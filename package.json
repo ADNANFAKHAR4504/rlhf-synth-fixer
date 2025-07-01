@@ -10,10 +10,13 @@
     "test": "jest --coverage",
     "test:unit": "jest --coverage --testPathPattern=\\.unit\\.test\\.ts$",
     "test:integration": "jest --testPathPattern=\\.int\\.test\\.ts$ --testTimeout=30000",
-    "cdk": "cdk"
+    "cdk": "cdk",
+    "cdk:synth": "npx cdk synth",
+    "cdk:bootstrap": "npx cdk bootstrap",
+    "cdk:deploy": "npx cdk deploy --all --require-approval never",
+    "cdk:destroy": "npx cdk destroy --all --force"
   },
   "devDependencies": {
-    "@types/axios": "^0.14.4",
     "@types/jest": "^29.5.14",
     "@types/node": "22.7.9",
     "aws-cdk": "2.1019.2",

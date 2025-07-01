@@ -1,0 +1,208 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  NODE_VERSION: "22"
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-artifacts
+          include-hidden-files: true # <-- This one!
+          path: |
+            bin/
+            lib/
+            package*.json
+            tsconfig.json
+            cdk.json
+
+  cdk-synth:
+    name: CDK Synth
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Environment
+        uses: ./.github/actions/setup-environment
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          download-artifacts: "true"
+
+      - name: Configure AWS
+        uses: ./.github/actions/configure-aws
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+
+      - name: CDK Synth
+        run: npm run cdk:synth
+
+      - name: Upload CDK artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: cdk-artifacts
+          path: cdk.out/
+
+  unit-tests:
+    name: Unit Testing
+    runs-on: ubuntu-latest
+    needs: cdk-synth
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Environment
+        uses: ./.github/actions/setup-environment
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          download-artifacts: "true"
+
+      - name: Run unit tests
+        run: npm run test:unit
+
+      - name: Upload coverage reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-reports
+          path: coverage/
+
+  cdk-deploy:
+    name: CDK Deploy
+    runs-on: ubuntu-latest
+    needs: unit-tests
+    environment: production
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Environment
+        uses: ./.github/actions/setup-environment
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          download-artifacts: "true"
+          download-cdk-artifacts: "true"
+
+      - name: Configure AWS
+        uses: ./.github/actions/configure-aws
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+
+      - name: CDK Bootstrap
+        run: npm run cdk:bootstrap
+
+      - name: CDK Deploy
+        run: npm run cdk:deploy
+
+  # mocked-integration-tests:
+  #   name: Mocked Integration Tests
+  #   runs-on: ubuntu-latest
+  #   needs: unit-tests
+
+  #   steps:
+  #     - name: Checkout code
+  #       uses: actions/checkout@v4
+
+  #     - name: Setup Environment
+  #       uses: ./.github/actions/setup-environment
+  #       with:
+  #         node-version: ${{ env.NODE_VERSION }}
+  #         download-artifacts: "true"
+
+  #     - name: Run mocked integration tests
+  #       run: npm run test:integration
+  #       env:
+  #         # Mock environment variables for testing
+  #         API_GATEWAY_ENDPOINT: "https://mock-api.example.com/prod"
+  #         READ_ONLY_API_KEY: "mock-readonly-key"
+  #         ADMIN_API_KEY: "mock-admin-key"
+
+  integration-tests-live:
+    name: Integration Tests (Live)
+    runs-on: ubuntu-latest
+    needs: cdk-deploy
+    environment: production
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Environment
+        uses: ./.github/actions/setup-environment
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          download-artifacts: "true"
+
+      - name: Configure AWS
+        uses: ./.github/actions/configure-aws
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+
+      - name: Run integration tests against live environment
+        run: npm run test:integration
+        env:
+          API_GATEWAY_ENDPOINT: ${{ vars.API_GATEWAY_ENDPOINT }}
+          READ_ONLY_API_KEY: ${{ vars.READ_ONLY_API_KEY }}
+          ADMIN_API_KEY: ${{ vars.ADMIN_API_KEY }}
+
+  cleanup:
+    name: CDK Destroy (Cleanup)
+    runs-on: ubuntu-latest
+    needs: [cdk-deploy, integration-tests-live]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    environment: production
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Environment
+        uses: ./.github/actions/setup-environment
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          download-artifacts: "true"
+
+      - name: Configure AWS
+        uses: ./.github/actions/configure-aws
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+
+      - name: CDK Destroy
+        run: npm run cdk:destroy

@@ -1,18 +1,54 @@
 {
   "jest.runMode": "on-demand",
-  
+
   // Environment variables for Jest integration tests
   "jest.nodeEnv": {
     "API_GATEWAY_ENDPOINT": "https://xlf44z4dlc.execute-api.us-east-2.amazonaws.com/prod",
     "READ_ONLY_API_KEY": "readOnlyApiKeyValuexxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
     "ADMIN_API_KEY": "adminApiKeyValuexxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
   },
-  
+
   // TypeScript settings
   "typescript.preferences.quoteStyle": "single",
   "typescript.suggest.autoImports": true,
   "typescript.updateImportsOnFileMove.enabled": "always",
-  
+
+  "[javascript]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.tabSize": 2,
+    "editor.rulers": [120]
+  },
+  "[json]": {
+    "editor.defaultFormatter": "vscode.json-language-features",
+    "editor.tabSize": 2
+  },
+  "[jsonc]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.tabSize": 2
+  },
+  "[python]": {
+    "editor.defaultFormatter": "ms-python.black-formatter",
+    "editor.insertSpaces": true,
+    "editor.rulers": [120],
+    "editor.tabSize": 2,
+    "editor.codeActionsOnSave": {
+      "source.organizeImports": "explicit",
+      "source.fixAll.pylance": "explicit"
+    }
+  },
+  "[typescript]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.formatOnSave": true,
+    "editor.formatOnType": true,
+    "editor.tabSize": 2,
+    "editor.rulers": [120],
+    "editor.wordWrap": "off",
+    "editor.codeActionsOnSave": {
+      "source.fixAll.eslint": "explicit",
+      "source.organizeImports": "explicit"
+    }
+  },
+
   // Editor settings for consistency
   "editor.tabSize": 2,
   "editor.insertSpaces": true,
@@ -24,13 +60,13 @@
   // Test file patterns
   "files.exclude": {
     "**/node_modules": true,
-    "**/cdk.out": true,
+    // "**/cdk.out": true,
     "**/*.js": {
       "when": "$(basename).ts"
     },
     "**/*.d.ts": true
   },
-  
+
   // AWS CDK specific settings
   "json.schemas": [
     {
@@ -38,7 +74,7 @@
       "url": "https://raw.githubusercontent.com/aws/aws-cdk/main/packages/@aws-cdk/cloud-assembly-schema/schema/cloud-assembly.schema.json"
     }
   ],
-  
+
   // Coverage settings
   "jest.coverageFormatter": "DefaultFormatter",
   "jest.coverageColors": {
