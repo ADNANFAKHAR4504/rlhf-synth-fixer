@@ -13,3 +13,5 @@ cdk.out
 
 # VS Code local settings (keep shared settings)
 .vscode/settings.local.json
+
+coverage/
