@@ -1,0 +1,87 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Debug Jest Unit Tests",
+      "type": "node",
+      "request": "launch",
+      "program": "${workspaceFolder}/node_modules/.bin/jest",
+      "args": [
+        "--runInBand",
+        "--testPathPattern=\\.unit\\.test\\.ts$"
+      ],
+      "console": "integratedTerminal",
+      "internalConsoleOptions": "neverOpen",
+      "windows": {
+        "program": "${workspaceFolder}/node_modules/jest/bin/jest"
+      }
+    },
+    {
+      "name": "Debug Jest Integration Tests",
+      "type": "node",
+      "request": "launch",
+      "program": "${workspaceFolder}/node_modules/.bin/jest",
+      "args": [
+        "--runInBand",
+        "--testPathPattern=\\.int\\.test\\.ts$",
+        "--testTimeout=30000"
+      ],
+      "console": "integratedTerminal",
+      "internalConsoleOptions": "neverOpen",
+      "env": {
+        "API_GATEWAY_ENDPOINT": "https://your-api-id.execute-api.region.amazonaws.com/prod",
+        "READ_ONLY_API_KEY": "readOnlyApiKeyValuexxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+        "ADMIN_API_KEY": "adminApiKeyValuexxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      },
+      "windows": {
+        "program": "${workspaceFolder}/node_modules/jest/bin/jest"
+      }
+    },
+    {
+      "name": "Debug Current Jest Test File",
+      "type": "node",
+      "request": "launch",
+      "program": "${workspaceFolder}/node_modules/.bin/jest",
+      "args": [
+        "--runInBand",
+        "${relativeFile}"
+      ],
+      "console": "integratedTerminal",
+      "internalConsoleOptions": "neverOpen",
+      "env": {
+        "API_GATEWAY_ENDPOINT": "https://your-api-id.execute-api.region.amazonaws.com/prod",
+        "READ_ONLY_API_KEY": "readOnlyApiKeyValuexxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+        "ADMIN_API_KEY": "adminApiKeyValuexxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      },
+      "windows": {
+        "program": "${workspaceFolder}/node_modules/jest/bin/jest"
+      }
+    },
+    {
+      "name": "Debug CDK Synth",
+      "type": "node",
+      "request": "launch",
+      "program": "${workspaceFolder}/node_modules/.bin/cdk",
+      "args": ["synth"],
+      "console": "integratedTerminal",
+      "internalConsoleOptions": "neverOpen",
+      "cwd": "${workspaceFolder}",
+      "windows": {
+        "program": "${workspaceFolder}/node_modules/aws-cdk/bin/cdk"
+      }
+    },
+    {
+      "name": "Debug CDK Deploy",
+      "type": "node",
+      "request": "launch",
+      "program": "${workspaceFolder}/node_modules/.bin/cdk",
+      "args": ["deploy", "--require-approval", "never"],
+      "console": "integratedTerminal",
+      "internalConsoleOptions": "neverOpen",
+      "cwd": "${workspaceFolder}",
+      "windows": {
+        "program": "${workspaceFolder}/node_modules/aws-cdk/bin/cdk"
+      }
+    }
+  ]
+}
