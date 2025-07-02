@@ -1,11 +1,13 @@
 {
   "name": "tap",
   "version": "0.1.0",
+  "license": "MIT",
   "bin": {
     "tap": "bin/tap.js"
   },
   "scripts": {
     "build": "tsc",
+    "lint": "eslint .",
     "watch": "tsc -w",
     "test": "jest --coverage",
     "test:unit": "jest --coverage --testPathPattern=\\.unit\\.test\\.ts$",
@@ -19,9 +21,19 @@
   "devDependencies": {
     "@types/jest": "^29.5.14",
     "@types/node": "22.7.9",
+    "@typescript-eslint/eslint-plugin": "^7.18.0",
+    "@typescript-eslint/parser": "^7.18.0",
     "aws-cdk": "2.1019.2",
     "axios": "^1.10.0",
+    "eslint": "^8.57.0",
+    "eslint-config-airbnb-base": "^15.0.0",
+    "eslint-config-airbnb-typescript": "^18.0.0",
+    "eslint-config-prettier": "^9.0.0",
+    "eslint-import-resolver-typescript": "^4.4.4",
+    "eslint-plugin-import": "^2.29.0",
+    "eslint-plugin-prettier": "^5.0.0",
     "jest": "^29.7.0",
+    "prettier": "^3.0.0",
     "ts-jest": "^29.2.5",
     "ts-node": "^10.9.2",
     "typescript": "~5.6.3"
