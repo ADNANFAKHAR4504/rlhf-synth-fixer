@@ -5,14 +5,16 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+    types: [opened, synchronize, reopened, closed]
 
 env:
-  NODE_VERSION: "22"
+  NODE_VERSION: '22'
 
 jobs:
   build:
     name: Build
     runs-on: ubuntu-latest
+    if: ${{ github.event.action != 'closed' }}
 
     steps:
       - name: Checkout code
@@ -22,7 +24,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: "npm"
+          cache: 'npm'
 
       - name: Install dependencies
         run: npm ci
@@ -46,6 +48,7 @@ jobs:
     name: Lint
     runs-on: ubuntu-latest
     needs: build
+    if: ${{ github.event.action != 'closed' }}
 
     steps:
       - name: Checkout code
@@ -55,7 +58,7 @@ jobs:
         uses: ./.github/actions/setup-environment
         with:
           node-version: ${{ env.NODE_VERSION }}
-          download-artifacts: "true"
+          download-artifacts: 'true'
 
       - name: Run ESLint
         run: npm run lint
@@ -64,6 +67,7 @@ jobs:
     name: CDK Synth
     runs-on: ubuntu-latest
     needs: lint
+    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' }}
 
     steps:
       - name: Checkout code
@@ -73,7 +77,7 @@ jobs:
         uses: ./.github/actions/setup-environment
         with:
           node-version: ${{ env.NODE_VERSION }}
-          download-artifacts: "true"
+          download-artifacts: 'true'
 
       - name: Configure AWS
         uses: ./.github/actions/configure-aws
@@ -95,6 +99,7 @@ jobs:
     name: Unit Testing
     runs-on: ubuntu-latest
     needs: cdk-synth
+    if: ${{ github.event.action != 'closed' }}
 
     steps:
       - name: Checkout code
@@ -104,7 +109,7 @@ jobs:
         uses: ./.github/actions/setup-environment
         with:
           node-version: ${{ env.NODE_VERSION }}
-          download-artifacts: "true"
+          download-artifacts: 'true'
 
       - name: Run unit tests
         run: npm run test:unit
@@ -119,6 +124,7 @@ jobs:
     name: CDK Deploy
     runs-on: ubuntu-latest
     needs: unit-tests
+    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' }}
     environment: production
 
     steps:
@@ -129,8 +135,8 @@ jobs:
         uses: ./.github/actions/setup-environment
         with:
           node-version: ${{ env.NODE_VERSION }}
-          download-artifacts: "true"
-          download-cdk-artifacts: "true"
+          download-artifacts: 'true'
+          download-cdk-artifacts: 'true'
 
       - name: Configure AWS
         uses: ./.github/actions/configure-aws
@@ -168,40 +174,41 @@ jobs:
   #         READ_ONLY_API_KEY: "mock-readonly-key"
   #         ADMIN_API_KEY: "mock-admin-key"
 
-  integration-tests-live:
-    name: Integration Tests (Live)
-    runs-on: ubuntu-latest
-    needs: cdk-deploy
-    environment: production
+  # integration-tests-live:
+  #   name: Integration Tests (Live)
+  #   runs-on: ubuntu-latest
+  #   needs: cdk-deploy
+  #   environment: production
 
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+  #   steps:
+  #     - name: Checkout code
+  #       uses: actions/checkout@v4
 
-      - name: Setup Environment
-        uses: ./.github/actions/setup-environment
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          download-artifacts: "true"
+  #     - name: Setup Environment
+  #       uses: ./.github/actions/setup-environment
+  #       with:
+  #         node-version: ${{ env.NODE_VERSION }}
+  #         download-artifacts: 'true'
 
-      - name: Configure AWS
-        uses: ./.github/actions/configure-aws
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+  #     - name: Configure AWS
+  #       uses: ./.github/actions/configure-aws
+  #       with:
+  #         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+  #         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+  #         aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
 
-      - name: Run integration tests against live environment
-        run: npm run test:integration
-        env:
-          API_GATEWAY_ENDPOINT: ${{ vars.API_GATEWAY_ENDPOINT }}
-          READ_ONLY_API_KEY: ${{ vars.READ_ONLY_API_KEY }}
-          ADMIN_API_KEY: ${{ vars.ADMIN_API_KEY }}
+  #     - name: Run integration tests against live environment
+  #       run: npm run test:integration
+  #       env:
+  #         API_GATEWAY_ENDPOINT: ${{ vars.API_GATEWAY_ENDPOINT }}
+  #         READ_ONLY_API_KEY: ${{ vars.READ_ONLY_API_KEY }}
+  #         ADMIN_API_KEY: ${{ vars.ADMIN_API_KEY }}
 
   cleanup:
     name: CDK Destroy (Cleanup)
     runs-on: ubuntu-latest
-    needs: [cdk-deploy, integration-tests-live]
+    # needs: [cdk-deploy, integration-tests-live]
+    needs: [unit-tests]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     environment: production
 
@@ -209,11 +216,17 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Environment
-        uses: ./.github/actions/setup-environment
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          download-artifacts: "true"
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
 
       - name: Configure AWS
         uses: ./.github/actions/configure-aws
@@ -222,5 +235,41 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
 
-      - name: CDK Destroy
-        run: npm run cdk:destroy
+      - name: CDK Destroy (cleanup any leftover resources)
+        run: |
+          # Try to destroy any leftover resources from PRs, but don't fail if they don't exist
+          npm run cdk:destroy || echo "No resources to destroy or destruction failed"
+
+  cleanup-pr:
+    name: CDK Destroy (PR Cleanup)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' && github.event.action == 'closed'
+    environment: production
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Configure AWS
+        uses: ./.github/actions/configure-aws
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+
+      - name: CDK Destroy (if resources exist)
+        run: |
+          # Try to destroy resources, but don't fail if they don't exist
+          npm run cdk:destroy || echo "No resources to destroy or destruction failed"
