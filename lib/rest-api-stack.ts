@@ -1,8 +1,8 @@
-import * as cdk from "aws-cdk-lib";
-import * as apigateway from "aws-cdk-lib/aws-apigateway";
-import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
-import * as iam from "aws-cdk-lib/aws-iam";
-import { Construct } from "constructs";
+import * as cdk from 'aws-cdk-lib';
+import * as apigateway from 'aws-cdk-lib/aws-apigateway';
+import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
+import * as iam from 'aws-cdk-lib/aws-iam';
+import { Construct } from 'constructs';
 
 export class ApiGatewayStack extends cdk.Stack {
   constructor(
@@ -13,12 +13,12 @@ export class ApiGatewayStack extends cdk.Stack {
   ) {
     super(scope, id, cdkProps);
 
-    const api = new apigateway.RestApi(this, "TurnAroundPromptApi", {
-      restApiName: "Turn Around Prompt Service",
+    const api = new apigateway.RestApi(this, 'TurnAroundPromptApi', {
+      restApiName: 'Turn Around Prompt Service',
       description:
-        "This service provides CRUD operations for turn around prompts.",
+        'This service provides CRUD operations for turn around prompts.',
       deployOptions: {
-        stageName: "prod",
+        stageName: 'prod',
         loggingLevel: apigateway.MethodLoggingLevel.INFO,
         dataTraceEnabled: true,
         metricsEnabled: true,
@@ -27,18 +27,18 @@ export class ApiGatewayStack extends cdk.Stack {
       cloudWatchRoleRemovalPolicy: cdk.RemovalPolicy.DESTROY, // Remove the role when the stack is destroyed
     });
 
-    const apiKey1 = api.addApiKey("readOnlyApiKey", {
-      apiKeyName: "readOnlyApiKey",
-      value: "readOnlyApiKeyValuexxxxxxxxxxxxxxxxxxxxxxxxxxxxxx", // In production, generate and store this securely
+    const apiKey1 = api.addApiKey('readOnlyApiKey', {
+      apiKeyName: 'readOnlyApiKey',
+      value: 'readOnlyApiKeyValuexxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', // In production, generate and store this securely
     });
 
-    const apiKey2 = api.addApiKey("adminApiKey", {
-      apiKeyName: "adminApiKey",
-      value: "adminApiKeyValuexxxxxxxxxxxxxxxxxxxxxxxxxxxxxx", // In production, generate and store this securely
+    const apiKey2 = api.addApiKey('adminApiKey', {
+      apiKeyName: 'adminApiKey',
+      value: 'adminApiKeyValuexxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', // In production, generate and store this securely
     });
 
-    const usagePlan = api.addUsagePlan("UsagePlan", {
-      name: "Easy",
+    const usagePlan = api.addUsagePlan('UsagePlan', {
+      name: 'Easy',
       throttle: {
         rateLimit: 10,
         burstLimit: 20,
@@ -54,14 +54,14 @@ export class ApiGatewayStack extends cdk.Stack {
     usagePlan.addApiKey(apiKey1);
     usagePlan.addApiKey(apiKey2);
 
-    const dynamoDBRole = new iam.Role(this, "DynamoDBRole", {
-      assumedBy: new iam.ServicePrincipal("apigateway.amazonaws.com"),
+    const dynamoDBRole = new iam.Role(this, 'DynamoDBRole', {
+      assumedBy: new iam.ServicePrincipal('apigateway.amazonaws.com'),
     });
 
     const dataModel = {
       id: {
         type: apigateway.JsonSchemaType.STRING,
-        pattern: "^TAP-\\d+$",
+        pattern: '^TAP-\\d+$',
         minLength: 5,
       },
       name: { type: apigateway.JsonSchemaType.STRING, minLength: 1 },
@@ -72,30 +72,30 @@ export class ApiGatewayStack extends cdk.Stack {
 
     const defaultIntegrationResponses = [
       {
-        statusCode: "200",
+        statusCode: '200',
         responseTemplates: {
-          "application/json": JSON.stringify({
-            message: "Success",
+          'application/json': JSON.stringify({
+            message: 'Success',
           }),
         },
       },
       {
-        selectionPattern: "4\\d{2}", // Match any 4XX error
-        statusCode: "400",
+        selectionPattern: '4\\d{2}', // Match any 4XX error
+        statusCode: '400',
         responseTemplates: {
-          "application/json": JSON.stringify({
-            error: "Bad Request",
+          'application/json': JSON.stringify({
+            error: 'Bad Request',
             message: "$input.path('$.message')",
           }),
         },
       },
       {
-        selectionPattern: "5\\d{2}",
-        statusCode: "500",
+        selectionPattern: '5\\d{2}',
+        statusCode: '500',
         responseTemplates: {
-          "application/json": JSON.stringify({
-            error: "Internal Server Error",
-            message: "$context.error.message",
+          'application/json': JSON.stringify({
+            error: 'Internal Server Error',
+            message: '$context.error.message',
           }),
         },
       },
@@ -103,9 +103,9 @@ export class ApiGatewayStack extends cdk.Stack {
 
     const integrationHttpMethods = {
       GET: {
-        dbOperation: "GetItem",
+        dbOperation: 'GetItem',
         requestTemplates: {
-          "application/json": JSON.stringify({
+          'application/json': JSON.stringify({
             TableName: props.dynamoDBTable.tableName,
             Key: {
               id: { S: "$input.params('id')" },
@@ -116,9 +116,9 @@ export class ApiGatewayStack extends cdk.Stack {
         requestModels: undefined,
         integrationResponses: [
           {
-            statusCode: "200",
+            statusCode: '200',
             responseTemplates: {
-              "application/json": JSON.stringify({
+              'application/json': JSON.stringify({
                 id: "$input.path('$.Item.id.S')",
                 name: "$input.path('$.Item.name.S')",
                 status: "$input.path('$.Item.status.S')",
@@ -127,42 +127,42 @@ export class ApiGatewayStack extends cdk.Stack {
             },
           },
           {
-            selectionPattern: "4\\d{2}", // Match any 4XX error
-            statusCode: "400",
+            selectionPattern: '4\\d{2}', // Match any 4XX error
+            statusCode: '400',
             responseTemplates: {
-              "application/json": JSON.stringify({ error: "Bad Request" }),
+              'application/json': JSON.stringify({ error: 'Bad Request' }),
             },
           },
           {
-            selectionPattern: "5\\d{2}",
-            statusCode: "500",
+            selectionPattern: '5\\d{2}',
+            statusCode: '500',
             responseTemplates: {
-              "application/json": JSON.stringify({
-                error: "Internal Server Error",
+              'application/json': JSON.stringify({
+                error: 'Internal Server Error',
               }),
             },
           },
         ],
       },
       PUT: {
-        dbOperation: "PutItem",
+        dbOperation: 'PutItem',
         requestTemplates: {
-          "application/json": JSON.stringify({
+          'application/json': JSON.stringify({
             TableName: props.dynamoDBTable.tableName,
             Item: {
               id: { S: "$input.path('$.id')" },
               name: { S: "$input.path('$.name')" },
               status: { S: "$input.path('$.status')" },
-              createdAt: { S: "$context.requestTimeEpoch" },
-              updatedAt: { S: "$context.requestTimeEpoch" },
+              createdAt: { S: '$context.requestTimeEpoch' },
+              updatedAt: { S: '$context.requestTimeEpoch' },
             },
-            ConditionExpression: "attribute_not_exists(id)",
+            ConditionExpression: 'attribute_not_exists(id)',
           }),
         },
         requestModels: {
-          "application/json": api.addModel("TurnAroundPromptModelPut", {
-            contentType: "application/json",
-            modelName: "TurnAroundPromptModelPut",
+          'application/json': api.addModel('TurnAroundPromptModelPut', {
+            contentType: 'application/json',
+            modelName: 'TurnAroundPromptModelPut',
             schema: {
               type: apigateway.JsonSchemaType.OBJECT,
               properties: {
@@ -170,41 +170,41 @@ export class ApiGatewayStack extends cdk.Stack {
                 name: dataModel.name,
                 status: dataModel.status,
               },
-              required: ["id", "name", "status"],
+              required: ['id', 'name', 'status'],
             },
           }),
         },
         integrationResponses: defaultIntegrationResponses,
       },
       PATCH: {
-        dbOperation: "UpdateItem",
+        dbOperation: 'UpdateItem',
         requestTemplates: {
-          "application/json": JSON.stringify({
+          'application/json': JSON.stringify({
             TableName: props.dynamoDBTable.tableName,
             Key: {
               id: { S: "$input.path('$.id')" },
             },
             UpdateExpression:
-              "SET #nameField = :nameVal, #statusField = :statusVal, #updatedAtField = :updatedAtVal",
-            ConditionExpression: "#deletedField <> :true",
+              'SET #nameField = :nameVal, #statusField = :statusVal, #updatedAtField = :updatedAtVal',
+            ConditionExpression: '#deletedField <> :true',
             ExpressionAttributeNames: {
-              "#nameField": "name",
-              "#statusField": "status",
-              "#updatedAtField": "updatedAt",
-              "#deletedField": "deleted",
+              '#nameField': 'name',
+              '#statusField': 'status',
+              '#updatedAtField': 'updatedAt',
+              '#deletedField': 'deleted',
             },
             ExpressionAttributeValues: {
-              ":nameVal": { S: "$input.path('$.name')" },
-              ":statusVal": { S: "$input.path('$.status')" },
-              ":updatedAtVal": { S: "$context.requestTimeEpoch" },
-              ":true": { BOOL: true },
+              ':nameVal': { S: "$input.path('$.name')" },
+              ':statusVal': { S: "$input.path('$.status')" },
+              ':updatedAtVal': { S: '$context.requestTimeEpoch' },
+              ':true': { BOOL: true },
             },
           }),
         },
         requestModels: {
-          "application/json": api.addModel("TurnAroundPromptModel", {
-            contentType: "application/json",
-            modelName: "TurnAroundPromptModel",
+          'application/json': api.addModel('TurnAroundPromptModel', {
+            contentType: 'application/json',
+            modelName: 'TurnAroundPromptModel',
             schema: {
               type: apigateway.JsonSchemaType.OBJECT,
               properties: {
@@ -212,37 +212,37 @@ export class ApiGatewayStack extends cdk.Stack {
                 name: dataModel.name,
                 status: dataModel.status,
               },
-              required: ["id", "name", "status"],
+              required: ['id', 'name', 'status'],
             },
           }),
         },
         integrationResponses: defaultIntegrationResponses,
       },
       DELETE: {
-        dbOperation: "UpdateItem",
+        dbOperation: 'UpdateItem',
         requestTemplates: {
-          "application/json": JSON.stringify({
+          'application/json': JSON.stringify({
             TableName: props.dynamoDBTable.tableName,
             Key: {
               id: { S: "$input.path('$.id')" },
             },
-            UpdateExpression: "SET deleted = :true",
+            UpdateExpression: 'SET deleted = :true',
             ExpressionAttributeValues: {
-              ":true": { BOOL: true },
+              ':true': { BOOL: true },
             },
-            ConditionExpression: "attribute_exists(id) AND deleted <> :true",
+            ConditionExpression: 'attribute_exists(id) AND deleted <> :true',
           }),
         },
         requestModels: {
-          "application/json": api.addModel("TurnAroundPromptModelDelete", {
-            contentType: "application/json",
-            modelName: "TurnAroundPromptModelDelete",
+          'application/json': api.addModel('TurnAroundPromptModelDelete', {
+            contentType: 'application/json',
+            modelName: 'TurnAroundPromptModelDelete',
             schema: {
               type: apigateway.JsonSchemaType.OBJECT,
               properties: {
                 id: dataModel.id,
               },
-              required: ["id"],
+              required: ['id'],
             },
           }),
         },
@@ -250,7 +250,7 @@ export class ApiGatewayStack extends cdk.Stack {
       },
     };
 
-    const resource = api.root.addResource("turnaroundprompt");
+    const resource = api.root.addResource('turnaroundprompt');
 
     type HttpMethod = keyof typeof integrationHttpMethods;
     Object.entries(integrationHttpMethods).forEach(
@@ -259,15 +259,15 @@ export class ApiGatewayStack extends cdk.Stack {
         (typeof integrationHttpMethods)[HttpMethod],
       ]) => {
         const integration = new apigateway.AwsIntegration({
-          service: "dynamodb",
+          service: 'dynamodb',
           action: options.dbOperation,
-          integrationHttpMethod: "POST",
+          integrationHttpMethod: 'POST',
           options: {
             credentialsRole: dynamoDBRole,
             passthroughBehavior:
               apigateway.PassthroughBehavior.WHEN_NO_TEMPLATES,
             requestParameters: {
-              "integration.request.header.Content-Type": "'application/json'",
+              'integration.request.header.Content-Type': "'application/json'",
             },
             integrationResponses: options.integrationResponses,
             requestTemplates: options.requestTemplates,
@@ -277,10 +277,10 @@ export class ApiGatewayStack extends cdk.Stack {
           authorizationType: apigateway.AuthorizationType.NONE,
           apiKeyRequired: true,
           methodResponses: [
-            { statusCode: "200" },
-            { statusCode: "400" },
-            { statusCode: "404" },
-            { statusCode: "500" },
+            { statusCode: '200' },
+            { statusCode: '400' },
+            { statusCode: '404' },
+            { statusCode: '500' },
           ],
           requestValidator: new apigateway.RequestValidator(
             this,
