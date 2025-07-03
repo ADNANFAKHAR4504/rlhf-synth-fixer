@@ -1,0 +1,47 @@
+name: "Setup Environment"
+description: "Sets up Node.js environment and restores build artifacts"
+inputs:
+  node-version:
+    description: "Node.js version to use"
+    required: true
+    default: "22"
+  download-artifacts:
+    description: "Whether to download build artifacts"
+    required: false
+    default: "true"
+  download-cdk-artifacts:
+    description: "Whether to download CDK artifacts"
+    required: false
+    default: "false"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Download build artifacts
+      if: inputs.download-artifacts == 'true'
+      uses: actions/download-artifact@v4
+      with:
+        name: build-artifacts
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ inputs.node-version }}
+        cache: "npm"
+
+    - name: Install dependencies
+      shell: bash
+      run: npm ci
+
+    - name: Download CDK artifacts
+      if: inputs.download-cdk-artifacts == 'true'
+      uses: actions/download-artifact@v4
+      with:
+        name: cdk-artifacts
+        path: cdk.out/
+
+    - name: Restore executable permissions and setup PATH
+      shell: bash
+      run: |
+        chmod +x node_modules/.bin/* 2>/dev/null || true
+        echo "${{ github.workspace }}/node_modules/.bin" >> $GITHUB_PATH

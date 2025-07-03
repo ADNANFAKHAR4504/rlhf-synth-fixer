@@ -5,12 +5,18 @@ import * as iam from 'aws-cdk-lib/aws-iam';
 import { Construct } from 'constructs';
 
 export class ApiGatewayStack extends cdk.Stack {
-  constructor(scope: Construct, id: string, props: { dynamoDBTable: dynamodb.Table }, cdkProps?: cdk.StackProps) {
+  constructor(
+    scope: Construct,
+    id: string,
+    props: { dynamoDBTable: dynamodb.Table },
+    cdkProps?: cdk.StackProps
+  ) {
     super(scope, id, cdkProps);
 
     const api = new apigateway.RestApi(this, 'TurnAroundPromptApi', {
       restApiName: 'Turn Around Prompt Service',
-      description: 'This service provides CRUD operations for turn around prompts.',
+      description:
+        'This service provides CRUD operations for turn around prompts.',
       deployOptions: {
         stageName: 'prod',
         loggingLevel: apigateway.MethodLoggingLevel.INFO,
@@ -35,12 +41,14 @@ export class ApiGatewayStack extends cdk.Stack {
       name: 'Easy',
       throttle: {
         rateLimit: 10,
-        burstLimit: 20
+        burstLimit: 20,
       },
-      apiStages: [{
-        api: api,
-        stage: api.deploymentStage,
-      }],
+      apiStages: [
+        {
+          api: api,
+          stage: api.deploymentStage,
+        },
+      ],
     });
 
     usagePlan.addApiKey(apiKey1);
@@ -51,12 +59,16 @@ export class ApiGatewayStack extends cdk.Stack {
     });
 
     const dataModel = {
-      id: { type: apigateway.JsonSchemaType.STRING, pattern: '^TAP-\\d+$', minLength: 5 },
+      id: {
+        type: apigateway.JsonSchemaType.STRING,
+        pattern: '^TAP-\\d+$',
+        minLength: 5,
+      },
       name: { type: apigateway.JsonSchemaType.STRING, minLength: 1 },
       status: { type: apigateway.JsonSchemaType.STRING, minLength: 1 },
       createdAt: { type: apigateway.JsonSchemaType.STRING },
       updatedAt: { type: apigateway.JsonSchemaType.STRING },
-    }
+    };
 
     const defaultIntegrationResponses = [
       {
@@ -71,14 +83,20 @@ export class ApiGatewayStack extends cdk.Stack {
         selectionPattern: '4\\d{2}', // Match any 4XX error
         statusCode: '400',
         responseTemplates: {
-          'application/json': JSON.stringify({ error: 'Bad Request', message: "$input.path('$.message')" }),
+          'application/json': JSON.stringify({
+            error: 'Bad Request',
+            message: "$input.path('$.message')",
+          }),
         },
       },
       {
         selectionPattern: '5\\d{2}',
         statusCode: '500',
         responseTemplates: {
-          'application/json': JSON.stringify({ error: 'Internal Server Error', message: '$context.error.message' }),
+          'application/json': JSON.stringify({
+            error: 'Internal Server Error',
+            message: '$context.error.message',
+          }),
         },
       },
     ];
@@ -90,7 +108,7 @@ export class ApiGatewayStack extends cdk.Stack {
           'application/json': JSON.stringify({
             TableName: props.dynamoDBTable.tableName,
             Key: {
-              'id': { 'S': "$input.params('id')" }
+              id: { S: "$input.params('id')" },
             },
             ConsistentRead: true,
           }),
@@ -101,10 +119,10 @@ export class ApiGatewayStack extends cdk.Stack {
             statusCode: '200',
             responseTemplates: {
               'application/json': JSON.stringify({
-                "id": "$input.path('$.Item.id.S')",
-                "name": "$input.path('$.Item.name.S')",
-                "status": "$input.path('$.Item.status.S')",
-                "deleted": "$input.path('$.Item.deleted.BOOL')",
+                id: "$input.path('$.Item.id.S')",
+                name: "$input.path('$.Item.name.S')",
+                status: "$input.path('$.Item.status.S')",
+                deleted: "$input.path('$.Item.deleted.BOOL')",
               }),
             },
           },
@@ -119,10 +137,12 @@ export class ApiGatewayStack extends cdk.Stack {
             selectionPattern: '5\\d{2}',
             statusCode: '500',
             responseTemplates: {
-              'application/json': JSON.stringify({ error: 'Internal Server Error' }),
+              'application/json': JSON.stringify({
+                error: 'Internal Server Error',
+              }),
             },
           },
-        ]
+        ],
       },
       PUT: {
         dbOperation: 'PutItem',
@@ -130,11 +150,11 @@ export class ApiGatewayStack extends cdk.Stack {
           'application/json': JSON.stringify({
             TableName: props.dynamoDBTable.tableName,
             Item: {
-              'id': { 'S': "$input.path('$.id')" },
-              'name': { 'S': "$input.path('$.name')" },
-              'status': { 'S': "$input.path('$.status')" },
-              'createdAt': { 'S': "$context.requestTimeEpoch" },
-              'updatedAt': { 'S': "$context.requestTimeEpoch" },
+              id: { S: "$input.path('$.id')" },
+              name: { S: "$input.path('$.name')" },
+              status: { S: "$input.path('$.status')" },
+              createdAt: { S: '$context.requestTimeEpoch' },
+              updatedAt: { S: '$context.requestTimeEpoch' },
             },
             ConditionExpression: 'attribute_not_exists(id)',
           }),
@@ -150,11 +170,11 @@ export class ApiGatewayStack extends cdk.Stack {
                 name: dataModel.name,
                 status: dataModel.status,
               },
-              required: ['id', 'name', 'status']
+              required: ['id', 'name', 'status'],
             },
           }),
         },
-        integrationResponses: defaultIntegrationResponses
+        integrationResponses: defaultIntegrationResponses,
       },
       PATCH: {
         dbOperation: 'UpdateItem',
@@ -162,9 +182,10 @@ export class ApiGatewayStack extends cdk.Stack {
           'application/json': JSON.stringify({
             TableName: props.dynamoDBTable.tableName,
             Key: {
-              'id': { 'S': "$input.path('$.id')" },
+              id: { S: "$input.path('$.id')" },
             },
-            UpdateExpression: 'SET #nameField = :nameVal, #statusField = :statusVal, #updatedAtField = :updatedAtVal',
+            UpdateExpression:
+              'SET #nameField = :nameVal, #statusField = :statusVal, #updatedAtField = :updatedAtVal',
             ConditionExpression: '#deletedField <> :true',
             ExpressionAttributeNames: {
               '#nameField': 'name',
@@ -173,10 +194,10 @@ export class ApiGatewayStack extends cdk.Stack {
               '#deletedField': 'deleted',
             },
             ExpressionAttributeValues: {
-              ':nameVal': { 'S': "$input.path('$.name')" },
-              ':statusVal': { 'S': "$input.path('$.status')" },
-              ':updatedAtVal': { 'S': "$context.requestTimeEpoch" },
-              ':true': { 'BOOL': true },
+              ':nameVal': { S: "$input.path('$.name')" },
+              ':statusVal': { S: "$input.path('$.status')" },
+              ':updatedAtVal': { S: '$context.requestTimeEpoch' },
+              ':true': { BOOL: true },
             },
           }),
         },
@@ -191,11 +212,11 @@ export class ApiGatewayStack extends cdk.Stack {
                 name: dataModel.name,
                 status: dataModel.status,
               },
-              required: ['id', 'name', 'status']
+              required: ['id', 'name', 'status'],
             },
           }),
         },
-        integrationResponses: defaultIntegrationResponses
+        integrationResponses: defaultIntegrationResponses,
       },
       DELETE: {
         dbOperation: 'UpdateItem',
@@ -203,11 +224,11 @@ export class ApiGatewayStack extends cdk.Stack {
           'application/json': JSON.stringify({
             TableName: props.dynamoDBTable.tableName,
             Key: {
-              'id': { 'S': "$input.path('$.id')" },
+              id: { S: "$input.path('$.id')" },
             },
             UpdateExpression: 'SET deleted = :true',
             ExpressionAttributeValues: {
-              ':true': { 'BOOL': true },
+              ':true': { BOOL: true },
             },
             ConditionExpression: 'attribute_exists(id) AND deleted <> :true',
           }),
@@ -221,47 +242,62 @@ export class ApiGatewayStack extends cdk.Stack {
               properties: {
                 id: dataModel.id,
               },
-              required: ['id']
+              required: ['id'],
             },
           }),
         },
-        integrationResponses: defaultIntegrationResponses
+        integrationResponses: defaultIntegrationResponses,
       },
-    }
+    };
 
     const resource = api.root.addResource('turnaroundprompt');
 
     type HttpMethod = keyof typeof integrationHttpMethods;
-    Object.entries(integrationHttpMethods).forEach(([method, options]: [string, typeof integrationHttpMethods[HttpMethod]]) => {
-      const integration = new apigateway.AwsIntegration({
-        service: 'dynamodb',
-        action: options.dbOperation,
-        integrationHttpMethod: "POST",
-        options: {
-          credentialsRole: dynamoDBRole,
-          passthroughBehavior: apigateway.PassthroughBehavior.WHEN_NO_TEMPLATES,
-          requestParameters: {
-            'integration.request.header.Content-Type': "'application/json'",
+    Object.entries(integrationHttpMethods).forEach(
+      ([method, options]: [
+        string,
+        (typeof integrationHttpMethods)[HttpMethod],
+      ]) => {
+        const integration = new apigateway.AwsIntegration({
+          service: 'dynamodb',
+          action: options.dbOperation,
+          integrationHttpMethod: 'POST',
+          options: {
+            credentialsRole: dynamoDBRole,
+            passthroughBehavior:
+              apigateway.PassthroughBehavior.WHEN_NO_TEMPLATES,
+            requestParameters: {
+              'integration.request.header.Content-Type': "'application/json'",
+            },
+            integrationResponses: options.integrationResponses,
+            requestTemplates: options.requestTemplates,
           },
-          integrationResponses: options.integrationResponses,
-          requestTemplates: options.requestTemplates,
-        },
-      });
-      resource.addMethod(method, integration, {
-        authorizationType: apigateway.AuthorizationType.NONE,
-        apiKeyRequired: true,
-        methodResponses: [{ statusCode: '200' }, { statusCode: '400' }, { statusCode: '404' }, { statusCode: '500' }],
-        requestValidator: new apigateway.RequestValidator(this, `${method}Validator`, {
-          restApi: api,
-          requestValidatorName: `${method}Validator`,
-          validateRequestBody: true,
-          validateRequestParameters: false,
-        }),
-        requestModels: options.requestModels,
-      });
-    });
+        });
+        resource.addMethod(method, integration, {
+          authorizationType: apigateway.AuthorizationType.NONE,
+          apiKeyRequired: true,
+          methodResponses: [
+            { statusCode: '200' },
+            { statusCode: '400' },
+            { statusCode: '404' },
+            { statusCode: '500' },
+          ],
+          requestValidator: new apigateway.RequestValidator(
+            this,
+            `${method}Validator`,
+            {
+              restApi: api,
+              requestValidatorName: `${method}Validator`,
+              validateRequestBody: true,
+              validateRequestParameters: false,
+            }
+          ),
+          requestModels: options.requestModels,
+        });
+      }
+    );
 
     // Add permissions to the DynamoDB table
     props.dynamoDBTable.grantReadWriteData(dynamoDBRole);
   }
-};
+}
