@@ -1,8 +1,8 @@
 import * as cdk from 'aws-cdk-lib';
-import { Template, Match } from 'aws-cdk-lib/assertions';
-import { TapStack } from '../lib/tap-stack';
+import { Template } from 'aws-cdk-lib/assertions';
 import { DynamoDBStack } from '../lib/ddb-stack';
 import { ApiGatewayStack } from '../lib/rest-api-stack';
+import { TapStack } from '../lib/tap-stack';
 
 // Mock the nested stacks to verify they are called correctly
 jest.mock('../lib/ddb-stack');
@@ -16,19 +16,23 @@ describe('TapStack', () => {
   // Create mock instances
   const mockDynamoDBStack = {
     table: {
-      tableName: 'mock-table'
-    }
+      tableName: 'mock-table',
+    },
   };
 
   beforeEach(() => {
     // Reset mocks before each test
     jest.clearAllMocks();
-    
+
     // Mock the DynamoDBStack constructor to return our mock instance
-    (DynamoDBStack as jest.MockedClass<typeof DynamoDBStack>).mockImplementation(() => mockDynamoDBStack as any);
-    
+    (
+      DynamoDBStack as jest.MockedClass<typeof DynamoDBStack>
+    ).mockImplementation(() => mockDynamoDBStack as any);
+
     // Mock the ApiGatewayStack constructor
-    (ApiGatewayStack as jest.MockedClass<typeof ApiGatewayStack>).mockImplementation(() => ({} as any));
+    (
+      ApiGatewayStack as jest.MockedClass<typeof ApiGatewayStack>
+    ).mockImplementation(() => ({}) as any);
 
     app = new cdk.App();
     stack = new TapStack(app, 'TestTapStack');
@@ -46,7 +50,7 @@ describe('TapStack', () => {
     test('should not expose sensitive information in outputs', () => {
       const template = Template.fromStack(stack);
       const outputs = template.findOutputs('*');
-      
+
       // Ensure no API keys are exposed in outputs
       Object.values(outputs).forEach(output => {
         expect(JSON.stringify(output)).not.toMatch(/readOnlyApiKeyValue/);
@@ -66,9 +70,9 @@ describe('TapStack', () => {
       const customProps: cdk.StackProps = {
         env: {
           account: '123456789012',
-          region: 'us-east-1'
+          region: 'us-east-1',
         },
-        description: 'Test stack with custom props'
+        description: 'Test stack with custom props',
       };
 
       expect(() => {
@@ -81,7 +85,7 @@ describe('TapStack', () => {
     test('should allow adding tags to the stack', () => {
       cdk.Tags.of(stack).add('Environment', 'Test');
       cdk.Tags.of(stack).add('Project', 'TAP');
-      
+
       // The stack should accept tags without throwing errors
       expect(stack).toBeDefined();
     });
@@ -111,10 +115,12 @@ describe('TapStack', () => {
       // Verify both stacks were called
       expect(DynamoDBStack).toHaveBeenCalledTimes(1);
       expect(ApiGatewayStack).toHaveBeenCalledTimes(1);
-      
+
       // Get the ApiGateway call arguments
-      const apiGatewayCall = (ApiGatewayStack as jest.MockedClass<typeof ApiGatewayStack>).mock.calls[0];
-      
+      const apiGatewayCall = (
+        ApiGatewayStack as jest.MockedClass<typeof ApiGatewayStack>
+      ).mock.calls[0];
+
       // ApiGatewayStack should receive the table from DynamoDBStack
       const apiGatewayProps = apiGatewayCall[2]; // Third argument is props
       expect(apiGatewayProps).toHaveProperty('dynamoDBTable');

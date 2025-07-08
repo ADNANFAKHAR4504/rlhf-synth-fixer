@@ -153,16 +153,63 @@ jobs:
 
       - name: Get CDK Outputs
         run: |
-          # Get stack outputs and save to JSON files
           npx cdk list --json > cdk-stacks.json
-          echo "CDK stacks: $(cat cdk-stacks.json)"
           mkdir -p cdk-outputs
 
-          # Get outputs for each stack
-          for stack in $(npx cdk list); do
-            echo "Getting outputs for stack: $stack"
-            aws cloudformation describe-stacks --stack-name "$stack" --query 'Stacks[0].Outputs' --output json > "cdk-outputs/${stack}-outputs.json" || echo "No outputs for $stack"
-          done
+          echo "Getting all CloudFormation stacks..."
+          aws cloudformation list-stacks --stack-status-filter CREATE_COMPLETE UPDATE_COMPLETE --query 'StackSummaries[?contains(StackName, `TapStack`)].StackName' --output text > cf-stacks.txt
+
+          # Initialize consolidated outputs file
+          echo "{}" > cdk-outputs/all-outputs.json
+
+          if [ -s cf-stacks.txt ]; then
+            for stack in $(cat cf-stacks.txt); do
+              echo "Getting outputs for CloudFormation stack: $stack"
+              
+              # Get outputs for this stack
+              aws cloudformation describe-stacks --stack-name "$stack" --query 'Stacks[0].Outputs' --output json > "temp-${stack}-outputs.json" 2>/dev/null || echo "No outputs for $stack"
+              
+              if [ -f "temp-${stack}-outputs.json" ]; then
+                output_count=$(jq 'length' "temp-${stack}-outputs.json" 2>/dev/null || echo "0")
+                
+                if [ "$output_count" != "0" ] && [ "$output_count" != "null" ]; then
+                  
+                  # Merge outputs into consolidated file
+                  # Create a temporary file with stack name as key and outputs as value
+                  jq -n --arg stack "$stack" --slurpfile outputs "temp-${stack}-outputs.json" '{($stack): $outputs[0]}' > "temp-stack.json"
+                  
+                  # Merge with existing consolidated outputs
+                  jq -s '.[0] * .[1]' cdk-outputs/all-outputs.json temp-stack.json > temp-merged.json
+                  mv temp-merged.json cdk-outputs/all-outputs.json
+                  
+                  # Also flatten all outputs into a single level for easier access
+                  if [ ! -f "cdk-outputs/flat-outputs.json" ]; then
+                    echo "{}" > cdk-outputs/flat-outputs.json
+                  fi
+                  
+                  # Add each output key-value pair to flat outputs
+                  jq -r '.[] | "\(.OutputKey)=\(.OutputValue)"' "temp-${stack}-outputs.json" | while IFS='=' read -r key value; do
+                    jq --arg key "$key" --arg value "$value" '. + {($key): $value}' cdk-outputs/flat-outputs.json > temp-flat.json
+                    mv temp-flat.json cdk-outputs/flat-outputs.json
+                  done
+                fi
+                
+                # Clean up temporary file
+                rm -f "temp-${stack}-outputs.json"
+              fi
+            done
+            
+            # Clean up temporary files
+            rm -f temp-stack.json temp-merged.json temp-flat.json
+          else
+            echo "No TapStack CloudFormation stacks found"
+          fi
+
+          echo "Consolidated outputs:"
+          cat cdk-outputs/all-outputs.json || echo "No consolidated outputs"
+
+          echo "Flat outputs:"
+          cat cdk-outputs/flat-outputs.json || echo "No flat outputs"
 
       - name: Upload CDK Outputs
         uses: actions/upload-artifact@v4
@@ -215,7 +262,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: cdk-outputs
-          path: cdk-outputs/
+          path: .
 
       - name: Configure AWS
         uses: ./.github/actions/configure-aws

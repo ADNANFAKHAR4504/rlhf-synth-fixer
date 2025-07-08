@@ -1,21 +1,20 @@
 module.exports = {
-  testEnvironment: "node",
-  roots: ["<rootDir>/test", "<rootDir>/lib", "<rootDir>/bin"],
-  testMatch: ["**/*.test.ts"],
+  testEnvironment: 'node',
+  roots: ['<rootDir>/test', '<rootDir>/lib', '<rootDir>/bin'],
+  testMatch: ['**/*.test.ts'],
   transform: {
-    "^.+\\.tsx?$": "ts-jest",
+    '^.+\\.tsx?$': 'ts-jest',
   },
-  moduleFileExtensions: ["ts", "tsx", "js", "jsx", "json", "node"],
-  collectCoverage: true,
+  moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'],
   collectCoverageFrom: [
-    "<rootDir>/lib/**/*.ts",
-    "!<rootDir>/bin/**/*.ts",
-    "!<rootDir>/**/*.d.ts",
-    "!<rootDir>/**/*.js",
-    "!<rootDir>/**/*.test.ts",
-    "!<rootDir>/node_modules/**",
+    '<rootDir>/lib/**/*.ts',
+    '!<rootDir>/bin/**/*.ts',
+    '!<rootDir>/**/*.d.ts',
+    '!<rootDir>/**/*.js',
+    '!<rootDir>/**/*.test.ts',
+    '!<rootDir>/node_modules/**',
   ],
-  coverageReporters: ["text", "lcov"],
+  coverageReporters: ['text', 'lcov'],
   coverageThreshold: {
     global: {
       branches: 70,
