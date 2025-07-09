@@ -386,33 +386,45 @@ jobs:
         run: |
           # Create archive directory if it doesn't exist
           mkdir -p archive
-          
+
           # Move folders to archive
           if [ -d "lib" ]; then
             mv lib/ archive/
           fi
-          
+
           if [ -d "bin" ]; then
             mv bin/ archive/
           fi
-          
+
           if [ -d "test" ]; then
             mv test/ archive/
           fi
 
-      - name: Commit and push changes
+      - name: Create archive branch and PR
         run: |
-          # Switch to main branch
-          git checkout main
-          git pull origin main
-          
+          # Create a new branch for the archive
+          ARCHIVE_BRANCH="archive-pr-${{ github.event.number }}"
+          git checkout -b "$ARCHIVE_BRANCH"
+
           # Add changes
           git add archive/
-          
+
           # Check if there are changes to commit
           if git diff --staged --quiet; then
             echo "No changes to commit"
           else
             git commit -m "Archive PR ${{ github.event.number }} code to archive/"
-            git push origin main
+            git push origin "$ARCHIVE_BRANCH"
+
+            # Create pull request using GitHub CLI
+            gh pr create \
+              --title "Archive code from PR #${{ github.event.number }}" \
+              --body "Automatically archiving lib/, bin/, and test/ folders from closed PR #${{ github.event.number }}" \
+              --base main \
+              --head "$ARCHIVE_BRANCH"
+
+            # Enable auto-merge on the created PR
+            gh pr merge "$ARCHIVE_BRANCH" --auto --squash
           fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
