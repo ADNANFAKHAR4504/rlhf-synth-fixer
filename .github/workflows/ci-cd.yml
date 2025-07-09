@@ -368,6 +368,7 @@ jobs:
     if: github.event_name == 'pull_request' && github.event.action == 'closed'
     permissions:
       contents: write
+      pull-requests: write
 
     steps:
       - name: Checkout code
@@ -417,14 +418,30 @@ jobs:
             git push origin "$ARCHIVE_BRANCH"
 
             # Create pull request using GitHub CLI
-            gh pr create \
+            if gh pr create \
               --title "Archive code from PR #${{ github.event.number }}" \
               --body "Automatically archiving lib/, bin/, and test/ folders from closed PR #${{ github.event.number }}" \
               --base main \
-              --head "$ARCHIVE_BRANCH"
-
-            # Enable auto-merge on the created PR
-            gh pr merge "$ARCHIVE_BRANCH" --auto --squash
+              --head "$ARCHIVE_BRANCH"; then
+              echo "PR created successfully"
+              
+              # Enable auto-merge on the created PR
+              gh pr merge "$ARCHIVE_BRANCH" --auto --squash || echo "Auto-merge failed, PR needs manual review"
+            else
+              echo "GitHub CLI failed, trying REST API approach"
+              
+              # Fallback: Create PR using REST API
+              curl -X POST \
+                -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+                -H "Accept: application/vnd.github.v3+json" \
+                https://api.github.com/repos/${{ github.repository }}/pulls \
+                -d "{
+                  \"title\": \"Archive code from PR #${{ github.event.number }}\",
+                  \"body\": \"Automatically archiving lib/, bin/, and test/ folders from closed PR #${{ github.event.number }}\",
+                  \"head\": \"$ARCHIVE_BRANCH\",
+                  \"base\": \"main\"
+                }"
+            fi
           fi
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
