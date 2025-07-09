@@ -361,3 +361,58 @@ jobs:
           npm run cdk:destroy || echo "No resources to destroy or destruction failed"
         env:
           CDK_CONTEXT_ENVIRONMENT_SUFFIX: ${{ env.ENVIRONMENT_SUFFIX }}
+
+  archive-pr:
+    name: Archive PR Code
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' && github.event.action == 'closed'
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          # Use a personal access token to allow pushing to main
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Configure Git
+        run: |
+          git config user.name "GitHub Actions Bot"
+          git config user.email "actions@github.com"
+
+      - name: Archive folders
+        run: |
+          # Create archive directory if it doesn't exist
+          mkdir -p archive
+          
+          # Move folders to archive
+          if [ -d "lib" ]; then
+            mv lib/ archive/
+          fi
+          
+          if [ -d "bin" ]; then
+            mv bin/ archive/
+          fi
+          
+          if [ -d "test" ]; then
+            mv test/ archive/
+          fi
+
+      - name: Commit and push changes
+        run: |
+          # Switch to main branch
+          git checkout main
+          git pull origin main
+          
+          # Add changes
+          git add archive/
+          
+          # Check if there are changes to commit
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Archive PR ${{ github.event.number }} code to archive/"
+            git push origin main
+          fi
