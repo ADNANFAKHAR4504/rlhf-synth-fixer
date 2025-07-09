@@ -8,3 +8,4 @@
 # No owners specified = anyone can approve PRs affecting only these folders
 lib/
 test/
+bin/
