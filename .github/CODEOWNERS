@@ -1,0 +1,10 @@
+# CODEOWNERS file
+# This file defines who owns and can approve changes to different parts of the repository
+
+# Global ownership: @hernanmog-turing has access to all files
+* @hernanmog-turing
+
+# Allow anyone to approve changes in lib/ and test/ folders only
+# No owners specified = anyone can approve PRs affecting only these folders
+lib/
+test/

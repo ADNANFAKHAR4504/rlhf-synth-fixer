@@ -151,6 +151,74 @@ jobs:
       - name: CDK Deploy
         run: npm run cdk:deploy
 
+      - name: Get CDK Outputs
+        run: |
+          npx cdk list --json > cdk-stacks.json
+          mkdir -p cdk-outputs
+
+          echo "Getting all CloudFormation stacks..."
+          aws cloudformation list-stacks --stack-status-filter CREATE_COMPLETE UPDATE_COMPLETE --query 'StackSummaries[?contains(StackName, `TapStack`)].StackName' --output text > cf-stacks.txt
+
+          # Initialize consolidated outputs file
+          echo "{}" > cdk-outputs/all-outputs.json
+
+          if [ -s cf-stacks.txt ]; then
+            for stack in $(cat cf-stacks.txt); do
+              echo "Getting outputs for CloudFormation stack: $stack"
+              
+              # Get outputs for this stack
+              aws cloudformation describe-stacks --stack-name "$stack" --query 'Stacks[0].Outputs' --output json > "temp-${stack}-outputs.json" 2>/dev/null || echo "No outputs for $stack"
+              
+              if [ -f "temp-${stack}-outputs.json" ]; then
+                output_count=$(jq 'length' "temp-${stack}-outputs.json" 2>/dev/null || echo "0")
+                
+                if [ "$output_count" != "0" ] && [ "$output_count" != "null" ]; then
+                  
+                  # Merge outputs into consolidated file
+                  # Create a temporary file with stack name as key and outputs as value
+                  jq -n --arg stack "$stack" --slurpfile outputs "temp-${stack}-outputs.json" '{($stack): $outputs[0]}' > "temp-stack.json"
+                  
+                  # Merge with existing consolidated outputs
+                  jq -s '.[0] * .[1]' cdk-outputs/all-outputs.json temp-stack.json > temp-merged.json
+                  mv temp-merged.json cdk-outputs/all-outputs.json
+                  
+                  # Also flatten all outputs into a single level for easier access
+                  if [ ! -f "cdk-outputs/flat-outputs.json" ]; then
+                    echo "{}" > cdk-outputs/flat-outputs.json
+                  fi
+                  
+                  # Add each output key-value pair to flat outputs
+                  jq -r '.[] | "\(.OutputKey)=\(.OutputValue)"' "temp-${stack}-outputs.json" | while IFS='=' read -r key value; do
+                    jq --arg key "$key" --arg value "$value" '. + {($key): $value}' cdk-outputs/flat-outputs.json > temp-flat.json
+                    mv temp-flat.json cdk-outputs/flat-outputs.json
+                  done
+                fi
+                
+                # Clean up temporary file
+                rm -f "temp-${stack}-outputs.json"
+              fi
+            done
+            
+            # Clean up temporary files
+            rm -f temp-stack.json temp-merged.json temp-flat.json
+          else
+            echo "No TapStack CloudFormation stacks found"
+          fi
+
+          echo "Consolidated outputs:"
+          cat cdk-outputs/all-outputs.json || echo "No consolidated outputs"
+
+          echo "Flat outputs:"
+          cat cdk-outputs/flat-outputs.json || echo "No flat outputs"
+
+      - name: Upload CDK Outputs
+        uses: actions/upload-artifact@v4
+        with:
+          name: cdk-outputs
+          path: |
+            cdk-outputs/
+            cdk-stacks.json
+
   # mocked-integration-tests:
   #   name: Mocked Integration Tests
   #   runs-on: ubuntu-latest
@@ -174,41 +242,42 @@ jobs:
   #         READ_ONLY_API_KEY: "mock-readonly-key"
   #         ADMIN_API_KEY: "mock-admin-key"
 
-  # integration-tests-live:
-  #   name: Integration Tests (Live)
-  #   runs-on: ubuntu-latest
-  #   needs: cdk-deploy
-  #   environment: production
+  integration-tests-live:
+    name: Integration Tests (Live)
+    runs-on: ubuntu-latest
+    needs: cdk-deploy
+    environment: production
 
-  #   steps:
-  #     - name: Checkout code
-  #       uses: actions/checkout@v4
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-  #     - name: Setup Environment
-  #       uses: ./.github/actions/setup-environment
-  #       with:
-  #         node-version: ${{ env.NODE_VERSION }}
-  #         download-artifacts: 'true'
+      - name: Setup Environment
+        uses: ./.github/actions/setup-environment
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          download-artifacts: 'true'
 
-  #     - name: Configure AWS
-  #       uses: ./.github/actions/configure-aws
-  #       with:
-  #         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-  #         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-  #         aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+      - name: Download CDK Outputs
+        uses: actions/download-artifact@v4
+        with:
+          name: cdk-outputs
+          path: .
 
-  #     - name: Run integration tests against live environment
-  #       run: npm run test:integration
-  #       env:
-  #         API_GATEWAY_ENDPOINT: ${{ vars.API_GATEWAY_ENDPOINT }}
-  #         READ_ONLY_API_KEY: ${{ vars.READ_ONLY_API_KEY }}
-  #         ADMIN_API_KEY: ${{ vars.ADMIN_API_KEY }}
+      - name: Configure AWS
+        uses: ./.github/actions/configure-aws
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+
+      - name: Run integration tests against live environment
+        run: npm run test:integration
 
   cleanup:
     name: CDK Destroy (Cleanup)
     runs-on: ubuntu-latest
-    # needs: [cdk-deploy, integration-tests-live]
-    needs: [unit-tests]
+    needs: [integration-tests-live]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     environment: production
 

@@ -2,11 +2,7 @@
   "jest.runMode": "on-demand",
 
   // Environment variables for Jest integration tests
-  "jest.nodeEnv": {
-    "API_GATEWAY_ENDPOINT": "https://xlf44z4dlc.execute-api.us-east-2.amazonaws.com/prod",
-    "READ_ONLY_API_KEY": "readOnlyApiKeyValuexxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
-    "ADMIN_API_KEY": "adminApiKeyValuexxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-  },
+  "jest.nodeEnv": {},
 
   // TypeScript settings
   "typescript.preferences.quoteStyle": "single",
