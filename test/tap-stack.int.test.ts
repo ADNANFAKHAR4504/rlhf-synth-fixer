@@ -5,9 +5,20 @@ import fs from 'fs';
 const outputs = JSON.parse(
   fs.readFileSync('cdk-outputs/flat-outputs.json', 'utf8')
 );
-const API_GATEWAY_ENDPOINT = Object.entries(outputs).find(([key]) =>
-  key.startsWith('TurnAroundPromptApiEndpoint')
-)?.[1];
+
+// Get environment suffix from environment variable (set by CI/CD pipeline)
+const environmentSuffix = process.env.CDK_CONTEXT_ENVIRONMENT_SUFFIX || 'dev';
+
+// Look for the API endpoint output - it will have the environment suffix in the stack name
+const API_GATEWAY_ENDPOINT =
+  Object.entries(outputs).find(
+    ([key]) =>
+      key.includes('TurnAroundPromptApiEndpoint') &&
+      key.includes(`TapStack${environmentSuffix}`)
+  )?.[1] ||
+  Object.entries(outputs).find(([key]) =>
+    key.includes('TurnAroundPromptApiEndpoint')
+  )?.[1];
 
 const READ_ONLY_API_KEY =
   process.env.READ_ONLY_API_KEY ||

@@ -299,5 +299,12 @@ export class ApiGatewayStack extends cdk.Stack {
 
     // Add permissions to the DynamoDB table
     props.dynamoDBTable.grantReadWriteData(dynamoDBRole);
+
+    // Output the API endpoint
+    new cdk.CfnOutput(this, 'TurnAroundPromptApiEndpoint', {
+      value: api.url,
+      description:
+        'API Gateway endpoint URL for the Turn Around Prompt service',
+    });
   }
 }

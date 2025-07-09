@@ -9,6 +9,9 @@ on:
 
 env:
   NODE_VERSION: '22'
+  # Use PR number for resource isolation, fallback to 'main' for main branch
+  # Prefix with 'pr' to ensure AWS resource names start with a letter
+  ENVIRONMENT_SUFFIX: ${{ github.event.number && format('Pr{0}', github.event.number) || 'main' }}
 
 jobs:
   build:
@@ -88,6 +91,8 @@ jobs:
 
       - name: CDK Synth
         run: npm run cdk:synth
+        env:
+          CDK_CONTEXT_ENVIRONMENT_SUFFIX: ${{ env.ENVIRONMENT_SUFFIX }}
 
       - name: Upload CDK artifacts
         uses: actions/upload-artifact@v4
@@ -147,9 +152,13 @@ jobs:
 
       - name: CDK Bootstrap
         run: npm run cdk:bootstrap
+        env:
+          CDK_CONTEXT_ENVIRONMENT_SUFFIX: ${{ env.ENVIRONMENT_SUFFIX }}
 
       - name: CDK Deploy
         run: npm run cdk:deploy
+        env:
+          CDK_CONTEXT_ENVIRONMENT_SUFFIX: ${{ env.ENVIRONMENT_SUFFIX }}
 
       - name: Get CDK Outputs
         run: |
@@ -157,7 +166,7 @@ jobs:
           mkdir -p cdk-outputs
 
           echo "Getting all CloudFormation stacks..."
-          aws cloudformation list-stacks --stack-status-filter CREATE_COMPLETE UPDATE_COMPLETE --query 'StackSummaries[?contains(StackName, `TapStack`)].StackName' --output text > cf-stacks.txt
+          aws cloudformation list-stacks --stack-status-filter CREATE_COMPLETE UPDATE_COMPLETE --query "StackSummaries[?contains(StackName, \`TapStack${{ env.ENVIRONMENT_SUFFIX }}\`)].StackName" --output text > cf-stacks.txt
 
           # Initialize consolidated outputs file
           echo "{}" > cdk-outputs/all-outputs.json
@@ -273,6 +282,8 @@ jobs:
 
       - name: Run integration tests against live environment
         run: npm run test:integration
+        env:
+          CDK_CONTEXT_ENVIRONMENT_SUFFIX: ${{ env.ENVIRONMENT_SUFFIX }}
 
   cleanup:
     name: CDK Destroy (Cleanup)
@@ -308,6 +319,8 @@ jobs:
         run: |
           # Try to destroy any leftover resources from PRs, but don't fail if they don't exist
           npm run cdk:destroy || echo "No resources to destroy or destruction failed"
+        env:
+          CDK_CONTEXT_ENVIRONMENT_SUFFIX: ${{ env.ENVIRONMENT_SUFFIX }}
 
   cleanup-pr:
     name: CDK Destroy (PR Cleanup)
@@ -342,3 +355,5 @@ jobs:
         run: |
           # Try to destroy resources, but don't fail if they don't exist
           npm run cdk:destroy || echo "No resources to destroy or destruction failed"
+        env:
+          CDK_CONTEXT_ENVIRONMENT_SUFFIX: ${{ env.ENVIRONMENT_SUFFIX }}
