@@ -289,6 +289,71 @@ jobs:
         env:
           CDK_CONTEXT_ENVIRONMENT_SUFFIX: ${{ env.ENVIRONMENT_SUFFIX }}
 
+  archive-folders:
+    name: Archive Folders and Reset Repository
+    runs-on: ubuntu-latest
+    needs: integration-tests-live
+    permissions:
+      issues: write
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Manual Approval for Archive
+        uses: trstringer/manual-approval@v1
+        timeout-minutes: 5
+        with:
+          secret: ${{ github.TOKEN }}
+          approvers: ${{ github.actor }},hernanmog-turing
+          minimum-approvals: 1
+          issue-title: 'Archive folders for PR #${{ github.event.number }}'
+          issue-body: 'Please approve or deny the archiving of lib/, bin/, and test/ folders for PR #${{ github.event.number }}. This will move the folders to archive/Pr${{ github.event.number }}/ and commit the changes to the feature branch.'
+          exclude-workflow-initiator-as-approver: false
+          fail-on-denial: true
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+          repository: ${{ github.repository }}
+          ref: ${{ github.head_ref }}
+
+      - name: Archive folders and reset repository
+        run: |
+          # Configure Git
+          git config user.name "GitHub Actions Bot"
+          git config user.email "actions@github.com"
+
+          # Create archive directory with PR number if it doesn't exist
+          mkdir -p archive/Pr${{ github.event.number }}
+
+          # Move folders to archive
+          if [ -d "lib" ]; then
+            mv lib/ archive/Pr${{ github.event.number }}/
+            echo "Moved lib/ to archive"
+          fi
+
+          if [ -d "bin" ]; then
+            mv bin/ archive/Pr${{ github.event.number }}/
+            echo "Moved bin/ to archive"
+          fi
+
+          if [ -d "test" ]; then
+            mv test/ archive/Pr${{ github.event.number }}/
+            echo "Moved test/ to archive"
+          fi
+
+          # Check if there are changes to commit
+          if git diff --quiet && git diff --cached --quiet; then
+            echo "No changes to commit - no folders found to archive"
+          else
+            git add -A
+            git commit -m "Archive build artifacts for PR ${{ github.event.number }} [skip ci]"
+            git push origin HEAD
+            echo "Archive committed to current branch"
+          fi
+
   cleanup:
     name: CDK Destroy (Cleanup)
     runs-on: ubuntu-latest
@@ -361,87 +426,3 @@ jobs:
           npm run cdk:destroy || echo "No resources to destroy or destruction failed"
         env:
           CDK_CONTEXT_ENVIRONMENT_SUFFIX: ${{ env.ENVIRONMENT_SUFFIX }}
-
-  archive-pr:
-    name: Archive PR Code
-    runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request' && github.event.action == 'closed'
-    permissions:
-      contents: write
-      pull-requests: write
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          # Use a personal access token to allow pushing to main
-          token: ${{ secrets.GITHUB_TOKEN }}
-          fetch-depth: 0
-
-      - name: Configure Git
-        run: |
-          git config user.name "GitHub Actions Bot"
-          git config user.email "actions@github.com"
-
-      - name: Archive folders
-        run: |
-          # Create archive directory if it doesn't exist
-          mkdir -p archive
-
-          # Move folders to archive
-          if [ -d "lib" ]; then
-            mv lib/ archive/
-          fi
-
-          if [ -d "bin" ]; then
-            mv bin/ archive/
-          fi
-
-          if [ -d "test" ]; then
-            mv test/ archive/
-          fi
-
-      - name: Create archive branch and PR
-        run: |
-          # Create a new branch for the archive
-          ARCHIVE_BRANCH="archive-pr-${{ github.event.number }}"
-          git checkout -b "$ARCHIVE_BRANCH"
-
-          # Add changes
-          git add archive/
-
-          # Check if there are changes to commit
-          if git diff --staged --quiet; then
-            echo "No changes to commit"
-          else
-            git commit -m "Archive PR ${{ github.event.number }} code to archive/"
-            git push origin "$ARCHIVE_BRANCH"
-
-            # Create pull request using GitHub CLI
-            if gh pr create \
-              --title "Archive code from PR #${{ github.event.number }}" \
-              --body "Automatically archiving lib/, bin/, and test/ folders from closed PR #${{ github.event.number }}" \
-              --base main \
-              --head "$ARCHIVE_BRANCH"; then
-              echo "PR created successfully"
-              
-              # Enable auto-merge on the created PR
-              gh pr merge "$ARCHIVE_BRANCH" --auto --squash || echo "Auto-merge failed, PR needs manual review"
-            else
-              echo "GitHub CLI failed, trying REST API approach"
-              
-              # Fallback: Create PR using REST API
-              curl -X POST \
-                -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-                -H "Accept: application/vnd.github.v3+json" \
-                https://api.github.com/repos/${{ github.repository }}/pulls \
-                -d "{
-                  \"title\": \"Archive code from PR #${{ github.event.number }}\",
-                  \"body\": \"Automatically archiving lib/, bin/, and test/ folders from closed PR #${{ github.event.number }}\",
-                  \"head\": \"$ARCHIVE_BRANCH\",
-                  \"base\": \"main\"
-                }"
-            fi
-          fi
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
