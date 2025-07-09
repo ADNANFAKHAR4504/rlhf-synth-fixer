@@ -293,14 +293,31 @@ jobs:
     name: Archive Folders and Reset Repository
     runs-on: ubuntu-latest
     needs: integration-tests-live
-    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' }}
+    permissions:
+      issues: write
+      contents: write
+      pull-requests: write
 
     steps:
+      - name: Manual Approval for Archive
+        uses: trstringer/manual-approval@v1
+        with:
+          secret: ${{ github.TOKEN }}
+          approvers: ${{ github.actor }},hernanmog-turing
+          minimum-approvals: 1
+          issue-title: 'Archive folders for PR #${{ github.event.number }}'
+          issue-body: 'Please approve or deny the archiving of lib/, bin/, and test/ folders for PR #${{ github.event.number }}. This will move the folders to archive/Pr${{ github.event.number }}/ and commit the changes to the feature branch.'
+          exclude-workflow-initiator-as-approver: false
+          fail-on-denial: true
+          timeout-minutes: 5
+
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0
+          repository: ${{ github.repository }}
+          ref: ${{ github.head_ref }}
 
       - name: Archive folders and reset repository
         run: |
@@ -314,24 +331,27 @@ jobs:
           # Move folders to archive
           if [ -d "lib" ]; then
             mv lib/ archive/Pr${{ github.event.number }}/
+            echo "Moved lib/ to archive"
           fi
 
           if [ -d "bin" ]; then
             mv bin/ archive/Pr${{ github.event.number }}/
+            echo "Moved bin/ to archive"
           fi
 
           if [ -d "test" ]; then
             mv test/ archive/Pr${{ github.event.number }}/
+            echo "Moved test/ to archive"
           fi
 
           # Check if there are changes to commit
           if git diff --quiet && git diff --cached --quiet; then
-            echo "No changes to commit"
+            echo "No changes to commit - no folders found to archive"
           else
             git add -A
-            git commit -m "Archive build artifacts after integration tests [skip ci]"
+            git commit -m "Archive build artifacts for PR ${{ github.event.number }} [skip ci]"
             git push origin HEAD
-            echo "Archive committed to feature branch"
+            echo "Archive committed to current branch"
           fi
 
   cleanup:
