@@ -8,6 +8,8 @@ import { TapStack } from '../lib/tap-stack';
 jest.mock('../lib/ddb-stack');
 jest.mock('../lib/rest-api-stack');
 
+const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
+
 describe('TapStack', () => {
   let app: cdk.App;
   let stack: TapStack;
@@ -35,7 +37,7 @@ describe('TapStack', () => {
     ).mockImplementation(() => ({}) as any);
 
     app = new cdk.App();
-    stack = new TapStack(app, 'TestTapStack');
+    stack = new TapStack(app, 'TestTapStack', { environmentSuffix });
     template = Template.fromStack(stack);
   });
 
@@ -97,7 +99,8 @@ describe('TapStack', () => {
       expect(DynamoDBStack).toHaveBeenCalledTimes(1);
       expect(DynamoDBStack).toHaveBeenCalledWith(
         stack, // scope should be the TapStack instance
-        'DynamoDBStack' // id should be 'DynamoDBStack'
+        'DynamoDBStack', // id should be 'DynamoDBStack'
+        { environmentSuffix } // props should contain environmentSuffix
       );
     });
 
@@ -107,7 +110,7 @@ describe('TapStack', () => {
       expect(ApiGatewayStack).toHaveBeenCalledWith(
         stack, // scope should be the TapStack instance
         'ApiGatewayStack', // id should be 'ApiGatewayStack'
-        { dynamoDBTable: mockDynamoDBStack.table } // props should contain the DynamoDB table
+        { dynamoDBTable: mockDynamoDBStack.table, environmentSuffix } // props should contain the DynamoDB table
       );
     });
 

@@ -11,7 +11,7 @@ env:
   NODE_VERSION: '22'
   # Use PR number for resource isolation, fallback to 'main' for main branch
   # Prefix with 'pr' to ensure AWS resource names start with a letter
-  ENVIRONMENT_SUFFIX: ${{ github.event.number && format('Pr{0}', github.event.number) || 'main' }}
+  ENVIRONMENT_SUFFIX: ${{ github.event.number && format('Pr{0}', github.event.number) || 'dev' }}
 
 jobs:
   build:
@@ -130,7 +130,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: unit-tests
     if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' }}
-    environment: production
+    environment: qa
 
     steps:
       - name: Checkout code
@@ -255,7 +255,7 @@ jobs:
     name: Integration Tests (Live)
     runs-on: ubuntu-latest
     needs: cdk-deploy
-    environment: production
+    environment: qa
 
     steps:
       - name: Checkout code
@@ -290,7 +290,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [integration-tests-live]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    environment: production
+    environment: qa
 
     steps:
       - name: Checkout code
@@ -326,7 +326,7 @@ jobs:
     name: CDK Destroy (PR Cleanup)
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request' && github.event.action == 'closed'
-    environment: production
+    environment: qa
 
     steps:
       - name: Checkout code

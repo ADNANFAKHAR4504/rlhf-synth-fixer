@@ -2,6 +2,8 @@ import * as cdk from 'aws-cdk-lib';
 import { Match, Template } from 'aws-cdk-lib/assertions';
 import { DynamoDBStack } from '../lib/ddb-stack';
 
+const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
+
 describe('DynamoDBStack', () => {
   let app: cdk.App;
   let stack: DynamoDBStack;
@@ -9,7 +11,9 @@ describe('DynamoDBStack', () => {
 
   beforeEach(() => {
     app = new cdk.App();
-    stack = new DynamoDBStack(app, 'TestDynamoDBStack');
+    stack = new DynamoDBStack(app, 'TestDynamoDBStack', {
+      environmentSuffix,
+    });
     template = Template.fromStack(stack);
   });
 
@@ -33,7 +37,7 @@ describe('DynamoDBStack', () => {
 
     test('should have correct table name pattern', () => {
       template.hasResourceProperties('AWS::DynamoDB::Table', {
-        TableName: Match.absent(),
+        TableName: `TurnAroundPromptTable${environmentSuffix}`,
       });
     });
 
