@@ -2,7 +2,9 @@
   "jest.runMode": "on-demand",
 
   // Environment variables for Jest integration tests
-  "jest.nodeEnv": {},
+  "jest.nodeEnv": {
+    "ENVIRONMENT_SUFFIX": "dev"
+  },
 
   // TypeScript settings
   "typescript.preferences.quoteStyle": "single",

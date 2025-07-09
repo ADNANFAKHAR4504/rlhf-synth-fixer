@@ -3,6 +3,8 @@ import { Match, Template } from 'aws-cdk-lib/assertions';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import { ApiGatewayStack } from '../lib/rest-api-stack';
 
+const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
+
 describe('ApiGatewayStack', () => {
   let app: cdk.App;
   let dynamoDBTable: dynamodb.Table;
@@ -22,6 +24,7 @@ describe('ApiGatewayStack', () => {
     // Create the ApiGatewayStack with the mock table
     stack = new ApiGatewayStack(app, 'TestApiGatewayStack', {
       dynamoDBTable: dynamoDBTable,
+      environmentSuffix,
     });
     template = Template.fromStack(stack);
   });
@@ -29,7 +32,7 @@ describe('ApiGatewayStack', () => {
   describe('REST API Creation', () => {
     test('should create a REST API', () => {
       template.hasResourceProperties('AWS::ApiGateway::RestApi', {
-        Name: 'Turn Around Prompt Service',
+        Name: `Turn Around Prompt Service ${environmentSuffix}`,
         Description:
           'This service provides CRUD operations for turn around prompts.',
       });
@@ -58,21 +61,21 @@ describe('ApiGatewayStack', () => {
   describe('API Keys and Usage Plan', () => {
     test('should create read-only API key', () => {
       template.hasResourceProperties('AWS::ApiGateway::ApiKey', {
-        Name: 'readOnlyApiKey',
+        Name: `readOnlyApiKey${environmentSuffix}`,
         Value: 'readOnlyApiKeyValuexxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
       });
     });
 
     test('should create admin API key', () => {
       template.hasResourceProperties('AWS::ApiGateway::ApiKey', {
-        Name: 'adminApiKey',
+        Name: `adminApiKey${environmentSuffix}`,
         Value: 'adminApiKeyValuexxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
       });
     });
 
     test('should create usage plan with throttling', () => {
       template.hasResourceProperties('AWS::ApiGateway::UsagePlan', {
-        UsagePlanName: 'Easy',
+        UsagePlanName: `Easy${environmentSuffix}`,
         Throttle: {
           RateLimit: 10,
           BurstLimit: 20,
@@ -199,7 +202,7 @@ describe('ApiGatewayStack', () => {
   describe('Request Validators', () => {
     test('should create GET request validator', () => {
       template.hasResourceProperties('AWS::ApiGateway::RequestValidator', {
-        Name: 'GETValidator',
+        Name: `GETValidator${environmentSuffix}`,
         ValidateRequestBody: true,
         ValidateRequestParameters: false,
       });
@@ -207,7 +210,7 @@ describe('ApiGatewayStack', () => {
 
     test('should create PUT request validator', () => {
       template.hasResourceProperties('AWS::ApiGateway::RequestValidator', {
-        Name: 'PUTValidator',
+        Name: `PUTValidator${environmentSuffix}`,
         ValidateRequestBody: true,
         ValidateRequestParameters: false,
       });
@@ -215,7 +218,7 @@ describe('ApiGatewayStack', () => {
 
     test('should create PATCH request validator', () => {
       template.hasResourceProperties('AWS::ApiGateway::RequestValidator', {
-        Name: 'PATCHValidator',
+        Name: `PATCHValidator${environmentSuffix}`,
         ValidateRequestBody: true,
         ValidateRequestParameters: false,
       });
@@ -223,7 +226,7 @@ describe('ApiGatewayStack', () => {
 
     test('should create DELETE request validator', () => {
       template.hasResourceProperties('AWS::ApiGateway::RequestValidator', {
-        Name: 'DELETEValidator',
+        Name: `DELETEValidator${environmentSuffix}`,
         ValidateRequestBody: true,
         ValidateRequestParameters: false,
       });
@@ -237,7 +240,7 @@ describe('ApiGatewayStack', () => {
   describe('Request Models and Schemas', () => {
     test('should create GET request model with correct schema', () => {
       template.hasResourceProperties('AWS::ApiGateway::Model', {
-        Name: 'TurnAroundPromptModel',
+        Name: `TurnAroundPromptModel${environmentSuffix}`,
         ContentType: 'application/json',
         Schema: {
           $schema: 'http://json-schema.org/draft-04/schema#',
@@ -254,7 +257,7 @@ describe('ApiGatewayStack', () => {
 
     test('should create PUT request model with correct schema', () => {
       template.hasResourceProperties('AWS::ApiGateway::Model', {
-        Name: 'TurnAroundPromptModelPut',
+        Name: `TurnAroundPromptModelPut${environmentSuffix}`,
         ContentType: 'application/json',
         Schema: {
           $schema: 'http://json-schema.org/draft-04/schema#',
@@ -271,7 +274,7 @@ describe('ApiGatewayStack', () => {
 
     test('should create PATCH request model with correct schema', () => {
       template.hasResourceProperties('AWS::ApiGateway::Model', {
-        Name: 'TurnAroundPromptModel',
+        Name: `TurnAroundPromptModel${environmentSuffix}`,
         ContentType: 'application/json',
         Schema: {
           $schema: 'http://json-schema.org/draft-04/schema#',
@@ -288,7 +291,7 @@ describe('ApiGatewayStack', () => {
 
     test('should create DELETE request model with correct schema', () => {
       template.hasResourceProperties('AWS::ApiGateway::Model', {
-        Name: 'TurnAroundPromptModelDelete',
+        Name: `TurnAroundPromptModelDelete${environmentSuffix}`,
         ContentType: 'application/json',
         Schema: {
           type: 'object',

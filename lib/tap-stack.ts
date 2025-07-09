@@ -3,13 +3,27 @@ import { Construct } from 'constructs';
 import { DynamoDBStack } from './ddb-stack';
 import { ApiGatewayStack } from './rest-api-stack';
 
+interface TapStackProps extends cdk.StackProps {
+  environmentSuffix?: string;
+}
+
 export class TapStack extends cdk.Stack {
-  constructor(scope: Construct, id: string, props?: cdk.StackProps) {
+  constructor(scope: Construct, id: string, props?: TapStackProps) {
     super(scope, id, props);
 
-    const dynamoDBStack = new DynamoDBStack(this, 'DynamoDBStack');
+    // Get environment suffix from props, context, or use 'dev' as default
+    const environmentSuffix =
+      props?.environmentSuffix ||
+      this.node.tryGetContext('environmentSuffix') ||
+      'dev';
+
+    const dynamoDBStack = new DynamoDBStack(this, 'DynamoDBStack', {
+      environmentSuffix,
+    });
+
     new ApiGatewayStack(this, 'ApiGatewayStack', {
       dynamoDBTable: dynamoDBStack.table,
+      environmentSuffix,
     });
   }
 }

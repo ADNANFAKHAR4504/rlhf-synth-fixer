@@ -9,6 +9,9 @@ on:
 
 env:
   NODE_VERSION: '22'
+  # Use PR number for resource isolation, fallback to 'main' for main branch
+  # Prefix with 'pr' to ensure AWS resource names start with a letter
+  ENVIRONMENT_SUFFIX: ${{ github.event.number && format('Pr{0}', github.event.number) || 'dev' }}
 
 jobs:
   build:
@@ -88,6 +91,8 @@ jobs:
 
       - name: CDK Synth
         run: npm run cdk:synth
+        env:
+          CDK_CONTEXT_ENVIRONMENT_SUFFIX: ${{ env.ENVIRONMENT_SUFFIX }}
 
       - name: Upload CDK artifacts
         uses: actions/upload-artifact@v4
@@ -125,7 +130,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: unit-tests
     if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' }}
-    environment: production
+    environment: qa
 
     steps:
       - name: Checkout code
@@ -147,9 +152,17 @@ jobs:
 
       - name: CDK Bootstrap
         run: npm run cdk:bootstrap
+        env:
+          CDK_CONTEXT_ENVIRONMENT_SUFFIX: ${{ env.ENVIRONMENT_SUFFIX }}
+          REPOSITORY: ${{ github.repository }}
+          COMMIT_AUTHOR: ${{ github.event.head_commit.author.name || github.actor }}
 
       - name: CDK Deploy
         run: npm run cdk:deploy
+        env:
+          CDK_CONTEXT_ENVIRONMENT_SUFFIX: ${{ env.ENVIRONMENT_SUFFIX }}
+          REPOSITORY: ${{ github.repository }}
+          COMMIT_AUTHOR: ${{ github.event.head_commit.author.name || github.actor }}
 
       - name: Get CDK Outputs
         run: |
@@ -157,7 +170,7 @@ jobs:
           mkdir -p cdk-outputs
 
           echo "Getting all CloudFormation stacks..."
-          aws cloudformation list-stacks --stack-status-filter CREATE_COMPLETE UPDATE_COMPLETE --query 'StackSummaries[?contains(StackName, `TapStack`)].StackName' --output text > cf-stacks.txt
+          aws cloudformation list-stacks --stack-status-filter CREATE_COMPLETE UPDATE_COMPLETE --query "StackSummaries[?contains(StackName, \`TapStack${{ env.ENVIRONMENT_SUFFIX }}\`)].StackName" --output text > cf-stacks.txt
 
           # Initialize consolidated outputs file
           echo "{}" > cdk-outputs/all-outputs.json
@@ -246,7 +259,7 @@ jobs:
     name: Integration Tests (Live)
     runs-on: ubuntu-latest
     needs: cdk-deploy
-    environment: production
+    environment: qa
 
     steps:
       - name: Checkout code
@@ -273,13 +286,15 @@ jobs:
 
       - name: Run integration tests against live environment
         run: npm run test:integration
+        env:
+          CDK_CONTEXT_ENVIRONMENT_SUFFIX: ${{ env.ENVIRONMENT_SUFFIX }}
 
   cleanup:
     name: CDK Destroy (Cleanup)
     runs-on: ubuntu-latest
     needs: [integration-tests-live]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    environment: production
+    environment: qa
 
     steps:
       - name: Checkout code
@@ -308,12 +323,14 @@ jobs:
         run: |
           # Try to destroy any leftover resources from PRs, but don't fail if they don't exist
           npm run cdk:destroy || echo "No resources to destroy or destruction failed"
+        env:
+          CDK_CONTEXT_ENVIRONMENT_SUFFIX: ${{ env.ENVIRONMENT_SUFFIX }}
 
   cleanup-pr:
     name: CDK Destroy (PR Cleanup)
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request' && github.event.action == 'closed'
-    environment: production
+    environment: qa
 
     steps:
       - name: Checkout code
@@ -342,3 +359,5 @@ jobs:
         run: |
           # Try to destroy resources, but don't fail if they don't exist
           npm run cdk:destroy || echo "No resources to destroy or destruction failed"
+        env:
+          CDK_CONTEXT_ENVIRONMENT_SUFFIX: ${{ env.ENVIRONMENT_SUFFIX }}

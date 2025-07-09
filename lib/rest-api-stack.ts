@@ -8,13 +8,15 @@ export class ApiGatewayStack extends cdk.Stack {
   constructor(
     scope: Construct,
     id: string,
-    props: { dynamoDBTable: dynamodb.Table },
+    props: { dynamoDBTable: dynamodb.Table; environmentSuffix?: string },
     cdkProps?: cdk.StackProps
   ) {
     super(scope, id, cdkProps);
 
+    const environmentSuffix = props.environmentSuffix || 'dev';
+
     const api = new apigateway.RestApi(this, 'TurnAroundPromptApi', {
-      restApiName: 'Turn Around Prompt Service',
+      restApiName: `Turn Around Prompt Service ${environmentSuffix}`,
       description:
         'This service provides CRUD operations for turn around prompts.',
       deployOptions: {
@@ -27,18 +29,18 @@ export class ApiGatewayStack extends cdk.Stack {
       cloudWatchRoleRemovalPolicy: cdk.RemovalPolicy.DESTROY, // Remove the role when the stack is destroyed
     });
 
-    const apiKey1 = api.addApiKey('readOnlyApiKey', {
-      apiKeyName: 'readOnlyApiKey',
+    const apiKey1 = api.addApiKey(`readOnlyApiKey${environmentSuffix}`, {
+      apiKeyName: `readOnlyApiKey${environmentSuffix}`,
       value: 'readOnlyApiKeyValuexxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', // In production, generate and store this securely
     });
 
-    const apiKey2 = api.addApiKey('adminApiKey', {
-      apiKeyName: 'adminApiKey',
+    const apiKey2 = api.addApiKey(`adminApiKey${environmentSuffix}`, {
+      apiKeyName: `adminApiKey${environmentSuffix}`,
       value: 'adminApiKeyValuexxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', // In production, generate and store this securely
     });
 
     const usagePlan = api.addUsagePlan('UsagePlan', {
-      name: 'Easy',
+      name: `Easy${environmentSuffix}`,
       throttle: {
         rateLimit: 10,
         burstLimit: 20,
@@ -55,6 +57,7 @@ export class ApiGatewayStack extends cdk.Stack {
     usagePlan.addApiKey(apiKey2);
 
     const dynamoDBRole = new iam.Role(this, 'DynamoDBRole', {
+      roleName: `TapApiGatewayDynamoDBRole${environmentSuffix}`,
       assumedBy: new iam.ServicePrincipal('apigateway.amazonaws.com'),
     });
 
@@ -162,7 +165,7 @@ export class ApiGatewayStack extends cdk.Stack {
         requestModels: {
           'application/json': api.addModel('TurnAroundPromptModelPut', {
             contentType: 'application/json',
-            modelName: 'TurnAroundPromptModelPut',
+            modelName: `TurnAroundPromptModelPut${environmentSuffix}`,
             schema: {
               type: apigateway.JsonSchemaType.OBJECT,
               properties: {
@@ -204,7 +207,7 @@ export class ApiGatewayStack extends cdk.Stack {
         requestModels: {
           'application/json': api.addModel('TurnAroundPromptModel', {
             contentType: 'application/json',
-            modelName: 'TurnAroundPromptModel',
+            modelName: `TurnAroundPromptModel${environmentSuffix}`,
             schema: {
               type: apigateway.JsonSchemaType.OBJECT,
               properties: {
@@ -236,7 +239,7 @@ export class ApiGatewayStack extends cdk.Stack {
         requestModels: {
           'application/json': api.addModel('TurnAroundPromptModelDelete', {
             contentType: 'application/json',
-            modelName: 'TurnAroundPromptModelDelete',
+            modelName: `TurnAroundPromptModelDelete${environmentSuffix}`,
             schema: {
               type: apigateway.JsonSchemaType.OBJECT,
               properties: {
@@ -287,7 +290,7 @@ export class ApiGatewayStack extends cdk.Stack {
             `${method}Validator`,
             {
               restApi: api,
-              requestValidatorName: `${method}Validator`,
+              requestValidatorName: `${method}Validator${environmentSuffix}`,
               validateRequestBody: true,
               validateRequestParameters: false,
             }
@@ -299,5 +302,12 @@ export class ApiGatewayStack extends cdk.Stack {
 
     // Add permissions to the DynamoDB table
     props.dynamoDBTable.grantReadWriteData(dynamoDBRole);
+
+    // Output the API endpoint
+    new cdk.CfnOutput(this, 'TurnAroundPromptApiEndpoint', {
+      value: api.url,
+      description:
+        'API Gateway endpoint URL for the Turn Around Prompt service',
+    });
   }
 }
