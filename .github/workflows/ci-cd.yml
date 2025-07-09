@@ -366,6 +366,8 @@ jobs:
     name: Archive PR Code
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request' && github.event.action == 'closed'
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout code
