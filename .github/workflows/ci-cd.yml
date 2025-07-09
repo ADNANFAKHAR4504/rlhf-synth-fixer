@@ -301,6 +301,7 @@ jobs:
     steps:
       - name: Manual Approval for Archive
         uses: trstringer/manual-approval@v1
+        timeout-minutes: 5
         with:
           secret: ${{ github.TOKEN }}
           approvers: ${{ github.actor }},hernanmog-turing
@@ -309,7 +310,6 @@ jobs:
           issue-body: 'Please approve or deny the archiving of lib/, bin/, and test/ folders for PR #${{ github.event.number }}. This will move the folders to archive/Pr${{ github.event.number }}/ and commit the changes to the feature branch.'
           exclude-workflow-initiator-as-approver: false
           fail-on-denial: true
-          timeout-minutes: 5
 
       - name: Checkout code
         uses: actions/checkout@v4
