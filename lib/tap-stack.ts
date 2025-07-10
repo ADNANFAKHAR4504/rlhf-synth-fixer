@@ -1,9 +1,8 @@
 import * as cdk from 'aws-cdk-lib';
-import * as s3 from 'aws-cdk-lib/aws-s3';
 import { Construct } from 'constructs';
 
 // ? Import your stacks here
-// import { MyStack } from './my-stack';
+import { DynamoDBStack } from './ddb-stack';
 
 interface TapStackProps extends cdk.StackProps {
   environmentSuffix?: string;
@@ -21,9 +20,10 @@ export class TapStack extends cdk.Stack {
       'dev';
 
     // ? Add your stack instantiations here
-    new s3.Bucket(this, `TapBucket-${environmentSuffix}`, {
-      bucketName: 'tap-bucket',
-      removalPolicy: cdk.RemovalPolicy.DESTROY, // Change to RETAIN for production
+    // ! Do NOT create resources directly in this stack.
+    // ! Instead, create separate stacks for each resource type.
+    new DynamoDBStack(this, 'DynamoDBStack', {
+      environmentSuffix: environmentSuffix,
     });
   }
 }

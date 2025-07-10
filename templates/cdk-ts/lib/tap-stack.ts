@@ -20,5 +20,7 @@ export class TapStack extends cdk.Stack {
       'dev';
 
     // ? Add your stack instantiations here
+    // ! Do NOT create resources directly in this stack.
+    // ! Instead, create separate stacks for each resource type.
   }
 }

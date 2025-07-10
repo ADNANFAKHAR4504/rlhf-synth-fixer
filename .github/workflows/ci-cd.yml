@@ -17,7 +17,8 @@ jobs:
   build:
     name: Build
     runs-on: ubuntu-latest
-    if: ${{ github.event.action != 'closed' }}
+    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' }}
+    environment: dev
 
     steps:
       - name: Checkout code
@@ -47,30 +48,12 @@ jobs:
             tsconfig.json
             cdk.json
 
-  lint:
-    name: Lint
+  synth:
+    name: Synth
     runs-on: ubuntu-latest
     needs: build
-    if: ${{ github.event.action != 'closed' }}
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Environment
-        uses: ./.github/actions/setup-environment
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          download-artifacts: 'true'
-
-      - name: Run ESLint
-        run: npm run lint
-
-  cdk-synth:
-    name: CDK Synth
-    runs-on: ubuntu-latest
-    needs: lint
     if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' }}
+    environment: dev
 
     steps:
       - name: Checkout code
@@ -100,37 +83,12 @@ jobs:
           name: cdk-artifacts
           path: cdk.out/
 
-  unit-tests:
-    name: Unit Testing
+  deploy:
+    name: Deploy
     runs-on: ubuntu-latest
-    needs: cdk-synth
-    if: ${{ github.event.action != 'closed' }}
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Environment
-        uses: ./.github/actions/setup-environment
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          download-artifacts: 'true'
-
-      - name: Run unit tests
-        run: npm run test:unit
-
-      - name: Upload coverage reports
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-reports
-          path: coverage/
-
-  cdk-deploy:
-    name: CDK Deploy
-    runs-on: ubuntu-latest
-    needs: unit-tests
+    needs: synth
     if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' }}
-    environment: qa
+    environment: dev
 
     steps:
       - name: Checkout code
@@ -232,6 +190,52 @@ jobs:
             cdk-outputs/
             cdk-stacks.json
 
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    needs: build
+    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' }}
+    environment: qa
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Environment
+        uses: ./.github/actions/setup-environment
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          download-artifacts: 'true'
+
+      - name: Run ESLint
+        run: npm run lint
+
+  unit-tests:
+    name: Unit Testing
+    runs-on: ubuntu-latest
+    needs: lint
+    if: ${{ github.event.action != 'closed' }}
+    environment: qa
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Environment
+        uses: ./.github/actions/setup-environment
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          download-artifacts: 'true'
+
+      - name: Run unit tests
+        run: npm run test:unit
+
+      - name: Upload coverage reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-reports
+          path: coverage/
+
   # mocked-integration-tests:
   #   name: Mocked Integration Tests
   #   runs-on: ubuntu-latest
@@ -258,7 +262,7 @@ jobs:
   integration-tests-live:
     name: Integration Tests (Live)
     runs-on: ubuntu-latest
-    needs: cdk-deploy
+    needs: [unit-tests, deploy]
     environment: qa
 
     steps:
@@ -289,28 +293,52 @@ jobs:
         env:
           CDK_CONTEXT_ENVIRONMENT_SUFFIX: ${{ env.ENVIRONMENT_SUFFIX }}
 
+  cleanup:
+    name: CDK Destroy (Cleanup)
+    runs-on: ubuntu-latest
+    needs: [integration-tests-live]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    environment: production
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Configure AWS
+        uses: ./.github/actions/configure-aws
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+
+      - name: CDK Destroy (cleanup any leftover resources)
+        run: |
+          # Try to destroy any leftover resources from PRs, but don't fail if they don't exist
+          npm run cdk:destroy || echo "No resources to destroy or destruction failed"
+        env:
+          CDK_CONTEXT_ENVIRONMENT_SUFFIX: ${{ env.ENVIRONMENT_SUFFIX }}
+
   archive-folders:
     name: Archive Folders and Reset Repository
     runs-on: ubuntu-latest
-    needs: integration-tests-live
+    needs: cleanup
+    environment: production
     permissions:
-      issues: write
       contents: write
-      pull-requests: write
 
     steps:
-      - name: Manual Approval for Archive
-        uses: trstringer/manual-approval@v1
-        timeout-minutes: 5
-        with:
-          secret: ${{ github.TOKEN }}
-          approvers: ${{ github.actor }},hernanmog-turing
-          minimum-approvals: 1
-          issue-title: 'Archive folders for PR #${{ github.event.number }}'
-          issue-body: 'Please approve or deny the archiving of lib/, bin/, and test/ folders for PR #${{ github.event.number }}. This will move the folders to archive/Pr${{ github.event.number }}/ and commit the changes to the feature branch.'
-          exclude-workflow-initiator-as-approver: false
-          fail-on-denial: true
-
       - name: Checkout code
         uses: actions/checkout@v4
         with:
@@ -354,45 +382,8 @@ jobs:
             echo "Archive committed to current branch"
           fi
 
-  cleanup:
-    name: CDK Destroy (Cleanup)
-    runs-on: ubuntu-latest
-    needs: [integration-tests-live]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    environment: qa
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build
-        run: npm run build
-
-      - name: Configure AWS
-        uses: ./.github/actions/configure-aws
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
-
-      - name: CDK Destroy (cleanup any leftover resources)
-        run: |
-          # Try to destroy any leftover resources from PRs, but don't fail if they don't exist
-          npm run cdk:destroy || echo "No resources to destroy or destruction failed"
-        env:
-          CDK_CONTEXT_ENVIRONMENT_SUFFIX: ${{ env.ENVIRONMENT_SUFFIX }}
-
   cleanup-pr:
-    name: CDK Destroy (PR Cleanup)
+    name: CDK Destroy (PR Closed Cleanup)
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request' && github.event.action == 'closed'
     environment: qa
