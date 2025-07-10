@@ -2,6 +2,7 @@
 /bin/*.js
 /lib/*.js
 /test/*.js
+/cli/*.js
 *.d.ts
 
 # Dependencies
