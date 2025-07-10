@@ -3,37 +3,26 @@
 // eslint-disable-next-line import/no-extraneous-dependencies
 import * as fs from 'fs-extra';
 // eslint-disable-next-line import/no-extraneous-dependencies
-import { confirm, select } from '@inquirer/prompts';
+import { confirm, input, select } from '@inquirer/prompts';
 import * as path from 'path';
 
-interface TemplateChoice {
-  name: string;
-  value: string;
+interface TaskMetadata {
+  platform: string;
+  language: string;
+  complexity: string;
+  turn_type: string;
+  po_id: string;
 }
 
-async function getAvailableTemplates(): Promise<TemplateChoice[]> {
-  const templatesDir = path.join(__dirname, '..', 'templates');
+async function generateMetadataFile(metadata: TaskMetadata): Promise<void> {
+  const rootDir = path.join(__dirname, '..');
+  const metadataPath = path.join(rootDir, 'metadata.json');
 
   try {
-    const items = await fs.readdir(templatesDir);
-    const templates: TemplateChoice[] = [];
-
-    for (const item of items) {
-      const itemPath = path.join(templatesDir, item);
-      const stat = await fs.stat(itemPath);
-
-      if (stat.isDirectory()) {
-        templates.push({
-          name: item,
-          value: item,
-        });
-      }
-    }
-
-    return templates;
+    await fs.writeJson(metadataPath, metadata, { spaces: 2 });
+    console.log('✓ Generated metadata.json');
   } catch (error) {
-    console.error('Error reading templates directory:', error);
-    return [];
+    console.error('Error generating metadata.json:', error);
   }
 }
 
@@ -92,28 +81,86 @@ async function main(): Promise<void> {
   if (command === 'rlhf-task') {
     console.log('🔧 TAP Template Selector\n');
 
-    const templates = await getAvailableTemplates();
+    // Collect task metadata
+    const platform = await select({
+      message: 'Select the platform:',
+      choices: [{ name: 'CDK', value: 'cdk' }],
+    });
 
-    if (templates.length === 0) {
-      console.error('No templates found in the templates directory');
+    const language = await select({
+      message: 'Select the language:',
+      choices: [{ name: 'TypeScript', value: 'ts' }],
+    });
+
+    const complexity = await select({
+      message: 'Select the complexity:',
+      choices: [
+        { name: 'Medium', value: 'medium' },
+        { name: 'Hard', value: 'hard' },
+        { name: 'Expert', value: 'expert' },
+      ],
+    });
+
+    const turnType = await select({
+      message: 'Select the turn type:',
+      choices: [
+        { name: 'Single', value: 'single' },
+        { name: 'Multi', value: 'multi' },
+      ],
+    });
+
+    const taskId = await input({
+      message: 'Enter the task ID:',
+      validate: value => {
+        if (!value.trim()) {
+          return 'Task ID is required';
+        }
+        return true;
+      },
+    });
+
+    // Generate template folder name
+    const templateName = `${platform}-${language}`;
+
+    // Check if template exists
+    const templatesDir = path.join(__dirname, '..', 'templates');
+    const templatePath = path.join(templatesDir, templateName);
+
+    if (!(await fs.pathExists(templatePath))) {
+      console.error(
+        `Template '${templateName}' not found in templates directory`
+      );
       process.exit(1);
     }
 
-    const selectedTemplate = await select({
-      message: 'Which template would you like to use?',
-      choices: templates.map(template => ({
-        name: template.name,
-        value: template.value,
-      })),
-    });
+    // Create metadata object
+    const metadata: TaskMetadata = {
+      platform,
+      language,
+      complexity,
+      turn_type: turnType,
+      po_id: taskId,
+    };
+
+    // Show summary and confirm
+    console.log('\n📋 Task Summary:');
+    console.log(`Platform: ${platform}`);
+    console.log(`Language: ${language}`);
+    console.log(`Complexity: ${complexity}`);
+    console.log(`Turn Type: ${turnType}`);
+    console.log(`Task ID: ${taskId}`);
+    console.log(`Template: ${templateName}`);
 
     const confirmApply = await confirm({
-      message: `Are you sure you want to apply the '${selectedTemplate}' template? This will overwrite existing files.`,
+      message:
+        'Create the RLHF task with these settings? This will overwrite existing files.',
       default: false,
     });
 
     if (confirmApply) {
-      await copyTemplate(selectedTemplate);
+      await copyTemplate(templateName);
+      await generateMetadataFile(metadata);
+      console.log('\n🎉 RLHF task created successfully!');
     } else {
       console.log('Operation cancelled');
     }

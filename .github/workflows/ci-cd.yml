@@ -39,6 +39,14 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Check metadata.json exists
+        run: |
+          if [ ! -f "metadata.json" ]; then
+            echo "Error: metadata.json not found!"
+            exit 1
+          fi
+          echo "metadata.json found and will be included in artifacts"
+
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -50,6 +58,7 @@ jobs:
             package*.json
             tsconfig.json
             cdk.json
+            metadata.json
 
   synth:
     name: Synth
@@ -360,30 +369,40 @@ jobs:
           git config user.name "GitHub Actions Bot"
           git config user.email "actions@github.com"
 
-          # Create archive directory with PR number if it doesn't exist
-          mkdir -p archive/Pr${{ github.event.number }}
-
-          # Move folders to archive
-          if [ -d "lib" ]; then
-            mv lib/ archive/Pr${{ github.event.number }}/
-            echo "Moved lib/ to archive"
+          # Extract platform and language from metadata.json
+          if [ -f "metadata.json" ]; then
+            PLATFORM=$(jq -r '.platform // "unknown"' metadata.json)
+            LANGUAGE=$(jq -r '.language // "unknown"' metadata.json)
+            echo "Extracted platform: $PLATFORM, language: $LANGUAGE"
+          else
+            echo "Warning: metadata.json not found, using default values"
+            PLATFORM="unknown"
+            LANGUAGE="unknown"
           fi
 
-          if [ -d "bin" ]; then
-            mv bin/ archive/Pr${{ github.event.number }}/
-            echo "Moved bin/ to archive"
-          fi
+          # Create archive directory with platform, language, and PR number
+          ARCHIVE_DIR="archive/${PLATFORM}-${LANGUAGE}/Pr${{ github.event.number }}"
+          mkdir -p "$ARCHIVE_DIR"
+          echo "Created archive directory: $ARCHIVE_DIR"
 
-          if [ -d "test" ]; then
-            mv test/ archive/Pr${{ github.event.number }}/
-            echo "Moved test/ to archive"
-          fi
+            # Define list of paths to move to archive
+            PATHS_TO_ARCHIVE=(
+            "lib"
+            "bin" 
+            "test"
+            "cdk.json"
+            "metadata.json"
+            )
 
-          # Move also cdk.json to archive
-          if [ -f "cdk.json" ]; then
-            mv cdk.json archive/Pr${{ github.event.number }}/
-            echo "Moved cdk.json to archive"
-          fi
+            # Move paths to archive
+            for path in "${PATHS_TO_ARCHIVE[@]}"; do
+            if [[ -d "$path" || -f "$path" ]]; then
+              mv "$path" "$ARCHIVE_DIR"/
+              echo "Moved $path to archive"
+            else
+              echo "Path $path not found, skipping"
+            fi
+            done
 
           # Check if there are changes to commit
           if git diff --quiet && git diff --cached --quiet; then
