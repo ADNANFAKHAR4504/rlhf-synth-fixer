@@ -79,6 +79,12 @@ This project includes a CLI tool for creating RLHF tasks with predefined templat
 npm start rlhf-task
 ```
 
+If required, run the following command for installing dependencies. Run this command at the root of the repository.
+
+```bash
+npm install
+```
+
 This command will launch an interactive prompt that guides you through:
 
 1. **Platform Selection**: Choose the Infrastructure as Code platform:
