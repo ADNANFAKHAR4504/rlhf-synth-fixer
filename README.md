@@ -55,6 +55,20 @@ python --version  # Should output: Python 3.12.11
 pipenv --version  # Should output: pipenv, version 2025.0.4
 ```
 
+## AWS CLI Access
+
+Since engineers don't have direct access to the AWS Console, an EC2 instance has been provided for making queries to the AWS CLI.
+
+**Login to the EC2 instance:**
+
+```bash
+ssh -o PreferredAuthentications=password devuser@35.175.34.151
+```
+
+**Password**: Ask your team leader for the password.
+
+Once connected to the EC2 instance, you can use standard AWS CLI commands to interact with your AWS resources, check deployment status, and troubleshoot issues.
+
 ## CLI Usage
 
 This project includes a CLI tool for creating RLHF tasks with predefined templates and metadata.
