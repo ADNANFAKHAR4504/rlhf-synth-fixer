@@ -67,6 +67,17 @@ async function copyTemplate(templateName: string): Promise<void> {
   }
 }
 
+function getLanguageChoices(platform: string) {
+  if (platform === 'cdk') {
+    return [{ name: 'TypeScript', value: 'ts' }];
+  }
+
+  return [
+    { name: 'YAML', value: 'yaml' },
+    { name: 'JSON', value: 'json' },
+  ];
+}
+
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
 
@@ -84,12 +95,15 @@ async function main(): Promise<void> {
     // Collect task metadata
     const platform = await select({
       message: 'Select the platform:',
-      choices: [{ name: 'CDK', value: 'cdk' }],
+      choices: [
+        { name: 'CDK', value: 'cdk' },
+        { name: 'CloudFormation', value: 'cfn' },
+      ],
     });
 
     const language = await select({
       message: 'Select the language:',
-      choices: [{ name: 'TypeScript', value: 'ts' }],
+      choices: getLanguageChoices(platform),
     });
 
     const complexity = await select({

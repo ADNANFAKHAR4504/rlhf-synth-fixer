@@ -1,5 +1,7 @@
 {
   "jest.runMode": "on-demand",
+  "jest.jestCommandLine": "npx jest",
+  "jest.rootPath": ".",
 
   // Environment variables for Jest integration tests
   "jest.nodeEnv": {
