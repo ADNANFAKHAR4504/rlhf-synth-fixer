@@ -6,7 +6,7 @@ A TypeScript CDK project for creating and managing RLHF (Reinforcement Learning 
 
 **Runtime Versions**: This project requires specific versions of the following tools:
 - **Node.js**: v22.17.0 exactly
-- **Python**: 3.12.11 exactly  
+- **Python**: 3.12.11 exactly
 - **Pipenv**: 2025.0.4 exactly
 
 ### Quick Setup
@@ -79,6 +79,12 @@ This project includes a CLI tool for creating RLHF tasks with predefined templat
 npm start rlhf-task
 ```
 
+If required, run the following command for installing dependencies. Run this command at the root of the repository.
+
+```bash
+npm ci
+```
+
 This command will launch an interactive prompt that guides you through:
 
 1. **Platform Selection**: Choose the Infrastructure as Code platform:
@@ -132,6 +138,7 @@ After running the CLI, you'll have:
 
 ### Build and Test Commands
 
+- `npm ci`          installs dependencies exactly as specified in package-lock.json
 - `npm run build`   compile typescript to js
 - `npm run watch`   watch for changes and compile
 - `npm run test`    perform the jest unit tests
