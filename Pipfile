@@ -1,0 +1,20 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+cfn-lint = "*"
+cfn-flip = "*"
+
+[dev-packages]
+
+[requires]
+python_version = "3.12.11"
+
+[scripts]
+# Validation
+cfn-validate-yaml = "cfn-lint lib/TapStack.yml"
+cfn-validate-json = "cfn-lint lib/TapStack.json"
+cfn-flip-to-json = "cfn-flip  lib/TapStack.yml"
+cfn-flip-to-yaml = "cfn-flip -y lib/TapStack.json"

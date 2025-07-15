@@ -1,5 +1,5 @@
 name: "Setup Environment"
-description: "Sets up Node.js environment and restores build artifacts"
+description: "Sets up Node.js and Python environment and restores build artifacts"
 inputs:
   node-version:
     description: "Node.js version to use"
@@ -29,9 +29,31 @@ runs:
         node-version: ${{ inputs.node-version }}
         cache: "npm"
 
+    - name: Setup Python 3.12.11
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12.11'
+        check-latest: true
+
+    - name: Install pipenv
+      shell: bash
+      run: |
+        python -m pip install --upgrade pip
+        pip install pipenv==2025.0.4
+
     - name: Install dependencies
       shell: bash
       run: npm ci
+
+    - name: Install Python dependencies
+      shell: bash
+      run: |
+        if [ -f "Pipfile" ]; then
+          echo "Installing Python dependencies from Pipfile..."
+          pipenv install --dev
+        else
+          echo "No Pipfile found, skipping Python dependencies"
+        fi
 
     - name: Download CDK artifacts
       if: inputs.download-cdk-artifacts == 'true'

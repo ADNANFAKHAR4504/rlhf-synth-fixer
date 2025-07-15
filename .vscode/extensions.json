@@ -2,6 +2,7 @@
   "recommendations": [
     "ms-vscode.vscode-typescript-next",
     "ms-vscode.vscode-jest",
+    "orta.vscode-jest",
     "amazonwebservices.aws-toolkit-vscode",
     "ms-vscode.vscode-json",
     "bradlc.vscode-tailwindcss",

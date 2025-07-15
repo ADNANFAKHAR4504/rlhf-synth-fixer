@@ -5,7 +5,7 @@ const outputs = JSON.parse(
 );
 
 // Get environment suffix from environment variable (set by CI/CD pipeline)
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
+const environmentSuffix = process.env.CDK_CONTEXT_ENVIRONMENT_SUFFIX || 'dev';
 
 describe('Turn Around Prompt API Integration Tests', () => {
   describe('Hello', () => {
