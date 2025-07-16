@@ -12,6 +12,7 @@ interface TaskMetadata {
   complexity: string;
   turn_type: string;
   po_id: string;
+  startedAt: string;
 }
 
 async function generateMetadataFile(metadata: TaskMetadata): Promise<void> {
@@ -154,6 +155,7 @@ async function main(): Promise<void> {
       complexity,
       turn_type: turnType,
       po_id: taskId,
+      startedAt: new Date().toISOString(),
     };
 
     // Show summary and confirm

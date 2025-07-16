@@ -8,6 +8,8 @@ cfn-lint = "*"
 cfn-flip = "*"
 
 [dev-packages]
+boto3 = "*"
+moto = "*"
 
 [requires]
 python_version = "3.12.11"
