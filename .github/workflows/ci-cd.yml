@@ -146,14 +146,6 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Check metadata.json exists
-        run: |
-          if [ ! -f "metadata.json" ]; then
-            echo "Error: metadata.json not found!"
-            exit 1
-          fi
-          echo "metadata.json found and will be included in artifacts"
-
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
