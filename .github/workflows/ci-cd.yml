@@ -35,7 +35,7 @@ jobs:
         id: metadata
         run: |
           if [ ! -f "metadata.json" ]; then
-            echo "❌ metadata.json not found, exitting with error"
+            echo "❌ metadata.json not found, exiting with failure"
             exit 1
           fi
 
