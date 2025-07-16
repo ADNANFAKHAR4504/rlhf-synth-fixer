@@ -285,66 +285,71 @@ jobs:
         run: |
           if [ "${{ needs.synth.outputs.is-cdk-ts }}" = "true" ]; then
             echo "✅ CDK TypeScript project detected, getting CDK outputs..."
-            
             npx cdk list --json > cdk-stacks.json
             mkdir -p cdk-outputs
-
             echo "Getting all CloudFormation stacks..."
             aws cloudformation list-stacks --stack-status-filter CREATE_COMPLETE UPDATE_COMPLETE --query "StackSummaries[?contains(StackName, \`TapStack${{ env.ENVIRONMENT_SUFFIX }}\`)].StackName" --output text > cf-stacks.txt
-
-            # Initialize consolidated outputs file
             echo "{}" > cdk-outputs/all-outputs.json
-
             if [ -s cf-stacks.txt ]; then
               for stack in $(cat cf-stacks.txt); do
                 echo "Getting outputs for CloudFormation stack: $stack"
-                
-                # Get outputs for this stack
                 aws cloudformation describe-stacks --stack-name "$stack" --query 'Stacks[0].Outputs' --output json > "temp-${stack}-outputs.json" 2>/dev/null || echo "No outputs for $stack"
-                
                 if [ -f "temp-${stack}-outputs.json" ]; then
                   output_count=$(jq 'length' "temp-${stack}-outputs.json" 2>/dev/null || echo "0")
-                  
                   if [ "$output_count" != "0" ] && [ "$output_count" != "null" ]; then
-                    
-                    # Merge outputs into consolidated file
-                    # Create a temporary file with stack name as key and outputs as value
                     jq -n --arg stack "$stack" --slurpfile outputs "temp-${stack}-outputs.json" '{($stack): $outputs[0]}' > "temp-stack.json"
-                    
-                    # Merge with existing consolidated outputs
                     jq -s '.[0] * .[1]' cdk-outputs/all-outputs.json temp-stack.json > temp-merged.json
                     mv temp-merged.json cdk-outputs/all-outputs.json
-                    
-                    # Also flatten all outputs into a single level for easier access
                     if [ ! -f "cdk-outputs/flat-outputs.json" ]; then
                       echo "{}" > cdk-outputs/flat-outputs.json
                     fi
-                    
-                    # Add each output key-value pair to flat outputs
                     jq -r '.[] | "\(.OutputKey)=\(.OutputValue)"' "temp-${stack}-outputs.json" | while IFS='=' read -r key value; do
                       jq --arg key "$key" --arg value "$value" '. + {($key): $value}' cdk-outputs/flat-outputs.json > temp-flat.json
                       mv temp-flat.json cdk-outputs/flat-outputs.json
                     done
                   fi
-                  
-                  # Clean up temporary file
                   rm -f "temp-${stack}-outputs.json"
                 fi
               done
-              
-              # Clean up temporary files
               rm -f temp-stack.json temp-merged.json temp-flat.json
             else
               echo "No TapStack CloudFormation stacks found"
             fi
-
             echo "Consolidated outputs:"
             cat cdk-outputs/all-outputs.json || echo "No consolidated outputs"
-
+            echo "Flat outputs:"
+            cat cdk-outputs/flat-outputs.json || echo "No flat outputs"
+          elif [ "${{ needs.synth.outputs.platform }}" = "cfn" ]; then
+            echo "✅ CloudFormation project detected, getting stack outputs..."
+            mkdir -p cdk-outputs
+            # Try to find the stack name (assuming TapStack<ENVIRONMENT_SUFFIX>)
+            STACK_NAME="TapStack${{ env.ENVIRONMENT_SUFFIX }}"
+            echo "Getting outputs for CloudFormation stack: $STACK_NAME"
+            aws cloudformation describe-stacks --stack-name "$STACK_NAME" --query 'Stacks[0].Outputs' --output json > temp-${STACK_NAME}-outputs.json 2>/dev/null || echo "No outputs for $STACK_NAME"
+            echo "{}" > cdk-outputs/all-outputs.json
+            if [ -f "temp-${STACK_NAME}-outputs.json" ]; then
+              output_count=$(jq 'length' "temp-${STACK_NAME}-outputs.json" 2>/dev/null || echo "0")
+              if [ "$output_count" != "0" ] && [ "$output_count" != "null" ]; then
+                jq -n --arg stack "$STACK_NAME" --slurpfile outputs "temp-${STACK_NAME}-outputs.json" '{($stack): $outputs[0]}' > temp-stack.json
+                jq -s '.[0] * .[1]' cdk-outputs/all-outputs.json temp-stack.json > temp-merged.json
+                mv temp-merged.json cdk-outputs/all-outputs.json
+                if [ ! -f "cdk-outputs/flat-outputs.json" ]; then
+                  echo "{}" > cdk-outputs/flat-outputs.json
+                fi
+                jq -r '.[] | "\(.OutputKey)=\(.OutputValue)"' "temp-${STACK_NAME}-outputs.json" | while IFS='=' read -r key value; do
+                  jq --arg key "$key" --arg value "$value" '. + {($key): $value}' cdk-outputs/flat-outputs.json > temp-flat.json
+                  mv temp-flat.json cdk-outputs/flat-outputs.json
+                done
+              fi
+              rm -f "temp-${STACK_NAME}-outputs.json"
+            fi
+            rm -f temp-stack.json temp-merged.json temp-flat.json
+            echo "Consolidated outputs:"
+            cat cdk-outputs/all-outputs.json || echo "No consolidated outputs"
             echo "Flat outputs:"
             cat cdk-outputs/flat-outputs.json || echo "No flat outputs"
           else
-            echo "ℹ️ Not a CDK TypeScript project, creating empty outputs for consistency"
+            echo "ℹ️ Not a CDK TypeScript or CloudFormation project, creating empty outputs for consistency"
             mkdir -p cdk-outputs
             echo "{}" > cdk-outputs/all-outputs.json
             echo "{}" > cdk-outputs/flat-outputs.json
@@ -583,17 +588,17 @@ jobs:
           repository: ${{ github.repository }}
           ref: ${{ github.head_ref }}
 
-        - name: Download unit/integration test markdown reports
-          uses: actions/download-artifact@v4
-          with:
-            name: unit-test-report
-            path: lib/
+      - name: Download unit/integration test markdown reports
+        uses: actions/download-artifact@v4
+        with:
+          name: unit-test-report
+          path: lib/
 
-        - name: Download integration test markdown reports
-          uses: actions/download-artifact@v4
-          with:
-            name: integration-test-report
-            path: lib/
+      - name: Download integration test markdown reports
+        uses: actions/download-artifact@v4
+        with:
+          name: integration-test-report
+          path: lib/
 
       - name: Archive folders and reset repository
         run: |
