@@ -35,11 +35,8 @@ jobs:
         id: metadata
         run: |
           if [ ! -f "metadata.json" ]; then
-            echo "⚠️ metadata.json not found, using defaults"
-            echo "platform=unknown" >> $GITHUB_OUTPUT
-            echo "language=unknown" >> $GITHUB_OUTPUT
-            echo "is-cdk-ts=false" >> $GITHUB_OUTPUT
-            exit 0
+            echo "❌ metadata.json not found, exitting with error"
+            exit 1
           fi
 
           PLATFORM=$(jq -r '.platform // "unknown"' metadata.json)
@@ -148,14 +145,6 @@ jobs:
 
       - name: Build
         run: npm run build
-
-      - name: Check metadata.json exists
-        run: |
-          if [ ! -f "metadata.json" ]; then
-            echo "Error: metadata.json not found!"
-            exit 1
-          fi
-          echo "metadata.json found and will be included in artifacts"
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
