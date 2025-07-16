@@ -588,17 +588,17 @@ jobs:
           repository: ${{ github.repository }}
           ref: ${{ github.head_ref }}
 
-        - name: Download unit/integration test markdown reports
-          uses: actions/download-artifact@v4
-          with:
-            name: unit-test-report
-            path: lib/
+      - name: Download unit/integration test markdown reports
+        uses: actions/download-artifact@v4
+        with:
+          name: unit-test-report
+          path: lib/
 
-        - name: Download integration test markdown reports
-          uses: actions/download-artifact@v4
-          with:
-            name: integration-test-report
-            path: lib/
+      - name: Download integration test markdown reports
+        uses: actions/download-artifact@v4
+        with:
+          name: integration-test-report
+          path: lib/
 
       - name: Archive folders and reset repository
         run: |
