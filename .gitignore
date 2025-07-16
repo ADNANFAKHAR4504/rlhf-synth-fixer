@@ -7,8 +7,6 @@
 
 # Dependencies
 node_modules/
-package-lock.json
-yarn.lock
 
 # CDK
 .cdk.staging
