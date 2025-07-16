@@ -42,7 +42,7 @@ Your mission is to generate a complete and executable AWS CloudFormation templat
 
 **Parameters to Include:**
 * `ProjectName`
-* `Region1`, `Region2` (default to common regions like `us-east-1`, `us-west-2`)
+* `Region1` (default to common regions like `us-east-1`, `us-west-2`)
 * `VpcCidr1`, `VpcCidr2`
 * `PublicSubnet1Cidr1`, `PrivateSubnet1Cidr1`, `PublicSubnet2Cidr1`, `PrivateSubnet2Cidr1` (for Region 1)
 * `PublicSubnet1Cidr2`, `PrivateSubnet1Cidr2`, `PublicSubnet2Cidr2`, `PrivateSubnet2Cidr2` (for Region 2)
