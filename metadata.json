@@ -1,7 +1,7 @@
 {
-  "platform": "cfn",
-  "language": "yaml",
-  "complexity": "medium",
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
   "turn_type": "single",
-  "po_id": "P002"
+  "po_id": "TAP-1"
 }
