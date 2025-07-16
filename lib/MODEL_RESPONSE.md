@@ -10,15 +10,6 @@ Parameters:
   VpcCidr2:
     Type: String
     Default: 10.1.0.0/16
-  AMI:
-    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
-    
-Mappings:
-  RegionMap:
-    us-east-1:
-      AMI: "/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2"
-    us-west-2:
-      AMI: "/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2"
 
 Resources:
   # Region 1 VPC
