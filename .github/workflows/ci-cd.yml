@@ -15,7 +15,7 @@ env:
   # Use PR number for resource isolation, fallback to 'main' for main branch
   # Prefix with 'pr' to ensure AWS resource names start with a letter
   ENVIRONMENT_SUFFIX: ${{ github.event.number && format('Pr{0}', github.event.number) || 'dev' }}
-  S3_BUCKET_NAME: 'iac-rlhf-aws-tasks'
+  S3_BUCKET_NAME: 'iac-rlhf-aws-release'
 
 jobs:
   detect-metadata:
@@ -640,7 +640,7 @@ jobs:
   upload-task-to-s3:
     name: Upload Task to S3
     runs-on: ubuntu-latest
-    environment: production
+    environment: release
     if: ${{ github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged == true }}
     permissions:
       contents: read
