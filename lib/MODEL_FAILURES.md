@@ -1,13 +1,50 @@
-1. Failed importing Task
-`Property 'Task' does not exist on type 'typeof import("/home/hernan/dev/turing/rlhf/iac-test-automations/node_modules/aws-cdk-lib/aws-stepfunctions/index")`
-Resolution: `import * as tasks from 'aws-cdk-lib/aws-stepfunctions-tasks';`
-   
-2. [Synth]: Failed setting Parameters for tasks.CallAwsServic
-`ValidationError: parameter names must be PascalCase, got: collectionName, documentId, document, index at path [TapStackdev/MetadataProcessingStack/IndexDocument] in aws-cdk-lib.aws_stepfunctions_tasks.CallAwsService`
-3. [Deploy]: Failed creating Opensearch serverless collection `AWS::OpenSearchServerless::SecurityPolicy | TapStackPr19/MetadataProcessingStack/OpenSearchNetworkPolicy (OpenSearchNetworkPolicy) Resource handler returned message: "Invalid request provided: CreateSecurityPolicyRequest(Type=network, Name=metadata-network-policy, Description=Network policy for metadata collection, Policy=[{"Rules":[{"ResourceType":"collection","Resource":["collection/metadata-collection"]}],"AllowFromPublic":false}]), Policy json is invalid, error: [$[0].AllowFromPublic: must be a constant value true, $[0].SourceVPCEs: is missing but it is required, $[0].SourceServices: is missing but it is required] (Service: OpenSearchServerless, Status Code: 400, Request ID: 1ab25a1c-2025-42bf-abd4-c8a94b36c9de) (SDK Attempt Count: 1)" (RequestToken: b8c4fb5d-4059-ff0f-7279-b0418ba1c0c0, HandlerErrorCode: InvalidRequest)`
-4. [Deploy]: Policy does not exist. Probably LLM is making up policy names `(MetadataProcessingStateMachineRole91504CF0) Resource handler returned message: "Policy arn:aws:iam::aws:policy/AmazonOpenSearchServerlessFullAccess does not exist or is not attachable. (Service: Iam, Status Code: 404, Request ID: c2a67e7e-45a4-413b-8cb3-931a1a6b66b3) (SDK Attempt Count: 1)" (RequestToken: 6957c0ef-a627-1c1f-be07-1a8901174216, HandlerErrorCode: NotFound)`
-5. AccessPolicy for collection failed. Principal cannot be '*' `Invalid request provided: CreateAccessPolicyRequest(Type=data, Name=iac-rlhf-metadata-access-policy, Description=Data access policy for iac-rlhf-metadata collection, Policy=[{"Rules":[{"ResourceType":"collection","Resource":["collection/iac-rlhf-metadata-collection"],"Permission":["aoss:*"]},{"ResourceType":"index","Resource":["index/iac-rlhf-metadata-collection/*"],"Permission":["aoss:*"]}],"Principal":["*"]}]), Policy json is invalid, error: [$[0].Principal[0]: does not match the regex pattern ^arn:(?:aws|aws-cn|aws-us-gov|aws-iso|aws-iso-b|aws-iso-c|aws-iso-d|aws-iso-e):iam::\d{12}:root$, $[0].Principal[0]: does not match the regex pattern ^arn:(?:aws|aws-cn|aws-us-gov|aws-iso|aws-iso-b|aws-iso-c|aws-iso-d|aws-iso-e):iam::\d{12}:(user|role)(/[\w+=,.@-]+)*/[\w+=,.@-]{1,64}$, $[0].Principal[0]: does not match the regex pattern ^saml/[0-9]{12}/[a-z][a-z0-9-]+/(user|group)/.{1,60}$, $[0].Principal[0]: does not match the regex pattern ^arn:(?:aws|aws-cn|aws-us-gov|aws-iso|aws-iso-b|aws-iso-c|aws-iso-d|aws-iso-e):sts::\d{12}:assumed-role/[\w+=,.@-]{1,64}/([\w+=,.@-]{2,64}|[\w+=,.@-]{0,63}\*)$, $[0].Principal[0]: does not match the regex pattern ^iamidentitycenter/(sso)?ins-[a-zA-Z0-9-.]{16}/(user|group)/.{1,60}$, $[0].Principal[0]: does not match the regex pattern ^iamfederation/[0-9]{12}/(user|group)/.{1,256}$] (Service: OpenSearchServerless, Status Code: 400, Request ID: ddf8322e-50be-4336-9961-3f33e20b0c86) (SDK Attempt Count: 1)" (RequestToken: 92cb7f1e-a8da-63ef-1189-06c01fb9c4fd, HandlerErrorCode: InvalidRequest)`
-6. Definition Prop is deprecated: `Warning:  aws-cdk-lib.aws_stepfunctions.StateMachineProps#definition is deprecated.use definitionBody: DefinitionBody.fromChainable(). This API will be removed in the next major release.`
-7. State Machine definition invalid. There is no task to call Opensearch drectly: `Invalid State Machine Definition: 'SCHEMA_VALIDATION_FAILED: The resource provided arn:aws:states:::aws-sdk:opensearchserverless:indexDocument is not recognized. The value is not a valid resource ARN, or the resource is not available in this region. at /States/IndexDocument/Resource' (Service: Sfn, Status Code: 400, Request ID: 4c98056c-6c9d-4f3b-80eb-5a659a243b4a) (SDK Attempt Count: 1)" (RequestToken: 6e3ddfc9-02d5-d5fb-d857-85efadb45e1c, HandlerErrorCode: InvalidRequest)`
-8. A SQS queue between Eventbridge and the Step function is not needed. Eventbridge can directly call the state machine and retry 3 times and store the failures in a dlq.
-9. action: 'indexDocument' does not exist on opensearch serverless. a Lambda is needed.
+# Model Failures
+
+* Model declared securityPolicy and netrkPolicy for collection but did not add dependency to ensure build order
+`'securityPolicy' is declared but its value is never read.`
+`'dashboardPolicy' is declared but its value is never read.ts(6133)`
+    --> collection.addDependency(securityPolicy);
+* Property 'addCatch' does not exist on type 'Chain'.ts(2339)
+Model appended addCatch to a cdk.aws_stepfunctions.Chain, which is not allowed
+
+```typescript
+ definition: getMetadataFromS3
+          .next(processMetadata)
+          .next(prepareMetadataForOpenSearch)
+          .next(indexToOpenSearch)
+          .addCatch(
+            recordFailure.next(
+              new stepfunctions.Fail(this, 'ProcessingFailed', {
+                error: 'MetadataProcessingError',
+                cause: 'Error occurred during metadata processing',
+              })
+            ),
+            {
+              resultPath: '$',
+            }
+          )
+```
+
+* Step function's catch needs to cover all the steps in the state machine. Model added only one addCatch.
+a better strategy is to create a Parallel State with only one branch. as Catch can be added to a Parallel type task.
+
+* Wrong paramaters attached to OpenSearch policy
+`Properties validation failed for resource OpenSearchDashboardPolicy with message:[#/Type: data is not a valid enum value, #/Name: expected maxLength: 32, actual: 34, #/Name: string [iac-rlhf-metadata-dashboard-policy] does not match pattern ^[a-z][a-z0-9-]{2,31}$]`
+
+* Custom Step Function Task for Indexing to OpenSearch does not exist:
+`arn:aws:states:::aws-sdk:opensearchserverless:indexDocument` -> This does not exist.
+Actually, indexDocument is not part of the opensearch api and its not present in any sdk.
+To index a document a Lambda is needed with the right permissions.
+
+* Time Series OpenSearch collections need a @timestamp field. Not present in the custom api call. It is declared in the step before (PrepareMetadataForOpenSearch) but ignored in the parameters.
+
+```typescript
+Parameters: {
+          CollectionId: openSearchCollection.attrId,
+          DocumentString: stepfunctions.JsonPath.stringAt('States.JsonToString($.processedMetadata.document)'),
+          Index: 'metadata',
+          Id: stepfunctions.JsonPath.stringAt('$$.Execution.Id')
+        },
+```
+
+* aoss:DashboardAccessAll permission does not exist

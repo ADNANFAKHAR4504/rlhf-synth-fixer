@@ -1,4 +1,5 @@
 import * as cdk from 'aws-cdk-lib';
+import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as events from 'aws-cdk-lib/aws-events';
 import * as targets from 'aws-cdk-lib/aws-events-targets';
@@ -6,7 +7,6 @@ import * as iam from 'aws-cdk-lib/aws-iam';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as opensearchserverless from 'aws-cdk-lib/aws-opensearchserverless';
 import * as s3 from 'aws-cdk-lib/aws-s3';
-import * as sqs from 'aws-cdk-lib/aws-sqs';
 import * as sfn from 'aws-cdk-lib/aws-stepfunctions';
 import * as tasks from 'aws-cdk-lib/aws-stepfunctions-tasks';
 import { Construct } from 'constructs';
@@ -30,6 +30,8 @@ export class MetadataProcessingStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
+    const collectionName = 'iac-rlhf-metadata-collection';
+
     // OpenSearch Serverless Collection
     const securityPolicy = new opensearchserverless.CfnSecurityPolicy(
       this,
@@ -42,7 +44,7 @@ export class MetadataProcessingStack extends cdk.Stack {
           Rules: [
             {
               ResourceType: 'collection',
-              Resource: ['collection/iac-rlhf-metadata-collection'],
+              Resource: [`collection/${collectionName}`],
             },
           ],
           AWSOwnedKey: true,
@@ -62,7 +64,11 @@ export class MetadataProcessingStack extends cdk.Stack {
             Rules: [
               {
                 ResourceType: 'collection',
-                Resource: ['collection/iac-rlhf-metadata-collection'],
+                Resource: [`collection/${collectionName}`],
+              },
+              {
+                ResourceType: 'dashboard',
+                Resource: [`collection/${collectionName}`],
               },
             ],
             AllowFromPublic: true,
@@ -71,74 +77,22 @@ export class MetadataProcessingStack extends cdk.Stack {
       }
     );
 
+    // Lambda Layer for OpenSearch dependencies
+    const openSearchLayer = new lambda.LayerVersion(this, 'OpenSearchLayer', {
+      code: lambda.Code.fromAsset(
+        'lib/lambda-layers/opensearch-layer/opensearch-layer.zip'
+      ),
+      compatibleRuntimes: [lambda.Runtime.PYTHON_3_12],
+      description:
+        'Layer containing requests_aws4auth and opensearch-py dependencies',
+    });
+
     // Lambda function to handle OpenSearch Serverless indexing
     const openSearchLambda = new lambda.Function(this, 'OpenSearchIndexer', {
-      runtime: lambda.Runtime.PYTHON_3_11,
+      runtime: lambda.Runtime.PYTHON_3_12,
       handler: 'index.handler',
-      code: lambda.Code.fromInline(`
-import json
-import boto3
-import urllib3
-from botocore.auth import SigV4Auth
-from botocore.awsrequest import AWSRequest
-from botocore.credentials import Credentials
-import os
-
-def handler(event, context):
-    try:
-        # Log the execution context for debugging
-        print(f"Lambda execution role: {context.invoked_function_arn}")
-        print(f"AWS region: {os.environ.get('AWS_REGION', 'Unknown')}")
-        
-        # Extract data from Step Function input
-        endpoint = event['endpoint']
-        index = event.get('index', 'rlhf-iac-aws')
-        body = event['body']
-        
-        print(f"OpenSearch endpoint: {endpoint}")
-        print(f"Index: {index}")
-        print(f"Document body: {json.dumps(body, default=str)}")
-        
-        # Create the OpenSearch document URL
-        url = f"{endpoint}/{index}/_doc"
-        print(f"Full URL: {url}")
-        
-        # Get AWS credentials
-        session = boto3.Session()
-        credentials = session.get_credentials()
-        print(f"Using credentials for access key: {credentials.access_key[:8]}...")
-        
-        # Create request for AWS SigV4 signing
-        request = AWSRequest(method='POST', url=url, data=json.dumps(body))
-        SigV4Auth(credentials, 'aoss', os.environ['AWS_REGION']).add_auth(request)
-        
-        print(f"Request headers: {dict(request.headers)}")
-        
-        # Make the HTTP request
-        http = urllib3.PoolManager()
-        response = http.request(
-            'POST',
-            url,
-            body=request.body,
-            headers=dict(request.headers)
-        )
-        
-        # Check if the response status is successful
-        if response.status not in [200, 201]:
-            error_msg = f"OpenSearch request failed with status {response.status}: {response.data.decode('utf-8')}"
-            print(error_msg)
-            raise Exception(error_msg)
-        
-        return {
-            'statusCode': response.status,
-            'body': response.data.decode('utf-8'),
-            'headers': dict(response.headers)
-        }
-        
-    except Exception as e:
-        print(f"Error: {str(e)}")
-        raise e
-`),
+      code: lambda.Code.fromAsset('lib/lambda-functions/opensearch-indexer'),
+      layers: [openSearchLayer],
       timeout: cdk.Duration.minutes(5),
     });
 
@@ -154,12 +108,12 @@ def handler(event, context):
             Rules: [
               {
                 ResourceType: 'collection',
-                Resource: ['collection/iac-rlhf-metadata-collection'],
+                Resource: [`collection/${collectionName}`],
                 Permission: ['aoss:*'],
               },
               {
                 ResourceType: 'index',
-                Resource: ['index/iac-rlhf-metadata-collection/*'],
+                Resource: [`index/${collectionName}/*`],
                 Permission: ['aoss:*'],
               },
             ],
@@ -176,8 +130,8 @@ def handler(event, context):
       this,
       'MetadataCollection',
       {
-        name: 'iac-rlhf-metadata-collection',
-        type: 'TIMESERIES',
+        name: collectionName,
+        type: 'SEARCH', // Changed from TIMESERIES to SEARCH for document indexing
         description: 'Collection for storing metadata from iac-rlhf-releases',
       }
     );
@@ -193,6 +147,7 @@ def handler(event, context):
     // Add environment variables to Lambda after collection is created
     openSearchLambda.addEnvironment('OPENSEARCH_ENDPOINT', collectionEndpoint);
     openSearchLambda.addEnvironment('COLLECTION_NAME', collection.name!);
+    openSearchLambda.addEnvironment('OPENSEARCH_INDEX', 'iac-rlhf-metadata');
 
     // Grant Lambda permissions to access OpenSearch Serverless
     openSearchLambda.role!.attachInlinePolicy(
@@ -200,58 +155,116 @@ def handler(event, context):
         statements: [
           new iam.PolicyStatement({
             effect: iam.Effect.ALLOW,
-            actions: [
-              'aoss:WriteDocument',
-              'aoss:ReadDocument',
-              'aoss:APIAccessAll',
-            ],
+            actions: ['aoss:APIAccessAll'],
             resources: [collection.attrArn, `${collection.attrArn}/*`],
           }),
         ],
       })
     );
 
-    // Dead Letter Queue for failed Step Function executions
-    const dlq = new sqs.Queue(this, 'MetadataProcessingDLQ', {
-      visibilityTimeout: cdk.Duration.seconds(300),
-      retentionPeriod: cdk.Duration.days(14),
-    });
-
     // Step Function to process metadata and store in OpenSearch
-    const processMetadataTask = new tasks.CallAwsService(this, 'GetS3Object', {
-      service: 's3',
-      action: 'getObject',
-      parameters: {
-        Bucket: bucket.bucketName,
-        Key: sfn.JsonPath.stringAt('$.detail.object.key'),
-      },
-      iamResources: [bucket.arnForObjects('*')],
-      resultPath: '$.s3Object',
-    });
+    const processMetadataTask = tasks.CallAwsService.jsonata(
+      this,
+      'GetS3Object',
+      {
+        service: 's3',
+        action: 'getObject',
+        parameters: {
+          Bucket: '{% $states.input.detail.bucket.name %}',
+          Key: '{% $states.input.detail.object.key %}',
+        },
+        iamResources: [bucket.arnForObjects('*')],
+        outputs: `{% $merge([
+          { 
+            "s3Location": {
+              "Bucket": $states.input.detail.bucket.name,
+              "Key": $states.input.detail.object.key
+            },
+            "@timestamp": $states.input.time
+          },
+          $parse($states.result.Body)
+        ]
+      ) %}`,
+      }
+    );
 
     // Lambda invocation task to send data to OpenSearch Serverless
-    const storeInOpenSearchTask = new tasks.LambdaInvoke(
+    const storeInOpenSearchTask = tasks.LambdaInvoke.jsonata(
       this,
       'IndexDocumentInOpenSearch',
       {
         lambdaFunction: openSearchLambda,
-        payload: sfn.TaskInput.fromObject({
-          endpoint: collection.attrCollectionEndpoint,
-          index: 'iac-rlhf-metadata',
-          body: {
-            'documentId.$': '$.detail.object.key',
-            'documentContent.$': '$.s3Object.Body',
-            'bucket.$': '$.detail.bucket.name',
-            'key.$': '$.detail.object.key',
-            'timestamp.$': '$$.State.EnteredTime',
-            collectionName: collection.name,
-          },
-        }),
-        resultPath: '$.openSearchResult',
+        payload: sfn.TaskInput.fromText('{% $states.input %}'),
+        outputs: `{% $merge([
+          $states.input,
+          {
+            "documentId": $states.result.Payload.documentId  
+          }
+        ]) %}`,
       }
     );
 
-    const definition = processMetadataTask.next(storeInOpenSearchTask);
+    // Task to handle failures and store in DynamoDB
+    const handleFailureTask = new tasks.DynamoPutItem(
+      this,
+      'StoreFailureInDynamoDB',
+      {
+        table: failureTable,
+        item: {
+          id: tasks.DynamoAttributeValue.fromString(
+            '{% $states.context.Execution.Name %}'
+          ),
+          timestamp: tasks.DynamoAttributeValue.fromString('{% $now() %}'),
+          error: tasks.DynamoAttributeValue.fromString(
+            '{% $string($states.input.Error) %}'
+          ),
+          cause: tasks.DynamoAttributeValue.fromString(
+            '{% $string($states.input.Cause) %}'
+          ),
+          originalEvent: tasks.DynamoAttributeValue.fromString(
+            '{% $string($states.context.Execution.Input) %}'
+          ),
+        },
+        outputs: '{% $states.input %}',
+      }
+    );
+
+    // Fail state to ensure the execution fails after recording the error
+    const failState = new sfn.Fail(this, 'ExecutionFailed', {
+      cause: '{% $string($states.input.errorDetails.Cause) %}',
+      error: '{% $string($states.input.errorDetails.Error) %}',
+    });
+
+    // Chain the failure handler to the fail state
+    const failureChain = handleFailureTask.next(failState);
+
+    // Create main processing chain
+    const mainProcessingChain = processMetadataTask.next(storeInOpenSearchTask);
+
+    // Wrap everything in a Parallel state with a single branch for cleaner error handling
+    const parallelProcessing = new sfn.Parallel(
+      this,
+      'ProcessMetadataParallel',
+      {
+        comment: 'Main processing workflow with centralized error handling',
+      }
+    );
+
+    // Add the main processing chain as a single branch
+    parallelProcessing.branch(mainProcessingChain);
+
+    // Add catch to the entire parallel block
+    parallelProcessing.addCatch(failureChain, {
+      errors: ['States.ALL'],
+      outputs: `{% $merge([
+        $states.input,
+        {
+          errorDetails: $states.errorOutput
+        }
+      ]) %}`,
+    });
+
+    const definition = parallelProcessing;
 
     const stateMachine = new sfn.StateMachine(
       this,
@@ -259,12 +272,14 @@ def handler(event, context):
       {
         definitionBody: sfn.DefinitionBody.fromChainable(definition),
         timeout: cdk.Duration.minutes(5),
+        queryLanguage: sfn.QueryLanguage.JSONATA,
       }
     );
 
     // Grant necessary permissions to State Machine role
     bucket.grantRead(stateMachine.role!);
     openSearchLambda.grantInvoke(stateMachine.role!);
+    failureTable.grantWriteData(stateMachine.role!);
 
     // EventBridge Rule to filter for metadata.json files
     const rule = new events.Rule(this, 'MetadataFileRule', {
@@ -289,42 +304,28 @@ def handler(event, context):
     // Target the Step Function directly from EventBridge
     rule.addTarget(
       new targets.SfnStateMachine(stateMachine, {
-        deadLetterQueue: dlq, // Step Function failures go to DLQ
         maxEventAge: cdk.Duration.hours(24),
         retryAttempts: 3,
       })
     );
 
-    // Create a Step Function task to process DLQ messages and store in DynamoDB
-    const dlqToDbTask = new tasks.DynamoPutItem(this, 'PutItemInDynamoDB', {
-      table: failureTable,
-      item: {
-        id: tasks.DynamoAttributeValue.fromString(
-          sfn.JsonPath.stringAt('$.receiptHandle')
-        ),
-        timestamp: tasks.DynamoAttributeValue.fromString(
-          sfn.JsonPath.stringAt('$$.State.EnteredTime')
-        ),
-        errorDetails: tasks.DynamoAttributeValue.fromString(
-          sfn.JsonPath.stringAt('$.body')
-        ),
-        originalEvent: tasks.DynamoAttributeValue.fromString(
-          sfn.JsonPath.stringAt('$.body')
-        ),
-      },
-    });
-
-    const dlqProcessingStateMachine = new sfn.StateMachine(
+    // CloudWatch Alarm for Step Function failures
+    const stepFunctionFailureAlarm = new cloudwatch.Alarm(
       this,
-      'DLQProcessingStateMachine',
+      'StepFunctionFailureAlarm',
       {
-        definitionBody: sfn.DefinitionBody.fromChainable(dlqToDbTask),
-        timeout: cdk.Duration.minutes(5),
+        alarmName: 'MetadataProcessing-StepFunction-Failures',
+        alarmDescription:
+          'Alarm when Step Function for processing metadata fails',
+        metric: stateMachine.metricFailed({
+          period: cdk.Duration.minutes(5),
+          statistic: 'Sum',
+        }),
+        threshold: 1,
+        evaluationPeriods: 1,
+        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
       }
     );
-
-    // Grant the DLQ state machine permission to write to DynamoDB
-    failureTable.grantWriteData(dlqProcessingStateMachine.role!);
 
     // Outputs
     new cdk.CfnOutput(this, 'BucketName', {
@@ -332,19 +333,9 @@ def handler(event, context):
       description: 'The name of the S3 bucket',
     });
 
-    new cdk.CfnOutput(this, 'DLQUrl', {
-      value: dlq.queueUrl,
-      description: 'The URL of the Dead Letter Queue',
-    });
-
     new cdk.CfnOutput(this, 'StateMachineArn', {
       value: stateMachine.stateMachineArn,
       description: 'The ARN of the Step Function state machine',
-    });
-
-    new cdk.CfnOutput(this, 'DLQProcessingStateMachineArn', {
-      value: dlqProcessingStateMachine.stateMachineArn,
-      description: 'The ARN of the DLQ processing Step Function state machine',
     });
 
     new cdk.CfnOutput(this, 'OpenSearchCollectionName', {
@@ -357,6 +348,11 @@ def handler(event, context):
       description: 'The endpoint of the OpenSearch Serverless collection',
     });
 
+    new cdk.CfnOutput(this, 'OpenSearchDashboardsUrl', {
+      value: collection.attrDashboardEndpoint,
+      description: 'The URL for OpenSearch Dashboards',
+    });
+
     new cdk.CfnOutput(this, 'DynamoDBTableName', {
       value: failureTable.tableName,
       description: 'The name of the DynamoDB table for failures',
@@ -365,6 +361,12 @@ def handler(event, context):
     new cdk.CfnOutput(this, 'OpenSearchLambdaArn', {
       value: openSearchLambda.functionArn,
       description: 'The ARN of the Lambda function for OpenSearch indexing',
+    });
+
+    new cdk.CfnOutput(this, 'StepFunctionFailureAlarmName', {
+      value: stepFunctionFailureAlarm.alarmName,
+      description:
+        'The name of the CloudWatch alarm for Step Function failures',
     });
   }
 }
