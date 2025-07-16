@@ -2,6 +2,7 @@ AWSTemplateFormatVersion: '2010-09-09'
 Parameters:
   ProjectName:
     Type: String
+    Default: CloudFormation-Turing
   VpcCidr1:
     Type: String
     Default: 10.0.0.0/16
