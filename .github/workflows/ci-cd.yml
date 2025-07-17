@@ -500,6 +500,7 @@ jobs:
 
       - name: Run integration tests against live environment
         run: |
+          npm run test:integration
           OUTPUT=$(npm run test:integration 2>&1)
           echo "# Integration tests" > lib/INTEGRATION_TESTS.md
           echo >> lib/INTEGRATION_TESTS.md
