@@ -48,6 +48,14 @@ Parameters:
   DBAllocatedStorage:
     Type: Number
     Default: 20
+  AZCountRegion1:
+    Type: Number
+    Description: Number of AZs in Region 1
+    Default: 2
+  AZCountRegion2:
+    Type: Number
+    Description: Number of AZs in Region 2
+    Default: 2
 
 Mappings:
   RegionMap:
@@ -92,6 +100,7 @@ Resources:
 
   PublicSubnet2R1:
     Type: AWS::EC2::Subnet
+    Condition: HasTwoAZsRegion1
     Properties:
       VpcId: !Ref VpcR1
       CidrBlock: !Ref PublicSubnet2Cidr1
@@ -112,6 +121,7 @@ Resources:
 
   PrivateSubnet2R1:
     Type: AWS::EC2::Subnet
+    Condition: HasTwoAZsRegion1
     Properties:
       VpcId: !Ref VpcR1
       CidrBlock: !Ref PrivateSubnet2Cidr1
@@ -132,6 +142,7 @@ Resources:
 
   PublicSubnet2R2:
     Type: AWS::EC2::Subnet
+    Condition: HasTwoAZsRegion2
     Properties:
       VpcId: !Ref VpcR2
       CidrBlock: !Ref PublicSubnet2Cidr2
@@ -152,6 +163,7 @@ Resources:
 
   PrivateSubnet2R2:
     Type: AWS::EC2::Subnet
+    Condition: HasTwoAZsRegion2
     Properties:
       VpcId: !Ref VpcR2
       CidrBlock: !Ref PrivateSubnet2Cidr2
@@ -229,6 +241,7 @@ Resources:
 
   PublicSubnet2RouteTableAssociationR1:
     Type: AWS::EC2::SubnetRouteTableAssociation
+    Condition: HasTwoAZsRegion1
     Properties:
       SubnetId: !Ref PublicSubnet2R1
       RouteTableId: !Ref PublicRouteTableR1
@@ -241,6 +254,7 @@ Resources:
 
   PublicSubnet2RouteTableAssociationR2:
     Type: AWS::EC2::SubnetRouteTableAssociation
+    Condition: HasTwoAZsRegion2
     Properties:
       SubnetId: !Ref PublicSubnet2R2
       RouteTableId: !Ref PublicRouteTableR2
@@ -316,6 +330,7 @@ Resources:
 
   PrivateSubnet2RouteTableAssociationR1:
     Type: AWS::EC2::SubnetRouteTableAssociation
+    Condition: HasTwoAZsRegion1
     Properties:
       SubnetId: !Ref PrivateSubnet2R1
       RouteTableId: !Ref PrivateRouteTableR1
@@ -328,6 +343,7 @@ Resources:
 
   PrivateSubnet2RouteTableAssociationR2:
     Type: AWS::EC2::SubnetRouteTableAssociation
+    Condition: HasTwoAZsRegion2
     Properties:
       SubnetId: !Ref PrivateSubnet2R2
       RouteTableId: !Ref PrivateRouteTableR2
@@ -447,7 +463,7 @@ Resources:
       DBSubnetGroupDescription: Subnet group for RDS in Region 1
       SubnetIds:
         - !Ref PrivateSubnet1R1
-        - !Ref PrivateSubnet2R1
+        - !If [HasTwoAZsRegion1, !Ref PrivateSubnet2R1, !Ref PrivateSubnet1R1]
       Tags:
         - Key: Name
           Value: !Sub ${ProjectName}-dbsubnetgroup-r1
@@ -458,7 +474,7 @@ Resources:
       DBSubnetGroupDescription: Subnet group for RDS in Region 2
       SubnetIds:
         - !Ref PrivateSubnet1R2
-        - !Ref PrivateSubnet2R2
+        - !If [HasTwoAZsRegion2, !Ref PrivateSubnet2R2, !Ref PrivateSubnet1R2]
       Tags:
         - Key: Name
           Value: !Sub ${ProjectName}-dbsubnetgroup-r2
