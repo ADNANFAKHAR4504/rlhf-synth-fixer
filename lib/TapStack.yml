@@ -74,7 +74,7 @@ Resources:
   AppS3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${EnvironmentSuffix}-app-s3-bucket-${AWS::AccountId}'
+      BucketName: !Sub 'app-s3-olaolawa-bucket-${AWS::AccountId}'
       Tags:
         - Key: Environment
           Value: !Ref AWS::StackName
