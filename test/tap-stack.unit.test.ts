@@ -37,8 +37,22 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Parameters.EnvironmentSuffix).toBeDefined();
     });
 
+    test('LatestAmiId parameter should have correct properties', () => {
+      const amiParam = template.Parameters.LatestAmiId;
+      expect(amiParam).toBeDefined();
+      // Assuming dynamic AMI via SSM, validate its type.
+      // Check for the correct AWS SSM parameter type.  This is a placeholder, adjust according to your actual template.
+       expect(amiParam.Type).toBe('AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>');
+    });
+
+
     test('should have LatestAmiId parameter', () => {
       expect(template.Parameters.LatestAmiId).toBeDefined();
+    });
+
+    test('EC2InstanceProfile should reference the correct role', () => {
+      const instanceProfile = template.Resources.EC2InstanceProfile;
+      expect(instanceProfile.Properties.Roles).toEqual([{ Ref: 'EC2InstanceRole' }]);
     });
 
     test('EnvironmentSuffix parameter should have correct properties', () => {
@@ -188,7 +202,9 @@ describe('TapStack CloudFormation Template', () => {
 
     test('ProductionOnlyInstance should have correct properties when condition is met', () => {
       const productionOnlyInstance = template.Resources.ProductionOnlyInstance;
-      expect(productionOnlyInstance.Properties.InstanceType).toBe('t2.micro');
+      expect(productionOnlyInstance.Properties.InstanceType).toEqual({
+        Ref: 'InstanceType',
+      });
       expect(productionOnlyInstance.Properties.ImageId).toEqual({
         Ref: 'LatestAmiId',
       });
