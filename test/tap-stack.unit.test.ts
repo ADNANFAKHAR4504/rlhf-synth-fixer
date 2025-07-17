@@ -200,7 +200,7 @@ describe('TapStack CloudFormation Template', () => {
       );
     });
 
-    test('ProductionOnlyInstance should have correct properties when condition is met', () => {
+    test('ProductionOnlyInstance should have correct properties', () => {
       const productionOnlyInstance = template.Resources.ProductionOnlyInstance;
       expect(productionOnlyInstance.Properties.InstanceType).toEqual({
         Ref: 'InstanceType',

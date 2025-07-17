@@ -62,16 +62,6 @@
             "Description": "The Availability Zone to deploy the public subnet into."
         }
     },
-    "Conditions": {
-        "IsProduction": {
-            "Fn::Equals": [
-                {
-                    "Ref": "EnvironmentSuffix"
-                },
-                "prod"
-            ]
-        }
-    },
     "Resources": {
         "SharedVPC": {
             "Type": "AWS::EC2::VPC",
@@ -238,7 +228,6 @@
         },
         "ProductionOnlyInstance": {
             "Type": "AWS::EC2::Instance",
-            "Condition": "IsProduction",
             "Properties": {
                 "IamInstanceProfile": {
                     "Ref": "EC2InstanceProfile"

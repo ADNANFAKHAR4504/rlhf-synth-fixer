@@ -43,9 +43,6 @@ Parameters:
     Default: 'us-east-1a'
     Description: 'The Availability Zone to deploy the public subnet into.'
 
-Conditions:
-  IsProduction: !Equals [ !Ref EnvironmentSuffix, prod ]
-
 Resources:
   SharedVPC:
     Type: AWS::EC2::VPC
@@ -131,7 +128,6 @@ Resources:
 
   ProductionOnlyInstance:
     Type: AWS::EC2::Instance
-    Condition: IsProduction
     Properties:
       IamInstanceProfile: !Ref EC2InstanceProfile
       InstanceType: !Ref InstanceType

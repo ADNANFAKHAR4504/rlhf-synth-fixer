@@ -6,7 +6,9 @@ import {
 } from '@aws-sdk/client-cloudformation';
 import {
   DescribeInstancesCommand,
+  DescribeSubnetsCommand,
   DescribeSecurityGroupsCommand,
+  DescribeVpcsCommand,
   EC2Client,
 } from '@aws-sdk/client-ec2';
 import { GetRoleCommand, IAMClient } from '@aws-sdk/client-iam';
@@ -117,6 +119,50 @@ describe('TapStack Integration Tests', () => {
       });
     });
   }
+
+  describe('SharedVPC', () => {
+    test('should exist, be available, and have correct tags', async () => {
+      const vpcId = getPhysicalId('SharedVPC');
+      expect(vpcId).toBeDefined();
+
+      const command = new DescribeVpcsCommand({ VpcIds: [vpcId!] });
+      const data = await ec2Client.send(command);
+      const vpc = data.Vpcs?.[0];
+
+      expect(vpc).toBeDefined();
+      expect(vpc?.State).toBe('available');
+
+      const nameTag = vpc?.Tags?.find(t => t.Key === 'Name');
+      expect(nameTag?.Value).toBe(`${environmentSuffix}-shared-vpc`);
+
+      const envTag = vpc?.Tags?.find(t => t.Key === 'Environment');
+      expect(envTag?.Value).toBe(stackName);
+    });
+  });
+
+  describe('PublicSubnet', () => {
+    test('should exist, be available, map public IPs, and have correct tags', async () => {
+      const subnetId = getPhysicalId('PublicSubnet');
+      const vpcId = getPhysicalId('SharedVPC');
+      expect(subnetId).toBeDefined();
+      expect(vpcId).toBeDefined();
+
+      const command = new DescribeSubnetsCommand({ SubnetIds: [subnetId!] });
+      const data = await ec2Client.send(command);
+      const subnet = data.Subnets?.[0];
+
+      expect(subnet).toBeDefined();
+      expect(subnet?.State).toBe('available');
+      expect(subnet?.VpcId).toBe(vpcId);
+      expect(subnet?.MapPublicIpOnLaunch).toBe(true);
+
+      const nameTag = subnet?.Tags?.find(t => t.Key === 'Name');
+      expect(nameTag?.Value).toBe(`${environmentSuffix}-public-subnet`);
+
+      const envTag = subnet?.Tags?.find(t => t.Key === 'Environment');
+      expect(envTag?.Value).toBe(stackName);
+    });
+  });
 
   describe('AppS3Bucket', () => {
     test('should have the "Environment" tag set to the stack name', async () => {
