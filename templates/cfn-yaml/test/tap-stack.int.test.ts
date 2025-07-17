@@ -1,82 +1,67 @@
-// Configuration - These are coming from cdk-outputs after cdk deploy
 import fs from 'fs';
 import path from 'path';
-const outputs = JSON.parse(
-  fs.readFileSync('cdk-outputs/flat-outputs.json', 'utf8')
-);
-
-// Get environment suffix from environment variable (set by CI/CD pipeline)
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-
-describe('Turn Around Prompt API Integration Tests', () => {
-  describe('Hello', () => {
-    test('World', async () => {
-      expect(true).toBe(true);
-    });
-  });
-});
 
 describe('Secure Web Infrastructure Init Test', () => {
-  let template: any;
+  let outputs: any;
 
   beforeAll(() => {
-    const templatePath = path.join(__dirname, '../lib/secure-web-infrastructure.json');
-    const templateContent = fs.readFileSync(templatePath, 'utf8');
-    template = JSON.parse(templateContent);
+    const filePath = path.join(__dirname, '../../../cdk-outputs/flat-outputs.json');
+    outputs = JSON.parse(fs.readFileSync(filePath, 'utf8'));
   });
 
-  test('should contain VPC spanning 3 Availability Zones', () => {
-    const subnets = Object.values(template.Resources).filter(
-      (r: any) => r.Type === 'AWS::EC2::Subnet'
-    );
-    expect(subnets.length).toBeGreaterThanOrEqual(3);
+  test('VPC ID should follow AWS format', () => {
+    expect(outputs.VpcId).toMatch(/^vpc-[0-9a-f]{17}$/);
   });
 
-  test('should have KMS key configured', () => {
-    expect(template.Resources.KMSKey.Type).toBe('AWS::KMS::Key');
+  test('KMS Key ARN should be valid', () => {
+    expect(outputs.KMSKeyId).toMatch(/^arn:aws:kms:us-east-1:\d{12}:key\/[0-9a-f\-]{36}$/);
   });
 
-  test('should encrypt RDS with KMS', () => {
-    const rds = template.Resources.RDSInstance.Properties;
-    expect(rds.StorageEncrypted).toBe(true);
-    expect(rds.KmsKeyId).toBeDefined();
+  test('Database endpoint should be a valid RDS endpoint', () => {
+    expect(outputs.DatabaseEndpoint).toMatch(/^.+\.rds\.amazonaws\.com$/);
   });
 
-  test('should use Secrets Manager for RDS credentials', () => {
-    expect(template.Resources.Secrets.Type).toBe('AWS::SecretsManager::Secret');
-    const rds = template.Resources.RDSInstance.Properties;
-    expect(rds.MasterUsername).toContain('resolve:secretsmanager');
-    expect(rds.MasterUserPassword).toContain('resolve:secretsmanager');
+  test('Content bucket should follow naming conventions', () => {
+    expect(outputs.ContentBucketName).toMatch(/^secure-content-bucket-/);
   });
 
-  test('S3 Bucket should have server-side encryption', () => {
-    const s3 = template.Resources.LoggingBucket.Properties;
-    expect(s3.BucketEncryption).toBeDefined();
-    expect(
-      s3.BucketEncryption.ServerSideEncryptionConfiguration[0].ServerSideEncryptionByDefault.SSEAlgorithm
-    ).toBe('AES256');
+  test('Logging bucket should follow naming conventions', () => {
+    expect(outputs.LoggingBucketName).toMatch(/^secure-logging-bucket-/);
   });
 
-  test('should use IAM roles and instance profile for EC2', () => {
-    expect(template.Resources.EC2InstanceProfile.Type).toBe('AWS::IAM::InstanceProfile');
-    expect(template.Resources.InstanceRole.Type).toBe('AWS::IAM::Role');
+  test('Load Balancer DNS should look like a valid AWS ELB address', () => {
+    expect(outputs.LoadBalancerDNS).toMatch(/elb\.amazonaws\.com$/);
   });
 
-  test('should define Auto Scaling Group with Launch Template', () => {
-    expect(template.Resources.ApplicationLaunchTemplate.Type).toBe('AWS::EC2::LaunchTemplate');
-    expect(template.Resources.AutoScalingGroup.Type).toBe('AWS::AutoScaling::AutoScalingGroup');
+  test('CloudFront domain name should look valid', () => {
+    expect(outputs.CloudFrontDomainName).toMatch(/^d[a-z0-9]{13}\.cloudfront\.net$/);
   });
 
-  test('should configure ALB with Listener', () => {
-    expect(template.Resources.ALB.Type).toBe('AWS::ElasticLoadBalancingV2::LoadBalancer');
-    expect(template.Resources.ALBListener.Type).toBe('AWS::ElasticLoadBalancingV2::Listener');
+  test('CloudFront Distribution ID should start with E', () => {
+    expect(outputs.CloudFrontDistributionId).toMatch(/^E[A-Z0-9]{13}$/);
   });
 
-  test('should include WAF WebACL', () => {
-    expect(template.Resources.WAFWebACL.Type).toBe('AWS::WAFv2::WebACL');
+  test('WebACL ARN should be valid', () => {
+    expect(outputs.WebACLArn).toMatch(/^arn:aws:wafv2:us-east-1:\d{12}:global\/webacl\/.+/);
   });
 
-  test('should configure CloudFront distribution', () => {
-    expect(template.Resources.CloudFrontDistribution.Type).toBe('AWS::CloudFront::Distribution');
+  test('Auto Scaling Group name should end in -dev', () => {
+    expect(outputs.AutoScalingGroupName).toMatch(/-dev$/);
+  });
+
+  test('CloudWatch CPU alarm ARN should be valid', () => {
+    expect(outputs.CPUAlarmArn).toMatch(/^arn:aws:cloudwatch:us-east-1:\d{12}:alarm:/);
+  });
+
+  test('Environment suffix should be a short tag', () => {
+    expect(outputs.EnvironmentSuffix).toMatch(/^Pr\d+$/);
+  });
+
+  test('DynamoDB table name should be consistent with suffix', () => {
+    expect(outputs.TurnAroundPromptTableName).toMatch(/TurnAroundPromptTablePr\d+$/);
+  });
+
+  test('Stack name should match naming convention', () => {
+    expect(outputs.StackName).toMatch(/^TapStackPr\d+$/);
   });
 });

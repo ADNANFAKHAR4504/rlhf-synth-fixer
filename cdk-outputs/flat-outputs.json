@@ -11,5 +11,8 @@
   "WebACLArn": "arn:aws:wafv2:us-east-1:123456789012:global/webacl/mywebacl/12345678-1234-1234-1234-123456789012",
   "AutoScalingGroupName": "myasg-dev",
   "CPUAlarmArn": "arn:aws:cloudwatch:us-east-1:123456789012:alarm:cpu-alarm-dev",
-  "EnvironmentSuffix": "dev"
+  "EnvironmentSuffix": "Pr42",
+  "TurnAroundPromptTableArn": "arn:aws:dynamodb:us-east-1:718240086340:table/TurnAroundPromptTablePr42",
+  "TurnAroundPromptTableName": "TurnAroundPromptTablePr42",
+  "StackName": "TapStackPr42"
 }

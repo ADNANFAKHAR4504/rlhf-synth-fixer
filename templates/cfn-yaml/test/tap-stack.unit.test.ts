@@ -1,76 +1,50 @@
-import fs from 'fs';
-import path from 'path';
+import { Template } from 'aws-cdk-lib/assertions';
+import * as fs from 'fs';
+import * as path from 'path';
+import * as yaml from 'yaml';
 
 describe('Secure Web Infrastructure Unit Test', () => {
-  let template: any;
+  let template: Template;
 
   beforeAll(() => {
-    const templatePath = path.join(__dirname, '../lib/secure-web-infrastructure.json');
-    const templateContent = fs.readFileSync(templatePath, 'utf8');
-    template = JSON.parse(templateContent);
+    const templatePath = path.join(__dirname, '../../../templates/cfn-yaml/lib/TapStack.yml');
+    const file = fs.readFileSync(templatePath, 'utf8');
+    const parsed = yaml.parse(file);
+    template = Template.fromJSON(parsed);
   });
 
-  test('RDSInstance should use Multi-AZ and KMS encryption', () => {
-    const rds = template.Resources.RDSInstance.Properties;
-    expect(rds.Engine).toBe('MySQL');
-    expect(rds.MultiAZ).toBe(true);
-    expect(rds.StorageEncrypted).toBe(true);
-    expect(rds.KmsKeyId).toBeDefined();
+  test('VPC should be created with correct CIDR block', () => {
+    template.hasResourceProperties('AWS::EC2::VPC', {
+      CidrBlock: '10.0.0.0/16'
+    });
   });
 
-  test('SecretsManager should store RDS credentials', () => {
-    const secret = template.Resources.Secrets;
-    expect(secret.Type).toBe('AWS::SecretsManager::Secret');
-    expect(secret.Properties.SecretString).toMatch(/"username":/);
+  test('EC2 Instance should be of type t2.micro', () => {
+    template.hasResourceProperties('AWS::EC2::Instance', {
+      InstanceType: 't2.micro'
+    });
   });
 
-  test('S3 logging bucket should have AES256 encryption', () => {
-    const s3 = template.Resources.LoggingBucket.Properties;
-    expect(
-      s3.BucketEncryption.ServerSideEncryptionConfiguration[0].ServerSideEncryptionByDefault.SSEAlgorithm
-    ).toBe('AES256');
+  test('Security Group should allow SSH and HTTP', () => {
+    template.hasResourceProperties('AWS::EC2::SecurityGroup', {
+      SecurityGroupIngress: [
+        { FromPort: 22, ToPort: 22, IpProtocol: 'tcp' },
+        { FromPort: 80, ToPort: 80, IpProtocol: 'tcp' }
+      ]
+    });
   });
 
-  test('KMS key should be created and enabled for rotation', () => {
-    const kms = template.Resources.KMSKey.Properties;
-    expect(kms.Description).toMatch(/Key for/);
-    expect(kms.EnableKeyRotation).toBe(true);
+  test('Internet Gateway should be attached to the VPC', () => {
+    template.resourceCountIs('AWS::EC2::InternetGateway', 1);
+    template.resourceCountIs('AWS::EC2::VPCGatewayAttachment', 1);
   });
 
-  test('AutoScalingGroup should cover 3 AZs and use LaunchTemplate', () => {
-    const asg = template.Resources.AutoScalingGroup.Properties;
-    expect(asg.MinSize).toBe("2");
-    expect(asg.MaxSize).toBe("10");
-    expect(asg.LaunchTemplate).toBeDefined();
-    expect(asg.VPCZoneIdentifier.length).toBeGreaterThanOrEqual(3);
+  test('At least one public subnet should exist', () => {
+    template.resourceCountIs('AWS::EC2::Subnet', 2); // Adjust if dynamic
   });
 
-  test('IAM Role and InstanceProfile should be configured', () => {
-    expect(template.Resources.InstanceRole.Type).toBe('AWS::IAM::Role');
-    expect(template.Resources.EC2InstanceProfile.Type).toBe('AWS::IAM::InstanceProfile');
-    expect(template.Resources.EC2InstanceProfile.Properties.Roles).toContain('InstanceRole');
-  });
-
-  test('ALB should exist with a Listener', () => {
-    expect(template.Resources.ALB.Type).toBe('AWS::ElasticLoadBalancingV2::LoadBalancer');
-    expect(template.Resources.ALBListener.Type).toBe('AWS::ElasticLoadBalancingV2::Listener');
-    expect(template.Resources.ALBListener.Properties.Port).toBe(80);
-  });
-
-  test('CloudWatch alarm should trigger SNS', () => {
-    const alarm = template.Resources.CloudWatchAlarm.Properties;
-    expect(alarm.MetricName).toBe('CPUUtilization');
-    expect(alarm.AlarmActions).toContainEqual(expect.anything());
-  });
-
-  test('CloudFront must be configured to serve S3 content securely', () => {
-    const cf = template.Resources.CloudFrontDistribution.Properties.DistributionConfig;
-    expect(cf.Enabled).toBe(true);
-    expect(cf.DefaultCacheBehavior.ViewerProtocolPolicy).toBe('redirect-to-https');
-  });
-
-  test('WAF should be defined for CloudFront', () => {
-    expect(template.Resources.WAFWebACL.Type).toBe('AWS::WAFv2::WebACL');
-    expect(template.Resources.WAFWebACL.Properties.Scope).toBe('CLOUDFRONT');
+  test('Outputs must include public IP and VPC ID', () => {
+    template.hasOutput('VpcId', {});
+    template.hasOutput('InstancePublicIp', {});
   });
 });
