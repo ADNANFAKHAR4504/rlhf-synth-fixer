@@ -9,17 +9,9 @@
             "Type": "String",
             "Default": "us-east-1"
         },
-        "Region2": {
-            "Type": "String",
-            "Default": "us-west-2"
-        },
         "VpcCidr1": {
             "Type": "String",
             "Default": "10.0.0.0/16"
-        },
-        "VpcCidr2": {
-            "Type": "String",
-            "Default": "10.1.0.0/16"
         },
         "PublicSubnet1Cidr1": {
             "Type": "String",
@@ -37,22 +29,6 @@
             "Type": "String",
             "Default": "10.0.102.0/24"
         },
-        "PublicSubnet1Cidr2": {
-            "Type": "String",
-            "Default": "10.1.1.0/24"
-        },
-        "PublicSubnet2Cidr2": {
-            "Type": "String",
-            "Default": "10.1.2.0/24"
-        },
-        "PrivateSubnet1Cidr2": {
-            "Type": "String",
-            "Default": "10.1.101.0/24"
-        },
-        "PrivateSubnet2Cidr2": {
-            "Type": "String",
-            "Default": "10.1.102.0/24"
-        },
         "InstanceType": {
             "Type": "String",
             "Default": "t2.micro"
@@ -64,52 +40,13 @@
         "DBAllocatedStorage": {
             "Type": "Number",
             "Default": 20
-        },
-        "AZCountRegion1": {
-            "Type": "Number",
-            "Description": "Number of AZs in Region 1",
-            "Default": 2
-        },
-        "AZCountRegion2": {
-            "Type": "Number",
-            "Description": "Number of AZs in Region 2",
-            "Default": 2
         }
     },
     "Mappings": {
         "RegionMap": {
             "us-east-1": {
                 "AMI": "/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2"
-            },
-            "us-west-2": {
-                "AMI": "/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2"
             }
-        }
-    },
-    "Conditions": {
-        "HasTwoAZsRegion1": {
-            "Fn::Not": [
-                {
-                    "Fn::Equals": [
-                        {
-                            "Ref": "AZCountRegion1"
-                        },
-                        1
-                    ]
-                }
-            ]
-        },
-        "HasTwoAZsRegion2": {
-            "Fn::Not": [
-                {
-                    "Fn::Equals": [
-                        {
-                            "Ref": "AZCountRegion2"
-                        },
-                        1
-                    ]
-                }
-            ]
         }
     },
     "Resources": {
@@ -130,28 +67,6 @@
                         "Key": "Region",
                         "Value": {
                             "Ref": "Region1"
-                        }
-                    }
-                ]
-            }
-        },
-        "VpcR2": {
-            "Type": "AWS::EC2::VPC",
-            "Properties": {
-                "CidrBlock": {
-                    "Ref": "VpcCidr2"
-                },
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${ProjectName}-vpc-r2"
-                        }
-                    },
-                    {
-                        "Key": "Region",
-                        "Value": {
-                            "Ref": "Region2"
                         }
                     }
                 ]
@@ -186,7 +101,6 @@
         },
         "PublicSubnet2R1": {
             "Type": "AWS::EC2::Subnet",
-            "Condition": "HasTwoAZsRegion1",
             "Properties": {
                 "VpcId": {
                     "Ref": "VpcR1"
@@ -195,18 +109,10 @@
                     "Ref": "PublicSubnet2Cidr1"
                 },
                 "AvailabilityZone": {
-                    "Fn::If": [
-                        "HasTwoAZsRegion1",
+                    "Fn::Select": [
+                        1,
                         {
-                            "Fn::Select": [
-                                1,
-                                {
-                                    "Fn::GetAZs": "us-east-1"
-                                }
-                            ]
-                        },
-                        {
-                            "Ref": "AWS::NoValue"
+                            "Fn::GetAZs": "us-east-1"
                         }
                     ]
                 },
@@ -249,7 +155,6 @@
         },
         "PrivateSubnet2R1": {
             "Type": "AWS::EC2::Subnet",
-            "Condition": "HasTwoAZsRegion1",
             "Properties": {
                 "VpcId": {
                     "Ref": "VpcR1"
@@ -258,18 +163,10 @@
                     "Ref": "PrivateSubnet2Cidr1"
                 },
                 "AvailabilityZone": {
-                    "Fn::If": [
-                        "HasTwoAZsRegion1",
+                    "Fn::Select": [
+                        1,
                         {
-                            "Fn::Select": [
-                                1,
-                                {
-                                    "Fn::GetAZs": "us-east-1"
-                                }
-                            ]
-                        },
-                        {
-                            "Ref": "AWS::NoValue"
+                            "Fn::GetAZs": "us-east-1"
                         }
                     ]
                 },
@@ -278,132 +175,6 @@
                         "Key": "Name",
                         "Value": {
                             "Fn::Sub": "${ProjectName}-private-subnet2-r1"
-                        }
-                    }
-                ]
-            }
-        },
-        "PublicSubnet1R2": {
-            "Type": "AWS::EC2::Subnet",
-            "Properties": {
-                "VpcId": {
-                    "Ref": "VpcR2"
-                },
-                "CidrBlock": {
-                    "Ref": "PublicSubnet1Cidr2"
-                },
-                "AvailabilityZone": {
-                    "Fn::Select": [
-                        0,
-                        {
-                            "Fn::GetAZs": "us-west-2"
-                        }
-                    ]
-                },
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${ProjectName}-public-subnet1-r2"
-                        }
-                    }
-                ]
-            }
-        },
-        "PublicSubnet2R2": {
-            "Type": "AWS::EC2::Subnet",
-            "Condition": "HasTwoAZsRegion2",
-            "Properties": {
-                "VpcId": {
-                    "Ref": "VpcR2"
-                },
-                "CidrBlock": {
-                    "Ref": "PublicSubnet2Cidr2"
-                },
-                "AvailabilityZone": {
-                    "Fn::If": [
-                        "HasTwoAZsRegion2",
-                        {
-                            "Fn::Select": [
-                                1,
-                                {
-                                    "Fn::GetAZs": "us-west-2"
-                                }
-                            ]
-                        },
-                        {
-                            "Ref": "AWS::NoValue"
-                        }
-                    ]
-                },
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${ProjectName}-public-subnet2-r2"
-                        }
-                    }
-                ]
-            }
-        },
-        "PrivateSubnet1R2": {
-            "Type": "AWS::EC2::Subnet",
-            "Properties": {
-                "VpcId": {
-                    "Ref": "VpcR2"
-                },
-                "CidrBlock": {
-                    "Ref": "PrivateSubnet1Cidr2"
-                },
-                "AvailabilityZone": {
-                    "Fn::Select": [
-                        0,
-                        {
-                            "Fn::GetAZs": "us-west-2"
-                        }
-                    ]
-                },
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${ProjectName}-private-subnet1-r2"
-                        }
-                    }
-                ]
-            }
-        },
-        "PrivateSubnet2R2": {
-            "Type": "AWS::EC2::Subnet",
-            "Condition": "HasTwoAZsRegion2",
-            "Properties": {
-                "VpcId": {
-                    "Ref": "VpcR2"
-                },
-                "CidrBlock": {
-                    "Ref": "PrivateSubnet2Cidr2"
-                },
-                "AvailabilityZone": {
-                    "Fn::If": [
-                        "HasTwoAZsRegion2",
-                        {
-                            "Fn::Select": [
-                                1,
-                                {
-                                    "Fn::GetAZs": "us-west-2"
-                                }
-                            ]
-                        },
-                        {
-                            "Ref": "AWS::NoValue"
-                        }
-                    ]
-                },
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${ProjectName}-private-subnet2-r2"
                         }
                     }
                 ]
@@ -422,19 +193,6 @@
                 ]
             }
         },
-        "InternetGatewayR2": {
-            "Type": "AWS::EC2::InternetGateway",
-            "Properties": {
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${ProjectName}-igw-r2"
-                        }
-                    }
-                ]
-            }
-        },
         "AttachIgwR1": {
             "Type": "AWS::EC2::VPCGatewayAttachment",
             "Properties": {
@@ -443,17 +201,6 @@
                 },
                 "InternetGatewayId": {
                     "Ref": "InternetGatewayR1"
-                }
-            }
-        },
-        "AttachIgwR2": {
-            "Type": "AWS::EC2::VPCGatewayAttachment",
-            "Properties": {
-                "VpcId": {
-                    "Ref": "VpcR2"
-                },
-                "InternetGatewayId": {
-                    "Ref": "InternetGatewayR2"
                 }
             }
         },
@@ -473,22 +220,6 @@
                 ]
             }
         },
-        "PublicRouteTableR2": {
-            "Type": "AWS::EC2::RouteTable",
-            "Properties": {
-                "VpcId": {
-                    "Ref": "VpcR2"
-                },
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${ProjectName}-public-rt-r2"
-                        }
-                    }
-                ]
-            }
-        },
         "PublicRouteR1": {
             "Type": "AWS::EC2::Route",
             "Properties": {
@@ -498,18 +229,6 @@
                 "DestinationCidrBlock": "0.0.0.0/0",
                 "GatewayId": {
                     "Ref": "InternetGatewayR1"
-                }
-            }
-        },
-        "PublicRouteR2": {
-            "Type": "AWS::EC2::Route",
-            "Properties": {
-                "RouteTableId": {
-                    "Ref": "PublicRouteTableR2"
-                },
-                "DestinationCidrBlock": "0.0.0.0/0",
-                "GatewayId": {
-                    "Ref": "InternetGatewayR2"
                 }
             }
         },
@@ -526,36 +245,12 @@
         },
         "PublicSubnet2RouteTableAssociationR1": {
             "Type": "AWS::EC2::SubnetRouteTableAssociation",
-            "Condition": "HasTwoAZsRegion1",
             "Properties": {
                 "SubnetId": {
                     "Ref": "PublicSubnet2R1"
                 },
                 "RouteTableId": {
                     "Ref": "PublicRouteTableR1"
-                }
-            }
-        },
-        "PublicSubnet1RouteTableAssociationR2": {
-            "Type": "AWS::EC2::SubnetRouteTableAssociation",
-            "Properties": {
-                "SubnetId": {
-                    "Ref": "PublicSubnet1R2"
-                },
-                "RouteTableId": {
-                    "Ref": "PublicRouteTableR2"
-                }
-            }
-        },
-        "PublicSubnet2RouteTableAssociationR2": {
-            "Type": "AWS::EC2::SubnetRouteTableAssociation",
-            "Condition": "HasTwoAZsRegion2",
-            "Properties": {
-                "SubnetId": {
-                    "Ref": "PublicSubnet2R2"
-                },
-                "RouteTableId": {
-                    "Ref": "PublicRouteTableR2"
                 }
             }
         },
@@ -581,35 +276,7 @@
                 ]
             }
         },
-        "NatGatewayR2": {
-            "Type": "AWS::EC2::NatGateway",
-            "Properties": {
-                "AllocationId": {
-                    "Fn::GetAtt": [
-                        "NatEIPR2",
-                        "AllocationId"
-                    ]
-                },
-                "SubnetId": {
-                    "Ref": "PublicSubnet1R2"
-                },
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${ProjectName}-nat-r2"
-                        }
-                    }
-                ]
-            }
-        },
         "NatEIPR1": {
-            "Type": "AWS::EC2::EIP",
-            "Properties": {
-                "Domain": "vpc"
-            }
-        },
-        "NatEIPR2": {
             "Type": "AWS::EC2::EIP",
             "Properties": {
                 "Domain": "vpc"
@@ -631,22 +298,6 @@
                 ]
             }
         },
-        "PrivateRouteTableR2": {
-            "Type": "AWS::EC2::RouteTable",
-            "Properties": {
-                "VpcId": {
-                    "Ref": "VpcR2"
-                },
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${ProjectName}-private-rt-r2"
-                        }
-                    }
-                ]
-            }
-        },
         "PrivateRouteR1": {
             "Type": "AWS::EC2::Route",
             "Properties": {
@@ -656,18 +307,6 @@
                 "DestinationCidrBlock": "0.0.0.0/0",
                 "NatGatewayId": {
                     "Ref": "NatGatewayR1"
-                }
-            }
-        },
-        "PrivateRouteR2": {
-            "Type": "AWS::EC2::Route",
-            "Properties": {
-                "RouteTableId": {
-                    "Ref": "PrivateRouteTableR2"
-                },
-                "DestinationCidrBlock": "0.0.0.0/0",
-                "NatGatewayId": {
-                    "Ref": "NatGatewayR2"
                 }
             }
         },
@@ -684,36 +323,12 @@
         },
         "PrivateSubnet2RouteTableAssociationR1": {
             "Type": "AWS::EC2::SubnetRouteTableAssociation",
-            "Condition": "HasTwoAZsRegion1",
             "Properties": {
                 "SubnetId": {
                     "Ref": "PrivateSubnet2R1"
                 },
                 "RouteTableId": {
                     "Ref": "PrivateRouteTableR1"
-                }
-            }
-        },
-        "PrivateSubnet1RouteTableAssociationR2": {
-            "Type": "AWS::EC2::SubnetRouteTableAssociation",
-            "Properties": {
-                "SubnetId": {
-                    "Ref": "PrivateSubnet1R2"
-                },
-                "RouteTableId": {
-                    "Ref": "PrivateRouteTableR2"
-                }
-            }
-        },
-        "PrivateSubnet2RouteTableAssociationR2": {
-            "Type": "AWS::EC2::SubnetRouteTableAssociation",
-            "Condition": "HasTwoAZsRegion2",
-            "Properties": {
-                "SubnetId": {
-                    "Ref": "PrivateSubnet2R2"
-                },
-                "RouteTableId": {
-                    "Ref": "PrivateRouteTableR2"
                 }
             }
         },
@@ -765,54 +380,6 @@
                 ]
             }
         },
-        "ELBSecurityGroupR2": {
-            "Type": "AWS::EC2::SecurityGroup",
-            "Properties": {
-                "GroupDescription": "ELB Security Group",
-                "VpcId": {
-                    "Ref": "VpcR2"
-                },
-                "SecurityGroupIngress": [
-                    {
-                        "IpProtocol": "tcp",
-                        "FromPort": 80,
-                        "ToPort": 80,
-                        "CidrIp": "0.0.0.0/0"
-                    },
-                    {
-                        "IpProtocol": "tcp",
-                        "FromPort": 443,
-                        "ToPort": 443,
-                        "CidrIp": "0.0.0.0/0"
-                    }
-                ]
-            }
-        },
-        "AppSecurityGroupR2": {
-            "Type": "AWS::EC2::SecurityGroup",
-            "Properties": {
-                "GroupDescription": "App Security Group",
-                "VpcId": {
-                    "Ref": "VpcR2"
-                },
-                "SecurityGroupIngress": [
-                    {
-                        "IpProtocol": "tcp",
-                        "FromPort": 80,
-                        "ToPort": 80,
-                        "SourceSecurityGroupId": {
-                            "Ref": "ELBSecurityGroupR2"
-                        }
-                    },
-                    {
-                        "IpProtocol": "tcp",
-                        "FromPort": 22,
-                        "ToPort": 22,
-                        "CidrIp": "0.0.0.0/0"
-                    }
-                ]
-            }
-        },
         "EC2InstanceR1": {
             "Type": "AWS::EC2::Instance",
             "Metadata": {
@@ -845,43 +412,6 @@
                         "Key": "Name",
                         "Value": {
                             "Fn::Sub": "${ProjectName}-ec2-r1"
-                        }
-                    }
-                ]
-            }
-        },
-        "EC2InstanceR2": {
-            "Type": "AWS::EC2::Instance",
-            "Metadata": {
-                "cfn-lint": {
-                    "config": {
-                        "ignore_checks": [
-                            "W1034"
-                        ]
-                    }
-                }
-            },
-            "Properties": {
-                "ImageId": {
-                    "Fn::FindInMap": [
-                        "RegionMap",
-                        {
-                            "Ref": "Region2"
-                        },
-                        "AMI"
-                    ]
-                },
-                "InstanceType": {
-                    "Ref": "InstanceType"
-                },
-                "SubnetId": {
-                    "Ref": "PublicSubnet1R2"
-                },
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${ProjectName}-ec2-r2"
                         }
                     }
                 ]
@@ -924,15 +454,7 @@
                         "Ref": "PrivateSubnet1R1"
                     },
                     {
-                        "Fn::If": [
-                            "HasTwoAZsRegion1",
-                            {
-                                "Ref": "PrivateSubnet2R1"
-                            },
-                            {
-                                "Ref": "PrivateSubnet1R1"
-                            }
-                        ]
+                        "Ref": "PrivateSubnet2R1"
                     }
                 ],
                 "Tags": [
@@ -944,75 +466,12 @@
                     }
                 ]
             }
-        },
-        "DBSubnetGroupR2": {
-            "Type": "AWS::RDS::DBSubnetGroup",
-            "Properties": {
-                "DBSubnetGroupDescription": "Subnet group for RDS in Region 2",
-                "SubnetIds": [
-                    {
-                        "Ref": "PrivateSubnet1R2"
-                    },
-                    {
-                        "Fn::If": [
-                            "HasTwoAZsRegion2",
-                            {
-                                "Ref": "PrivateSubnet2R2"
-                            },
-                            {
-                                "Ref": "PrivateSubnet1R2"
-                            }
-                        ]
-                    }
-                ],
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${ProjectName}-dbsubnetgroup-r2"
-                        }
-                    }
-                ]
-            }
-        },
-        "RDSInstanceR2": {
-            "Type": "AWS::RDS::DBInstance",
-            "Properties": {
-                "DBInstanceIdentifier": {
-                    "Fn::Sub": "${ProjectName}-db-r2"
-                },
-                "AllocatedStorage": {
-                    "Ref": "DBAllocatedStorage"
-                },
-                "DBInstanceClass": {
-                    "Ref": "DBInstanceType"
-                },
-                "Engine": "mysql",
-                "MasterUsername": "{{resolve:secretsmanager:tapstack-db-credentials:SecretString:username}}",
-                "MasterUserPassword": "{{resolve:secretsmanager:tapstack-db-credentials:SecretString:password}}",
-                "VPCSecurityGroups": [
-                    {
-                        "Ref": "AppSecurityGroupR2"
-                    }
-                ],
-                "DBSubnetGroupName": {
-                    "Ref": "DBSubnetGroupR2"
-                },
-                "MultiAZ": false,
-                "PubliclyAccessible": false,
-                "StorageType": "gp2"
-            }
         }
     },
     "Outputs": {
         "VpcIdR1": {
             "Value": {
                 "Ref": "VpcR1"
-            }
-        },
-        "VpcIdR2": {
-            "Value": {
-                "Ref": "VpcR2"
             }
         }
     }
