@@ -1,3 +1,23 @@
+# Ideal CloudFormation Response
+
+This is the gold-standard CloudFormation YAML template for the secure, multi-AZ web infrastructure task.
+
+## Template Features
+
+- **Multi-AZ VPC** with 3 subnets across different availability zones
+- **Security-first design** with least privilege IAM roles and policies
+- **Multi-AZ RDS** deployment for high availability
+- **Encrypted storage** using S3 with server-side encryption and KMS
+- **Auto Scaling** groups for EC2 instances
+- **Application Load Balancer** for traffic distribution
+- **CloudFront CDN** for global content delivery
+- **WAF protection** against web exploits
+- **CloudWatch monitoring** and alerting
+- **Secure logging** with encrypted log storage
+
+## CloudFormation Template
+
+```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: Ideal CloudFormation Template for Secure, High-Availability Web Infrastructure
 
@@ -280,3 +300,13 @@ Outputs:
   CloudFrontURL:
     Description: CloudFront URL
     Value: !GetAtt CloudFrontDistribution.DomainName
+```
+
+## Security Features
+
+- **Least Privilege IAM**: IAM roles and policies follow the principle of least privilege
+- **Encryption at Rest**: RDS and S3 use encryption with KMS keys
+- **Multi-AZ Deployment**: RDS is configured for Multi-AZ for high availability
+- **Network Security**: Security groups and VPC configuration follow best practices
+- **WAF Protection**: Web Application Firewall protects against common exploits
+- **Secure Secrets Management**: Database credentials stored in AWS Secrets Manager
