@@ -16,7 +16,7 @@ import { GetBucketTaggingCommand, S3Client } from '@aws-sdk/client-s3';
 // The name of the stack to be tested. This should be deployed beforehand.
 // The test is designed to run against a 'prod' environment to validate conditional resources.
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-const stackName = `tap-stack-${environmentSuffix}`;
+const stackName = `TapStack${environmentSuffix}`;
 const region = process.env.AWS_REGION || 'us-east-1';
 
 // --- AWS Clients ---
