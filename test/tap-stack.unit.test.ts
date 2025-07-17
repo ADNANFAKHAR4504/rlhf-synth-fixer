@@ -113,7 +113,7 @@ describe('TapStack CloudFormation Template', () => {
     test('AppS3Bucket should have correct bucket name and tags', () => {
       const appS3Bucket = template.Resources.AppS3Bucket;
       expect(appS3Bucket.Properties.BucketName).toEqual({
-        'Fn::Sub': '${EnvironmentSuffix}-app-s3-bucket-${AWS::AccountId}',
+        'Fn::Sub': 'app-s3-olaolawa-bucket-${AWS::AccountId}',
       });
       expect(appS3Bucket.Properties.Tags).toContainEqual({
         Key: 'Environment',

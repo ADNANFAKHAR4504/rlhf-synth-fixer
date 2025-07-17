@@ -126,7 +126,7 @@
             "Type": "AWS::S3::Bucket",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "${EnvironmentSuffix}-app-s3-bucket-${AWS::AccountId}"
+                    "Fn::Sub": "app-s3-olaolawa-bucket-${AWS::AccountId}"
                 },
                 "Tags": [
                     {
