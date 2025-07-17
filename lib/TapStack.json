@@ -64,6 +64,16 @@
         "DBAllocatedStorage": {
             "Type": "Number",
             "Default": 20
+        },
+        "AZCountRegion1": {
+            "Type": "Number",
+            "Description": "Number of AZs in Region 1",
+            "Default": 2
+        },
+        "AZCountRegion2": {
+            "Type": "Number",
+            "Description": "Number of AZs in Region 2",
+            "Default": 2
         }
     },
     "Mappings": {
@@ -74,6 +84,32 @@
             "us-west-2": {
                 "AMI": "/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2"
             }
+        }
+    },
+    "Conditions": {
+        "HasTwoAZsRegion1": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "AZCountRegion1"
+                        },
+                        1
+                    ]
+                }
+            ]
+        },
+        "HasTwoAZsRegion2": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "AZCountRegion2"
+                        },
+                        1
+                    ]
+                }
+            ]
         }
     },
     "Resources": {
@@ -150,6 +186,7 @@
         },
         "PublicSubnet2R1": {
             "Type": "AWS::EC2::Subnet",
+            "Condition": "HasTwoAZsRegion1",
             "Properties": {
                 "VpcId": {
                     "Ref": "VpcR1"
@@ -158,10 +195,18 @@
                     "Ref": "PublicSubnet2Cidr1"
                 },
                 "AvailabilityZone": {
-                    "Fn::Select": [
-                        1,
+                    "Fn::If": [
+                        "HasTwoAZsRegion1",
                         {
-                            "Fn::GetAZs": "us-east-1"
+                            "Fn::Select": [
+                                1,
+                                {
+                                    "Fn::GetAZs": "us-east-1"
+                                }
+                            ]
+                        },
+                        {
+                            "Ref": "AWS::NoValue"
                         }
                     ]
                 },
@@ -204,6 +249,7 @@
         },
         "PrivateSubnet2R1": {
             "Type": "AWS::EC2::Subnet",
+            "Condition": "HasTwoAZsRegion1",
             "Properties": {
                 "VpcId": {
                     "Ref": "VpcR1"
@@ -212,10 +258,18 @@
                     "Ref": "PrivateSubnet2Cidr1"
                 },
                 "AvailabilityZone": {
-                    "Fn::Select": [
-                        1,
+                    "Fn::If": [
+                        "HasTwoAZsRegion1",
                         {
-                            "Fn::GetAZs": "us-east-1"
+                            "Fn::Select": [
+                                1,
+                                {
+                                    "Fn::GetAZs": "us-east-1"
+                                }
+                            ]
+                        },
+                        {
+                            "Ref": "AWS::NoValue"
                         }
                     ]
                 },
@@ -258,6 +312,7 @@
         },
         "PublicSubnet2R2": {
             "Type": "AWS::EC2::Subnet",
+            "Condition": "HasTwoAZsRegion2",
             "Properties": {
                 "VpcId": {
                     "Ref": "VpcR2"
@@ -266,10 +321,18 @@
                     "Ref": "PublicSubnet2Cidr2"
                 },
                 "AvailabilityZone": {
-                    "Fn::Select": [
-                        1,
+                    "Fn::If": [
+                        "HasTwoAZsRegion2",
                         {
-                            "Fn::GetAZs": "us-west-2"
+                            "Fn::Select": [
+                                1,
+                                {
+                                    "Fn::GetAZs": "us-west-2"
+                                }
+                            ]
+                        },
+                        {
+                            "Ref": "AWS::NoValue"
                         }
                     ]
                 },
@@ -312,6 +375,7 @@
         },
         "PrivateSubnet2R2": {
             "Type": "AWS::EC2::Subnet",
+            "Condition": "HasTwoAZsRegion2",
             "Properties": {
                 "VpcId": {
                     "Ref": "VpcR2"
@@ -320,10 +384,18 @@
                     "Ref": "PrivateSubnet2Cidr2"
                 },
                 "AvailabilityZone": {
-                    "Fn::Select": [
-                        1,
+                    "Fn::If": [
+                        "HasTwoAZsRegion2",
                         {
-                            "Fn::GetAZs": "us-west-2"
+                            "Fn::Select": [
+                                1,
+                                {
+                                    "Fn::GetAZs": "us-west-2"
+                                }
+                            ]
+                        },
+                        {
+                            "Ref": "AWS::NoValue"
                         }
                     ]
                 },
@@ -454,6 +526,7 @@
         },
         "PublicSubnet2RouteTableAssociationR1": {
             "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Condition": "HasTwoAZsRegion1",
             "Properties": {
                 "SubnetId": {
                     "Ref": "PublicSubnet2R1"
@@ -476,6 +549,7 @@
         },
         "PublicSubnet2RouteTableAssociationR2": {
             "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Condition": "HasTwoAZsRegion2",
             "Properties": {
                 "SubnetId": {
                     "Ref": "PublicSubnet2R2"
@@ -610,6 +684,7 @@
         },
         "PrivateSubnet2RouteTableAssociationR1": {
             "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Condition": "HasTwoAZsRegion1",
             "Properties": {
                 "SubnetId": {
                     "Ref": "PrivateSubnet2R1"
@@ -632,6 +707,7 @@
         },
         "PrivateSubnet2RouteTableAssociationR2": {
             "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Condition": "HasTwoAZsRegion2",
             "Properties": {
                 "SubnetId": {
                     "Ref": "PrivateSubnet2R2"
@@ -739,6 +815,15 @@
         },
         "EC2InstanceR1": {
             "Type": "AWS::EC2::Instance",
+            "Metadata": {
+                "cfn-lint": {
+                    "config": {
+                        "ignore_checks": [
+                            "W1034"
+                        ]
+                    }
+                }
+            },
             "Properties": {
                 "ImageId": {
                     "Fn::FindInMap": [
@@ -767,6 +852,15 @@
         },
         "EC2InstanceR2": {
             "Type": "AWS::EC2::Instance",
+            "Metadata": {
+                "cfn-lint": {
+                    "config": {
+                        "ignore_checks": [
+                            "W1034"
+                        ]
+                    }
+                }
+            },
             "Properties": {
                 "ImageId": {
                     "Fn::FindInMap": [
@@ -830,7 +924,15 @@
                         "Ref": "PrivateSubnet1R1"
                     },
                     {
-                        "Ref": "PrivateSubnet2R1"
+                        "Fn::If": [
+                            "HasTwoAZsRegion1",
+                            {
+                                "Ref": "PrivateSubnet2R1"
+                            },
+                            {
+                                "Ref": "PrivateSubnet1R1"
+                            }
+                        ]
                     }
                 ],
                 "Tags": [
@@ -852,7 +954,15 @@
                         "Ref": "PrivateSubnet1R2"
                     },
                     {
-                        "Ref": "PrivateSubnet2R2"
+                        "Fn::If": [
+                            "HasTwoAZsRegion2",
+                            {
+                                "Ref": "PrivateSubnet2R2"
+                            },
+                            {
+                                "Ref": "PrivateSubnet1R2"
+                            }
+                        ]
                     }
                 ],
                 "Tags": [

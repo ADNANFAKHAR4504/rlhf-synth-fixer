@@ -108,7 +108,7 @@ Resources:
     Properties:
       VpcId: !Ref VpcR1
       CidrBlock: !Ref PublicSubnet2Cidr1
-      AvailabilityZone: !Select [1, !GetAZs us-east-1]
+      AvailabilityZone: !If [HasTwoAZsRegion1, !Select [1, !GetAZs us-east-1], !Ref "AWS::NoValue"]
       Tags:
         - Key: Name
           Value: !Sub "${ProjectName}-public-subnet2-r1"
@@ -129,7 +129,7 @@ Resources:
     Properties:
       VpcId: !Ref VpcR1
       CidrBlock: !Ref PrivateSubnet2Cidr1
-      AvailabilityZone: !Select [1, !GetAZs us-east-1]
+      AvailabilityZone: !If [HasTwoAZsRegion1, !Select [1, !GetAZs us-east-1], !Ref "AWS::NoValue"]
       Tags:
         - Key: Name
           Value: !Sub "${ProjectName}-private-subnet2-r1"
@@ -150,7 +150,7 @@ Resources:
     Properties:
       VpcId: !Ref VpcR2
       CidrBlock: !Ref PublicSubnet2Cidr2
-      AvailabilityZone: !Select [1, !GetAZs us-west-2]
+      AvailabilityZone: !If [HasTwoAZsRegion2, !Select [1, !GetAZs us-west-2], !Ref "AWS::NoValue"]
       Tags:
         - Key: Name
           Value: !Sub "${ProjectName}-public-subnet2-r2"
@@ -171,7 +171,7 @@ Resources:
     Properties:
       VpcId: !Ref VpcR2
       CidrBlock: !Ref PrivateSubnet2Cidr2
-      AvailabilityZone: !Select [1, !GetAZs us-west-2]
+      AvailabilityZone: !If [HasTwoAZsRegion2, !Select [1, !GetAZs us-west-2], !Ref "AWS::NoValue"]
       Tags:
         - Key: Name
           Value: !Sub "${ProjectName}-private-subnet2-r2"
