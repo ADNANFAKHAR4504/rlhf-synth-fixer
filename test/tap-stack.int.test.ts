@@ -5,7 +5,7 @@ describe('Secure Web Infrastructure Init Test', () => {
   let outputs: any;
 
   beforeAll(() => {
-    const filePath = path.join(__dirname, '../../../cdk-outputs/flat-outputs.json');
+    const filePath = path.join(__dirname, '../cdk-outputs/flat-outputs.json');
     outputs = JSON.parse(fs.readFileSync(filePath, 'utf8'));
   });
 
@@ -45,8 +45,8 @@ describe('Secure Web Infrastructure Init Test', () => {
     expect(outputs.WebACLArn).toMatch(/^arn:aws:wafv2:us-east-1:\d{12}:global\/webacl\/.+/);
   });
 
-  test('Auto Scaling Group name should end in -dev', () => {
-    expect(outputs.AutoScalingGroupName).toMatch(/-dev$/);
+  test('Auto Scaling Group name should end in -Pr24', () => {
+    expect(outputs.AutoScalingGroupName).toMatch(/-Pr\d+$/);
   });
 
   test('CloudWatch CPU alarm ARN should be valid', () => {

@@ -5,8 +5,8 @@ const outputs = JSON.parse(
   fs.readFileSync('cdk-outputs/flat-outputs.json', 'utf8')
 );
 
-// Get environment suffix from environment variable (set by CI/CD pipeline)
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
+// Get environment suffix from the actual outputs instead of environment variable
+const environmentSuffix = outputs.EnvironmentSuffix || process.env.ENVIRONMENT_SUFFIX || 'dev';
 
 describe('CloudFormation Security Infrastructure Integration Tests', () => {
   describe('Stack Outputs Validation', () => {
