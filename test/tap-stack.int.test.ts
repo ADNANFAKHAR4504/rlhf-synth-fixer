@@ -71,54 +71,54 @@ describe('TapStack Integration Tests', () => {
   }, 30000); // 30s timeout for setup
 
   // Only run EC2 tests if it's a 'prod' environment, due to the Condition
-  if (environmentSuffix === 'prod') {
-    describe('ProductionOnlyInstance (EC2)', () => {
-      let instanceId: string | undefined;
-      let instanceDetails: any;
+  // if (environmentSuffix === 'prod') {
+  describe('ProductionOnlyInstance (EC2)', () => {
+    let instanceId: string | undefined;
+    let instanceDetails: any;
 
-      beforeAll(async () => {
-        instanceId = getPhysicalId('ProductionOnlyInstance');
-        expect(instanceId).toBeDefined();
+    beforeAll(async () => {
+      instanceId = getPhysicalId('ProductionOnlyInstance');
+      expect(instanceId).toBeDefined();
 
-        const command = new DescribeInstancesCommand({
-          InstanceIds: [instanceId!],
-        });
-        const data = await ec2Client.send(command);
-        instanceDetails = data.Reservations?.[0]?.Instances?.[0];
-        expect(instanceDetails).toBeDefined();
+      const command = new DescribeInstancesCommand({
+        InstanceIds: [instanceId!],
       });
-
-      test('should be running', () => {
-        expect(instanceDetails.State?.Name).toBe('running');
-      });
-
-      test('should have the correct "Environment" tag', () => {
-        const envTag = instanceDetails.Tags?.find(
-          (t: any) => t.Key === 'Environment'
-        );
-        expect(envTag).toBeDefined();
-        expect(envTag.Value).toBe(stackName);
-      });
-
-      test('should have the correct Security Group attached', () => {
-        const sgId = getPhysicalId('AppSecurityGroup');
-        expect(sgId).toBeDefined();
-        expect(instanceDetails.SecurityGroups).toContainEqual(
-          expect.objectContaining({ GroupId: sgId })
-        );
-      });
-
-      test('should have the correct IAM Instance Profile attached', () => {
-        const profileId = getPhysicalId('EC2InstanceProfile');
-        expect(profileId).toBeDefined();
-        expect(instanceDetails.IamInstanceProfile?.Arn).toContain(profileId);
-      });
-
-      test('should be using a dynamic AMI from SSM', () => {
-        expect(instanceDetails.ImageId).toMatch(/^ami-/);
-      });
+      const data = await ec2Client.send(command);
+      instanceDetails = data.Reservations?.[0]?.Instances?.[0];
+      expect(instanceDetails).toBeDefined();
     });
-  }
+
+    test('should be running', () => {
+      expect(instanceDetails.State?.Name).toBe('running');
+    });
+
+    test('should have the correct "Environment" tag', () => {
+      const envTag = instanceDetails.Tags?.find(
+        (t: any) => t.Key === 'Environment'
+      );
+      expect(envTag).toBeDefined();
+      expect(envTag.Value).toBe(stackName);
+    });
+
+    test('should have the correct Security Group attached', () => {
+      const sgId = getPhysicalId('AppSecurityGroup');
+      expect(sgId).toBeDefined();
+      expect(instanceDetails.SecurityGroups).toContainEqual(
+        expect.objectContaining({ GroupId: sgId })
+      );
+    });
+
+    test('should have the correct IAM Instance Profile attached', () => {
+      const profileId = getPhysicalId('EC2InstanceProfile');
+      expect(profileId).toBeDefined();
+      expect(instanceDetails.IamInstanceProfile?.Arn).toContain(profileId);
+    });
+
+    test('should be using a dynamic AMI from SSM', () => {
+      expect(instanceDetails.ImageId).toMatch(/^ami-/);
+    });
+  });
+  // }
 
   describe('SharedVPC', () => {
     test('should exist, be available, and have correct tags', async () => {
