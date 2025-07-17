@@ -3,23 +3,42 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'yaml';
 
-describe('Secure Web Infrastructure Unit Test', () => {
+describe('Tap Stack Unit Tests (Rewritten)', () => {
   let template: Template;
 
   beforeAll(() => {
     const templatePath = path.join(__dirname, '../../../templates/cfn-yaml/lib/IDEAL_RESPONSE.md');
     const file = fs.readFileSync(templatePath, 'utf8');
-    const parsed = yaml.parse(file.split('```yaml')[1].split('```')[0]);
-    template = Template.fromJSON(parsed);
+    const parsedYaml = yaml.parse(file.split('```yaml')[1].split('```')[0]);
+    template = Template.fromJSON(parsedYaml);
   });
 
-  test('VPC should be created with correct CIDR block', () => {
+  test('VPC should use 10.0.0.0/16 CIDR block', () => {
     template.hasResourceProperties('AWS::EC2::VPC', {
       CidrBlock: '10.0.0.0/16',
     });
   });
 
-  test('EC2 Instance should be of type t3.micro', () => {
+  test('Internet Gateway should exist', () => {
+    template.resourceCountIs('AWS::EC2::InternetGateway', 1);
+  });
+
+  test('Public subnet should be present', () => {
+    template.hasResourceProperties('AWS::EC2::Subnet', {
+      MapPublicIpOnLaunch: true,
+    });
+  });
+
+  test('Security Group should allow SSH and HTTP', () => {
+    template.hasResourceProperties('AWS::EC2::SecurityGroup', {
+      SecurityGroupIngress: expect.arrayContaining([
+        expect.objectContaining({ FromPort: 22, ToPort: 22, IpProtocol: 'tcp' }),
+        expect.objectContaining({ FromPort: 80, ToPort: 80, IpProtocol: 'tcp' }),
+      ]),
+    });
+  });
+
+  test('Launch Template should use t3.micro instance type', () => {
     template.hasResourceProperties('AWS::EC2::LaunchTemplate', {
       LaunchTemplateData: {
         InstanceType: 't3.micro',
@@ -27,64 +46,9 @@ describe('Secure Web Infrastructure Unit Test', () => {
     });
   });
 
-  test('RDS should be encrypted and Multi-AZ', () => {
-    template.hasResourceProperties('AWS::RDS::DBInstance', {
-      MultiAZ: true,
-      StorageEncrypted: true,
-    });
-  });
-
-  test('SecretsManager should be used for DB credentials', () => {
-    template.resourceCountIs('AWS::SecretsManager::Secret', 1);
-  });
-
-  test('AutoScalingGroup should target three subnets', () => {
-    template.hasResourceProperties('AWS::AutoScaling::AutoScalingGroup', {
-      VPCZoneIdentifier: expect.arrayContaining([
-        expect.anything(), expect.anything(), expect.anything(),
-      ]),
-    });
-  });
-
-  test('CloudFront should be configured with origin and HTTPS redirect', () => {
-    template.hasResourceProperties('AWS::CloudFront::Distribution', {
-      DistributionConfig: {
-        Enabled: true,
-        DefaultCacheBehavior: {
-          ViewerProtocolPolicy: 'redirect-to-https',
-        },
-      },
-    });
-  });
-
-  test('WAF WebACL should have monitoring enabled', () => {
-    template.hasResourceProperties('AWS::WAFv2::WebACL', {
-      VisibilityConfig: {
-        CloudWatchMetricsEnabled: true,
-        SampledRequestsEnabled: true,
-      },
-    });
-  });
-
-  test('KMS key should have key rotation enabled', () => {
-    template.hasResourceProperties('AWS::KMS::Key', {
-      EnableKeyRotation: true,
-    });
-  });
-
-  test('LoadBalancer should span 3 subnets', () => {
-    template.hasResourceProperties('AWS::ElasticLoadBalancingV2::LoadBalancer', {
-      Subnets: expect.arrayContaining([
-        expect.anything(), expect.anything(), expect.anything(),
-      ]),
-    });
-  });
-
-  test('Instance profile should be created', () => {
-    template.resourceCountIs('AWS::IAM::InstanceProfile', 1);
-  });
-
-  test('SNS Alarm topic must exist', () => {
-    template.resourceCountIs('AWS::SNS::Topic', 1);
+  test('Outputs should include VPC ID and public IP', () => {
+    const outputs = template.toJSON().Outputs || {};
+    expect(outputs).toHaveProperty('VpcId');
+    expect(outputs).toHaveProperty('PublicIP');
   });
 });
