@@ -64,6 +64,10 @@ Mappings:
     us-west-2:
       AMI: "/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2"
 
+Conditions:
+  HasTwoAZsRegion1: !Not [!Equals [!Ref AZCountRegion1, 1]]
+  HasTwoAZsRegion2: !Not [!Equals [!Ref AZCountRegion2, 1]]
+
 Resources:
   # Region 1 VPC
   VpcR1:
