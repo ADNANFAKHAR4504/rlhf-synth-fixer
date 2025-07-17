@@ -64,14 +64,6 @@
         "DBAllocatedStorage": {
             "Type": "Number",
             "Default": 20
-        },
-        "DBUsername": {
-            "Type": "String",
-            "NoEcho": true
-        },
-        "DBPassword": {
-            "Type": "String",
-            "NoEcho": true
         }
     },
     "Mappings": {
@@ -846,12 +838,8 @@
                     "Ref": "DBInstanceType"
                 },
                 "Engine": "mysql",
-                "MasterUsername": {
-                    "Ref": "DBUsername"
-                },
-                "MasterUserPassword": {
-                    "Ref": "DBPassword"
-                },
+                "MasterUsername": "{{resolve:secretsmanager:tapstack-db-credentials:SecretString:username}}",
+                "MasterUserPassword": "{{resolve:secretsmanager:tapstack-db-credentials:SecretString:password}}",
                 "VPCSecurityGroups": [
                     {
                         "Ref": "AppSecurityGroupR1"
@@ -922,12 +910,8 @@
                     "Ref": "DBInstanceType"
                 },
                 "Engine": "mysql",
-                "MasterUsername": {
-                    "Ref": "DBUsername"
-                },
-                "MasterUserPassword": {
-                    "Ref": "DBPassword"
-                },
+                "MasterUsername": "{{resolve:secretsmanager:tapstack-db-credentials:SecretString:username}}",
+                "MasterUserPassword": "{{resolve:secretsmanager:tapstack-db-credentials:SecretString:password}}",
                 "VPCSecurityGroups": [
                     {
                         "Ref": "AppSecurityGroupR2"

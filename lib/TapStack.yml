@@ -48,14 +48,6 @@ Parameters:
   DBAllocatedStorage:
     Type: Number
     Default: 20
-  DBUsername:
-    Type: String
-    NoEcho: true
-    Default: dummyuser
-  DBPassword:
-    Type: String
-    NoEcho: true
-    Default: dummypassword
 
 Mappings:
   RegionMap:
@@ -93,7 +85,10 @@ Resources:
     Properties:
       VpcId: !Ref VpcR1
       CidrBlock: !Ref PublicSubnet1Cidr1
-      AvailabilityZone: !Select [0, !GetAZs !Ref Region1]
+      AvailabilityZone: !Select
+        - 0
+        - !GetAZs
+          - !Ref Region1
       Tags:
         - Key: Name
           Value: !Sub "${ProjectName}-public-subnet1-r1"
@@ -103,7 +98,10 @@ Resources:
     Properties:
       VpcId: !Ref VpcR1
       CidrBlock: !Ref PublicSubnet2Cidr1
-      AvailabilityZone: !Select [1, !GetAZs !Ref Region1]
+      AvailabilityZone: !Select
+        - 1
+        - !GetAZs
+          - !Ref Region1
       Tags:
         - Key: Name
           Value: !Sub "${ProjectName}-public-subnet2-r1"
@@ -113,7 +111,10 @@ Resources:
     Properties:
       VpcId: !Ref VpcR1
       CidrBlock: !Ref PrivateSubnet1Cidr1
-      AvailabilityZone: !Select [0, !GetAZs !Ref Region1]
+      AvailabilityZone: !Select
+        - 0
+        - !GetAZs
+          - !Ref Region1
       Tags:
         - Key: Name
           Value: !Sub "${ProjectName}-private-subnet1-r1"
@@ -123,7 +124,10 @@ Resources:
     Properties:
       VpcId: !Ref VpcR1
       CidrBlock: !Ref PrivateSubnet2Cidr1
-      AvailabilityZone: !Select [1, !GetAZs !Ref Region1]
+      AvailabilityZone: !Select
+        - 1
+        - !GetAZs
+          - !Ref Region1
       Tags:
         - Key: Name
           Value: !Sub "${ProjectName}-private-subnet2-r1"
@@ -133,7 +137,10 @@ Resources:
     Properties:
       VpcId: !Ref VpcR2
       CidrBlock: !Ref PublicSubnet1Cidr2
-      AvailabilityZone: !Select [0, !GetAZs !Ref Region2]
+      AvailabilityZone: !Select
+        - 0
+        - !GetAZs
+          - !Ref Region2
       Tags:
         - Key: Name
           Value: !Sub "${ProjectName}-public-subnet1-r2"
@@ -143,7 +150,10 @@ Resources:
     Properties:
       VpcId: !Ref VpcR2
       CidrBlock: !Ref PublicSubnet2Cidr2
-      AvailabilityZone: !Select [1, !GetAZs !Ref Region2]
+      AvailabilityZone: !Select
+        - 1
+        - !GetAZs
+          - !Ref Region2
       Tags:
         - Key: Name
           Value: !Sub "${ProjectName}-public-subnet2-r2"
@@ -153,7 +163,10 @@ Resources:
     Properties:
       VpcId: !Ref VpcR2
       CidrBlock: !Ref PrivateSubnet1Cidr2
-      AvailabilityZone: !Select [0, !GetAZs !Ref Region2]
+      AvailabilityZone: !Select
+        - 0
+        - !GetAZs
+          - !Ref Region2
       Tags:
         - Key: Name
           Value: !Sub "${ProjectName}-private-subnet1-r2"
@@ -163,7 +176,10 @@ Resources:
     Properties:
       VpcId: !Ref VpcR2
       CidrBlock: !Ref PrivateSubnet2Cidr2
-      AvailabilityZone: !Select [1, !GetAZs !Ref Region2]
+      AvailabilityZone: !Select
+        - 1
+        - !GetAZs
+          - !Ref Region2
       Tags:
         - Key: Name
           Value: !Sub "${ProjectName}-private-subnet2-r2"
