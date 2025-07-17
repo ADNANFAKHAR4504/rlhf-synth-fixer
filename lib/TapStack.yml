@@ -87,8 +87,7 @@ Resources:
       CidrBlock: !Ref PublicSubnet1Cidr1
       AvailabilityZone: !Select
         - 0
-        - !GetAZs
-          - !Ref Region1
+        - !GetAZs us-east-1
       Tags:
         - Key: Name
           Value: !Sub "${ProjectName}-public-subnet1-r1"
@@ -100,8 +99,7 @@ Resources:
       CidrBlock: !Ref PublicSubnet2Cidr1
       AvailabilityZone: !Select
         - 1
-        - !GetAZs
-          - !Ref Region1
+        - !GetAZs us-east-1
       Tags:
         - Key: Name
           Value: !Sub "${ProjectName}-public-subnet2-r1"
@@ -113,8 +111,7 @@ Resources:
       CidrBlock: !Ref PrivateSubnet1Cidr1
       AvailabilityZone: !Select
         - 0
-        - !GetAZs
-          - !Ref Region1
+        - !GetAZs us-east-1
       Tags:
         - Key: Name
           Value: !Sub "${ProjectName}-private-subnet1-r1"
@@ -126,8 +123,7 @@ Resources:
       CidrBlock: !Ref PrivateSubnet2Cidr1
       AvailabilityZone: !Select
         - 1
-        - !GetAZs
-          - !Ref Region1
+        - !GetAZs us-east-1
       Tags:
         - Key: Name
           Value: !Sub "${ProjectName}-private-subnet2-r1"
@@ -139,8 +135,7 @@ Resources:
       CidrBlock: !Ref PublicSubnet1Cidr2
       AvailabilityZone: !Select
         - 0
-        - !GetAZs
-          - !Ref Region2
+        - !GetAZs us-west-2
       Tags:
         - Key: Name
           Value: !Sub "${ProjectName}-public-subnet1-r2"
@@ -152,8 +147,7 @@ Resources:
       CidrBlock: !Ref PublicSubnet2Cidr2
       AvailabilityZone: !Select
         - 1
-        - !GetAZs
-          - !Ref Region2
+        - !GetAZs us-west-2
       Tags:
         - Key: Name
           Value: !Sub "${ProjectName}-public-subnet2-r2"
@@ -165,8 +159,7 @@ Resources:
       CidrBlock: !Ref PrivateSubnet1Cidr2
       AvailabilityZone: !Select
         - 0
-        - !GetAZs
-          - !Ref Region2
+        - !GetAZs us-west-2
       Tags:
         - Key: Name
           Value: !Sub "${ProjectName}-private-subnet1-r2"
@@ -178,8 +171,7 @@ Resources:
       CidrBlock: !Ref PrivateSubnet2Cidr2
       AvailabilityZone: !Select
         - 1
-        - !GetAZs
-          - !Ref Region2
+        - !GetAZs us-west-2
       Tags:
         - Key: Name
           Value: !Sub "${ProjectName}-private-subnet2-r2"

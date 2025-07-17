@@ -134,11 +134,7 @@
                     "Fn::Select": [
                         0,
                         {
-                            "Fn::GetAZs": [
-                                {
-                                    "Ref": "Region1"
-                                }
-                            ]
+                            "Fn::GetAZs": "us-east-1"
                         }
                     ]
                 },
@@ -165,11 +161,7 @@
                     "Fn::Select": [
                         1,
                         {
-                            "Fn::GetAZs": [
-                                {
-                                    "Ref": "Region1"
-                                }
-                            ]
+                            "Fn::GetAZs": "us-east-1"
                         }
                     ]
                 },
@@ -196,11 +188,7 @@
                     "Fn::Select": [
                         0,
                         {
-                            "Fn::GetAZs": [
-                                {
-                                    "Ref": "Region1"
-                                }
-                            ]
+                            "Fn::GetAZs": "us-east-1"
                         }
                     ]
                 },
@@ -227,11 +215,7 @@
                     "Fn::Select": [
                         1,
                         {
-                            "Fn::GetAZs": [
-                                {
-                                    "Ref": "Region1"
-                                }
-                            ]
+                            "Fn::GetAZs": "us-east-1"
                         }
                     ]
                 },
@@ -258,11 +242,7 @@
                     "Fn::Select": [
                         0,
                         {
-                            "Fn::GetAZs": [
-                                {
-                                    "Ref": "Region2"
-                                }
-                            ]
+                            "Fn::GetAZs": "us-west-2"
                         }
                     ]
                 },
@@ -289,11 +269,7 @@
                     "Fn::Select": [
                         1,
                         {
-                            "Fn::GetAZs": [
-                                {
-                                    "Ref": "Region2"
-                                }
-                            ]
+                            "Fn::GetAZs": "us-west-2"
                         }
                     ]
                 },
@@ -320,11 +296,7 @@
                     "Fn::Select": [
                         0,
                         {
-                            "Fn::GetAZs": [
-                                {
-                                    "Ref": "Region2"
-                                }
-                            ]
+                            "Fn::GetAZs": "us-west-2"
                         }
                     ]
                 },
@@ -351,11 +323,7 @@
                     "Fn::Select": [
                         1,
                         {
-                            "Fn::GetAZs": [
-                                {
-                                    "Ref": "Region2"
-                                }
-                            ]
+                            "Fn::GetAZs": "us-west-2"
                         }
                     ]
                 },
