@@ -51,9 +51,11 @@ Parameters:
   DBUsername:
     Type: String
     NoEcho: true
+    Default: dummyuser
   DBPassword:
     Type: String
     NoEcho: true
+    Default: dummypassword
 
 Mappings:
   RegionMap:
@@ -94,7 +96,7 @@ Resources:
       AvailabilityZone: !Select 
         - 0
         - !GetAZs 
-            - !Ref Region1
+            - !Ref "AWS::Region"
       Tags:
         - Key: Name
           Value: !Sub "${ProjectName}-public-subnet1-r1"
@@ -107,7 +109,7 @@ Resources:
       AvailabilityZone: !Select 
         - 1
         - !GetAZs 
-            - !Ref Region1
+            - !Ref "AWS::Region"
       Tags:
         - Key: Name
           Value: !Sub "${ProjectName}-public-subnet2-r1"
@@ -120,7 +122,7 @@ Resources:
       AvailabilityZone: !Select 
         - 0
         - !GetAZs 
-            - !Ref Region1
+            - !Ref "AWS::Region"
       Tags:
         - Key: Name
           Value: !Sub "${ProjectName}-private-subnet1-r1"
@@ -133,7 +135,7 @@ Resources:
       AvailabilityZone: !Select 
         - 1
         - !GetAZs 
-            - !Ref Region1
+            - !Ref "AWS::Region"
       Tags:
         - Key: Name
           Value: !Sub "${ProjectName}-private-subnet2-r1"
@@ -146,7 +148,7 @@ Resources:
       AvailabilityZone: !Select 
         - 0
         - !GetAZs 
-            - !Ref Region2
+            - !Ref "AWS::Region"
       Tags:
         - Key: Name
           Value: !Sub "${ProjectName}-public-subnet1-r2"
@@ -159,7 +161,7 @@ Resources:
       AvailabilityZone: !Select 
         - 1
         - !GetAZs 
-            - !Ref Region2
+            - !Ref "AWS::Region"
       Tags:
         - Key: Name
           Value: !Sub "${ProjectName}-public-subnet2-r2"
@@ -172,7 +174,7 @@ Resources:
       AvailabilityZone: !Select 
         - 0
         - !GetAZs 
-            - !Ref Region2
+            - !Ref "AWS::Region"
       Tags:
         - Key: Name
           Value: !Sub "${ProjectName}-private-subnet1-r2"
@@ -185,7 +187,7 @@ Resources:
       AvailabilityZone: !Select 
         - 1
         - !GetAZs 
-            - !Ref Region2
+            - !Ref "AWS::Region"
       Tags:
         - Key: Name
           Value: !Sub "${ProjectName}-private-subnet2-r2"
