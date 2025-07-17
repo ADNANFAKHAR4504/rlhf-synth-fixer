@@ -15,6 +15,12 @@ Parameters:
   AvailabilityZone:
     Type: String
     Description: AWS availability zone
+  InstanceType:
+    Type: String
+    Description: EC2 instance type
+  LatestAmiId:
+    Type: String
+    Description: Latest AMI ID for the availability zone
 
 Resources:
   SharedVPC:
@@ -148,7 +154,7 @@ Resources:
     Condition: IsProduction
     Properties:
       IamInstanceProfile: !Ref EC2InstanceProfile
-      InstanceType: t2.micro
+      InstanceType: !Ref InstanceType
       ImageId: !Ref LatestAmiId
       SecurityGroupIds:
         - !Ref AppSecurityGroup

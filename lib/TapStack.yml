@@ -12,6 +12,11 @@ Metadata:
           default: 'EC2 Configuration'
         Parameters:
           - LatestAmiId
+          - InstanceType
+      - Label:
+          default: 'Network Configuration'
+        Parameters:
+          - AvailabilityZone
 
 Parameters:
   EnvironmentSuffix:
@@ -24,6 +29,19 @@ Parameters:
     Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
     Default: '/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2'
     Description: 'The latest Amazon Linux 2 AMI ID from SSM Parameter Store.'
+  InstanceType:
+    Type: String
+    Default: 't2.micro'
+    Description: 'EC2 instance type for the production instance.'
+    AllowedValues:
+      - t2.micro
+      - t3.micro
+      - t3.small
+    ConstraintDescription: 'Must be a valid EC2 instance type.'
+  AvailabilityZone:
+    Type: 'AWS::EC2::AvailabilityZone::Name'
+    Default: 'us-east-1a'
+    Description: 'The Availability Zone to deploy the public subnet into.'
 
 Conditions:
   IsProduction: !Equals [ !Ref EnvironmentSuffix, prod ]
@@ -47,7 +65,7 @@ Resources:
       VpcId: !Ref SharedVPC
       CidrBlock: 10.0.1.0/24
       MapPublicIpOnLaunch: true
-      AvailabilityZone: us-east-1a
+      AvailabilityZone: !Ref AvailabilityZone
       Tags:
         - Key: Name
           Value: !Sub '${EnvironmentSuffix}-public-subnet'
@@ -116,7 +134,7 @@ Resources:
     Condition: IsProduction
     Properties:
       IamInstanceProfile: !Ref EC2InstanceProfile
-      InstanceType: t2.micro
+      InstanceType: !Ref InstanceType
       ImageId: !Ref LatestAmiId
       SecurityGroupIds:
         - !Ref AppSecurityGroup
