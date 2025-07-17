@@ -1,37 +1,36 @@
-Prompt
-Task Title: multi-env-consistency_CloudFormation_YAML_6dq1ae9tnvqx
-Complexity: Expert
-Platform: AWS CloudFormation
-Language: YAML
 
-Prompt Instruction:
+# Task: Multi-Environment Consistency – CloudFormation YAML
 
+## Prompt Details
+
+**Task Title:** `multi-env-consistency_CloudFormation_YAML_6dq1ae9tnvqx`  
+**Complexity:** Expert  
+**Platform:** AWS CloudFormation  
+**Language:** YAML  
+
+### Prompt Instruction
 You are tasked with designing a highly available, secure, and scalable AWS infrastructure using CloudFormation YAML. The infrastructure should support a production-level web application architecture deployed across multiple AWS regions. Prioritize best practices such as encryption, IAM security, and resiliency across tiers.
 
-Requirements:
+---
 
-Use CloudFormation YAML format
+## Requirements
+- Use CloudFormation YAML format
+- Support deployment in more than one AWS region
+- Include essential components for availability, scaling, and protection
+- Adhere to least-privilege IAM
+- Use managed AWS services where possible
 
-Support deployment in more than one AWS region
+### Constraints
+- YAML only
+- Minimize hardcoded values
+- Prioritize reusability and modularity
+- Avoid overly complex logic
 
-Include essential components for availability, scaling, and protection
+---
 
-Adhere to least-privilege IAM
+## Generated CloudFormation Template (YAML)
 
-Use managed AWS services where possible
-
-Constraints:
-
-YAML only
-
-Minimize hardcoded values
-
-Prioritize reusability and modularity
-
-Avoid overly complex logic
-
-Generated Output (CloudFormation YAML)
-
+```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: Multi-region, highly available, secure, and scalable web application infrastructure.
 
@@ -198,22 +197,25 @@ Outputs:
   ALBDNSName:
     Description: DNSName of the ALB
     Value: !GetAtt ApplicationLoadBalancer.DNSName
+```
 
+---
 
+## Evaluation Summary
 
-Evaluation Summary
-Feature	Result	Notes
-Multi-Region Support	❌	No StackSets, cross-region stacks, or global DNS setup.
-High Availability	✅	ALB + ASG with 2 AZs provides basic availability.
-Least Privilege IAM	⚠️	IAM role grants S3:* access; should be narrowed.
-Managed AWS Services	⚠️	Uses ALB/ASG/EC2, but omits RDS, S3, CloudFront, WAF, etc.
-Encryption (KMS, S3, RDS)	❌	No encryption or KMS usage defined.
-Monitoring & Logs (CloudWatch)	❌	No logging, metrics, or alarms configured.
-WAF/Shield	❌	Not included or integrated with ALB/CloudFront.
-Secrets Management	❌	No AWS Secrets Manager used for credentials.
-RDS Multi-AZ	❌	No database defined at all.
-Modularity / Reusability	⚠️	Parameters used, but lacks nested stacks/modules.
-Hardcoded Values Avoided	✅	AMIs and AZs are mapped/selected properly.
+| Feature                         | Result | Notes                                                                 |
+|----------------------------------|--------|------------------------------------------------------------------------|
+| Multi-Region Support            | ❌     | No StackSets, cross-region stacks, or global DNS setup.               |
+| High Availability               | ✅     | ALB + ASG with 2 AZs provides basic availability.                     |
+| Least Privilege IAM            | ⚠️     | IAM role grants S3:* access; should be narrowed.                      |
+| Managed AWS Services           | ⚠️     | Uses ALB/ASG/EC2, but omits RDS, S3, CloudFront, WAF, etc.            |
+| Encryption (KMS, S3, RDS)      | ❌     | No encryption or KMS usage defined.                                   |
+| Monitoring & Logs (CloudWatch) | ❌     | No logging, metrics, or alarms configured.                            |
+| WAF/Shield                     | ❌     | Not included or integrated with ALB/CloudFront.                       |
+| Secrets Management             | ❌     | No AWS Secrets Manager used for credentials.                          |
+| RDS Multi-AZ                   | ❌     | No database defined at all.                                           |
+| Modularity / Reusability       | ⚠️     | Parameters used, but lacks nested stacks/modules.                     |
+| Hardcoded Values Avoided       | ✅     | AMIs and AZs are mapped/selected properly.                            |
 
-Verdict
-❌ FAIL – While the template implements a basic scalable web infrastructure in a single region, it falls significantly short of expert-level expectations for a secure, multi-region, production-ready setup. Critical security, observability, and redundancy requirements were not addressed.
+### Verdict
+❌ **FAIL** – While the template implements a basic scalable web infrastructure in a single region, it falls significantly short of expert-level expectations for a secure, multi-region, production-ready setup. Critical security, observability, and redundancy requirements were not addressed.

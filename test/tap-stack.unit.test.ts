@@ -7,9 +7,9 @@ describe('Secure Web Infrastructure Unit Test', () => {
   let template: Template;
 
   beforeAll(() => {
-    const templatePath = path.join(__dirname, '../../../templates/cfn-yaml/lib/TapStack.yml');
+    const templatePath = path.join(__dirname, '../lib/TapStack.yml');
     const file = fs.readFileSync(templatePath, 'utf8');
-    const parsed = yaml.parse(file);
+    const parsed = yaml.parse(file, { logLevel: 'silent' });
     template = Template.fromJSON(parsed);
   });
 
