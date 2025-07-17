@@ -1,23 +1,23 @@
 import {
   CloudFormationClient,
-  DescribeStacksCommand,
   DescribeStackResourcesCommand,
+  DescribeStacksCommand,
   StackResource,
 } from '@aws-sdk/client-cloudformation';
 import {
-  EC2Client,
   DescribeInstancesCommand,
   DescribeSecurityGroupsCommand,
+  EC2Client,
 } from '@aws-sdk/client-ec2';
-import { S3Client, GetBucketTaggingCommand } from '@aws-sdk/client-s3';
-import { IAMClient, GetRoleCommand, GetInstanceProfileCommand } from '@aws-sdk/client-iam';
+import { GetRoleCommand, IAMClient } from '@aws-sdk/client-iam';
+import { GetBucketTaggingCommand, S3Client } from '@aws-sdk/client-s3';
 
 // --- Configuration ---
 // The name of the stack to be tested. This should be deployed beforehand.
 // The test is designed to run against a 'prod' environment to validate conditional resources.
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 const stackName = `tap-stack-${environmentSuffix}`;
-const region = process.env.AWS_REGION || 'us-west-2';
+const region = process.env.AWS_REGION || 'us-east-1';
 
 // --- AWS Clients ---
 const cfnClient = new CloudFormationClient({ region });
@@ -42,15 +42,27 @@ describe('TapStack Integration Tests', () => {
       const stacksResponse = await cfnClient.send(stacksCommand);
       const stack = stacksResponse.Stacks?.[0];
 
-      if (!stack || !['CREATE_COMPLETE', 'UPDATE_COMPLETE'].includes(stack.StackStatus || '')) {
-        throw new Error(`Stack ${stackName} not found or not in a successful state.`);
+      if (
+        !stack ||
+        !['CREATE_COMPLETE', 'UPDATE_COMPLETE'].includes(
+          stack.StackStatus || ''
+        )
+      ) {
+        throw new Error(
+          `Stack ${stackName} not found or not in a successful state.`
+        );
       }
 
-      const resourcesCommand = new DescribeStackResourcesCommand({ StackName: stackName });
+      const resourcesCommand = new DescribeStackResourcesCommand({
+        StackName: stackName,
+      });
       const resourcesResponse = await cfnClient.send(resourcesCommand);
       stackResources = resourcesResponse.StackResources || [];
     } catch (error) {
-      console.error('Failed to fetch stack details. Ensure the stack is deployed and its name is correct.', error);
+      console.error(
+        'Failed to fetch stack details. Ensure the stack is deployed and its name is correct.',
+        error
+      );
       // Fail fast if we can't get stack details
       throw error;
     }
@@ -66,7 +78,9 @@ describe('TapStack Integration Tests', () => {
         instanceId = getPhysicalId('ProductionOnlyInstance');
         expect(instanceId).toBeDefined();
 
-        const command = new DescribeInstancesCommand({ InstanceIds: [instanceId!] });
+        const command = new DescribeInstancesCommand({
+          InstanceIds: [instanceId!],
+        });
         const data = await ec2Client.send(command);
         instanceDetails = data.Reservations?.[0]?.Instances?.[0];
         expect(instanceDetails).toBeDefined();
@@ -77,7 +91,9 @@ describe('TapStack Integration Tests', () => {
       });
 
       test('should have the correct "Environment" tag', () => {
-        const envTag = instanceDetails.Tags?.find((t: any) => t.Key === 'Environment');
+        const envTag = instanceDetails.Tags?.find(
+          (t: any) => t.Key === 'Environment'
+        );
         expect(envTag).toBeDefined();
         expect(envTag.Value).toBe(stackName);
       });
@@ -106,8 +122,13 @@ describe('TapStack Integration Tests', () => {
     test('should have the "Environment" tag set to the stack name', async () => {
       const bucketId = getPhysicalId('AppS3Bucket');
       expect(bucketId).toBeDefined();
-      const s3Tags = await s3Client.send(new GetBucketTaggingCommand({ Bucket: bucketId! }));
-      expect(s3Tags.TagSet).toContainEqual({ Key: 'Environment', Value: stackName });
+      const s3Tags = await s3Client.send(
+        new GetBucketTaggingCommand({ Bucket: bucketId! })
+      );
+      expect(s3Tags.TagSet).toContainEqual({
+        Key: 'Environment',
+        Value: stackName,
+      });
     });
   });
 
@@ -119,10 +140,14 @@ describe('TapStack Integration Tests', () => {
       const data = await ec2Client.send(command);
       const sgDetails = data.SecurityGroups?.[0];
 
-      const httpRule = sgDetails?.IpPermissions?.find((p: any) => p.FromPort === 80 && p.ToPort === 80);
+      const httpRule = sgDetails?.IpPermissions?.find(
+        (p: any) => p.FromPort === 80 && p.ToPort === 80
+      );
       expect(httpRule?.IpRanges).toContainEqual({ CidrIp: '0.0.0.0/0' });
 
-      const httpsRule = sgDetails?.IpPermissions?.find((p: any) => p.FromPort === 443 && p.ToPort === 443);
+      const httpsRule = sgDetails?.IpPermissions?.find(
+        (p: any) => p.FromPort === 443 && p.ToPort === 443
+      );
       expect(httpsRule?.IpRanges).toContainEqual({ CidrIp: '0.0.0.0/0' });
     });
   });
@@ -133,7 +158,9 @@ describe('TapStack Integration Tests', () => {
       expect(roleName).toBeDefined();
       const command = new GetRoleCommand({ RoleName: roleName! });
       const data = await iamClient.send(command);
-      const policy = JSON.parse(decodeURIComponent(data.Role!.AssumeRolePolicyDocument!));
+      const policy = JSON.parse(
+        decodeURIComponent(data.Role!.AssumeRolePolicyDocument!)
+      );
       const statement = policy.Statement[0];
       expect(statement.Principal.Service).toBe('ec2.amazonaws.com');
       expect(statement.Action).toBe('sts:AssumeRole');
