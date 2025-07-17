@@ -7,7 +7,7 @@ describe('Tap Stack Unit Tests (Rewritten)', () => {
   let template: Template;
 
   beforeAll(() => {
-    const templatePath = path.join(__dirname, '../../../templates/cfn-yaml/lib/IDEAL_RESPONSE.md');
+    const templatePath = path.join(__dirname, '../lib/IDEAL_RESPONSE.md');
     const file = fs.readFileSync(templatePath, 'utf8');
     const parsedYaml = yaml.parse(file.split('```yaml')[1].split('```')[0]);
     template = Template.fromJSON(parsedYaml);
