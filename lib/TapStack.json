@@ -1,5 +1,6 @@
 {
     "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Highly available, multi-region, scalable, and secure application infrastructure.",
     "Parameters": {
         "ProjectName": {
             "Type": "String",
@@ -9,42 +10,81 @@
             "Type": "String",
             "Default": "us-east-1"
         },
+        "Region2": {
+            "Type": "String",
+            "Default": "us-west-2"
+        },
         "VpcCidr1": {
             "Type": "String",
             "Default": "10.0.0.0/16"
+        },
+        "VpcCidr2": {
+            "Type": "String",
+            "Default": "10.1.0.0/16"
         },
         "PublicSubnet1Cidr1": {
             "Type": "String",
             "Default": "10.0.1.0/24"
         },
-        "PublicSubnet2Cidr1": {
-            "Type": "String",
-            "Default": "10.0.2.0/24"
-        },
         "PrivateSubnet1Cidr1": {
             "Type": "String",
             "Default": "10.0.101.0/24"
+        },
+        "PublicSubnet2Cidr1": {
+            "Type": "String",
+            "Default": "10.0.2.0/24"
         },
         "PrivateSubnet2Cidr1": {
             "Type": "String",
             "Default": "10.0.102.0/24"
         },
+        "PublicSubnet1Cidr2": {
+            "Type": "String",
+            "Default": "10.1.1.0/24"
+        },
+        "PrivateSubnet1Cidr2": {
+            "Type": "String",
+            "Default": "10.1.101.0/24"
+        },
+        "PublicSubnet2Cidr2": {
+            "Type": "String",
+            "Default": "10.1.2.0/24"
+        },
+        "PrivateSubnet2Cidr2": {
+            "Type": "String",
+            "Default": "10.1.102.0/24"
+        },
         "InstanceType": {
             "Type": "String",
-            "Default": "t2.micro"
+            "Default": "t3.micro"
+        },
+        "AMI": {
+            "Type": "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>",
+            "Description": "SSM parameter for latest Amazon Linux 2 AMI"
         },
         "DBInstanceType": {
             "Type": "String",
-            "Default": "db.t2.micro"
+            "Default": "db.t3.micro"
         },
         "DBAllocatedStorage": {
             "Type": "Number",
             "Default": 20
+        },
+        "DBUsername": {
+            "Type": "String",
+            "NoEcho": true
+        },
+        "DBPassword": {
+            "Type": "String",
+            "NoEcho": true
         }
     },
     "Mappings": {
         "RegionMap": {
             "us-east-1": {
+                "AMI": "/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2"
+            },
+            "us-west-2": {
                 "AMI": "/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2"
             }
         }
@@ -56,17 +96,31 @@
                 "CidrBlock": {
                     "Ref": "VpcCidr1"
                 },
+                "EnableDnsSupport": true,
+                "EnableDnsHostnames": true,
                 "Tags": [
                     {
                         "Key": "Name",
                         "Value": {
                             "Fn::Sub": "${ProjectName}-vpc-r1"
                         }
-                    },
+                    }
+                ]
+            }
+        },
+        "VpcR2": {
+            "Type": "AWS::EC2::VPC",
+            "Properties": {
+                "CidrBlock": {
+                    "Ref": "VpcCidr2"
+                },
+                "EnableDnsSupport": true,
+                "EnableDnsHostnames": true,
+                "Tags": [
                     {
-                        "Key": "Region",
+                        "Key": "Name",
                         "Value": {
-                            "Ref": "Region1"
+                            "Fn::Sub": "${ProjectName}-vpc-r2"
                         }
                     }
                 ]
@@ -85,10 +139,11 @@
                     "Fn::Select": [
                         0,
                         {
-                            "Fn::GetAZs": "us-east-1"
+                            "Fn::GetAZs": "Region1"
                         }
                     ]
                 },
+                "MapPublicIpOnLaunch": true,
                 "Tags": [
                     {
                         "Key": "Name",
@@ -112,10 +167,11 @@
                     "Fn::Select": [
                         1,
                         {
-                            "Fn::GetAZs": "us-east-1"
+                            "Fn::GetAZs": "Region1"
                         }
                     ]
                 },
+                "MapPublicIpOnLaunch": true,
                 "Tags": [
                     {
                         "Key": "Name",
@@ -139,7 +195,7 @@
                     "Fn::Select": [
                         0,
                         {
-                            "Fn::GetAZs": "us-east-1"
+                            "Fn::GetAZs": "Region1"
                         }
                     ]
                 },
@@ -166,7 +222,7 @@
                     "Fn::Select": [
                         1,
                         {
-                            "Fn::GetAZs": "us-east-1"
+                            "Fn::GetAZs": "Region1"
                         }
                     ]
                 },
@@ -175,6 +231,116 @@
                         "Key": "Name",
                         "Value": {
                             "Fn::Sub": "${ProjectName}-private-subnet2-r1"
+                        }
+                    }
+                ]
+            }
+        },
+        "PublicSubnet1R2": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VpcR2"
+                },
+                "CidrBlock": {
+                    "Ref": "PublicSubnet1Cidr2"
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": "Region2"
+                        }
+                    ]
+                },
+                "MapPublicIpOnLaunch": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-public-subnet1-r2"
+                        }
+                    }
+                ]
+            }
+        },
+        "PublicSubnet2R2": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VpcR2"
+                },
+                "CidrBlock": {
+                    "Ref": "PublicSubnet2Cidr2"
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::GetAZs": "Region2"
+                        }
+                    ]
+                },
+                "MapPublicIpOnLaunch": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-public-subnet2-r2"
+                        }
+                    }
+                ]
+            }
+        },
+        "PrivateSubnet1R2": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VpcR2"
+                },
+                "CidrBlock": {
+                    "Ref": "PrivateSubnet1Cidr2"
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": "Region2"
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-private-subnet1-r2"
+                        }
+                    }
+                ]
+            }
+        },
+        "PrivateSubnet2R2": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VpcR2"
+                },
+                "CidrBlock": {
+                    "Ref": "PrivateSubnet2Cidr2"
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::GetAZs": "Region2"
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-private-subnet2-r2"
                         }
                     }
                 ]
@@ -193,6 +359,19 @@
                 ]
             }
         },
+        "InternetGatewayR2": {
+            "Type": "AWS::EC2::InternetGateway",
+            "Properties": {
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-igw-r2"
+                        }
+                    }
+                ]
+            }
+        },
         "AttachIgwR1": {
             "Type": "AWS::EC2::VPCGatewayAttachment",
             "Properties": {
@@ -202,6 +381,73 @@
                 "InternetGatewayId": {
                     "Ref": "InternetGatewayR1"
                 }
+            }
+        },
+        "AttachIgwR2": {
+            "Type": "AWS::EC2::VPCGatewayAttachment",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VpcR2"
+                },
+                "InternetGatewayId": {
+                    "Ref": "InternetGatewayR2"
+                }
+            }
+        },
+        "NatEIPR1": {
+            "Type": "AWS::EC2::EIP",
+            "Properties": {
+                "Domain": "vpc"
+            }
+        },
+        "NatEIPR2": {
+            "Type": "AWS::EC2::EIP",
+            "Properties": {
+                "Domain": "vpc"
+            }
+        },
+        "NatGatewayR1": {
+            "Type": "AWS::EC2::NatGateway",
+            "Properties": {
+                "AllocationId": {
+                    "Fn::GetAtt": [
+                        "NatEIPR1",
+                        "AllocationId"
+                    ]
+                },
+                "SubnetId": {
+                    "Ref": "PublicSubnet1R1"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-natgw-r1"
+                        }
+                    }
+                ]
+            }
+        },
+        "NatGatewayR2": {
+            "Type": "AWS::EC2::NatGateway",
+            "Properties": {
+                "AllocationId": {
+                    "Fn::GetAtt": [
+                        "NatEIPR2",
+                        "AllocationId"
+                    ]
+                },
+                "SubnetId": {
+                    "Ref": "PublicSubnet1R2"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-natgw-r2"
+                        }
+                    }
+                ]
             }
         },
         "PublicRouteTableR1": {
@@ -220,6 +466,22 @@
                 ]
             }
         },
+        "PrivateRouteTableR1": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VpcR1"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-private-rt-r1"
+                        }
+                    }
+                ]
+            }
+        },
         "PublicRouteR1": {
             "Type": "AWS::EC2::Route",
             "Properties": {
@@ -229,6 +491,18 @@
                 "DestinationCidrBlock": "0.0.0.0/0",
                 "GatewayId": {
                     "Ref": "InternetGatewayR1"
+                }
+            }
+        },
+        "PrivateRouteR1": {
+            "Type": "AWS::EC2::Route",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTableR1"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "NatGatewayId": {
+                    "Ref": "NatGatewayR1"
                 }
             }
         },
@@ -254,62 +528,6 @@
                 }
             }
         },
-        "NatGatewayR1": {
-            "Type": "AWS::EC2::NatGateway",
-            "Properties": {
-                "AllocationId": {
-                    "Fn::GetAtt": [
-                        "NatEIPR1",
-                        "AllocationId"
-                    ]
-                },
-                "SubnetId": {
-                    "Ref": "PublicSubnet1R1"
-                },
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${ProjectName}-nat-r1"
-                        }
-                    }
-                ]
-            }
-        },
-        "NatEIPR1": {
-            "Type": "AWS::EC2::EIP",
-            "Properties": {
-                "Domain": "vpc"
-            }
-        },
-        "PrivateRouteTableR1": {
-            "Type": "AWS::EC2::RouteTable",
-            "Properties": {
-                "VpcId": {
-                    "Ref": "VpcR1"
-                },
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${ProjectName}-private-rt-r1"
-                        }
-                    }
-                ]
-            }
-        },
-        "PrivateRouteR1": {
-            "Type": "AWS::EC2::Route",
-            "Properties": {
-                "RouteTableId": {
-                    "Ref": "PrivateRouteTableR1"
-                },
-                "DestinationCidrBlock": "0.0.0.0/0",
-                "NatGatewayId": {
-                    "Ref": "NatGatewayR1"
-                }
-            }
-        },
         "PrivateSubnet1RouteTableAssociationR1": {
             "Type": "AWS::EC2::SubnetRouteTableAssociation",
             "Properties": {
@@ -332,10 +550,110 @@
                 }
             }
         },
+        "PublicRouteTableR2": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VpcR2"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-public-rt-r2"
+                        }
+                    }
+                ]
+            }
+        },
+        "PrivateRouteTableR2": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VpcR2"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-private-rt-r2"
+                        }
+                    }
+                ]
+            }
+        },
+        "PublicRouteR2": {
+            "Type": "AWS::EC2::Route",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PublicRouteTableR2"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "GatewayId": {
+                    "Ref": "InternetGatewayR2"
+                }
+            }
+        },
+        "PrivateRouteR2": {
+            "Type": "AWS::EC2::Route",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTableR2"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "NatGatewayId": {
+                    "Ref": "NatGatewayR2"
+                }
+            }
+        },
+        "PublicSubnet1RouteTableAssociationR2": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "PublicSubnet1R2"
+                },
+                "RouteTableId": {
+                    "Ref": "PublicRouteTableR2"
+                }
+            }
+        },
+        "PublicSubnet2RouteTableAssociationR2": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "PublicSubnet2R2"
+                },
+                "RouteTableId": {
+                    "Ref": "PublicRouteTableR2"
+                }
+            }
+        },
+        "PrivateSubnet1RouteTableAssociationR2": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "PrivateSubnet1R2"
+                },
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTableR2"
+                }
+            }
+        },
+        "PrivateSubnet2RouteTableAssociationR2": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "PrivateSubnet2R2"
+                },
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTableR2"
+                }
+            }
+        },
         "ELBSecurityGroupR1": {
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
-                "GroupDescription": "ELB Security Group",
+                "GroupDescription": "ELB Security Group R1",
                 "VpcId": {
                     "Ref": "VpcR1"
                 },
@@ -358,7 +676,7 @@
         "AppSecurityGroupR1": {
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
-                "GroupDescription": "App Security Group",
+                "GroupDescription": "App Security Group R1",
                 "VpcId": {
                     "Ref": "VpcR1"
                 },
@@ -380,69 +698,449 @@
                 ]
             }
         },
-        "EC2InstanceR1": {
-            "Type": "AWS::EC2::Instance",
-            "Metadata": {
-                "cfn-lint": {
-                    "config": {
-                        "ignore_checks": [
-                            "W1034"
-                        ]
-                    }
-                }
-            },
+        "DBSecurityGroupR1": {
+            "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
-                "ImageId": {
-                    "Fn::FindInMap": [
-                        "RegionMap",
-                        {
-                            "Ref": "Region1"
-                        },
-                        "AMI"
-                    ]
+                "GroupDescription": "DB Security Group R1",
+                "VpcId": {
+                    "Ref": "VpcR1"
                 },
-                "InstanceType": {
-                    "Ref": "InstanceType"
-                },
-                "SubnetId": {
-                    "Ref": "PublicSubnet1R1"
-                },
-                "Tags": [
+                "SecurityGroupIngress": [
                     {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${ProjectName}-ec2-r1"
+                        "IpProtocol": "tcp",
+                        "FromPort": 3306,
+                        "ToPort": 3306,
+                        "SourceSecurityGroupId": {
+                            "Ref": "AppSecurityGroupR1"
                         }
                     }
                 ]
             }
         },
-        "RDSInstanceR1": {
-            "Type": "AWS::RDS::DBInstance",
+        "ELBSecurityGroupR2": {
+            "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
-                "DBInstanceIdentifier": {
-                    "Fn::Sub": "${ProjectName}-db-r1"
+                "GroupDescription": "ELB Security Group R2",
+                "VpcId": {
+                    "Ref": "VpcR2"
                 },
-                "AllocatedStorage": {
-                    "Ref": "DBAllocatedStorage"
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 80,
+                        "ToPort": 80,
+                        "CidrIp": "0.0.0.0/0"
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 443,
+                        "ToPort": 443,
+                        "CidrIp": "0.0.0.0/0"
+                    }
+                ]
+            }
+        },
+        "AppSecurityGroupR2": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "App Security Group R2",
+                "VpcId": {
+                    "Ref": "VpcR2"
                 },
-                "DBInstanceClass": {
-                    "Ref": "DBInstanceType"
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 80,
+                        "ToPort": 80,
+                        "SourceSecurityGroupId": {
+                            "Ref": "ELBSecurityGroupR2"
+                        }
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 22,
+                        "ToPort": 22,
+                        "CidrIp": "0.0.0.0/0"
+                    }
+                ]
+            }
+        },
+        "DBSecurityGroupR2": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "DB Security Group R2",
+                "VpcId": {
+                    "Ref": "VpcR2"
                 },
-                "Engine": "mysql",
-                "MasterUsername": "{{resolve:secretsmanager:tapstack-db-credentials:SecretString:username}}",
-                "MasterUserPassword": "{{resolve:secretsmanager:tapstack-db-credentials:SecretString:password}}",
-                "VPCSecurityGroups": [
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 3306,
+                        "ToPort": 3306,
+                        "SourceSecurityGroupId": {
+                            "Ref": "AppSecurityGroupR2"
+                        }
+                    }
+                ]
+            }
+        },
+        "ALBR1": {
+            "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-alb-r1"
+                },
+                "Subnets": [
+                    {
+                        "Ref": "PublicSubnet1R1"
+                    },
+                    {
+                        "Ref": "PublicSubnet2R1"
+                    }
+                ],
+                "SecurityGroups": [
+                    {
+                        "Ref": "ELBSecurityGroupR1"
+                    }
+                ],
+                "Scheme": "internet-facing",
+                "Type": "application",
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-alb-r1"
+                        }
+                    }
+                ]
+            }
+        },
+        "ALBTargetGroupR1": {
+            "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-tg-r1"
+                },
+                "Port": 80,
+                "Protocol": "HTTP",
+                "VpcId": {
+                    "Ref": "VpcR1"
+                },
+                "TargetType": "instance",
+                "HealthCheckPath": "/",
+                "Matcher": {
+                    "HttpCode": 200
+                }
+            }
+        },
+        "ALBListenerR1": {
+            "Type": "AWS::ElasticLoadBalancingV2::Listener",
+            "Properties": {
+                "LoadBalancerArn": {
+                    "Ref": "ALBR1"
+                },
+                "Port": 80,
+                "Protocol": "HTTP",
+                "DefaultActions": [
+                    {
+                        "Type": "forward",
+                        "TargetGroupArn": {
+                            "Ref": "ALBTargetGroupR1"
+                        }
+                    }
+                ]
+            }
+        },
+        "ALBR2": {
+            "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-alb-r2"
+                },
+                "Subnets": [
+                    {
+                        "Ref": "PublicSubnet1R2"
+                    },
+                    {
+                        "Ref": "PublicSubnet2R2"
+                    }
+                ],
+                "SecurityGroups": [
+                    {
+                        "Ref": "ELBSecurityGroupR2"
+                    }
+                ],
+                "Scheme": "internet-facing",
+                "Type": "application",
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-alb-r2"
+                        }
+                    }
+                ]
+            }
+        },
+        "ALBTargetGroupR2": {
+            "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-tg-r2"
+                },
+                "Port": 80,
+                "Protocol": "HTTP",
+                "VpcId": {
+                    "Ref": "VpcR2"
+                },
+                "TargetType": "instance",
+                "HealthCheckPath": "/",
+                "Matcher": {
+                    "HttpCode": 200
+                }
+            }
+        },
+        "ALBListenerR2": {
+            "Type": "AWS::ElasticLoadBalancingV2::Listener",
+            "Properties": {
+                "LoadBalancerArn": {
+                    "Ref": "ALBR2"
+                },
+                "Port": 80,
+                "Protocol": "HTTP",
+                "DefaultActions": [
+                    {
+                        "Type": "forward",
+                        "TargetGroupArn": {
+                            "Ref": "ALBTargetGroupR2"
+                        }
+                    }
+                ]
+            }
+        },
+        "EC2Role": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": [
+                                    "ec2.amazonaws.com"
+                                ]
+                            },
+                            "Action": [
+                                "sts:AssumeRole"
+                            ]
+                        }
+                    ]
+                },
+                "Path": "/",
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore",
+                    "arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess"
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-ec2-role"
+                        }
+                    }
+                ]
+            }
+        },
+        "EC2InstanceProfile": {
+            "Type": "AWS::IAM::InstanceProfile",
+            "Properties": {
+                "Roles": [
+                    {
+                        "Ref": "EC2Role"
+                    }
+                ],
+                "Path": "/"
+            }
+        },
+        "EC2Instance1R1": {
+            "Type": "AWS::EC2::Instance",
+            "Properties": {
+                "ImageId": {
+                    "Ref": "AMI"
+                },
+                "InstanceType": {
+                    "Ref": "InstanceType"
+                },
+                "SubnetId": {
+                    "Ref": "PrivateSubnet1R1"
+                },
+                "SecurityGroupIds": [
                     {
                         "Ref": "AppSecurityGroupR1"
                     }
                 ],
-                "DBSubnetGroupName": {
-                    "Ref": "DBSubnetGroupR1"
+                "IamInstanceProfile": {
+                    "Ref": "EC2InstanceProfile"
                 },
-                "MultiAZ": false,
-                "PubliclyAccessible": false,
-                "StorageType": "gp2"
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-ec2-1-r1"
+                        }
+                    }
+                ],
+                "UserData": {
+                    "Fn::Base64": "#!/bin/bash\nyum update -y\nyum install -y httpd\nsystemctl enable httpd\nsystemctl start httpd\necho \"Hello from Region 1, Instance 1\" > /var/www/html/index.html\n"
+                }
+            }
+        },
+        "EC2Instance2R1": {
+            "Type": "AWS::EC2::Instance",
+            "Properties": {
+                "ImageId": {
+                    "Ref": "AMI"
+                },
+                "InstanceType": {
+                    "Ref": "InstanceType"
+                },
+                "SubnetId": {
+                    "Ref": "PrivateSubnet2R1"
+                },
+                "SecurityGroupIds": [
+                    {
+                        "Ref": "AppSecurityGroupR1"
+                    }
+                ],
+                "IamInstanceProfile": {
+                    "Ref": "EC2InstanceProfile"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-ec2-2-r1"
+                        }
+                    }
+                ],
+                "UserData": {
+                    "Fn::Base64": "#!/bin/bash\nyum update -y\nyum install -y httpd\nsystemctl enable httpd\nsystemctl start httpd\necho \"Hello from Region 1, Instance 2\" > /var/www/html/index.html\n"
+                }
+            }
+        },
+        "EC2Instance1R2": {
+            "Type": "AWS::EC2::Instance",
+            "Properties": {
+                "ImageId": {
+                    "Ref": "AMI"
+                },
+                "InstanceType": {
+                    "Ref": "InstanceType"
+                },
+                "SubnetId": {
+                    "Ref": "PrivateSubnet1R2"
+                },
+                "SecurityGroupIds": [
+                    {
+                        "Ref": "AppSecurityGroupR2"
+                    }
+                ],
+                "IamInstanceProfile": {
+                    "Ref": "EC2InstanceProfile"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-ec2-1-r2"
+                        }
+                    }
+                ],
+                "UserData": {
+                    "Fn::Base64": "#!/bin/bash\nyum update -y\nyum install -y httpd\nsystemctl enable httpd\nsystemctl start httpd\necho \"Hello from Region 2, Instance 1\" > /var/www/html/index.html\n"
+                }
+            }
+        },
+        "EC2Instance2R2": {
+            "Type": "AWS::EC2::Instance",
+            "Properties": {
+                "ImageId": {
+                    "Ref": "AMI"
+                },
+                "InstanceType": {
+                    "Ref": "InstanceType"
+                },
+                "SubnetId": {
+                    "Ref": "PrivateSubnet2R2"
+                },
+                "SecurityGroupIds": [
+                    {
+                        "Ref": "AppSecurityGroupR2"
+                    }
+                ],
+                "IamInstanceProfile": {
+                    "Ref": "EC2InstanceProfile"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-ec2-2-r2"
+                        }
+                    }
+                ],
+                "UserData": {
+                    "Fn::Base64": "#!/bin/bash\nyum update -y\nyum install -y httpd\nsystemctl enable httpd\nsystemctl start httpd\necho \"Hello from Region 2, Instance 2\" > /var/www/html/index.html\n"
+                }
+            }
+        },
+        "ALBTargetAttachment1R1": {
+            "Type": "AWS::ElasticLoadBalancingV2::TargetGroupAttachment",
+            "Properties": {
+                "TargetGroupArn": {
+                    "Ref": "ALBTargetGroupR1"
+                },
+                "TargetId": {
+                    "Ref": "EC2Instance1R1"
+                },
+                "Port": 80
+            }
+        },
+        "ALBTargetAttachment2R1": {
+            "Type": "AWS::ElasticLoadBalancingV2::TargetGroupAttachment",
+            "Properties": {
+                "TargetGroupArn": {
+                    "Ref": "ALBTargetGroupR1"
+                },
+                "TargetId": {
+                    "Ref": "EC2Instance2R1"
+                },
+                "Port": 80
+            }
+        },
+        "ALBTargetAttachment1R2": {
+            "Type": "AWS::ElasticLoadBalancingV2::TargetGroupAttachment",
+            "Properties": {
+                "TargetGroupArn": {
+                    "Ref": "ALBTargetGroupR2"
+                },
+                "TargetId": {
+                    "Ref": "EC2Instance1R2"
+                },
+                "Port": 80
+            }
+        },
+        "ALBTargetAttachment2R2": {
+            "Type": "AWS::ElasticLoadBalancingV2::TargetGroupAttachment",
+            "Properties": {
+                "TargetGroupArn": {
+                    "Ref": "ALBTargetGroupR2"
+                },
+                "TargetId": {
+                    "Ref": "EC2Instance2R2"
+                },
+                "Port": 80
             }
         },
         "DBSubnetGroupR1": {
@@ -466,12 +1164,123 @@
                     }
                 ]
             }
+        },
+        "DBSubnetGroupR2": {
+            "Type": "AWS::RDS::DBSubnetGroup",
+            "Properties": {
+                "DBSubnetGroupDescription": "Subnet group for RDS in Region 2",
+                "SubnetIds": [
+                    {
+                        "Ref": "PrivateSubnet1R2"
+                    },
+                    {
+                        "Ref": "PrivateSubnet2R2"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-dbsubnetgroup-r2"
+                        }
+                    }
+                ]
+            }
+        },
+        "RDSInstanceR1": {
+            "Type": "AWS::RDS::DBInstance",
+            "Properties": {
+                "DBInstanceIdentifier": {
+                    "Fn::Sub": "${ProjectName}-db-r1"
+                },
+                "AllocatedStorage": {
+                    "Ref": "DBAllocatedStorage"
+                },
+                "DBInstanceClass": {
+                    "Ref": "DBInstanceType"
+                },
+                "Engine": "mysql",
+                "MasterUsername": {
+                    "Ref": "DBUsername"
+                },
+                "MasterUserPassword": {
+                    "Ref": "DBPassword"
+                },
+                "VPCSecurityGroups": [
+                    {
+                        "Ref": "DBSecurityGroupR1"
+                    }
+                ],
+                "DBSubnetGroupName": {
+                    "Ref": "DBSubnetGroupR1"
+                },
+                "MultiAZ": true,
+                "PubliclyAccessible": false,
+                "StorageType": "gp2"
+            }
+        },
+        "RDSInstanceR2": {
+            "Type": "AWS::RDS::DBInstance",
+            "Properties": {
+                "DBInstanceIdentifier": {
+                    "Fn::Sub": "${ProjectName}-db-r2"
+                },
+                "AllocatedStorage": {
+                    "Ref": "DBAllocatedStorage"
+                },
+                "DBInstanceClass": {
+                    "Ref": "DBInstanceType"
+                },
+                "Engine": "mysql",
+                "MasterUsername": {
+                    "Ref": "DBUsername"
+                },
+                "MasterUserPassword": {
+                    "Ref": "DBPassword"
+                },
+                "VPCSecurityGroups": [
+                    {
+                        "Ref": "DBSecurityGroupR2"
+                    }
+                ],
+                "DBSubnetGroupName": {
+                    "Ref": "DBSubnetGroupR2"
+                },
+                "MultiAZ": true,
+                "PubliclyAccessible": false,
+                "StorageType": "gp2"
+            }
         }
     },
     "Outputs": {
         "VpcIdR1": {
+            "Description": "VPC ID for Region 1",
             "Value": {
                 "Ref": "VpcR1"
+            }
+        },
+        "VpcIdR2": {
+            "Description": "VPC ID for Region 2",
+            "Value": {
+                "Ref": "VpcR2"
+            }
+        },
+        "ALBDNSR1": {
+            "Description": "DNS name of the Application Load Balancer in Region 1",
+            "Value": {
+                "Fn::GetAtt": [
+                    "ALBR1",
+                    "DNSName"
+                ]
+            }
+        },
+        "ALBDNSR2": {
+            "Description": "DNS name of the Application Load Balancer in Region 2",
+            "Value": {
+                "Fn::GetAtt": [
+                    "ALBR2",
+                    "DNSName"
+                ]
             }
         }
     }
