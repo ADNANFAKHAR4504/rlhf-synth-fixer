@@ -7,10 +7,10 @@ describe('Secure Web Infrastructure Unit Test', () => {
   let template: Template;
 
   beforeAll(() => {
-    const templatePath = path.join(__dirname, '../lib/TapStack.yml');
+    const templatePath = path.join(__dirname, '../lib/IDEAL_RESPONSE.md');
     const file = fs.readFileSync(templatePath, 'utf8');
-    const parsed = yaml.parse(file, { logLevel: 'silent' });
-    template = Template.fromJSON(parsed);
+    const parsedYaml = yaml.parse(file.split('```yaml')[1].split('```')[0], { logLevel: 'silent' });
+    template = Template.fromJSON(parsedYaml);
   });
 
   test('VPC should be created with correct CIDR block', () => {
@@ -19,17 +19,19 @@ describe('Secure Web Infrastructure Unit Test', () => {
     });
   });
 
-  test('EC2 Instance should be of type t2.micro', () => {
-    template.hasResourceProperties('AWS::EC2::Instance', {
-      InstanceType: 't2.micro'
+  test('Launch Template should be of type t3.micro', () => {
+    template.hasResourceProperties('AWS::EC2::LaunchTemplate', {
+      LaunchTemplateData: {
+        InstanceType: 't3.micro'
+      }
     });
   });
 
-  test('Security Group should allow SSH and HTTP', () => {
+  test('Security Group should allow HTTP and HTTPS', () => {
     template.hasResourceProperties('AWS::EC2::SecurityGroup', {
       SecurityGroupIngress: [
-        { FromPort: 22, ToPort: 22, IpProtocol: 'tcp' },
-        { FromPort: 80, ToPort: 80, IpProtocol: 'tcp' }
+        { FromPort: 80, ToPort: 80, IpProtocol: 'tcp' },
+        { FromPort: 443, ToPort: 443, IpProtocol: 'tcp' }
       ]
     });
   });
@@ -39,12 +41,12 @@ describe('Secure Web Infrastructure Unit Test', () => {
     template.resourceCountIs('AWS::EC2::VPCGatewayAttachment', 1);
   });
 
-  test('At least one public subnet should exist', () => {
-    template.resourceCountIs('AWS::EC2::Subnet', 2); // Adjust if dynamic
+  test('Three public subnets should exist for multi-AZ deployment', () => {
+    template.resourceCountIs('AWS::EC2::Subnet', 3);
   });
 
-  test('Outputs must include public IP and VPC ID', () => {
-    template.hasOutput('VpcId', {});
-    template.hasOutput('InstancePublicIp', {});
+  test('Outputs must include Load Balancer DNS and CloudFront URL', () => {
+    template.hasOutput('AppLoadBalancerDNS', {});
+    template.hasOutput('CloudFrontURL', {});
   });
 });
