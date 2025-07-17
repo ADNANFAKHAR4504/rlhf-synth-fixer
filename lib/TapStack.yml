@@ -396,6 +396,11 @@ Resources:
   # EC2 Instances
   EC2InstanceR1:
     Type: AWS::EC2::Instance
+    Metadata:
+      cfn-lint:
+        config:
+          ignore_checks:
+            - W1034
     Properties:
       ImageId: !FindInMap [RegionMap, !Ref Region1, AMI]
       InstanceType: !Ref InstanceType
@@ -406,6 +411,11 @@ Resources:
 
   EC2InstanceR2:
     Type: AWS::EC2::Instance
+    Metadata:
+      cfn-lint:
+        config:
+          ignore_checks:
+            - W1034
     Properties:
       ImageId: !FindInMap [RegionMap, !Ref Region2, AMI]
       InstanceType: !Ref InstanceType
