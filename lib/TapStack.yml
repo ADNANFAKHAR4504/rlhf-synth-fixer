@@ -790,6 +790,8 @@ Resources:
         - IpProtocol: -1 # Allow all outbound traffic by default for testing
           CidrIp: 0.0.0.0/0
       Tags:
+        - Key: Name
+          Value: !Sub ${Environment}-${Project}-LambdaSecurityGroup
         - Key: Environment
           Value: !Ref Environment
         - Key: Project
@@ -963,10 +965,10 @@ Resources:
         Tags:
           - Key: Environment
             Value: !Ref Environment
-          - Key: Project # Corrected indentation and removed extra hyphen
-            Value: !Ref Project
-          - Key: Owner   # Corrected indentation and removed extra hyphen
-            Value: !Ref Owner
+            - Key: Project
+              Value: !Ref Project
+            - Key: Owner
+              Value: !Ref Owner
 
   CloudFrontLogsBucket:
     Type: AWS::S3::Bucket
@@ -1043,10 +1045,9 @@ Resources:
             Condition:
               StringNotEquals:
                 'aws:SourceArn': !GetAtt FinancialProcessorLambda.Arn
+                'aws:UserAgent': 'CloudFormation' # <--- THIS LINE IS MOVED HERE
               NotIpAddress:
                 'aws:SourceIp': [] # Or specific trusted IPs
-              StringNotEquals:
-                'aws:UserAgent': 'CloudFormation' # Allow CF to manage
           - Sid: AWSAccountAccess
             Effect: Allow
             Principal:
