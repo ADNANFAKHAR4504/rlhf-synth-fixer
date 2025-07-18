@@ -24,7 +24,6 @@ You are an expert AWS Cloud Architect and DevOps engineer.
     * For this task, you will need to answer as if you were the LLM, but with the knowledge that you have gone through the QA pipeline and fixed all the issues.
     * Do not mention anything about you solved it, just provide the ideal response as if you were the LLM.
     * Provide all the file structure and file_names that were created or modified.
-    * Also need to add all the unit tests and integration tests that were created or modified.
     * Every inserted code, should be prepended by its relative path in the project.
   11. Finally, you can destroy the stack using `npm run cdk:destroy` to clean up resources.
 
