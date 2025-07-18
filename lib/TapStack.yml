@@ -1,7 +1,7 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: |
   CloudFormation template for a highly available, scalable, and secure
-  cloud environment across two distinct AWS regions to support a critical application.
+  cloud environment in a single AWS region to support a critical application.
 
 Parameters:
   ProjectName:
@@ -10,20 +10,12 @@ Parameters:
     Default: TapStack
   Region1:
     Type: String
-    Default: us-east-2
-    Description: The first AWS region for deployment.
-  Region2:
-    Type: String
-    Default: us-west-2
-    Description: The second AWS region for deployment.
+    Default: us-east-1
+    Description: The AWS region for deployment.
   VpcCidr1:
     Type: String
     Default: 10.0.0.0/16
     Description: CIDR block for the VPC in Region 1.
-  VpcCidr2:
-    Type: String
-    Default: 10.1.0.0/16
-    Description: CIDR block for the VPC in Region 2.
   PublicSubnet1Cidr1:
     Type: String
     Default: 10.0.1.0/24
@@ -40,22 +32,6 @@ Parameters:
     Type: String
     Default: 10.0.4.0/24
     Description: CIDR block for Private Subnet 2 in Region 1.
-  PublicSubnet1Cidr2:
-    Type: String
-    Default: 10.1.1.0/24
-    Description: CIDR block for Public Subnet 1 in Region 2.
-  PrivateSubnet1Cidr2:
-    Type: String
-    Default: 10.1.2.0/24
-    Description: CIDR block for Private Subnet 1 in Region 2.
-  PublicSubnet2Cidr2:
-    Type: String
-    Default: 10.1.3.0/24
-    Description: CIDR block for Public Subnet 2 in Region 2.
-  PrivateSubnet2Cidr2:
-    Type: String
-    Default: 10.1.4.0/24
-    Description: CIDR block for Private Subnet 2 in Region 2.
   InstanceType:
     Type: String
     Default: t3.micro
@@ -72,6 +48,11 @@ Parameters:
     Type: Number
     Default: 20
     Description: Allocated storage for the RDS database in GiB.
+  DBUsername: # 👈 Added parameter for DB username
+    Type: String
+    Description: Master username for the RDS database.
+    Default: oracless
+    NoEcho: true # Hides the value in console output
 
 Resources:
   # Region 1 Resources --------------------------------------------------------
@@ -390,8 +371,8 @@ Resources:
     Properties:
       DBInstanceClass: !Ref DBInstanceType
       Engine: mysql
-      MasterUsername: '{{resolve:secretsmanager:my-project/db/credentials:SecretString:username}}'
-      MasterUserPassword: '{{resolve:secretsmanager:my-project/db/credentials:SecretString:password}}'
+      # ⚠️ Replaced Secrets Manager resolution with direct parameter references
+      MasterUsername: !Ref DBUsername
       AllocatedStorage: !Ref DBAllocatedStorage
       MultiAZ: true
       VPCSecurityGroups:
@@ -401,307 +382,7 @@ Resources:
         - Key: Name
           Value: !Sub ${ProjectName}-RDS-R1-${Region1}
 
-  # Region 2 Resources --------------------------------------------------------
-  VpcR2:
-    Type: AWS::EC2::VPC
-    Properties:
-      CidrBlock: !Ref VpcCidr2
-      EnableDnsSupport: true
-      EnableDnsHostnames: true
-      Tags:
-        - Key: Name
-          Value: !Sub ${ProjectName}-VPC-R2-${Region2}
-
-  PublicSubnet1R2:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref VpcR2
-      CidrBlock: !Ref PublicSubnet1Cidr2
-      AvailabilityZone: !Sub "${Region2}a" # Direct Sub for AZ to avoid parsing issues
-      MapPublicIpOnLaunch: true
-      Tags:
-        - Key: Name
-          Value: !Sub ${ProjectName}-PublicSubnet1-R2-${Region2}
-
-  PublicSubnet2R2:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref VpcR2
-      CidrBlock: !Ref PublicSubnet2Cidr2
-      AvailabilityZone: !Sub "${Region2}b" # Direct Sub for AZ to avoid parsing issues
-      MapPublicIpOnLaunch: true
-      Tags:
-        - Key: Name
-          Value: !Sub ${ProjectName}-PublicSubnet2-R2-${Region2}
-
-  PrivateSubnet1R2:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref VpcR2
-      CidrBlock: !Ref PrivateSubnet1Cidr2
-      AvailabilityZone: !Sub "${Region2}a" # Direct Sub for AZ to avoid parsing issues
-      Tags:
-        - Key: Name
-          Value: !Sub ${ProjectName}-PrivateSubnet1-R2-${Region2}
-
-  PrivateSubnet2R2:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref VpcR2
-      CidrBlock: !Ref PrivateSubnet2Cidr2
-      AvailabilityZone: !Sub "${Region2}b" # Direct Sub for AZ to avoid parsing issues
-      Tags:
-        - Key: Name
-          Value: !Sub ${ProjectName}-PrivateSubnet2-R2-${Region2}
-
-  IgwR2:
-    Type: AWS::EC2::InternetGateway
-    Properties:
-      Tags:
-        - Key: Name
-          Value: !Sub ${ProjectName}-IGW-R2-${Region2}
-
-  IgwAttachmentR2:
-    Type: AWS::EC2::VPCGatewayAttachment
-    Properties:
-      VpcId: !Ref VpcR2
-      InternetGatewayId: !Ref IgwR2
-
-  NatEipR2:
-    Type: AWS::EC2::EIP
-    Properties:
-      Domain: vpc
-    DependsOn: IgwAttachmentR2
-
-  NatGwR2:
-    Type: AWS::EC2::NatGateway
-    Properties:
-      AllocationId: !GetAtt NatEipR2.AllocationId
-      SubnetId: !Ref PublicSubnet1R2
-      Tags:
-        - Key: Name
-          Value: !Sub ${ProjectName}-NATGW-R2-${Region2}
-
-  PublicRouteTableR2:
-    Type: AWS::EC2::RouteTable
-    Properties:
-      VpcId: !Ref VpcR2
-      Tags:
-        - Key: Name
-          Value: !Sub ${ProjectName}-PublicRouteTable-R2-${Region2}
-
-  PrivateRouteTableR2:
-    Type: AWS::EC2::RouteTable
-    Properties:
-      VpcId: !Ref VpcR2
-      Tags:
-        - Key: Name
-          Value: !Sub ${ProjectName}-PrivateRouteTable-R2-${Region2}
-
-  PublicRouteR2:
-    Type: AWS::EC2::Route
-    Properties:
-      RouteTableId: !Ref PublicRouteTableR2
-      DestinationCidrBlock: 0.0.0.0/0
-      GatewayId: !Ref IgwR2
-
-  PrivateRouteR2:
-    Type: AWS::EC2::Route
-    Properties:
-      RouteTableId: !Ref PrivateRouteTableR2
-      DestinationCidrBlock: 0.0.0.0/0
-      NatGatewayId: !Ref NatGwR2
-
-  PublicSubnet1AssocR2:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      SubnetId: !Ref PublicSubnet1R2
-      RouteTableId: !Ref PublicRouteTableR2
-
-  PublicSubnet2AssocR2:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      SubnetId: !Ref PublicSubnet2R2
-      RouteTableId: !Ref PublicRouteTableR2
-
-  PrivateSubnet1AssocR2:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      SubnetId: !Ref PrivateSubnet1R2
-      RouteTableId: !Ref PrivateRouteTableR2
-
-  PrivateSubnet2AssocR2:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      SubnetId: !Ref PrivateSubnet2R2
-      RouteTableId: !Ref PrivateRouteTableR2
-
-  # Security Groups - Region 2
-  AlbSgR2:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: ALB Security Group for HTTP and HTTPS from anywhere
-      VpcId: !Ref VpcR2
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 80
-          ToPort: 80
-          CidrIp: 0.0.0.0/0
-        - IpProtocol: tcp
-          FromPort: 443
-          ToPort: 443
-          CidrIp: 0.0.0.0/0
-      Tags:
-        - Key: Name
-          Value: !Sub ${ProjectName}-ALBSG-R2-${Region2}
-
-  AppSgR2:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: App Security Group for HTTP from ALB and SSH from specific IP
-      VpcId: !Ref VpcR2
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 80
-          ToPort: 80
-          SourceSecurityGroupId: !GetAtt AlbSgR2.GroupId
-        - IpProtocol: tcp
-          FromPort: 22
-          ToPort: 22
-          CidrIp: 0.0.0.0/0
-      Tags:
-        - Key: Name
-          Value: !Sub ${ProjectName}-AppSG-R2-${Region2}
-
-  DbSgR2:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: DB Security Group for MySQL from Application Security Group
-      VpcId: !Ref VpcR2
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 3306
-          ToPort: 3306
-          SourceSecurityGroupId: !GetAtt AppSgR2.GroupId
-      Tags:
-        - Key: Name
-          Value: !Sub ${ProjectName}-DBSG-R2-${Region2}
-
-  # Application Load Balancer - Region 2
-  AlbR2:
-    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
-    Properties:
-      Name: !Sub ${ProjectName}-ALB-R2
-      Subnets:
-        - !Ref PublicSubnet1R2
-        - !Ref PublicSubnet2R2
-      SecurityGroups:
-        - !GetAtt AlbSgR2.GroupId
-      Tags:
-        - Key: Name
-          Value: !Sub ${ProjectName}-ALB-R2-${Region2}
-
-  AlbListenerR2:
-    Type: AWS::ElasticLoadBalancingV2::Listener
-    Properties:
-      LoadBalancerArn: !Ref AlbR2
-      Port: 80
-      Protocol: HTTP
-      DefaultActions:
-        - Type: forward
-          TargetGroupArn: !Ref AlbTargetGroupR2
-
-  AlbTargetGroupR2:
-    Type: AWS::ElasticLoadBalancingV2::TargetGroup
-    Properties:
-      Name: !Sub ${ProjectName}-TG-R2
-      VpcId: !Ref VpcR2
-      Port: 80
-      Protocol: HTTP
-      HealthCheckPath: /
-      HealthCheckPort: 80
-      HealthCheckProtocol: HTTP
-      HealthyThresholdCount: 2
-      UnhealthyThresholdCount: 2
-      Tags:
-        - Key: Name
-          Value: !Sub ${ProjectName}-TG-R2-${Region2}
-
-  # EC2 Instances - Region 2
-  AppInstance1R2:
-    Type: AWS::EC2::Instance
-    Properties:
-      ImageId: !Ref AMI # Directly referencing AMI parameter
-      InstanceType: !Ref InstanceType
-      SubnetId: !Ref PrivateSubnet1R2
-      SecurityGroupIds:
-        - !GetAtt AppSgR2.GroupId
-      IamInstanceProfile: !Ref Ec2InstanceProfile
-      UserData:
-        Fn::Base64: !Sub |
-          #!/bin/bash
-          yum update -y
-          yum install -y httpd
-          systemctl start httpd
-          echo "<h1>Hello from ${ProjectName} App Instance 1 in Region 2 (${Region2})</h1>" > /var/www/html/index.html
-          chkconfig httpd on
-      Tags:
-        - Key: Name
-          Value: !Sub ${ProjectName}-AppInstance1-R2-${Region2}
-
-  AppInstance2R2:
-    Type: AWS::EC2::Instance
-    Properties:
-      ImageId: !Ref AMI # Directly referencing AMI parameter
-      InstanceType: !Ref InstanceType
-      SubnetId: !Ref PrivateSubnet2R2
-      SecurityGroupIds:
-        - !GetAtt AppSgR2.GroupId
-      IamInstanceProfile: !Ref Ec2InstanceProfile
-      UserData:
-        Fn::Base64: !Sub |
-          #!/bin/bash
-          yum update -y
-          yum install -y httpd
-          systemctl start httpd
-          echo "<h1>Hello from ${ProjectName} App Instance 2 in Region 2 (${Region2})</h1>" > /var/www/html/index.html
-          chkconfig httpd on
-      Tags:
-        - Key: Name
-          Value: !Sub ${ProjectName}-AppInstance2-R2-${Region2}
-
-  # RDS Database - Region 2
-  DbSubnetGroupR2:
-    Type: AWS::RDS::DBSubnetGroup
-    Properties:
-      DBSubnetGroupDescription: DB Subnet Group for RDS in Region 2
-      SubnetIds:
-        - !Ref PrivateSubnet1R2
-        - !Ref PrivateSubnet2R2
-      Tags:
-        - Key: Name
-          Value: !Sub ${ProjectName}-DBSG-R2-${Region2}
-
-  RdsInstanceR2:
-    Type: AWS::RDS::DBInstance
-    Properties:
-      DBInstanceClass: !Ref DBInstanceType
-      Engine: mysql
-      MasterUsername: '{{resolve:secretsmanager:my-project/db/credentials:SecretString:username}}'
-      MasterUserPassword: '{{resolve:secretsmanager:my-project/db/credentials:SecretString:password}}'
-      AllocatedStorage: !Ref DBAllocatedStorage
-      MultiAZ: true
-      VPCSecurityGroups:
-        - !GetAtt DbSgR2.GroupId
-      DBSubnetGroupName: !Ref DbSubnetGroupR2
-      Tags:
-        - Key: Name
-          Value: !Sub ${ProjectName}-RDS-R2-${Region2}
-
 Outputs:
   AlbDnsNameR1:
     Description: The DNS name of the ALB in Region 1
     Value: !GetAtt AlbR1.DNSName
-  AlbDnsNameR2:
-    Description: The DNS name of the ALB in Region 2
-    Value: !GetAtt AlbR2.DNSName
