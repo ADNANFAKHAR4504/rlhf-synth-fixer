@@ -32,7 +32,7 @@ Resources:
       VpcId: !Ref SharedVPC
       CidrBlock: 10.0.1.0/24
       MapPublicIpOnLaunch: true
-      AvailabilityZone: us-west-2a
+      AvailabilityZone: us-east-1a
       Tags:
         - Key: Name
           Value: !Sub '${EnvironmentName}-public-subnet'
@@ -136,7 +136,7 @@ aws cloudformation deploy \
   --stack-name common-resources \
   --template-file common-resources.yaml \
   --parameter-overrides EnvironmentName=dev \
-  --region us-west-2
+  --region us-east-1
 ```
 
 Then, deploy the environment-specific stack:
@@ -147,7 +147,7 @@ aws cloudformation deploy \
   --template-file environment-specific.yaml \
   --parameter-overrides EnvironmentName=dev VPCId=<VPCId-from-common-resources-output> PublicSubnetId=<PublicSubnetId-from-common-resources-output> \
   --capabilities CAPABILITY_NAMED_IAM \
-  --region us-west-2
+  --region us-east-1
 ```
 
 #### **Enabling Drift Detection**
@@ -157,7 +157,7 @@ To enable drift detection, you can use the AWS CLI or Management Console:
 ```sh
 aws cloudformation detect-stack-drift \
   --stack-name dev-environment \
-  --region us-west-2
+  --region us-east-1
 ```
 
 These templates ensure that resources are tagged with the environment name, use cross-stack references, apply conditions for environment-specific configurations, and parameterize inputs for flexibility. The IAM policies and other security configurations should be added similarly, ensuring consistency across environments.

@@ -7,7 +7,7 @@
 
 * **Environment:** An AWS Organization with dedicated AWS accounts for development, testing, and production environments. The environments must maintain consistent resource configurations using CloudFormation.
 
-* **Region:** All deployments will occur in the us-west-2 region.
+* **Region:** All deployments will occur in the us-east-1 region.
 
 * **Constraints:**:
   * Ensure that all stack resources are tagged with an 'Environment' tag that matches the stack name.
