@@ -8,9 +8,9 @@ const outputs = JSON.parse(
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
 describe('Turn Around Prompt API Integration Tests', () => {
-  describe('Hello', () => {
-    test('World', async () => {
-      expect(true).toBe(true);
+  describe('Write Integration TESTS', () => {
+    test('Dont forget!', async () => {
+      expect(false).toBe(true);
     });
   });
 });

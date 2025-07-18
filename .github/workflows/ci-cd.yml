@@ -1,5 +1,9 @@
 name: CI/CD Pipeline
 
+# Special keyword [skip-jobs] can be added to commit messages to skip most jobs
+# The upload-task-to-s3 job will still run when a PR is merged, regardless of this tag
+# The cleanup-pr job will still run when a PR is closed, regardless of this tag
+
 on:
   push:
     branches: [main]
@@ -21,7 +25,7 @@ jobs:
   detect-metadata:
     name: Detect Project Metadata
     runs-on: ubuntu-latest
-    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' }}
+    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
     outputs:
       platform: ${{ steps.metadata.outputs.platform }}
       language: ${{ steps.metadata.outputs.language }}
@@ -59,7 +63,7 @@ jobs:
     name: Check Runtime Versions
     runs-on: ubuntu-latest
     needs: detect-metadata
-    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' }}
+    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
 
     steps:
       - name: Checkout code
@@ -116,7 +120,7 @@ jobs:
     name: Build
     runs-on: ubuntu-latest
     needs: version-check
-    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' }}
+    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
     environment: dev
 
     steps:
@@ -163,7 +167,7 @@ jobs:
     name: Synth
     runs-on: ubuntu-latest
     needs: [detect-metadata, build]
-    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' }}
+    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
     environment: dev
     permissions:
       contents: read
@@ -216,7 +220,7 @@ jobs:
     name: Deploy
     runs-on: ubuntu-latest
     needs: synth
-    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' }}
+    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
     environment: dev
 
     steps:
@@ -357,7 +361,7 @@ jobs:
     name: Lint
     runs-on: ubuntu-latest
     needs: [detect-metadata, build]
-    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' }}
+    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
     environment: qa
     outputs:
       platform: ${{ needs.detect-metadata.outputs.platform }}
@@ -404,7 +408,7 @@ jobs:
     name: Unit Testing
     runs-on: ubuntu-latest
     needs: lint
-    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' }}
+    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
     environment: qa
 
     steps:
@@ -425,25 +429,13 @@ jobs:
 
       - name: Run unit tests
         run: |
-          OUTPUT=$(npm run test:unit 2>&1)
-          echo "# Unit tests" > lib/UNIT_TESTS.md
-          echo >> lib/UNIT_TESTS.md
-          echo '```text' >> lib/UNIT_TESTS.md
-          echo "$OUTPUT" >> lib/UNIT_TESTS.md
-          echo '```' >> lib/UNIT_TESTS.md
-          echo "$OUTPUT"
+          npm run test:unit
 
       - name: Upload coverage reports
         uses: actions/upload-artifact@v4
         with:
           name: coverage-reports
           path: coverage/
-
-      - name: Upload unit test markdown report
-        uses: actions/upload-artifact@v4
-        with:
-          name: unit-test-report
-          path: lib/UNIT_TESTS.md
 
   # mocked-integration-tests:
   #   name: Mocked Integration Tests
@@ -473,7 +465,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [unit-tests, deploy]
     environment: qa
-    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' }}
+    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
 
     steps:
       - name: Checkout code
@@ -501,27 +493,14 @@ jobs:
       - name: Run integration tests against live environment
         run: |
           npm run test:integration
-          OUTPUT=$(npm run test:integration 2>&1)
-          echo "# Integration tests" > lib/INTEGRATION_TESTS.md
-          echo >> lib/INTEGRATION_TESTS.md
-          echo '```text' >> lib/INTEGRATION_TESTS.md
-          echo "$OUTPUT" >> lib/INTEGRATION_TESTS.md
-          echo '```' >> lib/INTEGRATION_TESTS.md
-          echo "$OUTPUT"
         env:
           ENVIRONMENT_SUFFIX: ${{ env.ENVIRONMENT_SUFFIX }}
-
-      - name: Upload integration test markdown report
-        uses: actions/upload-artifact@v4
-        with:
-          name: integration-test-report
-          path: lib/INTEGRATION_TESTS.md
 
   cleanup:
     name: Cleanup (Destroy Resources)
     runs-on: ubuntu-latest
     needs: [detect-metadata, integration-tests-live]
-    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' }}
+    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
     environment: stage
 
     steps:
@@ -565,7 +544,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [detect-metadata, cleanup]
     environment: release
-    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' }}
+    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
     permissions:
       contents: write
 
@@ -578,17 +557,11 @@ jobs:
           repository: ${{ github.repository }}
           ref: ${{ github.head_ref }}
 
-      - name: Download unit/integration test markdown reports
+      - name: Download coverage reports
         uses: actions/download-artifact@v4
         with:
-          name: unit-test-report
-          path: lib/
-
-      - name: Download integration test markdown reports
-        uses: actions/download-artifact@v4
-        with:
-          name: integration-test-report
-          path: lib/
+          name: coverage-reports
+          path: coverage/
 
       - name: Archive folders and reset repository
         run: |
@@ -600,6 +573,33 @@ jobs:
           PLATFORM="${{ needs.detect-metadata.outputs.platform }}"
           LANGUAGE="${{ needs.detect-metadata.outputs.language }}"
           echo "Using platform: $PLATFORM, language: $LANGUAGE"
+
+          # Update metadata.json with coverage information
+          if [ -f "coverage/coverage-summary.json" ]; then
+            echo "Found coverage-summary.json, updating metadata.json with coverage info"
+            
+            # Extract coverage percentages from coverage-summary.json
+            LINES_COVERAGE=$(jq -r '.total.lines.pct' coverage/coverage-summary.json)
+            BRANCHES_COVERAGE=$(jq -r '.total.branches.pct' coverage/coverage-summary.json)
+            
+            echo "Lines coverage: $LINES_COVERAGE%"
+            echo "Branches coverage: $BRANCHES_COVERAGE%"
+            
+            # Update metadata.json with coverage information
+            if [ -f "metadata.json" ]; then
+              jq --arg lines "$LINES_COVERAGE" --arg branches "$BRANCHES_COVERAGE" '. + {coverage: {lines: ($lines|tonumber), branches: ($branches|tonumber)}}' metadata.json > metadata.json.tmp
+              mv metadata.json.tmp metadata.json
+              echo "Updated metadata.json with coverage information"
+            else
+              echo "metadata.json not found, creating a new one with coverage information"
+              echo "{\"platform\": \"$PLATFORM\", \"language\": \"$LANGUAGE\", \"coverage\": {\"lines\": $LINES_COVERAGE, \"branches\": $BRANCHES_COVERAGE}}" > metadata.json
+              echo "Created metadata.json with coverage information"
+            fi
+            
+            cat metadata.json
+          else
+            echo "Warning: coverage-summary.json not found, skipping coverage update"
+          fi
 
           echo "Current directory contents before archiving:"
           ls -la
@@ -633,7 +633,7 @@ jobs:
             echo "No changes to commit - no folders found to archive"
           else
             git add -A
-            git commit -m "Archive build artifacts for PR ${{ github.event.number }} [skip ci]"
+            git commit -m "Archive build artifacts for PR ${{ github.event.number }} [skip-jobs]"
             git push origin HEAD
             echo "Archive committed to current branch"
           fi
@@ -642,7 +642,7 @@ jobs:
     name: Upload Task to S3
     runs-on: ubuntu-latest
     environment: release
-    if: ${{ github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged == true }}
+    if: ${{ github.event_name == 'pull_request' && github.event.pull_request.merged == true }}
     permissions:
       contents: read
 
@@ -728,6 +728,7 @@ jobs:
   cleanup-pr:
     name: Cleanup (PR Closed)
     runs-on: ubuntu-latest
+    # This job should run regardless of the [skip-jobs] tag since it's for cleanup
     if: github.event_name == 'pull_request' && github.event.action == 'closed'
     environment: qa
 
