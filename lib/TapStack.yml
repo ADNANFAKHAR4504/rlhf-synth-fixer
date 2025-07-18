@@ -373,6 +373,7 @@ Resources:
       Engine: mysql
       # ⚠️ Replaced Secrets Manager resolution with direct parameter references
       MasterUsername: !Ref DBUsername
+      MasterUserPassword: '{{resolve:secretsmanager:/my-app/rds/master-password:SecretString}}'
       AllocatedStorage: !Ref DBAllocatedStorage
       MultiAZ: true
       VPCSecurityGroups:
