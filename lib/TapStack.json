@@ -1287,7 +1287,7 @@
                 "MasterUsername": {
                     "Ref": "RDSDatabaseUser"
                 },
-                "MasterUserPassword": "{{resolve:secretsmanager:!Ref RDSSecret:SecretString:::password}}",
+                "MasterUserPassword": "{{resolve:secretsmanager:!Ref RDSSecret:SecretString:password}}",
                 "DBSubnetGroupName": {
                     "Ref": "RDSSubnetGroup"
                 },
