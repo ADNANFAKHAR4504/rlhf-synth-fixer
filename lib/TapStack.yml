@@ -1,26 +1,24 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: |
-  CloudFormation template for secure financial services application infrastructure.
-  Includes Networking, IAM, Storage, Security, Serverless, DNS, CDN, Messaging,
-  and Monitoring components, all compliant with financial-grade security standards.
+Description: TAP Stack - Task Assignment Platform CloudFormation Template
 
 Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
       - Label:
-          default: 'EnvironmentSuffix Configuration'
+          default: "Environment Configuration"
         Parameters:
           - EnvironmentSuffix
+    ParameterLabels:
+      EnvironmentSuffix:
+        default: "Environment Suffix"
 
 Parameters:
   EnvironmentSuffix:
-    Description: The deployment EnvironmentSuffix (e.g., dev, staging, prod).
     Type: String
-    AllowedValues:
-      - dev
-      - staging
-      - prod
+    Description: Environment suffix for resource naming (e.g., dev, staging, prod)
     Default: dev
+    AllowedPattern: '^[a-zA-Z0-9]+$'
+    ConstraintDescription: Must contain only alphanumeric characters
   Project:
     Description: The name of the project this infrastructure belongs to.
     Type: String
