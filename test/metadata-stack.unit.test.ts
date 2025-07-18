@@ -162,9 +162,11 @@ describe('MetadataProcessingStack', () => {
     });
 
     test('should create Step Functions state machine with proper definition', () => {
-      const stateMachines = template.findResources('AWS::StepFunctions::StateMachine');
+      const stateMachines = template.findResources(
+        'AWS::StepFunctions::StateMachine'
+      );
       const stateMachine = Object.values(stateMachines)[0];
-      
+
       // Check that the state machine has a definition
       expect(stateMachine.Properties).toHaveProperty('DefinitionString');
       expect(stateMachine.Properties.DefinitionString).toBeDefined();
@@ -239,10 +241,7 @@ describe('MetadataProcessingStack', () => {
         Environment: {
           Variables: {
             OPENSEARCH_ENDPOINT: {
-              'Fn::GetAtt': [
-                'MetadataCollection',
-                'CollectionEndpoint'
-              ]
+              'Fn::GetAtt': ['MetadataCollection', 'CollectionEndpoint'],
             },
             OPENSEARCH_INDEX: 'metadata',
           },
@@ -255,7 +254,7 @@ describe('MetadataProcessingStack', () => {
       // instead of inline code
       const lambdaFunction = template.findResources('AWS::Lambda::Function');
       const lambdaCode = Object.values(lambdaFunction)[0].Properties.Code;
-      
+
       expect(lambdaCode).toHaveProperty('S3Bucket');
       expect(lambdaCode).toHaveProperty('S3Key');
       expect(lambdaCode.S3Key).toMatch(/^[a-f0-9]{64}\.zip$/);
@@ -266,14 +265,15 @@ describe('MetadataProcessingStack', () => {
     test('should create OpenSearch layer with correct runtime', () => {
       template.hasResourceProperties('AWS::Lambda::LayerVersion', {
         CompatibleRuntimes: ['python3.11'],
-        Description: 'Layer containing requests and requests-aws4auth for OpenSearch',
+        Description:
+          'Layer containing requests and requests-aws4auth for OpenSearch',
       });
     });
 
     test('should attach layer to Lambda function', () => {
       const lambdaFunction = template.findResources('AWS::Lambda::Function');
       const lambdaProps = Object.values(lambdaFunction)[0].Properties;
-      
+
       expect(lambdaProps).toHaveProperty('Layers');
       expect(lambdaProps.Layers).toHaveLength(1);
       expect(lambdaProps.Layers[0]).toHaveProperty('Ref');
@@ -286,7 +286,7 @@ describe('MetadataProcessingStack', () => {
       template.resourceCountIs('AWS::DynamoDB::Table', 1);
       template.resourceCountIs('AWS::OpenSearchServerless::Collection', 1);
       template.resourceCountIs('AWS::OpenSearchServerless::SecurityPolicy', 2);
-      template.resourceCountIs('AWS::OpenSearchServerless::AccessPolicy', 2); // Step Functions + Lambda access policies
+      template.resourceCountIs('AWS::OpenSearchServerless::AccessPolicy', 1); // Access policy for the collection
       template.resourceCountIs('AWS::IAM::Role', 3); // Step Functions role + Events role + Lambda role
       template.resourceCountIs('AWS::StepFunctions::StateMachine', 1);
       template.resourceCountIs('AWS::Events::Rule', 1);
