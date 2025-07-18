@@ -955,7 +955,7 @@
                         "Fn::Sub": "{\"username\": \"${RDSDatabaseUser}\"}"
                     },
                     "PasswordLength": 32,
-                    "ExcludeCharacters": "\"@/\\",
+                    "ExcludeCharacters": "\"@/\\\\ ",
                     "GenerateStringKey": "password"
                 },
                 "Tags": [

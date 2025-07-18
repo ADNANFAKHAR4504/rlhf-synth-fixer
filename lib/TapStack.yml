@@ -463,7 +463,7 @@ Resources:
       GenerateSecretString:
         SecretStringTemplate: !Sub '{"username": "${RDSDatabaseUser}"}'
         PasswordLength: 32
-        ExcludeCharacters: '"@/\'
+        ExcludeCharacters: '"@/\\ '
         GenerateStringKey: password
       Tags:
         - Key: Environment
