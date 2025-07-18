@@ -990,8 +990,18 @@ Resources:
             Principal:
               Service: config.amazonaws.com
             Action: sts:AssumeRole
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWSConfigRole
+      Policies:
+        - PolicyName: AWSConfigInlinePolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - config:Put*
+                  - config:Get*
+                  - config:Describe*
+                  - config:Start*
+                Resource: "*"
       Tags:
         - Key: Environment
           Value: !Ref EnvironmentSuffix
@@ -1044,6 +1054,7 @@ Resources:
 
   RDSPublicAccessCheck:
     Type: AWS::Config::ConfigRule
+    DependsOn: AWSConfigRecorder
     Properties:
       ConfigRuleName: rds-public-access-check
       Description: Checks if RDS DB instances are publicly accessible.
