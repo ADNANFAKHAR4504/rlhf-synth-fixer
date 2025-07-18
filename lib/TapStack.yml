@@ -633,7 +633,7 @@ Resources:
       DBInstanceClass: db.t3.micro
       AllocatedStorage: 20
       MasterUsername: !Ref RDSDatabaseUser
-      MasterUserPassword: !Sub '{{resolve:secretsmanager:${RDSSecret}}}'
+      MasterUserPassword: '{{resolve:secretsmanager:!Ref RDSSecret:SecretString:::password}}'
       DBSubnetGroupName: !Ref RDSSubnetGroup
       VPCSecurityGroups:
         - !GetAtt RDSSecurityGroup.GroupId
