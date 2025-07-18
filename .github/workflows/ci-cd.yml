@@ -650,7 +650,7 @@ jobs:
     name: Upload Task to S3
     runs-on: ubuntu-latest
     environment: release
-    if: ${{ github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged == true }}
+    if: ${{ github.event_name == 'pull_request' && github.event.pull_request.merged == true }}
     permissions:
       contents: read
 
