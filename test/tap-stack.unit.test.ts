@@ -53,10 +53,10 @@ describe('TapStack CloudFormation Template', () => {
     });
 
     test('should have correct default values for InstanceType, AMI, DBInstanceType, DBAllocatedStorage, DBUsername, and DBPassword', () => {
-      expect(template.Parameters.InstanceType.Default).toBe('t3.micro');
+      expect(template.Parameters.InstanceType.Default).toBe('t2.micro');
       expect(template.Parameters.AMI.Type).toBe('AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>');
       expect(template.Parameters.AMI.Default).toBe('/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2');
-      expect(template.Parameters.DBInstanceType.Default).toBe('db.t3.micro');
+      expect(template.Parameters.DBInstanceType.Default).toBe('db.t2.micro');
       expect(template.Parameters.DBAllocatedStorage.Default).toBe(20);
       expect(template.Parameters.DBUsername.Default).toBe('oracless'); // 👈 Added default for DBUsername
       expect(template.Parameters.DBUsername.NoEcho).toBe(true); // 👈 Check NoEcho property
