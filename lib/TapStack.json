@@ -86,18 +86,6 @@
             "Type": "Number",
             "Default": 20,
             "Description": "Allocated storage for the RDS database in GiB."
-        },
-        "DBUsername": {
-            "Type": "String",
-            "NoEcho": true,
-            "Description": "Master username for the RDS database.",
-            "Default": "dummyUsername"
-        },
-        "DBPassword": {
-            "Type": "String",
-            "NoEcho": true,
-            "Description": "Master password for the RDS database.",
-            "Default": "dummyPassword"
         }
     },
     "Resources": {
@@ -113,7 +101,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${ProjectName}-VPC-R1-${AWS::Region}"
+                            "Fn::Sub": "${ProjectName}-VPC-R1-${Region1}"
                         }
                     }
                 ]
@@ -141,7 +129,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${ProjectName}-PublicSubnet1-R1-${AWS::Region}"
+                            "Fn::Sub": "${ProjectName}-PublicSubnet1-R1-${Region1}"
                         }
                     }
                 ]
@@ -169,7 +157,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${ProjectName}-PublicSubnet2-R1-${AWS::Region}"
+                            "Fn::Sub": "${ProjectName}-PublicSubnet2-R1-${Region1}"
                         }
                     }
                 ]
@@ -196,7 +184,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${ProjectName}-PrivateSubnet1-R1-${AWS::Region}"
+                            "Fn::Sub": "${ProjectName}-PrivateSubnet1-R1-${Region1}"
                         }
                     }
                 ]
@@ -223,7 +211,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${ProjectName}-PrivateSubnet2-R1-${AWS::Region}"
+                            "Fn::Sub": "${ProjectName}-PrivateSubnet2-R1-${Region1}"
                         }
                     }
                 ]
@@ -236,7 +224,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${ProjectName}-IGW-R1-${AWS::Region}"
+                            "Fn::Sub": "${ProjectName}-IGW-R1-${Region1}"
                         }
                     }
                 ]
@@ -276,7 +264,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${ProjectName}-NATGW-R1-${AWS::Region}"
+                            "Fn::Sub": "${ProjectName}-NATGW-R1-${Region1}"
                         }
                     }
                 ]
@@ -292,7 +280,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${ProjectName}-PublicRouteTable-R1-${AWS::Region}"
+                            "Fn::Sub": "${ProjectName}-PublicRouteTable-R1-${Region1}"
                         }
                     }
                 ]
@@ -308,7 +296,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${ProjectName}-PrivateRouteTable-R1-${AWS::Region}"
+                            "Fn::Sub": "${ProjectName}-PrivateRouteTable-R1-${Region1}"
                         }
                     }
                 ]
@@ -407,7 +395,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${ProjectName}-ALBSG-R1-${AWS::Region}"
+                            "Fn::Sub": "${ProjectName}-ALBSG-R1-${Region1}"
                         }
                     }
                 ]
@@ -443,7 +431,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${ProjectName}-AppSG-R1-${AWS::Region}"
+                            "Fn::Sub": "${ProjectName}-AppSG-R1-${Region1}"
                         }
                     }
                 ]
@@ -473,7 +461,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${ProjectName}-DBSG-R1-${AWS::Region}"
+                            "Fn::Sub": "${ProjectName}-DBSG-R1-${Region1}"
                         }
                     }
                 ]
@@ -505,7 +493,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${ProjectName}-ALB-R1-${AWS::Region}"
+                            "Fn::Sub": "${ProjectName}-ALB-R1-${Region1}"
                         }
                     }
                 ]
@@ -545,14 +533,11 @@
                 "HealthCheckProtocol": "HTTP",
                 "HealthyThresholdCount": 2,
                 "UnhealthyThresholdCount": 2,
-                "Matcher": {
-                    "HttpStatus": "200"
-                },
                 "Tags": [
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${ProjectName}-TG-R1-${AWS::Region}"
+                            "Fn::Sub": "${ProjectName}-TG-R1-${Region1}"
                         }
                     }
                 ]
@@ -631,14 +616,14 @@
                 },
                 "UserData": {
                     "Fn::Base64": {
-                        "Fn::Sub": "#!/bin/bash\nyum update -y\nyum install -y httpd\nsystemctl start httpd\necho \"<h1>Hello from ${ProjectName} App Instance 1 in Region 1 (${AWS::Region})</h1>\" > /var/www/html/index.html\nchkconfig httpd on\n"
+                        "Fn::Sub": "#!/bin/bash\nyum update -y\nyum install -y httpd\nsystemctl start httpd\necho \"<h1>Hello from ${ProjectName} App Instance 1 in Region 1 (${Region1})</h1>\" > /var/www/html/index.html\nchkconfig httpd on\n"
                     }
                 },
                 "Tags": [
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${ProjectName}-AppInstance1-R1-${AWS::Region}"
+                            "Fn::Sub": "${ProjectName}-AppInstance1-R1-${Region1}"
                         }
                     }
                 ]
@@ -669,14 +654,14 @@
                 },
                 "UserData": {
                     "Fn::Base64": {
-                        "Fn::Sub": "#!/bin/bash\nyum update -y\nyum install -y httpd\nsystemctl start httpd\necho \"<h1>Hello from ${ProjectName} App Instance 2 in Region 1 (${AWS::Region})</h1>\" > /var/www/html/index.html\nchkconfig httpd on\n"
+                        "Fn::Sub": "#!/bin/bash\nyum update -y\nyum install -y httpd\nsystemctl start httpd\necho \"<h1>Hello from ${ProjectName} App Instance 2 in Region 1 (${Region1})</h1>\" > /var/www/html/index.html\nchkconfig httpd on\n"
                     }
                 },
                 "Tags": [
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${ProjectName}-AppInstance2-R1-${AWS::Region}"
+                            "Fn::Sub": "${ProjectName}-AppInstance2-R1-${Region1}"
                         }
                     }
                 ]
@@ -698,7 +683,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${ProjectName}-DBSG-R1-${AWS::Region}"
+                            "Fn::Sub": "${ProjectName}-DBSG-R1-${Region1}"
                         }
                     }
                 ]
@@ -711,12 +696,8 @@
                     "Ref": "DBInstanceType"
                 },
                 "Engine": "mysql",
-                "MasterUsername": {
-                    "Ref": "DBUsername"
-                },
-                "MasterUserPassword": {
-                    "Ref": "DBPassword"
-                },
+                "MasterUsername": "{{resolve:secretsmanager:my-project/db/credentials:SecretString:username}}",
+                "MasterUserPassword": "{{resolve:secretsmanager:my-project/db/credentials:SecretString:password}}",
                 "AllocatedStorage": {
                     "Ref": "DBAllocatedStorage"
                 },
@@ -736,7 +717,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${ProjectName}-RDS-R1-${AWS::Region}"
+                            "Fn::Sub": "${ProjectName}-RDS-R1-${Region1}"
                         }
                     }
                 ]
@@ -1166,9 +1147,6 @@
                 "HealthCheckProtocol": "HTTP",
                 "HealthyThresholdCount": 2,
                 "UnhealthyThresholdCount": 2,
-                "Matcher": {
-                    "HttpStatus": "200"
-                },
                 "Tags": [
                     {
                         "Key": "Name",
@@ -1284,12 +1262,8 @@
                     "Ref": "DBInstanceType"
                 },
                 "Engine": "mysql",
-                "MasterUsername": {
-                    "Ref": "DBUsername"
-                },
-                "MasterUserPassword": {
-                    "Ref": "DBPassword"
-                },
+                "MasterUsername": "{{resolve:secretsmanager:my-project/db/credentials:SecretString:username}}",
+                "MasterUserPassword": "{{resolve:secretsmanager:my-project/db/credentials:SecretString:password}}",
                 "AllocatedStorage": {
                     "Ref": "DBAllocatedStorage"
                 },

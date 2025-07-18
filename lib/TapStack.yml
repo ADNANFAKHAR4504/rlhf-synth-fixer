@@ -10,7 +10,7 @@ Parameters:
     Default: TapStack
   Region1:
     Type: String
-    Default: us-east-1
+    Default: us-east-2
     Description: The first AWS region for deployment.
   Region2:
     Type: String
@@ -72,20 +72,6 @@ Parameters:
     Type: Number
     Default: 20
     Description: Allocated storage for the RDS database in GiB.
-  DBUsername:
-    Type: String
-    NoEcho: true
-    Description: Master username for the RDS database.
-    Default: dummyUsername
-  DBPassword:
-    Type: String
-    NoEcho: true
-    Description: Master password for the RDS database.
-    Default: dummyPassword
-
-# Removed Mappings section to resolve E7001 and E1011 errors.
-# The AMI parameter type AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
-# already resolves to a string, so direct use with !Ref AMI is sufficient.
 
 Resources:
   # Region 1 Resources --------------------------------------------------------
@@ -97,7 +83,7 @@ Resources:
       EnableDnsHostnames: true
       Tags:
         - Key: Name
-          Value: !Sub ${ProjectName}-VPC-R1-${AWS::Region}
+          Value: !Sub ${ProjectName}-VPC-R1-${Region1}
 
   PublicSubnet1R1:
     Type: AWS::EC2::Subnet
@@ -108,7 +94,7 @@ Resources:
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub ${ProjectName}-PublicSubnet1-R1-${AWS::Region}
+          Value: !Sub ${ProjectName}-PublicSubnet1-R1-${Region1}
 
   PublicSubnet2R1:
     Type: AWS::EC2::Subnet
@@ -119,7 +105,7 @@ Resources:
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub ${ProjectName}-PublicSubnet2-R1-${AWS::Region}
+          Value: !Sub ${ProjectName}-PublicSubnet2-R1-${Region1}
 
   PrivateSubnet1R1:
     Type: AWS::EC2::Subnet
@@ -129,7 +115,7 @@ Resources:
       AvailabilityZone: !Select [0, !GetAZs ""] # Use empty string for current region AZs
       Tags:
         - Key: Name
-          Value: !Sub ${ProjectName}-PrivateSubnet1-R1-${AWS::Region}
+          Value: !Sub ${ProjectName}-PrivateSubnet1-R1-${Region1}
 
   PrivateSubnet2R1:
     Type: AWS::EC2::Subnet
@@ -139,14 +125,14 @@ Resources:
       AvailabilityZone: !Select [1, !GetAZs ""] # Use empty string for current region AZs
       Tags:
         - Key: Name
-          Value: !Sub ${ProjectName}-PrivateSubnet2-R1-${AWS::Region}
+          Value: !Sub ${ProjectName}-PrivateSubnet2-R1-${Region1}
 
   IgwR1:
     Type: AWS::EC2::InternetGateway
     Properties:
       Tags:
         - Key: Name
-          Value: !Sub ${ProjectName}-IGW-R1-${AWS::Region}
+          Value: !Sub ${ProjectName}-IGW-R1-${Region1}
 
   IgwAttachmentR1:
     Type: AWS::EC2::VPCGatewayAttachment
@@ -167,7 +153,7 @@ Resources:
       SubnetId: !Ref PublicSubnet1R1
       Tags:
         - Key: Name
-          Value: !Sub ${ProjectName}-NATGW-R1-${AWS::Region}
+          Value: !Sub ${ProjectName}-NATGW-R1-${Region1}
 
   PublicRouteTableR1:
     Type: AWS::EC2::RouteTable
@@ -175,7 +161,7 @@ Resources:
       VpcId: !Ref VpcR1
       Tags:
         - Key: Name
-          Value: !Sub ${ProjectName}-PublicRouteTable-R1-${AWS::Region}
+          Value: !Sub ${ProjectName}-PublicRouteTable-R1-${Region1}
 
   PrivateRouteTableR1:
     Type: AWS::EC2::RouteTable
@@ -183,7 +169,7 @@ Resources:
       VpcId: !Ref VpcR1
       Tags:
         - Key: Name
-          Value: !Sub ${ProjectName}-PrivateRouteTable-R1-${AWS::Region}
+          Value: !Sub ${ProjectName}-PrivateRouteTable-R1-${Region1}
 
   PublicRouteR1:
     Type: AWS::EC2::Route
@@ -240,7 +226,7 @@ Resources:
           CidrIp: 0.0.0.0/0
       Tags:
         - Key: Name
-          Value: !Sub ${ProjectName}-ALBSG-R1-${AWS::Region}
+          Value: !Sub ${ProjectName}-ALBSG-R1-${Region1}
 
   AppSgR1:
     Type: AWS::EC2::SecurityGroup
@@ -259,7 +245,7 @@ Resources:
           CidrIp: 0.0.0.0/0
       Tags:
         - Key: Name
-          Value: !Sub ${ProjectName}-AppSG-R1-${AWS::Region}
+          Value: !Sub ${ProjectName}-AppSG-R1-${Region1}
 
   DbSgR1:
     Type: AWS::EC2::SecurityGroup
@@ -273,7 +259,7 @@ Resources:
           SourceSecurityGroupId: !GetAtt AppSgR1.GroupId
       Tags:
         - Key: Name
-          Value: !Sub ${ProjectName}-DBSG-R1-${AWS::Region}
+          Value: !Sub ${ProjectName}-DBSG-R1-${Region1}
 
   # Application Load Balancer - Region 1
   AlbR1:
@@ -287,7 +273,7 @@ Resources:
         - !GetAtt AlbSgR1.GroupId
       Tags:
         - Key: Name
-          Value: !Sub ${ProjectName}-ALB-R1-${AWS::Region}
+          Value: !Sub ${ProjectName}-ALB-R1-${Region1}
 
   AlbListenerR1:
     Type: AWS::ElasticLoadBalancingV2::Listener
@@ -311,11 +297,9 @@ Resources:
       HealthCheckProtocol: HTTP
       HealthyThresholdCount: 2
       UnhealthyThresholdCount: 2
-      Matcher: # Corrected indentation for Matcher
-        HttpStatus: '200'
       Tags:
         - Key: Name
-          Value: !Sub ${ProjectName}-TG-R1-${AWS::Region}
+          Value: !Sub ${ProjectName}-TG-R1-${Region1}
 
   # IAM Roles and Instance Profiles
   Ec2InstanceRole:
@@ -362,11 +346,11 @@ Resources:
           yum update -y
           yum install -y httpd
           systemctl start httpd
-          echo "<h1>Hello from ${ProjectName} App Instance 1 in Region 1 (${AWS::Region})</h1>" > /var/www/html/index.html
+          echo "<h1>Hello from ${ProjectName} App Instance 1 in Region 1 (${Region1})</h1>" > /var/www/html/index.html
           chkconfig httpd on
       Tags:
         - Key: Name
-          Value: !Sub ${ProjectName}-AppInstance1-R1-${AWS::Region}
+          Value: !Sub ${ProjectName}-AppInstance1-R1-${Region1}
 
   AppInstance2R1:
     Type: AWS::EC2::Instance
@@ -383,11 +367,11 @@ Resources:
           yum update -y
           yum install -y httpd
           systemctl start httpd
-          echo "<h1>Hello from ${ProjectName} App Instance 2 in Region 1 (${AWS::Region})</h1>" > /var/www/html/index.html
+          echo "<h1>Hello from ${ProjectName} App Instance 2 in Region 1 (${Region1})</h1>" > /var/www/html/index.html
           chkconfig httpd on
       Tags:
         - Key: Name
-          Value: !Sub ${ProjectName}-AppInstance2-R1-${AWS::Region}
+          Value: !Sub ${ProjectName}-AppInstance2-R1-${Region1}
 
   # RDS Database - Region 1
   DbSubnetGroupR1:
@@ -399,15 +383,15 @@ Resources:
         - !Ref PrivateSubnet2R1
       Tags:
         - Key: Name
-          Value: !Sub ${ProjectName}-DBSG-R1-${AWS::Region}
+          Value: !Sub ${ProjectName}-DBSG-R1-${Region1}
 
   RdsInstanceR1:
     Type: AWS::RDS::DBInstance
     Properties:
       DBInstanceClass: !Ref DBInstanceType
       Engine: mysql
-      MasterUsername: !Ref DBUsername
-      MasterUserPassword: !Ref DBPassword
+      MasterUsername: '{{resolve:secretsmanager:my-project/db/credentials:SecretString:username}}'
+      MasterUserPassword: '{{resolve:secretsmanager:my-project/db/credentials:SecretString:password}}'
       AllocatedStorage: !Ref DBAllocatedStorage
       MultiAZ: true
       VPCSecurityGroups:
@@ -415,7 +399,7 @@ Resources:
       DBSubnetGroupName: !Ref DbSubnetGroupR1
       Tags:
         - Key: Name
-          Value: !Sub ${ProjectName}-RDS-R1-${AWS::Region}
+          Value: !Sub ${ProjectName}-RDS-R1-${Region1}
 
   # Region 2 Resources --------------------------------------------------------
   VpcR2:
@@ -639,8 +623,6 @@ Resources:
       HealthCheckProtocol: HTTP
       HealthyThresholdCount: 2
       UnhealthyThresholdCount: 2
-      Matcher: # Corrected indentation for Matcher
-        HttpStatus: '200'
       Tags:
         - Key: Name
           Value: !Sub ${ProjectName}-TG-R2-${Region2}
@@ -705,8 +687,8 @@ Resources:
     Properties:
       DBInstanceClass: !Ref DBInstanceType
       Engine: mysql
-      MasterUsername: !Ref DBUsername
-      MasterUserPassword: !Ref DBPassword
+      MasterUsername: '{{resolve:secretsmanager:my-project/db/credentials:SecretString:username}}'
+      MasterUserPassword: '{{resolve:secretsmanager:my-project/db/credentials:SecretString:password}}'
       AllocatedStorage: !Ref DBAllocatedStorage
       MultiAZ: true
       VPCSecurityGroups:
