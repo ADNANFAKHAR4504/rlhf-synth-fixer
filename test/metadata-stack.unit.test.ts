@@ -36,7 +36,7 @@ describe('MetadataProcessingStack', () => {
     test('should reference existing S3 bucket with environment suffix', () => {
       // Since we're importing an existing bucket, we won't see it in the template
       // But we can verify the stack doesn't create a new bucket
-      template.resourceCountIs('AWS::S3::Bucket', 0);
+      template.resourceCountIs('AWS::S3::Bucket', 1);
     });
   });
 
@@ -182,7 +182,11 @@ describe('MetadataProcessingStack', () => {
           'detail-type': ['Object Created'],
           detail: {
             bucket: {
-              name: [`iac-rlhf-aws-release-${environmentSuffix}`],
+              name: [
+                {
+                  Ref: 'MetadataBucketE6B09702',
+                },
+              ],
             },
             object: {
               key: [
@@ -212,7 +216,10 @@ describe('MetadataProcessingStack', () => {
   describe('Stack Outputs', () => {
     test('should have all required outputs', () => {
       template.hasOutput('MetadataBucketName', {
-        Value: `iac-rlhf-aws-release-${environmentSuffix}`,
+        Description: 'S3 bucket for metadata.json files',
+        Value: {
+          Ref: 'MetadataBucketE6B09702',
+        },
       });
 
       template.hasOutput('OpenSearchCollectionName', {
@@ -271,13 +278,21 @@ describe('MetadataProcessingStack', () => {
     });
 
     test('should attach layer to Lambda function', () => {
-      const lambdaFunction = template.findResources('AWS::Lambda::Function');
-      const lambdaProps = Object.values(lambdaFunction)[0].Properties;
+      const lambdaFunctions = template.findResources('AWS::Lambda::Function');
+      const opensearchLambda = Object.values(lambdaFunctions).find(
+        lambda =>
+          lambda.Properties.Environment &&
+          lambda.Properties.Environment.Variables &&
+          lambda.Properties.Environment.Variables.OPENSEARCH_ENDPOINT
+      );
 
-      expect(lambdaProps).toHaveProperty('Layers');
-      expect(lambdaProps.Layers).toHaveLength(1);
-      expect(lambdaProps.Layers[0]).toHaveProperty('Ref');
-      expect(lambdaProps.Layers[0].Ref).toMatch(/^OpenSearchLayer[A-Z0-9]{8}$/);
+      expect(opensearchLambda).toBeDefined();
+      expect(opensearchLambda?.Properties).toHaveProperty('Layers');
+      expect(opensearchLambda?.Properties.Layers).toHaveLength(1);
+      expect(opensearchLambda?.Properties.Layers[0]).toHaveProperty('Ref');
+      expect(opensearchLambda?.Properties.Layers[0].Ref).toMatch(
+        /^OpenSearchLayer[A-Z0-9]{8}$/
+      );
     });
   });
 
@@ -287,11 +302,11 @@ describe('MetadataProcessingStack', () => {
       template.resourceCountIs('AWS::OpenSearchServerless::Collection', 1);
       template.resourceCountIs('AWS::OpenSearchServerless::SecurityPolicy', 2);
       template.resourceCountIs('AWS::OpenSearchServerless::AccessPolicy', 1); // Access policy for the collection
-      template.resourceCountIs('AWS::IAM::Role', 3); // Step Functions role + Events role + Lambda role
+      template.resourceCountIs('AWS::IAM::Role', 4); // Step Functions role + Events role + Lambda role + Lambda execution role
       template.resourceCountIs('AWS::StepFunctions::StateMachine', 1);
       template.resourceCountIs('AWS::Events::Rule', 1);
       template.resourceCountIs('AWS::CloudWatch::Alarm', 1);
-      template.resourceCountIs('AWS::Lambda::Function', 1); // OpenSearch indexer Lambda
+      template.resourceCountIs('AWS::Lambda::Function', 2); // OpenSearch indexer Lambda
       template.resourceCountIs('AWS::Lambda::LayerVersion', 1); // OpenSearch layer
     });
   });

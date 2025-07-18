@@ -25,12 +25,13 @@ export class MetadataProcessingStack extends cdk.Stack {
 
     const environmentSuffix = props?.environmentSuffix || 'dev';
 
-    // S3 Bucket for metadata.json files (import existing bucket)
-    const metadataBucket = s3.Bucket.fromBucketName(
-      this,
-      'MetadataBucket',
-      `iac-rlhf-aws-release-${environmentSuffix}`
-    );
+    // Create a new S3 bucket for metadata files
+    const metadataBucket = new s3.Bucket(this, 'MetadataBucket', {
+      bucketName: `iac-rlhf-metadata-${environmentSuffix}`,
+      versioned: true,
+      removalPolicy: cdk.RemovalPolicy.DESTROY, // Change to RETAIN for production
+      autoDeleteObjects: true, // Automatically delete objects when bucket is deleted
+    });
 
     // Note: EventBridge notifications need to be enabled on the existing bucket manually
 
@@ -345,10 +346,12 @@ export class MetadataProcessingStack extends cdk.Stack {
       this,
       'MetadataProcessingWorkflow',
       {
-        definition: getMetadataFromS3
-          .next(processMetadata)
-          .next(prepareMetadataForOpenSearch)
-          .next(indexToOpenSearch),
+        definitionBody: stepfunctions.DefinitionBody.fromChainable(
+          getMetadataFromS3
+            .next(processMetadata)
+            .next(prepareMetadataForOpenSearch)
+            .next(indexToOpenSearch)
+        ),
         role: stepFunctionsRole,
         tracingEnabled: true,
       }

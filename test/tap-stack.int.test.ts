@@ -1,7 +1,6 @@
 import { CloudFormationClient } from '@aws-sdk/client-cloudformation';
 import {
   CloudWatchLogsClient,
-  DescribeLogGroupsCommand,
   DescribeLogStreamsCommand,
   GetLogEventsCommand,
 } from '@aws-sdk/client-cloudwatch-logs';
@@ -39,7 +38,10 @@ const outputs = JSON.parse(
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
 // Utility function to analyze Step Function execution failures
-async function analyzeStepFunctionFailure(executionArn: string, sfnClient: SFNClient): Promise<string | null> {
+async function analyzeStepFunctionFailure(
+  executionArn: string,
+  sfnClient: SFNClient
+): Promise<string | null> {
   try {
     // Get execution history for detailed analysis
     const historyCommand = new GetExecutionHistoryCommand({
@@ -48,113 +50,145 @@ async function analyzeStepFunctionFailure(executionArn: string, sfnClient: SFNCl
     });
 
     const history = await sfnClient.send(historyCommand);
-    
+
     console.log('\n=== Step Function Execution Analysis ===');
     console.log(`Execution ARN: ${executionArn}`);
-    
+
     if (history.events) {
       // Find failed events
-      const failedEvents = history.events.filter(event => 
-        event.type?.includes('Failed') || 
-        event.type?.includes('TimedOut') ||
-        event.type?.includes('Aborted')
+      const failedEvents = history.events.filter(
+        event =>
+          event.type?.includes('Failed') ||
+          event.type?.includes('TimedOut') ||
+          event.type?.includes('Aborted')
       );
-      
+
       if (failedEvents.length > 0) {
         console.log('\n--- Failed Events ---');
         failedEvents.forEach((event, index) => {
           console.log(`${index + 1}. Event Type: ${event.type}`);
           console.log(`   Timestamp: ${event.timestamp}`);
-          
+
           if (event.lambdaFunctionFailedEventDetails) {
             console.log(`   Lambda Function Failed:`);
-            console.log(`   - Error: ${event.lambdaFunctionFailedEventDetails.error}`);
-            console.log(`   - Cause: ${event.lambdaFunctionFailedEventDetails.cause}`);
+            console.log(
+              `   - Error: ${event.lambdaFunctionFailedEventDetails.error}`
+            );
+            console.log(
+              `   - Cause: ${event.lambdaFunctionFailedEventDetails.cause}`
+            );
           }
-          
+
           if (event.taskFailedEventDetails) {
             console.log(`   Task Failed:`);
             console.log(`   - Error: ${event.taskFailedEventDetails.error}`);
             console.log(`   - Cause: ${event.taskFailedEventDetails.cause}`);
-            console.log(`   - Resource: ${event.taskFailedEventDetails.resource}`);
+            console.log(
+              `   - Resource: ${event.taskFailedEventDetails.resource}`
+            );
           }
-          
+
           if (event.executionFailedEventDetails) {
             console.log(`   Execution Failed:`);
-            console.log(`   - Error: ${event.executionFailedEventDetails.error}`);
-            console.log(`   - Cause: ${event.executionFailedEventDetails.cause}`);
+            console.log(
+              `   - Error: ${event.executionFailedEventDetails.error}`
+            );
+            console.log(
+              `   - Cause: ${event.executionFailedEventDetails.cause}`
+            );
           }
-          
+
           console.log('');
         });
       }
-      
+
       // Find state transitions to understand flow
-      const stateEvents = history.events.filter(event => 
-        event.type?.includes('StateEntered') || 
-        event.type?.includes('StateExited')
+      const stateEvents = history.events.filter(
+        event =>
+          event.type?.includes('StateEntered') ||
+          event.type?.includes('StateExited')
       );
-      
+
       if (stateEvents.length > 0) {
         console.log('\n--- State Transitions ---');
         stateEvents.forEach((event, index) => {
           if (event.stateEnteredEventDetails) {
-            console.log(`${index + 1}. Entered State: ${event.stateEnteredEventDetails.name}`);
+            console.log(
+              `${index + 1}. Entered State: ${event.stateEnteredEventDetails.name}`
+            );
             console.log(`   Input: ${event.stateEnteredEventDetails.input}`);
           }
           if (event.stateExitedEventDetails) {
-            console.log(`${index + 1}. Exited State: ${event.stateExitedEventDetails.name}`);
+            console.log(
+              `${index + 1}. Exited State: ${event.stateExitedEventDetails.name}`
+            );
             console.log(`   Output: ${event.stateExitedEventDetails.output}`);
           }
         });
       }
-      
+
       // Find Lambda function invocations
-      const lambdaEvents = history.events.filter(event => 
+      const lambdaEvents = history.events.filter(event =>
         event.type?.includes('Lambda')
       );
-      
+
       if (lambdaEvents.length > 0) {
         console.log('\n--- Lambda Function Events ---');
         lambdaEvents.forEach((event, index) => {
           console.log(`${index + 1}. Event Type: ${event.type}`);
           console.log(`   Timestamp: ${event.timestamp}`);
-          
+
           if (event.lambdaFunctionScheduledEventDetails) {
             console.log(`   Lambda Scheduled:`);
-            console.log(`   - Input: ${event.lambdaFunctionScheduledEventDetails.input}`);
-            console.log(`   - Resource: ${event.lambdaFunctionScheduledEventDetails.resource}`);
+            console.log(
+              `   - Input: ${event.lambdaFunctionScheduledEventDetails.input}`
+            );
+            console.log(
+              `   - Resource: ${event.lambdaFunctionScheduledEventDetails.resource}`
+            );
           }
-          
+
           if (event.lambdaFunctionStartFailedEventDetails) {
-            console.log(`   Lambda Start Failed:`, event.lambdaFunctionStartFailedEventDetails);
+            console.log(
+              `   Lambda Start Failed:`,
+              event.lambdaFunctionStartFailedEventDetails
+            );
           }
-          
+
           if (event.lambdaFunctionSucceededEventDetails) {
             console.log(`   Lambda Succeeded:`);
-            console.log(`   - Output: ${event.lambdaFunctionSucceededEventDetails.output}`);
+            console.log(
+              `   - Output: ${event.lambdaFunctionSucceededEventDetails.output}`
+            );
           }
-          
+
           if (event.lambdaFunctionFailedEventDetails) {
             console.log(`   Lambda Failed:`);
-            console.log(`   - Error: ${event.lambdaFunctionFailedEventDetails.error}`);
-            console.log(`   - Cause: ${event.lambdaFunctionFailedEventDetails.cause}`);
+            console.log(
+              `   - Error: ${event.lambdaFunctionFailedEventDetails.error}`
+            );
+            console.log(
+              `   - Cause: ${event.lambdaFunctionFailedEventDetails.cause}`
+            );
           }
-          
+
           console.log('');
         });
       }
     }
-    
+
     console.log('=== End of Analysis ===\n');
-    
+
     // Extract Lambda function name from events
-    const lambdaScheduledEvents = history.events?.filter(event => 
-      event.type === 'LambdaFunctionScheduled' && event.lambdaFunctionScheduledEventDetails?.resource
+    const lambdaScheduledEvents = history.events?.filter(
+      event =>
+        event.type === 'LambdaFunctionScheduled' &&
+        event.lambdaFunctionScheduledEventDetails?.resource
     );
-    
+
     if (lambdaScheduledEvents && lambdaScheduledEvents.length > 0) {
-      const resource = lambdaScheduledEvents[0].lambdaFunctionScheduledEventDetails?.resource;
+      const resource =
+        lambdaScheduledEvents[0].lambdaFunctionScheduledEventDetails?.resource;
       if (resource) {
         // Extract function name from ARN format: arn:aws:lambda:region:account:function:function-name
         const functionName = resource.split(':').pop();
@@ -162,9 +196,8 @@ async function analyzeStepFunctionFailure(executionArn: string, sfnClient: SFNCl
         return functionName || null;
       }
     }
-    
+
     return null;
-    
   } catch (error) {
     console.error('Error analyzing Step Function execution:', error);
     return null;
@@ -172,52 +205,63 @@ async function analyzeStepFunctionFailure(executionArn: string, sfnClient: SFNCl
 }
 
 // Utility function to analyze Lambda function logs
-async function analyzeLambdaLogs(functionName: string, cloudWatchLogsClient: CloudWatchLogsClient, executionTime: Date, timeRangeMinutes: number = 5) {
+async function analyzeLambdaLogs(
+  functionName: string,
+  cloudWatchLogsClient: CloudWatchLogsClient,
+  executionTime: Date,
+  timeRangeMinutes: number = 5
+) {
   try {
     const logGroupName = `/aws/lambda/${functionName}`;
-    
+
     console.log(`\n=== Lambda Function Log Analysis ===`);
     console.log(`Log Group: ${logGroupName}`);
     console.log(`Execution Time: ${executionTime.toISOString()}`);
-    
+
     // Get log streams
     const logStreamsCommand = new DescribeLogStreamsCommand({
       logGroupName: logGroupName,
       orderBy: 'LastEventTime',
       descending: true,
-      limit: 10
+      limit: 10,
     });
-    
+
     const logStreams = await cloudWatchLogsClient.send(logStreamsCommand);
-    
+
     if (!logStreams.logStreams || logStreams.logStreams.length === 0) {
       console.log('No log streams found');
       return;
     }
-    
-    const startTime = new Date(executionTime.getTime() - timeRangeMinutes * 60 * 1000);
-    const endTime = new Date(executionTime.getTime() + timeRangeMinutes * 60 * 1000);
-    
-    console.log(`Looking for logs between ${startTime.toISOString()} and ${endTime.toISOString()}`);
-    
+
+    const startTime = new Date(
+      executionTime.getTime() - timeRangeMinutes * 60 * 1000
+    );
+    const endTime = new Date(
+      executionTime.getTime() + timeRangeMinutes * 60 * 1000
+    );
+
+    console.log(
+      `Looking for logs between ${startTime.toISOString()} and ${endTime.toISOString()}`
+    );
+
     // Get log events from recent streams
     for (const logStream of logStreams.logStreams.slice(0, 3)) {
       if (!logStream.logStreamName) continue;
-      
+
       try {
         const logEventsCommand = new GetLogEventsCommand({
           logGroupName: logGroupName,
           logStreamName: logStream.logStreamName,
           startTime: startTime.getTime(),
           endTime: endTime.getTime(),
-          limit: 100
+          limit: 100,
         });
-        
+
         const logEvents = await cloudWatchLogsClient.send(logEventsCommand);
-        
+
         if (logEvents.events && logEvents.events.length > 0) {
           console.log(`\n--- Log Stream: ${logStream.logStreamName} ---`);
-          
+
           for (const event of logEvents.events) {
             if (event.message && event.timestamp) {
               const timestamp = new Date(event.timestamp).toISOString();
@@ -226,12 +270,14 @@ async function analyzeLambdaLogs(functionName: string, cloudWatchLogsClient: Clo
           }
         }
       } catch (streamError) {
-        console.log(`Error reading log stream ${logStream.logStreamName}:`, streamError);
+        console.log(
+          `Error reading log stream ${logStream.logStreamName}:`,
+          streamError
+        );
       }
     }
-    
+
     console.log('=== End of Lambda Log Analysis ===\n');
-    
   } catch (error) {
     console.error('Error analyzing Lambda logs:', error);
   }
@@ -319,7 +365,7 @@ describe('Turn Around Prompt API Integration Tests', () => {
     test('should have S3 bucket accessible', async () => {
       expect(outputs.MetadataBucketName).toBeDefined();
       expect(outputs.MetadataBucketName).toBe(
-        `iac-rlhf-aws-release-${environmentSuffix}`
+        `iac-rlhf-metadata-${environmentSuffix}`
       );
 
       // Test bucket access by attempting to list objects (should not throw)
@@ -370,7 +416,7 @@ describe('Turn Around Prompt API Integration Tests', () => {
     test('should have OpenSearch collection configured', async () => {
       expect(outputs.OpenSearchCollectionName).toBeDefined();
       expect(outputs.OpenSearchCollectionName).toBe(
-        `iac-rlhf-metadata-collection-${environmentSuffix}`
+        `iac-rlhf-metadata-coll-${environmentSuffix}`
       );
 
       expect(outputs.OpenSearchDashboardUrl).toBeDefined();
@@ -450,12 +496,19 @@ describe('Turn Around Prompt API Integration Tests', () => {
       }
 
       // Always perform detailed analysis regardless of status
-      const lambdaFunctionName = await analyzeStepFunctionFailure(executionResult.executionArn!, sfnClient);
-      
+      const lambdaFunctionName = await analyzeStepFunctionFailure(
+        executionResult.executionArn!,
+        sfnClient
+      );
+
       // Analyze Lambda function logs for additional debugging
       if (lambdaFunctionName) {
         const executionTime = new Date();
-        await analyzeLambdaLogs(lambdaFunctionName, cloudWatchLogsClient, executionTime);
+        await analyzeLambdaLogs(
+          lambdaFunctionName,
+          cloudWatchLogsClient,
+          executionTime
+        );
       }
 
       // Get final execution details
@@ -464,14 +517,14 @@ describe('Turn Around Prompt API Integration Tests', () => {
       });
 
       const finalDescription = await sfnClient.send(finalDescribeCommand);
-      
+
       console.log('\n=== Final Execution Status ===');
       console.log(`Status: ${finalDescription.status}`);
       console.log(`Start Date: ${finalDescription.startDate}`);
       console.log(`Stop Date: ${finalDescription.stopDate}`);
       console.log(`Input: ${finalDescription.input}`);
       console.log(`Output: ${finalDescription.output}`);
-      
+
       if (finalDescription.error) {
         console.log(`Error: ${finalDescription.error}`);
       }
@@ -554,8 +607,11 @@ describe('Turn Around Prompt API Integration Tests', () => {
 
       // If execution failed, get comprehensive analysis
       if (executionStatus === 'FAILED') {
-        await analyzeStepFunctionFailure(executionResult.executionArn!, sfnClient);
-        
+        await analyzeStepFunctionFailure(
+          executionResult.executionArn!,
+          sfnClient
+        );
+
         const describeExecutionCommand = new DescribeExecutionCommand({
           executionArn: executionResult.executionArn!,
         });
@@ -770,10 +826,10 @@ describe('Turn Around Prompt API Integration Tests', () => {
 
       // 4. Verify that all required infrastructure components are accessible
       expect(outputs.MetadataBucketName).toBe(
-        `iac-rlhf-aws-release-${environmentSuffix}`
+        `iac-rlhf-metadata-${environmentSuffix}`
       );
       expect(outputs.OpenSearchCollectionName).toBe(
-        `iac-rlhf-metadata-collection-${environmentSuffix}`
+        `iac-rlhf-metadata-coll-${environmentSuffix}`
       );
       expect(outputs.FailureTableName).toContain('MetadataProcessingFailures');
       expect(outputs.OpenSearchDashboardUrl).toContain('aoss.amazonaws.com');
@@ -882,8 +938,11 @@ describe('Turn Around Prompt API Integration Tests', () => {
 
       // If execution failed, get comprehensive analysis
       if (executionStatus === 'FAILED') {
-        await analyzeStepFunctionFailure(executionResult.executionArn!, sfnClient);
-        
+        await analyzeStepFunctionFailure(
+          executionResult.executionArn!,
+          sfnClient
+        );
+
         const describeExecutionCommand = new DescribeExecutionCommand({
           executionArn: executionResult.executionArn!,
         });
