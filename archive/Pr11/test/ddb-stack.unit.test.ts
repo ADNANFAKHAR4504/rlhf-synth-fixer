@@ -125,13 +125,13 @@ describe('DynamoDBStack', () => {
       const customStack = new DynamoDBStack(customApp, 'CustomStack', {
         env: {
           account: '123456789012',
-          region: 'us-west-2',
+          region: 'us-east-1',
         },
         description: 'Custom DynamoDB Stack',
       });
 
       expect(customStack.account).toBe('123456789012');
-      expect(customStack.region).toBe('us-west-2');
+      expect(customStack.region).toBe('us-east-1');
     });
   });
 

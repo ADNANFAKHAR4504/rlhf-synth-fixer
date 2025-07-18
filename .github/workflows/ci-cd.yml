@@ -14,7 +14,7 @@ env:
   NODE_VERSION: '22'
   # Use PR number for resource isolation, fallback to 'main' for main branch
   # Prefix with 'pr' to ensure AWS resource names start with a letter
-  ENVIRONMENT_SUFFIX: ${{ github.event.number && format('Pr{0}', github.event.number) || 'dev' }}
+  ENVIRONMENT_SUFFIX: ${{ github.event.number && format('pr{0}', github.event.number) || 'dev' }}
   S3_BUCKET_NAME: 'iac-rlhf-aws-release'
 
 jobs:
@@ -500,6 +500,7 @@ jobs:
 
       - name: Run integration tests against live environment
         run: |
+          npm run test:integration
           OUTPUT=$(npm run test:integration 2>&1)
           echo "# Integration tests" > lib/INTEGRATION_TESTS.md
           echo >> lib/INTEGRATION_TESTS.md
@@ -641,7 +642,7 @@ jobs:
     name: Upload Task to S3
     runs-on: ubuntu-latest
     environment: release
-    if: ${{ github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged == true }}
+    if: ${{ github.event_name == 'pull_request' && github.event.pull_request.merged == true }}
     permissions:
       contents: read
 
