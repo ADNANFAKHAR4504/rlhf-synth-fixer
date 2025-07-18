@@ -1,71 +1,97 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: Highly available, multi-region, scalable, and secure application infrastructure.
+Description: |
+  CloudFormation template for a highly available, scalable, and secure
+  cloud environment across two distinct AWS regions to support a critical application.
 
 Parameters:
   ProjectName:
     Type: String
-    Default: TapStack
+    Description: A unique name for the project, used as a prefix for resources.
   Region1:
     Type: String
     Default: us-east-1
+    Description: The first AWS region for deployment.
   Region2:
     Type: String
     Default: us-west-2
+    Description: The second AWS region for deployment.
   VpcCidr1:
     Type: String
     Default: 10.0.0.0/16
+    Description: CIDR block for the VPC in Region 1.
   VpcCidr2:
     Type: String
     Default: 10.1.0.0/16
+    Description: CIDR block for the VPC in Region 2.
   PublicSubnet1Cidr1:
     Type: String
     Default: 10.0.1.0/24
+    Description: CIDR block for Public Subnet 1 in Region 1.
   PrivateSubnet1Cidr1:
     Type: String
-    Default: 10.0.101.0/24
+    Default: 10.0.2.0/24
+    Description: CIDR block for Private Subnet 1 in Region 1.
   PublicSubnet2Cidr1:
     Type: String
-    Default: 10.0.2.0/24
+    Default: 10.0.3.0/24
+    Description: CIDR block for Public Subnet 2 in Region 1.
   PrivateSubnet2Cidr1:
     Type: String
-    Default: 10.0.102.0/24
+    Default: 10.0.4.0/24
+    Description: CIDR block for Private Subnet 2 in Region 1.
   PublicSubnet1Cidr2:
     Type: String
     Default: 10.1.1.0/24
+    Description: CIDR block for Public Subnet 1 in Region 2.
   PrivateSubnet1Cidr2:
     Type: String
-    Default: 10.1.101.0/24
+    Default: 10.1.2.0/24
+    Description: CIDR block for Private Subnet 1 in Region 2.
   PublicSubnet2Cidr2:
     Type: String
-    Default: 10.1.2.0/24
+    Default: 10.1.3.0/24
+    Description: CIDR block for Public Subnet 2 in Region 2.
   PrivateSubnet2Cidr2:
     Type: String
-    Default: 10.1.102.0/24
+    Default: 10.1.4.0/24
+    Description: CIDR block for Private Subnet 2 in Region 2.
   InstanceType:
     Type: String
     Default: t3.micro
+    Description: EC2 instance type for application servers.
+  AMI:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
+    Description: The SSM parameter path for the EC2 AMI ID.
   DBInstanceType:
     Type: String
     Default: db.t3.micro
+    Description: RDS DB instance type.
   DBAllocatedStorage:
     Type: Number
     Default: 20
+    Description: Allocated storage for the RDS database in GiB.
   DBUsername:
     Type: String
     NoEcho: true
+    Description: Master username for the RDS database.
   DBPassword:
     Type: String
     NoEcho: true
+    Description: Master password for the RDS database.
 
 Mappings:
-  RegionMap:
+  # This mapping is used to ensure the correct AMI is picked based on the region
+  # The AMI parameter type is already defined to fetch from SSM, so this map
+  # directly references that parameter for clarity and potential future overrides
+  RegionAMIMap:
     us-east-1:
-      AMI: "/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2"
+      AMIId: !Ref AMI
     us-west-2:
-      AMI: "/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2"
+      AMIId: !Ref AMI
 
 Resources:
-  # VPCs
+  # Region 1 Resources --------------------------------------------------------
   VpcR1:
     Type: AWS::EC2::VPC
     Properties:
@@ -74,7 +100,342 @@ Resources:
       EnableDnsHostnames: true
       Tags:
         - Key: Name
-          Value: !Sub "${ProjectName}-vpc-r1"
+          Value: !Sub ${ProjectName}-VPC-R1-${AWS::Region}
+
+  PublicSubnet1R1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VpcR1
+      CidrBlock: !Ref PublicSubnet1Cidr1
+      AvailabilityZone: !Select [0, !GetAZs ""] # Corrected line: Use empty string for current region AZs
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-PublicSubnet1-R1-${AWS::Region}
+
+  PublicSubnet2R1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VpcR1
+      CidrBlock: !Ref PublicSubnet2Cidr1
+      AvailabilityZone: !Select [1, !GetAZs ""] # Corrected line: Use empty string for current region AZs
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-PublicSubnet2-R1-${AWS::Region}
+
+  PrivateSubnet1R1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VpcR1
+      CidrBlock: !Ref PrivateSubnet1Cidr1
+      AvailabilityZone: !Select [0, !GetAZs ""] # Corrected line: Use empty string for current region AZs
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-PrivateSubnet1-R1-${AWS::Region}
+
+  PrivateSubnet2R1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VpcR1
+      CidrBlock: !Ref PrivateSubnet2Cidr1
+      AvailabilityZone: !Select [1, !GetAZs ""] # Corrected line: Use empty string for current region AZs
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-PrivateSubnet2-R1-${AWS::Region}
+
+  IgwR1:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-IGW-R1-${AWS::Region}
+
+  IgwAttachmentR1:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VpcR1
+      InternetGatewayId: !Ref IgwR1
+
+  NatEipR1:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+    DependsOn: IgwAttachmentR1 # Ensure IGW is attached before allocating EIP for NAT GW
+
+  NatGwR1:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatEipR1.AllocationId
+      SubnetId: !Ref PublicSubnet1R1
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-NATGW-R1-${AWS::Region}
+
+  PublicRouteTableR1:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VpcR1
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-PublicRouteTable-R1-${AWS::Region}
+
+  PrivateRouteTableR1:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VpcR1
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-PrivateRouteTable-R1-${AWS::Region}
+
+  PublicRouteR1:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PublicRouteTableR1
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref IgwR1
+
+  PrivateRouteR1:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTableR1
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGwR1
+
+  PublicSubnet1AssocR1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet1R1
+      RouteTableId: !Ref PublicRouteTableR1
+
+  PublicSubnet2AssocR1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet2R1
+      RouteTableId: !Ref PublicRouteTableR1
+
+  PrivateSubnet1AssocR1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet1R1
+      RouteTableId: !Ref PrivateRouteTableR1
+
+  PrivateSubnet2AssocR1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet2R1
+      RouteTableId: !Ref PrivateRouteTableR1
+
+  # Security Groups - Region 1
+  AlbSgR1:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: ALB Security Group for HTTP and HTTPS from anywhere
+      VpcId: !Ref VpcR1
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-ALBSG-R1-${AWS::Region}
+
+  AppSgR1:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: App Security Group for HTTP from ALB and SSH from specific IP
+      VpcId: !Ref VpcR1
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          SourceSecurityGroupId: !GetAtt AlbSgR1.GroupId
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          # IMPORTANT: For production, restrict this to a known IP range
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-AppSG-R1-${AWS::Region}
+
+  DbSgR1:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: DB Security Group for MySQL from Application Security Group
+      VpcId: !Ref VpcR1
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          SourceSecurityGroupId: !GetAtt AppSgR1.GroupId
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-DBSG-R1-${AWS::Region}
+
+  # Application Load Balancer - Region 1
+  AlbR1:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Sub ${ProjectName}-ALB-R1
+      Subnets:
+        - !Ref PublicSubnet1R1
+        - !Ref PublicSubnet2R1
+      SecurityGroups:
+        - !GetAtt AlbSgR1.GroupId
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-ALB-R1-${AWS::Region}
+
+  AlbListenerR1:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref AlbR1
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref AlbTargetGroupR1
+
+  AlbTargetGroupR1:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub ${ProjectName}-TG-R1
+      VpcId: !Ref VpcR1
+      Port: 80
+      Protocol: HTTP
+      HealthCheckPath: /
+      HealthCheckPort: 80
+      HealthCheckProtocol: HTTP
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 2
+      Matcher:
+        HttpStatus: '200'
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-TG-R1-${AWS::Region}
+
+  # IAM Roles and Instance Profiles
+  Ec2InstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: { Service: ec2.amazonaws.com }
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore # Allows SSM access
+      Policies:
+        - PolicyName: S3AccessPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:ListBucket
+                Resource: "*" # Restrict this to specific S3 buckets in production
+
+  Ec2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref Ec2InstanceRole
+
+  # EC2 Instances - Region 1
+  AppInstance1R1:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !FindInMap [RegionAMIMap, !Ref "AWS::Region", AMIId]
+      InstanceType: !Ref InstanceType
+      SubnetId: !Ref PrivateSubnet1R1
+      SecurityGroupIds:
+        - !GetAtt AppSgR1.GroupId
+      IamInstanceProfile: !Ref Ec2InstanceProfile
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          yum update -y
+          yum install -y httpd
+          systemctl start httpd
+          echo "<h1>Hello from ${ProjectName} App Instance 1 in Region 1 (${AWS::Region})</h1>" > /var/www/html/index.html
+          chkconfig httpd on
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-AppInstance1-R1-${AWS::Region}
+
+  AppInstance2R1:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !FindInMap [RegionAMIMap, !Ref "AWS::Region", AMIId]
+      InstanceType: !Ref InstanceType
+      SubnetId: !Ref PrivateSubnet2R1
+      SecurityGroupIds:
+        - !GetAtt AppSgR1.GroupId
+      IamInstanceProfile: !Ref Ec2InstanceProfile
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          yum update -y
+          yum install -y httpd
+          systemctl start httpd
+          echo "<h1>Hello from ${ProjectName} App Instance 2 in Region 1 (${AWS::Region})</h1>" > /var/www/html/index.html
+          chkconfig httpd on
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-AppInstance2-R1-${AWS::Region}
+
+  # Register EC2 Instances with ALB Target Group
+  AlbTargetGroupAttachment1R1:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroupAttachment
+    Properties:
+      TargetGroupArn: !Ref AlbTargetGroupR1
+      TargetId: !Ref AppInstance1R1
+      Port: 80
+
+  AlbTargetGroupAttachment2R1:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroupAttachment
+    Properties:
+      TargetGroupArn: !Ref AlbTargetGroupR1
+      TargetId: !Ref AppInstance2R1
+      Port: 80
+
+  # RDS Database - Region 1
+  DbSubnetGroupR1:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: DB Subnet Group for RDS in Region 1
+      SubnetIds:
+        - !Ref PrivateSubnet1R1
+        - !Ref PrivateSubnet2R1
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-DBSG-R1-${AWS::Region}
+
+  RdsInstanceR1:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceClass: !Ref DBInstanceType
+      Engine: mysql
+      MasterUsername: !Ref DBUsername
+      MasterUserPassword: !Ref DBPassword
+      AllocatedStorage: !Ref DBAllocatedStorage
+      MultiAZ: true
+      VPCSecurityGroups:
+        - !GetAtt DbSgR1.GroupId
+      DBSubnetGroupName: !Ref DbSubnetGroupR1
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-RDS-R1-${AWS::Region}
+
+  # Region 2 Resources --------------------------------------------------------
   VpcR2:
     Type: AWS::EC2::VPC
     Properties:
@@ -83,285 +444,137 @@ Resources:
       EnableDnsHostnames: true
       Tags:
         - Key: Name
-          Value: !Sub "${ProjectName}-vpc-r2"
+          Value: !Sub ${ProjectName}-VPC-R2-${Region2}
 
-  # Subnets Region 1
-  PublicSubnet1R1:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref VpcR1
-      CidrBlock: !Ref PublicSubnet1Cidr1
-      AvailabilityZone: !Select [0, !GetAZs !Ref Region1]
-      MapPublicIpOnLaunch: true
-      Tags:
-        - Key: Name
-          Value: !Sub "${ProjectName}-public-subnet1-r1"
-  PublicSubnet2R1:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref VpcR1
-      CidrBlock: !Ref PublicSubnet2Cidr1
-      AvailabilityZone: !Select [1, !GetAZs !Ref Region1]
-      MapPublicIpOnLaunch: true
-      Tags:
-        - Key: Name
-          Value: !Sub "${ProjectName}-public-subnet2-r1"
-  PrivateSubnet1R1:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref VpcR1
-      CidrBlock: !Ref PrivateSubnet1Cidr1
-      AvailabilityZone: !Select [0, !GetAZs !Ref Region1]
-      Tags:
-        - Key: Name
-          Value: !Sub "${ProjectName}-private-subnet1-r1"
-  PrivateSubnet2R1:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref VpcR1
-      CidrBlock: !Ref PrivateSubnet2Cidr1
-      AvailabilityZone: !Select [1, !GetAZs !Ref Region1]
-      Tags:
-        - Key: Name
-          Value: !Sub "${ProjectName}-private-subnet2-r1"
-
-  # Subnets Region 2
   PublicSubnet1R2:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VpcR2
       CidrBlock: !Ref PublicSubnet1Cidr2
-      AvailabilityZone: !Select [0, !GetAZs !Ref Region2]
+      AvailabilityZone: !Sub "${Region2}a" # Corrected: Direct Sub for AZ
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub "${ProjectName}-public-subnet1-r2"
+          Value: !Sub ${ProjectName}-PublicSubnet1-R2-${Region2}
+
   PublicSubnet2R2:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VpcR2
       CidrBlock: !Ref PublicSubnet2Cidr2
-      AvailabilityZone: !Select [1, !GetAZs !Ref Region2]
+      AvailabilityZone: !Sub "${Region2}b" # Corrected: Direct Sub for AZ
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub "${ProjectName}-public-subnet2-r2"
+          Value: !Sub ${ProjectName}-PublicSubnet2-R2-${Region2}
+
   PrivateSubnet1R2:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VpcR2
       CidrBlock: !Ref PrivateSubnet1Cidr2
-      AvailabilityZone: !Select [0, !GetAZs !Ref Region2]
+      AvailabilityZone: !Sub "${Region2}a" # Corrected: Direct Sub for AZ
       Tags:
         - Key: Name
-          Value: !Sub "${ProjectName}-private-subnet1-r2"
+          Value: !Sub ${ProjectName}-PrivateSubnet1-R2-${Region2}
+
   PrivateSubnet2R2:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VpcR2
       CidrBlock: !Ref PrivateSubnet2Cidr2
-      AvailabilityZone: !Select [1, !GetAZs !Ref Region2]
+      AvailabilityZone: !Sub "${Region2}b" # Corrected: Direct Sub for AZ
       Tags:
         - Key: Name
-          Value: !Sub "${ProjectName}-private-subnet2-r2"
+          Value: !Sub ${ProjectName}-PrivateSubnet2-R2-${Region2}
 
-  # IGWs
-  InternetGatewayR1:
+  IgwR2:
     Type: AWS::EC2::InternetGateway
     Properties:
       Tags:
         - Key: Name
-          Value: !Sub "${ProjectName}-igw-r1"
-  InternetGatewayR2:
-    Type: AWS::EC2::InternetGateway
-    Properties:
-      Tags:
-        - Key: Name
-          Value: !Sub "${ProjectName}-igw-r2"
+          Value: !Sub ${ProjectName}-IGW-R2-${Region2}
 
-  AttachIgwR1:
-    Type: AWS::EC2::VPCGatewayAttachment
-    Properties:
-      VpcId: !Ref VpcR1
-      InternetGatewayId: !Ref InternetGatewayR1
-  AttachIgwR2:
+  IgwAttachmentR2:
     Type: AWS::EC2::VPCGatewayAttachment
     Properties:
       VpcId: !Ref VpcR2
-      InternetGatewayId: !Ref InternetGatewayR2
+      InternetGatewayId: !Ref IgwR2
 
-  # EIPs for NAT
-  NatEIPR1:
+  NatEipR2:
     Type: AWS::EC2::EIP
     Properties:
       Domain: vpc
-  NatEIPR2:
-    Type: AWS::EC2::EIP
-    Properties:
-      Domain: vpc
+    DependsOn: IgwAttachmentR2
 
-  # NAT Gateways
-  NatGatewayR1:
+  NatGwR2:
     Type: AWS::EC2::NatGateway
     Properties:
-      AllocationId: !GetAtt NatEIPR1.AllocationId
-      SubnetId: !Ref PublicSubnet1R1
-      Tags:
-        - Key: Name
-          Value: !Sub "${ProjectName}-natgw-r1"
-  NatGatewayR2:
-    Type: AWS::EC2::NatGateway
-    Properties:
-      AllocationId: !GetAtt NatEIPR2.AllocationId
+      AllocationId: !GetAtt NatEipR2.AllocationId
       SubnetId: !Ref PublicSubnet1R2
       Tags:
         - Key: Name
-          Value: !Sub "${ProjectName}-natgw-r2"
+          Value: !Sub ${ProjectName}-NATGW-R2-${Region2}
 
-  # Route Tables and Routes Region 1
-  PublicRouteTableR1:
-    Type: AWS::EC2::RouteTable
-    Properties:
-      VpcId: !Ref VpcR1
-      Tags:
-        - Key: Name
-          Value: !Sub "${ProjectName}-public-rt-r1"
-  PrivateRouteTableR1:
-    Type: AWS::EC2::RouteTable
-    Properties:
-      VpcId: !Ref VpcR1
-      Tags:
-        - Key: Name
-          Value: !Sub "${ProjectName}-private-rt-r1"
-  PublicRouteR1:
-    Type: AWS::EC2::Route
-    Properties:
-      RouteTableId: !Ref PublicRouteTableR1
-      DestinationCidrBlock: 0.0.0.0/0
-      GatewayId: !Ref InternetGatewayR1
-  PrivateRouteR1:
-    Type: AWS::EC2::Route
-    Properties:
-      RouteTableId: !Ref PrivateRouteTableR1
-      DestinationCidrBlock: 0.0.0.0/0
-      NatGatewayId: !Ref NatGatewayR1
-
-  # Route Table Associations Region 1
-  PublicSubnet1RouteTableAssociationR1:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      SubnetId: !Ref PublicSubnet1R1
-      RouteTableId: !Ref PublicRouteTableR1
-  PublicSubnet2RouteTableAssociationR1:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      SubnetId: !Ref PublicSubnet2R1
-      RouteTableId: !Ref PublicRouteTableR1
-  PrivateSubnet1RouteTableAssociationR1:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      SubnetId: !Ref PrivateSubnet1R1
-      RouteTableId: !Ref PrivateRouteTableR1
-  PrivateSubnet2RouteTableAssociationR1:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      SubnetId: !Ref PrivateSubnet2R1
-      RouteTableId: !Ref PrivateRouteTableR1
-
-  # Route Tables and Routes Region 2
   PublicRouteTableR2:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref VpcR2
       Tags:
         - Key: Name
-          Value: !Sub "${ProjectName}-public-rt-r2"
+          Value: !Sub ${ProjectName}-PublicRouteTable-R2-${Region2}
+
   PrivateRouteTableR2:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref VpcR2
       Tags:
         - Key: Name
-          Value: !Sub "${ProjectName}-private-rt-r2"
+          Value: !Sub ${ProjectName}-PrivateRouteTable-R2-${Region2}
+
   PublicRouteR2:
     Type: AWS::EC2::Route
     Properties:
       RouteTableId: !Ref PublicRouteTableR2
       DestinationCidrBlock: 0.0.0.0/0
-      GatewayId: !Ref InternetGatewayR2
+      GatewayId: !Ref IgwR2
+
   PrivateRouteR2:
     Type: AWS::EC2::Route
     Properties:
       RouteTableId: !Ref PrivateRouteTableR2
       DestinationCidrBlock: 0.0.0.0/0
-      NatGatewayId: !Ref NatGatewayR2
+      NatGatewayId: !Ref NatGwR2
 
-  # Route Table Associations Region 2
-  PublicSubnet1RouteTableAssociationR2:
+  PublicSubnet1AssocR2:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       SubnetId: !Ref PublicSubnet1R2
       RouteTableId: !Ref PublicRouteTableR2
-  PublicSubnet2RouteTableAssociationR2:
+
+  PublicSubnet2AssocR2:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       SubnetId: !Ref PublicSubnet2R2
       RouteTableId: !Ref PublicRouteTableR2
-  PrivateSubnet1RouteTableAssociationR2:
+
+  PrivateSubnet1AssocR2:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       SubnetId: !Ref PrivateSubnet1R2
       RouteTableId: !Ref PrivateRouteTableR2
-  PrivateSubnet2RouteTableAssociationR2:
+
+  PrivateSubnet2AssocR2:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       SubnetId: !Ref PrivateSubnet2R2
       RouteTableId: !Ref PrivateRouteTableR2
 
-  # Security Groups (per region)
-  ELBSecurityGroupR1:
+  # Security Groups - Region 2
+  AlbSgR2:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: ELB Security Group R1
-      VpcId: !Ref VpcR1
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 80
-          ToPort: 80
-          CidrIp: 0.0.0.0/0
-        - IpProtocol: tcp
-          FromPort: 443
-          ToPort: 443
-          CidrIp: 0.0.0.0/0
-  AppSecurityGroupR1:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: App Security Group R1
-      VpcId: !Ref VpcR1
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 80
-          ToPort: 80
-          SourceSecurityGroupId: !Ref ELBSecurityGroupR1
-        - IpProtocol: tcp
-          FromPort: 22
-          ToPort: 22
-          CidrIp: 0.0.0.0/0
-  DBSecurityGroupR1:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: DB Security Group R1
-      VpcId: !Ref VpcR1
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 3306
-          ToPort: 3306
-          SourceSecurityGroupId: !Ref AppSecurityGroupR1
-
-  ELBSecurityGroupR2:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: ELB Security Group R2
+      GroupDescription: ALB Security Group for HTTP and HTTPS from anywhere
       VpcId: !Ref VpcR2
       SecurityGroupIngress:
         - IpProtocol: tcp
@@ -372,305 +585,174 @@ Resources:
           FromPort: 443
           ToPort: 443
           CidrIp: 0.0.0.0/0
-  AppSecurityGroupR2:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: App Security Group R2
-      VpcId: !Ref VpcR2
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 80
-          ToPort: 80
-          SourceSecurityGroupId: !Ref ELBSecurityGroupR2
-        - IpProtocol: tcp
-          FromPort: 22
-          ToPort: 22
-          CidrIp: 0.0.0.0/0
-  DBSecurityGroupR2:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: DB Security Group R2
-      VpcId: !Ref VpcR2
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 3306
-          ToPort: 3306
-          SourceSecurityGroupId: !Ref AppSecurityGroupR2
-
-  # ALB (Application Load Balancer) and Target Groups (per region)
-  ALBR1:
-    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
-    Properties:
-      Name: !Sub "${ProjectName}-alb-r1"
-      Subnets:
-        - !Ref PublicSubnet1R1
-        - !Ref PublicSubnet2R1
-      SecurityGroups:
-        - !Ref ELBSecurityGroupR1
-      Scheme: internet-facing
-      Type: application
       Tags:
         - Key: Name
-          Value: !Sub "${ProjectName}-alb-r1"
-  ALBTargetGroupR1:
-    Type: AWS::ElasticLoadBalancingV2::TargetGroup
-    Properties:
-      Name: !Sub "${ProjectName}-tg-r1"
-      Port: 80
-      Protocol: HTTP
-      VpcId: !Ref VpcR1
-      TargetType: instance
-      HealthCheckPath: /
-      Matcher:
-        HttpCode: 200
-      Targets:
-        - Id: !Ref EC2Instance1R1
-          Port: 80
-        - Id: !Ref EC2Instance2R1
-          Port: 80
-  ALBListenerR1:
-    Type: AWS::ElasticLoadBalancingV2::Listener
-    Properties:
-      LoadBalancerArn: !Ref ALBR1
-      Port: 80
-      Protocol: HTTP
-      DefaultActions:
-        - Type: forward
-          TargetGroupArn: !Ref ALBTargetGroupR1
+          Value: !Sub ${ProjectName}-ALBSG-R2-${Region2}
 
-  ALBR2:
+  AppSgR2:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: App Security Group for HTTP from ALB and SSH from specific IP
+      VpcId: !Ref VpcR2
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          SourceSecurityGroupId: !GetAtt AlbSgR2.GroupId
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-AppSG-R2-${Region2}
+
+  DbSgR2:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: DB Security Group for MySQL from Application Security Group
+      VpcId: !Ref VpcR2
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          SourceSecurityGroupId: !GetAtt AppSgR2.GroupId
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-DBSG-R2-${Region2}
+
+  # Application Load Balancer - Region 2
+  AlbR2:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
-      Name: !Sub "${ProjectName}-alb-r2"
+      Name: !Sub ${ProjectName}-ALB-R2
       Subnets:
         - !Ref PublicSubnet1R2
         - !Ref PublicSubnet2R2
       SecurityGroups:
-        - !Ref ELBSecurityGroupR2
-      Scheme: internet-facing
-      Type: application
+        - !GetAtt AlbSgR2.GroupId
       Tags:
         - Key: Name
-          Value: !Sub "${ProjectName}-alb-r2"
-  ALBTargetGroupR2:
-    Type: AWS::ElasticLoadBalancingV2::TargetGroup
-    Properties:
-      Name: !Sub "${ProjectName}-tg-r2"
-      Port: 80
-      Protocol: HTTP
-      VpcId: !Ref VpcR2
-      TargetType: instance
-      HealthCheckPath: /
-      Matcher:
-        HttpCode: 200
-      Targets:
-        - Id: !Ref EC2Instance1R2
-          Port: 80
-        - Id: !Ref EC2Instance2R2
-          Port: 80
-  ALBListenerR2:
+          Value: !Sub ${ProjectName}-ALB-R2-${Region2}
+
+  AlbListenerR2:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
-      LoadBalancerArn: !Ref ALBR2
+      LoadBalancerArn: !Ref AlbR2
       Port: 80
       Protocol: HTTP
       DefaultActions:
         - Type: forward
-          TargetGroupArn: !Ref ALBTargetGroupR2
+          TargetGroupArn: !Ref AlbTargetGroupR2
 
-  # IAM Role for EC2
-  EC2Role:
-    Type: AWS::IAM::Role
+  AlbTargetGroupR2:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      AssumeRolePolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: [ec2.amazonaws.com]
-            Action: ["sts:AssumeRole"]
-      Path: /
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
-        - arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess
+      Name: !Sub ${ProjectName}-TG-R2
+      VpcId: !Ref VpcR2
+      Port: 80
+      Protocol: HTTP
+      HealthCheckPath: /
+      HealthCheckPort: 80
+      HealthCheckProtocol: HTTP
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 2
+      Matcher:
+        HttpStatus: '200'
       Tags:
         - Key: Name
-          Value: !Sub "${ProjectName}-ec2-role"
-  EC2InstanceProfile:
-    Type: AWS::IAM::InstanceProfile
-    Properties:
-      Roles: [!Ref EC2Role]
-      Path: /
+          Value: !Sub ${ProjectName}-TG-R2-${Region2}
 
-  # EC2 Instances (2 per region, in private subnets)
-  EC2Instance1R1:
+  # EC2 Instances - Region 2
+  AppInstance1R2:
     Type: AWS::EC2::Instance
     Properties:
-      ImageId: !FindInMap [RegionMap, !Ref Region1, AMI]
-      InstanceType: !Ref InstanceType
-      SubnetId: !Ref PrivateSubnet1R1
-      SecurityGroupIds:
-        - !Ref AppSecurityGroupR1
-      IamInstanceProfile: !Ref EC2InstanceProfile
-      Tags:
-        - Key: Name
-          Value: !Sub "${ProjectName}-ec2-1-r1"
-      UserData: !Base64 |
-        #!/bin/bash
-        yum update -y
-        yum install -y httpd
-        systemctl enable httpd
-        systemctl start httpd
-        echo "Hello from Region 1, Instance 1" > /var/www/html/index.html
-  EC2Instance2R1:
-    Type: AWS::EC2::Instance
-    Properties:
-      ImageId: !FindInMap [RegionMap, !Ref Region1, AMI]
-      InstanceType: !Ref InstanceType
-      SubnetId: !Ref PrivateSubnet2R1
-      SecurityGroupIds:
-        - !Ref AppSecurityGroupR1
-      IamInstanceProfile: !Ref EC2InstanceProfile
-      Tags:
-        - Key: Name
-          Value: !Sub "${ProjectName}-ec2-2-r1"
-      UserData: !Base64 |
-        #!/bin/bash
-        yum update -y
-        yum install -y httpd
-        systemctl enable httpd
-        systemctl start httpd
-        echo "Hello from Region 1, Instance 2" > /var/www/html/index.html
-
-  EC2Instance1R2:
-    Type: AWS::EC2::Instance
-    Properties:
-      ImageId: !FindInMap [RegionMap, !Ref Region2, AMI]
+      ImageId: !FindInMap [RegionAMIMap, !Ref Region2, AMIId]
       InstanceType: !Ref InstanceType
       SubnetId: !Ref PrivateSubnet1R2
       SecurityGroupIds:
-        - !Ref AppSecurityGroupR2
-      IamInstanceProfile: !Ref EC2InstanceProfile
+        - !GetAtt AppSgR2.GroupId
+      IamInstanceProfile: !Ref Ec2InstanceProfile
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          yum update -y
+          yum install -y httpd
+          systemctl start httpd
+          echo "<h1>Hello from ${ProjectName} App Instance 1 in Region 2 (${Region2})</h1>" > /var/www/html/index.html
+          chkconfig httpd on
       Tags:
         - Key: Name
-          Value: !Sub "${ProjectName}-ec2-1-r2"
-      UserData: !Base64 |
-        #!/bin/bash
-        yum update -y
-        yum install -y httpd
-        systemctl enable httpd
-        systemctl start httpd
-        echo "Hello from Region 2, Instance 1" > /var/www/html/index.html
-  EC2Instance2R2:
+          Value: !Sub ${ProjectName}-AppInstance1-R2-${Region2}
+
+  AppInstance2R2:
     Type: AWS::EC2::Instance
     Properties:
-      ImageId: !FindInMap [RegionMap, !Ref Region2, AMI]
+      ImageId: !FindInMap [RegionAMIMap, !Ref Region2, AMIId]
       InstanceType: !Ref InstanceType
       SubnetId: !Ref PrivateSubnet2R2
       SecurityGroupIds:
-        - !Ref AppSecurityGroupR2
-      IamInstanceProfile: !Ref EC2InstanceProfile
+        - !GetAtt AppSgR2.GroupId
+      IamInstanceProfile: !Ref Ec2InstanceProfile
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          yum update -y
+          yum install -y httpd
+          systemctl start httpd
+          echo "<h1>Hello from ${ProjectName} App Instance 2 in Region 2 (${Region2})</h1>" > /var/www/html/index.html
+          chkconfig httpd on
       Tags:
         - Key: Name
-          Value: !Sub "${ProjectName}-ec2-2-r2"
-      UserData: !Base64 |
-        #!/bin/bash
-        yum update -y
-        yum install -y httpd
-        systemctl enable httpd
-        systemctl start httpd
-        echo "Hello from Region 2, Instance 2" > /var/www/html/index.html
+          Value: !Sub ${ProjectName}-AppInstance2-R2-${Region2}
 
-  # Register EC2s with ALB Target Groups
-  ALBTargetAttachment1R1:
+  # Register EC2 Instances with ALB Target Group - Region 2
+  AlbTargetGroupAttachment1R2:
     Type: AWS::ElasticLoadBalancingV2::TargetGroupAttachment
     Properties:
-      TargetGroupArn: !Ref ALBTargetGroupR1
-      TargetId: !Ref EC2Instance1R1
-      Port: 80
-  ALBTargetAttachment2R1:
-    Type: AWS::ElasticLoadBalancingV2::TargetGroupAttachment
-    Properties:
-      TargetGroupArn: !Ref ALBTargetGroupR1
-      TargetId: !Ref EC2Instance2R1
-      Port: 80
-  ALBTargetAttachment1R2:
-    Type: AWS::ElasticLoadBalancingV2::TargetGroupAttachment
-    Properties:
-      TargetGroupArn: !Ref ALBTargetGroupR2
-      TargetId: !Ref EC2Instance1R2
-      Port: 80
-  ALBTargetAttachment2R2:
-    Type: AWS::ElasticLoadBalancingV2::TargetGroupAttachment
-    Properties:
-      TargetGroupArn: !Ref ALBTargetGroupR2
-      TargetId: !Ref EC2Instance2R2
+      TargetGroupArn: !Ref AlbTargetGroupR2
+      TargetId: !Ref AppInstance1R2
       Port: 80
 
-  # RDS Subnet Groups
-  DBSubnetGroupR1:
+  AlbTargetGroupAttachment2R2:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroupAttachment
+    Properties:
+      TargetGroupArn: !Ref AlbTargetGroupR2
+      TargetId: !Ref AppInstance2R2
+      Port: 80
+
+  # RDS Database - Region 2
+  DbSubnetGroupR2:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
-      DBSubnetGroupDescription: Subnet group for RDS in Region 1
-      SubnetIds:
-        - !Ref PrivateSubnet1R1
-        - !Ref PrivateSubnet2R1
-      Tags:
-        - Key: Name
-          Value: !Sub "${ProjectName}-dbsubnetgroup-r1"
-  DBSubnetGroupR2:
-    Type: AWS::RDS::DBSubnetGroup
-    Properties:
-      DBSubnetGroupDescription: Subnet group for RDS in Region 2
+      DBSubnetGroupDescription: DB Subnet Group for RDS in Region 2
       SubnetIds:
         - !Ref PrivateSubnet1R2
         - !Ref PrivateSubnet2R2
       Tags:
         - Key: Name
-          Value: !Sub "${ProjectName}-dbsubnetgroup-r2"
+          Value: !Sub ${ProjectName}-DBSG-R2-${Region2}
 
-  # RDS Instances (Multi-AZ)
-  RDSInstanceR1:
+  RdsInstanceR2:
     Type: AWS::RDS::DBInstance
     Properties:
-      DBInstanceIdentifier: !Sub "${ProjectName}-db-r1"
-      AllocatedStorage: !Ref DBAllocatedStorage
       DBInstanceClass: !Ref DBInstanceType
       Engine: mysql
-      MasterUsername: '{{resolve:secretsmanager:mydbsecret:SecretString:username}}'
-      MasterUserPassword: '{{resolve:secretsmanager:mydbsecret:SecretString:password}}'
-      VPCSecurityGroups:
-        - !Ref DBSecurityGroupR1
-      DBSubnetGroupName: !Ref DBSubnetGroupR1
-      MultiAZ: true
-      PubliclyAccessible: false
-      StorageType: gp2
-  RDSInstanceR2:
-    Type: AWS::RDS::DBInstance
-    Properties:
-      DBInstanceIdentifier: !Sub "${ProjectName}-db-r2"
+      MasterUsername: !Ref DBUsername
+      MasterUserPassword: !Ref DBPassword
       AllocatedStorage: !Ref DBAllocatedStorage
-      DBInstanceClass: !Ref DBInstanceType
-      Engine: mysql
-      MasterUsername: '{{resolve:secretsmanager:mydbsecret:SecretString:username}}'
-      MasterUserPassword: '{{resolve:secretsmanager:mydbsecret:SecretString:password}}'
-      VPCSecurityGroups:
-        - !Ref DBSecurityGroupR2
-      DBSubnetGroupName: !Ref DBSubnetGroupR2
       MultiAZ: true
-      PubliclyAccessible: false
-      StorageType: gp2
+      VPCSecurityGroups:
+        - !GetAtt DbSgR2.GroupId
+      DBSubnetGroupName: !Ref DbSubnetGroupR2
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-RDS-R2-${Region2}
 
 Outputs:
-  VpcIdR1:
-    Description: VPC ID for Region 1
-    Value: !Ref VpcR1
-  VpcIdR2:
-    Description: VPC ID for Region 2
-    Value: !Ref VpcR2
-  ALBDNSR1:
-    Description: DNS name of the Application Load Balancer in Region 1
-    Value: !GetAtt ALBR1.DNSName
-  ALBDNSR2:
-    Description: DNS name of the Application Load Balancer in Region 2
-    Value: !GetAtt ALBR2.DNSName
+  AlbDnsNameR1:
+    Description: The DNS name of the ALB in Region 1
+    Value: !GetAtt AlbR1.DNSName
+  AlbDnsNameR2:
+    Description: The DNS name of the ALB in Region 2
+    Value: !GetAtt AlbR2.DNSName
