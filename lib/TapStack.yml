@@ -44,9 +44,6 @@ Parameters:
   InstanceType:
     Type: String
     Default: t3.micro
-  AMI:
-    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
-    Description: SSM parameter for latest Amazon Linux 2 AMI
   DBInstanceType:
     Type: String
     Default: db.t3.micro
@@ -94,7 +91,7 @@ Resources:
     Properties:
       VpcId: !Ref VpcR1
       CidrBlock: !Ref PublicSubnet1Cidr1
-      AvailabilityZone: !Select [0, !GetAZs Region1]
+      AvailabilityZone: !Select [0, !GetAZs !Ref Region1]
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -104,7 +101,7 @@ Resources:
     Properties:
       VpcId: !Ref VpcR1
       CidrBlock: !Ref PublicSubnet2Cidr1
-      AvailabilityZone: !Select [1, !GetAZs Region1]
+      AvailabilityZone: !Select [1, !GetAZs !Ref Region1]
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -114,7 +111,7 @@ Resources:
     Properties:
       VpcId: !Ref VpcR1
       CidrBlock: !Ref PrivateSubnet1Cidr1
-      AvailabilityZone: !Select [0, !GetAZs Region1]
+      AvailabilityZone: !Select [0, !GetAZs !Ref Region1]
       Tags:
         - Key: Name
           Value: !Sub "${ProjectName}-private-subnet1-r1"
@@ -123,7 +120,7 @@ Resources:
     Properties:
       VpcId: !Ref VpcR1
       CidrBlock: !Ref PrivateSubnet2Cidr1
-      AvailabilityZone: !Select [1, !GetAZs Region1]
+      AvailabilityZone: !Select [1, !GetAZs !Ref Region1]
       Tags:
         - Key: Name
           Value: !Sub "${ProjectName}-private-subnet2-r1"
@@ -134,7 +131,7 @@ Resources:
     Properties:
       VpcId: !Ref VpcR2
       CidrBlock: !Ref PublicSubnet1Cidr2
-      AvailabilityZone: !Select [0, !GetAZs Region2]
+      AvailabilityZone: !Select [0, !GetAZs !Ref Region2]
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -144,7 +141,7 @@ Resources:
     Properties:
       VpcId: !Ref VpcR2
       CidrBlock: !Ref PublicSubnet2Cidr2
-      AvailabilityZone: !Select [1, !GetAZs Region2]
+      AvailabilityZone: !Select [1, !GetAZs !Ref Region2]
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -154,7 +151,7 @@ Resources:
     Properties:
       VpcId: !Ref VpcR2
       CidrBlock: !Ref PrivateSubnet1Cidr2
-      AvailabilityZone: !Select [0, !GetAZs Region2]
+      AvailabilityZone: !Select [0, !GetAZs !Ref Region2]
       Tags:
         - Key: Name
           Value: !Sub "${ProjectName}-private-subnet1-r2"
@@ -163,7 +160,7 @@ Resources:
     Properties:
       VpcId: !Ref VpcR2
       CidrBlock: !Ref PrivateSubnet2Cidr2
-      AvailabilityZone: !Select [1, !GetAZs Region2]
+      AvailabilityZone: !Select [1, !GetAZs !Ref Region2]
       Tags:
         - Key: Name
           Value: !Sub "${ProjectName}-private-subnet2-r2"
@@ -426,6 +423,11 @@ Resources:
       HealthCheckPath: /
       Matcher:
         HttpCode: 200
+      Targets:
+        - Id: !Ref EC2Instance1R1
+          Port: 80
+        - Id: !Ref EC2Instance2R1
+          Port: 80
   ALBListenerR1:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
@@ -461,6 +463,11 @@ Resources:
       HealthCheckPath: /
       Matcher:
         HttpCode: 200
+      Targets:
+        - Id: !Ref EC2Instance1R2
+          Port: 80
+        - Id: !Ref EC2Instance2R2
+          Port: 80
   ALBListenerR2:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
@@ -499,7 +506,7 @@ Resources:
   EC2Instance1R1:
     Type: AWS::EC2::Instance
     Properties:
-      ImageId: !Ref AMI
+      ImageId: !FindInMap [RegionMap, !Ref Region1, AMI]
       InstanceType: !Ref InstanceType
       SubnetId: !Ref PrivateSubnet1R1
       SecurityGroupIds:
@@ -518,7 +525,7 @@ Resources:
   EC2Instance2R1:
     Type: AWS::EC2::Instance
     Properties:
-      ImageId: !Ref AMI
+      ImageId: !FindInMap [RegionMap, !Ref Region1, AMI]
       InstanceType: !Ref InstanceType
       SubnetId: !Ref PrivateSubnet2R1
       SecurityGroupIds:
@@ -538,7 +545,7 @@ Resources:
   EC2Instance1R2:
     Type: AWS::EC2::Instance
     Properties:
-      ImageId: !Ref AMI
+      ImageId: !FindInMap [RegionMap, !Ref Region2, AMI]
       InstanceType: !Ref InstanceType
       SubnetId: !Ref PrivateSubnet1R2
       SecurityGroupIds:
@@ -557,7 +564,7 @@ Resources:
   EC2Instance2R2:
     Type: AWS::EC2::Instance
     Properties:
-      ImageId: !Ref AMI
+      ImageId: !FindInMap [RegionMap, !Ref Region2, AMI]
       InstanceType: !Ref InstanceType
       SubnetId: !Ref PrivateSubnet2R2
       SecurityGroupIds:
@@ -630,8 +637,8 @@ Resources:
       AllocatedStorage: !Ref DBAllocatedStorage
       DBInstanceClass: !Ref DBInstanceType
       Engine: mysql
-      MasterUsername: !Ref DBUsername
-      MasterUserPassword: !Ref DBPassword
+      MasterUsername: '{{resolve:secretsmanager:mydbsecret:SecretString:username}}'
+      MasterUserPassword: '{{resolve:secretsmanager:mydbsecret:SecretString:password}}'
       VPCSecurityGroups:
         - !Ref DBSecurityGroupR1
       DBSubnetGroupName: !Ref DBSubnetGroupR1
@@ -645,8 +652,8 @@ Resources:
       AllocatedStorage: !Ref DBAllocatedStorage
       DBInstanceClass: !Ref DBInstanceType
       Engine: mysql
-      MasterUsername: !Ref DBUsername
-      MasterUserPassword: !Ref DBPassword
+      MasterUsername: '{{resolve:secretsmanager:mydbsecret:SecretString:username}}'
+      MasterUserPassword: '{{resolve:secretsmanager:mydbsecret:SecretString:password}}'
       VPCSecurityGroups:
         - !Ref DBSecurityGroupR2
       DBSubnetGroupName: !Ref DBSubnetGroupR2
