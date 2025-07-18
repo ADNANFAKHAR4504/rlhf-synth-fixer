@@ -1,5 +1,9 @@
 name: CI/CD Pipeline
 
+# Special keyword [skip-jobs] can be added to commit messages to skip most jobs
+# The upload-task-to-s3 job will still run when a PR is merged, regardless of this tag
+# The cleanup-pr job will still run when a PR is closed, regardless of this tag
+
 on:
   push:
     branches: [main]
@@ -21,7 +25,7 @@ jobs:
   detect-metadata:
     name: Detect Project Metadata
     runs-on: ubuntu-latest
-    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' }}
+    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
     outputs:
       platform: ${{ steps.metadata.outputs.platform }}
       language: ${{ steps.metadata.outputs.language }}
@@ -59,7 +63,7 @@ jobs:
     name: Check Runtime Versions
     runs-on: ubuntu-latest
     needs: detect-metadata
-    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' }}
+    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
 
     steps:
       - name: Checkout code
@@ -116,7 +120,7 @@ jobs:
     name: Build
     runs-on: ubuntu-latest
     needs: version-check
-    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' }}
+    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
     environment: dev
 
     steps:
@@ -163,7 +167,7 @@ jobs:
     name: Synth
     runs-on: ubuntu-latest
     needs: [detect-metadata, build]
-    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' }}
+    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
     environment: dev
     permissions:
       contents: read
@@ -216,7 +220,7 @@ jobs:
     name: Deploy
     runs-on: ubuntu-latest
     needs: synth
-    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' }}
+    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
     environment: dev
 
     steps:
@@ -357,7 +361,7 @@ jobs:
     name: Lint
     runs-on: ubuntu-latest
     needs: [detect-metadata, build]
-    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' }}
+    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
     environment: qa
     outputs:
       platform: ${{ needs.detect-metadata.outputs.platform }}
@@ -404,7 +408,7 @@ jobs:
     name: Unit Testing
     runs-on: ubuntu-latest
     needs: lint
-    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' }}
+    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
     environment: qa
 
     steps:
@@ -461,7 +465,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [unit-tests, deploy]
     environment: qa
-    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' }}
+    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
 
     steps:
       - name: Checkout code
@@ -496,7 +500,7 @@ jobs:
     name: Cleanup (Destroy Resources)
     runs-on: ubuntu-latest
     needs: [detect-metadata, integration-tests-live]
-    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' }}
+    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
     environment: stage
 
     steps:
@@ -540,7 +544,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [detect-metadata, cleanup]
     environment: release
-    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' }}
+    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
     permissions:
       contents: write
 
@@ -629,7 +633,7 @@ jobs:
             echo "No changes to commit - no folders found to archive"
           else
             git add -A
-            git commit -m "Archive build artifacts for PR ${{ github.event.number }} [skip ci]"
+            git commit -m "Archive build artifacts for PR ${{ github.event.number }} [skip-jobs]"
             git push origin HEAD
             echo "Archive committed to current branch"
           fi
@@ -724,6 +728,7 @@ jobs:
   cleanup-pr:
     name: Cleanup (PR Closed)
     runs-on: ubuntu-latest
+    # This job should run regardless of the [skip-jobs] tag since it's for cleanup
     if: github.event_name == 'pull_request' && github.event.action == 'closed'
     environment: qa
 
