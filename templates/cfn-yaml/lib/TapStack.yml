@@ -18,7 +18,8 @@ Resources:
       VpcId: !Ref MyVPC
       CidrBlock: 10.0.1.0/24
       MapPublicIpOnLaunch: true
-      AvailabilityZone: us-east-1a
+      AvailabilityZone: !Select [ 0, !GetAZs '' ]
+
       Tags:
         - Key: Environment
           Value: Production

@@ -1,1 +1,1 @@
-Insert here the model's failures
+W3010 Avoid hardcoding availability zones 'us-east-1a' lib/TapStack.yml:21:7
