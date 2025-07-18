@@ -4,7 +4,8 @@
     "Parameters": {
         "ProjectName": {
             "Type": "String",
-            "Description": "A unique name for the project, used as a prefix for resources."
+            "Description": "A unique name for the project, used as a prefix for resources.",
+            "Default": "TapStack"
         },
         "Region1": {
             "Type": "String",
@@ -89,26 +90,14 @@
         "DBUsername": {
             "Type": "String",
             "NoEcho": true,
-            "Description": "Master username for the RDS database."
+            "Description": "Master username for the RDS database.",
+            "Default": "dummyUsername"
         },
         "DBPassword": {
             "Type": "String",
             "NoEcho": true,
-            "Description": "Master password for the RDS database."
-        }
-    },
-    "Mappings": {
-        "RegionAMIMap": {
-            "us-east-1": {
-                "AMIId": {
-                    "Ref": "AMI"
-                }
-            },
-            "us-west-2": {
-                "AMIId": {
-                    "Ref": "AMI"
-                }
-            }
+            "Description": "Master password for the RDS database.",
+            "Default": "dummyPassword"
         }
     },
     "Resources": {
@@ -621,13 +610,7 @@
             "Type": "AWS::EC2::Instance",
             "Properties": {
                 "ImageId": {
-                    "Fn::FindInMap": [
-                        "RegionAMIMap",
-                        {
-                            "Ref": "AWS::Region"
-                        },
-                        "AMIId"
-                    ]
+                    "Ref": "AMI"
                 },
                 "InstanceType": {
                     "Ref": "InstanceType"
@@ -665,13 +648,7 @@
             "Type": "AWS::EC2::Instance",
             "Properties": {
                 "ImageId": {
-                    "Fn::FindInMap": [
-                        "RegionAMIMap",
-                        {
-                            "Ref": "AWS::Region"
-                        },
-                        "AMIId"
-                    ]
+                    "Ref": "AMI"
                 },
                 "InstanceType": {
                     "Ref": "InstanceType"
@@ -1206,13 +1183,7 @@
             "Type": "AWS::EC2::Instance",
             "Properties": {
                 "ImageId": {
-                    "Fn::FindInMap": [
-                        "RegionAMIMap",
-                        {
-                            "Ref": "Region2"
-                        },
-                        "AMIId"
-                    ]
+                    "Ref": "AMI"
                 },
                 "InstanceType": {
                     "Ref": "InstanceType"
@@ -1250,13 +1221,7 @@
             "Type": "AWS::EC2::Instance",
             "Properties": {
                 "ImageId": {
-                    "Fn::FindInMap": [
-                        "RegionAMIMap",
-                        {
-                            "Ref": "Region2"
-                        },
-                        "AMIId"
-                    ]
+                    "Ref": "AMI"
                 },
                 "InstanceType": {
                     "Ref": "InstanceType"
