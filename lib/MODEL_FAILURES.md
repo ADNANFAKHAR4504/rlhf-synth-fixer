@@ -6,6 +6,7 @@
 - `AMI` parameter is present in MODEL_RESPONSE.md but not in IDEAL_RESPONSE.md (and is not used in resources).
 - `MODEL_RESPONSE.md` is missing the `Region` tag in VPC resources.
 
+
 ## Resource Coverage
 - Many resources are omitted in MODEL_RESPONSE.md (marked as "omitted for brevity"), including:
   - Subnets
