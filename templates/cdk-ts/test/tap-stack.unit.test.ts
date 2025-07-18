@@ -22,10 +22,9 @@ describe('TapStack', () => {
     template = Template.fromStack(stack);
   });
 
-  describe('Stack Creation', () => {
-    test('should create a TapStack instance', () => {
-      expect(stack).toBeInstanceOf(TapStack);
-      expect(stack).toBeInstanceOf(cdk.Stack);
+  describe('Write Integration TESTS', () => {
+    test('Dont forget!', async () => {
+      expect(false).toBe(true);
     });
   });
 });
