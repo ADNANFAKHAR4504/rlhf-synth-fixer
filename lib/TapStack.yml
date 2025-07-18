@@ -4,6 +4,14 @@ Description: |
   Includes Networking, IAM, Storage, Security, Serverless, DNS, CDN, Messaging,
   and Monitoring components, all compliant with financial-grade security standards.
 
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: 'Environment Configuration'
+        Parameters:
+          - EnvironmentSuffix
+
 Parameters:
   Environment:
     Description: The deployment environment (e.g., dev, staging, prod).
