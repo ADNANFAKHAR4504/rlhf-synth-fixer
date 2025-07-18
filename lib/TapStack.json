@@ -1670,15 +1670,15 @@
                     ]
                 },
                 "PublicAccessBlockConfiguration": {
-                    "BlockPublicAcls": true,
+                    "BlockPublicAcls": false,
                     "BlockPublicPolicy": true,
-                    "IgnorePublicAcls": true,
+                    "IgnorePublicAcls": false,
                     "RestrictPublicBuckets": true
                 },
                 "OwnershipControls": {
                     "Rules": [
                         {
-                            "ObjectOwnership": "BucketOwnerEnforced"
+                            "ObjectOwnership": "ObjectWriter"
                         }
                     ]
                 },

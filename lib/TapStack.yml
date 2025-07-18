@@ -828,13 +828,13 @@ Resources:
           - ServerSideEncryptionByDefault:
               SSEAlgorithm: AES256
       PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
+        BlockPublicAcls: false
         BlockPublicPolicy: true
-        IgnorePublicAcls: true
+        IgnorePublicAcls: false
         RestrictPublicBuckets: true
       OwnershipControls:
         Rules:
-          - ObjectOwnership: BucketOwnerEnforced
+          - ObjectOwnership: ObjectWriter
       Tags:
         - Key: Environment
           Value: !Ref EnvironmentSuffix
