@@ -615,7 +615,8 @@ jobs:
             "bin" 
             "test"
             "cdk.json"
-            "metadata.json"
+            "metadata.json",
+            "app.py"
             )
 
             # Move paths to archive

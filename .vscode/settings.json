@@ -26,11 +26,14 @@
     "editor.defaultFormatter": "esbenp.prettier-vscode",
     "editor.tabSize": 2
   },
+  "pylint.args": ["--indent-string='  '"],
+  "autopep8.args": ["--indent-size=2"],
   "[python]": {
-    "editor.defaultFormatter": "ms-python.black-formatter",
+    "editor.defaultFormatter": "ms-python.autopep8",
     "editor.insertSpaces": true,
     "editor.rulers": [120],
     "editor.tabSize": 2,
+    "editor.formatOnSave": true,
     "editor.codeActionsOnSave": {
       "source.organizeImports": "explicit",
       "source.fixAll.pylance": "explicit"
@@ -81,5 +84,11 @@
     "covered": "rgba(9, 156, 65, 0.4)",
     "uncovered": "rgba(121, 31, 10, 0.4)",
     "partially-covered": "rgba(235, 198, 52, 0.4)"
-  }
+  },
+
+  // Python testing settings
+  "python.testing.pytestEnabled": true,
+  "python.testing.pytestArgs": ["-s", "--no-cov", "--testdox"],
+  "python.testing.unittestEnabled": false,
+  "python.testing.autoTestDiscoverOnSaveEnabled": true
 }

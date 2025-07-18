@@ -53,3 +53,10 @@ coverage/
 # Temporary folders
 tmp/
 temp/
+
+# Python specific
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
