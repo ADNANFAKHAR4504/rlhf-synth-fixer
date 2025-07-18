@@ -7,7 +7,7 @@ import {
 import fs from 'fs';
 import path from 'path';
 
-const REGION = 'us-east-1'; // Adjust if needed
+const REGION = 'us-east-2';
 const client = new EC2Client({ region: REGION });
 
 describe('CloudFormation Stack Integration Tests', () => {
