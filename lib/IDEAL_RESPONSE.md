@@ -1,32 +1,32 @@
-# This CloudFormation template defines the core infrastructure for a financial services application.
-# It adheres to financial-grade security, internal compliance rules, and AWS best practices.
-# This template is designed for deployment in a testing AWS account.
-
 AWSTemplateFormatVersion: '2010-09-09'
-Description: |
-  CloudFormation template for secure financial services application infrastructure.
-  Includes Networking, IAM, Storage, Security, Serverless, DNS, CDN, Messaging,
-  and Monitoring components, all compliant with financial-grade security standards.
+Description: TAP Stack - Task Assignment Platform CloudFormation Template
 
-# --------------------------------------------------------------------------------------------------
-# Parameters Section
-# Defines configurable parameters for the stack, promoting reusability and flexibility.
-# --------------------------------------------------------------------------------------------------
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: "Environment Configuration"
+        Parameters:
+          - EnvironmentSuffix
+    ParameterLabels:
+      EnvironmentSuffix:
+        default: "Environment Suffix"
+
 Parameters:
-  Environment:
-    Description: The deployment environment (e.g., dev, staging, prod).
+  EnvironmentSuffix:
     Type: String
-    AllowedValues:
-      - dev
-      - staging
-      - prod
+    Description: Environment suffix for resource naming (e.g., dev, staging, prod)
     Default: dev
+    AllowedPattern: '^[a-zA-Z0-9]+$'
+    ConstraintDescription: Must contain only alphanumeric characters
   Project:
     Description: The name of the project this infrastructure belongs to.
     Type: String
+    Default: financial-app
   Owner:
     Description: The owner or team responsible for this infrastructure.
     Type: String
+    Default: DevOps
   VPCCIDR:
     Description: CIDR block for the VPC.
     Type: String
@@ -66,7 +66,7 @@ Parameters:
   S3BucketName:
     Description: Name for the secure S3 bucket for static content.
     Type: String
-    Default: financial-app-static-content-${AWS::AccountId}
+    Default: financial-app-static-content
   CloudFrontPriceClass:
     Description: The price class for the CloudFront distribution.
     Type: String
@@ -88,16 +88,7 @@ Parameters:
     Type: String
     Default: alias/rds-financial-app-key
 
-# --------------------------------------------------------------------------------------------------
-# Resources Section
-# Defines all AWS resources to be provisioned.
-# --------------------------------------------------------------------------------------------------
 Resources:
-
-  # ----------------------------------------------------------------------------------------------
-  # 1. Networking (VPC & Subnets)
-  # Sets up a secure VPC with public and private subnets, NAT Gateways, and Flow Logs.
-  # ----------------------------------------------------------------------------------------------
   VPC:
     Type: AWS::EC2::VPC
     Properties:
@@ -106,9 +97,9 @@ Resources:
       EnableDnsHostnames: true
       Tags:
         - Key: Name
-          Value: !Sub ${Environment}-${Project}-VPC
+          Value: !Sub ${EnvironmentSuffix}-${Project}-VPC
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
@@ -119,9 +110,9 @@ Resources:
     Properties:
       Tags:
         - Key: Name
-          Value: !Sub ${Environment}-${Project}-InternetGateway
+          Value: !Sub ${EnvironmentSuffix}-${Project}-InternetGateway
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
@@ -138,13 +129,13 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       CidrBlock: !Ref PublicSubnet1CIDR
-      AvailabilityZone: !Select [0, !GetAZs ''] # Automatically selects the first AZ
-      MapPublicIpOnLaunch: true # Required for public subnets to assign public IPs
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub ${Environment}-${Project}-PublicSubnet1
+          Value: !Sub ${EnvironmentSuffix}-${Project}-PublicSubnet1
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
@@ -155,13 +146,13 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       CidrBlock: !Ref PublicSubnet2CIDR
-      AvailabilityZone: !Select [1, !GetAZs ''] # Automatically selects the second AZ
+      AvailabilityZone: !Select [1, !GetAZs '']
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub ${Environment}-${Project}-PublicSubnet2
+          Value: !Sub ${EnvironmentSuffix}-${Project}-PublicSubnet2
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
@@ -175,9 +166,9 @@ Resources:
       AvailabilityZone: !Select [0, !GetAZs '']
       Tags:
         - Key: Name
-          Value: !Sub ${Environment}-${Project}-PrivateSubnet1
+          Value: !Sub ${EnvironmentSuffix}-${Project}-PrivateSubnet1
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
@@ -191,9 +182,9 @@ Resources:
       AvailabilityZone: !Select [1, !GetAZs '']
       Tags:
         - Key: Name
-          Value: !Sub ${Environment}-${Project}-PrivateSubnet2
+          Value: !Sub ${EnvironmentSuffix}-${Project}-PrivateSubnet2
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
@@ -205,9 +196,9 @@ Resources:
       Domain: vpc
       Tags:
         - Key: Name
-          Value: !Sub ${Environment}-${Project}-EIP1
+          Value: !Sub ${EnvironmentSuffix}-${Project}-EIP1
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
@@ -219,9 +210,9 @@ Resources:
       Domain: vpc
       Tags:
         - Key: Name
-          Value: !Sub ${Environment}-${Project}-EIP2
+          Value: !Sub ${EnvironmentSuffix}-${Project}-EIP2
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
@@ -234,9 +225,9 @@ Resources:
       SubnetId: !Ref PublicSubnet1
       Tags:
         - Key: Name
-          Value: !Sub ${Environment}-${Project}-NATGateway1
+          Value: !Sub ${EnvironmentSuffix}-${Project}-NATGateway1
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
@@ -249,9 +240,9 @@ Resources:
       SubnetId: !Ref PublicSubnet2
       Tags:
         - Key: Name
-          Value: !Sub ${Environment}-${Project}-NATGateway2
+          Value: !Sub ${EnvironmentSuffix}-${Project}-NATGateway2
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
@@ -263,9 +254,9 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub ${Environment}-${Project}-PublicRouteTable
+          Value: !Sub ${EnvironmentSuffix}-${Project}-PublicRouteTable
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
@@ -273,7 +264,7 @@ Resources:
 
   PublicRoute:
     Type: AWS::EC2::Route
-    DependsOn: AttachGateway # Ensure IGW is attached before creating route
+    DependsOn: AttachGateway
     Properties:
       RouteTableId: !Ref PublicRouteTable
       DestinationCidrBlock: 0.0.0.0/0
@@ -297,9 +288,9 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub ${Environment}-${Project}-PrivateRouteTable1
+          Value: !Sub ${EnvironmentSuffix}-${Project}-PrivateRouteTable1
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
@@ -307,7 +298,6 @@ Resources:
 
   PrivateRoute1:
     Type: AWS::EC2::Route
-    DependsOn: NATGateway1 # Ensure NAT Gateway is ready
     Properties:
       RouteTableId: !Ref PrivateRouteTable1
       DestinationCidrBlock: 0.0.0.0/0
@@ -325,9 +315,9 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub ${Environment}-${Project}-PrivateRouteTable2
+          Value: !Sub ${EnvironmentSuffix}-${Project}-PrivateRouteTable2
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
@@ -335,7 +325,6 @@ Resources:
 
   PrivateRoute2:
     Type: AWS::EC2::Route
-    DependsOn: NATGateway2 # Ensure NAT Gateway is ready
     Properties:
       RouteTableId: !Ref PrivateRouteTable2
       DestinationCidrBlock: 0.0.0.0/0
@@ -373,7 +362,7 @@ Resources:
                 Resource: !GetAtt VPCFlowLogsLogGroup.Arn
       Tags:
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
@@ -382,11 +371,11 @@ Resources:
   VPCFlowLogsLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub /aws/vpc/flowlogs/${Environment}-${Project}-VPCFlowLogs
-      RetentionInDays: 90 # Retain logs for 90 days for compliance
+      LogGroupName: !Sub /aws/vpc/flowlogs/${EnvironmentSuffix}-${Project}-VPCFlowLogs
+      RetentionInDays: 90
       Tags:
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
@@ -399,19 +388,14 @@ Resources:
       LogGroupName: !Ref VPCFlowLogsLogGroup
       ResourceId: !Ref VPC
       ResourceType: VPC
-      TrafficType: ALL # Log all traffic for comprehensive monitoring
+      TrafficType: ALL
       Tags:
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
           Value: !Ref Owner
-
-  # ----------------------------------------------------------------------------------------------
-  # 2. IAM & Access Control
-  # Defines IAM roles and policies with least privilege, using Secrets Manager for sensitive data.
-  # ----------------------------------------------------------------------------------------------
 
   LambdaExecutionRole:
     Type: AWS::IAM::Role
@@ -424,7 +408,7 @@ Resources:
               Service: lambda.amazonaws.com
             Action: sts:AssumeRole
       ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole # Basic Lambda execution logs
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
       Policies:
         - PolicyName: LambdaSecretsManagerAccess
           PolicyDocument:
@@ -433,7 +417,7 @@ Resources:
               - Effect: Allow
                 Action:
                   - secretsmanager:GetSecretValue
-                Resource: !GetAtt RDSSecret.Arn # Allow access only to the specific RDS secret
+                Resource: !Sub arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:${EnvironmentSuffix}/${Project}/RDSSecret*
         - PolicyName: LambdaDynamoDBAccess
           PolicyDocument:
             Version: '2012-10-17'
@@ -448,12 +432,11 @@ Resources:
                   - dynamodb:BatchWriteItem
                   - dynamodb:Query
                   - dynamodb:Scan
-                Resource: !GetAtt DynamoDBTable.Arn # Allow access only to the specific DynamoDB table
-                # Potentially add more granular conditions based on item attributes if needed
+                Resource: !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DynamoDBTableName}
               - Effect: Allow
                 Action:
                   - dynamodb:DescribeTable
-                Resource: !GetAtt DynamoDBTable.Arn
+                Resource: !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DynamoDBTableName}
         - PolicyName: LambdaVPCAccess
           PolicyDocument:
             Version: '2012-10-17'
@@ -463,10 +446,10 @@ Resources:
                   - ec2:CreateNetworkInterface
                   - ec2:DescribeNetworkInterfaces
                   - ec2:DeleteNetworkInterface
-                Resource: "*" # Necessary for Lambda to operate within a VPC
+                Resource: "*"
       Tags:
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
@@ -475,22 +458,21 @@ Resources:
   RDSSecret:
     Type: AWS::SecretsManager::Secret
     Properties:
-      Name: !Sub ${Environment}/${Project}/RDSSecret
+      Name: !Sub ${EnvironmentSuffix}/${Project}/RDSSecret
       Description: Stores the master password for the RDS PostgreSQL database.
       GenerateSecretString:
         SecretStringTemplate: !Sub '{"username": "${RDSDatabaseUser}"}'
         PasswordLength: 32
-        ExcludeCharacters: '"@/\' # Exclude problematic characters
+        ExcludeCharacters: '"@/\'
         GenerateStringKey: password
       Tags:
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
           Value: !Ref Owner
 
-  # KMS Key for general application encryption (S3, EBS)
   ApplicationKMSKey:
     Type: AWS::KMS::Key
     Properties:
@@ -508,9 +490,7 @@ Resources:
           - Sid: Allow use of the key by authorized services
             Effect: Allow
             Principal:
-              AWS:
-                - !GetAtt LambdaExecutionRole.Arn
-                - !Sub arn:aws:iam::${AWS::AccountId}:root # For console access
+              AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
             Action:
               - kms:Encrypt
               - kms:Decrypt
@@ -518,21 +498,11 @@ Resources:
               - kms:GenerateDataKey*
               - kms:DescribeKey
             Resource: '*'
-          - Sid: Allow S3 to use the key for encryption
-            Effect: Allow
-            Principal:
-              Service: s3.amazonaws.com
-            Action:
-              - kms:Decrypt
-              - kms:Encrypt
-              - kms:ReEncrypt*
-              - kms:GenerateDataKey*
-            Resource: '*'
       Enabled: true
-      EnableKeyRotation: true # Enable automatic key rotation for enhanced security
+      EnableKeyRotation: true
       Tags:
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
@@ -543,15 +513,7 @@ Resources:
     Properties:
       AliasName: !Ref KMSKeyAlias
       TargetKeyId: !Ref ApplicationKMSKey
-      Tags:
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Project
-          Value: !Ref Project
-        - Key: Owner
-          Value: !Ref Owner
 
-  # KMS Key specifically for RDS encryption
   RDSKMSKey:
     Type: AWS::KMS::Key
     Properties:
@@ -569,7 +531,6 @@ Resources:
           - Sid: Allow RDS to use the key for encryption
             Effect: Allow
             Principal:
-              AWS: !Sub arn:aws:iam::${AWS::AccountId}:root # Needed for RDS to encrypt using this key
               Service: rds.amazonaws.com
             Action:
               - kms:Encrypt
@@ -582,50 +543,39 @@ Resources:
       EnableKeyRotation: true
       Tags:
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
           Value: !Ref Owner
 
-  RDSKMSKeyAlias:
+  RDSKMSKeyAliasResource:
     Type: AWS::KMS::Alias
     Properties:
       AliasName: !Ref RDSKMSKeyAlias
       TargetKeyId: !Ref RDSKMSKey
-      Tags:
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Project
-          Value: !Ref Project
-        - Key: Owner
-          Value: !Ref Owner
-
-  # ----------------------------------------------------------------------------------------------
-  # 3. Storage (S3, RDS, DynamoDB, EBS)
-  # Configures secure storage services with encryption and access controls.
-  # ----------------------------------------------------------------------------------------------
 
   SecureS3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Ref S3BucketName
+      BucketName: !Sub ${S3BucketName}-${AWS::AccountId}
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
-              SSEAlgorithm: AES256 # Default encryption using SSE-S3
-            # You can also use SSE-KMS with CustomerMasterKeyID: !Ref ApplicationKMSKey
+              SSEAlgorithm: AES256
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
         IgnorePublicAcls: true
-        RestrictPublicBuckets: true # Block all public access
+        RestrictPublicBuckets: true
       VersioningConfiguration:
-        Status: Enabled # Enable versioning for data recovery
-      AccessControl: Private # Ensure no public access at creation
+        Status: Enabled
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
       Tags:
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
@@ -636,6 +586,7 @@ Resources:
     Properties:
       Bucket: !Ref SecureS3Bucket
       PolicyDocument:
+        Version: '2012-10-17'
         Statement:
           - Sid: DenyHTTP
             Effect: Deny
@@ -645,32 +596,14 @@ Resources:
               - !Sub ${SecureS3Bucket.Arn}/*
               - !Sub ${SecureS3Bucket.Arn}
             Condition:
-              BoolIfExists:
-                'aws:SecureTransport': 'false' # Enforce HTTPS access
+              Bool:
+                'aws:SecureTransport': 'false'
           - Sid: AllowCloudFrontOAI
             Effect: Allow
             Principal:
-              AWS: !GetAtt CloudFrontOAI.Arn # Only CloudFront OAI can access
+              CanonicalUser: !GetAtt CloudFrontOAI.S3CanonicalUserId
             Action: s3:GetObject
             Resource: !Sub ${SecureS3Bucket.Arn}/*
-          - Sid: DenyPublicAccessToBucket
-            Effect: Deny
-            Principal: '*'
-            Action: s3:*
-            Resource:
-              - !Sub ${SecureS3Bucket.Arn}
-              - !Sub ${SecureS3Bucket.Arn}/*
-            Condition:
-              Bool:
-                'aws:SecureTransport': 'false'
-              NotIpAddress:
-                'aws:SourceIp': [] # No specific IPs, just enforcing HTTPS
-            # Additional conditions to deny public access if OAI is not used or misconfigured
-            NotPrincipal:
-              AWS: !GetAtt CloudFrontOAI.Arn
-            StringNotLike:
-              'aws:UserAgent':
-                - 'CloudFront*'
 
   RDSSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -681,12 +614,12 @@ Resources:
         - IpProtocol: tcp
           FromPort: !Ref RDSDatabasePort
           ToPort: !Ref RDSDatabasePort
-          SourceSecurityGroupId: !GetAtt LambdaSecurityGroup.GroupId # Allow access only from Lambda SG
+          SourceSecurityGroupId: !GetAtt LambdaSecurityGroup.GroupId
       Tags:
         - Key: Name
-          Value: !Sub ${Environment}-${Project}-RDSSecurityGroup
+          Value: !Sub ${EnvironmentSuffix}-${Project}-RDSSecurityGroup
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
@@ -696,23 +629,23 @@ Resources:
     Type: AWS::RDS::DBInstance
     Properties:
       Engine: postgres
-      EngineVersion: 14.7 # Specify a secure and stable version
-      DBInstanceClass: db.t3.micro # Or appropriate size for testing
-      AllocatedStorage: 20 # Minimum recommended storage for production
+      EngineVersion: "14.18"
+      DBInstanceClass: db.t3.micro
+      AllocatedStorage: 20
       MasterUsername: !Ref RDSDatabaseUser
-      MasterUserPassword: !Sub '{{resolve:secretsmanager:${RDSSecret}}}' # Reference secret for password
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${RDSSecret}}}'
       DBSubnetGroupName: !Ref RDSSubnetGroup
       VPCSecurityGroups:
         - !GetAtt RDSSecurityGroup.GroupId
-      PubliclyAccessible: false # Crucial for financial applications
-      StorageEncrypted: true # Encrypt at rest
-      KmsKeyId: !Ref RDSKMSKey # Use the specific KMS key for RDS
-      MultiAZ: true # Enable Multi-AZ for high availability
-      BackupRetentionPeriod: 7 # Retain backups for 7 days
-      DeletionProtection: false # Set to true for production to prevent accidental deletion
+      PubliclyAccessible: false
+      StorageEncrypted: true
+      KmsKeyId: !Ref RDSKMSKey
+      MultiAZ: true
+      BackupRetentionPeriod: 7
+      DeletionProtection: false
       Tags:
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
@@ -727,7 +660,7 @@ Resources:
         - !Ref PrivateSubnet2
       Tags:
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
@@ -750,115 +683,51 @@ Resources:
       ProvisionedThroughput:
         ReadCapacityUnits: 5
         WriteCapacityUnits: 5
-      BillingMode: PROVISIONED # Or PAY_PER_REQUEST for flexible scaling
+      BillingMode: PROVISIONED
       SSESpecification:
-        SSEEnabled: true # Encrypted at rest
-        KMSMasterKeyId: !Ref ApplicationKMSKey # Use the application KMS key
-        SSEType: Kms
+        SSEEnabled: true
+        SSEType: KMS
       PointInTimeRecoverySpecification:
-        PointInTimeRecoveryEnabled: true # Enable PITR for continuous backups
+        PointInTimeRecoveryEnabled: true
       Tags:
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
           Value: !Ref Owner
-
-  # EBS Encryption is handled account-wide by default through KMS configuration or
-  # by specifying a default encryption key in the EC2 settings.
-  # For CloudFormation, you typically ensure this at the AMI/Instance level,
-  # or explicitly when defining an EC2 instance with a custom block device mapping.
-  # This template assumes account-wide EBS encryption is enabled or will be
-  # configured for EC2 instances provisioned from this infrastructure.
-
-  # ----------------------------------------------------------------------------------------------
-  # 4. Security Groups & Firewall Rules
-  # Defines strict security groups with no open public ports.
-  # ----------------------------------------------------------------------------------------------
 
   LambdaSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: Security group for Lambda functions in VPC.
       VpcId: !Ref VPC
-      SecurityGroupIngress:
-        # No ingress rules by default, Lambda functions typically connect outbound
-        # or receive triggers from internal AWS services.
-        # If an API Gateway is used, its security group would allow inbound HTTPS.
-      SecurityGroupEgress:
-        - IpProtocol: -1 # Allow all outbound traffic by default for testing
-          CidrIp: 0.0.0.0/0
-      Tags:
-        - Key: Name
-          Value: !Sub ${Environment}-${Project}-LambdaSecurityGroup
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Project
-          Value: !Ref Project
-        - Key: Owner
-          Value: !Ref Owner
-
-  # Example Security Group for an internal EC2 instance (e.g., jump host, backend service)
-  # Not publicly accessible, ports 22/3389 closed.
-  InternalInstanceSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: Security group for internal instances (no public access, no SSH/RDP).
-      VpcId: !Ref VPC
-      SecurityGroupIngress:
-        # Example: Allow internal communication within VPC
-        - IpProtocol: -1
-          FromPort: -1
-          ToPort: -1
-          SourceSecurityGroupId: !GetAtt LambdaSecurityGroup.GroupId # Example: Allow traffic from Lambda
-        - IpProtocol: tcp
-          FromPort: 80
-          ToPort: 80
-          CidrIp: !Ref VPCCIDR # Allow internal HTTP traffic
-        - IpProtocol: tcp
-          FromPort: 443
-          ToPort: 443
-          CidrIp: !Ref VPCCIDR # Allow internal HTTPS traffic
-        # IMPORTANT: Explicitly avoid rules that open ports 22 (SSH) or 3389 (RDP) to 0.0.0.0/0
       SecurityGroupEgress:
         - IpProtocol: -1
           CidrIp: 0.0.0.0/0
       Tags:
         - Key: Name
-          Value: !Sub ${Environment}-${Project}-InternalInstanceSecurityGroup
+          Value: !Sub ${EnvironmentSuffix}-${Project}-LambdaSecurityGroup
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
           Value: !Ref Owner
-
-  # ----------------------------------------------------------------------------------------------
-  # 5. Lambda & Serverless
-  # Defines an example Lambda function within the VPC for secure processing.
-  # ----------------------------------------------------------------------------------------------
 
   FinancialProcessorLambda:
     Type: AWS::Lambda::Function
     Properties:
       FunctionName: !Ref LambdaFunctionName
-      Handler: index.handler # Assuming a Node.js Lambda function
-      Runtime: nodejs20.x # Use a current, secure runtime
+      Handler: index.handler
+      Runtime: nodejs18.x
       Code:
         ZipFile: |
           exports.handler = async (event) => {
             console.log('Received event:', JSON.stringify(event, null, 2));
-            const secret = process.env.RDS_SECRET_ARN; // Accessed securely via env var
+            const secret = process.env.RDS_SECRET_ARN;
             const dbName = process.env.DB_NAME;
             const dynamoTableName = process.env.DYNAMODB_TABLE_NAME;
-
-            // In a real application, you'd use AWS SDK to interact with Secrets Manager, RDS, and DynamoDB
-            // Example: const AWS = require('aws-sdk');
-            // const secretsManager = new AWS.SecretsManager();
-            // const dynamoDb = new AWS.DynamoDB.DocumentClient();
-            // const rdsDataService = new AWS.RDSDataService();
-
             const response = {
                 statusCode: 200,
                 body: JSON.stringify('Financial transaction processed securely!'),
@@ -866,9 +735,9 @@ Resources:
             return response;
           };
       Role: !GetAtt LambdaExecutionRole.Arn
-      Timeout: 30 # Set an appropriate timeout
-      MemorySize: 128 # Set an appropriate memory size
-      VpcConfig: # Deploy Lambda in the private subnets for secure access to RDS/DynamoDB
+      Timeout: 30
+      MemorySize: 128
+      VpcConfig:
         SecurityGroupIds:
           - !GetAtt LambdaSecurityGroup.GroupId
         SubnetIds:
@@ -876,51 +745,32 @@ Resources:
           - !Ref PrivateSubnet2
       Environment:
         Variables:
-          RDS_SECRET_ARN: !Ref RDSSecret # Securely pass secret ARN, not the secret itself
+          RDS_SECRET_ARN: !Ref RDSSecret
           DB_NAME: !Ref RDSDatabaseName
           DYNAMODB_TABLE_NAME: !Ref DynamoDBTableName
       Tags:
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
           Value: !Ref Owner
-
-  # ----------------------------------------------------------------------------------------------
-  # 6. DNS, CDN, and Messaging
-  # Configures Route 53 private hosted zones, CloudFront with OAI, and secure SNS topics.
-  # ----------------------------------------------------------------------------------------------
 
   PrivateHostedZone:
     Type: AWS::Route53::HostedZone
     Properties:
-      Name: internal.local # Example internal domain
-      VPC:
-        VPCId: !Ref VPC
-        VPCRegion: !Ref 'AWS::Region'
+      Name: internal.local
+      VPCs:
+        - VPCId: !Ref VPC
+          VPCRegion: !Ref 'AWS::Region'
       HostedZoneConfig:
         Comment: Private Hosted Zone for internal financial application services.
-      Tags:
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Project
-          Value: !Ref Project
-        - Key: Owner
-          Value: !Ref Owner
 
   CloudFrontOAI:
     Type: AWS::CloudFront::CloudFrontOriginAccessIdentity
     Properties:
       CloudFrontOriginAccessIdentityConfig:
         Comment: OAI for S3 bucket access via CloudFront.
-      Tags:
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Project
-          Value: !Ref Project
-        - Key: Owner
-          Value: !Ref Owner
 
   CloudFrontDistribution:
     Type: AWS::CloudFront::Distribution
@@ -930,11 +780,11 @@ Resources:
           - DomainName: !GetAtt SecureS3Bucket.RegionalDomainName
             Id: S3Origin
             S3OriginConfig:
-              CloudFrontOriginAccessIdentity: !Sub "origin-access-identity/cloudfront/${CloudFrontOAI}"
+              OriginAccessIdentity: !Sub origin-access-identity/cloudfront/${CloudFrontOAI}
         Enabled: true
         DefaultCacheBehavior:
           TargetOriginId: S3Origin
-          ViewerProtocolPolicy: https-only # Enforce HTTPS for all viewer requests
+          ViewerProtocolPolicy: https-only
           AllowedMethods:
             - GET
             - HEAD
@@ -949,32 +799,30 @@ Resources:
               Forward: none
           Compress: true
         ViewerCertificate:
-          CloudFrontDefaultCertificate: true # Use default CloudFront certificate
-          # Or specify an ACM ARN for custom domain: Arn: "arn:aws:acm:us-east-1:123456789012:certificate/xyz-123"
-          MinimumProtocolVersion: TLSv1.2_2021 # Enforce strong TLS versions
-          SslSupportMethod: sni-only
+          CloudFrontDefaultCertificate: true
+          MinimumProtocolVersion: TLSv1.2_2021
         Restrictions:
           GeoRestriction:
-            RestrictionType: none # Or whitelist/blacklist specific countries
-        PriceClass: !Ref CloudFrontPriceClass # Control costs based on edge locations
+            RestrictionType: none
+        PriceClass: !Ref CloudFrontPriceClass
         Logging:
-          Bucket: !GetAtt CloudFrontLogsBucket.RegionalDomainName
-          Enabled: true
+          Bucket: !GetAtt CloudFrontLogsBucket.DomainName
           IncludeCookies: false
           Prefix: cloudfront-logs/
-        Tags:
-          - Key: Environment
-            Value: !Ref Environment
-            - Key: Project
-              Value: !Ref Project
-            - Key: Owner
-              Value: !Ref Owner
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: !Ref Project
+        - Key: Owner
+          Value: !Ref Owner
 
   CloudFrontLogsBucket:
     Type: AWS::S3::Bucket
-    DeletionPolicy: Retain # Retain logs even if stack is deleted
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
-      BucketName: !Sub ${S3BucketName}-cloudfront-logs
+      BucketName: !Sub ${S3BucketName}-cloudfront-logs-${AWS::AccountId}
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -984,10 +832,12 @@ Resources:
         BlockPublicPolicy: true
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
-      AccessControl: LogDeliveryWrite # Allows CloudFront to write logs
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
       Tags:
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
@@ -997,10 +847,10 @@ Resources:
     Type: AWS::SNS::Topic
     Properties:
       DisplayName: Financial Transaction Notifications
-      TopicName: !Sub ${Environment}-${Project}-FinancialNotifications
+      TopicName: !Sub ${EnvironmentSuffix}-${Project}-FinancialNotifications
       Tags:
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
@@ -1020,35 +870,15 @@ Resources:
             Resource: !Ref SNSTopic
             Condition:
               Bool:
-                'aws:SecureTransport': 'false' # Enforce HTTPS for publishing
-          - Effect: Deny
-            Principal: '*'
-            Action: sns:Subscribe
-            Resource: !Ref SNSTopic
-            Condition:
-              Bool:
-                'aws:SecureTransport': 'false' # Enforce HTTPS for subscribing
+                'aws:SecureTransport': 'false'
           - Effect: Allow
             Principal:
-              Service: lambda.amazonaws.com # Allow Lambda to publish
+              Service: lambda.amazonaws.com
             Action: sns:Publish
             Resource: !Ref SNSTopic
             Condition:
               ArnLike:
-                'aws:SourceArn': !GetAtt FinancialProcessorLambda.Arn # Only specific Lambda
-          - Effect: Deny # Deny public access to the topic
-            Principal: '*'
-            Action:
-              - sns:Publish
-              - sns:Receive
-            Resource: !Ref SNSTopic
-            Condition:
-              StringNotEquals:
                 'aws:SourceArn': !GetAtt FinancialProcessorLambda.Arn
-              NotIpAddress:
-                'aws:SourceIp': [] # Or specific trusted IPs
-              StringNotEquals:
-                'aws:UserAgent': 'CloudFormation' # Allow CF to manage
           - Sid: AWSAccountAccess
             Effect: Allow
             Principal:
@@ -1062,35 +892,12 @@ Resources:
               - sns:Subscribe
               - sns:ListSubscriptionsByTopic
               - sns:Publish
-              - sns:Receive
             Resource: !Ref SNSTopic
-
-  # ----------------------------------------------------------------------------------------------
-  # 7. Monitoring & Compliance
-  # Enables CloudTrail, AWS Config, and AWS WAF for robust security monitoring.
-  # ----------------------------------------------------------------------------------------------
-
-  CloudTrailTrail:
-    Type: AWS::CloudTrail::Trail
-    Properties:
-      IsLogging: true
-      S3BucketName: !Ref CloudTrailLogsBucket
-      IncludeGlobalServiceEvents: true # Capture events from global services (IAM, Route 53)
-      IsMultiRegionTrail: true # Crucial for multi-region audit
-      EnableLogFileValidation: true # Ensure log integrity
-      CloudWatchLogsRoleArn: !GetAtt CloudTrailCloudWatchLogsRole.Arn
-      CloudWatchLogsLogGroupArn: !GetAtt CloudTrailLogGroup.Arn
-      Tags:
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Project
-          Value: !Ref Project
-        - Key: Owner
-          Value: !Ref Owner
 
   CloudTrailLogsBucket:
     Type: AWS::S3::Bucket
-    DeletionPolicy: Retain # Retain logs even if stack is deleted
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       BucketName: !Sub ${AWS::AccountId}-${AWS::Region}-cloudtrail-logs
       BucketEncryption:
@@ -1102,10 +909,12 @@ Resources:
         BlockPublicPolicy: true
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
-      AccessControl: LogDeliveryWrite # Allows CloudTrail to write logs
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
       Tags:
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
@@ -1134,7 +943,7 @@ Resources:
                 Resource: !GetAtt CloudTrailLogGroup.Arn
       Tags:
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
@@ -1143,27 +952,29 @@ Resources:
   CloudTrailLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub /aws/cloudtrail/${Environment}-${Project}-CloudTrailLogs
-      RetentionInDays: 365 # Retain logs for one year for compliance
+      LogGroupName: !Sub /aws/cloudtrail/${EnvironmentSuffix}-${Project}-CloudTrailLogs
+      RetentionInDays: 365
       Tags:
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
           Value: !Ref Owner
 
-  AWSConfigRecorder:
-    Type: AWS::Config::ConfigurationRecorder
+  CloudTrailTrail:
+    Type: AWS::CloudTrail::Trail
     Properties:
-      Name: default
-      RoleARN: !GetAtt AWSConfigRole.Arn
-      RecordingGroup:
-        AllSupported: true
-        IncludeGlobalResourceTypes: true # Track global resources like IAM
+      IsLogging: true
+      S3BucketName: !Ref CloudTrailLogsBucket
+      IncludeGlobalServiceEvents: true
+      IsMultiRegionTrail: true
+      EnableLogFileValidation: true
+      CloudWatchLogsRoleArn: !GetAtt CloudTrailCloudWatchLogsRole.Arn
+      CloudWatchLogsLogGroupArn: !GetAtt CloudTrailLogGroup.Arn
       Tags:
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
@@ -1180,32 +991,28 @@ Resources:
               Service: config.amazonaws.com
             Action: sts:AssumeRole
       ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWSConfigServiceRolePolicy # Required by AWS Config
+        - arn:aws:iam::aws:policy/service-role/AWSConfigServiceRolePolicy
       Tags:
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
           Value: !Ref Owner
 
-  AWSConfigDeliveryChannel:
-    Type: AWS::Config::DeliveryChannel
+  AWSConfigRecorder:
+    Type: AWS::Config::ConfigurationRecorder
     Properties:
-      ConfigSnapshotDeliveryProperties:
-        DeliveryFrequency: One_Hour # Deliver configuration snapshots hourly
-      S3BucketName: !Ref AWSConfigLogsBucket
-      Tags:
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Project
-          Value: !Ref Project
-        - Key: Owner
-          Value: !Ref Owner
+      Name: default
+      RoleARN: !GetAtt AWSConfigRole.Arn
+      RecordingGroup:
+        AllSupported: true
+        IncludeGlobalResourceTypes: true
 
   AWSConfigLogsBucket:
     Type: AWS::S3::Bucket
-    DeletionPolicy: Retain # Retain logs even if stack is deleted
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       BucketName: !Sub ${AWS::AccountId}-${AWS::Region}-aws-config-logs
       BucketEncryption:
@@ -1217,15 +1024,24 @@ Resources:
         BlockPublicPolicy: true
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
       Tags:
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
           Value: !Ref Owner
 
-  # Example AWS Config Rule for security compliance
+  AWSConfigDeliveryChannel:
+    Type: AWS::Config::DeliveryChannel
+    Properties:
+      ConfigSnapshotDeliveryProperties:
+        DeliveryFrequency: One_Hour
+      S3BucketName: !Ref AWSConfigLogsBucket
+
   RDSPublicAccessCheck:
     Type: AWS::Config::ConfigRule
     Properties:
@@ -1233,27 +1049,19 @@ Resources:
       Description: Checks if RDS DB instances are publicly accessible.
       Source:
         Owner: AWS
-        SourceIdentifier: RDS_INSTANCE_PUBLIC_ACCESSIBLE_CHECK
+        SourceIdentifier: RDS_INSTANCE_PUBLIC_ACCESS_CHECK
       Scope:
         ComplianceResourceTypes:
           - AWS::RDS::DBInstance
-      MaximumExecutionFrequency: TwentyFour_Hours # Run check daily
-      Tags:
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Project
-          Value: !Ref Project
-        - Key: Owner
-          Value: !Ref Owner
+      MaximumExecutionFrequency: TwentyFour_Hours
 
-  # AWS WAF for CloudFront protection (for public-facing applications)
   WAFWebACL:
     Type: AWS::WAFv2::WebACL
     Properties:
-      Name: !Sub ${Environment}-${Project}-WebACL
-      Scope: CLOUDFRONT # Apply to CloudFront distribution
+      Name: !Sub ${EnvironmentSuffix}-${Project}-WebACL
+      Scope: CLOUDFRONT
       DefaultAction:
-        Allow: {} # Default to allow, but add rules to block malicious traffic
+        Allow: {}
       VisibilityConfig:
         CloudWatchMetricsEnabled: true
         MetricName: WebACLMetrics
@@ -1264,40 +1072,16 @@ Resources:
           Statement:
             ManagedRuleGroupStatement:
               VendorName: AWS
-              Name: AWSManagedRulesCommonRuleSet # Basic protection against common attacks
+              Name: AWSManagedRulesCommonRuleSet
           OverrideAction:
             None: {}
           VisibilityConfig:
             CloudWatchMetricsEnabled: true
             MetricName: AWSManagedRulesCommonRuleSetMetrics
             SampledRequestsEnabled: true
-        - Name: AWSManagedRulesKnownBadInputsRuleSet
-          Priority: 1
-          Statement:
-            ManagedRuleGroupStatement:
-              VendorName: AWS
-              Name: AWSManagedRulesKnownBadInputsRuleSet # Protects against common attack patterns
-          OverrideAction:
-            None: {}
-          VisibilityConfig:
-            CloudWatchMetricsEnabled: true
-            MetricName: AWSManagedRulesKnownBadInputsRuleSetMetrics
-            SampledRequestsEnabled: true
-        - Name: AWSManagedRulesSQLiRuleSet
-          Priority: 2
-          Statement:
-            ManagedRuleGroupStatement:
-              VendorName: AWS
-              Name: AWSManagedRulesSQLiRuleSet # Protection against SQL injection attacks
-          OverrideAction:
-            None: {}
-          VisibilityConfig:
-            CloudWatchMetricsEnabled: true
-            MetricName: AWSManagedRulesSQLiRuleSetMetrics
-            SampledRequestsEnabled: true
       Tags:
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
@@ -1306,100 +1090,96 @@ Resources:
   AssociateWAFWithCloudFront:
     Type: AWS::WAFv2::WebACLAssociation
     Properties:
-      ResourceArn: !GetAtt CloudFrontDistribution.Arn
+      ResourceArn: !GetAtt CloudFrontDistribution.DomainName
       WebACLArn: !GetAtt WAFWebACL.Arn
 
-# --------------------------------------------------------------------------------------------------
-# Outputs Section
-# Defines values that are exported from the stack, useful for cross-stack references.
-# --------------------------------------------------------------------------------------------------
 Outputs:
   VPCId:
     Description: The ID of the newly created VPC.
     Value: !Ref VPC
     Export:
-      Name: !Sub ${Environment}-${Project}-VPCId
+      Name: !Sub ${EnvironmentSuffix}-${Project}-VPCId
 
   PublicSubnet1Id:
     Description: The ID of Public Subnet 1.
     Value: !Ref PublicSubnet1
     Export:
-      Name: !Sub ${Environment}-${Project}-PublicSubnet1Id
+      Name: !Sub ${EnvironmentSuffix}-${Project}-PublicSubnet1Id
 
   PublicSubnet2Id:
     Description: The ID of Public Subnet 2.
     Value: !Ref PublicSubnet2
     Export:
-      Name: !Sub ${Environment}-${Project}-PublicSubnet2Id
+      Name: !Sub ${EnvironmentSuffix}-${Project}-PublicSubnet2Id
 
   PrivateSubnet1Id:
     Description: The ID of Private Subnet 1.
     Value: !Ref PrivateSubnet1
     Export:
-      Name: !Sub ${Environment}-${Project}-PrivateSubnet1Id
+      Name: !Sub ${EnvironmentSuffix}-${Project}-PrivateSubnet1Id
 
   PrivateSubnet2Id:
     Description: The ID of Private Subnet 2.
     Value: !Ref PrivateSubnet2
     Export:
-      Name: !Sub ${Environment}-${Project}-PrivateSubnet2Id
+      Name: !Sub ${EnvironmentSuffix}-${Project}-PrivateSubnet2Id
 
   RDSEndpointAddress:
     Description: The endpoint address of the RDS PostgreSQL instance.
     Value: !GetAtt RDSInstance.Endpoint.Address
     Export:
-      Name: !Sub ${Environment}-${Project}-RDSEndpointAddress
+      Name: !Sub ${EnvironmentSuffix}-${Project}-RDSEndpointAddress
 
   RDSSecurityGroupId:
     Description: The Security Group ID of the RDS instance.
     Value: !GetAtt RDSSecurityGroup.GroupId
     Export:
-      Name: !Sub ${Environment}-${Project}-RDSSecurityGroupId
+      Name: !Sub ${EnvironmentSuffix}-${Project}-RDSSecurityGroupId
 
   SecureS3BucketName:
     Description: The name of the secure S3 bucket.
     Value: !Ref SecureS3Bucket
     Export:
-      Name: !Sub ${Environment}-${Project}-SecureS3BucketName
+      Name: !Sub ${EnvironmentSuffix}-${Project}-SecureS3BucketName
 
   CloudFrontDistributionDomainName:
     Description: The domain name of the CloudFront distribution.
     Value: !GetAtt CloudFrontDistribution.DomainName
     Export:
-      Name: !Sub ${Environment}-${Project}-CloudFrontDomainName
+      Name: !Sub ${EnvironmentSuffix}-${Project}-CloudFrontDomainName
 
   FinancialProcessorLambdaArn:
     Description: The ARN of the Financial Processor Lambda function.
     Value: !GetAtt FinancialProcessorLambda.Arn
     Export:
-      Name: !Sub ${Environment}-${Project}-FinancialProcessorLambdaArn
+      Name: !Sub ${EnvironmentSuffix}-${Project}-FinancialProcessorLambdaArn
 
   DynamoDBTableName:
     Description: The name of the DynamoDB table.
     Value: !Ref DynamoDBTableName
     Export:
-      Name: !Sub ${Environment}-${Project}-DynamoDBTableName
+      Name: !Sub ${EnvironmentSuffix}-${Project}-DynamoDBTableName
 
   SNSTopicArn:
     Description: The ARN of the SNS Topic.
     Value: !Ref SNSTopic
     Export:
-      Name: !Sub ${Environment}-${Project}-SNSTopicArn
+      Name: !Sub ${EnvironmentSuffix}-${Project}-SNSTopicArn
 
   ApplicationKMSKeyArn:
     Description: The ARN of the application KMS Key.
     Value: !GetAtt ApplicationKMSKey.Arn
     Export:
-      Name: !Sub ${Environment}-${Project}-ApplicationKMSKeyArn
+      Name: !Sub ${EnvironmentSuffix}-${Project}-ApplicationKMSKeyArn
 
   RDSKMSKeyArn:
     Description: The ARN of the RDS KMS Key.
     Value: !GetAtt RDSKMSKey.Arn
     Export:
-      Name: !Sub ${Environment}-${Project}-RDSKMSKeyArn
+      Name: !Sub ${EnvironmentSuffix}-${Project}-RDSKMSKeyArn
 
   WAFWebACLArn:
     Description: The ARN of the WAF WebACL.
     Value: !GetAtt WAFWebACL.Arn
     Export:
-      Name: !Sub ${Environment}-${Project}-WAFWebACLArn
+      Name: !Sub ${EnvironmentSuffix}-${Project}-WAFWebACLArn

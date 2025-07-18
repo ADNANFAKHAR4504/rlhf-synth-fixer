@@ -1049,7 +1049,7 @@ Resources:
       Description: Checks if RDS DB instances are publicly accessible.
       Source:
         Owner: AWS
-        SourceIdentifier: RDS_INSTANCE_PUBLIC_ACCESSIBLE_CHECK
+        SourceIdentifier: RDS_INSTANCE_PUBLIC_ACCESS_CHECK
       Scope:
         ComplianceResourceTypes:
           - AWS::RDS::DBInstance
