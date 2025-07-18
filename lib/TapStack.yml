@@ -8,13 +8,13 @@ Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
       - Label:
-          default: 'Environment Configuration'
+          default: 'EnvironmentSuffix Configuration'
         Parameters:
           - EnvironmentSuffix
 
 Parameters:
-  Environment:
-    Description: The deployment environment (e.g., dev, staging, prod).
+  EnvironmentSuffix:
+    Description: The deployment EnvironmentSuffix (e.g., dev, staging, prod).
     Type: String
     AllowedValues:
       - dev
@@ -99,9 +99,9 @@ Resources:
       EnableDnsHostnames: true
       Tags:
         - Key: Name
-          Value: !Sub ${Environment}-${Project}-VPC
+          Value: !Sub ${EnvironmentSuffix}-${Project}-VPC
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
@@ -112,9 +112,9 @@ Resources:
     Properties:
       Tags:
         - Key: Name
-          Value: !Sub ${Environment}-${Project}-InternetGateway
+          Value: !Sub ${EnvironmentSuffix}-${Project}-InternetGateway
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
@@ -135,9 +135,9 @@ Resources:
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub ${Environment}-${Project}-PublicSubnet1
+          Value: !Sub ${EnvironmentSuffix}-${Project}-PublicSubnet1
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
@@ -152,9 +152,9 @@ Resources:
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub ${Environment}-${Project}-PublicSubnet2
+          Value: !Sub ${EnvironmentSuffix}-${Project}-PublicSubnet2
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
@@ -168,9 +168,9 @@ Resources:
       AvailabilityZone: !Select [0, !GetAZs '']
       Tags:
         - Key: Name
-          Value: !Sub ${Environment}-${Project}-PrivateSubnet1
+          Value: !Sub ${EnvironmentSuffix}-${Project}-PrivateSubnet1
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
@@ -184,9 +184,9 @@ Resources:
       AvailabilityZone: !Select [1, !GetAZs '']
       Tags:
         - Key: Name
-          Value: !Sub ${Environment}-${Project}-PrivateSubnet2
+          Value: !Sub ${EnvironmentSuffix}-${Project}-PrivateSubnet2
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
@@ -198,9 +198,9 @@ Resources:
       Domain: vpc
       Tags:
         - Key: Name
-          Value: !Sub ${Environment}-${Project}-EIP1
+          Value: !Sub ${EnvironmentSuffix}-${Project}-EIP1
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
@@ -212,9 +212,9 @@ Resources:
       Domain: vpc
       Tags:
         - Key: Name
-          Value: !Sub ${Environment}-${Project}-EIP2
+          Value: !Sub ${EnvironmentSuffix}-${Project}-EIP2
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
@@ -227,9 +227,9 @@ Resources:
       SubnetId: !Ref PublicSubnet1
       Tags:
         - Key: Name
-          Value: !Sub ${Environment}-${Project}-NATGateway1
+          Value: !Sub ${EnvironmentSuffix}-${Project}-NATGateway1
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
@@ -242,9 +242,9 @@ Resources:
       SubnetId: !Ref PublicSubnet2
       Tags:
         - Key: Name
-          Value: !Sub ${Environment}-${Project}-NATGateway2
+          Value: !Sub ${EnvironmentSuffix}-${Project}-NATGateway2
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
@@ -256,9 +256,9 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub ${Environment}-${Project}-PublicRouteTable
+          Value: !Sub ${EnvironmentSuffix}-${Project}-PublicRouteTable
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
@@ -290,9 +290,9 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub ${Environment}-${Project}-PrivateRouteTable1
+          Value: !Sub ${EnvironmentSuffix}-${Project}-PrivateRouteTable1
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
@@ -317,9 +317,9 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub ${Environment}-${Project}-PrivateRouteTable2
+          Value: !Sub ${EnvironmentSuffix}-${Project}-PrivateRouteTable2
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
@@ -364,7 +364,7 @@ Resources:
                 Resource: !GetAtt VPCFlowLogsLogGroup.Arn
       Tags:
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
@@ -373,11 +373,11 @@ Resources:
   VPCFlowLogsLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub /aws/vpc/flowlogs/${Environment}-${Project}-VPCFlowLogs
+      LogGroupName: !Sub /aws/vpc/flowlogs/${EnvironmentSuffix}-${Project}-VPCFlowLogs
       RetentionInDays: 90
       Tags:
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
@@ -393,7 +393,7 @@ Resources:
       TrafficType: ALL
       Tags:
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
@@ -419,7 +419,7 @@ Resources:
               - Effect: Allow
                 Action:
                   - secretsmanager:GetSecretValue
-                Resource: !Sub arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:${Environment}/${Project}/RDSSecret*
+                Resource: !Sub arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:${EnvironmentSuffix}/${Project}/RDSSecret*
         - PolicyName: LambdaDynamoDBAccess
           PolicyDocument:
             Version: '2012-10-17'
@@ -451,7 +451,7 @@ Resources:
                 Resource: "*"
       Tags:
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
@@ -460,7 +460,7 @@ Resources:
   RDSSecret:
     Type: AWS::SecretsManager::Secret
     Properties:
-      Name: !Sub ${Environment}/${Project}/RDSSecret
+      Name: !Sub ${EnvironmentSuffix}/${Project}/RDSSecret
       Description: Stores the master password for the RDS PostgreSQL database.
       GenerateSecretString:
         SecretStringTemplate: !Sub '{"username": "${RDSDatabaseUser}"}'
@@ -469,7 +469,7 @@ Resources:
         GenerateStringKey: password
       Tags:
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
@@ -504,7 +504,7 @@ Resources:
       EnableKeyRotation: true
       Tags:
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
@@ -545,7 +545,7 @@ Resources:
       EnableKeyRotation: true
       Tags:
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
@@ -577,7 +577,7 @@ Resources:
           - ObjectOwnership: BucketOwnerEnforced
       Tags:
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
@@ -619,9 +619,9 @@ Resources:
           SourceSecurityGroupId: !GetAtt LambdaSecurityGroup.GroupId
       Tags:
         - Key: Name
-          Value: !Sub ${Environment}-${Project}-RDSSecurityGroup
+          Value: !Sub ${EnvironmentSuffix}-${Project}-RDSSecurityGroup
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
@@ -647,7 +647,7 @@ Resources:
       DeletionProtection: false
       Tags:
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
@@ -662,7 +662,7 @@ Resources:
         - !Ref PrivateSubnet2
       Tags:
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
@@ -693,7 +693,7 @@ Resources:
         PointInTimeRecoveryEnabled: true
       Tags:
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
@@ -709,9 +709,9 @@ Resources:
           CidrIp: 0.0.0.0/0
       Tags:
         - Key: Name
-          Value: !Sub ${Environment}-${Project}-LambdaSecurityGroup
+          Value: !Sub ${EnvironmentSuffix}-${Project}-LambdaSecurityGroup
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
@@ -752,7 +752,7 @@ Resources:
           DYNAMODB_TABLE_NAME: !Ref DynamoDBTableName
       Tags:
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
@@ -813,7 +813,7 @@ Resources:
           Prefix: cloudfront-logs/
       Tags:
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
@@ -839,7 +839,7 @@ Resources:
           - ObjectOwnership: BucketOwnerEnforced
       Tags:
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
@@ -849,10 +849,10 @@ Resources:
     Type: AWS::SNS::Topic
     Properties:
       DisplayName: Financial Transaction Notifications
-      TopicName: !Sub ${Environment}-${Project}-FinancialNotifications
+      TopicName: !Sub ${EnvironmentSuffix}-${Project}-FinancialNotifications
       Tags:
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
@@ -916,7 +916,7 @@ Resources:
           - ObjectOwnership: BucketOwnerEnforced
       Tags:
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
@@ -945,7 +945,7 @@ Resources:
                 Resource: !GetAtt CloudTrailLogGroup.Arn
       Tags:
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
@@ -954,11 +954,11 @@ Resources:
   CloudTrailLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub /aws/cloudtrail/${Environment}-${Project}-CloudTrailLogs
+      LogGroupName: !Sub /aws/cloudtrail/${EnvironmentSuffix}-${Project}-CloudTrailLogs
       RetentionInDays: 365
       Tags:
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
@@ -976,7 +976,7 @@ Resources:
       CloudWatchLogsLogGroupArn: !GetAtt CloudTrailLogGroup.Arn
       Tags:
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
@@ -996,7 +996,7 @@ Resources:
         - arn:aws:iam::aws:policy/service-role/AWSConfigServiceRolePolicy
       Tags:
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
@@ -1031,7 +1031,7 @@ Resources:
           - ObjectOwnership: BucketOwnerEnforced
       Tags:
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
@@ -1060,7 +1060,7 @@ Resources:
   WAFWebACL:
     Type: AWS::WAFv2::WebACL
     Properties:
-      Name: !Sub ${Environment}-${Project}-WebACL
+      Name: !Sub ${EnvironmentSuffix}-${Project}-WebACL
       Scope: CLOUDFRONT
       DefaultAction:
         Allow: {}
@@ -1083,7 +1083,7 @@ Resources:
             SampledRequestsEnabled: true
       Tags:
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
@@ -1100,88 +1100,88 @@ Outputs:
     Description: The ID of the newly created VPC.
     Value: !Ref VPC
     Export:
-      Name: !Sub ${Environment}-${Project}-VPCId
+      Name: !Sub ${EnvironmentSuffix}-${Project}-VPCId
 
   PublicSubnet1Id:
     Description: The ID of Public Subnet 1.
     Value: !Ref PublicSubnet1
     Export:
-      Name: !Sub ${Environment}-${Project}-PublicSubnet1Id
+      Name: !Sub ${EnvironmentSuffix}-${Project}-PublicSubnet1Id
 
   PublicSubnet2Id:
     Description: The ID of Public Subnet 2.
     Value: !Ref PublicSubnet2
     Export:
-      Name: !Sub ${Environment}-${Project}-PublicSubnet2Id
+      Name: !Sub ${EnvironmentSuffix}-${Project}-PublicSubnet2Id
 
   PrivateSubnet1Id:
     Description: The ID of Private Subnet 1.
     Value: !Ref PrivateSubnet1
     Export:
-      Name: !Sub ${Environment}-${Project}-PrivateSubnet1Id
+      Name: !Sub ${EnvironmentSuffix}-${Project}-PrivateSubnet1Id
 
   PrivateSubnet2Id:
     Description: The ID of Private Subnet 2.
     Value: !Ref PrivateSubnet2
     Export:
-      Name: !Sub ${Environment}-${Project}-PrivateSubnet2Id
+      Name: !Sub ${EnvironmentSuffix}-${Project}-PrivateSubnet2Id
 
   RDSEndpointAddress:
     Description: The endpoint address of the RDS PostgreSQL instance.
     Value: !GetAtt RDSInstance.Endpoint.Address
     Export:
-      Name: !Sub ${Environment}-${Project}-RDSEndpointAddress
+      Name: !Sub ${EnvironmentSuffix}-${Project}-RDSEndpointAddress
 
   RDSSecurityGroupId:
     Description: The Security Group ID of the RDS instance.
     Value: !GetAtt RDSSecurityGroup.GroupId
     Export:
-      Name: !Sub ${Environment}-${Project}-RDSSecurityGroupId
+      Name: !Sub ${EnvironmentSuffix}-${Project}-RDSSecurityGroupId
 
   SecureS3BucketName:
     Description: The name of the secure S3 bucket.
     Value: !Ref SecureS3Bucket
     Export:
-      Name: !Sub ${Environment}-${Project}-SecureS3BucketName
+      Name: !Sub ${EnvironmentSuffix}-${Project}-SecureS3BucketName
 
   CloudFrontDistributionDomainName:
     Description: The domain name of the CloudFront distribution.
     Value: !GetAtt CloudFrontDistribution.DomainName
     Export:
-      Name: !Sub ${Environment}-${Project}-CloudFrontDomainName
+      Name: !Sub ${EnvironmentSuffix}-${Project}-CloudFrontDomainName
 
   FinancialProcessorLambdaArn:
     Description: The ARN of the Financial Processor Lambda function.
     Value: !GetAtt FinancialProcessorLambda.Arn
     Export:
-      Name: !Sub ${Environment}-${Project}-FinancialProcessorLambdaArn
+      Name: !Sub ${EnvironmentSuffix}-${Project}-FinancialProcessorLambdaArn
 
   DynamoDBTableName:
     Description: The name of the DynamoDB table.
     Value: !Ref DynamoDBTableName
     Export:
-      Name: !Sub ${Environment}-${Project}-DynamoDBTableName
+      Name: !Sub ${EnvironmentSuffix}-${Project}-DynamoDBTableName
 
   SNSTopicArn:
     Description: The ARN of the SNS Topic.
     Value: !Ref SNSTopic
     Export:
-      Name: !Sub ${Environment}-${Project}-SNSTopicArn
+      Name: !Sub ${EnvironmentSuffix}-${Project}-SNSTopicArn
 
   ApplicationKMSKeyArn:
     Description: The ARN of the application KMS Key.
     Value: !GetAtt ApplicationKMSKey.Arn
     Export:
-      Name: !Sub ${Environment}-${Project}-ApplicationKMSKeyArn
+      Name: !Sub ${EnvironmentSuffix}-${Project}-ApplicationKMSKeyArn
 
   RDSKMSKeyArn:
     Description: The ARN of the RDS KMS Key.
     Value: !GetAtt RDSKMSKey.Arn
     Export:
-      Name: !Sub ${Environment}-${Project}-RDSKMSKeyArn
+      Name: !Sub ${EnvironmentSuffix}-${Project}-RDSKMSKeyArn
 
   WAFWebACLArn:
     Description: The ARN of the WAF WebACL.
     Value: !GetAtt WAFWebACL.Arn
     Export:
-      Name: !Sub ${Environment}-${Project}-WAFWebACLArn
+      Name: !Sub ${EnvironmentSuffix}-${Project}-WAFWebACLArn
