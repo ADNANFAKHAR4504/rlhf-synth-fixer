@@ -34,7 +34,7 @@ Parameters:
     Description: CIDR block for Private Subnet 2 in Region 1.
   InstanceType:
     Type: String
-    Default: t3.micro
+    Default: t2.micro
     Description: EC2 instance type for application servers.
   AMI:
     Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
@@ -42,7 +42,7 @@ Parameters:
     Description: The SSM parameter path for the EC2 AMI ID.
   DBInstanceType:
     Type: String
-    Default: db.t3.micro
+    Default: db.t2.micro
     Description: RDS DB instance type.
   DBAllocatedStorage:
     Type: Number
