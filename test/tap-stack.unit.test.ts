@@ -5,9 +5,19 @@ describe('VPC Stack CloudFormation Template', () => {
   let template: any;
 
   beforeAll(() => {
-    const templatePath = path.join(__dirname, '../lib/VpcStack.json');
-    const templateContent = fs.readFileSync(templatePath, 'utf8');
-    template = JSON.parse(templateContent);
+    const templatePath = path.join(__dirname, '../lib/TapStack.json');
+
+    if (!fs.existsSync(templatePath)) {
+      throw new Error(`Template file not found: ${templatePath}`);
+    }
+
+    const content = fs.readFileSync(templatePath, 'utf8');
+
+    try {
+      template = JSON.parse(content);
+    } catch (err) {
+      throw new Error(`Invalid JSON in CloudFormation template: ${err}`);
+    }
   });
 
   describe('Template Basics', () => {
@@ -80,28 +90,25 @@ describe('VPC Stack CloudFormation Template', () => {
   });
 
   describe('Tags', () => {
-    const resourceKeys = Object.keys(
-      template.Resources
-    );
-
-    test.each(resourceKeys)(
-      'resource %s should have Environment=Production tag',
-      (resourceKey) => {
-        const resource = template.Resources[resourceKey];
-        if (resource?.Properties?.Tags) {
-          const tags = resource.Properties.Tags;
-          const envTag = tags.find(
-            (t: any) => t.Key === 'Environment' && t.Value === 'Production'
-          );
+    test('all tagged resources include Environment=Production', () => {
+      const keys = Object.keys(template.Resources);
+      keys.forEach((key) => {
+        const resource = template.Resources[key];
+        const tags = resource?.Properties?.Tags || [];
+        const envTag = tags.find(
+          (t: any) => t.Key === 'Environment' && t.Value === 'Production'
+        );
+        if (tags.length > 0) {
           expect(envTag).toBeDefined();
         }
-      }
-    );
+      });
+    });
   });
 
   describe('Outputs', () => {
     test('outputs include VPCId, PublicSubnetId, and WebSecurityGroupId', () => {
       const outputs = template.Outputs;
+      expect(outputs).toBeDefined();
       expect(outputs.VPCId).toBeDefined();
       expect(outputs.PublicSubnetId).toBeDefined();
       expect(outputs.WebSecurityGroupId).toBeDefined();
@@ -112,15 +119,11 @@ describe('VPC Stack CloudFormation Template', () => {
     });
 
     test('output PublicSubnetId should reference PublicSubnet', () => {
-      expect(template.Outputs.PublicSubnetId.Value).toEqual({
-        Ref: 'PublicSubnet',
-      });
+      expect(template.Outputs.PublicSubnetId.Value).toEqual({ Ref: 'PublicSubnet' });
     });
 
     test('output WebSecurityGroupId should reference WebSecurityGroup', () => {
-      expect(template.Outputs.WebSecurityGroupId.Value).toEqual({
-        Ref: 'WebSecurityGroup',
-      });
+      expect(template.Outputs.WebSecurityGroupId.Value).toEqual({ Ref: 'WebSecurityGroup' });
     });
   });
 });
