@@ -1872,12 +1872,26 @@
                             },
                             "Action": "s3:PutObject",
                             "Resource": {
-                                "Fn::Sub": "arn:aws:s3:::${CloudTrailLogsBucket}/AWSLogs/${AWS::AccountId}/*"
+                                "Fn::Sub": "${CloudTrailLogsBucket.Arn}/AWSLogs/${AWS::AccountId}/*"
                             },
                             "Condition": {
                                 "StringEquals": {
                                     "s3:x-amz-acl": "bucket-owner-full-control"
                                 }
+                            }
+                        },
+                        {
+                            "Sid": "AWSCloudTrailBucketACL",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "cloudtrail.amazonaws.com"
+                            },
+                            "Action": "s3:GetBucketAcl",
+                            "Resource": {
+                                "Fn::GetAtt": [
+                                    "CloudTrailLogsBucket",
+                                    "Arn"
+                                ]
                             }
                         }
                     ]
