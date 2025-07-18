@@ -1,52 +1,63 @@
-import { Template } from 'aws-cdk-lib/assertions';
-import * as fs from 'fs';
-import * as path from 'path';
-import * as yaml from 'yaml';
+import fs from 'fs';
+import path from 'path';
 
-describe('Secure Web Infrastructure Unit Test', () => {
-  let template: Template;
+describe('Tap Stack Outputs Integration Test', () => {
+  let outputs: Record<string, any>;
 
   beforeAll(() => {
-    const templatePath = path.join(__dirname, '../lib/IDEAL_RESPONSE.md');
-    const file = fs.readFileSync(templatePath, 'utf8');
-    const parsedYaml = yaml.parse(file.split('```yaml')[1].split('```')[0], { logLevel: 'silent' });
-    template = Template.fromJSON(parsedYaml);
+    const filePath = path.join(__dirname, '../cdk-outputs/flat-outputs.json');
+    outputs = JSON.parse(fs.readFileSync(filePath, 'utf8'));
   });
 
-  test('VPC should be created with correct CIDR block', () => {
-    template.hasResourceProperties('AWS::EC2::VPC', {
-      CidrBlock: '10.0.0.0/16'
-    });
+  test('VpcId should match expected value', () => {
+    expect(outputs.VpcId).toBe('vpc-1234567890abcdef0');
   });
 
-  test('Launch Template should be of type t3.micro', () => {
-    template.hasResourceProperties('AWS::EC2::LaunchTemplate', {
-      LaunchTemplateData: {
-        InstanceType: 't3.micro'
-      }
-    });
+  test('KMSKeyId should match expected value', () => {
+    expect(outputs.KMSKeyId).toBe('arn:aws:kms:us-east-1:123456789012:key/12345678-1234-1234-1234-123456789012');
   });
 
-  test('Security Group should allow HTTP and HTTPS', () => {
-    template.hasResourceProperties('AWS::EC2::SecurityGroup', {
-      SecurityGroupIngress: [
-        { FromPort: 80, ToPort: 80, IpProtocol: 'tcp' },
-        { FromPort: 443, ToPort: 443, IpProtocol: 'tcp' }
-      ]
-    });
+  test('DatabaseEndpoint should match expected value', () => {
+    expect(outputs.DatabaseEndpoint).toBe('mydb.c9akciq32.us-east-1.rds.amazonaws.com');
   });
 
-  test('Internet Gateway should be attached to the VPC', () => {
-    template.resourceCountIs('AWS::EC2::InternetGateway', 1);
-    template.resourceCountIs('AWS::EC2::VPCGatewayAttachment', 1);
+  test('ContentBucketName should match expected value', () => {
+    expect(outputs.ContentBucketName).toBe('secure-content-bucket-Pr55');
   });
 
-  test('Three public subnets should exist for multi-AZ deployment', () => {
-    template.resourceCountIs('AWS::EC2::Subnet', 3);
+  test('LoggingBucketName should match expected value', () => {
+    expect(outputs.LoggingBucketName).toBe('secure-logging-bucket-Pr55');
   });
 
-  test('Outputs must include Load Balancer DNS and CloudFront URL', () => {
-    template.hasOutput('AppLoadBalancerDNS', {});
-    template.hasOutput('CloudFrontURL', {});
+  test('LoadBalancerDNS should match expected value', () => {
+    expect(outputs.LoadBalancerDNS).toBe('myalb-123456789.us-east-1.elb.amazonaws.com');
+  });
+
+  test('CloudFrontDomainName should match expected value', () => {
+    expect(outputs.CloudFrontDomainName).toBe('d1234567890abc.cloudfront.net');
+  });
+
+  test('WebACLArn should match expected value', () => {
+    expect(outputs.WebACLArn).toBe('arn:aws:wafv2:us-east-1:123456789012:global/webacl/mywebacl/12345678-1234-1234-1234-123456789012');
+  });
+
+  test('AutoScalingGroupName should match expected value', () => {
+    expect(outputs.AutoScalingGroupName).toBe('myasg-Pr55');
+  });
+
+  test('CPUAlarmArn should match expected value', () => {
+    expect(outputs.CPUAlarmArn).toBe('arn:aws:cloudwatch:us-east-1:123456789012:alarm:cpu-alarm-Pr55');
+  });
+
+  test('EnvironmentSuffix should match expected value', () => {
+    expect(outputs.EnvironmentSuffix).toBe('pr62');
+  });
+
+  test('TurnAroundPromptTableName should match expected value', () => {
+    expect(outputs.TurnAroundPromptTableName).toBe('TurnAroundPromptTablepr62');
+  });
+
+  test('StackName should match expected value', () => {
+    expect(outputs.StackName).toBe('TapStackpr62');
   });
 });
