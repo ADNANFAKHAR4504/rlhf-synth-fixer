@@ -76,10 +76,12 @@ Parameters:
     Type: String
     NoEcho: true
     Description: Master username for the RDS database.
+    Default: dummyUsername
   DBPassword:
     Type: String
     NoEcho: true
     Description: Master password for the RDS database.
+    Default: dummyPassword
 
 Mappings:
   # This mapping is used to ensure the correct AMI is picked based on the region
