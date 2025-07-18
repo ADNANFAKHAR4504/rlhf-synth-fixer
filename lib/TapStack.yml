@@ -32,32 +32,7 @@ Parameters:
     Type: String
     Default: 10.0.4.0/24
     Description: CIDR block for Private Subnet 2 in Region 1.
-  InstanceType:
-    Type: String
-    Default: t2.micro
-    Description: EC2 instance type for application servers.
-  AMI:
-    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
-    Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
-    Description: The SSM parameter path for the EC2 AMI ID.
-  DBInstanceType:
-    Type: String
-    Default: db.t2.micro
-    Description: RDS DB instance type.
-  DBAllocatedStorage:
-    Type: Number
-    Default: 20
-    Description: Allocated storage for the RDS database in GiB.
-  DBUsername:
-    Type: String
-    Description: Master username for the RDS database.
-    Default: oracless
-    NoEcho: true
-  DBPassword:
-    Type: String
-    Description: Master password for the RDS database. Must be 8-41 characters, contain at least one uppercase letter, one lowercase letter, one number, and one non-alphanumeric character.
-    Default: oracless123
-    NoEcho: true
+
 
 Resources:
   VpcR1:
