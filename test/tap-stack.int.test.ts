@@ -1,10 +1,20 @@
 // Configuration - These are coming from cdk-outputs after cdk deploy
 import fs from 'fs';
-// You might need to adjust the path based on where your cdk-outputs are generated.
-// Common paths include 'cdk-outputs.json', 'cdk-outputs/flat-outputs.json', or a specific regional file.
-const outputs = JSON.parse(
-  fs.readFileSync('cdk-outputs/flat-outputs.json', 'utf8')
-);
+import path from 'path'; // Import path module for robust path joining
+
+// Determine the outputs file path.
+// It's good practice to make this configurable or infer it based on environment.
+// For now, assuming cdk-outputs/flat-outputs.json as per your original.
+const outputsFilePath = path.join(process.cwd(), 'cdk-outputs', 'flat-outputs.json'); // Using process.cwd() for robustness
+let outputs: any;
+try {
+  outputs = JSON.parse(fs.readFileSync(outputsFilePath, 'utf8'));
+} catch (error) {
+  console.error(`Error reading or parsing cdk-outputs.json: ${error}`);
+  console.error(`Please ensure 'cdk-outputs/flat-outputs.json' exists and is valid JSON.`);
+  // Exit or throw to prevent tests from running with invalid outputs
+  process.exit(1);
+}
 
 // If running in Node.js environment without a global fetch, you'll need to import it.
 // For Node.js versions < 18, you might need a polyfill like 'node-fetch'.
@@ -13,12 +23,16 @@ const outputs = JSON.parse(
 // import fetch from 'node-fetch'; // Uncomment this line if 'fetch' is not globally available
 
 // Get environment suffix from environment variable (set by CI/CD pipeline)
+// Note: Your YAML does not explicitly use an environment suffix for resource naming.
+// If your CDK stack incorporates this suffix into its output names (e.g., ProjectName-dev),
+// you might need to adjust how outputs are accessed or how ProjectName is determined here.
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
 describe('TapStack Integration Tests', () => {
   // Test 1: Verify ALB DNS Name outputs exist
   test('ALB DNS Name outputs should exist for both regions', () => {
-    // These outputs are directly from your CloudFormation template's Outputs section
+    // The output names directly correspond to the 'Outputs' section in your YAML.
+    // Your YAML outputs are `AlbDnsNameR1` and `AlbDnsNameR2`.
     expect(outputs.AlbDnsNameR1).toBeDefined();
     expect(outputs.AlbDnsNameR2).toBeDefined();
     // Optionally, you can add more specific checks, e.g., that they are non-empty strings
@@ -33,7 +47,7 @@ describe('TapStack Integration Tests', () => {
   // It also assumes your EC2 instances are serving HTTP content on port 80.
   // Increase timeout as network requests can take longer.
   test('ALB in Region 1 should be accessible and return 200 OK', async () => {
-    const albDns = outputs.AlbDnsNameR1;
+    const albDns = outputs.AlbDnsNameR1; // This is correct, matches YAML output
     expect(albDns).toBeDefined(); // Ensure the DNS name exists before attempting to fetch
 
     try {
@@ -42,8 +56,13 @@ describe('TapStack Integration Tests', () => {
       expect(response.status).toBe(200); // Expect a successful HTTP response
 
       // Optional: Verify specific content from the EC2 instance's UserData
+      // The UserData in your YAML includes:
+      // echo "<h1>Hello from ${ProjectName} App Instance 1 in Region 1 (${Region1})</h1>"
+      // So we should expect the ProjectName to be part of the response.
+      // Assuming 'ProjectName' output is also available or inferring 'TapStack' as default.
+      const projectName = outputs.ProjectName || 'TapStack'; // Get ProjectName from outputs or use default
       const text = await response.text();
-      expect(text).toContain(`Hello from ${outputs.ProjectName || 'TapStack'} App Instance`);
+      expect(text).toContain(`Hello from ${projectName} App Instance`);
     } catch (error) {
       // Catch any network errors (e.g., DNS resolution failure, connection refused)
       fail(`Failed to connect to ALB in Region 1 (${albDns}): ${error}`);
@@ -52,15 +71,16 @@ describe('TapStack Integration Tests', () => {
 
   // Test 3: Verify connectivity to the ALB in Region 2
   test('ALB in Region 2 should be accessible and return 200 OK', async () => {
-    const albDns = outputs.AlbDnsNameR2;
+    const albDns = outputs.AlbDnsNameR2; // This is correct, matches YAML output
     expect(albDns).toBeDefined();
 
     try {
       const response = await fetch(`http://${albDns}`);
       expect(response.status).toBe(200);
 
+      const projectName = outputs.ProjectName || 'TapStack'; // Get ProjectName from outputs or use default
       const text = await response.text();
-      expect(text).toContain(`Hello from ${outputs.ProjectName || 'TapStack'} App Instance`);
+      expect(text).toContain(`Hello from ${projectName} App Instance`);
     } catch (error) {
       fail(`Failed to connect to ALB in Region 2 (${albDns}): ${error}`);
     }

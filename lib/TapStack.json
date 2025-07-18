@@ -9,7 +9,7 @@
         },
         "Region1": {
             "Type": "String",
-            "Default": "us-east-1",
+            "Default": "us-east-2",
             "Description": "The first AWS region for deployment."
         },
         "Region2": {
