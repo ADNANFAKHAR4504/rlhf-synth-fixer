@@ -10,7 +10,7 @@ Parameters:
     Default: TapStack
   Region1:
     Type: String
-    Default: us-east-1
+    Default: us-east-2 # Changed from us-east-1 to us-east-2
     Description: The AWS region for deployment.
   VpcCidr1:
     Type: String
