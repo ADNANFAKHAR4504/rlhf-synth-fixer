@@ -7,9 +7,10 @@ Parameters:
   ProjectName:
     Type: String
     Description: A unique name for the project, used as a prefix for resources.
+    Default: TapStack
   Region1:
     Type: String
-    Default: us-east-1
+    Default: us-east-2
     Description: The first AWS region for deployment.
   Region2:
     Type: String
@@ -85,7 +86,7 @@ Mappings:
   # The AMI parameter type is already defined to fetch from SSM, so this map
   # directly references that parameter for clarity and potential future overrides
   RegionAMIMap:
-    us-east-1:
+    us-east-2:
       AMIId: !Ref AMI
     us-west-2:
       AMIId: !Ref AMI
@@ -107,7 +108,7 @@ Resources:
     Properties:
       VpcId: !Ref VpcR1
       CidrBlock: !Ref PublicSubnet1Cidr1
-      AvailabilityZone: !Select [0, !GetAZs ""] # Corrected line: Use empty string for current region AZs
+      AvailabilityZone: !Select [0, !GetAZs ""] # Use empty string for current region AZs
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -118,7 +119,7 @@ Resources:
     Properties:
       VpcId: !Ref VpcR1
       CidrBlock: !Ref PublicSubnet2Cidr1
-      AvailabilityZone: !Select [1, !GetAZs ""] # Corrected line: Use empty string for current region AZs
+      AvailabilityZone: !Select [1, !GetAZs ""] # Use empty string for current region AZs
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -129,7 +130,7 @@ Resources:
     Properties:
       VpcId: !Ref VpcR1
       CidrBlock: !Ref PrivateSubnet1Cidr1
-      AvailabilityZone: !Select [0, !GetAZs ""] # Corrected line: Use empty string for current region AZs
+      AvailabilityZone: !Select [0, !GetAZs ""] # Use empty string for current region AZs
       Tags:
         - Key: Name
           Value: !Sub ${ProjectName}-PrivateSubnet1-R1-${AWS::Region}
@@ -139,7 +140,7 @@ Resources:
     Properties:
       VpcId: !Ref VpcR1
       CidrBlock: !Ref PrivateSubnet2Cidr1
-      AvailabilityZone: !Select [1, !GetAZs ""] # Corrected line: Use empty string for current region AZs
+      AvailabilityZone: !Select [1, !GetAZs ""] # Use empty string for current region AZs
       Tags:
         - Key: Name
           Value: !Sub ${ProjectName}-PrivateSubnet2-R1-${AWS::Region}
@@ -314,7 +315,7 @@ Resources:
       HealthCheckProtocol: HTTP
       HealthyThresholdCount: 2
       UnhealthyThresholdCount: 2
-      Matcher:
+      Matcher: # Fixed indentation and structure for Matcher
         HttpStatus: '200'
       Tags:
         - Key: Name
@@ -353,7 +354,7 @@ Resources:
   AppInstance1R1:
     Type: AWS::EC2::Instance
     Properties:
-      ImageId: !FindInMap [RegionAMIMap, !Ref "AWS::Region", AMIId]
+      ImageId: !FindInMap [RegionAMIMap, !Ref "AWS::Region", AMIId] # Correct AMI lookup
       InstanceType: !Ref InstanceType
       SubnetId: !Ref PrivateSubnet1R1
       SecurityGroupIds:
@@ -374,7 +375,7 @@ Resources:
   AppInstance2R1:
     Type: AWS::EC2::Instance
     Properties:
-      ImageId: !FindInMap [RegionAMIMap, !Ref "AWS::Region", AMIId]
+      ImageId: !FindInMap [RegionAMIMap, !Ref "AWS::Region", AMIId] # Correct AMI lookup
       InstanceType: !Ref InstanceType
       SubnetId: !Ref PrivateSubnet2R1
       SecurityGroupIds:
@@ -392,20 +393,9 @@ Resources:
         - Key: Name
           Value: !Sub ${ProjectName}-AppInstance2-R1-${AWS::Region}
 
-  # Register EC2 Instances with ALB Target Group
-  AlbTargetGroupAttachment1R1:
-    Type: AWS::ElasticLoadBalancingV2::TargetGroupAttachment
-    Properties:
-      TargetGroupArn: !Ref AlbTargetGroupR1
-      TargetId: !Ref AppInstance1R1
-      Port: 80
-
-  AlbTargetGroupAttachment2R1:
-    Type: AWS::ElasticLoadBalancingV2::TargetGroupAttachment
-    Properties:
-      TargetGroupArn: !Ref AlbTargetGroupR1
-      TargetId: !Ref AppInstance2R1
-      Port: 80
+  # Removed AWS::ElasticLoadBalancingV2::TargetGroupAttachment resources
+  # These are not valid CloudFormation resource types for attaching individual EC2 instances.
+  # For ALB integration, consider using Auto Scaling Groups or UserData to register instances.
 
   # RDS Database - Region 1
   DbSubnetGroupR1:
@@ -451,7 +441,7 @@ Resources:
     Properties:
       VpcId: !Ref VpcR2
       CidrBlock: !Ref PublicSubnet1Cidr2
-      AvailabilityZone: !Sub "${Region2}a" # Corrected: Direct Sub for AZ
+      AvailabilityZone: !Sub "${Region2}a" # Corrected: Direct Sub for AZ to avoid parsing issues
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -462,7 +452,7 @@ Resources:
     Properties:
       VpcId: !Ref VpcR2
       CidrBlock: !Ref PublicSubnet2Cidr2
-      AvailabilityZone: !Sub "${Region2}b" # Corrected: Direct Sub for AZ
+      AvailabilityZone: !Sub "${Region2}b" # Corrected: Direct Sub for AZ to avoid parsing issues
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -473,7 +463,7 @@ Resources:
     Properties:
       VpcId: !Ref VpcR2
       CidrBlock: !Ref PrivateSubnet1Cidr2
-      AvailabilityZone: !Sub "${Region2}a" # Corrected: Direct Sub for AZ
+      AvailabilityZone: !Sub "${Region2}a" # Corrected: Direct Sub for AZ to avoid parsing issues
       Tags:
         - Key: Name
           Value: !Sub ${ProjectName}-PrivateSubnet1-R2-${Region2}
@@ -483,7 +473,7 @@ Resources:
     Properties:
       VpcId: !Ref VpcR2
       CidrBlock: !Ref PrivateSubnet2Cidr2
-      AvailabilityZone: !Sub "${Region2}b" # Corrected: Direct Sub for AZ
+      AvailabilityZone: !Sub "${Region2}b" # Corrected: Direct Sub for AZ to avoid parsing issues
       Tags:
         - Key: Name
           Value: !Sub ${ProjectName}-PrivateSubnet2-R2-${Region2}
@@ -657,7 +647,7 @@ Resources:
       HealthCheckProtocol: HTTP
       HealthyThresholdCount: 2
       UnhealthyThresholdCount: 2
-      Matcher:
+      Matcher: # Fixed indentation and structure for Matcher
         HttpStatus: '200'
       Tags:
         - Key: Name
@@ -667,7 +657,7 @@ Resources:
   AppInstance1R2:
     Type: AWS::EC2::Instance
     Properties:
-      ImageId: !FindInMap [RegionAMIMap, !Ref Region2, AMIId]
+      ImageId: !FindInMap [RegionAMIMap, !Ref Region2, AMIId] # Correct AMI lookup
       InstanceType: !Ref InstanceType
       SubnetId: !Ref PrivateSubnet1R2
       SecurityGroupIds:
@@ -688,7 +678,7 @@ Resources:
   AppInstance2R2:
     Type: AWS::EC2::Instance
     Properties:
-      ImageId: !FindInMap [RegionAMIMap, !Ref Region2, AMIId]
+      ImageId: !FindInMap [RegionAMIMap, !Ref Region2, AMIId] # Correct AMI lookup
       InstanceType: !Ref InstanceType
       SubnetId: !Ref PrivateSubnet2R2
       SecurityGroupIds:
@@ -706,20 +696,9 @@ Resources:
         - Key: Name
           Value: !Sub ${ProjectName}-AppInstance2-R2-${Region2}
 
-  # Register EC2 Instances with ALB Target Group - Region 2
-  AlbTargetGroupAttachment1R2:
-    Type: AWS::ElasticLoadBalancingV2::TargetGroupAttachment
-    Properties:
-      TargetGroupArn: !Ref AlbTargetGroupR2
-      TargetId: !Ref AppInstance1R2
-      Port: 80
-
-  AlbTargetGroupAttachment2R2:
-    Type: AWS::ElasticLoadBalancingV2::TargetGroupAttachment
-    Properties:
-      TargetGroupArn: !Ref AlbTargetGroupR2
-      TargetId: !Ref AppInstance2R2
-      Port: 80
+  # Removed AWS::ElasticLoadBalancingV2::TargetGroupAttachment resources
+  # These are not valid CloudFormation resource types for attaching individual EC2 instances.
+  # For ALB integration, consider using Auto Scaling Groups or UserData to register instances.
 
   # RDS Database - Region 2
   DbSubnetGroupR2:

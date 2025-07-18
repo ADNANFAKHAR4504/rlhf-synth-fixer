@@ -705,30 +705,6 @@
                 ]
             }
         },
-        "AlbTargetGroupAttachment1R1": {
-            "Type": "AWS::ElasticLoadBalancingV2::TargetGroupAttachment",
-            "Properties": {
-                "TargetGroupArn": {
-                    "Ref": "AlbTargetGroupR1"
-                },
-                "TargetId": {
-                    "Ref": "AppInstance1R1"
-                },
-                "Port": 80
-            }
-        },
-        "AlbTargetGroupAttachment2R1": {
-            "Type": "AWS::ElasticLoadBalancingV2::TargetGroupAttachment",
-            "Properties": {
-                "TargetGroupArn": {
-                    "Ref": "AlbTargetGroupR1"
-                },
-                "TargetId": {
-                    "Ref": "AppInstance2R1"
-                },
-                "Port": 80
-            }
-        },
         "DbSubnetGroupR1": {
             "Type": "AWS::RDS::DBSubnetGroup",
             "Properties": {
@@ -1312,30 +1288,6 @@
                         }
                     }
                 ]
-            }
-        },
-        "AlbTargetGroupAttachment1R2": {
-            "Type": "AWS::ElasticLoadBalancingV2::TargetGroupAttachment",
-            "Properties": {
-                "TargetGroupArn": {
-                    "Ref": "AlbTargetGroupR2"
-                },
-                "TargetId": {
-                    "Ref": "AppInstance1R2"
-                },
-                "Port": 80
-            }
-        },
-        "AlbTargetGroupAttachment2R2": {
-            "Type": "AWS::ElasticLoadBalancingV2::TargetGroupAttachment",
-            "Properties": {
-                "TargetGroupArn": {
-                    "Ref": "AlbTargetGroupR2"
-                },
-                "TargetId": {
-                    "Ref": "AppInstance2R2"
-                },
-                "Port": 80
             }
         },
         "DbSubnetGroupR2": {
