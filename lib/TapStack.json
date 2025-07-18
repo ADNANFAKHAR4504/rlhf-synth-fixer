@@ -2005,7 +2005,7 @@
                     ]
                 },
                 "ManagedPolicyArns": [
-                    "arn:aws:iam::aws:policy/service-role/AWSConfigServiceRolePolicy"
+                    "arn:aws:iam::aws:policy/service-role/AWSConfigRole"
                 ],
                 "Tags": [
                     {
@@ -2115,14 +2115,13 @@
                 "Description": "Checks if RDS DB instances are publicly accessible.",
                 "Source": {
                     "Owner": "AWS",
-                    "SourceIdentifier": "RDS_INSTANCE_PUBLIC_ACCESSIBLE_CHECK"
+                    "SourceIdentifier": "RDS_INSTANCE_PUBLIC_ACCESS_CHECK"
                 },
                 "Scope": {
                     "ComplianceResourceTypes": [
                         "AWS::RDS::DBInstance"
                     ]
-                },
-                "MaximumExecutionFrequency": "TwentyFour_Hours"
+                }
             }
         },
         "WAFWebACL": {
@@ -2131,7 +2130,7 @@
                 "Name": {
                     "Fn::Sub": "${EnvironmentSuffix}-${Project}-WebACL"
                 },
-                "Scope": "CLOUDFRONT",
+                "Scope": "REGIONAL",
                 "DefaultAction": {
                     "Allow": {}
                 },

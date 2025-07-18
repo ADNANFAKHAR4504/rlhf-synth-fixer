@@ -991,7 +991,7 @@ Resources:
               Service: config.amazonaws.com
             Action: sts:AssumeRole
       ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWSConfigServiceRolePolicy
+        - arn:aws:iam::aws:policy/service-role/AWSConfigRole
       Tags:
         - Key: Environment
           Value: !Ref EnvironmentSuffix
@@ -1053,13 +1053,12 @@ Resources:
       Scope:
         ComplianceResourceTypes:
           - AWS::RDS::DBInstance
-      MaximumExecutionFrequency: TwentyFour_Hours
 
   WAFWebACL:
     Type: AWS::WAFv2::WebACL
     Properties:
       Name: !Sub ${EnvironmentSuffix}-${Project}-WebACL
-      Scope: CLOUDFRONT
+      Scope: REGIONAL
       DefaultAction:
         Allow: {}
       VisibilityConfig:

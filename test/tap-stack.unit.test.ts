@@ -212,14 +212,14 @@ describe('Financial Services Application CloudFormation Template', () => {
       expect(template.Resources.AWSConfigDeliveryChannel).toBeDefined();
       expect(template.Resources.AWSConfigLogsBucket).toBeDefined();
       expect(template.Resources.RDSPublicAccessCheck).toBeDefined();
-      expect(template.Resources.RDSPublicAccessCheck.Properties.Source.SourceIdentifier).toBe('RDS_INSTANCE_PUBLIC_ACCESSIBLE_CHECK');
+      expect(template.Resources.RDSPublicAccessCheck.Properties.Source.SourceIdentifier).toBe('RDS_INSTANCE_PUBLIC_ACCESS_CHECK');
     });
 
-    test('should have AWS WAF WebACL associated with CloudFront', () => {
+    test('should have AWS WAF WebACL associated with REGIONAL', () => {
       expect(template.Resources.WAFWebACL).toBeDefined();
       const waf = template.Resources.WAFWebACL;
       expect(waf.Type).toBe('AWS::WAFv2::WebACL');
-      expect(waf.Properties.Scope).toBe('CLOUDFRONT');
+      expect(waf.Properties.Scope).toBe('REGIONAL');
       expect(waf.Properties.DefaultAction.Allow).toBeDefined();
       expect(waf.Properties.Rules).toBeDefined();
       expect(waf.Properties.Rules.some((rule: { Name: string; }) => rule.Name === 'AWSManagedRulesCommonRuleSet')).toBe(true);
