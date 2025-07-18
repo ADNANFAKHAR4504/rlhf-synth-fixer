@@ -48,19 +48,18 @@ Parameters:
     Type: Number
     Default: 20
     Description: Allocated storage for the RDS database in GiB.
-  DBUsername: # 👈 Added parameter for DB username
+  DBUsername:
     Type: String
     Description: Master username for the RDS database.
     Default: oracless
-    NoEcho: true # Hides the value in console output
-  DBPassword: # 🆕 Added parameter for DB master password
+    NoEcho: true
+  DBPassword:
     Type: String
     Description: Master password for the RDS database. Must be 8-41 characters, contain at least one uppercase letter, one lowercase letter, one number, and one non-alphanumeric character.
     Default: oracless123
-    NoEcho: true # IMPORTANT: Hides the value in console output for security
+    NoEcho: true
 
 Resources:
-  # Region 1 Resources --------------------------------------------------------
   VpcR1:
     Type: AWS::EC2::VPC
     Properties:
@@ -76,7 +75,7 @@ Resources:
     Properties:
       VpcId: !Ref VpcR1
       CidrBlock: !Ref PublicSubnet1Cidr1
-      AvailabilityZone: !Select [0, !GetAZs ""] # Use empty string for current region AZs
+      AvailabilityZone: !Select [0, !GetAZs ""]
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -87,7 +86,7 @@ Resources:
     Properties:
       VpcId: !Ref VpcR1
       CidrBlock: !Ref PublicSubnet2Cidr1
-      AvailabilityZone: !Select [1, !GetAZs ""] # Use empty string for current region AZs
+      AvailabilityZone: !Select [1, !GetAZs ""]
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -98,7 +97,7 @@ Resources:
     Properties:
       VpcId: !Ref VpcR1
       CidrBlock: !Ref PrivateSubnet1Cidr1
-      AvailabilityZone: !Select [0, !GetAZs ""] # Use empty string for current region AZs
+      AvailabilityZone: !Select [0, !GetAZs ""]
       Tags:
         - Key: Name
           Value: !Sub ${ProjectName}-PrivateSubnet1-R1-${Region1}
@@ -108,7 +107,7 @@ Resources:
     Properties:
       VpcId: !Ref VpcR1
       CidrBlock: !Ref PrivateSubnet2Cidr1
-      AvailabilityZone: !Select [1, !GetAZs ""] # Use empty string for current region AZs
+      AvailabilityZone: !Select [1, !GetAZs ""]
       Tags:
         - Key: Name
           Value: !Sub ${ProjectName}-PrivateSubnet2-R1-${Region1}
@@ -130,16 +129,6 @@ Resources:
     Type: AWS::EC2::EIP
     Properties:
       Domain: vpc
-    DependsOn: IgwAttachmentR1 # Ensure IGW is attached before allocating EIP for NAT GW
-
-  NatGwR1:
-    Type: AWS::EC2::NatGateway
-    Properties:
-      AllocationId: !GetAtt NatEipR1.AllocationId
-      SubnetId: !Ref PublicSubnet1R1
-      Tags:
-        - Key: Name
-          Value: !Sub ${ProjectName}-NATGW-R1-${Region1}
 
   PublicRouteTableR1:
     Type: AWS::EC2::RouteTable
@@ -163,13 +152,6 @@ Resources:
       RouteTableId: !Ref PublicRouteTableR1
       DestinationCidrBlock: 0.0.0.0/0
       GatewayId: !Ref IgwR1
-
-  PrivateRouteR1:
-    Type: AWS::EC2::Route
-    Properties:
-      RouteTableId: !Ref PrivateRouteTableR1
-      DestinationCidrBlock: 0.0.0.0/0
-      NatGatewayId: !Ref NatGwR1
 
   PublicSubnet1AssocR1:
     Type: AWS::EC2::SubnetRouteTableAssociation
@@ -195,7 +177,6 @@ Resources:
       SubnetId: !Ref PrivateSubnet2R1
       RouteTableId: !Ref PrivateRouteTableR1
 
-  # Security Groups - Region 1
   AlbSgR1:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -223,11 +204,10 @@ Resources:
         - IpProtocol: tcp
           FromPort: 80
           ToPort: 80
-          SourceSecurityGroupId: !GetAtt AlbSgR1.GroupId
+          CidrIp: 0.0.0.0/0
         - IpProtocol: tcp
           FromPort: 22
           ToPort: 22
-          # IMPORTANT: For production, restrict this to a known IP range
           CidrIp: 0.0.0.0/0
       Tags:
         - Key: Name
@@ -238,56 +218,10 @@ Resources:
     Properties:
       GroupDescription: DB Security Group for MySQL from Application Security Group
       VpcId: !Ref VpcR1
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 3306
-          ToPort: 3306
-          SourceSecurityGroupId: !GetAtt AppSgR1.GroupId
       Tags:
         - Key: Name
           Value: !Sub ${ProjectName}-DBSG-R1-${Region1}
 
-  # Application Load Balancer - Region 1
-  AlbR1:
-    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
-    Properties:
-      Name: !Sub ${ProjectName}-ALB-R1
-      Subnets:
-        - !Ref PublicSubnet1R1
-        - !Ref PublicSubnet2R1
-      SecurityGroups:
-        - !GetAtt AlbSgR1.GroupId
-      Tags:
-        - Key: Name
-          Value: !Sub ${ProjectName}-ALB-R1-${Region1}
-
-  AlbListenerR1:
-    Type: AWS::ElasticLoadBalancingV2::Listener
-    Properties:
-      LoadBalancerArn: !Ref AlbR1
-      Port: 80
-      Protocol: HTTP
-      DefaultActions:
-        - Type: forward
-          TargetGroupArn: !Ref AlbTargetGroupR1
-
-  AlbTargetGroupR1:
-    Type: AWS::ElasticLoadBalancingV2::TargetGroup
-    Properties:
-      Name: !Sub ${ProjectName}-TG-R1
-      VpcId: !Ref VpcR1
-      Port: 80
-      Protocol: HTTP
-      HealthCheckPath: /
-      HealthCheckPort: 80
-      HealthCheckProtocol: HTTP
-      HealthyThresholdCount: 2
-      UnhealthyThresholdCount: 2
-      Tags:
-        - Key: Name
-          Value: !Sub ${ProjectName}-TG-R1-${Region1}
-
-  # IAM Roles and Instance Profiles
   Ec2InstanceRole:
     Type: AWS::IAM::Role
     Properties:
@@ -298,7 +232,7 @@ Resources:
             Principal: { Service: ec2.amazonaws.com }
             Action: sts:AssumeRole
       ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore # Allows SSM access
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
       Policies:
         - PolicyName: S3AccessPolicy
           PolicyDocument:
@@ -308,58 +242,8 @@ Resources:
                 Action:
                   - s3:GetObject
                   - s3:ListBucket
-                Resource: "*" # Restrict this to specific S3 buckets in production
+                Resource: "*"
 
-  Ec2InstanceProfile:
-    Type: AWS::IAM::InstanceProfile
-    Properties:
-      Roles:
-        - !Ref Ec2InstanceRole
-
-  # EC2 Instances - Region 1
-  AppInstance1R1:
-    Type: AWS::EC2::Instance
-    Properties:
-      ImageId: !Ref AMI # Directly referencing AMI parameter
-      InstanceType: !Ref InstanceType
-      SubnetId: !Ref PrivateSubnet1R1
-      SecurityGroupIds:
-        - !GetAtt AppSgR1.GroupId
-      IamInstanceProfile: !Ref Ec2InstanceProfile
-      UserData:
-        Fn::Base64: !Sub |
-          #!/bin/bash
-          yum update -y
-          yum install -y httpd
-          systemctl start httpd
-          echo "<h1>Hello from ${ProjectName} App Instance 1 in Region 1 (${Region1})</h1>" > /var/www/html/index.html
-          chkconfig httpd on
-      Tags:
-        - Key: Name
-          Value: !Sub ${ProjectName}-AppInstance1-R1-${Region1}
-
-  AppInstance2R1:
-    Type: AWS::EC2::Instance
-    Properties:
-      ImageId: !Ref AMI # Directly referencing AMI parameter
-      InstanceType: !Ref InstanceType
-      SubnetId: !Ref PrivateSubnet2R1
-      SecurityGroupIds:
-        - !GetAtt AppSgR1.GroupId
-      IamInstanceProfile: !Ref Ec2InstanceProfile
-      UserData:
-        Fn::Base64: !Sub |
-          #!/bin/bash
-          yum update -y
-          yum install -y httpd
-          systemctl start httpd
-          echo "<h1>Hello from ${ProjectName} App Instance 2 in Region 1 (${Region1})</h1>" > /var/www/html/index.html
-          chkconfig httpd on
-      Tags:
-        - Key: Name
-          Value: !Sub ${ProjectName}-AppInstance2-R1-${Region1}
-
-  # RDS Database - Region 1
   DbSubnetGroupR1:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
@@ -371,24 +255,10 @@ Resources:
         - Key: Name
           Value: !Sub ${ProjectName}-DBSG-R1-${Region1}
 
-  RdsInstanceR1:
-    Type: AWS::RDS::DBInstance
-    Properties:
-      DBInstanceClass: !Ref DBInstanceType
-      Engine: mysql
-      # ⚠️ Replaced Secrets Manager resolution with direct parameter references
-      MasterUsername: !Ref DBUsername
-      MasterUserPassword: !Ref DBPassword
-      AllocatedStorage: !Ref DBAllocatedStorage
-      MultiAZ: true
-      VPCSecurityGroups:
-        - !GetAtt DbSgR1.GroupId
-      DBSubnetGroupName: !Ref DbSubnetGroupR1
-      Tags:
-        - Key: Name
-          Value: !Sub ${ProjectName}-RDS-R1-${Region1}
-
 Outputs:
-  AlbDnsNameR1:
-    Description: The DNS name of the ALB in Region 1
-    Value: !GetAtt AlbR1.DNSName
+  NatEipR1PublicIp:
+    Description: The Public IP Address of the NAT Gateway Elastic IP
+    Value: !GetAtt NatEipR1.PublicIp
+  NatEipR1AllocationId:
+    Description: The Allocation ID of the NAT Gateway Elastic IP
+    Value: !GetAtt NatEipR1.AllocationId
