@@ -9,7 +9,7 @@
         },
         "Region1": {
             "Type": "String",
-            "Default": "us-east-1",
+            "Default": "us-east-2",
             "Description": "The AWS region for deployment."
         },
         "VpcCidr1": {
@@ -36,32 +36,6 @@
             "Type": "String",
             "Default": "10.0.4.0/24",
             "Description": "CIDR block for Private Subnet 2 in Region 1."
-        },
-        "InstanceType": {
-            "Type": "String",
-            "Default": "t3.micro",
-            "Description": "EC2 instance type for application servers."
-        },
-        "AMI": {
-            "Type": "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>",
-            "Default": "/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2",
-            "Description": "The SSM parameter path for the EC2 AMI ID."
-        },
-        "DBInstanceType": {
-            "Type": "String",
-            "Default": "db.t3.micro",
-            "Description": "RDS DB instance type."
-        },
-        "DBAllocatedStorage": {
-            "Type": "Number",
-            "Default": 20,
-            "Description": "Allocated storage for the RDS database in GiB."
-        },
-        "DBUsername": {
-            "Type": "String",
-            "Description": "Master username for the RDS database.",
-            "Default": "oracless",
-            "NoEcho": true
         }
     },
     "Resources": {
@@ -221,29 +195,6 @@
             "Type": "AWS::EC2::EIP",
             "Properties": {
                 "Domain": "vpc"
-            },
-            "DependsOn": "IgwAttachmentR1"
-        },
-        "NatGwR1": {
-            "Type": "AWS::EC2::NatGateway",
-            "Properties": {
-                "AllocationId": {
-                    "Fn::GetAtt": [
-                        "NatEipR1",
-                        "AllocationId"
-                    ]
-                },
-                "SubnetId": {
-                    "Ref": "PublicSubnet1R1"
-                },
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${ProjectName}-NATGW-R1-${Region1}"
-                        }
-                    }
-                ]
             }
         },
         "PublicRouteTableR1": {
@@ -287,18 +238,6 @@
                 "DestinationCidrBlock": "0.0.0.0/0",
                 "GatewayId": {
                     "Ref": "IgwR1"
-                }
-            }
-        },
-        "PrivateRouteR1": {
-            "Type": "AWS::EC2::Route",
-            "Properties": {
-                "RouteTableId": {
-                    "Ref": "PrivateRouteTableR1"
-                },
-                "DestinationCidrBlock": "0.0.0.0/0",
-                "NatGatewayId": {
-                    "Ref": "NatGwR1"
                 }
             }
         },
@@ -389,12 +328,7 @@
                         "IpProtocol": "tcp",
                         "FromPort": 80,
                         "ToPort": 80,
-                        "SourceSecurityGroupId": {
-                            "Fn::GetAtt": [
-                                "AlbSgR1",
-                                "GroupId"
-                            ]
-                        }
+                        "CidrIp": "0.0.0.0/0"
                     },
                     {
                         "IpProtocol": "tcp",
@@ -420,100 +354,11 @@
                 "VpcId": {
                     "Ref": "VpcR1"
                 },
-                "SecurityGroupIngress": [
-                    {
-                        "IpProtocol": "tcp",
-                        "FromPort": 3306,
-                        "ToPort": 3306,
-                        "SourceSecurityGroupId": {
-                            "Fn::GetAtt": [
-                                "AppSgR1",
-                                "GroupId"
-                            ]
-                        }
-                    }
-                ],
                 "Tags": [
                     {
                         "Key": "Name",
                         "Value": {
                             "Fn::Sub": "${ProjectName}-DBSG-R1-${Region1}"
-                        }
-                    }
-                ]
-            }
-        },
-        "AlbR1": {
-            "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
-            "Properties": {
-                "Name": {
-                    "Fn::Sub": "${ProjectName}-ALB-R1"
-                },
-                "Subnets": [
-                    {
-                        "Ref": "PublicSubnet1R1"
-                    },
-                    {
-                        "Ref": "PublicSubnet2R1"
-                    }
-                ],
-                "SecurityGroups": [
-                    {
-                        "Fn::GetAtt": [
-                            "AlbSgR1",
-                            "GroupId"
-                        ]
-                    }
-                ],
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${ProjectName}-ALB-R1-${Region1}"
-                        }
-                    }
-                ]
-            }
-        },
-        "AlbListenerR1": {
-            "Type": "AWS::ElasticLoadBalancingV2::Listener",
-            "Properties": {
-                "LoadBalancerArn": {
-                    "Ref": "AlbR1"
-                },
-                "Port": 80,
-                "Protocol": "HTTP",
-                "DefaultActions": [
-                    {
-                        "Type": "forward",
-                        "TargetGroupArn": {
-                            "Ref": "AlbTargetGroupR1"
-                        }
-                    }
-                ]
-            }
-        },
-        "AlbTargetGroupR1": {
-            "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
-            "Properties": {
-                "Name": {
-                    "Fn::Sub": "${ProjectName}-TG-R1"
-                },
-                "VpcId": {
-                    "Ref": "VpcR1"
-                },
-                "Port": 80,
-                "Protocol": "HTTP",
-                "HealthCheckPath": "/",
-                "HealthCheckPort": 80,
-                "HealthCheckProtocol": "HTTP",
-                "HealthyThresholdCount": 2,
-                "UnhealthyThresholdCount": 2,
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${ProjectName}-TG-R1-${Region1}"
                         }
                     }
                 ]
@@ -557,92 +402,6 @@
                 ]
             }
         },
-        "Ec2InstanceProfile": {
-            "Type": "AWS::IAM::InstanceProfile",
-            "Properties": {
-                "Roles": [
-                    {
-                        "Ref": "Ec2InstanceRole"
-                    }
-                ]
-            }
-        },
-        "AppInstance1R1": {
-            "Type": "AWS::EC2::Instance",
-            "Properties": {
-                "ImageId": {
-                    "Ref": "AMI"
-                },
-                "InstanceType": {
-                    "Ref": "InstanceType"
-                },
-                "SubnetId": {
-                    "Ref": "PrivateSubnet1R1"
-                },
-                "SecurityGroupIds": [
-                    {
-                        "Fn::GetAtt": [
-                            "AppSgR1",
-                            "GroupId"
-                        ]
-                    }
-                ],
-                "IamInstanceProfile": {
-                    "Ref": "Ec2InstanceProfile"
-                },
-                "UserData": {
-                    "Fn::Base64": {
-                        "Fn::Sub": "#!/bin/bash\nyum update -y\nyum install -y httpd\nsystemctl start httpd\necho \"<h1>Hello from ${ProjectName} App Instance 1 in Region 1 (${Region1})</h1>\" > /var/www/html/index.html\nchkconfig httpd on\n"
-                    }
-                },
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${ProjectName}-AppInstance1-R1-${Region1}"
-                        }
-                    }
-                ]
-            }
-        },
-        "AppInstance2R1": {
-            "Type": "AWS::EC2::Instance",
-            "Properties": {
-                "ImageId": {
-                    "Ref": "AMI"
-                },
-                "InstanceType": {
-                    "Ref": "InstanceType"
-                },
-                "SubnetId": {
-                    "Ref": "PrivateSubnet2R1"
-                },
-                "SecurityGroupIds": [
-                    {
-                        "Fn::GetAtt": [
-                            "AppSgR1",
-                            "GroupId"
-                        ]
-                    }
-                ],
-                "IamInstanceProfile": {
-                    "Ref": "Ec2InstanceProfile"
-                },
-                "UserData": {
-                    "Fn::Base64": {
-                        "Fn::Sub": "#!/bin/bash\nyum update -y\nyum install -y httpd\nsystemctl start httpd\necho \"<h1>Hello from ${ProjectName} App Instance 2 in Region 1 (${Region1})</h1>\" > /var/www/html/index.html\nchkconfig httpd on\n"
-                    }
-                },
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${ProjectName}-AppInstance2-R1-${Region1}"
-                        }
-                    }
-                ]
-            }
-        },
         "DbSubnetGroupR1": {
             "Type": "AWS::RDS::DBSubnetGroup",
             "Properties": {
@@ -664,50 +423,24 @@
                     }
                 ]
             }
-        },
-        "RdsInstanceR1": {
-            "Type": "AWS::RDS::DBInstance",
-            "Properties": {
-                "DBInstanceClass": {
-                    "Ref": "DBInstanceType"
-                },
-                "Engine": "mysql",
-                "MasterUsername": {
-                    "Ref": "DBUsername"
-                },
-                "AllocatedStorage": {
-                    "Ref": "DBAllocatedStorage"
-                },
-                "MultiAZ": true,
-                "VPCSecurityGroups": [
-                    {
-                        "Fn::GetAtt": [
-                            "DbSgR1",
-                            "GroupId"
-                        ]
-                    }
-                ],
-                "DBSubnetGroupName": {
-                    "Ref": "DbSubnetGroupR1"
-                },
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${ProjectName}-RDS-R1-${Region1}"
-                        }
-                    }
-                ]
-            }
         }
     },
     "Outputs": {
-        "AlbDnsNameR1": {
-            "Description": "The DNS name of the ALB in Region 1",
+        "NatEipR1PublicIp": {
+            "Description": "The Public IP Address of the NAT Gateway Elastic IP",
             "Value": {
                 "Fn::GetAtt": [
-                    "AlbR1",
-                    "DNSName"
+                    "NatEipR1",
+                    "PublicIp"
+                ]
+            }
+        },
+        "NatEipR1AllocationId": {
+            "Description": "The Allocation ID of the NAT Gateway Elastic IP",
+            "Value": {
+                "Fn::GetAtt": [
+                    "NatEipR1",
+                    "AllocationId"
                 ]
             }
         }
