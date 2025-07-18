@@ -56,6 +56,7 @@ Parameters:
   DBPassword: # 🆕 Added parameter for DB master password
     Type: String
     Description: Master password for the RDS database. Must be 8-41 characters, contain at least one uppercase letter, one lowercase letter, one number, and one non-alphanumeric character.
+    Default: oracless123
     NoEcho: true # IMPORTANT: Hides the value in console output for security
 
 Resources:
