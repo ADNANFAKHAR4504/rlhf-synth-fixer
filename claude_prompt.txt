@@ -1,0 +1,33 @@
+You are an expert AWS Cloud Architect and DevOps engineer.
+
+* You are given a problem described in lib/PROMPT.md.
+* You are given a Response of an LLM in lib/MODEL_RESPONSE.md
+* Is proven that the response from that LLM has not passed the QA pipeline.
+* None of the resources to be created can have a Retain policy. As they are going to be destroyed at the end of the QA pipeline.
+* our QA pipeline involes:
+  1. lint: npm run lint
+  2. build: npm run build
+  3. synth: npm run cdk:synth
+  4. deploy: npm run cdk:deploy
+    * If deployment fails, fix the code until it passes.
+    * Read the latest documentation for the resources involved to get the latest information.
+  5. Write unit tests for testing the code in lib/ inside test/tap-stack.unit.test.ts for 100% coverage.
+  6. run unit tests: npm run test:unit. and fix it until it passes
+  7. Write integration tests for testing the code in lib/ inside test/tap-stack.integration.test.ts
+    * You will need to collect the outputs from the deploy step and use them in the integration tests.
+  8. Run integration tests: npm run test:integration. And fix it until it passes.
+    * Use the outputs from the deploy step to test the integration tests.
+    * The integration tests should be able to validate the e2e workflow of the application.
+    * To fix the problems in the integration tests, read the aws documentation for the resources involved to address problems.
+  9. Run build, lint, unit tests, and integrations tests until everything passes.
+  10. Once you have fixed the code, you will need to fill the file lib/IDEAL_RESPONSE.md.
+    * For this task, you will need to answer as if you were the LLM, but with the knowledge that you have gone through the QA pipeline and fixed all the issues.
+    * Do not mention anything about you solved it, just provide the ideal response as if you were the LLM.
+    * Provide all the file structure and file_names that were created or modified.
+    * Also need to add all the unit tests and integration tests that were created or modified.
+    * Every inserted code, should be prepended by its relative path in the project.
+  11. Finally, you can destroy the stack using `npm run cdk:destroy` to clean up resources.
+
+* You need to fix the code related to the problem and go through the entire QA pipeline, fixing one step at a time.
+  * Example, Run lint and fix it, only then run build and fix it, and so on.
+  * Every time you see a problem, you will document it in the MODEL_FAILURES.md file.
