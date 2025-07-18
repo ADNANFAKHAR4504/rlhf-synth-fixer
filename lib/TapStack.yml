@@ -1,4 +1,4 @@
-AWSTemplateFormatVersion: '2010-09-10'
+AWSTemplateFormatVersion: '2010-09-09'
 Description: |
   CloudFormation template for a highly available, scalable, and secure
   cloud environment in a single AWS region to support a critical application.
