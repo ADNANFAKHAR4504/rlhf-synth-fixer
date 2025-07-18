@@ -27,6 +27,7 @@ Parameters:
   Owner:
     Description: The owner or team responsible for this infrastructure.
     Type: String
+    Default: san
   VPCCIDR:
     Description: CIDR block for the VPC.
     Type: String
@@ -965,10 +966,10 @@ Resources:
         Tags:
           - Key: Environment
             Value: !Ref Environment
-            - Key: Project
-              Value: !Ref Project
-            - Key: Owner
-              Value: !Ref Owner
+          - Key: Project
+            Value: !Ref Project
+          - Key: Owner
+            Value: !Ref Owner
 
   CloudFrontLogsBucket:
     Type: AWS::S3::Bucket
