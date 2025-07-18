@@ -53,6 +53,10 @@ Parameters:
     Description: Master username for the RDS database.
     Default: oracless
     NoEcho: true # Hides the value in console output
+  DBPassword: # 🆕 Added parameter for DB master password
+    Type: String
+    Description: Master password for the RDS database. Must be 8-41 characters, contain at least one uppercase letter, one lowercase letter, one number, and one non-alphanumeric character.
+    NoEcho: true # IMPORTANT: Hides the value in console output for security
 
 Resources:
   # Region 1 Resources --------------------------------------------------------
@@ -373,7 +377,7 @@ Resources:
       Engine: mysql
       # ⚠️ Replaced Secrets Manager resolution with direct parameter references
       MasterUsername: !Ref DBUsername
-      MasterUserPassword: '{{resolve:secretsmanager:/my-app/rds/master-password:SecretString}}'
+      MasterUserPassword: !Ref DBPassword
       AllocatedStorage: !Ref DBAllocatedStorage
       MultiAZ: true
       VPCSecurityGroups:
