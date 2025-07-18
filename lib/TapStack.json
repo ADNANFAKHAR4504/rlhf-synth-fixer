@@ -2110,9 +2110,9 @@
                 },
                 "PublicAccessBlockConfiguration": {
                     "BlockPublicAcls": true,
-                    "BlockPublicPolicy": true,
+                    "BlockPublicPolicy": false,
                     "IgnorePublicAcls": true,
-                    "RestrictPublicBuckets": true
+                    "RestrictPublicBuckets": false
                 },
                 "OwnershipControls": {
                     "Rules": [
@@ -2141,6 +2141,49 @@
                         }
                     }
                 ]
+            }
+        },
+        "AWSConfigLogsBucketPolicy": {
+            "Type": "AWS::S3::BucketPolicy",
+            "Properties": {
+                "Bucket": {
+                    "Ref": "AWSConfigLogsBucket"
+                },
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "AWSConfigBucketPermissionsCheck",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "config.amazonaws.com"
+                            },
+                            "Action": "s3:GetBucketAcl",
+                            "Resource": {
+                                "Fn::GetAtt": [
+                                    "AWSConfigLogsBucket",
+                                    "Arn"
+                                ]
+                            }
+                        },
+                        {
+                            "Sid": "AWSConfigBucketDelivery",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "config.amazonaws.com"
+                            },
+                            "Action": "s3:PutObject",
+                            "Resource": {
+                                "Fn::Sub": "${AWSConfigLogsBucket.Arn}/AWSLogs/${AWS::AccountId}/*"
+                            },
+                            "Condition": {
+                                "StringEquals": {
+                                    "s3:x-amz-acl": "bucket-owner-full-control"
+                                }
+                            }
+                        }
+                    ]
+                }
             }
         },
         "AWSConfigDeliveryChannel": {

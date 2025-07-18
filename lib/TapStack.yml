@@ -1048,9 +1048,9 @@ Resources:
               SSEAlgorithm: AES256
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
-        BlockPublicPolicy: true
+        BlockPublicPolicy: false
         IgnorePublicAcls: true
-        RestrictPublicBuckets: true
+        RestrictPublicBuckets: false
       OwnershipControls:
         Rules:
           - ObjectOwnership: BucketOwnerEnforced
@@ -1061,6 +1061,30 @@ Resources:
           Value: !Ref Project
         - Key: Owner
           Value: !Ref Owner
+
+  AWSConfigLogsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref AWSConfigLogsBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AWSConfigBucketPermissionsCheck
+            Effect: Allow
+            Principal:
+              Service: config.amazonaws.com
+            Action: "s3:GetBucketAcl"
+            Resource: !GetAtt AWSConfigLogsBucket.Arn
+
+          - Sid: AWSConfigBucketDelivery
+            Effect: Allow
+            Principal:
+              Service: config.amazonaws.com
+            Action: "s3:PutObject"
+            Resource: !Sub "${AWSConfigLogsBucket.Arn}/AWSLogs/${AWS::AccountId}/*"
+            Condition:
+              StringEquals:
+                "s3:x-amz-acl": "bucket-owner-full-control"
 
   AWSConfigDeliveryChannel:
     Type: AWS::Config::DeliveryChannel
