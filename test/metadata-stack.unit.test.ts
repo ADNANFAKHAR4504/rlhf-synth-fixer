@@ -71,7 +71,7 @@ describe('MetadataProcessingStack', () => {
   describe('OpenSearch Serverless', () => {
     test('should create OpenSearch Serverless collection with environment suffix', () => {
       template.hasResourceProperties('AWS::OpenSearchServerless::Collection', {
-        Name: `iac-rlhf-metadata-collection-${environmentSuffix}`,
+        Name: `iac-rlhf-metadata-coll-${environmentSuffix}`,
         Type: 'TIMESERIES',
       });
     });
@@ -216,7 +216,7 @@ describe('MetadataProcessingStack', () => {
       });
 
       template.hasOutput('OpenSearchCollectionName', {
-        Value: `iac-rlhf-metadata-collection-${environmentSuffix}`,
+        Value: `iac-rlhf-metadata-coll-${environmentSuffix}`,
       });
 
       template.hasOutput('OpenSearchDashboardUrl', {});

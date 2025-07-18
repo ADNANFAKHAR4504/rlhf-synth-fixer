@@ -54,7 +54,7 @@ export class MetadataProcessingStack extends cdk.Stack {
       this,
       'MetadataCollection',
       {
-        name: `iac-rlhf-metadata-collection-${environmentSuffix}`,
+        name: `iac-rlhf-metadata-coll-${environmentSuffix}`,
         type: 'TIMESERIES',
       }
     );
