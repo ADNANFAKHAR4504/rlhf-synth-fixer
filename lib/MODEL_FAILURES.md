@@ -1,37 +1,54 @@
-## MODEL_FAILURE.md
+MODEL_FAILURES.md
+Task Overview
+Task Title: multi-env-consistency_CloudFormation_YAML_6dq1ae9tnvqx
+Objective: Build a production-grade, secure, highly available, and scalable AWS infrastructure using CloudFormation YAML, with support for multi-region deployments and enforcement of security best practices such as least-privilege IAM, KMS encryption, AWS WAF, Shield, centralized logging, and multi-tier separation.
 
-### Summary
-The generated CloudFormation YAML template fails to meet multiple security, reliability, and best practice expectations outlined in the original prompt. The issues include incorrect S3 bucket policies, lack of IAM policy separation, missing NACLs, improper EC2 key handling, and unvalidated components.
+Summary of Failures
+Category	Issue	Description
+❌ Multi-Region Deployment	Not Implemented	Template only supports deployment in a single region; no use of StackSets, cross-region replication, or Route 53 latency-based routing.
+⚠️ IAM Security	Overly Permissive Policy	IAM Role grants S3 read access using wildcard *. Does not follow the least-privilege principle.
+❌ Encryption (KMS, S3, RDS)	Missing	No KMS keys, S3 server-side encryption, or encrypted resources are defined.
+❌ Secrets Management	Missing	No use of AWS Secrets Manager or Parameter Store for handling credentials or sensitive configuration.
+❌ Database Layer	Missing	No RDS instance defined. The requirement to implement RDS with cross-region read replicas was ignored.
+❌ CloudFront	Missing	No CloudFront distribution was configured. Edge caching and distribution requirements unaddressed.
+❌ WAF and AWS Shield	Missing	Web application firewall and DDoS protection were not implemented or associated with any service.
+❌ Logging and Monitoring	Missing	CloudWatch metrics, alarms, and centralized logging (e.g., dedicated S3 log bucket with SSE) are not included.
+⚠️ Auto Scaling Logic	Partially Satisfied	Auto Scaling Group is defined, but lacks scaling policies, health checks, and CloudWatch alarm triggers.
+⚠️ Network Security	Partially Satisfied	Security groups are present, but network ACLs and private subnets for database/application separation are missing.
+⚠️ Modularity	Limited	Template uses parameters and mappings but does not leverage nested stacks or macros for modularity.
+✅ Hardcoding Avoided	Passed	AMI selection and availability zones are dynamic. Good use of mappings and references.
 
----
+Root Cause
+The model defaulted to generating a basic single-region web application stack, reusing standard infrastructure blocks such as VPC, subnets, ALB, and ASG, without fully integrating advanced enterprise-grade features like:
 
-### Detailed Failures
+Cross-region logic (e.g., Route 53 latency routing, StackSets, multi-region DNS failover)
 
-#### 1. 🔐 S3 Bucket Policy Misconfiguration
-- **Issue**: Bucket policy attempts to deny insecure transport using an unresolved intrinsic reference: `!Sub "arn:aws:s3:::${S3Bucket}/*"` inside the policy's `Resource`. This results in deployment failure due to circular dependency.
-- **Fix**: Replace with explicit bucket name or use `!Join` workaround. Alternatively, move policy to a separate `AWS::S3::BucketPolicy` resource.
+Compliance-focused security (KMS, logging, least-privilege IAM, Secrets Manager)
 
-#### 2. 🔐 Missing KMS Encryption for RDS
-- **Issue**: RDS is deployed without KMS key encryption.
-- **Fix**: Add `StorageEncrypted: true` and `KmsKeyId: !Ref MyKmsKey`.
+Observability (CloudTrail, CloudWatch Alarms)
 
-#### 3. 🚫 No NACLs Defined
-- **Issue**: Prompt requests network ACLs configured with best practices. These are missing entirely.
-- **Fix**: Add `AWS::EC2::NetworkAcl` and `AWS::EC2::SubnetNetworkAclAssociation` resources.
+Edge performance (CloudFront with WAF)
 
-#### 4. ⚠️ Hardcoded RDS Credentials
-- **Issue**: `MasterUsername` and `MasterUserPassword` are hardcoded.
-- **Fix**: Use `AWS::SecretsManager::Secret` and reference it securely.
+These omissions suggest that the prompt was not strong enough to enforce multi-region awareness and strict security standards.
 
-#### 5. 🔐 IAM Role Lacks Granular Policies
-- **Issue**: IAM roles lack least privilege granularity and reuse the same policy for EC2 access to S3.
-- **Fix**: Split roles by resource and restrict by action and condition.
+Impact
+The model's output would fail a real-world expert-level review for production infrastructure due to:
 
-#### 6. ❌ Launch Configuration is Deprecated
-- **Issue**: `AWS::AutoScaling::LaunchConfiguration` is outdated.
-- **Fix**: Use `AWS::AutoScaling::LaunchTemplate` instead.
+Operational risk (no failover, no region redundancy)
 
----
+Security vulnerabilities (no encryption, open IAM permissions, no WAF/Shield)
 
-### Conclusion
-The model response contains valid CloudFormation syntax but does **not fully satisfy** the security, high availability, and best practice criteria requested. Therefore, it **breaks the model** as per expert-level expectations.
+Compliance gaps (no audit logging, no secrets control)
+
+Scalability bottlenecks (no edge distribution, no autoscaling policies)
+
+Recommendation
+Strengthen the prompt by explicitly stating multi-region must be functionally implemented, and no single-region assumption is acceptable.
+
+Add acceptance criteria for:
+
+Presence of AWS::Route53, AWS::RDS::DBInstance, AWS::WAFv2::WebACL, AWS::SecretsManager::Secret, AWS::CloudFront::Distribution
+
+Multi-region constructs such as StackSets or Route 53 failover/latency routing
+
+Would you like a redraft of the prompt or a fixed CloudFormation template that passes all requirements?

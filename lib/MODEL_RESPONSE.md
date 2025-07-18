@@ -1,46 +1,74 @@
-# MODEL_RESPONSE.md
 
-## Prompt
+# Task: Multi-Environment Consistency – CloudFormation YAML
 
-**Task Title:** security-configuration-as-code_CloudFormation_YAML_y8dhye9sj3ab  
+## Prompt Details
+
+**Task Title:** `multi-env-consistency_CloudFormation_YAML_6dq1ae9tnvqx`  
 **Complexity:** Expert  
 **Platform:** AWS CloudFormation  
 **Language:** YAML  
 
-**Prompt Instruction:**
+### Prompt Instruction
+You are tasked with designing a highly available, secure, and scalable AWS infrastructure using CloudFormation YAML. The infrastructure should support a production-level web application architecture deployed across multiple AWS regions. Prioritize best practices such as encryption, IAM security, and resiliency across tiers.
 
-Use AWS CloudFormation to define your infrastructure as code.
+---
 
-Ensure the VPC spans multiple Availability Zones for fault tolerance.  
-Use AWS Identity and Access Management (IAM) to define custom roles and policies that limit permissions according to the principle of least privilege.  
-Implement Amazon RDS for MySQL and ensure it uses Multi-AZ deployments for high availability.  
-Set up S3 buckets with appropriate bucket policies and use server-side encryption.  
-Utilize Amazon CloudWatch for monitoring and alerts setup to keep track of resources and performance.  
-Incorporate auto-scaling groups for EC2 instances to maintain the necessary number of instances.  
-Deploy a CloudFront distribution to serve content through S3 buckets, optimizing delivery by caching at edge locations.  
-Apply AWS WAF to protect your application from web exploits and bots.  
-Configure an Elastic Load Balancer to distribute incoming requests across multiple instances.  
-Ensure all logs are securely stored in a dedicated logging bucket, using SSE.  
-Utilize AWS Key Management Service (KMS) to manage encryption keys for sensitive data.  
-Ensure all instances are launched with IAM roles instead of baking access keys into AMIs.  
-VPC should have network ACLs and security groups configured according to best practices.
+## Requirements
+- Use CloudFormation YAML format
+- Support deployment in more than one AWS region
+- Include essential components for availability, scaling, and protection
+- Adhere to least-privilege IAM
+- Use managed AWS services where possible
 
-## Generated Output (CloudFormation YAML)
+### Constraints
+- YAML only
+- Minimize hardcoded values
+- Prioritize reusability and modularity
+- Avoid overly complex logic
+
+---
+
+## Generated CloudFormation Template (YAML)
 
 ```yaml
 AWSTemplateFormatVersion: '2010-09-09'
-Description: Highly secure and scalable web infrastructure
+Description: Multi-region, highly available, secure, and scalable web application infrastructure.
+
+Parameters:
+  Environment:
+    Type: String
+    AllowedValues: 
+      - dev
+      - prod
+    Default: dev
+  VpcCIDR:
+    Type: String
+    Default: 10.0.0.0/16
+
+Mappings:
+  RegionMap:
+    us-east-1:
+      AMI: ami-0abcdef1234567890
+    us-west-2:
+      AMI: ami-0abcdef1234567891
 
 Resources:
   VPC:
     Type: AWS::EC2::VPC
-    Properties: 
-      CidrBlock: 10.0.0.0/16
+    Properties:
+      CidrBlock: !Ref VpcCIDR
       EnableDnsSupport: true
       EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${Environment}-VPC
 
   InternetGateway:
     Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub ${Environment}-IGW
 
   VPCGatewayAttachment:
     Type: AWS::EC2::VPCGatewayAttachment
@@ -50,59 +78,30 @@ Resources:
 
   PublicSubnet1:
     Type: AWS::EC2::Subnet
-    Properties: 
+    Properties:
       VpcId: !Ref VPC
-      CidrBlock: 10.0.1.0/24
-      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: !Select [ 0, !Cidr [ !Ref VpcCIDR, 4, 8 ] ]
+      MapPublicIpOnLaunch: true
+      AvailabilityZone: !Select [ 0, !GetAZs '' ]
+      Tags:
+        - Key: Name
+          Value: !Sub ${Environment}-PublicSubnet1
 
   PublicSubnet2:
     Type: AWS::EC2::Subnet
-    Properties: 
+    Properties:
       VpcId: !Ref VPC
-      CidrBlock: 10.0.2.0/24
-      AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: !Select [ 1, !Cidr [ !Ref VpcCIDR, 4, 8 ] ]
+      MapPublicIpOnLaunch: true
+      AvailabilityZone: !Select [ 1, !GetAZs '' ]
+      Tags:
+        - Key: Name
+          Value: !Sub ${Environment}-PublicSubnet2
 
-  PublicSubnet3:
-    Type: AWS::EC2::Subnet
-    Properties: 
-      VpcId: !Ref VPC
-      CidrBlock: 10.0.3.0/24
-      AvailabilityZone: !Select [2, !GetAZs '']
-
-  PublicRouteTable:
-    Type: AWS::EC2::RouteTable
-    Properties: 
-      VpcId: !Ref VPC
-
-  PublicRoute:
-    Type: AWS::EC2::Route
-    Properties: 
-      RouteTableId: !Ref PublicRouteTable
-      DestinationCidrBlock: 0.0.0.0/0
-      GatewayId: !Ref InternetGateway
-
-  PublicSubnet1RouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties: 
-      SubnetId: !Ref PublicSubnet1
-      RouteTableId: !Ref PublicRouteTable
-
-  PublicSubnet2RouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties: 
-      SubnetId: !Ref PublicSubnet2
-      RouteTableId: !Ref PublicRouteTable
-
-  PublicSubnet3RouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties: 
-      SubnetId: !Ref PublicSubnet3
-      RouteTableId: !Ref PublicRouteTable
-
-  EC2SecurityGroup:
+  WebServerSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Enable HTTP and SSH
+      GroupDescription: Enable HTTP and HTTPS access
       VpcId: !Ref VPC
       SecurityGroupIngress:
         - IpProtocol: tcp
@@ -110,137 +109,11 @@ Resources:
           ToPort: 80
           CidrIp: 0.0.0.0/0
         - IpProtocol: tcp
-          FromPort: 22
-          ToPort: 22
+          FromPort: 443
+          ToPort: 443
           CidrIp: 0.0.0.0/0
 
-  RDSSubnetGroup:
-    Type: AWS::RDS::DBSubnetGroup
-    Properties:
-      DBSubnetGroupDescription: Subnets for RDS
-      SubnetIds:
-        - !Ref PublicSubnet1
-        - !Ref PublicSubnet2
-        - !Ref PublicSubnet3
-
-  RDSInstance:
-    Type: AWS::RDS::DBInstance
-    Properties:
-      DBInstanceClass: db.t3.medium
-      Engine: MySQL
-      MasterUsername: admin
-      MasterUserPassword: SecretPassword123
-      MultiAZ: true
-      DBSubnetGroupName: !Ref RDSSubnetGroup
-      VPCSecurityGroups:
-        - !GetAtt EC2SecurityGroup.GroupId
-
-  S3Bucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketEncryption:
-        ServerSideEncryptionConfiguration:
-          - ServerSideEncryptionByDefault:
-              SSEAlgorithm: AES256
-      BucketPolicy:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Deny
-            Principal: "*"
-            Action: "s3:*"
-            Resource: !Sub "arn:aws:s3:::${S3Bucket}/*"
-            Condition:
-              Bool:
-                "aws:SecureTransport": "false"
-
-  CloudFrontDistribution:
-    Type: AWS::CloudFront::Distribution
-    Properties:
-      DistributionConfig:
-        Origins:
-          - DomainName: !GetAtt S3Bucket.DomainName
-            Id: S3Origin
-            S3OriginConfig:
-              OriginAccessIdentity: ""
-        Enabled: true
-        DefaultRootObject: index.html
-        DefaultCacheBehavior:
-          TargetOriginId: S3Origin
-          ViewerProtocolPolicy: redirect-to-https
-          ForwardedValues:
-            QueryString: false
-            Cookies:
-              Forward: none
-
-  WAF:
-    Type: AWS::WAFv2::WebACL
-    Properties:
-      Scope: CLOUDFRONT
-      DefaultAction:
-        Allow: {}
-      VisibilityConfig:
-        SampledRequestsEnabled: true
-        CloudWatchMetricsEnabled: true
-        MetricName: waf-metric
-
-  ALB:
-    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
-    Properties:
-      Subnets:
-        - !Ref PublicSubnet1
-        - !Ref PublicSubnet2
-        - !Ref PublicSubnet3
-      SecurityGroups:
-        - !GetAtt EC2SecurityGroup.GroupId
-
-  ALBListener:
-    Type: AWS::ElasticLoadBalancingV2::Listener
-    Properties:
-      LoadBalancerArn: !Ref ALB
-      Port: 80
-      Protocol: HTTP
-      DefaultActions:
-        - Type: forward
-          TargetGroupArn: !Ref TargetGroup
-
-  TargetGroup:
-    Type: AWS::ElasticLoadBalancingV2::TargetGroup
-    Properties:
-      VpcId: !Ref VPC
-      Port: 80
-      Protocol: HTTP
-
-  LaunchConfiguration:
-    Type: AWS::AutoScaling::LaunchConfiguration
-    Properties:
-      ImageId: ami-0abcdef1234567890
-      SecurityGroups:
-        - !Ref EC2SecurityGroup
-      IamInstanceProfile: !Ref EC2InstanceProfile
-      InstanceType: t2.micro
-
-  AutoScalingGroup:
-    Type: AWS::AutoScaling::AutoScalingGroup
-    Properties:
-      AvailabilityZones: 
-        - !Select [0, !GetAZs '']
-        - !Select [1, !GetAZs '']
-        - !Select [2, !GetAZs '']
-      LaunchConfigurationName: !Ref LaunchConfiguration
-      MinSize: 2
-      MaxSize: 10
-      LoadBalancerNames:
-        - !Ref ALB
-      TargetGroupARNs:
-        - !Ref TargetGroup
-
-  EC2InstanceProfile:
-    Type: AWS::IAM::InstanceProfile
-    Properties:
-      Roles:
-        - !Ref EC2Role
-
-  EC2Role:
+  WebServerRole:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
@@ -251,57 +124,98 @@ Resources:
               Service: ec2.amazonaws.com
             Action: sts:AssumeRole
       Policies:
-        - PolicyName: EC2S3Policy
+        - PolicyName: S3ReadOnly
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
               - Effect: Allow
                 Action:
-                  - s3:GetObject
-                Resource: !Sub "arn:aws:s3:::${S3Bucket}/*"
+                  - s3:Get*
+                  - s3:List*
+                Resource: "*"
 
-  CloudWatchAlarm:
-    Type: AWS::CloudWatch::Alarm
+  ApplicationLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
-      MetricName: CPUUtilization
-      Namespace: AWS/EC2
-      Statistic: Average
-      Period: 300
-      EvaluationPeriods: 2
-      Threshold: 75
-      ComparisonOperator: GreaterThanThreshold
-      AlarmActions: 
-        - !Ref SNSTopic
+      Subnets:
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
+      SecurityGroups:
+        - !Ref WebServerSecurityGroup
+      Scheme: internet-facing
 
-  SNSTopic:
-    Type: AWS::SNS::Topic
+  WebServerTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      VpcId: !Ref VPC
+      Port: 80
+      Protocol: HTTP
+      TargetType: instance
+
+  ALBListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref ApplicationLoadBalancer
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref WebServerTargetGroup
+
+  LaunchConfiguration:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Properties:
+      ImageId: !FindInMap [RegionMap, !Ref "AWS::Region", AMI]
+      InstanceType: t2.micro
+      IamInstanceProfile: !Ref WebServerInstanceProfile
+      SecurityGroups:
+        - !Ref WebServerSecurityGroup
+
+  WebServerInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref WebServerRole
+
+  AutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      VPCZoneIdentifier:
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
+      LaunchConfigurationName: !Ref LaunchConfiguration
+      MinSize: 2
+      MaxSize: 4
+      DesiredCapacity: 2
+      TargetGroupARNs:
+        - !Ref WebServerTargetGroup
 
 Outputs:
-  WebsiteURL:
-    Description: URL for CloudFront distribution
-    Value: !GetAtt CloudFrontDistribution.DomainName
+  VPCId:
+    Description: VPC ID
+    Value: !Ref VPC
+  ALBDNSName:
+    Description: DNSName of the ALB
+    Value: !GetAtt ApplicationLoadBalancer.DNSName
 ```
 
-# Evaluation Summary
-
-| Feature | Result | Notes |
-|--------|--------|--------|
-| VPC with AZs | ✅ | Implemented with 3 AZs |
-| IAM roles | ✅ | Included, but least privilege policy could be improved |
-| RDS Multi-AZ | ✅ | `MultiAZ: true` set |
-| Secure subnets for RDS | ❌ | Uses public subnets |
-| S3 encryption | ✅ | AES256 |
-| S3 bucket policy | ❌ | Self-reference in `!Sub` is invalid inside resource |
-| CloudFront | ✅ | Setup with S3 origin |
-| WAF association | ❌ | WAF defined but not associated |
-| Logging | ❌ | No log bucket |
-| KMS | ❌ | No CMK used |
-| Secrets | ❌ | Hardcoded RDS password |
-| Network ACLs | ❌ | Not defined |
-| Use of deprecated LaunchConfiguration | ❌ | Should use LaunchTemplate |
-
-## Verdict
-
-❌ **FAIL** – Major security and production-readiness gaps.
-
 ---
+
+## Evaluation Summary
+
+| Feature                         | Result | Notes                                                                 |
+|----------------------------------|--------|------------------------------------------------------------------------|
+| Multi-Region Support            | ❌     | No StackSets, cross-region stacks, or global DNS setup.               |
+| High Availability               | ✅     | ALB + ASG with 2 AZs provides basic availability.                     |
+| Least Privilege IAM            | ⚠️     | IAM role grants S3:* access; should be narrowed.                      |
+| Managed AWS Services           | ⚠️     | Uses ALB/ASG/EC2, but omits RDS, S3, CloudFront, WAF, etc.            |
+| Encryption (KMS, S3, RDS)      | ❌     | No encryption or KMS usage defined.                                   |
+| Monitoring & Logs (CloudWatch) | ❌     | No logging, metrics, or alarms configured.                            |
+| WAF/Shield                     | ❌     | Not included or integrated with ALB/CloudFront.                       |
+| Secrets Management             | ❌     | No AWS Secrets Manager used for credentials.                          |
+| RDS Multi-AZ                   | ❌     | No database defined at all.                                           |
+| Modularity / Reusability       | ⚠️     | Parameters used, but lacks nested stacks/modules.                     |
+| Hardcoded Values Avoided       | ✅     | AMIs and AZs are mapped/selected properly.                            |
+
+### Verdict
+❌ **FAIL** – While the template implements a basic scalable web infrastructure in a single region, it falls significantly short of expert-level expectations for a secure, multi-region, production-ready setup. Critical security, observability, and redundancy requirements were not addressed.
