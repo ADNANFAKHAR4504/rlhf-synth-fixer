@@ -1,11 +1,11 @@
 {
   "jest.runMode": "on-demand",
-  "jest.jestCommandLine": "npx jest",
+  "jest.jestCommandLine": "npm test --",
   "jest.rootPath": ".",
 
   // Environment variables for Jest integration tests
   "jest.nodeEnv": {
-    "ENVIRONMENT_SUFFIX": "dev"
+    "ENVIRONMENT_SUFFIX_": ""
   },
 
   // TypeScript settings

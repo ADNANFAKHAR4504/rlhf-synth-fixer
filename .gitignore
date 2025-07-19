@@ -54,9 +54,16 @@ coverage/
 tmp/
 temp/
 
-# Python specific
+# Python virtual environments and packages
+python/
 __pycache__/
-*.py[cod]
+*.pyc
 *.pyo
 *.pyd
 .Python
+env/
+venv/
+.venv/
+ENV/
+env.bak/
+venv.bak/
