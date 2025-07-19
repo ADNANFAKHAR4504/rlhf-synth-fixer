@@ -1,3 +1,33 @@
+# MODEL_RESPONSE.md
+
+## Prompt
+
+**Task Title:** security-configuration-as-code_CloudFormation_YAML_y8dhye9sj3ab  
+**Complexity:** Expert  
+**Platform:** AWS CloudFormation  
+**Language:** YAML  
+
+**Prompt Instruction:**
+
+Use AWS CloudFormation to define your infrastructure as code.
+
+Ensure the VPC spans multiple Availability Zones for fault tolerance.  
+Use AWS Identity and Access Management (IAM) to define custom roles and policies that limit permissions according to the principle of least privilege.  
+Implement Amazon RDS for MySQL and ensure it uses Multi-AZ deployments for high availability.  
+Set up S3 buckets with appropriate bucket policies and use server-side encryption.  
+Utilize Amazon CloudWatch for monitoring and alerts setup to keep track of resources and performance.  
+Incorporate auto-scaling groups for EC2 instances to maintain the necessary number of instances.  
+Deploy a CloudFront distribution to serve content through S3 buckets, optimizing delivery by caching at edge locations.  
+Apply AWS WAF to protect your application from web exploits and bots.  
+Configure an Elastic Load Balancer to distribute incoming requests across multiple instances.  
+Ensure all logs are securely stored in a dedicated logging bucket, using SSE.  
+Utilize AWS Key Management Service (KMS) to manage encryption keys for sensitive data.  
+Ensure all instances are launched with IAM roles instead of baking access keys into AMIs.  
+VPC should have network ACLs and security groups configured according to best practices.
+
+## Generated Output (CloudFormation YAML)
+
+```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: Highly secure and scalable web infrastructure
 
@@ -250,3 +280,28 @@ Outputs:
   WebsiteURL:
     Description: URL for CloudFront distribution
     Value: !GetAtt CloudFrontDistribution.DomainName
+```
+
+# Evaluation Summary
+
+| Feature | Result | Notes |
+|--------|--------|--------|
+| VPC with AZs | ✅ | Implemented with 3 AZs |
+| IAM roles | ✅ | Included, but least privilege policy could be improved |
+| RDS Multi-AZ | ✅ | `MultiAZ: true` set |
+| Secure subnets for RDS | ❌ | Uses public subnets |
+| S3 encryption | ✅ | AES256 |
+| S3 bucket policy | ❌ | Self-reference in `!Sub` is invalid inside resource |
+| CloudFront | ✅ | Setup with S3 origin |
+| WAF association | ❌ | WAF defined but not associated |
+| Logging | ❌ | No log bucket |
+| KMS | ❌ | No CMK used |
+| Secrets | ❌ | Hardcoded RDS password |
+| Network ACLs | ❌ | Not defined |
+| Use of deprecated LaunchConfiguration | ❌ | Should use LaunchTemplate |
+
+## Verdict
+
+❌ **FAIL** – Major security and production-readiness gaps.
+
+---
