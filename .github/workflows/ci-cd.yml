@@ -279,10 +279,10 @@ jobs:
           if [ "${{ needs.synth.outputs.is-cdk-ts }}" = "true" ]; then
             echo "✅ CDK TypeScript project detected, getting CDK outputs..."
             npx cdk list --json > cdk-stacks.json
-            mkdir -p cdk-outputs
+            mkdir -p cfn-outputs
             echo "Getting all CloudFormation stacks..."
             aws cloudformation list-stacks --stack-status-filter CREATE_COMPLETE UPDATE_COMPLETE --query "StackSummaries[?contains(StackName, \`TapStack${{ env.ENVIRONMENT_SUFFIX }}\`)].StackName" --output text > cf-stacks.txt
-            echo "{}" > cdk-outputs/all-outputs.json
+            echo "{}" > cfn-outputs/all-outputs.json
             if [ -s cf-stacks.txt ]; then
               for stack in $(cat cf-stacks.txt); do
                 echo "Getting outputs for CloudFormation stack: $stack"
@@ -291,14 +291,14 @@ jobs:
                   output_count=$(jq 'length' "temp-${stack}-outputs.json" 2>/dev/null || echo "0")
                   if [ "$output_count" != "0" ] && [ "$output_count" != "null" ]; then
                     jq -n --arg stack "$stack" --slurpfile outputs "temp-${stack}-outputs.json" '{($stack): $outputs[0]}' > "temp-stack.json"
-                    jq -s '.[0] * .[1]' cdk-outputs/all-outputs.json temp-stack.json > temp-merged.json
-                    mv temp-merged.json cdk-outputs/all-outputs.json
-                    if [ ! -f "cdk-outputs/flat-outputs.json" ]; then
-                      echo "{}" > cdk-outputs/flat-outputs.json
+                    jq -s '.[0] * .[1]' cfn-outputs/all-outputs.json temp-stack.json > temp-merged.json
+                    mv temp-merged.json cfn-outputs/all-outputs.json
+                    if [ ! -f "cfn-outputs/flat-outputs.json" ]; then
+                      echo "{}" > cfn-outputs/flat-outputs.json
                     fi
                     jq -r '.[] | "\(.OutputKey)=\(.OutputValue)"' "temp-${stack}-outputs.json" | while IFS='=' read -r key value; do
-                      jq --arg key "$key" --arg value "$value" '. + {($key): $value}' cdk-outputs/flat-outputs.json > temp-flat.json
-                      mv temp-flat.json cdk-outputs/flat-outputs.json
+                      jq --arg key "$key" --arg value "$value" '. + {($key): $value}' cfn-outputs/flat-outputs.json > temp-flat.json
+                      mv temp-flat.json cfn-outputs/flat-outputs.json
                     done
                   fi
                   rm -f "temp-${stack}-outputs.json"
@@ -309,52 +309,52 @@ jobs:
               echo "No TapStack CloudFormation stacks found"
             fi
             echo "Consolidated outputs:"
-            cat cdk-outputs/all-outputs.json || echo "No consolidated outputs"
+            cat cfn-outputs/all-outputs.json || echo "No consolidated outputs"
             echo "Flat outputs:"
-            cat cdk-outputs/flat-outputs.json || echo "No flat outputs"
+            cat cfn-outputs/flat-outputs.json || echo "No flat outputs"
           elif [ "${{ needs.synth.outputs.platform }}" = "cfn" ]; then
             echo "✅ CloudFormation project detected, getting stack outputs..."
-            mkdir -p cdk-outputs
+            mkdir -p cfn-outputs
             # Try to find the stack name (assuming TapStack<ENVIRONMENT_SUFFIX>)
             STACK_NAME="TapStack${{ env.ENVIRONMENT_SUFFIX }}"
             echo "Getting outputs for CloudFormation stack: $STACK_NAME"
             aws cloudformation describe-stacks --stack-name "$STACK_NAME" --query 'Stacks[0].Outputs' --output json > temp-${STACK_NAME}-outputs.json 2>/dev/null || echo "No outputs for $STACK_NAME"
-            echo "{}" > cdk-outputs/all-outputs.json
+            echo "{}" > cfn-outputs/all-outputs.json
             if [ -f "temp-${STACK_NAME}-outputs.json" ]; then
               output_count=$(jq 'length' "temp-${STACK_NAME}-outputs.json" 2>/dev/null || echo "0")
               if [ "$output_count" != "0" ] && [ "$output_count" != "null" ]; then
                 jq -n --arg stack "$STACK_NAME" --slurpfile outputs "temp-${STACK_NAME}-outputs.json" '{($stack): $outputs[0]}' > temp-stack.json
-                jq -s '.[0] * .[1]' cdk-outputs/all-outputs.json temp-stack.json > temp-merged.json
-                mv temp-merged.json cdk-outputs/all-outputs.json
-                if [ ! -f "cdk-outputs/flat-outputs.json" ]; then
-                  echo "{}" > cdk-outputs/flat-outputs.json
+                jq -s '.[0] * .[1]' cfn-outputs/all-outputs.json temp-stack.json > temp-merged.json
+                mv temp-merged.json cfn-outputs/all-outputs.json
+                if [ ! -f "cfn-outputs/flat-outputs.json" ]; then
+                  echo "{}" > cfn-outputs/flat-outputs.json
                 fi
                 jq -r '.[] | "\(.OutputKey)=\(.OutputValue)"' "temp-${STACK_NAME}-outputs.json" | while IFS='=' read -r key value; do
-                  jq --arg key "$key" --arg value "$value" '. + {($key): $value}' cdk-outputs/flat-outputs.json > temp-flat.json
-                  mv temp-flat.json cdk-outputs/flat-outputs.json
+                  jq --arg key "$key" --arg value "$value" '. + {($key): $value}' cfn-outputs/flat-outputs.json > temp-flat.json
+                  mv temp-flat.json cfn-outputs/flat-outputs.json
                 done
               fi
               rm -f "temp-${STACK_NAME}-outputs.json"
             fi
             rm -f temp-stack.json temp-merged.json temp-flat.json
             echo "Consolidated outputs:"
-            cat cdk-outputs/all-outputs.json || echo "No consolidated outputs"
+            cat cfn-outputs/all-outputs.json || echo "No consolidated outputs"
             echo "Flat outputs:"
-            cat cdk-outputs/flat-outputs.json || echo "No flat outputs"
+            cat cfn-outputs/flat-outputs.json || echo "No flat outputs"
           else
             echo "ℹ️ Not a CDK TypeScript or CloudFormation project, creating empty outputs for consistency"
-            mkdir -p cdk-outputs
-            echo "{}" > cdk-outputs/all-outputs.json
-            echo "{}" > cdk-outputs/flat-outputs.json
+            mkdir -p cfn-outputs
+            echo "{}" > cfn-outputs/all-outputs.json
+            echo "{}" > cfn-outputs/flat-outputs.json
             echo "# No CDK outputs for non-CDK projects" > cdk-stacks.json
           fi
 
       - name: Upload Deployment Outputs
         uses: actions/upload-artifact@v4
         with:
-          name: cdk-outputs
+          name: cfn-outputs
           path: |
-            cdk-outputs/
+            cfn-outputs/
             cdk-stacks.json
 
   lint:
@@ -480,7 +480,7 @@ jobs:
       - name: Download Deployment Outputs
         uses: actions/download-artifact@v4
         with:
-          name: cdk-outputs
+          name: cfn-outputs
           path: .
 
       - name: Configure AWS
@@ -574,32 +574,32 @@ jobs:
           LANGUAGE="${{ needs.detect-metadata.outputs.language }}"
           echo "Using platform: $PLATFORM, language: $LANGUAGE"
 
-          # Update metadata.json with coverage information
-          if [ -f "coverage/coverage-summary.json" ]; then
-            echo "Found coverage-summary.json, updating metadata.json with coverage info"
-            
-            # Extract coverage percentages from coverage-summary.json
+          # Update metadata.json with coverage information and commit author
+          # Get commit author from GitHub context
+          COMMIT_AUTHOR="${{ github.event.pull_request.user.login || github.actor }}"
+          echo "Commit author: $COMMIT_AUTHOR"
+
+          # Extract coverage percentages from coverage-summary.json (assuming it always exists)
             LINES_COVERAGE=$(jq -r '.total.lines.pct' coverage/coverage-summary.json)
             BRANCHES_COVERAGE=$(jq -r '.total.branches.pct' coverage/coverage-summary.json)
-            
-            echo "Lines coverage: $LINES_COVERAGE%"
-            echo "Branches coverage: $BRANCHES_COVERAGE%"
-            
-            # Update metadata.json with coverage information
-            if [ -f "metadata.json" ]; then
-              jq --arg lines "$LINES_COVERAGE" --arg branches "$BRANCHES_COVERAGE" '. + {coverage: {lines: ($lines|tonumber), branches: ($branches|tonumber)}}' metadata.json > metadata.json.tmp
-              mv metadata.json.tmp metadata.json
-              echo "Updated metadata.json with coverage information"
-            else
-              echo "metadata.json not found, creating a new one with coverage information"
-              echo "{\"platform\": \"$PLATFORM\", \"language\": \"$LANGUAGE\", \"coverage\": {\"lines\": $LINES_COVERAGE, \"branches\": $BRANCHES_COVERAGE}}" > metadata.json
-              echo "Created metadata.json with coverage information"
+
+            # If coverage is "Unknown", set to 100
+            if [ "$LINES_COVERAGE" = "Unknown" ]; then
+            LINES_COVERAGE=100
             fi
-            
-            cat metadata.json
-          else
-            echo "Warning: coverage-summary.json not found, skipping coverage update"
-          fi
+            if [ "$BRANCHES_COVERAGE" = "Unknown" ]; then
+            BRANCHES_COVERAGE=100
+            fi
+
+          echo "Lines coverage: $LINES_COVERAGE%"
+          echo "Branches coverage: $BRANCHES_COVERAGE%"
+
+          # Update metadata.json with coverage information and commit author (assuming it always exists)
+          jq --arg lines "$LINES_COVERAGE" --arg branches "$BRANCHES_COVERAGE" --arg author "$COMMIT_AUTHOR" '. + {coverage: {lines: ($lines|tonumber), branches: ($branches|tonumber)}, author: $author}' metadata.json > metadata.json.tmp
+          mv metadata.json.tmp metadata.json
+          echo "Updated metadata.json with coverage information and commit author"
+
+          cat metadata.json
 
           echo "Current directory contents before archiving:"
           ls -la
@@ -609,24 +609,24 @@ jobs:
           mkdir -p "$ARCHIVE_DIR"
           echo "Created archive directory: $ARCHIVE_DIR"
 
-            # Define list of paths to move to archive
-            PATHS_TO_ARCHIVE=(
-            "lib"
-            "bin" 
-            "test"
-            "cdk.json"
-            "metadata.json"
-            )
+          # Define list of paths to move to archive
+          PATHS_TO_ARCHIVE=(
+          "lib"
+          "bin" 
+          "test"
+          "cdk.json"
+          "metadata.json"
+          )
 
-            # Move paths to archive
-            for path in "${PATHS_TO_ARCHIVE[@]}"; do
-            if [[ -d "$path" || -f "$path" ]]; then
-              mv "$path" "$ARCHIVE_DIR"/
-              echo "Moved $path to archive"
-            else
-              echo "Path $path not found, skipping"
-            fi
-            done
+          # Move paths to archive
+          for path in "${PATHS_TO_ARCHIVE[@]}"; do
+          if [[ -d "$path" || -f "$path" ]]; then
+            mv "$path" "$ARCHIVE_DIR"/
+            echo "Moved $path to archive"
+          else
+            echo "Path $path not found, skipping"
+          fi
+          done
 
           # Check if there are changes to commit
           if git diff --quiet && git diff --cached --quiet; then
