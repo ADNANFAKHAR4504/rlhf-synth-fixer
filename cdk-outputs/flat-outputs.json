@@ -1,18 +1,6 @@
 {
-  "VpcId": "vpc-1234567890abcdef0",
-  "KMSKeyId": "arn:aws:kms:us-east-1:123456789012:key/12345678-1234-1234-1234-123456789012",
-  "DatabaseEndpoint": "mydb.c9akciq32.us-east-1.rds.amazonaws.com",
-  "ContentBucketName": "secure-content-bucket-dev",
-  "LoggingBucketName": "secure-logging-bucket-dev",
-  "LoadBalancerDNS": "myalb-123456789.us-east-1.elb.amazonaws.com",
-  "LoadBalancerArn": "arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/app/myalb/1234567890123456",
-  "CloudFrontDomainName": "d1234567890abc.cloudfront.net",
-  "CloudFrontDistributionId": "E1234567890ABC",
-  "WebACLArn": "arn:aws:wafv2:us-east-1:123456789012:global/webacl/mywebacl/12345678-1234-1234-1234-123456789012",
-  "AutoScalingGroupName": "myasg-dev",
-  "CPUAlarmArn": "arn:aws:cloudwatch:us-east-1:123456789012:alarm:cpu-alarm-dev",
-  "EnvironmentSuffix": "Pr42",
-  "TurnAroundPromptTableArn": "arn:aws:dynamodb:us-east-1:718240086340:table/TurnAroundPromptTablePr42",
-  "TurnAroundPromptTableName": "TurnAroundPromptTablePr42",
-  "StackName": "TapStackPr42"
+  "WebsiteURL": "d1x2h2cu6qd6sf.cloudfront.net",
+  "LoadBalancerDNS": "prod-alb-730852658.us-east-1.elb.amazonaws.com",
+  "S3BucketName": "prod-web-content-206218410543",
+  "RDSInstanceEndpoint": "secure-web-stack-mysqldb-r2tt5c6xkyjd.cchmqciaab54.us-east-1.rds.amazonaws.com"
 }

@@ -1,312 +1,539 @@
-# Ideal CloudFormation Response
-
-This is the gold-standard CloudFormation YAML template for the secure, multi-AZ web infrastructure task.
-
-## Template Features
-
-- **Multi-AZ VPC** with 3 subnets across different availability zones
-- **Security-first design** with least privilege IAM roles and policies
-- **Multi-AZ RDS** deployment for high availability
-- **Encrypted storage** using S3 with server-side encryption and KMS
-- **Auto Scaling** groups for EC2 instances
-- **Application Load Balancer** for traffic distribution
-- **CloudFront CDN** for global content delivery
-- **WAF protection** against web exploits
-- **CloudWatch monitoring** and alerting
-- **Secure logging** with encrypted log storage
-
-## CloudFormation Template
-
-```yaml
 AWSTemplateFormatVersion: '2010-09-09'
-Description: Ideal CloudFormation Template for Secure, High-Availability Web Infrastructure
+Description: 'Secure web infrastructure with high availability and security'
+
+Mappings:
+  AWSRegionArch2AMI:
+    us-east-1:
+      x8664: ami-004021b186a0c56f8
+    us-east-2:
+      x8664: ami-004021b186a0c56f8
+    us-west-1:
+      x8664: ami-004021b186a0c56f8
+    us-west-2:
+      x8664: ami-004021b186a0c56f8
+    eu-west-1:
+      x8664: ami-004021b186a0c56f8
+    eu-central-1:
+      x8664: ami-004021b186a0c56f8
+    ap-southeast-1:
+      x8664: ami-004021b186a0c56f8
+    ap-northeast-1:
+      x8664: ami-004021b186a0c56f8
 
 Parameters:
-  DBUsername:
+  Environment:
     Type: String
-    NoEcho: true
-  DBPassword:
-    Type: String
-    NoEcho: true
+    Default: 'prod'
+    AllowedValues: ['dev', 'staging', 'prod']
+    Description: Deployment environment
 
 Resources:
-
+  # 1. VPC with 3 AZs
   VPC:
     Type: AWS::EC2::VPC
     Properties:
-      CidrBlock: 10.0.0.0/16
+      CidrBlock: '10.0.0.0/16'
       EnableDnsSupport: true
       EnableDnsHostnames: true
       Tags:
         - Key: Name
-          Value: SecureVPC
+          Value: !Sub '${Environment}-vpc'
 
+  # Internet Gateway
   InternetGateway:
     Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-igw'
 
-  VPCGatewayAttachment:
+  # Attach Internet Gateway to VPC
+  InternetGatewayAttachment:
     Type: AWS::EC2::VPCGatewayAttachment
     Properties:
-      VpcId: !Ref VPC
       InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref VPC
 
+  # Route Table for Public Subnets
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-public-routes'
+
+  # Default Route to Internet Gateway
+  DefaultPublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: '0.0.0.0/0'
+      GatewayId: !Ref InternetGateway
+
+  # Public Subnets in 3 AZs
   PublicSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
+      CidrBlock: '10.0.1.0/24'
       AvailabilityZone: !Select [0, !GetAZs '']
-      CidrBlock: 10.0.1.0/24
       MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-public-subnet-az1'
 
   PublicSubnet2:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
+      CidrBlock: '10.0.2.0/24'
       AvailabilityZone: !Select [1, !GetAZs '']
-      CidrBlock: 10.0.2.0/24
       MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-public-subnet-az2'
 
   PublicSubnet3:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
+      CidrBlock: '10.0.3.0/24'
       AvailabilityZone: !Select [2, !GetAZs '']
-      CidrBlock: 10.0.3.0/24
       MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-public-subnet-az3'
 
-  PublicRouteTable:
+  # Associate Public Subnets with Public Route Table
+  PublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet1
+
+  PublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet2
+
+  PublicSubnet3RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet3
+
+  # Private Subnets for RDS (New Addition)
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: '10.0.10.0/24'
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-private-subnet-az1'
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: '10.0.11.0/24'
+      AvailabilityZone: !Select [1, !GetAZs '']
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-private-subnet-az2'
+
+  PrivateSubnet3:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: '10.0.12.0/24'
+      AvailabilityZone: !Select [2, !GetAZs '']
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-private-subnet-az3'
+
+  # Route Table for Private Subnets (New Addition)
+  PrivateRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-private-routes'
 
-  PublicRoute:
-    Type: AWS::EC2::Route
-    Properties:
-      RouteTableId: !Ref PublicRouteTable
-      DestinationCidrBlock: 0.0.0.0/0
-      GatewayId: !Ref InternetGateway
-
-  PublicSubnetRouteTableAssociation1:
+  # Associate Private Subnets with Private Route Table (New Addition)
+  PrivateSubnet1RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
-      SubnetId: !Ref PublicSubnet1
-      RouteTableId: !Ref PublicRouteTable
+      RouteTableId: !Ref PrivateRouteTable
+      SubnetId: !Ref PrivateSubnet1
 
-  PublicSubnetRouteTableAssociation2:
+  PrivateSubnet2RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
-      SubnetId: !Ref PublicSubnet2
-      RouteTableId: !Ref PublicRouteTable
+      RouteTableId: !Ref PrivateRouteTable
+      SubnetId: !Ref PrivateSubnet2
 
-  PublicSubnetRouteTableAssociation3:
+  PrivateSubnet3RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
-      SubnetId: !Ref PublicSubnet3
-      RouteTableId: !Ref PublicRouteTable
+      RouteTableId: !Ref PrivateRouteTable
+      SubnetId: !Ref PrivateSubnet3
 
-  AppSecurityGroup:
+  # 13. Security Groups
+  WebSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Allow HTTP/HTTPS
+      GroupDescription: 'Allow HTTP/HTTPS traffic to web servers'
       VpcId: !Ref VPC
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 80
           ToPort: 80
-          CidrIp: 0.0.0.0/0
+          CidrIp: '0.0.0.0/0'
         - IpProtocol: tcp
           FromPort: 443
           ToPort: 443
-          CidrIp: 0.0.0.0/0
+          CidrIp: '0.0.0.0/0'
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-web-sg'
 
-  LoggingBucket:
-    Type: AWS::S3::Bucket
+  # RDS Security Group (New Addition)
+  DBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
     Properties:
-      BucketEncryption:
-        ServerSideEncryptionConfiguration:
-          - ServerSideEncryptionByDefault:
-              SSEAlgorithm: AES256
-      AccessControl: LogDeliveryWrite
+      GroupDescription: 'Allow MySQL traffic from web servers'
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          SourceSecurityGroupId: !GetAtt WebSecurityGroup.GroupId # Allow traffic only from web servers
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-db-sg'
 
-  KMSKey:
-    Type: AWS::KMS::Key
-    Properties:
-      Description: Key for RDS, S3, and CloudWatch
-      EnableKeyRotation: true
-      KeyPolicy:
-        Version: "2012-10-17"
-        Statement:
-          - Effect: Allow
-            Principal:
-              AWS: !Sub "arn:aws:iam::${AWS::AccountId}:root"
-            Action: "kms:*"
-            Resource: "*"
-
-  Secrets:
-    Type: AWS::SecretsManager::Secret
-    Properties:
-      Name: RDSSecret
-      SecretString: !Sub '{"username":"${DBUsername}", "password":"${DBPassword}"}'
-
-  DBSubnetGroup:
-    Type: AWS::RDS::DBSubnetGroup
-    Properties:
-      DBSubnetGroupDescription: Subnets for RDS
-      SubnetIds:
-        - !Ref PublicSubnet1
-        - !Ref PublicSubnet2
-        - !Ref PublicSubnet3
-
-  RDSInstance:
-    Type: AWS::RDS::DBInstance
-    Properties:
-      DBInstanceClass: db.t3.medium
-      Engine: MySQL
-      MultiAZ: true
-      StorageEncrypted: true
-      KmsKeyId: !Ref KMSKey
-      MasterUsername: !Join ['', [ '{{resolve:secretsmanager:', !Ref Secrets, ':SecretString:username}}' ]]
-      MasterUserPassword: !Join ['', [ '{{resolve:secretsmanager:', !Ref Secrets, ':SecretString:password}}' ]]
-      VPCSecurityGroups:
-        - !GetAtt AppSecurityGroup.GroupId
-      DBSubnetGroupName: !Ref DBSubnetGroup
-
-  ApplicationLaunchTemplate:
-    Type: AWS::EC2::LaunchTemplate
-    Properties:
-      LaunchTemplateData:
-        InstanceType: t3.micro
-        ImageId: ami-0abcdef1234567890
-        IamInstanceProfile:
-          Name: !Ref EC2InstanceProfile
-        SecurityGroupIds:
-          - !Ref AppSecurityGroup
-
-  AutoScalingGroup:
-    Type: AWS::AutoScaling::AutoScalingGroup
-    Properties:
-      VPCZoneIdentifier:
-        - !Ref PublicSubnet1
-        - !Ref PublicSubnet2
-        - !Ref PublicSubnet3
-      LaunchTemplate:
-        LaunchTemplateId: !Ref ApplicationLaunchTemplate
-        Version: !GetAtt ApplicationLaunchTemplate.LatestVersionNumber
-      MinSize: 2
-      MaxSize: 10
-
-  ALB:
-    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
-    Properties:
-      Subnets:
-        - !Ref PublicSubnet1
-        - !Ref PublicSubnet2
-        - !Ref PublicSubnet3
-      SecurityGroups:
-        - !Ref AppSecurityGroup
-
-  ALBListener:
-    Type: AWS::ElasticLoadBalancingV2::Listener
-    Properties:
-      LoadBalancerArn: !Ref ALB
-      Port: 80
-      Protocol: HTTP
-      DefaultActions:
-        - Type: fixed-response
-          FixedResponseConfig:
-            StatusCode: 200
-            ContentType: text/plain
-            MessageBody: Hello from ALB
-
-  CloudFrontDistribution:
-    Type: AWS::CloudFront::Distribution
-    Properties:
-      DistributionConfig:
-        Enabled: true
-        Origins:
-          - Id: S3Origin
-            DomainName: !GetAtt LoggingBucket.RegionalDomainName
-            S3OriginConfig:
-              OriginAccessIdentity: ''
-        DefaultCacheBehavior:
-          TargetOriginId: S3Origin
-          ViewerProtocolPolicy: redirect-to-https
-          ForwardedValues:
-            QueryString: false
-            Cookies:
-              Forward: none
-
-  WAFWebACL:
-    Type: AWS::WAFv2::WebACL
-    Properties:
-      Scope: CLOUDFRONT
-      DefaultAction:
-        Allow: {}
-      VisibilityConfig:
-        SampledRequestsEnabled: true
-        CloudWatchMetricsEnabled: true
-        MetricName: webACL
-
-  InstanceRole:
+  # 2. IAM Role for EC2
+  EC2Role:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
           - Effect: Allow
-            Principal:
-              Service: ec2.amazonaws.com
-            Action: sts:AssumeRole
-      Policies:
-        - PolicyName: S3ReadAccess
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - s3:GetObject
-                Resource: '*'
+            Principal: {Service: [ec2.amazonaws.com]}
+            Action: ['sts:AssumeRole']
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore'
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-ec2-role'
 
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
       Roles:
-        - !Ref InstanceRole
+        - !Ref EC2Role
+      InstanceProfileName: !Sub '${Environment}-ec2-instance-profile' # Add a name
 
-  CloudWatchAlarm:
+  # 4. Encrypted S3 Bucket
+  WebContentBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${Environment}-web-content-${AWS::AccountId}'
+      AccessControl: Private
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: 'AES256'
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-web-content-bucket'
+
+  # 11. KMS Key
+  EncryptionKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: 'Encryption key for sensitive data'
+      EnableKeyRotation: true
+      KeyPolicy: # Added Key Policy
+        Version: '2012-10-17'
+        Id: key-default-policy
+        Statement:
+          - Sid: Enable IAM User Permissions
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: 'kms:*'
+            Resource: '*'
+          - Sid: Allow access for RDS
+            Effect: Allow
+            Principal:
+              Service: rds.amazonaws.com
+            Action:
+              - kms:Decrypt
+              - kms:Encrypt
+              - kms:GenerateDataKey*
+              - kms:ReEncrypt*
+              - kms:DescribeKey
+            Resource: '*'
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-encryption-key'
+
+  # 3. Multi-AZ RDS MySQL
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: 'DB subnet group for private subnets'
+      SubnetIds:
+        - !Ref PrivateSubnet1 # Use private subnets
+        - !Ref PrivateSubnet2
+        - !Ref PrivateSubnet3
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-db-subnet-group'
+
+  MySQLDB:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      Engine: mysql
+      DBInstanceClass: db.t3.medium
+      AllocatedStorage: 20
+      MultiAZ: true
+      MasterUsername: 'admin'
+      MasterUserPassword: 'ChangeThisPassword123!' # CONSIDER AWS SECRETS MANAGER FOR PRODUCTION
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      VPCSecurityGroups:
+        - !GetAtt DBSecurityGroup.GroupId # Use the dedicated DB security group
+      StorageEncrypted: true
+      KmsKeyId: !Ref EncryptionKey
+      PubliclyAccessible: false # Ensure it's not publicly accessible
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-mysql-db'
+
+  # 6. Auto Scaling Group
+  LaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: !Sub '${Environment}-web-lt' # Add a name
+      LaunchTemplateData:
+        ImageId: !FindInMap [AWSRegionArch2AMI, !Ref 'AWS::Region', 'x8664']
+        InstanceType: 't3.micro'
+        SecurityGroupIds:
+          - !GetAtt WebSecurityGroup.GroupId
+        IamInstanceProfile:
+          Arn: !GetAtt EC2InstanceProfile.Arn
+        UserData: !Base64 | # Example UserData for a simple web server
+          #!/bin/bash
+          yum update -y
+          yum install -y httpd
+          systemctl start httpd
+          systemctl enable httpd
+          echo "<h1>Hello from AWS CloudFormation!</h1>" > /var/www/html/index.html
+
+  # Target Group for Load Balancer (New Addition)
+  WebAppTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub '${Environment}-web-tg'
+      Port: 80
+      Protocol: HTTP
+      VpcId: !Ref VPC
+      TargetType: instance
+      HealthCheckPath: /
+      HealthCheckProtocol: HTTP
+      HealthCheckIntervalSeconds: 30
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 2
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-web-target-group'
+
+  AutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      MinSize: 2
+      MaxSize: 4
+      DesiredCapacity: 2
+      VPCZoneIdentifier:
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
+        - !Ref PublicSubnet3
+      LaunchTemplate:
+        LaunchTemplateId: !Ref LaunchTemplate
+        Version: !GetAtt LaunchTemplate.LatestVersionNumber # Using LatestVersionNumber for simplicity, can also use !Ref LaunchTemplate
+      TargetGroupARNs: # Associate ASG with Target Group
+        - !Ref WebAppTargetGroup
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-web-asg'
+          PropagateAtLaunch: true # Propagate tags to EC2 instances
+
+  # 9. Load Balancer
+  AppLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Sub '${Environment}-alb'
+      Scheme: internet-facing
+      Subnets:
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
+        - !Ref PublicSubnet3
+      SecurityGroups:
+        - !GetAtt WebSecurityGroup.GroupId
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-app-load-balancer'
+
+  # Listener for Load Balancer (New Addition)
+  HTTPListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref AppLoadBalancer
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref WebAppTargetGroup
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-http-listener'
+
+  # CloudFront Origin Access Control (New Addition for S3 Security)
+  CloudFrontOAC:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: !Sub '${Environment}-cloudfront-oac'
+        OriginAccessControlOriginType: s3
+        SigningBehavior: no-override
+        SigningProtocol: sigv4
+
+  # 7. CloudFront with S3
+  CloudFrontDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        Origins:
+          - DomainName: !GetAtt WebContentBucket.RegionalDomainName # Use RegionalDomainName for OAC
+            Id: S3Origin
+            S3OriginConfig: # Remove S3OriginConfig when using OAC
+              OriginAccessIdentity: "" # This will be replaced by OAC
+            OriginAccessControlId: !GetAtt CloudFrontOAC.Id # Associate OAC
+        DefaultCacheBehavior:
+          TargetOriginId: S3Origin
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods: ['GET', 'HEAD']
+          CachedMethods: ['GET', 'HEAD']
+          ForwardedValues:
+            QueryString: false
+            Cookies:
+              Forward: 'none'
+        WebACLId: !GetAtt WebACL.Arn # Associate WAF with CloudFront
+      Tags: # Add tags to CloudFront distribution
+        - Key: Name
+          Value: !Sub '${Environment}-cloudfront-distribution'
+
+  # S3 Bucket Policy for CloudFront OAC (New Addition)
+  WebContentBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref WebContentBucket
+      PolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: cloudfront.amazonaws.com
+            Action: s3:GetObject
+            Resource: !Sub 'arn:aws:s3:::${WebContentBucket}/*'
+            Condition:
+              StringEquals:
+                'AWS:SourceArn': !Sub 'arn:aws:cloudfront::${AWS::AccountId}:distribution/${CloudFrontDistribution}'
+
+  # 8. WAF
+  WebACL:
+    Type: AWS::WAFv2::WebACL
+    Properties:
+      Name: !Sub '${Environment}-web-acl'
+      Scope: CLOUDFRONT
+      DefaultAction:
+        Allow: {}
+      VisibilityConfig:
+        SampledRequestsEnabled: true
+        CloudWatchMetricsEnabled: true
+        MetricName: 'WebACLMetrics'
+      Rules: # Example WAF rule (optional, you can customize or add more)
+        - Name: 'AWS-ManagedRules-CommonRuleSet'
+          Priority: 1
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: 'AWS'
+              Name: 'AWSManagedRulesCommonRuleSet'
+          OverrideAction:
+            None: {}
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: 'AWSManagedRulesCommonRuleSetMetrics'
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-web-acl'
+
+  # 5. CloudWatch Alarms
+  CPUAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      Namespace: AWS/EC2
-      MetricName: CPUUtilization
+      AlarmDescription: 'CPU utilization > 80% on Auto Scaling Group'
+      MetricName: 'CPUUtilization'
+      Namespace: 'AWS/EC2'
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 80
+      ComparisonOperator: GreaterThanThreshold
       Dimensions:
         - Name: AutoScalingGroupName
           Value: !Ref AutoScalingGroup
-      Statistic: Average
-      Period: 300
-      EvaluationPeriods: 1
-      Threshold: 70
-      ComparisonOperator: GreaterThanThreshold
-      AlarmActions:
-        - !Ref AlarmTopic
+      AlarmActions: [] # No SNS topic for now - can be added later
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-cpu-alarm'
 
-  AlarmTopic:
-    Type: AWS::SNS::Topic
+  # 10. Logging Bucket
+  LogBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${Environment}-logs-${AWS::AccountId}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: 'AES256'
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-logs-bucket'
 
 Outputs:
-  AppLoadBalancerDNS:
-    Description: DNS Name of the Load Balancer
-    Value: !GetAtt ALB.DNSName
-
-  CloudFrontURL:
-    Description: CloudFront URL
+  WebsiteURL:
+    Description: 'CloudFront Distribution URL'
     Value: !GetAtt CloudFrontDistribution.DomainName
-```
-
-## Security Features
-
-- **Least Privilege IAM**: IAM roles and policies follow the principle of least privilege
-- **Encryption at Rest**: RDS and S3 use encryption with KMS keys
-- **Multi-AZ Deployment**: RDS is configured for Multi-AZ for high availability
-- **Network Security**: Security groups and VPC configuration follow best practices
-- **WAF Protection**: Web Application Firewall protects against common exploits
-- **Secure Secrets Management**: Database credentials stored in AWS Secrets Manager
+  LoadBalancerDNS:
+    Description: 'Load Balancer DNS Name'
+    Value: !GetAtt AppLoadBalancer.DNSName
+  S3BucketName:
+    Description: 'S3 Web Content Bucket Name'
+    Value: !Ref WebContentBucket
+  RDSInstanceEndpoint:
+    Description: 'RDS Database Endpoint Address'
+    Value: !GetAtt MySQLDB.Endpoint.Address
