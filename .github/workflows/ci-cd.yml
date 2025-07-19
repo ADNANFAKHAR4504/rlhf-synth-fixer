@@ -729,7 +729,7 @@ jobs:
     name: Cleanup (PR Closed)
     runs-on: ubuntu-latest
     # This job should run regardless of the [skip-jobs] tag since it's for cleanup
-    if: github.event_name == 'pull_request' && github.event.action == 'closed'
+    if: github.event_name == 'pull_request' && github.event.action == 'closed' && !github.event.pull_request.merged
     environment: qa
 
     steps:
