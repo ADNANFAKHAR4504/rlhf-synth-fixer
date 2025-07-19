@@ -1,21 +1,40 @@
-import { Template } from 'aws-cdk-lib/assertions';
-import * as fs from 'fs';
-import * as path from 'path';
-import * as yaml from 'yaml';
+import fs from 'fs';
+import path from 'path';
 
-describe('Secure Web Infrastructure Unit Test', () => {
-  let template: Template;
+const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
+
+describe('TapStack CloudFormation Template', () => {
+  let template: any;
 
   beforeAll(() => {
-    const templatePath = path.join(__dirname, '../../../templates/cfn-yaml/lib/TapStack.yml');
-    const file = fs.readFileSync(templatePath, 'utf8');
-    const parsed = yaml.parse(file);
-    template = Template.fromJSON(parsed);
+    // If youre testing a yaml template. run `pipenv run cfn-flip-to-json > lib/TapStack.json`
+    // Otherwise, ensure the template is in JSON format.
+    const templatePath = path.join(__dirname, '../lib/TapStack.json');
+    const templateContent = fs.readFileSync(templatePath, 'utf8');
+    template = JSON.parse(templateContent);
   });
 
-  test('VPC should be created with correct CIDR block', () => {
-    template.hasResourceProperties('AWS::EC2::VPC', {
-      CidrBlock: '10.0.0.0/16'
+  describe('Write Integration TESTS', () => {
+    test('Dont forget!', async () => {
+      expect(false).toBe(true);
+    });
+  });
+
+  describe('Template Structure', () => {
+    test('should have valid CloudFormation format version', () => {
+      expect(template.AWSTemplateFormatVersion).toBe('2010-09-09');
+    });
+
+    test('should have a description', () => {
+      expect(template.Description).toBeDefined();
+      expect(template.Description).toBe(
+        'TAP Stack - Task Assignment Platform CloudFormation Template'
+      );
+    });
+
+    test('should have metadata section', () => {
+      expect(template.Metadata).toBeDefined();
+      expect(template.Metadata['AWS::CloudFormation::Interface']).toBeDefined();
     });
   });
 
