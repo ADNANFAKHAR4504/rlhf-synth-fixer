@@ -215,14 +215,31 @@ describe('Secure Serverless Application Infrastructure CloudFormation Template',
   describe('Outputs', () => {
     test('should have all required outputs', () => {
       const expected = [
-        'ApiEndpoint',
+        'VPC',
+        'PrivateSubnet1',
+        'PrivateSubnet2',
+        'PublicSubnet1',
+        'SSMParameterName',
         'LambdaFunction1Arn',
         'LambdaFunction2Arn',
-        'SSMParameterName',
+        'ApiEndpoint',
         'CloudWatchAlarmName',
         'SNSTopicArn',
       ];
       expect(Object.keys(template.Outputs).sort()).toEqual(expected.sort());
+    });
+
+    test('VPC, PrivateSubnet1, PrivateSubnet2, PublicSubnet1 outputs should reference correct resources', () => {
+      expect(template.Outputs.VPC.Value).toEqual({ Ref: 'VPC' });
+      expect(template.Outputs.PrivateSubnet1.Value).toEqual({
+        Ref: 'PrivateSubnet1',
+      });
+      expect(template.Outputs.PrivateSubnet2.Value).toEqual({
+        Ref: 'PrivateSubnet2',
+      });
+      expect(template.Outputs.PublicSubnet1.Value).toEqual({
+        Ref: 'PublicSubnet1',
+      });
     });
 
     test('ApiEndpoint output should use Fn::Sub with ApiGateway', () => {
