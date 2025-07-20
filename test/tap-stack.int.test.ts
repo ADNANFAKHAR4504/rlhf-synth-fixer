@@ -80,10 +80,17 @@ describe('TapStack Infrastructure Integration Tests', () => {
   });
 
   test('Flow Logs log group should exist', async () => {
-    const logGroupName = `vpc-flow-logs-${outputs.EnvironmentSuffix || 'dev'}`;
+    // Use output if available, else fallback to convention
+    const logGroupName =
+      outputs.FlowLogsLogGroupName ||
+      `vpc-flow-logs-${outputs.EnvironmentSuffix || 'dev'}`;
     const groups = await logs
       .describeLogGroups({ logGroupNamePrefix: logGroupName })
       .promise();
+    console.log(
+      'Available log groups:',
+      groups.logGroups?.map(g => g.logGroupName)
+    );
     expect(groups.logGroups?.some(g => g.logGroupName === logGroupName)).toBe(
       true
     );
