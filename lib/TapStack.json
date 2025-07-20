@@ -2,9 +2,12 @@
     "AWSTemplateFormatVersion": "2010-09-09",
     "Description": "Secure and scalable infrastructure environment in us-east-1",
     "Parameters": {
-        "EnvSuffix": {
+        "EnvironmentSuffix": {
             "Type": "String",
-            "Description": "Environment suffix (e.g., dev, staging, prod)"
+            "Default": "dev",
+            "Description": "Environment suffix (e.g., dev, staging, prod)",
+            "AllowedPattern": "^[a-zA-Z0-9]+$",
+            "ConstraintDescription": "Must contain only alphanumeric characters"
         },
         "VpcCidr": {
             "Type": "String",
@@ -12,7 +15,8 @@
         },
         "AMIId": {
             "Type": "AWS::EC2::Image::Id",
-            "Description": "Approved AMI ID for EC2 instances"
+            "Description": "Approved AMI ID for EC2 instances",
+            "Default": "ami-0c94855ba95c71c99"
         },
         "RdsInstanceType": {
             "Type": "String",
@@ -32,7 +36,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "vpc-${EnvSuffix}"
+                            "Fn::Sub": "vpc-${EnvironmentSuffix}"
                         }
                     }
                 ]
@@ -45,7 +49,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "igw-${EnvSuffix}"
+                            "Fn::Sub": "igw-${EnvironmentSuffix}"
                         }
                     }
                 ]
@@ -82,12 +86,19 @@
                         }
                     ]
                 },
-                "AvailabilityZone": "us-east-1a",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
                 "Tags": [
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "public-subnet-1-${EnvSuffix}"
+                            "Fn::Sub": "public-subnet-1-${EnvironmentSuffix}"
                         }
                     }
                 ]
@@ -113,12 +124,19 @@
                         }
                     ]
                 },
-                "AvailabilityZone": "us-east-1b",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
                 "Tags": [
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "public-subnet-2-${EnvSuffix}"
+                            "Fn::Sub": "public-subnet-2-${EnvironmentSuffix}"
                         }
                     }
                 ]
@@ -144,12 +162,19 @@
                         }
                     ]
                 },
-                "AvailabilityZone": "us-east-1a",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
                 "Tags": [
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "private-subnet-1-${EnvSuffix}"
+                            "Fn::Sub": "private-subnet-1-${EnvironmentSuffix}"
                         }
                     }
                 ]
@@ -175,12 +200,19 @@
                         }
                     ]
                 },
-                "AvailabilityZone": "us-east-1b",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
                 "Tags": [
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "private-subnet-2-${EnvSuffix}"
+                            "Fn::Sub": "private-subnet-2-${EnvironmentSuffix}"
                         }
                     }
                 ]
@@ -202,7 +234,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "nat-gateway-1-${EnvSuffix}"
+                            "Fn::Sub": "nat-gateway-1-${EnvironmentSuffix}"
                         }
                     }
                 ]
@@ -224,7 +256,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "public-rt-${EnvSuffix}"
+                            "Fn::Sub": "public-rt-${EnvironmentSuffix}"
                         }
                     }
                 ]
@@ -240,7 +272,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "private-rt-${EnvSuffix}"
+                            "Fn::Sub": "private-rt-${EnvironmentSuffix}"
                         }
                     }
                 ]
@@ -314,6 +346,14 @@
                 }
             }
         },
+        "FlowLogsLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "vpc-flow-logs-${EnvironmentSuffix}"
+                }
+            }
+        },
         "FlowLogsRole": {
             "Type": "AWS::IAM::Role",
             "Properties": {
@@ -340,12 +380,14 @@
                         "Arn"
                     ]
                 },
+                "LogDestinationType": "cloud-watch-logs",
                 "LogGroupName": {
-                    "Fn::Sub": "vpc-flow-logs-${EnvSuffix}"
+                    "Ref": "FlowLogsLogGroup"
                 },
                 "ResourceId": {
                     "Ref": "VPC"
                 },
+                "ResourceType": "VPC",
                 "TrafficType": "ALL"
             }
         },
@@ -367,7 +409,7 @@
                 "Policies": [
                     {
                         "PolicyName": {
-                            "Fn::Sub": "ec2-s3-policy-${EnvSuffix}"
+                            "Fn::Sub": "ec2-s3-policy-${EnvironmentSuffix}"
                         },
                         "PolicyDocument": {
                             "Version": "2012-10-17",
@@ -393,21 +435,31 @@
                 ]
             }
         },
-        "LaunchConfiguration": {
-            "Type": "AWS::AutoScaling::LaunchConfiguration",
+        "LaunchTemplate": {
+            "Type": "AWS::EC2::LaunchTemplate",
             "Properties": {
-                "ImageId": {
-                    "Ref": "AMIId"
+                "LaunchTemplateName": {
+                    "Fn::Sub": "launch-template-${EnvironmentSuffix}"
                 },
-                "InstanceType": "t2.micro",
-                "IamInstanceProfile": {
-                    "Ref": "EC2InstanceProfile"
-                },
-                "SecurityGroups": [
-                    {
-                        "Ref": "EC2SecurityGroup"
-                    }
-                ]
+                "LaunchTemplateData": {
+                    "ImageId": {
+                        "Ref": "AMIId"
+                    },
+                    "InstanceType": "t2.micro",
+                    "IamInstanceProfile": {
+                        "Arn": {
+                            "Fn::GetAtt": [
+                                "EC2InstanceProfile",
+                                "Arn"
+                            ]
+                        }
+                    },
+                    "SecurityGroupIds": [
+                        {
+                            "Ref": "EC2SecurityGroup"
+                        }
+                    ]
+                }
             }
         },
         "AutoScalingGroup": {
@@ -415,8 +467,16 @@
             "Properties": {
                 "MinSize": 2,
                 "MaxSize": 5,
-                "LaunchConfigurationName": {
-                    "Ref": "LaunchConfiguration"
+                "LaunchTemplate": {
+                    "LaunchTemplateId": {
+                        "Ref": "LaunchTemplate"
+                    },
+                    "Version": {
+                        "Fn::GetAtt": [
+                            "LaunchTemplate",
+                            "LatestVersionNumber"
+                        ]
+                    }
                 },
                 "VPCZoneIdentifier": [
                     {
@@ -430,7 +490,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "asg-${EnvSuffix}"
+                            "Fn::Sub": "asg-${EnvironmentSuffix}"
                         },
                         "PropagateAtLaunch": true
                     }
@@ -468,7 +528,7 @@
             "Type": "AWS::SNS::Topic",
             "Properties": {
                 "TopicName": {
-                    "Fn::Sub": "cpu-alarm-topic-${EnvSuffix}"
+                    "Fn::Sub": "cpu-alarm-topic-${EnvironmentSuffix}"
                 }
             }
         },
@@ -476,16 +536,18 @@
             "Type": "AWS::SecretsManager::Secret",
             "Properties": {
                 "Name": {
-                    "Fn::Sub": "rds-secret-${EnvSuffix}"
+                    "Fn::Sub": "rds-secret-${EnvironmentSuffix}"
                 },
                 "GenerateSecretString": {
-                    "SecretStringTemplate": "{\"username\": \"admin\"}",
-                    "GenerateStringKey": "password"
+                    "SecretStringTemplate": "{\"username\": \"masteruser\"}",
+                    "GenerateStringKey": "password",
+                    "ExcludeCharacters": "/@\" "
                 }
             }
         },
         "RDSInstance": {
             "Type": "AWS::RDS::DBInstance",
+            "DeletionPolicy": "Delete",
             "Properties": {
                 "DBInstanceClass": {
                     "Ref": "RdsInstanceType"
@@ -532,6 +594,20 @@
                 ]
             }
         },
+        "ElastiCacheSubnetGroup": {
+            "Type": "AWS::ElastiCache::SubnetGroup",
+            "Properties": {
+                "Description": "Subnet group for ElastiCache",
+                "SubnetIds": [
+                    {
+                        "Ref": "PrivateSubnet1"
+                    },
+                    {
+                        "Ref": "PrivateSubnet2"
+                    }
+                ]
+            }
+        },
         "ElastiCacheCluster": {
             "Type": "AWS::ElastiCache::CacheCluster",
             "Properties": {
@@ -542,7 +618,10 @@
                     {
                         "Ref": "ElastiCacheSecurityGroup"
                     }
-                ]
+                ],
+                "CacheSubnetGroupName": {
+                    "Ref": "ElastiCacheSubnetGroup"
+                }
             }
         },
         "ElastiCacheSecurityGroup": {
@@ -609,6 +688,13 @@
                 },
                 "Scope": "REGIONAL",
                 "Description": "Protect against common web exploits",
+                "VisibilityConfig": {
+                    "SampledRequestsEnabled": true,
+                    "CloudWatchMetricsEnabled": true,
+                    "MetricName": {
+                        "Fn::Sub": "waf-web-acl-${EnvironmentSuffix}"
+                    }
+                },
                 "Rules": [
                     {
                         "Name": "AWS-AWSManagedRulesCommonRuleSet",
@@ -617,6 +703,16 @@
                             "ManagedRuleGroupStatement": {
                                 "VendorName": "AWS",
                                 "Name": "AWSManagedRulesCommonRuleSet"
+                            }
+                        },
+                        "OverrideAction": {
+                            "None": {}
+                        },
+                        "VisibilityConfig": {
+                            "SampledRequestsEnabled": true,
+                            "CloudWatchMetricsEnabled": true,
+                            "MetricName": {
+                                "Fn::Sub": "waf-commonruleset-${EnvironmentSuffix}"
                             }
                         }
                     }
