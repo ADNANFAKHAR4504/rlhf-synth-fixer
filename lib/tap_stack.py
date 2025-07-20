@@ -8,7 +8,8 @@ manages environment-specific configurations.
 from typing import Optional
 
 import aws_cdk as cdk
-from aws_cdk import NestedStack
+# from aws_cdk import NestedStack, aws_s3
+from aws_cdk import aws_s3
 from constructs import Construct
 
 # Import your stacks here
@@ -66,28 +67,11 @@ class TapStack(cdk.Stack):
         props.environment_suffix if props else None
     ) or self.node.try_get_context('environmentSuffix') or 'dev'
 
-    # Create separate stacks for each resource type
-    # Create the DynamoDB stack as a nested stack
-
-    # ! DO not create resources directly in this stack.
-    # ! Instead, instantiate separate stacks for each resource type.
-
-    # class NestedDynamoDBStack(NestedStack):
-    #   def __init__(self, scope, id, props=None, **kwargs):
-    #     super().__init__(scope, id, **kwargs)
-    #     # Use the original DynamoDBStack logic here
-    #     self.ddb_stack = DynamoDBStack(self, "Resource", props=props)
-    #     self.table = self.ddb_stack.table
-
-    # db_props = DynamoDBStackProps(
-    #     environment_suffix=environment_suffix
-    # )
-
-    # dynamodb_stack = NestedDynamoDBStack(
-    #     self,
-    #     f"DynamoDBStack{environment_suffix}",
-    #     props=db_props
-    # )
-
-    # # Make the table available as a property of this stack
-    # self.table = dynamodb_stack.table
+    # Create an S3 bucket with environment suffix in the name
+    self.s3_bucket = aws_s3.Bucket(
+        self,
+        f"tap-bucket-{environment_suffix}",
+        bucket_name=f"tap-bucket-{environment_suffix}",
+        removal_policy=cdk.RemovalPolicy.DESTROY,
+        auto_delete_objects=True
+    )

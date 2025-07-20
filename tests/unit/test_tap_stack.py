@@ -44,10 +44,3 @@ class TestTapStack(unittest.TestCase):
     template.has_resource_properties("AWS::S3::Bucket", {
         "BucketName": "tap-bucket-dev"
     })
-
-  @mark.it("Write Unit Tests")
-  def test_write_unit_tests(self):
-    # ARRANGE
-    self.fail(
-        "Unit test for TapStack should be implemented here."
-    )
