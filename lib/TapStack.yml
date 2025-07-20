@@ -1,13 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'TAP Stack - Task Assignment Platform CloudFormation Template'
-
-Metadata:
-  AWS::CloudFormation::Interface:
-    ParameterGroups:
-      - Label:
-          default: 'Environment Configuration'
-        Parameters:
-          - EnvironmentSuffix
+Description: Secure Serverless Application Infrastructure
 
 Parameters:
   EnvironmentSuffix:
@@ -16,55 +8,6 @@ Parameters:
     Description: 'Environment suffix for resource naming (e.g., dev, staging, prod)'
     AllowedPattern: '^[a-zA-Z0-9]+$'
     ConstraintDescription: 'Must contain only alphanumeric characters'
-
-Resources:
-  TurnAroundPromptTable:
-    Type: AWS::DynamoDB::Table
-    DeletionPolicy: Delete
-    UpdateReplacePolicy: Delete
-    Properties:
-      TableName: !Sub 'TurnAroundPromptTable${EnvironmentSuffix}'
-      AttributeDefinitions:
-        - AttributeName: 'id'
-          AttributeType: 'S'
-      KeySchema:
-        - AttributeName: 'id'
-          KeyType: 'HASH'
-      BillingMode: PAY_PER_REQUEST
-      DeletionProtectionEnabled: false
-      # Tags will be applied at stack level during deployment
-
-Outputs:
-  TurnAroundPromptTableName:
-    Description: 'Name of the DynamoDB table'
-    Value: !Ref TurnAroundPromptTable
-    Export:
-      Name: !Sub '${AWS::StackName}-TurnAroundPromptTableName'
-
-  TurnAroundPromptTableArn:
-    Description: 'ARN of the DynamoDB table'
-    Value: !GetAtt TurnAroundPromptTable.Arn
-    Export:
-      Name: !Sub '${AWS::StackName}-TurnAroundPromptTableArn'
-
-  StackName:
-    Description: 'Name of this CloudFormation stack'
-    Value: !Ref AWS::StackName
-    Export:
-      Name: !Sub '${AWS::StackName}-StackName'
-
-  EnvironmentSuffix:
-    Description: 'Environment suffix used for this deployment'
-    Value: !Ref EnvironmentSuffix
-    Export:
-      Name: !Sub '${AWS::StackName}-EnvironmentSuffix'
-AWSTemplateFormatVersion: '2010-09-09'
-Description: Secure Serverless Application Infrastructure
-
-Parameters:
-  EnvironmentName:
-    Type: String
-    Description: Environment name for resource tagging
   LambdaRuntime:
     Type: String
     Description: Lambda runtime (e.g., python3.12, nodejs20.x)
@@ -75,9 +18,11 @@ Resources:
     Type: AWS::EC2::VPC
     Properties:
       CidrBlock: 10.1.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
       Tags:
         - Key: Name
-          Value: !Sub secure-${EnvironmentName}-vpc
+          Value: !Sub secure-${EnvironmentSuffix}-vpc
 
   PublicSubnet1:
     Type: AWS::EC2::Subnet
@@ -88,7 +33,7 @@ Resources:
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub secure-${EnvironmentName}-public-subnet-1
+          Value: !Sub secure-${EnvironmentSuffix}-public-subnet-1
 
   PrivateSubnet1:
     Type: AWS::EC2::Subnet
@@ -98,7 +43,7 @@ Resources:
       AvailabilityZone: us-east-1a
       Tags:
         - Key: Name
-          Value: !Sub secure-${EnvironmentName}-private-subnet-1
+          Value: !Sub secure-${EnvironmentSuffix}-private-subnet-1
 
   PrivateSubnet2:
     Type: AWS::EC2::Subnet
@@ -108,14 +53,25 @@ Resources:
       AvailabilityZone: us-east-1b
       Tags:
         - Key: Name
-          Value: !Sub secure-${EnvironmentName}-private-subnet-2
+          Value: !Sub secure-${EnvironmentSuffix}-private-subnet-2
 
   InternetGateway:
     Type: AWS::EC2::InternetGateway
     Properties:
       Tags:
         - Key: Name
-          Value: !Sub secure-${EnvironmentName}-igw
+          Value: !Sub secure-${EnvironmentSuffix}-igw
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  ElasticIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
 
   NatGateway:
     Type: AWS::EC2::NatGateway
@@ -124,13 +80,7 @@ Resources:
       SubnetId: !Ref PublicSubnet1
       Tags:
         - Key: Name
-          Value: !Sub secure-${EnvironmentName}-nat
-
-  ElasticIP:
-    Type: AWS::EC2::EIP
-    DependsOn: InternetGateway
-    Properties:
-      Domain: vpc
+          Value: !Sub secure-${EnvironmentSuffix}-nat
 
   PublicRouteTable:
     Type: AWS::EC2::RouteTable
@@ -138,7 +88,7 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub secure-${EnvironmentName}-public-rt
+          Value: !Sub secure-${EnvironmentSuffix}-public-rt
 
   PrivateRouteTable:
     Type: AWS::EC2::RouteTable
@@ -146,7 +96,7 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub secure-${EnvironmentName}-private-rt
+          Value: !Sub secure-${EnvironmentSuffix}-private-rt
 
   PublicRoute:
     Type: AWS::EC2::Route
@@ -180,10 +130,19 @@ Resources:
       SubnetId: !Ref PrivateSubnet2
       RouteTableId: !Ref PrivateRouteTable
 
+  LambdaSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Access for Lambda functions inside VPC
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub secure-${EnvironmentSuffix}-lambda-sg
+
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub secure-${EnvironmentName}-lambda-exec-role
+      RoleName: !Sub secure-${EnvironmentSuffix}-lambda-exec-role
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -209,7 +168,7 @@ Resources:
   LambdaFunction1:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: !Sub secure-${EnvironmentName}-lambda1
+      FunctionName: !Sub secure-${EnvironmentSuffix}-lambda1
       Handler: index.handler
       Role: !GetAtt LambdaExecutionRole.Arn
       Runtime: !Ref LambdaRuntime
@@ -217,7 +176,8 @@ Resources:
         ZipFile: |
           exports.handler = async () => "Hello from Lambda 1";
       VpcConfig:
-        SecurityGroupIds: []
+        SecurityGroupIds:
+          - !Ref LambdaSecurityGroup
         SubnetIds:
           - !Ref PrivateSubnet1
           - !Ref PrivateSubnet2
@@ -225,7 +185,7 @@ Resources:
   LambdaFunction2:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: !Sub secure-${EnvironmentName}-lambda2
+      FunctionName: !Sub secure-${EnvironmentSuffix}-lambda2
       Handler: index.handler
       Role: !GetAtt LambdaExecutionRole.Arn
       Runtime: !Ref LambdaRuntime
@@ -233,7 +193,8 @@ Resources:
         ZipFile: |
           exports.handler = async () => "Hello from Lambda 2";
       VpcConfig:
-        SecurityGroupIds: []
+        SecurityGroupIds:
+          - !Ref LambdaSecurityGroup
         SubnetIds:
           - !Ref PrivateSubnet1
           - !Ref PrivateSubnet2
@@ -241,14 +202,14 @@ Resources:
   ApiGateway:
     Type: AWS::ApiGateway::RestApi
     Properties:
-      Name: !Sub secure-${EnvironmentName}-api
+      Name: !Sub secure-${EnvironmentSuffix}-api
 
   ApiResource:
     Type: AWS::ApiGateway::Resource
     Properties:
       ParentId: !GetAtt ApiGateway.RootResourceId
       RestApiId: !Ref ApiGateway
-      PathPart: "{proxy+}"
+      PathPart: '{proxy+}'
 
   ApiMethod:
     Type: AWS::ApiGateway::Method
@@ -262,6 +223,14 @@ Resources:
         Type: AWS_PROXY
         Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaFunction1.Arn}/invocations
 
+  LambdaApiInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref LambdaFunction1
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/*/*
+
   ApiDeployment:
     Type: AWS::ApiGateway::Deployment
     DependsOn: ApiMethod
@@ -272,16 +241,21 @@ Resources:
   SSMParameter:
     Type: AWS::SSM::Parameter
     Properties:
-      Name: !Sub /secure-${EnvironmentName}/api-key
+      Name: !Sub /secure-${EnvironmentSuffix}/api-key
       Type: SecureString
-      Value: "dummy-api-key"
+      Value: 'dummy-api-key'
+
+  SNSTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub secure-${EnvironmentSuffix}-alerts
 
   CloudWatchAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub secure-${EnvironmentName}-lambda-errors
-      MetricName: Errors
+      AlarmName: !Sub secure-${EnvironmentSuffix}-lambda-errors
       Namespace: AWS/Lambda
+      MetricName: Errors
       Statistic: Sum
       Period: 300
       EvaluationPeriods: 1
@@ -289,11 +263,9 @@ Resources:
       ComparisonOperator: GreaterThanThreshold
       AlarmActions:
         - !Ref SNSTopic
-
-  SNSTopic:
-    Type: AWS::SNS::Topic
-    Properties:
-      TopicName: !Sub secure-${EnvironmentName}-alerts
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref LambdaFunction1
 
   BudgetAlert:
     Type: AWS::Budgets::Budget
@@ -316,12 +288,20 @@ Resources:
 
 Outputs:
   ApiEndpoint:
-    Value: !Sub "https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/v1"
+    Description: API Gateway endpoint URL
+    Value: !Sub 'https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/v1'
   LambdaFunction1Arn:
+    Description: ARN of Lambda Function 1
     Value: !GetAtt LambdaFunction1.Arn
   LambdaFunction2Arn:
+    Description: ARN of Lambda Function 2
     Value: !GetAtt LambdaFunction2.Arn
-  SSMParameterArn:
+  SSMParameterName:
+    Description: Name of the SSM Parameter storing the API key
     Value: !Ref SSMParameter
   CloudWatchAlarmName:
+    Description: Name of the CloudWatch Alarm
     Value: !Ref CloudWatchAlarm
+  SNSTopicArn:
+    Description: ARN of the SNS Topic for alerts
+    Value: !Ref SNSTopic
