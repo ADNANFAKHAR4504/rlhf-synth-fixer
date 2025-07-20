@@ -5,8 +5,6 @@ on:
     types: [created]
   pull_request_review:
     types: [submitted]
-  issue_comment:
-    types: [created]
 
 env:
   NODE_VERSION: '22'
@@ -18,8 +16,7 @@ jobs:
   claude-code-action:
     if: |
       (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude')) ||
-      (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@claude')) ||
-      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude'))
+      (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@claude'))
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -27,28 +24,11 @@ jobs:
       issues: write
       id-token: write
     steps:
-      - name: Get PR number
-        id: get-pr-number
-        run: |
-          if [[ "${{ github.event_name }}" == "pull_request_review" ]]; then
-            PR_NUMBER="${{ github.event.pull_request.number }}"
-          elif [[ "${{ github.event_name }}" == "pull_request_review_comment" ]]; then
-            PR_NUMBER="${{ github.event.pull_request.number }}"
-          elif [[ "${{ github.event_name }}" == "issue_comment" && "${{ github.event.issue.pull_request }}" != null ]]; then
-            PR_NUMBER="${{ github.event.issue.number }}"
-          else
-            echo "No PR number found, exiting"
-            exit 1
-          fi
-          echo "PR number determined as: $PR_NUMBER"
-          echo "pr_number=$PR_NUMBER" >> $GITHUB_OUTPUT
-          echo "PR_NUMBER=$PR_NUMBER" >> $GITHUB_ENV
-
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: refs/pull/${{ env.PR_NUMBER }}/head
+          ref: refs/pull/${{ github.event.pull_request.number }}/head
 
       - name: Debug checkout info
         run: |
@@ -60,10 +40,11 @@ jobs:
 
           # Debug event context
           echo "Event name: ${{ github.event_name }}"
-          echo "PR/Issue number: ${{ env.PR_NUMBER }}"
-          if [[ "${{ github.event_name }}" == "issue_comment" ]]; then
-            echo "Is PR? ${{ github.event.issue.pull_request != null }}"
+          echo "PR number: ${{ github.event.pull_request.number }}"
+          if [[ "${{ github.event_name }}" == "pull_request_review_comment" ]]; then
             echo "Comment body: ${{ github.event.comment.body }}"
+          elif [[ "${{ github.event_name }}" == "pull_request_review" ]]; then
+            echo "Review body: ${{ github.event.review.body }}"
           fi
 
       - name: Setup Node.js
@@ -94,7 +75,7 @@ jobs:
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           timeout_minutes: '60'
-          pr_number: ${{ env.PR_NUMBER }}
+          pr_number: ${{ github.event.pull_request.number }}
           # Optional: Restrict network access to specific domains only
           # experimental_allowed_domains: |
           #   .anthropic.com
