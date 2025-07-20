@@ -5,7 +5,6 @@ describe('Secure Serverless Application Infrastructure CloudFormation Template',
   let template: any;
 
   beforeAll(() => {
-    // Adjust the path to your actual JSON template as needed.
     const templatePath = path.join(__dirname, '../lib/TapStack.json');
     const templateContent = fs.readFileSync(templatePath, 'utf8');
     template = JSON.parse(templateContent);
@@ -53,7 +52,7 @@ describe('Secure Serverless Application Infrastructure CloudFormation Template',
 
     test('should not have unexpected parameters', () => {
       const allowed = ['EnvironmentSuffix', 'LambdaRuntime'];
-      expect(Object.keys(template.Parameters)).toEqual(allowed);
+      expect(Object.keys(template.Parameters).sort()).toEqual(allowed.sort());
     });
 
     test('EnvironmentSuffix AllowedPattern should be a valid regex', () => {
@@ -98,7 +97,7 @@ describe('Secure Serverless Application Infrastructure CloudFormation Template',
     });
 
     test('VPC resource should be correct', () => {
-      const vpc = template.Resources.VPC;
+      const vpc: any = template.Resources.VPC;
       expect(vpc.Type).toBe('AWS::EC2::VPC');
       expect(vpc.Properties.CidrBlock).toBe('10.1.0.0/16');
       expect(vpc.Properties.EnableDnsSupport).toBe(true);
@@ -106,7 +105,7 @@ describe('Secure Serverless Application Infrastructure CloudFormation Template',
     });
 
     test('LambdaExecutionRole should have required EC2 and logs permissions', () => {
-      const role = template.Resources.LambdaExecutionRole;
+      const role: any = template.Resources.LambdaExecutionRole;
       expect(role.Type).toBe('AWS::IAM::Role');
       const statements = role.Properties.Policies[0].PolicyDocument.Statement;
       const ec2Statement = statements.find(
@@ -134,7 +133,7 @@ describe('Secure Serverless Application Infrastructure CloudFormation Template',
 
     test('Lambda functions should use VPC config and security group', () => {
       ['LambdaFunction1', 'LambdaFunction2'].forEach(fnName => {
-        const fn = template.Resources[fnName];
+        const fn: any = template.Resources[fnName];
         expect(fn.Type).toBe('AWS::Lambda::Function');
         expect(fn.Properties.VpcConfig).toBeDefined();
         expect(fn.Properties.VpcConfig.SecurityGroupIds).toEqual([
@@ -149,7 +148,7 @@ describe('Secure Serverless Application Infrastructure CloudFormation Template',
 
     test('Lambda functions should use expected runtime and handler', () => {
       ['LambdaFunction1', 'LambdaFunction2'].forEach(fnName => {
-        const fn = template.Resources[fnName];
+        const fn: any = template.Resources[fnName];
         expect(fn.Properties.Handler).toBe('index.handler');
         expect(fn.Properties.Runtime).toEqual({ Ref: 'LambdaRuntime' });
       });
@@ -166,7 +165,7 @@ describe('Secure Serverless Application Infrastructure CloudFormation Template',
     });
 
     test('SSMParameter should be of type String and have correct name', () => {
-      const ssm = template.Resources.SSMParameter;
+      const ssm: any = template.Resources.SSMParameter;
       expect(ssm.Type).toBe('AWS::SSM::Parameter');
       expect(ssm.Properties.Type).toBe('String');
       expect(ssm.Properties.Name).toEqual({
@@ -175,7 +174,7 @@ describe('Secure Serverless Application Infrastructure CloudFormation Template',
     });
 
     test('CloudWatchAlarm should reference LambdaFunction1', () => {
-      const alarm = template.Resources.CloudWatchAlarm;
+      const alarm: any = template.Resources.CloudWatchAlarm;
       expect(alarm.Type).toBe('AWS::CloudWatch::Alarm');
       const dim = (alarm.Properties.Dimensions as any[]).find(
         (d: any) => d.Name === 'FunctionName'
@@ -185,7 +184,7 @@ describe('Secure Serverless Application Infrastructure CloudFormation Template',
     });
 
     test('BudgetAlert should have budget limit 10 USD monthly', () => {
-      const budget = template.Resources.BudgetAlert;
+      const budget: any = template.Resources.BudgetAlert;
       expect(budget.Type).toBe('AWS::Budgets::Budget');
       expect(budget.Properties.Budget.BudgetLimit.Amount).toBe(10);
       expect(budget.Properties.Budget.BudgetLimit.Unit).toBe('USD');
@@ -194,7 +193,7 @@ describe('Secure Serverless Application Infrastructure CloudFormation Template',
     });
 
     test('No deprecated or forbidden properties in LambdaExecutionRole', () => {
-      const role = template.Resources.LambdaExecutionRole;
+      const role: any = template.Resources.LambdaExecutionRole;
       expect(role.Properties.RoleName).toBeUndefined();
       expect(role.Properties.ManagedPolicyArns).toBeUndefined();
     });
