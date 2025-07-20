@@ -43,6 +43,9 @@ const outputs = JSON.parse(
 const REGION = 'us-east-1'; // Assuming us-east-1 as per the template
 const ec2Client = new EC2Client({ region: REGION });
 
+// Helper function to pause execution
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
 describe('Web Server Stack Integration Tests', () => {
   let instanceDetails: Instance | undefined;
   let securityGroupDetails: SecurityGroup | undefined;
@@ -129,24 +132,36 @@ describe('Web Server Stack Integration Tests', () => {
   });
 
   describe('Web Server Functionality', () => {
+    // FIX: Implement a polling mechanism to handle EC2 startup delay.
     test('Web server should be accessible and return correct content', async () => {
-      // It can take a minute for the instance to be fully initialized and the web server to start.
-      // A timeout is added to give the instance time.
       const url = `http://${outputs.InstancePublicIp}`;
-      let response;
-      try {
-        response = await fetch(url);
-        const text = await response.text();
-        expect(response.status).toBe(200);
-        expect(text).toContain('<h1>Deployed Successfully via CloudFormation</h1>');
-      } catch (error) {
-        // Fail the test if the fetch operation fails
-        if (error instanceof Error) {
-            fail(`Could not connect to the web server at ${url}. Error: ${error.message}`);
-        } else {
-            fail(`An unknown error occurred while connecting to ${url}`);
+      const maxRetries = 12; // 12 retries * 5 seconds = 60 seconds total wait time
+      let lastError: Error | null = null;
+
+      for (let i = 0; i < maxRetries; i++) {
+        try {
+          console.log(`Attempt ${i + 1}/${maxRetries}: Pinging ${url}...`);
+          const response = await fetch(url);
+          if (response.ok) {
+            const text = await response.text();
+            expect(response.status).toBe(200);
+            expect(text).toContain('<h1>Deployed Successfully via CloudFormation</h1>');
+            console.log('Connection successful!');
+            return; // Exit test successfully
+          }
+        } catch (error) {
+          if (error instanceof Error) {
+            lastError = error;
+          }
         }
+        // Wait 5 seconds before the next retry
+        await sleep(5000);
       }
-    }, 30000); // 30-second timeout for this test
+
+      // If the loop completes without a successful connection, fail the test.
+      fail(
+        `Web server was not accessible after ${maxRetries * 5} seconds. Last error: ${lastError?.message || 'Unknown error'}`
+      );
+    }, 90000); // Increased test timeout to 90 seconds to accommodate polling
   });
 });
