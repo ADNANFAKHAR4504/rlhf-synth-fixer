@@ -5,8 +5,7 @@ describe('Secure Serverless Application Infrastructure CloudFormation Template',
   let template: any;
 
   beforeAll(() => {
-    // You can replace this with your actual JSON import if needed.
-    // For this example, we'll load from the file as you do in your code.
+    // Adjust the path to your actual JSON template as needed.
     const templatePath = path.join(__dirname, '../lib/TapStack.json');
     const templateContent = fs.readFileSync(templatePath, 'utf8');
     template = JSON.parse(templateContent);
@@ -55,6 +54,11 @@ describe('Secure Serverless Application Infrastructure CloudFormation Template',
     test('should not have unexpected parameters', () => {
       const allowed = ['EnvironmentSuffix', 'LambdaRuntime'];
       expect(Object.keys(template.Parameters)).toEqual(allowed);
+    });
+
+    test('EnvironmentSuffix AllowedPattern should be a valid regex', () => {
+      const pattern = template.Parameters.EnvironmentSuffix.AllowedPattern;
+      expect(() => new RegExp(pattern)).not.toThrow();
     });
   });
 
@@ -173,7 +177,7 @@ describe('Secure Serverless Application Infrastructure CloudFormation Template',
     test('CloudWatchAlarm should reference LambdaFunction1', () => {
       const alarm = template.Resources.CloudWatchAlarm;
       expect(alarm.Type).toBe('AWS::CloudWatch::Alarm');
-      const dim = alarm.Properties.Dimensions.find(
+      const dim = (alarm.Properties.Dimensions as any[]).find(
         (d: any) => d.Name === 'FunctionName'
       );
       expect(dim).toBeDefined();
@@ -194,6 +198,19 @@ describe('Secure Serverless Application Infrastructure CloudFormation Template',
       expect(role.Properties.RoleName).toBeUndefined();
       expect(role.Properties.ManagedPolicyArns).toBeUndefined();
     });
+
+    test('All resource logical IDs should be unique', () => {
+      const ids = Object.keys(template.Resources);
+      const unique = new Set(ids);
+      expect(unique.size).toBe(ids.length);
+    });
+
+    test('All resources should have Type and Properties', () => {
+      Object.values(template.Resources).forEach((resource: any) => {
+        expect(resource.Type).toBeDefined();
+        expect(resource.Properties).toBeDefined();
+      });
+    });
   });
 
   describe('Outputs', () => {
@@ -210,7 +227,7 @@ describe('Secure Serverless Application Infrastructure CloudFormation Template',
     });
 
     test('ApiEndpoint output should use Fn::Sub with ApiGateway', () => {
-      const output = template.Outputs.ApiEndpoint;
+      const output: any = template.Outputs.ApiEndpoint;
       expect(output.Value).toEqual({
         'Fn::Sub':
           'https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/v1',
@@ -218,8 +235,8 @@ describe('Secure Serverless Application Infrastructure CloudFormation Template',
     });
 
     test('LambdaFunction1Arn and LambdaFunction2Arn outputs should use Fn::GetAtt', () => {
-      const output1 = template.Outputs.LambdaFunction1Arn;
-      const output2 = template.Outputs.LambdaFunction2Arn;
+      const output1: any = template.Outputs.LambdaFunction1Arn;
+      const output2: any = template.Outputs.LambdaFunction2Arn;
       expect(output1.Value).toEqual({
         'Fn::GetAtt': ['LambdaFunction1', 'Arn'],
       });
@@ -229,17 +246,17 @@ describe('Secure Serverless Application Infrastructure CloudFormation Template',
     });
 
     test('SSMParameterName output should reference SSMParameter', () => {
-      const output = template.Outputs.SSMParameterName;
+      const output: any = template.Outputs.SSMParameterName;
       expect(output.Value).toEqual({ Ref: 'SSMParameter' });
     });
 
     test('CloudWatchAlarmName output should reference CloudWatchAlarm', () => {
-      const output = template.Outputs.CloudWatchAlarmName;
+      const output: any = template.Outputs.CloudWatchAlarmName;
       expect(output.Value).toEqual({ Ref: 'CloudWatchAlarm' });
     });
 
     test('SNSTopicArn output should reference SNSTopic', () => {
-      const output = template.Outputs.SNSTopicArn;
+      const output: any = template.Outputs.SNSTopicArn;
       expect(output.Value).toEqual({ Ref: 'SNSTopic' });
     });
 
@@ -247,6 +264,15 @@ describe('Secure Serverless Application Infrastructure CloudFormation Template',
       Object.values(template.Outputs).forEach((output: any) => {
         expect(output.Description).toBeDefined();
         expect(output.Value).toBeDefined();
+      });
+    });
+
+    test('All outputs should not be empty values', () => {
+      Object.values(template.Outputs).forEach((output: any) => {
+        expect(output.Value).toBeDefined();
+        if (typeof output.Value === 'string') {
+          expect(output.Value.length).toBeGreaterThan(0);
+        }
       });
     });
   });
@@ -273,31 +299,9 @@ describe('Secure Serverless Application Infrastructure CloudFormation Template',
     });
 
     test('should not have deprecated or forbidden properties in LambdaFunction1', () => {
-      const fn = template.Resources.LambdaFunction1;
+      const fn: any = template.Resources.LambdaFunction1;
       expect(fn.Properties.ReservedConcurrentExecutions).toBeUndefined();
       expect(fn.Properties.Layers).toBeUndefined();
-    });
-
-    test('All outputs should not be empty values', () => {
-      Object.values(template.Outputs).forEach(output => {
-        expect(output.Value).toBeDefined();
-        if (typeof output.Value === 'string') {
-          expect(output.Value.length).toBeGreaterThan(0);
-        }
-      });
-    });
-
-    test('All resources should have Type and Properties', () => {
-      Object.values(template.Resources).forEach((resource: any) => {
-        expect(resource.Type).toBeDefined();
-        expect(resource.Properties).toBeDefined();
-      });
-    });
-
-    test('All resource logical IDs should be unique', () => {
-      const ids = Object.keys(template.Resources);
-      const unique = new Set(ids);
-      expect(unique.size).toBe(ids.length);
     });
   });
 });
