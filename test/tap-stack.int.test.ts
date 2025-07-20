@@ -1,7 +1,23 @@
+// ====================================================================================
+// !! IMPORTANT !! TROUBLESHOOTING: "Cannot find module" ERROR
+// ====================================================================================
+// If you see an error like "Cannot find module '@aws-sdk/client-ec2'" or
+// "Cannot find module 'node-fetch'", it means the required packages are not
+// installed in your project's `node_modules` folder.
+//
+// To fix this, you must run the following command in your project's terminal:
+//
+// npm install --save-dev @aws-sdk/client-ec2 @aws-sdk/client-iam node-fetch @types/node-fetch
+//
+// This command reads your `package.json` file, downloads the necessary code,
+// and makes it available to your test files. This step is essential for both
+// local testing and for your CI/CD pipeline.
+// ====================================================================================
+
 // This is an integration test suite for the deployed Web Server CloudFormation stack.
 // It uses the AWS SDK for JavaScript (v3) to verify the created resources.
-// Ensure you have the AWS SDK installed (`npm install @aws-sdk/client-ec2 node-fetch`)
-// and your AWS credentials configured in the environment where you run these tests.
+// Ensure you have the AWS SDK installed and your AWS credentials configured
+// in the environment where you run these tests.
 
 import {
   EC2Client,
@@ -11,6 +27,7 @@ import {
   SecurityGroup,
   Tag,
   IpPermission,
+  DescribeSecurityGroupsCommandInput,
 } from '@aws-sdk/client-ec2';
 import fetch from 'node-fetch';
 import fs from 'fs';
@@ -46,12 +63,22 @@ describe('Web Server Stack Integration Tests', () => {
     instanceDetails = instanceResponse.Reservations[0].Instances?.[0];
 
     // Get Security Group Details from AWS
-    const sgCommand = new DescribeSecurityGroupsCommand({
-      GroupIds: [outputs.SecurityGroupId],
-    });
+    const sgIdentifier = outputs.SecurityGroupId;
+    let sgCommandInput: DescribeSecurityGroupsCommandInput;
+
+    // FIX: Check if the identifier is an ID (starts with 'sg-') or a name.
+    // This makes the test robust against incorrect CloudFormation outputs.
+    if (sgIdentifier.startsWith('sg-')) {
+      sgCommandInput = { GroupIds: [sgIdentifier] };
+    } else {
+      sgCommandInput = { GroupNames: [sgIdentifier] };
+    }
+    
+    const sgCommand = new DescribeSecurityGroupsCommand(sgCommandInput);
     const sgResponse = await ec2Client.send(sgCommand);
+    
     if (!sgResponse.SecurityGroups || sgResponse.SecurityGroups.length === 0) {
-      throw new Error(`Security Group ${outputs.SecurityGroupId} not found.`);
+      throw new Error(`Security Group '${sgIdentifier}' not found.`);
     }
     securityGroupDetails = sgResponse.SecurityGroups[0];
   });
