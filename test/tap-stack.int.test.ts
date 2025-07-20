@@ -71,6 +71,34 @@ describe('Serverless Stack Integration Tests', () => {
         ).toBeGreaterThan(0);
       }
     });
+
+    test('LambdaFunction1 should return expected output', async () => {
+      const functionName = outputs.LambdaFunction1Arn;
+      const result = await lambda
+        .invoke({
+          FunctionName: functionName,
+          Payload: JSON.stringify({}),
+        })
+        .promise();
+      expect(result.StatusCode).toBe(200);
+      expect(result.Payload).toBeDefined();
+      const payload = JSON.parse(result.Payload as string);
+      expect(payload).toBe('Hello from Lambda 1');
+    });
+
+    test('LambdaFunction2 should return expected output', async () => {
+      const functionName = outputs.LambdaFunction2Arn;
+      const result = await lambda
+        .invoke({
+          FunctionName: functionName,
+          Payload: JSON.stringify({}),
+        })
+        .promise();
+      expect(result.StatusCode).toBe(200);
+      expect(result.Payload).toBeDefined();
+      const payload = JSON.parse(result.Payload as string);
+      expect(payload).toBe('Hello from Lambda 2');
+    });
   });
 
   describe('VPC & Subnet Validation', () => {
@@ -110,6 +138,18 @@ describe('Serverless Stack Integration Tests', () => {
       expect(['OK', 'INSUFFICIENT_DATA', 'ALARM']).toContain(
         alarms.MetricAlarms![0].StateValue
       );
+    });
+
+    test('Billing alarm should exist in AWS/Billing namespace', async () => {
+      // Billing alarms are usually available only in us-east-1
+      const billingAlarms = await cloudwatch.describeAlarms({}).promise();
+      const found = (billingAlarms.MetricAlarms || []).some(
+        alarm =>
+          alarm.Namespace === 'AWS/Billing' ||
+          (alarm.MetricName &&
+            alarm.MetricName.toLowerCase().includes('billing'))
+      );
+      expect(found).toBe(true);
     });
   });
 
