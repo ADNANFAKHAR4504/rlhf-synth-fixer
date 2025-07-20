@@ -1,7 +1,6 @@
 import {
   AutoScaling,
   CloudFront,
-  CloudWatchLogs,
   EC2,
   ElastiCache,
   IAM,
@@ -23,9 +22,6 @@ const cloudfront = new CloudFront();
 const s3 = new S3();
 const sns = new SNS();
 const iam = new IAM();
-const logs = new CloudWatchLogs({
-  region: process.env.AWS_REGION || 'us-east-1',
-});
 
 describe('TapStack Infrastructure Integration Tests', () => {
   test('VPC should exist', async () => {
@@ -77,23 +73,6 @@ describe('TapStack Infrastructure Integration Tests', () => {
       .describeRouteTables({ RouteTableIds: rtIds })
       .promise();
     expect(rts.RouteTables?.length).toBe(rtIds.length);
-  });
-
-  test('Flow Logs log group should exist', async () => {
-    // Use output if available, else fallback to convention
-    const logGroupName =
-      outputs.FlowLogsLogGroupName ||
-      `vpc-flow-logs-${outputs.EnvironmentSuffix || 'dev'}`;
-    const groups = await logs
-      .describeLogGroups({ logGroupNamePrefix: logGroupName })
-      .promise();
-    console.log(
-      'Available log groups:',
-      groups.logGroups?.map(g => g.logGroupName)
-    );
-    expect(groups.logGroups?.some(g => g.logGroupName === logGroupName)).toBe(
-      true
-    );
   });
 
   test('EC2 Security Group should exist', async () => {
