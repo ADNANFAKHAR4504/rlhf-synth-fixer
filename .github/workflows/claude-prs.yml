@@ -1,12 +1,8 @@
 name: Claude PR Assistant
 
 on:
-  issue_comment:
-    types: [created]
   pull_request_review_comment:
     types: [created]
-  issues:
-    types: [opened, assigned]
   pull_request_review:
     types: [submitted]
 
@@ -19,10 +15,8 @@ env:
 jobs:
   claude-code-action:
     if: |
-      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
       (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude')) ||
-      (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@claude')) ||
-      (github.event_name == 'issues' && contains(github.event.issue.body, '@claude'))
+      (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@claude'))
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -30,8 +24,34 @@ jobs:
       issues: write
       id-token: write
     steps:
+      - name: Get PR number
+        id: get-pr-number
+        run: |
+          if [[ "${{ github.event_name }}" == "pull_request_review" ]]; then
+            PR_NUMBER="${{ github.event.pull_request.number }}"
+          elif [[ "${{ github.event_name }}" == "pull_request_review_comment" ]]; then
+            PR_NUMBER="${{ github.event.pull_request.number }}"
+          else
+            echo "No PR number found, exiting"
+            exit 1
+          fi
+          echo "PR number determined as: $PR_NUMBER"
+          echo "pr_number=$PR_NUMBER" >> $GITHUB_OUTPUT
+          echo "PR_NUMBER=$PR_NUMBER" >> $GITHUB_ENV
+
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: refs/pull/${{ env.PR_NUMBER }}/head
+
+      - name: Debug checkout info
+        run: |
+          # Debug info
+          echo "Current branch: $(git branch --show-current)"
+          echo "Current commit: $(git rev-parse HEAD)"
+          echo "Files in PR:"
+          git diff --name-status origin/main...HEAD
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -61,6 +81,7 @@ jobs:
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           timeout_minutes: '60'
+          pr_number: ${{ env.PR_NUMBER }}
           # Optional: Restrict network access to specific domains only
           # experimental_allowed_domains: |
           #   .anthropic.com

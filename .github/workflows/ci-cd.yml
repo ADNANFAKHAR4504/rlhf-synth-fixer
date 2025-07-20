@@ -23,13 +23,12 @@ env:
 
 jobs:
   detect-metadata:
-    name: Detect Project Metadata
+    name: Detect Project Files
     runs-on: ubuntu-latest
     if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
     outputs:
       platform: ${{ steps.metadata.outputs.platform }}
       language: ${{ steps.metadata.outputs.language }}
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -49,6 +48,19 @@ jobs:
 
           echo "platform=$PLATFORM" >> $GITHUB_OUTPUT
           echo "language=$LANGUAGE" >> $GITHUB_OUTPUT
+
+      - name: Check for required documentation files
+        id: docs-check
+        run: |
+          if [ ! -f "lib/PROMPT.md" ]; then
+            echo "❌ lib/PROMPT.md not found, exiting with failure"
+            exit 1
+          fi
+
+          if [ ! -f "lib/MODEL_RESPONSE.md" ]; then
+            echo "❌ lib/PROMPT.md not found, exiting with failure"
+            exit 1
+          fi
 
   version-check:
     name: Check Runtime Versions
