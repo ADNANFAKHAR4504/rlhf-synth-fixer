@@ -16,7 +16,7 @@ Parameters:
   AMIId:
     Type: AWS::EC2::Image::Id
     Description: Approved AMI ID for EC2 instances
-    Default: ami-0c94855ba95c71c99 # &lt;-- Replace with your security-approved AMI ID!
+    Default: ami-0c94855ba95c71c99 # &lt;-- Replace with your approved AMI ID!
 
   RdsInstanceType:
     Type: String
@@ -288,6 +288,14 @@ Resources:
         - !Ref PrivateSubnet1
         - !Ref PrivateSubnet2
 
+  ElastiCacheSubnetGroup:
+    Type: AWS::ElastiCache::SubnetGroup
+    Properties:
+      Description: 'Subnet group for ElastiCache'
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+
   ElastiCacheCluster:
     Type: AWS::ElastiCache::CacheCluster
     Properties:
@@ -296,6 +304,7 @@ Resources:
       NumCacheNodes: 1
       VpcSecurityGroupIds:
         - !Ref ElastiCacheSecurityGroup
+      CacheSubnetGroupName: !Ref ElastiCacheSubnetGroup
 
   ElastiCacheSecurityGroup:
     Type: AWS::EC2::SecurityGroup
