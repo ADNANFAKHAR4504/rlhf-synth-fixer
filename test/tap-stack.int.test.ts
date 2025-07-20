@@ -1,13 +1,12 @@
-import {
-  AutoScaling,
-  CloudFront,
-  EC2,
-  ElastiCache,
-  IAM,
-  RDS,
-  S3,
-  SNS,
-} from 'aws-sdk';
+import { AutoScaling } from '@aws-sdk/client-auto-scaling';
+import { CloudFront } from '@aws-sdk/client-cloudfront';
+import { EC2 } from '@aws-sdk/client-ec2';
+import { ElastiCache } from '@aws-sdk/client-elasticache';
+import { IAM } from '@aws-sdk/client-iam';
+import { RDS } from '@aws-sdk/client-rds';
+import { S3 } from '@aws-sdk/client-s3';
+import { SNS } from '@aws-sdk/client-sns';
+
 import fs from 'fs';
 
 const outputs = JSON.parse(
