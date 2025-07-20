@@ -12,10 +12,6 @@ Parameters:
     Type: String
     Description: Lambda runtime (e.g., python3.12, nodejs20.x)
     Default: python3.12
-  AZCount:
-    Type: Number
-    Default: 2
-    Description: Number of Availability Zones to use (minimum 2)
 
 Resources:
   VPC:
@@ -74,6 +70,7 @@ Resources:
 
   ElasticIP:
     Type: AWS::EC2::EIP
+    DependsOn: AttachGateway
     Properties:
       Domain: vpc
 
@@ -104,6 +101,7 @@ Resources:
 
   PublicRoute:
     Type: AWS::EC2::Route
+    DependsOn: AttachGateway
     Properties:
       RouteTableId: !Ref PublicRouteTable
       DestinationCidrBlock: 0.0.0.0/0
@@ -146,7 +144,6 @@ Resources:
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
-      # RoleName removed for CAPABILITY_IAM compatibility
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -168,6 +165,15 @@ Resources:
               - Effect: Allow
                 Action: ssm:GetParameter
                 Resource: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/secure-*
+              - Effect: Allow
+                Action:
+                  - ec2:CreateNetworkInterface
+                  - ec2:DescribeNetworkInterfaces
+                  - ec2:DeleteNetworkInterface
+                  - ec2:DescribeVpcs
+                  - ec2:DescribeSubnets
+                  - ec2:DescribeSecurityGroups
+                Resource: '*'
 
   LambdaFunction1:
     Type: AWS::Lambda::Function
