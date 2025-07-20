@@ -12,6 +12,10 @@ Parameters:
     Type: String
     Description: Lambda runtime (e.g., python3.12, nodejs20.x)
     Default: python3.12
+  AZCount:
+    Type: Number
+    Default: 2
+    Description: Number of Availability Zones to use (minimum 2)
 
 Resources:
   VPC:
@@ -29,7 +33,7 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       CidrBlock: 10.1.1.0/24
-      AvailabilityZone: us-east-1a
+      AvailabilityZone: !Select [0, !GetAZs '']
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -40,7 +44,7 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       CidrBlock: 10.1.2.0/24
-      AvailabilityZone: us-east-1a
+      AvailabilityZone: !Select [0, !GetAZs '']
       Tags:
         - Key: Name
           Value: !Sub secure-${EnvironmentSuffix}-private-subnet-1
@@ -50,7 +54,7 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       CidrBlock: 10.1.3.0/24
-      AvailabilityZone: us-east-1b
+      AvailabilityZone: !Select [1, !GetAZs '']
       Tags:
         - Key: Name
           Value: !Sub secure-${EnvironmentSuffix}-private-subnet-2
@@ -142,7 +146,7 @@ Resources:
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub secure-${EnvironmentSuffix}-lambda-exec-role
+      # RoleName removed for CAPABILITY_IAM compatibility
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -242,7 +246,7 @@ Resources:
     Type: AWS::SSM::Parameter
     Properties:
       Name: !Sub /secure-${EnvironmentSuffix}/api-key
-      Type: SecureString
+      Type: String # CloudFormation only supports String or StringList
       Value: 'dummy-api-key'
 
   SNSTopic:
