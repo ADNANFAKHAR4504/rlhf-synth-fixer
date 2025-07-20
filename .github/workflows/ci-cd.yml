@@ -665,7 +665,7 @@ jobs:
             "test"
             "tests"
             "cdk.json"
-            "metadata.json",
+            "metadata.json"
             "tap.py"
             )
 
