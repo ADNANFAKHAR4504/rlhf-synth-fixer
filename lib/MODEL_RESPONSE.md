@@ -1,3 +1,6 @@
+Nova Model produced response is as below
+
+```
 # Note: AWS region is specified during stack deployment, not in the template
 Resources:
   WebServerInstance:
@@ -54,3 +57,4 @@ Resources:
           Value: Production
         - Key: Project
           Value: GlobalResilience
+```
