@@ -31,6 +31,11 @@ jobs:
           ref: refs/pull/${{ github.event.pull_request.number }}/head
 
       - name: Debug checkout info
+        env:
+          COMMENT_BODY: ${{ github.event.comment.body }}
+          REVIEW_BODY: ${{ github.event.review.body }}
+          EVENT_NAME: ${{ github.event_name }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           # Debug info
           echo "Current branch: $(git branch --show-current)"
@@ -39,12 +44,12 @@ jobs:
           git diff --name-status origin/main...HEAD
 
           # Debug event context
-          echo "Event name: ${{ github.event_name }}"
-          echo "PR number: ${{ github.event.pull_request.number }}"
-          if [[ "${{ github.event_name }}" == "pull_request_review_comment" ]]; then
-            echo "Comment body: ${{ github.event.comment.body }}"
-          elif [[ "${{ github.event_name }}" == "pull_request_review" ]]; then
-            echo "Review body: ${{ github.event.review.body }}"
+          echo "Event name: $EVENT_NAME"
+          echo "PR number: $PR_NUMBER"
+          if [[ "$EVENT_NAME" == "pull_request_review_comment" ]]; then
+            echo "Comment body: $COMMENT_BODY"
+          elif [[ "$EVENT_NAME" == "pull_request_review" ]]; then
+            echo "Review body: $REVIEW_BODY"
           fi
 
       - name: Setup Node.js
