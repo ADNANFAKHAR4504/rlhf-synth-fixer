@@ -32,6 +32,9 @@
     "cfn:destroy": "aws cloudformation delete-stack --stack-name TapStack${ENVIRONMENT_SUFFIX:-dev}"
   },
   "devDependencies": {
+    "@aws-sdk/client-sns": "^3.848.0",
+    "@aws-sdk/client-ssm": "^3.848.0",
+    "@aws-sdk/client-lambda": "^3.848.0",
     "@aws-sdk/client-cloudformation": "^3.848.0",
     "@aws-sdk/client-cloudwatch": "^3.846.0",
     "@aws-sdk/client-cloudwatch-logs": "^3.848.0",
