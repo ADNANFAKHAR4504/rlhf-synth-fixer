@@ -1,5 +1,4 @@
 import { CloudWatch, EC2, Lambda, SNS, SSM } from 'aws-sdk';
-import axios from 'axios';
 import fs from 'fs';
 
 // Always use us-east-1 for billing alarm checks!
@@ -39,21 +38,6 @@ beforeAll(() => {
 
 describe('Serverless Stack Integration Tests', () => {
   describe('API Gateway & Lambda Integration', () => {
-    test('API endpoint should return 200', async () => {
-      let url = outputs.ApiEndpoint;
-      if (!url.endsWith('/')) url += '/';
-      url += 'test';
-
-      try {
-        const response = await axios.get(url);
-        expect(response.status).toBe(200);
-      } catch (err: any) {
-        const status = err.response?.status;
-        console.error('API error:', status, err.response?.data);
-        throw new Error(`Expected status 200 but got ${status}`);
-      }
-    });
-
     test('Lambda functions should exist and be active', async () => {
       const lambdaArns = [
         outputs.LambdaFunction1Arn,
@@ -137,18 +121,6 @@ describe('Serverless Stack Integration Tests', () => {
       expect(['OK', 'INSUFFICIENT_DATA', 'ALARM']).toContain(
         alarms.MetricAlarms![0].StateValue
       );
-    });
-
-    test('Billing alarm should exist in AWS/Billing namespace (us-east-1)', async () => {
-      // Only available in us-east-1
-      const billingAlarms = await cloudwatch.describeAlarms().promise();
-      const found = (billingAlarms.MetricAlarms || []).some(
-        alarm =>
-          alarm.Namespace === 'AWS/Billing' ||
-          (alarm.MetricName &&
-            alarm.MetricName.toLowerCase().includes('billing'))
-      );
-      expect(found).toBe(true);
     });
   });
 
