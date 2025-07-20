@@ -5,21 +5,18 @@ import { SNS } from '@aws-sdk/client-sns';
 import { SSM } from '@aws-sdk/client-ssm';
 import fs from 'fs';
 
-// Always use us-east-1 for billing alarm checks!
 const cloudwatch = new CloudWatch({ region: 'us-east-1' });
 const lambda = new Lambda();
 const ec2 = new EC2();
 const ssm = new SSM();
 const sns = new SNS();
 
-// Load outputs (adjust path if needed)
 const outputs = JSON.parse(
   fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
 );
 
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
-// Fail fast if required outputs are missing
 beforeAll(() => {
   [
     'VPC',
@@ -48,9 +45,9 @@ describe('Serverless Stack Integration Tests', () => {
         outputs.LambdaFunction2Arn,
       ];
       for (const arn of lambdaArns) {
-        const { Configuration } = await lambda
-          .getFunction({ FunctionName: arn })
-          .promise();
+        const { Configuration } = await lambda.getFunction({
+          FunctionName: arn,
+        });
         expect(Configuration?.State).toBe('Active');
         expect(Configuration?.VpcConfig?.SubnetIds?.length).toBeGreaterThan(0);
         expect(
@@ -61,29 +58,31 @@ describe('Serverless Stack Integration Tests', () => {
 
     test('LambdaFunction1 should return expected output', async () => {
       const functionName = outputs.LambdaFunction1Arn;
-      const result = await lambda
-        .invoke({
-          FunctionName: functionName,
-          Payload: JSON.stringify({}),
-        })
-        .promise();
+      const result = await lambda.invoke({
+        FunctionName: functionName,
+        Payload: JSON.stringify({}),
+      });
       expect(result.StatusCode).toBe(200);
       expect(result.Payload).toBeDefined();
-      const payload = JSON.parse(result.Payload as string);
+      const payloadString = result.Payload
+        ? Buffer.from(result.Payload as Uint8Array).toString('utf-8')
+        : '';
+      const payload = JSON.parse(payloadString);
       expect(payload).toBe('Hello from Lambda 1');
     });
 
     test('LambdaFunction2 should return expected output', async () => {
       const functionName = outputs.LambdaFunction2Arn;
-      const result = await lambda
-        .invoke({
-          FunctionName: functionName,
-          Payload: JSON.stringify({}),
-        })
-        .promise();
+      const result = await lambda.invoke({
+        FunctionName: functionName,
+        Payload: JSON.stringify({}),
+      });
       expect(result.StatusCode).toBe(200);
       expect(result.Payload).toBeDefined();
-      const payload = JSON.parse(result.Payload as string);
+      const payloadString = result.Payload
+        ? Buffer.from(result.Payload as Uint8Array).toString('utf-8')
+        : '';
+      const payload = JSON.parse(payloadString);
       expect(payload).toBe('Hello from Lambda 2');
     });
   });
@@ -91,15 +90,15 @@ describe('Serverless Stack Integration Tests', () => {
   describe('VPC & Subnet Validation', () => {
     test('VPC should exist', async () => {
       const vpcId = outputs.VPC;
-      const vpcs = await ec2.describeVpcs({ VpcIds: [vpcId] }).promise();
+      const vpcs = await ec2.describeVpcs({ VpcIds: [vpcId] });
       expect(vpcs.Vpcs?.length).toBe(1);
     });
 
     test('Private subnets should exist and be in different AZs', async () => {
       const privateSubnetIds = [outputs.PrivateSubnet1, outputs.PrivateSubnet2];
-      const subnets = await ec2
-        .describeSubnets({ SubnetIds: privateSubnetIds })
-        .promise();
+      const subnets = await ec2.describeSubnets({
+        SubnetIds: privateSubnetIds,
+      });
       expect(subnets.Subnets?.length).toBe(privateSubnetIds.length);
       const azs = new Set(subnets.Subnets?.map((s: any) => s.AvailabilityZone));
       expect(azs.size).toBe(privateSubnetIds.length);
@@ -109,7 +108,7 @@ describe('Serverless Stack Integration Tests', () => {
   describe('SSM Parameter Store', () => {
     test('API key parameter should exist and be retrievable', async () => {
       const paramName = outputs.SSMParameterName;
-      const param = await ssm.getParameter({ Name: paramName }).promise();
+      const param = await ssm.getParameter({ Name: paramName });
       expect(param.Parameter?.Value).toBeDefined();
       expect(param.Parameter?.Name).toBe(paramName);
     });
@@ -118,9 +117,9 @@ describe('Serverless Stack Integration Tests', () => {
   describe('CloudWatch Alarm', () => {
     test('CloudWatch alarm should exist and be in a known state', async () => {
       const alarmName = outputs.CloudWatchAlarmName;
-      const alarms = await cloudwatch
-        .describeAlarms({ AlarmNames: [alarmName] })
-        .promise();
+      const alarms = await cloudwatch.describeAlarms({
+        AlarmNames: [alarmName],
+      });
       expect(alarms.MetricAlarms?.length).toBe(1);
       expect(['OK', 'INSUFFICIENT_DATA', 'ALARM']).toContain(
         alarms.MetricAlarms![0].StateValue
@@ -131,8 +130,8 @@ describe('Serverless Stack Integration Tests', () => {
   describe('SNS Topic', () => {
     test('SNS topic should exist', async () => {
       const topicArn = outputs.SNSTopicArn;
-      const topics = await sns.listTopics().promise();
-      const arns = topics.Topics?.map(t => t.TopicArn);
+      const topics = await sns.listTopics({});
+      const arns = topics.Topics?.map((t: any) => t.TopicArn);
       expect(arns).toContain(topicArn);
     });
   });
@@ -140,7 +139,6 @@ describe('Serverless Stack Integration Tests', () => {
   describe('Resource Naming Conventions', () => {
     test('Named resources should include environment suffix', () => {
       expect(outputs.SSMParameterName).toContain(environmentSuffix);
-      // Add more checks for other named resources if needed
     });
   });
 });
