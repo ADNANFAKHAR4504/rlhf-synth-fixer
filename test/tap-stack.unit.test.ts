@@ -44,7 +44,7 @@ describe('Secure Serverless Application Infrastructure CloudFormation Template',
     test('should have LambdaRuntime parameter', () => {
       expect(template.Parameters.LambdaRuntime).toBeDefined();
       expect(template.Parameters.LambdaRuntime.Type).toBe('String');
-      expect(template.Parameters.LambdaRuntime.Default).toBe('python3.12');
+      expect(template.Parameters.LambdaRuntime.Default).toBe('nodejs20.x');
       expect(template.Parameters.LambdaRuntime.Description).toMatch(
         /Lambda runtime/
       );

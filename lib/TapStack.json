@@ -12,7 +12,7 @@
         "LambdaRuntime": {
             "Type": "String",
             "Description": "Lambda runtime (e.g., python3.12, nodejs20.x)",
-            "Default": "python3.12"
+            "Default": "nodejs20.x"
         }
     },
     "Resources": {

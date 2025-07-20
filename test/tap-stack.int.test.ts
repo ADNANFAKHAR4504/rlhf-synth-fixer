@@ -2,18 +2,19 @@ import { CloudWatch, EC2, Lambda, SNS, SSM } from 'aws-sdk';
 import axios from 'axios';
 import fs from 'fs';
 
+// Always use us-east-1 for billing alarm checks!
+const cloudwatch = new CloudWatch({ region: 'us-east-1' });
+const lambda = new Lambda();
+const ec2 = new EC2();
+const ssm = new SSM();
+const sns = new SNS();
+
 // Load outputs (adjust path if needed)
 const outputs = JSON.parse(
   fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
 );
 
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-
-const lambda = new Lambda();
-const ec2 = new EC2();
-const ssm = new SSM();
-const cloudwatch = new CloudWatch();
-const sns = new SNS();
 
 // Fail fast if required outputs are missing
 beforeAll(() => {
@@ -38,20 +39,18 @@ beforeAll(() => {
 
 describe('Serverless Stack Integration Tests', () => {
   describe('API Gateway & Lambda Integration', () => {
-    test('API endpoint should return 200, 403, or 502', async () => {
+    test('API endpoint should return 200', async () => {
       let url = outputs.ApiEndpoint;
       if (!url.endsWith('/')) url += '/';
       url += 'test';
 
       try {
         const response = await axios.get(url);
-        expect([200, 403, 502]).toContain(response.status);
+        expect(response.status).toBe(200);
       } catch (err: any) {
         const status = err.response?.status;
-        if (![200, 403, 502].includes(status)) {
-          console.error('API error:', status, err.response?.data);
-        }
-        expect([200, 403, 502]).toContain(status);
+        console.error('API error:', status, err.response?.data);
+        throw new Error(`Expected status 200 but got ${status}`);
       }
     });
 
@@ -140,9 +139,9 @@ describe('Serverless Stack Integration Tests', () => {
       );
     });
 
-    test('Billing alarm should exist in AWS/Billing namespace', async () => {
-      // Billing alarms are usually available only in us-east-1
-      const billingAlarms = await cloudwatch.describeAlarms({}).promise();
+    test('Billing alarm should exist in AWS/Billing namespace (us-east-1)', async () => {
+      // Only available in us-east-1
+      const billingAlarms = await cloudwatch.describeAlarms().promise();
       const found = (billingAlarms.MetricAlarms || []).some(
         alarm =>
           alarm.Namespace === 'AWS/Billing' ||
