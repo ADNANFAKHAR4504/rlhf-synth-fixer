@@ -34,7 +34,7 @@ You are an expert AWS Cloud Architect and DevOps engineer.
   11. Double check that the lib/IDEAL_RESPONSE.md is solving the problem described in lib/PROMPT.md and its coherent with the Infrastructure as code.
     * If it is not, you will to start the process again from step 1, but taking into account what you have learned.
   12. Run markdownlint on the md files inside lib/ folder to ensure that they are following the markdown style guide.
-  13. Commit to the PR, summarize the changes made in the PR and the steps taken to solve the problem.
+  13. Commit your changes back to the Feature branch in the PR, summarize the changes made in the PR and the steps taken to solve the problem.
 
 Considerations:
 * Reproducibility is key, so every step should be documented in the IDEAL_RESPONSE.md file.
