@@ -205,21 +205,26 @@ Resources:
       Roles:
         - !Ref EC2InstanceRole
 
-  LaunchConfiguration:
-    Type: AWS::AutoScaling::LaunchConfiguration
+  LaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
     Properties:
-      ImageId: !Ref AMIId
-      InstanceType: t2.micro
-      IamInstanceProfile: !Ref EC2InstanceProfile
-      SecurityGroups:
-        - !Ref EC2SecurityGroup
+      LaunchTemplateName: !Sub 'launch-template-${EnvironmentSuffix}'
+      LaunchTemplateData:
+        ImageId: !Ref AMIId
+        InstanceType: t2.micro
+        IamInstanceProfile:
+          Arn: !GetAtt EC2InstanceProfile.Arn
+        SecurityGroupIds:
+          - !Ref EC2SecurityGroup
 
   AutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
       MinSize: 2
       MaxSize: 5
-      LaunchConfigurationName: !Ref LaunchConfiguration
+      LaunchTemplate:
+        LaunchTemplateId: !Ref LaunchTemplate
+        Version: !GetAtt LaunchTemplate.LatestVersionNumber
       VPCZoneIdentifier:
         - !Ref PrivateSubnet1
         - !Ref PrivateSubnet2
@@ -264,6 +269,7 @@ Resources:
 
   RDSInstance:
     Type: AWS::RDS::DBInstance
+    DeletionPolicy: Delete
     Properties:
       DBInstanceClass: !Ref RdsInstanceType
       Engine: postgres
