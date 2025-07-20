@@ -260,6 +260,7 @@ Resources:
       GenerateSecretString:
         SecretStringTemplate: '{"username": "masteruser"}'
         GenerateStringKey: 'password'
+        ExcludeCharacters: '/@" '
 
   RDSInstance:
     Type: AWS::RDS::DBInstance
