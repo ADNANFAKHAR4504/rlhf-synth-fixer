@@ -2,15 +2,22 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: Secure and scalable infrastructure environment in us-east-1
 
 Parameters:
-  EnvSuffix:
+  EnvironmentSuffix:
     Type: String
+    Default: dev
     Description: Environment suffix (e.g., dev, staging, prod)
+    AllowedPattern: '^[a-zA-Z0-9]+$'
+    ConstraintDescription: Must contain only alphanumeric characters
+
   VpcCidr:
     Type: String
     Default: '10.0.0.0/16'
+
   AMIId:
     Type: AWS::EC2::Image::Id
     Description: Approved AMI ID for EC2 instances
+    Default: ami-0c94855ba95c71c99 # &lt;-- Replace with your security-approved AMI ID!
+
   RdsInstanceType:
     Type: String
     Default: 'db.t3.micro'
@@ -24,14 +31,14 @@ Resources:
       EnableDnsHostnames: true
       Tags:
         - Key: Name
-          Value: !Sub 'vpc-${EnvSuffix}'
+          Value: !Sub 'vpc-${EnvironmentSuffix}'
 
   InternetGateway:
     Type: AWS::EC2::InternetGateway
     Properties:
       Tags:
         - Key: Name
-          Value: !Sub 'igw-${EnvSuffix}'
+          Value: !Sub 'igw-${EnvironmentSuffix}'
 
   InternetGatewayAttachment:
     Type: AWS::EC2::VPCGatewayAttachment
@@ -47,7 +54,7 @@ Resources:
       AvailabilityZone: !Select [0, !GetAZs '']
       Tags:
         - Key: Name
-          Value: !Sub 'public-subnet-1-${EnvSuffix}'
+          Value: !Sub 'public-subnet-1-${EnvironmentSuffix}'
 
   PublicSubnet2:
     Type: AWS::EC2::Subnet
@@ -57,7 +64,7 @@ Resources:
       AvailabilityZone: !Select [1, !GetAZs '']
       Tags:
         - Key: Name
-          Value: !Sub 'public-subnet-2-${EnvSuffix}'
+          Value: !Sub 'public-subnet-2-${EnvironmentSuffix}'
 
   PrivateSubnet1:
     Type: AWS::EC2::Subnet
@@ -67,7 +74,7 @@ Resources:
       AvailabilityZone: !Select [0, !GetAZs '']
       Tags:
         - Key: Name
-          Value: !Sub 'private-subnet-1-${EnvSuffix}'
+          Value: !Sub 'private-subnet-1-${EnvironmentSuffix}'
 
   PrivateSubnet2:
     Type: AWS::EC2::Subnet
@@ -77,7 +84,7 @@ Resources:
       AvailabilityZone: !Select [1, !GetAZs '']
       Tags:
         - Key: Name
-          Value: !Sub 'private-subnet-2-${EnvSuffix}'
+          Value: !Sub 'private-subnet-2-${EnvironmentSuffix}'
 
   NatGateway1:
     Type: AWS::EC2::NatGateway
@@ -86,7 +93,7 @@ Resources:
       SubnetId: !Ref PublicSubnet1
       Tags:
         - Key: Name
-          Value: !Sub 'nat-gateway-1-${EnvSuffix}'
+          Value: !Sub 'nat-gateway-1-${EnvironmentSuffix}'
 
   ElasticIP1:
     Type: AWS::EC2::EIP
@@ -99,7 +106,7 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub 'public-rt-${EnvSuffix}'
+          Value: !Sub 'public-rt-${EnvironmentSuffix}'
 
   PrivateRouteTable:
     Type: AWS::EC2::RouteTable
@@ -107,7 +114,7 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub 'private-rt-${EnvSuffix}'
+          Value: !Sub 'private-rt-${EnvironmentSuffix}'
 
   PublicRoute:
     Type: AWS::EC2::Route
@@ -150,7 +157,7 @@ Resources:
   FlowLogsLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub 'vpc-flow-logs-${EnvSuffix}'
+      LogGroupName: !Sub 'vpc-flow-logs-${EnvironmentSuffix}'
 
   FlowLogsRole:
     Type: AWS::IAM::Role
@@ -184,7 +191,7 @@ Resources:
               Service: ec2.amazonaws.com
             Action: 'sts:AssumeRole'
       Policies:
-        - PolicyName: !Sub 'ec2-s3-policy-${EnvSuffix}'
+        - PolicyName: !Sub 'ec2-s3-policy-${EnvironmentSuffix}'
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
@@ -218,7 +225,7 @@ Resources:
         - !Ref PrivateSubnet2
       Tags:
         - Key: Name
-          Value: !Sub 'asg-${EnvSuffix}'
+          Value: !Sub 'asg-${EnvironmentSuffix}'
           PropagateAtLaunch: true
 
   EC2SecurityGroup:
@@ -244,12 +251,12 @@ Resources:
   SNSTopic:
     Type: AWS::SNS::Topic
     Properties:
-      TopicName: !Sub 'cpu-alarm-topic-${EnvSuffix}'
+      TopicName: !Sub 'cpu-alarm-topic-${EnvironmentSuffix}'
 
   RDSSecret:
     Type: AWS::SecretsManager::Secret
     Properties:
-      Name: !Sub 'rds-secret-${EnvSuffix}'
+      Name: !Sub 'rds-secret-${EnvironmentSuffix}'
       GenerateSecretString:
         SecretStringTemplate: '{"username": "admin"}'
         GenerateStringKey: 'password'
@@ -333,7 +340,7 @@ Resources:
       VisibilityConfig:
         SampledRequestsEnabled: true
         CloudWatchMetricsEnabled: true
-        MetricName: !Sub 'waf-web-acl-${EnvSuffix}'
+        MetricName: !Sub 'waf-web-acl-${EnvironmentSuffix}'
       Rules:
         - Name: AWS-AWSManagedRulesCommonRuleSet
           Priority: 1
@@ -346,7 +353,7 @@ Resources:
           VisibilityConfig:
             SampledRequestsEnabled: true
             CloudWatchMetricsEnabled: true
-            MetricName: !Sub 'waf-commonruleset-${EnvSuffix}'
+            MetricName: !Sub 'waf-commonruleset-${EnvironmentSuffix}'
 
 Outputs:
   VpcId:
