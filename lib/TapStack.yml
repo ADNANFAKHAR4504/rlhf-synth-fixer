@@ -297,18 +297,30 @@ Resources:
               Address: !Ref SNSTopic
 
 Outputs:
-  ApiEndpoint:
-    Description: API Gateway endpoint URL
-    Value: !Sub 'https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/v1'
+  VPC:
+    Description: VPC ID
+    Value: !Ref VPC
+  PrivateSubnet1:
+    Description: Private Subnet 1 ID
+    Value: !Ref PrivateSubnet1
+  PrivateSubnet2:
+    Description: Private Subnet 2 ID
+    Value: !Ref PrivateSubnet2
+  PublicSubnet1:
+    Description: Public Subnet 1 ID
+    Value: !Ref PublicSubnet1
+  SSMParameterName:
+    Description: Name of the SSM Parameter storing the API key
+    Value: !Ref SSMParameter
   LambdaFunction1Arn:
     Description: ARN of Lambda Function 1
     Value: !GetAtt LambdaFunction1.Arn
   LambdaFunction2Arn:
     Description: ARN of Lambda Function 2
     Value: !GetAtt LambdaFunction2.Arn
-  SSMParameterName:
-    Description: Name of the SSM Parameter storing the API key
-    Value: !Ref SSMParameter
+  ApiEndpoint:
+    Description: API Gateway endpoint URL
+    Value: !Sub 'https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/v1'
   CloudWatchAlarmName:
     Description: Name of the CloudWatch Alarm
     Value: !Ref CloudWatchAlarm

@@ -15,6 +15,27 @@ const ssm = new SSM();
 const cloudwatch = new CloudWatch();
 const sns = new SNS();
 
+// Fail fast if required outputs are missing
+beforeAll(() => {
+  [
+    'VPC',
+    'PrivateSubnet1',
+    'PrivateSubnet2',
+    'LambdaFunction1Arn',
+    'LambdaFunction2Arn',
+    'ApiEndpoint',
+    'SSMParameterName',
+    'CloudWatchAlarmName',
+    'SNSTopicArn',
+  ].forEach(key => {
+    if (!outputs[key]) {
+      throw new Error(
+        `outputs.${key} is missing or undefined! Check your CloudFormation outputs and cfn-outputs/flat-outputs.json`
+      );
+    }
+  });
+});
+
 describe('Serverless Stack Integration Tests', () => {
   describe('API Gateway & Lambda Integration', () => {
     test('API endpoint should return 200, 403, or 502', async () => {
@@ -55,35 +76,17 @@ describe('Serverless Stack Integration Tests', () => {
   describe('VPC & Subnet Validation', () => {
     test('VPC should exist', async () => {
       const vpcId = outputs.VPC;
-      const vpcs = await ec2.describeVpcs({}).promise();
-      const found = vpcs.Vpcs?.some((v: any) => v.VpcId === vpcId);
-      if (!found) {
-        console.error(
-          'Available VPCs:',
-          vpcs.Vpcs?.map((v: any) => v.VpcId),
-          'Expected:',
-          vpcId
-        );
-      }
-      expect(found).toBe(true);
+      const vpcs = await ec2.describeVpcs({ VpcIds: [vpcId] }).promise();
+      expect(vpcs.Vpcs?.length).toBe(1);
     });
 
     test('Private subnets should exist and be in different AZs', async () => {
       const privateSubnetIds = [outputs.PrivateSubnet1, outputs.PrivateSubnet2];
-      const subnets = await ec2.describeSubnets({}).promise();
-      const foundSubnets = (subnets.Subnets || []).filter((s: any) =>
-        privateSubnetIds.includes(s.SubnetId)
-      );
-      if (foundSubnets.length !== privateSubnetIds.length) {
-        console.error(
-          'Available subnets:',
-          subnets.Subnets?.map((s: any) => s.SubnetId),
-          'Expected:',
-          privateSubnetIds
-        );
-      }
-      expect(foundSubnets.length).toBe(privateSubnetIds.length);
-      const azs = new Set(foundSubnets.map(s => s.AvailabilityZone));
+      const subnets = await ec2
+        .describeSubnets({ SubnetIds: privateSubnetIds })
+        .promise();
+      expect(subnets.Subnets?.length).toBe(privateSubnetIds.length);
+      const azs = new Set(subnets.Subnets?.map((s: any) => s.AvailabilityZone));
       expect(azs.size).toBe(privateSubnetIds.length);
     });
   });
