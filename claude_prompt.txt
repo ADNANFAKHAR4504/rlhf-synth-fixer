@@ -6,26 +6,27 @@ You are an expert AWS Cloud Architect and DevOps engineer.
 * You will find inside metadata.json file the platform and language that you will need to use to solve the problem.
 * None of the resources to be created can have a Retain policy. As they are going to be destroyed at the end of the QA pipeline.
 * our QA pipeline involes: (Check the package.json and the Pipfile to know which commands to run)
-  1. lint
-  2. build
-  3. synth
+  1. lint - Fix until it passes
+  2. build - Fix until it passes
+  3. synth - Only when needed, fix until it passes.
   4. deploy
-    * If deployment fails, fix the code until it passes.
-    * Read the latest documentation for the resources involved to get the latest information.
-    * Get the outputs from the deploy step, as they will be used in the integration tests. Storing them in the cfn-outputs folder. all-outputs and flat-outputs (as a json object with key: string).
+    * Dont deploy resources to the cloud, that job is part of the CI/CD pipeline in the PR.
+    * But you will be given feedback from the developer, on how to fix the deployment or make it more robust.
+    * Remember that the goal is to generate infrastructure that best fits the problem described in lib/PROMPT.md.
   5. Write unit tests for testing the code in lib/, you will find the placeholder files inside test/ folder.
     * If its a json file, you will need to write a test that validates the json file.
     * If its a yaml file, you will need to run pipenv run `pipenv run cfn-flip-to-json` to convert the yaml file to json and then write a test that validates the json file.
   6. run unit tests: npm run test:unit. and fix it until it passes
   7. Write integration tests for testing the code in lib/ inside the file in test/ folder.
-    * You will need to collect the outputs from the deploy step and use them in the integration tests.
+    * You will need to collect the outputs from aws. Check the .github/workflows/ci-cd.yml file to see how to collect the outputs.
+    * If the outputs are not available, ignore this step until the deployment pipeline has passed.
     * Your integration tests should not only assert that the resources were created, but also that any end-to-end workflows are working as expected.
   8. Run integration tests: npm run test:integration. And fix it until it passes.
-    * Use the outputs from the deploy step to test the integration tests.
+    * Use the outputs from the deploy step to test the integration tests. If the outputs are not available, stop processing here and commit to the PR.
     * The integration tests should be able to validate the e2e workflow of the application.
     * To fix the problems in the integration tests, read the aws documentation for the resources involved to address problems.
   9. Run build, lint, unit tests, and integrations tests until everything passes.
-  10. Once you have solved the task, you will need to fill the file lib/IDEAL_RESPONSE.md.
+  10. Once integration tests have passed, you will need to fill the file lib/IDEAL_RESPONSE.md.
     * For this task, you will need to answer as if you were the LLM, but with the knowledge that you have gone through the QA pipeline and fixed all the issues.
     * Just provide the ideal response as if you were the LLM asked to solve the problem.
     * Provide all the file structure and file_names that were created or modified.
@@ -33,25 +34,25 @@ You are an expert AWS Cloud Architect and DevOps engineer.
   11. Double check that the lib/IDEAL_RESPONSE.md is solving the problem described in lib/PROMPT.md and its coherent with the Infrastructure as code.
     * If it is not, you will to start the process again from step 1, but taking into account what you have learned.
   12. Run markdownlint on the md files inside lib/ folder to ensure that they are following the markdown style guide.
-  13. Finally, you can destroy the stack using the right commands to clean up resources.
-  14. Verify that the stack is in DELETE COMPLETE state. If not, you will need to fix the issues and run the destroy command again.
+  13. Commit to the PR, summarize the changes made in the PR and the steps taken to solve the problem.
 
 Considerations:
 * Reproducibility is key, so every step should be documented in the IDEAL_RESPONSE.md file.
   * If commands need to be run (specially for AWS CLI), they should be documented in the IDEAL_RESPONSE.md file.
-* Every time you make changes in the code, you will need to run the lint, build, synth, and deploy steps again.
+* Every time you make changes in the code, you will need to run the lint, build, synth, and unit tests steps again.
 * You will need to run the tests after each step to ensure that everything is working as expected.
 * If you find any issues in the code, you will need to fix them before proceeding to the next step.
-* You will need to read the latest documentation for the resources involved to get the latest information.
-* You will need to use the outputs from the deploy step in the integration tests.
+* You will need to read the latest documentation for the resources involved to get the best practices. Very useful as you might not be updated with the latest features from AWS.
+* For integration tests, you will need to collect the outputs from the stack in AWS, and all its children. Generally, parent stack is called `TapStack${{ env.ENVIRONMENT_SUFFIX }}`
+* The ENVIRONMENT_SUFFIX is `format('pr{0}', github.event.number)` if the PR number is available, otherwise it is `dev`.
 * Every resource created should be destroyed at the end of the QA pipeline. Do not use Retain policy.
 * If the prompt requires to deploy a resource in a specific region, you will need to specify it in the code, not in the command line. as default region is us-east-1.
-* If you need feedback or you are stuck, dont hesitate to ask for help.
-* Every time you find a problem in the MODEL_RESPONSE.md, you need to document it in the MODEL_FAILURES file, and explain how you fixed it.
-* You will need to use an ENVIRONMENT_SUFFIX as environment variable. Create one and use it for the scope of one task. Store it in a text file so you can reuse it.
+* If you need feedback or you are stuck, dont hesitate to ask for help to the reviewer in github PR comments.
+* Every time you solve a problem in the QA pipeline or while deploying, you need to document it in the MODEL_FAILURES file, and explain how you fixed it.
 * If its a cfn template, keep all the resources in the same file, do not split them into multiple files.
-* If you create s3 buckets, empty them before deleting them, as they cannot be deleted if they are not empty.
-* If you need to create resources that are needed for deployment, create them using aws cli commands, and destroy them after destroying the stack. Document the commands in the IDEAL_RESPONSE.md file.
+* If you create s3 buckets, request the reviewer to empty the bucket before destroying the stack, as it will fail if the bucket is not empty.
+* If you need to create resources that are needed for deployment, add the necessary commands in a .sh file and commit it to the lib/ folder. Request the reviewer to run it before deploying the stack.
 * If you need auxiliar files, such as bash commands, create them in the lib/ folder, and document them in the IDEAL_RESPONSE.md file.
-* If running aws cli commands is needed, ask the user to connect to the ec2 instance and run the commands there.
+* If running aws cli commands is needed, ask the reviewer to do them and give you feedback.
 * IDEAL_RESPONSE.md should not reference other .md files or the process of creating the response. It should be a standalone document that describes the solution to the problem.
+* IMPORTANT: Your highest priority is that IDEAL_RESPONSE.md is the perfect response to the problem described in lib/PROMPT.md, and that it is coherent with the Infrastructure as code created in the lib/ folder.
