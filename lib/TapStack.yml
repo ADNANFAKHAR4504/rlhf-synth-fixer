@@ -258,7 +258,7 @@ Resources:
     Properties:
       Name: !Sub 'rds-secret-${EnvironmentSuffix}'
       GenerateSecretString:
-        SecretStringTemplate: '{"username": "admin"}'
+        SecretStringTemplate: '{"username": "masteruser"}'
         GenerateStringKey: 'password'
 
   RDSInstance:
