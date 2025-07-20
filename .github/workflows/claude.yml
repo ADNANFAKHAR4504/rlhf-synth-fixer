@@ -5,6 +5,8 @@ on:
     types: [created]
   pull_request_review:
     types: [submitted]
+  issue_comment:
+    types: [created]
 
 env:
   NODE_VERSION: '22'
@@ -16,7 +18,8 @@ jobs:
   claude-code-action:
     if: |
       (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude')) ||
-      (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@claude'))
+      (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@claude')) ||
+      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude'))
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -31,6 +34,8 @@ jobs:
             PR_NUMBER="${{ github.event.pull_request.number }}"
           elif [[ "${{ github.event_name }}" == "pull_request_review_comment" ]]; then
             PR_NUMBER="${{ github.event.pull_request.number }}"
+          elif [[ "${{ github.event_name }}" == "issue_comment" && "${{ github.event.issue.pull_request }}" != null ]]; then
+            PR_NUMBER="${{ github.event.issue.number }}"
           else
             echo "No PR number found, exiting"
             exit 1
@@ -52,6 +57,14 @@ jobs:
           echo "Current commit: $(git rev-parse HEAD)"
           echo "Files in PR:"
           git diff --name-status origin/main...HEAD
+
+          # Debug event context
+          echo "Event name: ${{ github.event_name }}"
+          echo "PR/Issue number: ${{ env.PR_NUMBER }}"
+          if [[ "${{ github.event_name }}" == "issue_comment" ]]; then
+            echo "Is PR? ${{ github.event.issue.pull_request != null }}"
+            echo "Comment body: ${{ github.event.comment.body }}"
+          fi
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
