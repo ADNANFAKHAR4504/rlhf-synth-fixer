@@ -1,4 +1,8 @@
-import { CloudWatch, EC2, Lambda, SNS, SSM } from 'aws-sdk';
+import { CloudWatch } from '@aws-sdk/client-cloudwatch';
+import { EC2 } from '@aws-sdk/client-ec2';
+import { Lambda } from '@aws-sdk/client-lambda';
+import { SNS } from '@aws-sdk/client-sns';
+import { SSM } from '@aws-sdk/client-ssm';
 import fs from 'fs';
 
 // Always use us-east-1 for billing alarm checks!
