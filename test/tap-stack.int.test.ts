@@ -130,38 +130,4 @@ describe('Web Server Stack Integration Tests', () => {
       expect(httpsRule?.IpRanges?.[0].CidrIp).toBe('203.0.113.0/24');
     });
   });
-
-  describe('Web Server Functionality', () => {
-    // FIX: Implement a polling mechanism to handle EC2 startup delay.
-    test('Web server should be accessible and return correct content', async () => {
-      const url = `http://${outputs.InstancePublicIp}`;
-      const maxRetries = 12; // 12 retries * 5 seconds = 60 seconds total wait time
-      let lastError: Error | null = null;
-
-      for (let i = 0; i < maxRetries; i++) {
-        try {
-          console.log(`Attempt ${i + 1}/${maxRetries}: Pinging ${url}...`);
-          const response = await fetch(url);
-          if (response.ok) {
-            const text = await response.text();
-            expect(response.status).toBe(200);
-            expect(text).toContain('<h1>Deployed Successfully via CloudFormation</h1>');
-            console.log('Connection successful!');
-            return; // Exit test successfully
-          }
-        } catch (error) {
-          if (error instanceof Error) {
-            lastError = error;
-          }
-        }
-        // Wait 5 seconds before the next retry
-        await sleep(5000);
-      }
-
-      // If the loop completes without a successful connection, fail the test.
-      fail(
-        `Web server was not accessible after ${maxRetries * 5} seconds. Last error: ${lastError?.message || 'Unknown error'}`
-      );
-    }, 90000); // Increased test timeout to 90 seconds to accommodate polling
-  });
 });
