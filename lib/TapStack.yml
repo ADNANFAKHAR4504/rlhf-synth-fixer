@@ -29,6 +29,15 @@ Parameters:
     Description: Number of days to retain logs in CloudWatch
     Default: 30
     AllowedValues: [1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1827, 3653]
+  
+  # Region enforcement parameter
+  DeploymentRegion:
+    Type: String
+    Description: AWS region where resources will be deployed
+    Default: us-west-2
+    AllowedValues:
+      - us-west-2
+    ConstraintDescription: This template can only be deployed in us-west-2 region
 
 Resources:
   #############################################
@@ -36,7 +45,7 @@ Resources:
   #############################################
   LogBucket:
     Type: AWS::S3::Bucket
-    DeletionPolicy: Retain
+    DeletionPolicy: Delete
     Properties:
       BucketName: !Sub '${AWS::AccountId}-${ProjectName}-logs-${AWS::Region}-${Environment}'
       AccessControl: LogDeliveryWrite
