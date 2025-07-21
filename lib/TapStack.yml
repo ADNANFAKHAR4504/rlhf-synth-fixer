@@ -422,7 +422,7 @@ Resources:
   SecureSNSTopic:
     Type: AWS::SNS::Topic
     Properties:
-      TopicName: !Sub "${Project}-secure-topic"
+      TopicName: !Sub "financial-secure-topic"
       Tags:
         - Key: Environment
           Value: !Ref Environment
@@ -540,3 +540,7 @@ Outputs:
   S3BucketName:
     Description: S3 Bucket Name
     Value: !Ref SecureS3Bucket
+
+  # WebACLArn:
+  #   Description: ARN of the WebACL
+  #   Value: !GetAtt WebACL.Arn

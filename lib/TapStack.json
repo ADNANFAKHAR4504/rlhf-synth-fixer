@@ -776,7 +776,7 @@
             "Type": "AWS::SNS::Topic",
             "Properties": {
                 "TopicName": {
-                    "Fn::Sub": "${Project}-secure-topic"
+                    "Fn::Sub": "financial-secure-topic"
                 },
                 "Tags": [
                     {
