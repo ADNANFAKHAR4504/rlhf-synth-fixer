@@ -10,7 +10,6 @@
 
 #### Model Response Issues:
 
-- The model output included both a sample table (`TurnAroundPromptTable`) and the main DynamoDB table (`DynamoDBTable`), which is confusing and redundant.
 - Some outputs reference resources that are not used by the Lambda functions or API Gateway.
 
 #### Ideal Response Features:
