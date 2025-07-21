@@ -839,9 +839,7 @@
                 "VisibilityConfig": {
                     "SampledRequestsEnabled": true,
                     "CloudWatchMetricsEnabled": true,
-                    "MetricName": {
-                        "Fn::Sub": "${Project}-webacl-metric"
-                    }
+                    "MetricName": "CommonWafMetric"
                 },
                 "Rules": [
                     {
@@ -853,13 +851,12 @@
                         "VisibilityConfig": {
                             "SampledRequestsEnabled": true,
                             "CloudWatchMetricsEnabled": true,
-                            "MetricName": "AWSManagedRulesCommonRuleSetMetric"
+                            "MetricName": "AWSCommonRules"
                         },
                         "Statement": {
                             "ManagedRuleGroupStatement": {
                                 "VendorName": "AWS",
-                                "Name": "AWSManagedRulesCommonRuleSet",
-                                "ExcludedRules": []
+                                "Name": "AWSManagedRulesCommonRuleSet"
                             }
                         }
                     }
@@ -1058,6 +1055,34 @@
             "Description": "S3 Bucket Name",
             "Value": {
                 "Ref": "SecureS3Bucket"
+            }
+        },
+        "WebACLArn": {
+            "Description": "The ARN of the WebACL",
+            "Value": {
+                "Fn::GetAtt": [
+                    "WebACL",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${Project}-WebACLArn"
+                }
+            }
+        },
+        "WebACLId": {
+            "Description": "The ID of the WebACL",
+            "Value": {
+                "Fn::GetAtt": [
+                    "WebACL",
+                    "Id"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${Project}-WebACLId"
+                }
             }
         }
     }

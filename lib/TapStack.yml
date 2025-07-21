@@ -458,7 +458,7 @@ Resources:
       VisibilityConfig:
         SampledRequestsEnabled: true
         CloudWatchMetricsEnabled: true
-        MetricName: !Sub "${Project}-webacl-metric"
+        MetricName: CommonWafMetric
       Rules:
         - Name: AWSManagedRulesCommonRuleSet
           Priority: 1
@@ -467,12 +467,11 @@ Resources:
           VisibilityConfig:
             SampledRequestsEnabled: true
             CloudWatchMetricsEnabled: true
-            MetricName: AWSManagedRulesCommonRuleSetMetric
+            MetricName: AWSCommonRules
           Statement:
             ManagedRuleGroupStatement:
               VendorName: AWS
               Name: AWSManagedRulesCommonRuleSet
-              ExcludedRules: []
       Tags:
         - Key: Environment
           Value: !Ref Environment
@@ -561,3 +560,15 @@ Outputs:
   S3BucketName:
     Description: S3 Bucket Name
     Value: !Ref SecureS3Bucket
+
+  WebACLArn:
+    Description: The ARN of the WebACL
+    Value: !GetAtt WebACL.Arn
+    Export:
+      Name: !Sub "${Project}-WebACLArn"
+       
+  WebACLId:
+    Description: The ID of the WebACL
+    Value: !GetAtt WebACL.Id
+    Export:
+      Name: !Sub "${Project}-WebACLId"
