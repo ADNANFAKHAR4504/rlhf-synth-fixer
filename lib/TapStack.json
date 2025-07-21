@@ -708,6 +708,11 @@
             "Description": "URL of the API Gateway endpoint",
             "Value": {
                 "Fn::Sub": "https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${Environment}"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ApiGatewayEndpoint"
+                }
             }
         },
         "LambdaFunction": {
@@ -717,12 +722,80 @@
                     "HelloWorldFunction",
                     "Arn"
                 ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-LambdaFunction"
+                }
             }
         },
         "LogBucketName": {
             "Description": "Name of the S3 bucket for logs",
             "Value": {
                 "Ref": "LogBucket"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-LogBucketName"
+                }
+            }
+        },
+        "HelloWorldFunctionName": {
+            "Description": "Name of the Lambda function",
+            "Value": {
+                "Ref": "HelloWorldFunction"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-HelloWorldFunctionName"
+                }
+            }
+        },
+        "ApiGatewayId": {
+            "Description": "ID of the API Gateway",
+            "Value": {
+                "Ref": "ApiGateway"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ApiGatewayId"
+                }
+            }
+        },
+        "ApiGatewayStageName": {
+            "Description": "Stage name of the API Gateway deployment",
+            "Value": {
+                "Ref": "Environment"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ApiGatewayStageName"
+                }
+            }
+        },
+        "LambdaExecutionRoleArn": {
+            "Description": "ARN of the Lambda execution role",
+            "Value": {
+                "Fn::GetAtt": [
+                    "LambdaExecutionRole",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-LambdaExecutionRoleArn"
+                }
+            }
+        },
+        "LogsToS3DeliveryStreamName": {
+            "Description": "Name of the Kinesis Firehose delivery stream",
+            "Value": {
+                "Ref": "LogsToS3DeliveryStream"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-LogsToS3DeliveryStreamName"
+                }
             }
         }
     }

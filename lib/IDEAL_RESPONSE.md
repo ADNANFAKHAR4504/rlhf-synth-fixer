@@ -1,10 +1,11 @@
 # AWS Serverless Web Application - CloudFormation Solution
 
-I'll provide you with a complete CloudFormation template that deploys a serverless web application with comprehensive logging to S3, adhering to all your requirements including deployment to the us-west-2 region.
+I'll provide you with a complete CloudFormation template that deploys a serverless web application with comprehensive logging to S3, adhering to all your requirements for deployment in the us-west-2 region.
 
 ## Solution Architecture
 
 This solution creates a fully serverless web application with:
+
 - **API Gateway** for HTTP request handling
 - **Lambda Function** returning "Hello World" message
 - **Comprehensive S3 Logging** for both API Gateway and Lambda
@@ -14,13 +15,13 @@ This solution creates a fully serverless web application with:
 
 ## File Structure
 
-```
+```text
 lib/
 ├── TapStack.yml          # Main CloudFormation template (YAML)
 ├── TapStack.json         # Template in JSON format (for testing)
 
 test/
-├── tap-stack.unit.test.ts    # Comprehensive unit tests (41 tests)
+├── tap-stack.unit.test.ts    # Comprehensive unit tests (40 tests)
 ├── tap-stack.int.test.ts     # End-to-end integration tests (21 tests)
 ```
 
@@ -31,7 +32,7 @@ test/
 ```yaml
 # serverless-infra.yaml
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'CloudFormation template for a serverless web application with API Gateway, Lambda, and S3 logging'
+Description: 'CloudFormation template for a serverless web application with API Gateway, Lambda, and S3 logging. Deployed in us-west-2.'
 
 Parameters:
   # Parameters for resource tagging
@@ -48,11 +49,11 @@ Parameters:
   Environment:
     Type: String
     Description: Deployment environment
-    Default: Production
+    Default: production
     AllowedValues:
-      - Production
-      - Staging
-      - Development
+      - production
+      - staging
+      - development
   
   # Parameters for log retention
   LogRetentionInDays:
@@ -60,15 +61,6 @@ Parameters:
     Description: Number of days to retain logs in CloudWatch
     Default: 30
     AllowedValues: [1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1827, 3653]
-  
-  # Region enforcement parameter
-  DeploymentRegion:
-    Type: String
-    Description: AWS region where resources will be deployed
-    Default: us-west-2
-    AllowedValues:
-      - us-west-2
-    ConstraintDescription: This template can only be deployed in us-west-2 region
 
 Resources:
   #############################################
@@ -78,8 +70,10 @@ Resources:
     Type: AWS::S3::Bucket
     DeletionPolicy: Delete
     Properties:
-      BucketName: !Sub '${AWS::AccountId}-${ProjectName}-logs-${AWS::Region}-${Environment}'
-      AccessControl: LogDeliveryWrite
+      BucketName: !Sub '${AWS::AccountId}-serverlessweb-logs-${AWS::Region}-${Environment}'
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerPreferred
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -287,9 +281,7 @@ Resources:
   # Subscription Filter to send Lambda logs to S3
   LambdaLogToS3SubscriptionFilter:
     Type: AWS::Logs::SubscriptionFilter
-    DependsOn: 
-      - LogBucketPolicy
-      - HelloWorldFunctionLogGroup
+    DependsOn: LogBucketPolicy
     Properties:
       LogGroupName: !Ref HelloWorldFunctionLogGroup
       FilterPattern: '' # Empty pattern to capture all logs
@@ -399,9 +391,7 @@ Resources:
   # Subscription Filter to send API Gateway logs to S3
   ApiGatewayLogToS3SubscriptionFilter:
     Type: AWS::Logs::SubscriptionFilter
-    DependsOn: 
-      - LogBucketPolicy
-      - ApiGatewayLogGroup
+    DependsOn: LogBucketPolicy
     Properties:
       LogGroupName: !Ref ApiGatewayLogGroup
       FilterPattern: '' # Empty pattern to capture all logs
@@ -418,22 +408,61 @@ Resources:
       SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/*/*'
 
 Outputs:
+  # Core outputs for basic usage
   ApiGatewayEndpoint:
     Description: 'URL of the API Gateway endpoint'
     Value: !Sub 'https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${Environment}'
+    Export:
+      Name: !Sub '${AWS::StackName}-ApiGatewayEndpoint'
   
   LambdaFunction:
     Description: 'ARN of the Lambda function'
     Value: !GetAtt HelloWorldFunction.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-LambdaFunction'
   
   LogBucketName:
     Description: 'Name of the S3 bucket for logs'
     Value: !Ref LogBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-LogBucketName'
+
+  # Additional outputs for comprehensive testing and observability
+  HelloWorldFunctionName:
+    Description: 'Name of the Lambda function'
+    Value: !Ref HelloWorldFunction
+    Export:
+      Name: !Sub '${AWS::StackName}-HelloWorldFunctionName'
+  
+  ApiGatewayId:
+    Description: 'ID of the API Gateway'
+    Value: !Ref ApiGateway
+    Export:
+      Name: !Sub '${AWS::StackName}-ApiGatewayId'
+  
+  ApiGatewayStageName:
+    Description: 'Stage name of the API Gateway deployment'
+    Value: !Ref Environment
+    Export:
+      Name: !Sub '${AWS::StackName}-ApiGatewayStageName'
+  
+  LambdaExecutionRoleArn:
+    Description: 'ARN of the Lambda execution role'
+    Value: !GetAtt LambdaExecutionRole.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-LambdaExecutionRoleArn'
+  
+  LogsToS3DeliveryStreamName:
+    Description: 'Name of the Kinesis Firehose delivery stream'
+    Value: !Ref LogsToS3DeliveryStream
+    Export:
+      Name: !Sub '${AWS::StackName}-LogsToS3DeliveryStreamName'
 ```
 
 ## Deployment Instructions
 
 ### Prerequisites
+
 - AWS CLI configured with appropriate permissions
 - CloudFormation deployment permissions for all resource types
 
@@ -448,7 +477,7 @@ Outputs:
      --parameter-overrides \
        ProjectName=ServerlessWebApp \
        CostCenter=IT-12345 \
-       Environment=Production \
+       Environment=production \
      --region us-west-2
    ```
 
@@ -481,12 +510,14 @@ Outputs:
 ## Architecture Features
 
 ### 🔐 Security Best Practices
+
 - **S3 Public Access Blocked**: Complete protection against accidental public exposure
 - **Encryption at Rest**: S3 server-side encryption enabled
 - **Least Privilege IAM**: Each service has minimal required permissions
-- **Regional Constraints**: Template enforces us-west-2 deployment only
+- **Bucket Owner Controls**: Secure bucket ownership configuration
 
 ### 📊 Comprehensive Logging
+
 - **API Gateway Logs**: Access logs with detailed request information
 - **Lambda Execution Logs**: Complete function execution tracking
 - **Kinesis Firehose Delivery**: Reliable, scalable log delivery to S3
@@ -494,37 +525,17 @@ Outputs:
 - **Automatic Lifecycle**: 365-day automatic log retention policy
 
 ### 🏷️ Resource Management
+
 - **Consistent Tagging**: All resources tagged with Environment, ProjectName, CostCenter
-- **No Retain Policies**: All resources can be cleanly destroyed
+- **No Retain Policies**: All resources can be cleanly destroyed (DeletionPolicy: Delete)
 - **Parameterized Template**: Easy customization for different environments
 
 ### ⚡ Scalability & Performance
+
 - **Serverless Architecture**: Automatic scaling based on demand
 - **Regional API Gateway**: Optimized for us-west-2 deployment
 - **Efficient Log Delivery**: 60-second/5MB buffering for optimal performance
 
-## Testing
-
-The solution includes comprehensive test coverage:
-
-### Unit Tests (41 tests)
-- CloudFormation template validation
-- All 18 AWS resources verification
-- Security configuration validation
-- Tagging compliance checks
-
-### Integration Tests (21 tests)
-- End-to-end API functionality
-- AWS resource existence verification  
-- Logging pipeline validation
-- Security compliance verification
-
-Run tests with:
-```bash
-npm install
-npm run test:unit
-npm run test:integration
-```
 
 ## Cost Optimization
 
@@ -539,5 +550,6 @@ npm run test:integration
 - **Detailed Logging**: JSON-formatted access logs with key request metadata
 - **Centralized Log Storage**: All logs consolidated in dedicated S3 bucket
 - **Log Retention**: Configurable retention periods (default 30 days)
+- **Comprehensive Outputs**: 8 stack outputs for monitoring and integration testing
 
 This solution provides a production-ready, secure, and scalable serverless web application that fully meets all your requirements while following AWS best practices.

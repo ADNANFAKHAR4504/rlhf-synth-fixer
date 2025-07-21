@@ -84,7 +84,8 @@ jobs:
           timeout_minutes: '60'
           allowed_tools: 'Bash,Read,Write,Edit,MultiEdit,Glob,Grep,LS,Task,TodoWrite'
           custom_instructions: |
-            Follow the instructions from the user.
+            First read claude_prompt.txt to understand the QA pipeline.
+            Then Follow the instructions from the user.
             IMPORTANT: You MUST commit your changes back to the feature branch.
           # Optional: Restrict network access to specific domains only
           # experimental_allowed_domains: |
