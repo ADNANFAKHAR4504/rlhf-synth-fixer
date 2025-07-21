@@ -231,6 +231,7 @@ Resources:
       FunctionName: !Ref S3ProcessingLambda
       Principal: s3.amazonaws.com
       SourceArn: !GetAtt SecureS3Bucket.Arn
+      SourceAccount: !Ref "AWS::AccountId"
 
   LaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
