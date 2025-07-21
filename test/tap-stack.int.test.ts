@@ -12,6 +12,7 @@ import {
 } from '@aws-sdk/client-lambda';
 import fs from 'fs';
 
+// Load outputs (adjust path if needed)
 const outputs = JSON.parse(
   fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
 );
@@ -50,10 +51,11 @@ describe('Turn Around Prompt API Integration Tests', () => {
     );
     expect(result.StatusCode).toBe(200);
     const payloadString = result.Payload
-      ? Buffer.from(result.Payload).toString('utf-8')
+      ? Buffer.from(result.Payload as Uint8Array).toString('utf-8')
       : '';
     const payload = JSON.parse(payloadString);
-    expect(payload.message).toBe('Hello from Function 1');
+    const body = payload.body ? JSON.parse(payload.body) : {};
+    expect(body.message).toBe('Hello from Function 1');
   });
 
   test('Lambda Function 2 should return expected output', async () => {
@@ -66,10 +68,11 @@ describe('Turn Around Prompt API Integration Tests', () => {
     );
     expect(result.StatusCode).toBe(200);
     const payloadString = result.Payload
-      ? Buffer.from(result.Payload).toString('utf-8')
+      ? Buffer.from(result.Payload as Uint8Array).toString('utf-8')
       : '';
     const payload = JSON.parse(payloadString);
-    expect(payload.message).toBe('Hello from Function 2');
+    const body = payload.body ? JSON.parse(payload.body) : {};
+    expect(body.message).toBe('Hello from Function 2');
   });
 
   test('DynamoDB table should exist', async () => {
@@ -89,8 +92,6 @@ describe('Turn Around Prompt API Integration Tests', () => {
   });
 
   test('API Gateway RestApi should exist', async () => {
-    // The RestApiId is the logical ID, but the actual ID is part of the endpoint URL.
-    // Extract the RestApiId from the API endpoint output.
     const endpoint = outputs.ApiEndpoint;
     const match = endpoint.match(
       /^https:\/\/([a-z0-9]+)\.execute-api\.[a-z0-9-]+\.amazonaws\.com/
