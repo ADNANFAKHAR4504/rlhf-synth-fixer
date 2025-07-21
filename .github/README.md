@@ -19,10 +19,24 @@ Add the following **repository variables** (these are non-sensitive configuratio
 ### AWS Configuration
 - `AWS_REGION`: AWS region for deployment (e.g., `us-east-1`)
 
-### API Configuration
-- `API_GATEWAY_ENDPOINT`: Your API Gateway endpoint URL for integration tests
-- `READ_ONLY_API_KEY`: API key for read-only operations in integration tests  
-- `ADMIN_API_KEY`: API key for admin operations in integration tests
+### AWS Region Configuration
+
+By default, all AWS operations use the us-east-1 region. However, you can override this by creating a lib/AWS_REGION file containing the desired region.
+### How to set a custom AWS region
+- Create a file named AWS_REGION in the lib/ directory
+- Add the desired AWS region (e.g., us-west-2) as the only content of the file
+- Make sure there are no extra spaces or newlines in the file
+
+Example:
+`echo "us-west-2" > lib/AWS_REGION`
+
+### How it works
+
+The CI/CD pipeline automatically detects the presence of lib/AWS_REGION
+If found, it reads the region from this file and sets it as the AWS_REGION environment variable
+This environment variable overrides the default region (us-east-1) for all AWS operations.
+All tasks in the pipeline that use the composite action `.github/actions/configure-aws` will use this custom region
+
 
 ## How to Set Up
 
@@ -69,9 +83,6 @@ For local development, you can set these values in your environment:
 export AWS_ACCESS_KEY_ID="your-access-key"
 export AWS_SECRET_ACCESS_KEY="your-secret-key" 
 export AWS_REGION="us-east-1"
-export API_GATEWAY_ENDPOINT="https://your-api.execute-api.region.amazonaws.com/prod"
-export READ_ONLY_API_KEY="your-readonly-key"
-export ADMIN_API_KEY="your-admin-key"
 ```
 
 Or create a `.env` file (make sure it's in `.gitignore`):
@@ -80,7 +91,4 @@ Or create a `.env` file (make sure it's in `.gitignore`):
 AWS_ACCESS_KEY_ID=your-access-key
 AWS_SECRET_ACCESS_KEY=your-secret-key
 AWS_REGION=us-east-1
-API_GATEWAY_ENDPOINT=https://your-api.execute-api.region.amazonaws.com/prod
-READ_ONLY_API_KEY=your-readonly-key
-ADMIN_API_KEY=your-admin-key
 ```

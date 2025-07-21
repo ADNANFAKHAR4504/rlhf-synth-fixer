@@ -12,6 +12,7 @@ interface TaskMetadata {
   complexity: string;
   turn_type: string;
   po_id: string;
+  startedAt: string;
 }
 
 async function generateMetadataFile(metadata: TaskMetadata): Promise<void> {
@@ -69,7 +70,10 @@ async function copyTemplate(templateName: string): Promise<void> {
 
 function getLanguageChoices(platform: string) {
   if (platform === 'cdk') {
-    return [{ name: 'TypeScript', value: 'ts' }];
+    return [
+      { name: 'TypeScript', value: 'ts' },
+      { name: 'Python', value: 'py' },
+    ];
   }
 
   return [
@@ -154,6 +158,7 @@ async function main(): Promise<void> {
       complexity,
       turn_type: turnType,
       po_id: taskId,
+      startedAt: new Date().toISOString(),
     };
 
     // Show summary and confirm
