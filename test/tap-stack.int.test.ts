@@ -8,7 +8,7 @@ import fs from 'fs';
 import path from 'path';
 
 // Setup AWS EC2 client
-const REGION = 'us-east-2';
+const REGION = 'us-east-1';
 const client = new EC2Client({ region: REGION });
 
 // ✅ Load outputs at module level so tests don't run if loading fails
