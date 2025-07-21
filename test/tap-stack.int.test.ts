@@ -13,7 +13,7 @@ import {
 } from "@aws-sdk/client-ec2";
 
 const ENVIRONMENT_SUFFIX = process.env.ENVIRONMENT_SUFFIX || "dev";
-const STACK_NAME = `TapStack-${ENVIRONMENT_SUFFIX}`;
+const STACK_NAME = `TapStack${ENVIRONMENT_SUFFIX}`;
 
 let cfnClient: CloudFormationClient;
 let ec2Client: EC2Client;
