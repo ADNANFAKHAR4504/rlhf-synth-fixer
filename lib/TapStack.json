@@ -16,11 +16,12 @@
         }
     },
     "Parameters": {
-        "EnvironmentName": {
+        "EnvironmentSuffix": {
             "Type": "String",
-            "Description": "Environment suffix (e.g., dev, staging, prod)",
-            "AllowedPattern": "^[a-z0-9]+$",
-            "ConstraintDescription": "Must contain only lowercase letters and numbers"
+            "Default": "dev",
+            "Description": "Environment suffix for resource naming (e.g., dev, staging, prod)",
+            "AllowedPattern": "^[a-zA-Z0-9]+$",
+            "ConstraintDescription": "Must contain only alphanumeric characters"
         },
         "LambdaRuntime": {
             "Type": "String",
@@ -38,12 +39,33 @@
         }
     },
     "Resources": {
+        "TurnAroundPromptTable": {
+            "Type": "AWS::DynamoDB::Table",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "TableName": {
+                    "Fn::Sub": "TurnAroundPromptTable${EnvironmentSuffix}"
+                },
+                "AttributeDefinitions": [
+                    {
+                        "AttributeName": "id",
+                        "AttributeType": "S"
+                    }
+                ],
+                "KeySchema": [
+                    {
+                        "AttributeName": "id",
+                        "KeyType": "HASH"
+                    }
+                ],
+                "BillingMode": "PAY_PER_REQUEST",
+                "DeletionProtectionEnabled": false
+            }
+        },
         "LambdaExecutionRole": {
             "Type": "AWS::IAM::Role",
             "Properties": {
-                "RoleName": {
-                    "Fn::Sub": "LambdaExecutionRole-${EnvironmentName}"
-                },
                 "AssumeRolePolicyDocument": {
                     "Version": "2012-10-17",
                     "Statement": [
@@ -70,6 +92,16 @@
                                         "logs:PutLogEvents"
                                     ],
                                     "Resource": "arn:aws:logs:*:*:*"
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "dynamodb:PutItem",
+                                        "dynamodb:GetItem",
+                                        "dynamodb:UpdateItem",
+                                        "dynamodb:Query"
+                                    ],
+                                    "Resource": "*"
                                 }
                             ]
                         }
@@ -81,7 +113,7 @@
             "Type": "AWS::Lambda::Function",
             "Properties": {
                 "FunctionName": {
-                    "Fn::Sub": "FunctionOne-${EnvironmentName}"
+                    "Fn::Sub": "FunctionOne-${EnvironmentSuffix}"
                 },
                 "Runtime": {
                     "Ref": "LambdaRuntime"
@@ -109,7 +141,7 @@
             "Type": "AWS::Lambda::Function",
             "Properties": {
                 "FunctionName": {
-                    "Fn::Sub": "FunctionTwo-${EnvironmentName}"
+                    "Fn::Sub": "FunctionTwo-${EnvironmentSuffix}"
                 },
                 "Runtime": {
                     "Ref": "LambdaRuntime"
@@ -130,7 +162,7 @@
             "Type": "AWS::DynamoDB::Table",
             "Properties": {
                 "TableName": {
-                    "Fn::Sub": "${DynamoDBTableName}-${EnvironmentName}"
+                    "Fn::Sub": "${DynamoDBTableName}-${EnvironmentSuffix}"
                 },
                 "AttributeDefinitions": [
                     {
@@ -151,7 +183,7 @@
             "Type": "AWS::ApiGateway::RestApi",
             "Properties": {
                 "Name": {
-                    "Fn::Sub": "ServerlessAPI-${EnvironmentName}"
+                    "Fn::Sub": "ServerlessAPI-${EnvironmentSuffix}"
                 }
             }
         },
@@ -235,13 +267,84 @@
                 },
                 "Principal": "apigateway.amazonaws.com"
             }
+        },
+        "ApiGatewayDeployment": {
+            "Type": "AWS::ApiGateway::Deployment",
+            "DependsOn": [
+                "ApiGatewayMethod1",
+                "ApiGatewayMethod2"
+            ],
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "ApiGatewayRestApi"
+                }
+            }
+        },
+        "ApiGatewayStage": {
+            "Type": "AWS::ApiGateway::Stage",
+            "Properties": {
+                "StageName": "prod",
+                "RestApiId": {
+                    "Ref": "ApiGatewayRestApi"
+                },
+                "DeploymentId": {
+                    "Ref": "ApiGatewayDeployment"
+                }
+            }
         }
     },
     "Outputs": {
+        "TurnAroundPromptTableName": {
+            "Description": "Name of the DynamoDB table",
+            "Value": {
+                "Ref": "TurnAroundPromptTable"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-TurnAroundPromptTableName"
+                }
+            }
+        },
+        "TurnAroundPromptTableArn": {
+            "Description": "ARN of the DynamoDB table",
+            "Value": {
+                "Fn::GetAtt": [
+                    "TurnAroundPromptTable",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-TurnAroundPromptTableArn"
+                }
+            }
+        },
+        "StackName": {
+            "Description": "Name of this CloudFormation stack",
+            "Value": {
+                "Ref": "AWS::StackName"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-StackName"
+                }
+            }
+        },
+        "EnvironmentSuffix": {
+            "Description": "Environment suffix used for this deployment",
+            "Value": {
+                "Ref": "EnvironmentSuffix"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-EnvironmentSuffix"
+                }
+            }
+        },
         "ApiEndpoint": {
             "Description": "API Gateway endpoint URL",
             "Value": {
-                "Fn::Sub": "https://${ApiGatewayRestApi}.execute-api.${AWS::Region}.amazonaws.com/${ApiGatewayRestApi.Stage}/requests"
+                "Fn::Sub": "https://${ApiGatewayRestApi}.execute-api.${AWS::Region}.amazonaws.com/prod/requests"
             }
         },
         "Function1Arn": {
@@ -280,10 +383,7 @@
         "ExecutionRoleName": {
             "Description": "Lambda Execution Role Name",
             "Value": {
-                "Fn::GetAtt": [
-                    "LambdaExecutionRole",
-                    "RoleName"
-                ]
+                "Ref": "LambdaExecutionRole"
             }
         }
     }
