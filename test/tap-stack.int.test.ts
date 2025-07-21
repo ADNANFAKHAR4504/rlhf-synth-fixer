@@ -14,7 +14,7 @@ describe('CloudFormation Stack Integration Tests', () => {
   let outputs: any;
 
   beforeAll(() => {
-    const outputPath = path.join(__dirname, '../cdk-outputs/flat-outputs.json');
+    const outputPath = path.join(__dirname, '../cfn-outputs/flat-outputs.json');
     const raw = fs.readFileSync(outputPath, 'utf8');
     outputs = JSON.parse(raw)['TapStackpr60'];
   });
