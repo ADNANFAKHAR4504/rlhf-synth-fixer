@@ -1062,11 +1062,6 @@
                     "WebACL",
                     "Arn"
                 ]
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${Project}-WebACLArn"
-                }
             }
         },
         "WebACLId": {
@@ -1076,11 +1071,6 @@
                     "WebACL",
                     "Id"
                 ]
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${Project}-WebACLId"
-                }
             }
         }
     }
