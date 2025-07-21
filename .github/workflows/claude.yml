@@ -23,35 +23,35 @@ jobs:
       pull-requests: write
       issues: write
       id-token: write
+      actions: read
     steps:
-      - name: Get PR number
-        id: get-pr-number
-        run: |
-          if [[ "${{ github.event_name }}" == "pull_request_review" ]]; then
-            PR_NUMBER="${{ github.event.pull_request.number }}"
-          elif [[ "${{ github.event_name }}" == "pull_request_review_comment" ]]; then
-            PR_NUMBER="${{ github.event.pull_request.number }}"
-          else
-            echo "No PR number found, exiting"
-            exit 1
-          fi
-          echo "PR number determined as: $PR_NUMBER"
-          echo "pr_number=$PR_NUMBER" >> $GITHUB_OUTPUT
-          echo "PR_NUMBER=$PR_NUMBER" >> $GITHUB_ENV
-
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: refs/pull/${{ env.PR_NUMBER }}/head
+          ref: refs/pull/${{ github.event.pull_request.number }}/head
 
       - name: Debug checkout info
+        env:
+          COMMENT_BODY: ${{ github.event.comment.body }}
+          REVIEW_BODY: ${{ github.event.review.body }}
+          EVENT_NAME: ${{ github.event_name }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           # Debug info
           echo "Current branch: $(git branch --show-current)"
           echo "Current commit: $(git rev-parse HEAD)"
           echo "Files in PR:"
           git diff --name-status origin/main...HEAD
+
+          # Debug event context
+          echo "Event name: $EVENT_NAME"
+          echo "PR number: $PR_NUMBER"
+          if [[ "$EVENT_NAME" == "pull_request_review_comment" ]]; then
+            echo "Comment body: $COMMENT_BODY"
+          elif [[ "$EVENT_NAME" == "pull_request_review" ]]; then
+            echo "Review body: $REVIEW_BODY"
+          fi
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -80,8 +80,13 @@ jobs:
         uses: anthropics/claude-code-action@beta
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
           timeout_minutes: '60'
-          pr_number: ${{ env.PR_NUMBER }}
+          allowed_tools: 'Bash,Read,Write,Edit,MultiEdit,Glob,Grep,LS,Task,TodoWrite'
+          custom_instructions: |
+            First read claude_prompt.txt to understand the QA pipeline.
+            Then Follow the instructions from the user.
+            IMPORTANT: You MUST commit your changes back to the feature branch.
           # Optional: Restrict network access to specific domains only
           # experimental_allowed_domains: |
           #   .anthropic.com

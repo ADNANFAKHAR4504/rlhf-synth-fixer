@@ -34,7 +34,9 @@ You are an expert AWS Cloud Architect and DevOps engineer.
   11. Double check that the lib/IDEAL_RESPONSE.md is solving the problem described in lib/PROMPT.md and its coherent with the Infrastructure as code.
     * If it is not, you will to start the process again from step 1, but taking into account what you have learned.
   12. Run markdownlint on the md files inside lib/ folder to ensure that they are following the markdown style guide.
-  13. Commit to the PR, summarize the changes made in the PR and the steps taken to solve the problem.
+  13. Compare lib/MODEL_RESPONSE.md with lib/IDEAL_RESPONSE.md, and highlight in MODEL_FAILURES.md the differences between the two files and why the IDEAL_RESPONSE.md solves the problem better.
+    * Dont mention the differences on Retain Policies.
+  13. Commit your changes back to the Feature branch in the PR, summarize the changes made in the PR and the steps taken to solve the problem.
 
 Considerations:
 * Reproducibility is key, so every step should be documented in the IDEAL_RESPONSE.md file.
@@ -48,7 +50,6 @@ Considerations:
 * Every resource created should be destroyed at the end of the QA pipeline. Do not use Retain policy.
 * If the prompt requires to deploy a resource in a specific region, you will need to specify it in the code, not in the command line. as default region is us-east-1.
 * If you need feedback or you are stuck, dont hesitate to ask for help to the reviewer in github PR comments.
-* Every time you solve a problem in the QA pipeline or while deploying, you need to document it in the MODEL_FAILURES file, and explain how you fixed it.
 * If its a cfn template, keep all the resources in the same file, do not split them into multiple files.
 * If you create s3 buckets, request the reviewer to empty the bucket before destroying the stack, as it will fail if the bucket is not empty.
 * If you need to create resources that are needed for deployment, add the necessary commands in a .sh file and commit it to the lib/ folder. Request the reviewer to run it before deploying the stack.
