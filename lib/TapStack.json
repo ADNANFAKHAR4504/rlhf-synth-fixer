@@ -1,139 +1,201 @@
 {
     "AWSTemplateFormatVersion": "2010-09-09",
-    "Description": "TAP Stack - Task Assignment Platform CloudFormation Template",
-    "Metadata": {
-        "AWS::CloudFormation::Interface": {
-            "ParameterGroups": [
-                {
-                    "Label": {
-                        "default": "Environment Configuration"
-                    },
-                    "Parameters": [
-                        "EnvironmentSuffix"
-                    ]
-                }
-            ],
-            "ParameterLabels": {
-                "EnvironmentSuffix": {
-                    "default": "Environment Suffix"
-                }
-            }
-        }
-    },
+    "Description": "Core infrastructure for a financial services application adhering to security and compliance best practices.",
     "Parameters": {
-        "EnvironmentSuffix": {
+        "Environment": {
             "Type": "String",
-            "Description": "Environment suffix for resource naming (e.g., dev, staging, prod)",
-            "Default": "dev",
-            "AllowedPattern": "^[a-zA-Z0-9]+$",
-            "ConstraintDescription": "Must contain only alphanumeric characters"
+            "AllowedValues": [
+                "dev",
+                "staging",
+                "prod"
+            ],
+            "Description": "Deployment environment (dev, staging, prod)"
         },
         "Project": {
-            "Description": "The name of the project this infrastructure belongs to.",
             "Type": "String",
-            "Default": "financial-app"
+            "Description": "Project name for tagging"
         },
         "Owner": {
-            "Description": "The owner or team responsible for this infrastructure.",
             "Type": "String",
-            "Default": "DevOps"
-        },
-        "VPCCIDR": {
-            "Description": "CIDR block for the VPC.",
-            "Type": "String",
-            "Default": "10.0.0.0/16"
-        },
-        "PublicSubnet1CIDR": {
-            "Description": "CIDR block for Public Subnet 1.",
-            "Type": "String",
-            "Default": "10.0.1.0/24"
-        },
-        "PublicSubnet2CIDR": {
-            "Description": "CIDR block for Public Subnet 2.",
-            "Type": "String",
-            "Default": "10.0.2.0/24"
-        },
-        "PrivateSubnet1CIDR": {
-            "Description": "CIDR block for Private Subnet 1.",
-            "Type": "String",
-            "Default": "10.0.101.0/24"
-        },
-        "PrivateSubnet2CIDR": {
-            "Description": "CIDR block for Private Subnet 2.",
-            "Type": "String",
-            "Default": "10.0.102.0/24"
-        },
-        "RDSDatabaseName": {
-            "Description": "The name of the RDS PostgreSQL database.",
-            "Type": "String",
-            "Default": "financialdb"
-        },
-        "RDSDatabaseUser": {
-            "Description": "Master username for the RDS PostgreSQL database.",
-            "Type": "String",
-            "Default": "dbuser"
-        },
-        "RDSDatabasePort": {
-            "Description": "Port for the RDS PostgreSQL database.",
-            "Type": "Number",
-            "Default": 5432
-        },
-        "LambdaFunctionName": {
-            "Description": "Name for the example Lambda function.",
-            "Type": "String",
-            "Default": "FinancialServicesProcessor"
-        },
-        "S3BucketName": {
-            "Description": "Name for the secure S3 bucket for static content.",
-            "Type": "String",
-            "Default": "financial-app-static-content"
-        },
-        "CloudFrontPriceClass": {
-            "Description": "The price class for the CloudFront distribution.",
-            "Type": "String",
-            "Default": "PriceClass_100",
-            "AllowedValues": [
-                "PriceClass_100",
-                "PriceClass_200",
-                "PriceClass_All"
-            ]
-        },
-        "DynamoDBTableName": {
-            "Description": "Name for the DynamoDB table.",
-            "Type": "String",
-            "Default": "FinancialTransactions"
-        },
-        "KMSKeyAlias": {
-            "Description": "Alias for the KMS Key used for encryption.",
-            "Type": "String",
-            "Default": "alias/financial-app-key"
-        },
-        "RDSKMSKeyAlias": {
-            "Description": "Alias for the KMS Key used for RDS encryption.",
-            "Type": "String",
-            "Default": "alias/rds-financial-app-key"
+            "Description": "Resource owner for tagging"
         }
     },
     "Resources": {
-        "VPC": {
+        "FinancialServicesVPC": {
             "Type": "AWS::EC2::VPC",
             "Properties": {
-                "CidrBlock": {
-                    "Ref": "VPCCIDR"
-                },
+                "CidrBlock": "10.0.0.0/16",
                 "EnableDnsSupport": true,
                 "EnableDnsHostnames": true,
                 "Tags": [
                     {
-                        "Key": "Name",
+                        "Key": "Environment",
                         "Value": {
-                            "Fn::Sub": "${EnvironmentSuffix}-${Project}-VPC"
+                            "Ref": "Environment"
                         }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "Project"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        },
+        "PublicSubnet1": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "FinancialServicesVPC"
+                },
+                "CidrBlock": "10.0.1.0/24",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "Public Subnet 1"
                     },
                     {
                         "Key": "Environment",
                         "Value": {
-                            "Ref": "EnvironmentSuffix"
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "Project"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        },
+        "PublicSubnet2": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "FinancialServicesVPC"
+                },
+                "CidrBlock": "10.0.2.0/24",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "Public Subnet 2"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "Project"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        },
+        "PrivateSubnet1": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "FinancialServicesVPC"
+                },
+                "CidrBlock": "10.0.101.0/24",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "Private Subnet 1"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "Project"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        },
+        "PrivateSubnet2": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "FinancialServicesVPC"
+                },
+                "CidrBlock": "10.0.102.0/24",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "Private Subnet 2"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
                         }
                     },
                     {
@@ -157,405 +219,70 @@
                 "Tags": [
                     {
                         "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${EnvironmentSuffix}-${Project}-InternetGateway"
-                        }
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "EnvironmentSuffix"
-                        }
-                    },
-                    {
-                        "Key": "Project",
-                        "Value": {
-                            "Ref": "Project"
-                        }
-                    },
-                    {
-                        "Key": "Owner",
-                        "Value": {
-                            "Ref": "Owner"
-                        }
+                        "Value": "Internet Gateway"
                     }
                 ]
             }
         },
-        "AttachGateway": {
+        "VPCGatewayAttachment": {
             "Type": "AWS::EC2::VPCGatewayAttachment",
             "Properties": {
                 "VpcId": {
-                    "Ref": "VPC"
+                    "Ref": "FinancialServicesVPC"
                 },
                 "InternetGatewayId": {
                     "Ref": "InternetGateway"
                 }
             }
         },
-        "PublicSubnet1": {
-            "Type": "AWS::EC2::Subnet",
-            "Properties": {
-                "VpcId": {
-                    "Ref": "VPC"
-                },
-                "CidrBlock": {
-                    "Ref": "PublicSubnet1CIDR"
-                },
-                "AvailabilityZone": {
-                    "Fn::Select": [
-                        0,
-                        {
-                            "Fn::GetAZs": ""
-                        }
-                    ]
-                },
-                "MapPublicIpOnLaunch": true,
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${EnvironmentSuffix}-${Project}-PublicSubnet1"
-                        }
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "EnvironmentSuffix"
-                        }
-                    },
-                    {
-                        "Key": "Project",
-                        "Value": {
-                            "Ref": "Project"
-                        }
-                    },
-                    {
-                        "Key": "Owner",
-                        "Value": {
-                            "Ref": "Owner"
-                        }
-                    }
-                ]
-            }
-        },
-        "PublicSubnet2": {
-            "Type": "AWS::EC2::Subnet",
-            "Properties": {
-                "VpcId": {
-                    "Ref": "VPC"
-                },
-                "CidrBlock": {
-                    "Ref": "PublicSubnet2CIDR"
-                },
-                "AvailabilityZone": {
-                    "Fn::Select": [
-                        1,
-                        {
-                            "Fn::GetAZs": ""
-                        }
-                    ]
-                },
-                "MapPublicIpOnLaunch": true,
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${EnvironmentSuffix}-${Project}-PublicSubnet2"
-                        }
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "EnvironmentSuffix"
-                        }
-                    },
-                    {
-                        "Key": "Project",
-                        "Value": {
-                            "Ref": "Project"
-                        }
-                    },
-                    {
-                        "Key": "Owner",
-                        "Value": {
-                            "Ref": "Owner"
-                        }
-                    }
-                ]
-            }
-        },
-        "PrivateSubnet1": {
-            "Type": "AWS::EC2::Subnet",
-            "Properties": {
-                "VpcId": {
-                    "Ref": "VPC"
-                },
-                "CidrBlock": {
-                    "Ref": "PrivateSubnet1CIDR"
-                },
-                "AvailabilityZone": {
-                    "Fn::Select": [
-                        0,
-                        {
-                            "Fn::GetAZs": ""
-                        }
-                    ]
-                },
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${EnvironmentSuffix}-${Project}-PrivateSubnet1"
-                        }
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "EnvironmentSuffix"
-                        }
-                    },
-                    {
-                        "Key": "Project",
-                        "Value": {
-                            "Ref": "Project"
-                        }
-                    },
-                    {
-                        "Key": "Owner",
-                        "Value": {
-                            "Ref": "Owner"
-                        }
-                    }
-                ]
-            }
-        },
-        "PrivateSubnet2": {
-            "Type": "AWS::EC2::Subnet",
-            "Properties": {
-                "VpcId": {
-                    "Ref": "VPC"
-                },
-                "CidrBlock": {
-                    "Ref": "PrivateSubnet2CIDR"
-                },
-                "AvailabilityZone": {
-                    "Fn::Select": [
-                        1,
-                        {
-                            "Fn::GetAZs": ""
-                        }
-                    ]
-                },
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${EnvironmentSuffix}-${Project}-PrivateSubnet2"
-                        }
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "EnvironmentSuffix"
-                        }
-                    },
-                    {
-                        "Key": "Project",
-                        "Value": {
-                            "Ref": "Project"
-                        }
-                    },
-                    {
-                        "Key": "Owner",
-                        "Value": {
-                            "Ref": "Owner"
-                        }
-                    }
-                ]
-            }
-        },
-        "ElasticIP1": {
+        "NatGatewayEIP1": {
             "Type": "AWS::EC2::EIP",
-            "Properties": {
-                "Domain": "vpc",
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${EnvironmentSuffix}-${Project}-EIP1"
-                        }
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "EnvironmentSuffix"
-                        }
-                    },
-                    {
-                        "Key": "Project",
-                        "Value": {
-                            "Ref": "Project"
-                        }
-                    },
-                    {
-                        "Key": "Owner",
-                        "Value": {
-                            "Ref": "Owner"
-                        }
-                    }
-                ]
-            }
+            "DependsOn": "InternetGateway"
         },
-        "ElasticIP2": {
-            "Type": "AWS::EC2::EIP",
-            "Properties": {
-                "Domain": "vpc",
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${EnvironmentSuffix}-${Project}-EIP2"
-                        }
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "EnvironmentSuffix"
-                        }
-                    },
-                    {
-                        "Key": "Project",
-                        "Value": {
-                            "Ref": "Project"
-                        }
-                    },
-                    {
-                        "Key": "Owner",
-                        "Value": {
-                            "Ref": "Owner"
-                        }
-                    }
-                ]
-            }
-        },
-        "NATGateway1": {
+        "NatGateway1": {
             "Type": "AWS::EC2::NatGateway",
             "Properties": {
                 "AllocationId": {
                     "Fn::GetAtt": [
-                        "ElasticIP1",
+                        "NatGatewayEIP1",
                         "AllocationId"
                     ]
                 },
                 "SubnetId": {
                     "Ref": "PublicSubnet1"
-                },
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${EnvironmentSuffix}-${Project}-NATGateway1"
-                        }
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "EnvironmentSuffix"
-                        }
-                    },
-                    {
-                        "Key": "Project",
-                        "Value": {
-                            "Ref": "Project"
-                        }
-                    },
-                    {
-                        "Key": "Owner",
-                        "Value": {
-                            "Ref": "Owner"
-                        }
-                    }
-                ]
-            }
-        },
-        "NATGateway2": {
-            "Type": "AWS::EC2::NatGateway",
-            "Properties": {
-                "AllocationId": {
-                    "Fn::GetAtt": [
-                        "ElasticIP2",
-                        "AllocationId"
-                    ]
-                },
-                "SubnetId": {
-                    "Ref": "PublicSubnet2"
-                },
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${EnvironmentSuffix}-${Project}-NATGateway2"
-                        }
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "EnvironmentSuffix"
-                        }
-                    },
-                    {
-                        "Key": "Project",
-                        "Value": {
-                            "Ref": "Project"
-                        }
-                    },
-                    {
-                        "Key": "Owner",
-                        "Value": {
-                            "Ref": "Owner"
-                        }
-                    }
-                ]
+                }
             }
         },
         "PublicRouteTable": {
             "Type": "AWS::EC2::RouteTable",
             "Properties": {
                 "VpcId": {
-                    "Ref": "VPC"
+                    "Ref": "FinancialServicesVPC"
                 },
                 "Tags": [
                     {
                         "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${EnvironmentSuffix}-${Project}-PublicRouteTable"
-                        }
-                    },
+                        "Value": "Public Route Table"
+                    }
+                ]
+            }
+        },
+        "PrivateRouteTable": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "FinancialServicesVPC"
+                },
+                "Tags": [
                     {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "EnvironmentSuffix"
-                        }
-                    },
-                    {
-                        "Key": "Project",
-                        "Value": {
-                            "Ref": "Project"
-                        }
-                    },
-                    {
-                        "Key": "Owner",
-                        "Value": {
-                            "Ref": "Owner"
-                        }
+                        "Key": "Name",
+                        "Value": "Private Route Table"
                     }
                 ]
             }
         },
         "PublicRoute": {
             "Type": "AWS::EC2::Route",
-            "DependsOn": "AttachGateway",
             "Properties": {
                 "RouteTableId": {
                     "Ref": "PublicRouteTable"
@@ -563,6 +290,18 @@
                 "DestinationCidrBlock": "0.0.0.0/0",
                 "GatewayId": {
                     "Ref": "InternetGateway"
+                }
+            }
+        },
+        "PrivateRoute": {
+            "Type": "AWS::EC2::Route",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTable"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "NatGatewayId": {
+                    "Ref": "NatGateway1"
                 }
             }
         },
@@ -588,52 +327,6 @@
                 }
             }
         },
-        "PrivateRouteTable1": {
-            "Type": "AWS::EC2::RouteTable",
-            "Properties": {
-                "VpcId": {
-                    "Ref": "VPC"
-                },
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${EnvironmentSuffix}-${Project}-PrivateRouteTable1"
-                        }
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "EnvironmentSuffix"
-                        }
-                    },
-                    {
-                        "Key": "Project",
-                        "Value": {
-                            "Ref": "Project"
-                        }
-                    },
-                    {
-                        "Key": "Owner",
-                        "Value": {
-                            "Ref": "Owner"
-                        }
-                    }
-                ]
-            }
-        },
-        "PrivateRoute1": {
-            "Type": "AWS::EC2::Route",
-            "Properties": {
-                "RouteTableId": {
-                    "Ref": "PrivateRouteTable1"
-                },
-                "DestinationCidrBlock": "0.0.0.0/0",
-                "NatGatewayId": {
-                    "Ref": "NATGateway1"
-                }
-            }
-        },
         "PrivateSubnet1RouteTableAssociation": {
             "Type": "AWS::EC2::SubnetRouteTableAssociation",
             "Properties": {
@@ -641,53 +334,7 @@
                     "Ref": "PrivateSubnet1"
                 },
                 "RouteTableId": {
-                    "Ref": "PrivateRouteTable1"
-                }
-            }
-        },
-        "PrivateRouteTable2": {
-            "Type": "AWS::EC2::RouteTable",
-            "Properties": {
-                "VpcId": {
-                    "Ref": "VPC"
-                },
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${EnvironmentSuffix}-${Project}-PrivateRouteTable2"
-                        }
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "EnvironmentSuffix"
-                        }
-                    },
-                    {
-                        "Key": "Project",
-                        "Value": {
-                            "Ref": "Project"
-                        }
-                    },
-                    {
-                        "Key": "Owner",
-                        "Value": {
-                            "Ref": "Owner"
-                        }
-                    }
-                ]
-            }
-        },
-        "PrivateRoute2": {
-            "Type": "AWS::EC2::Route",
-            "Properties": {
-                "RouteTableId": {
-                    "Ref": "PrivateRouteTable2"
-                },
-                "DestinationCidrBlock": "0.0.0.0/0",
-                "NatGatewayId": {
-                    "Ref": "NATGateway2"
+                    "Ref": "PrivateRouteTable"
                 }
             }
         },
@@ -698,140 +345,128 @@
                     "Ref": "PrivateSubnet2"
                 },
                 "RouteTableId": {
-                    "Ref": "PrivateRouteTable2"
+                    "Ref": "PrivateRouteTable"
                 }
             }
         },
-        "VPCFlowLogsRole": {
-            "Type": "AWS::IAM::Role",
+        "SecureS3Bucket": {
+            "Type": "AWS::S3::Bucket",
             "Properties": {
-                "AssumeRolePolicyDocument": {
-                    "Version": "2012-10-17",
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "aws:kms"
+                            }
+                        }
+                    ]
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "Project"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        },
+        "CloudTrailLogBucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "aws:kms"
+                            }
+                        }
+                    ]
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "Project"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        },
+        "CloudTrailBucketPolicy": {
+            "Type": "AWS::S3::BucketPolicy",
+            "Properties": {
+                "Bucket": {
+                    "Ref": "CloudTrailLogBucket"
+                },
+                "PolicyDocument": {
                     "Statement": [
                         {
                             "Effect": "Allow",
                             "Principal": {
-                                "Service": "vpc-flow-logs.amazonaws.com"
+                                "Service": "cloudtrail.amazonaws.com"
                             },
-                            "Action": "sts:AssumeRole"
-                        }
-                    ]
-                },
-                "Path": "/",
-                "Policies": [
-                    {
-                        "PolicyName": "VPCFlowLogsPolicy",
-                        "PolicyDocument": {
-                            "Version": "2012-10-17",
-                            "Statement": [
-                                {
-                                    "Effect": "Allow",
-                                    "Action": [
-                                        "logs:CreateLogGroup",
-                                        "logs:CreateLogStream",
-                                        "logs:PutLogEvents",
-                                        "logs:DescribeLogGroups",
-                                        "logs:DescribeLogStreams"
-                                    ],
-                                    "Resource": {
-                                        "Fn::GetAtt": [
-                                            "VPCFlowLogsLogGroup",
-                                            "Arn"
-                                        ]
-                                    }
+                            "Action": "s3:GetBucketAcl",
+                            "Resource": {
+                                "Fn::GetAtt": [
+                                    "CloudTrailLogBucket",
+                                    "Arn"
+                                ]
+                            }
+                        },
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "cloudtrail.amazonaws.com"
+                            },
+                            "Action": "s3:PutObject",
+                            "Resource": {
+                                "Fn::Sub": "${CloudTrailLogBucket.Arn}/AWSLogs/${AWS::AccountId}/*"
+                            },
+                            "Condition": {
+                                "StringEquals": {
+                                    "s3:x-amz-acl": "bucket-owner-full-control"
                                 }
-                            ]
+                            }
                         }
-                    }
-                ],
-                "Tags": [
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "EnvironmentSuffix"
-                        }
-                    },
-                    {
-                        "Key": "Project",
-                        "Value": {
-                            "Ref": "Project"
-                        }
-                    },
-                    {
-                        "Key": "Owner",
-                        "Value": {
-                            "Ref": "Owner"
-                        }
-                    }
-                ]
-            }
-        },
-        "VPCFlowLogsLogGroup": {
-            "Type": "AWS::Logs::LogGroup",
-            "Properties": {
-                "LogGroupName": {
-                    "Fn::Sub": "/aws/vpc/flowlogs/${EnvironmentSuffix}-${Project}-VPCFlowLogs"
-                },
-                "RetentionInDays": 90,
-                "Tags": [
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "EnvironmentSuffix"
-                        }
-                    },
-                    {
-                        "Key": "Project",
-                        "Value": {
-                            "Ref": "Project"
-                        }
-                    },
-                    {
-                        "Key": "Owner",
-                        "Value": {
-                            "Ref": "Owner"
-                        }
-                    }
-                ]
-            }
-        },
-        "VPCFlowLogs": {
-            "Type": "AWS::EC2::FlowLog",
-            "Properties": {
-                "DeliverLogsPermissionArn": {
-                    "Fn::GetAtt": [
-                        "VPCFlowLogsRole",
-                        "Arn"
                     ]
-                },
-                "LogGroupName": {
-                    "Ref": "VPCFlowLogsLogGroup"
-                },
-                "ResourceId": {
-                    "Ref": "VPC"
-                },
-                "ResourceType": "VPC",
-                "TrafficType": "ALL",
-                "Tags": [
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "EnvironmentSuffix"
-                        }
-                    },
-                    {
-                        "Key": "Project",
-                        "Value": {
-                            "Ref": "Project"
-                        }
-                    },
-                    {
-                        "Key": "Owner",
-                        "Value": {
-                            "Ref": "Owner"
-                        }
-                    }
-                ]
+                }
             }
         },
         "LambdaExecutionRole": {
@@ -849,83 +484,212 @@
                         }
                     ]
                 },
-                "ManagedPolicyArns": [
-                    "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
-                ],
                 "Policies": [
                     {
-                        "PolicyName": "LambdaSecretsManagerAccess",
+                        "PolicyName": "LambdaBasicExecution",
                         "PolicyDocument": {
                             "Version": "2012-10-17",
                             "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "logs:CreateLogGroup",
+                                        "logs:CreateLogStream",
+                                        "logs:PutLogEvents"
+                                    ],
+                                    "Resource": "arn:aws:logs:*:*:*"
+                                },
                                 {
                                     "Effect": "Allow",
                                     "Action": [
                                         "secretsmanager:GetSecretValue"
                                     ],
                                     "Resource": {
-                                        "Fn::Sub": "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:${EnvironmentSuffix}/${Project}/RDSSecret*"
+                                        "Ref": "RDSSecret"
                                     }
                                 }
                             ]
                         }
+                    }
+                ]
+            }
+        },
+        "CloudTrailTrail": {
+            "Type": "AWS::CloudTrail::Trail",
+            "Properties": {
+                "IsLogging": true,
+                "IncludeGlobalServiceEvents": true,
+                "IsMultiRegionTrail": true,
+                "S3BucketName": {
+                    "Ref": "CloudTrailLogBucket"
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
                     },
                     {
-                        "PolicyName": "LambdaDynamoDBAccess",
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "Project"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        },
+        "ConfigRecorder": {
+            "Type": "AWS::Config::ConfigurationRecorder",
+            "Properties": {
+                "Name": "configRecorder",
+                "RoleARN": {
+                    "Fn::GetAtt": [
+                        "ConfigRole",
+                        "Arn"
+                    ]
+                },
+                "RecordingGroup": {
+                    "AllSupported": true
+                }
+            }
+        },
+        "ConfigRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "config.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                }
+            }
+        },
+        "VPCFlowLog": {
+            "Type": "AWS::EC2::FlowLog",
+            "Properties": {
+                "DeliverLogsPermissionArn": {
+                    "Fn::GetAtt": [
+                        "FlowLogIAMRole",
+                        "Arn"
+                    ]
+                },
+                "LogGroupName": {
+                    "Ref": "VPCFlowLogGroup"
+                },
+                "ResourceId": {
+                    "Ref": "FinancialServicesVPC"
+                },
+                "ResourceType": "VPC",
+                "TrafficType": "ALL"
+            }
+        },
+        "FlowLogIAMRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "vpc-flow-logs.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "Policies": [
+                    {
+                        "PolicyName": "FlowLogsPolicy",
                         "PolicyDocument": {
                             "Version": "2012-10-17",
                             "Statement": [
                                 {
                                     "Effect": "Allow",
                                     "Action": [
-                                        "dynamodb:GetItem",
-                                        "dynamodb:PutItem",
-                                        "dynamodb:UpdateItem",
-                                        "dynamodb:DeleteItem",
-                                        "dynamodb:BatchGetItem",
-                                        "dynamodb:BatchWriteItem",
-                                        "dynamodb:Query",
-                                        "dynamodb:Scan"
-                                    ],
-                                    "Resource": {
-                                        "Fn::Sub": "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DynamoDBTableName}"
-                                    }
-                                },
-                                {
-                                    "Effect": "Allow",
-                                    "Action": [
-                                        "dynamodb:DescribeTable"
-                                    ],
-                                    "Resource": {
-                                        "Fn::Sub": "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DynamoDBTableName}"
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    {
-                        "PolicyName": "LambdaVPCAccess",
-                        "PolicyDocument": {
-                            "Version": "2012-10-17",
-                            "Statement": [
-                                {
-                                    "Effect": "Allow",
-                                    "Action": [
-                                        "ec2:CreateNetworkInterface",
-                                        "ec2:DescribeNetworkInterfaces",
-                                        "ec2:DeleteNetworkInterface"
+                                        "logs:CreateLogGroup",
+                                        "logs:CreateLogStream",
+                                        "logs:PutLogEvents"
                                     ],
                                     "Resource": "*"
                                 }
                             ]
                         }
                     }
+                ]
+            }
+        },
+        "VPCFlowLogGroup": {
+            "Type": "AWS::Logs::LogGroup"
+        },
+        "RDSSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "RDS security group - no public access, no SSH/RDP",
+                "VpcId": {
+                    "Ref": "FinancialServicesVPC"
+                },
+                "SecurityGroupIngress": [],
+                "SecurityGroupEgress": [
+                    {
+                        "IpProtocol": -1,
+                        "CidrIp": "0.0.0.0/0"
+                    }
                 ],
                 "Tags": [
                     {
                         "Key": "Environment",
                         "Value": {
-                            "Ref": "EnvironmentSuffix"
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "Project"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        },
+        "LambdaSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "Lambda security group - no public access",
+                "VpcId": {
+                    "Ref": "FinancialServicesVPC"
+                },
+                "SecurityGroupIngress": [],
+                "SecurityGroupEgress": [
+                    {
+                        "IpProtocol": -1,
+                        "CidrIp": "0.0.0.0/0"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
                         }
                     },
                     {
@@ -947,234 +711,15 @@
             "Type": "AWS::SecretsManager::Secret",
             "Properties": {
                 "Name": {
-                    "Fn::Sub": "${EnvironmentSuffix}/${Project}/RDSSecret"
+                    "Fn::Sub": "${Project}-rds-credentials"
                 },
-                "Description": "Stores the master password for the RDS PostgreSQL database.",
+                "Description": "RDS credentials for FinancialDB",
                 "GenerateSecretString": {
-                    "SecretStringTemplate": {
-                        "Fn::Sub": "{\"username\": \"${RDSDatabaseUser}\"}"
-                    },
-                    "PasswordLength": 32,
-                    "ExcludeCharacters": "\"@/\\\\ ",
-                    "GenerateStringKey": "password"
-                },
-                "Tags": [
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "EnvironmentSuffix"
-                        }
-                    },
-                    {
-                        "Key": "Project",
-                        "Value": {
-                            "Ref": "Project"
-                        }
-                    },
-                    {
-                        "Key": "Owner",
-                        "Value": {
-                            "Ref": "Owner"
-                        }
-                    }
-                ]
-            }
-        },
-        "ApplicationKMSKey": {
-            "Type": "AWS::KMS::Key",
-            "Properties": {
-                "Description": "KMS Key for general application encryption (S3, EBS, etc.)",
-                "KeyPolicy": {
-                    "Version": "2012-10-17",
-                    "Id": "key-default-1",
-                    "Statement": [
-                        {
-                            "Sid": "Allow administration of the key",
-                            "Effect": "Allow",
-                            "Principal": {
-                                "AWS": {
-                                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
-                                }
-                            },
-                            "Action": "kms:*",
-                            "Resource": "*"
-                        },
-                        {
-                            "Sid": "Allow use of the key by authorized services",
-                            "Effect": "Allow",
-                            "Principal": {
-                                "AWS": {
-                                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
-                                }
-                            },
-                            "Action": [
-                                "kms:Encrypt",
-                                "kms:Decrypt",
-                                "kms:ReEncrypt*",
-                                "kms:GenerateDataKey*",
-                                "kms:DescribeKey"
-                            ],
-                            "Resource": "*"
-                        }
-                    ]
-                },
-                "Enabled": true,
-                "EnableKeyRotation": true,
-                "Tags": [
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "EnvironmentSuffix"
-                        }
-                    },
-                    {
-                        "Key": "Project",
-                        "Value": {
-                            "Ref": "Project"
-                        }
-                    },
-                    {
-                        "Key": "Owner",
-                        "Value": {
-                            "Ref": "Owner"
-                        }
-                    }
-                ]
-            }
-        },
-        "ApplicationKMSKeyAlias": {
-            "Type": "AWS::KMS::Alias",
-            "Properties": {
-                "AliasName": {
-                    "Ref": "KMSKeyAlias"
-                },
-                "TargetKeyId": {
-                    "Ref": "ApplicationKMSKey"
+                    "SecretStringTemplate": "{\"username\":\"dbadmin\"}",
+                    "GenerateStringKey": "password",
+                    "PasswordLength": 16,
+                    "ExcludeCharacters": "\"@/\\\\"
                 }
-            }
-        },
-        "RDSKMSKey": {
-            "Type": "AWS::KMS::Key",
-            "Properties": {
-                "Description": "KMS Key for RDS database encryption.",
-                "KeyPolicy": {
-                    "Version": "2012-10-17",
-                    "Id": "key-default-2",
-                    "Statement": [
-                        {
-                            "Sid": "Allow administration of the key",
-                            "Effect": "Allow",
-                            "Principal": {
-                                "AWS": {
-                                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
-                                }
-                            },
-                            "Action": "kms:*",
-                            "Resource": "*"
-                        },
-                        {
-                            "Sid": "Allow RDS to use the key for encryption",
-                            "Effect": "Allow",
-                            "Principal": {
-                                "Service": "rds.amazonaws.com"
-                            },
-                            "Action": [
-                                "kms:Encrypt",
-                                "kms:Decrypt",
-                                "kms:ReEncrypt*",
-                                "kms:GenerateDataKey*",
-                                "kms:DescribeKey"
-                            ],
-                            "Resource": "*"
-                        }
-                    ]
-                },
-                "Enabled": true,
-                "EnableKeyRotation": true,
-                "Tags": [
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "EnvironmentSuffix"
-                        }
-                    },
-                    {
-                        "Key": "Project",
-                        "Value": {
-                            "Ref": "Project"
-                        }
-                    },
-                    {
-                        "Key": "Owner",
-                        "Value": {
-                            "Ref": "Owner"
-                        }
-                    }
-                ]
-            }
-        },
-        "RDSKMSKeyAliasResource": {
-            "Type": "AWS::KMS::Alias",
-            "Properties": {
-                "AliasName": {
-                    "Ref": "RDSKMSKeyAlias"
-                },
-                "TargetKeyId": {
-                    "Ref": "RDSKMSKey"
-                }
-            }
-        },
-        "SecureS3Bucket": {
-            "Type": "AWS::S3::Bucket",
-            "Properties": {
-                "BucketName": {
-                    "Fn::Sub": "${S3BucketName}-${AWS::AccountId}"
-                },
-                "BucketEncryption": {
-                    "ServerSideEncryptionConfiguration": [
-                        {
-                            "ServerSideEncryptionByDefault": {
-                                "SSEAlgorithm": "AES256"
-                            }
-                        }
-                    ]
-                },
-                "PublicAccessBlockConfiguration": {
-                    "BlockPublicAcls": true,
-                    "BlockPublicPolicy": true,
-                    "IgnorePublicAcls": true,
-                    "RestrictPublicBuckets": true
-                },
-                "VersioningConfiguration": {
-                    "Status": "Enabled"
-                },
-                "OwnershipControls": {
-                    "Rules": [
-                        {
-                            "ObjectOwnership": "BucketOwnerEnforced"
-                        }
-                    ]
-                },
-                "Tags": [
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "EnvironmentSuffix"
-                        }
-                    },
-                    {
-                        "Key": "Project",
-                        "Value": {
-                            "Ref": "Project"
-                        }
-                    },
-                    {
-                        "Key": "Owner",
-                        "Value": {
-                            "Ref": "Owner"
-                        }
-                    }
-                ]
             }
         },
         "S3BucketPolicy": {
@@ -1184,29 +729,8 @@
                     "Ref": "SecureS3Bucket"
                 },
                 "PolicyDocument": {
-                    "Version": "2012-10-17",
                     "Statement": [
                         {
-                            "Sid": "DenyHTTP",
-                            "Effect": "Deny",
-                            "Principal": "*",
-                            "Action": "s3:*",
-                            "Resource": [
-                                {
-                                    "Fn::Sub": "${SecureS3Bucket.Arn}/*"
-                                },
-                                {
-                                    "Fn::Sub": "${SecureS3Bucket.Arn}"
-                                }
-                            ],
-                            "Condition": {
-                                "Bool": {
-                                    "aws:SecureTransport": "false"
-                                }
-                            }
-                        },
-                        {
-                            "Sid": "AllowCloudFrontOAI",
                             "Effect": "Allow",
                             "Principal": {
                                 "CanonicalUser": {
@@ -1225,41 +749,43 @@
                 }
             }
         },
-        "RDSSecurityGroup": {
-            "Type": "AWS::EC2::SecurityGroup",
+        "CloudFrontOAI": {
+            "Type": "AWS::CloudFront::CloudFrontOriginAccessIdentity",
             "Properties": {
-                "GroupDescription": "Security group for RDS PostgreSQL instance.",
-                "VpcId": {
-                    "Ref": "VPC"
+                "CloudFrontOriginAccessIdentityConfig": {
+                    "Comment": "Access Identity for SecureS3Bucket"
+                }
+            }
+        },
+        "PrivateHostedZone": {
+            "Type": "AWS::Route53::HostedZone",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "internal.${Project}.local"
                 },
-                "SecurityGroupIngress": [
+                "VPCs": [
                     {
-                        "IpProtocol": "tcp",
-                        "FromPort": {
-                            "Ref": "RDSDatabasePort"
+                        "VPCId": {
+                            "Ref": "FinancialServicesVPC"
                         },
-                        "ToPort": {
-                            "Ref": "RDSDatabasePort"
-                        },
-                        "SourceSecurityGroupId": {
-                            "Fn::GetAtt": [
-                                "LambdaSecurityGroup",
-                                "GroupId"
-                            ]
+                        "VPCRegion": {
+                            "Ref": "AWS::Region"
                         }
                     }
-                ],
+                ]
+            }
+        },
+        "SecureSNSTopic": {
+            "Type": "AWS::SNS::Topic",
+            "Properties": {
+                "TopicName": {
+                    "Fn::Sub": "${Project}-secure-topic"
+                },
                 "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${EnvironmentSuffix}-${Project}-RDSSecurityGroup"
-                        }
-                    },
                     {
                         "Key": "Environment",
                         "Value": {
-                            "Ref": "EnvironmentSuffix"
+                            "Ref": "Environment"
                         }
                     },
                     {
@@ -1277,41 +803,94 @@
                 ]
             }
         },
-        "RDSInstance": {
+        "SecureSNSTopicPolicy": {
+            "Type": "AWS::SNS::TopicPolicy",
+            "Properties": {
+                "Topics": [
+                    {
+                        "Ref": "SecureSNSTopic"
+                    }
+                ],
+                "PolicyDocument": {
+                    "Statement": [
+                        {
+                            "Effect": "Deny",
+                            "Principal": "*",
+                            "Action": "SNS:Publish",
+                            "Resource": {
+                                "Ref": "SecureSNSTopic"
+                            },
+                            "Condition": {
+                                "Bool": {
+                                    "aws:SecureTransport": false
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "WebACL": {
+            "Type": "AWS::WAFv2::WebACL",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${Project}-webacl"
+                },
+                "Scope": "REGIONAL",
+                "DefaultAction": {
+                    "Allow": {}
+                },
+                "VisibilityConfig": {
+                    "SampledRequestsEnabled": true,
+                    "CloudWatchMetricsEnabled": true,
+                    "MetricName": {
+                        "Fn::Sub": "${Project}-webacl"
+                    }
+                },
+                "Rules": []
+            }
+        },
+        "FinancialDB": {
             "Type": "AWS::RDS::DBInstance",
             "Properties": {
+                "DBInstanceClass": "db.t3.medium",
                 "Engine": "postgres",
-                "EngineVersion": "14.18",
-                "DBInstanceClass": "db.t3.micro",
-                "AllocatedStorage": 20,
                 "MasterUsername": {
-                    "Ref": "RDSDatabaseUser"
+                    "Fn::Join": [
+                        "",
+                        [
+                            "{{resolve:secretsmanager:",
+                            {
+                                "Ref": "RDSSecret"
+                            },
+                            ":SecretString:username}}"
+                        ]
+                    ]
                 },
-                "MasterUserPassword": "{{resolve:secretsmanager:!Ref RDSSecret:SecretString:password}}",
-                "DBSubnetGroupName": {
-                    "Ref": "RDSSubnetGroup"
+                "MasterUserPassword": {
+                    "Fn::Join": [
+                        "",
+                        [
+                            "{{resolve:secretsmanager:",
+                            {
+                                "Ref": "RDSSecret"
+                            },
+                            ":SecretString:password}}"
+                        ]
+                    ]
                 },
+                "StorageEncrypted": true,
+                "PubliclyAccessible": false,
                 "VPCSecurityGroups": [
                     {
-                        "Fn::GetAtt": [
-                            "RDSSecurityGroup",
-                            "GroupId"
-                        ]
+                        "Ref": "RDSSecurityGroup"
                     }
                 ],
-                "PubliclyAccessible": false,
-                "StorageEncrypted": true,
-                "KmsKeyId": {
-                    "Ref": "RDSKMSKey"
-                },
-                "MultiAZ": true,
-                "BackupRetentionPeriod": 7,
-                "DeletionProtection": false,
                 "Tags": [
                     {
                         "Key": "Environment",
                         "Value": {
-                            "Ref": "EnvironmentSuffix"
+                            "Ref": "Environment"
                         }
                     },
                     {
@@ -1329,167 +908,31 @@
                 ]
             }
         },
-        "RDSSubnetGroup": {
-            "Type": "AWS::RDS::DBSubnetGroup",
-            "Properties": {
-                "DBSubnetGroupDescription": "Subnet group for RDS instance.",
-                "SubnetIds": [
-                    {
-                        "Ref": "PrivateSubnet1"
-                    },
-                    {
-                        "Ref": "PrivateSubnet2"
-                    }
-                ],
-                "Tags": [
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "EnvironmentSuffix"
-                        }
-                    },
-                    {
-                        "Key": "Project",
-                        "Value": {
-                            "Ref": "Project"
-                        }
-                    },
-                    {
-                        "Key": "Owner",
-                        "Value": {
-                            "Ref": "Owner"
-                        }
-                    }
-                ]
-            }
-        },
-        "DynamoDBTable": {
-            "Type": "AWS::DynamoDB::Table",
-            "Properties": {
-                "TableName": {
-                    "Ref": "DynamoDBTableName"
-                },
-                "AttributeDefinitions": [
-                    {
-                        "AttributeName": "TransactionId",
-                        "AttributeType": "S"
-                    },
-                    {
-                        "AttributeName": "AccountId",
-                        "AttributeType": "S"
-                    }
-                ],
-                "KeySchema": [
-                    {
-                        "AttributeName": "TransactionId",
-                        "KeyType": "HASH"
-                    },
-                    {
-                        "AttributeName": "AccountId",
-                        "KeyType": "RANGE"
-                    }
-                ],
-                "ProvisionedThroughput": {
-                    "ReadCapacityUnits": 5,
-                    "WriteCapacityUnits": 5
-                },
-                "BillingMode": "PROVISIONED",
-                "SSESpecification": {
-                    "SSEEnabled": true,
-                    "SSEType": "KMS"
-                },
-                "PointInTimeRecoverySpecification": {
-                    "PointInTimeRecoveryEnabled": true
-                },
-                "Tags": [
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "EnvironmentSuffix"
-                        }
-                    },
-                    {
-                        "Key": "Project",
-                        "Value": {
-                            "Ref": "Project"
-                        }
-                    },
-                    {
-                        "Key": "Owner",
-                        "Value": {
-                            "Ref": "Owner"
-                        }
-                    }
-                ]
-            }
-        },
-        "LambdaSecurityGroup": {
-            "Type": "AWS::EC2::SecurityGroup",
-            "Properties": {
-                "GroupDescription": "Security group for Lambda functions in VPC.",
-                "VpcId": {
-                    "Ref": "VPC"
-                },
-                "SecurityGroupEgress": [
-                    {
-                        "IpProtocol": -1,
-                        "CidrIp": "0.0.0.0/0"
-                    }
-                ],
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${EnvironmentSuffix}-${Project}-LambdaSecurityGroup"
-                        }
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "EnvironmentSuffix"
-                        }
-                    },
-                    {
-                        "Key": "Project",
-                        "Value": {
-                            "Ref": "Project"
-                        }
-                    },
-                    {
-                        "Key": "Owner",
-                        "Value": {
-                            "Ref": "Owner"
-                        }
-                    }
-                ]
-            }
-        },
-        "FinancialProcessorLambda": {
+        "FinancialLambdaFunction": {
             "Type": "AWS::Lambda::Function",
             "Properties": {
-                "FunctionName": {
-                    "Ref": "LambdaFunctionName"
-                },
                 "Handler": "index.handler",
-                "Runtime": "nodejs18.x",
-                "Code": {
-                    "ZipFile": "exports.handler = async (event) => {\n  console.log('Received event:', JSON.stringify(event, null, 2));\n  const secret = process.env.RDS_SECRET_ARN;\n  const dbName = process.env.DB_NAME;\n  const dynamoTableName = process.env.DYNAMODB_TABLE_NAME;\n  const response = {\n      statusCode: 200,\n      body: JSON.stringify('Financial transaction processed securely!'),\n  };\n  return response;\n};\n"
-                },
                 "Role": {
                     "Fn::GetAtt": [
                         "LambdaExecutionRole",
                         "Arn"
                     ]
                 },
-                "Timeout": 30,
-                "MemorySize": 128,
+                "Code": {
+                    "ZipFile": "exports.handler = async (event) => {\n  console.log(\"Financial processing Lambda function\");\n};\n"
+                },
+                "Runtime": "nodejs14.x",
+                "Environment": {
+                    "Variables": {
+                        "SECRET_ARN": {
+                            "Ref": "RDSSecret"
+                        }
+                    }
+                },
                 "VpcConfig": {
                     "SecurityGroupIds": [
                         {
-                            "Fn::GetAtt": [
-                                "LambdaSecurityGroup",
-                                "GroupId"
-                            ]
+                            "Ref": "LambdaSecurityGroup"
                         }
                     ],
                     "SubnetIds": [
@@ -1501,24 +944,11 @@
                         }
                     ]
                 },
-                "Environment": {
-                    "Variables": {
-                        "RDS_SECRET_ARN": {
-                            "Ref": "RDSSecret"
-                        },
-                        "DB_NAME": {
-                            "Ref": "RDSDatabaseName"
-                        },
-                        "DYNAMODB_TABLE_NAME": {
-                            "Ref": "DynamoDBTableName"
-                        }
-                    }
-                },
                 "Tags": [
                     {
                         "Key": "Environment",
                         "Value": {
-                            "Ref": "EnvironmentSuffix"
+                            "Ref": "Environment"
                         }
                     },
                     {
@@ -1536,306 +966,33 @@
                 ]
             }
         },
-        "PrivateHostedZone": {
-            "Type": "AWS::Route53::HostedZone",
+        "FinancialDynamoDB": {
+            "Type": "AWS::DynamoDB::Table",
             "Properties": {
-                "Name": "internal.local",
-                "VPCs": [
+                "AttributeDefinitions": [
                     {
-                        "VPCId": {
-                            "Ref": "VPC"
-                        },
-                        "VPCRegion": {
-                            "Ref": "AWS::Region"
-                        }
+                        "AttributeName": "id",
+                        "AttributeType": "S"
                     }
                 ],
-                "HostedZoneConfig": {
-                    "Comment": "Private Hosted Zone for internal financial application services."
-                }
-            }
-        },
-        "CloudFrontOAI": {
-            "Type": "AWS::CloudFront::CloudFrontOriginAccessIdentity",
-            "Properties": {
-                "CloudFrontOriginAccessIdentityConfig": {
-                    "Comment": "OAI for S3 bucket access via CloudFront."
-                }
-            }
-        },
-        "CloudFrontDistribution": {
-            "Type": "AWS::CloudFront::Distribution",
-            "Properties": {
-                "DistributionConfig": {
-                    "Origins": [
-                        {
-                            "DomainName": {
-                                "Fn::GetAtt": [
-                                    "SecureS3Bucket",
-                                    "RegionalDomainName"
-                                ]
-                            },
-                            "Id": "S3Origin",
-                            "S3OriginConfig": {
-                                "OriginAccessIdentity": {
-                                    "Fn::Sub": "origin-access-identity/cloudfront/${CloudFrontOAI}"
-                                }
-                            }
-                        }
-                    ],
-                    "Enabled": true,
-                    "DefaultCacheBehavior": {
-                        "TargetOriginId": "S3Origin",
-                        "ViewerProtocolPolicy": "https-only",
-                        "AllowedMethods": [
-                            "GET",
-                            "HEAD",
-                            "OPTIONS"
-                        ],
-                        "CachedMethods": [
-                            "GET",
-                            "HEAD",
-                            "OPTIONS"
-                        ],
-                        "ForwardedValues": {
-                            "QueryString": false,
-                            "Cookies": {
-                                "Forward": "none"
-                            }
-                        },
-                        "Compress": true
-                    },
-                    "ViewerCertificate": {
-                        "CloudFrontDefaultCertificate": true,
-                        "MinimumProtocolVersion": "TLSv1.2_2021"
-                    },
-                    "Restrictions": {
-                        "GeoRestriction": {
-                            "RestrictionType": "none"
-                        }
-                    },
-                    "PriceClass": {
-                        "Ref": "CloudFrontPriceClass"
-                    },
-                    "Logging": {
-                        "Bucket": {
-                            "Fn::GetAtt": [
-                                "CloudFrontLogsBucket",
-                                "DomainName"
-                            ]
-                        },
-                        "IncludeCookies": false,
-                        "Prefix": "cloudfront-logs/"
-                    }
-                },
-                "Tags": [
+                "KeySchema": [
                     {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "EnvironmentSuffix"
-                        }
-                    },
-                    {
-                        "Key": "Project",
-                        "Value": {
-                            "Ref": "Project"
-                        }
-                    },
-                    {
-                        "Key": "Owner",
-                        "Value": {
-                            "Ref": "Owner"
-                        }
-                    }
-                ]
-            }
-        },
-        "CloudFrontLogsBucket": {
-            "Type": "AWS::S3::Bucket",
-            "DeletionPolicy": "Retain",
-            "UpdateReplacePolicy": "Retain",
-            "Properties": {
-                "BucketName": {
-                    "Fn::Sub": "${S3BucketName}-cloudfront-logs-${AWS::AccountId}"
-                },
-                "BucketEncryption": {
-                    "ServerSideEncryptionConfiguration": [
-                        {
-                            "ServerSideEncryptionByDefault": {
-                                "SSEAlgorithm": "AES256"
-                            }
-                        }
-                    ]
-                },
-                "PublicAccessBlockConfiguration": {
-                    "BlockPublicAcls": false,
-                    "BlockPublicPolicy": true,
-                    "IgnorePublicAcls": false,
-                    "RestrictPublicBuckets": true
-                },
-                "OwnershipControls": {
-                    "Rules": [
-                        {
-                            "ObjectOwnership": "ObjectWriter"
-                        }
-                    ]
-                },
-                "Tags": [
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "EnvironmentSuffix"
-                        }
-                    },
-                    {
-                        "Key": "Project",
-                        "Value": {
-                            "Ref": "Project"
-                        }
-                    },
-                    {
-                        "Key": "Owner",
-                        "Value": {
-                            "Ref": "Owner"
-                        }
-                    }
-                ]
-            }
-        },
-        "SNSTopic": {
-            "Type": "AWS::SNS::Topic",
-            "Properties": {
-                "DisplayName": "Financial Transaction Notifications",
-                "TopicName": {
-                    "Fn::Sub": "${EnvironmentSuffix}-${Project}-FinancialNotifications"
-                },
-                "Tags": [
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "EnvironmentSuffix"
-                        }
-                    },
-                    {
-                        "Key": "Project",
-                        "Value": {
-                            "Ref": "Project"
-                        }
-                    },
-                    {
-                        "Key": "Owner",
-                        "Value": {
-                            "Ref": "Owner"
-                        }
-                    }
-                ]
-            }
-        },
-        "SNSTopicPolicy": {
-            "Type": "AWS::SNS::TopicPolicy",
-            "Properties": {
-                "Topics": [
-                    {
-                        "Ref": "SNSTopic"
+                        "AttributeName": "id",
+                        "KeyType": "HASH"
                     }
                 ],
-                "PolicyDocument": {
-                    "Version": "2012-10-17",
-                    "Statement": [
-                        {
-                            "Effect": "Deny",
-                            "Principal": "*",
-                            "Action": "sns:Publish",
-                            "Resource": {
-                                "Ref": "SNSTopic"
-                            },
-                            "Condition": {
-                                "Bool": {
-                                    "aws:SecureTransport": "false"
-                                }
-                            }
-                        },
-                        {
-                            "Effect": "Allow",
-                            "Principal": {
-                                "Service": "lambda.amazonaws.com"
-                            },
-                            "Action": "sns:Publish",
-                            "Resource": {
-                                "Ref": "SNSTopic"
-                            },
-                            "Condition": {
-                                "ArnLike": {
-                                    "aws:SourceArn": {
-                                        "Fn::GetAtt": [
-                                            "FinancialProcessorLambda",
-                                            "Arn"
-                                        ]
-                                    }
-                                }
-                            }
-                        },
-                        {
-                            "Sid": "AWSAccountAccess",
-                            "Effect": "Allow",
-                            "Principal": {
-                                "AWS": {
-                                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
-                                }
-                            },
-                            "Action": [
-                                "sns:GetTopicAttributes",
-                                "sns:SetTopicAttributes",
-                                "sns:AddPermission",
-                                "sns:RemovePermission",
-                                "sns:DeleteTopic",
-                                "sns:Subscribe",
-                                "sns:ListSubscriptionsByTopic",
-                                "sns:Publish"
-                            ],
-                            "Resource": {
-                                "Ref": "SNSTopic"
-                            }
-                        }
-                    ]
-                }
-            }
-        },
-        "CloudTrailLogsBucket": {
-            "Type": "AWS::S3::Bucket",
-            "DeletionPolicy": "Retain",
-            "UpdateReplacePolicy": "Retain",
-            "Properties": {
-                "BucketName": {
-                    "Fn::Sub": "${AWS::AccountId}-${AWS::Region}-cloudtrail-logs"
+                "BillingMode": "PAY_PER_REQUEST",
+                "SSESpecification": {
+                    "SSEEnabled": true
                 },
-                "BucketEncryption": {
-                    "ServerSideEncryptionConfiguration": [
-                        {
-                            "ServerSideEncryptionByDefault": {
-                                "SSEAlgorithm": "AES256"
-                            }
-                        }
-                    ]
-                },
-                "PublicAccessBlockConfiguration": {
-                    "BlockPublicAcls": true,
-                    "BlockPublicPolicy": true,
-                    "IgnorePublicAcls": true,
-                    "RestrictPublicBuckets": true
-                },
-                "OwnershipControls": {
-                    "Rules": [
-                        {
-                            "ObjectOwnership": "BucketOwnerEnforced"
-                        }
-                    ]
+                "PointInTimeRecoverySpecification": {
+                    "PointInTimeRecoveryEnabled": true
                 },
                 "Tags": [
                     {
                         "Key": "Environment",
                         "Value": {
-                            "Ref": "EnvironmentSuffix"
+                            "Ref": "Environment"
                         }
                     },
                     {
@@ -1851,641 +1008,20 @@
                         }
                     }
                 ]
-            }
-        },
-        "CloudTrailLogsBucketPolicy": {
-            "Type": "AWS::S3::BucketPolicy",
-            "Properties": {
-                "Bucket": {
-                    "Ref": "CloudTrailLogsBucket"
-                },
-                "PolicyDocument": {
-                    "Version": "2012-10-17",
-                    "Statement": [
-                        {
-                            "Sid": "AWSCloudTrailWrite",
-                            "Effect": "Allow",
-                            "Principal": {
-                                "Service": "cloudtrail.amazonaws.com"
-                            },
-                            "Action": "s3:PutObject",
-                            "Resource": {
-                                "Fn::Sub": "${CloudTrailLogsBucket.Arn}/AWSLogs/${AWS::AccountId}/*"
-                            },
-                            "Condition": {
-                                "StringEquals": {
-                                    "s3:x-amz-acl": "bucket-owner-full-control"
-                                }
-                            }
-                        },
-                        {
-                            "Sid": "AWSCloudTrailBucketACL",
-                            "Effect": "Allow",
-                            "Principal": {
-                                "Service": "cloudtrail.amazonaws.com"
-                            },
-                            "Action": "s3:GetBucketAcl",
-                            "Resource": {
-                                "Fn::GetAtt": [
-                                    "CloudTrailLogsBucket",
-                                    "Arn"
-                                ]
-                            }
-                        }
-                    ]
-                }
-            }
-        },
-        "CloudTrailCloudWatchLogsRole": {
-            "Type": "AWS::IAM::Role",
-            "Properties": {
-                "AssumeRolePolicyDocument": {
-                    "Version": "2012-10-17",
-                    "Statement": [
-                        {
-                            "Effect": "Allow",
-                            "Principal": {
-                                "Service": "cloudtrail.amazonaws.com"
-                            },
-                            "Action": "sts:AssumeRole"
-                        }
-                    ]
-                },
-                "Path": "/",
-                "Policies": [
-                    {
-                        "PolicyName": "CloudTrailCloudWatchLogsPolicy",
-                        "PolicyDocument": {
-                            "Version": "2012-10-17",
-                            "Statement": [
-                                {
-                                    "Effect": "Allow",
-                                    "Action": [
-                                        "logs:CreateLogStream",
-                                        "logs:PutLogEvents"
-                                    ],
-                                    "Resource": {
-                                        "Fn::GetAtt": [
-                                            "CloudTrailLogGroup",
-                                            "Arn"
-                                        ]
-                                    }
-                                }
-                            ]
-                        }
-                    }
-                ],
-                "Tags": [
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "EnvironmentSuffix"
-                        }
-                    },
-                    {
-                        "Key": "Project",
-                        "Value": {
-                            "Ref": "Project"
-                        }
-                    },
-                    {
-                        "Key": "Owner",
-                        "Value": {
-                            "Ref": "Owner"
-                        }
-                    }
-                ]
-            }
-        },
-        "CloudTrailLogGroup": {
-            "Type": "AWS::Logs::LogGroup",
-            "Properties": {
-                "LogGroupName": {
-                    "Fn::Sub": "/aws/cloudtrail/${EnvironmentSuffix}-${Project}-CloudTrailLogs"
-                },
-                "RetentionInDays": 365,
-                "Tags": [
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "EnvironmentSuffix"
-                        }
-                    },
-                    {
-                        "Key": "Project",
-                        "Value": {
-                            "Ref": "Project"
-                        }
-                    },
-                    {
-                        "Key": "Owner",
-                        "Value": {
-                            "Ref": "Owner"
-                        }
-                    }
-                ]
-            }
-        },
-        "CloudTrailTrail": {
-            "Type": "AWS::CloudTrail::Trail",
-            "Properties": {
-                "IsLogging": true,
-                "S3BucketName": {
-                    "Ref": "CloudTrailLogsBucket"
-                },
-                "IncludeGlobalServiceEvents": true,
-                "IsMultiRegionTrail": true,
-                "EnableLogFileValidation": true,
-                "CloudWatchLogsRoleArn": {
-                    "Fn::GetAtt": [
-                        "CloudTrailCloudWatchLogsRole",
-                        "Arn"
-                    ]
-                },
-                "CloudWatchLogsLogGroupArn": {
-                    "Fn::GetAtt": [
-                        "CloudTrailLogGroup",
-                        "Arn"
-                    ]
-                },
-                "Tags": [
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "EnvironmentSuffix"
-                        }
-                    },
-                    {
-                        "Key": "Project",
-                        "Value": {
-                            "Ref": "Project"
-                        }
-                    },
-                    {
-                        "Key": "Owner",
-                        "Value": {
-                            "Ref": "Owner"
-                        }
-                    }
-                ]
-            }
-        },
-        "AWSConfigRole": {
-            "Type": "AWS::IAM::Role",
-            "Properties": {
-                "AssumeRolePolicyDocument": {
-                    "Version": "2012-10-17",
-                    "Statement": [
-                        {
-                            "Effect": "Allow",
-                            "Principal": {
-                                "Service": "config.amazonaws.com"
-                            },
-                            "Action": "sts:AssumeRole"
-                        }
-                    ]
-                },
-                "Policies": [
-                    {
-                        "PolicyName": "AWSConfigInlinePolicy",
-                        "PolicyDocument": {
-                            "Version": "2012-10-17",
-                            "Statement": [
-                                {
-                                    "Effect": "Allow",
-                                    "Action": [
-                                        "config:Put*",
-                                        "config:Get*",
-                                        "config:Describe*",
-                                        "config:Start*"
-                                    ],
-                                    "Resource": "*"
-                                }
-                            ]
-                        }
-                    }
-                ],
-                "Tags": [
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "EnvironmentSuffix"
-                        }
-                    },
-                    {
-                        "Key": "Project",
-                        "Value": {
-                            "Ref": "Project"
-                        }
-                    },
-                    {
-                        "Key": "Owner",
-                        "Value": {
-                            "Ref": "Owner"
-                        }
-                    }
-                ]
-            }
-        },
-        "AWSConfigRecorder": {
-            "Type": "AWS::Config::ConfigurationRecorder",
-            "Properties": {
-                "Name": "default",
-                "RoleARN": {
-                    "Fn::GetAtt": [
-                        "AWSConfigRole",
-                        "Arn"
-                    ]
-                },
-                "RecordingGroup": {
-                    "AllSupported": true,
-                    "IncludeGlobalResourceTypes": true
-                }
-            }
-        },
-        "AWSConfigLogsBucket": {
-            "Type": "AWS::S3::Bucket",
-            "DeletionPolicy": "Retain",
-            "UpdateReplacePolicy": "Retain",
-            "Properties": {
-                "BucketName": {
-                    "Fn::Sub": "${AWS::AccountId}-${AWS::Region}-aws-config-logs"
-                },
-                "BucketEncryption": {
-                    "ServerSideEncryptionConfiguration": [
-                        {
-                            "ServerSideEncryptionByDefault": {
-                                "SSEAlgorithm": "AES256"
-                            }
-                        }
-                    ]
-                },
-                "PublicAccessBlockConfiguration": {
-                    "BlockPublicAcls": true,
-                    "BlockPublicPolicy": false,
-                    "IgnorePublicAcls": true,
-                    "RestrictPublicBuckets": false
-                },
-                "OwnershipControls": {
-                    "Rules": [
-                        {
-                            "ObjectOwnership": "BucketOwnerEnforced"
-                        }
-                    ]
-                },
-                "Tags": [
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "EnvironmentSuffix"
-                        }
-                    },
-                    {
-                        "Key": "Project",
-                        "Value": {
-                            "Ref": "Project"
-                        }
-                    },
-                    {
-                        "Key": "Owner",
-                        "Value": {
-                            "Ref": "Owner"
-                        }
-                    }
-                ]
-            }
-        },
-        "AWSConfigLogsBucketPolicy": {
-            "Type": "AWS::S3::BucketPolicy",
-            "Properties": {
-                "Bucket": {
-                    "Ref": "AWSConfigLogsBucket"
-                },
-                "PolicyDocument": {
-                    "Version": "2012-10-17",
-                    "Statement": [
-                        {
-                            "Sid": "AWSConfigBucketPermissionsCheck",
-                            "Effect": "Allow",
-                            "Principal": {
-                                "Service": "config.amazonaws.com"
-                            },
-                            "Action": "s3:GetBucketAcl",
-                            "Resource": {
-                                "Fn::GetAtt": [
-                                    "AWSConfigLogsBucket",
-                                    "Arn"
-                                ]
-                            }
-                        },
-                        {
-                            "Sid": "AWSConfigBucketDelivery",
-                            "Effect": "Allow",
-                            "Principal": {
-                                "Service": "config.amazonaws.com"
-                            },
-                            "Action": "s3:PutObject",
-                            "Resource": {
-                                "Fn::Sub": "${AWSConfigLogsBucket.Arn}/AWSLogs/${AWS::AccountId}/*"
-                            },
-                            "Condition": {
-                                "StringEquals": {
-                                    "s3:x-amz-acl": "bucket-owner-full-control"
-                                }
-                            }
-                        }
-                    ]
-                }
-            }
-        },
-        "AWSConfigDeliveryChannel": {
-            "Type": "AWS::Config::DeliveryChannel",
-            "Properties": {
-                "ConfigSnapshotDeliveryProperties": {
-                    "DeliveryFrequency": "One_Hour"
-                },
-                "S3BucketName": {
-                    "Ref": "AWSConfigLogsBucket"
-                }
-            }
-        },
-        "RDSPublicAccessCheck": {
-            "Type": "AWS::Config::ConfigRule",
-            "DependsOn": "AWSConfigRecorder",
-            "Properties": {
-                "ConfigRuleName": "rds-public-access-check",
-                "Description": "Checks if RDS DB instances are publicly accessible.",
-                "Source": {
-                    "Owner": "AWS",
-                    "SourceIdentifier": "RDS_INSTANCE_PUBLIC_ACCESS_CHECK"
-                },
-                "Scope": {
-                    "ComplianceResourceTypes": [
-                        "AWS::RDS::DBInstance"
-                    ]
-                }
-            }
-        },
-        "WAFWebACL": {
-            "Type": "AWS::WAFv2::WebACL",
-            "Properties": {
-                "Name": {
-                    "Fn::Sub": "${EnvironmentSuffix}-${Project}-WebACL"
-                },
-                "Scope": "REGIONAL",
-                "DefaultAction": {
-                    "Allow": {}
-                },
-                "VisibilityConfig": {
-                    "CloudWatchMetricsEnabled": true,
-                    "MetricName": "WebACLMetrics",
-                    "SampledRequestsEnabled": true
-                },
-                "Rules": [
-                    {
-                        "Name": "AWSManagedRulesCommonRuleSet",
-                        "Priority": 0,
-                        "Statement": {
-                            "ManagedRuleGroupStatement": {
-                                "VendorName": "AWS",
-                                "Name": "AWSManagedRulesCommonRuleSet"
-                            }
-                        },
-                        "OverrideAction": {
-                            "None": {}
-                        },
-                        "VisibilityConfig": {
-                            "CloudWatchMetricsEnabled": true,
-                            "MetricName": "AWSManagedRulesCommonRuleSetMetrics",
-                            "SampledRequestsEnabled": true
-                        }
-                    }
-                ],
-                "Tags": [
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "EnvironmentSuffix"
-                        }
-                    },
-                    {
-                        "Key": "Project",
-                        "Value": {
-                            "Ref": "Project"
-                        }
-                    },
-                    {
-                        "Key": "Owner",
-                        "Value": {
-                            "Ref": "Owner"
-                        }
-                    }
-                ]
-            }
-        },
-        "AssociateWAFWithCloudFront": {
-            "Type": "AWS::WAFv2::WebACLAssociation",
-            "Properties": {
-                "ResourceArn": {
-                    "Fn::GetAtt": [
-                        "CloudFrontDistribution",
-                        "DomainName"
-                    ]
-                },
-                "WebACLArn": {
-                    "Fn::GetAtt": [
-                        "WAFWebACL",
-                        "Arn"
-                    ]
-                }
             }
         }
     },
     "Outputs": {
         "VPCId": {
-            "Description": "The ID of the newly created VPC.",
+            "Description": "VPC ID",
             "Value": {
-                "Ref": "VPC"
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${EnvironmentSuffix}-${Project}-VPCId"
-                }
+                "Ref": "FinancialServicesVPC"
             }
         },
-        "PublicSubnet1Id": {
-            "Description": "The ID of Public Subnet 1.",
-            "Value": {
-                "Ref": "PublicSubnet1"
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${EnvironmentSuffix}-${Project}-PublicSubnet1Id"
-                }
-            }
-        },
-        "PublicSubnet2Id": {
-            "Description": "The ID of Public Subnet 2.",
-            "Value": {
-                "Ref": "PublicSubnet2"
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${EnvironmentSuffix}-${Project}-PublicSubnet2Id"
-                }
-            }
-        },
-        "PrivateSubnet1Id": {
-            "Description": "The ID of Private Subnet 1.",
-            "Value": {
-                "Ref": "PrivateSubnet1"
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${EnvironmentSuffix}-${Project}-PrivateSubnet1Id"
-                }
-            }
-        },
-        "PrivateSubnet2Id": {
-            "Description": "The ID of Private Subnet 2.",
-            "Value": {
-                "Ref": "PrivateSubnet2"
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${EnvironmentSuffix}-${Project}-PrivateSubnet2Id"
-                }
-            }
-        },
-        "RDSEndpointAddress": {
-            "Description": "The endpoint address of the RDS PostgreSQL instance.",
-            "Value": {
-                "Fn::GetAtt": [
-                    "RDSInstance",
-                    "Endpoint.Address"
-                ]
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${EnvironmentSuffix}-${Project}-RDSEndpointAddress"
-                }
-            }
-        },
-        "RDSSecurityGroupId": {
-            "Description": "The Security Group ID of the RDS instance.",
-            "Value": {
-                "Fn::GetAtt": [
-                    "RDSSecurityGroup",
-                    "GroupId"
-                ]
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${EnvironmentSuffix}-${Project}-RDSSecurityGroupId"
-                }
-            }
-        },
-        "SecureS3BucketName": {
-            "Description": "The name of the secure S3 bucket.",
+        "S3BucketName": {
+            "Description": "S3 Bucket Name",
             "Value": {
                 "Ref": "SecureS3Bucket"
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${EnvironmentSuffix}-${Project}-SecureS3BucketName"
-                }
-            }
-        },
-        "CloudFrontDistributionDomainName": {
-            "Description": "The domain name of the CloudFront distribution.",
-            "Value": {
-                "Fn::GetAtt": [
-                    "CloudFrontDistribution",
-                    "DomainName"
-                ]
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${EnvironmentSuffix}-${Project}-CloudFrontDomainName"
-                }
-            }
-        },
-        "FinancialProcessorLambdaArn": {
-            "Description": "The ARN of the Financial Processor Lambda function.",
-            "Value": {
-                "Fn::GetAtt": [
-                    "FinancialProcessorLambda",
-                    "Arn"
-                ]
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${EnvironmentSuffix}-${Project}-FinancialProcessorLambdaArn"
-                }
-            }
-        },
-        "DynamoDBTableName": {
-            "Description": "The name of the DynamoDB table.",
-            "Value": {
-                "Ref": "DynamoDBTableName"
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${EnvironmentSuffix}-${Project}-DynamoDBTableName"
-                }
-            }
-        },
-        "SNSTopicArn": {
-            "Description": "The ARN of the SNS Topic.",
-            "Value": {
-                "Ref": "SNSTopic"
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${EnvironmentSuffix}-${Project}-SNSTopicArn"
-                }
-            }
-        },
-        "ApplicationKMSKeyArn": {
-            "Description": "The ARN of the application KMS Key.",
-            "Value": {
-                "Fn::GetAtt": [
-                    "ApplicationKMSKey",
-                    "Arn"
-                ]
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${EnvironmentSuffix}-${Project}-ApplicationKMSKeyArn"
-                }
-            }
-        },
-        "RDSKMSKeyArn": {
-            "Description": "The ARN of the RDS KMS Key.",
-            "Value": {
-                "Fn::GetAtt": [
-                    "RDSKMSKey",
-                    "Arn"
-                ]
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${EnvironmentSuffix}-${Project}-RDSKMSKeyArn"
-                }
-            }
-        },
-        "WAFWebACLArn": {
-            "Description": "The ARN of the WAF WebACL.",
-            "Value": {
-                "Fn::GetAtt": [
-                    "WAFWebACL",
-                    "Arn"
-                ]
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${EnvironmentSuffix}-${Project}-WAFWebACLArn"
-                }
             }
         }
     }
