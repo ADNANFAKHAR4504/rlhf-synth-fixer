@@ -6,7 +6,7 @@ const REGION = 'us-east-2';
 const PROJECT_NAME = 'TapStack'; // This should ideally come from the outputs as well, or be a consistent default.
 
 // Determine the outputs file path.
-const outputsFilePath = 'cdk-outputs/flat-outputs.json'
+const outputsFilePath = 'cfn-outputs/flat-outputs.json'
 let outputs: any;
 
 try {
