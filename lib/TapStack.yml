@@ -235,31 +235,42 @@ Resources:
             Effect: Allow
             Principal:
               Service: cloudtrail.amazonaws.com
-            Action: 
-              - s3:GetBucketAcl
+            Action: s3:GetBucketAcl
             Resource: !GetAtt CloudTrailLogBucket.Arn
           - Sid: AWSCloudTrailWrite
             Effect: Allow
             Principal:
               Service: cloudtrail.amazonaws.com
-            Action: 
-              - s3:PutObject
-            Resource: 
-              - !Join ['', [!GetAtt CloudTrailLogBucket.Arn, '/AWSLogs/', !Ref 'AWS::AccountId', '/*']]
-              - !Join ['', [!GetAtt CloudTrailLogBucket.Arn, '/AWSLogs/*']]
+            Action: s3:PutObject
+            Resource: !Join ['', [!GetAtt CloudTrailLogBucket.Arn, '/AWSLogs/', !Ref 'AWS::AccountId', '/*']]
             Condition:
               StringEquals:
                 s3:x-amz-acl: bucket-owner-full-control
-          - Sid: DenyNonSSLRequests
+          - Sid: AWSCloudTrailAclCheck
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:ListBucket
+            Resource: !GetAtt CloudTrailLogBucket.Arn
+            Condition:
+              StringEquals:
+                s3:prefix: AWSLogs/
+          - Sid: DenyUnencryptedUploads
+            Effect: Deny
+            Principal: '*'
+            Action: s3:PutObject
+            Resource: !Join ['', [!GetAtt CloudTrailLogBucket.Arn, '/AWSLogs/', !Ref 'AWS::AccountId', '/*']]
+            Condition:
+              StringNotEquals:
+                s3:x-amz-server-side-encryption: aws:kms
+          - Sid: DenyInsecureTransport
             Effect: Deny
             Principal: '*'
             Action: s3:*
-            Resource: 
-              - !GetAtt CloudTrailLogBucket.Arn
-              - !Join ['', [!GetAtt CloudTrailLogBucket.Arn, '/*']]
+            Resource: !Join ['', [!GetAtt CloudTrailLogBucket.Arn, '/*']]
             Condition:
               Bool:
-                aws:SecureTransport: false
+                aws:SecureTransport: 'false'
 
   # IAM Role
   LambdaExecutionRole:

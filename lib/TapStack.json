@@ -441,9 +441,7 @@
                             "Principal": {
                                 "Service": "cloudtrail.amazonaws.com"
                             },
-                            "Action": [
-                                "s3:GetBucketAcl"
-                            ],
+                            "Action": "s3:GetBucketAcl",
                             "Resource": {
                                 "Fn::GetAtt": [
                                     "CloudTrailLogBucket",
@@ -457,43 +455,25 @@
                             "Principal": {
                                 "Service": "cloudtrail.amazonaws.com"
                             },
-                            "Action": [
-                                "s3:PutObject"
-                            ],
-                            "Resource": [
-                                {
-                                    "Fn::Join": [
-                                        "",
-                                        [
-                                            {
-                                                "Fn::GetAtt": [
-                                                    "CloudTrailLogBucket",
-                                                    "Arn"
-                                                ]
-                                            },
-                                            "/AWSLogs/",
-                                            {
-                                                "Ref": "AWS::AccountId"
-                                            },
-                                            "/*"
-                                        ]
+                            "Action": "s3:PutObject",
+                            "Resource": {
+                                "Fn::Join": [
+                                    "",
+                                    [
+                                        {
+                                            "Fn::GetAtt": [
+                                                "CloudTrailLogBucket",
+                                                "Arn"
+                                            ]
+                                        },
+                                        "/AWSLogs/",
+                                        {
+                                            "Ref": "AWS::AccountId"
+                                        },
+                                        "/*"
                                     ]
-                                },
-                                {
-                                    "Fn::Join": [
-                                        "",
-                                        [
-                                            {
-                                                "Fn::GetAtt": [
-                                                    "CloudTrailLogBucket",
-                                                    "Arn"
-                                                ]
-                                            },
-                                            "/AWSLogs/*"
-                                        ]
-                                    ]
-                                }
-                            ],
+                                ]
+                            },
                             "Condition": {
                                 "StringEquals": {
                                     "s3:x-amz-acl": "bucket-owner-full-control"
@@ -501,35 +481,75 @@
                             }
                         },
                         {
-                            "Sid": "DenyNonSSLRequests",
+                            "Sid": "AWSCloudTrailAclCheck",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "cloudtrail.amazonaws.com"
+                            },
+                            "Action": "s3:ListBucket",
+                            "Resource": {
+                                "Fn::GetAtt": [
+                                    "CloudTrailLogBucket",
+                                    "Arn"
+                                ]
+                            },
+                            "Condition": {
+                                "StringEquals": {
+                                    "s3:prefix": "AWSLogs/"
+                                }
+                            }
+                        },
+                        {
+                            "Sid": "DenyUnencryptedUploads",
+                            "Effect": "Deny",
+                            "Principal": "*",
+                            "Action": "s3:PutObject",
+                            "Resource": {
+                                "Fn::Join": [
+                                    "",
+                                    [
+                                        {
+                                            "Fn::GetAtt": [
+                                                "CloudTrailLogBucket",
+                                                "Arn"
+                                            ]
+                                        },
+                                        "/AWSLogs/",
+                                        {
+                                            "Ref": "AWS::AccountId"
+                                        },
+                                        "/*"
+                                    ]
+                                ]
+                            },
+                            "Condition": {
+                                "StringNotEquals": {
+                                    "s3:x-amz-server-side-encryption": "aws:kms"
+                                }
+                            }
+                        },
+                        {
+                            "Sid": "DenyInsecureTransport",
                             "Effect": "Deny",
                             "Principal": "*",
                             "Action": "s3:*",
-                            "Resource": [
-                                {
-                                    "Fn::GetAtt": [
-                                        "CloudTrailLogBucket",
-                                        "Arn"
+                            "Resource": {
+                                "Fn::Join": [
+                                    "",
+                                    [
+                                        {
+                                            "Fn::GetAtt": [
+                                                "CloudTrailLogBucket",
+                                                "Arn"
+                                            ]
+                                        },
+                                        "/*"
                                     ]
-                                },
-                                {
-                                    "Fn::Join": [
-                                        "",
-                                        [
-                                            {
-                                                "Fn::GetAtt": [
-                                                    "CloudTrailLogBucket",
-                                                    "Arn"
-                                                ]
-                                            },
-                                            "/*"
-                                        ]
-                                    ]
-                                }
-                            ],
+                                ]
+                            },
                             "Condition": {
                                 "Bool": {
-                                    "aws:SecureTransport": false
+                                    "aws:SecureTransport": "false"
                                 }
                             }
                         }
