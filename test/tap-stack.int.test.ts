@@ -12,7 +12,7 @@ const REGION = 'us-east-2';
 const client = new EC2Client({ region: REGION });
 
 // ✅ Load outputs at module level so tests don't run if loading fails
-const outputsFilePath = path.join(process.cwd(), 'cdk-outputs', 'flat-outputs.json');
+const outputsFilePath = path.join(process.cwd(), 'cfn-outputs', 'flat-outputs.json');
 let outputs: any;
 
 try {
