@@ -6,15 +6,15 @@ const REGION = 'us-east-2';
 const PROJECT_NAME = 'TapStack'; // This should ideally come from the outputs as well, or be a consistent default.
 
 // Determine the outputs file path.
-const outputsFilePath = path.join(process.cwd(), 'cdk-outputs', 'flat-outputs.json');
+const outputsFilePath = 'cdk-outputs/flat-outputs.json'
 let outputs: any;
 
 try {
   // Read and parse the outputs JSON file once when the test file is loaded
   outputs = JSON.parse(fs.readFileSync(outputsFilePath, 'utf8'));
-  console.log(`✅ Successfully loaded outputs from: ${outputsFilePath}`);
+  console.log(`Successfully loaded outputs from: ${outputsFilePath}`);
 } catch (error) {
-  console.error(`❌ Error reading or parsing outputs file: ${outputsFilePath}`);
+  console.error(`Error reading or parsing outputs file: ${outputsFilePath}`);
   console.error(`Please ensure 'cdk-outputs/flat-outputs.json' exists and is valid JSON.`);
   console.error(`Error details:`, error);
   // Exit the process to prevent tests from running with missing/invalid outputs
