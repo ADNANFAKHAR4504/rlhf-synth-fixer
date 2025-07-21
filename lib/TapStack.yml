@@ -7,8 +7,9 @@ Description: Core infrastructure for a financial services application adhering t
 Parameters:
   Environment:
     Type: String
-    AllowedValues: [dev, staging, prod]
-    Description: Deployment environment (dev, staging, prod)
+    Default: dev
+    AllowedPattern: '^[a-zA-Z0-9]+$'
+    ConstraintDescription: Must contain only alphanumeric characters
   Project:
     Type: String
     Description: Project name for tagging
@@ -490,7 +491,7 @@ Resources:
           exports.handler = async (event) => {
             console.log("Financial processing Lambda function");
           };
-      Runtime: nodejs14.x
+      Runtime: nodejs22.x
       Environment:
         Variables:
           SECRET_ARN: !Ref RDSSecret

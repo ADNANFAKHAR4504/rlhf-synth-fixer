@@ -4,12 +4,9 @@
     "Parameters": {
         "Environment": {
             "Type": "String",
-            "AllowedValues": [
-                "dev",
-                "staging",
-                "prod"
-            ],
-            "Description": "Deployment environment (dev, staging, prod)"
+            "Default": "dev",
+            "AllowedPattern": "^[a-zA-Z0-9]+$",
+            "ConstraintDescription": "Must contain only alphanumeric characters"
         },
         "Project": {
             "Type": "String",
@@ -921,7 +918,7 @@
                 "Code": {
                     "ZipFile": "exports.handler = async (event) => {\n  console.log(\"Financial processing Lambda function\");\n};\n"
                 },
-                "Runtime": "nodejs14.x",
+                "Runtime": "nodejs22.x",
                 "Environment": {
                     "Variables": {
                         "SECRET_ARN": {
