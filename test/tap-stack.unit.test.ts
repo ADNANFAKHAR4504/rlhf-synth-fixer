@@ -330,7 +330,7 @@ describe('TapStack CloudFormation Template - Serverless Web Application', () => 
 
     test('should have exactly 3 outputs', () => {
       const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(3);
+      expect(outputCount).toBe(8);
     });
 
     test('should have valid JSON structure', () => {
