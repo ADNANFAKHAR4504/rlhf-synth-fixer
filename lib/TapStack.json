@@ -1,6 +1,6 @@
 {
     "AWSTemplateFormatVersion": "2010-09-09",
-    "Description": "CloudFormation template for a serverless web application with API Gateway, Lambda, and S3 logging",
+    "Description": "CloudFormation template for a serverless web application with API Gateway, Lambda, and S3 logging. Deployed in us-west-2.",
     "Parameters": {
         "ProjectName": {
             "Type": "String",
@@ -15,11 +15,11 @@
         "Environment": {
             "Type": "String",
             "Description": "Deployment environment",
-            "Default": "Production",
+            "Default": "production",
             "AllowedValues": [
-                "Production",
-                "Staging",
-                "Development"
+                "production",
+                "staging",
+                "development"
             ]
         },
         "LogRetentionInDays": {
@@ -45,15 +45,6 @@
                 1827,
                 3653
             ]
-        },
-        "DeploymentRegion": {
-            "Type": "String",
-            "Description": "AWS region where resources will be deployed",
-            "Default": "us-west-2",
-            "AllowedValues": [
-                "us-west-2"
-            ],
-            "ConstraintDescription": "This template can only be deployed in us-west-2 region"
         }
     },
     "Resources": {
@@ -62,9 +53,15 @@
             "DeletionPolicy": "Delete",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "${AWS::AccountId}-${ProjectName}-logs-${AWS::Region}-${Environment}"
+                    "Fn::Sub": "${AWS::AccountId}-serverlessweb-logs-${AWS::Region}-${Environment}"
                 },
-                "AccessControl": "LogDeliveryWrite",
+                "OwnershipControls": {
+                    "Rules": [
+                        {
+                            "ObjectOwnership": "BucketOwnerPreferred"
+                        }
+                    ]
+                },
                 "PublicAccessBlockConfiguration": {
                     "BlockPublicAcls": true,
                     "BlockPublicPolicy": true,
@@ -271,10 +268,7 @@
         },
         "LambdaLogToS3SubscriptionFilter": {
             "Type": "AWS::Logs::SubscriptionFilter",
-            "DependsOn": [
-                "LogBucketPolicy",
-                "HelloWorldFunctionLogGroup"
-            ],
+            "DependsOn": "LogBucketPolicy",
             "Properties": {
                 "LogGroupName": {
                     "Ref": "HelloWorldFunctionLogGroup"
@@ -675,10 +669,7 @@
         },
         "ApiGatewayLogToS3SubscriptionFilter": {
             "Type": "AWS::Logs::SubscriptionFilter",
-            "DependsOn": [
-                "LogBucketPolicy",
-                "ApiGatewayLogGroup"
-            ],
+            "DependsOn": "LogBucketPolicy",
             "Properties": {
                 "LogGroupName": {
                     "Ref": "ApiGatewayLogGroup"

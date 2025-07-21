@@ -20,8 +20,8 @@ Parameters:
     Default: production
     AllowedValues:
       - production
-      - ptaging
-      - pevelopment
+      - staging
+      - development
   
   # Parameters for log retention
   LogRetentionInDays:

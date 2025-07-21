@@ -18,13 +18,20 @@ describe('TapStack CloudFormation Template - Serverless Web Application', () => 
     });
 
     test('should have correct description', () => {
-      expect(template.Description).toBe('CloudFormation template for a serverless web application with API Gateway, Lambda, and S3 logging');
+      expect(template.Description).toBe(
+        'CloudFormation template for a serverless web application with API Gateway, Lambda, and S3 logging. Deployed in us-west-2.'
+      );
     });
   });
 
   describe('Parameters', () => {
     test('should have all required parameters', () => {
-      const expectedParams = ['ProjectName', 'CostCenter', 'Environment', 'LogRetentionInDays', 'DeploymentRegion'];
+      const expectedParams = [
+        'ProjectName',
+        'CostCenter',
+        'Environment',
+        'LogRetentionInDays',
+      ];
       expectedParams.forEach(param => {
         expect(template.Parameters[param]).toBeDefined();
       });
@@ -40,15 +47,11 @@ describe('TapStack CloudFormation Template - Serverless Web Application', () => 
     test('Environment parameter should have correct allowed values', () => {
       const param = template.Parameters.Environment;
       expect(param.Type).toBe('String');
-      expect(param.AllowedValues).toEqual(['Production', 'Staging', 'Development']);
-    });
-
-    test('DeploymentRegion parameter should enforce us-west-2', () => {
-      const param = template.Parameters.DeploymentRegion;
-      expect(param.Type).toBe('String');
-      expect(param.Default).toBe('us-west-2');
-      expect(param.AllowedValues).toEqual(['us-west-2']);
-      expect(param.ConstraintDescription).toBe('This template can only be deployed in us-west-2 region');
+      expect(param.AllowedValues).toEqual([
+        'production',
+        'staging',
+        'development',
+      ]);
     });
   });
 
@@ -63,18 +66,22 @@ describe('TapStack CloudFormation Template - Serverless Web Application', () => 
     test('LogBucket should have security configurations', () => {
       const bucket = template.Resources.LogBucket;
       const props = bucket.Properties;
-      
+
       expect(props.PublicAccessBlockConfiguration).toBeDefined();
       expect(props.PublicAccessBlockConfiguration.BlockPublicAcls).toBe(true);
       expect(props.PublicAccessBlockConfiguration.BlockPublicPolicy).toBe(true);
       expect(props.PublicAccessBlockConfiguration.IgnorePublicAcls).toBe(true);
-      expect(props.PublicAccessBlockConfiguration.RestrictPublicBuckets).toBe(true);
+      expect(props.PublicAccessBlockConfiguration.RestrictPublicBuckets).toBe(
+        true
+      );
     });
 
     test('LogBucket should have encryption enabled', () => {
       const bucket = template.Resources.LogBucket;
       expect(bucket.Properties.BucketEncryption).toBeDefined();
-      expect(bucket.Properties.BucketEncryption.ServerSideEncryptionConfiguration).toBeDefined();
+      expect(
+        bucket.Properties.BucketEncryption.ServerSideEncryptionConfiguration
+      ).toBeDefined();
     });
 
     test('should have LogBucketPolicy for CloudWatch access', () => {
@@ -90,9 +97,11 @@ describe('TapStack CloudFormation Template - Serverless Web Application', () => 
       const role = template.Resources.LambdaExecutionRole;
       expect(role).toBeDefined();
       expect(role.Type).toBe('AWS::IAM::Role');
-      
+
       const trustPolicy = role.Properties.AssumeRolePolicyDocument;
-      expect(trustPolicy.Statement[0].Principal.Service).toBe('lambda.amazonaws.com');
+      expect(trustPolicy.Statement[0].Principal.Service).toBe(
+        'lambda.amazonaws.com'
+      );
     });
 
     test('should have HelloWorldFunction with correct properties', () => {
@@ -144,7 +153,7 @@ describe('TapStack CloudFormation Template - Serverless Web Application', () => 
     test('should have ApiGatewayDeployment and ApiGatewayStage', () => {
       const deployment = template.Resources.ApiGatewayDeployment;
       const stage = template.Resources.ApiGatewayStage;
-      
+
       expect(deployment).toBeDefined();
       expect(deployment.Type).toBe('AWS::ApiGateway::Deployment');
       expect(stage).toBeDefined();
@@ -168,7 +177,9 @@ describe('TapStack CloudFormation Template - Serverless Web Application', () => 
       const role = template.Resources.ApiGatewayCloudWatchRole;
       expect(role).toBeDefined();
       expect(role.Type).toBe('AWS::IAM::Role');
-      expect(role.Properties.ManagedPolicyArns).toContain('arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs');
+      expect(role.Properties.ManagedPolicyArns).toContain(
+        'arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs'
+      );
     });
 
     test('should have ApiGatewayAccount linking CloudWatch role', () => {
@@ -190,15 +201,19 @@ describe('TapStack CloudFormation Template - Serverless Web Application', () => 
       const role = template.Resources.LogsToS3Role;
       expect(role).toBeDefined();
       expect(role.Type).toBe('AWS::IAM::Role');
-      expect(role.Properties.AssumeRolePolicyDocument.Statement[0].Principal.Service).toBe('logs.amazonaws.com');
+      expect(
+        role.Properties.AssumeRolePolicyDocument.Statement[0].Principal.Service
+      ).toBe('logs.amazonaws.com');
     });
 
     test('should have FirehoseDeliveryRole with S3 permissions', () => {
       const role = template.Resources.FirehoseDeliveryRole;
       expect(role).toBeDefined();
       expect(role.Type).toBe('AWS::IAM::Role');
-      expect(role.Properties.AssumeRolePolicyDocument.Statement[0].Principal.Service).toBe('firehose.amazonaws.com');
-      
+      expect(
+        role.Properties.AssumeRolePolicyDocument.Statement[0].Principal.Service
+      ).toBe('firehose.amazonaws.com');
+
       const policy = role.Properties.Policies[0].PolicyDocument;
       const actions = policy.Statement[0].Action;
       expect(actions).toContain('s3:PutObject');
@@ -208,7 +223,7 @@ describe('TapStack CloudFormation Template - Serverless Web Application', () => 
     test('should have subscription filters for both Lambda and API Gateway logs', () => {
       const lambdaFilter = template.Resources.LambdaLogToS3SubscriptionFilter;
       const apiFilter = template.Resources.ApiGatewayLogToS3SubscriptionFilter;
-      
+
       expect(lambdaFilter).toBeDefined();
       expect(lambdaFilter.Type).toBe('AWS::Logs::SubscriptionFilter');
       expect(apiFilter).toBeDefined();
@@ -219,15 +234,25 @@ describe('TapStack CloudFormation Template - Serverless Web Application', () => 
   describe('Resource Tagging', () => {
     test('all resources should have Environment tag', () => {
       const resourcesWithTags = [
-        'LogBucket', 'LambdaExecutionRole', 'HelloWorldFunction', 'HelloWorldFunctionLogGroup',
-        'LogsToS3Role', 'FirehoseDeliveryRole', 'LogsToS3DeliveryStream', 'ApiGatewayCloudWatchRole',
-        'ApiGateway', 'ApiGatewayStage', 'ApiGatewayLogGroup'
+        'LogBucket',
+        'LambdaExecutionRole',
+        'HelloWorldFunction',
+        'HelloWorldFunctionLogGroup',
+        'LogsToS3Role',
+        'FirehoseDeliveryRole',
+        'LogsToS3DeliveryStream',
+        'ApiGatewayCloudWatchRole',
+        'ApiGateway',
+        'ApiGatewayStage',
+        'ApiGatewayLogGroup',
       ];
-      
+
       resourcesWithTags.forEach(resourceName => {
         const resource = template.Resources[resourceName];
         expect(resource.Properties.Tags).toBeDefined();
-        const environmentTag = resource.Properties.Tags.find((tag: any) => tag.Key === 'Environment');
+        const environmentTag = resource.Properties.Tags.find(
+          (tag: any) => tag.Key === 'Environment'
+        );
         expect(environmentTag).toBeDefined();
         expect(environmentTag.Value).toEqual({ Ref: 'Environment' });
       });
@@ -236,7 +261,7 @@ describe('TapStack CloudFormation Template - Serverless Web Application', () => 
     test('tagged resources should have ProjectName and CostCenter tags', () => {
       const resource = template.Resources.LogBucket;
       const tags = resource.Properties.Tags;
-      
+
       expect(tags.find((tag: any) => tag.Key === 'ProjectName')).toBeDefined();
       expect(tags.find((tag: any) => tag.Key === 'CostCenter')).toBeDefined();
     });
@@ -275,13 +300,16 @@ describe('TapStack CloudFormation Template - Serverless Web Application', () => 
     test('IAM roles should follow least privilege principle', () => {
       const lambdaRole = template.Resources.LambdaExecutionRole;
       expect(lambdaRole.Properties.ManagedPolicyArns).toHaveLength(1);
-      expect(lambdaRole.Properties.ManagedPolicyArns[0]).toBe('arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole');
+      expect(lambdaRole.Properties.ManagedPolicyArns[0]).toBe(
+        'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
+      );
     });
 
     test('S3 bucket should have public access blocked', () => {
       const bucket = template.Resources.LogBucket;
-      const publicAccessBlock = bucket.Properties.PublicAccessBlockConfiguration;
-      
+      const publicAccessBlock =
+        bucket.Properties.PublicAccessBlockConfiguration;
+
       expect(publicAccessBlock.BlockPublicAcls).toBe(true);
       expect(publicAccessBlock.BlockPublicPolicy).toBe(true);
       expect(publicAccessBlock.IgnorePublicAcls).toBe(true);
@@ -297,7 +325,7 @@ describe('TapStack CloudFormation Template - Serverless Web Application', () => 
 
     test('should have exactly 5 parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(5);
+      expect(parameterCount).toBe(4);
     });
 
     test('should have exactly 3 outputs', () => {
@@ -334,7 +362,7 @@ describe('TapStack CloudFormation Template - Serverless Web Application', () => 
     test('All log groups should have retention policies', () => {
       const lambdaLogGroup = template.Resources.HelloWorldFunctionLogGroup;
       const apiLogGroup = template.Resources.ApiGatewayLogGroup;
-      
+
       expect(lambdaLogGroup.Properties.RetentionInDays).toBeDefined();
       expect(apiLogGroup.Properties.RetentionInDays).toBeDefined();
     });
