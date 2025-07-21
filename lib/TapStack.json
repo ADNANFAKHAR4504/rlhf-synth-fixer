@@ -828,9 +828,7 @@
         "WebACL": {
             "Type": "AWS::WAFv2::WebACL",
             "Properties": {
-                "Name": {
-                    "Fn::Sub": "${Project}-webacl"
-                },
+                "Name": "financial-services-webacl",
                 "Description": "Web ACL for protecting web applications",
                 "Scope": "REGIONAL",
                 "DefaultAction": {

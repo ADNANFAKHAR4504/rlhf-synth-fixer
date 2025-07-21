@@ -450,7 +450,7 @@ Resources:
   WebACL:
     Type: AWS::WAFv2::WebACL
     Properties:
-      Name: !Sub "${Project}-webacl"
+      Name: "financial-services-webacl"  # Static name instead of Sub
       Description: 'Web ACL for protecting web applications'
       Scope: REGIONAL
       DefaultAction:
@@ -566,7 +566,7 @@ Outputs:
     Value: !GetAtt WebACL.Arn
     Export:
       Name: !Sub "${Project}-WebACLArn"
-       
+
   WebACLId:
     Description: The ID of the WebACL
     Value: !GetAtt WebACL.Id
