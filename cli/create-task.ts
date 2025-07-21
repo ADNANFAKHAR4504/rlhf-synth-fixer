@@ -70,7 +70,10 @@ async function copyTemplate(templateName: string): Promise<void> {
 
 function getLanguageChoices(platform: string) {
   if (platform === 'cdk') {
-    return [{ name: 'TypeScript', value: 'ts' }];
+    return [
+      { name: 'TypeScript', value: 'ts' },
+      { name: 'Python', value: 'py' },
+    ];
   }
 
   return [
