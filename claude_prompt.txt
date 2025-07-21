@@ -57,3 +57,4 @@ Considerations:
 * If running aws cli commands is needed, ask the reviewer to do them and give you feedback.
 * IDEAL_RESPONSE.md should not reference other .md files or the process of creating the response. It should be a standalone document that describes the solution to the problem.
 * IMPORTANT: Your highest priority is that IDEAL_RESPONSE.md is the perfect response to the problem described in lib/PROMPT.md, and that it is coherent with the Infrastructure as code created in the lib/ folder.
+* IMPORTANT: Store in metadata.json the field `subtask`, which should be the category of the problem: (IaC Program Optimization| Infrastructure QA and Management | ...), and the field subject_labels (e.g: "General Infrastructure Tooling QA", "IaC Optimization", "Web Application Deployment")
