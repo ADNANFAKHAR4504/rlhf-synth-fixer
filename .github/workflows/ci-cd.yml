@@ -1,5 +1,9 @@
 name: CI/CD Pipeline
 
+# Special keyword [skip-jobs] can be added to commit messages to skip most jobs
+# The upload-task-to-s3 job will still run when a PR is merged, regardless of this tag
+# The cleanup-pr job will still run when a PR is closed, regardless of this tag
+
 on:
   push:
     branches: [main]
@@ -14,19 +18,17 @@ env:
   NODE_VERSION: '22'
   # Use PR number for resource isolation, fallback to 'main' for main branch
   # Prefix with 'pr' to ensure AWS resource names start with a letter
-  ENVIRONMENT_SUFFIX: ${{ github.event.number && format('Pr{0}', github.event.number) || 'dev' }}
+  ENVIRONMENT_SUFFIX: ${{ github.event.number && format('pr{0}', github.event.number) || 'dev' }}
   S3_BUCKET_NAME: 'iac-rlhf-aws-release'
 
 jobs:
   detect-metadata:
-    name: Detect Project Metadata
+    name: Detect Project Files
     runs-on: ubuntu-latest
-    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' }}
+    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
     outputs:
       platform: ${{ steps.metadata.outputs.platform }}
       language: ${{ steps.metadata.outputs.language }}
-      is-cdk-ts: ${{ steps.metadata.outputs.is-cdk-ts }}
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -42,24 +44,29 @@ jobs:
           PLATFORM=$(jq -r '.platform // "unknown"' metadata.json)
           LANGUAGE=$(jq -r '.language // "unknown"' metadata.json)
 
-          # Check if it's a CDK TypeScript project
-          if [ "$PLATFORM" = "cdk" ] && ([ "$LANGUAGE" = "ts" ] || [ "$LANGUAGE" = "typescript" ]); then
-            IS_CDK_TS="true"
-          else
-            IS_CDK_TS="false"
-          fi
-
-          echo "Detected platform: $PLATFORM, language: $LANGUAGE, is-cdk-ts: $IS_CDK_TS"
+          echo "Detected platform: $PLATFORM, language: $LANGUAGE"
 
           echo "platform=$PLATFORM" >> $GITHUB_OUTPUT
           echo "language=$LANGUAGE" >> $GITHUB_OUTPUT
-          echo "is-cdk-ts=$IS_CDK_TS" >> $GITHUB_OUTPUT
+
+      - name: Check for required documentation files
+        id: docs-check
+        run: |
+          if [ ! -f "lib/PROMPT.md" ]; then
+            echo "❌ lib/PROMPT.md not found, exiting with failure"
+            exit 1
+          fi
+
+          if [ ! -f "lib/MODEL_RESPONSE.md" ]; then
+            echo "❌ lib/PROMPT.md not found, exiting with failure"
+            exit 1
+          fi
 
   version-check:
     name: Check Runtime Versions
     runs-on: ubuntu-latest
     needs: detect-metadata
-    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' }}
+    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
 
     steps:
       - name: Checkout code
@@ -116,7 +123,7 @@ jobs:
     name: Build
     runs-on: ubuntu-latest
     needs: version-check
-    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' }}
+    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
     environment: dev
 
     steps:
@@ -163,14 +170,13 @@ jobs:
     name: Synth
     runs-on: ubuntu-latest
     needs: [detect-metadata, build]
-    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' }}
+    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
     environment: dev
     permissions:
       contents: read
     outputs:
       platform: ${{ needs.detect-metadata.outputs.platform }}
       language: ${{ needs.detect-metadata.outputs.language }}
-      is-cdk-ts: ${{ needs.detect-metadata.outputs.is-cdk-ts }}
 
     steps:
       - name: Checkout code
@@ -193,11 +199,14 @@ jobs:
         run: |
           echo "Project: platform=${{ needs.detect-metadata.outputs.platform }}, language=${{ needs.detect-metadata.outputs.language }}"
 
-          if [ "${{ needs.detect-metadata.outputs.is-cdk-ts }}" = "true" ]; then
-            echo "✅ CDK TypeScript project detected, running CDK synth..."
+          PLATFORM="${{ needs.detect-metadata.outputs.platform }}"
+          LANGUAGE="${{ needs.detect-metadata.outputs.language }}"
+
+          if [ "$PLATFORM" = "cdk" ]; then
+            echo "✅ CDK project detected, running CDK synth..."
             npm run cdk:synth
           else
-            echo "ℹ️ Not a CDK TypeScript project, skipping CDK synth"
+            echo "ℹ️ Not a CDK project, skipping CDK synth"
             echo "This is expected for non-CDK projects like CloudFormation templates"
             # Create empty cdk.out directory to satisfy artifact upload
             mkdir -p cdk.out
@@ -216,7 +225,7 @@ jobs:
     name: Deploy
     runs-on: ubuntu-latest
     needs: synth
-    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' }}
+    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
     environment: dev
 
     steps:
@@ -239,11 +248,14 @@ jobs:
 
       - name: Bootstrap
         run: |
-          if [ "${{ needs.synth.outputs.is-cdk-ts }}" = "true" ]; then
-            echo "✅ CDK TypeScript project detected, running CDK bootstrap..."
+          PLATFORM="${{ needs.synth.outputs.platform }}"
+          LANGUAGE="${{ needs.synth.outputs.language }}"
+
+          if [ "$PLATFORM" = "cdk" ]; then
+            echo "✅ CDK project detected, running CDK bootstrap..."
             npm run cdk:bootstrap
           else
-            echo "ℹ️ Not a CDK TypeScript project, skipping CDK bootstrap"
+            echo "ℹ️ Not a CDK project, skipping CDK bootstrap"
           fi
         env:
           ENVIRONMENT_SUFFIX: ${{ env.ENVIRONMENT_SUFFIX }}
@@ -252,18 +264,21 @@ jobs:
 
       - name: Deploy
         run: |
-          if [ "${{ needs.synth.outputs.is-cdk-ts }}" = "true" ]; then
-            echo "✅ CDK TypeScript project detected, running CDK deploy..."
+          PLATFORM="${{ needs.synth.outputs.platform }}"
+          LANGUAGE="${{ needs.synth.outputs.language }}"
+
+          if [ "$PLATFORM" = "cdk" ]; then
+            echo "✅ CDK project detected, running CDK deploy..."
             npm run cdk:deploy
-          elif [ "${{ needs.synth.outputs.platform }}" = "cfn" ] && [ "${{ needs.synth.outputs.language }}" = "yaml" ]; then
+          elif [ "$PLATFORM" = "cfn" ] && [ "$LANGUAGE" = "yaml" ]; then
             echo "✅ CloudFormation YAML project detected, deploying with AWS CLI..."
             npm run cfn:deploy-yaml
-          elif [ "${{ needs.synth.outputs.platform }}" = "cfn" ] && [ "${{ needs.synth.outputs.language }}" = "json" ]; then
+          elif [ "$PLATFORM" = "cfn" ] && [ "$LANGUAGE" = "json" ]; then
             echo "✅ CloudFormation JSON project detected, deploying with AWS CLI..."
             npm run cfn:deploy-json
           else
-            echo "ℹ️ Unknown deployment method for platform: ${{ needs.synth.outputs.platform }}, language: ${{ needs.synth.outputs.language }}"
-            echo "💡 Supported combinations: cdk+typescript, cfn+yaml, cfn+json"
+            echo "ℹ️ Unknown deployment method for platform: $PLATFORM, language: $LANGUAGE"
+            echo "💡 Supported combinations: cdk+typescript, cdk+python, cfn+yaml, cfn+json"
           fi
         env:
           ENVIRONMENT_SUFFIX: ${{ env.ENVIRONMENT_SUFFIX }}
@@ -272,13 +287,16 @@ jobs:
 
       - name: Get Deployment Outputs
         run: |
-          if [ "${{ needs.synth.outputs.is-cdk-ts }}" = "true" ]; then
-            echo "✅ CDK TypeScript project detected, getting CDK outputs..."
+          PLATFORM="${{ needs.synth.outputs.platform }}"
+          LANGUAGE="${{ needs.synth.outputs.language }}"
+
+          if [ "$PLATFORM" = "cdk" ]; then
+            echo "✅ CDK project detected, getting CDK outputs..."
             npx cdk list --json > cdk-stacks.json
-            mkdir -p cdk-outputs
+            mkdir -p cfn-outputs
             echo "Getting all CloudFormation stacks..."
             aws cloudformation list-stacks --stack-status-filter CREATE_COMPLETE UPDATE_COMPLETE --query "StackSummaries[?contains(StackName, \`TapStack${{ env.ENVIRONMENT_SUFFIX }}\`)].StackName" --output text > cf-stacks.txt
-            echo "{}" > cdk-outputs/all-outputs.json
+            echo "{}" > cfn-outputs/all-outputs.json
             if [ -s cf-stacks.txt ]; then
               for stack in $(cat cf-stacks.txt); do
                 echo "Getting outputs for CloudFormation stack: $stack"
@@ -287,14 +305,14 @@ jobs:
                   output_count=$(jq 'length' "temp-${stack}-outputs.json" 2>/dev/null || echo "0")
                   if [ "$output_count" != "0" ] && [ "$output_count" != "null" ]; then
                     jq -n --arg stack "$stack" --slurpfile outputs "temp-${stack}-outputs.json" '{($stack): $outputs[0]}' > "temp-stack.json"
-                    jq -s '.[0] * .[1]' cdk-outputs/all-outputs.json temp-stack.json > temp-merged.json
-                    mv temp-merged.json cdk-outputs/all-outputs.json
-                    if [ ! -f "cdk-outputs/flat-outputs.json" ]; then
-                      echo "{}" > cdk-outputs/flat-outputs.json
+                    jq -s '.[0] * .[1]' cfn-outputs/all-outputs.json temp-stack.json > temp-merged.json
+                    mv temp-merged.json cfn-outputs/all-outputs.json
+                    if [ ! -f "cfn-outputs/flat-outputs.json" ]; then
+                      echo "{}" > cfn-outputs/flat-outputs.json
                     fi
                     jq -r '.[] | "\(.OutputKey)=\(.OutputValue)"' "temp-${stack}-outputs.json" | while IFS='=' read -r key value; do
-                      jq --arg key "$key" --arg value "$value" '. + {($key): $value}' cdk-outputs/flat-outputs.json > temp-flat.json
-                      mv temp-flat.json cdk-outputs/flat-outputs.json
+                      jq --arg key "$key" --arg value "$value" '. + {($key): $value}' cfn-outputs/flat-outputs.json > temp-flat.json
+                      mv temp-flat.json cfn-outputs/flat-outputs.json
                     done
                   fi
                   rm -f "temp-${stack}-outputs.json"
@@ -305,64 +323,63 @@ jobs:
               echo "No TapStack CloudFormation stacks found"
             fi
             echo "Consolidated outputs:"
-            cat cdk-outputs/all-outputs.json || echo "No consolidated outputs"
+            cat cfn-outputs/all-outputs.json || echo "No consolidated outputs"
             echo "Flat outputs:"
-            cat cdk-outputs/flat-outputs.json || echo "No flat outputs"
+            cat cfn-outputs/flat-outputs.json || echo "No flat outputs"
           elif [ "${{ needs.synth.outputs.platform }}" = "cfn" ]; then
             echo "✅ CloudFormation project detected, getting stack outputs..."
-            mkdir -p cdk-outputs
+            mkdir -p cfn-outputs
             # Try to find the stack name (assuming TapStack<ENVIRONMENT_SUFFIX>)
             STACK_NAME="TapStack${{ env.ENVIRONMENT_SUFFIX }}"
             echo "Getting outputs for CloudFormation stack: $STACK_NAME"
             aws cloudformation describe-stacks --stack-name "$STACK_NAME" --query 'Stacks[0].Outputs' --output json > temp-${STACK_NAME}-outputs.json 2>/dev/null || echo "No outputs for $STACK_NAME"
-            echo "{}" > cdk-outputs/all-outputs.json
+            echo "{}" > cfn-outputs/all-outputs.json
             if [ -f "temp-${STACK_NAME}-outputs.json" ]; then
               output_count=$(jq 'length' "temp-${STACK_NAME}-outputs.json" 2>/dev/null || echo "0")
               if [ "$output_count" != "0" ] && [ "$output_count" != "null" ]; then
                 jq -n --arg stack "$STACK_NAME" --slurpfile outputs "temp-${STACK_NAME}-outputs.json" '{($stack): $outputs[0]}' > temp-stack.json
-                jq -s '.[0] * .[1]' cdk-outputs/all-outputs.json temp-stack.json > temp-merged.json
-                mv temp-merged.json cdk-outputs/all-outputs.json
-                if [ ! -f "cdk-outputs/flat-outputs.json" ]; then
-                  echo "{}" > cdk-outputs/flat-outputs.json
+                jq -s '.[0] * .[1]' cfn-outputs/all-outputs.json temp-stack.json > temp-merged.json
+                mv temp-merged.json cfn-outputs/all-outputs.json
+                if [ ! -f "cfn-outputs/flat-outputs.json" ]; then
+                  echo "{}" > cfn-outputs/flat-outputs.json
                 fi
                 jq -r '.[] | "\(.OutputKey)=\(.OutputValue)"' "temp-${STACK_NAME}-outputs.json" | while IFS='=' read -r key value; do
-                  jq --arg key "$key" --arg value "$value" '. + {($key): $value}' cdk-outputs/flat-outputs.json > temp-flat.json
-                  mv temp-flat.json cdk-outputs/flat-outputs.json
+                  jq --arg key "$key" --arg value "$value" '. + {($key): $value}' cfn-outputs/flat-outputs.json > temp-flat.json
+                  mv temp-flat.json cfn-outputs/flat-outputs.json
                 done
               fi
               rm -f "temp-${STACK_NAME}-outputs.json"
             fi
             rm -f temp-stack.json temp-merged.json temp-flat.json
             echo "Consolidated outputs:"
-            cat cdk-outputs/all-outputs.json || echo "No consolidated outputs"
+            cat cfn-outputs/all-outputs.json || echo "No consolidated outputs"
             echo "Flat outputs:"
-            cat cdk-outputs/flat-outputs.json || echo "No flat outputs"
+            cat cfn-outputs/flat-outputs.json || echo "No flat outputs"
           else
             echo "ℹ️ Not a CDK TypeScript or CloudFormation project, creating empty outputs for consistency"
-            mkdir -p cdk-outputs
-            echo "{}" > cdk-outputs/all-outputs.json
-            echo "{}" > cdk-outputs/flat-outputs.json
+            mkdir -p cfn-outputs
+            echo "{}" > cfn-outputs/all-outputs.json
+            echo "{}" > cfn-outputs/flat-outputs.json
             echo "# No CDK outputs for non-CDK projects" > cdk-stacks.json
           fi
 
       - name: Upload Deployment Outputs
         uses: actions/upload-artifact@v4
         with:
-          name: cdk-outputs
+          name: cfn-outputs
           path: |
-            cdk-outputs/
+            cfn-outputs/
             cdk-stacks.json
 
   lint:
     name: Lint
     runs-on: ubuntu-latest
     needs: [detect-metadata, build]
-    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' }}
+    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
     environment: qa
     outputs:
       platform: ${{ needs.detect-metadata.outputs.platform }}
       language: ${{ needs.detect-metadata.outputs.language }}
-      is-cdk-ts: ${{ needs.detect-metadata.outputs.is-cdk-ts }}
 
     steps:
       - name: Checkout code
@@ -374,6 +391,8 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           download-artifacts: 'true'
 
+      # Python setup is handled by the setup-environment action
+
       - name: Run Linting
         run: |
           PLATFORM="${{ needs.detect-metadata.outputs.platform }}"
@@ -381,14 +400,14 @@ jobs:
 
           echo "Running linting for platform: $PLATFORM, language: $LANGUAGE"
 
-          if [ "${{ needs.detect-metadata.outputs.is-cdk-ts }}" = "true" ]; then
-            echo "✅ CDK TypeScript project detected, running ESLint..."
+          if [ "$LANGUAGE" = "ts" ]; then
+            echo "✅ TypeScript project detected, running ESLint..."
             npm run lint
-          elif [ "$PLATFORM" = "cfn" ] && ([ "$LANGUAGE" = "yaml" ] || [ "$LANGUAGE" = "json" ]); then
-            echo "✅ CloudFormation project detected, running ESLint + CloudFormation validation..."
-            npm run lint
-
-            echo "Running CloudFormation validation..."
+          elif [ "$LANGUAGE" = "py" ]; then
+            echo "✅ Python project detected, running Pylint..."
+            pipenv run lint
+          elif [ "$PLATFORM" = "cfn" ]; then
+            echo "✅ CloudFormation project detected, running CloudFormation validation..."
             if [ "$LANGUAGE" = "json" ]; then
               pipenv run cfn-validate-json -D
             elif [ "$LANGUAGE" = "yaml" ]; then
@@ -404,7 +423,7 @@ jobs:
     name: Unit Testing
     runs-on: ubuntu-latest
     needs: lint
-    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' }}
+    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
     environment: qa
 
     steps:
@@ -425,25 +444,24 @@ jobs:
 
       - name: Run unit tests
         run: |
-          OUTPUT=$(npm run test:unit 2>&1)
-          echo "# Unit tests" > lib/UNIT_TESTS.md
-          echo >> lib/UNIT_TESTS.md
-          echo '```text' >> lib/UNIT_TESTS.md
-          echo "$OUTPUT" >> lib/UNIT_TESTS.md
-          echo '```' >> lib/UNIT_TESTS.md
-          echo "$OUTPUT"
+          if [ "${{ needs.lint.outputs.language }}" = "ts" ]; then
+            echo "✅ TypeScript project detected, running unit tests..."
+            npm run test:unit
+          elif [ "${{ needs.lint.outputs.language }}" = "py" ]; then
+            echo "✅ Python project detected, running pytest unit tests..."
+            pipenv run test-py-unit
+          else
+            echo "✅ Running default unit tests..."
+            npm run test:unit
+          fi
 
       - name: Upload coverage reports
         uses: actions/upload-artifact@v4
         with:
           name: coverage-reports
-          path: coverage/
-
-      - name: Upload unit test markdown report
-        uses: actions/upload-artifact@v4
-        with:
-          name: unit-test-report
-          path: lib/UNIT_TESTS.md
+          path: |
+            coverage/
+            cov.json
 
   # mocked-integration-tests:
   #   name: Mocked Integration Tests
@@ -471,9 +489,9 @@ jobs:
   integration-tests-live:
     name: Integration Tests (Live)
     runs-on: ubuntu-latest
-    needs: [unit-tests, deploy]
+    needs: [lint, unit-tests, deploy]
     environment: qa
-    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' }}
+    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
 
     steps:
       - name: Checkout code
@@ -488,7 +506,7 @@ jobs:
       - name: Download Deployment Outputs
         uses: actions/download-artifact@v4
         with:
-          name: cdk-outputs
+          name: cfn-outputs
           path: .
 
       - name: Configure AWS
@@ -500,27 +518,21 @@ jobs:
 
       - name: Run integration tests against live environment
         run: |
-          OUTPUT=$(npm run test:integration 2>&1)
-          echo "# Integration tests" > lib/INTEGRATION_TESTS.md
-          echo >> lib/INTEGRATION_TESTS.md
-          echo '```text' >> lib/INTEGRATION_TESTS.md
-          echo "$OUTPUT" >> lib/INTEGRATION_TESTS.md
-          echo '```' >> lib/INTEGRATION_TESTS.md
-          echo "$OUTPUT"
+          if [ "${{ needs.lint.outputs.language }}" = "py" ]; then
+            echo "✅ CDK project detected, running integration tests..."
+            pipenv run test-py-integration
+          else
+            echo "✅ Running default integration tests..."
+            npm run test:integration
+          fi
         env:
           ENVIRONMENT_SUFFIX: ${{ env.ENVIRONMENT_SUFFIX }}
-
-      - name: Upload integration test markdown report
-        uses: actions/upload-artifact@v4
-        with:
-          name: integration-test-report
-          path: lib/INTEGRATION_TESTS.md
 
   cleanup:
     name: Cleanup (Destroy Resources)
     runs-on: ubuntu-latest
     needs: [detect-metadata, integration-tests-live]
-    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' }}
+    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
     environment: stage
 
     steps:
@@ -543,9 +555,10 @@ jobs:
       - name: Destroy Resources (cleanup any leftover resources)
         run: |
           PLATFORM="${{ needs.detect-metadata.outputs.platform }}"
+          LANGUAGE="${{ needs.detect-metadata.outputs.language }}"
 
-          if [ "${{ needs.detect-metadata.outputs.is-cdk-ts }}" = "true" ]; then
-            echo "✅ CDK TypeScript project detected, running CDK destroy..."
+          if [ "$PLATFORM" = "cdk" ]; then
+            echo "✅ CDK project detected, running CDK destroy..."
             # Try to destroy any leftover resources from PRs, but don't fail if they don't exist
             npm run cdk:destroy || echo "No resources to destroy or destruction failed"
           elif [ "$PLATFORM" = "cfn" ]; then
@@ -553,8 +566,8 @@ jobs:
             # Try to destroy any leftover resources from PRs, but don't fail if they don't exist
             npm run cfn:destroy || echo "No resources to destroy or destruction failed"
           else
-            echo "ℹ️ Platform '$PLATFORM' not supported for destruction, skipping destroy"
-            echo "💡 Consider adding cleanup logic for $PLATFORM projects here"
+            echo "ℹ️ Platform '$PLATFORM' with language '$LANGUAGE' not supported for destruction, skipping destroy"
+            echo "💡 Consider adding cleanup logic for $PLATFORM/$LANGUAGE projects here"
           fi
         env:
           ENVIRONMENT_SUFFIX: ${{ env.ENVIRONMENT_SUFFIX }}
@@ -564,7 +577,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [detect-metadata, cleanup]
     environment: release
-    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' }}
+    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
     permissions:
       contents: write
 
@@ -577,17 +590,11 @@ jobs:
           repository: ${{ github.repository }}
           ref: ${{ github.head_ref }}
 
-      - name: Download unit/integration test markdown reports
+      - name: Download coverage reports
         uses: actions/download-artifact@v4
         with:
-          name: unit-test-report
-          path: lib/
-
-      - name: Download integration test markdown reports
-        uses: actions/download-artifact@v4
-        with:
-          name: integration-test-report
-          path: lib/
+          name: coverage-reports
+          path: coverage/
 
       - name: Archive folders and reset repository
         run: |
@@ -599,6 +606,61 @@ jobs:
           PLATFORM="${{ needs.detect-metadata.outputs.platform }}"
           LANGUAGE="${{ needs.detect-metadata.outputs.language }}"
           echo "Using platform: $PLATFORM, language: $LANGUAGE"
+
+          # Update metadata.json with coverage information and commit author
+          # Get commit author from GitHub context
+          COMMIT_AUTHOR="${{ github.event.pull_request.user.login || github.actor }}"
+          echo "Commit author: $COMMIT_AUTHOR"
+
+          # Extract coverage percentages based on language
+          if [ "$LANGUAGE" = "py" ]; then
+            echo "Extracting Python coverage from cov.json..."
+            if [ -f "cov.json" ]; then
+              LINES_COVERAGE=$(jq -r '.totals.percent_covered' cov.json)
+              # Calculate branch coverage percentage
+              BRANCHES_NUM=$(jq -r '.totals.num_branches' cov.json)
+              if [ "$BRANCHES_NUM" = "0" ] || [ "$BRANCHES_NUM" = "null" ]; then
+                # No branches to cover, set to 100%
+                BRANCHES_COVERAGE=100
+              else
+                COVERED_BRANCHES=$(jq -r '.totals.covered_branches' cov.json)
+                # Calculate percentage: (covered_branches / num_branches) * 100
+                BRANCHES_COVERAGE=$(awk "BEGIN {print ($COVERED_BRANCHES / $BRANCHES_NUM) * 100}")
+              fi
+            else
+              echo "Warning: cov.json not found, setting default coverage values"
+              LINES_COVERAGE=100
+              BRANCHES_COVERAGE=100
+            fi
+          else
+            echo "Extracting TypeScript/JavaScript coverage from coverage-summary.json..."
+            if [ -f "coverage/coverage-summary.json" ]; then
+              LINES_COVERAGE=$(jq -r '.total.lines.pct' coverage/coverage-summary.json)
+              BRANCHES_COVERAGE=$(jq -r '.total.branches.pct' coverage/coverage-summary.json)
+            else
+              echo "Warning: coverage-summary.json not found, setting default coverage values"
+              LINES_COVERAGE=100
+              BRANCHES_COVERAGE=100
+            fi
+          fi
+
+          # If coverage is "Unknown", set to 100
+          if [ "$LINES_COVERAGE" = "Unknown" ]; then
+            LINES_COVERAGE=100
+          fi
+          if [ "$BRANCHES_COVERAGE" = "Unknown" ]; then
+            BRANCHES_COVERAGE=100
+          fi
+
+          echo "Lines coverage: $LINES_COVERAGE%"
+          echo "Branches coverage: $BRANCHES_COVERAGE%"
+
+          # Update metadata.json with coverage information and commit author (assuming it always exists)
+          jq --arg lines "$LINES_COVERAGE" --arg branches "$BRANCHES_COVERAGE" --arg author "$COMMIT_AUTHOR" '. + {coverage: {lines: ($lines|tonumber), branches: ($branches|tonumber)}, author: $author}' metadata.json > metadata.json.tmp
+          mv metadata.json.tmp metadata.json
+          echo "Updated metadata.json with coverage information and commit author"
+
+          cat metadata.json
 
           echo "Current directory contents before archiving:"
           ls -la
@@ -613,26 +675,28 @@ jobs:
             "lib"
             "bin" 
             "test"
+            "tests"
             "cdk.json"
             "metadata.json"
+            "tap.py"
             )
 
-            # Move paths to archive
-            for path in "${PATHS_TO_ARCHIVE[@]}"; do
-            if [[ -d "$path" || -f "$path" ]]; then
-              mv "$path" "$ARCHIVE_DIR"/
-              echo "Moved $path to archive"
-            else
-              echo "Path $path not found, skipping"
-            fi
-            done
+          # Move paths to archive
+          for path in "${PATHS_TO_ARCHIVE[@]}"; do
+          if [[ -d "$path" || -f "$path" ]]; then
+            mv "$path" "$ARCHIVE_DIR"/
+            echo "Moved $path to archive"
+          else
+            echo "Path $path not found, skipping"
+          fi
+          done
 
           # Check if there are changes to commit
           if git diff --quiet && git diff --cached --quiet; then
             echo "No changes to commit - no folders found to archive"
           else
             git add -A
-            git commit -m "Archive build artifacts for PR ${{ github.event.number }} [skip ci]"
+            git commit -m "Archive build artifacts for PR ${{ github.event.number }} [skip-jobs]"
             git push origin HEAD
             echo "Archive committed to current branch"
           fi
@@ -641,7 +705,7 @@ jobs:
     name: Upload Task to S3
     runs-on: ubuntu-latest
     environment: release
-    if: ${{ github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged == true }}
+    if: ${{ github.event_name == 'pull_request' && github.event.pull_request.merged == true }}
     permissions:
       contents: read
 
@@ -727,7 +791,8 @@ jobs:
   cleanup-pr:
     name: Cleanup (PR Closed)
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request' && github.event.action == 'closed'
+    # This job should run regardless of the [skip-jobs] tag since it's for cleanup
+    if: github.event_name == 'pull_request' && github.event.action == 'closed' && !github.event.pull_request.merged
     environment: qa
 
     steps:
@@ -758,7 +823,7 @@ jobs:
           PLATFORM=$(jq -r '.platform // "unknown"' metadata.json)
           LANGUAGE=$(jq -r '.language // "unknown"' metadata.json)
 
-          if [ "$PLATFORM" = "cdk" ] && ([ "$LANGUAGE" = "ts" ] || [ "$LANGUAGE" = "typescript" ]); then
+          if [ "$PLATFORM" = "cdk" ]; then
             echo "✅ CDK TypeScript project detected, running CDK destroy..."
             # Try to destroy resources, but don't fail if they don't exist
             npm run cdk:destroy || echo "No resources to destroy or destruction failed"
