@@ -775,9 +775,7 @@
         "SecureSNSTopic": {
             "Type": "AWS::SNS::Topic",
             "Properties": {
-                "TopicName": {
-                    "Fn::Sub": "financial-secure-topic"
-                },
+                "TopicName": "financial-secure-topic",
                 "Tags": [
                     {
                         "Key": "Environment",
@@ -833,6 +831,7 @@
                 "Name": {
                     "Fn::Sub": "${Project}-webacl"
                 },
+                "Description": "Web ACL for protecting web applications",
                 "Scope": "REGIONAL",
                 "DefaultAction": {
                     "Allow": {}
@@ -844,7 +843,27 @@
                         "Fn::Sub": "${Project}-webacl"
                     }
                 },
-                "Rules": []
+                "Rules": [
+                    {
+                        "Name": "AWSManagedRulesCommonRuleSet",
+                        "Priority": 1,
+                        "OverrideAction": {
+                            "None": {}
+                        },
+                        "VisibilityConfig": {
+                            "SampledRequestsEnabled": true,
+                            "CloudWatchMetricsEnabled": true,
+                            "MetricName": "AWS-AWSManagedRulesCommonRuleSetMetric"
+                        },
+                        "Statement": {
+                            "ManagedRuleGroupStatement": {
+                                "VendorName": "AWS",
+                                "Name": "AWSManagedRulesCommonRuleSet",
+                                "ExcludedRules": []
+                            }
+                        }
+                    }
+                ]
             }
         },
         "FinancialDB": {
