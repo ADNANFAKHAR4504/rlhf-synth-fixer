@@ -13,10 +13,11 @@ const client = new EC2Client({ region: REGION });
 
 // ✅ Load outputs at module level so tests don't run if loading fails
 const outputsFilePath = path.join(process.cwd(), 'cfn-outputs', 'flat-outputs.json');
-let outputs: any;
+let outputs: { [key: string]: string }; // Explicitly type outputs as a key-value object
 
 try {
-  outputs = JSON.parse(fs.readFileSync(outputsFilePath, 'utf8'))['TapStackpr60'];
+  // Directly parse the flat JSON object
+  outputs = JSON.parse(fs.readFileSync(outputsFilePath, 'utf8'));
   console.log(`✅ Successfully loaded outputs from: ${outputsFilePath}`);
 } catch (error) {
   console.error(`❌ Error reading or parsing outputs file: ${outputsFilePath}`);
@@ -25,10 +26,11 @@ try {
   process.exit(1); // Prevent test run if outputs are invalid or missing
 }
 
+// Modify getOutputValue to directly access the property
 const getOutputValue = (key: string): string => {
-  const item = outputs.find((o: any) => o.OutputKey === key);
-  if (!item) throw new Error(`Missing output for ${key}`);
-  return item.OutputValue;
+  const value = outputs[key]; // Access directly by key
+  if (value === undefined) throw new Error(`Missing output for ${key}`);
+  return value;
 };
 
 describe('CloudFormation Stack Integration Tests', () => {
