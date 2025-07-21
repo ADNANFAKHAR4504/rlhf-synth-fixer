@@ -1,6 +1,6 @@
 # serverless-infra.yaml
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'CloudFormation template for a serverless web application with API Gateway, Lambda, and S3 logging'
+Description: 'CloudFormation template for a serverless web application with API Gateway, Lambda, and S3 logging. Deployed in us-west-2.'
 
 Parameters:
   # Parameters for resource tagging
@@ -17,11 +17,11 @@ Parameters:
   Environment:
     Type: String
     Description: Deployment environment
-    Default: Production
+    Default: production
     AllowedValues:
-      - Production
-      - Staging
-      - Development
+      - production
+      - ptaging
+      - pevelopment
   
   # Parameters for log retention
   LogRetentionInDays:
@@ -29,15 +29,6 @@ Parameters:
     Description: Number of days to retain logs in CloudWatch
     Default: 30
     AllowedValues: [1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1827, 3653]
-  
-  # Region enforcement parameter
-  DeploymentRegion:
-    Type: String
-    Description: AWS region where resources will be deployed
-    Default: us-west-2
-    AllowedValues:
-      - us-west-2
-    ConstraintDescription: This template can only be deployed in us-west-2 region
 
 Resources:
   #############################################
@@ -47,8 +38,10 @@ Resources:
     Type: AWS::S3::Bucket
     DeletionPolicy: Delete
     Properties:
-      BucketName: !Sub '${AWS::AccountId}-${ProjectName}-logs-${AWS::Region}-${Environment}'
-      AccessControl: LogDeliveryWrite
+      BucketName: !Sub '${AWS::AccountId}-serverlessweb-logs-${AWS::Region}-${Environment}'
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerPreferred
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -170,9 +163,7 @@ Resources:
   # Subscription Filter to send Lambda logs to S3
   LambdaLogToS3SubscriptionFilter:
     Type: AWS::Logs::SubscriptionFilter
-    DependsOn: 
-      - LogBucketPolicy
-      - HelloWorldFunctionLogGroup
+    DependsOn: LogBucketPolicy
     Properties:
       LogGroupName: !Ref HelloWorldFunctionLogGroup
       FilterPattern: '' # Empty pattern to capture all logs
@@ -368,9 +359,7 @@ Resources:
   # Subscription Filter to send API Gateway logs to S3
   ApiGatewayLogToS3SubscriptionFilter:
     Type: AWS::Logs::SubscriptionFilter
-    DependsOn: 
-      - LogBucketPolicy
-      - ApiGatewayLogGroup
+    DependsOn: LogBucketPolicy
     Properties:
       LogGroupName: !Ref ApiGatewayLogGroup
       FilterPattern: '' # Empty pattern to capture all logs
