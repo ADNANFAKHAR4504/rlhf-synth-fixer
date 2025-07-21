@@ -207,7 +207,7 @@ Outputs:
 
   ApiEndpoint:
     Description: 'API Gateway endpoint URL'
-    Value: !Sub 'https://${ApiGatewayRestApi}.execute-api.${AWS::Region}.amazonaws.com/${ApiGatewayStage.StageName}/requests'
+    Value: !Sub 'https://${ApiGatewayRestApi}.execute-api.${AWS::Region}.amazonaws.com/prod/requests'
 
   Function1Arn:
     Description: 'ARN of Lambda Function 1'
