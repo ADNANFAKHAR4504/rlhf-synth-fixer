@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'TAP Stack - Task Assignment Platform CloudFormation Template'
+Description: Serverless API stack with Lambda, API Gateway, DynamoDB, and IAM roles
 
 Metadata:
   AWS::CloudFormation::Interface:
@@ -16,6 +16,17 @@ Parameters:
     Description: 'Environment suffix for resource naming (e.g., dev, staging, prod)'
     AllowedPattern: '^[a-zA-Z0-9]+$'
     ConstraintDescription: 'Must contain only alphanumeric characters'
+  LambdaRuntime:
+    Type: String
+    Description: Lambda runtime environment
+    Default: 'nodejs20.x'
+    AllowedValues:
+      - nodejs20.x
+      - python3.12
+  DynamoDBTableName:
+    Type: String
+    Description: DynamoDB table name
+    Default: 'RequestData'
 
 Resources:
   TurnAroundPromptTable:
@@ -32,60 +43,11 @@ Resources:
           KeyType: 'HASH'
       BillingMode: PAY_PER_REQUEST
       DeletionProtectionEnabled: false
-      # Tags will be applied at stack level during deployment
 
-Outputs:
-  TurnAroundPromptTableName:
-    Description: 'Name of the DynamoDB table'
-    Value: !Ref TurnAroundPromptTable
-    Export:
-      Name: !Sub '${AWS::StackName}-TurnAroundPromptTableName'
-
-  TurnAroundPromptTableArn:
-    Description: 'ARN of the DynamoDB table'
-    Value: !GetAtt TurnAroundPromptTable.Arn
-    Export:
-      Name: !Sub '${AWS::StackName}-TurnAroundPromptTableArn'
-
-  StackName:
-    Description: 'Name of this CloudFormation stack'
-    Value: !Ref AWS::StackName
-    Export:
-      Name: !Sub '${AWS::StackName}-StackName'
-
-  EnvironmentSuffix:
-    Description: 'Environment suffix used for this deployment'
-    Value: !Ref EnvironmentSuffix
-    Export:
-      Name: !Sub '${AWS::StackName}-EnvironmentSuffix'
-AWSTemplateFormatVersion: '2010-09-09'
-Description: Serverless API stack with Lambda, API Gateway, DynamoDB, and IAM roles
-
-Parameters:
-  EnvironmentName:
-    Type: String
-    Description: Environment suffix (e.g., dev, staging, prod)
-    AllowedPattern: '^[a-z0-9]+$'
-    ConstraintDescription: Must contain only lowercase letters and numbers
-
-  LambdaRuntime:
-    Type: String
-    Description: Lambda runtime environment
-    Default: 'nodejs20.x'
-    AllowedValues:
-      - nodejs20.x
-      - python3.12
-
-  DynamoDBTableName:
-    Type: String
-    Description: DynamoDB table name
-    Default: 'RequestData'
-
-Resources:
   LambdaExecutionRole:
     Type: 'AWS::IAM::Role'
     Properties:
-      RoleName: !Sub 'LambdaExecutionRole-${EnvironmentName}'
+      RoleName: !Sub 'LambdaExecutionRole-${EnvironmentSuffix}'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -104,11 +66,18 @@ Resources:
                   - 'logs:CreateLogStream'
                   - 'logs:PutLogEvents'
                 Resource: 'arn:aws:logs:*:*:*'
+              - Effect: 'Allow'
+                Action:
+                  - 'dynamodb:PutItem'
+                  - 'dynamodb:GetItem'
+                  - 'dynamodb:UpdateItem'
+                  - 'dynamodb:Query'
+                Resource: '*'
 
   LambdaFunction1:
     Type: 'AWS::Lambda::Function'
     Properties:
-      FunctionName: !Sub 'FunctionOne-${EnvironmentName}'
+      FunctionName: !Sub 'FunctionOne-${EnvironmentSuffix}'
       Runtime: !Ref LambdaRuntime
       Handler: 'index.handler'
       Role: !GetAtt LambdaExecutionRole.Arn
@@ -124,7 +93,7 @@ Resources:
   LambdaFunction2:
     Type: 'AWS::Lambda::Function'
     Properties:
-      FunctionName: !Sub 'FunctionTwo-${EnvironmentName}'
+      FunctionName: !Sub 'FunctionTwo-${EnvironmentSuffix}'
       Runtime: !Ref LambdaRuntime
       Handler: 'index.handler'
       Role: !GetAtt LambdaExecutionRole.Arn
@@ -137,7 +106,7 @@ Resources:
   DynamoDBTable:
     Type: 'AWS::DynamoDB::Table'
     Properties:
-      TableName: !Sub '${DynamoDBTableName}-${EnvironmentName}'
+      TableName: !Sub '${DynamoDBTableName}-${EnvironmentSuffix}'
       AttributeDefinitions:
         - AttributeName: 'RequestId'
           AttributeType: 'S'
@@ -149,7 +118,7 @@ Resources:
   ApiGatewayRestApi:
     Type: 'AWS::ApiGateway::RestApi'
     Properties:
-      Name: !Sub 'ServerlessAPI-${EnvironmentName}'
+      Name: !Sub 'ServerlessAPI-${EnvironmentSuffix}'
 
   ApiGatewayResource:
     Type: 'AWS::ApiGateway::Resource'
@@ -197,6 +166,30 @@ Resources:
       Principal: 'apigateway.amazonaws.com'
 
 Outputs:
+  TurnAroundPromptTableName:
+    Description: 'Name of the DynamoDB table'
+    Value: !Ref TurnAroundPromptTable
+    Export:
+      Name: !Sub '${AWS::StackName}-TurnAroundPromptTableName'
+
+  TurnAroundPromptTableArn:
+    Description: 'ARN of the DynamoDB table'
+    Value: !GetAtt TurnAroundPromptTable.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-TurnAroundPromptTableArn'
+
+  StackName:
+    Description: 'Name of this CloudFormation stack'
+    Value: !Ref AWS::StackName
+    Export:
+      Name: !Sub '${AWS::StackName}-StackName'
+
+  EnvironmentSuffix:
+    Description: 'Environment suffix used for this deployment'
+    Value: !Ref EnvironmentSuffix
+    Export:
+      Name: !Sub '${AWS::StackName}-EnvironmentSuffix'
+
   ApiEndpoint:
     Description: 'API Gateway endpoint URL'
     Value: !Sub 'https://${ApiGatewayRestApi}.execute-api.${AWS::Region}.amazonaws.com/${ApiGatewayRestApi.Stage}/requests'
