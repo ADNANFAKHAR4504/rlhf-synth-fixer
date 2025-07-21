@@ -229,20 +229,33 @@ Resources:
     Properties:
       Bucket: !Ref CloudTrailLogBucket
       PolicyDocument:
+        Version: '2012-10-17'
         Statement:
-          - Effect: Allow
+          - Sid: AWSCloudTrailAclCheck
+            Effect: Allow
             Principal:
               Service: cloudtrail.amazonaws.com
             Action: s3:GetBucketAcl
             Resource: !GetAtt CloudTrailLogBucket.Arn
-          - Effect: Allow
+          - Sid: AWSCloudTrailWrite
+            Effect: Allow
             Principal:
               Service: cloudtrail.amazonaws.com
             Action: s3:PutObject
-            Resource: !Sub "${CloudTrailLogBucket.Arn}/AWSLogs/${AWS::AccountId}/*"
+            Resource: !Join ['', [!GetAtt CloudTrailLogBucket.Arn, '/AWSLogs/', !Ref 'AWS::AccountId', '/*']]
             Condition:
               StringEquals:
-                "s3:x-amz-acl": "bucket-owner-full-control"
+                s3:x-amz-acl: bucket-owner-full-control
+          - Sid: DenyNonSSLRequests
+            Effect: Deny
+            Principal: '*'
+            Action: s3:*
+            Resource: 
+              - !GetAtt CloudTrailLogBucket.Arn
+              - !Join ['', [!GetAtt CloudTrailLogBucket.Arn, '/*']]
+            Condition:
+              Bool:
+                aws:SecureTransport: false
 
   # IAM Role
   LambdaExecutionRole:
