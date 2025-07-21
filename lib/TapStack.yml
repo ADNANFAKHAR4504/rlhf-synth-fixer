@@ -376,14 +376,52 @@ Resources:
       SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/*/*'
 
 Outputs:
+  # Outputs required for integration tests
   ApiGatewayEndpoint:
     Description: 'URL of the API Gateway endpoint'
     Value: !Sub 'https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${Environment}'
+    Export:
+      Name: !Sub '${AWS::StackName}-ApiGatewayEndpoint'
   
   LambdaFunction:
     Description: 'ARN of the Lambda function'
     Value: !GetAtt HelloWorldFunction.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-LambdaFunction'
   
   LogBucketName:
     Description: 'Name of the S3 bucket for logs'
     Value: !Ref LogBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-LogBucketName'
+
+  # Additional outputs for comprehensive testing and observability
+  HelloWorldFunctionName:
+    Description: 'Name of the Lambda function'
+    Value: !Ref HelloWorldFunction
+    Export:
+      Name: !Sub '${AWS::StackName}-HelloWorldFunctionName'
+  
+  ApiGatewayId:
+    Description: 'ID of the API Gateway'
+    Value: !Ref ApiGateway
+    Export:
+      Name: !Sub '${AWS::StackName}-ApiGatewayId'
+  
+  ApiGatewayStageName:
+    Description: 'Stage name of the API Gateway deployment'
+    Value: !Ref Environment
+    Export:
+      Name: !Sub '${AWS::StackName}-ApiGatewayStageName'
+  
+  LambdaExecutionRoleArn:
+    Description: 'ARN of the Lambda execution role'
+    Value: !GetAtt LambdaExecutionRole.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-LambdaExecutionRoleArn'
+  
+  LogsToS3DeliveryStreamName:
+    Description: 'Name of the Kinesis Firehose delivery stream'
+    Value: !Ref LogsToS3DeliveryStream
+    Export:
+      Name: !Sub '${AWS::StackName}-LogsToS3DeliveryStreamName'
