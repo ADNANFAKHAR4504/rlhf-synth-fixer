@@ -450,7 +450,7 @@ Resources:
   WebACL:
     Type: AWS::WAFv2::WebACL
     Properties:
-      Name: "financial-services-webacl"  # Static name instead of Sub
+      Name: "financialwebacl"  # Static name instead of Sub
       Description: 'Web ACL for protecting web applications'
       Scope: REGIONAL
       DefaultAction:
