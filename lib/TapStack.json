@@ -840,7 +840,7 @@
                     "SampledRequestsEnabled": true,
                     "CloudWatchMetricsEnabled": true,
                     "MetricName": {
-                        "Fn::Sub": "${Project}-webacl"
+                        "Fn::Sub": "${Project}-webacl-metric"
                     }
                 },
                 "Rules": [
@@ -853,7 +853,7 @@
                         "VisibilityConfig": {
                             "SampledRequestsEnabled": true,
                             "CloudWatchMetricsEnabled": true,
-                            "MetricName": "AWS-AWSManagedRulesCommonRuleSetMetric"
+                            "MetricName": "AWSManagedRulesCommonRuleSetMetric"
                         },
                         "Statement": {
                             "ManagedRuleGroupStatement": {
@@ -861,6 +861,26 @@
                                 "Name": "AWSManagedRulesCommonRuleSet",
                                 "ExcludedRules": []
                             }
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "Project"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
                         }
                     }
                 ]
