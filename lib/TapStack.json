@@ -441,7 +441,9 @@
                             "Principal": {
                                 "Service": "cloudtrail.amazonaws.com"
                             },
-                            "Action": "s3:GetBucketAcl",
+                            "Action": [
+                                "s3:GetBucketAcl"
+                            ],
                             "Resource": {
                                 "Fn::GetAtt": [
                                     "CloudTrailLogBucket",
@@ -455,25 +457,43 @@
                             "Principal": {
                                 "Service": "cloudtrail.amazonaws.com"
                             },
-                            "Action": "s3:PutObject",
-                            "Resource": {
-                                "Fn::Join": [
-                                    "",
-                                    [
-                                        {
-                                            "Fn::GetAtt": [
-                                                "CloudTrailLogBucket",
-                                                "Arn"
-                                            ]
-                                        },
-                                        "/AWSLogs/",
-                                        {
-                                            "Ref": "AWS::AccountId"
-                                        },
-                                        "/*"
+                            "Action": [
+                                "s3:PutObject"
+                            ],
+                            "Resource": [
+                                {
+                                    "Fn::Join": [
+                                        "",
+                                        [
+                                            {
+                                                "Fn::GetAtt": [
+                                                    "CloudTrailLogBucket",
+                                                    "Arn"
+                                                ]
+                                            },
+                                            "/AWSLogs/",
+                                            {
+                                                "Ref": "AWS::AccountId"
+                                            },
+                                            "/*"
+                                        ]
                                     ]
-                                ]
-                            },
+                                },
+                                {
+                                    "Fn::Join": [
+                                        "",
+                                        [
+                                            {
+                                                "Fn::GetAtt": [
+                                                    "CloudTrailLogBucket",
+                                                    "Arn"
+                                                ]
+                                            },
+                                            "/AWSLogs/*"
+                                        ]
+                                    ]
+                                }
+                            ],
                             "Condition": {
                                 "StringEquals": {
                                     "s3:x-amz-acl": "bucket-owner-full-control"
