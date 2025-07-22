@@ -1,0 +1,232 @@
+```yaml
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Serverless API stack with Lambda, API Gateway, DynamoDB, and IAM roles
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: 'Environment Configuration'
+        Parameters:
+          - EnvironmentSuffix
+
+Parameters:
+  EnvironmentSuffix:
+    Type: String
+    Default: 'dev'
+    Description: 'Environment suffix for resource naming (e.g., dev, staging, prod)'
+    AllowedPattern: '^[a-zA-Z0-9]+$'
+    ConstraintDescription: 'Must contain only alphanumeric characters'
+  LambdaRuntime:
+    Type: String
+    Description: Lambda runtime environment
+    Default: 'nodejs20.x'
+    AllowedValues:
+      - nodejs20.x
+      - python3.12
+  DynamoDBTableName:
+    Type: String
+    Description: DynamoDB table name
+    Default: 'RequestData'
+
+Resources:
+  TurnAroundPromptTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      TableName: !Sub 'TurnAroundPromptTable${EnvironmentSuffix}'
+      AttributeDefinitions:
+        - AttributeName: 'id'
+          AttributeType: 'S'
+      KeySchema:
+        - AttributeName: 'id'
+          KeyType: 'HASH'
+      BillingMode: PAY_PER_REQUEST
+      DeletionProtectionEnabled: false
+
+  LambdaExecutionRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      # RoleName removed for CAPABILITY_IAM compatibility
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: 'Allow'
+            Principal:
+              Service: 'lambda.amazonaws.com'
+            Action: 'sts:AssumeRole'
+      Policies:
+        - PolicyName: 'LambdaBasicExecution'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: 'Allow'
+                Action:
+                  - 'logs:CreateLogGroup'
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                Resource: 'arn:aws:logs:*:*:*'
+              - Effect: 'Allow'
+                Action:
+                  - 'dynamodb:PutItem'
+                  - 'dynamodb:GetItem'
+                  - 'dynamodb:UpdateItem'
+                  - 'dynamodb:Query'
+                Resource: '*'
+
+  LambdaFunction1:
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      FunctionName: !Sub 'FunctionOne-${EnvironmentSuffix}'
+      Runtime: !Ref LambdaRuntime
+      Handler: 'index.handler'
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Code:
+        ZipFile: |
+          exports.handler = async (event) => {
+            return { statusCode: 200, body: JSON.stringify({ message: "Hello from Function 1" }) };
+          };
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref DynamoDBTable
+
+  LambdaFunction2:
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      FunctionName: !Sub 'FunctionTwo-${EnvironmentSuffix}'
+      Runtime: !Ref LambdaRuntime
+      Handler: 'index.handler'
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Code:
+        ZipFile: |
+          exports.handler = async (event) => {
+            return { statusCode: 200, body: JSON.stringify({ message: "Hello from Function 2" }) };
+          };
+
+  DynamoDBTable:
+    Type: 'AWS::DynamoDB::Table'
+    Properties:
+      TableName: !Sub '${DynamoDBTableName}-${EnvironmentSuffix}'
+      AttributeDefinitions:
+        - AttributeName: 'RequestId'
+          AttributeType: 'S'
+      KeySchema:
+        - AttributeName: 'RequestId'
+          KeyType: 'HASH'
+      BillingMode: PAY_PER_REQUEST
+
+  ApiGatewayRestApi:
+    Type: 'AWS::ApiGateway::RestApi'
+    Properties:
+      Name: !Sub 'ServerlessAPI-${EnvironmentSuffix}'
+
+  ApiGatewayResource:
+    Type: 'AWS::ApiGateway::Resource'
+    Properties:
+      ParentId: !GetAtt ApiGatewayRestApi.RootResourceId
+      PathPart: 'requests'
+      RestApiId: !Ref ApiGatewayRestApi
+
+  ApiGatewayMethod1:
+    Type: 'AWS::ApiGateway::Method'
+    Properties:
+      HttpMethod: 'GET'
+      ResourceId: !Ref ApiGatewayResource
+      RestApiId: !Ref ApiGatewayRestApi
+      AuthorizationType: 'NONE'
+      Integration:
+        IntegrationHttpMethod: 'POST'
+        Type: 'AWS_PROXY'
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaFunction1.Arn}/invocations'
+
+  ApiGatewayMethod2:
+    Type: 'AWS::ApiGateway::Method'
+    Properties:
+      HttpMethod: 'POST'
+      ResourceId: !Ref ApiGatewayResource
+      RestApiId: !Ref ApiGatewayRestApi
+      AuthorizationType: 'NONE'
+      Integration:
+        IntegrationHttpMethod: 'POST'
+        Type: 'AWS_PROXY'
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaFunction2.Arn}/invocations'
+
+  LambdaPermission1:
+    Type: 'AWS::Lambda::Permission'
+    Properties:
+      Action: 'lambda:InvokeFunction'
+      FunctionName: !GetAtt LambdaFunction1.Arn
+      Principal: 'apigateway.amazonaws.com'
+
+  LambdaPermission2:
+    Type: 'AWS::Lambda::Permission'
+    Properties:
+      Action: 'lambda:InvokeFunction'
+      FunctionName: !GetAtt LambdaFunction2.Arn
+      Principal: 'apigateway.amazonaws.com'
+
+  ApiGatewayDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn:
+      - ApiGatewayMethod1
+      - ApiGatewayMethod2
+    Properties:
+      RestApiId: !Ref ApiGatewayRestApi
+
+  ApiGatewayStage:
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      StageName: prod
+      RestApiId: !Ref ApiGatewayRestApi
+      DeploymentId: !Ref ApiGatewayDeployment
+
+Outputs:
+  TurnAroundPromptTableName:
+    Description: 'Name of the DynamoDB table'
+    Value: !Ref TurnAroundPromptTable
+    Export:
+      Name: !Sub '${AWS::StackName}-TurnAroundPromptTableName'
+
+  TurnAroundPromptTableArn:
+    Description: 'ARN of the DynamoDB table'
+    Value: !GetAtt TurnAroundPromptTable.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-TurnAroundPromptTableArn'
+
+  StackName:
+    Description: 'Name of this CloudFormation stack'
+    Value: !Ref AWS::StackName
+    Export:
+      Name: !Sub '${AWS::StackName}-StackName'
+
+  EnvironmentSuffix:
+    Description: 'Environment suffix used for this deployment'
+    Value: !Ref EnvironmentSuffix
+    Export:
+      Name: !Sub '${AWS::StackName}-EnvironmentSuffix'
+
+  ApiEndpoint:
+    Description: 'API Gateway endpoint URL'
+    Value: !Sub 'https://${ApiGatewayRestApi}.execute-api.${AWS::Region}.amazonaws.com/prod/requests'
+
+  Function1Arn:
+    Description: 'ARN of Lambda Function 1'
+    Value: !GetAtt LambdaFunction1.Arn
+
+  Function2Arn:
+    Description: 'ARN of Lambda Function 2'
+    Value: !GetAtt LambdaFunction2.Arn
+
+  DynamoDBTableArn:
+    Description: 'DynamoDB Table ARN'
+    Value: !GetAtt DynamoDBTable.Arn
+
+  DynamoDBTableNameOutput:
+    Description: 'DynamoDB Table Name'
+    Value: !Ref DynamoDBTable
+
+  ExecutionRoleName:
+    Description: 'Lambda Execution Role Name'
+    Value: !Ref LambdaExecutionRole
+```
