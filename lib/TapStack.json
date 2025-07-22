@@ -373,7 +373,7 @@
                     "ServerSideEncryptionConfiguration": [
                         {
                             "ServerSideEncryptionByDefault": {
-                                "SSEAlgorithm": "aws:kms"
+                                "SSEAlgorithm": "AES256"
                             }
                         }
                     ]
@@ -404,6 +404,31 @@
                         }
                     }
                 ]
+            }
+        },
+        "ConfigDeliveryChannel": {
+            "Type": "AWS::Config::DeliveryChannel",
+            "Properties": {
+                "S3BucketName": {
+                    "Ref": "SecureS3Bucket"
+                }
+            }
+        },
+        "ConfigRecorder": {
+            "Type": "AWS::Config::ConfigurationRecorder",
+            "DependsOn": "ConfigDeliveryChannel",
+            "Properties": {
+                "Name": "default",
+                "RoleARN": {
+                    "Fn::GetAtt": [
+                        "ConfigRole",
+                        "Arn"
+                    ]
+                },
+                "RecordingGroup": {
+                    "AllSupported": true,
+                    "IncludeGlobalResourceTypes": true
+                }
             }
         },
         "CloudTrailLogBucket": {
@@ -574,21 +599,6 @@
                         }
                     }
                 ]
-            }
-        },
-        "ConfigRecorder": {
-            "Type": "AWS::Config::ConfigurationRecorder",
-            "Properties": {
-                "Name": "configRecorder",
-                "RoleARN": {
-                    "Fn::GetAtt": [
-                        "ConfigRole",
-                        "Arn"
-                    ]
-                },
-                "RecordingGroup": {
-                    "AllSupported": true
-                }
             }
         },
         "ConfigRole": {
@@ -774,6 +784,31 @@
                             "Action": "s3:GetObject",
                             "Resource": {
                                 "Fn::Sub": "${SecureS3Bucket.Arn}/*"
+                            }
+                        },
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "config.amazonaws.com"
+                            },
+                            "Action": [
+                                "s3:GetBucketAcl",
+                                "s3:PutObject"
+                            ],
+                            "Resource": [
+                                {
+                                    "Fn::Sub": "arn:aws:s3:::${SecureS3Bucket}"
+                                },
+                                {
+                                    "Fn::Sub": "${SecureS3Bucket.Arn}/*"
+                                }
+                            ],
+                            "Condition": {
+                                "StringEquals": {
+                                    "aws:SourceAccount": {
+                                        "Ref": "AWS::AccountId"
+                                    }
+                                }
                             }
                         }
                     ]
