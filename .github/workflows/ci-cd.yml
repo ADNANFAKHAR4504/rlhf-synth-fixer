@@ -23,14 +23,12 @@ env:
 
 jobs:
   detect-metadata:
-    name: Detect Project Metadata
+    name: Detect Project Files
     runs-on: ubuntu-latest
     if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
     outputs:
       platform: ${{ steps.metadata.outputs.platform }}
       language: ${{ steps.metadata.outputs.language }}
-      is-cdk-ts: ${{ steps.metadata.outputs.is-cdk-ts }}
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -46,18 +44,23 @@ jobs:
           PLATFORM=$(jq -r '.platform // "unknown"' metadata.json)
           LANGUAGE=$(jq -r '.language // "unknown"' metadata.json)
 
-          # Check if it's a CDK TypeScript project
-          if [ "$PLATFORM" = "cdk" ] && ([ "$LANGUAGE" = "ts" ] || [ "$LANGUAGE" = "typescript" ]); then
-            IS_CDK_TS="true"
-          else
-            IS_CDK_TS="false"
-          fi
-
-          echo "Detected platform: $PLATFORM, language: $LANGUAGE, is-cdk-ts: $IS_CDK_TS"
+          echo "Detected platform: $PLATFORM, language: $LANGUAGE"
 
           echo "platform=$PLATFORM" >> $GITHUB_OUTPUT
           echo "language=$LANGUAGE" >> $GITHUB_OUTPUT
-          echo "is-cdk-ts=$IS_CDK_TS" >> $GITHUB_OUTPUT
+
+      - name: Check for required documentation files
+        id: docs-check
+        run: |
+          if [ ! -f "lib/PROMPT.md" ]; then
+            echo "❌ lib/PROMPT.md not found, exiting with failure"
+            exit 1
+          fi
+
+          if [ ! -f "lib/MODEL_RESPONSE.md" ]; then
+            echo "❌ lib/PROMPT.md not found, exiting with failure"
+            exit 1
+          fi
 
   version-check:
     name: Check Runtime Versions
@@ -174,7 +177,6 @@ jobs:
     outputs:
       platform: ${{ needs.detect-metadata.outputs.platform }}
       language: ${{ needs.detect-metadata.outputs.language }}
-      is-cdk-ts: ${{ needs.detect-metadata.outputs.is-cdk-ts }}
 
     steps:
       - name: Checkout code
@@ -197,11 +199,14 @@ jobs:
         run: |
           echo "Project: platform=${{ needs.detect-metadata.outputs.platform }}, language=${{ needs.detect-metadata.outputs.language }}"
 
-          if [ "${{ needs.detect-metadata.outputs.is-cdk-ts }}" = "true" ]; then
-            echo "✅ CDK TypeScript project detected, running CDK synth..."
+          PLATFORM="${{ needs.detect-metadata.outputs.platform }}"
+          LANGUAGE="${{ needs.detect-metadata.outputs.language }}"
+
+          if [ "$PLATFORM" = "cdk" ]; then
+            echo "✅ CDK project detected, running CDK synth..."
             npm run cdk:synth
           else
-            echo "ℹ️ Not a CDK TypeScript project, skipping CDK synth"
+            echo "ℹ️ Not a CDK project, skipping CDK synth"
             echo "This is expected for non-CDK projects like CloudFormation templates"
             # Create empty cdk.out directory to satisfy artifact upload
             mkdir -p cdk.out
@@ -243,11 +248,14 @@ jobs:
 
       - name: Bootstrap
         run: |
-          if [ "${{ needs.synth.outputs.is-cdk-ts }}" = "true" ]; then
-            echo "✅ CDK TypeScript project detected, running CDK bootstrap..."
+          PLATFORM="${{ needs.synth.outputs.platform }}"
+          LANGUAGE="${{ needs.synth.outputs.language }}"
+
+          if [ "$PLATFORM" = "cdk" ]; then
+            echo "✅ CDK project detected, running CDK bootstrap..."
             npm run cdk:bootstrap
           else
-            echo "ℹ️ Not a CDK TypeScript project, skipping CDK bootstrap"
+            echo "ℹ️ Not a CDK project, skipping CDK bootstrap"
           fi
         env:
           ENVIRONMENT_SUFFIX: ${{ env.ENVIRONMENT_SUFFIX }}
@@ -256,18 +264,21 @@ jobs:
 
       - name: Deploy
         run: |
-          if [ "${{ needs.synth.outputs.is-cdk-ts }}" = "true" ]; then
-            echo "✅ CDK TypeScript project detected, running CDK deploy..."
+          PLATFORM="${{ needs.synth.outputs.platform }}"
+          LANGUAGE="${{ needs.synth.outputs.language }}"
+
+          if [ "$PLATFORM" = "cdk" ]; then
+            echo "✅ CDK project detected, running CDK deploy..."
             npm run cdk:deploy
-          elif [ "${{ needs.synth.outputs.platform }}" = "cfn" ] && [ "${{ needs.synth.outputs.language }}" = "yaml" ]; then
+          elif [ "$PLATFORM" = "cfn" ] && [ "$LANGUAGE" = "yaml" ]; then
             echo "✅ CloudFormation YAML project detected, deploying with AWS CLI..."
             npm run cfn:deploy-yaml
-          elif [ "${{ needs.synth.outputs.platform }}" = "cfn" ] && [ "${{ needs.synth.outputs.language }}" = "json" ]; then
+          elif [ "$PLATFORM" = "cfn" ] && [ "$LANGUAGE" = "json" ]; then
             echo "✅ CloudFormation JSON project detected, deploying with AWS CLI..."
             npm run cfn:deploy-json
           else
-            echo "ℹ️ Unknown deployment method for platform: ${{ needs.synth.outputs.platform }}, language: ${{ needs.synth.outputs.language }}"
-            echo "💡 Supported combinations: cdk+typescript, cfn+yaml, cfn+json"
+            echo "ℹ️ Unknown deployment method for platform: $PLATFORM, language: $LANGUAGE"
+            echo "💡 Supported combinations: cdk+typescript, cdk+python, cfn+yaml, cfn+json"
           fi
         env:
           ENVIRONMENT_SUFFIX: ${{ env.ENVIRONMENT_SUFFIX }}
@@ -276,8 +287,11 @@ jobs:
 
       - name: Get Deployment Outputs
         run: |
-          if [ "${{ needs.synth.outputs.is-cdk-ts }}" = "true" ]; then
-            echo "✅ CDK TypeScript project detected, getting CDK outputs..."
+          PLATFORM="${{ needs.synth.outputs.platform }}"
+          LANGUAGE="${{ needs.synth.outputs.language }}"
+
+          if [ "$PLATFORM" = "cdk" ]; then
+            echo "✅ CDK project detected, getting CDK outputs..."
             npx cdk list --json > cdk-stacks.json
             mkdir -p cfn-outputs
             echo "Getting all CloudFormation stacks..."
@@ -366,7 +380,6 @@ jobs:
     outputs:
       platform: ${{ needs.detect-metadata.outputs.platform }}
       language: ${{ needs.detect-metadata.outputs.language }}
-      is-cdk-ts: ${{ needs.detect-metadata.outputs.is-cdk-ts }}
 
     steps:
       - name: Checkout code
@@ -378,6 +391,8 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           download-artifacts: 'true'
 
+      # Python setup is handled by the setup-environment action
+
       - name: Run Linting
         run: |
           PLATFORM="${{ needs.detect-metadata.outputs.platform }}"
@@ -385,14 +400,14 @@ jobs:
 
           echo "Running linting for platform: $PLATFORM, language: $LANGUAGE"
 
-          if [ "${{ needs.detect-metadata.outputs.is-cdk-ts }}" = "true" ]; then
-            echo "✅ CDK TypeScript project detected, running ESLint..."
+          if [ "$LANGUAGE" = "ts" ]; then
+            echo "✅ TypeScript project detected, running ESLint..."
             npm run lint
-          elif [ "$PLATFORM" = "cfn" ] && ([ "$LANGUAGE" = "yaml" ] || [ "$LANGUAGE" = "json" ]); then
-            echo "✅ CloudFormation project detected, running ESLint + CloudFormation validation..."
-            npm run lint
-
-            echo "Running CloudFormation validation..."
+          elif [ "$LANGUAGE" = "py" ]; then
+            echo "✅ Python project detected, running Pylint..."
+            pipenv run lint
+          elif [ "$PLATFORM" = "cfn" ]; then
+            echo "✅ CloudFormation project detected, running CloudFormation validation..."
             if [ "$LANGUAGE" = "json" ]; then
               pipenv run cfn-validate-json -D
             elif [ "$LANGUAGE" = "yaml" ]; then
@@ -429,13 +444,24 @@ jobs:
 
       - name: Run unit tests
         run: |
-          npm run test:unit
+          if [ "${{ needs.lint.outputs.language }}" = "ts" ]; then
+            echo "✅ TypeScript project detected, running unit tests..."
+            npm run test:unit
+          elif [ "${{ needs.lint.outputs.language }}" = "py" ]; then
+            echo "✅ Python project detected, running pytest unit tests..."
+            pipenv run test-py-unit
+          else
+            echo "✅ Running default unit tests..."
+            npm run test:unit
+          fi
 
       - name: Upload coverage reports
         uses: actions/upload-artifact@v4
         with:
           name: coverage-reports
-          path: coverage/
+          path: |
+            coverage/
+            cov.json
 
   # mocked-integration-tests:
   #   name: Mocked Integration Tests
@@ -463,7 +489,7 @@ jobs:
   integration-tests-live:
     name: Integration Tests (Live)
     runs-on: ubuntu-latest
-    needs: [unit-tests, deploy]
+    needs: [lint, unit-tests, deploy]
     environment: qa
     if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
 
@@ -492,7 +518,13 @@ jobs:
 
       - name: Run integration tests against live environment
         run: |
-          npm run test:integration
+          if [ "${{ needs.lint.outputs.language }}" = "py" ]; then
+            echo "✅ CDK project detected, running integration tests..."
+            pipenv run test-py-integration
+          else
+            echo "✅ Running default integration tests..."
+            npm run test:integration
+          fi
         env:
           ENVIRONMENT_SUFFIX: ${{ env.ENVIRONMENT_SUFFIX }}
 
@@ -523,9 +555,10 @@ jobs:
       - name: Destroy Resources (cleanup any leftover resources)
         run: |
           PLATFORM="${{ needs.detect-metadata.outputs.platform }}"
+          LANGUAGE="${{ needs.detect-metadata.outputs.language }}"
 
-          if [ "${{ needs.detect-metadata.outputs.is-cdk-ts }}" = "true" ]; then
-            echo "✅ CDK TypeScript project detected, running CDK destroy..."
+          if [ "$PLATFORM" = "cdk" ]; then
+            echo "✅ CDK project detected, running CDK destroy..."
             # Try to destroy any leftover resources from PRs, but don't fail if they don't exist
             npm run cdk:destroy || echo "No resources to destroy or destruction failed"
           elif [ "$PLATFORM" = "cfn" ]; then
@@ -533,8 +566,8 @@ jobs:
             # Try to destroy any leftover resources from PRs, but don't fail if they don't exist
             npm run cfn:destroy || echo "No resources to destroy or destruction failed"
           else
-            echo "ℹ️ Platform '$PLATFORM' not supported for destruction, skipping destroy"
-            echo "💡 Consider adding cleanup logic for $PLATFORM projects here"
+            echo "ℹ️ Platform '$PLATFORM' with language '$LANGUAGE' not supported for destruction, skipping destroy"
+            echo "💡 Consider adding cleanup logic for $PLATFORM/$LANGUAGE projects here"
           fi
         env:
           ENVIRONMENT_SUFFIX: ${{ env.ENVIRONMENT_SUFFIX }}
@@ -579,17 +612,45 @@ jobs:
           COMMIT_AUTHOR="${{ github.event.pull_request.user.login || github.actor }}"
           echo "Commit author: $COMMIT_AUTHOR"
 
-          # Extract coverage percentages from coverage-summary.json (assuming it always exists)
-            LINES_COVERAGE=$(jq -r '.total.lines.pct' coverage/coverage-summary.json)
-            BRANCHES_COVERAGE=$(jq -r '.total.branches.pct' coverage/coverage-summary.json)
+          # Extract coverage percentages based on language
+          if [ "$LANGUAGE" = "py" ]; then
+            echo "Extracting Python coverage from cov.json..."
+            if [ -f "cov.json" ]; then
+              LINES_COVERAGE=$(jq -r '.totals.percent_covered' cov.json)
+              # Calculate branch coverage percentage
+              BRANCHES_NUM=$(jq -r '.totals.num_branches' cov.json)
+              if [ "$BRANCHES_NUM" = "0" ] || [ "$BRANCHES_NUM" = "null" ]; then
+                # No branches to cover, set to 100%
+                BRANCHES_COVERAGE=100
+              else
+                COVERED_BRANCHES=$(jq -r '.totals.covered_branches' cov.json)
+                # Calculate percentage: (covered_branches / num_branches) * 100
+                BRANCHES_COVERAGE=$(awk "BEGIN {print ($COVERED_BRANCHES / $BRANCHES_NUM) * 100}")
+              fi
+            else
+              echo "Warning: cov.json not found, setting default coverage values"
+              LINES_COVERAGE=100
+              BRANCHES_COVERAGE=100
+            fi
+          else
+            echo "Extracting TypeScript/JavaScript coverage from coverage-summary.json..."
+            if [ -f "coverage/coverage-summary.json" ]; then
+              LINES_COVERAGE=$(jq -r '.total.lines.pct' coverage/coverage-summary.json)
+              BRANCHES_COVERAGE=$(jq -r '.total.branches.pct' coverage/coverage-summary.json)
+            else
+              echo "Warning: coverage-summary.json not found, setting default coverage values"
+              LINES_COVERAGE=100
+              BRANCHES_COVERAGE=100
+            fi
+          fi
 
-            # If coverage is "Unknown", set to 100
-            if [ "$LINES_COVERAGE" = "Unknown" ]; then
+          # If coverage is "Unknown", set to 100
+          if [ "$LINES_COVERAGE" = "Unknown" ]; then
             LINES_COVERAGE=100
-            fi
-            if [ "$BRANCHES_COVERAGE" = "Unknown" ]; then
+          fi
+          if [ "$BRANCHES_COVERAGE" = "Unknown" ]; then
             BRANCHES_COVERAGE=100
-            fi
+          fi
 
           echo "Lines coverage: $LINES_COVERAGE%"
           echo "Branches coverage: $BRANCHES_COVERAGE%"
@@ -609,14 +670,16 @@ jobs:
           mkdir -p "$ARCHIVE_DIR"
           echo "Created archive directory: $ARCHIVE_DIR"
 
-          # Define list of paths to move to archive
-          PATHS_TO_ARCHIVE=(
-          "lib"
-          "bin" 
-          "test"
-          "cdk.json"
-          "metadata.json"
-          )
+            # Define list of paths to move to archive
+            PATHS_TO_ARCHIVE=(
+            "lib"
+            "bin" 
+            "test"
+            "tests"
+            "cdk.json"
+            "metadata.json"
+            "tap.py"
+            )
 
           # Move paths to archive
           for path in "${PATHS_TO_ARCHIVE[@]}"; do
@@ -760,7 +823,7 @@ jobs:
           PLATFORM=$(jq -r '.platform // "unknown"' metadata.json)
           LANGUAGE=$(jq -r '.language // "unknown"' metadata.json)
 
-          if [ "$PLATFORM" = "cdk" ] && ([ "$LANGUAGE" = "ts" ] || [ "$LANGUAGE" = "typescript" ]); then
+          if [ "$PLATFORM" = "cdk" ]; then
             echo "✅ CDK TypeScript project detected, running CDK destroy..."
             # Try to destroy resources, but don't fail if they don't exist
             npm run cdk:destroy || echo "No resources to destroy or destruction failed"

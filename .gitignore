@@ -67,3 +67,9 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+
+.coverage
+coverage.xml
+cov.json
+
+cfn-outputs/*
