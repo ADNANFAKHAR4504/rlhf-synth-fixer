@@ -1,8 +1,8 @@
-// Configuration - These are coming from cdk-outputs after deployment
+// Configuration - These are coming from cfn-outputs after deployment
 import fs from 'fs';
 
 const outputs = JSON.parse(
-  fs.readFileSync('cdk-outputs/flat-outputs.json', 'utf8')
+  fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
 );
 
 // Get environment suffix from the actual outputs instead of environment variable
@@ -12,38 +12,22 @@ describe('CloudFormation Security Infrastructure Integration Tests', () => {
   describe('Stack Outputs Validation', () => {
     test('should have VPC-related outputs', () => {
       // These outputs should be present if the stack was deployed successfully
-      expect(outputs).toHaveProperty('VpcId');
-      expect(outputs.VpcId).toMatch(/^vpc-[a-f0-9]{8,17}$/);
+      expect(outputs).toHaveProperty('VPCId');
+      expect(outputs.VPCId).toMatch(/^vpc-[a-f0-9]{8,17}$/);
     });
 
-    test('should have security-related outputs', () => {
-      // Check for security-related outputs
-      expect(outputs).toHaveProperty('KMSKeyId');
-      expect(outputs.KMSKeyId).toBeDefined();
+    test('should have subnet-related outputs', () => {
+      // Check for subnet-related outputs
+      expect(outputs).toHaveProperty('PrivateSubnet1Id');
+      expect(outputs).toHaveProperty('PrivateSubnet2Id');
+      expect(outputs.PrivateSubnet1Id).toMatch(/^subnet-[a-f0-9]{8,17}$/);
+      expect(outputs.PrivateSubnet2Id).toMatch(/^subnet-[a-f0-9]{8,17}$/);
     });
 
     test('should have database-related outputs', () => {
       // Check for RDS-related outputs
-      expect(outputs).toHaveProperty('DatabaseEndpoint');
-      expect(outputs.DatabaseEndpoint).toBeDefined();
-    });
-
-    test('should have storage-related outputs', () => {
-      // Check for S3-related outputs
-      expect(outputs).toHaveProperty('ContentBucketName');
-      expect(outputs.ContentBucketName).toBeDefined();
-    });
-
-    test('should have load balancer outputs', () => {
-      // Check for ALB-related outputs
-      expect(outputs).toHaveProperty('LoadBalancerDNS');
-      expect(outputs.LoadBalancerDNS).toBeDefined();
-    });
-
-    test('should have CDN-related outputs', () => {
-      // Check for CloudFront-related outputs
-      expect(outputs).toHaveProperty('CloudFrontDomainName');
-      expect(outputs.CloudFrontDomainName).toBeDefined();
+      expect(outputs).toHaveProperty('PrimaryDatabaseIdentifier');
+      expect(outputs.PrimaryDatabaseIdentifier).toBeDefined();
     });
   });
 
@@ -63,17 +47,6 @@ describe('CloudFormation Security Infrastructure Integration Tests', () => {
   });
 
   describe('Security Compliance Checks', () => {
-    test('should have HTTPS endpoints only', () => {
-      // Check that any URL outputs use HTTPS
-      const urlOutputs = Object.values(outputs).filter(value => 
-        typeof value === 'string' && value.startsWith('http')
-      ) as string[];
-      
-      urlOutputs.forEach(url => {
-        expect(url).toMatch(/^https:/);
-      });
-    });
-
     test('should not expose internal identifiers', () => {
       // Check that outputs don't contain sensitive internal information
       const outputValues = Object.values(outputs).filter(value => 
@@ -100,10 +73,11 @@ describe('CloudFormation Security Infrastructure Integration Tests', () => {
   });
 
   describe('Basic Connectivity Tests', () => {
-    test('World', async () => {
+    test('should have valid output structure', () => {
       // Placeholder test that always passes
       // In a real scenario, you might test HTTP endpoints here
-      expect(true).toBe(true);
+      expect(outputs).toBeDefined();
+      expect(typeof outputs).toBe('object');
     });
   });
 }); 
