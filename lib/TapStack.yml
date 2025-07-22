@@ -219,15 +219,15 @@ Resources:
     Properties:
       S3BucketName: !Ref SecureS3Bucket
 
-  ConfigRecorder:
-    Type: AWS::Config::ConfigurationRecorder
-    DependsOn: ConfigDeliveryChannel
-    Properties:
-      Name: default
-      RoleARN: !GetAtt ConfigRole.Arn
-      RecordingGroup:
-        AllSupported: true
-        IncludeGlobalResourceTypes: true
+  # ConfigRecorder:
+  #   Type: AWS::Config::ConfigurationRecorder
+  #   DependsOn: ConfigDeliveryChannel
+  #   Properties:
+  #     Name: default
+  #     RoleARN: !GetAtt ConfigRole.Arn
+  #     RecordingGroup:
+  #       AllSupported: true
+  #       IncludeGlobalResourceTypes: true
 
   # CloudTrail S3 Bucket (dedicated, secure, encrypted)
   CloudTrailLogBucket:
@@ -326,14 +326,14 @@ Resources:
         - Key: Owner
           Value: !Ref Owner
 
-  # # AWS Config
-  # ConfigRecorder:
-  #   Type: AWS::Config::ConfigurationRecorder
-  #   Properties:
-  #     Name: configRecorder
-  #     RoleARN: !GetAtt ConfigRole.Arn
-  #     RecordingGroup:
-  #       AllSupported: true
+  # AWS Config
+  ConfigRecorder:
+    Type: AWS::Config::ConfigurationRecorder
+    Properties:
+      Name: configRecorder
+      RoleARN: !GetAtt ConfigRole.Arn
+      RecordingGroup:
+        AllSupported: true
 
   ConfigRole:
     Type: AWS::IAM::Role

@@ -414,23 +414,6 @@
                 }
             }
         },
-        "ConfigRecorder": {
-            "Type": "AWS::Config::ConfigurationRecorder",
-            "DependsOn": "ConfigDeliveryChannel",
-            "Properties": {
-                "Name": "default",
-                "RoleARN": {
-                    "Fn::GetAtt": [
-                        "ConfigRole",
-                        "Arn"
-                    ]
-                },
-                "RecordingGroup": {
-                    "AllSupported": true,
-                    "IncludeGlobalResourceTypes": true
-                }
-            }
-        },
         "CloudTrailLogBucket": {
             "Type": "AWS::S3::Bucket",
             "Properties": {
@@ -599,6 +582,21 @@
                         }
                     }
                 ]
+            }
+        },
+        "ConfigRecorder": {
+            "Type": "AWS::Config::ConfigurationRecorder",
+            "Properties": {
+                "Name": "configRecorder",
+                "RoleARN": {
+                    "Fn::GetAtt": [
+                        "ConfigRole",
+                        "Arn"
+                    ]
+                },
+                "RecordingGroup": {
+                    "AllSupported": true
+                }
             }
         },
         "ConfigRole": {
