@@ -20,6 +20,12 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
       expect(typedTemplate.Parameters.DeploymentType.AllowedValues).toEqual(['Primary', 'Replica']);
       expect(typedTemplate.Parameters.DeploymentType.Description).toContain('Choose "Primary" for your main region');
     });
+    test('should define EnvironmentSuffix parameter with correct properties', () => {
+      expect(typedTemplate.Parameters.EnvironmentSuffix).toBeDefined();
+      expect(typedTemplate.Parameters.EnvironmentSuffix.Type).toBe('String');
+      expect(typedTemplate.Parameters.EnvironmentSuffix.Description).toContain('Suffix for naming');
+      expect(typedTemplate.Parameters.EnvironmentSuffix.Default).toBe('dev');
+    });
     test('should define DomainName parameter', () => {
       expect(typedTemplate.Parameters.DomainName).toBeDefined();
       expect(typedTemplate.Parameters.DomainName.Type).toBe('String');
@@ -34,6 +40,7 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
       expect(typedTemplate.Parameters.PrimaryDbIdentifier).toBeDefined();
       expect(typedTemplate.Parameters.PrimaryDbIdentifier.Type).toBe('String');
       expect(typedTemplate.Parameters.PrimaryDbIdentifier.Description).toContain('DB Identifier of the primary RDS instance');
+      expect(typedTemplate.Parameters.PrimaryDbIdentifier.Default).toBe('');
     });
     test('should define PrimaryRegion parameter with correct default', () => {
       expect(typedTemplate.Parameters.PrimaryRegion).toBeDefined();
@@ -69,6 +76,7 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
       const coreGroup = typedTemplate.Metadata['AWS::CloudFormation::Interface'].ParameterGroups[0];
       expect(coreGroup.Label.default).toBe('Core Deployment Configuration');
       expect(coreGroup.Parameters).toContain('DeploymentType');
+      expect(coreGroup.Parameters).toContain('EnvironmentSuffix');
     });
     test('should have Primary Deployment Settings parameter group', () => {
       const primaryGroup = typedTemplate.Metadata['AWS::CloudFormation::Interface'].ParameterGroups[1];
@@ -290,7 +298,7 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
         expect(typedTemplate.Resources.DBSecret.Type).toBe('AWS::SecretsManager::Secret');
         expect(typedTemplate.Resources.DBSecret.Condition).toBe('IsPrimaryDeployment');
         expect(typedTemplate.Resources.DBSecret.Properties.Name['Fn::Sub']).toBe('${EnvironmentSuffix}/rds-credentials');
-        expect(typedTemplate.Resources.DBSecret.Properties.SecretString).toBe('{"username": "admin", "password": "admin1234"}');
+        expect(typedTemplate.Resources.DBSecret.Properties.SecretString).toBe('{"username": "dbadmin", "password": "admin1234"}');
       });
       test('should define PrimaryDBSubnetGroup with correct subnets', () => {
         expect(typedTemplate.Resources.PrimaryDBSubnetGroup).toBeDefined();
@@ -314,7 +322,7 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
         expect(typedTemplate.Resources.PrimaryDBInstance.Condition).toBe('IsPrimaryDeployment');
         expect(typedTemplate.Resources.PrimaryDBInstance.Properties.DBInstanceIdentifier['Fn::Sub']).toBe('${EnvironmentSuffix}-primary-db-${AWS::Region}');
         expect(typedTemplate.Resources.PrimaryDBInstance.Properties.Engine).toBe('mysql');
-        expect(typedTemplate.Resources.PrimaryDBInstance.Properties.EngineVersion).toBe('8.0');
+        expect(typedTemplate.Resources.PrimaryDBInstance.Properties.EngineVersion).toBe('8.0.35');
         expect(typedTemplate.Resources.PrimaryDBInstance.Properties.DBInstanceClass).toBe('db.t3.micro');
         expect(typedTemplate.Resources.PrimaryDBInstance.Properties.AllocatedStorage).toBe('20');
         expect(typedTemplate.Resources.PrimaryDBInstance.Properties.MasterUsername['Fn::Sub']).toBe('{{resolve:secretsmanager:${DBSecret}:SecretString:username}}');
@@ -348,7 +356,8 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
       expect(typedTemplate.Resources.RDSReadReplica.Properties.DBSubnetGroupName.Ref).toBe('ReplicaDBSubnetGroup');
       expect(typedTemplate.Resources.RDSReadReplica.Properties.SourceDBInstanceIdentifier.Ref).toBe('PrimaryDbIdentifier');
       expect(typedTemplate.Resources.RDSReadReplica.Properties.SourceRegion.Ref).toBe('PrimaryRegion');
-      expect(typedTemplate.Resources.RDSReadReplica.Properties.StorageEncrypted).toBe(true);
+      // StorageEncrypted should not be present for read replicas
+      expect(typedTemplate.Resources.RDSReadReplica.Properties.StorageEncrypted).toBeUndefined();
     });
   });
 

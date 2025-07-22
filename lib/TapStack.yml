@@ -8,6 +8,10 @@ Parameters:
     AllowedValues:
       - Primary
       - Replica
+  EnvironmentSuffix:
+    Type: String
+    Description: 'Suffix for naming (e.g., dev, pr42)'
+    Default: 'dev'
   DomainName:
     Type: String
     Description: '(Required for Primary) The apex domain name for your application (e.g., example.com).'
@@ -17,6 +21,7 @@ Parameters:
   PrimaryDbIdentifier:
     Type: String
     Description: '(Required for Replica) The DB Identifier of the primary RDS instance (e.g., prod-primary-db-us-east-1).'
+    Default: ''
   PrimaryRegion:
     Type: String
     Description: '(Required for Replica) The AWS Region of the source/primary database.'
@@ -33,6 +38,7 @@ Metadata:
           default: 'Core Deployment Configuration'
         Parameters:
           - DeploymentType
+          - EnvironmentSuffix
       - Label:
           default: 'Primary Deployment Settings (Only used if DeploymentType is Primary)'
         Parameters:
@@ -250,7 +256,7 @@ Resources:
     Condition: IsPrimaryDeployment
     Properties:
       Name: !Sub '${EnvironmentSuffix}/rds-credentials'
-      SecretString: '{"username": "admin", "password": "admin1234"}'
+      SecretString: '{"username": "dbadmin", "password": "admin1234"}'
 
   PrimaryDBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
@@ -274,7 +280,7 @@ Resources:
     Properties:
       DBInstanceIdentifier: !Sub '${EnvironmentSuffix}-primary-db-${AWS::Region}'
       Engine: 'mysql'
-      EngineVersion: '8.0'
+      EngineVersion: '8.0.35'
       DBInstanceClass: 'db.t3.micro'
       AllocatedStorage: '20'
       MasterUsername: !Sub '{{resolve:secretsmanager:${DBSecret}:SecretString:username}}'
@@ -307,7 +313,6 @@ Resources:
       DBSubnetGroupName: !Ref ReplicaDBSubnetGroup
       SourceDBInstanceIdentifier: !Ref PrimaryDbIdentifier
       SourceRegion: !Ref PrimaryRegion
-      StorageEncrypted: true # Must match the source
 
 Outputs:
   PrimaryDatabaseIdentifier:
