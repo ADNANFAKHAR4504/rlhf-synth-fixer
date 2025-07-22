@@ -426,6 +426,126 @@
         }
     },
     "Outputs": {
+        "VpcId": {
+            "Description": "The ID of the created VPC",
+            "Value": {
+                "Ref": "VpcR1"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-VPCID"
+                }
+            }
+        },
+        "PublicSubnetIds": {
+            "Description": "A comma-delimited list of the Public Subnet IDs",
+            "Value": {
+                "Fn::Join": [
+                    ",",
+                    [
+                        {
+                            "Ref": "PublicSubnet1R1"
+                        },
+                        {
+                            "Ref": "PublicSubnet2R1"
+                        }
+                    ]
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-PublicSubnets"
+                }
+            }
+        },
+        "PrivateSubnetIds": {
+            "Description": "A comma-delimited list of the Private Subnet IDs",
+            "Value": {
+                "Fn::Join": [
+                    ",",
+                    [
+                        {
+                            "Ref": "PrivateSubnet1R1"
+                        },
+                        {
+                            "Ref": "PrivateSubnet2R1"
+                        }
+                    ]
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-PrivateSubnets"
+                }
+            }
+        },
+        "AlbSecurityGroupId": {
+            "Description": "The ID of the Application Load Balancer Security Group",
+            "Value": {
+                "Fn::GetAtt": [
+                    "AlbSgR1",
+                    "GroupId"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-AlbSgId"
+                }
+            }
+        },
+        "AppSecurityGroupId": {
+            "Description": "The ID of the Application Security Group",
+            "Value": {
+                "Fn::GetAtt": [
+                    "AppSgR1",
+                    "GroupId"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-AppSgId"
+                }
+            }
+        },
+        "DbSecurityGroupId": {
+            "Description": "The ID of the Database Security Group",
+            "Value": {
+                "Fn::GetAtt": [
+                    "DbSgR1",
+                    "GroupId"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-DbSgId"
+                }
+            }
+        },
+        "DbSubnetGroupName": {
+            "Description": "The name of the RDS DB Subnet Group",
+            "Value": {
+                "Ref": "DbSubnetGroupR1"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-DbSubnetGroup"
+                }
+            }
+        },
+        "Ec2InstanceRoleArn": {
+            "Description": "The ARN of the EC2 Instance Role",
+            "Value": {
+                "Fn::GetAtt": [
+                    "Ec2InstanceRole",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-Ec2InstanceRoleArn"
+                }
+            }
+        },
         "NatEipR1PublicIp": {
             "Description": "The Public IP Address of the NAT Gateway Elastic IP",
             "Value": {
@@ -433,6 +553,11 @@
                     "NatEipR1",
                     "PublicIp"
                 ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-NatEipPublicIp"
+                }
             }
         },
         "NatEipR1AllocationId": {
@@ -442,6 +567,11 @@
                     "NatEipR1",
                     "AllocationId"
                 ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-NatEipAllocationId"
+                }
             }
         }
     }
