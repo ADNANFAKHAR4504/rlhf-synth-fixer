@@ -210,6 +210,26 @@
                 ]
             }
         },
+        "FinancialDBSubnetGroup": {
+            "Type": "AWS::RDS::DBSubnetGroup",
+            "Properties": {
+                "DBSubnetGroupDescription": "Subnet group for FinancialDB",
+                "SubnetIds": [
+                    {
+                        "Ref": "PrivateSubnet1"
+                    },
+                    {
+                        "Ref": "PrivateSubnet2"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "FinancialDBSubnetGroup"
+                    }
+                ]
+            }
+        },
         "InternetGateway": {
             "Type": "AWS::EC2::InternetGateway",
             "Properties": {
@@ -443,10 +463,7 @@
                             },
                             "Action": "s3:GetBucketAcl",
                             "Resource": {
-                                "Fn::GetAtt": [
-                                    "CloudTrailLogBucket",
-                                    "Arn"
-                                ]
+                                "Fn::Sub": "arn:aws:s3:::${CloudTrailLogBucket}"
                             }
                         },
                         {
@@ -457,99 +474,11 @@
                             },
                             "Action": "s3:PutObject",
                             "Resource": {
-                                "Fn::Join": [
-                                    "",
-                                    [
-                                        {
-                                            "Fn::GetAtt": [
-                                                "CloudTrailLogBucket",
-                                                "Arn"
-                                            ]
-                                        },
-                                        "/AWSLogs/",
-                                        {
-                                            "Ref": "AWS::AccountId"
-                                        },
-                                        "/*"
-                                    ]
-                                ]
+                                "Fn::Sub": "arn:aws:s3:::${CloudTrailLogBucket}/AWSLogs/${AWS::AccountId}/*"
                             },
                             "Condition": {
                                 "StringEquals": {
                                     "s3:x-amz-acl": "bucket-owner-full-control"
-                                }
-                            }
-                        },
-                        {
-                            "Sid": "AWSCloudTrailAclCheck",
-                            "Effect": "Allow",
-                            "Principal": {
-                                "Service": "cloudtrail.amazonaws.com"
-                            },
-                            "Action": "s3:ListBucket",
-                            "Resource": {
-                                "Fn::GetAtt": [
-                                    "CloudTrailLogBucket",
-                                    "Arn"
-                                ]
-                            },
-                            "Condition": {
-                                "StringEquals": {
-                                    "s3:prefix": "AWSLogs/"
-                                }
-                            }
-                        },
-                        {
-                            "Sid": "DenyUnencryptedUploads",
-                            "Effect": "Deny",
-                            "Principal": "*",
-                            "Action": "s3:PutObject",
-                            "Resource": {
-                                "Fn::Join": [
-                                    "",
-                                    [
-                                        {
-                                            "Fn::GetAtt": [
-                                                "CloudTrailLogBucket",
-                                                "Arn"
-                                            ]
-                                        },
-                                        "/AWSLogs/",
-                                        {
-                                            "Ref": "AWS::AccountId"
-                                        },
-                                        "/*"
-                                    ]
-                                ]
-                            },
-                            "Condition": {
-                                "StringNotEquals": {
-                                    "s3:x-amz-server-side-encryption": "aws:kms"
-                                }
-                            }
-                        },
-                        {
-                            "Sid": "DenyInsecureTransport",
-                            "Effect": "Deny",
-                            "Principal": "*",
-                            "Action": "s3:*",
-                            "Resource": {
-                                "Fn::Join": [
-                                    "",
-                                    [
-                                        {
-                                            "Fn::GetAtt": [
-                                                "CloudTrailLogBucket",
-                                                "Arn"
-                                            ]
-                                        },
-                                        "/*"
-                                    ]
-                                ]
-                            },
-                            "Condition": {
-                                "Bool": {
-                                    "aws:SecureTransport": "false"
                                 }
                             }
                         }
@@ -595,6 +524,17 @@
                                     "Resource": {
                                         "Ref": "RDSSecret"
                                     }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "ec2:CreateNetworkInterface",
+                                        "ec2:DescribeNetworkInterfaces",
+                                        "ec2:DeleteNetworkInterface",
+                                        "ec2:AssignPrivateIpAddresses",
+                                        "ec2:UnassignPrivateIpAddresses"
+                                    ],
+                                    "Resource": "*"
                                 }
                             ]
                         }
@@ -604,6 +544,9 @@
         },
         "CloudTrailTrail": {
             "Type": "AWS::CloudTrail::Trail",
+            "DependsOn": [
+                "CloudTrailBucketPolicy"
+            ],
             "Properties": {
                 "IsLogging": true,
                 "IncludeGlobalServiceEvents": true,
@@ -974,8 +917,12 @@
         },
         "FinancialDB": {
             "Type": "AWS::RDS::DBInstance",
+            "DependsOn": [
+                "FinancialServicesVPC"
+            ],
             "Properties": {
                 "DBInstanceClass": "db.t3.medium",
+                "AllocatedStorage": 20,
                 "Engine": "postgres",
                 "MasterUsername": {
                     "Fn::Join": [
@@ -1003,6 +950,9 @@
                 },
                 "StorageEncrypted": true,
                 "PubliclyAccessible": false,
+                "DBSubnetGroupName": {
+                    "Ref": "FinancialDBSubnetGroup"
+                },
                 "VPCSecurityGroups": [
                     {
                         "Ref": "RDSSecurityGroup"
@@ -1161,6 +1111,21 @@
                 "Fn::GetAtt": [
                     "WebACL",
                     "Id"
+                ]
+            }
+        },
+        "RDSInstanceId": {
+            "Description": "FinancialDB RDS Instance ID",
+            "Value": {
+                "Ref": "FinancialDB"
+            }
+        },
+        "RDSInstanceEndpoint": {
+            "Description": "FinancialDB Endpoint Address",
+            "Value": {
+                "Fn::GetAtt": [
+                    "FinancialDB",
+                    "Endpoint.Address"
                 ]
             }
         }

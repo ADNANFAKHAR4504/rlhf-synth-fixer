@@ -98,6 +98,17 @@ Resources:
           Value: !Ref Project
         - Key: Owner
           Value: !Ref Owner
+  
+  FinancialDBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: Subnet group for FinancialDB
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      Tags:
+        - Key: Name
+          Value: FinancialDBSubnetGroup
 
   # Internet Gateway
   InternetGateway:
@@ -229,48 +240,23 @@ Resources:
     Properties:
       Bucket: !Ref CloudTrailLogBucket
       PolicyDocument:
-        Version: '2012-10-17'
+        Version: "2012-10-17"
         Statement:
-          - Sid: AWSCloudTrailAclCheck
+          - Sid: "AWSCloudTrailAclCheck"
             Effect: Allow
             Principal:
-              Service: cloudtrail.amazonaws.com
-            Action: s3:GetBucketAcl
-            Resource: !GetAtt CloudTrailLogBucket.Arn
-          - Sid: AWSCloudTrailWrite
+              Service: 'cloudtrail.amazonaws.com'
+            Action: "s3:GetBucketAcl"
+            Resource: !Sub arn:aws:s3:::${CloudTrailLogBucket}
+          - Sid: "AWSCloudTrailWrite"
             Effect: Allow
             Principal:
-              Service: cloudtrail.amazonaws.com
-            Action: s3:PutObject
-            Resource: !Join ['', [!GetAtt CloudTrailLogBucket.Arn, '/AWSLogs/', !Ref 'AWS::AccountId', '/*']]
+              Service: 'cloudtrail.amazonaws.com'
+            Action: "s3:PutObject"
+            Resource: !Sub arn:aws:s3:::${CloudTrailLogBucket}/AWSLogs/${AWS::AccountId}/*
             Condition:
               StringEquals:
-                s3:x-amz-acl: bucket-owner-full-control
-          - Sid: AWSCloudTrailAclCheck
-            Effect: Allow
-            Principal:
-              Service: cloudtrail.amazonaws.com
-            Action: s3:ListBucket
-            Resource: !GetAtt CloudTrailLogBucket.Arn
-            Condition:
-              StringEquals:
-                s3:prefix: AWSLogs/
-          - Sid: DenyUnencryptedUploads
-            Effect: Deny
-            Principal: '*'
-            Action: s3:PutObject
-            Resource: !Join ['', [!GetAtt CloudTrailLogBucket.Arn, '/AWSLogs/', !Ref 'AWS::AccountId', '/*']]
-            Condition:
-              StringNotEquals:
-                s3:x-amz-server-side-encryption: aws:kms
-          - Sid: DenyInsecureTransport
-            Effect: Deny
-            Principal: '*'
-            Action: s3:*
-            Resource: !Join ['', [!GetAtt CloudTrailLogBucket.Arn, '/*']]
-            Condition:
-              Bool:
-                aws:SecureTransport: 'false'
+                's3:x-amz-acl': 'bucket-owner-full-control'
 
   # IAM Role
   LambdaExecutionRole:
@@ -298,10 +284,20 @@ Resources:
                 Action:
                   - secretsmanager:GetSecretValue
                 Resource: !Ref RDSSecret
+              - Effect: Allow
+                Action:
+                  - ec2:CreateNetworkInterface
+                  - ec2:DescribeNetworkInterfaces
+                  - ec2:DeleteNetworkInterface
+                  - ec2:AssignPrivateIpAddresses
+                  - ec2:UnassignPrivateIpAddresses
+                Resource: "*"
 
   # CloudTrail
   CloudTrailTrail:
     Type: AWS::CloudTrail::Trail
+    DependsOn:
+      - CloudTrailBucketPolicy
     Properties:
       IsLogging: true
       IncludeGlobalServiceEvents: true
@@ -511,13 +507,17 @@ Resources:
   # Update RDS to use credentials from Secrets Manager and security group
   FinancialDB:
     Type: AWS::RDS::DBInstance
+    DependsOn:
+    - FinancialServicesVPC
     Properties:
       DBInstanceClass: db.t3.medium
+      AllocatedStorage: 20
       Engine: postgres
       MasterUsername: !Join ['', ['{{resolve:secretsmanager:', !Ref RDSSecret, ':SecretString:username}}']]
       MasterUserPassword: !Join ['', ['{{resolve:secretsmanager:', !Ref RDSSecret, ':SecretString:password}}']]
       StorageEncrypted: true
       PubliclyAccessible: false
+      DBSubnetGroupName: !Ref FinancialDBSubnetGroup
       VPCSecurityGroups:
         - !Ref RDSSecurityGroup
       Tags:
@@ -596,3 +596,11 @@ Outputs:
   WebACLId:
     Description: The ID of the WebACL
     Value: !GetAtt WebACL.Id
+
+  RDSInstanceId:
+    Description: FinancialDB RDS Instance ID
+    Value: !Ref FinancialDB
+
+  RDSInstanceEndpoint:
+    Description: FinancialDB Endpoint Address
+    Value: !GetAtt FinancialDB.Endpoint.Address
