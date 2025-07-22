@@ -1,3 +1,6 @@
+# IDEAL RESPONSE
+
+```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Secure web infrastructure with high availability and security'
 
@@ -26,6 +29,15 @@ Parameters:
     Default: 'prod'
     AllowedValues: ['dev', 'staging', 'prod']
     Description: Deployment environment
+  DBUsername:
+    Type: String
+    Default: 'admin'
+    Description: Database master username
+    NoEcho: false
+  UniqueIdentifier:
+    Type: String
+    Default: 'pr42'
+    Description: Unique identifier to avoid resource naming conflicts
 
 Resources:
   # 1. VPC with 3 AZs
@@ -37,7 +49,7 @@ Resources:
       EnableDnsHostnames: true
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-vpc'
+          Value: !Sub '${UniqueIdentifier}-${Environment}-vpc'
 
   # Internet Gateway
   InternetGateway:
@@ -45,7 +57,7 @@ Resources:
     Properties:
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-igw'
+          Value: !Sub '${UniqueIdentifier}-${Environment}-igw'
 
   # Attach Internet Gateway to VPC
   InternetGatewayAttachment:
@@ -61,7 +73,7 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-public-routes'
+          Value: !Sub '${UniqueIdentifier}-${Environment}-public-routes'
 
   # Default Route to Internet Gateway
   DefaultPublicRoute:
@@ -82,7 +94,7 @@ Resources:
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-public-subnet-az1'
+          Value: !Sub '${UniqueIdentifier}-${Environment}-public-subnet-az1'
 
   PublicSubnet2:
     Type: AWS::EC2::Subnet
@@ -93,7 +105,7 @@ Resources:
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-public-subnet-az2'
+          Value: !Sub '${UniqueIdentifier}-${Environment}-public-subnet-az2'
 
   PublicSubnet3:
     Type: AWS::EC2::Subnet
@@ -104,7 +116,7 @@ Resources:
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-public-subnet-az3'
+          Value: !Sub '${UniqueIdentifier}-${Environment}-public-subnet-az3'
 
   # Associate Public Subnets with Public Route Table
   PublicSubnet1RouteTableAssociation:
@@ -135,7 +147,7 @@ Resources:
       MapPublicIpOnLaunch: false
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-private-subnet-az1'
+          Value: !Sub '${UniqueIdentifier}-${Environment}-private-subnet-az1'
 
   PrivateSubnet2:
     Type: AWS::EC2::Subnet
@@ -146,7 +158,7 @@ Resources:
       MapPublicIpOnLaunch: false
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-private-subnet-az2'
+          Value: !Sub '${UniqueIdentifier}-${Environment}-private-subnet-az2'
 
   PrivateSubnet3:
     Type: AWS::EC2::Subnet
@@ -157,7 +169,7 @@ Resources:
       MapPublicIpOnLaunch: false
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-private-subnet-az3'
+          Value: !Sub '${UniqueIdentifier}-${Environment}-private-subnet-az3'
 
   # Route Table for Private Subnets (New Addition)
   PrivateRouteTable:
@@ -166,7 +178,7 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-private-routes'
+          Value: !Sub '${UniqueIdentifier}-${Environment}-private-routes'
 
   # Associate Private Subnets with Private Route Table (New Addition)
   PrivateSubnet1RouteTableAssociation:
@@ -204,7 +216,7 @@ Resources:
           CidrIp: '0.0.0.0/0'
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-web-sg'
+          Value: !Sub '${UniqueIdentifier}-${Environment}-web-sg'
 
   # RDS Security Group (New Addition)
   DBSecurityGroup:
@@ -219,7 +231,7 @@ Resources:
           SourceSecurityGroupId: !GetAtt WebSecurityGroup.GroupId # Allow traffic only from web servers
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-db-sg'
+          Value: !Sub '${UniqueIdentifier}-${Environment}-db-sg'
 
   # 2. IAM Role for EC2
   EC2Role:
@@ -235,28 +247,26 @@ Resources:
         - 'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore'
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-ec2-role'
+          Value: !Sub '${UniqueIdentifier}-${Environment}-ec2-role'
 
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
       Roles:
         - !Ref EC2Role
-      InstanceProfileName: !Sub '${Environment}-ec2-instance-profile' # Add a name
 
   # 4. Encrypted S3 Bucket
   WebContentBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${Environment}-web-content-${AWS::AccountId}'
-      AccessControl: Private
+      BucketName: !Sub '${UniqueIdentifier}-${Environment}-tapstack-web-content-${AWS::AccountId}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
               SSEAlgorithm: 'AES256'
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-web-content-bucket'
+          Value: !Sub '${UniqueIdentifier}-${Environment}-web-content-bucket'
 
   # 11. KMS Key
   EncryptionKey:
@@ -287,7 +297,7 @@ Resources:
             Resource: '*'
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-encryption-key'
+          Value: !Sub '${UniqueIdentifier}-${Environment}-encryption-key'
 
   # 3. Multi-AZ RDS MySQL
   DBSubnetGroup:
@@ -300,8 +310,23 @@ Resources:
         - !Ref PrivateSubnet3
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-db-subnet-group'
+          Value: !Sub '${UniqueIdentifier}-${Environment}-db-subnet-group'
 
+  # 4. Secrets Manager for Database Password
+  DBSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub '${UniqueIdentifier}-${Environment}/db-password'
+      Description: 'Database password for TapStack'
+      SecretString: |
+        {
+          "password": "ChangeThisPassword123!"
+        }
+      Tags:
+        - Key: Name
+          Value: !Sub '${UniqueIdentifier}-${Environment}-db-secret'
+
+  # 5. RDS Database
   MySQLDB:
     Type: AWS::RDS::DBInstance
     Properties:
@@ -309,8 +334,8 @@ Resources:
       DBInstanceClass: db.t3.medium
       AllocatedStorage: 20
       MultiAZ: true
-      MasterUsername: 'admin'
-      MasterUserPassword: 'ChangeThisPassword123!' # CONSIDER AWS SECRETS MANAGER FOR PRODUCTION
+      MasterUsername: !Ref DBUsername
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DBSecret}:SecretString:password}}'
       DBSubnetGroupName: !Ref DBSubnetGroup
       VPCSecurityGroups:
         - !GetAtt DBSecurityGroup.GroupId # Use the dedicated DB security group
@@ -319,13 +344,13 @@ Resources:
       PubliclyAccessible: false # Ensure it's not publicly accessible
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-mysql-db'
+          Value: !Sub '${UniqueIdentifier}-${Environment}-mysql-db'
 
   # 6. Auto Scaling Group
   LaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
     Properties:
-      LaunchTemplateName: !Sub '${Environment}-web-lt' # Add a name
+      LaunchTemplateName: !Sub '${UniqueIdentifier}-${Environment}-web-lt' # Add a name
       LaunchTemplateData:
         ImageId: !FindInMap [AWSRegionArch2AMI, !Ref 'AWS::Region', 'x8664']
         InstanceType: 't3.micro'
@@ -345,7 +370,7 @@ Resources:
   WebAppTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      Name: !Sub '${Environment}-web-tg'
+      Name: !Sub '${UniqueIdentifier}-${Environment}-web-tg'
       Port: 80
       Protocol: HTTP
       VpcId: !Ref VPC
@@ -358,7 +383,7 @@ Resources:
       UnhealthyThresholdCount: 2
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-web-target-group'
+          Value: !Sub '${UniqueIdentifier}-${Environment}-web-target-group'
 
   AutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
@@ -377,14 +402,14 @@ Resources:
         - !Ref WebAppTargetGroup
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-web-asg'
+          Value: !Sub '${UniqueIdentifier}-${Environment}-web-asg'
           PropagateAtLaunch: true # Propagate tags to EC2 instances
 
   # 9. Load Balancer
   AppLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
-      Name: !Sub '${Environment}-alb'
+      Name: !Sub '${UniqueIdentifier}-${Environment}-alb'
       Scheme: internet-facing
       Subnets:
         - !Ref PublicSubnet1
@@ -394,7 +419,7 @@ Resources:
         - !GetAtt WebSecurityGroup.GroupId
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-app-load-balancer'
+          Value: !Sub '${UniqueIdentifier}-${Environment}-app-load-balancer'
 
   # Listener for Load Balancer (New Addition)
   HTTPListener:
@@ -406,16 +431,13 @@ Resources:
       DefaultActions:
         - Type: forward
           TargetGroupArn: !Ref WebAppTargetGroup
-      Tags:
-        - Key: Name
-          Value: !Sub '${Environment}-http-listener'
 
   # CloudFront Origin Access Control (New Addition for S3 Security)
   CloudFrontOAC:
     Type: AWS::CloudFront::OriginAccessControl
     Properties:
       OriginAccessControlConfig:
-        Name: !Sub '${Environment}-cloudfront-oac'
+        Name: !Sub '${UniqueIdentifier}-${Environment}-cloudfront-oac'
         OriginAccessControlOriginType: s3
         SigningBehavior: no-override
         SigningProtocol: sigv4
@@ -442,9 +464,6 @@ Resources:
             Cookies:
               Forward: 'none'
         WebACLId: !GetAtt WebACL.Arn # Associate WAF with CloudFront
-      Tags: # Add tags to CloudFront distribution
-        - Key: Name
-          Value: !Sub '${Environment}-cloudfront-distribution'
 
   # S3 Bucket Policy for CloudFront OAC (New Addition)
   WebContentBucketPolicy:
@@ -466,7 +485,7 @@ Resources:
   WebACL:
     Type: AWS::WAFv2::WebACL
     Properties:
-      Name: !Sub '${Environment}-web-acl'
+      Name: !Sub '${UniqueIdentifier}-${Environment}-web-acl'
       Scope: CLOUDFRONT
       DefaultAction:
         Allow: {}
@@ -489,7 +508,7 @@ Resources:
             MetricName: 'AWSManagedRulesCommonRuleSetMetrics'
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-web-acl'
+          Value: !Sub '${UniqueIdentifier}-${Environment}-web-acl'
 
   # 5. CloudWatch Alarms
   CPUAlarm:
@@ -509,20 +528,20 @@ Resources:
       AlarmActions: [] # No SNS topic for now - can be added later
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-cpu-alarm'
+          Value: !Sub '${UniqueIdentifier}-${Environment}-cpu-alarm'
 
   # 10. Logging Bucket
   LogBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${Environment}-logs-${AWS::AccountId}'
+      BucketName: !Sub '${UniqueIdentifier}-${Environment}-tapstack-logs-${AWS::AccountId}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
               SSEAlgorithm: 'AES256'
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-logs-bucket'
+          Value: !Sub '${UniqueIdentifier}-${Environment}-logs-bucket'
 
 Outputs:
   WebsiteURL:
@@ -537,3 +556,4 @@ Outputs:
   RDSInstanceEndpoint:
     Description: 'RDS Database Endpoint Address'
     Value: !GetAtt MySQLDB.Endpoint.Address
+```

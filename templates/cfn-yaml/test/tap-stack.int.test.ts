@@ -1,7 +1,7 @@
 // Configuration - These are coming from cdk-outputs after cdk deploy
 import fs from 'fs';
 const outputs = JSON.parse(
-  fs.readFileSync('cdk-outputs/flat-outputs.json', 'utf8')
+  fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
 );
 
 // Get environment suffix from environment variable (set by CI/CD pipeline)

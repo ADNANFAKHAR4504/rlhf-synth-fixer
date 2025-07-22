@@ -11,12 +11,9 @@ describe('CloudFormation Security Template Unit Tests', () => {
     const templatePath = path.join(__dirname, '../lib/IDEAL_RESPONSE.md');
     const content = fs.readFileSync(templatePath, 'utf8');
     
-    // Extract YAML content and convert to JSON for testing
-    // Note: In production, you'd run `pipenv run cfn-flip-to-json` to convert YAML to JSON
+    // Extract YAML content from code blocks
     const yamlMatch = content.match(/```yaml\s*\n([\s\S]*?)\n```/);
     if (yamlMatch) {
-      // For now, we'll test the structure by checking the raw YAML content
-      // In a real scenario, you'd convert this to JSON first
       const yamlContent = yamlMatch[1];
       expect(yamlContent).toContain('AWSTemplateFormatVersion');
     } else {
@@ -117,10 +114,12 @@ describe('CloudFormation Security Template Unit Tests', () => {
     test('should use least privilege IAM policies', () => {
       const templatePath = path.join(__dirname, '../lib/IDEAL_RESPONSE.md');
       const content = fs.readFileSync(templatePath, 'utf8');
+      const yamlMatch = content.match(/```yaml\s*\n([\s\S]*?)\n```/);
+      const yamlContent = yamlMatch![1];
       
       // Check that IAM policies don't use overly broad wildcard permissions
       // Allow KMS policies to use Resource: "*" as that's standard practice
-      const iamPolicySection = content.match(/PolicyDocument:([\s\S]*?)(?=\n\s{2,8}[A-Z]|$)/g);
+      const iamPolicySection = yamlContent.match(/PolicyDocument:([\s\S]*?)(?=\n\s{2,8}[A-Z]|$)/g);
       if (iamPolicySection) {
         iamPolicySection.forEach(section => {
           // Check for overly permissive actions like Action: "*"
@@ -133,24 +132,28 @@ describe('CloudFormation Security Template Unit Tests', () => {
     test('should use encryption for sensitive resources', () => {
       const templatePath = path.join(__dirname, '../lib/IDEAL_RESPONSE.md');
       const content = fs.readFileSync(templatePath, 'utf8');
+      const yamlMatch = content.match(/```yaml\s*\n([\s\S]*?)\n```/);
+      const yamlContent = yamlMatch![1];
       
       // Check for encryption configurations
-      expect(content).toContain('BucketEncryption');
-      expect(content).toContain('StorageEncrypted: true');
+      expect(yamlContent).toContain('BucketEncryption');
+      expect(yamlContent).toContain('StorageEncrypted: true');
     });
 
     test('should not expose sensitive information', () => {
       const templatePath = path.join(__dirname, '../lib/IDEAL_RESPONSE.md');
       const content = fs.readFileSync(templatePath, 'utf8');
+      const yamlMatch = content.match(/```yaml\s*\n([\s\S]*?)\n```/);
+      const yamlContent = yamlMatch![1];
       
       // Check that no hardcoded secrets are present (but allow AWS service names)
-      expect(content).not.toContain('password123');
-      expect(content).not.toContain('hardcoded-secret-key');
-      expect(content).not.toContain('AKIA'); // AWS Access Key pattern
+      expect(yamlContent).not.toContain('password123');
+      expect(yamlContent).not.toContain('hardcoded-secret-key');
+      expect(yamlContent).not.toContain('AKIA'); // AWS Access Key pattern
       
       // Check that we're using proper secret management
-      expect(content).toContain('AWS::SecretsManager::Secret');
-      expect(content).toContain('resolve:secretsmanager');
+      expect(yamlContent).toContain('AWS::SecretsManager::Secret');
+      expect(yamlContent).toContain('resolve:secretsmanager');
     });
   });
 }); 
