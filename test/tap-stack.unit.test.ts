@@ -142,7 +142,7 @@ describe('Production Infrastructure CloudFormation Template', () => {
     expect(countResources('AWS::EC2::VPC')).toBe(1);
     expect(countResources('AWS::EC2::Subnet')).toBe(4);
     expect(countResources('AWS::RDS::DBInstance')).toBe(1);
-    expect(countResources('AWS::S3::Bucket')).toBe(1);
+    expect(countResources('AWS::S3::Bucket')).toBe(2);
   });
 
   // 17. Tagging Compliance

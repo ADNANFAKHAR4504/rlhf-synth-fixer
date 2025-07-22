@@ -19,6 +19,7 @@ Parameters:
   SSHLocation:
     Type: String
     Description: CIDR for SSH access
+    Default: "0.0.0.0/0" # Replace with actual CIDR
   WhitelistedUser:
     Type: String
     Default: "whitelisted-user" # Replace with actual IAM user
@@ -60,7 +61,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      CidrBlock: 10.0.1.0/24
+      CidrBlock: 10.0.2.0/24
       AvailabilityZone: !Select [1, !GetAZs '']
       MapPublicIpOnLaunch: true
 
@@ -280,6 +281,24 @@ Resources:
           CidrIp: 0.0.0.0/0
 
   # --- LOGGING & MONITORING (Requirements 5,7,9,13,14) ---
+  CloudTrailLogBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Owner
+          Value: DevOps
+
   CloudTrail:
     Type: AWS::CloudTrail::Trail
     DependsOn:
@@ -300,7 +319,7 @@ Resources:
   CloudTrailBucketPolicy:
     Type: AWS::S3::BucketPolicy
     Properties:
-      Bucket: !Ref EncryptedBucket
+      Bucket: !Ref CloudTrailLogBucket
       PolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -309,13 +328,13 @@ Resources:
             Principal:
               Service: 'cloudtrail.amazonaws.com'
             Action: "s3:GetBucketAcl"
-            Resource: !Sub arn:aws:s3:::${EncryptedBucket}
+            Resource: !Sub arn:aws:s3:::${CloudTrailLogBucket}
           - Sid: "AWSCloudTrailWrite"
             Effect: Allow
             Principal:
               Service: 'cloudtrail.amazonaws.com'
             Action: "s3:PutObject"
-            Resource: !Sub arn:aws:s3:::${EncryptedBucket}/AWSLogs/${AWS::AccountId}/*
+            Resource: !Sub arn:aws:s3:::${CloudTrailLogBucket}/AWSLogs/${AWS::AccountId}/*
             Condition:
               StringEquals:
                 's3:x-amz-acl': 'bucket-owner-full-control'

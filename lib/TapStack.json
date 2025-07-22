@@ -25,7 +25,8 @@
         },
         "SSHLocation": {
             "Type": "String",
-            "Description": "CIDR for SSH access"
+            "Description": "CIDR for SSH access",
+            "Default": "0.0.0.0/0"
         },
         "WhitelistedUser": {
             "Type": "String",
@@ -91,7 +92,7 @@
                 "VpcId": {
                     "Ref": "VPC"
                 },
-                "CidrBlock": "10.0.1.0/24",
+                "CidrBlock": "10.0.2.0/24",
                 "AvailabilityZone": {
                     "Fn::Select": [
                         1,
@@ -500,6 +501,38 @@
                 ]
             }
         },
+        "CloudTrailLogBucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "aws:kms"
+                            }
+                        }
+                    ]
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": "DevOps"
+                    }
+                ]
+            }
+        },
         "CloudTrail": {
             "Type": "AWS::CloudTrail::Trail",
             "DependsOn": [
@@ -532,7 +565,7 @@
             "Type": "AWS::S3::BucketPolicy",
             "Properties": {
                 "Bucket": {
-                    "Ref": "EncryptedBucket"
+                    "Ref": "CloudTrailLogBucket"
                 },
                 "PolicyDocument": {
                     "Version": "2012-10-17",
@@ -545,7 +578,7 @@
                             },
                             "Action": "s3:GetBucketAcl",
                             "Resource": {
-                                "Fn::Sub": "arn:aws:s3:::${EncryptedBucket}"
+                                "Fn::Sub": "arn:aws:s3:::${CloudTrailLogBucket}"
                             }
                         },
                         {
@@ -556,7 +589,7 @@
                             },
                             "Action": "s3:PutObject",
                             "Resource": {
-                                "Fn::Sub": "arn:aws:s3:::${EncryptedBucket}/AWSLogs/${AWS::AccountId}/*"
+                                "Fn::Sub": "arn:aws:s3:::${CloudTrailLogBucket}/AWSLogs/${AWS::AccountId}/*"
                             },
                             "Condition": {
                                 "StringEquals": {
