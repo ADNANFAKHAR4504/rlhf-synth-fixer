@@ -5,6 +5,7 @@ Parameters:
   DeploymentType:
     Type: String
     Description: 'Choose "Primary" for your main region or "Replica" for secondary regions.'
+    Default: 'Primary'
     AllowedValues:
       - Primary
       - Replica
@@ -15,9 +16,11 @@ Parameters:
   DomainName:
     Type: String
     Description: '(Required for Primary) The apex domain name for your application (e.g., example.com).'
+    Default: 'example.com'
   Subdomain:
     Type: String
     Description: '(Required for Primary) The subdomain for your application (e.g., app for app.example.com).'
+    Default: 'app'
   PrimaryDbIdentifier:
     Type: String
     Description: '(Required for Replica) The DB Identifier of the primary RDS instance (e.g., prod-primary-db-us-east-1).'
@@ -195,7 +198,7 @@ Resources:
     Type: AWS::S3::Bucket
     Condition: IsPrimaryDeployment
     Properties:
-      BucketName: !Sub '${Subdomain}-${DomainName}-${AWS::Region}'
+      BucketName: !Sub '${EnvironmentSuffix}-${Subdomain}-${DomainName}-${AWS::Region}'
       VersioningConfiguration:
         Status: Enabled
       PublicAccessBlockConfiguration:
@@ -291,7 +294,7 @@ Resources:
       PubliclyAccessible: false
       StorageEncrypted: true
       KmsKeyId: !Ref KMSKey
-      MultiAZ: false # Set to false for faster dev/test deployments
+      MultiAZ: false
       DeletionProtection: false
 
   # --- REPLICA-ONLY RESOURCES ---
@@ -300,8 +303,6 @@ Resources:
     Condition: IsReplicaDeployment
     Properties:
       DBSubnetGroupDescription: "Subnet group for RDS Replica"
-      # This looks up the subnets created by the Primary deployment in THIS region.
-      # This assumes you have already run the template with 'Primary' mode in this region.
       SubnetIds:
          - Fn::ImportValue: !Sub '${EnvironmentSuffix}-PrivateSubnet1Id'
 
@@ -332,7 +333,7 @@ Outputs:
     Description: 'ID of Private Subnet 1'
     Value: !Ref PrivateSubnet1
     Export:
-      Name: !Sub '${EnvironmentSuffix}-PrivateSubnet1Id' # Simpler export name for replicas to find
+      Name: !Sub '${EnvironmentSuffix}-PrivateSubnet1Id'
   PrivateSubnet2Id:
     Condition: IsPrimaryDeployment
     Description: 'ID of Private Subnet 2'
