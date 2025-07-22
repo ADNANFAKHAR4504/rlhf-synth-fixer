@@ -4,7 +4,7 @@ import { DescribeDBInstancesCommand, DescribeDBSubnetGroupsCommand, RDSClient } 
 import { GetBucketEncryptionCommand, GetBucketPolicyCommand, HeadBucketCommand, S3Client } from '@aws-sdk/client-s3';
 import fs from 'fs';
 
-const outputs = JSON.parse(fs.readFileSync('cdk-outputs/flat-outputs.json', 'utf8'));
+const outputs = JSON.parse(fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8'));
 const region = process.env.AWS_REGION || 'us-east-1';
 
 // Handle empty outputs in CI/CD scenario
