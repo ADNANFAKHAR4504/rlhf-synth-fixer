@@ -23,76 +23,77 @@ from aws_cdk import (
 )
 
 # Import your stacks here
-# from .ddb_stack import DynamoDBStack, DynamoDBStackProps
+from .metadata_stack import ServerlessStack
 
-class ServerlessStack(Stack):
-    def __init__(self, scope: Construct, id: str, **kwargs) -> None:
-        super().__init__(scope, id, **kwargs)
+# class ServerlessStack(Stack):
+#     def __init__(self, scope: Construct, id: str, **kwargs) -> None:
+#         super().__init__(scope, id, **kwargs)
 
-        # VPC with two public subnets
-        vpc = ec2.Vpc(self, "LambdaVPC", 
-            max_azs=2,
-            subnet_configuration=[
-                ec2.SubnetConfiguration(name="PublicSubnet", subnet_type=ec2.SubnetType.PUBLIC)
-            ]
-        )
+#         # VPC with two public subnets
+#         vpc = ec2.Vpc(self, "LambdaVPC", 
+#             max_azs=2,
+#             subnet_configuration=[
+#                 ec2.SubnetConfiguration(name="PublicSubnet", subnet_type=ec2.SubnetType.PUBLIC)
+#             ]
+#         )
 
-        # DynamoDB Table
-        table = dynamodb.Table(self, "ItemTable",
-            partition_key=dynamodb.Attribute(name="itemId", type=dynamodb.AttributeType.STRING),
-            billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST
-        )
+#         # DynamoDB Table
+#         table = dynamodb.Table(self, "ItemTable",
+#             partition_key=dynamodb.Attribute(name="itemId", type=dynamodb.AttributeType.STRING),
+#             billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST
+#         )
 
-        # Lambda Execution Role
-        lambda_role = iam.Role(self, "LambdaExecutionRole",
-            assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
-            managed_policies=[
-                iam.ManagedPolicy.from_aws_managed_policy_name("service-role/AWSLambdaBasicExecutionRole")
-            ]
-        )
+#         # Lambda Execution Role
+#         lambda_role = iam.Role(self, "LambdaExecutionRole",
+#             assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
+#             managed_policies=[
+#                 iam.ManagedPolicy.from_aws_managed_policy_name("service-role/AWSLambdaBasicExecutionRole")
+#             ]
+#         )
 
-        # Grant permissions to DynamoDB and CloudWatch
-        table.grant_write_data(lambda_role)
-        lambda_role.add_to_policy(iam.PolicyStatement(
-            actions=["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"],
-            resources=["arn:aws:logs:*:*:*"]
-        ))
+#         # Grant permissions to DynamoDB and CloudWatch
+#         table.grant_write_data(lambda_role)
+#         lambda_role.add_to_policy(iam.PolicyStatement(
+#             actions=["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"],
+#             resources=["arn:aws:logs:*:*:*"]
+#         ))
 
-        # Lambda Function
-        lambda_function = _lambda.Function(self, "ItemFunction",
-            runtime=_lambda.Runtime.PYTHON_3_9,
-            code=_lambda.Code.from_asset("lib/lambda"),  # Assuming code is in 'lambda' directory
-            handler="index.handler",
-            role=lambda_role,
-            vpc=vpc,
-            environment={
-                "TABLE_NAME": table.table_name
-            }
-        )
+#         # Lambda Function
+#         lambda_function = _lambda.Function(self, "ItemFunction",
+#             runtime=_lambda.Runtime.PYTHON_3_9,
+#             code=_lambda.Code.from_asset("lib/lambda"),  # Assuming code is in 'lambda' directory
+#             handler="index.handler",
+#             role=lambda_role,
+#             vpc=vpc,
+#             allow_public_subnet=True,
+#             environment={
+#                 "TABLE_NAME": table.table_name
+#             }
+#         )
 
-        # # CloudWatch Alarm for Lambda Errors
-        # cloudwatch.Alarm(self, "LambdaErrorsAlarm",
-        #     metric=lambda_function.metric_errors(),
-        #     threshold=1,
-        #     evaluation_periods=1
-        # )
+#         # CloudWatch Alarm for Lambda Errors
+#         cloudwatch.Alarm(self, "LambdaErrorsAlarm",
+#             metric=lambda_function.metric_errors(),
+#             threshold=1,
+#             evaluation_periods=1
+#         )
 
-        # # API Gateway
-        # api = apigateway.RestApi(self, "ItemApi",
-        #     rest_api_name="Item Service",
-        #     default_cors_preflight_options=apigateway.CorsOptions(
-        #         allow_origins=apigateway.Cors.ALL_ORIGINS,
-        #         allow_methods=apigateway.Cors.ALL_METHODS
-        #     )
-        # )
+#         # API Gateway
+#         api = apigateway.RestApi(self, "ItemApi",
+#             rest_api_name="Item Service",
+#             default_cors_preflight_options=apigateway.CorsOptions(
+#                 allow_origins=apigateway.Cors.ALL_ORIGINS,
+#                 allow_methods=apigateway.Cors.ALL_METHODS
+#             )
+#         )
 
-        # integration = apigateway.LambdaIntegration(lambda_function)
+#         integration = apigateway.LambdaIntegration(lambda_function)
 
-        # items = api.root.add_resource("item")
-        # items.add_method("GET", integration)
+#         items = api.root.add_resource("item")
+#         items.add_method("GET", integration)
 
-        # # Tagging all resources
-        # core.Tags.of(self).add("Environment", "Production")
+#         # Tagging all resources
+#         # core.Tags.of(self).add("Environment", "Production")
 
 class TapStackProps(cdk.StackProps):
   """
@@ -151,17 +152,19 @@ class TapStack(cdk.Stack):
     # ! DO not create resources directly in this stack.
     # ! Instead, instantiate separate stacks for each resource type.
 
-    # class NestedDynamoDBStack(NestedStack):
-    #   def __init__(self, scope, id, props=None, **kwargs):
-    #     super().__init__(scope, id, **kwargs)
-    #     # Use the original DynamoDBStack logic here
-    #     self.ddb_stack = DynamoDBStack(self, "Resource", props=props)
-    #     self.table = self.ddb_stack.table
-
-    db_props = ServerlessStack(
-        self,"mystack_id",
-
+    class NestedServerlessStack(NestedStack):
+      def __init__(self, scope, id, props=None, **kwargs):
+        super().__init__(scope, id, **kwargs)
+        # Use the original DynamoDBStack logic here
+        self.sl_stack = ServerlessStack(
+        self,"ServerlessStack",
     )
+
+
+    # db_props = ServerlessStack(
+    #     self,"ServerlessStack",
+
+    # )
 
     # dynamodb_stack = NestedDynamoDBStack(
     #     self,
