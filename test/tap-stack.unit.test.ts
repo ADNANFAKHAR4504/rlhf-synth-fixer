@@ -5,12 +5,13 @@ describe('TapStack CloudFormation Template', () => {
   let template: any;
 
   beforeAll(() => {
+    // This test reads the JSON version of your CloudFormation template.
     const templatePath = path.join(__dirname, '../lib/TapStack.json'); 
     template = JSON.parse(fs.readFileSync(templatePath, 'utf8'));
   });
 
   //================================================================================
-  // ## Template Structure and Validation
+  // ## Template Structure and Validation (3 Tests)
   //================================================================================
   describe('Template Validation & Structure', () => {
     test('should have a valid CloudFormation format version', () => {
@@ -28,9 +29,37 @@ describe('TapStack CloudFormation Template', () => {
   });
 
   //================================================================================
-  // ## Resources
+  // ## Resources (6 Tests)
   //================================================================================
   describe('Resources', () => {
+    // --- NEW TEST ---
+    test('VPC should have DNS support and hostnames enabled', () => {
+      const vpc = template.Resources.VpcR1;
+      expect(vpc).toBeDefined();
+      expect(vpc.Properties.EnableDnsSupport).toBe(true);
+      expect(vpc.Properties.EnableDnsHostnames).toBe(true);
+    });
+
+    // --- NEW TEST ---
+    test('⚠️ App Security Group should have overly permissive ingress rules', () => {
+      const appSg = template.Resources.AppSgR1;
+      expect(appSg).toBeDefined();
+      expect(appSg.Properties.SecurityGroupIngress).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ CidrIp: '0.0.0.0/0', IpProtocol: 'tcp', FromPort: 80 }),
+          expect.objectContaining({ CidrIp: '0.0.0.0/0', IpProtocol: 'tcp', FromPort: 22 })
+        ])
+      );
+    });
+
+    // --- NEW TEST ---
+    test('🚨 should provision a NAT EIP but is MISSING the NAT Gateway resource', () => {
+      // This confirms an Elastic IP is created but not used by a NAT Gateway,
+      // leaving private subnets without internet access.
+      expect(template.Resources.NatEipR1).toBeDefined();
+      expect(template.Resources.NatGwR1).toBeUndefined();
+    });
+      
     test('should have a Private Route Table with no default route', () => {
       expect(template.Resources.PrivateRouteTableR1).toBeDefined();
 
@@ -51,6 +80,4 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Resources.Ec2InstanceProfile).toBeUndefined();
     });
   });
-
-  // The "Outputs" test suite has been removed to align with the provided JSON.
 });
