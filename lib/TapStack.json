@@ -10,30 +10,17 @@
                 "Replica"
             ]
         },
-        "EnvironmentSuffix": {
-            "Type": "String",
-            "Default": "dev",
-            "Description": "Environment suffix for resource naming (e.g., dev, staging, prod)"
-        },
         "DomainName": {
             "Type": "String",
-            "Description": "(Required for Primary) The apex domain name for your application (e.g., example.com).",
-            "Default": "example.com"
+            "Description": "(Required for Primary) The apex domain name for your application (e.g., example.com)."
         },
         "Subdomain": {
             "Type": "String",
-            "Default": "app",
             "Description": "(Required for Primary) The subdomain for your application (e.g., app for app.example.com)."
-        },
-        "DBUsername": {
-            "Type": "String",
-            "Default": "dbadmin",
-            "Description": "(Required for Primary) The master username for the RDS database."
         },
         "PrimaryDbIdentifier": {
             "Type": "String",
-            "Description": "(Required for Replica) The DB Identifier of the primary RDS instance (e.g., prod-primary-db-us-east-1).",
-            "Default": ""
+            "Description": "(Required for Replica) The DB Identifier of the primary RDS instance (e.g., prod-primary-db-us-east-1)."
         },
         "PrimaryRegion": {
             "Type": "String",
@@ -67,8 +54,7 @@
                         "default": "Core Deployment Configuration"
                     },
                     "Parameters": [
-                        "DeploymentType",
-                        "EnvironmentSuffix"
+                        "DeploymentType"
                     ]
                 },
                 {
@@ -77,8 +63,7 @@
                     },
                     "Parameters": [
                         "DomainName",
-                        "Subdomain",
-                        "DBUsername"
+                        "Subdomain"
                     ]
                 },
                 {
@@ -480,14 +465,7 @@
                 "Name": {
                     "Fn::Sub": "${EnvironmentSuffix}/rds-credentials"
                 },
-                "GenerateSecretString": {
-                    "SecretStringTemplate": {
-                        "Fn::Sub": "{\"username\": \"${DBUsername}\"}"
-                    },
-                    "GenerateStringKey": "password",
-                    "PasswordLength": 16,
-                    "ExcludePunctuation": true
-                }
+                "SecretString": "{\"username\": \"admin\", \"password\": \"admin1234\"}"
             }
         },
         "PrimaryDBSubnetGroup": {

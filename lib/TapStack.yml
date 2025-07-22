@@ -8,26 +8,15 @@ Parameters:
     AllowedValues:
       - Primary
       - Replica
-  EnvironmentSuffix:
-    Type: String
-    Default: 'dev'
-    Description: 'Environment suffix for resource naming (e.g., dev, staging, prod)'
   DomainName:
     Type: String
     Description: '(Required for Primary) The apex domain name for your application (e.g., example.com).'
-    Default: 'example.com'
   Subdomain:
     Type: String
-    Default: 'app'
     Description: '(Required for Primary) The subdomain for your application (e.g., app for app.example.com).'
-  DBUsername:
-    Type: String
-    Default: 'dbadmin'
-    Description: '(Required for Primary) The master username for the RDS database.'
   PrimaryDbIdentifier:
     Type: String
     Description: '(Required for Replica) The DB Identifier of the primary RDS instance (e.g., prod-primary-db-us-east-1).'
-    Default: ''
   PrimaryRegion:
     Type: String
     Description: '(Required for Replica) The AWS Region of the source/primary database.'
@@ -44,13 +33,11 @@ Metadata:
           default: 'Core Deployment Configuration'
         Parameters:
           - DeploymentType
-          - EnvironmentSuffix
       - Label:
           default: 'Primary Deployment Settings (Only used if DeploymentType is Primary)'
         Parameters:
           - DomainName
           - Subdomain
-          - DBUsername
       - Label:
           default: 'Replica Deployment Settings (Only used if DeploymentType is Replica)'
         Parameters:
@@ -263,11 +250,7 @@ Resources:
     Condition: IsPrimaryDeployment
     Properties:
       Name: !Sub '${EnvironmentSuffix}/rds-credentials'
-      GenerateSecretString:
-        SecretStringTemplate: !Sub '{"username": "${DBUsername}"}'
-        GenerateStringKey: 'password'
-        PasswordLength: 16
-        ExcludePunctuation: true
+      SecretString: '{"username": "admin", "password": "admin1234"}'
 
   PrimaryDBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
