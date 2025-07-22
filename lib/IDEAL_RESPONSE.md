@@ -7,8 +7,9 @@ Description: Core infrastructure for a financial services application adhering t
 Parameters:
   Environment:
     Type: String
-    AllowedValues: [dev, staging, prod]
-    Description: Deployment environment (dev, staging, prod)
+    Default: dev
+    AllowedPattern: '^[a-zA-Z0-9]+$'
+    ConstraintDescription: Must contain only alphanumeric characters
   Project:
     Type: String
     Description: Project name for tagging
@@ -97,6 +98,17 @@ Resources:
           Value: !Ref Project
         - Key: Owner
           Value: !Ref Owner
+  
+  FinancialDBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: Subnet group for FinancialDB
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      Tags:
+        - Key: Name
+          Value: FinancialDBSubnetGroup
 
   # Internet Gateway
   InternetGateway:
@@ -188,7 +200,7 @@ Resources:
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
-              SSEAlgorithm: aws:kms
+              SSEAlgorithm: AES256
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -201,6 +213,21 @@ Resources:
           Value: !Ref Project
         - Key: Owner
           Value: !Ref Owner
+  
+  ConfigDeliveryChannel:
+    Type: AWS::Config::DeliveryChannel
+    Properties:
+      S3BucketName: !Ref SecureS3Bucket
+
+  # ConfigRecorder:
+  #   Type: AWS::Config::ConfigurationRecorder
+  #   DependsOn: ConfigDeliveryChannel
+  #   Properties:
+  #     Name: default
+  #     RoleARN: !GetAtt ConfigRole.Arn
+  #     RecordingGroup:
+  #       AllSupported: true
+  #       IncludeGlobalResourceTypes: true
 
   # CloudTrail S3 Bucket (dedicated, secure, encrypted)
   CloudTrailLogBucket:
@@ -228,20 +255,23 @@ Resources:
     Properties:
       Bucket: !Ref CloudTrailLogBucket
       PolicyDocument:
+        Version: "2012-10-17"
         Statement:
-          - Effect: Allow
+          - Sid: "AWSCloudTrailAclCheck"
+            Effect: Allow
             Principal:
-              Service: cloudtrail.amazonaws.com
-            Action: s3:GetBucketAcl
-            Resource: !GetAtt CloudTrailLogBucket.Arn
-          - Effect: Allow
+              Service: 'cloudtrail.amazonaws.com'
+            Action: "s3:GetBucketAcl"
+            Resource: !Sub arn:aws:s3:::${CloudTrailLogBucket}
+          - Sid: "AWSCloudTrailWrite"
+            Effect: Allow
             Principal:
-              Service: cloudtrail.amazonaws.com
-            Action: s3:PutObject
-            Resource: !Sub "${CloudTrailLogBucket.Arn}/AWSLogs/${AWS::AccountId}/*"
+              Service: 'cloudtrail.amazonaws.com'
+            Action: "s3:PutObject"
+            Resource: !Sub arn:aws:s3:::${CloudTrailLogBucket}/AWSLogs/${AWS::AccountId}/*
             Condition:
               StringEquals:
-                "s3:x-amz-acl": "bucket-owner-full-control"
+                's3:x-amz-acl': 'bucket-owner-full-control'
 
   # IAM Role
   LambdaExecutionRole:
@@ -269,10 +299,20 @@ Resources:
                 Action:
                   - secretsmanager:GetSecretValue
                 Resource: !Ref RDSSecret
+              - Effect: Allow
+                Action:
+                  - ec2:CreateNetworkInterface
+                  - ec2:DescribeNetworkInterfaces
+                  - ec2:DeleteNetworkInterface
+                  - ec2:AssignPrivateIpAddresses
+                  - ec2:UnassignPrivateIpAddresses
+                Resource: "*"
 
   # CloudTrail
   CloudTrailTrail:
     Type: AWS::CloudTrail::Trail
+    DependsOn:
+      - CloudTrailBucketPolicy
     Properties:
       IsLogging: true
       IncludeGlobalServiceEvents: true
@@ -401,6 +441,20 @@ Resources:
             Action: s3:GetObject
             Resource: !Sub "${SecureS3Bucket.Arn}/*"
 
+          # NEW: AWS Config PutObject Access
+          - Effect: Allow
+            Principal:
+              Service: config.amazonaws.com
+            Action:
+              - s3:GetBucketAcl
+              - s3:PutObject
+            Resource:
+              - !Sub "arn:aws:s3:::${SecureS3Bucket}"
+              - !Sub "${SecureS3Bucket.Arn}/*"
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+
   # CloudFront OAI
   CloudFrontOAI:
     Type: AWS::CloudFront::CloudFrontOriginAccessIdentity
@@ -421,7 +475,7 @@ Resources:
   SecureSNSTopic:
     Type: AWS::SNS::Topic
     Properties:
-      TopicName: !Sub "${Project}-secure-topic"
+      TopicName: "financial-secure-topic"
       Tags:
         - Key: Environment
           Value: !Ref Environment
@@ -449,26 +503,50 @@ Resources:
   WebACL:
     Type: AWS::WAFv2::WebACL
     Properties:
-      Name: !Sub "${Project}-webacl"
+      Name: "financialwebacl"  # Static name instead of Sub
+      Description: 'Web ACL for protecting web applications'
       Scope: REGIONAL
       DefaultAction:
         Allow: {}
       VisibilityConfig:
         SampledRequestsEnabled: true
         CloudWatchMetricsEnabled: true
-        MetricName: !Sub "${Project}-webacl"
-      Rules: []
+        MetricName: CommonWafMetric
+      Rules:
+        - Name: AWSManagedRulesCommonRuleSet
+          Priority: 1
+          OverrideAction:
+            None: {}
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: AWSCommonRules
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesCommonRuleSet
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref Project
+        - Key: Owner
+          Value: !Ref Owner
 
   # Update RDS to use credentials from Secrets Manager and security group
   FinancialDB:
     Type: AWS::RDS::DBInstance
+    DependsOn:
+    - FinancialServicesVPC
     Properties:
       DBInstanceClass: db.t3.medium
+      AllocatedStorage: 20
       Engine: postgres
       MasterUsername: !Join ['', ['{{resolve:secretsmanager:', !Ref RDSSecret, ':SecretString:username}}']]
       MasterUserPassword: !Join ['', ['{{resolve:secretsmanager:', !Ref RDSSecret, ':SecretString:password}}']]
       StorageEncrypted: true
       PubliclyAccessible: false
+      DBSubnetGroupName: !Ref FinancialDBSubnetGroup
       VPCSecurityGroups:
         - !Ref RDSSecurityGroup
       Tags:
@@ -490,7 +568,7 @@ Resources:
           exports.handler = async (event) => {
             console.log("Financial processing Lambda function");
           };
-      Runtime: nodejs14.x
+      Runtime: nodejs22.x
       Environment:
         Variables:
           SECRET_ARN: !Ref RDSSecret
@@ -539,3 +617,19 @@ Outputs:
   S3BucketName:
     Description: S3 Bucket Name
     Value: !Ref SecureS3Bucket
+
+  WebACLArn:
+    Description: The ARN of the WebACL
+    Value: !GetAtt WebACL.Arn
+
+  WebACLId:
+    Description: The ID of the WebACL
+    Value: !GetAtt WebACL.Id
+
+  RDSInstanceId:
+    Description: FinancialDB RDS Instance ID
+    Value: !Ref FinancialDB
+
+  RDSInstanceEndpoint:
+    Description: FinancialDB Endpoint Address
+    Value: !GetAtt FinancialDB.Endpoint.Address
