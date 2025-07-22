@@ -1,0 +1,6 @@
+{
+  "WebsiteURL": "d1x2h2cu6qd6sf.cloudfront.net",
+  "LoadBalancerDNS": "prod-alb-730852658.us-east-1.elb.amazonaws.com",
+  "S3BucketName": "prod-web-content-206218410543",
+  "RDSInstanceEndpoint": "secure-web-stack-mysqldb-r2tt5c6xkyjd.cchmqciaab54.us-east-1.rds.amazonaws.com"
+}
