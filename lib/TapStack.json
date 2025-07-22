@@ -5,6 +5,7 @@
         "DeploymentType": {
             "Type": "String",
             "Description": "Choose \"Primary\" for your main region or \"Replica\" for secondary regions.",
+            "Default": "Primary",
             "AllowedValues": [
                 "Primary",
                 "Replica"
@@ -17,11 +18,13 @@
         },
         "DomainName": {
             "Type": "String",
-            "Description": "(Required for Primary) The apex domain name for your application (e.g., example.com)."
+            "Description": "(Required for Primary) The apex domain name for your application (e.g., example.com).",
+            "Default": "example.com"
         },
         "Subdomain": {
             "Type": "String",
-            "Description": "(Required for Primary) The subdomain for your application (e.g., app for app.example.com)."
+            "Description": "(Required for Primary) The subdomain for your application (e.g., app for app.example.com).",
+            "Default": "app"
         },
         "PrimaryDbIdentifier": {
             "Type": "String",
@@ -363,7 +366,7 @@
             "Condition": "IsPrimaryDeployment",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "${Subdomain}-${DomainName}-${AWS::Region}"
+                    "Fn::Sub": "${EnvironmentSuffix}-${Subdomain}-${DomainName}-${AWS::Region}"
                 },
                 "VersioningConfiguration": {
                     "Status": "Enabled"

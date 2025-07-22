@@ -245,7 +245,7 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
         expect(typedTemplate.Resources.WebAppBucket).toBeDefined();
         expect(typedTemplate.Resources.WebAppBucket.Type).toBe('AWS::S3::Bucket');
         expect(typedTemplate.Resources.WebAppBucket.Condition).toBe('IsPrimaryDeployment');
-        expect(typedTemplate.Resources.WebAppBucket.Properties.BucketName['Fn::Sub']).toBe('${Subdomain}-${DomainName}-${AWS::Region}');
+        expect(typedTemplate.Resources.WebAppBucket.Properties.BucketName['Fn::Sub']).toBe('${EnvironmentSuffix}-${Subdomain}-${DomainName}-${AWS::Region}');
         expect(typedTemplate.Resources.WebAppBucket.Properties.VersioningConfiguration.Status).toBe('Enabled');
         expect(typedTemplate.Resources.WebAppBucket.Properties.PublicAccessBlockConfiguration.BlockPublicAcls).toBe(true);
         expect(typedTemplate.Resources.WebAppBucket.Properties.PublicAccessBlockConfiguration.BlockPublicPolicy).toBe(true);
