@@ -1,6 +1,0 @@
-{
-  "VPCId": "vpc-02e9a8e4b5dead059",
-  "PrivateSubnet2Id": "subnet-02a90636fd5e8ddf0",
-  "PrivateSubnet1Id": "subnet-0d41c12983677f2da",
-  "PrimaryDatabaseIdentifier": "pr92-primary-db-us-east-1"
-}
