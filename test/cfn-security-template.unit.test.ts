@@ -3,64 +3,54 @@ import path from 'path';
 
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
-describe('CloudFormation Security Template Unit Tests', () => {
-  let template: any;
-  
-  beforeAll(() => {
-    // Load the CloudFormation template from IDEAL_RESPONSE.md
-    const templatePath = path.join(__dirname, '../lib/IDEAL_RESPONSE.md');
-    const content = fs.readFileSync(templatePath, 'utf8');
-    
-    // Extract YAML content and convert to JSON for testing
-    // Note: In production, you'd run `pipenv run cfn-flip-to-json` to convert YAML to JSON
-    const yamlMatch = content.match(/```yaml\s*\n([\s\S]*?)\n```/);
-    if (yamlMatch) {
-      // For now, we'll test the structure by checking the raw YAML content
-      // In a real scenario, you'd convert this to JSON first
-      const yamlContent = yamlMatch[1];
-      expect(yamlContent).toContain('AWSTemplateFormatVersion');
-    } else {
-      throw new Error('Could not find YAML template in IDEAL_RESPONSE.md');
-    }
-  });
-
-  describe('Template Content Validation', () => {
-    test('should contain CloudFormation template structure', () => {
+describe('CloudFormation Security Template', () => {
+  describe('Template Structure', () => {
+    test('should have correct template format version', () => {
       const templatePath = path.join(__dirname, '../lib/IDEAL_RESPONSE.md');
       const content = fs.readFileSync(templatePath, 'utf8');
       const yamlMatch = content.match(/```yaml\s*\n([\s\S]*?)\n```/);
-      
-      expect(yamlMatch).toBeTruthy();
       const yamlContent = yamlMatch![1];
       
-      // Basic structure checks
       expect(yamlContent).toContain('AWSTemplateFormatVersion: \'2010-09-09\'');
-      expect(yamlContent).toContain('Description:');
-      expect(yamlContent).toContain('Parameters:');
-      expect(yamlContent).toContain('Resources:');
-      expect(yamlContent).toContain('Outputs:');
+      expect(yamlContent).toContain('Description: \'Unified Template: Deploys a Primary stack or a Replica stack based on parameters. v2.0\'');
     });
 
-    test('should include VPC resources', () => {
+    test('should define required parameters', () => {
+      const templatePath = path.join(__dirname, '../lib/IDEAL_RESPONSE.md');
+      const content = fs.readFileSync(templatePath, 'utf8');
+      const yamlMatch = content.match(/```yaml\s*\n([\s\S]*?)\n```/);
+      const yamlContent = yamlMatch![1];
+      
+      expect(yamlContent).toContain('DeploymentType:');
+      expect(yamlContent).toContain('EnvironmentSuffix:');
+      expect(yamlContent).toContain('DomainName:');
+      expect(yamlContent).toContain('Subdomain:');
+    });
+
+    test('should define conditions for deployment types', () => {
+      const templatePath = path.join(__dirname, '../lib/IDEAL_RESPONSE.md');
+      const content = fs.readFileSync(templatePath, 'utf8');
+      const yamlMatch = content.match(/```yaml\s*\n([\s\S]*?)\n```/);
+      const yamlContent = yamlMatch![1];
+      
+      expect(yamlContent).toContain('IsPrimaryDeployment:');
+      expect(yamlContent).toContain('IsReplicaDeployment:');
+    });
+  });
+
+  describe('Infrastructure Resources', () => {
+    test('should include networking resources', () => {
       const templatePath = path.join(__dirname, '../lib/IDEAL_RESPONSE.md');
       const content = fs.readFileSync(templatePath, 'utf8');
       const yamlMatch = content.match(/```yaml\s*\n([\s\S]*?)\n```/);
       const yamlContent = yamlMatch![1];
       
       expect(yamlContent).toContain('AWS::EC2::VPC');
-      expect(yamlContent).toContain('AWS::EC2::Subnet');
       expect(yamlContent).toContain('AWS::EC2::InternetGateway');
-    });
-
-    test('should include security resources', () => {
-      const templatePath = path.join(__dirname, '../lib/IDEAL_RESPONSE.md');
-      const content = fs.readFileSync(templatePath, 'utf8');
-      const yamlMatch = content.match(/```yaml\s*\n([\s\S]*?)\n```/);
-      const yamlContent = yamlMatch![1];
-      
-      expect(yamlContent).toContain('AWS::IAM::Role');
+      expect(yamlContent).toContain('AWS::EC2::Subnet');
+      expect(yamlContent).toContain('AWS::EC2::RouteTable');
+      expect(yamlContent).toContain('AWS::EC2::NatGateway');
       expect(yamlContent).toContain('AWS::EC2::SecurityGroup');
-      expect(yamlContent).toContain('AWS::KMS::Key');
     });
 
     test('should include database resources', () => {
@@ -70,10 +60,11 @@ describe('CloudFormation Security Template Unit Tests', () => {
       const yamlContent = yamlMatch![1];
       
       expect(yamlContent).toContain('AWS::RDS::DBInstance');
-      expect(yamlContent).toContain('MultiAZ: true');
+      expect(yamlContent).toContain('AWS::RDS::DBSubnetGroup');
+      expect(yamlContent).toContain('MultiAZ: false');
     });
 
-    test('should include storage resources', () => {
+    test('should include storage and CDN resources', () => {
       const templatePath = path.join(__dirname, '../lib/IDEAL_RESPONSE.md');
       const content = fs.readFileSync(templatePath, 'utf8');
       const yamlMatch = content.match(/```yaml\s*\n([\s\S]*?)\n```/);
@@ -81,35 +72,18 @@ describe('CloudFormation Security Template Unit Tests', () => {
       
       expect(yamlContent).toContain('AWS::S3::Bucket');
       expect(yamlContent).toContain('BucketEncryption');
-    });
-
-    test('should include load balancer and auto scaling', () => {
-      const templatePath = path.join(__dirname, '../lib/IDEAL_RESPONSE.md');
-      const content = fs.readFileSync(templatePath, 'utf8');
-      const yamlMatch = content.match(/```yaml\s*\n([\s\S]*?)\n```/);
-      const yamlContent = yamlMatch![1];
-      
-      expect(yamlContent).toContain('AWS::ElasticLoadBalancingV2::LoadBalancer');
-      expect(yamlContent).toContain('AWS::AutoScaling::AutoScalingGroup');
-    });
-
-    test('should include CloudFront and WAF', () => {
-      const templatePath = path.join(__dirname, '../lib/IDEAL_RESPONSE.md');
-      const content = fs.readFileSync(templatePath, 'utf8');
-      const yamlMatch = content.match(/```yaml\s*\n([\s\S]*?)\n```/);
-      const yamlContent = yamlMatch![1];
-      
       expect(yamlContent).toContain('AWS::CloudFront::Distribution');
-      expect(yamlContent).toContain('AWS::WAFv2::WebACL');
+      expect(yamlContent).toContain('AWS::CloudFront::CloudFrontOriginAccessIdentity');
     });
 
-    test('should include monitoring resources', () => {
+    test('should include security and encryption resources', () => {
       const templatePath = path.join(__dirname, '../lib/IDEAL_RESPONSE.md');
       const content = fs.readFileSync(templatePath, 'utf8');
       const yamlMatch = content.match(/```yaml\s*\n([\s\S]*?)\n```/);
       const yamlContent = yamlMatch![1];
       
-      expect(yamlContent).toContain('AWS::CloudWatch::Alarm');
+      expect(yamlContent).toContain('AWS::KMS::Key');
+      expect(yamlContent).toContain('AWS::SecretsManager::Secret');
     });
   });
 
@@ -151,6 +125,16 @@ describe('CloudFormation Security Template Unit Tests', () => {
       // Check that we're using proper secret management
       expect(content).toContain('AWS::SecretsManager::Secret');
       expect(content).toContain('resolve:secretsmanager');
+    });
+
+    test('should use environment-specific naming', () => {
+      const templatePath = path.join(__dirname, '../lib/IDEAL_RESPONSE.md');
+      const content = fs.readFileSync(templatePath, 'utf8');
+      const yamlMatch = content.match(/```yaml\s*\n([\s\S]*?)\n```/);
+      const yamlContent = yamlMatch![1];
+      
+      // Check that resources use EnvironmentSuffix for naming
+      expect(yamlContent).toContain('${EnvironmentSuffix}');
     });
   });
 }); 

@@ -11,20 +11,14 @@ Parameters:
       - Replica
   EnvironmentSuffix:
     Type: String
+    Description: 'Suffix for naming (e.g., dev, pr42)'
     Default: 'dev'
-    Description: 'Environment suffix for resource naming (e.g., dev, staging, prod)'
   DomainName:
     Type: String
     Description: '(Required for Primary) The apex domain name for your application (e.g., example.com).'
-    Default: 'example.com'
   Subdomain:
     Type: String
-    Default: 'app'
     Description: '(Required for Primary) The subdomain for your application (e.g., app for app.example.com).'
-  DBUsername:
-    Type: String
-    Default: 'dbadmin'
-    Description: '(Required for Primary) The master username for the RDS database.'
   PrimaryDbIdentifier:
     Type: String
     Description: '(Required for Replica) The DB Identifier of the primary RDS instance (e.g., prod-primary-db-us-east-1).'
@@ -51,7 +45,6 @@ Metadata:
         Parameters:
           - DomainName
           - Subdomain
-          - DBUsername
       - Label:
           default: 'Replica Deployment Settings (Only used if DeploymentType is Replica)'
         Parameters:
@@ -264,11 +257,7 @@ Resources:
     Condition: IsPrimaryDeployment
     Properties:
       Name: !Sub '${EnvironmentSuffix}/rds-credentials'
-      GenerateSecretString:
-        SecretStringTemplate: !Sub '{"username": "${DBUsername}"}'
-        GenerateStringKey: 'password'
-        PasswordLength: 16
-        ExcludePunctuation: true
+      SecretString: '{"username": "dbadmin", "password": "admin1234"}'
 
   PrimaryDBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
@@ -292,7 +281,7 @@ Resources:
     Properties:
       DBInstanceIdentifier: !Sub '${EnvironmentSuffix}-primary-db-${AWS::Region}'
       Engine: 'mysql'
-      EngineVersion: '8.0'
+      EngineVersion: '8.0.35'
       DBInstanceClass: 'db.t3.micro'
       AllocatedStorage: '20'
       MasterUsername: !Sub '{{resolve:secretsmanager:${DBSecret}:SecretString:username}}'
@@ -325,7 +314,6 @@ Resources:
       DBSubnetGroupName: !Ref ReplicaDBSubnetGroup
       SourceDBInstanceIdentifier: !Ref PrimaryDbIdentifier
       SourceRegion: !Ref PrimaryRegion
-      StorageEncrypted: true # Must match the source
 
 Outputs:
   PrimaryDatabaseIdentifier:
