@@ -36,7 +36,7 @@ Parameters:
     NoEcho: false
   UniqueIdentifier:
     Type: String
-    Default: 'pr42'
+    Default: 'pr79'
     Description: Unique identifier to avoid resource naming conflicts
 
 Resources:
