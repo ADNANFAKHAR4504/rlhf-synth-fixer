@@ -15,9 +15,37 @@ inputs:
 runs:
   using: "composite"
   steps:
+    - name: Check for custom AWS region
+      id: check-region
+      shell: bash
+      run: |
+        if [ -f "lib/AWS_REGION" ]; then
+          CUSTOM_REGION=$(cat lib/AWS_REGION | tr -d '[:space:]')
+          echo "Using custom AWS region from lib/AWS_REGION: $CUSTOM_REGION"
+          echo "aws-region=$CUSTOM_REGION" >> $GITHUB_OUTPUT
+          # Export the custom region as an environment variable
+          echo "AWS_REGION=$CUSTOM_REGION" >> $GITHUB_ENV
+          echo "CDK_DEFAULT_REGION=$CUSTOM_REGION" >> $GITHUB_ENV
+          echo "Custom region $CUSTOM_REGION exported as AWS_REGION and CDK_DEFAULT_REGION environment variables"
+        else
+          echo "No custom region file found, using default region: ${{ inputs.aws-region }}"
+          echo "aws-region=${{ inputs.aws-region }}" >> $GITHUB_OUTPUT
+          # Make sure to set the environment variables even with the default region
+          echo "AWS_REGION=${{ inputs.aws-region }}" >> $GITHUB_ENV
+          echo "CDK_DEFAULT_REGION=${{ inputs.aws-region }}" >> $GITHUB_ENV
+        fi
+
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v4
       with:
         aws-access-key-id: ${{ inputs.aws-access-key-id }}
         aws-secret-access-key: ${{ inputs.aws-secret-access-key }}
-        aws-region: ${{ inputs.aws-region }}
+        aws-region: ${{ steps.check-region.outputs.aws-region }}
+        mask-aws-account-id: true
+        
+    - name: Verify AWS region configuration
+      shell: bash
+      run: |
+        echo "Current AWS_REGION: $AWS_REGION"
+        echo "Current CDK_DEFAULT_REGION: $CDK_DEFAULT_REGION"
+        echo "aws-cli configured region: $(aws configure get region)"

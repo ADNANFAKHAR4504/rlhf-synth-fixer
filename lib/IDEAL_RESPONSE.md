@@ -1,193 +1,359 @@
-# Ideal CloudFormation Response
-
-This is the gold-standard CloudFormation YAML template for the secure, multi-region web infrastructure task.
-
-## Template Features
-
-- Multi-Region Deployment with Route 53 latency-based routing
-- Multi-AZ VPCs in each region with public and private subnets
-- Cross-Region RDS with read replicas for failover
-- Security-first design with least privilege IAM roles and KMS encryption
-- Encrypted storage using S3 with versioning, MFA delete, and server-side encryption
-- Auto Scaling groups for EC2 instances in each region
-- Application Load Balancer with WAF and AWS Shield integration
-- CloudFront CDN with 3+ edge locations for global delivery
-- CloudWatch & CloudTrail for monitoring and secure log storage
-- Secrets Manager for storing sensitive information
-- AWS Config & Backup for compliance and resilience
-
-## CloudFormation YAML
-
 ```yaml
 AWSTemplateFormatVersion: '2010-09-09'
-Description: Multi-Region, Secure, High-Availability CloudFormation Template
+Description: 'Unified Template: Deploys a Primary stack or a Replica stack based on parameters. v2.0'
 
 Parameters:
-  Environment:
+  DeploymentType:
     Type: String
+    Description: 'Choose "Primary" for your main region or "Replica" for secondary regions.'
+    AllowedValues:
+      - Primary
+      - Replica
+  EnvironmentSuffix:
+    Type: String
+    Default: 'dev'
+    Description: 'Environment suffix for resource naming (e.g., dev, staging, prod)'
+  DomainName:
+    Type: String
+    Description: '(Required for Primary) The apex domain name for your application (e.g., example.com).'
+    Default: 'example.com'
+  Subdomain:
+    Type: String
+    Default: 'app'
+    Description: '(Required for Primary) The subdomain for your application (e.g., app for app.example.com).'
   DBUsername:
     Type: String
-    NoEcho: true
-  DBPassword:
+    Default: 'dbadmin'
+    Description: '(Required for Primary) The master username for the RDS database.'
+  PrimaryDbIdentifier:
     Type: String
-    NoEcho: true
+    Description: '(Required for Replica) The DB Identifier of the primary RDS instance (e.g., prod-primary-db-us-east-1).'
+    Default: ''
+  PrimaryRegion:
+    Type: String
+    Description: '(Required for Replica) The AWS Region of the source/primary database.'
+    Default: 'us-east-1'
+
+Conditions:
+  IsPrimaryDeployment: !Equals [!Ref DeploymentType, 'Primary']
+  IsReplicaDeployment: !Equals [!Ref DeploymentType, 'Replica']
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: 'Core Deployment Configuration'
+        Parameters:
+          - DeploymentType
+          - EnvironmentSuffix
+      - Label:
+          default: 'Primary Deployment Settings (Only used if DeploymentType is Primary)'
+        Parameters:
+          - DomainName
+          - Subdomain
+          - DBUsername
+      - Label:
+          default: 'Replica Deployment Settings (Only used if DeploymentType is Replica)'
+        Parameters:
+          - PrimaryDbIdentifier
+          - PrimaryRegion
 
 Resources:
+  # --- PRIMARY-ONLY RESOURCES ---
+  VPC:
+    Type: AWS::EC2::VPC
+    Condition: IsPrimaryDeployment
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentSuffix}-vpc'
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Condition: IsPrimaryDeployment
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentSuffix}-igw'
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Condition: IsPrimaryDeployment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Condition: IsPrimaryDeployment
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: 10.0.1.0/24
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentSuffix}-public-subnet-az1'
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Condition: IsPrimaryDeployment
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: 10.0.10.0/24
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentSuffix}-private-subnet-az1'
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Condition: IsPrimaryDeployment
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: 10.0.11.0/24
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentSuffix}-private-subnet-az2'
+
+  PublicRouteTable1:
+    Type: AWS::EC2::RouteTable
+    Condition: IsPrimaryDeployment
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentSuffix}-public-rt-az1'
+  PublicRoute1:
+    Type: AWS::EC2::Route
+    Condition: IsPrimaryDeployment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable1
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+  PublicSubnet1Association:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Condition: IsPrimaryDeployment
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref PublicRouteTable1
+  EIP1:
+    Type: AWS::EC2::EIP
+    Condition: IsPrimaryDeployment
+    Properties:
+      Domain: vpc
+  NatGateway1:
+    Type: AWS::EC2::NatGateway
+    Condition: IsPrimaryDeployment
+    Properties:
+      AllocationId: !GetAtt EIP1.AllocationId
+      SubnetId: !Ref PublicSubnet1
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentSuffix}-nat-gw-az1'
+  PrivateRouteTable1:
+    Type: AWS::EC2::RouteTable
+    Condition: IsPrimaryDeployment
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentSuffix}-private-rt-az1'
+  PrivateRoute1:
+    Type: AWS::EC2::Route
+    Condition: IsPrimaryDeployment
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable1
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway1
+  PrivateSubnet1Association:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Condition: IsPrimaryDeployment
+    Properties:
+      SubnetId: !Ref PrivateSubnet1
+      RouteTableId: !Ref PrivateRouteTable1
+
+  PrivateSubnet2Association:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Condition: IsPrimaryDeployment
+    Properties:
+      SubnetId: !Ref PrivateSubnet2
+      RouteTableId: !Ref PrivateRouteTable1
 
   KMSKey:
     Type: AWS::KMS::Key
+    Condition: IsPrimaryDeployment
     Properties:
+      Description: 'General purpose KMS key'
       EnableKeyRotation: true
-      Description: Master key for encryption
       KeyPolicy:
         Version: '2012-10-17'
         Statement:
-          - Effect: Allow
+          - Sid: 'Allow administration of the key'
+            Effect: Allow
             Principal:
-              AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
-            Action: kms:*
-            Resource: "*"
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: 'kms:*'
+            Resource: '*'
 
-  AppBucket:
+  WebAppBucket:
     Type: AWS::S3::Bucket
+    Condition: IsPrimaryDeployment
     Properties:
+      BucketName: !Sub '${Subdomain}-${DomainName}-${AWS::Region}'
       VersioningConfiguration:
         Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
-              SSEAlgorithm: aws:kms
+              SSEAlgorithm: 'aws:kms'
               KMSMasterKeyID: !Ref KMSKey
 
-  AppSecrets:
-    Type: AWS::SecretsManager::Secret
+  CloudFrontOAI:
+    Type: AWS::CloudFront::CloudFrontOriginAccessIdentity
+    Condition: IsPrimaryDeployment
     Properties:
-      Name: !Sub ${Environment}-db-credentials
-      SecretString: !Sub |
-        {
-          "username": "${DBUsername}",
-          "password": "${DBPassword}"
-        }
-      KmsKeyId: !Ref KMSKey
+      CloudFrontOriginAccessIdentityConfig:
+        Comment: !Sub 'OAI for ${DomainName}'
 
-  DNSHealthCheck:
-    Type: AWS::Route53::HealthCheck
+  WebAppBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Condition: IsPrimaryDeployment
     Properties:
-      HealthCheckConfig:
-        Type: HTTP
-        FullyQualifiedDomainName: example.com
-        Port: 80
-        ResourcePath: /
-
-  ConfigRecorder:
-    Type: AWS::Config::ConfigurationRecorder
-    Properties:
-      RoleARN: !GetAtt ConfigRole.Arn
-      RecordingGroup:
-        AllSupported: true
-        IncludeGlobalResourceTypes: true
-
-  ConfigRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
+      Bucket: !Ref WebAppBucket
+      PolicyDocument:
         Statement:
-          - Effect: Allow
+          - Sid: 'AllowCloudFront'
+            Effect: Allow
             Principal:
-              Service: config.amazonaws.com
-            Action: sts:AssumeRole
-      Policies:
-        - PolicyName: ConfigPolicy
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action: '*'
-                Resource: '*'
+              CanonicalUser: !GetAtt CloudFrontOAI.S3CanonicalUserId
+            Action: 's3:GetObject'
+            Resource: !Sub 'arn:aws:s3:::${WebAppBucket}/*'
 
-  BackupVault:
-    Type: AWS::Backup::BackupVault
-    Properties:
-      BackupVaultName: !Sub ${Environment}-backup-vault
-      EncryptionKeyArn: !Ref KMSKey
-
-  WAFACL:
-    Type: AWS::WAFv2::WebACL
-    Properties:
-      Scope: CLOUDFRONT
-      DefaultAction:
-        Allow: {}
-      VisibilityConfig:
-        SampledRequestsEnabled: true
-        CloudWatchMetricsEnabled: true
-        MetricName: waf-metric
-      Rules:
-        - Name: AWS-AWSManagedRulesCommonRuleSet
-          Priority: 1
-          OverrideAction:
-            None: {}
-          Statement:
-            ManagedRuleGroupStatement:
-              VendorName: AWS
-              Name: AWSManagedRulesCommonRuleSet
-          VisibilityConfig:
-            SampledRequestsEnabled: true
-            CloudWatchMetricsEnabled: true
-            MetricName: common-rules
-
-  CloudFront:
+  CloudFrontDistribution:
     Type: AWS::CloudFront::Distribution
+    Condition: IsPrimaryDeployment
     Properties:
       DistributionConfig:
         Enabled: true
-        DefaultRootObject: index.html
+        DefaultRootObject: 'index.html'
         Origins:
-          - Id: S3Origin
-            DomainName: !GetAtt AppBucket.RegionalDomainName
-            S3OriginConfig: {}
+          - Id: 'S3Origin'
+            DomainName: !GetAtt WebAppBucket.DomainName
+            S3OriginConfig:
+              OriginAccessIdentity: !Sub 'origin-access-identity/cloudfront/${CloudFrontOAI}'
         DefaultCacheBehavior:
-          TargetOriginId: S3Origin
-          ViewerProtocolPolicy: redirect-to-https
+          TargetOriginId: 'S3Origin'
+          ViewerProtocolPolicy: 'redirect-to-https'
           ForwardedValues:
             QueryString: false
             Cookies:
               Forward: none
-        WebACLId: !Ref WAFACL
+        PriceClass: 'PriceClass_All'
 
-  CloudTrail:
-    Type: AWS::CloudTrail::Trail
+  DBSecret:
+    Type: AWS::SecretsManager::Secret
+    Condition: IsPrimaryDeployment
     Properties:
-      IsLogging: true
-      S3BucketName: !Ref AppBucket
-      IncludeGlobalServiceEvents: true
-      IsMultiRegionTrail: true
+      Name: !Sub '${EnvironmentSuffix}/rds-credentials'
+      GenerateSecretString:
+        SecretStringTemplate: !Sub '{"username": "${DBUsername}"}'
+        GenerateStringKey: 'password'
+        PasswordLength: 16
+        ExcludePunctuation: true
 
-  AppLogGroup:
-    Type: AWS::Logs::LogGroup
+  PrimaryDBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Condition: IsPrimaryDeployment
     Properties:
-      RetentionInDays: 30
+      DBSubnetGroupDescription: 'DB Subnet Group for Primary DB'
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+  
+  DBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Condition: IsPrimaryDeployment
+    Properties:
+      GroupDescription: 'Allow traffic from App Security Group'
+      VpcId: !Ref VPC
+      
+  PrimaryDBInstance:
+    Type: AWS::RDS::DBInstance
+    Condition: IsPrimaryDeployment
+    Properties:
+      DBInstanceIdentifier: !Sub '${EnvironmentSuffix}-primary-db-${AWS::Region}'
+      Engine: 'mysql'
+      EngineVersion: '8.0'
+      DBInstanceClass: 'db.t3.micro'
+      AllocatedStorage: '20'
+      MasterUsername: !Sub '{{resolve:secretsmanager:${DBSecret}:SecretString:username}}'
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DBSecret}:SecretString:password}}'
+      DBSubnetGroupName: !Ref PrimaryDBSubnetGroup
+      VPCSecurityGroups:
+        - !Ref DBSecurityGroup
+      PubliclyAccessible: false
+      StorageEncrypted: true
       KmsKeyId: !Ref KMSKey
+      MultiAZ: false # Set to false for faster dev/test deployments
+      DeletionProtection: false
+
+  # --- REPLICA-ONLY RESOURCES ---
+  ReplicaDBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Condition: IsReplicaDeployment
+    Properties:
+      DBSubnetGroupDescription: "Subnet group for RDS Replica"
+      # This looks up the subnets created by the Primary deployment in THIS region.
+      # This assumes you have already run the template with 'Primary' mode in this region.
+      SubnetIds:
+         - Fn::ImportValue: !Sub '${EnvironmentSuffix}-PrivateSubnet1Id'
+
+  RDSReadReplica:
+    Type: AWS::RDS::DBInstance
+    Condition: IsReplicaDeployment
+    Properties:
+      DBInstanceClass: 'db.t3.micro'
+      DBSubnetGroupName: !Ref ReplicaDBSubnetGroup
+      SourceDBInstanceIdentifier: !Ref PrimaryDbIdentifier
+      SourceRegion: !Ref PrimaryRegion
+      StorageEncrypted: true # Must match the source
 
 Outputs:
-  AppBucketName:
-    Description: Encrypted S3 Bucket
-    Value: !Ref AppBucket
-
-  CloudFrontURL:
-    Description: CDN URL
-    Value: !GetAtt CloudFront.DomainName
-
-  SecretsARN:
-    Description: ARN of the stored secret
-    Value: !Ref AppSecrets
+  PrimaryDatabaseIdentifier:
+    Condition: IsPrimaryDeployment
+    Description: 'Identifier for the primary RDS instance (USE THIS FOR REPLICA DEPLOYMENTS)'
+    Value: !Ref PrimaryDBInstance
+    Export:
+      Name: !Sub '${AWS::StackName}-PrimaryDBIdentifier'
+  VPCId:
+    Condition: IsPrimaryDeployment
+    Description: 'ID of the created VPC'
+    Value: !Ref VPC
+    Export:
+      Name: !Sub '${AWS::StackName}-VPCId'
+  PrivateSubnet1Id:
+    Condition: IsPrimaryDeployment
+    Description: 'ID of Private Subnet 1'
+    Value: !Ref PrivateSubnet1
+    Export:
+      Name: !Sub '${EnvironmentSuffix}-PrivateSubnet1Id' # Simpler export name for replicas to find
+  PrivateSubnet2Id:
+    Condition: IsPrimaryDeployment
+    Description: 'ID of Private Subnet 2'
+    Value: !Ref PrivateSubnet2
+    Export:
+      Name: !Sub '${EnvironmentSuffix}-PrivateSubnet2Id'
+  ReadReplicaEndpoint:
+    Condition: IsReplicaDeployment
+    Description: 'Endpoint for the RDS Read Replica in this region'
+    Value: !GetAtt RDSReadReplica.Endpoint.Address
 ```
-
-## Security Features
-
-- **Least Privilege IAM:** IAM roles are defined for AWS Config and CloudTrail
-- **Encryption:** Uses KMS for all encryption at rest (S3, Secrets, Logs, Backups)
-- **High Availability:** Designed to support regional extension and fault tolerance
-- **WAF:** Protects CloudFront and origin workloads from OWASP threats
-- **Monitoring:** CloudWatch, CloudTrail, Config for full observability
-- **Resiliency:** AWS Backup and Route 53 Health Checks for failover handling
