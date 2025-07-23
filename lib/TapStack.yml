@@ -261,7 +261,7 @@ Resources:
               StringNotLike:
                 "aws:PrincipalArn":
                   - !GetAtt WhitelistedIAMUser.Arn
-                  - arn:aws:sts::718240086340:assumed-role/iac-rlhf-trainer-instances-role/i-0256c21bc1d8edbd9
+                  - arn:aws:iam::718240086340:user/iac-deployment-runner
               StringNotEqualsIfExists:
                 aws:PrincipalServiceName:
                   - config.amazonaws.com
@@ -690,14 +690,3 @@ Outputs:
     Value: !Ref BackupLambda
     Description: Daily Backup Lambda Function
 
-  DynamoDBTableName:
-    Value: "N/A"
-    Description: No DynamoDB table in current stack — update if added
-
-  WebACLId:
-    Value: "N/A"
-    Description: WAF WebACL ID — update if WAF is added
-
-  WebACLArn:
-    Value: "N/A"
-    Description: WAF WebACL ARN — update if WAF is added
