@@ -5,16 +5,18 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: Core infrastructure for a financial services application adhering to security and compliance best practices.
 
 Parameters:
-  Environment:
+  EnvironmentSuffix:
     Type: String
     Default: dev
     AllowedPattern: '^[a-zA-Z0-9]+$'
     ConstraintDescription: Must contain only alphanumeric characters
   Project:
     Type: String
+    Default: defaultProject
     Description: Project name for tagging
   Owner:
     Type: String
+    Default: DevOps
     Description: Resource owner for tagging
 
 Resources:
@@ -27,7 +29,7 @@ Resources:
       EnableDnsHostnames: true
       Tags:
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
@@ -44,7 +46,7 @@ Resources:
         - Key: Name
           Value: Public Subnet 1
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
@@ -60,7 +62,7 @@ Resources:
         - Key: Name
           Value: Public Subnet 2
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
@@ -77,7 +79,7 @@ Resources:
         - Key: Name
           Value: Private Subnet 1
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
@@ -93,7 +95,7 @@ Resources:
         - Key: Name
           Value: Private Subnet 2
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
@@ -208,7 +210,7 @@ Resources:
         RestrictPublicBuckets: true
       Tags:
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
@@ -244,7 +246,7 @@ Resources:
         RestrictPublicBuckets: true
       Tags:
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
@@ -320,7 +322,7 @@ Resources:
       S3BucketName: !Ref CloudTrailLogBucket
       Tags:
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
@@ -393,7 +395,7 @@ Resources:
           CidrIp: 0.0.0.0/0
       Tags:
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
@@ -410,7 +412,7 @@ Resources:
           CidrIp: 0.0.0.0/0
       Tags:
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
@@ -478,7 +480,7 @@ Resources:
       TopicName: "financial-secure-topic"
       Tags:
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
@@ -527,7 +529,7 @@ Resources:
               Name: AWSManagedRulesCommonRuleSet
       Tags:
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
@@ -551,7 +553,7 @@ Resources:
         - !Ref RDSSecurityGroup
       Tags:
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
@@ -580,7 +582,7 @@ Resources:
           - !Ref PrivateSubnet2
       Tags:
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
@@ -603,7 +605,7 @@ Resources:
         PointInTimeRecoveryEnabled: true
       Tags:
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
@@ -614,9 +616,41 @@ Outputs:
     Description: VPC ID
     Value: !Ref FinancialServicesVPC
 
+  PublicSubnet1Id:
+    Description: First public subnet ID
+    Value: !Ref PublicSubnet1
+
+  PublicSubnet2Id:
+    Description: Second public subnet ID
+    Value: !Ref PublicSubnet2
+
+  PrivateSubnet1Id:
+    Description: First private subnet ID
+    Value: !Ref PrivateSubnet1
+
+  PrivateSubnet2Id:
+    Description: Second private subnet ID
+    Value: !Ref PrivateSubnet2
+
+  RDSInstanceId:
+    Description: FinancialDB RDS Instance ID
+    Value: !Ref FinancialDB
+
+  RDSInstanceEndpoint:
+    Description: FinancialDB Endpoint Address
+    Value: !GetAtt FinancialDB.Endpoint.Address
+
+  RDSInstancePort:
+    Description: FinancialDB Endpoint Port
+    Value: !GetAtt FinancialDB.Endpoint.Port
+
   S3BucketName:
-    Description: S3 Bucket Name
+    Description: Encrypted S3 Bucket Name
     Value: !Ref SecureS3Bucket
+
+  CloudTrailLogBucketName:
+    Description: CloudTrail S3 Bucket Name
+    Value: !Ref CloudTrailLogBucket
 
   WebACLArn:
     Description: The ARN of the WebACL
@@ -626,10 +660,14 @@ Outputs:
     Description: The ID of the WebACL
     Value: !GetAtt WebACL.Id
 
-  RDSInstanceId:
-    Description: FinancialDB RDS Instance ID
-    Value: !Ref FinancialDB
+  FinancialDynamoDBName:
+    Description: Name of the DynamoDB table
+    Value: !Ref FinancialDynamoDB
 
-  RDSInstanceEndpoint:
-    Description: FinancialDB Endpoint Address
-    Value: !GetAtt FinancialDB.Endpoint.Address
+  LambdaFunctionName:
+    Description: Financial Lambda Function Name
+    Value: !Ref FinancialLambdaFunction
+
+  ConfigRecorderName:
+    Description: AWS Config Recorder Name
+    Value: !Ref ConfigRecorder

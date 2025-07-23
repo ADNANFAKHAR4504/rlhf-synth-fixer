@@ -2,7 +2,7 @@
     "AWSTemplateFormatVersion": "2010-09-09",
     "Description": "Core infrastructure for a financial services application adhering to security and compliance best practices.",
     "Parameters": {
-        "Environment": {
+        "EnvironmentSuffix": {
             "Type": "String",
             "Default": "dev",
             "AllowedPattern": "^[a-zA-Z0-9]+$",
@@ -10,10 +10,12 @@
         },
         "Project": {
             "Type": "String",
+            "Default": "defaultProject",
             "Description": "Project name for tagging"
         },
         "Owner": {
             "Type": "String",
+            "Default": "DevOps",
             "Description": "Resource owner for tagging"
         }
     },
@@ -28,7 +30,7 @@
                     {
                         "Key": "Environment",
                         "Value": {
-                            "Ref": "Environment"
+                            "Ref": "EnvironmentSuffix"
                         }
                     },
                     {
@@ -69,7 +71,7 @@
                     {
                         "Key": "Environment",
                         "Value": {
-                            "Ref": "Environment"
+                            "Ref": "EnvironmentSuffix"
                         }
                     },
                     {
@@ -110,7 +112,7 @@
                     {
                         "Key": "Environment",
                         "Value": {
-                            "Ref": "Environment"
+                            "Ref": "EnvironmentSuffix"
                         }
                     },
                     {
@@ -151,7 +153,7 @@
                     {
                         "Key": "Environment",
                         "Value": {
-                            "Ref": "Environment"
+                            "Ref": "EnvironmentSuffix"
                         }
                     },
                     {
@@ -192,7 +194,7 @@
                     {
                         "Key": "Environment",
                         "Value": {
-                            "Ref": "Environment"
+                            "Ref": "EnvironmentSuffix"
                         }
                     },
                     {
@@ -388,7 +390,7 @@
                     {
                         "Key": "Environment",
                         "Value": {
-                            "Ref": "Environment"
+                            "Ref": "EnvironmentSuffix"
                         }
                     },
                     {
@@ -436,7 +438,7 @@
                     {
                         "Key": "Environment",
                         "Value": {
-                            "Ref": "Environment"
+                            "Ref": "EnvironmentSuffix"
                         }
                     },
                     {
@@ -566,7 +568,7 @@
                     {
                         "Key": "Environment",
                         "Value": {
-                            "Ref": "Environment"
+                            "Ref": "EnvironmentSuffix"
                         }
                     },
                     {
@@ -692,7 +694,7 @@
                     {
                         "Key": "Environment",
                         "Value": {
-                            "Ref": "Environment"
+                            "Ref": "EnvironmentSuffix"
                         }
                     },
                     {
@@ -728,7 +730,7 @@
                     {
                         "Key": "Environment",
                         "Value": {
-                            "Ref": "Environment"
+                            "Ref": "EnvironmentSuffix"
                         }
                     },
                     {
@@ -847,7 +849,7 @@
                     {
                         "Key": "Environment",
                         "Value": {
-                            "Ref": "Environment"
+                            "Ref": "EnvironmentSuffix"
                         }
                     },
                     {
@@ -930,7 +932,7 @@
                     {
                         "Key": "Environment",
                         "Value": {
-                            "Ref": "Environment"
+                            "Ref": "EnvironmentSuffix"
                         }
                     },
                     {
@@ -995,7 +997,7 @@
                     {
                         "Key": "Environment",
                         "Value": {
-                            "Ref": "Environment"
+                            "Ref": "EnvironmentSuffix"
                         }
                     },
                     {
@@ -1053,7 +1055,7 @@
                     {
                         "Key": "Environment",
                         "Value": {
-                            "Ref": "Environment"
+                            "Ref": "EnvironmentSuffix"
                         }
                     },
                     {
@@ -1097,7 +1099,7 @@
                     {
                         "Key": "Environment",
                         "Value": {
-                            "Ref": "Environment"
+                            "Ref": "EnvironmentSuffix"
                         }
                     },
                     {
@@ -1123,10 +1125,64 @@
                 "Ref": "FinancialServicesVPC"
             }
         },
+        "PublicSubnet1Id": {
+            "Description": "First public subnet ID",
+            "Value": {
+                "Ref": "PublicSubnet1"
+            }
+        },
+        "PublicSubnet2Id": {
+            "Description": "Second public subnet ID",
+            "Value": {
+                "Ref": "PublicSubnet2"
+            }
+        },
+        "PrivateSubnet1Id": {
+            "Description": "First private subnet ID",
+            "Value": {
+                "Ref": "PrivateSubnet1"
+            }
+        },
+        "PrivateSubnet2Id": {
+            "Description": "Second private subnet ID",
+            "Value": {
+                "Ref": "PrivateSubnet2"
+            }
+        },
+        "RDSInstanceId": {
+            "Description": "FinancialDB RDS Instance ID",
+            "Value": {
+                "Ref": "FinancialDB"
+            }
+        },
+        "RDSInstanceEndpoint": {
+            "Description": "FinancialDB Endpoint Address",
+            "Value": {
+                "Fn::GetAtt": [
+                    "FinancialDB",
+                    "Endpoint.Address"
+                ]
+            }
+        },
+        "RDSInstancePort": {
+            "Description": "FinancialDB Endpoint Port",
+            "Value": {
+                "Fn::GetAtt": [
+                    "FinancialDB",
+                    "Endpoint.Port"
+                ]
+            }
+        },
         "S3BucketName": {
-            "Description": "S3 Bucket Name",
+            "Description": "Encrypted S3 Bucket Name",
             "Value": {
                 "Ref": "SecureS3Bucket"
+            }
+        },
+        "CloudTrailLogBucketName": {
+            "Description": "CloudTrail S3 Bucket Name",
+            "Value": {
+                "Ref": "CloudTrailLogBucket"
             }
         },
         "WebACLArn": {
@@ -1147,19 +1203,22 @@
                 ]
             }
         },
-        "RDSInstanceId": {
-            "Description": "FinancialDB RDS Instance ID",
+        "FinancialDynamoDBName": {
+            "Description": "Name of the DynamoDB table",
             "Value": {
-                "Ref": "FinancialDB"
+                "Ref": "FinancialDynamoDB"
             }
         },
-        "RDSInstanceEndpoint": {
-            "Description": "FinancialDB Endpoint Address",
+        "LambdaFunctionName": {
+            "Description": "Financial Lambda Function Name",
             "Value": {
-                "Fn::GetAtt": [
-                    "FinancialDB",
-                    "Endpoint.Address"
-                ]
+                "Ref": "FinancialLambdaFunction"
+            }
+        },
+        "ConfigRecorderName": {
+            "Description": "AWS Config Recorder Name",
+            "Value": {
+                "Ref": "ConfigRecorder"
             }
         }
     }

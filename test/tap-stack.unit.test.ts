@@ -20,7 +20,7 @@ describe('TapStack CloudFormation Template', () => {
   });
 
   test('should define Environment, Project, and Owner parameters', () => {
-    expect(template.Parameters.Environment).toBeDefined();
+    expect(template.Parameters.EnvironmentSuffix).toBeDefined();
     expect(template.Parameters.Project).toBeDefined();
     expect(template.Parameters.Owner).toBeDefined();
   });
