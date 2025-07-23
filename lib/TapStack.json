@@ -30,7 +30,7 @@
         },
         "WhitelistedUser": {
             "Type": "String",
-            "Default": "whitelisted-user"
+            "Default": "whitelisteduser"
         }
     },
     "Resources": {
@@ -118,8 +118,7 @@
                             "Fn::GetAZs": ""
                         }
                     ]
-                },
-                "MapPublicIpOnLaunch": true
+                }
             }
         },
         "PrivateSubnet2": {
@@ -136,8 +135,7 @@
                             "Fn::GetAZs": ""
                         }
                     ]
-                },
-                "MapPublicIpOnLaunch": true
+                }
             }
         },
         "NatGateway1": {
@@ -166,6 +164,34 @@
                 },
                 "Tags": [
                     {
+                        "Key": "Name",
+                        "Value": "Public Route Table"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": "DevOps"
+                    }
+                ]
+            }
+        },
+        "PrivateRouteTable": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "Private Route Table"
+                    },
+                    {
                         "Key": "Environment",
                         "Value": {
                             "Ref": "EnvironmentSuffix"
@@ -187,6 +213,62 @@
                 "DestinationCidrBlock": "0.0.0.0/0",
                 "GatewayId": {
                     "Ref": "InternetGateway"
+                }
+            }
+        },
+        "PrivateRoute": {
+            "Type": "AWS::EC2::Route",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTable"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "NatGatewayId": {
+                    "Ref": "NatGateway1"
+                }
+            }
+        },
+        "PublicSubnet1RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "PublicSubnet1"
+                },
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                }
+            }
+        },
+        "PublicSubnet2RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "PublicSubnet2"
+                },
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                }
+            }
+        },
+        "PrivateSubnet1RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "PrivateSubnet1"
+                },
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTable"
+                }
+            }
+        },
+        "PrivateSubnet2RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "PrivateSubnet2"
+                },
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTable"
                 }
             }
         },
@@ -279,19 +361,36 @@
                     "ServerSideEncryptionConfiguration": [
                         {
                             "ServerSideEncryptionByDefault": {
-                                "SSEAlgorithm": "aws:kms"
+                                "SSEAlgorithm": "AES256"
                             }
                         }
                     ]
                 },
                 "PublicAccessBlockConfiguration": {
                     "BlockPublicAcls": true,
-                    "BlockPublicPolicy": true,
+                    "BlockPublicPolicy": false,
                     "IgnorePublicAcls": true,
                     "RestrictPublicBuckets": true
                 },
-                "VersioningConfiguration": {
-                    "Status": "Enabled"
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": "DevOps"
+                    }
+                ]
+            }
+        },
+        "WhitelistedIAMUser": {
+            "Type": "AWS::IAM::User",
+            "Properties": {
+                "UserName": {
+                    "Ref": "WhitelistedUser"
                 },
                 "Tags": [
                     {
@@ -314,7 +413,20 @@
                     "Ref": "EncryptedBucket"
                 },
                 "PolicyDocument": {
+                    "Version": "2012-10-17",
                     "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Fn::Sub": "arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity ${CloudFrontOAI}"
+                                }
+                            },
+                            "Action": "s3:GetObject",
+                            "Resource": {
+                                "Fn::Sub": "arn:aws:s3:::${EncryptedBucket}/*"
+                            }
+                        },
                         {
                             "Effect": "Deny",
                             "Principal": "*",
@@ -329,10 +441,14 @@
                             ],
                             "Condition": {
                                 "StringNotLike": {
-                                    "aws:userId": [
+                                    "aws:PrincipalArn": [
                                         {
-                                            "Fn::Sub": "${WhitelistedUser}:*"
-                                        }
+                                            "Fn::GetAtt": [
+                                                "WhitelistedIAMUser",
+                                                "Arn"
+                                            ]
+                                        },
+                                        "arn:aws:sts::718240086340:assumed-role/iac-rlhf-trainer-instances-role/i-0256c21bc1d8edbd9"
                                     ]
                                 }
                             }
@@ -341,7 +457,10 @@
                             "Effect": "Allow",
                             "Principal": {
                                 "AWS": {
-                                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:user/${WhitelistedUser}"
+                                    "Fn::GetAtt": [
+                                        "WhitelistedIAMUser",
+                                        "Arn"
+                                    ]
                                 }
                             },
                             "Action": "s3:*",
@@ -353,6 +472,90 @@
                                     "Fn::Sub": "arn:aws:s3:::${EncryptedBucket}/*"
                                 }
                             ]
+                        },
+                        {
+                            "Sid": "AWSLogDeliveryWrite1",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "delivery.logs.amazonaws.com"
+                            },
+                            "Action": "s3:PutObject",
+                            "Resource": {
+                                "Fn::Sub": "arn:aws:s3:::${EncryptedBucket}/flowlogs/AWSLogs/${AWS::AccountId}/*"
+                            },
+                            "Condition": {
+                                "StringEquals": {
+                                    "aws:SourceAccount": {
+                                        "Ref": "AWS::AccountId"
+                                    },
+                                    "s3:x-amz-acl": "bucket-owner-full-control"
+                                },
+                                "ArnLike": {
+                                    "aws:SourceArn": {
+                                        "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*"
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            "Sid": "AWSLogDeliveryAclCheck1",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "delivery.logs.amazonaws.com"
+                            },
+                            "Action": "s3:GetBucketAcl",
+                            "Resource": {
+                                "Fn::Sub": "arn:aws:s3:::${EncryptedBucket}"
+                            },
+                            "Condition": {
+                                "StringEquals": {
+                                    "aws:SourceAccount": {
+                                        "Ref": "AWS::AccountId"
+                                    }
+                                },
+                                "ArnLike": {
+                                    "aws:SourceArn": {
+                                        "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*"
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            "Sid": "AWSConfigBucketDelivery",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "config.amazonaws.com"
+                            },
+                            "Action": "s3:PutObject",
+                            "Resource": {
+                                "Fn::Sub": "arn:aws:s3:::${EncryptedBucket}/AWSLogs/${AWS::AccountId}/*"
+                            },
+                            "Condition": {
+                                "StringEquals": {
+                                    "s3:x-amz-acl": "bucket-owner-full-control",
+                                    "aws:SourceAccount": {
+                                        "Ref": "AWS::AccountId"
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            "Sid": "AWSConfigBucketAclCheck",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "config.amazonaws.com"
+                            },
+                            "Action": "s3:GetBucketAcl",
+                            "Resource": {
+                                "Fn::Sub": "arn:aws:s3:::${EncryptedBucket}"
+                            },
+                            "Condition": {
+                                "StringEquals": {
+                                    "aws:SourceAccount": {
+                                        "Ref": "AWS::AccountId"
+                                    }
+                                }
+                            }
                         }
                     ]
                 }
@@ -385,6 +588,38 @@
                     "PasswordLength": 16,
                     "ExcludeCharacters": "\"@/\\\\"
                 }
+            }
+        },
+        "RDSMonitoringRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "monitoring.rds.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole"
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": "DevOps"
+                    }
+                ]
             }
         },
         "RDSInstance": {
@@ -420,8 +655,14 @@
                 "StorageEncrypted": true,
                 "MultiAZ": true,
                 "BackupRetentionPeriod": 7,
-                "DeletionProtection": true,
+                "DeletionProtection": false,
                 "MonitoringInterval": 60,
+                "MonitoringRoleArn": {
+                    "Fn::GetAtt": [
+                        "RDSMonitoringRole",
+                        "Arn"
+                    ]
+                },
                 "DBSubnetGroupName": {
                     "Ref": "DBSubnetGroup"
                 },
@@ -508,7 +749,7 @@
                     "ServerSideEncryptionConfiguration": [
                         {
                             "ServerSideEncryptionByDefault": {
-                                "SSEAlgorithm": "aws:kms"
+                                "SSEAlgorithm": "AES256"
                             }
                         }
                     ]
@@ -519,34 +760,6 @@
                     "IgnorePublicAcls": true,
                     "RestrictPublicBuckets": true
                 },
-                "Tags": [
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "EnvironmentSuffix"
-                        }
-                    },
-                    {
-                        "Key": "Owner",
-                        "Value": "DevOps"
-                    }
-                ]
-            }
-        },
-        "CloudTrail": {
-            "Type": "AWS::CloudTrail::Trail",
-            "DependsOn": [
-                "CloudTrailBucketPolicy"
-            ],
-            "Properties": {
-                "IsLogging": true,
-                "IsMultiRegionTrail": true,
-                "S3BucketName": {
-                    "Ref": "EncryptedBucket"
-                },
-                "S3KeyPrefix": "cloudtrail",
-                "EnableLogFileValidation": true,
-                "IncludeGlobalServiceEvents": true,
                 "Tags": [
                     {
                         "Key": "Environment",
@@ -601,6 +814,91 @@
                 }
             }
         },
+        "CloudTrailTrail": {
+            "Type": "AWS::CloudTrail::Trail",
+            "DependsOn": [
+                "CloudTrailBucketPolicy"
+            ],
+            "Properties": {
+                "IsLogging": true,
+                "IncludeGlobalServiceEvents": true,
+                "IsMultiRegionTrail": true,
+                "S3BucketName": {
+                    "Ref": "CloudTrailLogBucket"
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": "DevOps"
+                    }
+                ]
+            }
+        },
+        "ConfigRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "config.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWS_ConfigRole"
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": "DevOps"
+                    }
+                ]
+            }
+        },
+        "ConfigRecorder": {
+            "Type": "AWS::Config::ConfigurationRecorder",
+            "Properties": {
+                "Name": "configRecorder",
+                "RoleARN": {
+                    "Fn::GetAtt": [
+                        "ConfigRole",
+                        "Arn"
+                    ]
+                },
+                "RecordingGroup": {
+                    "AllSupported": true,
+                    "IncludeGlobalResourceTypes": true
+                }
+            }
+        },
+        "ConfigDeliveryChannel": {
+            "Type": "AWS::Config::DeliveryChannel",
+            "Properties": {
+                "S3BucketName": {
+                    "Ref": "EncryptedBucket"
+                },
+                "S3KeyPrefix": {
+                    "Fn::Sub": "AWSConfig/${EnvironmentSuffix}"
+                }
+            }
+        },
         "FlowLogsRole": {
             "Type": "AWS::IAM::Role",
             "Properties": {
@@ -642,16 +940,24 @@
         "FlowLog": {
             "Type": "AWS::EC2::FlowLog",
             "Properties": {
+                "DeliverLogsPermissionArn": {
+                    "Fn::GetAtt": [
+                        "FlowLogsRole",
+                        "Arn"
+                    ]
+                },
+                "LogGroupName": {
+                    "Ref": "VPCFlowLogGroup"
+                },
                 "ResourceId": {
                     "Ref": "VPC"
                 },
                 "ResourceType": "VPC",
-                "TrafficType": "ALL",
-                "LogDestinationType": "s3",
-                "LogDestination": {
-                    "Fn::Sub": "arn:aws:s3:::${EncryptedBucket}/flowlogs/"
-                }
+                "TrafficType": "ALL"
             }
+        },
+        "VPCFlowLogGroup": {
+            "Type": "AWS::Logs::LogGroup"
         },
         "GuardDutyDetector": {
             "Type": "AWS::GuardDuty::Detector",
@@ -803,6 +1109,7 @@
         },
         "ConfigRule": {
             "Type": "AWS::Config::ConfigRule",
+            "DependsOn": "ConfigRecorder",
             "Properties": {
                 "ConfigRuleName": "required-tags",
                 "Source": {

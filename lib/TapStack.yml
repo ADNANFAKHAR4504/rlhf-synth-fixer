@@ -22,7 +22,7 @@ Parameters:
     Default: "0.0.0.0/0" # Replace with actual CIDR
   WhitelistedUser:
     Type: String
-    Default: "whitelisted-user" # Replace with actual IAM user
+    Default: "whitelisteduser" # Replace with actual IAM user
 
 Resources:
   # --- NETWORKING (Requirement 1,13) ---
@@ -72,7 +72,6 @@ Resources:
       VpcId: !Ref VPC
       CidrBlock: 10.0.3.0/24
       AvailabilityZone: !Select [0, !GetAZs '']
-      MapPublicIpOnLaunch: true
 
   PrivateSubnet2:
     # ... us-east-1b, CidrBlock: 10.0.4.0/24
@@ -81,7 +80,6 @@ Resources:
       VpcId: !Ref VPC
       CidrBlock: 10.0.4.0/24
       AvailabilityZone: !Select [1, !GetAZs '']
-      MapPublicIpOnLaunch: true
 
   # NAT Gateway + EIP (High Availability)
   NatGateway1:
@@ -100,20 +98,65 @@ Resources:
     Properties: 
       VpcId: !Ref VPC
       Tags:
+        - Key: Name
+          Value: Public Route Table
         - Key: Environment
           Value: !Ref EnvironmentSuffix
         - Key: Owner
           Value: DevOps
 
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: Private Route Table
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Owner
+          Value: DevOps
+  
   PublicRoute:
     Type: AWS::EC2::Route
     Properties:
       RouteTableId: !Ref PublicRouteTable
       DestinationCidrBlock: 0.0.0.0/0
       GatewayId: !Ref InternetGateway
+
+  PrivateRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway1
       
 
   # Associate public subnets...
+  # Subnet Associations
+  PublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet2
+      RouteTableId: !Ref PublicRouteTable
+  
+  PrivateSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet1
+      RouteTableId: !Ref PrivateRouteTable
+
+  PrivateSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet2
+      RouteTableId: !Ref PrivateRouteTable
 
   # --- SECURITY GROUPS (Requirement 6) ---
   SSHSecurityGroup:
@@ -169,14 +212,23 @@ Resources:
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
-              SSEAlgorithm: aws:kms
+              SSEAlgorithm: AES256
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
-        BlockPublicPolicy: true
+        BlockPublicPolicy: false
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
-      VersioningConfiguration:
-        Status: Enabled
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Owner
+          Value: DevOps
+
+  # --- IAM User for S3 Whitelisting (Requirement for BucketPolicy) ---
+  WhitelistedIAMUser:
+    Type: AWS::IAM::User
+    Properties:
+      UserName: !Ref WhitelistedUser # Uses the parameter value for the user's name
       Tags:
         - Key: Environment
           Value: !Ref EnvironmentSuffix
@@ -188,24 +240,84 @@ Resources:
     Properties:
       Bucket: !Ref EncryptedBucket
       PolicyDocument:
+        Version: "2012-10-17" # Always good to explicitly define the version
         Statement:
+          # Explicitly allow access for the CloudFront OAI to GetObject
+          - Effect: Allow
+            Principal:
+              # This correctly references the OAI created in your template
+              AWS: !Sub "arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity ${CloudFrontOAI}"
+            Action: "s3:GetObject"
+            Resource: !Sub "arn:aws:s3:::${EncryptedBucket}/*"
+          # Deny all access EXCEPT if the principal is the whitelisted IAM User ARN
           - Effect: Deny
-            Principal: "*"
+            Principal: "*" # Applies to everyone
             Action: "s3:*"
-            Resource: 
+            Resource:
               - !Sub "arn:aws:s3:::${EncryptedBucket}"
               - !Sub "arn:aws:s3:::${EncryptedBucket}/*"
             Condition:
+              # This condition ensures the deny is NOT applied if the Principal's ARN matches the whitelisted user
               StringNotLike:
-                "aws:userId": 
-                  - !Sub "${WhitelistedUser}:*"
+                "aws:PrincipalArn":
+                  - !GetAtt WhitelistedIAMUser.Arn
+                  - arn:aws:sts::718240086340:assumed-role/iac-rlhf-trainer-instances-role/i-0256c21bc1d8edbd9
+                
+          # Explicitly allow access for the whitelisted IAM User
           - Effect: Allow
             Principal:
-              AWS: !Sub "arn:aws:iam::${AWS::AccountId}:user/${WhitelistedUser}"
+              AWS: !GetAtt WhitelistedIAMUser.Arn # Referencing the ARN of the created user
             Action: "s3:*"
-            Resource: 
+            Resource:
               - !Sub "arn:aws:s3:::${EncryptedBucket}"
               - !Sub "arn:aws:s3:::${EncryptedBucket}/*"
+          # Allow VPC Flow Logs delivery
+          - Sid: AWSLogDeliveryWrite1
+            Effect: Allow
+            Principal:
+              Service: delivery.logs.amazonaws.com
+            Action: "s3:PutObject"
+            Resource: !Sub "arn:aws:s3:::${EncryptedBucket}/flowlogs/AWSLogs/${AWS::AccountId}/*"
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Ref "AWS::AccountId"
+                s3:x-amz-acl: "bucket-owner-full-control"
+              ArnLike:
+                aws:SourceArn: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*"
+
+          - Sid: AWSLogDeliveryAclCheck1
+            Effect: Allow
+            Principal:
+              Service: delivery.logs.amazonaws.com
+            Action: "s3:GetBucketAcl"
+            Resource: !Sub "arn:aws:s3:::${EncryptedBucket}"
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Ref "AWS::AccountId"
+              ArnLike:
+                aws:SourceArn: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*"
+          # --- ALLOW AWS CONFIG DELIVERY ---
+          - Sid: AWSConfigBucketDelivery
+            Effect: Allow
+            Principal:
+              Service: config.amazonaws.com
+            Action: s3:PutObject
+            Resource: !Sub arn:aws:s3:::${EncryptedBucket}/AWSLogs/${AWS::AccountId}/*
+            Condition:
+              StringEquals:
+                s3:x-amz-acl: bucket-owner-full-control
+                aws:SourceAccount: !Ref AWS::AccountId
+
+          - Sid: AWSConfigBucketAclCheck
+            Effect: Allow
+            Principal:
+              Service: config.amazonaws.com
+            Action: s3:GetBucketAcl
+            Resource: !Sub arn:aws:s3:::${EncryptedBucket}
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+
 
   # --- DATABASE (Requirement 4) ---
   DBSubnetGroup:
@@ -228,6 +340,24 @@ Resources:
         PasswordLength: 16
         ExcludeCharacters: '"@/\\'
 
+  RDSMonitoringRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: monitoring.rds.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Owner
+          Value: DevOps
+  
   RDSInstance:
     Type: AWS::RDS::DBInstance
     Properties:
@@ -239,8 +369,9 @@ Resources:
       StorageEncrypted: true
       MultiAZ: true
       BackupRetentionPeriod: 7
-      DeletionProtection: true
+      DeletionProtection: false
       MonitoringInterval: 60
+      MonitoringRoleArn: !GetAtt RDSMonitoringRole.Arn
       DBSubnetGroupName: !Ref DBSubnetGroup
       VPCSecurityGroups:
         - !GetAtt DBSecurityGroup.GroupId
@@ -281,13 +412,14 @@ Resources:
           CidrIp: 0.0.0.0/0
 
   # --- LOGGING & MONITORING (Requirements 5,7,9,13,14) ---
+  # CloudTrail S3 Bucket (dedicated, secure, encrypted)
   CloudTrailLogBucket:
     Type: AWS::S3::Bucket
     Properties:
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
-              SSEAlgorithm: aws:kms
+              SSEAlgorithm: AES256
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -299,23 +431,6 @@ Resources:
         - Key: Owner
           Value: DevOps
 
-  CloudTrail:
-    Type: AWS::CloudTrail::Trail
-    DependsOn:
-      - CloudTrailBucketPolicy
-    Properties:
-      IsLogging: true
-      IsMultiRegionTrail: true
-      S3BucketName: !Ref EncryptedBucket
-      S3KeyPrefix: "cloudtrail"
-      EnableLogFileValidation: true
-      IncludeGlobalServiceEvents: true
-      Tags:
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Owner
-          Value: DevOps
-  
   CloudTrailBucketPolicy:
     Type: AWS::S3::BucketPolicy
     Properties:
@@ -338,6 +453,55 @@ Resources:
             Condition:
               StringEquals:
                 's3:x-amz-acl': 'bucket-owner-full-control'
+
+  CloudTrailTrail:
+    Type: AWS::CloudTrail::Trail
+    DependsOn:
+      - CloudTrailBucketPolicy
+    Properties:
+      IsLogging: true
+      IncludeGlobalServiceEvents: true
+      IsMultiRegionTrail: true
+      S3BucketName: !Ref CloudTrailLogBucket
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Owner
+          Value: DevOps
+
+  ConfigRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: config.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWS_ConfigRole
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Owner
+          Value: DevOps
+  
+  # AWS Config
+  ConfigRecorder:
+    Type: AWS::Config::ConfigurationRecorder
+    Properties:
+      Name: configRecorder
+      RoleARN: !GetAtt ConfigRole.Arn
+      RecordingGroup:
+        AllSupported: true
+        IncludeGlobalResourceTypes: true
+  
+  ConfigDeliveryChannel:
+    Type: AWS::Config::DeliveryChannel
+    Properties:
+      S3BucketName: !Ref EncryptedBucket
+      S3KeyPrefix: !Sub "AWSConfig/${EnvironmentSuffix}"
 
   FlowLogsRole:
     Type: AWS::IAM::Role
@@ -366,11 +530,14 @@ Resources:
   FlowLog:
     Type: AWS::EC2::FlowLog
     Properties:
+      DeliverLogsPermissionArn: !GetAtt FlowLogsRole.Arn
+      LogGroupName: !Ref VPCFlowLogGroup
       ResourceId: !Ref VPC
       ResourceType: VPC
       TrafficType: ALL
-      LogDestinationType: s3
-      LogDestination: !Sub "arn:aws:s3:::${EncryptedBucket}/flowlogs/"
+
+  VPCFlowLogGroup:
+    Type: AWS::Logs::LogGroup
 
   GuardDutyDetector:
     Type: AWS::GuardDuty::Detector
@@ -458,6 +625,7 @@ Resources:
   # --- TAGGING ENFORCEMENT (Requirement 11) ---
   ConfigRule:
     Type: AWS::Config::ConfigRule
+    DependsOn: ConfigRecorder
     Properties:
       ConfigRuleName: required-tags
       Source:
