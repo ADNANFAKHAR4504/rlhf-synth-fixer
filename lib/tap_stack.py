@@ -73,19 +73,15 @@ class TapStack(cdk.Stack):
     # ! Instead, instantiate separate stacks for each resource type.
 
     class NestedServerlessDemoStack(NestedStack):
-      def __init__(self, scope, id, props=None, **kwargs):
-        super().__init__(scope, id, **kwargs)
-        # Use the original DynamoDBStack logic here
-        self.ddb_stack = ServerlessDemoStack(self, f"ServerlessDemoStack{environment_suffix}")  # Region can be parameterized
+      def __init__(self, scope, construct_id, **kwargs):
+        super().__init__(scope, construct_id, **kwargs)
+        # Use the original ServerlessDemoStack logic here
+        self.serverless_stack = ServerlessDemoStack(
+          self, f"ServerlessDemoStack{environment_suffix}"
+        )
 
-    # db_props = DynamoDBStackProps(
-    #     environment_suffix=environment_suffix
-    # )
-
-    dynamodb_stack = NestedServerlessDemoStack(
+    # Create the nested serverless demo stack
+    self.nested_serverless_stack = NestedServerlessDemoStack(
         self,
         f"NestedServerlessDemoStack{environment_suffix}"
     )
-
-    # # Make the table available as a property of this stack
-    # self.table = dynamodb_stack.table
