@@ -1,0 +1,90 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Deploys a highly available and scalable Node.js web application using AWS Elastic Beanstalk.
+  This template configures an Application Load Balancer, Auto Scaling, and HTTPS.
+
+Parameters:
+  ApplicationName:
+    Type: String
+    Description: The name of the Elastic Beanstalk application.
+    Default: MyNodeJsApp
+
+  InstanceType:
+    Type: String
+    Description: EC2 instance type for the web application servers.
+    Default: t3.micro
+    AllowedValues:
+      - t2.micro
+      - t3.micro
+      - t3.small
+      - m5.large
+
+  KeyPairName:
+    Type: AWS::EC2::KeyPair::KeyName
+    Description: The name of an existing EC2 KeyPair to enable SSH access to the instances.
+
+  SSLCertificateArn:
+    Type: String
+    Description: The ARN of an existing ACM SSL certificate in us-east-1 for HTTPS.
+
+Resources:
+  # 1. Define the Elastic Beanstalk Application
+  # This is the parent container for all environments and versions.
+  WebAppApplication:
+    Type: AWS::ElasticBeanstalk::Application
+    Properties:
+      ApplicationName: !Ref ApplicationName
+      Description: AWS Elastic Beanstalk application for our Node.js app.
+
+  # 2. Define the Elastic Beanstalk Environment
+  # This resource creates all the necessary infrastructure (EC2, ELB, ASG, etc.)
+  WebAppEnvironment:
+    Type: AWS::ElasticBeanstalk::Environment
+    Properties:
+      ApplicationName: !Ref WebAppApplication # Reference the application created above
+      Description: Environment for the Node.js web application
+      # Use a known valid solution stack for Node.js on Amazon Linux 2
+      SolutionStackName: "64bit Amazon Linux 2 v5.8.0 running Node.js 18"
+      OptionSettings:
+        # --- Instance and KeyPair Configuration ---
+        - Namespace: aws:autoscaling:launchconfiguration
+          OptionName: InstanceType
+          Value: !Ref InstanceType
+        - Namespace: aws:autoscaling:launchconfiguration
+          OptionName: EC2KeyName
+          Value: !Ref KeyPairName
+
+        # --- High Availability and Scalability Configuration ---
+        - Namespace: aws:elasticbeanstalk:environment
+          OptionName: EnvironmentType
+          Value: LoadBalanced
+        - Namespace: aws:elasticbeanstalk:environment
+          OptionName: LoadBalancerType
+          Value: application
+
+        # --- Auto Scaling Group Configuration ---
+        - Namespace: aws:autoscaling:asg
+          OptionName: MinSize
+          Value: '2'
+        - Namespace: aws:autoscaling:asg
+          OptionName: MaxSize
+          Value: '10'
+
+        # --- Security and HTTPS Configuration ---
+        - Namespace: aws:elbv2:listener:443
+          OptionName: Protocol
+          Value: HTTPS
+        - Namespace: aws:elbv2:listener:443
+          OptionName: SSLCertificateArns
+          Value: !Ref SSLCertificateArn
+        - Namespace: aws:elbv2:listener:default
+          OptionName: ListenerEnabled
+          Value: 'true' # Keep the default listener on port 80 enabled for HTTP->HTTPS redirect
+        - Namespace: aws:elasticbeanstalk:application:environment
+          OptionName: ELBScheme
+          Value: public # Make the load balancer internet-facing
+
+Outputs:
+  EnvironmentURL:
+    Description: The URL of the new Elastic Beanstalk environment.
+    Value: !Sub "https://${WebAppEnvironment.EndpointURL}"
