@@ -15,7 +15,7 @@ permissions:
   contents: read
 
 env:
-  NODE_VERSION: '22'
+  NODE_VERSION: '22.17.0'
   # Use PR number for resource isolation, fallback to 'main' for main branch
   # Prefix with 'pr' to ensure AWS resource names start with a letter
   ENVIRONMENT_SUFFIX: ${{ github.event.number && format('pr{0}', github.event.number) || 'dev' }}
