@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: Production-ready serverless API stack with HA, security, and observability
-# dummy
+
 Parameters:
   EnvironmentSuffix:
     Type: String
@@ -22,7 +22,7 @@ Resources:
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub ${EnvironmentSuffix}-${Name}-lambda-role-${Team}
+      # RoleName: !Sub ${EnvironmentSuffix}-${Name}-lambda-role-${Team}   # &lt;-- Removed!
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
