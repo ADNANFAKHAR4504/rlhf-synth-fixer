@@ -12,7 +12,7 @@ from aws_cdk import NestedStack
 from constructs import Construct
 
 # Import your stacks here
-# from .ddb_stack import DynamoDBStack, DynamoDBStackProps
+from .metadata_stack import ServerlessDemoStack
 
 
 class TapStackProps(cdk.StackProps):
@@ -72,22 +72,20 @@ class TapStack(cdk.Stack):
     # ! DO not create resources directly in this stack.
     # ! Instead, instantiate separate stacks for each resource type.
 
-    # class NestedDynamoDBStack(NestedStack):
-    #   def __init__(self, scope, id, props=None, **kwargs):
-    #     super().__init__(scope, id, **kwargs)
-    #     # Use the original DynamoDBStack logic here
-    #     self.ddb_stack = DynamoDBStack(self, "Resource", props=props)
-    #     self.table = self.ddb_stack.table
+    class NestedServerlessDemoStack(NestedStack):
+      def __init__(self, scope, id, props=None, **kwargs):
+        super().__init__(scope, id, **kwargs)
+        # Use the original DynamoDBStack logic here
+        self.ddb_stack = ServerlessDemoStack(self, f"ServerlessDemoStack{environment_suffix}")  # Region can be parameterized
 
     # db_props = DynamoDBStackProps(
     #     environment_suffix=environment_suffix
     # )
 
-    # dynamodb_stack = NestedDynamoDBStack(
-    #     self,
-    #     f"DynamoDBStack{environment_suffix}",
-    #     props=db_props
-    # )
+    dynamodb_stack = NestedServerlessDemoStack(
+        self,
+        f"NestedServerlessDemoStack{environment_suffix}"
+    )
 
     # # Make the table available as a property of this stack
     # self.table = dynamodb_stack.table
