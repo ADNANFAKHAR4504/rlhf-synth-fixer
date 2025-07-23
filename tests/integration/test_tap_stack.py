@@ -2,7 +2,12 @@ import json
 import os
 import unittest
 
+from aws_cdk import App
 from pytest import mark
+
+from lib.metadata_stack import ServerlessDemoStack
+from lib.tap_stack import TapStack
+
 
 # Open file cfn-outputs/flat-outputs.json
 base_dir = os.path.dirname(os.path.abspath(__file__))
@@ -64,9 +69,6 @@ class TestTapStack(unittest.TestCase):
   def test_infrastructure_requirements(self):
     """Test that validates our infrastructure meets the original requirements"""
     # Test 1: Verify we have a serverless demo stack implementation
-    from lib.metadata_stack import ServerlessDemoStack
-    from lib.tap_stack import TapStack
-    from aws_cdk import App
     
     # Create a test app and stack
     app = App()
