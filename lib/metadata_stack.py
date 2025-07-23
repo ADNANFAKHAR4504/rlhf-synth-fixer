@@ -40,7 +40,11 @@ class ServerlessStack(Stack):
       billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
     )
 
-    CfnOutput(self, "DynamoTableNameOutput", value=table.table_name, description="DynamoDB table name")
+    CfnOutput(
+      self, "DynamoTableNameOutput", 
+      value=table.table_name, 
+      description="DynamoDB table name"
+    )
 
     # Lambda Execution Role
     lambda_role = iam.Role(
@@ -82,7 +86,11 @@ class ServerlessStack(Stack):
     # Grant DynamoDB permissions
     table.grant_write_data(lambda_role)
 
-    CfnOutput(self, "LambdaRoleNameOutput", value=lambda_role.role_name, description="Lambda execution role name")
+    CfnOutput(
+      self, "LambdaRoleNameOutput", 
+      value=lambda_role.role_name, 
+      description="Lambda execution role name"
+    )
 
     # Lambda Function
     lambda_function = _lambda.Function(
@@ -90,15 +98,23 @@ class ServerlessStack(Stack):
       "ItemFunction",
       runtime=_lambda.Runtime.PYTHON_3_9,
       code=_lambda.Code.from_asset("lib/lambda"),
-      handler="index.handler",
+      handler="handler.handler",
       role=lambda_role,
       vpc=vpc,
       allow_public_subnet=True,
       environment={"TABLE_NAME": table.table_name},
     )
 
-    CfnOutput(self, "LambdaFunctionNameOutput", value=lambda_function.function_name, description="Lambda function name")
-    CfnOutput(self, "LambdaFunctionArnOutput", value=lambda_function.function_arn, description="Lambda function ARN")
+    CfnOutput(
+      self, "LambdaFunctionNameOutput", 
+      value=lambda_function.function_name, 
+      description="Lambda function name"
+    )
+    CfnOutput(
+      self, "LambdaFunctionArnOutput", 
+      value=lambda_function.function_arn, 
+      description="Lambda function ARN"
+    )
 
     # CloudWatch Alarm for Lambda Errors
     alarm = cloudwatch.Alarm(

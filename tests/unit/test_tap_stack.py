@@ -6,6 +6,8 @@ from aws_cdk import App
 from lib.metadata_stack import ServerlessStack
 from lib.tap_stack import TapStack
 
+# pylint: disable=redefined-outer-name
+
 
 @pytest.fixture
 def template():
@@ -24,7 +26,7 @@ def test_dynamodb_table_created(template):
 
 def test_lambda_function_created(template):
   template.has_resource_properties("AWS::Lambda::Function", {
-  "Handler": "index.handler",
+  "Handler": "handler.handler",
   "Runtime": "python3.9",
   "Environment": {
   "Variables": {
