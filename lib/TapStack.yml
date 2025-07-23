@@ -9,8 +9,7 @@ Description: Production-ready serverless API stack with HA, security, and observ
 # Once you have a valid ACM certificate, you can uncomment the ApiGatewayDomain
 # resource and its related output.
 #
-# The S3 artifacts bucket does NOT specify a name, so CloudFormation will create
-# a unique bucket and avoid name collisions.
+# The Lambda function code is provided inline using ZipFile.
 # ---------------------------------------------------------------------------------------
 
 Parameters:
@@ -31,24 +30,6 @@ Parameters:
     Description: AWS region for deployment
 
 Resources:
-  ArtifactsBucket:
-    Type: AWS::S3::Bucket
-    Properties: {}
-      # No BucketName property—CloudFormation will generate a unique name
-
-  ArtifactsBucketPolicy:
-    Type: AWS::S3::BucketPolicy
-    Properties:
-      Bucket: !Ref ArtifactsBucket
-      PolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: lambda.amazonaws.com
-            Action: s3:GetObject
-            Resource: !Sub '${ArtifactsBucket.Arn}/*'
-
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
@@ -85,8 +66,14 @@ Resources:
       TracingConfig:
         Mode: Active
       Code:
-        S3Bucket: !Ref ArtifactsBucket
-        S3Key: lambda-code.zip
+        ZipFile: |
+          import json
+
+          def handler(event, context):
+              return {
+                  'statusCode': 200,
+                  'body': json.dumps('Hello from Lambda!')
+              }
 
   DynamoDBTable:
     Type: AWS::DynamoDB::Table
@@ -158,9 +145,6 @@ Outputs:
   AlarmArn:
     Description: CloudWatch alarm ARN
     Value: !Ref LambdaErrorAlarm
-  ArtifactsBucketName:
-    Description: Name of the S3 bucket containing Lambda artifacts
-    Value: !Ref ArtifactsBucket
 
   # -----------------------------------------------------------------------------------
   # CustomDomain:
