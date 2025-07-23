@@ -7,10 +7,9 @@ from aws_cdk import (
   aws_dynamodb as dynamodb,
   aws_apigateway as apigateway,
   aws_iam as iam,
-  aws_cloudwatch as cloudwatch
+  aws_cloudwatch as cloudwatch,
+  CfnOutput
 )
-
-from aws_cdk import CfnOutput
 
 
 class ServerlessStack(Stack):
@@ -55,10 +54,20 @@ class ServerlessStack(Stack):
       ],
     )
 
-    CfnOutput(self, "LambdaRoleNameOutput", value=lambda_role.role_name, description="Lambda execution role name")
+    # Add required EC2 permissions for Lambda in a VPC
+    lambda_role.add_to_policy(
+      iam.PolicyStatement(
+        effect=iam.Effect.ALLOW,
+        actions=[
+          "ec2:CreateNetworkInterface",
+          "ec2:DescribeNetworkInterfaces",
+          "ec2:DeleteNetworkInterface"
+        ],
+        resources=["*"]
+      )
+    )
 
-    # Grant permissions to DynamoDB and CloudWatch
-    table.grant_write_data(lambda_role)
+    # Add CloudWatch log permissions (optional if not in the managed policy)
     lambda_role.add_to_policy(
       iam.PolicyStatement(
         actions=[
@@ -69,6 +78,11 @@ class ServerlessStack(Stack):
         resources=["arn:aws:logs:*:*:*"],
       )
     )
+
+    # Grant DynamoDB permissions
+    table.grant_write_data(lambda_role)
+
+    CfnOutput(self, "LambdaRoleNameOutput", value=lambda_role.role_name, description="Lambda execution role name")
 
     # Lambda Function
     lambda_function = _lambda.Function(
