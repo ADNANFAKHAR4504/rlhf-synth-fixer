@@ -35,17 +35,15 @@ const apigateway = new APIGatewayClient({});
 const logs = new CloudWatchLogsClient({});
 
 describe('TapStack Serverless Stack Integration Tests', () => {
-  test('Lambda function is deployed and invokable', async () => {
+  test('Lambda function is deployed and invokable directly', async () => {
     const lambdaArn = outputs.LambdaArn;
     expect(lambdaArn).toBeDefined();
 
-    // Check Lambda exists
     const getFn = await lambda.send(
       new GetFunctionCommand({ FunctionName: lambdaArn })
     );
     expect(getFn.Configuration?.FunctionName).toBeDefined();
 
-    // Invoke Lambda
     const result = await lambda.send(
       new InvokeCommand({
         FunctionName: lambdaArn,
@@ -56,15 +54,38 @@ describe('TapStack Serverless Stack Integration Tests', () => {
     expect(result.StatusCode).toBe(200);
     if (result.Payload) {
       const payload = JSON.parse(Buffer.from(result.Payload).toString());
-      expect(payload).toBeDefined();
+      expect(payload.statusCode).toBe(200);
+      expect(payload.body).toBe(JSON.stringify('Hello from Lambda!'));
     }
+  });
+
+  test('API Gateway endpoint invokes Lambda and returns correct response', async () => {
+    const apiEndpoint = outputs.ApiEndpoint;
+    expect(apiEndpoint).toBeDefined();
+
+    // Check API Gateway exists
+    const apiId = apiEndpoint.match(
+      /https:\/\/([a-z0-9]+)\.execute-api\.[^/]+/i
+    )?.[1];
+    expect(apiId).toBeDefined();
+    const { id } = await apigateway.send(
+      new GetRestApiCommand({ restApiId: apiId! })
+    );
+    expect(id).toBe(apiId);
+
+    // Make a real HTTP request to root (ANY /)
+    const url = `${apiEndpoint.replace(/\/$/, '')}/`;
+    const res = await fetch(url, { method: 'GET' });
+    expect(res.status).toBe(200);
+
+    const body = await res.text();
+    expect(body).toBe(JSON.stringify('Hello from Lambda!'));
   });
 
   test('DynamoDB table exists and is usable', async () => {
     const tableName = outputs.DynamoDBTable;
     expect(tableName).toBeDefined();
 
-    // Check table exists and is ACTIVE
     const { Table } = await dynamodb.send(
       new DescribeTableCommand({ TableName: tableName })
     );
@@ -86,28 +107,6 @@ describe('TapStack Serverless Stack Integration Tests', () => {
     );
     expect(Item).toBeDefined();
     expect(Item!.id.S).toBe('integration-test-id');
-  });
-
-  test('API Gateway is deployed and responds', async () => {
-    const apiEndpoint = outputs.ApiEndpoint;
-    expect(apiEndpoint).toBeDefined();
-
-    // Check API Gateway exists
-    const apiId = apiEndpoint.match(
-      /https:\/\/([a-z0-9]+)\.execute-api\.[^/]+/i
-    )?.[1];
-    expect(apiId).toBeDefined();
-    const { id } = await apigateway.send(
-      new GetRestApiCommand({ restApiId: apiId! })
-    );
-    expect(id).toBe(apiId);
-
-    // Make a real HTTP request
-    const url = `${apiEndpoint.replace(/\/$/, '')}/`; // root resource
-    const res = await fetch(url);
-    expect(res.status).toBeLessThan(500); // 200/4xx is OK, 500 is not
-    const body = await res.text();
-    expect(body.length).toBeGreaterThan(0);
   });
 
   test('CloudWatch Log Group exists', async () => {
