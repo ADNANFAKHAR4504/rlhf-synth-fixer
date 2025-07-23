@@ -4,5 +4,7 @@
   "complexity": "medium",
   "turn_type": "single",
   "po_id": "229163",
-  "startedAt": "2025-07-23T17:15:08.686Z"
+  "startedAt": "2025-07-23T17:15:08.686Z",
+  "subtask": "Infrastructure QA and Management",
+  "subject_labels": ["General Infrastructure Tooling QA", "AWS CloudFormation", "Infrastructure Deployment"]
 }
