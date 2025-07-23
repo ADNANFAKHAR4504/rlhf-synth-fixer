@@ -8,6 +8,9 @@ Description: Production-ready serverless API stack with HA, security, and observ
 # Your current ACM certificates are in FAILED state.
 # Once you have a valid ACM certificate, you can uncomment the ApiGatewayDomain
 # resource and its related output.
+#
+# The S3 artifacts bucket does NOT specify a name, so CloudFormation will create
+# a unique bucket and avoid name collisions.
 # ---------------------------------------------------------------------------------------
 
 Parameters:
@@ -30,9 +33,8 @@ Parameters:
 Resources:
   ArtifactsBucket:
     Type: AWS::S3::Bucket
-    Properties:
-      BucketName: !Sub my-artifacts-${Region}
-      AccessControl: Private
+    Properties: {}
+      # No BucketName property—CloudFormation will generate a unique name
 
   ArtifactsBucketPolicy:
     Type: AWS::S3::BucketPolicy
@@ -156,6 +158,9 @@ Outputs:
   AlarmArn:
     Description: CloudWatch alarm ARN
     Value: !Ref LambdaErrorAlarm
+  ArtifactsBucketName:
+    Description: Name of the S3 bucket containing Lambda artifacts
+    Value: !Ref ArtifactsBucket
 
   # -----------------------------------------------------------------------------------
   # CustomDomain:
