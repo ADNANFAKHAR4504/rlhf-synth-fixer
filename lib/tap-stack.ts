@@ -9,6 +9,7 @@ import {
   Peer,
   Port,
   SecurityGroup,
+  IpAddresses,
 } from 'aws-cdk-lib/aws-ec2';
 import {
   Bucket,
@@ -95,7 +96,7 @@ export class TapStack extends cdk.Stack {
     if (cloudProvider === 'aws') {
       // AWS VPC
       vpc = new Vpc(this, `${envName}-AWS-VPC`, {
-        cidr: config.awsVpcCidr,
+        ipAddresses: IpAddresses.cidr(config.awsVpcCidr),
         maxAzs: 1, // For simplicity as per prompt: single subnet implies single AZ
         subnetConfiguration: [
           {
@@ -175,8 +176,6 @@ export class TapStack extends cdk.Stack {
     if (cloudProvider === 'aws') {
       // AWS S3 Bucket
       const bucket = new Bucket(this, `${envName}-AWS-S3-Bucket`, {
-        bucketName:
-          `multi-cloud-app-${envName}-${config.awsS3BucketSuffix}-${cdk.Aws.ACCOUNT_ID}`.toLowerCase(),
         encryption: BucketEncryption.S3_MANAGED,
         blockPublicAccess: BlockPublicAccess.BLOCK_ALL, // Best practice
         removalPolicy: cdk.RemovalPolicy.DESTROY, // For demo, allow destroy
