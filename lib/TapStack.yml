@@ -14,10 +14,6 @@ Parameters:
   DbUsername:
     Type: String
     Description: Master username for the RDS database.
-  DbPassword:
-    Type: String
-    NoEcho: true
-    Description: Master password for the RDS database.
   InstanceType:
     Type: String
     Default: t3.micro
@@ -231,7 +227,7 @@ Resources:
         ImageId: !Ref ImageId
         SecurityGroupIds: [!Ref Ec2SecurityGroup]
         UserData:
-          Fn::Base64: !Sub |
+          Fn::Base64: |
             #!/bin/bash
             yum update -y
             yum install -y httpd
@@ -318,6 +314,18 @@ Resources:
           TargetGroupArn: !Ref AlbTargetGroup
 
   # RDS
+  RDSSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: production-rds-password
+      Description: RDS PostgreSQL master password
+      GenerateSecretString:
+        SecretStringTemplate: '{"username": "postgres"}'
+        GenerateStringKey: password
+        PasswordLength: 16
+        ExcludeCharacters: '"@/\'
+      Tags: [{ Key: Environment, Value: Production }]
+
   DbSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
@@ -330,11 +338,12 @@ Resources:
   RDSInstance:
     Type: AWS::RDS::DBInstance
     DeletionPolicy: Snapshot
+    UpdateReplacePolicy: Snapshot
     Properties:
       DBInstanceIdentifier: production-db-instance
       DBName: productiondb
       MasterUsername: !Ref DbUsername
-      MasterUserPassword: !Ref DbPassword
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${RDSSecret}:SecretString:password}}'
       DBInstanceClass: db.t3.micro
       Engine: postgres
       MultiAZ: true
