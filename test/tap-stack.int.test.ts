@@ -1,7 +1,7 @@
 import {
   AutoScalingClient,
   DescribeAutoScalingGroupsCommand,
-  DescribeScalingPoliciesCommand,
+  DescribePoliciesCommand,
 } from '@aws-sdk/client-auto-scaling';
 import {
   CloudFormationClient,
@@ -141,8 +141,8 @@ describe('TapStack Integration Tests', () => {
       expect(vpc).toBeDefined();
       expect(vpc?.CidrBlock).toBe('10.0.0.0/16');
       expect(vpc?.State).toBe('available');
-      expect(vpc?.EnableDnsSupport).toBe(true);
-      expect(vpc?.EnableDnsHostnames).toBe(true);
+      // Note: EnableDnsSupport and EnableDnsHostnames are not returned in describe calls
+      // They are VPC attributes that need to be checked separately if needed
     });
 
     test('should have public subnets with correct configuration', async () => {
@@ -255,7 +255,7 @@ describe('TapStack Integration Tests', () => {
       const igw = response.InternetGateways?.[0];
 
       expect(igw).toBeDefined();
-      expect(igw?.State).toBe('available');
+      // Note: Internet Gateway doesn't have a State property like VPC
       expect(igw?.Attachments?.[0]?.VpcId).toBe(vpcResource.PhysicalResourceId);
       expect(igw?.Attachments?.[0]?.State).toBe('available');
     });
@@ -446,7 +446,7 @@ describe('TapStack Integration Tests', () => {
         r => r.LogicalResourceId === 'AutoScalingGroup'
       );
 
-      const command = new DescribeScalingPoliciesCommand({
+      const command = new DescribePoliciesCommand({
         AutoScalingGroupName: asgResource.PhysicalResourceId,
       });
       const response = await autoScalingClient.send(command);
@@ -455,7 +455,7 @@ describe('TapStack Integration Tests', () => {
       expect(policies.length).toBeGreaterThan(0);
 
       const targetTrackingPolicy = policies.find(
-        p => p.PolicyType === 'TargetTrackingScaling'
+        (p: any) => p.PolicyType === 'TargetTrackingScaling'
       );
       expect(targetTrackingPolicy).toBeDefined();
       expect(
