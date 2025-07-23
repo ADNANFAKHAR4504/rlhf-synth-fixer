@@ -254,8 +254,7 @@ class TapStack(cdk.Stack):
     wafv2.CfnWebACLAssociation(
         self,
         "WafApiAssociation",
-        resource_arn=(f"arn:aws:apigateway:{Stack.of(self).region}:"
-                      f"{Stack.of(self).account}:/apis/{http_api.api_id}/stages/$default"),
+        resource_arn=f"arn:aws:apigateway:{Stack.of(self).region}::/apis/{http_api.api_id}/stages/$default",
         web_acl_arn=waf_acl.attr_arn
     )
 
