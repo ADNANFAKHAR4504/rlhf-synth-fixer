@@ -4,16 +4,13 @@
   "Parameters": {
     "YourIpForSsh": {
       "Type": "String",
+      "Default": "0.0.0.0/0",
       "Description": "CIDR block for SSH access to EC2 (e.g. 1.2.3.4/32)"
     },
     "DbUsername": {
       "Type": "String",
+      "Default": "postgres",
       "Description": "Master username for the RDS database."
-    },
-    "DbPassword": {
-      "Type": "String",
-      "NoEcho": true,
-      "Description": "Master password for the RDS database."
     },
     "InstanceType": {
       "Type": "String",
@@ -22,11 +19,8 @@
     },
     "ImageId": {
       "Type": "AWS::EC2::Image::Id",
+      "Default": "ami-0c02fb55956c7d316",
       "Description": "AMI ID for EC2 instances (Amazon Linux 2 recommended)"
-    },
-    "CertificateArn": {
-      "Type": "String",
-      "Description": "ACM certificate ARN for HTTPS (must be in this region)"
     }
   },
   "Resources": {
@@ -349,12 +343,6 @@
             "FromPort": 80,
             "ToPort": 80,
             "CidrIp": "0.0.0.0/0"
-          },
-          {
-            "IpProtocol": "tcp",
-            "FromPort": 443,
-            "ToPort": 443,
-            "CidrIp": "0.0.0.0/0"
           }
         ],
         "Tags": [
@@ -440,9 +428,7 @@
             }
           ],
           "UserData": {
-            "Fn::Base64": {
-              "Fn::Sub": "#!/bin/bash\nyum update -y\nyum install -y httpd\nsystemctl enable httpd\nsystemctl start httpd\necho \"Hello from $(hostname -f)\" > /var/www/html/index.html\n"
-            }
+            "Fn::Base64": "#!/bin/bash\nyum update -y\nyum install -y httpd\nsystemctl enable httpd\nsystemctl start httpd\necho \"Hello from $(hostname -f)\" > /var/www/html/index.html\n"
           }
         }
       }
@@ -562,27 +548,21 @@
         ]
       }
     },
-    "AlbListenerHTTPS": {
-      "Type": "AWS::ElasticLoadBalancingV2::Listener",
+    "RDSSecret": {
+      "Type": "AWS::SecretsManager::Secret",
       "Properties": {
-        "LoadBalancerArn": {
-          "Ref": "ApplicationLoadBalancer"
+        "Name": "production-rds-password",
+        "Description": "RDS PostgreSQL master password",
+        "GenerateSecretString": {
+          "SecretStringTemplate": "{\"username\": \"postgres\"}",
+          "GenerateStringKey": "password",
+          "PasswordLength": 16,
+          "ExcludeCharacters": "\"@/\\"
         },
-        "Port": 443,
-        "Protocol": "HTTPS",
-        "Certificates": [
+        "Tags": [
           {
-            "CertificateArn": {
-              "Ref": "CertificateArn"
-            }
-          }
-        ],
-        "DefaultActions": [
-          {
-            "Type": "forward",
-            "TargetGroupArn": {
-              "Ref": "AlbTargetGroup"
-            }
+            "Key": "Environment",
+            "Value": "Production"
           }
         ]
       }
@@ -610,6 +590,7 @@
     "RDSInstance": {
       "Type": "AWS::RDS::DBInstance",
       "DeletionPolicy": "Snapshot",
+      "UpdateReplacePolicy": "Snapshot",
       "Properties": {
         "DBInstanceIdentifier": "production-db-instance",
         "DBName": "productiondb",
@@ -617,7 +598,7 @@
           "Ref": "DbUsername"
         },
         "MasterUserPassword": {
-          "Ref": "DbPassword"
+          "Fn::Sub": "{{resolve:secretsmanager:${RDSSecret}:SecretString:password}}"
         },
         "DBInstanceClass": "db.t3.micro",
         "Engine": "postgres",
