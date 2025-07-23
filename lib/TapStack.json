@@ -450,6 +450,15 @@
                                         },
                                         "arn:aws:sts::718240086340:assumed-role/iac-rlhf-trainer-instances-role/i-0256c21bc1d8edbd9"
                                     ]
+                                },
+                                "StringNotEqualsIfExists": {
+                                    "aws:PrincipalServiceName": [
+                                        "config.amazonaws.com",
+                                        "delivery.logs.amazonaws.com"
+                                    ]
+                                },
+                                "StringNotLikeIfExists": {
+                                    "aws:PrincipalType": "Service"
                                 }
                             }
                         },
@@ -527,9 +536,14 @@
                                 "Service": "config.amazonaws.com"
                             },
                             "Action": "s3:PutObject",
-                            "Resource": {
-                                "Fn::Sub": "arn:aws:s3:::${EncryptedBucket}/AWSLogs/${AWS::AccountId}/*"
-                            },
+                            "Resource": [
+                                {
+                                    "Fn::Sub": "arn:aws:s3:::${EncryptedBucket}/AWSLogs/${AWS::AccountId}/*"
+                                },
+                                {
+                                    "Fn::Sub": "arn:aws:s3:::${EncryptedBucket}/AWSConfig/${EnvironmentSuffix}/*"
+                                }
+                            ],
                             "Condition": {
                                 "StringEquals": {
                                     "s3:x-amz-acl": "bucket-owner-full-control",
@@ -1134,7 +1148,38 @@
         "VPCId": {
             "Value": {
                 "Ref": "VPC"
-            }
+            },
+            "Description": "VPC ID"
+        },
+        "PublicSubnet1Id": {
+            "Value": {
+                "Ref": "PublicSubnet1"
+            },
+            "Description": "Public Subnet 1 ID"
+        },
+        "PublicSubnet2Id": {
+            "Value": {
+                "Ref": "PublicSubnet2"
+            },
+            "Description": "Public Subnet 2 ID"
+        },
+        "PrivateSubnet1Id": {
+            "Value": {
+                "Ref": "PrivateSubnet1"
+            },
+            "Description": "Private Subnet 1 ID"
+        },
+        "PrivateSubnet2Id": {
+            "Value": {
+                "Ref": "PrivateSubnet2"
+            },
+            "Description": "Private Subnet 2 ID"
+        },
+        "RDSInstanceId": {
+            "Value": {
+                "Ref": "RDSInstance"
+            },
+            "Description": "RDS Instance ID"
         },
         "RDSEndpoint": {
             "Value": {
@@ -1142,7 +1187,38 @@
                     "RDSInstance",
                     "Endpoint.Address"
                 ]
-            }
+            },
+            "Description": "RDS Endpoint Address"
+        },
+        "S3BucketName": {
+            "Value": {
+                "Ref": "EncryptedBucket"
+            },
+            "Description": "Secure Encrypted S3 Bucket"
+        },
+        "CloudTrailLogBucketName": {
+            "Value": {
+                "Ref": "CloudTrailLogBucket"
+            },
+            "Description": "CloudTrail Log Bucket"
+        },
+        "LambdaFunctionName": {
+            "Value": {
+                "Ref": "BackupLambda"
+            },
+            "Description": "Daily Backup Lambda Function"
+        },
+        "DynamoDBTableName": {
+            "Value": "N/A",
+            "Description": "No DynamoDB table in current stack — update if added"
+        },
+        "WebACLId": {
+            "Value": "N/A",
+            "Description": "WAF WebACL ID — update if WAF is added"
+        },
+        "WebACLArn": {
+            "Value": "N/A",
+            "Description": "WAF WebACL ARN — update if WAF is added"
         }
     }
 }

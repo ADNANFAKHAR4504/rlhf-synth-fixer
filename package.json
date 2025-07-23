@@ -27,8 +27,8 @@
     "cdk:bootstrap": "npx cdk bootstrap --context environmentSuffix=${ENVIRONMENT_SUFFIX:-dev}",
     "cdk:deploy": "npx cdk deploy --all --require-approval never --context environmentSuffix=${ENVIRONMENT_SUFFIX:-dev}",
     "cdk:destroy": "npx cdk destroy --all --force --context environmentSuffix=${ENVIRONMENT_SUFFIX:-dev}",
-    "cfn:deploy-yaml": "aws cloudformation deploy --template-file lib/TapStack.yml --stack-name TapStack${ENVIRONMENT_SUFFIX:-dev} --capabilities CAPABILITY_IAM --parameter-overrides EnvironmentSuffix=${ENVIRONMENT_SUFFIX:-dev} --tags Repository=${REPOSITORY:-unknown} CommitAuthor=${COMMIT_AUTHOR:-unknown}",
-    "cfn:deploy-json": "aws cloudformation deploy --template-file lib/TapStack.json --stack-name TapStack${ENVIRONMENT_SUFFIX:-dev} --capabilities CAPABILITY_IAM --parameter-overrides EnvironmentSuffix=${ENVIRONMENT_SUFFIX:-dev} --tags Repository=${REPOSITORY:-unknown} CommitAuthor=${COMMIT_AUTHOR:-unknown}",
+    "cfn:deploy-yaml": "aws cloudformation deploy --template-file lib/TapStack.yml --stack-name TapStack${ENVIRONMENT_SUFFIX:-dev} --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM --parameter-overrides EnvironmentSuffix=${ENVIRONMENT_SUFFIX:-dev} --tags Repository=${REPOSITORY:-unknown} CommitAuthor=${COMMIT_AUTHOR:-unknown}",
+    "cfn:deploy-json": "aws cloudformation deploy --template-file lib/TapStack.json --stack-name TapStack${ENVIRONMENT_SUFFIX:-dev} --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM --parameter-overrides EnvironmentSuffix=${ENVIRONMENT_SUFFIX:-dev} --tags Repository=${REPOSITORY:-unknown} CommitAuthor=${COMMIT_AUTHOR:-unknown}",
     "cfn:destroy": "aws cloudformation delete-stack --stack-name TapStack${ENVIRONMENT_SUFFIX:-dev}"
   },
   "devDependencies": {

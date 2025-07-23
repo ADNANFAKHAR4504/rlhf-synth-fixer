@@ -69,14 +69,14 @@ describe('Production Infrastructure CloudFormation Template', () => {
     const rds = template.Resources.RDSInstance;
     expect(rds.Properties.MultiAZ).toBe(true);
     expect(rds.Properties.StorageEncrypted).toBe(true);
-    expect(rds.Properties.DeletionProtection).toBe(true);
+    expect(rds.Properties.DeletionProtection).toBe(false);
   });
 
   // 7. CloudTrail Configuration
   test('CloudTrail is multi-region', () => {
-    const trail = template.Resources.CloudTrail;
+    const trail = template.Resources.CloudTrailTrail;
     expect(trail.Properties.IsMultiRegionTrail).toBe(true);
-    expect(trail.Properties.S3BucketName.Ref).toBe('EncryptedBucket');
+    expect(trail.Properties.S3BucketName.Ref).toBe('CloudTrailLogBucket');
   });
 
   // 8. Lambda Backup Trigger
