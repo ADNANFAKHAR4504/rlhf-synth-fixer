@@ -1,6 +1,15 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: Production-ready serverless API stack with HA, security, and observability
 
+# ---------------------------------------------------------------------------------------
+# NOTE:
+# The custom domain resource (ApiGatewayDomain) is commented out below because
+# AWS API Gateway custom domains require a valid ACM certificate in ISSUED state.
+# Your current ACM certificates are in FAILED state.
+# Once you have a valid ACM certificate, you can uncomment the ApiGatewayDomain
+# resource and its related output.
+# ---------------------------------------------------------------------------------------
+
 Parameters:
   EnvironmentSuffix:
     Type: String
@@ -79,15 +88,6 @@ Resources:
         Types:
           - REGIONAL
 
-  ApiGatewayDomain:
-    Type: AWS::ApiGateway::DomainName
-    Properties:
-      DomainName: !Sub api-${EnvironmentSuffix}.example.com
-      RegionalCertificateArn: arn:aws:acm:us-east-1:123456789012:certificate/abcd1234
-      EndpointConfiguration:
-        Types:
-          - REGIONAL
-
   LogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
@@ -110,13 +110,21 @@ Resources:
         - Name: FunctionName
           Value: !Ref MyLambdaFunction
 
+  # -----------------------------------------------------------------------------------
+  # ApiGatewayDomain:
+  #   Type: AWS::ApiGateway::DomainName
+  #   Properties:
+  #     DomainName: !Sub api-${EnvironmentSuffix}.example.com
+  #     RegionalCertificateArn: arn:aws:acm:us-east-1:YOUR-ACTUAL-CERTIFICATE-ARN
+  #     EndpointConfiguration:
+  #       Types:
+  #         - REGIONAL
+  # -----------------------------------------------------------------------------------
+
 Outputs:
   ApiEndpoint:
     Description: API Gateway endpoint
     Value: !Sub https://${ApiGateway}.execute-api.${Region}.amazonaws.com/${EnvironmentSuffix}
-  CustomDomain:
-    Description: Custom domain name
-    Value: !Sub api-${EnvironmentSuffix}.example.com
   LambdaArn:
     Description: Lambda function ARN
     Value: !GetAtt MyLambdaFunction.Arn
@@ -129,3 +137,9 @@ Outputs:
   AlarmArn:
     Description: CloudWatch alarm ARN
     Value: !Ref LambdaErrorAlarm
+
+  # -----------------------------------------------------------------------------------
+  # CustomDomain:
+  #   Description: Custom domain name
+  #   Value: !Sub api-${EnvironmentSuffix}.example.com
+  # -----------------------------------------------------------------------------------
