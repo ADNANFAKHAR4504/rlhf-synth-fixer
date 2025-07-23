@@ -97,6 +97,42 @@ describe('TapStack CloudFormation Template', () => {
       expect(api.Properties.Description).toBe('Serverless API');
     });
 
+    it('defines ApiGatewayRootMethod with Lambda proxy integration', () => {
+      const method = template.Resources.ApiGatewayRootMethod;
+      expect(method).toBeDefined();
+      expect(method.Type).toBe('AWS::ApiGateway::Method');
+      expect(method.Properties.HttpMethod).toBe('ANY');
+      expect(method.Properties.Integration.Type).toBe('AWS_PROXY');
+      expect(method.Properties.Integration.Uri['Fn::Sub']).toContain(
+        'apigateway:${Region}:lambda:path'
+      );
+      expect(method.Properties.AuthorizationType).toBe('NONE');
+    });
+
+    it('defines ApiGatewayDeployment with correct dependencies', () => {
+      const deploy = template.Resources.ApiGatewayDeployment;
+      expect(deploy).toBeDefined();
+      expect(deploy.Type).toBe('AWS::ApiGateway::Deployment');
+      expect(deploy.DependsOn).toBe('ApiGatewayRootMethod');
+      expect(deploy.Properties.RestApiId.Ref).toBe('ApiGateway');
+      expect(deploy.Properties.StageName.Ref).toBe('EnvironmentSuffix');
+    });
+
+    it('defines LambdaApiInvokePermission for API Gateway', () => {
+      const perm = template.Resources.LambdaApiInvokePermission;
+      expect(perm).toBeDefined();
+      expect(perm.Type).toBe('AWS::Lambda::Permission');
+      expect(perm.Properties.FunctionName['Fn::GetAtt']).toEqual([
+        'MyLambdaFunction',
+        'Arn',
+      ]);
+      expect(perm.Properties.Action).toBe('lambda:InvokeFunction');
+      expect(perm.Properties.Principal).toBe('apigateway.amazonaws.com');
+      expect(perm.Properties.SourceArn['Fn::Sub']).toContain(
+        'execute-api:${Region}'
+      );
+    });
+
     it('defines LogGroup with correct retention', () => {
       const logGroup = template.Resources.LogGroup;
       expect(logGroup).toBeDefined();

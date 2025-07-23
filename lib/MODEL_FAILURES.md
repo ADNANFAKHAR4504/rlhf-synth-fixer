@@ -1,79 +1,92 @@
-# Model Failures Analysis
+# MODEL_FAILURES.md
 
-## Primary Failures (Comparison Between MODEL_RESPONSE and IDEAL_RESPONSE)
+## 1. Introduction
 
-### 1. Security and Compliance Gaps
+This document outlines the common failures and gaps in the CloudFormation template provided for deploying serverless applications. It highlights issues in various areas such as infrastructure, security, networking, and compliance, along with their impacts and ideal solutions.
+
+---
+
+## 2. Model Response Issues
+
+### Outputs and Integration
 
 #### Model Response Issues:
 
-- **IAM Role Naming**: Uses explicit `RoleName` for Lambda execution role, which requires `CAPABILITY_NAMED_IAM` and increases risk of name collisions.
-- **No S3 Bucket Policy**: If the referenced bucket existed, it could be public or misconfigured.
-- **No Explicit Least-Privilege Policies**: IAM policies are minimal and not scoped for least privilege.
-- **No Resource Tagging**: No tags for cost allocation, security, or environment.
+- **Outputs are Accurate and Useful:** All key resources are output for cross-stack integration.
+- **No Outputs for Environment or Parameter Values:** The template does not output the `EnvironmentSuffix` or other parameter values for stack chaining.
+
+#### Impact:
+
+- Cross-stack referencing is possible, but environment propagation is manual.
 
 #### Ideal Response Features:
 
-- IAM roles are unnamed, avoiding permission escalation and name collision risks.
-- Only necessary IAM permissions are granted.
-- All resources are tagged for cost, security, and environment compliance.
+- Outputs environment/parameter values for easier cross-stack automation.
 
 ---
 
-### 2. Networking and High Availability Deficiencies
+## 3. Infrastructure Failures
 
-#### Model Response Issues:
+### Common Failures:
 
-- **No VPC Resources**: No VPC, subnets, or security groups for Lambda or API Gateway, so advanced networking is not possible.
-- **No Outputs for Networking**: No subnet, VPC, or security group outputs for cross-stack use.
-- **No Multi-region/HA Features**: No facilities for high availability or failover.
-
-#### Ideal Response Features:
-
-- Outputs and resources for networking and high availability.
-- Designed to be portable and HA-ready.
+- **No Path Resources:** Only root (`/`) is handled by API Gateway. RESTful APIs are not supported out-of-the-box.
+- **No S3 Bucket for Lambda Code:** Not suitable for larger Lambda functions.
 
 ---
 
-### 3. Resource Configuration and Operational Gaps
+## 4. Security Failures
 
-#### Model Response Issues:
+### Common Failures:
 
-- **No Inline Lambda Code**: Increases operational friction (need to upload to S3).
-- **No Guidance for ACM/DomainName**: The custom domain will fail if the ACM certificate is not valid.
-- **No Outputs for Parameter Values**: Makes cross-stack chaining harder.
-
-#### Ideal Response Features:
-
-- Inline Lambda code for rapid prototyping.
-- Clear comments/guidance for custom domains and ACM.
-- Outputs for all key values for integration.
+- **IAM Role Not Tagged:** No tags for cost or security compliance.
+- **No API Gateway Authorizer:** No authentication/authorization at the API level.
 
 ---
 
-### 4. Outputs and Cross-Stack Integration
+## 5. Networking Issues
 
-#### Model Response Issues:
+### Common Failures:
 
-- **Outputs Only Basic Resources**: Does not output parameter values, environment, or custom domain status.
-- **Outputs ARN for Alarm**: Outputs ARN for alarm (not name), which is less useful for CloudWatch API.
-
-#### Ideal Response Features:
-
-- Outputs all key resource identifiers and names.
-- Outputs parameter values and environment info for chaining.
+- **No VPC Configuration:** Lambda and API Gateway are public-only; no VPC/subnet support.
 
 ---
 
-## Detailed Failure Analysis
+## 6. Operational Gaps
 
-### 5. Infrastructure Failures
+### Common Failures:
 
-- **No S3 Bucket Resource**: Lambda deployment will fail unless the bucket is manually created and accessible.
-- **No Inline Lambda Code**: Friction for CI/CD and developer experience.
-- **Custom Domain Resource Always Created**: Stack fails if ACM certificate is not valid.
+- **No Parameter Validation:** Easy to accidentally misconfigure.
+- **No DeletionPolicy:** Resources can be deleted without retention for troubleshooting.
 
 ---
 
-### 6. Security Failures
+## 7. Compliance and Best Practices
 
-- **Explicit IAM Role Names**: Requires higher IAM permissions and increases collision risk.
+### Common Failures:
+
+- **No Tagging:** Fails AWS cost and compliance best practices.
+- **No Usage Plan or API Keys:** No API rate limiting or management.
+
+---
+
+## 8. Security Risk Assessment
+
+### Critical Security Risks:
+
+- Lack of API Gateway authorizer or usage plan.
+- IAM roles are not tagged for compliance.
+- No VPC, so all resources are public by default.
+
+### Compliance Issues:
+
+- Fails AWS Well-Architected Framework for Security, Reliability, and Operational Excellence in tagging, retention, and parameter validation.
+- No logging permissions on Lambda (if logging is required).
+
+---
+
+## 9. Severity
+
+### Assessment:
+
+- **Moderate:** The template is deployable, API Gateway and Lambda are correctly integrated, and DynamoDB is usable.
+- However, it is not production-ready: it lacks RESTful path support, compliance tagging, parameter validation, and advanced security features.
