@@ -22,10 +22,14 @@ Parameters:
   KeyPairName:
     Type: AWS::EC2::KeyPair::KeyName
     Description: The name of an existing EC2 KeyPair to enable SSH access to the instances.
+    # ADDED: Default value for development. Replace with a real KeyPair name for production.
+    Default: your-dev-key
 
   SSLCertificateArn:
     Type: String
     Description: The ARN of an existing ACM SSL certificate in us-east-1 for HTTPS.
+    # ADDED: Placeholder ARN for development. Replace with a real certificate ARN for production.
+    Default: arn:aws:acm:us-east-1:123456789012:certificate/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 
 Resources:
   # 1. Define the Elastic Beanstalk Application
