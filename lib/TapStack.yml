@@ -22,7 +22,6 @@ Resources:
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
-      # RoleName: !Sub ${EnvironmentSuffix}-${Name}-lambda-role-${Team}   # &lt;-- Removed!
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
