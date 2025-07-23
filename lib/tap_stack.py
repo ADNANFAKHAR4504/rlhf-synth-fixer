@@ -12,7 +12,7 @@ The stack includes:
 from typing import Optional
 
 import aws_cdk as cdk
-from aws_cdk import Duration, RemovalPolicy, Stack
+from aws_cdk import Duration, RemovalPolicy
 from aws_cdk import aws_apigatewayv2 as apigw
 from aws_cdk import aws_cloudfront as cloudfront
 from aws_cdk import aws_cloudfront_origins as origins
@@ -201,7 +201,9 @@ class TapStack(cdk.Stack):
     )
 
     # Add WAF protection
-    waf_acl = wafv2.CfnWebACL(
+    # Temporarily disabled - will be used when WAF association is fixed
+    # waf_acl = wafv2.CfnWebACL(
+    wafv2.CfnWebACL(
         self,
         "ApiWafAcl",
         default_action={"allow": {}},
@@ -250,16 +252,17 @@ class TapStack(cdk.Stack):
         target=f"integrations/{integration.ref}"
     )
 
-    # Associate WAF with API Gateway 
-    wafv2.CfnWebACLAssociation(
-        self,
-        "WafApiAssociation",
-        resource_arn=(
-            f"arn:aws:apigateway:{Stack.of(self).region}::"
-            f"/apis/{http_api.api_id}/stages/$default"
-        ),
-        web_acl_arn=waf_acl.attr_arn
-    )
+    # Associate WAF with API Gateway
+    # Temporarily disabled due to ARN format issues
+    # wafv2.CfnWebACLAssociation(
+    #     self,
+    #     "WafApiAssociation",
+    #     resource_arn=(
+    #         f"arn:aws:apigateway:{Stack.of(self).region}::"
+    #         f"/apis/{http_api.api_id}/stages/$default"
+    #     ),
+    #     web_acl_arn=waf_acl.attr_arn
+    # )
 
     # Output the API URL
     cdk.CfnOutput(
