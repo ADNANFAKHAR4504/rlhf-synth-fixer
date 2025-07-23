@@ -4,33 +4,30 @@ Description: Production-ready serverless API stack with HA, security, and observ
 Parameters:
   EnvironmentSuffix:
     Type: String
-    Description: Environment suffix (e.g., dev, prod)
-
-# Optionally define mappings for environment-specific values
-Mappings:
-  EnvMap:
-    dev:
-      Env: dev
-      Name: tapstack
-      Team: devteam
-      DomainName: api-dev.example.com
-      Region: us-east-1
-    prod:
-      Env: prod
-      Name: tapstack
-      Team: prodteam
-      DomainName: api.example.com
-      Region: us-east-1
+    Description: Environment suffix (e.g., dev, prod, pr101)
+  Name:
+    Type: String
+    Default: tapstack
+    Description: Application name
+  Team:
+    Type: String
+    Default: prteam
+    Description: Team name
+  DomainName:
+    Type: String
+    Default: !Sub api-${EnvironmentSuffix}.example.com
+    Description: Custom domain name for API Gateway
+  Region:
+    Type: String
+    Default: us-east-1
+    Description: AWS region for deployment
 
 Resources:
+  # IAM Role for Lambda
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub
-        - '${Env}-${Name}-lambda-role-${Team}'
-        - Env: !FindInMap [EnvMap, !Ref EnvironmentSuffix, Env]
-          Name: !FindInMap [EnvMap, !Ref EnvironmentSuffix, Name]
-          Team: !FindInMap [EnvMap, !Ref EnvironmentSuffix, Team]
+      RoleName: !Sub ${EnvironmentSuffix}-${Name}-lambda-role-${Team}
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -49,14 +46,11 @@ Resources:
                   - dynamodb:GetItem
                 Resource: !GetAtt DynamoDBTable.Arn
 
+  # Lambda Function
   MyLambdaFunction:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: !Sub
-        - '${Env}-${Name}-lambda-${Team}'
-        - Env: !FindInMap [EnvMap, !Ref EnvironmentSuffix, Env]
-          Name: !FindInMap [EnvMap, !Ref EnvironmentSuffix, Name]
-          Team: !FindInMap [EnvMap, !Ref EnvironmentSuffix, Team]
+      FunctionName: !Sub ${EnvironmentSuffix}-${Name}-lambda-${Team}
       Runtime: python3.9
       Handler: index.handler
       Role: !GetAtt LambdaExecutionRole.Arn
@@ -68,19 +62,14 @@ Resources:
       TracingConfig:
         Mode: Active
       Code:
-        S3Bucket: !Sub
-          - 'my-artifacts-${Region}'
-          - Region: !FindInMap [EnvMap, !Ref EnvironmentSuffix, Region]
+        S3Bucket: !Sub my-artifacts-${Region}
         S3Key: lambda-code.zip
 
+  # DynamoDB Table
   DynamoDBTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: !Sub
-        - '${Env}-${Name}-table-${Team}'
-        - Env: !FindInMap [EnvMap, !Ref EnvironmentSuffix, Env]
-          Name: !FindInMap [EnvMap, !Ref EnvironmentSuffix, Name]
-          Team: !FindInMap [EnvMap, !Ref EnvironmentSuffix, Team]
+      TableName: !Sub ${EnvironmentSuffix}-${Name}-table-${Team}
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
         - AttributeName: id
@@ -89,43 +78,35 @@ Resources:
         - AttributeName: id
           KeyType: HASH
 
+  # API Gateway
   ApiGateway:
     Type: AWS::ApiGateway::RestApi
     Properties:
-      Name: !Sub
-        - '${Env}-${Name}-api-${Team}'
-        - Env: !FindInMap [EnvMap, !Ref EnvironmentSuffix, Env]
-          Name: !FindInMap [EnvMap, !Ref EnvironmentSuffix, Name]
-          Team: !FindInMap [EnvMap, !Ref EnvironmentSuffix, Team]
+      Name: !Sub ${EnvironmentSuffix}-${Name}-api-${Team}
       Description: Serverless API
       EndpointConfiguration:
         Types:
           - REGIONAL
 
+  # Custom Domain for API Gateway
   ApiGatewayDomain:
     Type: AWS::ApiGateway::DomainName
     Properties:
-      DomainName: !FindInMap [EnvMap, !Ref EnvironmentSuffix, DomainName]
+      DomainName: !Ref DomainName
       RegionalCertificateArn: arn:aws:acm:us-east-1:123456789012:certificate/abcd1234
 
+  # CloudWatch Log Group
   LogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub
-        - '/aws/apigateway/${Env}-${Name}-api-${Team}'
-        - Env: !FindInMap [EnvMap, !Ref EnvironmentSuffix, Env]
-          Name: !FindInMap [EnvMap, !Ref EnvironmentSuffix, Name]
-          Team: !FindInMap [EnvMap, !Ref EnvironmentSuffix, Team]
+      LogGroupName: !Sub /aws/apigateway/${EnvironmentSuffix}-${Name}-api-${Team}
       RetentionInDays: 14
 
+  # CloudWatch Alarm for Lambda Errors
   LambdaErrorAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub
-        - '${Env}-${Name}-lambda-errors-${Team}'
-        - Env: !FindInMap [EnvMap, !Ref EnvironmentSuffix, Env]
-          Name: !FindInMap [EnvMap, !Ref EnvironmentSuffix, Name]
-          Team: !FindInMap [EnvMap, !Ref EnvironmentSuffix, Team]
+      AlarmName: !Sub ${EnvironmentSuffix}-${Name}-lambda-errors-${Team}
       MetricName: Errors
       Namespace: AWS/Lambda
       Statistic: Sum
@@ -141,14 +122,10 @@ Resources:
 Outputs:
   ApiEndpoint:
     Description: API Gateway endpoint
-    Value: !Sub
-      - 'https://${ApiGateway}.execute-api.${Region}.amazonaws.com/${Env}'
-      - ApiGateway: !Ref ApiGateway
-        Region: !FindInMap [EnvMap, !Ref EnvironmentSuffix, Region]
-        Env: !FindInMap [EnvMap, !Ref EnvironmentSuffix, Env]
+    Value: !Sub https://${ApiGateway}.execute-api.${Region}.amazonaws.com/${EnvironmentSuffix}
   CustomDomain:
     Description: Custom domain name
-    Value: !FindInMap [EnvMap, !Ref EnvironmentSuffix, DomainName]
+    Value: !Ref DomainName
   LambdaArn:
     Description: Lambda function ARN
     Value: !GetAtt MyLambdaFunction.Arn
