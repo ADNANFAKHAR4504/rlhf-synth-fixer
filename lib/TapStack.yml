@@ -84,6 +84,9 @@ Resources:
     Properties:
       DomainName: !Sub api-${EnvironmentSuffix}.example.com
       RegionalCertificateArn: arn:aws:acm:us-east-1:123456789012:certificate/abcd1234
+      EndpointConfiguration:
+        Types:
+          - REGIONAL
 
   LogGroup:
     Type: AWS::Logs::LogGroup
