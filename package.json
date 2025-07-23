@@ -32,6 +32,9 @@
     "cfn:destroy": "aws cloudformation delete-stack --stack-name TapStack${ENVIRONMENT_SUFFIX:-dev}"
   },
   "devDependencies": {
+    "@aws-sdk/client-rds": "^3.846.0",
+    "@aws-sdk/client-api-gateway": "^3.848.0",
+    "@aws-sdk/client-elasticache": "^3.846.0",
     "@aws-sdk/client-auto-scaling": "^3.846.0",
     "@aws-sdk/client-cloudformation": "^3.848.0",
     "@aws-sdk/client-cloudfront": "^3.846.0",
@@ -87,6 +90,7 @@
   "dependencies": {
     "@aws-sdk/client-elastic-load-balancing-v2": "^3.848.0",
     "aws-cdk-lib": "2.204.0",
+    "cdktf-cli": "0.21.0",
     "constructs": "10.4.2"
   }
 }
