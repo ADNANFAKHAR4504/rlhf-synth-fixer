@@ -1,5 +1,6 @@
 import json
 import os
+import time
 import unittest
 from datetime import datetime, timedelta
 from typing import Any, Dict
@@ -295,7 +296,6 @@ class TestTapStackIntegration(unittest.TestCase):
       # Allow some time for CloudFront to pick up the change
       # In a real environment, we might want to use CloudFront invalidation
       # but for testing purposes, we'll just wait a bit
-      import time
       time.sleep(5)
 
       # Request the file through CloudFront
