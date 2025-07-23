@@ -55,7 +55,8 @@ Resources:
       Environment:
         Variables:
           TABLE_NAME: !Ref DynamoDBTable
-      TracingConfig: Active
+      TracingConfig:
+        Mode: Active
       Code:
         S3Bucket: !Sub my-artifacts-${Region}
         S3Key: lambda-code.zip
@@ -112,7 +113,7 @@ Resources:
       AlarmActions: []
       Dimensions:
         - Name: FunctionName
-          Value: !GetAtt MyLambdaFunction.FunctionName
+          Value: !Ref MyLambdaFunction # &lt;-- FIXED
 
 Outputs:
   ApiEndpoint:
