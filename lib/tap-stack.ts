@@ -35,7 +35,8 @@ export interface EnvironmentConfig {
 
 // Define props for the TapStack
 interface TapStackProps extends cdk.StackProps {
-  environmentConfig: EnvironmentConfig;
+  environmentConfig?: EnvironmentConfig;
+  environmentSuffix?: string;
 }
 
 /**
@@ -50,9 +51,34 @@ export class TapStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: TapStackProps) {
     super(scope, id, props);
 
+    // Handle both legacy environmentSuffix and new environmentConfig approaches
+    let config: EnvironmentConfig;
+    
+    if (props.environmentConfig) {
+      // Use the provided environmentConfig
+      config = props.environmentConfig;
+    } else if (props.environmentSuffix) {
+      // Create a default config using environmentSuffix (legacy support)
+      config = {
+        environmentName: props.environmentSuffix,
+        cloudProvider: 'aws', // Default to AWS
+        awsRegion: process.env.CDK_DEFAULT_REGION || 'us-east-1',
+        awsVpcCidr: '10.0.0.0/16',
+        awsAmi: 'ami-0c02fb55956c7d316', // Default Amazon Linux 2
+        awsInstanceType: 't3.micro',
+        awsS3BucketSuffix: 'storage',
+        azureLocation: 'East US',
+        azureVnetCidr: '10.0.0.0/16',
+        azureVmSize: 'Standard_B1s',
+        azureStorageSku: 'Standard_LRS',
+        azureStorageAccountName: `storage${props.environmentSuffix}`,
+      };
+    } else {
+      throw new Error('Either environmentConfig or environmentSuffix must be provided');
+    }
+
     // Get environment suffix from props, context, or use 'dev' as default
     // The environmentConfig prop now directly provides the necessary details
-    const config = props.environmentConfig;
     const envName = config.environmentName;
     const cloudProvider = config.cloudProvider;
 
