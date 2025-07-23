@@ -8,8 +8,6 @@ Description: Production-ready serverless API stack with HA, security, and observ
 # Your current ACM certificates are in FAILED state.
 # Once you have a valid ACM certificate, you can uncomment the ApiGatewayDomain
 # resource and its related output.
-#
-# The Lambda function code is provided inline using ZipFile.
 # ---------------------------------------------------------------------------------------
 
 Parameters:
@@ -142,9 +140,9 @@ Outputs:
   LogGroupName:
     Description: CloudWatch log group
     Value: !Ref LogGroup
-  AlarmArn:
-    Description: CloudWatch alarm ARN
-    Value: !Ref LambdaErrorAlarm
+  AlarmName:
+    Description: CloudWatch alarm name
+    Value: !Sub ${EnvironmentSuffix}-${Name}-lambda-errors-${Team}
 
   # -----------------------------------------------------------------------------------
   # CustomDomain:

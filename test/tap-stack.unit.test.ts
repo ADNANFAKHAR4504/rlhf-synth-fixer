@@ -1,12 +1,11 @@
 import fs from 'fs';
 import path from 'path';
 
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-
 describe('TapStack CloudFormation Template', () => {
   let template: any;
 
   beforeAll(() => {
+    // Adjust the path as needed
     const templatePath = path.join(__dirname, '../lib/TapStack.json');
     const templateContent = fs.readFileSync(templatePath, 'utf8');
     template = JSON.parse(templateContent);
@@ -22,10 +21,13 @@ describe('TapStack CloudFormation Template', () => {
   });
 
   describe('Parameters', () => {
-    it('has required parameters', () => {
+    it('defines all required parameters with correct defaults', () => {
       expect(template.Parameters.EnvironmentSuffix).toBeDefined();
+      expect(template.Parameters.Name).toBeDefined();
       expect(template.Parameters.Name.Default).toBe('tapstack');
+      expect(template.Parameters.Team).toBeDefined();
       expect(template.Parameters.Team.Default).toBe('team');
+      expect(template.Parameters.Region).toBeDefined();
       expect(template.Parameters.Region.Default).toBe('us-east-1');
     });
 
@@ -44,25 +46,20 @@ describe('TapStack CloudFormation Template', () => {
   });
 
   describe('Resources', () => {
-    it('defines LambdaExecutionRole with correct assume role', () => {
+    it('defines LambdaExecutionRole with correct assume role and policies', () => {
       const role = template.Resources.LambdaExecutionRole;
       expect(role).toBeDefined();
       expect(role.Type).toBe('AWS::IAM::Role');
-      expect(
-        role.Properties.AssumeRolePolicyDocument.Statement[0].Principal.Service
-      ).toBe('lambda.amazonaws.com');
-      expect(
-        role.Properties.Policies[0].PolicyDocument.Statement[0].Action
-      ).toContain('dynamodb:PutItem');
-      expect(
-        role.Properties.Policies[0].PolicyDocument.Statement[0].Action
-      ).toContain('dynamodb:GetItem');
-      expect(
-        role.Properties.Policies[0].PolicyDocument.Statement[0].Resource
-      ).toBeDefined();
+      const assume = role.Properties.AssumeRolePolicyDocument.Statement[0];
+      expect(assume.Principal.Service).toBe('lambda.amazonaws.com');
+      expect(assume.Action).toBe('sts:AssumeRole');
+      const policy = role.Properties.Policies[0].PolicyDocument.Statement[0];
+      expect(policy.Action).toContain('dynamodb:PutItem');
+      expect(policy.Action).toContain('dynamodb:GetItem');
+      expect(policy.Resource['Fn::GetAtt']).toEqual(['DynamoDBTable', 'Arn']);
     });
 
-    it('defines MyLambdaFunction with inline code', () => {
+    it('defines MyLambdaFunction with inline code and correct env', () => {
       const lambda = template.Resources.MyLambdaFunction;
       expect(lambda).toBeDefined();
       expect(lambda.Type).toBe('AWS::Lambda::Function');
@@ -72,19 +69,12 @@ describe('TapStack CloudFormation Template', () => {
         'LambdaExecutionRole'
       );
       expect(lambda.Properties.Code.ZipFile).toContain('def handler');
-      expect(lambda.Properties.Environment.Variables.TABLE_NAME.Ref).toBe(
-        'DynamoDBTable'
-      );
       expect(lambda.Properties.MemorySize).toBe(512);
       expect(lambda.Properties.Timeout).toBe(15);
-      expect(lambda.Properties.TracingConfig.Mode).toBe('Active');
-    });
-
-    it('Lambda function references correct DynamoDB table', () => {
-      const lambda = template.Resources.MyLambdaFunction;
       expect(lambda.Properties.Environment.Variables.TABLE_NAME.Ref).toBe(
         'DynamoDBTable'
       );
+      expect(lambda.Properties.TracingConfig.Mode).toBe('Active');
     });
 
     it('defines DynamoDBTable with correct schema', () => {
@@ -117,28 +107,31 @@ describe('TapStack CloudFormation Template', () => {
       );
     });
 
-    it('defines LambdaErrorAlarm with correct dimensions', () => {
+    it('defines LambdaErrorAlarm with correct properties', () => {
       const alarm = template.Resources.LambdaErrorAlarm;
       expect(alarm).toBeDefined();
       expect(alarm.Type).toBe('AWS::CloudWatch::Alarm');
       expect(alarm.Properties.MetricName).toBe('Errors');
-      expect(alarm.Properties.Dimensions[0].Name).toBe('FunctionName');
-      expect(alarm.Properties.Dimensions[0].Value.Ref).toBe('MyLambdaFunction');
-      expect(alarm.Properties.Threshold).toBe(1);
-      expect(alarm.Properties.Statistic).toBe('Sum');
       expect(alarm.Properties.Namespace).toBe('AWS/Lambda');
+      expect(alarm.Properties.Statistic).toBe('Sum');
+      expect(alarm.Properties.Period).toBe(300);
+      expect(alarm.Properties.EvaluationPeriods).toBe(1);
+      expect(alarm.Properties.Threshold).toBe(1);
       expect(alarm.Properties.ComparisonOperator).toBe(
         'GreaterThanOrEqualToThreshold'
       );
-      expect(alarm.Properties.EvaluationPeriods).toBe(1);
-      expect(alarm.Properties.Period).toBe(300);
       expect(Array.isArray(alarm.Properties.AlarmActions)).toBe(true);
+      expect(alarm.Properties.Dimensions[0].Name).toBe('FunctionName');
+      expect(alarm.Properties.Dimensions[0].Value.Ref).toBe('MyLambdaFunction');
+      expect(alarm.Properties.AlarmName['Fn::Sub']).toContain(
+        '${EnvironmentSuffix}'
+      );
     });
 
-    it('does not define forbidden resources', () => {
-      // Example: No S3 bucket or custom domain in this template
-      expect(template.Resources.ArtifactsBucket).toBeUndefined();
-      expect(template.Resources.ApiGatewayDomain).toBeUndefined();
+    it('all resource logical IDs are unique', () => {
+      const ids = Object.keys(template.Resources);
+      const unique = Array.from(new Set(ids));
+      expect(ids.length).toBe(unique.length);
     });
   });
 
@@ -154,7 +147,7 @@ describe('TapStack CloudFormation Template', () => {
     it('outputs LambdaArn', () => {
       const output = template.Outputs.LambdaArn;
       expect(output).toBeDefined();
-      expect(output.Value['Fn::GetAtt']).toContain('MyLambdaFunction');
+      expect(output.Value['Fn::GetAtt']).toEqual(['MyLambdaFunction', 'Arn']);
     });
 
     it('outputs DynamoDBTable', () => {
@@ -169,30 +162,13 @@ describe('TapStack CloudFormation Template', () => {
       expect(output.Value.Ref).toBe('LogGroup');
     });
 
-    it('outputs AlarmArn', () => {
-      const output = template.Outputs.AlarmArn;
+    it('outputs AlarmName', () => {
+      const output = template.Outputs.AlarmName;
       expect(output).toBeDefined();
-      expect(output.Value.Ref).toBe('LambdaErrorAlarm');
+      expect(output.Value['Fn::Sub']).toContain('${EnvironmentSuffix}');
     });
 
-    it('does not output deprecated or forbidden outputs', () => {
-      expect(template.Outputs.CustomDomain).toBeUndefined();
-      expect(template.Outputs.ArtifactsBucketName).toBeUndefined();
-    });
-  });
-
-  describe('Edge Cases', () => {
-    it('fails gracefully if resource missing', () => {
-      expect(template.Resources.NonExistentResource).toBeUndefined();
-    });
-
-    it('all resource logical IDs are unique', () => {
-      const ids = Object.keys(template.Resources);
-      const unique = Array.from(new Set(ids));
-      expect(ids.length).toBe(unique.length);
-    });
-
-    it('all outputs reference valid resources', () => {
+    it('all outputs reference valid resources or parameters', () => {
       Object.values(template.Outputs).forEach((output: any) => {
         if (output.Value.Ref) {
           expect(template.Resources[output.Value.Ref]).toBeDefined();
@@ -202,6 +178,23 @@ describe('TapStack CloudFormation Template', () => {
           expect(template.Resources[logicalId]).toBeDefined();
         }
       });
+    });
+  });
+
+  describe('Edge Cases and Negative Checks', () => {
+    it('should not define forbidden or deprecated resources', () => {
+      expect(template.Resources.ArtifactsBucket).toBeUndefined();
+      expect(template.Resources.ApiGatewayDomain).toBeUndefined();
+    });
+
+    it('should not define forbidden outputs', () => {
+      expect(template.Outputs.CustomDomain).toBeUndefined();
+      expect(template.Outputs.ArtifactsBucketName).toBeUndefined();
+      expect(template.Outputs.AlarmArn).toBeUndefined();
+    });
+
+    it('fails gracefully if resource is missing', () => {
+      expect(template.Resources.NonExistentResource).toBeUndefined();
     });
   });
 });

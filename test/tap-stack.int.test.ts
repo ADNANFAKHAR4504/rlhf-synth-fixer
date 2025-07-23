@@ -121,17 +121,14 @@ describe('TapStack Serverless Stack Integration Tests', () => {
   });
 
   test('CloudWatch Alarm exists', async () => {
-    const alarmArn = outputs.AlarmArn;
-    expect(alarmArn).toBeDefined();
-    // Note: AlarmArn is not the AlarmName, so we need to list alarms and match by ARN
+    const alarmName = outputs.AlarmName;
+    expect(alarmName).toBeDefined();
     const { MetricAlarms } = await cloudwatch.send(
-      new DescribeAlarmsCommand({})
+      new DescribeAlarmsCommand({ AlarmNames: [alarmName] })
     );
-    const found = MetricAlarms?.find(a => a.AlarmArn === alarmArn);
-    expect(found).toBeDefined();
+    expect(MetricAlarms?.length).toBe(1);
+    expect(MetricAlarms?.[0].AlarmName).toBe(alarmName);
   });
-
-  // --- Optional: Add more tests if you add more outputs/resources ---
 
   test('All outputs are defined and non-empty', () => {
     Object.entries(outputs).forEach(([key, val]: [string, any]) => {
@@ -144,5 +141,6 @@ describe('TapStack Serverless Stack Integration Tests', () => {
   test('Should not output deprecated or forbidden outputs', () => {
     expect(outputs.CustomDomain).toBeUndefined();
     expect(outputs.ArtifactsBucketName).toBeUndefined();
+    expect(outputs.AlarmArn).toBeUndefined();
   });
 });
