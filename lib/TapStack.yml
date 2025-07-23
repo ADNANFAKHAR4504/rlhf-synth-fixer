@@ -283,7 +283,7 @@ Resources:
     Properties:
       DBInstanceIdentifier: !Sub '${EnvironmentSuffix}-primary-db-${AWS::Region}'
       Engine: 'mysql'
-      EngineVersion: '8.0.35'
+      EngineVersion: '8.0.40'
       DBInstanceClass: 'db.t3.micro'
       AllocatedStorage: '20'
       MasterUsername: !Sub '{{resolve:secretsmanager:${DBSecret}:SecretString:username}}'

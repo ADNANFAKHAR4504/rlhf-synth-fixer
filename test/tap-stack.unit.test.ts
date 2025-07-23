@@ -322,7 +322,7 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
         expect(typedTemplate.Resources.PrimaryDBInstance.Condition).toBe('IsPrimaryDeployment');
         expect(typedTemplate.Resources.PrimaryDBInstance.Properties.DBInstanceIdentifier['Fn::Sub']).toBe('${EnvironmentSuffix}-primary-db-${AWS::Region}');
         expect(typedTemplate.Resources.PrimaryDBInstance.Properties.Engine).toBe('mysql');
-        expect(typedTemplate.Resources.PrimaryDBInstance.Properties.EngineVersion).toBe('8.0.35');
+        expect(typedTemplate.Resources.PrimaryDBInstance.Properties.EngineVersion).toBe('8.0.40');
         expect(typedTemplate.Resources.PrimaryDBInstance.Properties.DBInstanceClass).toBe('db.t3.micro');
         expect(typedTemplate.Resources.PrimaryDBInstance.Properties.AllocatedStorage).toBe('20');
         expect(typedTemplate.Resources.PrimaryDBInstance.Properties.MasterUsername['Fn::Sub']).toBe('{{resolve:secretsmanager:${DBSecret}:SecretString:username}}');

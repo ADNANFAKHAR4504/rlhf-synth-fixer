@@ -146,7 +146,7 @@ describe('TapStack CloudFormation Integration Tests', () => {
         expect(db?.DBInstanceStatus).toBe('available');
         expect(db?.DBSubnetGroup?.VpcId).toBe(outputs.VPCId);
         expect(db?.Engine).toBe('mysql');
-        expect(db?.EngineVersion).toBe('8.0.35');
+        expect(db?.EngineVersion).toBe('8.0.40');
         expect(db?.DBInstanceClass).toBe('db.t3.micro');
         expect(db?.AllocatedStorage).toBe(20);
         
@@ -306,7 +306,7 @@ describe('TapStack CloudFormation Integration Tests', () => {
           
           // Verify primary database supports read replicas
           expect(db?.Engine).toBe('mysql');
-          expect(db?.EngineVersion).toBe('8.0.35');
+          expect(db?.EngineVersion).toBe('8.0.40');
           
           console.log('✅ Replica deployment workflow validation successful');
         } else {
