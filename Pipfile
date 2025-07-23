@@ -8,6 +8,7 @@ cfn-lint = "*"
 cfn-flip = "*"
 aws-cdk-lib = "2.202.0"
 constructs = ">=10.0.0,<11.0.0"
+cdktf = "0.21.0"
 
 [dev-packages]
 boto3 = "*"
