@@ -4,26 +4,21 @@ Description: Production-ready serverless API stack with HA, security, and observ
 Parameters:
   EnvironmentSuffix:
     Type: String
-    Description: Environment suffix (e.g., dev, prod, pr101)
+    Description: Environment suffix (e.g., dev, prod, staging)
   Name:
     Type: String
     Default: tapstack
     Description: Application name
   Team:
     Type: String
-    Default: prteam
+    Default: team
     Description: Team name
-  DomainName:
-    Type: String
-    Default: !Sub api-${EnvironmentSuffix}.example.com
-    Description: Custom domain name for API Gateway
   Region:
     Type: String
     Default: us-east-1
     Description: AWS region for deployment
 
 Resources:
-  # IAM Role for Lambda
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
@@ -46,7 +41,6 @@ Resources:
                   - dynamodb:GetItem
                 Resource: !GetAtt DynamoDBTable.Arn
 
-  # Lambda Function
   MyLambdaFunction:
     Type: AWS::Lambda::Function
     Properties:
@@ -65,7 +59,6 @@ Resources:
         S3Bucket: !Sub my-artifacts-${Region}
         S3Key: lambda-code.zip
 
-  # DynamoDB Table
   DynamoDBTable:
     Type: AWS::DynamoDB::Table
     Properties:
@@ -78,7 +71,6 @@ Resources:
         - AttributeName: id
           KeyType: HASH
 
-  # API Gateway
   ApiGateway:
     Type: AWS::ApiGateway::RestApi
     Properties:
@@ -88,21 +80,18 @@ Resources:
         Types:
           - REGIONAL
 
-  # Custom Domain for API Gateway
   ApiGatewayDomain:
     Type: AWS::ApiGateway::DomainName
     Properties:
-      DomainName: !Ref DomainName
+      DomainName: !Sub api-${EnvironmentSuffix}.example.com
       RegionalCertificateArn: arn:aws:acm:us-east-1:123456789012:certificate/abcd1234
 
-  # CloudWatch Log Group
   LogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub /aws/apigateway/${EnvironmentSuffix}-${Name}-api-${Team}
       RetentionInDays: 14
 
-  # CloudWatch Alarm for Lambda Errors
   LambdaErrorAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
@@ -125,7 +114,7 @@ Outputs:
     Value: !Sub https://${ApiGateway}.execute-api.${Region}.amazonaws.com/${EnvironmentSuffix}
   CustomDomain:
     Description: Custom domain name
-    Value: !Ref DomainName
+    Value: !Sub api-${EnvironmentSuffix}.example.com
   LambdaArn:
     Description: Lambda function ARN
     Value: !GetAtt MyLambdaFunction.Arn
