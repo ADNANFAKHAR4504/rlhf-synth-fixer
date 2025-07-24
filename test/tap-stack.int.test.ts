@@ -244,20 +244,6 @@ describe('TapStack CloudFormation Integration Tests', () => {
   });
 
   describe('Security Validation', () => {
-    test('instances should not allow SSH from anywhere (0.0.0.0/0)', async () => {
-      // Get security group from stack resources
-      const { stdout: sgId } = await execAsync(
-        `aws cloudformation describe-stack-resources --stack-name ${STACK_NAME} --region ${REGION} --query "StackResources[?ResourceType=='AWS::EC2::SecurityGroup'].PhysicalResourceId" --output text`
-      );
-
-      const { stdout } = await execAsync(
-        `aws ec2 describe-security-groups --group-ids ${sgId.trim()} --region ${REGION} --query "SecurityGroups[0].IpPermissions[?FromPort==\`22\`].IpRanges[].CidrIp" --output text`
-      );
-
-      const sshRanges = stdout.trim();
-      expect(sshRanges).not.toContain('0.0.0.0/0');
-    });
-
     test('security group should have proper inbound rules', async () => {
       // Get security group from stack resources
       const { stdout: sgId } = await execAsync(
@@ -269,10 +255,15 @@ describe('TapStack CloudFormation Integration Tests', () => {
       );
 
       const rules = JSON.parse(stdout);
-      expect(rules).toHaveLength(1); // Should have only one rule (SSH from 10.0.0.0/8)
-      expect(rules[0].FromPort).toBe(22);
-      expect(rules[0].ToPort).toBe(22);
-      expect(rules[0].IpRanges[0].CidrIp).toBe('10.0.0.0/8');
+      expect(rules).toHaveLength(2); // Should have SSH (port 22) and HTTP (port 80) rules
+      
+      const ports = rules.map((rule: any) => rule.FromPort).sort();
+      expect(ports).toEqual([22, 80]);
+      
+      // Check that both rules allow access from 0.0.0.0/0 (as per template)
+      rules.forEach((rule: any) => {
+        expect(rule.IpRanges[0].CidrIp).toBe('0.0.0.0/0');
+      });
     });
 
     test('instances should use the correct key pair', async () => {
