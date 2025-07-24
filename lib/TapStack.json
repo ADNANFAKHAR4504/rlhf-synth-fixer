@@ -20,6 +20,28 @@
         }
     },
     "Resources": {
+        "RDSKMSKey": {
+            "Type": "AWS::KMS::Key",
+            "Properties": {
+                "EnableKeyRotation": true,
+                "Description": "KMS key for RDS encryption",
+                "KeyPolicy": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                                }
+                            },
+                            "Action": "kms:*",
+                            "Resource": "*"
+                        }
+                    ]
+                }
+            }
+        },
         "FinancialServicesVPC": {
             "Type": "AWS::EC2::VPC",
             "Properties": {
@@ -618,6 +640,22 @@
                 }
             }
         },
+        "S3BucketLoggingEnabledRule": {
+            "Type": "AWS::Config::ConfigRule",
+            "Properties": {
+                "ConfigRuleName": "s3-bucket-logging-enabled",
+                "Description": "Ensure S3 bucket logging is enabled",
+                "Source": {
+                    "Owner": "AWS",
+                    "SourceIdentifier": "S3_BUCKET_LOGGING_ENABLED"
+                },
+                "Scope": {
+                    "ComplianceResourceTypes": [
+                        "AWS::S3::Bucket"
+                    ]
+                }
+            }
+        },
         "VPCFlowLog": {
             "Type": "AWS::EC2::FlowLog",
             "Properties": {
@@ -779,6 +817,9 @@
                                         "CloudFrontOAI",
                                         "S3CanonicalUserId"
                                     ]
+                                },
+                                "AWS": {
+                                    "Fn::Sub": "arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity ${CloudFrontOAI}"
                                 }
                             },
                             "Action": "s3:GetObject",
@@ -820,6 +861,49 @@
             "Properties": {
                 "CloudFrontOriginAccessIdentityConfig": {
                     "Comment": "Access Identity for SecureS3Bucket"
+                }
+            }
+        },
+        "SecureCloudFrontDistribution": {
+            "Type": "AWS::CloudFront::Distribution",
+            "Properties": {
+                "DistributionConfig": {
+                    "Enabled": true,
+                    "Origins": [
+                        {
+                            "Id": "S3Origin",
+                            "DomainName": {
+                                "Fn::GetAtt": [
+                                    "SecureS3Bucket",
+                                    "RegionalDomainName"
+                                ]
+                            },
+                            "S3OriginConfig": {
+                                "OriginAccessIdentity": {
+                                    "Fn::Sub": "origin-access-identity/cloudfront/${CloudFrontOAI}"
+                                }
+                            }
+                        }
+                    ],
+                    "DefaultCacheBehavior": {
+                        "TargetOriginId": "S3Origin",
+                        "ViewerProtocolPolicy": "redirect-to-https",
+                        "AllowedMethods": [
+                            "GET",
+                            "HEAD"
+                        ],
+                        "CachedMethods": [
+                            "GET",
+                            "HEAD"
+                        ],
+                        "ForwardedValues": {
+                            "QueryString": false
+                        }
+                    },
+                    "ViewerCertificate": {
+                        "CloudFrontDefaultCertificate": true
+                    },
+                    "Comment": "Secure CloudFront distribution for S3"
                 }
             }
         },
@@ -985,6 +1069,9 @@
                 },
                 "StorageEncrypted": true,
                 "PubliclyAccessible": false,
+                "KmsKeyId": {
+                    "Ref": "RDSKMSKey"
+                },
                 "DBSubnetGroupName": {
                     "Ref": "FinancialDBSubnetGroup"
                 },

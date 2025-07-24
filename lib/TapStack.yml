@@ -500,7 +500,7 @@ Resources:
         Enabled: true
         Origins:
           - Id: S3Origin
-            DomainName: !GetAtt EncryptedBucket.RegionalDomainName
+            DomainName: !GetAtt SecureS3Bucket.RegionalDomainName
             S3OriginConfig:
               OriginAccessIdentity: !Sub "origin-access-identity/cloudfront/${CloudFrontOAI}"
         DefaultCacheBehavior:
