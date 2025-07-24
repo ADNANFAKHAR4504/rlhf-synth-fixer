@@ -256,6 +256,7 @@ Resources:
       DBName: webappdb
       AllocatedStorage: 20
       DBInstanceClass: db.t3.micro
+      StorageEncrypted: true
       Engine: postgres
       EngineVersion: "15.7"
       MasterUsername: masteruser

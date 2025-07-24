@@ -27,6 +27,16 @@
             "Type": "AWS::EC2::KeyPair::KeyName",
             "Default": "iac-rlhf-aws-trainer-instance",
             "Description": "Name of an existing EC2 KeyPair for SSH access"
+        },
+        "RDSPassword": {
+            "Type": "String",
+            "NoEcho": true,
+            "Default": "masterpass123",
+            "Description": "Password for the RDS PostgreSQL master user",
+            "MinLength": 8,
+            "MaxLength": 41,
+            "AllowedPattern": "^(?=.*[A-Za-z])(?=.*\\d)[A-Za-z\\d@$!%*?&]{8,41}$",
+            "ConstraintDescription": "Must be between 8 and 41 characters long, contain at least one letter and one number."
         }
     },
     "Resources": {
@@ -40,6 +50,12 @@
                     {
                         "Key": "Name",
                         "Value": "WebAppVPC"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentSuffix}"
+                        }
                     }
                 ]
             }
@@ -64,7 +80,14 @@
                 "VpcId": {
                     "Ref": "VPC"
                 },
-                "AvailabilityZone": "us-east-1a",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
                 "CidrBlock": "10.0.1.0/24",
                 "MapPublicIpOnLaunch": true,
                 "Tags": [
@@ -81,13 +104,26 @@
                 "VpcId": {
                     "Ref": "VPC"
                 },
-                "AvailabilityZone": "us-east-1b",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
                 "CidrBlock": "10.0.2.0/24",
                 "MapPublicIpOnLaunch": true,
                 "Tags": [
                     {
                         "Key": "Name",
                         "Value": "PublicSubnet2"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentSuffix}"
+                        }
                     }
                 ]
             }
@@ -98,13 +134,26 @@
                 "VpcId": {
                     "Ref": "VPC"
                 },
-                "AvailabilityZone": "us-east-1a",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
                 "CidrBlock": "10.0.3.0/24",
                 "MapPublicIpOnLaunch": false,
                 "Tags": [
                     {
                         "Key": "Name",
                         "Value": "PrivateSubnet1"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentSuffix}"
+                        }
                     }
                 ]
             }
@@ -115,13 +164,26 @@
                 "VpcId": {
                     "Ref": "VPC"
                 },
-                "AvailabilityZone": "us-east-1b",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
                 "CidrBlock": "10.0.4.0/24",
                 "MapPublicIpOnLaunch": false,
                 "Tags": [
                     {
                         "Key": "Name",
                         "Value": "PrivateSubnet2"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentSuffix}"
+                        }
                     }
                 ]
             }
@@ -363,10 +425,13 @@
                 "DBName": "webappdb",
                 "AllocatedStorage": 20,
                 "DBInstanceClass": "db.t3.micro",
+                "StorageEncrypted": true,
                 "Engine": "postgres",
                 "EngineVersion": "15.7",
                 "MasterUsername": "masteruser",
-                "MasterUserPassword": "masterpass123",
+                "MasterUserPassword": {
+                    "Fn::Sub": "${RDSPassword}"
+                },
                 "VPCSecurityGroups": [
                     {
                         "Ref": "RDSSecurityGroup"

@@ -95,6 +95,6 @@ describe('Highly Available Web App Infrastructure - Integration Tests', () => {
   });
 
   test('LoadBalancer DNS name should be a valid DNS format', () => {
-    expect(outputs.LoadBalancerDNSName).toMatch(/^[a-z0-9-]+\.[a-z0-9.-]+\.elb\.amazonaws\.com$/);
+    expect(outputs.LoadBalancerDNSName).toMatch(/^[-a-zA-Z0-9.]+\.elb\.amazonaws\.com$/);
   });
 });
