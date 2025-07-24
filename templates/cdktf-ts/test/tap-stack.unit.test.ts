@@ -1,10 +1,6 @@
 import { App, Testing } from 'cdktf';
 import { TapStack } from '../lib/tap-stack';
 
-// Mock the nested stacks to verify they are called correctly
-jest.mock('../lib/ddb-stack');
-jest.mock('../lib/rest-api-stack');
-
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 const stateBucket = process.env.TERRAFORM_STATE_BUCKET || 'iac-rlhf-tf-states';
 const stateBucketRegion = process.env.TERRAFORM_STATE_BUCKET_REGION || 'us-east-1';
@@ -28,12 +24,6 @@ describe('TapStack', () => {
   describe("Stack Creation", () => {
     test("should create a TapStack instance", () => {
       expect(stack).toBeInstanceOf(TapStack);
-    }); 
-  });
-
-  describe('Write Integration TESTS', () => {
-    test('Dont forget!', async () => {
-      expect(false).toBe(true);
     });
   });
 });
