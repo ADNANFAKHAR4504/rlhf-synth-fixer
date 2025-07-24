@@ -331,10 +331,10 @@
                   ],
                   "Resource": [
                     {
-                      "Fn::Sub": "${S3Bucket}/*"
+                      "Fn::Sub": "arn:aws:s3:::${S3Bucket}/*"
                     },
                     {
-                      "Ref": "S3Bucket"
+                      "Fn::Sub": "arn:aws:s3:::${S3Bucket}"
                     }
                   ]
                 }
