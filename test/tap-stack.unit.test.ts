@@ -65,9 +65,9 @@ describe('TapStack CloudFormation Template - Serverless API', () => {
       const p = template.Parameters.EnvironmentSuffix;
       expect(p.Type).toBe('String');
       expect(p.Default).toBe('dev');
-      expect(p.AllowedValues).toEqual(['dev', 'test', 'prod']);
-      expect(Array.isArray(p.AllowedValues)).toBe(true);
-      expect(p.AllowedValues).toHaveLength(3);
+      expect(p.Description).toMatch(/environment suffix/i);
+      expect(p.AllowedPattern).toBe('^[a-zA-Z0-9]+$');
+      expect(p.ConstraintDescription).toMatch(/alphanumeric/i);
     });
 
     test('All parameters should have Type and Default', () => {

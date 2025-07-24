@@ -72,7 +72,7 @@ describe('TapStack API Integration Tests', () => {
   describe('API Gateway Endpoints', () => {
     test('should have accessible API Gateway endpoint', async () => {
       expect(apiUrl).toMatch(
-        /^https:\/\/.*\.execute-api\.us-east-1\.amazonaws\.com\//
+        /^https:\/\/[a-zA-Z0-9-]+\.execute-api\.us-east-1\.amazonaws\.com\//
       );
     });
 
