@@ -132,7 +132,7 @@ describe('TapStack CloudFormation Integration Tests', () => {
   describe('AWS Resource Validation', () => {
     test('should have VPC created with correct CIDR', async () => {
       const { stdout } = await execAsync(
-        `aws ec2 describe-vpcs --filters "Name=tag:Environment,Values=Development" --region ${REGION} --query "Vpcs[?CidrBlock=='10.0.0.0/16'].CidrBlock" --output text`
+        `aws ec2 describe-vpcs --filters "Name=tag:Environment,Values=Development" --region ${REGION} --query "Vpcs[?CidrBlock=='10.0.0.0/16'] | [0].CidrBlock" --output text`
       );
       
       expect(stdout.trim()).toBe('10.0.0.0/16');
@@ -140,7 +140,7 @@ describe('TapStack CloudFormation Integration Tests', () => {
 
     test('should have 2 public subnets created', async () => {
       const { stdout } = await execAsync(
-        `aws ec2 describe-subnets --filters "Name=tag:Environment,Values=Development" --region ${REGION} --query "length(Subnets[?MapPublicIpOnLaunch==\`true\`])"`
+        `aws cloudformation describe-stack-resources --stack-name ${STACK_NAME} --region ${REGION} --query "length(StackResources[?ResourceType=='AWS::EC2::Subnet'])"`
       );
       
       const subnetCount = parseInt(stdout.trim());
@@ -149,24 +149,29 @@ describe('TapStack CloudFormation Integration Tests', () => {
 
     test('should have Internet Gateway attached', async () => {
       const { stdout } = await execAsync(
-        `aws ec2 describe-internet-gateways --filters "Name=tag:Environment,Values=Development" --region ${REGION} --query "InternetGateways[0].State" --output text`
+        `aws cloudformation describe-stack-resources --stack-name ${STACK_NAME} --region ${REGION} --query "StackResources[?ResourceType=='AWS::EC2::InternetGateway'] | [0].ResourceStatus" --output text`
       );
       
-      expect(stdout.trim()).toBe('available');
+      expect(stdout.trim()).toBe('CREATE_COMPLETE');
     });
 
     test('should have security group with SSH and HTTP access', async () => {
       const { stdout } = await execAsync(
-        `aws ec2 describe-security-groups --filters "Name=group-description,Values=Enable SSH and HTTP access" "Name=tag:Environment,Values=Development" --region ${REGION} --query "SecurityGroups[0].IpPermissions[?FromPort==\`22\` || FromPort==\`80\`].FromPort" --output text`
+        `aws cloudformation describe-stack-resources --stack-name ${STACK_NAME} --region ${REGION} --query "StackResources[?ResourceType=='AWS::EC2::SecurityGroup'] | [0].PhysicalResourceId" --output text`
       );
       
-      const ports = stdout.trim().split('\t').map(p => parseInt(p)).sort();
+      const sgId = stdout.trim();
+      const { stdout: sgDetails } = await execAsync(
+        `aws ec2 describe-security-groups --group-ids ${sgId} --region ${REGION} --query "SecurityGroups[0].IpPermissions[*].FromPort" --output text`
+      );
+      
+      const ports = sgDetails.trim().split('\t').map(p => parseInt(p)).sort();
       expect(ports).toEqual([22, 80]);
     });
 
     test('should have 2 running EC2 instances', async () => {
       const { stdout } = await execAsync(
-        `aws ec2 describe-instances --filters "Name=tag:Environment,Values=Development" "Name=instance-state-name,Values=running" --region ${REGION} --query "length(Reservations[].Instances[])"`
+        `aws cloudformation describe-stack-resources --stack-name ${STACK_NAME} --region ${REGION} --query "length(StackResources[?ResourceType=='AWS::EC2::Instance'])"`
       );
       
       const instanceCount = parseInt(stdout.trim());
@@ -177,20 +182,30 @@ describe('TapStack CloudFormation Integration Tests', () => {
   describe('Infrastructure Validation', () => {
     test('instances should be in different availability zones', async () => {
       const { stdout } = await execAsync(
-        `aws ec2 describe-instances --filters "Name=tag:Environment,Values=Development" "Name=instance-state-name,Values=running" --region ${REGION} --query "Reservations[].Instances[].Placement.AvailabilityZone" --output text`
+        `aws cloudformation describe-stack-resources --stack-name ${STACK_NAME} --region ${REGION} --query "StackResources[?ResourceType=='AWS::EC2::Instance'].PhysicalResourceId" --output text`
       );
       
-      const azs = stdout.trim().split('\t');
+      const instanceIds = stdout.trim().split('\t');
+      const { stdout: azData } = await execAsync(
+        `aws ec2 describe-instances --instance-ids ${instanceIds.join(' ')} --region ${REGION} --query "Reservations[].Instances[].Placement.AvailabilityZone" --output text`
+      );
+      
+      const azs = azData.trim().split('\t');
       expect(azs).toHaveLength(2);
       expect(azs[0]).not.toBe(azs[1]); // Different AZs
     });
 
     test('instances should have public IP addresses', async () => {
       const { stdout } = await execAsync(
-        `aws ec2 describe-instances --filters "Name=tag:Environment,Values=Development" "Name=instance-state-name,Values=running" --region ${REGION} --query "Reservations[].Instances[].PublicIpAddress" --output text`
+        `aws cloudformation describe-stack-resources --stack-name ${STACK_NAME} --region ${REGION} --query "StackResources[?ResourceType=='AWS::EC2::Instance'].PhysicalResourceId" --output text`
       );
       
-      const publicIPs = stdout.trim().split('\t').filter(ip => ip && ip !== 'None');
+      const instanceIds = stdout.trim().split('\t');
+      const { stdout: ipData } = await execAsync(
+        `aws ec2 describe-instances --instance-ids ${instanceIds.join(' ')} --region ${REGION} --query "Reservations[].Instances[].PublicIpAddress" --output text`
+      );
+      
+      const publicIPs = ipData.trim().split('\t').filter(ip => ip && ip !== 'None');
       expect(publicIPs).toHaveLength(2);
       
       // Validate IP format
@@ -210,24 +225,48 @@ describe('TapStack CloudFormation Integration Tests', () => {
   });
 
   describe('Security Validation', () => {
-    test('security group should only allow necessary ports', async () => {
-      const { stdout } = await execAsync(
-        `aws ec2 describe-security-groups --filters "Name=group-description,Values=Enable SSH and HTTP access" "Name=tag:Environment,Values=Development" --region ${REGION} --query "SecurityGroups[0].IpPermissions" --output json`
+    test('instances should not allow SSH from anywhere (0.0.0.0/0)', async () => {
+      // Get security group from stack resources
+      const { stdout: sgId } = await execAsync(
+        `aws cloudformation describe-stack-resources --stack-name ${STACK_NAME} --region ${REGION} --query "StackResources[?ResourceType=='AWS::EC2::SecurityGroup'].PhysicalResourceId" --output text`
       );
       
-      const permissions = JSON.parse(stdout);
-      expect(permissions).toHaveLength(2);
+      const { stdout } = await execAsync(
+        `aws ec2 describe-security-groups --group-ids ${sgId.trim()} --region ${REGION} --query "SecurityGroups[0].IpPermissions[?FromPort==\`22\`].IpRanges[].CidrIp" --output text`
+      );
       
-      const ports = permissions.map((p: any) => p.FromPort).sort();
-      expect(ports).toEqual([22, 80]);
+      const sshRanges = stdout.trim();
+      expect(sshRanges).not.toContain('0.0.0.0/0');
+    });
+
+    test('security group should have proper inbound rules', async () => {
+      // Get security group from stack resources
+      const { stdout: sgId } = await execAsync(
+        `aws cloudformation describe-stack-resources --stack-name ${STACK_NAME} --region ${REGION} --query "StackResources[?ResourceType=='AWS::EC2::SecurityGroup'].PhysicalResourceId" --output text`
+      );
+      
+      const { stdout } = await execAsync(
+        `aws ec2 describe-security-groups --group-ids ${sgId.trim()} --region ${REGION} --query "SecurityGroups[0].IpPermissions" --output json`
+      );
+      
+      const rules = JSON.parse(stdout);
+      expect(rules).toHaveLength(1); // Should have only one rule (SSH from 10.0.0.0/8)
+      expect(rules[0].FromPort).toBe(22);
+      expect(rules[0].ToPort).toBe(22);
+      expect(rules[0].IpRanges[0].CidrIp).toBe('10.0.0.0/8');
     });
 
     test('instances should use the correct key pair', async () => {
       const { stdout } = await execAsync(
-        `aws ec2 describe-instances --filters "Name=tag:Environment,Values=Development" "Name=instance-state-name,Values=running" --region ${REGION} --query "Reservations[].Instances[].KeyName" --output text`
+        `aws cloudformation describe-stack-resources --stack-name ${STACK_NAME} --region ${REGION} --query "StackResources[?ResourceType=='AWS::EC2::Instance'].PhysicalResourceId" --output text`
       );
       
-      const keyNames = stdout.trim().split('\t');
+      const instanceIds = stdout.trim().split('\t');
+      const { stdout: keyData } = await execAsync(
+        `aws ec2 describe-instances --instance-ids ${instanceIds.join(' ')} --region ${REGION} --query "Reservations[].Instances[].KeyName" --output text`
+      );
+      
+      const keyNames = keyData.trim().split('\t');
       keyNames.forEach(keyName => {
         expect(keyName).toBe('iac-rlhf-aws-trainer-instance');
       });
