@@ -1,210 +1,181 @@
 import fs from 'fs';
 import path from 'path';
 
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-
-describe('TapStack CloudFormation Template', () => {
+describe('Greeting API CloudFormation Template', () => {
   let template: any;
 
   beforeAll(() => {
-    // If youre testing a yaml template. run `pipenv run cfn-flip-to-json > lib/TapStack.json`
-    // Otherwise, ensure the template is in JSON format.
-    const templatePath = path.join(__dirname, '../lib/TapStack.json');
+    // Load the JSON version of the CloudFormation template
+    // The user should ensure the YAML is converted to JSON before running tests.
+    const templatePath = path.join(__dirname, '../lib/TapStack.json'); // Assumes the JSON file is named TapStack.json
     const templateContent = fs.readFileSync(templatePath, 'utf8');
     template = JSON.parse(templateContent);
   });
 
-  describe('Write Integration TESTS', () => {
-    test('Dont forget!', async () => {
-      expect(false).toBe(true);
-    });
-  });
-
   describe('Template Structure', () => {
-    test('should have valid CloudFormation format version', () => {
+    test('should have a valid CloudFormation format version', () => {
       expect(template.AWSTemplateFormatVersion).toBe('2010-09-09');
     });
 
     test('should have a description', () => {
       expect(template.Description).toBeDefined();
-      expect(template.Description).toBe(
-        'TAP Stack - Task Assignment Platform CloudFormation Template'
+      expect(template.Description).toContain(
+        'A secure, serverless greeting API using API Gateway and Lambda.'
       );
     });
 
-    test('should have metadata section', () => {
-      expect(template.Metadata).toBeDefined();
-      expect(template.Metadata['AWS::CloudFormation::Interface']).toBeDefined();
-    });
-  });
-
-  describe('Parameters', () => {
-    test('should have EnvironmentSuffix parameter', () => {
-      expect(template.Parameters.EnvironmentSuffix).toBeDefined();
-    });
-
-    test('EnvironmentSuffix parameter should have correct properties', () => {
-      const envSuffixParam = template.Parameters.EnvironmentSuffix;
-      expect(envSuffixParam.Type).toBe('String');
-      expect(envSuffixParam.Default).toBe('dev');
-      expect(envSuffixParam.Description).toBe(
-        'Environment suffix for resource naming (e.g., dev, staging, prod)'
-      );
-      expect(envSuffixParam.AllowedPattern).toBe('^[a-zA-Z0-9]+$');
-      expect(envSuffixParam.ConstraintDescription).toBe(
-        'Must contain only alphanumeric characters'
-      );
+    test('should not have any parameters', () => {
+      expect(template.Parameters).toBeUndefined();
     });
   });
 
   describe('Resources', () => {
-    test('should have TurnAroundPromptTable resource', () => {
-      expect(template.Resources.TurnAroundPromptTable).toBeDefined();
-    });
+    const expectedResources = [
+      'GreetingApi',
+      'GreetingResource',
+      'GreetingMethod',
+      'GreetingDeployment',
+      'GreetingStage',
+      'LambdaExecutionRole',
+      'GreetingFunction',
+      'LambdaInvokePermission',
+      'LogGroup',
+    ];
 
-    test('TurnAroundPromptTable should be a DynamoDB table', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      expect(table.Type).toBe('AWS::DynamoDB::Table');
-    });
-
-    test('TurnAroundPromptTable should have correct deletion policies', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      expect(table.DeletionPolicy).toBe('Delete');
-      expect(table.UpdateReplacePolicy).toBe('Delete');
-    });
-
-    test('TurnAroundPromptTable should have correct properties', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const properties = table.Properties;
-
-      expect(properties.TableName).toEqual({
-        'Fn::Sub': 'TurnAroundPromptTable${EnvironmentSuffix}',
+    test('should have all required resources', () => {
+      expectedResources.forEach(resourceId => {
+        expect(template.Resources[resourceId]).toBeDefined();
       });
-      expect(properties.BillingMode).toBe('PAY_PER_REQUEST');
-      expect(properties.DeletionProtectionEnabled).toBe(false);
+      const resourceCount = Object.keys(template.Resources).length;
+      expect(resourceCount).toBe(expectedResources.length);
     });
 
-    test('TurnAroundPromptTable should have correct attribute definitions', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const attributeDefinitions = table.Properties.AttributeDefinitions;
+    describe('GreetingFunction', () => {
+      let func: any;
+      beforeAll(() => {
+        func = template.Resources.GreetingFunction;
+      });
 
-      expect(attributeDefinitions).toHaveLength(1);
-      expect(attributeDefinitions[0].AttributeName).toBe('id');
-      expect(attributeDefinitions[0].AttributeType).toBe('S');
+      test('should be an AWS Lambda Function', () => {
+        expect(func.Type).toBe('AWS::Lambda::Function');
+      });
+
+      test('should use python3.12 runtime', () => {
+        expect(func.Properties.Runtime).toBe('python3.12');
+      });
+
+      test('should have the correct handler', () => {
+        expect(func.Properties.Handler).toBe('index.handler');
+      });
+
+      test('should have the correct environment variable for the greeting message', () => {
+        const envVars = func.Properties.Environment.Variables;
+        expect(envVars.GREETING_MESSAGE).toBe('Hello from a secure, serverless API!');
+      });
+
+      test('should be linked to the correct IAM Role', () => {
+        expect(func.Properties.Role['Fn::GetAtt'][0]).toBe('LambdaExecutionRole');
+      });
     });
 
-    test('TurnAroundPromptTable should have correct key schema', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const keySchema = table.Properties.KeySchema;
+    describe('LambdaExecutionRole', () => {
+      let role: any;
+      beforeAll(() => {
+        role = template.Resources.LambdaExecutionRole;
+      });
 
-      expect(keySchema).toHaveLength(1);
-      expect(keySchema[0].AttributeName).toBe('id');
-      expect(keySchema[0].KeyType).toBe('HASH');
+      test('should be an AWS IAM Role', () => {
+        expect(role.Type).toBe('AWS::IAM::Role');
+      });
+
+      test('should have a trust policy for the Lambda service', () => {
+        const policy = role.Properties.AssumeRolePolicyDocument.Statement[0];
+        expect(policy.Effect).toBe('Allow');
+        expect(policy.Principal.Service).toBe('lambda.amazonaws.com');
+        expect(policy.Action).toBe('sts:AssumeRole');
+      });
+
+      test('should have a policy to write logs to the correct LogGroup', () => {
+        const policy = role.Properties.Policies[0].PolicyDocument.Statement[0];
+        expect(policy.Effect).toBe('Allow');
+        expect(policy.Action).toEqual(['logs:CreateLogStream', 'logs:PutLogEvents']);
+        expect(policy.Resource['Fn::GetAtt'][0]).toBe('LogGroup');
+      });
+    });
+
+    describe('LogGroup', () => {
+      let logGroup: any;
+      beforeAll(() => {
+        logGroup = template.Resources.LogGroup;
+      });
+
+      test('should be an AWS Logs LogGroup', () => {
+        expect(logGroup.Type).toBe('AWS::Logs::LogGroup');
+      });
+
+      test('should have the correct static log group name', () => {
+        expect(logGroup.Properties.LogGroupName).toBe('/aws/lambda/GreetingApiFunction');
+      });
+
+      test('should have a retention policy of 7 days', () => {
+        expect(logGroup.Properties.RetentionInDays).toBe(7);
+      });
+    });
+
+    describe('API Gateway', () => {
+      test('GreetingApi should be an AWS ApiGateway RestApi', () => {
+        expect(template.Resources.GreetingApi.Type).toBe('AWS::ApiGateway::RestApi');
+      });
+
+      test('GreetingResource should have the correct path part', () => {
+        expect(template.Resources.GreetingResource.Properties.PathPart).toBe('greet');
+      });
+
+      test('GreetingMethod should be a GET method', () => {
+        expect(template.Resources.GreetingMethod.Properties.HttpMethod).toBe('GET');
+      });
+
+      test('GreetingStage should be named "prod"', () => {
+        expect(template.Resources.GreetingStage.Properties.StageName).toBe('prod');
+      });
+    });
+
+    describe('LambdaInvokePermission', () => {
+      let permission: any;
+      beforeAll(() => {
+        permission = template.Resources.LambdaInvokePermission;
+      });
+
+      test('should be an AWS Lambda Permission', () => {
+        expect(permission.Type).toBe('AWS::Lambda::Permission');
+      });
+
+      test('should allow invocation from API Gateway', () => {
+        expect(permission.Properties.Principal).toBe('apigateway.amazonaws.com');
+      });
+
+      test('should have a source ARN to restrict invocation to the specific API Gateway', () => {
+        const sourceArn = permission.Properties.SourceArn['Fn::Sub'];
+        expect(sourceArn).toContain('arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${GreetingApi}/*/GET/greet');
+      });
     });
   });
 
   describe('Outputs', () => {
-    test('should have all required outputs', () => {
-      const expectedOutputs = [
-        'TurnAroundPromptTableName',
-        'TurnAroundPromptTableArn',
-        'StackName',
-        'EnvironmentSuffix',
-      ];
-
-      expectedOutputs.forEach(outputName => {
-        expect(template.Outputs[outputName]).toBeDefined();
-      });
-    });
-
-    test('TurnAroundPromptTableName output should be correct', () => {
-      const output = template.Outputs.TurnAroundPromptTableName;
-      expect(output.Description).toBe('Name of the DynamoDB table');
-      expect(output.Value).toEqual({ Ref: 'TurnAroundPromptTable' });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-TurnAroundPromptTableName',
-      });
-    });
-
-    test('TurnAroundPromptTableArn output should be correct', () => {
-      const output = template.Outputs.TurnAroundPromptTableArn;
-      expect(output.Description).toBe('ARN of the DynamoDB table');
-      expect(output.Value).toEqual({
-        'Fn::GetAtt': ['TurnAroundPromptTable', 'Arn'],
-      });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-TurnAroundPromptTableArn',
-      });
-    });
-
-    test('StackName output should be correct', () => {
-      const output = template.Outputs.StackName;
-      expect(output.Description).toBe('Name of this CloudFormation stack');
-      expect(output.Value).toEqual({ Ref: 'AWS::StackName' });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-StackName',
-      });
-    });
-
-    test('EnvironmentSuffix output should be correct', () => {
-      const output = template.Outputs.EnvironmentSuffix;
-      expect(output.Description).toBe(
-        'Environment suffix used for this deployment'
-      );
-      expect(output.Value).toEqual({ Ref: 'EnvironmentSuffix' });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-EnvironmentSuffix',
-      });
-    });
-  });
-
-  describe('Template Validation', () => {
-    test('should have valid JSON structure', () => {
-      expect(template).toBeDefined();
-      expect(typeof template).toBe('object');
-    });
-
-    test('should not have any undefined or null required sections', () => {
-      expect(template.AWSTemplateFormatVersion).not.toBeNull();
-      expect(template.Description).not.toBeNull();
-      expect(template.Parameters).not.toBeNull();
-      expect(template.Resources).not.toBeNull();
-      expect(template.Outputs).not.toBeNull();
-    });
-
-    test('should have exactly one resource', () => {
-      const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(1);
-    });
-
-    test('should have exactly one parameter', () => {
-      const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(1);
-    });
-
-    test('should have exactly four outputs', () => {
+    test('should have exactly one output', () => {
       const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(4);
-    });
-  });
-
-  describe('Resource Naming Convention', () => {
-    test('table name should follow naming convention with environment suffix', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const tableName = table.Properties.TableName;
-
-      expect(tableName).toEqual({
-        'Fn::Sub': 'TurnAroundPromptTable${EnvironmentSuffix}',
-      });
+      expect(outputCount).toBe(1);
     });
 
-    test('export names should follow naming convention', () => {
-      Object.keys(template.Outputs).forEach(outputKey => {
-        const output = template.Outputs[outputKey];
-        expect(output.Export.Name).toEqual({
-          'Fn::Sub': `\${AWS::StackName}-${outputKey}`,
-        });
-      });
+    test('should have the ApiUrl output', () => {
+      expect(template.Outputs.ApiUrl).toBeDefined();
+    });
+
+    test('ApiUrl output should be correctly configured', () => {
+      const output = template.Outputs.ApiUrl;
+      expect(output.Description).toBe('URL for invoking the Greeting API');
+      const urlSub = output.Value['Fn::Sub'];
+      expect(urlSub).toBe('https://${GreetingApi}.execute-api.${AWS::Region}.amazonaws.com/prod/greet');
     });
   });
 });
