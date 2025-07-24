@@ -1,20 +1,18 @@
-# Corrected and Hardened AWS CloudFormation Template
+# Corrected and Lint-Free AWS CloudFormation Template
 #
-# Key Improvements:
-# 1. IAM Role Permissions: The Lambda execution role now follows the principle of
-#    least privilege. It is only granted permission to write logs to its own
-#    specific log group, not all log groups in the account.
-# 2. API Gateway Invoke Permission: Added a 'SourceArn' to the Lambda permission.
-#    This is a critical security control that ensures only your specific API Gateway
-#    endpoint can trigger the function.
-# 3. Robust Lambda Code: Modified the inline Python code to use the `json` library
-#    for creating the response body, which is more reliable than string formatting.
-# 4. Logical Dependencies: Ensured explicit dependencies for deployment resources.
+# Fixes based on cfn-lint feedback:
+# 1. [E3004] Resolved Circular Dependency: The Log Group's name is now static
+#    and no longer depends on the Lambda Function's name. This breaks the
+#    circular dependency chain (Function -> Role -> LogGroup -> Function).
+# 2. [E1019] Fixed Invalid Property References: The 'SourceArn' in the Lambda
+#    permission and the 'ApiUrl' in the Outputs now use hardcoded values for the
+#    HTTP method ('GET'), path ('greet'), and stage name ('prod') instead of
+#    trying to reference properties that CloudFormation cannot resolve.
 
 AWSTemplateFormatVersion: '2010-09-09'
 Description: >
-  A secure, serverless greeting API using API Gateway and Lambda. Deploys
-  all resources in the us-west-2 region.
+  A secure, serverless greeting API using API Gateway and Lambda. This template
+  is corrected to resolve cfn-lint errors.
 
 Resources:
   # --- API Gateway Resources ---
@@ -47,11 +45,9 @@ Resources:
         Type: AWS_PROXY
         Uri: !Sub arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${GreetingFunction.Arn}/invocations
 
-  # The deployment resource. A new deployment is required to make API changes (like new methods or integrations) public.
-  # For simple templates, this is sufficient. In CI/CD, you might generate a new logical ID for this resource on each run to force a redeployment.
   GreetingDeployment:
     Type: AWS::ApiGateway::Deployment
-    DependsOn: GreetingMethod # Ensures method is created before deployment
+    DependsOn: GreetingMethod
     Properties:
       RestApiId: !Ref GreetingApi
 
@@ -83,9 +79,7 @@ Resources:
                 Action:
                   - logs:CreateLogStream
                   - logs:PutLogEvents
-                # MODIFICATION: Scoped down permissions to the specific log group for this function.
-                # This follows the principle of least privilege, a critical security best practice.
-                Resource: !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:${LogGroup}:*
+                Resource: !GetAtt LogGroup.Arn
 
   # --- Lambda Function and Permissions ---
 
@@ -101,13 +95,11 @@ Resources:
       Code:
         ZipFile: |
           import os
-          import json # MODIFICATION: Using the json library is more robust for creating JSON strings.
+          import json
 
           def handler(event, context):
               message = os.getenv('GREETING_MESSAGE', 'Default greeting')
               
-              # API Gateway proxy integration expects a JSON-serializable dict.
-              # The 'body' must be a JSON string.
               return {
                   'statusCode': 200,
                   'headers': {
@@ -122,20 +114,20 @@ Resources:
       FunctionName: !GetAtt GreetingFunction.Arn
       Action: lambda:InvokeFunction
       Principal: apigateway.amazonaws.com
-      # MODIFICATION: Added SourceArn to restrict which API Gateway can invoke this function.
-      # This is a critical security measure to prevent unauthorized invocations.
-      SourceArn: !Sub arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${GreetingApi}/*/${GreetingMethod.HttpMethod}${GreetingResource.PathPart}
+      # FIX: Hardcoded the method and path in the ARN to resolve linter errors.
+      SourceArn: !Sub arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${GreetingApi}/*/GET/greet
 
   # --- Logging ---
 
   LogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      # The log group name is conventionally prefixed with /aws/lambda/
-      LogGroupName: !Sub /aws/lambda/${GreetingFunction}
-      RetentionInDays: 7 # It's good practice to set a retention policy.
+      # FIX: Decoupled the log group name from the function ref to break the circular dependency.
+      LogGroupName: /aws/lambda/GreetingApiFunction
+      RetentionInDays: 7
 
 Outputs:
   ApiUrl:
     Description: "URL for invoking the Greeting API"
-    Value: !Sub "https://${GreetingApi}.execute-api.${AWS::Region}.amazonaws.com/${GreetingStage.StageName}/greet"
+    # FIX: Hardcoded the stage name ('prod') to resolve linter errors.
+    Value: !Sub "https://${GreetingApi}.execute-api.${AWS::Region}.amazonaws.com/prod/greet"
