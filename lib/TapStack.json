@@ -74,7 +74,7 @@
         "FunctionName": {
           "Fn::Sub": "CreateUserFunction-${EnvironmentSuffix}"
         },
-        "Runtime": "python3.8",
+        "Runtime": "python3.9",
         "Handler": "index.handler",
         "Role": {
           "Fn::GetAtt": [
@@ -100,7 +100,7 @@
         "FunctionName": {
           "Fn::Sub": "GetUserFunction-${EnvironmentSuffix}"
         },
-        "Runtime": "python3.8",
+        "Runtime": "python3.9",
         "Handler": "index.handler",
         "Role": {
           "Fn::GetAtt": [
@@ -126,7 +126,7 @@
         "FunctionName": {
           "Fn::Sub": "DeleteUserFunction-${EnvironmentSuffix}"
         },
-        "Runtime": "python3.8",
+        "Runtime": "python3.9",
         "Handler": "index.handler",
         "Role": {
           "Fn::GetAtt": [

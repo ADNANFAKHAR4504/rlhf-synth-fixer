@@ -277,7 +277,7 @@ describe('TapStack CloudFormation Template - Serverless API', () => {
           expect(func.Properties.FunctionName).toEqual({
             'Fn::Sub': `${functionName}-\${EnvironmentSuffix}`,
           });
-          expect(func.Properties.Runtime).toBe('python3.8');
+          expect(func.Properties.Runtime).toBe('python3.9');
           expect(func.Properties.Handler).toBe('index.handler');
           expect(func.Properties.Role).toEqual({
             'Fn::GetAtt': ['LambdaExecutionRole', 'Arn'],

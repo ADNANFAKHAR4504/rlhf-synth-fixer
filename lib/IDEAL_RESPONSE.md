@@ -101,7 +101,7 @@ Resources:
     Type: AWS::Lambda::Function
     Properties:
       FunctionName: !Sub CreateUserFunction-${EnvironmentSuffix}
-      Runtime: python3.8
+      Runtime: python3.9
       Handler: index.handler
       Role: !GetAtt LambdaExecutionRole.Arn
       Environment:
@@ -137,7 +137,7 @@ Resources:
     Type: AWS::Lambda::Function
     Properties:
       FunctionName: !Sub GetUserFunction-${EnvironmentSuffix}
-      Runtime: python3.8
+      Runtime: python3.9
       Handler: index.handler
       Role: !GetAtt LambdaExecutionRole.Arn
       Environment:
@@ -180,7 +180,7 @@ Resources:
     Type: AWS::Lambda::Function
     Properties:
       FunctionName: !Sub DeleteUserFunction-${EnvironmentSuffix}
-      Runtime: python3.8
+      Runtime: python3.9
       Handler: index.handler
       Role: !GetAtt LambdaExecutionRole.Arn
       Environment:

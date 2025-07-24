@@ -34,7 +34,7 @@ Summarising:
 
 An API Gateway with REST endpoints for CreateUser, GetUser, and DeleteUser
 
-Lambda functions (Python 3.8) for each endpoint (only if required)
+Lambda functions (Python 3.9) for each endpoint (only if required)
 
 DynamoDB table with 'UserId' as a string partition key
 
