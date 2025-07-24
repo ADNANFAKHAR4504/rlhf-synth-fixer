@@ -3,21 +3,14 @@ import path from 'path';
 
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
-describe('TapStack CloudFormation Template', () => {
+describe('VPC CloudFormation Template', () => {
   let template: any;
 
   beforeAll(() => {
-    // If youre testing a yaml template. run `pipenv run cfn-flip-to-json > lib/TapStack.json`
-    // Otherwise, ensure the template is in JSON format.
+    // Load the JSON template generated from YAML
     const templatePath = path.join(__dirname, '../lib/TapStack.json');
     const templateContent = fs.readFileSync(templatePath, 'utf8');
     template = JSON.parse(templateContent);
-  });
-
-  describe('Write Integration TESTS', () => {
-    test('Dont forget!', async () => {
-      expect(false).toBe(true);
-    });
   });
 
   describe('Template Structure', () => {
@@ -28,7 +21,7 @@ describe('TapStack CloudFormation Template', () => {
     test('should have a description', () => {
       expect(template.Description).toBeDefined();
       expect(template.Description).toBe(
-        'TAP Stack - Task Assignment Platform CloudFormation Template'
+        'Production-ready VPC with public subnets and internet access'
       );
     });
 
@@ -36,80 +29,185 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Metadata).toBeDefined();
       expect(template.Metadata['AWS::CloudFormation::Interface']).toBeDefined();
     });
+
+    test('should have parameter groups in metadata', () => {
+      const parameterGroups = template.Metadata['AWS::CloudFormation::Interface'].ParameterGroups;
+      expect(parameterGroups).toBeDefined();
+      expect(parameterGroups).toHaveLength(1);
+      expect(parameterGroups[0].Label.default).toBe('Network Configuration');
+    });
   });
 
   describe('Parameters', () => {
-    test('should have EnvironmentSuffix parameter', () => {
-      expect(template.Parameters.EnvironmentSuffix).toBeDefined();
+    test('should have all required parameters', () => {
+      const expectedParams = ['Environment', 'VpcCidr', 'PublicSubnet1Cidr', 'PublicSubnet2Cidr'];
+      expectedParams.forEach(param => {
+        expect(template.Parameters[param]).toBeDefined();
+      });
     });
 
-    test('EnvironmentSuffix parameter should have correct properties', () => {
-      const envSuffixParam = template.Parameters.EnvironmentSuffix;
-      expect(envSuffixParam.Type).toBe('String');
-      expect(envSuffixParam.Default).toBe('dev');
-      expect(envSuffixParam.Description).toBe(
-        'Environment suffix for resource naming (e.g., dev, staging, prod)'
-      );
-      expect(envSuffixParam.AllowedPattern).toBe('^[a-zA-Z0-9]+$');
-      expect(envSuffixParam.ConstraintDescription).toBe(
-        'Must contain only alphanumeric characters'
-      );
+    test('Environment parameter should have correct properties', () => {
+      const envParam = template.Parameters.Environment;
+      expect(envParam.Type).toBe('String');
+      expect(envParam.Default).toBe('Production');
+      expect(envParam.Description).toBe('Environment name (e.g., Production, Dev)');
+      expect(envParam.AllowedPattern).toBe('^[a-zA-Z0-9-]+$');
+      expect(envParam.ConstraintDescription).toBe('Must contain only alphanumeric characters and hyphens');
+    });
+
+    test('VpcCidr parameter should have correct properties', () => {
+      const vpcCidrParam = template.Parameters.VpcCidr;
+      expect(vpcCidrParam.Type).toBe('String');
+      expect(vpcCidrParam.Default).toBe('10.0.0.0/16');
+      expect(vpcCidrParam.Description).toBe('CIDR block for the VPC');
+      expect(vpcCidrParam.AllowedPattern).toMatch(/^\^.*\$$/);
+    });
+
+    test('subnet CIDR parameters should have correct defaults', () => {
+      expect(template.Parameters.PublicSubnet1Cidr.Default).toBe('10.0.1.0/24');
+      expect(template.Parameters.PublicSubnet2Cidr.Default).toBe('10.0.2.0/24');
     });
   });
 
-  describe('Resources', () => {
-    test('should have TurnAroundPromptTable resource', () => {
-      expect(template.Resources.TurnAroundPromptTable).toBeDefined();
+  describe('Mappings', () => {
+    test('should have AZ mappings for us-east-1', () => {
+      expect(template.Mappings.AZMappings).toBeDefined();
+      expect(template.Mappings.AZMappings['us-east-1']).toBeDefined();
+      expect(template.Mappings.AZMappings['us-east-1'].AZ1).toBe('us-east-1a');
+      expect(template.Mappings.AZMappings['us-east-1'].AZ2).toBe('us-east-1b');
+    });
+  });
+
+  describe('VPC Resources', () => {
+    test('should have MainVPC resource', () => {
+      expect(template.Resources.MainVPC).toBeDefined();
+      expect(template.Resources.MainVPC.Type).toBe('AWS::EC2::VPC');
     });
 
-    test('TurnAroundPromptTable should be a DynamoDB table', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      expect(table.Type).toBe('AWS::DynamoDB::Table');
+    test('MainVPC should have correct properties', () => {
+      const vpc = template.Resources.MainVPC;
+      expect(vpc.Properties.CidrBlock).toEqual({ Ref: 'VpcCidr' });
+      expect(vpc.Properties.EnableDnsSupport).toBe(true);
+      expect(vpc.Properties.EnableDnsHostnames).toBe(true);
     });
 
-    test('TurnAroundPromptTable should have correct deletion policies', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      expect(table.DeletionPolicy).toBe('Delete');
-      expect(table.UpdateReplacePolicy).toBe('Delete');
+    test('MainVPC should have correct tags', () => {
+      const vpc = template.Resources.MainVPC;
+      const tags = vpc.Properties.Tags;
+      
+      const nameTag = tags.find((tag: any) => tag.Key === 'Name');
+      expect(nameTag).toBeDefined();
+      expect(nameTag.Value).toEqual({ 'Fn::Sub': '${Environment}-VPC-Main' });
+
+      const envTag = tags.find((tag: any) => tag.Key === 'Environment');
+      expect(envTag).toBeDefined();
+      expect(envTag.Value).toEqual({ Ref: 'Environment' });
+    });
+  });
+
+  describe('Subnet Resources', () => {
+    test('should have two public subnets', () => {
+      expect(template.Resources.PublicSubnet1).toBeDefined();
+      expect(template.Resources.PublicSubnet2).toBeDefined();
+      expect(template.Resources.PublicSubnet1.Type).toBe('AWS::EC2::Subnet');
+      expect(template.Resources.PublicSubnet2.Type).toBe('AWS::EC2::Subnet');
     });
 
-    test('TurnAroundPromptTable should have correct properties', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const properties = table.Properties;
+    test('subnets should reference VPC correctly', () => {
+      expect(template.Resources.PublicSubnet1.Properties.VpcId).toEqual({ Ref: 'MainVPC' });
+      expect(template.Resources.PublicSubnet2.Properties.VpcId).toEqual({ Ref: 'MainVPC' });
+    });
 
-      expect(properties.TableName).toEqual({
-        'Fn::Sub': 'TurnAroundPromptTable${EnvironmentSuffix}',
+    test('subnets should have correct CIDR blocks', () => {
+      expect(template.Resources.PublicSubnet1.Properties.CidrBlock).toEqual({ Ref: 'PublicSubnet1Cidr' });
+      expect(template.Resources.PublicSubnet2.Properties.CidrBlock).toEqual({ Ref: 'PublicSubnet2Cidr' });
+    });
+
+    test('subnets should be in different availability zones', () => {
+      const subnet1AZ = template.Resources.PublicSubnet1.Properties.AvailabilityZone;
+      const subnet2AZ = template.Resources.PublicSubnet2.Properties.AvailabilityZone;
+      
+      expect(subnet1AZ).toEqual({
+        'Fn::FindInMap': ['AZMappings', { Ref: 'AWS::Region' }, 'AZ1']
       });
-      expect(properties.BillingMode).toBe('PAY_PER_REQUEST');
-      expect(properties.DeletionProtectionEnabled).toBe(false);
+      expect(subnet2AZ).toEqual({
+        'Fn::FindInMap': ['AZMappings', { Ref: 'AWS::Region' }, 'AZ2']
+      });
     });
 
-    test('TurnAroundPromptTable should have correct attribute definitions', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const attributeDefinitions = table.Properties.AttributeDefinitions;
-
-      expect(attributeDefinitions).toHaveLength(1);
-      expect(attributeDefinitions[0].AttributeName).toBe('id');
-      expect(attributeDefinitions[0].AttributeType).toBe('S');
+    test('subnets should auto-assign public IPs', () => {
+      expect(template.Resources.PublicSubnet1.Properties.MapPublicIpOnLaunch).toBe(true);
+      expect(template.Resources.PublicSubnet2.Properties.MapPublicIpOnLaunch).toBe(true);
     });
 
-    test('TurnAroundPromptTable should have correct key schema', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const keySchema = table.Properties.KeySchema;
+    test('subnets should have correct naming tags', () => {
+      const subnet1Tags = template.Resources.PublicSubnet1.Properties.Tags;
+      const subnet2Tags = template.Resources.PublicSubnet2.Properties.Tags;
 
-      expect(keySchema).toHaveLength(1);
-      expect(keySchema[0].AttributeName).toBe('id');
-      expect(keySchema[0].KeyType).toBe('HASH');
+      const subnet1NameTag = subnet1Tags.find((tag: any) => tag.Key === 'Name');
+      const subnet2NameTag = subnet2Tags.find((tag: any) => tag.Key === 'Name');
+
+      expect(subnet1NameTag.Value).toEqual({ 'Fn::Sub': '${Environment}-Subnet-Public1' });
+      expect(subnet2NameTag.Value).toEqual({ 'Fn::Sub': '${Environment}-Subnet-Public2' });
+    });
+  });
+
+  describe('Internet Gateway Resources', () => {
+    test('should have InternetGateway resource', () => {
+      expect(template.Resources.InternetGateway).toBeDefined();
+      expect(template.Resources.InternetGateway.Type).toBe('AWS::EC2::InternetGateway');
+    });
+
+    test('should have VPCGatewayAttachment resource', () => {
+      expect(template.Resources.VPCGatewayAttachment).toBeDefined();
+      expect(template.Resources.VPCGatewayAttachment.Type).toBe('AWS::EC2::VPCGatewayAttachment');
+    });
+
+    test('VPCGatewayAttachment should connect VPC and IGW correctly', () => {
+      const attachment = template.Resources.VPCGatewayAttachment;
+      expect(attachment.Properties.VpcId).toEqual({ Ref: 'MainVPC' });
+      expect(attachment.Properties.InternetGatewayId).toEqual({ Ref: 'InternetGateway' });
+    });
+  });
+
+  describe('Route Table Resources', () => {
+    test('should have PublicRouteTable resource', () => {
+      expect(template.Resources.PublicRouteTable).toBeDefined();
+      expect(template.Resources.PublicRouteTable.Type).toBe('AWS::EC2::RouteTable');
+    });
+
+    test('should have PublicRoute resource', () => {
+      expect(template.Resources.PublicRoute).toBeDefined();
+      expect(template.Resources.PublicRoute.Type).toBe('AWS::EC2::Route');
+    });
+
+    test('PublicRoute should route to Internet Gateway', () => {
+      const route = template.Resources.PublicRoute;
+      expect(route.Properties.RouteTableId).toEqual({ Ref: 'PublicRouteTable' });
+      expect(route.Properties.DestinationCidrBlock).toBe('0.0.0.0/0');
+      expect(route.Properties.GatewayId).toEqual({ Ref: 'InternetGateway' });
+      expect(route.DependsOn).toBe('VPCGatewayAttachment');
+    });
+
+    test('should have subnet route table associations', () => {
+      expect(template.Resources.PublicSubnet1RouteTableAssociation).toBeDefined();
+      expect(template.Resources.PublicSubnet2RouteTableAssociation).toBeDefined();
+      
+      expect(template.Resources.PublicSubnet1RouteTableAssociation.Type).toBe('AWS::EC2::SubnetRouteTableAssociation');
+      expect(template.Resources.PublicSubnet2RouteTableAssociation.Type).toBe('AWS::EC2::SubnetRouteTableAssociation');
     });
   });
 
   describe('Outputs', () => {
     test('should have all required outputs', () => {
       const expectedOutputs = [
-        'TurnAroundPromptTableName',
-        'TurnAroundPromptTableArn',
+        'VPCId',
+        'PublicSubnet1Id',
+        'PublicSubnet2Id',
+        'InternetGatewayId',
+        'PublicRouteTableId',
         'StackName',
-        'EnvironmentSuffix',
+        'Environment'
       ];
 
       expectedOutputs.forEach(outputName => {
@@ -117,23 +215,27 @@ describe('TapStack CloudFormation Template', () => {
       });
     });
 
-    test('TurnAroundPromptTableName output should be correct', () => {
-      const output = template.Outputs.TurnAroundPromptTableName;
-      expect(output.Description).toBe('Name of the DynamoDB table');
-      expect(output.Value).toEqual({ Ref: 'TurnAroundPromptTable' });
+    test('VPCId output should be correct', () => {
+      const output = template.Outputs.VPCId;
+      expect(output.Description).toBe('ID of the VPC');
+      expect(output.Value).toEqual({ Ref: 'MainVPC' });
       expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-TurnAroundPromptTableName',
+        'Fn::Sub': '${AWS::StackName}-VPCId'
       });
     });
 
-    test('TurnAroundPromptTableArn output should be correct', () => {
-      const output = template.Outputs.TurnAroundPromptTableArn;
-      expect(output.Description).toBe('ARN of the DynamoDB table');
-      expect(output.Value).toEqual({
-        'Fn::GetAtt': ['TurnAroundPromptTable', 'Arn'],
+    test('subnet outputs should be correct', () => {
+      const subnet1Output = template.Outputs.PublicSubnet1Id;
+      const subnet2Output = template.Outputs.PublicSubnet2Id;
+
+      expect(subnet1Output.Value).toEqual({ Ref: 'PublicSubnet1' });
+      expect(subnet2Output.Value).toEqual({ Ref: 'PublicSubnet2' });
+      
+      expect(subnet1Output.Export.Name).toEqual({
+        'Fn::Sub': '${AWS::StackName}-PublicSubnet1Id'
       });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-TurnAroundPromptTableArn',
+      expect(subnet2Output.Export.Name).toEqual({
+        'Fn::Sub': '${AWS::StackName}-PublicSubnet2Id'
       });
     });
 
@@ -142,18 +244,16 @@ describe('TapStack CloudFormation Template', () => {
       expect(output.Description).toBe('Name of this CloudFormation stack');
       expect(output.Value).toEqual({ Ref: 'AWS::StackName' });
       expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-StackName',
+        'Fn::Sub': '${AWS::StackName}-StackName'
       });
     });
 
-    test('EnvironmentSuffix output should be correct', () => {
-      const output = template.Outputs.EnvironmentSuffix;
-      expect(output.Description).toBe(
-        'Environment suffix used for this deployment'
-      );
-      expect(output.Value).toEqual({ Ref: 'EnvironmentSuffix' });
+    test('Environment output should be correct', () => {
+      const output = template.Outputs.Environment;
+      expect(output.Description).toBe('Environment name used for this deployment');
+      expect(output.Value).toEqual({ Ref: 'Environment' });
       expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-EnvironmentSuffix',
+        'Fn::Sub': '${AWS::StackName}-Environment'
       });
     });
   });
@@ -172,29 +272,43 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Outputs).not.toBeNull();
     });
 
-    test('should have exactly one resource', () => {
+    test('should have correct number of resources', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(1);
+      expect(resourceCount).toBe(9); // VPC, 2 subnets, IGW, attachment, route table, route, 2 associations
     });
 
-    test('should have exactly one parameter', () => {
+    test('should have correct number of parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(1);
+      expect(parameterCount).toBe(4); // Environment, VpcCidr, PublicSubnet1Cidr, PublicSubnet2Cidr
     });
 
-    test('should have exactly four outputs', () => {
+    test('should have correct number of outputs', () => {
       const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(4);
+      expect(outputCount).toBe(7); // VPCId, 2 subnet IDs, IGW ID, route table ID, stack name, environment
     });
   });
 
   describe('Resource Naming Convention', () => {
-    test('table name should follow naming convention with environment suffix', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const tableName = table.Properties.TableName;
+    test('VPC name should follow naming convention', () => {
+      const vpc = template.Resources.MainVPC;
+      const nameTag = vpc.Properties.Tags.find((tag: any) => tag.Key === 'Name');
+      expect(nameTag.Value).toEqual({
+        'Fn::Sub': '${Environment}-VPC-Main'
+      });
+    });
 
-      expect(tableName).toEqual({
-        'Fn::Sub': 'TurnAroundPromptTable${EnvironmentSuffix}',
+    test('subnet names should follow naming convention', () => {
+      const subnet1 = template.Resources.PublicSubnet1;
+      const subnet2 = template.Resources.PublicSubnet2;
+      
+      const subnet1NameTag = subnet1.Properties.Tags.find((tag: any) => tag.Key === 'Name');
+      const subnet2NameTag = subnet2.Properties.Tags.find((tag: any) => tag.Key === 'Name');
+
+      expect(subnet1NameTag.Value).toEqual({
+        'Fn::Sub': '${Environment}-Subnet-Public1'
+      });
+      expect(subnet2NameTag.Value).toEqual({
+        'Fn::Sub': '${Environment}-Subnet-Public2'
       });
     });
 
@@ -202,7 +316,7 @@ describe('TapStack CloudFormation Template', () => {
       Object.keys(template.Outputs).forEach(outputKey => {
         const output = template.Outputs[outputKey];
         expect(output.Export.Name).toEqual({
-          'Fn::Sub': `\${AWS::StackName}-${outputKey}`,
+          'Fn::Sub': `\${AWS::StackName}-${outputKey}`
         });
       });
     });

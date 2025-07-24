@@ -4,5 +4,7 @@
   "complexity": "medium",
   "turn_type": "single",
   "po_id": "229198",
-  "startedAt": "2025-07-24T16:54:58.250Z"
+  "startedAt": "2025-07-24T16:54:58.250Z",
+  "subtask": "Infrastructure QA and Management", 
+  "subject_labels": ["VPC Infrastructure Setup", "AWS CloudFormation Templates", "Network Infrastructure QA"]
 }
