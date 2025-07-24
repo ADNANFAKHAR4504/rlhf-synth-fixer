@@ -256,10 +256,10 @@ describe('TapStack CloudFormation Integration Tests', () => {
 
       const rules = JSON.parse(stdout);
       expect(rules).toHaveLength(2); // Should have SSH (port 22) and HTTP (port 80) rules
-      
+
       const ports = rules.map((rule: any) => rule.FromPort).sort();
       expect(ports).toEqual([22, 80]);
-      
+
       // Check that both rules allow access from 0.0.0.0/0 (as per template)
       rules.forEach((rule: any) => {
         expect(rule.IpRanges[0].CidrIp).toBe('0.0.0.0/0');
