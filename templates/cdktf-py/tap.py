@@ -1,42 +1,42 @@
 #!/usr/bin/env python
-from cdktf import App, S3Backend
+from cdktf import App
 from tap_stack import TapStack
 import os
 
 # -----------------------------------------------------------------------------
-# Required variables for CI/CD and local development
-# These can be set as environment variables or replaced directly in code.
+# Get environment variables or use defaults
 # -----------------------------------------------------------------------------
-# Example usage in CI/CD:
-#   export TF_STATE_BUCKET=iac-rlhf-tf-states
-#   export TF_STATE_KEY=iac-tfstate-pr48/state.json
-#   export TF_STATE_REGION=us-east-1
+ENVIRONMENT_SUFFIX = os.getenv("ENVIRONMENT_SUFFIX", "dev")
+TF_STATE_BUCKET = os.getenv("TERRAFORM_STATE_BUCKET", "iac-rlhf-tf-states")
+TF_STATE_REGION = os.getenv("TERRAFORM_STATE_BUCKET_REGION", "us-east-1")
+AWS_REGION = os.getenv("AWS_REGION", "us-east-1")
+REPOSITORY_NAME = os.getenv("REPOSITORY", "unknown")
+COMMIT_AUTHOR = os.getenv("COMMIT_AUTHOR", "unknown")
 
-TF_STATE_BUCKET = os.getenv("TF_STATE_BUCKET", "iac-rlhf-tf-states")
-TF_STATE_KEY = os.getenv("TF_STATE_KEY", "iac-tfstate-pr48/state.json")  # Update per PR/task
-TF_STATE_REGION = os.getenv("TF_STATE_REGION", "us-east-1")
+# Calculate the stack name
+STACK_NAME = f"TapStack{ENVIRONMENT_SUFFIX}"
+
+# Default tags for AWS resources
+DEFAULT_TAGS = {
+    "Environment": ENVIRONMENT_SUFFIX,
+    "Repository": REPOSITORY_NAME,
+    "Author": COMMIT_AUTHOR,
+}
 
 app = App()
 
 # -----------------------------------------------------------------------------
-# Configure the S3 remote backend for Terraform state
-# In CI/CD, these values should be injected via environment variables.
+# Instantiate the main stack with dynamic configuration
 # -----------------------------------------------------------------------------
-backend = S3Backend(
+TapStack(
     app,
-    bucket=TF_STATE_BUCKET,
-    key=TF_STATE_KEY,
-    region=TF_STATE_REGION,
-    encrypt=True,
+    STACK_NAME,
+    environment_suffix=ENVIRONMENT_SUFFIX,
+    state_bucket=TF_STATE_BUCKET,
+    state_bucket_region=TF_STATE_REGION,
+    aws_region=AWS_REGION,
+    default_tags=DEFAULT_TAGS,
 )
-
-# Use escape hatch to set use_lockfile to true
-backend.add_override("use_lockfile", True)
-
-# -----------------------------------------------------------------------------
-# Instantiate the main stack
-# -----------------------------------------------------------------------------
-TapStack(app, "cdktf-py")
 
 app.synth()
 

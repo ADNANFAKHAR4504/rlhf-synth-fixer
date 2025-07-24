@@ -1,12 +1,19 @@
 {
   "language": "python",
-  "app": "pipenv run python main.py",
+  "app": "pipenv run python tap.py",
   "projectId": "18754d04-9786-40f1-92a2-6ec8b0ebc00a",
   "sendCrashReports": "false",
-  "terraformProviders": [],
+  "terraformProviders": [
+    "hashicorp/aws@~> 6.0"
+  ],
   "terraformModules": [],
   "codeMakerOutput": "imports",
   "context": {
-
+    "environmentSuffix": "dev",
+    "stateBucket": "iac-rlhf-tf-states",
+    "stateBucketRegion": "us-east-1",
+    "awsRegion": "us-east-1",
+    "repositoryName": "unknown",
+    "commitAuthor": "unknown"
   }
 }
