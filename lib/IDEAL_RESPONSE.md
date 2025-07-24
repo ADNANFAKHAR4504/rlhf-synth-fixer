@@ -1,1 +1,136 @@
-Insert here the ideal response
+Ideal response is as below
+```
+# Corrected and Lint-Free AWS CloudFormation Template
+#
+# Fixes based on cfn-lint feedback:
+# 1. [E3004] Resolved Circular Dependency: The Log Group's name is now static
+#    and no longer depends on the Lambda Function's name. This breaks the
+#    circular dependency chain (Function -> Role -> LogGroup -> Function).
+# 2. [E1019] Fixed Invalid Property References: The 'SourceArn' in the Lambda
+#    permission and the 'ApiUrl' in the Outputs now use hardcoded values for the
+#    HTTP method ('GET'), path ('greet'), and stage name ('prod') instead of
+#    trying to reference properties that CloudFormation cannot resolve.
+
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  A secure, serverless greeting API using API Gateway and Lambda. This template
+  is corrected to resolve cfn-lint errors.
+
+Resources:
+  # --- API Gateway Resources ---
+
+  GreetingApi:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: GreetingAPI
+      Description: "API for a simple greeting service"
+      EndpointConfiguration:
+        Types:
+          - REGIONAL
+
+  GreetingResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !GetAtt GreetingApi.RootResourceId
+      RestApiId: !Ref GreetingApi
+      PathPart: greet
+
+  GreetingMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      HttpMethod: GET
+      ResourceId: !Ref GreetingResource
+      RestApiId: !Ref GreetingApi
+      AuthorizationType: NONE
+      Integration:
+        IntegrationHttpMethod: POST
+        Type: AWS_PROXY
+        Uri: !Sub arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${GreetingFunction.Arn}/invocations
+
+  GreetingDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn: GreetingMethod
+    Properties:
+      RestApiId: !Ref GreetingApi
+
+  GreetingStage:
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      StageName: prod
+      DeploymentId: !Ref GreetingDeployment
+      RestApiId: !Ref GreetingApi
+
+  # --- IAM Role and Policy ---
+
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: LambdaLoggingPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !GetAtt LogGroup.Arn
+
+  # --- Lambda Function and Permissions ---
+
+  GreetingFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Handler: index.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Runtime: python3.12
+      Environment:
+        Variables:
+          GREETING_MESSAGE: "Hello from a secure, serverless API!"
+      Code:
+        ZipFile: |
+          import os
+          import json
+
+          def handler(event, context):
+              message = os.getenv('GREETING_MESSAGE', 'Default greeting')
+              
+              return {
+                  'statusCode': 200,
+                  'headers': {
+                      'Content-Type': 'application/json'
+                  },
+                  'body': json.dumps({'message': message})
+              }
+
+  LambdaInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt GreetingFunction.Arn
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      # FIX: Hardcoded the method and path in the ARN to resolve linter errors.
+      SourceArn: !Sub arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${GreetingApi}/*/GET/greet
+
+  # --- Logging ---
+
+  LogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      # FIX: Decoupled the log group name from the function ref to break the circular dependency.
+      LogGroupName: /aws/lambda/GreetingApiFunction
+      RetentionInDays: 7
+
+Outputs:
+  ApiUrl:
+    Description: "URL for invoking the Greeting API"
+    # FIX: Hardcoded the stage name ('prod') to resolve linter errors.
+    Value: !Sub "https://${GreetingApi}.execute-api.${AWS::Region}.amazonaws.com/prod/greet"
+```
