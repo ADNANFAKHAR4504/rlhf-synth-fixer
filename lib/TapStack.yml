@@ -1,0 +1,193 @@
+#
+# Corrected and Enhanced CloudFormation Template
+#
+# Version: 2.0
+# Description: This template provisions a secure and scalable web application
+#              infrastructure with an S3 bucket, an EC2 instance, and a Multi-AZ
+#              RDS MySQL database. It includes proper security group configurations
+#              and best practices for handling sensitive information.
+#
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >-
+  Corrected: Provisions a secure web application infrastructure with S3, EC2, and RDS,
+  including proper networking and security best practices.
+
+# ============================================================================
+# PARAMETERS
+# ============================================================================
+# Parameters allow you to input custom values when you create or update a stack.
+Parameters:
+  EnvironmentName:
+    Type: String
+    Description: An environment identifier (e.g., dev, staging, prod).
+    Default: 'development'
+
+  OwnerName:
+    Type: String
+    Description: The name of the resource owner.
+    Default: 'WebAppTeam'
+
+  ProjectName:
+    Type: String
+    Description: The project identifier.
+    Default: 'NewWebApp'
+
+  # CORRECTION: Added a parameter for the EC2 Key Pair.
+  # This is essential for accessing the EC2 instance via SSH.
+  KeyName:
+    Type: AWS::EC2::KeyPair::KeyName
+    Description: Name of an existing EC2 KeyPair to enable SSH access to the instance.
+
+  # CORRECTION: Added a parameter for the Database Name.
+  DBName:
+    Type: String
+    Description: The name of the initial database to be created in the RDS instance.
+    Default: 'webappdb'
+    MinLength: '1'
+    MaxLength: '64'
+    AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
+    ConstraintDescription: Must begin with a letter and contain only alphanumeric characters.
+
+  # CORRECTION (CRITICAL SECURITY FIX): Replaced hardcoded password with a secure parameter.
+  # 'NoEcho' prevents the password from being displayed in the AWS console or logs.
+  DBMasterUserPassword:
+    NoEcho: true
+    Type: String
+    Description: The password for the RDS database master user.
+    MinLength: '8'
+    MaxLength: '41'
+    AllowedPattern: '(?=.*\d)(?=.*[a-z])(?=.*[A-Z])(?=.*[!@#$%^&*]).{8,}'
+    ConstraintDescription: >-
+      Must be 8-41 characters and contain at least one uppercase letter,
+      one lowercase letter, one number, and one special character (!@#$%^&*).
+
+# ============================================================================
+# RESOURCES
+# ============================================================================
+# This section defines the AWS resources that will be created.
+Resources:
+  # --- S3 Bucket for Static Assets ---
+  WebAppAssetsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Owner
+          Value: !Ref OwnerName
+        - Key: Project
+          Value: !Ref ProjectName
+
+  # --- Networking and Security ---
+  # CORRECTION: Added a Security Group for the EC2 instance.
+  # This group allows inbound web traffic (HTTP) and SSH access.
+  EC2SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Enable HTTP and SSH access for the web server
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0 # In production, you should restrict this to your IP.
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-ec2-sg'
+
+  # CORRECTION: Added a Security Group for the RDS instance.
+  # This group only allows inbound traffic from the EC2 instance's security group.
+  RDSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow inbound MySQL traffic from the EC2 instance
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          SourceSecurityGroupId: !Ref EC2SecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-rds-sg'
+
+  # --- EC2 Instance for Web Application ---
+  WebAppServerInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: t2.micro
+      # Using a dynamic reference to always get the latest Amazon Linux 2 AMI
+      ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}'
+      # CORRECTION: Attached the KeyName and Security Group.
+      KeyName: !Ref KeyName
+      SecurityGroupIds:
+        - !Ref EC2SecurityGroup
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Owner
+          Value: !Ref OwnerName
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Name
+          Value: !Sub '${ProjectName}-WebAppServer'
+
+  # --- RDS Database Instance ---
+  WebAppDatabase:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceClass: db.t3.micro
+      Engine: mysql
+      EngineVersion: '8.0' # Best practice to pin the engine version
+      AllocatedStorage: '20'
+      StorageType: gp2
+      MultiAZ: true
+      # CORRECTION: Added DBName and referenced the secure password parameter.
+      DBName: !Ref DBName
+      MasterUsername: 'admin'
+      MasterUserPassword: !Ref DBMasterUserPassword
+      # CORRECTION: Attached the dedicated RDS Security Group.
+      VPCSecurityGroups:
+        - !Ref RDSSecurityGroup
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Owner
+          Value: !Ref OwnerName
+        - Key: Project
+          Value: !Ref ProjectName
+
+# ============================================================================
+# OUTPUTS
+# ============================================================================
+# Outputs make it easy to find key information about your stack after creation.
+Outputs:
+  BucketName:
+    Description: Name of the S3 bucket for web assets
+    Value: !Ref WebAppAssetsBucket
+
+  InstanceID:
+    Description: Instance ID of the EC2 web server
+    Value: !Ref WebAppServerInstance
+
+  InstancePublicDNS:
+    Description: Public DNS name of the EC2 web server
+    Value: !GetAtt WebAppServerInstance.PublicDnsName
+
+  RDSInstanceEndpoint:
+    Description: The connection endpoint for the RDS database instance
+    Value: !GetAtt WebAppDatabase.Endpoint.Address
+
+  RDSSecurityGroup:
+    Description: Security Group ID for the RDS instance
+    Value: !GetAtt RDSSecurityGroup.GroupId
+
+  EC2SecurityGroup:
+    Description: Security Group ID for the EC2 instance
+    Value: !GetAtt EC2SecurityGroup.GroupId
