@@ -9,14 +9,16 @@ To create an infrastructure that will be deployed across two distinct environmen
 
 2. **Next, install the necessary AWS CDK libraries:**:
 ```bash
-npm install @aws-cdk/aws-ec2 @aws-cdk/aws-ecs @aws-cdk/aws-ecs-patterns @aws-cdk/aws-elasticloadbalancingv2 @aws-cdk/aws-route53 @aws-cdk/aws-ssm @aws-cdk/aws-cloudwatch @aws-cdk/aws-applicationautoscaling @aws-cdk-lib @aws-cdk-lib/aws-kms @aws-secretsmanager @aws-route53-targets constructs
+npm install @aws-cdk-lib  constructs 
 ```
 
+
+```bash
 
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as ecs from 'aws-cdk-lib/aws-ecs';
-import * as ecsPatterns from 'aws-cdk-lib/aws-ecs-patterns';
+import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
 import * as route53 from 'aws-cdk-lib/aws-route53';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as kms from 'aws-cdk-lib/aws-kms';
@@ -32,12 +34,16 @@ export interface EnvironmentConfig {
 }
 
 export class MultiEnvEcsStack extends cdk.Stack {
-  constructor(scope: Construct, id: string, config: EnvironmentConfig, props?: cdk.StackProps) {
+  constructor(
+    scope: Construct,
+    id: string,
+    config: EnvironmentConfig,
+    props?: cdk.StackProps
+  ) {
     super(scope, id, props);
 
     // Create a VPC
     const vpc = new ec2.Vpc(this, `${config.envName}Vpc`, {
-      // cidr: config.vpcCidr,
       ipAddresses: ec2.IpAddresses.cidr(config.vpcCidr),
       maxAzs: 3,
       natGateways: 1,
@@ -53,38 +59,62 @@ export class MultiEnvEcsStack extends cdk.Stack {
       enableKeyRotation: true,
     });
 
+    const configSecret = new secretsmanager.Secret(
+      this,
+      `${config.envName}ConfigSecret`,
+      {
+        secretName: `/${config.envName}/config`,
+        encryptionKey: kmsKey,
+        secretObjectValue: {
+          environment: cdk.SecretValue.unsafePlainText(config.envName),
+        },
+      }
+    );
 
+    const taskDefinition = new ecs.FargateTaskDefinition(this, 'TaskDef', {
+      cpu: 256,
+      memoryLimitMiB: 512,
+    });
 
-    const configSecret = new secretsmanager.Secret(this, `${config.envName}ConfigSecret`, {
-      secretName: `/${config.envName}/config`,
-      encryptionKey: kmsKey,
-      secretObjectValue: {
-        environment: cdk.SecretValue.unsafePlainText(config.envName),
+    taskDefinition.addContainer('AppContainer', {
+      image: ecs.ContainerImage.fromRegistry('nginx:latest'),
+      portMappings: [{ containerPort: 80 }],
+      secrets: {
+        CONFIG_PARAMETER: ecs.Secret.fromSecretsManager(
+          configSecret,
+          'environment'
+        ),
       },
     });
 
-
-    // Create a Fargate service
-    const fargateService = new ecsPatterns.ApplicationLoadBalancedFargateService(this, `${config.envName}FargateService`, {
+    const fargateService = new ecs.FargateService(this, 'Service', {
       cluster,
-      taskImageOptions: {
-        image: ecs.ContainerImage.fromRegistry('nginx:latest'),
-        secrets: {
-          CONFIG_PARAMETER: ecs.Secret.fromSecretsManager(configSecret, 'environment') //secret.parameterName,
-        },
-      },
-      desiredCount: 2,
-      publicLoadBalancer: true,
+      taskDefinition,
+      maxHealthyPercent: 200,
       minHealthyPercent: 100,
-      maxHealthyPercent: 200
+      desiredCount: 2,
+    });
+
+    const lb = new elbv2.ApplicationLoadBalancer(this, 'LB', {
+      vpc,
+      internetFacing: true,
+    });
+
+    const listener = lb.addListener('Listener', {
+      port: 80,
+    });
+
+    listener.addTargets('ECS', {
+      port: 80,
+      targets: [fargateService],
     });
 
     // Enable ECS Container Insights
     cluster.addDefaultCloudMapNamespace({
-      name: fargateService.service.serviceName,
+      name: fargateService.serviceName,
     });
 
-    const scalableTarget = fargateService.service.autoScaleTaskCount({
+    const scalableTarget = fargateService.autoScaleTaskCount({
       minCapacity: 2,
       maxCapacity: 10,
     });
@@ -93,22 +123,37 @@ export class MultiEnvEcsStack extends cdk.Stack {
       targetUtilizationPercent: 50,
     });
 
-    const hostedZone = new route53.PublicHostedZone(this, `${config.envName}Zone`, {
-      zoneName: config.domainName,
-    });
-
+    const hostedZone = new route53.PublicHostedZone(
+      this,
+      `${config.envName}Zone`,
+      {
+        zoneName: config.domainName,
+      }
+    );
 
     new route53.ARecord(this, `${config.envName}AliasRecord`, {
       recordName: config.domainName,
-      target: route53.RecordTarget.fromAlias(new route53Targets.LoadBalancerTarget(fargateService.loadBalancer)),
+      target: route53.RecordTarget.fromAlias(
+        new route53Targets.LoadBalancerTarget(lb)
+      ),
       zone: hostedZone,
     });
 
     // Setup CloudWatch monitoring
     new cloudwatch.Alarm(this, `${config.envName}HighCpuAlarm`, {
-      metric: fargateService.service.metricCpuUtilization(),
+      metric: fargateService.metricCpuUtilization(),
       evaluationPeriods: 2,
       threshold: 80,
     });
+
+    new cdk.CfnOutput(this, 'LB-DNS', {
+      value: lb.loadBalancerDnsName,
+      description: 'Load balancer dns name',
+    });
+    new cdk.CfnOutput(this, 'DomainName', {
+      value: config.domainName,
+      description: 'domain name',
+    });
   }
 }
+```

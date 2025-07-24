@@ -1,40 +1,45 @@
 import * as cdk from 'aws-cdk-lib';
-import { Template } from 'aws-cdk-lib/assertions';
+import { App } from 'aws-cdk-lib';
+import { Template, Match } from 'aws-cdk-lib/assertions';
 import { TapStack } from '../lib/tap-stack';
 
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
+describe('TapStack', () => {
+    test('DevStack and ProdStack are created with correct configuration', () => {
+    const app = new App();
+    const tapStack = new TapStack(app, 'TestTapStack', {
+      environmentSuffix: 'dev',
+    });
 
-describe.only('TapStack', () => {
-  let app: cdk.App;
-  let stack: TapStack;
-  let template: Template;
+    const devStack = tapStack.node.tryFindChild('DevStack') as cdk.Stack;
+    const prodStack = tapStack.node.tryFindChild('ProdStack') as cdk.Stack;
 
-  beforeAll(() => {
-    jest.spyOn(console, 'warn').mockImplementation(() => { });
+    const devTemplate = Template.fromStack(devStack);
+    const prodTemplate = Template.fromStack(prodStack);
+
+
+    devTemplate.resourceCountIs('AWS::ECS::Cluster', 1);
+    prodTemplate.resourceCountIs('AWS::ECS::Cluster', 1);
+
+    devTemplate.hasResourceProperties('AWS::EC2::VPC', {
+      CidrBlock: '10.0.0.0/16',
+    });
+
+    prodTemplate.hasResourceProperties('AWS::EC2::VPC', {
+      CidrBlock: '10.1.0.0/16',
+    });
   });
 
-  /**
-   *   console.warn
-    [WARNING] aws-cdk-lib.aws_ecs.CfnTaskDefinitionProps#inferenceAccelerators is deprecated.
-      this property has been deprecated
-      This API will be removed in the next major release.
-   */
+  test('Defaults to dev environmentSuffix when not provided', () => {
+    const app = new App();
 
+    // No environmentSuffix passed
+    const stack = new TapStack(app, 'DefaultEnvStack');
 
-  beforeEach(() => {
+    // You can access internal nodes like child stacks
+    const devStack = stack.node.tryFindChild('DevStack');
+    expect(devStack).toBeDefined();
 
-    app = new cdk.App();
-    stack = new TapStack(app, 'TestTapStack', {
-      environmentSuffix,
-    });
-    template = Template.fromStack(stack);
-  });
-
-  describe('Stack Creation', () => {
-    test('should create a TapStack instance', () => {
-      expect(stack).toBeInstanceOf(TapStack);
-      expect(stack).toBeInstanceOf(cdk.Stack);
-      expect(stack).toBeDefined()
-    });
+    const prodStack = stack.node.tryFindChild('ProdStack');
+    expect(prodStack).toBeDefined();
   });
 });

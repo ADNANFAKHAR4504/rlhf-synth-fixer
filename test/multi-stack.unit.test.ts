@@ -1,5 +1,5 @@
 import * as cdk from 'aws-cdk-lib';
-import { Template } from 'aws-cdk-lib/assertions';
+import { Match, Template } from 'aws-cdk-lib/assertions';
 import { MultiEnvEcsStack } from '../lib/multienv-ecs-stack';
 
 interface EnvironmentConfig {
@@ -21,10 +21,6 @@ describe.only('MultiEnvEcsStack', () => {
   let stack: MultiEnvEcsStack;
   let template: Template;
 
-  beforeAll(() => {
-    jest.spyOn(console, 'warn').mockImplementation(() => { });
-  });
-
   beforeEach(() => {
 
     app = new cdk.App();
@@ -37,6 +33,28 @@ describe.only('MultiEnvEcsStack', () => {
       expect(stack).toBeInstanceOf(MultiEnvEcsStack);
       expect(stack).toBeInstanceOf(cdk.Stack);
       expect(stack).toBeDefined()
+    });
+    describe('ECS and Secret', () => {
+      test('Check that ECS clusters were created', () => {
+        template.resourceCountIs('AWS::ECS::Cluster', 1)
+      });
+      test('Check if SecretsManager Secret is created', () => {
+        template.hasResourceProperties('AWS::SecretsManager::Secret', {
+          Name: '/dev/config',
+        });
+      });
+      test('ECS TaskDefinition uses SecretsManager secret', () => {
+        template.hasResourceProperties('AWS::ECS::TaskDefinition', Match.objectLike({
+          Cpu: '256',
+          Memory: '512',
+          NetworkMode: "awsvpc",
+          RequiresCompatibilities: ["FARGATE"],
+        })
+        );
+      });
+      test('ElasticLoadBalancingV2 exists', () => {
+        template.resourceCountIs('AWS::ElasticLoadBalancingV2::LoadBalancer', 1);
+      });
     });
   });
 });

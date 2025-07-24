@@ -19,7 +19,7 @@ export class TapStack extends cdk.Stack {
       this.node.tryGetContext('environmentSuffix') ||
       'dev';
 
-    // ? Add your stack instantiations here
+      // ? Add your stack instantiations here
     // ! Do NOT create resources directly in this stack.
     // ! Instead, create separate stacks for each resource type.
 
