@@ -211,7 +211,8 @@ jobs:
             echo "✅ CDK project detected, running CDK synth..."
             npm run cdk:synth
           elif [ "$PLATFORM" = "cdktf" ]; then
-            echo "✅ CDKTF project detected, running CDKTF synth..."
+            echo "✅ CDKTF project detected, running CDKTF get and synth..."
+            npm run cdktf:get
             npm run cdktf:synth
           else
             echo "ℹ️ Not a CDK project, skipping CDK synth"
