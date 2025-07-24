@@ -135,6 +135,26 @@ describe('TapStack CloudFormation Template', () => {
       );
       expect(s3Policy).toBeDefined();
     });
+
+    test('S3 policy should use proper ARN format', () => {
+      const role = template.Resources.EC2Role;
+      const s3Policy = role.Properties.Policies.find(
+        (p: any) => p.PolicyName === 'S3BucketAccess'
+      );
+      const resources = s3Policy.PolicyDocument.Statement[0].Resource;
+
+      // Check that resources use proper ARN format
+      expect(resources[0]).toEqual({ 'Fn::Sub': 'arn:aws:s3:::${S3Bucket}/*' });
+      expect(resources[1]).toEqual({ 'Fn::Sub': 'arn:aws:s3:::${S3Bucket}' });
+    });
+
+    test('IAM role should have CloudWatch permissions', () => {
+      const role = template.Resources.EC2Role;
+      const managedPolicies = role.Properties.ManagedPolicyArns;
+      expect(managedPolicies).toContain(
+        'arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy'
+      );
+    });
   });
 
   describe('Storage Resources', () => {
@@ -188,6 +208,30 @@ describe('TapStack CloudFormation Template', () => {
       expect(instance1.Properties.IamInstanceProfile).toEqual({
         Ref: 'EC2InstanceProfile',
       });
+    });
+
+    test('EC2 instances should be in different subnets', () => {
+      const instance1 = template.Resources.WebServerInstance1;
+      const instance2 = template.Resources.WebServerInstance2;
+
+      expect(instance1.Properties.SubnetId).toEqual({ Ref: 'PublicSubnet1' });
+      expect(instance2.Properties.SubnetId).toEqual({ Ref: 'PublicSubnet2' });
+    });
+
+    test('EC2 instances should use SecurityGroupIds (not VpcSecurityGroupIds)', () => {
+      const instance1 = template.Resources.WebServerInstance1;
+      const instance2 = template.Resources.WebServerInstance2;
+
+      expect(instance1.Properties.SecurityGroupIds).toBeDefined();
+      expect(instance2.Properties.SecurityGroupIds).toBeDefined();
+      expect(instance1.Properties.VpcSecurityGroupIds).toBeUndefined();
+      expect(instance2.Properties.VpcSecurityGroupIds).toBeUndefined();
+    });
+
+    test('EC2 instances should have UserData for web server setup', () => {
+      const instance1 = template.Resources.WebServerInstance1;
+      expect(instance1.Properties.UserData).toBeDefined();
+      expect(instance1.Properties.UserData['Fn::Base64']).toBeDefined();
     });
   });
 
@@ -281,6 +325,11 @@ describe('TapStack CloudFormation Template', () => {
     test('should have correct number of outputs', () => {
       const outputCount = Object.keys(template.Outputs).length;
       expect(outputCount).toBe(13);
+    });
+
+    test('should have expected total resource count', () => {
+      const resourceCount = Object.keys(template.Resources).length;
+      expect(resourceCount).toBe(18); // Updated to match comprehensive template
     });
   });
 
