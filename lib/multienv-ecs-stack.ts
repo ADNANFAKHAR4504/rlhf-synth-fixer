@@ -7,6 +7,7 @@ import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as kms from 'aws-cdk-lib/aws-kms';
 import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import * as route53Targets from 'aws-cdk-lib/aws-route53-targets';
+import * as acm from 'aws-cdk-lib/aws-certificatemanager';
 import { Construct } from 'constructs';
 
 export interface EnvironmentConfig {
@@ -14,6 +15,9 @@ export interface EnvironmentConfig {
   vpcCidr: string;
   hostedZoneName: string;
   domainName: string;
+  imageName: string;
+  imageTag: string;
+  port: number;
 }
 
 export class MultiEnvEcsStack extends cdk.Stack {
@@ -50,7 +54,7 @@ export class MultiEnvEcsStack extends cdk.Stack {
         encryptionKey: kmsKey,
         secretObjectValue: {
           environment: cdk.SecretValue.unsafePlainText(config.envName),
-        },
+        }
       }
     );
 
@@ -60,8 +64,10 @@ export class MultiEnvEcsStack extends cdk.Stack {
     });
 
     taskDefinition.addContainer('AppContainer', {
-      image: ecs.ContainerImage.fromRegistry('nginx:latest'),
-      portMappings: [{ containerPort: 80 }],
+      image: ecs.ContainerImage.fromRegistry(
+        `${config.imageName}:${config.imageTag}`
+      ),
+      portMappings: [{ containerPort: config.port }],
       secrets: {
         CONFIG_PARAMETER: ecs.Secret.fromSecretsManager(
           configSecret,
@@ -83,12 +89,23 @@ export class MultiEnvEcsStack extends cdk.Stack {
       internetFacing: true,
     });
 
-    const listener = lb.addListener('Listener', {
-      port: 80,
+    /**
+    const certificate = new acm.Certificate(this, 'Certificate', {
+      domainName: config.domainName,
+      validation: acm.CertificateValidation.fromDns(),
+    });
+     * 
+     */
+
+    const listener = lb.addListener('HttpsListener', {
+      port: config.port, //443 for a register domain
+      // certificates: [certificate],
+      protocol: elbv2.ApplicationProtocol.HTTP //elbv2.ApplicationProtocol.HTTPS,
     });
 
+
     listener.addTargets('ECS', {
-      port: 80,
+      port: config.port,
       targets: [fargateService],
     });
 

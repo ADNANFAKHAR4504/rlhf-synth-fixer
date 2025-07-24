@@ -29,6 +29,9 @@ export class TapStack extends cdk.Stack {
       vpcCidr: '10.0.0.0/16',
       hostedZoneName: 'dev.local',
       domainName: 'api.dev.local',
+      imageName: 'nginx',
+      imageTag: 'latest',
+      port: 80,
     };
 
     const prodConfig: EnvironmentConfig = {
@@ -36,6 +39,9 @@ export class TapStack extends cdk.Stack {
       vpcCidr: '10.1.0.0/16',
       hostedZoneName: 'prod.local',
       domainName: 'api.prod.local',
+      imageName: 'nginx',
+      imageTag: 'latest',
+      port: 80,
     };
 
     // Deploy stacks for each environment

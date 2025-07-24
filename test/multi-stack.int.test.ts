@@ -33,7 +33,7 @@ describe('DevStack Integration Tests', () => {
 
     expect(values.some(resource => {
       const containers = resource.Properties?.ContainerDefinitions || [];
-      return containers.some((c: any) => c.Image === 'nginx:latest' && c.Name === 'web');
+      return containers.some((c: any) => c.Image === 'nginx:latest' && c.Name === 'AppContainer');
     })).toBe(true);
   });
 
@@ -63,7 +63,7 @@ describe('ProdStack Integration Tests', () => {
 
     expect(values.some(resource => {
       const containers = resource.Properties?.ContainerDefinitions || [];
-      return containers.some((c: any) => c.Image === 'nginx:latest' && c.Name === 'web');
+      return containers.some((c: any) => c.Image === 'nginx:latest' && c.Name === 'AppContainer');
     })).toBe(true);
   });
 

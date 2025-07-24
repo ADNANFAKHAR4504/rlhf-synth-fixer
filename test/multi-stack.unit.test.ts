@@ -7,6 +7,9 @@ interface EnvironmentConfig {
   vpcCidr: string;
   hostedZoneName: string;
   domainName: string;
+  imageName: string;
+  imageTag: string;
+  port: number
 }
 
 const envConfig: EnvironmentConfig = {
@@ -14,6 +17,9 @@ const envConfig: EnvironmentConfig = {
   vpcCidr: '10.0.0.0/16',
   hostedZoneName: 'dummy.local',
   domainName: 'api.dummy.local',
+  imageName: 'nginx',
+  imageTag: 'latest',
+  port: 80
 };
 
 describe.only('MultiEnvEcsStack', () => {
