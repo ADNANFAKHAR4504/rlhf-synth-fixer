@@ -40,3 +40,5 @@ Each requirement must be fully implemented. No summaries or simplified resource 
 
 Do not use macros or custom resources — only standard AWS resources.
 
+
+

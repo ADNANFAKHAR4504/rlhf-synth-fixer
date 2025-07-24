@@ -158,7 +158,7 @@ Resources:
       SubnetId: !Ref PrivateSubnet2
       RouteTableId: !Ref PrivateRouteTable
 
-  # --- SECURITY GROUPS (Requirement 6) ---
+  # Security Group for EC2 SSH access (Requirement 6)
   SSHSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -198,7 +198,8 @@ Resources:
                   - logs:CreateLogGroup
                   - logs:CreateLogStream
                   - logs:PutLogEvents
-                Resource: "*"
+                Resource:
+                  - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/*"
       Tags:
         - Key: Environment
           Value: !Ref EnvironmentSuffix

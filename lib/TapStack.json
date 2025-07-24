@@ -334,7 +334,11 @@
                                         "logs:CreateLogStream",
                                         "logs:PutLogEvents"
                                     ],
-                                    "Resource": "*"
+                                    "Resource": [
+                                        {
+                                            "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/*"
+                                        }
+                                    ]
                                 }
                             ]
                         }
