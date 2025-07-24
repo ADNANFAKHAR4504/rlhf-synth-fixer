@@ -10,7 +10,7 @@ describe('Elastic Beanstalk CloudFormation Template', () => {
 
   beforeAll(() => {
     // Load the JSON version of the CloudFormation template.
-    const templatePath = path.join(__dirname, '../lib/Tapstack.json');
+    const templatePath ='../lib/Tapstack.json';
     const templateContent = fs.readFileSync(templatePath, 'utf8');
     template = JSON.parse(templateContent);
   });
