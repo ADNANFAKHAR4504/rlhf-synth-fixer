@@ -22,18 +22,16 @@ app = App()
 # Configure the S3 remote backend for Terraform state
 # In CI/CD, these values should be injected via environment variables.
 # -----------------------------------------------------------------------------
-S3Backend(
+backend = S3Backend(
     app,
     bucket=TF_STATE_BUCKET,
     key=TF_STATE_KEY,
     region=TF_STATE_REGION,
     encrypt=True,
-    # <Add state-locking configuration here>
-    
-    # Optionally, you can add dynamodb_table, profile, etc.
-    # dynamodb_table=os.getenv("TF_STATE_LOCK_TABLE", "iac-tfstate-locks"),
-    # profile=os.getenv("AWS_PROFILE", "default"),
 )
+
+# Use escape hatch to set use_lockfile to true
+backend.add_override("use_lockfile", True)
 
 # -----------------------------------------------------------------------------
 # Instantiate the main stack

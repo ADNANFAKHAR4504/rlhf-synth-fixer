@@ -165,6 +165,7 @@ jobs:
             tsconfig.json
             cdk.json
             metadata.json
+            cdktf.json
 
   synth:
     name: Synth
@@ -195,6 +196,16 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
 
+      - name: Set Terraform State Key for PR
+        id: set-tf-state-key
+        run: |
+          # Use PR number for state isolation, fallback to 'main' for main branch
+          if [ "${{ github.event.pull_request.number }}" != "" ]; then
+            echo "TF_STATE_KEY=iac-tfstate-pr${{ github.event.pull_request.number }}/state.json" >> $GITHUB_ENV
+          else
+            echo "TF_STATE_KEY=iac-tfstate-main/state.json" >> $GITHUB_ENV
+          fi
+
       - name: Synth
         run: |
           echo "Project: platform=${{ needs.detect-metadata.outputs.platform }}, language=${{ needs.detect-metadata.outputs.language }}"
@@ -220,6 +231,16 @@ jobs:
           fi
         env:
           ENVIRONMENT_SUFFIX: ${{ env.ENVIRONMENT_SUFFIX }}
+          TF_STATE_BUCKET: iac-rlhf-tf-states
+          TF_STATE_KEY: ${{ env.TF_STATE_KEY }}
+          TF_STATE_REGION: us-east-1
+
+      - name: Upload CDKTF Artifacts
+        if: ${{ needs.detect-metadata.outputs.platform == 'cdktf' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: cdktf-artifacts
+          path: cdktf.out/
 
       - name: Upload Build Artifacts
         uses: actions/upload-artifact@v4
@@ -268,6 +289,15 @@ jobs:
           REPOSITORY: ${{ github.repository }}
           COMMIT_AUTHOR: ${{ github.event.head_commit.author.name || github.actor }}
 
+      - name: Set Terraform State Key for PR
+        id: set-tf-state-key
+        run: |
+          if [ "${{ github.event.pull_request.number }}" != "" ]; then
+            echo "TF_STATE_KEY=iac-tfstate-pr${{ github.event.pull_request.number }}/state.json" >> $GITHUB_ENV
+          else
+            echo "TF_STATE_KEY=iac-tfstate-main/state.json" >> $GITHUB_ENV
+          fi
+
       - name: Deploy
         run: |
           PLATFORM="${{ needs.synth.outputs.platform }}"
@@ -294,6 +324,9 @@ jobs:
           fi
         env:
           ENVIRONMENT_SUFFIX: ${{ env.ENVIRONMENT_SUFFIX }}
+          TF_STATE_BUCKET: iac-rlhf-tf-states
+          TF_STATE_KEY: ${{ env.TF_STATE_KEY }}
+          TF_STATE_REGION: us-east-1
           REPOSITORY: ${{ github.repository }}
           COMMIT_AUTHOR: ${{ github.event.head_commit.author.name || github.actor }}
 
@@ -709,6 +742,7 @@ jobs:
             "cdk.json"
             "metadata.json"
             "tap.py"
+            "cdktf.json"
             )
 
           # Move paths to archive
