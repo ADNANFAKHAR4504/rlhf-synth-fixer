@@ -51,7 +51,7 @@ describe('TapStack CloudFormation Integration Tests', () => {
 
     test('should have stack outputs defined', () => {
       expect(stackInfo.Outputs).toBeDefined();
-      expect(stackInfo.Outputs).toHaveLength(2);
+      expect(stackInfo.Outputs!.length).toBeGreaterThanOrEqual(13);
     });
 
     test('should have Instance1PublicDNS output', () => {

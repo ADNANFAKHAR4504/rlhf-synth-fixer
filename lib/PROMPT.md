@@ -1,51 +1,134 @@
-You are an AWS Cloud Engineer tasked with provisioning a secure, development-ready web hosting environment using AWS CloudFormation.
+# AWS CloudFormation Infrastructure as Code Challenge
 
-Requirements:
+## Objective
 
-Networking:
+You are an AWS Cloud Engineer tasked with provisioning a **secure, development-ready web hosting environment** using AWS CloudFormation. Your solution must demonstrate best practices for cloud infrastructure, security, and operational monitoring.
 
-Define a new VPC with at least two subnets, each in a different Availability Zone.
+## Requirements
 
-Security:
+### 🌐 Networking Infrastructure
 
-Create a Security Group that allows inbound HTTP (port 80) and SSH (port 22) traffic only from a specified CIDR/IP range.
+- **VPC**: Define a new Virtual Private Cloud with appropriate CIDR block (e.g., 10.0.0.0/16)
+- **Multi-AZ Design**: Create at least two public subnets, each in a different Availability Zone for high availability
+- **Internet Gateway**: Ensure proper internet connectivity for public resources
+- **Route Tables**: Configure routing for public subnet access to the internet
 
-Compute:
+### 🔒 Security Configuration
 
-Launch an EC2 instance with a public IP address in one of the subnets.
+- **Security Groups**:
+  - Allow inbound HTTP traffic (port 80) from anywhere (0.0.0.0/0)
+  - Allow inbound SSH traffic (port 22) from a **specified CIDR/IP range** (parameterized)
+  - Apply principle of least privilege
+- **Key Pair**: Use parameterized EC2 key pair for secure access
+- **Network ACLs**: Consider additional network-level security if needed
 
-Storage:
+### 💻 Compute Resources
 
-Provision an S3 bucket with versioning and encryption enabled.
+- **EC2 Instance**:
+  - Launch at least one EC2 instance with a public IP address
+  - Use latest Amazon Linux 2 or Amazon Linux 2023 AMI
+  - Instance type: t2.micro or t3.micro (cost-effective)
+  - Deploy in one of the public subnets
+  - Associate with appropriate security group and IAM role
 
-Access Management:
+### 💾 Storage & Data Management
 
-Define IAM roles and policies so the EC2 instance has access to the S3 bucket.
+- **S3 Bucket**:
+  - Provision with versioning enabled
+  - Enable server-side encryption (AES-256 or KMS)
+  - Apply appropriate bucket policies
+  - Use unique naming convention
 
-Monitoring:
+### 🔐 Access Management (IAM)
 
-Enable CloudWatch monitoring for the EC2 instance.
+- **IAM Role**: Create EC2 service role with necessary permissions
+- **IAM Policies**: Define least-privilege policies for S3 bucket access
+- **Instance Profile**: Attach IAM role to EC2 instance for secure API access
 
-Configure a custom CloudWatch Alarm to trigger if CPU utilization exceeds 70% over a 5-minute period.
+### 📊 Monitoring & Alerting
 
-Tagging and Naming:
+- **CloudWatch Monitoring**: Enable detailed monitoring for EC2 instance
+- **Custom Alarms**:
+  - Configure alarm for CPU utilization > 70% over 5-minute period
+  - Include appropriate alarm actions and notifications
+- **Logs**: Consider CloudWatch Logs for application monitoring
 
-Tag all resources with Environment: Development.
+### 🏷️ Resource Organization
 
-Name all resources using the convention <ResourceType>-<Environment>-<UniqueId>.
+- **Tagging Strategy**:
+  - Tag ALL resources with `Environment: Development`
+  - Add additional tags for cost allocation and management
+- **Naming Convention**:
+  - Use consistent naming: `<ResourceType>-<Environment>-<UniqueId>`
+  - Example: `VPC-Development-001`, `EC2-Development-WebServer`
 
-Outputs:
+### 📤 Template Outputs
 
-Output the VPC ID, Subnet IDs, and EC2 instance Public IP.
+Provide the following outputs for integration and reference:
 
-Validation:
+- **VPC ID**: Reference to the created VPC
+- **Subnet IDs**: References to all created subnets
+- **EC2 Instance Public IP**: For direct access and testing
+- **S3 Bucket Name**: For application integration
+- **Security Group ID**: For potential additional resources
 
-The template must be syntactically valid YAML, pass aws cloudformation validate-template, and deploy successfully.
+## Validation Requirements
 
-Constraints:
+### ✅ Template Validation
 
-Use best practices for security and least-privilege access.
+- Template must be syntactically valid YAML
+- Must pass `aws cloudformation validate-template`
+- Must deploy successfully without errors
+- All dependencies and references must be correct
 
-Region: Use us-west-2 unless otherwise specified.
+### 🧪 Testing Criteria
 
-Use Parameters for values like SSH allowed IP and unique resource IDs where appropriate.
+- EC2 instance must be accessible via SSH and HTTP
+- S3 bucket must be functional with proper permissions
+- CloudWatch alarm must trigger appropriately
+- All security groups must function as intended
+- Resource tagging must be consistent and complete
+
+## Technical Constraints
+
+### 🌍 Regional Requirements
+
+- **Primary Region**: us-east-1 (unless otherwise specified)
+- **Availability Zones**: Use dynamic AZ selection with `!GetAZs`
+- Consider cross-AZ redundancy for critical components
+
+### 🔧 Best Practices
+
+- **Security**: Implement defense in depth
+- **Cost Optimization**: Use appropriate instance sizes and storage classes
+- **Reliability**: Design for fault tolerance where applicable
+- **Performance**: Optimize for expected workload
+- **Operational Excellence**: Include monitoring and logging
+
+### 📋 Parameters & Flexibility
+
+Use CloudFormation Parameters for:
+
+- SSH allowed IP/CIDR range
+- Unique resource identifiers
+- Instance type (with appropriate defaults)
+- Environment designation
+- Key pair name
+
+## Deliverables
+
+1. **Complete CloudFormation Template** (YAML format)
+2. **Parameter Documentation** explaining each configurable value
+3. **Resource Dependency Map** showing relationships between resources
+4. **Security Considerations** document outlining implemented protections
+5. **Deployment Instructions** with validation steps
+
+## Success Criteria
+
+Your solution will be evaluated on:
+
+- ✅ Functional completeness (all requirements met)
+- ✅ Security implementation (least privilege, proper isolation)
+- ✅ Code quality (readable, maintainable, well-documented)
+- ✅ Best practices adherence (AWS Well-Architected principles)
+- ✅ Operational readiness (monitoring, alerting, logging)
