@@ -11,23 +11,6 @@ from aws_cdk import (
 from constructs import Construct
 
 
-# class SecureInfrastructureStackProps(cdk.StackProps):
-#   """
-#   TapStackProps defines the properties for the TapStack CDK stack.
-
-#   Args:
-#     environment_suffix (Optional[str]): An optional suffix to identify the 
-#     deployment environment (e.g., 'dev', 'prod').
-#     **kwargs: Additional keyword arguments passed to the base cdk.StackProps.
-
-#   Attributes:
-#     environment_suffix (Optional[str]): Stores the environment suffix for the stack.
-#   """
-
-#   def __init__(self, environment_suffix: Optional[str] = None, **kwargs):
-#     super().__init__(**kwargs)
-#     self.environment_suffix = environment_suffix
-
 class SecureInfrastructureStack(Stack):
 
     def __init__(self, scope: Construct, id: str, **kwargs) -> None:
@@ -41,7 +24,10 @@ class SecureInfrastructureStack(Stack):
             removal_policy=RemovalPolicy.DESTROY
         )
 
-        # Define the Lambda function
+        # Lookup the default VPC
+        vpc = ec2.Vpc.from_lookup(self, "DefaultVPC", is_default=True)
+
+        # Define the Lambda function inside private subnets
         lambda_function = _lambda.Function(
             self, "SecureLambdaFunction",
             runtime=_lambda.Runtime.PYTHON_3_8,
@@ -52,7 +38,10 @@ class SecureInfrastructureStack(Stack):
             },
             environment_encryption=encryption_key,
             timeout=Duration.seconds(10),
-            vpc=ec2.Vpc.from_lookup(self, "DefaultVPC", is_default=True),
+            vpc=vpc,
+            vpc_subnets=ec2.SubnetSelection(
+                subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS  # ✅ Correct subnet type for internet access
+            )
         )
 
         # IAM policy for logging
