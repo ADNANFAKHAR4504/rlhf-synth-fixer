@@ -4,8 +4,6 @@ import axios from 'axios'; // You'll need to install this: npm install axios
 
 // --- Configuration ---
 // Load the deployed CloudFormation stack's outputs
-
-//The yaml output expect only the url for the server
 let outputs;
 try {
   const outputPath = path.join(__dirname, '../cfn-outputs/flat-outputs.json');
@@ -45,8 +43,13 @@ describe('Greeting API Integration Tests', () => {
           'Hello from a secure, serverless API!'
         );
       } catch (error) {
-        // Make sure the test fails with a clear message if the request fails
-        console.error('API request failed:', error.message);
+        // FIX: Handle the 'unknown' type of the error object in a catch block.
+        // We check if it's an instance of Error before accessing .message.
+        if (error instanceof Error) {
+          console.error('API request failed:', error.message);
+        } else {
+          console.error('An unknown error occurred during the API request:', error);
+        }
         // We rethrow the error to ensure the test case fails.
         throw error;
       }
