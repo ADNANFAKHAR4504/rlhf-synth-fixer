@@ -26,10 +26,8 @@ describe('TapStack CloudFormation Template', () => {
   });
 
   describe('Parameters', () => {
-    test('should have KeyPairName parameter', () => {
-      expect(template.Parameters.KeyPairName).toBeDefined();
-      expect(template.Parameters.KeyPairName.Type).toBe('String');
-      expect(template.Parameters.KeyPairName.Default).toBe('my-key-pair');
+    test('should not have KeyPairName parameter (using dynamic key pair creation)', () => {
+      expect(template.Parameters.KeyPairName).toBeUndefined();
     });
 
     test('should have SSHCidr parameter', () => {
@@ -116,6 +114,24 @@ describe('TapStack CloudFormation Template', () => {
       const instance = template.Resources.EC2Instance;
       expect(instance.Properties.InstanceType).toBe('t2.micro');
     });
+
+    test('should have key pair creator resources', () => {
+      expect(template.Resources.KeyPairCreatorRole).toBeDefined();
+      expect(template.Resources.KeyPairCreatorRole.Type).toBe('AWS::IAM::Role');
+      
+      expect(template.Resources.KeyPairCreatorFunction).toBeDefined();
+      expect(template.Resources.KeyPairCreatorFunction.Type).toBe('AWS::Lambda::Function');
+      
+      expect(template.Resources.KeyPairResource).toBeDefined();
+      expect(template.Resources.KeyPairResource.Type).toBe('AWS::CloudFormation::CustomResource');
+    });
+
+    test('EC2 instance should use dynamic key pair', () => {
+      const instance = template.Resources.EC2Instance;
+      expect(instance.Properties.KeyName).toEqual({
+        'Fn::GetAtt': ['KeyPairResource', 'KeyPairName']
+      });
+    });
   });
 
   describe('S3 and Lambda Resources', () => {
@@ -179,7 +195,8 @@ describe('TapStack CloudFormation Template', () => {
         'VPC', 'PublicSubnet', 'PrivateSubnet', 'InternetGateway',
         'PublicRouteTable', 'PrivateRouteTable', 'NATGateway',
         'EC2SecurityGroup', 'EC2Instance', 'S3Bucket', 'SNSTopic',
-        'LambdaExecutionRole', 'LambdaFunction'
+        'LambdaExecutionRole', 'LambdaFunction', 'KeyPairCreatorRole',
+        'KeyPairCreatorFunction'
       ];
 
       resourcesWithTags.forEach(resourceName => {
@@ -205,7 +222,9 @@ describe('TapStack CloudFormation Template', () => {
         EC2Instance: 'cf-task-ec2',
         S3Bucket: 'cf-task-s3bucket',
         LambdaExecutionRole: 'cf-task-lambda-role',
-        LambdaFunction: 'cf-task-lambda'
+        LambdaFunction: 'cf-task-lambda',
+        KeyPairCreatorRole: 'cf-task-keypair-creator-role',
+        KeyPairCreatorFunction: 'cf-task-keypair-creator'
       };
 
       Object.entries(expectedNames).forEach(([resourceName, expectedName]) => {
@@ -225,7 +244,7 @@ describe('TapStack CloudFormation Template', () => {
       const expectedOutputs = [
         'VPCId', 'PublicSubnetId', 'PrivateSubnetId', 'EC2InstanceId',
         'EC2PublicIP', 'S3BucketName', 'SNSTopicArn', 'LambdaFunctionArn',
-        'NATGatewayId'
+        'NATGatewayId', 'KeyPairName'
       ];
 
       expectedOutputs.forEach(outputName => {
@@ -243,7 +262,8 @@ describe('TapStack CloudFormation Template', () => {
         'S3BucketName': '${AWS::StackName}-S3Bucket-Name',
         'SNSTopicArn': '${AWS::StackName}-SNSTopic-ARN',
         'LambdaFunctionArn': '${AWS::StackName}-Lambda-ARN',
-        'NATGatewayId': '${AWS::StackName}-NATGateway-ID'
+        'NATGatewayId': '${AWS::StackName}-NATGateway-ID',
+        'KeyPairName': '${AWS::StackName}-KeyPair-Name'
       };
 
       Object.entries(expectedExports).forEach(([outputKey, expectedExport]) => {
@@ -272,17 +292,17 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have correct number of resources', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(20); // All the resources we created
+      expect(resourceCount).toBe(23); // All the resources including key pair creator resources
     });
 
     test('should have correct number of parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(3);
+      expect(parameterCount).toBe(2); // Removed KeyPairName parameter
     });
 
     test('should have correct number of outputs', () => {
       const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(9);
+      expect(outputCount).toBe(10); // Added KeyPairName output
     });
   });
 });

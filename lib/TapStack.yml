@@ -2,11 +2,6 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: AWS CloudFormation template for a secure, scalable cloud environment.
 
 Parameters:
-  KeyPairName:
-    Type: String
-    Description: Name of an existing EC2 KeyPair to enable SSH access to the instance
-    Default: 'my-key-pair'
-  
   SSHCidr:
     Type: String
     Description: CIDR block for SSH access
@@ -20,6 +15,119 @@ Parameters:
 
 
 Resources:
+  # Lambda function to create EC2 key pair dynamically
+  KeyPairCreatorRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: EC2KeyPairPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ec2:CreateKeyPair
+                  - ec2:DeleteKeyPair
+                  - ec2:DescribeKeyPairs
+                Resource: '*'
+      Tags:
+        - Key: Name
+          Value: cf-task-keypair-creator-role
+        - Key: Environment
+          Value: Production
+
+  KeyPairCreatorFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: cf-task-keypair-creator
+      Handler: index.handler
+      Role: !GetAtt KeyPairCreatorRole.Arn
+      Runtime: python3.12
+      Timeout: 60
+      Code:
+        ZipFile: |
+          import boto3
+          import cfnresponse
+          import json
+          import logging
+          
+          logger = logging.getLogger()
+          logger.setLevel(logging.INFO)
+          
+          def handler(event, context):
+              try:
+                  logger.info(f'Received event: {json.dumps(event)}')
+                  
+                  ec2 = boto3.client('ec2')
+                  request_type = event['RequestType']
+                  logical_resource_id = event['LogicalResourceId']
+                  stack_name = event['StackId'].split('/')[-2]
+                  
+                  # Generate a unique key pair name
+                  key_pair_name = f'cf-task-keypair-{stack_name}'
+                  
+                  if request_type == 'Create':
+                      logger.info(f'Creating key pair: {key_pair_name}')
+                      
+                      # Check if key pair already exists
+                      try:
+                          response = ec2.describe_key_pairs(KeyNames=[key_pair_name])
+                          logger.info(f'Key pair {key_pair_name} already exists')
+                      except ec2.exceptions.ClientError as e:
+                          if e.response['Error']['Code'] == 'InvalidKeyPair.NotFound':
+                              # Create the key pair
+                              response = ec2.create_key_pair(KeyName=key_pair_name)
+                              logger.info(f'Successfully created key pair: {key_pair_name}')
+                          else:
+                              raise e
+                      
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS, 
+                                     {'KeyPairName': key_pair_name}, key_pair_name)
+                      
+                  elif request_type == 'Delete':
+                      logger.info(f'Deleting key pair: {key_pair_name}')
+                      
+                      try:
+                          ec2.delete_key_pair(KeyName=key_pair_name)
+                          logger.info(f'Successfully deleted key pair: {key_pair_name}')
+                      except ec2.exceptions.ClientError as e:
+                          if e.response['Error']['Code'] == 'InvalidKeyPair.NotFound':
+                              logger.info(f'Key pair {key_pair_name} does not exist, nothing to delete')
+                          else:
+                              logger.error(f'Error deleting key pair: {str(e)}')
+                              # Don't fail the stack deletion for key pair cleanup issues
+                      
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+                      
+                  elif request_type == 'Update':
+                      logger.info('Update request - no action needed for key pair')
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS, 
+                                     {'KeyPairName': key_pair_name}, key_pair_name)
+                      
+              except Exception as e:
+                  logger.error(f'Error: {str(e)}')
+                  cfnresponse.send(event, context, cfnresponse.FAILED, {})
+      Tags:
+        - Key: Name
+          Value: cf-task-keypair-creator
+        - Key: Environment
+          Value: Production
+
+  KeyPairResource:
+    Type: AWS::CloudFormation::CustomResource
+    Properties:
+      ServiceToken: !GetAtt KeyPairCreatorFunction.Arn
+    DependsOn: KeyPairCreatorFunction
+
   VPC:
     Type: AWS::EC2::VPC
     Properties:
@@ -157,7 +265,7 @@ Resources:
     Properties:
       InstanceType: t2.micro
       ImageId: !Ref LatestAmiId
-      KeyName: !Ref KeyPairName
+      KeyName: !GetAtt KeyPairResource.KeyPairName
       NetworkInterfaces:
         - DeviceIndex: 0
           SubnetId: !Ref PublicSubnet
@@ -339,3 +447,9 @@ Outputs:
     Value: !Ref NATGateway
     Export:
       Name: !Sub '${AWS::StackName}-NATGateway-ID'
+
+  KeyPairName:
+    Description: EC2 Key Pair Name
+    Value: !GetAtt KeyPairResource.KeyPairName
+    Export:
+      Name: !Sub '${AWS::StackName}-KeyPair-Name'

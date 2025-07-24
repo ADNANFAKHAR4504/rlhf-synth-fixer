@@ -2,11 +2,6 @@
     "AWSTemplateFormatVersion": "2010-09-09",
     "Description": "AWS CloudFormation template for a secure, scalable cloud environment.",
     "Parameters": {
-        "KeyPairName": {
-            "Type": "String",
-            "Description": "Name of an existing EC2 KeyPair to enable SSH access to the instance",
-            "Default": "my-key-pair"
-        },
         "SSHCidr": {
             "Type": "String",
             "Description": "CIDR block for SSH access",
@@ -20,6 +15,89 @@
         }
     },
     "Resources": {
+        "KeyPairCreatorRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "EC2KeyPairPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "ec2:CreateKeyPair",
+                                        "ec2:DeleteKeyPair",
+                                        "ec2:DescribeKeyPairs"
+                                    ],
+                                    "Resource": "*"
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "cf-task-keypair-creator-role"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    }
+                ]
+            }
+        },
+        "KeyPairCreatorFunction": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": "cf-task-keypair-creator",
+                "Handler": "index.handler",
+                "Role": {
+                    "Fn::GetAtt": ["KeyPairCreatorRole", "Arn"]
+                },
+                "Runtime": "python3.12",
+                "Timeout": 60,
+                "Code": {
+                    "ZipFile": "import boto3\nimport cfnresponse\nimport json\nimport logging\n\nlogger = logging.getLogger()\nlogger.setLevel(logging.INFO)\n\ndef handler(event, context):\n    try:\n        logger.info(f'Received event: {json.dumps(event)}')\n        \n        ec2 = boto3.client('ec2')\n        request_type = event['RequestType']\n        logical_resource_id = event['LogicalResourceId']\n        stack_name = event['StackId'].split('/')[-2]\n        \n        # Generate a unique key pair name\n        key_pair_name = f'cf-task-keypair-{stack_name}'\n        \n        if request_type == 'Create':\n            logger.info(f'Creating key pair: {key_pair_name}')\n            \n            # Check if key pair already exists\n            try:\n                response = ec2.describe_key_pairs(KeyNames=[key_pair_name])\n                logger.info(f'Key pair {key_pair_name} already exists')\n            except ec2.exceptions.ClientError as e:\n                if e.response['Error']['Code'] == 'InvalidKeyPair.NotFound':\n                    # Create the key pair\n                    response = ec2.create_key_pair(KeyName=key_pair_name)\n                    logger.info(f'Successfully created key pair: {key_pair_name}')\n                else:\n                    raise e\n            \n            cfnresponse.send(event, context, cfnresponse.SUCCESS, \n                           {'KeyPairName': key_pair_name}, key_pair_name)\n            \n        elif request_type == 'Delete':\n            logger.info(f'Deleting key pair: {key_pair_name}')\n            \n            try:\n                ec2.delete_key_pair(KeyName=key_pair_name)\n                logger.info(f'Successfully deleted key pair: {key_pair_name}')\n            except ec2.exceptions.ClientError as e:\n                if e.response['Error']['Code'] == 'InvalidKeyPair.NotFound':\n                    logger.info(f'Key pair {key_pair_name} does not exist, nothing to delete')\n                else:\n                    logger.error(f'Error deleting key pair: {str(e)}')\n                    # Don't fail the stack deletion for key pair cleanup issues\n            \n            cfnresponse.send(event, context, cfnresponse.SUCCESS, {})\n            \n        elif request_type == 'Update':\n            logger.info('Update request - no action needed for key pair')\n            cfnresponse.send(event, context, cfnresponse.SUCCESS, \n                           {'KeyPairName': key_pair_name}, key_pair_name)\n            \n    except Exception as e:\n        logger.error(f'Error: {str(e)}')\n        cfnresponse.send(event, context, cfnresponse.FAILED, {})"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "cf-task-keypair-creator"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    }
+                ]
+            }
+        },
+        "KeyPairResource": {
+            "Type": "AWS::CloudFormation::CustomResource",
+            "Properties": {
+                "ServiceToken": {
+                    "Fn::GetAtt": ["KeyPairCreatorFunction", "Arn"]
+                }
+            },
+            "DependsOn": "KeyPairCreatorFunction"
+        },
         "VPC": {
             "Type": "AWS::EC2::VPC",
             "Properties": {
@@ -270,7 +348,7 @@
                     "Ref": "LatestAmiId"
                 },
                 "KeyName": {
-                    "Ref": "KeyPairName"
+                    "Fn::GetAtt": ["KeyPairResource", "KeyPairName"]
                 },
                 "NetworkInterfaces": [
                     {
@@ -560,6 +638,17 @@
             "Export": {
                 "Name": {
                     "Fn::Sub": "${AWS::StackName}-NATGateway-ID"
+                }
+            }
+        },
+        "KeyPairName": {
+            "Description": "EC2 Key Pair Name",
+            "Value": {
+                "Fn::GetAtt": ["KeyPairResource", "KeyPairName"]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-KeyPair-Name"
                 }
             }
         }

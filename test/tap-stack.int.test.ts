@@ -6,7 +6,8 @@ import {
   DescribeInstancesCommand,
   DescribeSecurityGroupsCommand,
   DescribeNatGatewaysCommand,
-  DescribeInternetGatewaysCommand
+  DescribeInternetGatewaysCommand,
+  DescribeKeyPairsCommand
 } from '@aws-sdk/client-ec2';
 import {
   S3Client,
@@ -83,7 +84,7 @@ describe('CloudFormation Stack Integration Tests', () => {
       const requiredOutputs = [
         'VPCId', 'PublicSubnetId', 'PrivateSubnetId', 'EC2InstanceId',
         'EC2PublicIP', 'S3BucketName', 'SNSTopicArn', 'LambdaFunctionArn',
-        'NATGatewayId'
+        'NATGatewayId', 'KeyPairName'
       ];
 
       requiredOutputs.forEach(outputName => {
@@ -227,6 +228,22 @@ describe('CloudFormation Stack Integration Tests', () => {
         rule.FromPort === 22 && rule.ToPort === 22 && rule.IpProtocol === 'tcp'
       );
       expect(sshRule).toBeDefined();
+    });
+
+    test('EC2 key pair should exist and be accessible', async () => {
+      if (!outputs.KeyPairName) {
+        console.warn('KeyPairName not available, skipping test');
+        return;
+      }
+
+      const response = await ec2Client.send(new DescribeKeyPairsCommand({
+        KeyNames: [outputs.KeyPairName]
+      }));
+
+      expect(response.KeyPairs).toHaveLength(1);
+      const keyPair = response.KeyPairs![0];
+      expect(keyPair.KeyName).toBe(outputs.KeyPairName);
+      expect(keyPair.KeyName).toMatch(/^cf-task-keypair-/);
     });
   });
 
