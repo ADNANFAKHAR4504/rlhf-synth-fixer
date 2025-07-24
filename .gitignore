@@ -73,3 +73,10 @@ coverage.xml
 cov.json
 
 cfn-outputs/*
+
+# CDK Terraform stuff
+cdktf.out
+cdktf.log
+*terraform.*.tfstate*
+.gen
+.terraform

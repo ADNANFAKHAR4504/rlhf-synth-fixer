@@ -20,6 +20,7 @@ env:
   # Prefix with 'pr' to ensure AWS resource names start with a letter
   ENVIRONMENT_SUFFIX: ${{ github.event.number && format('pr{0}', github.event.number) || 'dev' }}
   S3_BUCKET_NAME: 'iac-rlhf-aws-release'
+  TERRAFORM_STATE_BUCKET: 'iac-rlhf-tf-states'
 
 jobs:
   detect-metadata:
