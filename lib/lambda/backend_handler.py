@@ -1,6 +1,6 @@
 import json
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict
 
 import boto3
@@ -27,7 +27,7 @@ def handle_visit(path: str) -> Dict[str, Any]:
   try:
     # Get request context
     event = app.current_event
-    timestamp = datetime.utcnow().isoformat()
+    timestamp = datetime.now(timezone.utc).isoformat()
     ip = event.request_context.http.source_ip
 
     # Log visit details
@@ -60,7 +60,7 @@ def handle_visit(path: str) -> Dict[str, Any]:
             'path': path
         })
     }
-  except Exception as e:
+  except Exception:
     logger.exception("Error recording visit")
     metrics.add_metric(name="VisitErrors", unit=MetricUnit.Count, value=1)
     return {

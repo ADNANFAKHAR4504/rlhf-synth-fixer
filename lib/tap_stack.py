@@ -283,36 +283,31 @@ class TapStack(cdk.Stack):
         versioned=True,
         encryption=s3.BucketEncryption.KMS,
         encryption_key=s3_kms_key,
-        block_public_access=s3.BlockPublicAccess(
-            block_public_acls=True,
-            block_public_policy=False,  # Allow public policies for website hosting
-            ignore_public_acls=True,
-            restrict_public_buckets=False  # Allow public access for website hosting
-        ),
+        block_public_access=s3.BlockPublicAccess.BLOCK_ALL,  # Block all public access
         enforce_ssl=True,
         removal_policy=RemovalPolicy.DESTROY,
-        auto_delete_objects=True,
-        website_index_document="index.html",
-        website_error_document="error.html"
+        auto_delete_objects=True
+        # Remove website hosting configuration as we'll serve through CloudFront only
     )
 
-    # Create bucket policy to allow public read access for website
-    bucket_policy = iam.PolicyStatement(
-        actions=["s3:GetObject"],
-        resources=[bucket.arn_for_objects("*")],
-        principals=[iam.AnyPrincipal()]
+    # Create Origin Access Control for CloudFront
+    oac = cloudfront.CfnOriginAccessControl(
+        self,
+        "CloudFrontOAC",
+        origin_access_control_config=cloudfront.CfnOriginAccessControl.OriginAccessControlConfigProperty(
+            name=f"{construct_id}-oac",
+            origin_access_control_origin_type="s3",
+            signing_behavior="always",
+            signing_protocol="sigv4"
+        )
     )
 
-    # Apply the policy to the bucket
-    bucket.add_to_resource_policy(bucket_policy)
-
-    # CloudFront Distribution for S3
-    # Use S3BucketOrigin instead of deprecated S3Origin
+    # CloudFront Distribution for S3 with Origin Access Control
     distribution = cloudfront.Distribution(
         self,
         "FrontendDistribution",
         default_behavior=cloudfront.BehaviorOptions(
-            origin=origins.S3BucketOrigin(bucket),
+            origin=origins.S3Origin(bucket),
             viewer_protocol_policy=cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
             cache_policy=cloudfront.CachePolicy.CACHING_OPTIMIZED
         ),
@@ -328,6 +323,46 @@ class TapStack(cdk.Stack):
                 response_page_path="/index.html"
             )
         ]
+    )
+
+    # Apply OAC to the CloudFront distribution's S3 origin using L1 construct
+    cfn_distribution = distribution.node.default_child
+    cfn_distribution.add_property_override(
+        "DistributionConfig.Origins.0.S3OriginConfig.OriginAccessIdentity", ""
+    )
+    cfn_distribution.add_property_override(
+        "DistributionConfig.Origins.0.OriginAccessControlId", oac.attr_id
+    )
+
+    # Grant CloudFront access to the S3 bucket with KMS key
+    bucket.add_to_resource_policy(
+        iam.PolicyStatement(
+            actions=["s3:GetObject"],
+            resources=[bucket.arn_for_objects("*")],
+            principals=[iam.ServicePrincipal("cloudfront.amazonaws.com")],
+            conditions={
+                "StringEquals": {
+                    "AWS:SourceArn": f"arn:aws:cloudfront::{cdk.Stack.of(self).account}:distribution/{distribution.distribution_id}"
+                }
+            }
+        )
+    )
+
+    # Grant CloudFront access to use the KMS key
+    s3_kms_key.add_to_resource_policy(
+        iam.PolicyStatement(
+            actions=[
+                "kms:Decrypt",
+                "kms:GenerateDataKey*"
+            ],
+            resources=["*"],
+            principals=[iam.ServicePrincipal("cloudfront.amazonaws.com")],
+            conditions={
+                "StringEquals": {
+                    "AWS:SourceArn": f"arn:aws:cloudfront::{cdk.Stack.of(self).account}:distribution/{distribution.distribution_id}"
+                }
+            }
+        )
     )
 
     # Enhanced CloudWatch Monitoring
