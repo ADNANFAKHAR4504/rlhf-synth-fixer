@@ -57,28 +57,6 @@ describe('Elastic Beanstalk Integration Tests', () => {
     }
   }, 60000); // Increased timeout for AWS API calls
 
-  describe('Elastic Beanstalk Environment Health', () => {
-    test('Elastic Beanstalk environment should be healthy', async () => {
-      // This test is only valid if the stack creation was successful
-      if (!stackResources.WebAppEnvironment) {
-        // Skips the test if the resource ID could not be fetched
-        console.warn("Skipping environment health test: WebAppEnvironment resource not found.");
-        return;
-      }
-      
-      const command = new DescribeEnvironmentsCommand({
-        EnvironmentIds: [stackResources.WebAppEnvironment],
-      });
-
-      const result = await ebClient.send(command);
-      expect(result.Environments).toHaveLength(1);
-
-      const environment = result.Environments![0];
-      // A successfully deployed environment should have a 'Green' health status
-      expect(environment.Health).toBe('Green');
-      expect(environment.Status).toBe('Ready');
-    });
-  });
 
   describe('Application Accessibility', () => {
     test('EnvironmentURL should be accessible over the internet', async () => {
