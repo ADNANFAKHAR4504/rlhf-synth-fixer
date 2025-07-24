@@ -76,13 +76,6 @@ function getLanguageChoices(platform: string) {
     ];
   }
 
-  if (platform === 'cdktf') {
-    return [
-      { name: 'TypeScript', value: 'ts' },
-      { name: 'Python', value: 'py' },
-    ];
-  }
-
   return [
     { name: 'YAML', value: 'yaml' },
     { name: 'JSON', value: 'json' },
@@ -108,7 +101,6 @@ async function main(): Promise<void> {
       message: 'Select the platform:',
       choices: [
         { name: 'CDK', value: 'cdk' },
-        { name: 'CDK Terraform', value: 'cdktf' },
         { name: 'CloudFormation', value: 'cfn' },
       ],
     });

@@ -165,7 +165,6 @@ jobs:
             tsconfig.json
             cdk.json
             metadata.json
-            cdktf.json
 
   synth:
     name: Synth
@@ -196,16 +195,6 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
 
-      - name: Set Terraform State Key for PR
-        id: set-tf-state-key
-        run: |
-          # Use PR number for state isolation, fallback to 'main' for main branch
-          if [ "${{ github.event.pull_request.number }}" != "" ]; then
-            echo "TF_STATE_KEY=iac-tfstate-pr${{ github.event.pull_request.number }}/state.json" >> $GITHUB_ENV
-          else
-            echo "TF_STATE_KEY=iac-tfstate-main/state.json" >> $GITHUB_ENV
-          fi
-
       - name: Synth
         run: |
           echo "Project: platform=${{ needs.detect-metadata.outputs.platform }}, language=${{ needs.detect-metadata.outputs.language }}"
@@ -216,14 +205,8 @@ jobs:
           if [ "$PLATFORM" = "cdk" ]; then
             echo "✅ CDK project detected, running CDK synth..."
             npm run cdk:synth
-          elif [ "$PLATFORM" = "cdktf" ] && [ "$LANGUAGE" = "ts" ]; then
-            echo "✅ CDKTF TypeScript project detected, running cdktf synth..."
-            npm run cdktf:synth
-          elif [ "$PLATFORM" = "cdktf" ] && [ "$LANGUAGE" = "py" ]; then
-            echo "✅ CDKTF Python project detected, running pipenv synth..."
-            pipenv run cdktf-synth
           else
-            echo "ℹ️ Not a CDK or CDKTF project, skipping synth"
+            echo "ℹ️ Not a CDK project, skipping CDK synth"
             echo "This is expected for non-CDK projects like CloudFormation templates"
             # Create empty cdk.out directory to satisfy artifact upload
             mkdir -p cdk.out
@@ -231,16 +214,6 @@ jobs:
           fi
         env:
           ENVIRONMENT_SUFFIX: ${{ env.ENVIRONMENT_SUFFIX }}
-          TF_STATE_BUCKET: iac-rlhf-tf-states
-          TF_STATE_KEY: ${{ env.TF_STATE_KEY }}
-          TF_STATE_REGION: us-east-1
-
-      - name: Upload CDKTF Artifacts
-        if: ${{ needs.detect-metadata.outputs.platform == 'cdktf' }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: cdktf-artifacts
-          path: cdktf.out/
 
       - name: Upload Build Artifacts
         uses: actions/upload-artifact@v4
@@ -289,15 +262,6 @@ jobs:
           REPOSITORY: ${{ github.repository }}
           COMMIT_AUTHOR: ${{ github.event.head_commit.author.name || github.actor }}
 
-      - name: Set Terraform State Key for PR
-        id: set-tf-state-key
-        run: |
-          if [ "${{ github.event.pull_request.number }}" != "" ]; then
-            echo "TF_STATE_KEY=iac-tfstate-pr${{ github.event.pull_request.number }}/state.json" >> $GITHUB_ENV
-          else
-            echo "TF_STATE_KEY=iac-tfstate-main/state.json" >> $GITHUB_ENV
-          fi
-
       - name: Deploy
         run: |
           PLATFORM="${{ needs.synth.outputs.platform }}"
@@ -306,12 +270,6 @@ jobs:
           if [ "$PLATFORM" = "cdk" ]; then
             echo "✅ CDK project detected, running CDK deploy..."
             npm run cdk:deploy
-          elif [ "$PLATFORM" = "cdktf" ] && [ "$LANGUAGE" = "ts" ]; then
-            echo "✅ CDKTF TypeScript project detected, running cdktf deploy..."
-            npm run cdktf:deploy
-          elif [ "$PLATFORM" = "cdktf" ] && [ "$LANGUAGE" = "py" ]; then
-            echo "✅ CDKTF Python project detected, running pipenv deploy..."
-            pipenv run cdktf-deploy
           elif [ "$PLATFORM" = "cfn" ] && [ "$LANGUAGE" = "yaml" ]; then
             echo "✅ CloudFormation YAML project detected, deploying with AWS CLI..."
             npm run cfn:deploy-yaml
@@ -320,13 +278,10 @@ jobs:
             npm run cfn:deploy-json
           else
             echo "ℹ️ Unknown deployment method for platform: $PLATFORM, language: $LANGUAGE"
-            echo "💡 Supported combinations: cdk+typescript, cdk+python, cdktf+typescript, cdktf+python, cfn+yaml, cfn+json"
+            echo "💡 Supported combinations: cdk+typescript, cdk+python, cfn+yaml, cfn+json"
           fi
         env:
           ENVIRONMENT_SUFFIX: ${{ env.ENVIRONMENT_SUFFIX }}
-          TF_STATE_BUCKET: iac-rlhf-tf-states
-          TF_STATE_KEY: ${{ env.TF_STATE_KEY }}
-          TF_STATE_REGION: us-east-1
           REPOSITORY: ${{ github.repository }}
           COMMIT_AUTHOR: ${{ github.event.head_commit.author.name || github.actor }}
 
@@ -495,12 +450,6 @@ jobs:
           elif [ "${{ needs.lint.outputs.language }}" = "py" ]; then
             echo "✅ Python project detected, running pytest unit tests..."
             pipenv run test-py-unit
-          elif [ "${{ needs.lint.outputs.platform }}" = "cdktf" ] && [ "${{ needs.lint.outputs.language }}" = "ts" ]; then
-            echo "✅ CDKTF TypeScript project detected, running unit tests..."
-            npm run test:unit
-          elif [ "${{ needs.lint.outputs.platform }}" = "cdktf" ] && [ "${{ needs.lint.outputs.language }}" = "py" ]; then
-            echo "✅ CDKTF Python project detected, running pytest unit tests..."
-            pipenv run test-py-unit
           else
             echo "✅ Running default unit tests..."
             npm run test:unit
@@ -569,13 +518,7 @@ jobs:
 
       - name: Run integration tests against live environment
         run: |
-          if [ "${{ needs.lint.outputs.platform }}" = "cdktf" ] && [ "${{ needs.lint.outputs.language }}" = "py" ]; then
-            echo "✅ CDKTF Python project detected, running integration tests..."
-            pipenv run test-py-integration
-          elif [ "${{ needs.lint.outputs.platform }}" = "cdktf" ] && [ "${{ needs.lint.outputs.language }}" = "ts" ]; then
-            echo "✅ CDKTF TypeScript project detected, running integration tests..."
-            npm run test:integration
-          elif [ "${{ needs.lint.outputs.language }}" = "py" ]; then
+          if [ "${{ needs.lint.outputs.language }}" = "py" ]; then
             echo "✅ CDK project detected, running integration tests..."
             pipenv run test-py-integration
           else
@@ -618,12 +561,6 @@ jobs:
             echo "✅ CDK project detected, running CDK destroy..."
             # Try to destroy any leftover resources from PRs, but don't fail if they don't exist
             npm run cdk:destroy || echo "No resources to destroy or destruction failed"
-          elif [ "$PLATFORM" = "cdktf" ] && [ "$LANGUAGE" = "ts" ]; then
-            echo "✅ CDKTF TypeScript project detected, running cdktf destroy..."
-            npm run cdktf:destroy || echo "No resources to destroy or destruction failed"
-          elif [ "$PLATFORM" = "cdktf" ] && [ "$LANGUAGE" = "py" ]; then
-            echo "✅ CDKTF Python project detected, running pipenv destroy..."
-            pipenv run cdktf-destroy || echo "No resources to destroy or destruction failed"
           elif [ "$PLATFORM" = "cfn" ]; then
             echo "✅ CloudFormation project detected, running CloudFormation destroy..."
             # Try to destroy any leftover resources from PRs, but don't fail if they don't exist
@@ -742,7 +679,6 @@ jobs:
             "cdk.json"
             "metadata.json"
             "tap.py"
-            "cdktf.json"
             )
 
           # Move paths to archive
