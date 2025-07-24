@@ -45,8 +45,8 @@ describe('TapStack CloudFormation Integration Tests', () => {
   }, 30000);
 
   describe('Stack Deployment Status', () => {
-    test('should have CREATE_COMPLETE status', () => {
-      expect(stackInfo.StackStatus).toBe('CREATE_COMPLETE');
+    test('should have successful deployment status', () => {
+      expect(['CREATE_COMPLETE', 'UPDATE_COMPLETE']).toContain(stackInfo.StackStatus);
     });
 
     test('should have stack outputs defined', () => {
@@ -194,7 +194,7 @@ describe('TapStack CloudFormation Integration Tests', () => {
         `aws cloudformation describe-stack-resources --stack-name ${STACK_NAME} --region ${REGION} --query "StackResources[?ResourceType=='AWS::EC2::InternetGateway'] | [0].ResourceStatus" --output text`
       );
 
-      expect(stdout.trim()).toBe('CREATE_COMPLETE');
+      expect(['CREATE_COMPLETE', 'UPDATE_COMPLETE']).toContain(stdout.trim());
     });
 
     test('should have security group with SSH and HTTP access', async () => {
@@ -290,7 +290,7 @@ describe('TapStack CloudFormation Integration Tests', () => {
         );
 
         if (stdout.trim() !== 'None' && stdout.trim() !== '') {
-          expect(stdout.trim()).toBe('CREATE_COMPLETE');
+          expect(['CREATE_COMPLETE', 'UPDATE_COMPLETE']).toContain(stdout.trim());
           console.log('✓ S3 bucket found - comprehensive template detected');
         } else {
           console.log('! S3 bucket not found - basic template detected');
