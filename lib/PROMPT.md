@@ -42,3 +42,5 @@ Do not use macros or custom resources — only standard AWS resources.
 
 
 
+ Note: The prompt mentions using the us-east-1 region, but I used us-east-2 for testing due to quota issues in us-east-1.
+
