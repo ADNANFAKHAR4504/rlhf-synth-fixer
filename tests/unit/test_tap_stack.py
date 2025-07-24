@@ -1,53 +1,56 @@
-# import os
-# import sys
 import unittest
-
 import aws_cdk as cdk
-# import pytest
-# from aws_cdk.assertions import Match, Template
-from aws_cdk.assertions import Template
+from aws_cdk.assertions import Template, Match
 from pytest import mark
 
-from lib.tap_stack import TapStack, TapStackProps
+from lib.multi_region_stack import MultiRegionStack
 
 
-@mark.describe("TapStack")
-class TestTapStack(unittest.TestCase):
-  """Test cases for the TapStack CDK stack"""
+@mark.describe("MultiRegionStack")
+class TestMultiRegionStack(unittest.TestCase):
+    """Unit tests for the MultiRegionStack CDK stack"""
 
-  def setUp(self):
-    """Set up a fresh CDK app for each test"""
-    self.app = cdk.App()
+    def setUp(self):
+        """Set up a fresh CDK app and stack for each test"""
+        self.app = cdk.App()
+        self.stack = MultiRegionStack(self.app, "TestMultiRegionStack", region="us-east-1")
+        self.template = Template.from_stack(self.stack)
 
-  @mark.it("creates an S3 bucket with the correct environment suffix")
-  def test_creates_s3_bucket_with_env_suffix(self):
-    # ARRANGE
-    env_suffix = "testenv"
-    stack = TapStack(self.app, "TapStackTest",
-                     TapStackProps(environment_suffix=env_suffix))
-    template = Template.from_stack(stack)
+    @mark.it("creates a Lambda function with the correct handler and runtime")
+    def test_lambda_function_created(self):
+        self.template.has_resource_properties("AWS::Lambda::Function", {
+            "Handler": "index.handler",
+            "Runtime": "python3.9"
+        })
 
-    # ASSERT
-    template.resource_count_is("AWS::S3::Bucket", 1)
-    template.has_resource_properties("AWS::S3::Bucket", {
-        "BucketName": f"tap-bucket-{env_suffix}"
-    })
+    @mark.it("creates an IAM role for Lambda execution")
+    def test_lambda_execution_role_created(self):
+        self.template.has_resource_properties("AWS::IAM::Role", {
+            "AssumeRolePolicyDocument": Match.object_like({
+                "Statement": Match.array_with([
+                    Match.object_like({
+                        "Principal": {
+                            "Service": "lambda.amazonaws.com"
+                        }
+                    })
+                ])
+            })
+        })
 
-  @mark.it("defaults environment suffix to 'dev' if not provided")
-  def test_defaults_env_suffix_to_dev(self):
-    # ARRANGE
-    stack = TapStack(self.app, "TapStackTestDefault")
-    template = Template.from_stack(stack)
+    @mark.it("creates an API Gateway REST API with the correct name")
+    def test_api_gateway_created(self):
+        self.template.has_resource_properties("AWS::ApiGateway::RestApi", {
+            "Name": "MultiRegionService"
+        })
 
-    # ASSERT
-    template.resource_count_is("AWS::S3::Bucket", 1)
-    template.has_resource_properties("AWS::S3::Bucket", {
-        "BucketName": "tap-bucket-dev"
-    })
+    @mark.it("adds a GET method to the API Gateway resource")
+    def test_api_gateway_method_exists(self):
+        self.template.resource_count_is("AWS::ApiGateway::Method", 1)
 
-  @mark.it("Write Unit Tests")
-  def test_write_unit_tests(self):
-    # ARRANGE
-    self.fail(
-        "Unit test for TapStack should be implemented here."
-    )
+    @mark.it("outputs the API Gateway endpoint")
+    def test_api_endpoint_output_exists(self):
+        self.template.has_output("ApiEndpoint", {
+            "Value": {
+                "Ref": Match.any_value()
+            }
+        })
