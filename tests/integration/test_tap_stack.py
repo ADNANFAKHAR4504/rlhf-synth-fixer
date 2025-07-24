@@ -254,7 +254,18 @@ class TestTapStackIntegration(unittest.TestCase):
       # Check if we can get the distribution configuration
       try:
         cf = boto3.client('cloudfront')
-        distribution_id = cloudfront_domain.split('.')[0]
+        # List all distributions and find the one that matches our domain
+        distributions_response = cf.list_distributions()
+        distribution_id = None
+
+        for dist in distributions_response.get('DistributionList', {}).get('Items', []):
+          if dist.get('DomainName') == cloudfront_domain:
+            distribution_id = dist.get('Id')
+            break
+
+        if not distribution_id:
+          self.fail(f"Could not find CloudFront distribution for domain: {cloudfront_domain}")
+
         distribution = cf.get_distribution(Id=distribution_id)
 
         # Check that the distribution exists and is deployed
