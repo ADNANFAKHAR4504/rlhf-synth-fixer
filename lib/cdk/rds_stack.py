@@ -4,14 +4,13 @@ from aws_cdk import (
   aws_secretsmanager as secretsmanager,
   Stack,
   Duration,
-  Environment,
 )
 from constructs import Construct
 
 
 class RdsStack(Stack):
-  def __init__(self, scope: Construct, id: str, vpc: ec2.Vpc, **kwargs):
-    super().__init__(scope, id, **kwargs)
+  def __init__(self, scope: Construct, stack_id: str, vpc: ec2.Vpc, **kwargs):
+    super().__init__(scope, stack_id, **kwargs)
 
     instance_identifier = f"{self.stack_name}-rds-instance"
 
@@ -25,6 +24,8 @@ class RdsStack(Stack):
       ),
     )
 
+    admin_secret = secretsmanager.Secret.from_secret_name_v2(self, "AdminSecret", "admin")
+
     self.rds_instance = rds.DatabaseInstance(
       self,
       "RDS",
@@ -33,7 +34,8 @@ class RdsStack(Stack):
         version=rds.MysqlEngineVersion.VER_8_0
       ),
       instance_type=ec2.InstanceType.of(
-        ec2.InstanceClass.BURSTABLE3, ec2.InstanceSize.MICRO
+        ec2.InstanceClass.BURSTABLE3,
+        ec2.InstanceSize.MICRO
       ),
       vpc=vpc,
       vpc_subnets=ec2.SubnetSelection(
@@ -49,7 +51,11 @@ class RdsStack(Stack):
 
     if self.region == "us-east-1":
       replica_stack = Stack(
-        self, "ReplicaStack", env=Environment(region="us-east-2")
+        self,
+        "ReplicaStack",
+        env={
+          "region": "us-east-2"
+        }
       )
 
       replica_vpc = ec2.Vpc(
@@ -58,19 +64,24 @@ class RdsStack(Stack):
         ip_addresses=ec2.IpAddresses.cidr("10.1.0.0/16"),
       )
 
-      rds.DatabaseInstanceFromSnapshot(
+      rds.DatabaseInstance(
         replica_stack,
         "RDSReplica",
+        instance_identifier=f"{self.stack_name}-replica",
         engine=rds.DatabaseInstanceEngine.mysql(
           version=rds.MysqlEngineVersion.VER_8_0
         ),
         instance_type=ec2.InstanceType.of(
-          ec2.InstanceClass.BURSTABLE3, ec2.InstanceSize.MICRO
+          ec2.InstanceClass.BURSTABLE3,
+          ec2.InstanceSize.MICRO
         ),
         vpc=replica_vpc,
         vpc_subnets=ec2.SubnetSelection(
           subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS
         ),
-        snapshot_identifier=instance_identifier,
-        credentials=rds.SnapshotCredentials.from_generated_password("admin"),
+        multi_az=False,
+        allocated_storage=20,
+        database_name="appdb",
+        credentials=rds.Credentials.from_generated_secret("admin"),
+        storage_encrypted=True,
       )
