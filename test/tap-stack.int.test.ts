@@ -255,10 +255,10 @@ describe('CloudFormation Stack Integration Tests', () => {
         Bucket: outputs.S3BucketName
       }));
 
-      expect(response.LambdaConfigurations).toBeDefined();
-      expect(response.LambdaConfigurations!.length).toBeGreaterThan(0);
-      
-      const lambdaConfig = response.LambdaConfigurations![0];
+      expect(response.LambdaFunctionConfigurations).toBeDefined();
+      expect(response.LambdaFunctionConfigurations!.length).toBeGreaterThan(0);
+
+      const lambdaConfig = response.LambdaFunctionConfigurations![0];
       expect(lambdaConfig.Events).toContain('s3:ObjectCreated:*');
       expect(lambdaConfig.LambdaFunctionArn).toBe(outputs.LambdaFunctionArn);
     });
