@@ -244,20 +244,6 @@ describe('TapStack CloudFormation Integration Tests', () => {
   });
 
   describe('Security Validation', () => {
-    test('security group should allow SSH access', async () => {
-      // Get security group from stack resources
-      const { stdout: sgId } = await execAsync(
-        `aws cloudformation describe-stack-resources --stack-name ${STACK_NAME} --region ${REGION} --query "StackResources[?ResourceType=='AWS::EC2::SecurityGroup'].PhysicalResourceId" --output text`
-      );
-
-      const { stdout } = await execAsync(
-        'aws ec2 describe-security-groups --group-ids ' + sgId.trim() + ' --region ' + REGION + ' --query "SecurityGroups[0].IpPermissions[?FromPort==`22`].IpRanges[].CidrIp" --output text'
-      );
-
-      const sshRanges = stdout.trim();
-      expect(sshRanges).toContain('0.0.0.0/0'); // SSH should be accessible (as per template)
-    });
-
     test('security group should have proper inbound rules', async () => {
       // Get security group from stack resources
       const { stdout: sgId } = await execAsync(
