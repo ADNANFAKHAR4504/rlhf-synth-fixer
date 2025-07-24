@@ -57,6 +57,7 @@ describe('TapStack CloudFormation Templates', () => {
       const keyName = jsonTemplate.Parameters.KeyName;
       expect(keyName.Type).toBe('AWS::EC2::KeyPair::KeyName');
       expect(keyName.Description).toBe('Name of an existing EC2 KeyPair to enable SSH access to the instances.');
+      expect(keyName.Default).toBe('iac-rlhf-aws-trainer-instance');
     });
   });
 
