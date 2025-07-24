@@ -95,8 +95,7 @@
                 "ServiceToken": {
                     "Fn::GetAtt": ["KeyPairCreatorFunction", "Arn"]
                 }
-            },
-            "DependsOn": "KeyPairCreatorFunction"
+            }
         },
         "VPC": {
             "Type": "AWS::EC2::VPC",

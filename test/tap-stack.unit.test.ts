@@ -305,4 +305,77 @@ describe('TapStack CloudFormation Template', () => {
       expect(outputCount).toBe(10); // Added KeyPairName output
     });
   });
+
+  describe('Key Pair Creator Resources', () => {
+    test('KeyPairCreatorRole should have correct policies', () => {
+      const role = template.Resources.KeyPairCreatorRole;
+      expect(role.Properties.ManagedPolicyArns).toContain(
+        'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
+      );
+      
+      const ec2Policy = role.Properties.Policies.find((p: any) => p.PolicyName === 'EC2KeyPairPolicy');
+      expect(ec2Policy).toBeDefined();
+      expect(ec2Policy.PolicyDocument.Statement[0].Action).toContain('ec2:CreateKeyPair');
+      expect(ec2Policy.PolicyDocument.Statement[0].Action).toContain('ec2:DeleteKeyPair');
+      expect(ec2Policy.PolicyDocument.Statement[0].Action).toContain('ec2:DescribeKeyPairs');
+    });
+
+    test('KeyPairCreatorFunction should have correct runtime and handler', () => {
+      const lambdaFunction = template.Resources.KeyPairCreatorFunction;
+      expect(lambdaFunction.Properties.Runtime).toBe('python3.12');
+      expect(lambdaFunction.Properties.Handler).toBe('index.handler');
+      expect(lambdaFunction.Properties.Timeout).toBe(60);
+    });
+
+    test('KeyPairCreatorFunction should have inline Python code', () => {
+      const lambdaFunction = template.Resources.KeyPairCreatorFunction;
+      expect(lambdaFunction.Properties.Code.ZipFile).toBeDefined();
+      expect(typeof lambdaFunction.Properties.Code.ZipFile).toBe('string');
+      expect(lambdaFunction.Properties.Code.ZipFile).toContain('import boto3');
+      expect(lambdaFunction.Properties.Code.ZipFile).toContain('import cfnresponse');
+      expect(lambdaFunction.Properties.Code.ZipFile).toContain('def handler(event, context):');
+    });
+
+    test('KeyPairResource should not have DependsOn property (lint fix)', () => {
+      const keyPairResource = template.Resources.KeyPairResource;
+      expect(keyPairResource.DependsOn).toBeUndefined();
+    });
+
+    test('KeyPairResource should use GetAtt for ServiceToken', () => {
+      const keyPairResource = template.Resources.KeyPairResource;
+      expect(keyPairResource.Properties.ServiceToken).toEqual({
+        'Fn::GetAtt': ['KeyPairCreatorFunction', 'Arn']
+      });
+    });
+  });
+
+  describe('Template Consistency Validation', () => {
+    test('should not reference StackNameSuffix parameter (removed for consistency)', () => {
+      const templateString = JSON.stringify(template);
+      expect(templateString).not.toContain('StackNameSuffix');
+    });
+
+    test('should use AWS::StackName consistently for naming', () => {
+      const s3Bucket = template.Resources.S3Bucket;
+      expect(s3Bucket.Properties.BucketName).toEqual({
+        'Fn::Sub': 'cf-task-s3bucket-${AWS::StackName}'
+      });
+
+      const lambdaPolicy = template.Resources.LambdaExecutionRole.Properties.Policies
+        .find((p: any) => p.PolicyName === 'LambdaS3Policy');
+      expect(lambdaPolicy.PolicyDocument.Statement[0].Resource).toEqual({
+        'Fn::Sub': 'arn:aws:s3:::cf-task-s3bucket-${AWS::StackName}/*'
+      });
+    });
+
+    test('all outputs should use AWS::StackName for export names', () => {
+      Object.values(template.Outputs).forEach((output: any) => {
+        if (output.Export && output.Export.Name) {
+          expect(output.Export.Name).toEqual({
+            'Fn::Sub': expect.stringContaining('${AWS::StackName}')
+          });
+        }
+      });
+    });
+  });
 });

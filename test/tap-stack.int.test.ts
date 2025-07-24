@@ -244,6 +244,22 @@ describe('CloudFormation Stack Integration Tests', () => {
       const keyPair = response.KeyPairs![0];
       expect(keyPair.KeyName).toBe(outputs.KeyPairName);
       expect(keyPair.KeyName).toMatch(/^cf-task-keypair-/);
+      expect(keyPair.KeyType).toBe('rsa');
+    });
+
+    test('EC2 instance should be using the dynamically created key pair', async () => {
+      if (!outputs.EC2InstanceId || !outputs.KeyPairName) {
+        console.warn('EC2InstanceId or KeyPairName not available, skipping test');
+        return;
+      }
+
+      const response = await ec2Client.send(new DescribeInstancesCommand({
+        InstanceIds: [outputs.EC2InstanceId]
+      }));
+
+      const instance = response.Reservations![0].Instances![0];
+      expect(instance.KeyName).toBe(outputs.KeyPairName);
+      expect(instance.KeyName).toMatch(/^cf-task-keypair-/);
     });
   });
 
@@ -260,6 +276,15 @@ describe('CloudFormation Stack Integration Tests', () => {
 
       // If no error is thrown, the bucket exists and is accessible
       expect(response.$metadata.httpStatusCode).toBe(200);
+    });
+
+    test('S3 bucket should follow naming convention', async () => {
+      if (!outputs.S3BucketName) {
+        console.warn('S3BucketName not available, skipping test');
+        return;
+      }
+
+      expect(outputs.S3BucketName).toMatch(/^cf-task-s3bucket-/);
     });
 
     test('S3 bucket should have Lambda notification configured', async () => {
