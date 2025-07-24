@@ -210,6 +210,9 @@ jobs:
           if [ "$PLATFORM" = "cdk" ]; then
             echo "✅ CDK project detected, running CDK synth..."
             npm run cdk:synth
+          elif [ "$PLATFORM" = "cdktf" ]; then
+            echo "✅ CDKTF project detected, running CDKTF synth..."
+            npm run cdktf:synth
           else
             echo "ℹ️ Not a CDK project, skipping CDK synth"
             echo "This is expected for non-CDK projects like CloudFormation templates"
@@ -219,12 +222,16 @@ jobs:
           fi
         env:
           ENVIRONMENT_SUFFIX: ${{ env.ENVIRONMENT_SUFFIX }}
+          TERRAFORM_STATE_BUCKET: ${{ env.TERRAFORM_STATE_BUCKET }}
+          TERRAFORM_STATE_BUCKET_REGION: ${{ env.TERRAFORM_STATE_BUCKET_REGION }}
 
       - name: Upload Build Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: cdk-artifacts
-          path: cdk.out/
+          path: |
+            cdk.out/
+            cdktf.out/
 
   deploy:
     name: Deploy
@@ -275,6 +282,9 @@ jobs:
           if [ "$PLATFORM" = "cdk" ]; then
             echo "✅ CDK project detected, running CDK deploy..."
             npm run cdk:deploy
+          elif [ "$PLATFORM" = "cdktf" ]; then
+            echo "✅ CDKTF project detected, running CDKTF deploy..."
+            npm run cdktf:deploy
           elif [ "$PLATFORM" = "cfn" ] && [ "$LANGUAGE" = "yaml" ]; then
             echo "✅ CloudFormation YAML project detected, deploying with AWS CLI..."
             npm run cfn:deploy-yaml
@@ -289,6 +299,10 @@ jobs:
           ENVIRONMENT_SUFFIX: ${{ env.ENVIRONMENT_SUFFIX }}
           REPOSITORY: ${{ github.repository }}
           COMMIT_AUTHOR: ${{ github.event.head_commit.author.name || github.actor }}
+          AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+          TERRAFORM_STATE_BUCKET: ${{ env.TERRAFORM_STATE_BUCKET }}
+          TERRAFORM_STATE_BUCKET_REGION: ${{ env.TERRAFORM_STATE_BUCKET_REGION }}
+
 
       - name: Get Deployment Outputs
         run: |
@@ -331,6 +345,11 @@ jobs:
             cat cfn-outputs/all-outputs.json || echo "No consolidated outputs"
             echo "Flat outputs:"
             cat cfn-outputs/flat-outputs.json || echo "No flat outputs"
+          elif [ "$PLATFORM" = "cdktf" ]; then
+            echo "✅ CDKTF project detected, writing outputs to tf-outputs..."
+            mkdir -p tf-outputs
+            cdktf output --output-file=tf-outputs/outputs.json
+            cat tf-outputs/outputs.json || echo "No outputs found in tf-outputs/outputs.json"
           elif [ "${{ needs.synth.outputs.platform }}" = "cfn" ]; then
             echo "✅ CloudFormation project detected, getting stack outputs..."
             mkdir -p cfn-outputs
@@ -371,10 +390,11 @@ jobs:
       - name: Upload Deployment Outputs
         uses: actions/upload-artifact@v4
         with:
-          name: cfn-outputs
+          name: deployment-outputs
           path: |
             cfn-outputs/
             cdk-stacks.json
+            tf-outputs/
 
   lint:
     name: Lint
@@ -532,6 +552,9 @@ jobs:
           fi
         env:
           ENVIRONMENT_SUFFIX: ${{ env.ENVIRONMENT_SUFFIX }}
+          AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+          TERRAFORM_STATE_BUCKET: ${{ env.TERRAFORM_STATE_BUCKET }}
+          TERRAFORM_STATE_BUCKET_REGION: ${{ env.TERRAFORM_STATE_BUCKET_REGION }}
 
   cleanup:
     name: Cleanup (Destroy Resources)
@@ -566,6 +589,10 @@ jobs:
             echo "✅ CDK project detected, running CDK destroy..."
             # Try to destroy any leftover resources from PRs, but don't fail if they don't exist
             npm run cdk:destroy || echo "No resources to destroy or destruction failed"
+          elif [ "$PLATFORM" = "cdktf" ]; then
+            echo "✅ CDKTF project detected, running CDKTF destroy..."
+            # Try to destroy any leftover resources from PRs, but don't fail if they don't exist
+            npm run cdktf:destroy || echo "No resources to destroy or destruction failed"
           elif [ "$PLATFORM" = "cfn" ]; then
             echo "✅ CloudFormation project detected, running CloudFormation destroy..."
             # Try to destroy any leftover resources from PRs, but don't fail if they don't exist
@@ -576,6 +603,8 @@ jobs:
           fi
         env:
           ENVIRONMENT_SUFFIX: ${{ env.ENVIRONMENT_SUFFIX }}
+          TERRAFORM_STATE_BUCKET: ${{ env.TERRAFORM_STATE_BUCKET }}
+          TERRAFORM_STATE_BUCKET_REGION: ${{ env.TERRAFORM_STATE_BUCKET_REGION }}
 
   archive-folders:
     name: Archive Folders and Reset Repository
@@ -889,6 +918,10 @@ jobs:
             echo "✅ CDK TypeScript project detected, running CDK destroy..."
             # Try to destroy resources, but don't fail if they don't exist
             npm run cdk:destroy || echo "No resources to destroy or destruction failed"
+          elif [ "$PLATFORM" = "cdktf" ]; then
+            echo "✅ CDKTF project detected, running CDKTF destroy..."
+            # Try to destroy resources, but don't fail if they don't exist
+            npm run cdktf:destroy || echo "No resources to destroy or destruction failed"
           elif [ "$PLATFORM" = "cfn" ]; then
             echo "✅ CloudFormation project detected, running CloudFormation destroy..."
             # Try to destroy resources, but don't fail if they don't exist
@@ -899,3 +932,5 @@ jobs:
           fi
         env:
           ENVIRONMENT_SUFFIX: ${{ env.ENVIRONMENT_SUFFIX }}
+          TERRAFORM_STATE_BUCKET: ${{ env.TERRAFORM_STATE_BUCKET }}
+          TERRAFORM_STATE_BUCKET_REGION: ${{ env.TERRAFORM_STATE_BUCKET_REGION }}
