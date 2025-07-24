@@ -251,7 +251,7 @@ describe('TapStack CloudFormation Integration Tests', () => {
       );
 
       const { stdout } = await execAsync(
-        `aws ec2 describe-security-groups --group-ids ${sgId.trim()} --region ${REGION} --query "SecurityGroups[0].IpPermissions[?FromPort==\\`22\\`].IpRanges[].CidrIp" --output text`
+        'aws ec2 describe-security-groups --group-ids ' + sgId.trim() + ' --region ' + REGION + ' --query "SecurityGroups[0].IpPermissions[?FromPort==`22`].IpRanges[].CidrIp" --output text'
       );
 
       const sshRanges = stdout.trim();
