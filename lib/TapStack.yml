@@ -1,0 +1,141 @@
+# Corrected and Hardened AWS CloudFormation Template
+#
+# Key Improvements:
+# 1. IAM Role Permissions: The Lambda execution role now follows the principle of
+#    least privilege. It is only granted permission to write logs to its own
+#    specific log group, not all log groups in the account.
+# 2. API Gateway Invoke Permission: Added a 'SourceArn' to the Lambda permission.
+#    This is a critical security control that ensures only your specific API Gateway
+#    endpoint can trigger the function.
+# 3. Robust Lambda Code: Modified the inline Python code to use the `json` library
+#    for creating the response body, which is more reliable than string formatting.
+# 4. Logical Dependencies: Ensured explicit dependencies for deployment resources.
+
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  A secure, serverless greeting API using API Gateway and Lambda. Deploys
+  all resources in the us-west-2 region.
+
+Resources:
+  # --- API Gateway Resources ---
+
+  GreetingApi:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: GreetingAPI
+      Description: "API for a simple greeting service"
+      EndpointConfiguration:
+        Types:
+          - REGIONAL
+
+  GreetingResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !GetAtt GreetingApi.RootResourceId
+      RestApiId: !Ref GreetingApi
+      PathPart: greet
+
+  GreetingMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      HttpMethod: GET
+      ResourceId: !Ref GreetingResource
+      RestApiId: !Ref GreetingApi
+      AuthorizationType: NONE
+      Integration:
+        IntegrationHttpMethod: POST
+        Type: AWS_PROXY
+        Uri: !Sub arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${GreetingFunction.Arn}/invocations
+
+  # The deployment resource. A new deployment is required to make API changes (like new methods or integrations) public.
+  # For simple templates, this is sufficient. In CI/CD, you might generate a new logical ID for this resource on each run to force a redeployment.
+  GreetingDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn: GreetingMethod # Ensures method is created before deployment
+    Properties:
+      RestApiId: !Ref GreetingApi
+
+  GreetingStage:
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      StageName: prod
+      DeploymentId: !Ref GreetingDeployment
+      RestApiId: !Ref GreetingApi
+
+  # --- IAM Role and Policy ---
+
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: LambdaLoggingPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                # MODIFICATION: Scoped down permissions to the specific log group for this function.
+                # This follows the principle of least privilege, a critical security best practice.
+                Resource: !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:${LogGroup}:*
+
+  # --- Lambda Function and Permissions ---
+
+  GreetingFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Handler: index.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Runtime: python3.12
+      Environment:
+        Variables:
+          GREETING_MESSAGE: "Hello from a secure, serverless API!"
+      Code:
+        ZipFile: |
+          import os
+          import json # MODIFICATION: Using the json library is more robust for creating JSON strings.
+
+          def handler(event, context):
+              message = os.getenv('GREETING_MESSAGE', 'Default greeting')
+              
+              # API Gateway proxy integration expects a JSON-serializable dict.
+              # The 'body' must be a JSON string.
+              return {
+                  'statusCode': 200,
+                  'headers': {
+                      'Content-Type': 'application/json'
+                  },
+                  'body': json.dumps({'message': message})
+              }
+
+  LambdaInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt GreetingFunction.Arn
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      # MODIFICATION: Added SourceArn to restrict which API Gateway can invoke this function.
+      # This is a critical security measure to prevent unauthorized invocations.
+      SourceArn: !Sub arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${GreetingApi}/*/${GreetingMethod.HttpMethod}${GreetingResource.PathPart}
+
+  # --- Logging ---
+
+  LogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      # The log group name is conventionally prefixed with /aws/lambda/
+      LogGroupName: !Sub /aws/lambda/${GreetingFunction}
+      RetentionInDays: 7 # It's good practice to set a retention policy.
+
+Outputs:
+  ApiUrl:
+    Description: "URL for invoking the Greeting API"
+    Value: !Sub "https://${GreetingApi}.execute-api.${AWS::Region}.amazonaws.com/${GreetingStage.StageName}/greet"
