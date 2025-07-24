@@ -27,7 +27,7 @@ import {
 import fs from 'fs';
 
 const region = process.env.AWS_REGION || 'us-east-1';
-const outputs = JSON.parse(fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf-8'));
+const outputs = JSON.parse(fs.readFileSync('lib/TapStack.json', 'utf-8'));
 
 const ec2 = new EC2Client({ region });
 const rds = new RDSClient({ region });

@@ -20,6 +20,22 @@ Parameters:
     Description: Resource owner for tagging
 
 Resources:
+
+  RDSKMSKey: 
+    Type: AWS::KMS::Key
+    Properties:
+      EnableKeyRotation: true
+      Description: KMS key for RDS encryption
+      KeyPolicy:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !Sub "arn:aws:iam::${AWS::AccountId}:root"
+            Action: "kms:*"
+            Resource: "*"
+
+
   # VPC Configuration
   FinancialServicesVPC:
     Type: AWS::EC2::VPC
@@ -348,6 +364,18 @@ Resources:
               Service: config.amazonaws.com
             Action: sts:AssumeRole
 
+  S3BucketLoggingEnabledRule:  
+    Type: AWS::Config::ConfigRule
+    Properties:
+      ConfigRuleName: s3-bucket-logging-enabled
+      Description: Ensure S3 bucket logging is enabled
+      Source:
+        Owner: AWS
+        SourceIdentifier: S3_BUCKET_LOGGING_ENABLED
+      Scope:
+        ComplianceResourceTypes:
+          - AWS::S3::Bucket
+
   # VPC Flow Logs
   VPCFlowLog:
     Type: AWS::EC2::FlowLog
@@ -440,6 +468,7 @@ Resources:
           - Effect: Allow
             Principal:
               CanonicalUser: !GetAtt CloudFrontOAI.S3CanonicalUserId
+              AWS: !Sub "arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity ${CloudFrontOAI}"
             Action: s3:GetObject
             Resource: !Sub "${SecureS3Bucket.Arn}/*"
 
@@ -463,6 +492,27 @@ Resources:
     Properties:
       CloudFrontOriginAccessIdentityConfig:
         Comment: Access Identity for SecureS3Bucket
+
+  SecureCloudFrontDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        Origins:
+          - Id: S3Origin
+            DomainName: !GetAtt EncryptedBucket.RegionalDomainName
+            S3OriginConfig:
+              OriginAccessIdentity: !Sub "origin-access-identity/cloudfront/${CloudFrontOAI}"
+        DefaultCacheBehavior:
+          TargetOriginId: S3Origin
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods: [GET, HEAD]
+          CachedMethods: [GET, HEAD]
+          ForwardedValues:
+            QueryString: false
+        ViewerCertificate:
+          CloudFrontDefaultCertificate: true
+        Comment: Secure CloudFront distribution for S3
 
   # Route 53 Private Hosted Zone
   PrivateHostedZone:
@@ -548,6 +598,7 @@ Resources:
       MasterUserPassword: !Join ['', ['{{resolve:secretsmanager:', !Ref RDSSecret, ':SecretString:password}}']]
       StorageEncrypted: true
       PubliclyAccessible: false
+      KmsKeyId: !Ref RDSKMSKey
       DBSubnetGroupName: !Ref FinancialDBSubnetGroup
       VPCSecurityGroups:
         - !Ref RDSSecurityGroup
