@@ -1,7 +1,7 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: >
   Deploys a highly available and scalable Node.js web application using AWS Elastic Beanstalk.
-  This template configures an Application Load Balancer, Auto Scaling, and HTTPS.
+  This template includes the necessary IAM roles to create a stable, empty environment.
 
 Parameters:
   ApplicationName:
@@ -12,52 +12,81 @@ Parameters:
   InstanceType:
     Type: String
     Description: EC2 instance type for the web application servers.
-    Default: t3.micro
+    Default: t2.micro
     AllowedValues:
       - t2.micro
       - t3.micro
       - t3.small
       - m5.large
 
-  KeyPairName:
-    Type: AWS::EC2::KeyPair::KeyName
-    Description: The name of an existing EC2 KeyPair to enable SSH access to the instances.
-    # ADDED: Default value for development. Replace with a real KeyPair name for production.
-    Default: your-dev-key
-
-  SSLCertificateArn:
-    Type: String
-    Description: The ARN of an existing ACM SSL certificate in us-east-1 for HTTPS.
-    # ADDED: Placeholder ARN for development. Replace with a real certificate ARN for production.
-    Default: arn:aws:acm:us-east-1:123456789012:certificate/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
-
 Resources:
-  # 1. Define the Elastic Beanstalk Application
-  # This is the parent container for all environments and versions.
+  # --- IAM Roles and Profiles ---
+  # Service Role for Elastic Beanstalk to manage other AWS services
+  AWSElasticBeanstalkServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: elasticbeanstalk.amazonaws.com
+            Action: sts:AssumeRole
+      # WARNING: AdministratorAccess is for development/testing only.
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AdministratorAccess
+
+  # IAM Role for the EC2 instances launched by Elastic Beanstalk
+  AWSElasticBeanstalkEC2Role:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      # WARNING: AdministratorAccess is for development/testing only.
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AdministratorAccess
+
+  # Instance Profile to attach the role to the EC2 instances
+  AWSElasticBeanstalkEC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref AWSElasticBeanstalkEC2Role
+
+  # --- Elastic Beanstalk Application ---
   WebAppApplication:
     Type: AWS::ElasticBeanstalk::Application
     Properties:
       ApplicationName: !Ref ApplicationName
       Description: AWS Elastic Beanstalk application for our Node.js app.
 
-  # 2. Define the Elastic Beanstalk Environment
-  # This resource creates all the necessary infrastructure (EC2, ELB, ASG, etc.)
+  # REMOVED: The SampleApplicationVersion resource has been removed to bypass S3 access errors.
+
+  # --- Elastic Beanstalk Environment ---
   WebAppEnvironment:
     Type: AWS::ElasticBeanstalk::Environment
     Properties:
-      ApplicationName: !Ref WebAppApplication # Reference the application created above
+      ApplicationName: !Ref WebAppApplication
       Description: Environment for the Node.js web application
-      # Use a known valid solution stack for Node.js on Amazon Linux 2
-      SolutionStackName: "64bit Amazon Linux 2 v5.8.0 running Node.js 18"
+      SolutionStackName: "64bit Amazon Linux 2 v5.11.1 running Node.js 18"
+      # REMOVED: The VersionLabel property is no longer needed.
       OptionSettings:
-        # --- Instance and KeyPair Configuration ---
+        # --- IAM and Instance Configuration ---
+        - Namespace: aws:autoscaling:launchconfiguration
+          OptionName: IamInstanceProfile
+          Value: !Ref AWSElasticBeanstalkEC2InstanceProfile
         - Namespace: aws:autoscaling:launchconfiguration
           OptionName: InstanceType
           Value: !Ref InstanceType
-        - Namespace: aws:autoscaling:launchconfiguration
-          OptionName: EC2KeyName
-          Value: !Ref KeyPairName
-
+        # --- Service Role Configuration ---
+        - Namespace: aws:elasticbeanstalk:environment
+          OptionName: ServiceRole
+          Value: !Ref AWSElasticBeanstalkServiceRole
         # --- High Availability and Scalability Configuration ---
         - Namespace: aws:elasticbeanstalk:environment
           OptionName: EnvironmentType
@@ -65,7 +94,6 @@ Resources:
         - Namespace: aws:elasticbeanstalk:environment
           OptionName: LoadBalancerType
           Value: application
-
         # --- Auto Scaling Group Configuration ---
         - Namespace: aws:autoscaling:asg
           OptionName: MinSize
@@ -73,22 +101,12 @@ Resources:
         - Namespace: aws:autoscaling:asg
           OptionName: MaxSize
           Value: '10'
-
-        # --- Security and HTTPS Configuration ---
-        - Namespace: aws:elbv2:listener:443
-          OptionName: Protocol
-          Value: HTTPS
-        - Namespace: aws:elbv2:listener:443
-          OptionName: SSLCertificateArns
-          Value: !Ref SSLCertificateArn
-        - Namespace: aws:elbv2:listener:default
-          OptionName: ListenerEnabled
-          Value: 'true' # Keep the default listener on port 80 enabled for HTTP->HTTPS redirect
+        # --- Networking Configuration ---
         - Namespace: aws:elasticbeanstalk:application:environment
           OptionName: ELBScheme
-          Value: public # Make the load balancer internet-facing
+          Value: public
 
 Outputs:
   EnvironmentURL:
     Description: The URL of the new Elastic Beanstalk environment.
-    Value: !Sub "https://${WebAppEnvironment.EndpointURL}"
+    Value: !Sub "http://${WebAppEnvironment.EndpointURL}"
