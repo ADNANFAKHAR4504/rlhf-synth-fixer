@@ -24,7 +24,7 @@ env:
 jobs:
   detect-metadata:
     name: Detect Project Files
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
     outputs:
       platform: ${{ steps.metadata.outputs.platform }}
@@ -64,7 +64,7 @@ jobs:
 
   version-check:
     name: Check Runtime Versions
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: detect-metadata
     if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
 
@@ -121,7 +121,7 @@ jobs:
 
   build:
     name: Build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: version-check
     if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
     environment: dev
@@ -168,7 +168,7 @@ jobs:
 
   synth:
     name: Synth
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [detect-metadata, build]
     if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
     environment: dev
@@ -223,7 +223,7 @@ jobs:
 
   deploy:
     name: Deploy
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: synth
     if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
     environment: dev
@@ -373,7 +373,7 @@ jobs:
 
   lint:
     name: Lint
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [detect-metadata, build]
     if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
     environment: qa
@@ -421,7 +421,7 @@ jobs:
 
   unit-tests:
     name: Unit Testing
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: lint
     if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
     environment: qa
@@ -465,7 +465,7 @@ jobs:
 
   # mocked-integration-tests:
   #   name: Mocked Integration Tests
-  #   runs-on: ubuntu-latest
+  #   runs-on: ubuntu-24.04
   #   needs: unit-tests
 
   #   steps:
@@ -488,7 +488,7 @@ jobs:
 
   integration-tests-live:
     name: Integration Tests (Live)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [lint, unit-tests, deploy]
     environment: qa
     if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
@@ -530,7 +530,7 @@ jobs:
 
   cleanup:
     name: Cleanup (Destroy Resources)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [detect-metadata, integration-tests-live]
     if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
     environment: stage
@@ -574,7 +574,7 @@ jobs:
 
   archive-folders:
     name: Archive Folders and Reset Repository
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [detect-metadata, cleanup]
     environment: release
     if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
@@ -703,7 +703,7 @@ jobs:
 
   upload-task-to-s3:
     name: Upload Task to S3
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     environment: release
     if: ${{ github.event_name == 'pull_request' && github.event.pull_request.merged == true }}
     permissions:
@@ -790,7 +790,7 @@ jobs:
 
   cleanup-pr:
     name: Cleanup (PR Closed)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # This job should run regardless of the [skip-jobs] tag since it's for cleanup
     if: github.event_name == 'pull_request' && github.event.action == 'closed' && !github.event.pull_request.merged
     environment: qa
