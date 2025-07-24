@@ -239,7 +239,7 @@ describe('TapStack CloudFormation Integration Tests', () => {
       );
 
       const resourceCount = parseInt(stdout.trim());
-      expect(resourceCount).toBe(12); // Should match our template resource count
+      expect(resourceCount).toBe(18); // Should match our comprehensive template resource count
     });
   });
 
