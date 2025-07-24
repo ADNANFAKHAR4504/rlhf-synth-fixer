@@ -285,20 +285,21 @@ class TapStack(cdk.Stack):
         encryption_key=s3_kms_key,
         block_public_access=s3.BlockPublicAccess.BLOCK_ALL,  # Block all public access
         enforce_ssl=True,
-        removal_policy=RemovalPolicy.DESTROY,
-        auto_delete_objects=True
-        # Remove website hosting configuration as we'll serve through CloudFront only
+        removal_policy=RemovalPolicy.DESTROY
+        # Remove auto_delete_objects=True to avoid circular dependency
     )
 
     # Create Origin Access Control for CloudFront
     oac = cloudfront.CfnOriginAccessControl(
         self,
         "CloudFrontOAC",
-        origin_access_control_config=cloudfront.CfnOriginAccessControl.OriginAccessControlConfigProperty(
-            name=f"{construct_id}-oac",
-            origin_access_control_origin_type="s3",
-            signing_behavior="always",
-            signing_protocol="sigv4"
+        origin_access_control_config=(
+            cloudfront.CfnOriginAccessControl.OriginAccessControlConfigProperty(
+                name=f"{construct_id}-oac",
+                origin_access_control_origin_type="s3",
+                signing_behavior="always",
+                signing_protocol="sigv4"
+            )
         )
     )
 
@@ -335,6 +336,7 @@ class TapStack(cdk.Stack):
     )
 
     # Grant CloudFront access to the S3 bucket with KMS key
+    # Use a wildcard pattern to avoid circular dependency
     bucket.add_to_resource_policy(
         iam.PolicyStatement(
             actions=["s3:GetObject"],
@@ -342,13 +344,17 @@ class TapStack(cdk.Stack):
             principals=[iam.ServicePrincipal("cloudfront.amazonaws.com")],
             conditions={
                 "StringEquals": {
-                    "AWS:SourceArn": f"arn:aws:cloudfront::{cdk.Stack.of(self).account}:distribution/{distribution.distribution_id}"
+                    "AWS:SourceArn": (
+                        f"arn:aws:cloudfront::{cdk.Stack.of(self).account}:"
+                        f"distribution/*"
+                    )
                 }
             }
         )
     )
 
     # Grant CloudFront access to use the KMS key
+    # Use a wildcard pattern to avoid circular dependency
     s3_kms_key.add_to_resource_policy(
         iam.PolicyStatement(
             actions=[
@@ -359,7 +365,10 @@ class TapStack(cdk.Stack):
             principals=[iam.ServicePrincipal("cloudfront.amazonaws.com")],
             conditions={
                 "StringEquals": {
-                    "AWS:SourceArn": f"arn:aws:cloudfront::{cdk.Stack.of(self).account}:distribution/{distribution.distribution_id}"
+                    "AWS:SourceArn": (
+                        f"arn:aws:cloudfront::{cdk.Stack.of(self).account}:"
+                        f"distribution/*"
+                    )
                 }
             }
         )

@@ -272,7 +272,7 @@ class TestTapStackIntegration(unittest.TestCase):
           has_oac = any('OriginAccessControlId' in o for o in s3_origins)
           if not has_oac:
             print("Warning: No Origin Access Control found for S3 origins")
-      except Exception as e:
+      except (ValueError, KeyError, TypeError) as e:
         # This is just for additional diagnostics, not a test failure
         print(f"Could not check CloudFront configuration: {str(e)}")
 
@@ -479,7 +479,7 @@ class TestTapStackIntegration(unittest.TestCase):
         # Try to get more diagnostic information
         try:
           print(f"Response body: {response.text[:200]}...")
-        except Exception:
+        except (AttributeError, UnicodeDecodeError):
           pass
 
         # Check if CloudFront distribution has OAC configured
@@ -490,7 +490,7 @@ class TestTapStackIntegration(unittest.TestCase):
           has_oac = any(origin.get('OriginAccessControlId')
                         for origin in origins)
           print(f"CloudFront has OAC configured: {has_oac}")
-        except Exception as e:
+        except (ClientError, ValueError, KeyError) as e:
           print(f"Could not check CloudFront OAC configuration: {str(e)}")
 
         pytest.xfail(
@@ -537,7 +537,8 @@ class TestTapStackIntegration(unittest.TestCase):
     try:
       # Test with invalid path
       response = requests.get(
-          f"https://{self.cloudfront_domain}/nonexistent-path-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}.html",
+          f"https://{self.cloudfront_domain}/"
+          f"nonexistent-path-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}.html",
           timeout=self.request_timeout
       )
 

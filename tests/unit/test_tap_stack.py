@@ -93,7 +93,7 @@ class TestTapStack(unittest.TestCase):
         ]
     })
 
-  @mark.it("creates S3 bucket with static website hosting and enhanced security")
+  @mark.it("creates S3 bucket with enhanced security")
   def test_s3_bucket_creation(self):
     self.template.resource_count_is("AWS::S3::Bucket", 1)
     self.template.has_resource_properties("AWS::S3::Bucket", {
@@ -107,13 +107,9 @@ class TestTapStack(unittest.TestCase):
         },
         "PublicAccessBlockConfiguration": {
             "BlockPublicAcls": True,
-            "BlockPublicPolicy": False,  # Allow public policies for website hosting
+            "BlockPublicPolicy": True,
             "IgnorePublicAcls": True,
-            "RestrictPublicBuckets": False  # Allow public access for website hosting
-        },
-        "WebsiteConfiguration": {
-            "IndexDocument": "index.html",
-            "ErrorDocument": "error.html"
+            "RestrictPublicBuckets": True
         }
     })
 
@@ -150,11 +146,10 @@ class TestTapStack(unittest.TestCase):
 
   @mark.it("creates Lambda functions")
   def test_lambda_function_creation(self):
-    # Expected 3 Lambda functions:
+    # Expected 2 Lambda functions:
     # 1. The backend handler Lambda
-    # 2. AWS CDK Custom Resource provider framework Lambda
-    # 3. Another CDK Custom Resource
-    self.template.resource_count_is("AWS::Lambda::Function", 3)
+    # 2. AWS CDK Custom Resource provider framework Lambda (for log retention)
+    self.template.resource_count_is("AWS::Lambda::Function", 2)
 
     # Backend Lambda should have environment variables
     lambda_functions = self.template.find_resources("AWS::Lambda::Function")
