@@ -4,12 +4,10 @@
   "Parameters": {
     "EnvironmentSuffix": {
       "Type": "String",
-      "AllowedValues": [
-        "dev",
-        "test",
-        "prod"
-      ],
-      "Default": "dev"
+      "Default": "dev",
+      "Description": "Environment suffix for resource naming (e.g., dev, staging, prod)",
+      "AllowedPattern": "^[a-zA-Z0-9]+$",
+      "ConstraintDescription": "Must contain only alphanumeric characters"
     }
   },
   "Resources": {
