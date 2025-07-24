@@ -180,7 +180,6 @@ Resources:
   EC2Role:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub 'Role-${Environment}-TAP-EC2'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -214,7 +213,6 @@ Resources:
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
-      InstanceProfileName: !Sub 'Profile-${Environment}-TAP-EC2'
       Roles:
         - !Ref EC2Role
 
@@ -224,7 +222,7 @@ Resources:
   S3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 'tap-${Environment}-${AWS::AccountId}-${AWS::Region}'
+      BucketName: !Sub 'tap-${Environment}-bucket-${AWS::AccountId}'
       VersioningConfiguration:
         Status: Enabled
       BucketEncryption:
@@ -300,11 +298,11 @@ Resources:
   WebServerInstance1:
     Type: AWS::EC2::Instance
     Properties:
-      ImageId: !Sub '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64}}'
+      ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64}}'
       InstanceType: 't3.micro'
       KeyName: !Ref KeyName
       IamInstanceProfile: !Ref EC2InstanceProfile
-      VpcSecurityGroupIds:
+      SecurityGroupIds:
         - !Ref WebServerSecurityGroup
       SubnetId: !Ref PublicSubnet1
       Monitoring: true
@@ -332,11 +330,11 @@ Resources:
   WebServerInstance2:
     Type: AWS::EC2::Instance
     Properties:
-      ImageId: !Sub '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64}}'
+      ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64}}'
       InstanceType: 't3.micro'
       KeyName: !Ref KeyName
       IamInstanceProfile: !Ref EC2InstanceProfile
-      VpcSecurityGroupIds:
+      SecurityGroupIds:
         - !Ref WebServerSecurityGroup
       SubnetId: !Ref PublicSubnet2
       Monitoring: true

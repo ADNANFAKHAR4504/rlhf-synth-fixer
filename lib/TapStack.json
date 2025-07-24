@@ -300,9 +300,6 @@
     "EC2Role": {
       "Type": "AWS::IAM::Role",
       "Properties": {
-        "RoleName": {
-          "Fn::Sub": "Role-${Environment}-TAP-EC2"
-        },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
           "Statement": [
@@ -364,9 +361,6 @@
     "EC2InstanceProfile": {
       "Type": "AWS::IAM::InstanceProfile",
       "Properties": {
-        "InstanceProfileName": {
-          "Fn::Sub": "Profile-${Environment}-TAP-EC2"
-        },
         "Roles": [
           {
             "Ref": "EC2Role"
@@ -378,7 +372,7 @@
       "Type": "AWS::S3::Bucket",
       "Properties": {
         "BucketName": {
-          "Fn::Sub": "tap-${Environment}-${AWS::AccountId}-${AWS::Region}"
+          "Fn::Sub": "tap-${Environment}-bucket-${AWS::AccountId}"
         },
         "VersioningConfiguration": {
           "Status": "Enabled"
@@ -494,9 +488,7 @@
     "WebServerInstance1": {
       "Type": "AWS::EC2::Instance",
       "Properties": {
-        "ImageId": {
-          "Fn::Sub": "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64}}"
-        },
+        "ImageId": "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64}}",
         "InstanceType": "t3.micro",
         "KeyName": {
           "Ref": "KeyName"
@@ -504,7 +496,7 @@
         "IamInstanceProfile": {
           "Ref": "EC2InstanceProfile"
         },
-        "VpcSecurityGroupIds": [
+        "SecurityGroupIds": [
           {
             "Ref": "WebServerSecurityGroup"
           }
@@ -541,9 +533,7 @@
     "WebServerInstance2": {
       "Type": "AWS::EC2::Instance",
       "Properties": {
-        "ImageId": {
-          "Fn::Sub": "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64}}"
-        },
+        "ImageId": "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64}}",
         "InstanceType": "t3.micro",
         "KeyName": {
           "Ref": "KeyName"
@@ -551,7 +541,7 @@
         "IamInstanceProfile": {
           "Ref": "EC2InstanceProfile"
         },
-        "VpcSecurityGroupIds": [
+        "SecurityGroupIds": [
           {
             "Ref": "WebServerSecurityGroup"
           }
