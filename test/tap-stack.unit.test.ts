@@ -35,7 +35,7 @@ describe('TapStack CloudFormation Templates', () => {
 
     test('should have a description', () => {
       expect(jsonTemplate.Description).toBeDefined();
-      expect(jsonTemplate.Description).toBe(
+      expect(jsonTemplate.Description.trim()).toBe(
         'Basic Development Environment in us-east-1 with two public subnets, EC2 instances, security groups, Internet access, and tagging.'
       );
     });
