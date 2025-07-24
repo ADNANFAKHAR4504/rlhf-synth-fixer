@@ -1,3 +1,13 @@
+"""
+tap_stack.py
+This module defines the TapStack class, which serves as the main CDK stack for 
+the TAP (Test Automation Platform) project.
+
+It orchestrates the instantiation of VPC, ECS, RDS, Monitoring, Peering, Route53, 
+and CI/CD stacks across multiple regions. The stack is parameterized for environment-specific 
+deployments and follows a modular structure.
+"""
+
 import os
 import sys
 from dataclasses import dataclass
@@ -5,9 +15,10 @@ from typing import List
 from aws_cdk import Stack, Environment
 from constructs import Construct
 
-# Add path to import other modules
+# Ensure import path is properly set to access other modules
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")))
 
+# Import sub-stacks
 from lib.cdk.vpc_stack import VpcStack
 from lib.cdk.ecs_stack import EcsStack
 from lib.cdk.rds_stack import RdsStack
@@ -19,6 +30,15 @@ from lib.cdk.route53_stack import Route53Stack
 
 @dataclass
 class TapStackProps:
+  """
+  TapStackProps defines the properties required for instantiating the TapStack.
+
+  Attributes:
+    environment_suffix (str): A suffix for naming resources per environment (e.g., 'dev', 'prod').
+    env (Environment): CDK environment (account and region).
+    app_name (str): Application name prefix used in naming resources.
+    default_regions (List[str]): A list of AWS regions used for cross-region deployment.
+  """
   environment_suffix: str
   env: Environment
   app_name: str = "tap"
@@ -26,6 +46,19 @@ class TapStackProps:
 
 
 class TapStack(Stack):
+  """
+  Main orchestration CDK stack for the TAP project.
+
+  This stack creates regional VPCs, ECS services, RDS instances, monitoring setups,
+  and also provisions VPC peering, Route53 DNS, and CI/CD pipelines.
+
+  Args:
+    scope (Construct): The parent construct.
+    construct_id (str): The unique identifier for the stack.
+    props (TapStackProps): Properties containing environment configuration.
+    **kwargs: Additional keyword arguments for the base Stack.
+  """
+
   def __init__(self, scope: Construct, construct_id: str, props: TapStackProps, **kwargs):
     super().__init__(scope, construct_id, env=props.env, **kwargs)
 
@@ -38,16 +71,24 @@ class TapStack(Stack):
     self.ecs_stacks = {}
     self.rds_stacks = {}
 
+    # Orchestrate regional resources
     self._create_stacks_per_region()
+
+    # Establish networking, deployment, and DNS resources
     self._create_peering_stack()
     self._create_cicd_stack()
     self._create_route53_stack()
 
   def _create_stacks_per_region(self):
+    """
+    Create VPC, ECS, RDS, and Monitoring stacks in each configured region.
+    Results are stored in dictionaries for reference across stacks.
+    """
     regions = [self.env_us_east_1, self.env_us_east_2]
     for env in regions:
       region = env.region
 
+      # VPC stack
       vpc_stack = VpcStack(
         self,
         f"{self.app_name}-vpc-{region}-{self.stack_suffix}",
@@ -55,14 +96,16 @@ class TapStack(Stack):
       )
       self.vpcs[region] = vpc_stack
 
+      # ECS stack
       ecs_stack = EcsStack(
         self,
         f"{self.app_name}-ecs-{region}-{self.stack_suffix}",
         env=env,
-        task_image_options=None
+        task_image_options=None  # Customize as needed
       )
       self.ecs_stacks[region] = ecs_stack
 
+      # RDS stack
       rds_stack = RdsStack(
         self,
         f"{self.app_name}-rds-{region}-{self.stack_suffix}",
@@ -71,6 +114,7 @@ class TapStack(Stack):
       )
       self.rds_stacks[region] = rds_stack
 
+      # Monitoring stack
       MonitoringStack(
         self,
         f"{self.app_name}-monitoring-{region}-{self.stack_suffix}",
@@ -80,6 +124,9 @@ class TapStack(Stack):
       )
 
   def _create_peering_stack(self):
+    """
+    Create a VPC peering stack between the defined regional VPCs.
+    """
     VpcPeeringStack(
       self,
       f"{self.app_name}-peering-{self.stack_suffix}",
@@ -90,6 +137,9 @@ class TapStack(Stack):
     )
 
   def _create_cicd_stack(self):
+    """
+    Create a CI/CD stack targeting the primary ECS service in us-east-1.
+    """
     ecs_stack_primary = self.ecs_stacks["us-east-1"]
     CicdStack(
       self,
@@ -102,6 +152,9 @@ class TapStack(Stack):
     )
 
   def _create_route53_stack(self):
+    """
+    Create a Route53 stack to associate DNS records with the regional load balancers.
+    """
     Route53Stack(
       self,
       f"{self.app_name}-route53-{self.stack_suffix}",
