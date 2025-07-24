@@ -21,6 +21,7 @@ env:
   ENVIRONMENT_SUFFIX: ${{ github.event.number && format('pr{0}', github.event.number) || 'dev' }}
   S3_BUCKET_NAME: 'iac-rlhf-aws-release'
   TERRAFORM_STATE_BUCKET: 'iac-rlhf-tf-states'
+  TERRAFORM_STATE_BUCKET_REGION: 'us-east-1'
 
 jobs:
   detect-metadata:
