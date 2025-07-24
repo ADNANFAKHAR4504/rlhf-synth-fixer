@@ -73,20 +73,22 @@ class TapStack(cdk.Stack):
     # ! Instead, instantiate separate stacks for each resource type.
 
     class NestedMultiRegionStack(NestedStack):
-      def __init__(self, scope, id, props=None, **kwargs):
-        super().__init__(scope, id, **kwargs)
-        # Use the original DynamoDBStack logic here
+      """Nested stack for multi-region deployments."""
+      def __init__(self, scope, construct_id, **kwargs):
+        super().__init__(scope, construct_id, **kwargs)
+        # Deploy to multiple regions for high availability
         regions = ["us-east-1", "us-west-1"]
         for region in regions:
-            MultiRegionStack(self, f"MultiRegionStack-{region}", region=region)
+          MultiRegionStack(self, f"MultiRegionStack-{region}", region=region)
 
     # db_props = DynamoDBStackProps(
     #     environment_suffix=environment_suffix
     # )
 
-    multi_region_stack = NestedMultiRegionStack(
-        self,
-        f"MultiRegionStack{environment_suffix}"
+    # Create multi-region deployment
+    NestedMultiRegionStack(
+      self,
+      f"MultiRegionStack{environment_suffix}"
     )
 
     # # Make the table available as a property of this stack
