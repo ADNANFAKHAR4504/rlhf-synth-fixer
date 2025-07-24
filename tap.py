@@ -35,8 +35,8 @@ Tags.of(app).add('Author', commit_author)
 props = TapStackProps(
     environment_suffix=environment_suffix,
     env=cdk.Environment(
-        account=os.getenv('CDK_DEFAULT_ACCOUNT', "1215365656464"),
-        region=os.getenv('CDK_DEFAULT_REGION', "us-east-1")
+        account=os.getenv('CDK_DEFAULT_ACCOUNT'),
+        region=os.getenv('CDK_DEFAULT_REGION')
     )
 )
 
