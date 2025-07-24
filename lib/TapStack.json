@@ -372,7 +372,7 @@
       "Type": "AWS::S3::Bucket",
       "Properties": {
         "BucketName": {
-          "Fn::Sub": "tap-${Environment}-bucket-${AWS::AccountId}"
+          "Fn::Sub": "tap-development-bucket-${AWS::AccountId}"
         },
         "VersioningConfiguration": {
           "Status": "Enabled"

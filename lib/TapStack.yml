@@ -222,7 +222,7 @@ Resources:
   S3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 'tap-${Environment}-bucket-${AWS::AccountId}'
+      BucketName: !Sub 'tap-development-bucket-${AWS::AccountId}'
       VersioningConfiguration:
         Status: Enabled
       BucketEncryption:
