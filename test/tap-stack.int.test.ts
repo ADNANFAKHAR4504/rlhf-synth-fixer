@@ -4,10 +4,13 @@ import * as AWS from '@aws-sdk/client-cloudformation';
 import * as S3 from '@aws-sdk/client-s3';
 import * as EC2 from '@aws-sdk/client-ec2';
 
-// Get environment suffix from environment variable (set by CI/CD pipeline)
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-const stackName = `TapStack${environmentSuffix}`;
+// Utility function to construct stack name based on environment suffix
+function getStackName(envSuffix: string | undefined): string {
+  const environmentSuffix = envSuffix || 'dev';
+  return `TapStack${environmentSuffix}`;
+}
 
+const stackName = getStackName(process.env.ENVIRONMENT_SUFFIX);
 // Try to load outputs from file, if not available use empty object
 let outputs: Record<string, any> = {};
 const outputsFile = 'cfn-outputs/flat-outputs.json';
