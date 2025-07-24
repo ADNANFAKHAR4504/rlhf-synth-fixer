@@ -40,6 +40,13 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Parameters.LatestAmiId).toBeDefined();
       expect(template.Parameters.LatestAmiId.Type).toBe('AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>');
     });
+
+    test('should have StackNameSuffix parameter', () => {
+      expect(template.Parameters.StackNameSuffix).toBeDefined();
+      expect(template.Parameters.StackNameSuffix.Type).toBe('String');
+      expect(template.Parameters.StackNameSuffix.Default).toBe('tapstack-dev');
+      expect(template.Parameters.StackNameSuffix.AllowedPattern).toBe('^[a-z0-9][a-z0-9-]*[a-z0-9]$');
+    });
   });
 
   describe('VPC Resources', () => {
@@ -143,7 +150,7 @@ describe('TapStack CloudFormation Template', () => {
     test('S3 bucket should have unique name', () => {
       const bucket = template.Resources.S3Bucket;
       expect(bucket.Properties.BucketName).toEqual({
-        'Fn::Sub': 'cf-task-s3bucket-${AWS::StackName}'
+        'Fn::Sub': 'cf-task-s3bucket-${StackNameSuffix}'
       });
     });
 
@@ -254,16 +261,16 @@ describe('TapStack CloudFormation Template', () => {
 
     test('outputs should have export names', () => {
       const expectedExports = {
-        'VPCId': '${AWS::StackName}-VPC-ID',
-        'PublicSubnetId': '${AWS::StackName}-PublicSubnet-ID',
-        'PrivateSubnetId': '${AWS::StackName}-PrivateSubnet-ID',
-        'EC2InstanceId': '${AWS::StackName}-EC2-ID',
-        'EC2PublicIP': '${AWS::StackName}-EC2-PublicIP',
-        'S3BucketName': '${AWS::StackName}-S3Bucket-Name',
-        'SNSTopicArn': '${AWS::StackName}-SNSTopic-ARN',
-        'LambdaFunctionArn': '${AWS::StackName}-Lambda-ARN',
-        'NATGatewayId': '${AWS::StackName}-NATGateway-ID',
-        'KeyPairName': '${AWS::StackName}-KeyPair-Name'
+        'VPCId': '${StackNameSuffix}-VPC-ID',
+        'PublicSubnetId': '${StackNameSuffix}-PublicSubnet-ID',
+        'PrivateSubnetId': '${StackNameSuffix}-PrivateSubnet-ID',
+        'EC2InstanceId': '${StackNameSuffix}-EC2-ID',
+        'EC2PublicIP': '${StackNameSuffix}-EC2-PublicIP',
+        'S3BucketName': '${StackNameSuffix}-S3Bucket-Name',
+        'SNSTopicArn': '${StackNameSuffix}-SNSTopic-ARN',
+        'LambdaFunctionArn': '${StackNameSuffix}-Lambda-ARN',
+        'NATGatewayId': '${StackNameSuffix}-NATGateway-ID',
+        'KeyPairName': '${StackNameSuffix}-KeyPair-Name'
       };
 
       Object.entries(expectedExports).forEach(([outputKey, expectedExport]) => {
@@ -297,7 +304,7 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have correct number of parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(2); // Removed KeyPairName parameter
+      expect(parameterCount).toBe(3); // SSHCidr, LatestAmiId, StackNameSuffix
     });
 
     test('should have correct number of outputs', () => {
@@ -350,29 +357,30 @@ describe('TapStack CloudFormation Template', () => {
   });
 
   describe('Template Consistency Validation', () => {
-    test('should not reference StackNameSuffix parameter (removed for consistency)', () => {
+    test('should have StackNameSuffix parameter for lowercase S3 bucket naming', () => {
       const templateString = JSON.stringify(template);
-      expect(templateString).not.toContain('StackNameSuffix');
+      expect(templateString).toContain('StackNameSuffix');
+      expect(template.Parameters.StackNameSuffix).toBeDefined();
     });
 
-    test('should use AWS::StackName consistently for naming', () => {
+    test('should use StackNameSuffix consistently for S3 bucket naming', () => {
       const s3Bucket = template.Resources.S3Bucket;
       expect(s3Bucket.Properties.BucketName).toEqual({
-        'Fn::Sub': 'cf-task-s3bucket-${AWS::StackName}'
+        'Fn::Sub': 'cf-task-s3bucket-${StackNameSuffix}'
       });
 
       const lambdaPolicy = template.Resources.LambdaExecutionRole.Properties.Policies
         .find((p: any) => p.PolicyName === 'LambdaS3Policy');
       expect(lambdaPolicy.PolicyDocument.Statement[0].Resource).toEqual({
-        'Fn::Sub': 'arn:aws:s3:::cf-task-s3bucket-${AWS::StackName}/*'
+        'Fn::Sub': 'arn:aws:s3:::cf-task-s3bucket-${StackNameSuffix}/*'
       });
     });
 
-    test('all outputs should use AWS::StackName for export names', () => {
+    test('all outputs should use StackNameSuffix for export names', () => {
       Object.values(template.Outputs).forEach((output: any) => {
         if (output.Export && output.Export.Name) {
           expect(output.Export.Name).toEqual({
-            'Fn::Sub': expect.stringContaining('${AWS::StackName}')
+            'Fn::Sub': expect.stringContaining('${StackNameSuffix}')
           });
         }
       });

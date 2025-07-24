@@ -12,6 +12,12 @@
             "Type": "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>",
             "Description": "Latest Amazon Linux 2 AMI ID",
             "Default": "/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2"
+        },
+        "StackNameSuffix": {
+            "Type": "String",
+            "Description": "Lowercase suffix for resource naming (especially S3 buckets)",
+            "Default": "tapstack-dev",
+            "AllowedPattern": "^[a-z0-9][a-z0-9-]*[a-z0-9]$"
         }
     },
     "Resources": {
@@ -379,7 +385,7 @@
             "Type": "AWS::S3::Bucket",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "cf-task-s3bucket-${AWS::StackName}"
+                    "Fn::Sub": "cf-task-s3bucket-${StackNameSuffix}"
                 },
                 "NotificationConfiguration": {
                     "LambdaConfigurations": [
@@ -450,7 +456,7 @@
                                         "s3:GetObjectVersion"
                                     ],
                                     "Resource": {
-                                        "Fn::Sub": "arn:aws:s3:::cf-task-s3bucket-${AWS::StackName}/*"
+                                        "Fn::Sub": "arn:aws:s3:::cf-task-s3bucket-${StackNameSuffix}/*"
                                     }
                                 }
                             ]
@@ -529,7 +535,7 @@
                 "Action": "lambda:InvokeFunction",
                 "Principal": "s3.amazonaws.com",
                 "SourceArn": {
-                    "Fn::Sub": "arn:aws:s3:::cf-task-s3bucket-${AWS::StackName}"
+                    "Fn::Sub": "arn:aws:s3:::cf-task-s3bucket-${StackNameSuffix}"
                 }
             }
         }
@@ -542,7 +548,7 @@
             },
             "Export": {
                 "Name": {
-                    "Fn::Sub": "${AWS::StackName}-VPC-ID"
+                    "Fn::Sub": "${StackNameSuffix}-VPC-ID"
                 }
             }
         },
@@ -553,7 +559,7 @@
             },
             "Export": {
                 "Name": {
-                    "Fn::Sub": "${AWS::StackName}-PublicSubnet-ID"
+                    "Fn::Sub": "${StackNameSuffix}-PublicSubnet-ID"
                 }
             }
         },
@@ -564,7 +570,7 @@
             },
             "Export": {
                 "Name": {
-                    "Fn::Sub": "${AWS::StackName}-PrivateSubnet-ID"
+                    "Fn::Sub": "${StackNameSuffix}-PrivateSubnet-ID"
                 }
             }
         },
@@ -575,7 +581,7 @@
             },
             "Export": {
                 "Name": {
-                    "Fn::Sub": "${AWS::StackName}-EC2-ID"
+                    "Fn::Sub": "${StackNameSuffix}-EC2-ID"
                 }
             }
         },
@@ -589,7 +595,7 @@
             },
             "Export": {
                 "Name": {
-                    "Fn::Sub": "${AWS::StackName}-EC2-PublicIP"
+                    "Fn::Sub": "${StackNameSuffix}-EC2-PublicIP"
                 }
             }
         },
@@ -600,7 +606,7 @@
             },
             "Export": {
                 "Name": {
-                    "Fn::Sub": "${AWS::StackName}-S3Bucket-Name"
+                    "Fn::Sub": "${StackNameSuffix}-S3Bucket-Name"
                 }
             }
         },
@@ -611,7 +617,7 @@
             },
             "Export": {
                 "Name": {
-                    "Fn::Sub": "${AWS::StackName}-SNSTopic-ARN"
+                    "Fn::Sub": "${StackNameSuffix}-SNSTopic-ARN"
                 }
             }
         },
@@ -625,7 +631,7 @@
             },
             "Export": {
                 "Name": {
-                    "Fn::Sub": "${AWS::StackName}-Lambda-ARN"
+                    "Fn::Sub": "${StackNameSuffix}-Lambda-ARN"
                 }
             }
         },
@@ -636,7 +642,7 @@
             },
             "Export": {
                 "Name": {
-                    "Fn::Sub": "${AWS::StackName}-NATGateway-ID"
+                    "Fn::Sub": "${StackNameSuffix}-NATGateway-ID"
                 }
             }
         },
@@ -647,7 +653,7 @@
             },
             "Export": {
                 "Name": {
-                    "Fn::Sub": "${AWS::StackName}-KeyPair-Name"
+                    "Fn::Sub": "${StackNameSuffix}-KeyPair-Name"
                 }
             }
         }

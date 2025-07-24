@@ -13,6 +13,12 @@ Parameters:
     Description: Latest Amazon Linux 2 AMI ID
     Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
 
+  StackNameSuffix:
+    Type: String
+    Description: Lowercase suffix for resource naming (especially S3 buckets)
+    Default: 'tapstack-dev'
+    AllowedPattern: '^[a-z0-9][a-z0-9-]*[a-z0-9]$'
+
 
 Resources:
   # Lambda function to create EC2 key pair dynamically
@@ -280,7 +286,7 @@ Resources:
   S3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 'cf-task-s3bucket-${AWS::StackName}'
+      BucketName: !Sub 'cf-task-s3bucket-${StackNameSuffix}'
       NotificationConfiguration:
         LambdaConfigurations:
           - Event: s3:ObjectCreated:*
@@ -320,7 +326,7 @@ Resources:
                 Action:
                   - s3:GetObject
                   - s3:GetObjectVersion
-                Resource: !Sub 'arn:aws:s3:::cf-task-s3bucket-${AWS::StackName}/*'
+                Resource: !Sub 'arn:aws:s3:::cf-task-s3bucket-${StackNameSuffix}/*'
         - PolicyName: LambdaSNSPolicy
           PolicyDocument:
             Version: '2012-10-17'
@@ -390,65 +396,65 @@ Resources:
       FunctionName: !Ref LambdaFunction
       Action: lambda:InvokeFunction
       Principal: s3.amazonaws.com
-      SourceArn: !Sub 'arn:aws:s3:::cf-task-s3bucket-${AWS::StackName}'
+      SourceArn: !Sub 'arn:aws:s3:::cf-task-s3bucket-${StackNameSuffix}'
 
 Outputs:
   VPCId:
     Description: VPC ID
     Value: !Ref VPC
     Export:
-      Name: !Sub '${AWS::StackName}-VPC-ID'
+      Name: !Sub '${StackNameSuffix}-VPC-ID'
 
   PublicSubnetId:
     Description: Public Subnet ID
     Value: !Ref PublicSubnet
     Export:
-      Name: !Sub '${AWS::StackName}-PublicSubnet-ID'
+      Name: !Sub '${StackNameSuffix}-PublicSubnet-ID'
 
   PrivateSubnetId:
     Description: Private Subnet ID
     Value: !Ref PrivateSubnet
     Export:
-      Name: !Sub '${AWS::StackName}-PrivateSubnet-ID'
+      Name: !Sub '${StackNameSuffix}-PrivateSubnet-ID'
 
   EC2InstanceId:
     Description: EC2 Instance ID
     Value: !Ref EC2Instance
     Export:
-      Name: !Sub '${AWS::StackName}-EC2-ID'
+      Name: !Sub '${StackNameSuffix}-EC2-ID'
 
   EC2PublicIP:
     Description: EC2 Instance Public IP
     Value: !GetAtt EC2Instance.PublicIp
     Export:
-      Name: !Sub '${AWS::StackName}-EC2-PublicIP'
+      Name: !Sub '${StackNameSuffix}-EC2-PublicIP'
 
   S3BucketName:
     Description: S3 Bucket Name
     Value: !Ref S3Bucket
     Export:
-      Name: !Sub '${AWS::StackName}-S3Bucket-Name'
+      Name: !Sub '${StackNameSuffix}-S3Bucket-Name'
 
   SNSTopicArn:
     Description: SNS Topic ARN
     Value: !Ref SNSTopic
     Export:
-      Name: !Sub '${AWS::StackName}-SNSTopic-ARN'
+      Name: !Sub '${StackNameSuffix}-SNSTopic-ARN'
 
   LambdaFunctionArn:
     Description: Lambda Function ARN
     Value: !GetAtt LambdaFunction.Arn
     Export:
-      Name: !Sub '${AWS::StackName}-Lambda-ARN'
+      Name: !Sub '${StackNameSuffix}-Lambda-ARN'
 
   NATGatewayId:
     Description: NAT Gateway ID
     Value: !Ref NATGateway
     Export:
-      Name: !Sub '${AWS::StackName}-NATGateway-ID'
+      Name: !Sub '${StackNameSuffix}-NATGateway-ID'
 
   KeyPairName:
     Description: EC2 Key Pair Name
     Value: !GetAtt KeyPairResource.KeyPairName
     Export:
-      Name: !Sub '${AWS::StackName}-KeyPair-Name'
+      Name: !Sub '${StackNameSuffix}-KeyPair-Name'
