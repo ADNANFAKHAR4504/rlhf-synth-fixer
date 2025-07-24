@@ -142,9 +142,9 @@ class TestTapStack(unittest.TestCase):
         },
         "PublicAccessBlockConfiguration": {
             "BlockPublicAcls": True,
-            "BlockPublicPolicy": True,
+            "BlockPublicPolicy": False,  # Allow public policies for website hosting
             "IgnorePublicAcls": True,
-            "RestrictPublicBuckets": True
+            "RestrictPublicBuckets": False  # Allow public access for website hosting
         },
         "WebsiteConfiguration": {
             "IndexDocument": "index.html",

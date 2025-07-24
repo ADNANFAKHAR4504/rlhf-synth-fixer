@@ -283,7 +283,12 @@ class TapStack(cdk.Stack):
         versioned=True,
         encryption=s3.BucketEncryption.KMS,
         encryption_key=s3_kms_key,
-        block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
+        block_public_access=s3.BlockPublicAccess(
+            block_public_acls=True,
+            block_public_policy=False,  # Allow public policies for website hosting
+            ignore_public_acls=True,
+            restrict_public_buckets=False  # Allow public access for website hosting
+        ),
         enforce_ssl=True,
         removal_policy=RemovalPolicy.DESTROY,
         auto_delete_objects=True,
