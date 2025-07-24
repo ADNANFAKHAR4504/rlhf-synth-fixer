@@ -4,25 +4,8 @@ import os
 import sys
 import types
 
-
-os.environ["DISABLE_TAPSTACK"] = "1"
-sys.modules["tapstack"] = None  # Optional hard block
-
-
-if os.getenv("CI") and os.getenv("LOCAL_TESTING") == "1":
-    raise RuntimeError("CI environment should not use LOCAL_TESTING=1")
-
-
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")))
-
-
 import pytest
-import boto3
-import requests
-import json
-import mysql.connector
 from aws_cdk import App, Environment
-from aws_cdk import aws_ec2 as ec2
 
 from lib.cdk.vpc_stack import VpcStack
 from lib.cdk.ecs_stack import EcsStack
@@ -30,6 +13,15 @@ from lib.cdk.rds_stack import RdsStack
 from lib.cdk.monitoring_stack import MonitoringStack
 from lib.cdk.cicd_stack import CicdStack
 from lib.cdk.route53_stack import Route53Stack
+
+# Setup
+os.environ["DISABLE_TAPSTACK"] = "1"
+sys.modules["tapstack"] = None  # Optional hard block
+
+if os.getenv("CI") and os.getenv("LOCAL_TESTING") == "1":
+    raise RuntimeError("CI environment should not use LOCAL_TESTING=1")
+
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")))
 
 
 @pytest.fixture(scope="module")
@@ -40,27 +32,37 @@ def test_stack():
     if os.getenv("LOCAL_TESTING") == "1":
         print("  Running in MOCKED LOCAL TESTING mode")
 
-        vpc_stack = types.SimpleNamespace()
-        vpc_stack.vpc = types.SimpleNamespace(vpc_id="vpc-mock123")
-
-        ecs_stack = types.SimpleNamespace()
-        ecs_stack.alb = types.SimpleNamespace(load_balancer_dns_name="localhost:8080")
-        ecs_stack.ecs_service = types.SimpleNamespace(service_name="mock-service")
-        ecs_stack.cluster = types.SimpleNamespace(cluster_name="mock-cluster")
-
-        rds_stack = types.SimpleNamespace()
-        rds_stack.rds_instance = types.SimpleNamespace(instance_endpoint=types.SimpleNamespace(hostname="localhost"))
-        rds_stack.rds_instance_replica = types.SimpleNamespace(instance_endpoint=types.SimpleNamespace(hostname="localhost"))
-
-        monitoring_stack = types.SimpleNamespace()
-        monitoring_stack.cloudwatch_dashboard = types.SimpleNamespace(
-            dashboard_name="mock-dashboard",
-            name="mock-dashboard"
+        vpc_stack = types.SimpleNamespace(
+            vpc=types.SimpleNamespace(vpc_id="vpc-mock123")
         )
-        cicd_stack = types.SimpleNamespace()
-        vpc_peering_stack = types.SimpleNamespace()
-        vpc_peering_stack.peering_connection = types.SimpleNamespace(connection_id="pcx-mock123")
 
+        ecs_stack = types.SimpleNamespace(
+            alb=types.SimpleNamespace(load_balancer_dns_name="localhost:8080"),
+            ecs_service=types.SimpleNamespace(service_name="mock-service"),
+            cluster=types.SimpleNamespace(cluster_name="mock-cluster")
+        )
+
+        rds_stack = types.SimpleNamespace(
+            rds_instance=types.SimpleNamespace(
+                instance_endpoint=types.SimpleNamespace(hostname="localhost")
+            ),
+            rds_instance_replica=types.SimpleNamespace(
+                instance_endpoint=types.SimpleNamespace(hostname="localhost")
+            )
+        )
+
+        monitoring_stack = types.SimpleNamespace(
+            cloudwatch_dashboard=types.SimpleNamespace(
+                dashboard_name="mock-dashboard",
+                name="mock-dashboard"
+            )
+        )
+
+        cicd_stack = types.SimpleNamespace()
+
+        vpc_peering_stack = types.SimpleNamespace(
+            peering_connection=types.SimpleNamespace(connection_id="pcx-mock123")
+        )
 
         route53_stack = types.SimpleNamespace(
             node=types.SimpleNamespace(
@@ -89,7 +91,6 @@ def test_stack():
     else:
         print(" Running in REAL DEPLOYED STACK mode")
 
-        # Double ensure tapstack is blocked
         os.environ["DISABLE_TAPSTACK"] = "1"
         sys.modules["tapstack"] = None
 
@@ -121,10 +122,8 @@ def test_stack():
         }
 
 
-
 def test_mocked_stack_loads(test_stack):
-
-    #ECS Stack
+    # ECS Stack
     assert "ecs_stack" in test_stack
     assert hasattr(test_stack["ecs_stack"], "alb")
     assert test_stack["ecs_stack"].alb.load_balancer_dns_name.startswith("localhost")
@@ -153,4 +152,3 @@ def test_mocked_stack_loads(test_stack):
     assert "monitoring_stack" in test_stack
     assert hasattr(test_stack["monitoring_stack"], "cloudwatch_dashboard")
     assert test_stack["monitoring_stack"].cloudwatch_dashboard.name == "mock-dashboard"
-
