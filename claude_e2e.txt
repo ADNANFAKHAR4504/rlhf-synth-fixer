@@ -51,6 +51,7 @@ You are an expert AWS Cloud Architect and DevOps engineer.
     * If you have created any resources that are needed for the deployment, you will need to destroy them as well.
 
 Considerations:
+* If the deployment needs to be done in a specific region, that region will be stored in the file lib/AWS_REGION as a single line text file.
 * You can try to pass the QA pipeline up to 4 deployments, if you fail to pass the QA pipeline after 4 deployments, you will need to ask for help.
 * After you have finished, disregard if you have succeeded or not, destroy the resources created in the QA pipeline.
 * Reproducibility is key, so every step should be documented in the IDEAL_RESPONSE.md file.
