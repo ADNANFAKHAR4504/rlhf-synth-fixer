@@ -237,16 +237,6 @@ Resources:
     Properties:
       S3BucketName: !Ref SecureS3Bucket
 
-  # ConfigRecorder:
-  #   Type: AWS::Config::ConfigurationRecorder
-  #   DependsOn: ConfigDeliveryChannel
-  #   Properties:
-  #     Name: default
-  #     RoleARN: !GetAtt ConfigRole.Arn
-  #     RecordingGroup:
-  #       AllSupported: true
-  #       IncludeGlobalResourceTypes: true
-
   # CloudTrail S3 Bucket (dedicated, secure, encrypted)
   CloudTrailLogBucket:
     Type: AWS::S3::Bucket
@@ -352,6 +342,7 @@ Resources:
       RoleARN: !GetAtt ConfigRole.Arn
       RecordingGroup:
         AllSupported: true
+        IncludeGlobalResourceTypes: true
 
   ConfigRole:
     Type: AWS::IAM::Role
@@ -366,6 +357,9 @@ Resources:
 
   S3BucketLoggingEnabledRule:  
     Type: AWS::Config::ConfigRule
+    DependsOn:
+      - ConfigRecorder
+      - ConfigDeliveryChannel
     Properties:
       ConfigRuleName: s3-bucket-logging-enabled
       Description: Ensure S3 bucket logging is enabled

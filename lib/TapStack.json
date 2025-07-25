@@ -619,7 +619,8 @@
                     ]
                 },
                 "RecordingGroup": {
-                    "AllSupported": true
+                    "AllSupported": true,
+                    "IncludeGlobalResourceTypes": true
                 }
             }
         },
@@ -642,6 +643,10 @@
         },
         "S3BucketLoggingEnabledRule": {
             "Type": "AWS::Config::ConfigRule",
+            "DependsOn": [
+                "ConfigRecorder",
+                "ConfigDeliveryChannel"
+            ],
             "Properties": {
                 "ConfigRuleName": "s3-bucket-logging-enabled",
                 "Description": "Ensure S3 bucket logging is enabled",
