@@ -3,20 +3,19 @@ This module defines the TapStack class, which implements a serverless web backen
 architecture using AWS CDK with Python.
 
 The stack includes:
-- API Gateway HTTP API
-- Lambda Function with Powertools
+- Lambda Function (Python 3.8)
+- API Gateway HTTP API with CORS
+- S3 Bucket with static website hosting
 - DynamoDB Table with GSI
-- S3 Bucket with CloudFront
-- CloudWatch monitoring
+- CloudWatch monitoring and alarms
+- KMS encryption for S3 and DynamoDB
 """
 from typing import Optional
 
 from aws_cdk import CfnOutput
-from aws_cdk import CfnTag as cdk_CfnTag
-from aws_cdk import Duration, RemovalPolicy, Stack, StackProps
+from aws_cdk import Duration, RemovalPolicy, Stack, StackProps, Tags
 from aws_cdk import aws_apigatewayv2 as apigw
-from aws_cdk import aws_cloudfront as cloudfront
-from aws_cdk import aws_cloudfront_origins as origins
+from aws_cdk import aws_apigatewayv2_integrations as integrations
 from aws_cdk import aws_cloudwatch as cloudwatch
 from aws_cdk import aws_dynamodb as dynamodb
 from aws_cdk import aws_iam as iam
@@ -24,8 +23,6 @@ from aws_cdk import aws_kms as kms
 from aws_cdk import aws_lambda as _lambda
 from aws_cdk import aws_logs as logs
 from aws_cdk import aws_s3 as s3
-from aws_cdk import aws_secretsmanager as secretsmanager
-from aws_cdk import aws_wafv2 as wafv2
 from constructs import Construct
 
 
@@ -87,7 +84,6 @@ class TapStack(Stack):
         "S3EncryptionKey",
         description="KMS key for S3 bucket encryption",
         enable_key_rotation=True,
-        alias="alias/s3-encryption-key",
         removal_policy=RemovalPolicy.DESTROY
     )
 
@@ -96,25 +92,10 @@ class TapStack(Stack):
         "DynamoDBEncryptionKey",
         description="KMS key for DynamoDB table encryption",
         enable_key_rotation=True,
-        alias="alias/dynamodb-encryption-key",
         removal_policy=RemovalPolicy.DESTROY
     )
 
-    # Create a secret for sensitive environment variables
-    api_secret = secretsmanager.Secret(
-        self,
-        "ApiSecret",
-        description="Secret for API backend",
-        encryption_key=kms.Key(
-            self,
-            "SecretEncryptionKey",
-            enable_key_rotation=True,
-            alias="alias/secret-encryption-key",
-            removal_policy=RemovalPolicy.DESTROY
-        )
-    )
-
-    # DynamoDB Table with custom KMS key
+    # DynamoDB Table for visit logs with KMS encryption and GSI
     table = dynamodb.Table(
         self,
         "VisitsTable",
@@ -124,10 +105,8 @@ class TapStack(Stack):
         ),
         encryption=dynamodb.TableEncryption.CUSTOMER_MANAGED,
         encryption_key=dynamodb_kms_key,
-        point_in_time_recovery_specification={
-            "point_in_time_recovery_enabled": True},
         removal_policy=RemovalPolicy.DESTROY,
-        billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST  # Use on-demand capacity
+        billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST
     )
 
     # Add GSI for timestamp-based queries
@@ -140,372 +119,131 @@ class TapStack(Stack):
         projection_type=dynamodb.ProjectionType.ALL
     )
 
-    # Create Lambda Layer for Powertools
-    powertools_layer = _lambda.LayerVersion(
-        self,
-        "PowertoolsLayer",
-        code=_lambda.Code.from_asset("lib/lambda", exclude=[
-            "*.py",
-            "test/*",
-            "__pycache__",
-            "*.pyc",
-        ]),
-        compatible_runtimes=[_lambda.Runtime.PYTHON_3_12],
-        description="AWS Lambda Powertools Layer"
-    )
+    # Tag table with environment: production
+    Tags.of(table).add("environment", "production")
 
-    # Lambda Function with Powertools and dependencies
+    # Lambda Function (Python 3.8) for backend logic
     lambda_function = _lambda.Function(
         self,
         "BackendHandler",
-        runtime=_lambda.Runtime.PYTHON_3_12,
+        runtime=_lambda.Runtime.PYTHON_3_8,
         handler="backend_handler.handler",
         code=_lambda.Code.from_asset(
             "lib/lambda",
-            exclude=["__pycache__", "*.pyc", "requirements.txt"]
+            exclude=["__pycache__", "*.pyc"]
         ),
-        layers=[powertools_layer],
         environment={
             "TABLE_NAME": table.table_name,
-            "POWERTOOLS_SERVICE_NAME": "visit-logger",
-            "LOG_LEVEL": "INFO",
-            "POWERTOOLS_LOGGER_LOG_EVENT": "true",
-            "POWERTOOLS_LOGGER_SAMPLE_RATE": "0.1",
-            "POWERTOOLS_METRICS_NAMESPACE": "ServerlessApp",
-            # Reference to the secret for sensitive data
-            "API_SECRET_ARN": api_secret.secret_arn
+            "LOG_LEVEL": "INFO"
         },
-        tracing=_lambda.Tracing.ACTIVE,  # Enable X-Ray tracing
         log_retention=logs.RetentionDays.ONE_MONTH,
         timeout=Duration.seconds(30),
-        memory_size=128  # Optimized from 256MB to 128MB for cost efficiency
+        memory_size=128
     )
-
-    # Grant Lambda access to read the secret
-    api_secret.grant_read(lambda_function)
 
     # Grant least-privilege permissions to Lambda
     table.grant_write_data(lambda_function)
+    
+    # Note: CloudWatch Logs permissions are automatically granted by CDK
+    # when log_retention is set on the Lambda function
 
-    # API Gateway with improved CORS and security
+    # API Gateway HTTP API with CORS enabled for all origins
     http_api = apigw.HttpApi(
         self,
         "HttpApi",
         cors_preflight=apigw.CorsPreflightOptions(
             allow_headers=["Content-Type", "Authorization"],
-            allow_methods=[apigw.CorsHttpMethod.GET,
-                           apigw.CorsHttpMethod.POST],
-            # Will be restricted by CloudFront distribution
-            allow_origins=["*"],
-            max_age=Duration.days(1)
+            allow_methods=[
+                apigw.CorsHttpMethod.GET,
+                apigw.CorsHttpMethod.POST,
+                apigw.CorsHttpMethod.OPTIONS
+            ],
+            allow_origins=["*"],  # Enable CORS for all origins as required
+            max_age=Duration.hours(1)
         )
     )
 
-    # Create WAF Web ACL
-    waf_acl = wafv2.CfnWebACL(
-        self, "ApiWafAcl",
-        default_action=wafv2.CfnWebACL.DefaultActionProperty(
-            allow={}
-        ),
-        scope="REGIONAL",
-        visibility_config=wafv2.CfnWebACL.VisibilityConfigProperty(
-            cloud_watch_metrics_enabled=True,
-            metric_name="WafMetrics",
-            sampled_requests_enabled=True
-        ),
-        rules=[
-            wafv2.CfnWebACL.RuleProperty(
-                name="RateLimit",
-                priority=1,
-                action=wafv2.CfnWebACL.RuleActionProperty(
-                    block={}
-                ),
-                statement=wafv2.CfnWebACL.StatementProperty(
-                    rate_based_statement=wafv2.CfnWebACL.RateBasedStatementProperty(
-                        aggregate_key_type="IP",
-                        limit=2000
-                    )
-                ),
-                visibility_config=wafv2.CfnWebACL.VisibilityConfigProperty(
-                    cloud_watch_metrics_enabled=True,
-                    metric_name="RateLimitMetric",
-                    sampled_requests_enabled=True
-                )
-            )
-        ],
-        tags=[
-            cdk_CfnTag(
-                key="Environment",
-                value="dev"
-            ),
-            cdk_CfnTag(
-                key="Author",
-                value="unknown"
-            ),
-            cdk_CfnTag(
-                key="Repository",
-                value="unknown"
-            )
-        ]
+    # Add Lambda integration to API Gateway
+    http_api.add_routes(
+        path="/{proxy+}",
+        methods=[apigw.HttpMethod.ANY],
+        integration=integrations.HttpLambdaIntegration(
+            "LambdaIntegration",
+            lambda_function
+        )
     )
 
-    # Associate WAF with API Gateway
-    wafv2.CfnWebACLAssociation(
-        self, "WafApiAssociation",
-        resource_arn=http_api.default_stage.stage_arn,
-        web_acl_arn=waf_acl.attr_arn
-    )
-
-    # Create Lambda integration
-    integration = apigw.CfnIntegration(
-        self,
-        "HttpApiIntegration",
-        api_id=http_api.api_id,
-        integration_type="AWS_PROXY",
-        integration_uri=lambda_function.function_arn,
-        payload_format_version="2.0"
-    )
-
-    # Create default route
-    apigw.CfnRoute(
-        self,
-        "DefaultRoute",
-        api_id=http_api.api_id,
-        route_key="ANY /{proxy+}",
-        target=f"integrations/{integration.ref}"
-    )
-
-    # Add Lambda permissions for API Gateway using CDK's built-in method
-    lambda_function.grant_invoke(
-        iam.ServicePrincipal("apigateway.amazonaws.com")
-    )
-
-    # S3 Bucket for frontend with enhanced security and static website hosting
+    # S3 Bucket for static website hosting with versioning and KMS encryption
     bucket = s3.Bucket(
         self,
         "FrontendBucket",
         versioned=True,
         encryption=s3.BucketEncryption.KMS,
         encryption_key=s3_kms_key,
-        block_public_access=s3.BlockPublicAccess.BLOCK_ALL,  # Block all public access
-        enforce_ssl=True,
+        website_index_document="index.html",
+        website_error_document="error.html",
+        public_read_access=True,  # Required for static website hosting
+        block_public_access=s3.BlockPublicAccess(
+            block_public_acls=False,
+            block_public_policy=False,
+            ignore_public_acls=False,
+            restrict_public_buckets=False
+        ),
         removal_policy=RemovalPolicy.DESTROY
     )
+    
+    # Tag bucket with environment: production
+    Tags.of(bucket).add("environment", "production")
 
-    # Create Origin Access Control for CloudFront
-    oac = cloudfront.CfnOriginAccessControl(
-        self,
-        "CloudFrontOAC",
-        origin_access_control_config=
-        cloudfront.CfnOriginAccessControl.OriginAccessControlConfigProperty
-        (
-            name=f"{construct_id}-oac",
-            origin_access_control_origin_type="s3",
-            signing_behavior="always",
-            signing_protocol="sigv4"
-        )
-    )
-
-    # CloudFront Distribution for S3 with Origin Access Control
-    distribution = cloudfront.Distribution(
-        self,
-        "FrontendDistribution",
-        default_behavior=cloudfront.BehaviorOptions(
-            origin=origins.S3BucketOrigin(bucket),
-            viewer_protocol_policy=cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
-            cache_policy=cloudfront.CachePolicy.CACHING_OPTIMIZED
-        ),
-        error_responses=[
-            cloudfront.ErrorResponse(
-                http_status=403,
-                response_http_status=200,
-                response_page_path="/index.html"
-            ),
-            cloudfront.ErrorResponse(
-                http_status=404,
-                response_http_status=200,
-                response_page_path="/index.html"
-            )
-        ]
-    )
-
-    # Apply OAC to the CloudFront distribution's S3 origin using L1 construct
-    cfn_distribution = distribution.node.default_child
-    cfn_distribution.add_property_override(
-        "DistributionConfig.Origins.0.S3OriginConfig.OriginAccessIdentity", ""
-    )
-    cfn_distribution.add_property_override(
-        "DistributionConfig.Origins.0.OriginAccessControlId", oac.attr_id
-    )
-
-    # Grant CloudFront access to the S3 bucket with KMS key
-    bucket.add_to_resource_policy(
-        iam.PolicyStatement(
-            actions=["s3:GetObject"],
-            resources=[bucket.arn_for_objects("*")],
-            principals=[iam.ServicePrincipal("cloudfront.amazonaws.com")],
-            conditions={
-                "StringEquals": {
-                    "AWS:SourceArn": (
-                        f"arn:aws:cloudfront::{Stack.of(self).account}:"
-                        f"distribution/*"
-                    )
-                }
-            }
-        )
-    )
-
-    # Grant CloudFront access to use the KMS key
-    s3_kms_key.add_to_resource_policy(
-        iam.PolicyStatement(
-            actions=[
-                "kms:Decrypt",
-                "kms:GenerateDataKey*"
-            ],
-            resources=["*"],
-            principals=[iam.ServicePrincipal("cloudfront.amazonaws.com")],
-            conditions={
-                "StringEquals": {
-                    "AWS:SourceArn": (
-                        f"arn:aws:cloudfront::{Stack.of(self).account}:"
-                        f"distribution/*"
-                    )
-                }
-            }
-        )
-    )
-
-    # Enhanced CloudWatch Monitoring
-    # Create dashboard and save reference for future use if needed
-    dashboard = cloudwatch.Dashboard(
-        self,
-        "ServiceDashboard",
-        dashboard_name=f"{construct_id}-dashboard"
-    )
-
-    # Lambda Metrics
-    errors_metric = lambda_function.metric_errors()
-    throttles_metric = lambda_function.metric_throttles()
-    duration_metric = lambda_function.metric_duration()
-    invocations_metric = lambda_function.metric_invocations()
-
-    # API Gateway Metrics using custom metrics
-    api_metrics = {
-        'Latency': cloudwatch.Metric(
-            namespace='AWS/ApiGateway',
-            metric_name='Latency',
-            dimensions_map={'ApiId': http_api.api_id},
-            period=Duration.minutes(1),
-            statistic='p99'
-        ),
-        'Count': cloudwatch.Metric(
-            namespace='AWS/ApiGateway',
-            metric_name='Count',
-            dimensions_map={'ApiId': http_api.api_id},
-            period=Duration.minutes(1)
-        ),
-        '5XXError': cloudwatch.Metric(
-            namespace='AWS/ApiGateway',
-            metric_name='5XXError',
-            dimensions_map={'ApiId': http_api.api_id},
-            period=Duration.minutes(1)
-        ),
-        '4XXError': cloudwatch.Metric(
-            namespace='AWS/ApiGateway',
-            metric_name='4XXError',
-            dimensions_map={'ApiId': http_api.api_id},
-            period=Duration.minutes(1)
-        )
-    }
-
-    # Add metrics to dashboard for visualization
-    dashboard.add_widgets(
-        cloudwatch.GraphWidget(
-            title="Lambda Errors",
-            left=[errors_metric]
-        ),
-        cloudwatch.GraphWidget(
-            title="Lambda Throttles",
-            left=[throttles_metric]
-        ),
-        cloudwatch.GraphWidget(
-            title="Lambda Duration",
-            left=[duration_metric]
-        ),
-        cloudwatch.GraphWidget(
-            title="Lambda Invocations",
-            left=[invocations_metric]
-        ),
-        cloudwatch.GraphWidget(
-            title="API Gateway Latency",
-            left=[api_metrics['Latency']]
-        )
-    )
-
-    # CloudWatch Alarms with more detailed configuration
-    error_alarm = cloudwatch.Alarm(
+    # Basic CloudWatch Alarms for Lambda function failures and throttling
+    cloudwatch.Alarm(
         self,
         "LambdaErrorAlarm",
-        metric=errors_metric,
-        threshold=5,
-        evaluation_periods=3,
-        datapoints_to_alarm=2,
-        comparison_operator=cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
-        treat_missing_data=cloudwatch.TreatMissingData.NOT_BREACHING
+        metric=lambda_function.metric_errors(),
+        threshold=1,
+        evaluation_periods=2,
+        comparison_operator=cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+        alarm_description="Alarm for Lambda function errors"
     )
 
-    throttle_alarm = cloudwatch.Alarm(
+    cloudwatch.Alarm(
         self,
         "LambdaThrottleAlarm",
-        metric=throttles_metric,
-        threshold=5,
-        evaluation_periods=3,
-        datapoints_to_alarm=2,
-        comparison_operator=cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
-        treat_missing_data=cloudwatch.TreatMissingData.NOT_BREACHING
+        metric=lambda_function.metric_throttles(),
+        threshold=1,
+        evaluation_periods=2,
+        comparison_operator=cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+        alarm_description="Alarm for Lambda function throttling"
     )
 
-    latency_alarm = cloudwatch.Alarm(
+    # High latency alarm for API Gateway
+    cloudwatch.Alarm(
         self,
         "ApiLatencyAlarm",
-        metric=api_metrics['Latency'],
-        threshold=1000,  # 1 second
-        evaluation_periods=3,
-        datapoints_to_alarm=2,
+        metric=cloudwatch.Metric(
+            namespace="AWS/ApiGatewayV2",
+            metric_name="IntegrationLatency",
+            dimensions_map={"ApiId": http_api.api_id}
+        ),
+        threshold=5000,  # 5 seconds
+        evaluation_periods=2,
         comparison_operator=cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
-        treat_missing_data=cloudwatch.TreatMissingData.NOT_BREACHING
+        alarm_description="Alarm for high API Gateway latency"
     )
 
-    # Register the alarms with the dashboard
-    dashboard.add_widgets(
-        cloudwatch.AlarmWidget(
-            title="Lambda Error Alarm",
-            alarm=error_alarm
-        ),
-        cloudwatch.AlarmWidget(
-            title="Lambda Throttle Alarm",
-            alarm=throttle_alarm
-        ),
-        cloudwatch.AlarmWidget(
-            title="API Latency Alarm",
-            alarm=latency_alarm
-        )
-    )
-
-    # Output the API URL
+    # CloudFormation Outputs
     CfnOutput(
         self,
         "ApiEndpoint",
-        value=http_api.url if http_api.url else "API URL not available",
+        value=http_api.url or "API URL not available",
         description="API Gateway endpoint URL"
     )
 
-    # Additional CloudFormation Outputs for integration testing
     CfnOutput(
         self,
-        "StackName",
-        value=self.stack_name,
-        description="Name of the CloudFormation stack"
+        "S3BucketUrl",
+        value=bucket.bucket_website_url,
+        description="S3 bucket website URL"
     )
 
     CfnOutput(
@@ -524,21 +262,14 @@ class TapStack(Stack):
 
     CfnOutput(
         self,
-        "ApiSecretArn",
-        value=api_secret.secret_arn,
-        description="ARN of the Secret used by the API"
-    )
-
-    CfnOutput(
-        self,
-        "CloudFrontDomainName",
-        value=distribution.domain_name,
-        description="Domain name of the CloudFront distribution"
-    )
-
-    CfnOutput(
-        self,
         "LambdaFunctionName",
         value=lambda_function.function_name,
         description="Name of the Lambda function"
+    )
+
+    CfnOutput(
+        self,
+        "StackName",
+        value=self.stack_name,
+        description="Name of the CloudFormation stack"
     )

@@ -35,9 +35,9 @@ class TestTapStack(unittest.TestCase):
     assert props.environment_suffix == "prod"
     assert props.description == "Test description"
 
-  @mark.it("creates KMS keys")
+  @mark.it("creates KMS keys for S3 and DynamoDB")
   def test_kms_keys_creation(self):
-    self.template.resource_count_is("AWS::KMS::Key", 3)
+    self.template.resource_count_is("AWS::KMS::Key", 2)
     self.template.has_resource_properties("AWS::KMS::Key", {
         "Description": "KMS key for S3 bucket encryption",
         "EnableKeyRotation": True
@@ -45,17 +45,6 @@ class TestTapStack(unittest.TestCase):
     self.template.has_resource_properties("AWS::KMS::Key", {
         "Description": "KMS key for DynamoDB table encryption",
         "EnableKeyRotation": True
-    })
-    # Secret encryption key
-    self.template.has_resource_properties("AWS::KMS::Key", {
-        "EnableKeyRotation": True
-    })
-
-  @mark.it("creates Secrets Manager secret")
-  def test_secrets_manager_creation(self):
-    self.template.resource_count_is("AWS::SecretsManager::Secret", 1)
-    self.template.has_resource_properties("AWS::SecretsManager::Secret", {
-        "Description": "Secret for API backend",
     })
 
   @mark.it("creates DynamoDB table with encryption and GSI")
@@ -69,9 +58,6 @@ class TestTapStack(unittest.TestCase):
                 "KeyType": "HASH"
             }
         ],
-        "PointInTimeRecoverySpecification": {
-            "PointInTimeRecoveryEnabled": True
-        },
         "SSESpecification": {
             "KMSMasterKeyId": Match.any_value(),
             "SSEEnabled": True,
@@ -90,10 +76,16 @@ class TestTapStack(unittest.TestCase):
                     "ProjectionType": "ALL"
                 }
             }
+        ],
+        "Tags": [
+            {
+                "Key": "environment",
+                "Value": "production"
+            }
         ]
     })
 
-  @mark.it("creates S3 bucket with enhanced security")
+  @mark.it("creates S3 bucket with static website hosting and KMS encryption")
   def test_s3_bucket_creation(self):
     self.template.resource_count_is("AWS::S3::Bucket", 1)
     self.template.has_resource_properties("AWS::S3::Bucket", {
@@ -105,63 +97,55 @@ class TestTapStack(unittest.TestCase):
                 }
             }]
         },
+        "WebsiteConfiguration": {
+            "IndexDocument": "index.html",
+            "ErrorDocument": "error.html"
+        },
         "PublicAccessBlockConfiguration": {
-            "BlockPublicAcls": True,
-            "BlockPublicPolicy": True,
-            "IgnorePublicAcls": True,
-            "RestrictPublicBuckets": True
-        }
+            "BlockPublicAcls": False,
+            "BlockPublicPolicy": False,
+            "IgnorePublicAcls": False,
+            "RestrictPublicBuckets": False
+        },
+        "Tags": [
+            {
+                "Key": "environment",
+                "Value": "production"
+            }
+        ]
     })
 
-  @mark.it("creates S3 bucket policy")
-  def test_s3_bucket_policy_creation(self):
-    self.template.resource_count_is("AWS::S3::BucketPolicy", 1)
-    self.template.has_resource_properties("AWS::S3::BucketPolicy", {
-        "PolicyDocument": {
-            "Statement": Match.array_with([
-                Match.object_like({
-                    "Action": "s3:GetObject",
-                    "Effect": "Allow",
-                    "Principal": Match.any_value(),
-                    "Resource": Match.any_value()
-                })
-            ])
-        }
-    })
-
-  @mark.it("creates CloudFront distribution")
-  def test_cloudfront_distribution_creation(self):
-    self.template.resource_count_is("AWS::CloudFront::Distribution", 1)
-    self.template.has_resource_properties("AWS::CloudFront::Distribution", {
-        "DistributionConfig": {
-            "Enabled": True,
-            "DefaultCacheBehavior": Match.any_value(),
-            "Origins": Match.any_value()
-        }
-    })
-
-  @mark.it("creates Lambda layer")
-  def test_lambda_layer_creation(self):
-    self.template.resource_count_is("AWS::Lambda::LayerVersion", 1)
-
-  @mark.it("creates Lambda functions")
+  @mark.it("creates Lambda function with Python 3.8 runtime")
   def test_lambda_function_creation(self):
-    # Expected 2 Lambda functions:
+    # Expected Lambda functions:
     # 1. The backend handler Lambda
     # 2. AWS CDK Custom Resource provider framework Lambda (for log retention)
     self.template.resource_count_is("AWS::Lambda::Function", 2)
 
-    # Backend Lambda should have environment variables
+    # Find the backend Lambda function
     lambda_functions = self.template.find_resources("AWS::Lambda::Function")
     found_backend = False
 
     for _, lambda_resource in lambda_functions.items():
-      env_vars = lambda_resource.get("Properties", {}).get(
-          "Environment", {}).get("Variables", {})
-      if "TABLE_NAME" in env_vars and "API_SECRET_ARN" in env_vars:
+      props = lambda_resource.get("Properties", {})
+      runtime = props.get("Runtime")
+      env_vars = props.get("Environment", {}).get("Variables", {})
+      
+      if runtime == "python3.8" and "TABLE_NAME" in env_vars:
         found_backend = True
+        # Verify timeout is 30 seconds
+        assert props.get("Timeout") == 30
+        # Verify memory size is 128MB
+        assert props.get("MemorySize") == 128
+        # Verify required environment variables
+        assert "TABLE_NAME" in env_vars
+        assert "LOG_LEVEL" in env_vars
+        break
 
-    assert found_backend, "Backend Lambda with required environment variables not found"
+    assert found_backend, (
+        "Backend Lambda with Python 3.8 runtime and "
+        "required environment variables not found"
+    )
 
   @mark.it("creates proper Lambda IAM permissions")
   def test_lambda_permissions(self):
@@ -171,46 +155,54 @@ class TestTapStack(unittest.TestCase):
     # Check that we have at least some IAM policies
     assert len(iam_policies) > 0, "No IAM policies found"
 
-    # Find policies that grant DynamoDB or S3 access
-    found_access_policy = False
+    # Find policies that grant DynamoDB and logs access
+    policy_checks = self._check_iam_policies(iam_policies)
+
+    assert policy_checks['dynamodb'], "No DynamoDB access policy found"
+    assert policy_checks['logs'], "No CloudWatch Logs access policy found"
+    
+  def _check_iam_policies(self, iam_policies):
+    """Helper method to check IAM policies and reduce nesting complexity"""
+    found_policies = {'dynamodb': False, 'logs': False}
+    
     for _, policy in iam_policies.items():
       policy_doc = policy.get("Properties", {}).get("PolicyDocument", {})
       statements = policy_doc.get("Statement", [])
 
-      if not isinstance(statements, list):
-        continue
+      if isinstance(statements, list):
+        self._check_policy_statements(statements, found_policies)
+        
+    return found_policies
+        
+  def _check_policy_statements(self, statements, found_policies):
+    """Helper method to check policy statements"""
+    for statement in statements:
+      if isinstance(statement, dict):
+        self._check_statement_actions(statement, found_policies)
+        
+  def _check_statement_actions(self, statement, found_policies):
+    """Helper method to check statement actions"""
+    action = statement.get("Action", [])
+    
+    actions_to_check = [action] if isinstance(action, str) else action
+    
+    for act in actions_to_check:
+      if isinstance(act, str):
+        if "dynamodb:" in act:
+          found_policies['dynamodb'] = True
+        if "logs:" in act:
+          found_policies['logs'] = True
 
-      for statement in statements:
-        if not isinstance(statement, dict):
-          continue
-
-        action = statement.get("Action", [])
-        # Check if it's a single string action or a list
-        if isinstance(action, str) and ("dynamodb:" in action or "s3:" in action):
-          found_access_policy = True
-          break
-        if isinstance(action, list):
-          for act in action:
-            if isinstance(act, str) and ("dynamodb:" in act or "s3:" in act):
-              found_access_policy = True
-              break
-
-          if found_access_policy:
-            break
-
-      if found_access_policy:
-        break
-
-    assert found_access_policy, "No DynamoDB or S3 access policy found"
-
-  @mark.it("creates API Gateway")
+  @mark.it("creates API Gateway HTTP API with CORS")
   def test_api_gateway_creation(self):
     # HTTP API (API Gateway V2)
     self.template.resource_count_is("AWS::ApiGatewayV2::Api", 1)
     self.template.has_resource_properties("AWS::ApiGatewayV2::Api", {
         "ProtocolType": "HTTP",
         "CorsConfiguration": Match.object_like({
-            "AllowOrigins": ["*"]
+            "AllowOrigins": ["*"],
+            "AllowMethods": Match.array_with(["GET", "POST", "OPTIONS"]),
+            "AllowHeaders": Match.array_with(["Content-Type", "Authorization"])
         })
     })
 
@@ -227,41 +219,54 @@ class TestTapStack(unittest.TestCase):
         Match.any_value()
     )
 
-  @mark.it("creates WAF Web ACL")
-  def test_waf_creation(self):
-    self.template.resource_count_is("AWS::WAFv2::WebACL", 1)
-    self.template.has_resource_properties("AWS::WAFv2::WebACL", {
-        "DefaultAction": {
-            "Allow": {}
-        },
-        "Rules": Match.array_with([
-            Match.object_like({
-                "Name": "RateLimit",
-                "Action": {
-                    "Block": {}
-                }
-            })
-        ])
+  @mark.it("creates CloudWatch alarms")
+  def test_cloudwatch_alarms_creation(self):
+    # Should have 3 alarms: Lambda errors, Lambda throttles, API Gateway latency
+    self.template.resource_count_is("AWS::CloudWatch::Alarm", 3)
+    
+    # Check for Lambda error alarm
+    self.template.has_resource_properties("AWS::CloudWatch::Alarm", {
+        "AlarmDescription": "Alarm for Lambda function errors",
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "Threshold": 1
+    })
+    
+    # Check for Lambda throttle alarm
+    self.template.has_resource_properties("AWS::CloudWatch::Alarm", {
+        "AlarmDescription": "Alarm for Lambda function throttling",
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold", 
+        "Threshold": 1
+    })
+    
+    # Check for API Gateway latency alarm
+    self.template.has_resource_properties("AWS::CloudWatch::Alarm", {
+        "AlarmDescription": "Alarm for high API Gateway latency",
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Threshold": 5000
     })
 
-  @mark.it("creates CloudWatch alarms and dashboard")
-  def test_cloudwatch_alarms_creation(self):
-    # Alarms - check if we have at least one CloudWatch alarm
-    alarm_count = len(self.template.find_resources("AWS::CloudWatch::Alarm"))
-    assert alarm_count > 0, f"Expected at least one CloudWatch alarm, found {alarm_count}"
+  @mark.it("creates CloudFormation outputs")
+  def test_cloudformation_outputs(self):
+    # Check that required outputs are present
+    outputs = self.template.find_outputs("*")
+    
+    required_outputs = [
+        "ApiEndpoint",
+        "S3BucketUrl", 
+        "FrontendBucketName",
+        "VisitsTableName",
+        "LambdaFunctionName",
+        "StackName"
+    ]
+    
+    for output_name in required_outputs:
+      assert output_name in outputs, f"Required output {output_name} not found"
 
-    # Dashboard
-    self.template.resource_count_is("AWS::CloudWatch::Dashboard", 1)
-
-    # For Log groups, we'll just check if the Lambda function has logging configured
-    lambda_functions = self.template.find_resources("AWS::Lambda::Function")
-
-    # Check if any Lambda has logging configuration
-    has_logging = False
-    for lambda_id, lambda_resource in lambda_functions.items():
-      props = lambda_resource.get("Properties", {})
-      if props.get("LoggingConfig") or "LogRetention" in lambda_id:
-        has_logging = True
-        break
-
-    assert has_logging, "No Lambda functions with logging configuration found"
+  @mark.it("does not create over-engineered resources")
+  def test_no_over_engineered_resources(self):
+    # Verify that over-engineered resources are NOT created
+    self.template.resource_count_is("AWS::CloudFront::Distribution", 0)
+    self.template.resource_count_is("AWS::WAFv2::WebACL", 0)
+    self.template.resource_count_is("AWS::SecretsManager::Secret", 0)
+    self.template.resource_count_is("AWS::CloudWatch::Dashboard", 0)
+    self.template.resource_count_is("AWS::Lambda::LayerVersion", 0)

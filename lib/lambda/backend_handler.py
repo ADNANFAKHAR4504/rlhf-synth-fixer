@@ -1,82 +1,72 @@
 import json
+import logging
 import os
 from datetime import datetime, timezone
 from typing import Any, Dict
 
 import boto3
-from aws_lambda_powertools import Logger, Metrics, Tracer
-from aws_lambda_powertools.event_handler import APIGatewayHttpResolver
-from aws_lambda_powertools.logging import correlation_paths
-from aws_lambda_powertools.metrics import MetricUnit
 
-# Initialize Powertools
-logger = Logger()
-tracer = Tracer()
-metrics = Metrics()
-app = APIGatewayHttpResolver()
+# Configure logging
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
 
 # Initialize DynamoDB
 dynamodb = boto3.resource('dynamodb')
 table = dynamodb.Table(os.environ['TABLE_NAME'])
 
 
-@app.get("/<path>")
-@tracer.capture_method
-def handle_visit(path: str) -> Dict[str, Any]:
-  """Handle visit tracking for GET requests."""
-  try:
-    # Get request context
-    event = app.current_event
-    timestamp = datetime.now(timezone.utc).isoformat()
-    ip = event.request_context.http.source_ip
-
-    # Log visit details
-    logger.info("Recording visit", extra={
-        "path": path,
-        "ip": ip,
-        "timestamp": timestamp
-    })
-
-    # Store visit in DynamoDB
-    item = {
-        'id': event.request_context.request_id,
-        'timestamp': timestamp,
-        'ip': ip,
-        'path': f"/{path}"
-    }
-
-    table.put_item(Item=item)
-
-    # Record metrics
-    metrics.add_metric(name="VisitsRecorded", unit=MetricUnit.Count, value=1)
-
-    return {
-        'statusCode': 200,
-        'headers': {
-            'Content-Type': 'application/json'
-        },
-        'body': json.dumps({
-            'message': 'Visit logged successfully',
-            'path': path
-        })
-    }
-  except Exception:
-    logger.exception("Error recording visit")
-    metrics.add_metric(name="VisitErrors", unit=MetricUnit.Count, value=1)
-    return {
-        'statusCode': 500,
-        'headers': {
-            'Content-Type': 'application/json'
-        },
-        'body': json.dumps({
-            'message': 'Internal server error'
-        })
-    }
-
-
-@logger.inject_lambda_context(correlation_id_path=correlation_paths.API_GATEWAY_HTTP)
-@tracer.capture_lambda_handler
-@metrics.log_metrics(capture_cold_start_metric=True)
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
-  """Main Lambda handler with Powertools decorators for observability."""
-  return app.resolve(event, context)
+    """Main Lambda handler for processing API Gateway requests."""
+    try:
+        # Parse the HTTP method and path
+        http_method = event.get('requestContext', {}).get('http', {}).get('method', 'GET')
+        path = event.get('pathParameters', {}).get('proxy', 'home')
+        request_id = event.get('requestContext', {}).get('requestId', 'unknown')
+        source_ip = event.get('requestContext', {}).get('http', {}).get('sourceIp', 'unknown')
+        
+        # Generate timestamp
+        timestamp = datetime.now(timezone.utc).isoformat()
+        
+        # Log visit details
+        logger.info(f"Recording visit: path=/{path}, ip={source_ip}, method={http_method}")
+        
+        # Store visit in DynamoDB
+        item = {
+            'id': request_id,
+            'timestamp': timestamp,
+            'ip': source_ip,
+            'path': f"/{path}",
+            'method': http_method
+        }
+        
+        table.put_item(Item=item)
+        
+        # Return successful response
+        return {
+            'statusCode': 200,
+            'headers': {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*',
+                'Access-Control-Allow-Headers': 'Content-Type,Authorization',
+                'Access-Control-Allow-Methods': 'GET,POST,OPTIONS'
+            },
+            'body': json.dumps({
+                'message': 'Visit logged successfully',
+                'path': f"/{path}",
+                'timestamp': timestamp
+            })
+        }
+        
+    except Exception as e:
+        logger.error(f"Error recording visit: {str(e)}")
+        return {
+            'statusCode': 500,
+            'headers': {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*'
+            },
+            'body': json.dumps({
+                'message': 'Internal server error',
+                'error': str(e)
+            })
+        }

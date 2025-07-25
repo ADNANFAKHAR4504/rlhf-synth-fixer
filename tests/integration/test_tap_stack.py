@@ -81,11 +81,9 @@ class TestTapStackIntegration(unittest.TestCase):
     if not self.bucket_name:
       self.fail("S3 bucket name not found in CloudFormation outputs")
 
-    # Get CloudFront domain
-    self.cloudfront_domain = flat_outputs.get(
-        'TapStack.CloudFrontDomainName', '') or flat_outputs.get('CloudFrontDomainName', '')
-    if not self.cloudfront_domain:
-      self.fail("CloudFront domain not found in CloudFormation outputs")
+    # Get S3 bucket URL for static website hosting
+    self.s3_website_url = flat_outputs.get(
+        'TapStack.S3BucketUrl', '') or flat_outputs.get('S3BucketUrl', '')
 
     # Default request timeout
     self.request_timeout = 10
@@ -99,8 +97,12 @@ class TestTapStackIntegration(unittest.TestCase):
 
       # Verify response
       self.assertEqual(response.status_code, 200)
-      self.assertTrue('message' in response.json())
-      self.assertEqual(response.json()['message'], 'Visit logged successfully')
+      response_json = response.json()
+      self.assertTrue('message' in response_json)
+      self.assertEqual(response_json['message'], 'Visit logged successfully')
+      self.assertTrue('path' in response_json)
+      self.assertEqual(response_json['path'], '/test-path')
+      self.assertTrue('timestamp' in response_json)
     except requests.RequestException as e:
       self.fail(f"API request failed: {str(e)}")
     except AssertionError:
@@ -123,6 +125,7 @@ class TestTapStackIntegration(unittest.TestCase):
       self.assertEqual(response.status_code, 200)
       headers = response.headers
       self.assertIn('Access-Control-Allow-Origin', headers)
+      self.assertEqual(headers['Access-Control-Allow-Origin'], '*')
       self.assertIn('Access-Control-Allow-Methods', headers)
       self.assertIn('Access-Control-Allow-Headers', headers)
     except requests.RequestException as e:
@@ -159,26 +162,32 @@ class TestTapStackIntegration(unittest.TestCase):
         else:
           raise
 
-      # Query DynamoDB for the visit log
-      response = self.table.query(
+      # Query DynamoDB for the visit log using string timestamp
+      time.sleep(2)  # Wait for eventual consistency
+      response_data = self.table.query(
           IndexName='timestamp-index',
-          KeyConditionExpression='#ts between :start and :end',
+          KeyConditionExpression='#ts BETWEEN :start AND :end',
           ExpressionAttributeNames={'#ts': 'timestamp'},
           ExpressionAttributeValues={
-              ':start': int((datetime.now(timezone.utc) - timedelta(minutes=5)).timestamp()),
-              ':end': int((datetime.now(timezone.utc) + timedelta(minutes=1)).timestamp())
+              ':start': (datetime.now(timezone.utc) - timedelta(minutes=5)).isoformat(),
+              ':end': (datetime.now(timezone.utc) + timedelta(minutes=1)).isoformat()
           }
       )
 
       # Verify visit was logged
-      self.assertIn('Items', response)
-      self.assertGreater(len(response['Items']), 0)
+      self.assertIn('Items', response_data)
+      self.assertGreater(len(response_data['Items']), 0)
 
       # Find our specific test path
       found = False
-      for item in response['Items']:
+      for item in response_data['Items']:
         if item.get('path') == test_path:
           found = True
+          # Verify required fields are present
+          self.assertIn('id', item)
+          self.assertIn('timestamp', item)
+          self.assertIn('ip', item)
+          self.assertIn('method', item)
           break
 
       self.assertTrue(found, "Test path not found in DynamoDB logs")
@@ -206,120 +215,27 @@ class TestTapStackIntegration(unittest.TestCase):
     except requests.RequestException as e:
       self.fail(f"API error handling test failed: {str(e)}")
 
-  @mark.it("API should handle rate limiting")
-  def test_rate_limiting(self):
-    try:
-      # Make multiple rapid requests
-      responses = []
-      for _ in range(10):
-        response = requests.get(
-            f"{self.api_endpoint}/test-path", timeout=self.request_timeout)
-        responses.append(response)
-        if response.status_code == 429:  # Too Many Requests
-          break
-
-      # If all responses are 500s, mark test as xfailed
-      if all(r.status_code == 500 for r in responses):
-        pytest.xfail(
-            "API is returning 500 errors, possibly not deployed correctly")
-
-      # Verify rate limiting is working
-      # Note: This test might need adjustment based on your WAF rate limit configuration
-      successful_requests = len([r for r in responses if r.status_code == 200])
-      self.assertGreaterEqual(successful_requests, 0)
-    except requests.RequestException as e:
-      self.fail(f"API rate limiting test failed: {str(e)}")
-
-  @mark.it("CloudFront distribution should be accessible")
-  def test_cloudfront_distribution(self):
-    try:
-      # Get CloudFront domain
-      cloudfront_domain = flat_outputs.get(
-          'TapStack.CloudFrontDomainName', '') or flat_outputs.get('CloudFrontDomainName', '')
-      if not cloudfront_domain:
-        self.fail("CloudFront domain not found in CloudFormation outputs")
-
-      # Try to access the CloudFront distribution
-      response = requests.get(
-          f"https://{cloudfront_domain}",
-          timeout=self.request_timeout,
-          allow_redirects=True
-      )
-
-      # 403 is acceptable as it means the distribution exists but no content yet
-      # 200 means the distribution is serving content
-      # 400 might indicate KMS issues but the distribution exists
-      self.assertTrue(
-          response.status_code in [200, 403, 400],
-          f"Expected CloudFront status code 200, 403, or 400, got {response.status_code}"
-      )
-
-      # Check if we can get the distribution configuration
-      try:
-        cf = boto3.client('cloudfront')
-        # List all distributions and find the one that matches our domain
-        distributions_response = cf.list_distributions()
-        distribution_id = None
-
-        for dist in distributions_response.get('DistributionList', {}).get('Items', []):
-          if dist.get('DomainName') == cloudfront_domain:
-            distribution_id = dist.get('Id')
-            break
-
-        if not distribution_id:
-          self.fail(
-              f"Could not find CloudFront distribution for domain: {cloudfront_domain}")
-
-        distribution = cf.get_distribution(Id=distribution_id)
-
-        # Check that the distribution exists and is deployed
-        self.assertEqual(distribution['Distribution']['Status'], 'Deployed')
-
-        # Check for Origin Access Control configuration
-        origins = distribution['Distribution']['DistributionConfig']['Origins']['Items']
-        s3_origins = [o for o in origins if 'S3OriginConfig' in o]
-
-        if s3_origins:
-          print(
-              f"Found {len(s3_origins)} S3 origins in CloudFront distribution")
-
-          # Check if any S3 origin has OAC configured
-          has_oac = any('OriginAccessControlId' in o for o in s3_origins)
-          if not has_oac:
-            print("Warning: No Origin Access Control found for S3 origins")
-      except (ValueError, KeyError, TypeError) as e:
-        # This is just for additional diagnostics, not a test failure
-        print(f"Could not check CloudFront configuration: {str(e)}")
-
-    except requests.RequestException as e:
-      self.fail(f"CloudFront distribution test failed: {str(e)}")
-
-  @mark.it("S3 bucket should have website hosting enabled")
+  @mark.it("S3 bucket should have static website hosting enabled")
   @pytest.mark.aws_credentials
   def test_s3_website_hosting(self):
     try:
-      # Check if bucket policy allows CloudFront access
-      bucket_policy = self.s3.get_bucket_policy(Bucket=self.bucket_name)
-      policy_json = json.loads(bucket_policy['Policy'])
-
-      # Look for CloudFront service principal in the policy
-      cloudfront_access = False
-      for statement in policy_json.get('Statement', []):
-        principal = statement.get('Principal', {})
-        if isinstance(principal, dict) and principal.get('Service') == 'cloudfront.amazonaws.com':
-          cloudfront_access = True
-          break
-
-      self.assertTrue(
-          cloudfront_access, "S3 bucket should have policy allowing CloudFront access")
+      # Check if bucket has website configuration
+      website_config = self.s3.get_bucket_website(Bucket=self.bucket_name)
+      
+      # Verify website configuration
+      self.assertIn('IndexDocument', website_config)
+      self.assertEqual(website_config['IndexDocument']['Suffix'], 'index.html')
+      
+      if 'ErrorDocument' in website_config:
+        self.assertEqual(website_config['ErrorDocument']['Key'], 'error.html')
 
     except ClientError as e:
       if 'ExpiredToken' in str(e):
         pytest.skip("Skipping test due to expired AWS credentials")
-      elif 'NoSuchBucketPolicy' in str(e):
-        self.fail("S3 bucket does not have a bucket policy")
+      elif 'NoSuchWebsiteConfiguration' in str(e):
+        self.fail("S3 bucket does not have website hosting configuration")
       else:
-        self.fail(f"S3 bucket policy test failed: {str(e)}")
+        self.fail(f"S3 website hosting test failed: {str(e)}")
 
   @mark.it("S3 bucket should have versioning enabled")
   @pytest.mark.aws_credentials
@@ -370,7 +286,7 @@ class TestTapStackIntegration(unittest.TestCase):
       self.assertIn('SSEDescription', table_description['Table'])
       sse_description = table_description['Table']['SSEDescription']
       self.assertEqual(sse_description['Status'], 'ENABLED')
-      # Check if customer-managed KMS key is used (KMS type should be CUSTOMER)
+      # Check if customer-managed KMS key is used (KMS type should be KMS)
       self.assertEqual(sse_description['SSEType'], 'KMS')
     except ClientError as e:
       if 'ExpiredToken' in str(e):
@@ -392,179 +308,31 @@ class TestTapStackIntegration(unittest.TestCase):
           AlarmNamePrefix=f"{stack_name}",
       )
 
-      # Verify alarms exist
-      self.assertGreater(len(alarms.get('MetricAlarms', [])), 0)
+      # Verify alarms exist (should have 3: errors, throttles, latency)
+      self.assertEqual(len(alarms.get('MetricAlarms', [])), 3)
 
       # Check for specific alarm types we expect
-      expected_alarms = ['Errors', 'Throttles', 'Duration', 'Latency']
+      expected_alarms = ['Error', 'Throttle', 'Latency']
       found_alarm_types = 0
 
       for alarm in alarms.get('MetricAlarms', []):
+        alarm_name = alarm['AlarmName']
         for expected in expected_alarms:
-          if expected.lower() in alarm['AlarmName'].lower():
+          if expected.lower() in alarm_name.lower():
             found_alarm_types += 1
+            # Verify alarm configuration
+            self.assertIn('MetricName', alarm)
+            self.assertIn('Threshold', alarm)
+            self.assertIn('ComparisonOperator', alarm)
             break
 
-      self.assertGreater(found_alarm_types, 0, "No expected alarm types found")
+      self.assertEqual(found_alarm_types, 3, f"Expected 3 alarm types, found {found_alarm_types}")
 
     except ClientError as e:
       if 'ExpiredToken' in str(e):
         pytest.skip("Skipping test due to expired AWS credentials")
       else:
         self.fail(f"CloudWatch alarms test failed: {str(e)}")
-
-  @mark.it("Secrets Manager should contain API secret")
-  @pytest.mark.aws_credentials
-  def test_secrets_manager(self):
-    try:
-      # Get the Secret ARN from CloudFormation outputs
-      secret_arn = flat_outputs.get(
-          'TapStack.ApiSecretArn', '') or flat_outputs.get('ApiSecretArn', '')
-      if not secret_arn:
-        self.fail("API Secret ARN not found in CloudFormation outputs")
-
-      # Initialize Secrets Manager client
-      secrets_client = boto3.client('secretsmanager')
-
-      # Get the secret value
-      response = secrets_client.describe_secret(
-          SecretId=secret_arn
-      )
-
-      # Verify the secret exists
-      self.assertEqual(response['ARN'], secret_arn)
-      self.assertIn('Name', response)
-
-      # Check if KMS encryption is used
-      self.assertIn('KmsKeyId', response)
-
-    except ClientError as e:
-      if 'ExpiredToken' in str(e):
-        pytest.skip("Skipping test due to expired AWS credentials")
-      elif 'ResourceNotFoundException' in str(e):
-        self.fail("API Secret not found in Secrets Manager")
-      else:
-        self.fail(f"Secrets Manager test failed: {str(e)}")
-
-  @mark.it("CloudFront should serve content from S3")
-  @pytest.mark.aws_credentials
-  def test_cloudfront_serves_s3_content(self):
-    try:
-      # Create a unique test file
-      test_id = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
-      index_content = f"""
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <title>CloudFront Test</title>
-            </head>
-            <body>
-                <h1>CloudFront Integration Test</h1>
-                <p>This page was created for testing CloudFront distribution.</p>
-                <p>Test ID: {test_id}</p>
-            </body>
-            </html>
-            """
-
-      # Upload the file to S3
-      self.s3.put_object(
-          Bucket=self.bucket_name,
-          Key='index.html',
-          Body=index_content,
-          ContentType='text/html',
-          CacheControl='max-age=60'  # Short cache time for testing
-      )
-
-      # Allow more time for CloudFront to pick up the change
-      # In a real environment, we might want to use CloudFront invalidation
-      # but for testing purposes, we'll just wait longer
-      time.sleep(15)
-
-      # Request the file through CloudFront
-      response = requests.get(
-          f"https://{self.cloudfront_domain}/index.html",
-          timeout=self.request_timeout
-      )
-
-      # Check for common error codes and mark as xfail instead of failing
-      if response.status_code in [400, 403, 404]:
-        print(
-            f"CloudFront returned {response.status_code} for /index.html - marking as xfail")
-
-        # Try to get more diagnostic information
-        try:
-          print(f"Response body: {response.text[:200]}...")
-        except (AttributeError, UnicodeDecodeError):
-          pass
-
-        # Check if CloudFront distribution has OAC configured
-        try:
-          cf = boto3.client('cloudfront')
-          dist = cf.get_distribution(Id=self.cloudfront_domain.split('.')[0])
-          origins = dist['Distribution']['DistributionConfig']['Origins']['Items']
-          has_oac = any(origin.get('OriginAccessControlId')
-                        for origin in origins)
-          print(f"CloudFront has OAC configured: {has_oac}")
-        except (ClientError, ValueError, KeyError) as e:
-          print(f"Could not check CloudFront OAC configuration: {str(e)}")
-
-        pytest.xfail(
-            f"CloudFront returned status {response.status_code} - distribution may not be ready")
-
-      # Verify the response
-      self.assertEqual(response.status_code, 200)
-      self.assertIn('text/html', response.headers.get('Content-Type', ''))
-      self.assertIn(test_id, response.text)
-      self.assertIn('CloudFront Integration Test', response.text)
-
-      # Test the root URL (which should also serve index.html)
-      root_response = requests.get(
-          f"https://{self.cloudfront_domain}/",
-          timeout=self.request_timeout
-      )
-
-      # Check for common error codes and mark as xfail instead of failing
-      if root_response.status_code in [400, 403, 404]:
-        print(
-            f"CloudFront returned {root_response.status_code} for root path - marking as xfail")
-        pytest.xfail(
-            f"CloudFront returned status {root_response.status_code} for root path")
-
-      self.assertEqual(root_response.status_code, 200)
-      self.assertIn(test_id, root_response.text)
-
-    except ClientError as e:
-      if 'ExpiredToken' in str(e):
-        pytest.skip("Skipping test due to expired AWS credentials: " + str(e))
-      else:
-        self.fail(f"CloudFront S3 content serving test failed: {str(e)}")
-    except requests.RequestException as e:
-      # If CloudFront is not correctly configured to serve the S3 content
-      if any(code in str(e) for code in ["400", "403", "404"]):
-        error_msg = f"CloudFront error: {str(e)}"
-        pytest.xfail(
-            f"Configuration issue or distribution not ready: {error_msg}")
-      else:
-        self.fail(f"CloudFront request failed: {str(e)}")
-
-  @mark.it("CloudFront should return error for nonexistent content")
-  def test_cloudfront_error(self):
-    try:
-      # Test with invalid path
-      response = requests.get(
-          f"https://{self.cloudfront_domain}/"
-          f"nonexistent-path-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}.html",
-          timeout=self.request_timeout
-      )
-
-      # With our custom error responses, CloudFront should return 200 for 403/404 errors
-      # If OAC is not yet configured properly, we might get 400 for KMS issues
-      self.assertTrue(
-          response.status_code in [200, 403, 404, 400],
-          f"Expected CloudFront status code 200, 403, 404, or 400, got {response.status_code}"
-      )
-    except requests.RequestException as e:
-      self.fail(f"CloudFront error test failed: {str(e)}")
 
   @mark.it("Lambda function should respond correctly to direct invocation")
   @pytest.mark.aws_credentials
@@ -597,7 +365,7 @@ class TestTapStackIntegration(unittest.TestCase):
               "timeEpoch": int(datetime.now(timezone.utc).timestamp())
           },
           "pathParameters": {
-              "path": "test-direct"
+              "proxy": "test-direct"
           },
           "isBase64Encoded": False
       }
@@ -617,13 +385,20 @@ class TestTapStackIntegration(unittest.TestCase):
       self.assertEqual(response['StatusCode'], 200)
       self.assertIn('statusCode', payload)
       self.assertIn('body', payload)
+      self.assertIn('headers', payload)
 
       # Parse the body to verify the content
       body = json.loads(payload['body'])
       self.assertIn('message', body)
       self.assertEqual(body['message'], 'Visit logged successfully')
       self.assertIn('path', body)
-      self.assertEqual(body['path'], 'test-direct')
+      self.assertEqual(body['path'], '/test-direct')
+      self.assertIn('timestamp', body)
+
+      # Verify CORS headers are present
+      headers = payload['headers']
+      self.assertIn('Access-Control-Allow-Origin', headers)
+      self.assertEqual(headers['Access-Control-Allow-Origin'], '*')
 
     except ClientError as e:
       if 'ExpiredToken' in str(e):
@@ -660,8 +435,14 @@ class TestTapStackIntegration(unittest.TestCase):
       self.assertIn('body', payload)
 
       # The function should handle the error gracefully
-      # It might return 500 status code in the body, which is acceptable
-      self.assertTrue(payload['statusCode'] in [200, 500])
+      # It should return 500 status code in the body for errors
+      self.assertEqual(payload['statusCode'], 500)
+
+      # Parse the error response body
+      body = json.loads(payload['body'])
+      self.assertIn('message', body)
+      self.assertEqual(body['message'], 'Internal server error')
+      self.assertIn('error', body)
 
     except ClientError as e:
       if 'ExpiredToken' in str(e):
@@ -707,7 +488,7 @@ class TestTapStackIntegration(unittest.TestCase):
               "timeEpoch": int(datetime.now(timezone.utc).timestamp())
           },
           "pathParameters": {
-              "path": test_path
+              "proxy": test_path
           },
           "isBase64Encoded": False
       }
@@ -738,11 +519,66 @@ class TestTapStackIntegration(unittest.TestCase):
       self.assertEqual(api_response.status_code, 200)
       self.assertEqual(lambda_payload['statusCode'], 200)
 
+      # Both should have timestamps
+      self.assertIn('timestamp', api_body)
+      self.assertIn('timestamp', lambda_body)
+
     except (ClientError, requests.RequestException) as e:
       if 'ExpiredToken' in str(e):
         pytest.skip("Skipping test due to expired AWS credentials")
       else:
         self.fail(f"Lambda/API consistency test failed: {str(e)}")
+
+  @mark.it("S3 bucket should serve static website content")
+  @pytest.mark.aws_credentials  
+  def test_s3_static_website(self):
+    """Test S3 static website hosting functionality"""
+    try:
+      # Create a test HTML file
+      test_content = """
+      <!DOCTYPE html>
+      <html>
+      <head>
+          <title>Test Page</title>
+      </head>
+      <body>
+          <h1>Static Website Test</h1>
+          <p>This page is served from S3 static website hosting.</p>
+      </body>
+      </html>
+      """
+      
+      # Upload test file to S3
+      self.s3.put_object(
+          Bucket=self.bucket_name,
+          Key='index.html',
+          Body=test_content,
+          ContentType='text/html'
+      )
+      
+      # Test accessing the website URL if available
+      if self.s3_website_url:
+        try:
+          response = requests.get(self.s3_website_url, timeout=self.request_timeout)
+          
+          # S3 static website should return 200 or might return 403 if access is blocked
+          self.assertTrue(
+              response.status_code in [200, 403],
+              f"Expected status code 200 or 403, got {response.status_code}"
+          )
+          
+          if response.status_code == 200:
+            self.assertIn('Static Website Test', response.text)
+            
+        except requests.RequestException as e:
+          # Website URL might not be accessible due to bucket policy restrictions
+          print(f"S3 website URL not accessible (expected): {str(e)}")
+      
+    except ClientError as e:
+      if 'ExpiredToken' in str(e):
+        pytest.skip("Skipping test due to expired AWS credentials")
+      else:
+        self.fail(f"S3 static website test failed: {str(e)}")
 
   def tearDown(self):
     """Clean up any test data"""
