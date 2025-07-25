@@ -75,7 +75,7 @@ class TapStack(Stack):
     self._create_stacks_per_region()
 
     # Establish networking, deployment, and DNS resources
-    self._create_peering_stack()
+    # self._create_peering_stack()
     self._create_cicd_stack()
     self._create_route53_stack()
 
@@ -123,18 +123,18 @@ class TapStack(Stack):
         env=env
       )
 
-  def _create_peering_stack(self):
-    """
-    Create a VPC peering stack between the defined regional VPCs.
-    """
-    VpcPeeringStack(
-      self,
-      f"{self.app_name}-peering-{self.stack_suffix}",
-      vpc1=self.vpcs["us-east-1"].vpc,
-      vpc2=self.vpcs["us-east-2"].vpc,
-      env=self.env_us_east_1,
-      cross_region_references=True
-    )
+  # def _create_peering_stack(self):
+  #   """
+  #   Create a VPC peering stack between the defined regional VPCs.
+  #   """
+  #   VpcPeeringStack(
+  #     self,
+  #     f"{self.app_name}-peering-{self.stack_suffix}",
+  #     vpc1=self.vpcs["us-east-1"].vpc,
+  #     vpc2=self.vpcs["us-east-2"].vpc,
+  #     env=self.env_us_east_1,
+  #     cross_region_references=True
+  #   )
 
   def _create_cicd_stack(self):
     """
