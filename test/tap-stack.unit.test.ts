@@ -21,16 +21,17 @@ describe('Elastic Beanstalk CloudFormation Template', () => {
     });
 
     test('should have a comprehensive description', () => {
-      const expectedDescription = 'Deploys a highly available and scalable Node.js web application using AWS Elastic Beanstalk. This template includes the necessary IAM roles to create a stable, empty environment.';
+      // UPDATED: Description now reflects HTTPS and least-privilege roles.
+      const expectedDescription = 'Deploys a highly available and scalable Node.js web application using AWS Elastic Beanstalk with a secure HTTPS endpoint. This template includes least-privilege IAM roles.';
       expect(template.Description).toBeDefined();
-      // Use trim() to remove any trailing newlines (\n) for an exact match.
       expect(template.Description.trim()).toBe(expectedDescription);
     });
   });
 
   describe('Parameters', () => {
     test('should define the correct parameters', () => {
-      const expectedParams = ['ApplicationName', 'InstanceType'];
+      // UPDATED: Added SSLCertificateArn to the expected parameters.
+      const expectedParams = ['ApplicationName', 'InstanceType', 'SSLCertificateArn'];
       expect(Object.keys(template.Parameters)).toEqual(expectedParams);
     });
 
@@ -44,10 +45,17 @@ describe('Elastic Beanstalk CloudFormation Template', () => {
     test('InstanceType parameter should have correct properties', () => {
       const param = template.Parameters.InstanceType;
       expect(param.Type).toBe('String');
-      // Updated to match the JSON file's default value
       expect(param.Default).toBe('t2.micro');
       expect(param.Description).toBe('EC2 instance type for the web application servers.');
       expect(param.AllowedValues).toEqual(['t2.micro', 't3.micro', 't3.small', 'm5.large']);
+    });
+
+    // ADDED: New test for the SSLCertificateArn parameter.
+    test('SSLCertificateArn parameter should have correct properties', () => {
+      const param = template.Parameters.SSLCertificateArn;
+      expect(param.Type).toBe('String');
+      expect(param.Description).toBe('The ARN of the ACM SSL certificate for the Application Load Balancer.');
+      expect(param.Default).toBe('arn:aws:acm:us-east-1:123456789012:certificate/your-default-cert-id');
     });
   });
 
@@ -58,11 +66,14 @@ describe('Elastic Beanstalk CloudFormation Template', () => {
         expect(template.Resources.AWSElasticBeanstalkEC2InstanceProfile).toBeDefined();
     });
 
-    test('IAM roles should have AdministratorAccess for development', () => {
+    // UPDATED: This test now checks for the correct least-privilege policies.
+    test('IAM roles should use least-privilege managed policies', () => {
         const serviceRole = template.Resources.AWSElasticBeanstalkServiceRole;
         const ec2Role = template.Resources.AWSElasticBeanstalkEC2Role;
-        expect(serviceRole.Properties.ManagedPolicyArns).toContain('arn:aws:iam::aws:policy/AdministratorAccess');
-        expect(ec2Role.Properties.ManagedPolicyArns).toContain('arn:aws:iam::aws:policy/AdministratorAccess');
+        // Check for the more restrictive service role policy.
+        expect(serviceRole.Properties.ManagedPolicyArns).toContain('arn:aws:iam::aws:policy/service-role/AWSElasticBeanstalkService');
+        // Check for the standard web tier policy.
+        expect(ec2Role.Properties.ManagedPolicyArns).toContain('arn:aws:iam::aws:policy/AWSElasticBeanstalkWebTier');
     });
 
     test('should define WebAppApplication and WebAppEnvironment resources correctly', () => {
@@ -103,16 +114,40 @@ describe('Elastic Beanstalk CloudFormation Template', () => {
             const lbTypeOption = findOption('aws:elasticbeanstalk:environment', 'LoadBalancerType');
             expect(lbTypeOption.Value).toBe('application');
         });
+
+        // ADDED: New test for auto scaling settings.
+        test('should configure auto scaling group properties', () => {
+            const minSizeOption = findOption('aws:autoscaling:asg', 'MinSize');
+            expect(minSizeOption.Value).toBe('2');
+
+            const maxSizeOption = findOption('aws:autoscaling:asg', 'MaxSize');
+            expect(maxSizeOption.Value).toBe('10');
+        });
+
+        // ADDED: New test for the HTTPS listener configuration.
+        test('should configure a secure HTTPS listener on port 443', () => {
+            const protocolOption = findOption('aws:elbv2:listener:443', 'Protocol');
+            expect(protocolOption.Value).toBe('HTTPS');
+
+            const certOption = findOption('aws:elbv2:listener:443', 'SSLCertificateArns');
+            expect(certOption.Value).toEqual({ Ref: 'SSLCertificateArn' });
+        });
+
+        // ADDED: New test for disabling the default HTTP listener.
+        test('should disable the default insecure HTTP listener', () => {
+            const listenerEnabledOption = findOption('aws:elbv2:listener:default', 'ListenerEnabled');
+            expect(listenerEnabledOption.Value).toBe('false');
+        });
     });
   });
 
   describe('Outputs', () => {
-    test('should have a valid HTTP EnvironmentURL output', () => {
+    // UPDATED: This test now validates the HTTPS URL and description.
+    test('should have a valid HTTPS EnvironmentURL output', () => {
       const output = template.Outputs.EnvironmentURL;
       expect(output).toBeDefined();
-      expect(output.Description).toBe('The URL of the new Elastic Beanstalk environment.');
-      // Updated to check for an HTTP URL, not HTTPS
-      expect(output.Value).toEqual({ 'Fn::Sub': 'http://${WebAppEnvironment.EndpointURL}' });
+      expect(output.Description).toBe('The HTTPS URL of the new Elastic Beanstalk environment.');
+      expect(output.Value).toEqual({ 'Fn::Sub': 'https://${WebAppEnvironment.EndpointURL}' });
     });
   });
 });
