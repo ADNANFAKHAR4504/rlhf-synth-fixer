@@ -14,6 +14,7 @@ import {
 import {
   ElasticLoadBalancingV2Client,
   DescribeListenersCommand,
+  Certificate, // Correctly imported type
 } from '@aws-sdk/client-elastic-load-balancing-v2';
 
 // --- Configuration ---
@@ -147,7 +148,8 @@ describe('Elastic Beanstalk Integration Tests', () => {
       const httpsListener = listeners.find(l => l.Port === 443);
       expect(httpsListener).toBeDefined();
       
-      const certificate = httpsListener.Certificates?.find(cert => cert.CertificateArn === sslCertificateArn);
+      // FIX: Explicitly typed the 'cert' parameter to resolve the TS error.
+      const certificate = httpsListener.Certificates?.find((cert: Certificate) => cert.CertificateArn === sslCertificateArn);
       expect(certificate).toBeDefined();
     });
 
