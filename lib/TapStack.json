@@ -1,6 +1,6 @@
 {
     "AWSTemplateFormatVersion": "2010-09-09",
-    "Description": "Deploys a highly available and scalable Node.js web application using AWS Elastic Beanstalk. This template includes the necessary IAM roles to create a stable, empty environment.\n",
+    "Description": "Deploys a highly available and scalable Node.js web application using AWS Elastic Beanstalk with a secure HTTPS endpoint. This template includes least-privilege IAM roles.\n",
     "Parameters": {
         "ApplicationName": {
             "Type": "String",
@@ -17,6 +17,10 @@
                 "t3.small",
                 "m5.large"
             ]
+        },
+        "SSLCertificateArn": {
+            "Type": "String",
+            "Description": "The ARN of the ACM SSL certificate for the Application Load Balancer."
         }
     },
     "Resources": {
@@ -36,7 +40,7 @@
                     ]
                 },
                 "ManagedPolicyArns": [
-                    "arn:aws:iam::aws:policy/AdministratorAccess"
+                    "arn:aws:iam::aws:policy/service-role/AWSElasticBeanstalkServiceRole"
                 ]
             }
         },
@@ -56,7 +60,7 @@
                     ]
                 },
                 "ManagedPolicyArns": [
-                    "arn:aws:iam::aws:policy/AdministratorAccess"
+                    "arn:aws:iam::aws:policy/AWSElasticBeanstalkWebTier"
                 ]
             }
         },
@@ -130,9 +134,21 @@
                         "Value": "10"
                     },
                     {
-                        "Namespace": "aws:elasticbeanstalk:application:environment",
-                        "OptionName": "ELBScheme",
-                        "Value": "public"
+                        "Namespace": "aws:elbv2:listener:443",
+                        "OptionName": "Protocol",
+                        "Value": "HTTPS"
+                    },
+                    {
+                        "Namespace": "aws:elbv2:listener:443",
+                        "OptionName": "SSLCertificateArns",
+                        "Value": {
+                            "Ref": "SSLCertificateArn"
+                        }
+                    },
+                    {
+                        "Namespace": "aws:elbv2:listener:default",
+                        "OptionName": "ListenerEnabled",
+                        "Value": "false"
                     }
                 ]
             }
@@ -140,9 +156,9 @@
     },
     "Outputs": {
         "EnvironmentURL": {
-            "Description": "The URL of the new Elastic Beanstalk environment.",
+            "Description": "The HTTPS URL of the new Elastic Beanstalk environment.",
             "Value": {
-                "Fn::Sub": "http://${WebAppEnvironment.EndpointURL}"
+                "Fn::Sub": "https://${WebAppEnvironment.EndpointURL}"
             }
         }
     }

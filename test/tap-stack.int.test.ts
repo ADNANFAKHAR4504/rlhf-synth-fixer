@@ -29,12 +29,6 @@ if (!awsAccessKeyId || !awsSecretAccessKey) {
   throw new Error('AWS credentials AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY must be set as environment variables.');
 }
 
-console.log("keys are:")
-console.log(`AWS Key ID Length: ${awsAccessKeyId.length}`);
-console.log(`AWS Key ID: ${awsAccessKeyId.substring(0, awsAccessKeyId.length-1)}`);
-console.log(`AWS Key ID: ${awsAccessKeyId.substring(awsAccessKeyId.length-1, awsAccessKeyId.length)}`);
-console.log(`AWS access key: ${awsSecretAccessKey.substring(0, awsSecretAccessKey.length-1)}`);
-console.log(`AWS access key: ${awsSecretAccessKey.substring(awsSecretAccessKey.length-1, awsSecretAccessKey.length)}`);
 
 const credentials = {
   accessKeyId: awsAccessKeyId,

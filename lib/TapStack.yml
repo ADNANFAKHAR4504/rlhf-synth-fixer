@@ -1,14 +1,14 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: >
-  Deploys a highly available and scalable Node.js web application using AWS Elastic Beanstalk.
-  This template includes the necessary IAM roles to create a stable, empty environment.
+  Deploys a highly available and scalable Node.js web application using AWS Elastic Beanstalk
+  with a secure HTTPS endpoint. This template includes least-privilege IAM roles.
 
 Parameters:
   ApplicationName:
     Type: String
     Description: The name of the Elastic Beanstalk application.
     Default: MyNodeJsApp
-
+  
   InstanceType:
     Type: String
     Description: EC2 instance type for the web application servers.
@@ -18,10 +18,14 @@ Parameters:
       - t3.micro
       - t3.small
       - m5.large
+  
+  # ADDED: Parameter for the ACM SSL certificate ARN
+  SSLCertificateArn:
+    Type: String
+    Description: The ARN of the ACM SSL certificate for the Application Load Balancer.
 
 Resources:
-  # --- IAM Roles and Profiles ---
-  # Service Role for Elastic Beanstalk to manage other AWS services
+  # --- IAM Roles and Profiles (with improved security) ---
   AWSElasticBeanstalkServiceRole:
     Type: AWS::IAM::Role
     Properties:
@@ -32,11 +36,10 @@ Resources:
             Principal:
               Service: elasticbeanstalk.amazonaws.com
             Action: sts:AssumeRole
-      # WARNING: AdministratorAccess is for development/testing only.
+      # MODIFIED: Replaced AdministratorAccess with a more restrictive, standard service role.
       ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/AdministratorAccess
+        - arn:aws:iam::aws:policy/service-role/AWSElasticBeanstalkServiceRole
 
-  # IAM Role for the EC2 instances launched by Elastic Beanstalk
   AWSElasticBeanstalkEC2Role:
     Type: AWS::IAM::Role
     Properties:
@@ -47,11 +50,10 @@ Resources:
             Principal:
               Service: ec2.amazonaws.com
             Action: sts:AssumeRole
-      # WARNING: AdministratorAccess is for development/testing only.
+      # MODIFIED: Replaced AdministratorAccess with the standard web tier policy.
       ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/AdministratorAccess
+        - arn:aws:iam::aws:policy/AWSElasticBeanstalkWebTier
 
-  # Instance Profile to attach the role to the EC2 instances
   AWSElasticBeanstalkEC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
@@ -65,8 +67,6 @@ Resources:
       ApplicationName: !Ref ApplicationName
       Description: AWS Elastic Beanstalk application for our Node.js app.
 
-  # REMOVED: The SampleApplicationVersion resource has been removed to bypass S3 access errors.
-
   # --- Elastic Beanstalk Environment ---
   WebAppEnvironment:
     Type: AWS::ElasticBeanstalk::Environment
@@ -74,7 +74,6 @@ Resources:
       ApplicationName: !Ref WebAppApplication
       Description: Environment for the Node.js web application
       SolutionStackName: "64bit Amazon Linux 2 v5.11.1 running Node.js 18"
-      # REMOVED: The VersionLabel property is no longer needed.
       OptionSettings:
         # --- IAM and Instance Configuration ---
         - Namespace: aws:autoscaling:launchconfiguration
@@ -87,7 +86,7 @@ Resources:
         - Namespace: aws:elasticbeanstalk:environment
           OptionName: ServiceRole
           Value: !Ref AWSElasticBeanstalkServiceRole
-        # --- High Availability and Scalability Configuration ---
+        # --- High Availability Configuration ---
         - Namespace: aws:elasticbeanstalk:environment
           OptionName: EnvironmentType
           Value: LoadBalanced
@@ -101,12 +100,21 @@ Resources:
         - Namespace: aws:autoscaling:asg
           OptionName: MaxSize
           Value: '10'
-        # --- Networking Configuration ---
-        - Namespace: aws:elasticbeanstalk:application:environment
-          OptionName: ELBScheme
-          Value: public
+        
+        # ADDED: HTTPS Listener Configuration on the Application Load Balancer
+        - Namespace: aws:elbv2:listener:443
+          OptionName: Protocol
+          Value: HTTPS
+        - Namespace: aws:elbv2:listener:443
+          OptionName: SSLCertificateArns
+          Value: !Ref SSLCertificateArn
+        
+        # ADDED: Disable the default insecure HTTP listener for better security
+        - Namespace: aws:elbv2:listener:default
+          OptionName: ListenerEnabled
+          Value: 'false'
 
 Outputs:
   EnvironmentURL:
-    Description: The URL of the new Elastic Beanstalk environment.
-    Value: !Sub "http://${WebAppEnvironment.EndpointURL}"
+    Description: The HTTPS URL of the new Elastic Beanstalk environment.
+    Value: !Sub "https://${WebAppEnvironment.EndpointURL}"
