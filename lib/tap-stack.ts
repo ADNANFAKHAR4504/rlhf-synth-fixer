@@ -27,38 +27,39 @@ export class TapStack extends cdk.Stack {
     // ! Instead, create separate stacks for each resource type.
 
     // Define configurations for each environment
-    const devConfig: EnvironmentConfig = {
-      hostedZoneName,
-      imageName,
-      imageTag,
-      port,
-      domainName: process.env.DOMAIN_NAME || 'api.dev.local',
-      envName: 'dev',
-      vpcCidr: '10.0.0.0/16',
-      cpu: Number(process.env.CPU_VALUE) || 256,
-      memoryLimit: Number(process.env.MEMORY_Limit) || 512,
-    };
-
-    const prodConfig: EnvironmentConfig = {
-      hostedZoneName,
-      imageName,
-      imageTag,
-      port,
-      domainName: process.env.DOMAIN_NAME || 'api.prod.local',
-      envName: 'prod',
-      vpcCidr: '10.1.0.0/16',
-      cpu: Number(process.env.CPU_VALUE) || 512,
-      memoryLimit: Number(process.env.MEMORY_Limit) || 1024,
-    };
+    let config: EnvironmentConfig;
+    if (environmentSuffix === 'dev') {
+      config = {
+        hostedZoneName,
+        imageName,
+        imageTag,
+        port,
+        domainName: process.env.DOMAIN_NAME || 'api.dev.local',
+        envName: 'dev',
+        vpcCidr: '10.0.0.0/16',
+        cpu: Number(process.env.CPU_VALUE) || 256,
+        memoryLimit: Number(process.env.MEMORY_LIMIT) || 512,
+      };
+    } else {
+      config = {
+        hostedZoneName,
+        imageName,
+        imageTag,
+        port,
+        domainName: process.env.DOMAIN_NAME || `api.${environmentSuffix}.local`,
+        envName: environmentSuffix,
+        vpcCidr: '10.1.0.0/16',
+        cpu: Number(process.env.CPU_VALUE) || 512,
+        memoryLimit: Number(process.env.MEMORY_LIMIT) || 1024,
+      };
+    }
 
     // Deploy stacks for each environment
-    new MultiEnvEcsStack(this, 'DevStack', devConfig, {
-      env: {
-        account: process.env.CDK_DEFAULT_ACCOUNT,
-        region: process.env.CDK_DEFAULT_REGION,
-      },
-    });
-    new MultiEnvEcsStack(this, 'ProdStack', prodConfig, {
+    function capitalize(str: string): string {
+      return str.charAt(0).toUpperCase() + str.slice(1);
+    }
+
+    new MultiEnvEcsStack(this, capitalize(`${environmentSuffix}Stack`), config, {
       env: {
         account: process.env.CDK_DEFAULT_ACCOUNT,
         region: process.env.CDK_DEFAULT_REGION,
