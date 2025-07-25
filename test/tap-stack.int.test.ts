@@ -163,7 +163,7 @@ describe('Secure Infrastructure Stack Integration Tests', () => {
     const iam = new IAMClient({ region });
     const role = await iam.send(new GetRoleCommand({ RoleName: 'AppRole' }));
     expect(role.Role).toBeDefined();
-    expect(role.Role?.RoleName).toBe('AppRole');
+    expect(role.Role?.RoleName).toBe(outputs.AppRoleName);
   });
 
   test('Whitelisted IAM User should exist', async () => {
@@ -180,7 +180,7 @@ describe('Secure Infrastructure Stack Integration Tests', () => {
 
   test('RDS DBSubnetGroup should exist', async () => {
     const res = await rds.send(new DescribeDBSubnetGroupsCommand({}));
-    const group = res.DBSubnetGroups?.find(g => g.DBSubnetGroupName?.includes('Private'));
+    const group = res.DBSubnetGroups?.find(g => g.DBSubnetGroupName === outputs.DBSubnetGroupName);
     expect(group).toBeDefined();
   });
 
@@ -239,16 +239,17 @@ describe('Secure Infrastructure Stack Integration Tests', () => {
   });
 
   test('SNS Topic for Security Notifications should exist', async () => {
-    const sns = new SNSClient({ region });
-    const res = await sns.send(new ListTopicsCommand({}));
-    const topic = res.Topics?.find(t => t.TopicArn?.includes('SecurityAlerts'));
-    expect(topic).toBeDefined();
+    const res = await sns.send(new GetTopicAttributesCommand({
+      TopicArn: outputs.SecurityAlertsTopicArn, // 👈 Use the output from CloudFormation
+    }));
+    expect(res.Attributes?.TopicArn).toBe(outputs.SecurityAlertsTopicArn);
   });
 
   test('Daily EventBridge backup rule should exist', async () => {
     const eb = new EventBridgeClient({ region });
-    const res = await eb.send(new ListRulesCommand({ NamePrefix: 'DailyBackupRule' }));
-    expect(res.Rules?.[0]).toBeDefined();
+    const res = await eb.send(new ListRulesCommand({ NamePrefix: outputs.DailyBackupRuleName }));
+    const rule = res.Rules?.find(r => r.Name === outputs.DailyBackupRuleName);
+    expect(rule).toBeDefined();
   });
 
   test('CloudFront distribution should be enabled', async () => {
@@ -305,6 +306,11 @@ describe('Secure Infrastructure Stack Integration Tests', () => {
       'S3BucketName',
       'CloudTrailLogBucketName',
       'LambdaFunctionName',
+      'DBSubnetGroupName',
+      'RDSSecret',
+      'RDSMonitoringRoleName',
+      'SecurityAlertsTopicArn',
+      'DailyBackupRuleName'
     ];
     expected.forEach(key => expect(outputs[key]).toBeDefined());
   });

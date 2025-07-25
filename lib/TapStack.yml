@@ -262,7 +262,6 @@ Resources:
               StringNotLike:
                 "aws:PrincipalArn":
                   - !GetAtt WhitelistedIAMUser.Arn
-                  - arn:aws:iam::718240086340:user/iac-deployment-runner
               StringNotEqualsIfExists:
                 aws:PrincipalServiceName:
                   - config.amazonaws.com
@@ -357,7 +356,7 @@ Resources:
         Statement:
           - Effect: Allow
             Principal:
-              Service: monitoring.rds.amazonaws.com
+              Service: rds.amazonaws.com
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole
@@ -690,3 +689,30 @@ Outputs:
     Value: !Ref BackupLambda
     Description: Daily Backup Lambda Function
 
+  WhitelistedUser:
+    Value: !Ref WhitelistedUser
+    Description: IAM User allowed to access the environment
+
+  AppRoleName:
+    Value: !Ref AppRole
+    Description: The name of the IAM role used by the application
+  
+  DBSubnetGroupName:
+    Value: !Ref DBSubnetGroup
+    Description: DB Subnet Group Name
+  
+  RDSSecret:
+    Value: !Ref RDSSecret
+    Description: Name of the RDS credentials secret
+
+  RDSMonitoringRoleName:
+    Value: !Ref RDSMonitoringRole
+    Description: IAM role used for RDS enhanced monitoring
+  
+  SecurityAlertsTopicArn:
+    Value: !Ref SecurityNotifications
+    Description: SNS Topic for security notifications
+
+  DailyBackupRuleName:
+    Value: !Ref DailyBackupRule
+    Description: Name of the daily backup EventBridge rule
