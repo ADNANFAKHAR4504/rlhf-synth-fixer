@@ -195,7 +195,8 @@ describe('Secure Infrastructure Stack Integration Tests', () => {
 
   test('RDS monitoring role should have enhanced monitoring policy attached', async () => {
     const iam = new IAMClient({ region });
-    const res = await iam.send(new GetRoleCommand({ RoleName: 'RDSMonitoringRole' }));
+    const roleName = outputs.RDSMonitoringRoleName; // 👈 Dynamically use actual role name
+    const res = await iam.send(new GetRoleCommand({ RoleName: roleName }));
     expect(res.Role).toBeDefined();
   });
 
