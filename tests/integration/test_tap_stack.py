@@ -78,9 +78,9 @@ def stack_info_data():
   return {"info": stack_data, "outputs": outputs}
 
 
-def test_stack_status(stack_info_data):
+def test_stack_status(stack_data):
   """Stack should be successfully deployed"""
-  assert stack_info_data["info"]["StackStatus"] == "CREATE_COMPLETE"
+  assert stack_data["info"]["StackStatus"] == "CREATE_COMPLETE"
 
 
 def test_vpc_exists():
