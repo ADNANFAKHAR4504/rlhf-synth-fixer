@@ -32,3 +32,6 @@ new TapStack(app, stackName, {
   awsRegion: awsRegion,
   defaultTags: defaultTags
 });
+
+// Synthesize the app to generate the Terraform configuration
+app.synth();

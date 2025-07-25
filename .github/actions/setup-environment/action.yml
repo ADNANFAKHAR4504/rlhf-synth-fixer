@@ -42,7 +42,7 @@ runs:
     - name: Setup Terraform
       uses: hashicorp/setup-terraform@v3
       with:
-        terraform-version: ${{ inputs.terraform-version }}
+        terraform_version: ${{ inputs.terraform-version }}
 
     - name: Install pipenv
       shell: bash
