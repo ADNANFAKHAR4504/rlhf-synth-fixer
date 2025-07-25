@@ -1,0 +1,342 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Serverless RESTful API for User Management",
+  "Parameters": {
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Default": "dev",
+      "Description": "Environment suffix for resource naming (e.g., dev, staging, prod)",
+      "AllowedPattern": "^[a-zA-Z0-9]+$",
+      "ConstraintDescription": "Must contain only alphanumeric characters"
+    }
+  },
+  "Resources": {
+    "UsersTable": {
+      "Type": "AWS::DynamoDB::Table",
+      "Properties": {
+        "TableName": {
+          "Fn::Sub": "UsersTable-${EnvironmentSuffix}"
+        },
+        "AttributeDefinitions": [
+          {
+            "AttributeName": "UserId",
+            "AttributeType": "S"
+          }
+        ],
+        "KeySchema": [
+          {
+            "AttributeName": "UserId",
+            "KeyType": "HASH"
+          }
+        ],
+        "BillingMode": "PAY_PER_REQUEST"
+      }
+    },
+    "ApiGatewayRestApi": {
+      "Type": "AWS::ApiGateway::RestApi",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "UserManagementApi-${EnvironmentSuffix}"
+        },
+        "Description": "RESTful API for managing users"
+      }
+    },
+    "ApiGatewayResourceUsers": {
+      "Type": "AWS::ApiGateway::Resource",
+      "Properties": {
+        "RestApiId": {
+          "Ref": "ApiGatewayRestApi"
+        },
+        "ParentId": {
+          "Fn::GetAtt": [
+            "ApiGatewayRestApi",
+            "RootResourceId"
+          ]
+        },
+        "PathPart": "users"
+      }
+    },
+    "ApiGatewayResourceUserId": {
+      "Type": "AWS::ApiGateway::Resource",
+      "Properties": {
+        "RestApiId": {
+          "Ref": "ApiGatewayRestApi"
+        },
+        "ParentId": {
+          "Ref": "ApiGatewayResourceUsers"
+        },
+        "PathPart": "{userid}"
+      }
+    },
+    "CreateUserFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "CreateUserFunction-${EnvironmentSuffix}"
+        },
+        "Runtime": "python3.9",
+        "Handler": "index.handler",
+        "Role": {
+          "Fn::GetAtt": [
+            "LambdaExecutionRole",
+            "Arn"
+          ]
+        },
+        "Environment": {
+          "Variables": {
+            "TABLE_NAME": {
+              "Ref": "UsersTable"
+            }
+          }
+        },
+        "Code": {
+          "ZipFile": "import json\nimport boto3\nimport os\n\ndynamodb = boto3.resource('dynamodb')\ntable = dynamodb.Table(os.environ['TABLE_NAME'])\n\ndef handler(event, context):\n    try:\n        body = json.loads(event['body'])\n        user_id = body['UserId']\n        table.put_item(Item={'UserId': user_id})\n        return {\n            'statusCode': 200,\n            'headers': {'Content-Type': 'application/json'},\n            'body': json.dumps({'message': 'User created', 'UserId': user_id})\n        }\n    except Exception as e:\n        return {\n            'statusCode': 400,\n            'headers': {'Content-Type': 'application/json'},\n            'body': json.dumps({'error': str(e)})\n        }\n"
+        }
+      }
+    },
+    "GetUserFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "GetUserFunction-${EnvironmentSuffix}"
+        },
+        "Runtime": "python3.9",
+        "Handler": "index.handler",
+        "Role": {
+          "Fn::GetAtt": [
+            "LambdaExecutionRole",
+            "Arn"
+          ]
+        },
+        "Environment": {
+          "Variables": {
+            "TABLE_NAME": {
+              "Ref": "UsersTable"
+            }
+          }
+        },
+        "Code": {
+          "ZipFile": "import json\nimport boto3\nimport os\n\ndynamodb = boto3.resource('dynamodb')\ntable = dynamodb.Table(os.environ['TABLE_NAME'])\n\ndef handler(event, context):\n    try:\n        user_id = event['pathParameters']['userid']\n        response = table.get_item(Key={'UserId': user_id})\n        \n        if 'Item' in response:\n            return {\n                'statusCode': 200,\n                'headers': {'Content-Type': 'application/json'},\n                'body': json.dumps(response['Item'])\n            }\n        else:\n            return {\n                'statusCode': 404,\n                'headers': {'Content-Type': 'application/json'},\n                'body': json.dumps({'error': 'User not found'})\n            }\n    except Exception as e:\n        return {\n            'statusCode': 400,\n            'headers': {'Content-Type': 'application/json'},\n            'body': json.dumps({'error': str(e)})\n        }\n"
+        }
+      }
+    },
+    "DeleteUserFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "DeleteUserFunction-${EnvironmentSuffix}"
+        },
+        "Runtime": "python3.9",
+        "Handler": "index.handler",
+        "Role": {
+          "Fn::GetAtt": [
+            "LambdaExecutionRole",
+            "Arn"
+          ]
+        },
+        "Environment": {
+          "Variables": {
+            "TABLE_NAME": {
+              "Ref": "UsersTable"
+            }
+          }
+        },
+        "Code": {
+          "ZipFile": "import json\nimport boto3\nimport os\n\ndynamodb = boto3.resource('dynamodb')\ntable = dynamodb.Table(os.environ['TABLE_NAME'])\n\ndef handler(event, context):\n    try:\n        user_id = event['pathParameters']['userid']\n        table.delete_item(Key={'UserId': user_id})\n        return {\n            'statusCode': 200,\n            'headers': {'Content-Type': 'application/json'},\n            'body': json.dumps({'message': 'User deleted', 'UserId': user_id})\n        }\n    except Exception as e:\n        return {\n            'statusCode': 400,\n            'headers': {'Content-Type': 'application/json'},\n            'body': json.dumps({'error': str(e)})\n        }\n"
+        }
+      }
+    },
+    "CreateUserMethod": {
+      "Type": "AWS::ApiGateway::Method",
+      "Properties": {
+        "RestApiId": {
+          "Ref": "ApiGatewayRestApi"
+        },
+        "ResourceId": {
+          "Ref": "ApiGatewayResourceUsers"
+        },
+        "HttpMethod": "POST",
+        "AuthorizationType": "NONE",
+        "Integration": {
+          "Type": "AWS_PROXY",
+          "IntegrationHttpMethod": "POST",
+          "Uri": {
+            "Fn::Sub": "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${CreateUserFunction.Arn}/invocations"
+          }
+        }
+      }
+    },
+    "GetUserMethod": {
+      "Type": "AWS::ApiGateway::Method",
+      "Properties": {
+        "RestApiId": {
+          "Ref": "ApiGatewayRestApi"
+        },
+        "ResourceId": {
+          "Ref": "ApiGatewayResourceUserId"
+        },
+        "HttpMethod": "GET",
+        "AuthorizationType": "NONE",
+        "RequestParameters": {
+          "method.request.path.userid": true
+        },
+        "Integration": {
+          "Type": "AWS_PROXY",
+          "IntegrationHttpMethod": "POST",
+          "Uri": {
+            "Fn::Sub": "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${GetUserFunction.Arn}/invocations"
+          }
+        }
+      }
+    },
+    "DeleteUserMethod": {
+      "Type": "AWS::ApiGateway::Method",
+      "Properties": {
+        "RestApiId": {
+          "Ref": "ApiGatewayRestApi"
+        },
+        "ResourceId": {
+          "Ref": "ApiGatewayResourceUserId"
+        },
+        "HttpMethod": "DELETE",
+        "AuthorizationType": "NONE",
+        "RequestParameters": {
+          "method.request.path.userid": true
+        },
+        "Integration": {
+          "Type": "AWS_PROXY",
+          "IntegrationHttpMethod": "POST",
+          "Uri": {
+            "Fn::Sub": "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${DeleteUserFunction.Arn}/invocations"
+          }
+        }
+      }
+    },
+    "CreateUserFunctionPermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "CreateUserFunction"
+        },
+        "Action": "lambda:InvokeFunction",
+        "Principal": "apigateway.amazonaws.com",
+        "SourceArn": {
+          "Fn::Sub": "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGatewayRestApi}/*/*"
+        }
+      }
+    },
+    "GetUserFunctionPermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "GetUserFunction"
+        },
+        "Action": "lambda:InvokeFunction",
+        "Principal": "apigateway.amazonaws.com",
+        "SourceArn": {
+          "Fn::Sub": "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGatewayRestApi}/*/*"
+        }
+      }
+    },
+    "DeleteUserFunctionPermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "DeleteUserFunction"
+        },
+        "Action": "lambda:InvokeFunction",
+        "Principal": "apigateway.amazonaws.com",
+        "SourceArn": {
+          "Fn::Sub": "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGatewayRestApi}/*/*"
+        }
+      }
+    },
+    "LambdaExecutionRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+        ],
+        "Policies": [
+          {
+            "PolicyName": {
+              "Fn::Sub": "LambdaDynamoDBPolicy-${EnvironmentSuffix}"
+            },
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "dynamodb:PutItem",
+                    "dynamodb:GetItem",
+                    "dynamodb:DeleteItem"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "UsersTable",
+                      "Arn"
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "ApiGatewayDeployment": {
+      "Type": "AWS::ApiGateway::Deployment",
+      "DependsOn": [
+        "CreateUserMethod",
+        "GetUserMethod",
+        "DeleteUserMethod"
+      ],
+      "Properties": {
+        "RestApiId": {
+          "Ref": "ApiGatewayRestApi"
+        }
+      }
+    },
+    "ApiGatewayStage": {
+      "Type": "AWS::ApiGateway::Stage",
+      "Properties": {
+        "RestApiId": {
+          "Ref": "ApiGatewayRestApi"
+        },
+        "DeploymentId": {
+          "Ref": "ApiGatewayDeployment"
+        },
+        "StageName": {
+          "Ref": "EnvironmentSuffix"
+        }
+      }
+    }
+  },
+  "Outputs": {
+    "ApiUrl": {
+      "Description": "API Gateway endpoint URL",
+      "Value": {
+        "Fn::Sub": "https://${ApiGatewayRestApi}.execute-api.${AWS::Region}.amazonaws.com/${EnvironmentSuffix}"
+      }
+    },
+    "UsersTableName": {
+      "Description": "DynamoDB table name",
+      "Value": {
+        "Ref": "UsersTable"
+      }
+    }
+  }
+}
