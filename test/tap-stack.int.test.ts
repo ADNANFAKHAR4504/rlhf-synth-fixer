@@ -2,10 +2,9 @@ import fs from 'fs';
 import path from 'path';
 
 describe('Terraform Outputs', () => {
-  
-  let outputFilePath : string;
-  let outputData : string;
-  let outputs : any;
+  let outputFilePath: string;
+  let outputData: string;
+  let outputs: any;
 
   beforeEach(() => {
     // Reset mocks before each test
@@ -16,9 +15,9 @@ describe('Terraform Outputs', () => {
     outputs = JSON.parse(outputData);
   });
 
-  describe("Bucket Name", () => {
-    test("Bucket Name should contain the correct substring", () => {
-      expect(outputs.bucket_name.split("/").pop()).toContain("CdkTfTsTest");
+  describe('Bucket Name', () => {
+    test('Bucket Name should contain the correct prefix', () => {
+      expect(outputs.bucket_name.split('-').pop()).toBe('cdktftest');
     });
   });
 });

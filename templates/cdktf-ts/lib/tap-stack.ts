@@ -1,5 +1,8 @@
-import { AwsProvider, AwsProviderDefaultTags } from '@cdktf/provider-aws/lib/provider';
-import { TerraformStack } from 'cdktf';
+import {
+  AwsProvider,
+  AwsProviderDefaultTags,
+} from '@cdktf/provider-aws/lib/provider';
+import { S3Backend, TerraformStack } from 'cdktf';
 import { Construct } from 'constructs';
 
 // ? Import your stacks here
@@ -23,24 +26,22 @@ export class TapStack extends TerraformStack {
     const stateBucket = props?.stateBucket || 'iac-rlhf-tf-states';
     const defaultTags = props?.defaultTags ? [props.defaultTags] : [];
 
-
     // Configure AWS Provider - this expects AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY to be set in the environment
     new AwsProvider(this, 'aws', {
       region: awsRegion,
-      defaultTags: defaultTags
+      defaultTags: defaultTags,
     });
 
     // Configure S3 Backend with native state locking
+    new S3Backend(this, {
+      bucket: stateBucket,
+      key: `${environmentSuffix}/${id}.tfstate`,
+      region: stateBucketRegion,
+      encrypt: true,
+    });
     // Using an escape hatch instead of S3Backend construct - CDKTF still does not support S3 state locking natively
     // ref - https://developer.hashicorp.com/terraform/cdktf/concepts/resources#escape-hatch
-    this.addOverride("terraform.backend.s3",
-      {
-        bucket: stateBucket,
-        key: `${environmentSuffix}/${id}.tfstate`,
-        region: stateBucketRegion,
-        encrypt: true,
-        use_lockfile: true,
-      });
+    this.addOverride('terraform.backend.s3.use_lockfile', true);
 
     // ? Add your stack instantiations here
     // ! Do NOT create resources directly in this stack.

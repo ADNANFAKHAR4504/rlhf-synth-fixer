@@ -101,7 +101,7 @@ async function main(): Promise<void> {
       message: 'Select the platform:',
       choices: [
         { name: 'CDK', value: 'cdk' },
-        {name: 'CDK Terraform', value: 'cdktf'},
+        { name: 'CDK Terraform', value: 'cdktf' },
         { name: 'CloudFormation', value: 'cfn' },
       ],
     });

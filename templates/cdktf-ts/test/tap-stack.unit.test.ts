@@ -3,9 +3,9 @@ import { TapStack } from '../lib/tap-stack';
 
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 const stateBucket = process.env.TERRAFORM_STATE_BUCKET || 'iac-rlhf-tf-states';
-const stateBucketRegion = process.env.TERRAFORM_STATE_BUCKET_REGION || 'us-east-1';
+const stateBucketRegion =
+  process.env.TERRAFORM_STATE_BUCKET_REGION || 'us-east-1';
 const awsRegion = process.env.AWS_REGION || 'us-east-1';
-
 
 describe('TapStack', () => {
   let app: App;
@@ -17,12 +17,17 @@ describe('TapStack', () => {
     jest.clearAllMocks();
 
     app = new App();
-    stack = new TapStack(app, 'TestTapStack', { environmentSuffix, stateBucket, stateBucketRegion, awsRegion });
+    stack = new TapStack(app, 'TestTapStack', {
+      environmentSuffix,
+      stateBucket,
+      stateBucketRegion,
+      awsRegion,
+    });
     synthesized = Testing.synth(stack);
   });
 
-  describe("Stack Creation", () => {
-    test("should create a TapStack instance", () => {
+  describe('Stack Creation', () => {
+    test('should create a TapStack instance', () => {
       expect(stack).toBeInstanceOf(TapStack);
     });
   });
