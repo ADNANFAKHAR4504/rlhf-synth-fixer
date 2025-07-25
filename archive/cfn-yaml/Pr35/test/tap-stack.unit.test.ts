@@ -1,162 +1,344 @@
+// Configuration - These are coming from cdk-outputs after cdk deploy
 import fs from 'fs';
-import path from 'path';
+import {
+  AutoScaling,
+  CloudWatch,
+  EC2,
+  ELBv2,
+} from 'aws-sdk';
+import axios from 'axios';
 
-// This test suite validates the eb_deployment.yaml template.
-// NOTE: Before running, the YAML template must be converted to JSON format.
-// The test expects the converted file to be at `lib/Tapstack.json`.
-// You can use a tool like `cfn-flip` for the conversion:
-// `cfn-flip eb_deployment.yaml > lib/Tapstack.json`
+const outputs = JSON.parse(
+  fs.readFileSync('cdk-outputs/flat-outputs.json', 'utf8')
+);
 
-describe('Elastic Beanstalk CloudFormation Template', () => {
-  let template: any;
+// AWS Service clients
+const ec2 = new EC2();
+const elbv2 = new ELBv2();
+const autoscaling = new AutoScaling();
+const cloudwatch = new CloudWatch();
 
-  beforeAll(() => {
-    // Load the JSON version of the CloudFormation template.
-    const templatePath = path.join(__dirname, '../lib/Tapstack.json');
-    const templateContent = fs.readFileSync(templatePath, 'utf8');
-    template = JSON.parse(templateContent);
+// Destructure outputs, removing Lambda-specific outputs
+// Note: MetadataBucketName removed as S3 bucket is no longer part of the stack
+
+describe('ALB Integration Tests', () => {
+  test('ALB endpoint should be reachable', async () => {
+    const url = outputs.HrALBDNSName;
+    const response = await axios.get(`http://${url}`);
+    expect(response.status).toBe(200);
   });
 
-  describe('Template Structure', () => {
-    test('should have a valid CloudFormation format version', () => {
-      expect(template.AWSTemplateFormatVersion).toBe('2010-09-09');
-    });
+  test('ALB should have multiple healthy targets', async () => {
+    const albArn = outputs.HrALBArn;
+    const targetGroups = await elbv2
+      .describeTargetGroups({ LoadBalancerArn: albArn })
+      .promise();
+    expect(targetGroups.TargetGroups?.length).toBeGreaterThan(0);
 
-    test('should have a comprehensive description', () => {
-      const expectedDescription = 'Deploys a highly available and scalable Node.js web application using AWS Elastic Beanstalk. This template configures an Application Load Balancer, Auto Scaling, and HTTPS.';
-      expect(template.Description).toBeDefined();
-      // Use trim() to remove any trailing newlines (\n) for an exact match.
-      expect(template.Description.trim()).toBe(expectedDescription);
-    });
+    for (const tg of targetGroups.TargetGroups || []) {
+      const health = await elbv2
+        .describeTargetHealth({ TargetGroupArn: tg.TargetGroupArn! })
+        .promise();
+      const healthyCount =
+        health.TargetHealthDescriptions?.filter(
+          (desc: any) => desc.TargetHealth?.State === 'healthy'
+        ).length || 0;
+      expect(healthyCount).toBeGreaterThan(1);
+    }
+  });
+});
+
+describe('VPC and Subnet Integration Tests', () => {
+  test('VPC should exist', async () => {
+    const vpcId = outputs.VPCId;
+    const result = await ec2.describeVpcs({ VpcIds: [vpcId] }).promise();
+    expect(result.Vpcs?.length).toBe(1);
   });
 
-  describe('Parameters', () => {
-    test('should define all required parameters', () => {
-      const expectedParams = ['ApplicationName', 'InstanceType', 'KeyPairName', 'SSLCertificateArn'];
-      expectedParams.forEach(param => {
-        expect(template.Parameters[param]).toBeDefined();
-      });
-    });
+  test('All public subnets should exist and be in different AZs', async () => {
+    const publicSubnetIds = outputs.PublicSubnetIds.split(',');
+    const subnets = await ec2
+      .describeSubnets({ SubnetIds: publicSubnetIds })
+      .promise();
+    expect(subnets.Subnets?.length).toBe(3);
 
-    test('ApplicationName parameter should have correct properties', () => {
-      const param = template.Parameters.ApplicationName;
-      expect(param.Type).toBe('String');
-      expect(param.Default).toBe('MyNodeJsApp');
-      expect(param.Description).toBe('The name of the Elastic Beanstalk application.');
-    });
-
-    test('InstanceType parameter should have correct properties', () => {
-      const param = template.Parameters.InstanceType;
-      expect(param.Type).toBe('String');
-      expect(param.Default).toBe('t3.micro');
-      expect(param.Description).toBe('EC2 instance type for the web application servers.');
-      expect(param.AllowedValues).toEqual(['t2.micro', 't3.micro', 't3.small', 'm5.large']);
-    });
-
-    test('KeyPairName parameter should have correct properties including the new default', () => {
-        const param = template.Parameters.KeyPairName;
-        expect(param.Type).toBe('AWS::EC2::KeyPair::KeyName');
-        expect(param.Description).toBe('The name of an existing EC2 KeyPair to enable SSH access to the instances.');
-        // Validates the new default value.
-        expect(param.Default).toBe('your-dev-key');
-    });
-
-    test('SSLCertificateArn parameter should have correct properties including the new default', () => {
-        const param = template.Parameters.SSLCertificateArn;
-        expect(param.Type).toBe('String');
-        expect(param.Description).toBe('The ARN of an existing ACM SSL certificate in us-east-1 for HTTPS.');
-        // Validates the new default value.
-        expect(param.Default).toBe('arn:aws:acm:us-east-1:123456789012:certificate/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx');
-    });
+    const azs = new Set(subnets.Subnets?.map((s: any) => s.AvailabilityZone));
+    expect(azs.size).toBe(3);
   });
 
-  describe('Resources', () => {
-    test('should define WebAppApplication resource correctly', () => {
-      const resource = template.Resources.WebAppApplication;
-      expect(resource).toBeDefined();
-      expect(resource.Type).toBe('AWS::ElasticBeanstalk::Application');
-      expect(resource.Properties.ApplicationName).toEqual({ Ref: 'ApplicationName' });
-    });
+  test('All private subnets should exist and be in different AZs', async () => {
+    const privateSubnetIds = outputs.PrivateSubnetIds.split(',');
+    const subnets = await ec2
+      .describeSubnets({ SubnetIds: privateSubnetIds })
+      .promise();
+    expect(subnets.Subnets?.length).toBe(3);
 
-    test('should define WebAppEnvironment resource correctly', () => {
-      const resource = template.Resources.WebAppEnvironment;
-      expect(resource).toBeDefined();
-      expect(resource.Type).toBe('AWS::ElasticBeanstalk::Environment');
-    });
+    const azs = new Set(subnets.Subnets?.map((s: any) => s.AvailabilityZone));
+    expect(azs.size).toBe(3);
+  });
+});
 
-    test('WebAppEnvironment should reference the WebAppApplication', () => {
-        const resource = template.Resources.WebAppEnvironment;
-        expect(resource.Properties.ApplicationName).toEqual({ Ref: 'WebAppApplication' });
-    });
+describe('High Availability (HA) Tests', () => {
+  test('VPC should have subnets in multiple AZs', async () => {
+    const vpcId = outputs.VPCId;
+    const subnets = await ec2
+      .describeSubnets({ Filters: [{ Name: 'vpc-id', Values: [vpcId] }] })
+      .promise();
+    const azs = new Set(subnets.Subnets?.map((s: any) => s.AvailabilityZone));
+    expect(azs.size).toBeGreaterThan(1);
+  });
+});
 
-    test('WebAppEnvironment should use the correct SolutionStackName', () => {
-        const resource = template.Resources.WebAppEnvironment;
-        expect(resource.Properties.SolutionStackName).toBe('64bit Amazon Linux 2 v5.8.0 running Node.js 18');
-    });
+describe('🔒 Security & Access Control Tests', () => {
+  test('ALB Security Group should have correct ingress rules', async () => {
+    const sgDetails = await ec2
+      .describeSecurityGroups({
+        GroupIds: [outputs.HrALBSecurityGroupId],
+      })
+      .promise();
 
-    describe('WebAppEnvironment OptionSettings', () => {
-        let optionSettings: any[];
-
-        beforeAll(() => {
-            optionSettings = template.Resources.WebAppEnvironment.Properties.OptionSettings;
-        });
-
-        const findOption = (namespace: string, optionName: string) => {
-            return optionSettings.find(
-                (opt: any) => opt.Namespace === namespace && opt.OptionName === optionName
-            );
-        };
-
-        test('should configure InstanceType and EC2KeyName from parameters', () => {
-            const instanceTypeOption = findOption('aws:autoscaling:launchconfiguration', 'InstanceType');
-            expect(instanceTypeOption.Value).toEqual({ Ref: 'InstanceType' });
-
-            const keyNameOption = findOption('aws:autoscaling:launchconfiguration', 'EC2KeyName');
-            expect(keyNameOption.Value).toEqual({ Ref: 'KeyPairName' });
-        });
-
-        test('should configure a load-balanced application environment', () => {
-            const envTypeOption = findOption('aws:elasticbeanstalk:environment', 'EnvironmentType');
-            expect(envTypeOption.Value).toBe('LoadBalanced');
-
-            const lbTypeOption = findOption('aws:elasticbeanstalk:environment', 'LoadBalancerType');
-            expect(lbTypeOption.Value).toBe('application');
-        });
-
-        test('should configure Auto Scaling group min/max sizes', () => {
-            const minSizeOption = findOption('aws:autoscaling:asg', 'MinSize');
-            expect(minSizeOption.Value).toBe('2');
-
-            const maxSizeOption = findOption('aws:autoscaling:asg', 'MaxSize');
-            expect(maxSizeOption.Value).toBe('10');
-        });
-
-        test('should configure HTTPS listener on port 443 with SSL certificate', () => {
-            const protocolOption = findOption('aws:elbv2:listener:443', 'Protocol');
-            expect(protocolOption.Value).toBe('HTTPS');
-
-            const certOption = findOption('aws:elbv2:listener:443', 'SSLCertificateArns');
-            expect(certOption.Value).toEqual({ Ref: 'SSLCertificateArn' });
-        });
-        
-        test('should keep the default listener enabled for HTTP redirection', () => {
-            const listenerEnabledOption = findOption('aws:elbv2:listener:default', 'ListenerEnabled');
-            expect(listenerEnabledOption.Value).toBe('true');
-        });
-
-        test('should have a public-facing load balancer scheme', () => {
-            const schemeOption = findOption('aws:elasticbeanstalk:application:environment', 'ELBScheme');
-            expect(schemeOption.Value).toBe('public');
-        });
-    });
+    const sg = sgDetails.SecurityGroups![0];
+    expect(sg.IpPermissions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          FromPort: 80,
+          ToPort: 80,
+          IpProtocol: 'tcp',
+          IpRanges: expect.arrayContaining([{ CidrIp: '0.0.0.0/0' }]),
+        }),
+        expect.objectContaining({
+          FromPort: 443,
+          ToPort: 443,
+          IpProtocol: 'tcp',
+          IpRanges: expect.arrayContaining([{ CidrIp: '0.0.0.0/0' }]),
+        }),
+      ])
+    );
   });
 
-  describe('Outputs', () => {
-    test('should have a valid EnvironmentURL output', () => {
-      const output = template.Outputs.EnvironmentURL;
-      expect(output).toBeDefined();
-      expect(output.Description).toBe('The URL of the new Elastic Beanstalk environment.');
-      expect(output.Value).toEqual({ 'Fn::Sub': 'https://${WebAppEnvironment.EndpointURL}' });
-    });
+  test('App Security Group should only allow traffic from ALB', async () => {
+    const sgDetails = await ec2
+      .describeSecurityGroups({
+        GroupIds: [outputs.HrAppSecurityGroupId],
+      })
+      .promise();
+
+    const sg = sgDetails.SecurityGroups![0];
+    const httpRule = sg.IpPermissions?.find((rule: any) => rule.FromPort === 80);
+    const httpsRule = sg.IpPermissions?.find((rule: any) => rule.FromPort === 443);
+
+    expect(httpRule?.UserIdGroupPairs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          GroupId: outputs.HrALBSecurityGroupId,
+        }),
+      ])
+    );
+    expect(httpsRule?.UserIdGroupPairs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          GroupId: outputs.HrALBSecurityGroupId,
+        }),
+      ])
+    );
   });
+});
+
+
+
+describe('⚡ Performance & Scalability Tests', () => {
+  test('ALB should have healthy targets', async () => {
+    const targetGroups = await elbv2
+      .describeTargetGroups({ LoadBalancerArn: outputs.HrALBArn })
+      .promise();
+
+    expect(targetGroups.TargetGroups?.length).toBeGreaterThan(0);
+
+    for (const tg of targetGroups.TargetGroups || []) {
+      const health = await elbv2
+        .describeTargetHealth({ TargetGroupArn: tg.TargetGroupArn! })
+        .promise();
+
+      const healthyCount =
+        health.TargetHealthDescriptions?.filter(
+          (desc: any) => desc.TargetHealth?.State === 'healthy'
+        ).length || 0;
+
+      expect(healthyCount).toBeGreaterThan(0);
+    }
+  });
+
+  test('Auto Scaling Group should have correct capacity', async () => {
+    const asgs = await autoscaling
+      .describeAutoScalingGroups({
+        AutoScalingGroupNames: [outputs.HrAutoScalingGroupName],
+      })
+      .promise();
+
+    const asg = asgs.AutoScalingGroups![0];
+    expect(asg.MinSize).toBe(2);
+    expect(asg.MaxSize).toBe(6);
+    expect(asg.DesiredCapacity).toBe(3);
+    expect(asg.Instances?.length).toBe(3);
+  });
+});
+
+describe('🔄 Resilience & Failover Tests', () => {
+  test('ALB should be in multiple AZs', async () => {
+    const albDetails = await elbv2
+      .describeLoadBalancers({
+        LoadBalancerArns: [outputs.HrALBArn],
+      })
+      .promise();
+
+    const alb = albDetails.LoadBalancers![0];
+    expect(alb.AvailabilityZones?.length).toBeGreaterThanOrEqual(2);
+  });
+
+  test('Auto Scaling instances should be distributed across AZs', async () => {
+    const asgs = await autoscaling
+      .describeAutoScalingGroups({
+        AutoScalingGroupNames: [outputs.HrAutoScalingGroupName],
+      })
+      .promise();
+
+    const asg = asgs.AutoScalingGroups![0];
+    const azs = new Set(
+      asg.Instances?.map((instance: any) => instance.AvailabilityZone)
+    );
+    expect(azs.size).toBeGreaterThan(1); // Distributed across multiple AZs
+  });
+});
+
+describe('📊 Monitoring & Observability Tests', () => {
+  test('ALB metrics should be available', async () => {
+    const albArn = outputs.HrALBArn;
+    const albName = albArn.split('/').slice(-3).join('/');
+
+    const metricData = await cloudwatch
+      .getMetricStatistics({
+        Namespace: 'AWS/ApplicationELB',
+        MetricName: 'RequestCount',
+        Dimensions: [
+          {
+            Name: 'LoadBalancer',
+            Value: albName,
+          },
+        ],
+        StartTime: new Date(Date.now() - 3600000),
+        EndTime: new Date(),
+        Period: 300,
+        Statistics: ['Sum'],
+      })
+      .promise();
+
+    expect(metricData.Datapoints).toBeDefined();
+  });
+});
+
+describe('🏷️ Configuration & Compliance Tests', () => {
+  test('All resources should have proper tags', async () => {
+    // Check ALB tags
+    const albTags = await elbv2
+      .describeTags({
+        ResourceArns: [outputs.HrALBArn],
+      })
+      .promise();
+
+    const albTagsMap = albTags.TagDescriptions![0].Tags!.reduce(
+      (acc: any, tag: any) => {
+        acc[tag.Key!] = tag.Value!;
+        return acc;
+      },
+      {} as Record<string, string>
+    );
+
+    expect(albTagsMap).toHaveProperty('Name');
+    expect(albTagsMap.Name).toContain(outputs.EnvironmentSuffix);
+  });
+
+  test('Environment-specific configurations should be correct', async () => {
+    expect(outputs.EnvironmentSuffix).toBeDefined();
+    expect(outputs.StackName).toContain(outputs.EnvironmentSuffix);
+  });
+
+  test('Network configurations should be secure', async () => {
+    const privateSubnets = outputs.PrivateSubnetIds.split(',');
+
+    for (const subnetId of privateSubnets) {
+      const routeTables = await ec2
+        .describeRouteTables({
+          Filters: [
+            {
+              Name: 'association.subnet-id',
+              Values: [subnetId.trim()],
+            },
+          ],
+        })
+        .promise();
+
+      // Private subnets should route through NAT Gateway, not Internet Gateway
+      const igwRoute = routeTables.RouteTables![0].Routes?.find((route: any) =>
+        route.GatewayId?.startsWith('igw-')
+      );
+      expect(igwRoute).toBeUndefined();
+
+      const natRoute = routeTables.RouteTables![0].Routes?.find((route: any) =>
+        route.NatGatewayId?.startsWith('nat-')
+      );
+      expect(natRoute).toBeDefined();
+    }
+  });
+});
+
+describe('🚀 Infrastructure Validation Tests', () => {
+  test('All required outputs should be available', async () => {
+    const requiredOutputs = [
+      'VPCId',
+      'PublicSubnetIds',
+      'PrivateSubnetIds',
+      'HrALBDNSName',
+      'HrALBArn',
+      'HrTargetGroupArn',
+      'HrAutoScalingGroupName',
+    ];
+
+    for (const outputKey of requiredOutputs) {
+      expect(outputs[outputKey]).toBeDefined();
+      expect(outputs[outputKey]).not.toBe('');
+    }
+  });
+
+  test('VPC should have subnets in multiple AZs', async () => {
+    const privateSubnets = outputs.PrivateSubnetIds.split(',');
+    const publicSubnets = outputs.PublicSubnetIds.split(',');
+
+    const allSubnets = [...privateSubnets, ...publicSubnets];
+    const subnetDetails = await ec2
+      .describeSubnets({
+        SubnetIds: allSubnets.map(id => id.trim()),
+      })
+      .promise();
+
+    const azs = new Set(
+      subnetDetails.Subnets?.map((subnet: any) => subnet.AvailabilityZone)
+    );
+    expect(azs.size).toBeGreaterThanOrEqual(2);
+  });
+
+  test('Resource naming should follow conventions', async () => {
+    const envSuffix = outputs.EnvironmentSuffix;
+
+    expect(outputs.HrALBName).toContain(envSuffix);
+    expect(outputs.TurnAroundPromptTableName).toContain(envSuffix);
+  });
+});
+
+// Setup and teardown
+beforeAll(async () => {
+  // Test setup - no cleanup needed as S3 bucket removed from stack
+});
+
+afterAll(async () => {
+  // Test teardown - no cleanup needed as S3 bucket removed from stack
 });
