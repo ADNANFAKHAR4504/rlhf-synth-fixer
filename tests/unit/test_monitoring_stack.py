@@ -27,7 +27,7 @@ def monitoring_stack():
   env = Environment(account="123456789012", region="us-west-2")
   stack = MonitoringStack(
     scope=app,
-    id="MonitoringStack",
+    construct_id="MonitoringStack",
     ecs_service=MockECSService(),
     rds_instance=MockRDSInstance(),
     env=env

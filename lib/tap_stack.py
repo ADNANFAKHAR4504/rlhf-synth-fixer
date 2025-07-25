@@ -14,18 +14,15 @@ from dataclasses import dataclass
 from typing import List
 from aws_cdk import Stack, Environment
 from constructs import Construct
-
-# Ensure import path is properly set to access other modules
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")))
-
-# Import sub-stacks
 from lib.cdk.vpc_stack import VpcStack
 from lib.cdk.ecs_stack import EcsStack
 from lib.cdk.rds_stack import RdsStack
 from lib.cdk.monitoring_stack import MonitoringStack
 from lib.cdk.cicd_stack import CicdStack
-from lib.cdk.vpc_peering_stack import VpcPeeringStack
 from lib.cdk.route53_stack import Route53Stack
+
+# Ensure import path is properly set to access other modules
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")))
 
 
 @dataclass

@@ -26,7 +26,6 @@ def patched_tap_stack():
        patch("lib.tap_stack.EcsStack") as mock_ecs, \
        patch("lib.tap_stack.RdsStack") as mock_rds, \
        patch("lib.tap_stack.MonitoringStack") as mock_monitoring, \
-       patch("lib.tap_stack.VpcPeeringStack") as mock_peering, \
        patch("lib.tap_stack.Route53Stack") as mock_route53, \
        patch("aws_cdk.App") as mock_app:
 
@@ -47,7 +46,6 @@ def patched_tap_stack():
         "ecs": mock_ecs,
         "rds": mock_rds,
         "monitoring": mock_monitoring,
-        "peering": mock_peering,
         "cicd_init": mock_cicd_init,
         "route53": mock_route53,
       }
