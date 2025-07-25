@@ -71,9 +71,9 @@ class TapStack(cdk.Stack):
     super().__init__(scope, construct_id, **kwargs)
 
     # Get environment suffix from props, context, or use 'dev' as default
-    environment_suffix = (
-        props.environment_suffix if props else None
-    ) or self.node.try_get_context('environmentSuffix') or 'dev'
+    # environment_suffix = (
+    #     props.environment_suffix if props else None
+    # ) or self.node.try_get_context('environmentSuffix') or 'dev'
 
 
     # ----------------------
@@ -169,7 +169,7 @@ class TapStack(cdk.Stack):
     # ----------------------
     # CloudWatch Log Group for EC2 logs
     # ----------------------
-    ec2_log_group = logs.LogGroup(
+    logs.LogGroup(
         self, "EC2LogGroup",
         retention=logs.RetentionDays.ONE_WEEK,
         removal_policy=RemovalPolicy.DESTROY
