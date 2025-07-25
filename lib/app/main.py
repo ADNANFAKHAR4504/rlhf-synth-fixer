@@ -1,4 +1,4 @@
-name = "joshua"
-if name != "joshua":
-  print(name)
-print(name)
+# name = "joshua"
+# if name != "joshua":
+#   print(name)
+# print(name)

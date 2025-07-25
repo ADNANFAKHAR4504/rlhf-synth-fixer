@@ -13,6 +13,7 @@ from lib.cdk.rds_stack import RdsStack
 from lib.cdk.monitoring_stack import MonitoringStack
 from lib.cdk.cicd_stack import CicdStack
 from lib.cdk.route53_stack import Route53Stack
+from lib.cdk.vpc_peering_stack import VpcPeeringStack # Added import for VpcPeeringStack
 
 # Setup
 os.environ["DISABLE_TAPSTACK"] = "1"
@@ -37,9 +38,13 @@ def test_stack():
         )
 
         ecs_stack = types.SimpleNamespace(
-            alb=types.SimpleNamespace(load_balancer_dns_name="localhost:8080"),
+            # Corrected attribute name from 'alb' to 'load_balancer'
+            load_balancer=types.SimpleNamespace(load_balancer_dns_name="localhost:8080"),
             ecs_service=types.SimpleNamespace(service_name="mock-service"),
-            cluster=types.SimpleNamespace(cluster_name="mock-cluster")
+            cluster=types.SimpleNamespace(cluster_name="mock-cluster"),
+            listener=types.SimpleNamespace(listener_arn="mock-listener-arn"),
+            blue_target_group=types.SimpleNamespace(target_group_arn="mock-blue-tg-arn"),
+            green_target_group=types.SimpleNamespace(target_group_arn="mock-green-tg-arn")
         )
 
         rds_stack = types.SimpleNamespace(
@@ -107,8 +112,28 @@ def test_stack():
             rds_instance=rds_stack.rds_instance,
             env=env
         )
-        cicd_stack = CicdStack(app, "TestCicd", ecs_stacks={"us-east-1": ecs_stack}, env=env)
-        route53_stack = Route53Stack(app, "TestRoute53", alb1=ecs_stack.alb, alb2=ecs_stack.alb, env=env)
+        cicd_stack = CicdStack(
+            app,
+            "TestCicd",
+            fargate_service=ecs_stack.ecs_service,
+            listener=ecs_stack.listener,
+            blue_target_group=ecs_stack.blue_target_group,
+            green_target_group=ecs_stack.green_target_group,
+            env=env
+        )
+        
+        # Corrected Route53Stack instantiation to use the 'load_balancer' attribute
+        route53_stack = Route53Stack(
+            app,
+            "TestRoute53",
+            alb1=ecs_stack.load_balancer,
+            alb2=ecs_stack.load_balancer,
+            env=env
+        )
+        
+        vpc_peering_stack = VpcPeeringStack(
+            app, "TestPeering", vpc1=vpc_stack.vpc, vpc2=vpc_stack.vpc, env=env
+        )
 
         app.synth()
 
@@ -118,15 +143,18 @@ def test_stack():
             "rds_stack": rds_stack,
             "monitoring_stack": monitoring_stack,
             "cicd_stack": cicd_stack,
-            "route53_stack": route53_stack
+            "route53_stack": route53_stack,
+            "vpc_peering_stack": vpc_peering_stack
         }
 
 
 def test_mocked_stack_loads(test_stack):
     # ECS Stack
     assert "ecs_stack" in test_stack
-    assert hasattr(test_stack["ecs_stack"], "alb")
-    assert test_stack["ecs_stack"].alb.load_balancer_dns_name.startswith("localhost")
+    # CORRECTED: Check for 'load_balancer' attribute
+    assert hasattr(test_stack["ecs_stack"], "load_balancer")
+    # CORRECTED: Access the 'load_balancer' attribute
+    assert test_stack["ecs_stack"].load_balancer.load_balancer_dns_name.startswith("localhost")
 
     # RDS Stack
     assert "rds_stack" in test_stack

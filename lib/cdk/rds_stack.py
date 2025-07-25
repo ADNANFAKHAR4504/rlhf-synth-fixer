@@ -25,6 +25,8 @@ class RdsStack(Stack):
       ),
     )
 
+    admin_secret = secretsmanager.Secret.from_secret_name_v2(self, "AdminSecret", "admin")
+
     self.rds_instance = rds.DatabaseInstance(
       self,
       "RDS",

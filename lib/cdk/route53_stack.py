@@ -1,18 +1,11 @@
-from aws_cdk import Stack, aws_route53 as route53
-from aws_cdk.aws_elasticloadbalancingv2 import ApplicationLoadBalancer
+from aws_cdk import aws_route53 as route53, Stack
 from constructs import Construct
+from aws_cdk.aws_elasticloadbalancingv2 import ApplicationLoadBalancer
 
 
 class Route53Stack(Stack):
-  def __init__(
-      self,
-      scope: Construct,
-      construct_id: str,
-      alb1: ApplicationLoadBalancer,
-      alb2: ApplicationLoadBalancer,
-      **kwargs
-  ):
-    super().__init__(scope, construct_id, **kwargs)
+  def __init__(self, scope: Construct, id: str, alb1: ApplicationLoadBalancer, alb2: ApplicationLoadBalancer, **kwargs):
+    super().__init__(scope, id, **kwargs)
 
     # Create a public hosted zone
     zone = route53.HostedZone(self, "Zone", zone_name="joshua-academia.com")
@@ -42,8 +35,7 @@ class Route53Stack(Stack):
       health_check_id=health_check.ref,
       alias_target=route53.CfnRecordSet.AliasTargetProperty(
         dns_name=alb1.load_balancer_dns_name,
-        # You might need to hardcode ALB HostedZoneId instead
-        hosted_zone_id=alb1.load_balancer_canonical_hosted_zone_id,
+        hosted_zone_id=alb1.load_balancer_canonical_hosted_zone_id,  # You might need to hardcode ALB HostedZoneId instead
       ),
     )
 
@@ -58,7 +50,6 @@ class Route53Stack(Stack):
       failover="SECONDARY",
       alias_target=route53.CfnRecordSet.AliasTargetProperty(
         dns_name=alb2.load_balancer_dns_name,
-        # Same as above: make sure it's the HostedZoneId for the ALB
-        hosted_zone_id=alb2.load_balancer_canonical_hosted_zone_id,
+        hosted_zone_id=alb2.load_balancer_canonical_hosted_zone_id, # Same as above: make sure it's the HostedZoneId for the ALB
       ),
     )

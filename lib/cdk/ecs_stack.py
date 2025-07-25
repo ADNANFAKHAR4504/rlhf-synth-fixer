@@ -1,25 +1,17 @@
-from typing import Optional
 from aws_cdk import (
-    Stack,
-    aws_ecs as ecs,
-    aws_ec2 as ec2,
-    aws_elasticloadbalancingv2 as elbv2,
-    aws_codedeploy as codedeploy,
-    aws_iam as iam,
+  Stack,
+  aws_ecs as ecs,
+  aws_ec2 as ec2,
+  aws_elasticloadbalancingv2 as elbv2,
+  aws_codedeploy as codedeploy,
+  aws_iam as iam,
 )
 from constructs import Construct
+from typing import Optional
 
 
 class EcsStack(Stack):
-  def __init__(
-      self,
-      scope: Construct,
-      stack_id: str,
-      *,
-      vpc: Optional[ec2.Vpc] = None,
-      task_image_options=None,
-      **kwargs
-  ):
+  def __init__(self, scope: Construct, stack_id: str, *, vpc: Optional[ec2.Vpc] = None, task_image_options=None, **kwargs):
     super().__init__(scope, stack_id, **kwargs)
     self.task_image_options = task_image_options
 
