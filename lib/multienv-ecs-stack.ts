@@ -4,8 +4,6 @@ import * as ecs from 'aws-cdk-lib/aws-ecs';
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
 import * as route53 from 'aws-cdk-lib/aws-route53';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
-import * as kms from 'aws-cdk-lib/aws-kms';
-import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import * as route53Targets from 'aws-cdk-lib/aws-route53-targets';
 import * as acm from 'aws-cdk-lib/aws-certificatemanager';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
@@ -45,26 +43,12 @@ export class MultiEnvEcsStack extends cdk.Stack {
       vpc,
     });
 
-    // Create KMS Key for SSM Parameter Store
-    const kmsKey = new kms.Key(this, `${config.envName}KmsKey`, {
-      enableKeyRotation: true,
+    new ssm.StringParameter(this, `${config.envName}ConfigParameter`, {
+      parameterName: `/${config.envName}/config`,
+      stringValue: config.envName,
+      tier: ssm.ParameterTier.ADVANCED,
+      description: 'Environment config',
     });
-
-    const configSecret = new secretsmanager.Secret(
-      this,
-      `${config.envName}ConfigSecret`,
-      {
-        secretName: `/${config.envName}/config`,
-        encryptionKey: kmsKey,
-        generateSecretString: {
-          secretStringTemplate: JSON.stringify({
-            environment: config.envName,
-            domain: config.domainName,
-          }),
-          generateStringKey: 'placeholder',
-        },
-      }
-    );
 
     const taskDefinition = new ecs.FargateTaskDefinition(
       this,
@@ -81,9 +65,15 @@ export class MultiEnvEcsStack extends cdk.Stack {
       ),
       portMappings: [{ containerPort: config.port }],
       secrets: {
-        CONFIG_PARAMETER: ecs.Secret.fromSecretsManager(
-          configSecret,
-          'environment'
+        CONFIG_PARAMETER: ecs.Secret.fromSsmParameter(
+          ssm.StringParameter.fromSecureStringParameterAttributes(
+            this,
+            `${config.envName}ConfigParam`,
+            {
+              parameterName: `/${config.envName}/config`,
+              version: 1,
+            }
+          )
         ),
       },
       healthCheck: {

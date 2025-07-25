@@ -72,6 +72,4 @@ venv.bak/
 coverage.xml
 cov.json
 
-cfn-outputs/*
-
 certs

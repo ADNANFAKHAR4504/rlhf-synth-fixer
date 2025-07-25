@@ -19,7 +19,7 @@
     "start": "ts-node cli/create-task.ts",
     "lint": "eslint .",
     "watch": "tsc -w",
-    "format": "prettier --write 'lib/*.{ts,tsx}'",
+    "format": "prettier --write 'lib/*.{ts,tsx}' 'test/*.{ts,tsx}'",
     "format:check": "prettier --check 'lib/*.{ts,tsx}'",
     "test": "jest --coverage",
     "test:unit": "jest --coverage --testPathPattern=\\.unit\\.test\\.ts$",

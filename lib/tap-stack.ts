@@ -21,8 +21,7 @@ export class TapStack extends cdk.Stack {
     const imageName = process.env.IMAGE_NAME || 'nginx';
     const imageTag = process.env.IMAGE_TAG || '1.25.3';
     const port = Number(process.env.PORT) || 80;
-    const hostedZoneName = process.env.HOSTED_ZONE_NAME;
-    const domainName = process.env.DOMAIN_NAME || 'api.dev.local';
+    const hostedZoneName = process.env.HOSTED_ZONE_NAME; // you should have this domain in route53
     // ? Add your stack instantiations here
     // ! Do NOT create resources directly in this stack.
     // ! Instead, create separate stacks for each resource type.
@@ -30,10 +29,10 @@ export class TapStack extends cdk.Stack {
     // Define configurations for each environment
     const devConfig: EnvironmentConfig = {
       hostedZoneName,
-      domainName,
       imageName,
       imageTag,
       port,
+      domainName: process.env.DOMAIN_NAME || 'api.dev.local',
       envName: 'dev',
       vpcCidr: '10.0.0.0/16',
       cpu: Number(process.env.CPU_VALUE) || 256,
@@ -42,10 +41,10 @@ export class TapStack extends cdk.Stack {
 
     const prodConfig: EnvironmentConfig = {
       hostedZoneName,
-      domainName,
       imageName,
       imageTag,
       port,
+      domainName: process.env.DOMAIN_NAME || 'api.prod.local',
       envName: 'prod',
       vpcCidr: '10.1.0.0/16',
       cpu: Number(process.env.CPU_VALUE) || 512,

@@ -12,7 +12,7 @@ describe('TapStack', () => {
     const app = new App();
     const tapStack = new TapStack(app, 'TestTapStack', {
       environmentSuffix: 'dev',
-      env
+      env,
     });
 
     const devStack = tapStack.node.tryFindChild('DevStack') as cdk.Stack;
@@ -20,7 +20,6 @@ describe('TapStack', () => {
 
     const devTemplate = Template.fromStack(devStack);
     const prodTemplate = Template.fromStack(prodStack);
-
 
     devTemplate.resourceCountIs('AWS::ECS::Cluster', 1);
     prodTemplate.resourceCountIs('AWS::ECS::Cluster', 1);
