@@ -23,6 +23,7 @@ Parameters:
   SSLCertificateArn:
     Type: String
     Description: The ARN of the ACM SSL certificate for the Application Load Balancer.
+    Default: 'arn:aws:acm:us-east-1:123456789012:certificate/your-default-cert-id'
 
 Resources:
   # --- IAM Roles and Profiles (with improved security) ---
