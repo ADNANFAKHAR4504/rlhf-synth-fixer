@@ -60,9 +60,9 @@ Resources:
       EnableDnsSupport: true
       Tags:
         - Key: Name
-          Value: 'ProductionVPC'
+          Value: !Sub 'ProductionVPC-${EnvironmentSuffix}'
         - Key: Environment
-          Value: 'Production'
+          Value: !Ref EnvironmentSuffix
 
   # Internet Gateway
   InternetGateway:
@@ -70,9 +70,9 @@ Resources:
     Properties:
       Tags:
         - Key: Name
-          Value: 'ProductionIGW'
+          Value: !Sub 'ProductionIGW-${EnvironmentSuffix}'
         - Key: Environment
-          Value: 'Production'
+          Value: !Ref EnvironmentSuffix
 
   # Attach Internet Gateway to VPC
   InternetGatewayAttachment:

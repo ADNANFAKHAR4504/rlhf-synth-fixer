@@ -72,11 +72,15 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": "ProductionVPC"
+            "Value": {
+              "Fn::Sub": "ProductionVPC-${EnvironmentSuffix}"
+            }
           },
           {
             "Key": "Environment",
-            "Value": "Production"
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
           }
         ]
       }
@@ -87,11 +91,15 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": "ProductionIGW"
+            "Value": {
+              "Fn::Sub": "ProductionIGW-${EnvironmentSuffix}"
+            }
           },
           {
             "Key": "Environment",
-            "Value": "Production"
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
           }
         ]
       }
