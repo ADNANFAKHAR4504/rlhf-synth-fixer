@@ -51,7 +51,7 @@ class CicdStack(Stack):
         listener=listener,
         blue_target_group=blue_target_group,
         green_target_group=green_target_group,
-        deployment_approval_wait_time=Duration.minutes(0),
+        deployment_approval_wait_time=Duration.minutes(5),
       ),
       deployment_config=codedeploy.EcsDeploymentConfig.ALL_AT_ONCE,
       auto_rollback=codedeploy.AutoRollbackConfig(
