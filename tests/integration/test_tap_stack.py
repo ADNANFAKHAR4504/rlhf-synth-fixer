@@ -46,7 +46,9 @@ class TestTapStackIntegration(unittest.TestCase):
         'cloudformation', region_name=cls.region)
 
     # Use flat_outputs if available, otherwise fallback to CloudFormation
-    required_outputs = ['WebsiteURL', 'LambdaFunctionName', 'LambdaFunctionARN', 'S3BucketName', 'CloudFrontDistributionId']
+    required_outputs = ['WebsiteURL', 'LambdaFunctionName',
+                        'LambdaFunctionARN', 'S3BucketName', 'CloudFrontDistributionId',
+                        'ApiGatewayURL']
     if flat_outputs and all(k in flat_outputs for k in required_outputs):
       cls.stack_outputs = flat_outputs
     else:
@@ -56,7 +58,8 @@ class TestTapStackIntegration(unittest.TestCase):
     cls.lambda_function_name = cls.stack_outputs.get('LambdaFunctionName')
     cls.lambda_function_arn = cls.stack_outputs.get('LambdaFunctionARN')
     cls.s3_bucket_name = cls.stack_outputs.get('S3BucketName')
-    cls.cloudfront_distribution_id = cls.stack_outputs.get('CloudFrontDistributionId')
+    cls.cloudfront_distribution_id = cls.stack_outputs.get(
+        'CloudFrontDistributionId')
 
   @classmethod
   def _get_stack_outputs(cls) -> dict:
@@ -343,7 +346,8 @@ class TestTapStackIntegration(unittest.TestCase):
     """Test CloudFront distribution configuration"""
     distribution_id = flat_outputs.get(
         'CloudFrontDistributionId') if flat_outputs else self.cloudfront_distribution_id
-    self.assertIsNotNone(distribution_id, "CloudFront distribution ID not found")
+    self.assertIsNotNone(
+        distribution_id, "CloudFront distribution ID not found")
 
     try:
       # Get distribution configuration
@@ -356,13 +360,18 @@ class TestTapStackIntegration(unittest.TestCase):
 
       # Verify custom error responses
       error_responses = config.get('CustomErrorResponses', {}).get('Items', [])
-      self.assertTrue(len(error_responses) > 0, "Should have custom error responses")
-      
+      self.assertTrue(len(error_responses) > 0,
+                      "Should have custom error responses")
+
       # Check for 404 error response
-      error_404 = next((err for err in error_responses if err['ErrorCode'] == 404), None)
-      self.assertIsNotNone(error_404, "Should have 404 error response configuration")
-      self.assertEqual(error_404['ResponseCode'], 200, "404 should redirect to 200")
-      self.assertEqual(error_404['ResponsePagePath'], '/error.html', "404 should serve error.html")
+      error_404 = next(
+          (err for err in error_responses if err['ErrorCode'] == 404), None)
+      self.assertIsNotNone(
+          error_404, "Should have 404 error response configuration")
+      self.assertEqual(error_404['ResponseCode'],
+                       200, "404 should redirect to 200")
+      self.assertEqual(error_404['ResponsePagePath'],
+                       '/error.html', "404 should serve error.html")
 
     except ClientError as e:
       self.fail(f"Failed to get CloudFront distribution configuration: {e}")
@@ -378,7 +387,7 @@ class TestTapStackIntegration(unittest.TestCase):
       # Verify public access is blocked
       response = self.s3_client.get_public_access_block(Bucket=s3_bucket_name)
       config = response['PublicAccessBlockConfiguration']
-      
+
       # All public access should be blocked for security
       self.assertTrue(config.get('BlockPublicAcls', False),
                       "BlockPublicAcls should be True")
@@ -467,7 +476,6 @@ class TestTapStackIntegration(unittest.TestCase):
                       f"Response {i} should contain message")
         self.assertIn('timestamp', response_body,
                       f"Response {i} should contain timestamp")
-
         # Small delay between requests
         time.sleep(0.5)
 
