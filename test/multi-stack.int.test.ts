@@ -3,7 +3,6 @@ import fs from 'fs';
 import { Template } from 'aws-cdk-lib/assertions';
 import { envConfig } from './multi-stack.unit.test';
 
-
 function getStackName(envSuffix: string | undefined): string {
   const environmentSuffix = envSuffix || 'dev';
   return `TapStack${environmentSuffix}`;
@@ -56,9 +55,9 @@ describe('Stack Integration Tests', () => {
 
   test('VPC has expected CIDR block', () => {
     devTemplate.hasResourceProperties('AWS::EC2::VPC', {
-      "EnableDnsHostnames": true,
-      "EnableDnsSupport": true,
-      "InstanceTenancy": "default",
+      EnableDnsHostnames: true,
+      EnableDnsSupport: true,
+      InstanceTenancy: 'default',
     });
   });
   test('Auto Scaling policy is configured', () => {

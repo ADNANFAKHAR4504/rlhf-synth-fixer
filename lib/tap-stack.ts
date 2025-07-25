@@ -59,11 +59,16 @@ export class TapStack extends cdk.Stack {
       return str.charAt(0).toUpperCase() + str.slice(1);
     }
 
-    new MultiEnvEcsStack(this, capitalize(`${environmentSuffix}Stack`), config, {
-      env: {
-        account: process.env.CDK_DEFAULT_ACCOUNT,
-        region: process.env.CDK_DEFAULT_REGION,
-      },
-    });
+    new MultiEnvEcsStack(
+      this,
+      capitalize(`${environmentSuffix}Stack`),
+      config,
+      {
+        env: {
+          account: process.env.CDK_DEFAULT_ACCOUNT,
+          region: process.env.CDK_DEFAULT_REGION,
+        },
+      }
+    );
   }
 }
