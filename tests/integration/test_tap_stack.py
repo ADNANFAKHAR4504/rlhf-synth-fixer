@@ -37,6 +37,6 @@ def test_stack_synthesizes():
 
 def test_cdk_synth_command():
   """Runs `cdk synth` to ensure the app compiles without errors."""
-  result = subprocess.run(["cdk", "synth"], capture_output=True, text=True)
+  result = subprocess.run(["cdk", "synth"], capture_output=True, text=True, check=False)
   assert result.returncode == 0
   assert "AWS::EC2::VPC" in result.stdout or "Resources" in result.stdout
