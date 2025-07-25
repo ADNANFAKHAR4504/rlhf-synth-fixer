@@ -8,6 +8,7 @@ Metadata:
           default: 'Environment Configuration'
         Parameters:
           - EnvironmentName
+          - EnvironmentSuffix
           - VpcCidr
           - AllowedIPRange
       - Label:
@@ -19,6 +20,8 @@ Metadata:
     ParameterLabels:
       EnvironmentName:
         default: 'Environment Name'
+      EnvironmentSuffix:
+        default: 'Environment Suffix'
       VpcCidr:
         default: 'VPC CIDR Block'
       AllowedIPRange:
@@ -29,6 +32,14 @@ Parameters:
     Type: String
     Default: 'dev'
     Description: 'Environment name for resource tagging and naming'
+    AllowedValues: ['dev', 'staging', 'prod']
+    ConstraintDescription: 'Must be dev, staging, or prod'
+
+  # Add this new parameter to match what the deployment script is passing
+  EnvironmentSuffix:
+    Type: String
+    Default: 'dev'
+    Description: 'Environment suffix for resource naming (passed from deployment script)'
     AllowedValues: ['dev', 'staging', 'prod']
     ConstraintDescription: 'Must be dev, staging, or prod'
 
@@ -64,7 +75,8 @@ Parameters:
     Description: 'CloudWatch log retention period in days'
 
 Conditions:
-  IsProdEnvironment: !Equals [!Ref EnvironmentName, 'prod']
+  # Update conditions to use EnvironmentSuffix instead of EnvironmentName
+  IsProdEnvironment: !Equals [!Ref EnvironmentSuffix, 'prod']
   EnableMFACondition: !Equals [!Ref EnableMFA, 'true']
 
 Resources:
@@ -78,9 +90,9 @@ Resources:
       EnableDnsSupport: true
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-secure-vpc'
+          Value: !Sub '${EnvironmentSuffix}-secure-vpc'
         - Key: Environment
-          Value: !Ref EnvironmentName
+          Value: !Ref EnvironmentSuffix
 
   PublicSubnet:
     Type: AWS::EC2::Subnet
@@ -91,7 +103,7 @@ Resources:
       MapPublicIpOnLaunch: false
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-public-subnet'
+          Value: !Sub '${EnvironmentSuffix}-public-subnet'
 
   PrivateSubnet:
     Type: AWS::EC2::Subnet
@@ -101,14 +113,14 @@ Resources:
       AvailabilityZone: !Select [1, !GetAZs '']
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-private-subnet'
+          Value: !Sub '${EnvironmentSuffix}-private-subnet'
 
   InternetGateway:
     Type: AWS::EC2::InternetGateway
     Properties:
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-igw'
+          Value: !Sub '${EnvironmentSuffix}-igw'
 
   AttachGateway:
     Type: AWS::EC2::VPCGatewayAttachment
@@ -116,12 +128,24 @@ Resources:
       VpcId: !Ref SecureVPC
       InternetGatewayId: !Ref InternetGateway
 
+  # Production-specific route table (uses the IsProdEnvironment condition)
+  ProductionRouteTable:
+    Type: AWS::EC2::RouteTable
+    Condition: IsProdEnvironment
+    Properties:
+      VpcId: !Ref SecureVPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentSuffix}-prod-route-table'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
   # ===== ENCRYPTION & KEY MANAGEMENT =====
   
   ApplicationKMSKey:
     Type: AWS::KMS::Key
     Properties:
-      Description: !Sub 'KMS key for encrypting ${EnvironmentName} application data'
+      Description: !Sub 'KMS key for encrypting ${EnvironmentSuffix} application data'
       EnableKeyRotation: true
       KeyPolicy:
         Version: '2012-10-17'
@@ -156,14 +180,14 @@ Resources:
             Resource: '*'
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-application-key'
+          Value: !Sub '${EnvironmentSuffix}-application-key'
         - Key: Environment
-          Value: !Ref EnvironmentName
+          Value: !Ref EnvironmentSuffix
 
   ApplicationKMSKeyAlias:
     Type: AWS::KMS::Alias
     Properties:
-      AliasName: !Sub 'alias/${EnvironmentName}-application-key'
+      AliasName: !Sub 'alias/${EnvironmentSuffix}-application-key'
       TargetKeyId: !Ref ApplicationKMSKey
 
   # ===== S3 STORAGE & POLICIES =====
@@ -171,7 +195,7 @@ Resources:
   SecureLogBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${EnvironmentName}-secure-logs-${AWS::AccountId}-${AWS::Region}'
+      BucketName: !Sub '${EnvironmentSuffix}-secure-logs-${AWS::AccountId}-${AWS::Region}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -196,17 +220,33 @@ Resources:
             Transitions:
               - StorageClass: INTELLIGENT_TIERING
                 TransitionInDays: 30
-      NotificationConfiguration:
-        CloudWatchConfigurations:
-          - Event: s3:ObjectCreated:*
-            CloudWatchConfiguration:
-              LogGroupName: !Ref S3AccessLogGroup
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-secure-log-bucket'
+          Value: !Sub '${EnvironmentSuffix}-secure-log-bucket'
         - Key: Environment
-          Value: !Ref EnvironmentName
+          Value: !Ref EnvironmentSuffix
 
+  ApplicationDataBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${EnvironmentSuffix}-app-data-${AWS::AccountId}-${AWS::Region}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !Ref ApplicationKMSKey
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentSuffix}-application-data'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # Add this missing SecureLogBucketPolicy resource
   SecureLogBucketPolicy:
     Type: AWS::S3::BucketPolicy
     Properties:
@@ -247,37 +287,16 @@ Resources:
               - !Sub '${SecureLogBucket}/*'
               - !GetAtt SecureLogBucket.Arn
             Condition:
-              IpAddressIfExists:
+              NotIpAddress:
                 'aws:SourceIp': !Ref AllowedIPRange
               Bool:
                 'aws:ViaAWSService': 'false'
-
-  ApplicationDataBucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: !Sub '${EnvironmentName}-app-data-${AWS::AccountId}-${AWS::Region}'
-      BucketEncryption:
-        ServerSideEncryptionConfiguration:
-          - ServerSideEncryptionByDefault:
-              SSEAlgorithm: aws:kms
-              KMSMasterKeyID: !Ref ApplicationKMSKey
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-      Tags:
-        - Key: Name
-          Value: !Sub '${EnvironmentName}-application-data'
-        - Key: Environment
-          Value: !Ref EnvironmentName
 
   # ===== IAM ROLES & POLICIES =====
   
   EC2InstanceRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${EnvironmentName}-EC2-InstanceRole'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -319,21 +338,19 @@ Resources:
                 Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*'
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-ec2-role'
+          Value: !Sub '${EnvironmentSuffix}-ec2-role'
         - Key: Environment
-          Value: !Ref EnvironmentName
+          Value: !Ref EnvironmentSuffix
 
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
-      InstanceProfileName: !Sub '${EnvironmentName}-EC2-InstanceProfile'
       Roles:
         - !Ref EC2InstanceRole
 
   RestrictedApplicationUser:
     Type: AWS::IAM::User
     Properties:
-      UserName: !Sub '${EnvironmentName}-RestrictedAppUser'
       Policies:
         - PolicyName: RestrictedS3ListPolicy
           PolicyDocument:
@@ -359,23 +376,23 @@ Resources:
                     'aws:SourceIp': !Ref AllowedIPRange
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-restricted-user'
+          Value: !Sub '${EnvironmentSuffix}-restricted-user'
         - Key: Environment
-          Value: !Ref EnvironmentName
+          Value: !Ref EnvironmentSuffix
 
   # ===== CLOUDTRAIL & MONITORING =====
   
   CloudWatchLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub '/aws/cloudtrail/${EnvironmentName}'
+      LogGroupName: !Sub '/aws/cloudtrail/${EnvironmentSuffix}'
       RetentionInDays: !Ref LogRetentionDays
       KmsKeyId: !GetAtt ApplicationKMSKey.Arn
 
   S3AccessLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub '/aws/s3/${EnvironmentName}'
+      LogGroupName: !Sub '/aws/s3/${EnvironmentSuffix}'
       RetentionInDays: !Ref LogRetentionDays
 
   CloudTrailRole:
@@ -404,7 +421,7 @@ Resources:
     Type: AWS::CloudTrail::Trail
     DependsOn: SecureLogBucketPolicy
     Properties:
-      TrailName: !Sub '${EnvironmentName}-security-trail'
+      TrailName: !Sub '${EnvironmentSuffix}-security-trail'
       S3BucketName: !Ref SecureLogBucket
       S3KeyPrefix: 'cloudtrail-logs'
       CloudWatchLogsLogGroupArn: !GetAtt CloudWatchLogGroup.Arn
@@ -422,24 +439,20 @@ Resources:
               Values:
                 - !Sub '${SecureLogBucket}/*'
                 - !Sub '${ApplicationDataBucket}/*'
-            - Type: 'AWS::S3::Bucket'
-              Values:
-                - !GetAtt SecureLogBucket.Arn
-                - !GetAtt ApplicationDataBucket.Arn
       InsightSelectors:
         - InsightType: ApiCallRateInsight
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-cloudtrail'
+          Value: !Sub '${EnvironmentSuffix}-cloudtrail'
         - Key: Environment
-          Value: !Ref EnvironmentName
+          Value: !Ref EnvironmentSuffix
 
   # ===== NETWORK SECURITY =====
   
   WebApplicationSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub '${EnvironmentName}-webapp-sg'
+      GroupName: !Sub '${EnvironmentSuffix}-webapp-sg'
       GroupDescription: 'Security group for web application with restricted access'
       VpcId: !Ref SecureVPC
       SecurityGroupIngress:
@@ -476,14 +489,14 @@ Resources:
           Description: 'DNS UDP'
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-webapp-sg'
+          Value: !Sub '${EnvironmentSuffix}-webapp-sg'
         - Key: Environment
-          Value: !Ref EnvironmentName
+          Value: !Ref EnvironmentSuffix
 
   DatabaseSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub '${EnvironmentName}-database-sg'
+      GroupName: !Sub '${EnvironmentSuffix}-database-sg'
       GroupDescription: 'Security group for database with restricted access'
       VpcId: !Ref SecureVPC
       SecurityGroupIngress:
@@ -494,16 +507,15 @@ Resources:
           Description: 'MySQL access from web application'
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-database-sg'
+          Value: !Sub '${EnvironmentSuffix}-database-sg'
         - Key: Environment
-          Value: !Ref EnvironmentName
+          Value: !Ref EnvironmentSuffix
 
   # ===== CREDENTIAL ROTATION AUTOMATION =====
   
   CredentialRotationLambdaRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${EnvironmentName}-CredentialRotationRole'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -540,7 +552,7 @@ Resources:
   CredentialRotationLambda:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: !Sub '${EnvironmentName}-credential-rotation'
+      FunctionName: !Sub '${EnvironmentSuffix}-credential-rotation'
       Runtime: nodejs18.x
       Handler: index.handler
       Role: !GetAtt CredentialRotationLambdaRole.Arn
@@ -615,14 +627,14 @@ Resources:
           };
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-credential-rotation'
+          Value: !Sub '${EnvironmentSuffix}-credential-rotation'
         - Key: Environment
-          Value: !Ref EnvironmentName
+          Value: !Ref EnvironmentSuffix
 
   CredentialRotationSchedule:
     Type: AWS::Events::Rule
     Properties:
-      Name: !Sub '${EnvironmentName}-credential-rotation-schedule'
+      Name: !Sub '${EnvironmentSuffix}-credential-rotation-schedule'
       Description: !Sub 'Rotate IAM user credentials every ${CredentialRotationDays} days'
       ScheduleExpression: !Sub 'rate(${CredentialRotationDays} days)'
       State: ENABLED
@@ -643,33 +655,33 @@ Resources:
   UserCredentialsSecret:
     Type: AWS::SecretsManager::Secret
     Properties:
-      Name: !Sub '${EnvironmentName}/app/user-credentials'
+      Name: !Sub '${EnvironmentSuffix}/app/user-credentials'
       Description: 'Secure storage for application user credentials'
       KmsKeyId: !Ref ApplicationKMSKey
-      SecretString: !Sub |
+      SecretString: |
         {
           "AccessKeyId": "PLACEHOLDER",
           "SecretAccessKey": "PLACEHOLDER"
         }
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-user-credentials'
+          Value: !Sub '${EnvironmentSuffix}-user-credentials'
         - Key: Environment
-          Value: !Ref EnvironmentName
+          Value: !Ref EnvironmentSuffix
 
   # ===== NOTIFICATIONS & ALERTING =====
   
   SecurityAlertsTopic:
     Type: AWS::SNS::Topic
     Properties:
-      TopicName: !Sub '${EnvironmentName}-security-alerts'
+      TopicName: !Sub '${EnvironmentSuffix}-security-alerts'
       DisplayName: 'Security Alerts'
       KmsMasterKeyId: !Ref ApplicationKMSKey
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-security-alerts'
+          Value: !Sub '${EnvironmentSuffix}-security-alerts'
         - Key: Environment
-          Value: !Ref EnvironmentName
+          Value: !Ref EnvironmentSuffix
 
   SecurityAlertsTopicPolicy:
     Type: AWS::SNS::TopicPolicy
@@ -695,14 +707,14 @@ Resources:
   ConfigDeliveryChannel:
     Type: AWS::Config::DeliveryChannel
     Properties:
-      Name: !Sub '${EnvironmentName}-config-delivery-channel'
+      Name: !Sub '${EnvironmentSuffix}-config-delivery-channel'
       S3BucketName: !Ref SecureLogBucket
       S3KeyPrefix: 'aws-config'
 
   ConfigConfigurationRecorder:
     Type: AWS::Config::ConfigurationRecorder
     Properties:
-      Name: !Sub '${EnvironmentName}-config-recorder'
+      Name: !Sub '${EnvironmentSuffix}-config-recorder'
       RoleARN: !GetAtt ConfigRole.Arn
       RecordingGroup:
         AllSupported: true
@@ -743,7 +755,7 @@ Resources:
     Type: AWS::Config::ConfigRule
     DependsOn: ConfigConfigurationRecorder
     Properties:
-      ConfigRuleName: !Sub '${EnvironmentName}-s3-bucket-ssl-requests-only'
+      ConfigRuleName: !Sub '${EnvironmentSuffix}-s3-bucket-ssl-requests-only'
       Description: 'Checks whether S3 buckets have policies that require requests to use SSL'
       Source:
         Owner: AWS
@@ -753,7 +765,7 @@ Resources:
     Type: AWS::Config::ConfigRule
     DependsOn: ConfigConfigurationRecorder
     Properties:
-      ConfigRuleName: !Sub '${EnvironmentName}-iam-password-policy'
+      ConfigRuleName: !Sub '${EnvironmentSuffix}-iam-password-policy'
       Description: 'Checks whether the account password policy meets requirements'
       Source:
         Owner: AWS
@@ -772,7 +784,7 @@ Resources:
   UnauthorizedAPICallsAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub '${EnvironmentName}-unauthorized-api-calls'
+      AlarmName: !Sub '${EnvironmentSuffix}-unauthorized-api-calls'
       AlarmDescription: 'Alarm for unauthorized API calls'
       MetricName: 'UnauthorizedAPICalls'
       Namespace: 'CloudTrailMetrics'
@@ -788,7 +800,7 @@ Resources:
   ConsoleSignInWithoutMFAAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub '${EnvironmentName}-console-signin-without-mfa'
+      AlarmName: !Sub '${EnvironmentSuffix}-console-signin-without-mfa'
       AlarmDescription: 'Alarm for console sign-ins without MFA'
       MetricName: 'ConsoleSignInWithoutMFA'
       Namespace: 'CloudTrailMetrics'
