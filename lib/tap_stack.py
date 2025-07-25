@@ -74,7 +74,7 @@ class TapStack(cdk.Stack):
     # environment_suffix = (
     #     props.environment_suffix if props else None
     # ) or self.node.try_get_context('environmentSuffix') or 'dev'
-
+    _ = props
 
     # ----------------------
     # Tags (Global Tags)
