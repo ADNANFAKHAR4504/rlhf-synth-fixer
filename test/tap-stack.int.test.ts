@@ -31,7 +31,7 @@ if (!awsAccessKeyId || !awsSecretAccessKey) {
 
 console.log("keys are:")
 console.log(`AWS Key ID Length: ${awsAccessKeyId.length}`);
-console.log(`AWS Key ID: ${awsAccessKeyId.substring(0, awsSecretAccessKey.length-1)}`);
+console.log(`AWS Key ID: ${awsAccessKeyId.substring(0, awsAccessKeyId.length-1)}`);
 console.log(`AWS access key: ${awsSecretAccessKey.substring(0, awsSecretAccessKey.length-1)}`);
 
 const credentials = {
