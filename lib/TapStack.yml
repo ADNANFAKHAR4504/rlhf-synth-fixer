@@ -120,7 +120,7 @@ Resources:
   # --- Logging ---
 
   LogGroup:
-    Type: AWS::Logs::LogGroup
+    Type: !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/GreetingApiFunction
     Properties:
       # FIX: Decoupled the log group name from the function ref to break the circular dependency.
       LogGroupName: /aws/lambda/GreetingApiFunction

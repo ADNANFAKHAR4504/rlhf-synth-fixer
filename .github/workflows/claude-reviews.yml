@@ -26,8 +26,6 @@ jobs:
           fetch-depth: 0
           ref: refs/pull/${{ github.event.pull_request.number }}/head
 
-<<<<<<< HEAD
-=======
       - name: Check for required documentation files
         id: docs-check
         run: |
@@ -51,7 +49,6 @@ jobs:
             exit 1
           fi
 
->>>>>>> main
       - name: Run Claude PR Review Action
         uses: anthropics/claude-code-action@beta
         with:
