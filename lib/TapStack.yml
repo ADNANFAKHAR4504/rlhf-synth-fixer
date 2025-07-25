@@ -36,6 +36,7 @@ Parameters:
   WebAppServerKeyName:
     Type: AWS::EC2::KeyPair::KeyName
     Description: Name of an existing EC2 KeyPair to enable SSH access to the instance.
+    Default: 'arn:aws:acm:us-east-1:123456789012:certificate/your-default-cert-id'
 
 Resources:
   # -- S3 Bucket for Static Assets --
