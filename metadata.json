@@ -1,0 +1,10 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "229202",
+  "startedAt": "2025-07-24T20:05:30.341Z",
+  "subtask": "Infrastructure QA and Management",
+  "subject_labels": ["Multi-Region Infrastructure", "AWS CDK", "Security Best Practices", "Infrastructure Testing"]
+}
