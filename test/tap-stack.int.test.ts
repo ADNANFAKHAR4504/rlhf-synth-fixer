@@ -21,10 +21,8 @@ import {
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'pr99';
 const stackName = `TapStack${environmentSuffix}`;
 const region = process.env.AWS_REGION || 'us-east-1';
-// const awsAccessKeyId = process.env.AWS_ACCESS_KEY_ID;
-// const awsSecretAccessKey = process.env.AWS_SECRET_ACCESS_KEY;
-const awsAccessKeyId = "AKIA2OOTR7FCNUZMPGI";
-const awsSecretAccessKey = "bircjZyeLxWFowAsrXfxwkOQLqtwwpUgJgUkdY1";
+const awsAccessKeyId = process.env.AWS_ACCESS_KEY_ID;
+const awsSecretAccessKey = process.env.AWS_SECRET_ACCESS_KEY;
 
 // --- Pre-flight Checks ---
 if (!awsAccessKeyId || !awsSecretAccessKey) {
@@ -76,22 +74,6 @@ describe('Elastic Beanstalk Integration Tests', () => {
     });
     const environments = await ebClient.send(describeEnvCommand);
     const cname = new URL(stackOutputs.EnvironmentURL).hostname;
-
-    console.log('--- DEBUGGING ---');
-    console.log(`Value from stack output (cname): "${cname}"`);
-    console.log(`Type: ${typeof cname}, Length: ${cname.length}`);
-    console.log('-------------------');
-
-    // Now, log the values from the array you are searching
-    environments.Environments?.forEach(env => {
-      console.log(`Checking against EndpointURL: "${env.EndpointURL}"`);
-      console.log(`Type: ${typeof env.EndpointURL}, Length: ${env.EndpointURL?.length}`);
-      console.log(`Are they equal? --> ${env.EndpointURL === cname}`);
-      console.log('---');
-    });
-
-
-
     const targetEnvironment = environments.Environments?.find(env => env.EndpointURL === cname);
     console.log(`environmnts:` , JSON.stringify(environments, null, 2));
     console.log(`cname:` , cname);
