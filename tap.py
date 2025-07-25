@@ -32,14 +32,18 @@ Tags.of(app).add('Author', commit_author)
 # Create a TapStackProps object to pass environment_suffix
 
 props = TapStackProps(
-    environment_suffix=environment_suffix,
+    environment_suffix=environment_suffix
+)
+
+# Initialize the stack with proper parameters  
+TapStack(
+    app, 
+    STACK_NAME, 
+    props=props, 
     env=cdk.Environment(
         account=os.getenv('CDK_DEFAULT_ACCOUNT'),
         region=os.getenv('CDK_DEFAULT_REGION')
     )
 )
-
-# Initialize the stack with proper parameters
-TapStack(app, STACK_NAME, props=props)
 
 app.synth()

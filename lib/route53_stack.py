@@ -1,31 +1,20 @@
 from aws_cdk import (
-    NestedStack,
-    aws_route53 as route53,
-    aws_route53_targets as targets,
+  NestedStack,
+  aws_route53 as route53,
 )
 from constructs import Construct
 
-# You need to import your AlbStack class for this to work
-from .alb_stack import AlbStack  # <-- Replace with actual path
 
 class Route53Stack(NestedStack):
-    def __init__(self, scope: Construct, id: str, **kwargs) -> None:
-        super().__init__(scope, id, **kwargs)
+  def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
+    super().__init__(scope, construct_id, **kwargs)
 
-        hosted_zone = route53.HostedZone.from_lookup(
-            self, "HostedZone",
-            domain_name="example.com"
-        )
+    # Create a hosted zone for the domain
+    # Note: In production, you'd typically use an existing hosted zone
+    self.hosted_zone = route53.HostedZone(
+        self, "HostedZone",
+        zone_name="example.com"
+    )
 
-        alb_stack = AlbStack(self, "AlbStack-us-east-1", vpc=...)  # You must pass a VPC here!
-
-        record_set = route53.RecordSet(
-            self, "AppRecordSet",
-            zone=hosted_zone,
-            record_type=route53.RecordType.A,
-            target=route53.RecordTarget.from_alias(
-                targets.LoadBalancerTarget(load_balancer=alb_stack.alb)
-            )
-        )
-
-
+    # Failover routing will be implemented when ALB targets are available
+    # This is a placeholder for proper multi-region DNS failover
