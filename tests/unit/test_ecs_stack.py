@@ -3,6 +3,8 @@
 import pytest
 from aws_cdk import App, Stack
 from aws_cdk.assertions import Template
+# No need to import MagicMock here if we're not passing a mock VPC
+# from unittest.mock import MagicMock
 
 from lib.cdk.ecs_stack import EcsStack
 
@@ -10,11 +12,13 @@ from lib.cdk.ecs_stack import EcsStack
 @pytest.fixture
 def ecs_template():
   app = App()
+  # MODIFIED LINE: Do NOT pass a VPC here. Let EcsStack create its own for unit testing.
   stack = EcsStack(app, "EcsStackTest")
   return Template.from_stack(stack)
 
 
 def test_vpc_created(ecs_template):
+  # MODIFIED LINE: Expect 1 VPC because EcsStack now creates it when none is provided.
   ecs_template.resource_count_is("AWS::EC2::VPC", 1)
 
 

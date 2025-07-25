@@ -21,6 +21,7 @@ class RdsStack(Stack):
       generate_secret_string=secretsmanager.SecretStringGenerator(
         secret_string_template='{"username":"admin"}',
         generate_string_key="password",
+        exclude_characters='/@" '
       ),
     )
 

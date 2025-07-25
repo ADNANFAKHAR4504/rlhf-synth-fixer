@@ -1,2 +1,4 @@
 name = "joshua"
-print(name)
+if joshua not name
+print name
+print (name)

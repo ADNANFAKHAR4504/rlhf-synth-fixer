@@ -236,7 +236,7 @@ docker push <account-id>.dkr.ecr.us-east-1.amazonaws.com/app-repo-<stack>:latest
 
 Run Tests:Unit tests:bash
 
-pytest tests/unit/ tests/app/ -v
+pytest tests/unit/ -v
 
 Integration tests (after deploying test stack):bash
 
