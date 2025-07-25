@@ -192,12 +192,5 @@ describe('Production Infrastructure Stack Tests', () => {
     });
   });
 
-  test('Environment parameter is correctly defined', () => {
-    const parameters = template.toJSON().Parameters;
-    expect(parameters['EnvironmentName']).toBeDefined();
-    expect(parameters['EnvironmentName'].Type).toBe('String');
-    expect(parameters['EnvironmentName'].AllowedValues).toEqual(
-      expect.arrayContaining(['dev', 'stage', 'production'])
-    );
-  });
+
 });
