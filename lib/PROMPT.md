@@ -85,4 +85,3 @@ You are an expert **AWS Solutions Architect** specializing in **event-driven** a
 * Include brief notes in comments about unit testing strategy (but skip actual tests).
 
 ---
- 
