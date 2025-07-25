@@ -66,7 +66,7 @@ class TestTapStackIntegration(unittest.TestCase):
 
   @mark.it("validates Lambda functions are working correctly")
   def test_lambda_functions_working(self):
-    """Test that Lambda functions are properly integrated with API Gateway"""
+    """Test that Lambda functions are properly integrated with API Gateway """
     if not self.api_endpoints:
       self.skipTest("No API Gateway endpoints found in outputs")
     
