@@ -1,25 +1,23 @@
 import * as cdk from 'aws-cdk-lib';
 import { Match, Template } from 'aws-cdk-lib/assertions';
-import { MultiEnvEcsStack } from '../lib/multienv-ecs-stack';
+import { MultiEnvEcsStack, EnvironmentConfig } from '../lib/multienv-ecs-stack';
 
-interface EnvironmentConfig {
-  envName: string;
-  vpcCidr: string;
-  hostedZoneName: string;
-  domainName: string;
-  imageName: string;
-  imageTag: string;
-  port: number
-}
 
-const envConfig: EnvironmentConfig = {
+const imageName = process.env.IMAGE_NAME || 'nginx'
+const imageTag = process.env.IMAGE_NAME || '1.25.3'
+const port = Number(process.env.IMAGE_NAME) || 80
+const cpu = Number(process.env.CPU_VALUE) || 256
+const memoryLimit = Number(process.env.MEMORY_Limit) || 512
+
+export const envConfig: EnvironmentConfig = {
   envName: 'dev',
   vpcCidr: '10.0.0.0/16',
   hostedZoneName: 'dummy.local',
   domainName: 'api.dummy.local',
-  imageName: 'nginx',
-  imageTag: 'latest',
-  port: 80
+  imageName,
+  imageTag,
+  port,
+  cpu, memoryLimit
 };
 
 describe.only('MultiEnvEcsStack', () => {

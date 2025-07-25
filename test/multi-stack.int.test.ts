@@ -2,6 +2,7 @@
 import fs from 'fs';
 import path from 'path';
 import { Template } from 'aws-cdk-lib/assertions';
+import { envConfig } from './multi-stack.unit.test';
 
 const devTemplatePath = path.join(__dirname, '../cdk.out/DevStack.template.json');
 const devTemplate = Template.fromJSON(
@@ -33,7 +34,7 @@ describe('DevStack Integration Tests', () => {
 
     expect(values.some(resource => {
       const containers = resource.Properties?.ContainerDefinitions || [];
-      return containers.some((c: any) => c.Image === 'nginx:latest' && c.Name === 'AppContainer');
+      return containers.some((c: any) => c.Image === `${envConfig.imageName}:${envConfig.imageTag}` && c.Name === 'AppContainer');
     })).toBe(true);
   });
 
@@ -63,7 +64,7 @@ describe('ProdStack Integration Tests', () => {
 
     expect(values.some(resource => {
       const containers = resource.Properties?.ContainerDefinitions || [];
-      return containers.some((c: any) => c.Image === 'nginx:latest' && c.Name === 'AppContainer');
+      return containers.some((c: any) => c.Image === `${envConfig.imageName}:${envConfig.imageTag}` && c.Name === 'AppContainer');
     })).toBe(true);
   });
 

@@ -4,10 +4,15 @@ import { Template, Match } from 'aws-cdk-lib/assertions';
 import { TapStack } from '../lib/tap-stack';
 
 describe('TapStack', () => {
-    test('DevStack and ProdStack are created with correct configuration', () => {
+  const env = {
+    account: process.env.CDK_DEFAULT_ACCOUNT || '111111111111',
+    region: process.env.CDK_DEFAULT_REGION || 'us-east-1',
+  };
+  test('DevStack and ProdStack are created with correct configuration', () => {
     const app = new App();
     const tapStack = new TapStack(app, 'TestTapStack', {
       environmentSuffix: 'dev',
+      env
     });
 
     const devStack = tapStack.node.tryFindChild('DevStack') as cdk.Stack;
@@ -33,7 +38,7 @@ describe('TapStack', () => {
     const app = new App();
 
     // No environmentSuffix passed
-    const stack = new TapStack(app, 'DefaultEnvStack');
+    const stack = new TapStack(app, 'DefaultEnvStack', { env });
 
     // You can access internal nodes like child stacks
     const devStack = stack.node.tryFindChild('DevStack');
