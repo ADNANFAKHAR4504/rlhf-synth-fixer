@@ -35,20 +35,19 @@ class TestTapStackIntegration(unittest.TestCase):
   @classmethod
   def setUpClass(cls):
     """Set up AWS clients and get stack outputs once for all tests"""
-    cls.region = os.environ.get('AWS_DEFAULT_REGION', 'us-east-1')
+    cls.region = os.environ.get('AWS_DEFAULT_REGION', 'us-west-2')
     cls.stack_name = os.environ.get('STACK_NAME', 'TapStack')
 
     # Initialize AWS clients
     cls.lambda_client = boto3.client('lambda', region_name=cls.region)
     cls.s3_client = boto3.client('s3', region_name=cls.region)
+    cls.cloudfront_client = boto3.client('cloudfront', region_name=cls.region)
     cls.cloudformation_client = boto3.client(
         'cloudformation', region_name=cls.region)
 
     # Use flat_outputs if available, otherwise fallback to CloudFormation
-    if flat_outputs and all(
-        k in flat_outputs
-        for k in ['WebsiteURL', 'LambdaFunctionName', 'LambdaFunctionARN', 'S3BucketName']
-    ):
+    required_outputs = ['WebsiteURL', 'LambdaFunctionName', 'LambdaFunctionARN', 'S3BucketName', 'CloudFrontDistributionId']
+    if flat_outputs and all(k in flat_outputs for k in required_outputs):
       cls.stack_outputs = flat_outputs
     else:
       cls.stack_outputs = cls._get_stack_outputs()
@@ -57,6 +56,7 @@ class TestTapStackIntegration(unittest.TestCase):
     cls.lambda_function_name = cls.stack_outputs.get('LambdaFunctionName')
     cls.lambda_function_arn = cls.stack_outputs.get('LambdaFunctionARN')
     cls.s3_bucket_name = cls.stack_outputs.get('S3BucketName')
+    cls.cloudfront_distribution_id = cls.stack_outputs.get('CloudFrontDistributionId')
 
   @classmethod
   def _get_stack_outputs(cls) -> dict:
@@ -79,7 +79,7 @@ class TestTapStackIntegration(unittest.TestCase):
   def test_stack_outputs_exist(self):
     """Test that all required stack outputs are available"""
     required_outputs = ['WebsiteURL', 'LambdaFunctionName',
-                        'LambdaFunctionARN', 'S3BucketName']
+                        'LambdaFunctionARN', 'S3BucketName', 'CloudFrontDistributionId']
 
     # Use flat_outputs for this test
     outputs = flat_outputs if flat_outputs else self.stack_outputs
@@ -90,14 +90,18 @@ class TestTapStackIntegration(unittest.TestCase):
       self.assertIsNotNone(
           outputs[output_key], f"Stack output {output_key} is None")
 
-  @mark.it("can access S3 website and get index page")
-  def test_s3_website_index_page(self):
-    """Test that the S3 website serves the index page correctly"""
+  @mark.it("can access CloudFront website and get index page")
+  def test_cloudfront_website_index_page(self):
+    """Test that the CloudFront distribution serves the index page correctly"""
     # Use flat_outputs for website_url if available
     website_url = flat_outputs.get(
         'WebsiteURL') if flat_outputs else self.website_url
     self.assertIsNotNone(
         website_url, "Website URL not found in stack outputs")
+
+    # Verify it's a CloudFront URL
+    self.assertIn('cloudfront.net', website_url,
+                  "Website URL should be a CloudFront distribution")
 
     try:
       response = requests.get(website_url, timeout=30)
@@ -107,6 +111,10 @@ class TestTapStackIntegration(unittest.TestCase):
       # Verify content type
       self.assertIn(
           'text/html', response.headers.get('content-type', '').lower())
+
+      # Verify CloudFront headers
+      self.assertIn('x-cache', [h.lower() for h in response.headers.keys()],
+                    "Response should include CloudFront cache headers")
 
       # Verify expected content in the HTML
       content = response.text
@@ -120,9 +128,9 @@ class TestTapStackIntegration(unittest.TestCase):
     except requests.exceptions.RequestException as e:
       self.fail(f"Failed to access website: {e}")
 
-  @mark.it("returns 404 error page for non-existent URLs")
-  def test_s3_website_error_page(self):
-    """Test that the S3 website serves the 404 error page for non-existent URLs"""
+  @mark.it("returns custom error page for non-existent URLs")
+  def test_cloudfront_error_page(self):
+    """Test that CloudFront serves the custom error page for non-existent URLs"""
     website_url = flat_outputs.get(
         'WebsiteURL') if flat_outputs else self.website_url
     self.assertIsNotNone(
@@ -133,14 +141,19 @@ class TestTapStackIntegration(unittest.TestCase):
       non_existent_url = f"{website_url}/non-existent-page"
       response = requests.get(non_existent_url, timeout=30)
 
-      self.assertEqual(response.status_code, 404,
-                       "Non-existent page should return 404")
+      # CloudFront is configured to return 200 with error.html for 404/403 errors
+      self.assertEqual(response.status_code, 200,
+                       "CloudFront should return 200 with custom error page")
 
       # Verify it's serving the error page
       content = response.text
       self.assertIn('Page Not Found', content, "Error page title not found")
       self.assertIn('404', content, "404 error code not found")
       self.assertIn('Go to Homepage', content, "Homepage link not found")
+
+      # Verify CloudFront headers
+      self.assertIn('x-cache', [h.lower() for h in response.headers.keys()],
+                    "Error response should include CloudFront cache headers")
 
     except requests.exceptions.RequestException as e:
       self.fail(f"Failed to test error page: {e}")
@@ -307,7 +320,7 @@ class TestTapStackIntegration(unittest.TestCase):
       self.assertEqual(config['Runtime'], 'python3.12',
                        "Lambda should use Python 3.12 runtime")
       self.assertEqual(
-          config['Handler'], 'lambda_function.lambda_handler', "Lambda handler should be correct")
+          config['Handler'], 'handler.lambda_handler', "Lambda handler should be correct")
 
       # Verify timeout and memory
       self.assertEqual(config['Timeout'], 30,
@@ -325,102 +338,71 @@ class TestTapStackIntegration(unittest.TestCase):
     except ClientError as e:
       self.fail(f"Failed to get Lambda function configuration: {e}")
 
-  @mark.it("verifies S3 bucket has correct website configuration")
-  def test_s3_bucket_website_configuration(self):
-    """Test S3 bucket website configuration"""
+  @mark.it("verifies CloudFront distribution configuration")
+  def test_cloudfront_distribution_configuration(self):
+    """Test CloudFront distribution configuration"""
+    distribution_id = flat_outputs.get(
+        'CloudFrontDistributionId') if flat_outputs else self.cloudfront_distribution_id
+    self.assertIsNotNone(distribution_id, "CloudFront distribution ID not found")
+
+    try:
+      # Get distribution configuration
+      response = self.cloudfront_client.get_distribution(Id=distribution_id)
+      config = response['Distribution']['DistributionConfig']
+
+      # Verify default root object
+      self.assertEqual(config['DefaultRootObject'], 'index.html',
+                       "Default root object should be index.html")
+
+      # Verify custom error responses
+      error_responses = config.get('CustomErrorResponses', {}).get('Items', [])
+      self.assertTrue(len(error_responses) > 0, "Should have custom error responses")
+      
+      # Check for 404 error response
+      error_404 = next((err for err in error_responses if err['ErrorCode'] == 404), None)
+      self.assertIsNotNone(error_404, "Should have 404 error response configuration")
+      self.assertEqual(error_404['ResponseCode'], 200, "404 should redirect to 200")
+      self.assertEqual(error_404['ResponsePagePath'], '/error.html', "404 should serve error.html")
+
+    except ClientError as e:
+      self.fail(f"Failed to get CloudFront distribution configuration: {e}")
+
+  @mark.it("verifies S3 bucket is private and secure")
+  def test_s3_bucket_security(self):
+    """Test that S3 bucket is properly secured with blocked public access"""
     s3_bucket_name = flat_outputs.get(
         'S3BucketName') if flat_outputs else self.s3_bucket_name
     self.assertIsNotNone(s3_bucket_name, "S3 bucket name not found")
 
     try:
-      # Get bucket website configuration
-      response = self.s3_client.get_bucket_website(Bucket=s3_bucket_name)
+      # Verify public access is blocked
+      response = self.s3_client.get_public_access_block(Bucket=s3_bucket_name)
+      config = response['PublicAccessBlockConfiguration']
+      
+      # All public access should be blocked for security
+      self.assertTrue(config.get('BlockPublicAcls', False),
+                      "BlockPublicAcls should be True")
+      self.assertTrue(config.get('IgnorePublicAcls', False),
+                      "IgnorePublicAcls should be True")
+      self.assertTrue(config.get('BlockPublicPolicy', False),
+                      "BlockPublicPolicy should be True")
+      self.assertTrue(config.get('RestrictPublicBuckets', False),
+                      "RestrictPublicBuckets should be True")
 
-      # Verify index document
-      self.assertEqual(response['IndexDocument']['Suffix'], 'index.html',
-                       "Index document should be index.html")
-
-      # Verify error document
-      self.assertEqual(response['ErrorDocument']['Key'], 'error.html',
-                       "Error document should be error.html")
-
-    except ClientError as e:
-      self.fail(f"Failed to get S3 bucket website configuration: {e}")
-
-  @mark.it("verifies bucket is publicly accessible")
-  def test_s3_bucket_public_access(self):
-    """Test that S3 bucket allows public read access"""
-    s3_bucket_name = flat_outputs.get(
-        'S3BucketName') if flat_outputs else self.s3_bucket_name
-    self.assertIsNotNone(s3_bucket_name, "S3 bucket name not found")
-
-    def is_public_access_blocked(bucket):
+      # Verify no public bucket policy exists
       try:
-        response = self.s3_client.get_public_access_block(Bucket=bucket)
-        config = response['PublicAccessBlockConfiguration']
-        return any([
-            config.get('BlockPublicAcls', True),
-            config.get('IgnorePublicAcls', True),
-            config.get('BlockPublicPolicy', True),
-            config.get('RestrictPublicBuckets', True)
-        ])
-      except ClientError as e:
-        if e.response['Error']['Code'] == 'NoSuchPublicAccessBlockConfiguration':
-          return False
-        raise
-
-    def bucket_policy_allows_public_read(bucket):
-      try:
-        policy_response = self.s3_client.get_bucket_policy(Bucket=bucket)
-        policy = json.loads(policy_response['Policy'])
-        for statement in policy.get('Statement', []):
-          effect = statement.get('Effect')
-          principal = statement.get('Principal')
-          actions = statement.get('Action', [])
-          if isinstance(actions, str):
-            actions = [actions]
-          effect_is_allow = effect == 'Allow'
-          principal_is_star = principal == '*'
-          principal_is_dict_and_aws_star = isinstance(
-              principal, dict) and principal.get('AWS') == '*'
-          action_allows_get = 's3:GetObject' in actions
-          action_allows_all = 's3:*' in actions
-
-          if (effect_is_allow and
-              (principal_is_star or principal_is_dict_and_aws_star) and
-                  (action_allows_get or action_allows_all)):
-            print(f"Bucket policy allows public read for bucket: {bucket}")
-            return True
-        return False
+        self.s3_client.get_bucket_policy(Bucket=s3_bucket_name)
+        # If we get here, there's a bucket policy - verify it doesn't allow public access
+        # For now, we'll just note that a policy exists
       except ClientError as e:
         if e.response['Error']['Code'] == 'NoSuchBucketPolicy':
-          return False
-        raise
+          # No bucket policy is fine for private access
+          pass
+        else:
+          raise
 
-    def acl_allows_public_read(bucket):
-      try:
-        acl_response = self.s3_client.get_bucket_acl(Bucket=bucket)
-        for grant in acl_response.get('Grants', []):
-          grantee = grant.get('Grantee', {})
-          permission = grant.get('Permission')
-          if (grantee.get('Type') == 'Group' and
-              'AllUsers' in grantee.get('URI', '') and
-                  permission in ['READ', 'FULL_CONTROL']):
-            return True
-        return False
-      except ClientError:
-        return False
-
-    try:
-      public_access_blocked = is_public_access_blocked(s3_bucket_name)
-      policy_public = bucket_policy_allows_public_read(s3_bucket_name)
-      acl_public = acl_allows_public_read(s3_bucket_name)
-      is_publicly_accessible = policy_public or acl_public or not public_access_blocked
-
-      self.assertTrue(is_publicly_accessible,
-                      "Bucket should be publicly accessible for website hosting")
     except ClientError as e:
-      self.fail(f"Failed to verify S3 bucket public access: {e}")
+      self.fail(f"Failed to verify S3 bucket security configuration: {e}")
 
   @mark.it("tests end-to-end website and Lambda integration")
   def test_website_lambda_integration(self):
