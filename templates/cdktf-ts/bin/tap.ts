@@ -18,9 +18,9 @@ const stackName = `TapStack${environmentSuffix}`;
 // defautlTags is structured in adherence to the AwsProviderDefaultTags interface
 const defaultTags = {
   tags: {
-    'Environment': environmentSuffix,
-    'Repository': repositoryName,
-    'Author': commitAuthor,
+    Environment: environmentSuffix,
+    Repository: repositoryName,
+    Author: commitAuthor,
   }
 };
 
