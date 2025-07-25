@@ -9,7 +9,7 @@ import {
 // --- Configuration ---
 
 // **IMPORTANT**: Update this to match the name of your deployed CloudFormation stack.
-const stackName = 'GreetingApiStack';
+const stackName = 'TapStackpr122';
 
 // The AWS SDK for JavaScript (v3) will automatically use credentials from environment variables:
 // - AWS_ACCESS_KEY_ID
@@ -34,15 +34,9 @@ try {
 }
 
 const apiUrl = outputs.ApiUrl;
-
-const credentials = {
-  accessKeyId: awsAccessKeyId,
-  secretAccessKey: awsSecretAccessKey,
-};
-
 // Initialize the CloudFormation client. It will automatically pick up credentials
 // and region from the environment.
-const cfClient = new CloudFormationClient({ region, credentials });
+const cfClient = new CloudFormationClient({ region: awsRegion });
 
 /**
  * Test Suite for CloudFormation Stack Validation.
