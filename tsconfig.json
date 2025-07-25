@@ -19,7 +19,9 @@
     "experimentalDecorators": true,
     "strictPropertyInitialization": false,
     "typeRoots": ["./node_modules/@types"],
-    "isolatedModules": true
+    "isolatedModules": true,
+    "resolveJsonModule": true,
+    "esModuleInterop": true
   },
   "exclude": ["node_modules", "cdk.out", "templates", "archive"]
 }
