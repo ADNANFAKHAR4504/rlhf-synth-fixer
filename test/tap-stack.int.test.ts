@@ -24,6 +24,9 @@ const region = process.env.AWS_REGION || 'us-east-1';
 const awsAccessKeyId = process.env.AWS_ACCESS_KEY_ID;
 const awsSecretAccessKey = process.env.AWS_SECRET_ACCESS_KEY;
 
+console.log("keys are:")
+console.log(awsAccessKeyId);
+console.log(awsSecretAccessKey);
 
 // --- Pre-flight Checks ---
 if (!awsAccessKeyId || !awsSecretAccessKey) {
