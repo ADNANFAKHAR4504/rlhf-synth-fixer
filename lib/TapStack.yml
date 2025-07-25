@@ -81,45 +81,45 @@ Resources:
       VpcId: !Ref VPC
       InternetGatewayId: !Ref InternetGateway
 
-  # Public Subnet 1 (us-east-1a)
+  # Public Subnet 1 (dynamic AZ)
   PublicSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      AvailabilityZone: 'us-east-1a'
+      AvailabilityZone: !Select [0, !GetAZs '']
       CidrBlock: '10.0.1.0/24'
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: 'PublicSubnet1-us-east-1a'
+          Value: !Sub 'PublicSubnet1-${AWS::Region}a'
         - Key: Environment
           Value: 'Production'
 
-  # Public Subnet 2 (us-east-1b)
+  # Public Subnet 2 (dynamic AZ)
   PublicSubnet2:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      AvailabilityZone: 'us-east-1b'
+      AvailabilityZone: !Select [1, !GetAZs '']
       CidrBlock: '10.0.2.0/24'
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: 'PublicSubnet2-us-east-1b'
+          Value: !Sub 'PublicSubnet2-${AWS::Region}b'
         - Key: Environment
           Value: 'Production'
 
-  # Public Subnet 3 (us-east-1c)
+  # Public Subnet 3 (dynamic AZ)
   PublicSubnet3:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      AvailabilityZone: 'us-east-1c'
+      AvailabilityZone: !Select [2, !GetAZs '']
       CidrBlock: '10.0.3.0/24'
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: 'PublicSubnet3-us-east-1c'
+          Value: !Sub 'PublicSubnet3-${AWS::Region}c'
         - Key: Environment
           Value: 'Production'
 

@@ -113,13 +113,22 @@
         "VpcId": {
           "Ref": "VPC"
         },
-        "AvailabilityZone": "us-east-1a",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
         "CidrBlock": "10.0.1.0/24",
         "MapPublicIpOnLaunch": true,
         "Tags": [
           {
             "Key": "Name",
-            "Value": "PublicSubnet1-us-east-1a"
+            "Value": {
+              "Fn::Sub": "PublicSubnet1-${AWS::Region}a"
+            }
           },
           {
             "Key": "Environment",
@@ -134,13 +143,22 @@
         "VpcId": {
           "Ref": "VPC"
         },
-        "AvailabilityZone": "us-east-1b",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            1,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
         "CidrBlock": "10.0.2.0/24",
         "MapPublicIpOnLaunch": true,
         "Tags": [
           {
             "Key": "Name",
-            "Value": "PublicSubnet2-us-east-1b"
+            "Value": {
+              "Fn::Sub": "PublicSubnet2-${AWS::Region}b"
+            }
           },
           {
             "Key": "Environment",
@@ -155,13 +173,22 @@
         "VpcId": {
           "Ref": "VPC"
         },
-        "AvailabilityZone": "us-east-1c",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            2,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
         "CidrBlock": "10.0.3.0/24",
         "MapPublicIpOnLaunch": true,
         "Tags": [
           {
             "Key": "Name",
-            "Value": "PublicSubnet3-us-east-1c"
+            "Value": {
+              "Fn::Sub": "PublicSubnet3-${AWS::Region}c"
+            }
           },
           {
             "Key": "Environment",
