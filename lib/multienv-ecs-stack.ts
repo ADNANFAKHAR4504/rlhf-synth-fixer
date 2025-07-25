@@ -55,12 +55,13 @@ export class MultiEnvEcsStack extends cdk.Stack {
       {
         secretName: `/${config.envName}/config`,
         encryptionKey: kmsKey,
-        secretStringValue: cdk.SecretValue.unsafePlainText(
-          JSON.stringify({
+        generateSecretString: {
+          secretStringTemplate: JSON.stringify({
             environment: config.envName,
             domain: config.domainName,
-          })
-        ),
+          }),
+          generateStringKey: 'placeholder',
+        },
       }
     );
 

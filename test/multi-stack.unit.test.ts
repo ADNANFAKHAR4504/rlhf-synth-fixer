@@ -4,8 +4,8 @@ import { MultiEnvEcsStack, EnvironmentConfig } from '../lib/multienv-ecs-stack';
 
 
 const imageName = process.env.IMAGE_NAME || 'nginx'
-const imageTag = process.env.IMAGE_NAME || '1.25.3'
-const port = Number(process.env.IMAGE_NAME) || 80
+const imageTag = process.env.IMAGE_TAG || '1.25.3'
+const port = Number(process.env.PORT) || 80
 const cpu = Number(process.env.CPU_VALUE) || 256
 const memoryLimit = Number(process.env.MEMORY_Limit) || 512
 
