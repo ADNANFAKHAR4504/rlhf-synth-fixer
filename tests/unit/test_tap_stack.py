@@ -18,7 +18,7 @@ def test_vpc_created():
 
 def test_iam_role_for_ec2():
   template = get_template()
-  template.resource_count_is("AWS::IAM::Role", 1)
+  template.resource_count_is("AWS::IAM::Role", 2)
   template.has_resource_properties(
     "AWS::IAM::Role",
     {
