@@ -342,7 +342,6 @@ Resources:
       RoleARN: !GetAtt ConfigRole.Arn
       RecordingGroup:
         AllSupported: true
-        IncludeGlobalResourceTypes: true
 
   ConfigRole:
     Type: AWS::IAM::Role

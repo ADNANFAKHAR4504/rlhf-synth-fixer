@@ -619,8 +619,7 @@
                     ]
                 },
                 "RecordingGroup": {
-                    "AllSupported": true,
-                    "IncludeGlobalResourceTypes": true
+                    "AllSupported": true
                 }
             }
         },
