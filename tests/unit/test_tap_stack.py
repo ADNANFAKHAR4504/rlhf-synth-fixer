@@ -141,9 +141,9 @@ def test_tags_applied_to_resources():
   for resource_name, resource in template["Resources"].items():
     tags = resource.get("Properties", {}).get("Tags", [])
     if tags:  # Only check resources that support tags
-        tag_keys = [tag["Key"] for tag in tags]
-        assert "Project" in tag_keys
-        assert "Environment" in tag_keys
+      tag_keys = [tag["Key"] for tag in tags]
+      assert "Project" in tag_keys
+      assert "Environment" in tag_keys
     print(resource_name)
 
 

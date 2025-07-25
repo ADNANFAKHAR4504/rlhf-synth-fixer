@@ -64,7 +64,7 @@ def run_cmd(cmd):
 
 
 @pytest.fixture(scope="module")
-def stack_info():
+def stack_info_data():
   """Fetch CloudFormation stack details and parse outputs"""
   stdout = run_cmd(
       f"aws cloudformation describe-stacks --stack-name {STACK_NAME} --region {REGION}"
@@ -78,9 +78,9 @@ def stack_info():
   return {"info": stack_data, "outputs": outputs}
 
 
-def test_stack_status(stack_info):
+def test_stack_status(stack_info_data):
   """Stack should be successfully deployed"""
-  assert stack_info["info"]["StackStatus"] == "CREATE_COMPLETE"
+  assert stack_info_data["info"]["StackStatus"] == "CREATE_COMPLETE"
 
 
 def test_vpc_exists():
@@ -95,7 +95,7 @@ def test_vpc_exists():
 def test_security_groups():
   """Ensure at least 2 security groups exist (LB + EC2)"""
   sg_count = run_cmd(
-    f"aws ec2 describe-security-groups --filters \"Name=tag:Component,Values=LoadBalancer,EC2-Web\" "
+    f"aws ec2 describe-security-groups --filters \"Name=tag:Component,Values=LoadBalancer,EC2-Web\""
     f"--region {REGION} --query 'length(SecurityGroups)'"
   )
   assert int(sg_count) == 2
@@ -120,8 +120,9 @@ def test_cloudtrail_exists():
 
 def test_log_groups_exist():
   """Ensure CloudTrail and EC2 log groups exist"""
+  partofcommand = "'logGroups[].logGroupName' --output text"
   log_groups = run_cmd(
-    f"aws logs describe-log-groups --region {REGION} --query 'logGroups[].logGroupName' --output text"
+    f"aws logs describe-log-groups --region {REGION} --query " + partofcommand
   )
   assert "CloudTrailLogGroup" in log_groups
   assert "EC2LogGroup" in log_groups
