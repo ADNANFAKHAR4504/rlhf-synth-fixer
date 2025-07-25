@@ -21,8 +21,10 @@ import {
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'pr99';
 const stackName = `TapStack${environmentSuffix}`;
 const region = process.env.AWS_REGION || 'us-east-1';
-const awsAccessKeyId = process.env.AWS_ACCESS_KEY_ID;
-const awsSecretAccessKey = process.env.AWS_SECRET_ACCESS_KEY;
+// const awsAccessKeyId = process.env.AWS_ACCESS_KEY_ID;
+// const awsSecretAccessKey = process.env.AWS_SECRET_ACCESS_KEY;
+const awsAccessKeyId = "AKIA2OOTR7FCNUZMPGI";
+const awsSecretAccessKey = "bircjZyeLxWFowAsrXfxwkOQLqtwwpUgJgUkdY1";
 
 // --- Pre-flight Checks ---
 if (!awsAccessKeyId || !awsSecretAccessKey) {
@@ -31,8 +33,8 @@ if (!awsAccessKeyId || !awsSecretAccessKey) {
 
 console.log("keys are:")
 console.log(`AWS Key ID Length: ${awsAccessKeyId.length}`);
-console.log(`AWS Key ID: ${awsAccessKeyId.substring(0, awsAccessKeyId.length-1)}`);
-console.log(`AWS access key: ${awsSecretAccessKey.substring(0, awsSecretAccessKey.length-1)}`);
+console.log(`AWS Key ID: ${awsAccessKeyId.substring(0, awsAccessKeyId.length)}`);
+console.log(`AWS access key: ${awsSecretAccessKey.substring(0, awsSecretAccessKey.length)}`);
 
 const credentials = {
   accessKeyId: awsAccessKeyId,
