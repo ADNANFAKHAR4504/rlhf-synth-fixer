@@ -34,5 +34,10 @@
 - No proper error handling in Lambda function
 - Missing CloudWatch monitoring and logging setup
 - No environment variables or configuration management
+- No environment-specific deployment support
+- Missing resource tagging for better organization
+- No comprehensive stack outputs for monitoring and debugging
+- Lambda function lacks proper environment variable integration with S3 bucket
+- No cache invalidation or deployment automation for static assets
 
 ---
