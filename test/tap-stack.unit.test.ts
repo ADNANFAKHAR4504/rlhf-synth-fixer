@@ -11,7 +11,29 @@ describe('Stack Structure', () => {
     jest.clearAllMocks();
   });
 
-  test('TapStack instantiates successfully via props', () => {
+  test('TapStack instantiates successfully via props with default tags', () => {
+    app = new App();
+    stack = new TapStack(app, 'TestTapStackWithProps', {
+      environmentSuffix: 'prod',
+      stateBucket: 'custom-state-bucket',
+      stateBucketRegion: 'us-west-2',
+      awsRegion: 'us-west-2',
+      defaultTags: {
+        tags: {
+          Environment: 'prod',
+          Repository: 'test-repo',
+          Author: 'test-author',
+        },
+      },
+    });
+    synthesized = Testing.synth(stack);
+
+    // Verify that TapStack instantiates without errors via props
+    expect(stack).toBeDefined();
+    expect(synthesized).toBeDefined();
+  });
+
+  test('TapStack instantiates successfully via props without default tags', () => {
     app = new App();
     stack = new TapStack(app, 'TestTapStackWithProps', {
       environmentSuffix: 'prod',
