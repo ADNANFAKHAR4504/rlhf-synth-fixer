@@ -4,7 +4,7 @@
 
 ```yaml
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'Production-ready web application infrastructure with ALB, Auto Scaling, and comprehensive networking in us-west-2'
+Description: 'Production-ready web application infrastructure with ALB, Auto Scaling, and comprehensive networking in us-east-1'
 
 Parameters:
   LatestAmiId:
@@ -55,45 +55,45 @@ Resources:
       VpcId: !Ref VPC
       InternetGatewayId: !Ref InternetGateway
 
-  # Public Subnet 1 (us-west-2a)
+  # Public Subnet 1 (us-east-1a)
   PublicSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      AvailabilityZone: 'us-west-2a'
+      AvailabilityZone: 'us-east-1a'
       CidrBlock: '10.0.1.0/24'
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: 'PublicSubnet1-us-west-2a'
+          Value: 'PublicSubnet1-us-east-1a'
         - Key: Environment
           Value: 'Production'
 
-  # Public Subnet 2 (us-west-2b)
+  # Public Subnet 2 (us-east-1b)
   PublicSubnet2:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      AvailabilityZone: 'us-west-2b'
+      AvailabilityZone: 'us-east-1b'
       CidrBlock: '10.0.2.0/24'
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: 'PublicSubnet2-us-west-2b'
+          Value: 'PublicSubnet2-us-east-1b'
         - Key: Environment
           Value: 'Production'
 
-  # Public Subnet 3 (us-west-2c)
+  # Public Subnet 3 (us-east-1c)
   PublicSubnet3:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      AvailabilityZone: 'us-west-2c'
+      AvailabilityZone: 'us-east-1c'
       CidrBlock: '10.0.3.0/24'
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: 'PublicSubnet3-us-west-2c'
+          Value: 'PublicSubnet3-us-east-1c'
         - Key: Environment
           Value: 'Production'
 
@@ -469,7 +469,7 @@ Outputs:
 
 ### ✅ **Complete Networking Infrastructure**
 
-- VPC with 3 public subnets across 3 AZs in us-west-2
+- VPC with 3 public subnets across 3 AZs in us-east-1
 - Internet Gateway and proper routing
 - Security groups with least-privilege access
 

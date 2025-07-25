@@ -1,6 +1,6 @@
 You are an AWS Infrastructure Engineer.
 
-Your task is to write a CloudFormation YAML template to deploy a scalable, production-ready web application in the us-west-2 region. The solution must meet the following requirements:
+Your task is to write a CloudFormation YAML template to deploy a scalable, production-ready web application in the us-east-1 region. The solution must meet the following requirements:
 
 Networking & Security
 
@@ -14,7 +14,7 @@ Ensure all resources are tagged with Environment: Production.
 
 Compute & Load Balancing
 
-Use the latest Amazon Linux 2 AMI in us-west-2 for your EC2 instances.
+Use the latest Amazon Linux 2 AMI in us-east-1 for your EC2 instances.
 
 Create a Launch Template for the EC2 instances that pulls application code from a public S3 bucket during startup.
 
@@ -30,7 +30,7 @@ Output the Application URL (using the ALB DNS name and HTTP/HTTPS).
 
 Best Practices
 
-All resources must be created in the us-west-2 region.
+All resources must be created in the us-east-1 region.
 
 Ensure the template is valid YAML and will deploy successfully in CloudFormation without manual modification.
 
