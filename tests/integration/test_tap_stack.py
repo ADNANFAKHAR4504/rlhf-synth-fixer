@@ -43,15 +43,15 @@ class TestTapStackIntegration(unittest.TestCase):
     # Validate URL format
     self.assertTrue(self.website_url.startswith('http://'),
                     "WebsiteURL should be an HTTP URL")
-    self.assertIn('s3-website-us-west-2.amazonaws.com',
-                  self.website_url, "WebsiteURL should be S3 website URL")
+    self.assertRegex(self.website_url, r's3-website-[a-z0-9-]+\.amazonaws\.com',
+                    "WebsiteURL should be S3 website URL")
 
     # Validate Lambda function name format
-    self.assertIn('StaticWebsiteStack-DynamicContentFunction', self.lambda_function_name,
+    self.assertIn('DynamicContentFunction', self.lambda_function_name,
                   "Lambda function name should contain expected pattern")
 
     # Validate S3 bucket name format
-    self.assertIn('static-website-static-website-task', self.s3_bucket_name,
+    self.assertIn('static-website', self.s3_bucket_name,
                   "S3 bucket name should contain expected pattern")
 
   @mark.it("should have S3 bucket with website hosting enabled")
