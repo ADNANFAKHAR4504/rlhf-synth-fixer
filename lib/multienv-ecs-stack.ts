@@ -30,7 +30,8 @@ export class MultiEnvEcsStack extends cdk.Stack {
     props?: cdk.StackProps
   ) {
     super(scope, id, props);
-
+    cdk.Tags.of(this).add('envName', config.envName)
+    
     // Create a VPC
     const vpc = new ec2.Vpc(this, `${config.envName}Vpc`, {
       ipAddresses: ec2.IpAddresses.cidr(config.vpcCidr),
@@ -41,6 +42,7 @@ export class MultiEnvEcsStack extends cdk.Stack {
     // Create ECS cluster
     const cluster = new ecs.Cluster(this, `${config.envName}EcsCluster`, {
       vpc,
+      clusterName: `${config.envName}Tap`
     });
 
     new ssm.StringParameter(this, `${config.envName}ConfigParameter`, {
@@ -160,12 +162,12 @@ export class MultiEnvEcsStack extends cdk.Stack {
       const zone =
         process.env.NODE_ENV === 'test'
           ? route53.HostedZone.fromHostedZoneAttributes(this, 'HostedZone', {
-              hostedZoneId: 'Z111111QQQQQQQ',
-              zoneName: config.hostedZoneName!,
-            })
+            hostedZoneId: 'Z111111QQQQQQQ',
+            zoneName: config.hostedZoneName!,
+          })
           : route53.HostedZone.fromLookup(this, `${config.envName} Zone`, {
-              domainName: config.hostedZoneName!,
-            });
+            domainName: config.hostedZoneName!,
+          });
 
       new route53.ARecord(this, `${config.envName} AliasRecord`, {
         recordName: config.domainName,
