@@ -291,7 +291,7 @@ describe('Secure Infrastructure CloudFormation Template', () => {
     test('should have Lambda function for credential rotation', () => {
       const lambda = template.Resources.CredentialRotationLambda;
       expect(lambda.Type).toBe('AWS::Lambda::Function');
-      expect(lambda.Properties.Runtime).toBe('nodejs18.x');
+      expect(lambda.Properties.Runtime).toBe('nodejs20.x');
       expect(lambda.Properties.Handler).toBe('index.handler');
     });
 
@@ -542,7 +542,7 @@ describe('Secure Infrastructure CloudFormation Template', () => {
         .filter((resource: any) => resource.Type === 'AWS::Lambda::Function');
 
       lambdaResources.forEach((lambda: any) => {
-        expect(lambda.Properties.Runtime).toBe('nodejs18.x');
+        expect(lambda.Properties.Runtime).toBe('nodejs20.x');
       });
     });
   });
@@ -674,7 +674,7 @@ describe('Secure Infrastructure CloudFormation Template', () => {
     test('should have consistent API patterns', () => {
       const lambda = template.Resources.CredentialRotationLambda;
       expect(lambda.Properties.Handler).toBe('index.handler');
-      expect(lambda.Properties.Runtime).toBe('nodejs18.x');
+      expect(lambda.Properties.Runtime).toBe('nodejs20.x');
     });
 
     test('should have proper service integration', () => {

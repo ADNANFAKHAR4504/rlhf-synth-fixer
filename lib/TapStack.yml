@@ -182,7 +182,7 @@ Resources:
   SecureLogBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${EnvironmentSuffix}-secure-logs-${AWS::AccountId}-${AWS::Region}'
+      BucketName: !Sub '${EnvironmentSuffix}-secure-logs-${AWS::AccountId}-${AWS::Region}-${AWS::StackId}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -216,7 +216,7 @@ Resources:
   ApplicationDataBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${EnvironmentSuffix}-app-data-${AWS::AccountId}-${AWS::Region}'
+      BucketName: !Sub '${EnvironmentSuffix}-app-data-${AWS::AccountId}-${AWS::Region}-${AWS::StackId}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -246,8 +246,8 @@ Resources:
             Principal: '*'
             Action: 's3:*'
             Resource:
-              - !Sub '${SecureLogBucket}/*'
               - !GetAtt SecureLogBucket.Arn
+              - !Sub '${SecureLogBucket.Arn}/*'
             Condition:
               Bool:
                 'aws:SecureTransport': 'false'
@@ -256,7 +256,7 @@ Resources:
             Principal:
               Service: cloudtrail.amazonaws.com
             Action: 's3:PutObject'
-            Resource: !Sub '${SecureLogBucket}/cloudtrail-logs/*'
+            Resource: !Sub '${SecureLogBucket.Arn}/cloudtrail-logs/*'
             Condition:
               StringEquals:
                 's3:x-amz-acl': 'bucket-owner-full-control'
@@ -271,8 +271,8 @@ Resources:
             Principal: '*'
             Action: 's3:*'
             Resource:
-              - !Sub '${SecureLogBucket}/*'
               - !GetAtt SecureLogBucket.Arn
+              - !Sub '${SecureLogBucket.Arn}/*'
             Condition:
               NotIpAddress:
                 'aws:SourceIp': !Ref AllowedIPRange
@@ -540,7 +540,7 @@ Resources:
     Type: AWS::Lambda::Function
     Properties:
       FunctionName: !Sub '${EnvironmentSuffix}-credential-rotation'
-      Runtime: nodejs18.x
+      Runtime: nodejs20.x
       Handler: index.handler
       Role: !GetAtt CredentialRotationLambdaRole.Arn
       Timeout: 300

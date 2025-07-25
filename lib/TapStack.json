@@ -350,7 +350,7 @@
             "Type": "AWS::S3::Bucket",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "${EnvironmentSuffix}-secure-logs-${AWS::AccountId}-${AWS::Region}"
+                    "Fn::Sub": "${EnvironmentSuffix}-secure-logs-${AWS::AccountId}-${AWS::Region}-${AWS::StackId}"
                 },
                 "BucketEncryption": {
                     "ServerSideEncryptionConfiguration": [
@@ -416,7 +416,7 @@
             "Type": "AWS::S3::Bucket",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "${EnvironmentSuffix}-app-data-${AWS::AccountId}-${AWS::Region}"
+                    "Fn::Sub": "${EnvironmentSuffix}-app-data-${AWS::AccountId}-${AWS::Region}-${AWS::StackId}"
                 },
                 "BucketEncryption": {
                     "ServerSideEncryptionConfiguration": [
@@ -468,13 +468,13 @@
                             "Action": "s3:*",
                             "Resource": [
                                 {
-                                    "Fn::Sub": "${SecureLogBucket}/*"
-                                },
-                                {
                                     "Fn::GetAtt": [
                                         "SecureLogBucket",
                                         "Arn"
                                     ]
+                                },
+                                {
+                                    "Fn::Sub": "${SecureLogBucket.Arn}/*"
                                 }
                             ],
                             "Condition": {
@@ -491,7 +491,7 @@
                             },
                             "Action": "s3:PutObject",
                             "Resource": {
-                                "Fn::Sub": "${SecureLogBucket}/cloudtrail-logs/*"
+                                "Fn::Sub": "${SecureLogBucket.Arn}/cloudtrail-logs/*"
                             },
                             "Condition": {
                                 "StringEquals": {
@@ -520,13 +520,13 @@
                             "Action": "s3:*",
                             "Resource": [
                                 {
-                                    "Fn::Sub": "${SecureLogBucket}/*"
-                                },
-                                {
                                     "Fn::GetAtt": [
                                         "SecureLogBucket",
                                         "Arn"
                                     ]
+                                },
+                                {
+                                    "Fn::Sub": "${SecureLogBucket.Arn}/*"
                                 }
                             ],
                             "Condition": {
@@ -1052,7 +1052,7 @@
                 "FunctionName": {
                     "Fn::Sub": "${EnvironmentSuffix}-credential-rotation"
                 },
-                "Runtime": "nodejs18.x",
+                "Runtime": "nodejs20.x",
                 "Handler": "index.handler",
                 "Role": {
                     "Fn::GetAtt": [
