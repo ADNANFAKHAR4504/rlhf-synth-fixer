@@ -7,8 +7,8 @@ manages environment-specific configurations.
 
 from typing import Optional
 
-# import aws_cdk as cdk
-# from aws_cdk import NestedStack
+import aws_cdk as cdk
+from aws_cdk import NestedStack
 # from constructs import Construct
 
 from aws_cdk import (
