@@ -76,13 +76,14 @@ describe('Elastic Beanstalk Integration Tests', () => {
     const cname = new URL(stackOutputs.EnvironmentURL).hostname;
     const targetEnvironment = environments.Environments?.find(env => env.EndpointURL === cname);
     console.log(`environmnts:` , JSON.stringify(environments, null, 2));
-    console.log(`cname:` , targetEnvironment.EndpointURL);
     console.log(`cname:` , cname);
+
     console.log(`targetEnvironment:` ,JSON.stringify(targetEnvironment, null, 2));
 
     if (!targetEnvironment || !targetEnvironment.EnvironmentName) {
       throw new Error("Could not find the deployed Elastic Beanstalk environment by its CNAME.");
     }
+    console.log(`EndpointURL:` , targetEnvironment.EndpointURL);
 
     // 3. Fetch the physical resources of the environment (ALB, ASG, etc.)
     const resourcesCommand = new DescribeEnvironmentResourcesCommand({ EnvironmentName: targetEnvironment.EnvironmentName });
