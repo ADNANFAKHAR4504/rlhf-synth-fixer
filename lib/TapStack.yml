@@ -262,7 +262,7 @@ Resources:
               StringNotLike:
                 "aws:PrincipalArn":
                   - !GetAtt WhitelistedIAMUser.Arn
-                  - - arn:aws:iam::718240086340:user/iac-deployment-runner
+                  - arn:aws:iam::718240086340:user/iac-deployment-runner
               StringNotEqualsIfExists:
                 aws:PrincipalServiceName:
                   - config.amazonaws.com
