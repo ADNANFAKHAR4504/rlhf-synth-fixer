@@ -35,9 +35,14 @@ try {
 
 const apiUrl = outputs.ApiUrl;
 
+const credentials = {
+  accessKeyId: awsAccessKeyId,
+  secretAccessKey: awsSecretAccessKey,
+};
+
 // Initialize the CloudFormation client. It will automatically pick up credentials
 // and region from the environment.
-const cfClient = new CloudFormationClient({ region: awsRegion });
+const cfClient = new CloudFormationClient({ region, credentials });
 
 /**
  * Test Suite for CloudFormation Stack Validation.
