@@ -24,14 +24,14 @@ const region = process.env.AWS_REGION || 'us-east-1';
 const awsAccessKeyId = process.env.AWS_ACCESS_KEY_ID;
 const awsSecretAccessKey = process.env.AWS_SECRET_ACCESS_KEY;
 
-console.log("keys are:")
-console.log(awsAccessKeyId);
-console.log(awsSecretAccessKey);
-
 // --- Pre-flight Checks ---
 if (!awsAccessKeyId || !awsSecretAccessKey) {
   throw new Error('AWS credentials AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY must be set as environment variables.');
 }
+
+console.log("keys are:")
+console.log(`AWS Key ID Length: ${awsAccessKeyId.length}`);
+console.log(`AWS Key ID starts with: ${awsAccessKeyId.substring(0, 4)}`);
 
 const credentials = {
   accessKeyId: awsAccessKeyId,
@@ -54,9 +54,13 @@ describe('Elastic Beanstalk Integration Tests', () => {
     // 1. Get Stack Outputs (like the environment URL)
     const describeStacksCommand = new DescribeStacksCommand({ StackName: stackName });
     const stackInfo = await cfnClient.send(describeStacksCommand);
+    
+
     if (!stackInfo.Stacks || stackInfo.Stacks.length === 0) {
       throw new Error(`Stack ${stackName} not found.`);
     }
+    console.log(`stack info: ${stackInfo.Stacks.length}`);
+    console.log(`stack info: ${stackInfo.Stacks}`);
     stackInfo.Stacks[0].Outputs?.forEach(output => {
       if (output.OutputKey) {
         stackOutputs[output.OutputKey] = output.OutputValue;
