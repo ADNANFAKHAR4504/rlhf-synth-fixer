@@ -39,7 +39,7 @@ Resources:
             Action: sts:AssumeRole
       # MODIFIED: Replaced AdministratorAccess with a more restrictive, standard service role.
       ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWSElasticBeanstalkServiceRole
+        - arn:aws:iam::aws:policy/service-role/AWSElasticBeanstalkService
 
   AWSElasticBeanstalkEC2Role:
     Type: AWS::IAM::Role
