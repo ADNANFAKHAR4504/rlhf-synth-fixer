@@ -5,6 +5,7 @@ import {
 import {
   DescribeSubnetsCommand,
   DescribeVpcsCommand,
+  DescribeFlowLogsCommand,
   EC2Client
 } from '@aws-sdk/client-ec2';
 import {
@@ -24,11 +25,36 @@ import {
   GetWebACLCommand,
   WAFV2Client,
 } from '@aws-sdk/client-wafv2';
+import { CloudTrailClient, DescribeTrailsCommand } from '@aws-sdk/client-cloudtrail';
+import {
+  ConfigServiceClient,
+  DescribeConfigurationRecordersCommand,
+  DescribeConfigurationRecorderStatusCommand
+} from '@aws-sdk/client-config-service';
+import {
+  Route53Client,
+  ListHostedZonesByNameCommand
+} from '@aws-sdk/client-route-53'
+import {
+  GetTopicAttributesCommand,
+  SNSClient
+} from '@aws-sdk/client-sns';
+import {
+  CloudFrontClient,
+  GetDistributionCommand,
+  ListDistributionsCommand
+} from '@aws-sdk/client-cloudfront';
+
+
 import fs from 'fs';
 
 const region = process.env.AWS_REGION || 'us-east-1';
 const outputs = JSON.parse(fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf-8'));
-
+const cloudfront = new CloudFrontClient({ region: 'us-east-1' }); 
+const sns = new SNSClient({ region });
+const route53 = new Route53Client({ region });
+const config = new ConfigServiceClient({ region });
+const cloudtrail = new CloudTrailClient({ region });
 const ec2 = new EC2Client({ region });
 const rds = new RDSClient({ region });
 const s3 = new S3Client({ region });
@@ -90,6 +116,64 @@ describe('Financial Stack Integration Tests', () => {
     expect(res.Configuration?.VpcConfig?.SubnetIds?.length).toBeGreaterThan(0);
   });
 
+  test('CloudTrail trail should be configured and logging', async () => {
+    const res = await cloudtrail.send(new DescribeTrailsCommand({}));
+    const trail = res.trailList?.find(t => t.S3BucketName === outputs.CloudTrailLogBucketName);
+    expect(trail).toBeDefined();
+    expect(trail?.IsMultiRegionTrail).toBe(true);
+    expect(trail?.IncludeGlobalServiceEvents).toBe(true);
+  });
+
+  test('AWS Config recorder should exist and be recording', async () => {
+    const recorders = await config.send(new DescribeConfigurationRecordersCommand({}));
+    const recorder = recorders.ConfigurationRecorders?.find(r => r.name === outputs.ConfigRecorderName);
+    expect(recorder).toBeDefined();
+
+    const status = await config.send(new DescribeConfigurationRecorderStatusCommand({}));
+    const recorderStatus = status.ConfigurationRecordersStatus?.find(r => r.name === outputs.ConfigRecorderName);
+    expect(recorderStatus?.recording).toBe(true);
+  });
+
+  test('VPC Flow Logs should be enabled for the VPC', async () => {
+    const res = await ec2.send(new DescribeFlowLogsCommand({}));
+    const vpcLog = res.FlowLogs?.find(log => log.ResourceId === outputs.VPCId);
+    expect(vpcLog).toBeDefined();
+    expect(vpcLog?.TrafficType).toBe('ALL');
+  });
+
+  test('Private hosted zone should exist', async () => {
+    const res = await route53.send(new ListHostedZonesByNameCommand({}));
+    const zone = res.HostedZones?.find(z =>
+      z.Name === `internal.${outputs.ProjectName}.local.` && z.Config?.PrivateZone === true
+    );
+    expect(zone).toBeDefined();
+  });
+
+  test('SNS Topic should exist with SecureTransport enforced', async () => {
+    const res = await sns.send(new GetTopicAttributesCommand({
+      TopicArn: `arn:aws:sns:${region}:${process.env.AWS_ACCOUNT_ID}:financial-secure-topic`,
+    }));
+    expect(res.Attributes?.Policy).toContain('"Condition":{"Bool":{"aws:SecureTransport":false}}');
+  });
+
+  test('CloudFront distribution should exist and point to S3', async () => {
+    const list = await cloudfront.send(new ListDistributionsCommand({}));
+
+    const summary = list.DistributionList?.Items?.find(
+      d => d.Comment === 'Secure CloudFront distribution for S3'
+    );
+
+    expect(summary).toBeDefined();
+
+    const fullDist = await cloudfront.send(
+      new GetDistributionCommand({ Id: summary!.Id })
+    );
+
+    const originDomain = fullDist.Distribution?.DistributionConfig?.Origins?.Items?.[0]?.DomainName;
+
+    expect(originDomain).toContain(outputs.S3BucketName);
+  });
+  
   test('WAF WebACL should exist', async () => {
     const res = await waf.send(new GetWebACLCommand({
       Id: outputs.WebACLId,

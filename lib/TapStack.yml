@@ -715,3 +715,7 @@ Outputs:
   ConfigRecorderName:
     Description: AWS Config Recorder Name
     Value: !Ref ConfigRecorder
+
+  ProjectName:
+    Description: Project name
+    Value: !Ref Project

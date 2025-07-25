@@ -1311,6 +1311,12 @@
             "Value": {
                 "Ref": "ConfigRecorder"
             }
+        },
+        "ProjectName": {
+            "Description": "Project name",
+            "Value": {
+                "Ref": "Project"
+            }
         }
     }
 }
