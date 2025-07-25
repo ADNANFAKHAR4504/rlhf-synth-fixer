@@ -1,9 +1,11 @@
 import json
 import os
+import time
 import unittest
-from unittest.mock import MagicMock, patch
 
 import boto3
+import requests
+from botocore.exceptions import ClientError
 from pytest import mark
 
 # Open file cfn-outputs/flat-outputs.json
@@ -14,448 +16,420 @@ flat_outputs_path = os.path.join(
 
 if os.path.exists(flat_outputs_path):
   with open(flat_outputs_path, 'r', encoding='utf-8') as f:
-    flat_outputs = f.read()
+    flat_outputs = json.load(f)
 else:
-  flat_outputs = '{}'
-
-flat_outputs = json.loads(flat_outputs)
+  flat_outputs = {}
 
 
-@mark.describe("TapStack Integration Tests")
-class TestTapStackIntegration(unittest.TestCase):
-  """Integration test cases for the TapStack CDK stack"""
+@mark.describe("TapStack")
+class TestTapStack(unittest.TestCase):
+  """Test cases for the TapStack CDK stack"""
 
   def setUp(self):
-    """Set up test environment"""
-    self.website_url = flat_outputs.get('WebsiteURL')
-    self.lambda_function_name = flat_outputs.get('LambdaFunctionName')
-    self.s3_bucket_name = flat_outputs.get('S3BucketName')
-    self.region = 'us-west-2'
+    """Set up a fresh CDK app for each test"""
 
-  @mark.it("should have valid CDK outputs")
-  def test_cdk_outputs_exist(self):
-    """Test that all required CDK outputs are present"""
-    self.assertIsNotNone(self.website_url, "WebsiteURL should be present")
-    self.assertIsNotNone(self.lambda_function_name,
-                         "LambdaFunctionName should be present")
-    self.assertIsNotNone(self.s3_bucket_name, "S3BucketName should be present")
 
-    # Validate URL format
-    self.assertTrue(self.website_url.startswith('http://'),
-                    "WebsiteURL should be an HTTP URL")
-    self.assertRegex(self.website_url, r's3-website-[a-z0-9-]+\.amazonaws\.com',
-                    "WebsiteURL should be S3 website URL")
+class TestTapStackIntegration(unittest.TestCase):
+  """Integration tests for TapStack that test live AWS resources"""
 
-    # Validate Lambda function name format
-    self.assertIn('DynamicContentFunction', self.lambda_function_name,
-                  "Lambda function name should contain expected pattern")
+  @classmethod
+  def setUpClass(cls):
+    """Set up AWS clients and get stack outputs once for all tests"""
+    cls.region = os.environ.get('AWS_DEFAULT_REGION', 'us-east-1')
+    cls.stack_name = os.environ.get('STACK_NAME', 'TapStack')
 
-    # Validate S3 bucket name format
-    self.assertIn('static-website', self.s3_bucket_name,
-                  "S3 bucket name should contain expected pattern")
+    # Initialize AWS clients
+    cls.lambda_client = boto3.client('lambda', region_name=cls.region)
+    cls.s3_client = boto3.client('s3', region_name=cls.region)
+    cls.cloudformation_client = boto3.client(
+        'cloudformation', region_name=cls.region)
 
-  @mark.it("should have S3 bucket with website hosting enabled")
-  @patch('boto3.client')
-  def test_s3_bucket_website_hosting(self, mock_boto3_client):
-    """Test that S3 bucket has website hosting enabled"""
-    # Mock S3 client
-    mock_s3 = MagicMock()
-    mock_boto3_client.return_value = mock_s3
+    # Use flat_outputs if available, otherwise fallback to CloudFormation
+    if flat_outputs and all(
+        k in flat_outputs
+        for k in ['WebsiteURL', 'LambdaFunctionName', 'LambdaFunctionARN', 'S3BucketName']
+    ):
+      cls.stack_outputs = flat_outputs
+    else:
+      cls.stack_outputs = cls._get_stack_outputs()
 
-    # Mock successful response
-    mock_s3.get_bucket_website.return_value = {
-        'IndexDocument': {'Suffix': 'index.html'},
-        'ErrorDocument': {'Key': 'error.html'}
-    }
+    cls.website_url = cls.stack_outputs.get('WebsiteURL')
+    cls.lambda_function_name = cls.stack_outputs.get('LambdaFunctionName')
+    cls.lambda_function_arn = cls.stack_outputs.get('LambdaFunctionARN')
+    cls.s3_bucket_name = cls.stack_outputs.get('S3BucketName')
 
-    # Create S3 client and test
-    s3_client = boto3.client('s3', region_name=self.region)
-    response = s3_client.get_bucket_website(Bucket=self.s3_bucket_name)
+  @classmethod
+  def _get_stack_outputs(cls) -> dict:
+    """Get CloudFormation stack outputs"""
+    try:
+      response = cls.cloudformation_client.describe_stacks(
+          StackName=cls.stack_name)
+      stacks = response.get('Stacks', [])
+      if not stacks:
+        raise ValueError(f"No stacks found with name: {cls.stack_name}")
+      stack = stacks[0]
+      outputs = {}
+      for output in stack.get('Outputs', []):
+        outputs[output.get('OutputKey')] = output.get('OutputValue')
+      return outputs
+    except ClientError as e:
+      raise RuntimeError(f"Failed to get stack outputs: {e}") from e
 
-    # Verify the response
-    self.assertEqual(response['IndexDocument']['Suffix'], 'index.html')
-    self.assertEqual(response['ErrorDocument']['Key'], 'error.html')
+  @mark.it("retrieves stack outputs successfully")
+  def test_stack_outputs_exist(self):
+    """Test that all required stack outputs are available"""
+    required_outputs = ['WebsiteURL', 'LambdaFunctionName',
+                        'LambdaFunctionARN', 'S3BucketName']
 
-    # Verify the method was called with correct parameters
-    mock_s3.get_bucket_website.assert_called_once_with(
-        Bucket=self.s3_bucket_name)
+    # Use flat_outputs for this test
+    outputs = flat_outputs if flat_outputs else self.stack_outputs
 
-  @mark.it("should have S3 bucket with public read access")
-  @patch('boto3.client')
-  def test_s3_bucket_public_access(self, mock_boto3_client):
+    for output_key in required_outputs:
+      self.assertIn(output_key, outputs,
+                    f"Missing stack output: {output_key}")
+      self.assertIsNotNone(
+          outputs[output_key], f"Stack output {output_key} is None")
+
+  @mark.it("can access S3 website and get index page")
+  def test_s3_website_index_page(self):
+    """Test that the S3 website serves the index page correctly"""
+    # Use flat_outputs for website_url if available
+    website_url = flat_outputs.get(
+        'WebsiteURL') if flat_outputs else self.website_url
+    self.assertIsNotNone(
+        website_url, "Website URL not found in stack outputs")
+
+    try:
+      response = requests.get(website_url, timeout=30)
+      self.assertEqual(response.status_code, 200,
+                       "Website should return 200 status code")
+
+      # Verify content type
+      self.assertIn(
+          'text/html', response.headers.get('content-type', '').lower())
+
+      # Verify expected content in the HTML
+      content = response.text
+      self.assertIn('AWS CDK Static Website', content,
+                    "Expected title not found")
+      self.assertIn('Test Lambda Function', content,
+                    "Lambda test button not found")
+      self.assertIn('Welcome to your static website',
+                    content, "Welcome message not found")
+
+    except requests.exceptions.RequestException as e:
+      self.fail(f"Failed to access website: {e}")
+
+  @mark.it("returns 404 error page for non-existent URLs")
+  def test_s3_website_error_page(self):
+    """Test that the S3 website serves the 404 error page for non-existent URLs"""
+    website_url = flat_outputs.get(
+        'WebsiteURL') if flat_outputs else self.website_url
+    self.assertIsNotNone(
+        website_url, "Website URL not found in stack outputs")
+
+    try:
+      # Try to access a non-existent page
+      non_existent_url = f"{website_url}/non-existent-page"
+      response = requests.get(non_existent_url, timeout=30)
+
+      self.assertEqual(response.status_code, 404,
+                       "Non-existent page should return 404")
+
+      # Verify it's serving the error page
+      content = response.text
+      self.assertIn('Page Not Found', content, "Error page title not found")
+      self.assertIn('404', content, "404 error code not found")
+      self.assertIn('Go to Homepage', content, "Homepage link not found")
+
+    except requests.exceptions.RequestException as e:
+      self.fail(f"Failed to test error page: {e}")
+
+  @mark.it("can invoke Lambda function directly")
+  def test_lambda_function_invocation(self):
+    """Test direct invocation of the Lambda function"""
+    lambda_function_name = flat_outputs.get(
+        'LambdaFunctionName') if flat_outputs else self.lambda_function_name
+    s3_bucket_name = flat_outputs.get(
+        'S3BucketName') if flat_outputs else self.s3_bucket_name
+
+    self.assertIsNotNone(lambda_function_name,
+                         "Lambda function name not found")
+
+    try:
+      # Prepare test event
+      test_event = {
+          "httpMethod": "GET",
+          "path": "/test",
+          "headers": {
+              "User-Agent": "integration-test"
+          },
+          "body": None
+      }
+
+      # Invoke the Lambda function
+      response = self.lambda_client.invoke(
+          FunctionName=lambda_function_name,
+          InvocationType='RequestResponse',
+          Payload=json.dumps(test_event)
+      )
+
+      # Verify response
+      self.assertEqual(response['StatusCode'], 200,
+                       "Lambda invocation should succeed")
+
+      # Parse the response payload
+      payload = json.loads(response['Payload'].read())
+      self.assertEqual(payload['statusCode'], 200,
+                       "Lambda should return 200 status code")
+
+      # Parse the response body
+      response_body = json.loads(payload['body'])
+      self.assertIn('message', response_body,
+                    "Response should contain message")
+      self.assertIn('timestamp', response_body,
+                    "Response should contain timestamp")
+      self.assertIn('request_id', response_body,
+                    "Response should contain request_id")
+      self.assertIn('function_name', response_body,
+                    "Response should contain function_name")
+      self.assertIn('website_bucket', response_body,
+                    "Response should contain website_bucket")
+
+      # Verify the function name matches
+      self.assertEqual(
+          response_body['function_name'], lambda_function_name)
+
+      # Verify the bucket name matches
+      self.assertEqual(response_body['website_bucket'], s3_bucket_name)
+
+    except ClientError as e:
+      self.fail(f"Failed to invoke Lambda function: {e}")
+
+  @mark.it("can list objects in S3 bucket")
+  def test_s3_bucket_objects(self):
+    """Test that S3 bucket contains the expected static content"""
+    s3_bucket_name = flat_outputs.get(
+        'S3BucketName') if flat_outputs else self.s3_bucket_name
+    self.assertIsNotNone(s3_bucket_name, "S3 bucket name not found")
+
+    try:
+      # List objects in the bucket
+      response = self.s3_client.list_objects_v2(Bucket=s3_bucket_name)
+
+      self.assertIn('Contents', response, "Bucket should contain objects")
+
+      # Get list of object keys
+      object_keys = [obj['Key'] for obj in response['Contents']]
+
+      # Verify expected files are present
+      expected_files = ['index.html', 'error.html']
+      for expected_file in expected_files:
+        self.assertIn(expected_file, object_keys,
+                      f"Expected file {expected_file} not found in bucket")
+
+    except ClientError as e:
+      self.fail(f"Failed to list S3 bucket objects: {e}")
+
+  @mark.it("can retrieve and verify S3 object content")
+  def test_s3_object_content(self):
+    """Test that S3 objects contain expected content"""
+    s3_bucket_name = flat_outputs.get(
+        'S3BucketName') if flat_outputs else self.s3_bucket_name
+    self.assertIsNotNone(s3_bucket_name, "S3 bucket name not found")
+
+    try:
+      # Test index.html content
+      index_response = self.s3_client.get_object(
+          Bucket=s3_bucket_name, Key='index.html')
+      index_content = index_response['Body'].read().decode('utf-8')
+
+      self.assertIn('AWS CDK Static Website', index_content,
+                    "Index.html should contain expected title")
+      self.assertIn('Test Lambda Function', index_content,
+                    "Index.html should contain Lambda test button")
+
+      # Test error.html content
+      error_response = self.s3_client.get_object(
+          Bucket=s3_bucket_name, Key='error.html')
+      error_content = error_response['Body'].read().decode('utf-8')
+
+      self.assertIn('Page Not Found', error_content,
+                    "Error.html should contain expected title")
+      self.assertIn('404', error_content, "Error.html should contain 404 code")
+
+    except ClientError as e:
+      self.fail(f"Failed to retrieve S3 object content: {e}")
+
+  @mark.it("verifies Lambda function has correct configuration")
+  def test_lambda_function_configuration(self):
+    """Test Lambda function configuration and environment variables"""
+    lambda_function_name = flat_outputs.get(
+        'LambdaFunctionName') if flat_outputs else self.lambda_function_name
+    s3_bucket_name = flat_outputs.get(
+        'S3BucketName') if flat_outputs else self.s3_bucket_name
+
+    self.assertIsNotNone(lambda_function_name,
+                         "Lambda function name not found")
+
+    try:
+      # Get function configuration
+      response = self.lambda_client.get_function(
+          FunctionName=lambda_function_name)
+      config = response['Configuration']
+
+      # Verify runtime and handler
+      self.assertEqual(config['Runtime'], 'python3.12',
+                       "Lambda should use Python 3.12 runtime")
+      self.assertEqual(
+          config['Handler'], 'lambda_function.lambda_handler', "Lambda handler should be correct")
+
+      # Verify timeout and memory
+      self.assertEqual(config['Timeout'], 30,
+                       "Lambda timeout should be 30 seconds")
+      self.assertEqual(config['MemorySize'], 128,
+                       "Lambda memory should be 128 MB")
+
+      # Verify environment variables
+      env_vars = config.get('Environment', {}).get('Variables', {})
+      self.assertIn('WEBSITE_BUCKET', env_vars,
+                    "Lambda should have WEBSITE_BUCKET environment variable")
+      self.assertEqual(env_vars['WEBSITE_BUCKET'], s3_bucket_name,
+                       "WEBSITE_BUCKET should match S3 bucket name")
+
+    except ClientError as e:
+      self.fail(f"Failed to get Lambda function configuration: {e}")
+
+  @mark.it("verifies S3 bucket has correct website configuration")
+  def test_s3_bucket_website_configuration(self):
+    """Test S3 bucket website configuration"""
+    s3_bucket_name = flat_outputs.get(
+        'S3BucketName') if flat_outputs else self.s3_bucket_name
+    self.assertIsNotNone(s3_bucket_name, "S3 bucket name not found")
+
+    try:
+      # Get bucket website configuration
+      response = self.s3_client.get_bucket_website(Bucket=s3_bucket_name)
+
+      # Verify index document
+      self.assertEqual(response['IndexDocument']['Suffix'], 'index.html',
+                       "Index document should be index.html")
+
+      # Verify error document
+      self.assertEqual(response['ErrorDocument']['Key'], 'error.html',
+                       "Error document should be error.html")
+
+    except ClientError as e:
+      self.fail(f"Failed to get S3 bucket website configuration: {e}")
+
+  @mark.it("verifies bucket is publicly accessible")
+  def test_s3_bucket_public_access(self):
     """Test that S3 bucket allows public read access"""
-    # Mock S3 client
-    mock_s3 = MagicMock()
-    mock_boto3_client.return_value = mock_s3
+    s3_bucket_name = flat_outputs.get(
+        'S3BucketName') if flat_outputs else self.s3_bucket_name
+    self.assertIsNotNone(s3_bucket_name, "S3 bucket name not found")
 
-    # Mock successful response for bucket policy
-    mock_s3.get_bucket_policy.return_value = {
-        'Policy': json.dumps({
-            'Version': '2012-10-17',
-            'Statement': [
-                {
-                    'Sid': 'PublicReadGetObject',
-                    'Effect': 'Allow',
-                    'Principal': '*',
-                    'Action': 's3:GetObject',
-                    'Resource': f'arn:aws:s3:::{self.s3_bucket_name}/*'
-                }
-            ]
-        })
-    }
+    try:
+      # Get bucket public access block configuration
+      try:
+        response = self.s3_client.get_public_access_block(
+            Bucket=s3_bucket_name)
+        config = response['PublicAccessBlockConfiguration']
 
-    # Create S3 client and test
-    s3_client = boto3.client('s3', region_name=self.region)
-    response = s3_client.get_bucket_policy(Bucket=self.s3_bucket_name)
+        # For a public website, these should all be False
+        self.assertFalse(
+            config['BlockPublicAcls'], "BlockPublicAcls should be False for public website")
+        self.assertFalse(config['IgnorePublicAcls'],
+                         "IgnorePublicAcls should be False for public website")
+        self.assertFalse(config['BlockPublicPolicy'],
+                         "BlockPublicPolicy should be False for public website")
+        self.assertFalse(config['RestrictPublicBuckets'],
+                         "RestrictPublicBuckets should be False for public website")
 
-    # Parse the policy
-    policy = json.loads(response['Policy'])
+      except ClientError as e:
+        if e.response['Error']['Code'] == 'NoSuchPublicAccessBlockConfiguration':
+          # No public access block means public access is allowed
+          pass
+        else:
+          raise
 
-    # Verify the policy allows public read access
-    self.assertEqual(policy['Version'], '2012-10-17')
-    self.assertTrue(len(policy['Statement']) > 0)
+      # Test that bucket policy allows public read
+      try:
+        policy_response = self.s3_client.get_bucket_policy(
+            Bucket=s3_bucket_name)
+        policy = json.loads(policy_response['Policy'])
 
-    # Check for public read statement
-    public_read_statement = None
-    for statement in policy['Statement']:
-      if (statement.get('Effect') == 'Allow' and
-          statement.get('Principal') == '*' and
-              's3:GetObject' in statement.get('Action', [])):
-        public_read_statement = statement
-        break
+        # Look for a statement that allows public read access
+        public_read_allowed = False
+        for statement in policy.get('Statement', []):
+          if (statement.get('Effect') == 'Allow' and
+              statement.get('Principal') == '*' and
+                  's3:GetObject' in statement.get('Action', [])):
+            public_read_allowed = True
+            break
 
-    self.assertIsNotNone(public_read_statement,
-                         "Policy should allow public read access")
+        self.assertTrue(public_read_allowed,
+                        "Bucket should have public read policy")
 
-    # Verify the method was called with correct parameters
-    mock_s3.get_bucket_policy.assert_called_once_with(
-        Bucket=self.s3_bucket_name)
+      except ClientError as e:
+        if e.response['Error']['Code'] != 'NoSuchBucketPolicy':
+          raise
 
-  @mark.it("should have Lambda function with correct configuration")
-  @patch('boto3.client')
-  def test_lambda_function_configuration(self, mock_boto3_client):
-    """Test that Lambda function has correct configuration"""
-    # Mock Lambda client
-    mock_lambda = MagicMock()
-    mock_boto3_client.return_value = mock_lambda
+    except ClientError as e:
+      self.fail(f"Failed to verify S3 bucket public access: {e}")
 
-    # Mock successful response
-    mock_lambda.get_function_configuration.return_value = {
-        'FunctionName': self.lambda_function_name,
-        'Runtime': 'python3.12',
-        'Handler': 'lambda_function.lambda_handler',
-        'MemorySize': 128,
-        'Timeout': 30,
-        'Environment': {
-            'Variables': {
-                'WEBSITE_BUCKET': self.s3_bucket_name
-            }
+  @mark.it("tests end-to-end website and Lambda integration")
+  def test_website_lambda_integration(self):
+    """Test the integration between website and Lambda function through multiple requests"""
+    website_url = flat_outputs.get(
+        'WebsiteURL') if flat_outputs else self.website_url
+    lambda_function_name = flat_outputs.get(
+        'LambdaFunctionName') if flat_outputs else self.lambda_function_name
+
+    self.assertIsNotNone(website_url, "Website URL not found")
+    self.assertIsNotNone(lambda_function_name,
+                         "Lambda function name not found")
+
+    try:
+      # First, verify website is accessible
+      website_response = requests.get(website_url, timeout=30)
+      self.assertEqual(website_response.status_code, 200,
+                       "Website should be accessible")
+
+      # Then test multiple Lambda invocations to ensure consistency
+      for i in range(3):
+        test_event = {
+            "httpMethod": "GET",
+            "path": f"/test-{i}",
+            "headers": {"User-Agent": f"integration-test-{i}"},
+            "queryStringParameters": {"iteration": str(i)}
         }
-    }
 
-    # Create Lambda client and test
-    lambda_client = boto3.client('lambda', region_name=self.region)
-    response = lambda_client.get_function_configuration(
-        FunctionName=self.lambda_function_name)
+        response = self.lambda_client.invoke(
+            FunctionName=lambda_function_name,
+            InvocationType='RequestResponse',
+            Payload=json.dumps(test_event)
+        )
 
-    # Verify the configuration
-    self.assertEqual(response['Runtime'], 'python3.12')
-    self.assertEqual(response['Handler'], 'lambda_function.lambda_handler')
-    self.assertEqual(response['MemorySize'], 128)
-    self.assertEqual(response['Timeout'], 30)
-    self.assertEqual(response['Environment']['Variables']
-                     ['WEBSITE_BUCKET'], self.s3_bucket_name)
+        self.assertEqual(response['StatusCode'], 200,
+                         f"Lambda invocation {i} should succeed")
 
-    # Verify the method was called with correct parameters
-    mock_lambda.get_function_configuration.assert_called_once_with(
-        FunctionName=self.lambda_function_name)
+        payload = json.loads(response['Payload'].read())
+        self.assertEqual(payload['statusCode'], 200,
+                         f"Lambda response {i} should be 200")
 
-  @mark.it("should have Lambda function that can be invoked")
-  @patch('boto3.client')
-  def test_lambda_function_invocation(self, mock_boto3_client):
-    """Test that Lambda function can be invoked successfully"""
-    # Mock Lambda client
-    mock_lambda = MagicMock()
-    mock_boto3_client.return_value = mock_lambda
+        response_body = json.loads(payload['body'])
+        self.assertIn('message', response_body,
+                      f"Response {i} should contain message")
+        self.assertIn('timestamp', response_body,
+                      f"Response {i} should contain timestamp")
 
-    # Mock successful invocation response
-    mock_response = MagicMock()
-    mock_response.__getitem__.side_effect = lambda key: 200 if key == 'StatusCode' else MagicMock()
+        # Small delay between requests
+        time.sleep(0.5)
 
-    # Create a proper mock for the payload chain
-    mock_payload = MagicMock()
-    mock_payload.read.return_value = json.dumps({
-        'statusCode': 200,
-        'body': json.dumps({
-            'message': 'Hello from Lambda!',
-            'timestamp': '2024-01-01 12:00:00',
-            'request_id': 'test-request-id',
-            'function_name': self.lambda_function_name,
-            'website_bucket': self.s3_bucket_name
-        })
-    }).encode('utf-8')
-    mock_response.__getitem__.side_effect = lambda key: 200 if key == 'StatusCode' else mock_payload
+    except (requests.exceptions.RequestException, ClientError) as e:
+      self.fail(f"Failed in end-to-end integration test: {e}")
 
-    mock_lambda.invoke.return_value = mock_response
 
-    # Create Lambda client and test
-    lambda_client = boto3.client('lambda', region_name=self.region)
-
-    # Test event
-    test_event = {
-        'httpMethod': 'GET',
-        'path': '/api/dynamic',
-        'headers': {
-            'User-Agent': 'Integration Test'
-        }
-    }
-
-    response = lambda_client.invoke(
-        FunctionName=self.lambda_function_name,
-        Payload=json.dumps(test_event)
-    )
-
-    # Verify the response
-    self.assertEqual(response['StatusCode'], 200)
-
-    # Parse the payload
-    payload = json.loads(response['Payload'].read().decode('utf-8'))
-    self.assertEqual(payload['statusCode'], 200)
-
-    # Parse the body
-    body = json.loads(payload['body'])
-    self.assertEqual(body['message'], 'Hello from Lambda!')
-    self.assertEqual(body['function_name'], self.lambda_function_name)
-    self.assertEqual(body['website_bucket'], self.s3_bucket_name)
-
-    # Verify the method was called with correct parameters
-    mock_lambda.invoke.assert_called_once_with(
-        FunctionName=self.lambda_function_name,
-        Payload=json.dumps(test_event)
-    )
-
-  @mark.it("should have static content deployed to S3")
-  @patch('boto3.client')
-  def test_s3_static_content_deployment(self, mock_boto3_client):
-    """Test that static content is deployed to S3 bucket"""
-    # Mock S3 client
-    mock_s3 = MagicMock()
-    mock_boto3_client.return_value = mock_s3
-
-    # Mock successful response for listing objects
-    mock_s3.list_objects_v2.return_value = {
-        'Contents': [
-            {'Key': 'index.html', 'Size': 1024},
-            {'Key': 'error.html', 'Size': 512}
-        ]
-    }
-
-    # Create S3 client and test
-    s3_client = boto3.client('s3', region_name=self.region)
-    response = s3_client.list_objects_v2(Bucket=self.s3_bucket_name)
-
-    # Verify the response
-    self.assertTrue('Contents' in response)
-    self.assertEqual(len(response['Contents']), 2)
-
-    # Check for required files
-    keys = [obj['Key'] for obj in response['Contents']]
-    self.assertIn('index.html', keys, "index.html should be deployed")
-    self.assertIn('error.html', keys, "error.html should be deployed")
-
-    # Verify the method was called with correct parameters
-    mock_s3.list_objects_v2.assert_called_once_with(Bucket=self.s3_bucket_name)
-
-  @mark.it("should have proper IAM role for Lambda function")
-  @patch('boto3.client')
-  def test_lambda_iam_role(self, mock_boto3_client):
-    """Test that Lambda function has proper IAM role with least privilege"""
-    # Mock IAM client
-    mock_iam = MagicMock()
-    mock_lambda = MagicMock()
-
-    # Configure mock to return different clients based on service
-    def mock_client(service_name, **_):
-      if service_name == 'iam':
-        return mock_iam
-      if service_name == 'lambda':
-        return mock_lambda
-      return MagicMock()
-
-    mock_boto3_client.side_effect = mock_client
-
-    # Mock Lambda function configuration
-    mock_lambda.get_function_configuration.return_value = {
-        'Role': 'arn:aws:iam::123456789012:role/StaticWebsiteStack-LambdaExecutionRole'
-    }
-
-    # Mock successful response for getting role
-    mock_iam.get_role.return_value = {
-        'Role': {
-            'RoleName': 'StaticWebsiteStack-LambdaExecutionRole',
-            'AssumeRolePolicyDocument': {
-                'Version': '2012-10-17',
-                'Statement': [
-                    {
-                        'Effect': 'Allow',
-                        'Principal': {
-                            'Service': 'lambda.amazonaws.com'
-                        },
-                        'Action': 'sts:AssumeRole'
-                    }
-                ]
-            }
-        }
-    }
-
-    # Mock successful response for getting role policy
-    mock_iam.list_role_policies.return_value = {
-        'PolicyNames': ['S3AccessPolicy']
-    }
-
-    mock_iam.get_role_policy.return_value = {
-        'PolicyName': 'S3AccessPolicy',
-        'PolicyDocument': json.dumps({
-            'Version': '2012-10-17',
-            'Statement': [
-                {
-                    'Effect': 'Allow',
-                    'Action': [
-                        's3:GetObject',
-                        's3:PutObject',
-                        's3:DeleteObject',
-                        's3:ListBucket'
-                    ],
-                    'Resource': [
-                        f'arn:aws:s3:::{self.s3_bucket_name}',
-                        f'arn:aws:s3:::{self.s3_bucket_name}/*'
-                    ]
-                }
-            ]
-        })
-    }
-
-    # Create IAM client and test
-    iam_client = boto3.client('iam', region_name=self.region)
-
-    # Get Lambda function configuration to find the role
-    lambda_client = boto3.client('lambda', region_name=self.region)
-    lambda_config = lambda_client.get_function_configuration(
-        FunctionName=self.lambda_function_name)
-    role_arn = lambda_config['Role']
-    role_name = role_arn.split('/')[-1]
-
-    # Get role details
-    role_response = iam_client.get_role(RoleName=role_name)
-
-    # Verify the role
-    self.assertEqual(role_response['Role']['RoleName'], role_name)
-
-    # Verify assume role policy
-    assume_policy = role_response['Role']['AssumeRolePolicyDocument']
-    self.assertEqual(assume_policy['Version'], '2012-10-17')
-    self.assertEqual(assume_policy['Statement'][0]
-                     ['Principal']['Service'], 'lambda.amazonaws.com')
-
-    # Get role policies
-    policies_response = iam_client.list_role_policies(RoleName=role_name)
-    self.assertIn('S3AccessPolicy', policies_response['PolicyNames'])
-
-    # Get specific policy
-    policy_response = iam_client.get_role_policy(
-        RoleName=role_name, PolicyName='S3AccessPolicy')
-    policy_doc = json.loads(policy_response['PolicyDocument'])
-
-    # Verify S3 access policy
-    self.assertEqual(policy_doc['Version'], '2012-10-17')
-    s3_statement = policy_doc['Statement'][0]
-    self.assertEqual(s3_statement['Effect'], 'Allow')
-    self.assertIn('s3:GetObject', s3_statement['Action'])
-    self.assertIn('s3:PutObject', s3_statement['Action'])
-    self.assertIn('s3:DeleteObject', s3_statement['Action'])
-    self.assertIn('s3:ListBucket', s3_statement['Action'])
-
-    # Verify the methods were called with correct parameters
-    mock_iam.get_role.assert_called_once_with(RoleName=role_name)
-    mock_iam.list_role_policies.assert_called_once_with(RoleName=role_name)
-    mock_iam.get_role_policy.assert_called_once_with(
-        RoleName=role_name, PolicyName='S3AccessPolicy')
-
-  @mark.it("should have end-to-end workflow working")
-  @patch('boto3.client')
-  def test_end_to_end_workflow(self, mock_boto3_client):
-    """Test the complete end-to-end workflow"""
-    # Mock S3 client for website access
-    mock_s3 = MagicMock()
-    mock_s3.get_object.return_value = {
-        'Body': MagicMock(read=lambda: b'<html><body>Static Website Content</body></html>'),
-        'ContentType': 'text/html'
-    }
-
-    # Mock Lambda client for function invocation
-    mock_lambda = MagicMock()
-    mock_response = MagicMock()
-
-    # Create a proper mock for the payload chain
-    mock_payload = MagicMock()
-    mock_payload.read.return_value = json.dumps({
-        'statusCode': 200,
-        'body': json.dumps({
-            'message': 'Hello from Lambda!',
-            'timestamp': '2024-01-01 12:00:00',
-            'request_id': 'test-request-id',
-            'function_name': self.lambda_function_name,
-            'website_bucket': self.s3_bucket_name
-        })
-    }).encode('utf-8')
-    mock_response.__getitem__.side_effect = lambda key: 200 if key == 'StatusCode' else mock_payload
-    mock_lambda.invoke.return_value = mock_response
-
-    # Configure mock to return different clients based on service
-    def mock_client(service_name, **_):
-      if service_name == 's3':
-        return mock_s3
-      if service_name == 'lambda':
-        return mock_lambda
-      return MagicMock()
-
-    mock_boto3_client.side_effect = mock_client
-
-    # Test 1: Access static website content
-    s3_client = boto3.client('s3', region_name=self.region)
-    website_content = s3_client.get_object(
-        Bucket=self.s3_bucket_name, Key='index.html')
-
-    self.assertEqual(website_content['ContentType'], 'text/html')
-    self.assertIn(b'Static Website Content', website_content['Body'].read())
-
-    # Test 2: Invoke Lambda function
-    lambda_client = boto3.client('lambda', region_name=self.region)
-    test_event = {
-        'httpMethod': 'GET',
-        'path': '/api/dynamic',
-        'headers': {'User-Agent': 'E2E Test'}
-    }
-
-    lambda_response = lambda_client.invoke(
-        FunctionName=self.lambda_function_name,
-        Payload=json.dumps(test_event)
-    )
-
-    self.assertEqual(lambda_response['StatusCode'], 200)
-
-    # Parse Lambda response
-    payload = json.loads(lambda_response['Payload'].read().decode('utf-8'))
-    self.assertEqual(payload['statusCode'], 200)
-
-    body = json.loads(payload['body'])
-    self.assertEqual(body['message'], 'Hello from Lambda!')
-    self.assertEqual(body['website_bucket'], self.s3_bucket_name)
-
-    # Verify both services were called
-    mock_s3.get_object.assert_called_once_with(
-        Bucket=self.s3_bucket_name, Key='index.html')
-    mock_lambda.invoke.assert_called_once_with(
-        FunctionName=self.lambda_function_name,
-        Payload=json.dumps(test_event)
-    )
+if __name__ == '__main__':
+  unittest.main()
