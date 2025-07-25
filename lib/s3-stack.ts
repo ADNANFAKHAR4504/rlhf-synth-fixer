@@ -1,8 +1,8 @@
 import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
-import { TerraformOutput, TerraformStack } from 'cdktf';
+import { TerraformOutput } from 'cdktf';
 import { Construct } from 'constructs';
 
-export class S3Stack extends TerraformStack {
+export class S3Stack extends Construct {
   constructor(scope: Construct, id: string) {
     super(scope, id);
 
