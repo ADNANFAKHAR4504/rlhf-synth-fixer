@@ -74,7 +74,8 @@ describe('Elastic Beanstalk Integration Tests', () => {
     const environments = await ebClient.send(describeEnvCommand);
     const cname = new URL(stackOutputs.EnvironmentURL).hostname;
     const targetEnvironment = environments.Environments?.find(env => env.CNAME === cname);
-
+    console.log(`targetEnvironment: ${targetEnvironment}`);
+    
     if (!targetEnvironment || !targetEnvironment.EnvironmentName) {
       throw new Error("Could not find the deployed Elastic Beanstalk environment by its CNAME.");
     }
