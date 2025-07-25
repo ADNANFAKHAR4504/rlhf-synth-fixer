@@ -1,7 +1,7 @@
 {
   "platform": "cdk",
   "language": "py",
-  "complexity": "expert",
+  "complexity": "hard",
   "turn_type": "single",
   "po_id": "229180",
   "startedAt": "2025-07-23T12:34:17.639Z",
