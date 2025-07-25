@@ -1,4 +1,4 @@
-# Model Response Failures Analysis
+# Model Response Failures Analysis Report
 
 This document compares the original MODEL_RESPONSE.md with the IDEAL_RESPONSE.md and highlights the key failures and improvements made during the QA pipeline.
 
