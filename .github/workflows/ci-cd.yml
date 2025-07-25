@@ -286,7 +286,7 @@ jobs:
           elif [ "$PLATFORM" = "cdktf" ]; then
             echo "✅ CDKTF project detected, running CDKTF deploy..."
             ls -al
-            cat cdk.tf.json
+            cat cdk.out
             npm run cdktf:deploy
           elif [ "$PLATFORM" = "cfn" ] && [ "$LANGUAGE" = "yaml" ]; then
             echo "✅ CloudFormation YAML project detected, deploying with AWS CLI..."
