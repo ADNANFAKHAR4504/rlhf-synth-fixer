@@ -161,7 +161,7 @@ describe('Secure Infrastructure Stack Integration Tests', () => {
 
   test('App IAM role should exist with log permissions', async () => {
     const iam = new IAMClient({ region });
-    const role = await iam.send(new GetRoleCommand({ RoleName: 'AppRole' }));
+    const role = await iam.send(new GetRoleCommand({ RoleName: outputs.AppRoleName }));
     expect(role.Role).toBeDefined();
     expect(role.Role?.RoleName).toBe(outputs.AppRoleName);
   });
@@ -179,8 +179,11 @@ describe('Secure Infrastructure Stack Integration Tests', () => {
   });
 
   test('RDS DBSubnetGroup should exist', async () => {
+    const rds = new RDSClient({ region });
     const res = await rds.send(new DescribeDBSubnetGroupsCommand({}));
-    const group = res.DBSubnetGroups?.find(g => g.DBSubnetGroupName === outputs.DBSubnetGroupName);
+    const group = res.DBSubnetGroups?.find(
+      g => g.DBSubnetGroupName === outputs.DBSubnetGroupName
+    );
     expect(group).toBeDefined();
   });
 
