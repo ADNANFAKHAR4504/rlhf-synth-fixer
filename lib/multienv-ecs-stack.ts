@@ -99,6 +99,10 @@ export class MultiEnvEcsStack extends cdk.Stack {
         maxHealthyPercent: 200,
         minHealthyPercent: 100,
         desiredCount: 2,
+        serviceName: `${config.envName}-svc`,
+        cloudMapOptions: {
+          name: 'app',
+        },
       }
     );
 
@@ -141,7 +145,7 @@ export class MultiEnvEcsStack extends cdk.Stack {
 
     // Enable ECS Container Insights
     cluster.addDefaultCloudMapNamespace({
-      name: fargateService.serviceName,
+      name: `${config.envName}.local`,
     });
 
     const scalableTarget = fargateService.autoScaleTaskCount({
