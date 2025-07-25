@@ -45,6 +45,11 @@ export class MultiEnvEcsStack extends cdk.Stack {
       clusterName: `${config.envName}Tap`,
     });
 
+    // Enable ECS Container Insights
+    cluster.addDefaultCloudMapNamespace({
+      name: `${config.envName}.local`,
+    });
+
     new ssm.StringParameter(this, `${config.envName}ConfigParameter`, {
       parameterName: `/${config.envName}/config`,
       stringValue: config.envName,
@@ -141,11 +146,6 @@ export class MultiEnvEcsStack extends cdk.Stack {
         healthyThresholdCount: 2,
         unhealthyThresholdCount: 2,
       },
-    });
-
-    // Enable ECS Container Insights
-    cluster.addDefaultCloudMapNamespace({
-      name: `${config.envName}.local`,
     });
 
     const scalableTarget = fargateService.autoScaleTaskCount({
