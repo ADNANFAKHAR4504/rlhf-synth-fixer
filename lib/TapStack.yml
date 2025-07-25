@@ -17,6 +17,13 @@ Parameters:
     Description: EC2 Key Pair for SSH access
     Default: 'my-key-pair'
 
+  EnvironmentSuffix:
+    Type: String
+    Default: 'dev'
+    Description: Environment suffix for resource naming (e.g., dev, staging, prod)
+    AllowedPattern: '^[a-zA-Z0-9]+$'
+    ConstraintDescription: Must contain only alphanumeric characters
+
 Resources:
   # ===== NETWORKING INFRASTRUCTURE =====
 
