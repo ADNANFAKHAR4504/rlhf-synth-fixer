@@ -73,7 +73,8 @@ describe('Elastic Beanstalk Integration Tests', () => {
     });
     const environments = await ebClient.send(describeEnvCommand);
     const cname = new URL(stackOutputs.EnvironmentURL).hostname;
-    const targetEnvironment = environments.Environments?.find(env => env.CNAME === cname);
+    const targetEnvironment = environments.Environments?.find(env => env.EndpointURL === cname);
+    console.log(`cname:` , cname);
     console.log(`targetEnvironment:` ,JSON.stringify(targetEnvironment, null, 2));
 
     if (!targetEnvironment || !targetEnvironment.EnvironmentName) {
