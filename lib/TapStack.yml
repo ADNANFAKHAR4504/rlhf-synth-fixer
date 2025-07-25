@@ -300,7 +300,7 @@ Resources:
   SNSTopic:
     Type: AWS::SNS::Topic
     Properties:
-      TopicName: cf-task-snstopic
+      TopicName: !Sub 'cf-task-snstopic-${StackNameSuffix}'
       Tags:
         - Key: Environment
           Value: Production
