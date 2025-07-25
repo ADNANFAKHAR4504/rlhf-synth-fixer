@@ -1,6 +1,43 @@
 {
   "AWSTemplateFormatVersion": "2010-09-09",
   "Description": "Production-ready web application infrastructure with ALB, Auto Scaling, and comprehensive networking in us-west-2",
+  "Metadata": {
+    "AWS::CloudFormation::Interface": {
+      "ParameterGroups": [
+        {
+          "Label": {
+            "default": "Infrastructure Configuration"
+          },
+          "Parameters": [
+            "LatestAmiId",
+            "ApplicationS3Bucket",
+            "KeyName",
+            "EnvironmentSuffix"
+          ]
+        }
+      ],
+      "ParameterLabels": {
+        "LatestAmiId": {
+          "default": "Amazon Linux 2 AMI ID"
+        },
+        "ApplicationS3Bucket": {
+          "default": "Application S3 Bucket"
+        },
+        "KeyName": {
+          "default": "EC2 Key Pair"
+        },
+        "EnvironmentSuffix": {
+          "default": "Environment Suffix"
+        }
+      }
+    },
+    "AWS::CloudFormation::Designer": {
+      "ApplicationMetadata": {
+        "Region": "us-west-2",
+        "Description": "This template is designed specifically for the us-west-2 region"
+      }
+    }
+  },
   "Parameters": {
     "LatestAmiId": {
       "Type": "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>",
@@ -15,7 +52,14 @@
     "KeyName": {
       "Type": "AWS::EC2::KeyPair::KeyName",
       "Description": "EC2 Key Pair for SSH access",
-      "Default": "my-key-pair"
+      "Default": "iac-rlhf-aws-trainer-instance"
+    },
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Default": "dev",
+      "Description": "Environment suffix for resource naming (e.g., dev, staging, prod)",
+      "AllowedPattern": "^[a-zA-Z0-9]+$",
+      "ConstraintDescription": "Must contain only alphanumeric characters"
     }
   },
   "Resources": {
