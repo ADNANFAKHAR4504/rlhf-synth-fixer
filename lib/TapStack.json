@@ -348,7 +348,10 @@
               "Statement": [
                 {
                   "Effect": "Allow",
-                  "Action": ["s3:GetObject", "s3:ListBucket"],
+                  "Action": [
+                    "s3:GetObject",
+                    "s3:ListBucket"
+                  ],
                   "Resource": [
                     {
                       "Fn::Sub": "arn:aws:s3:::${ApplicationS3Bucket}"
@@ -398,7 +401,10 @@
           },
           "IamInstanceProfile": {
             "Arn": {
-              "Fn::GetAtt": ["EC2InstanceProfile", "Arn"]
+              "Fn::GetAtt": [
+                "EC2InstanceProfile",
+                "Arn"
+              ]
             }
           },
           "SecurityGroupIds": [
@@ -550,7 +556,10 @@
             "Ref": "EC2LaunchTemplate"
           },
           "Version": {
-            "Fn::GetAtt": ["EC2LaunchTemplate", "LatestVersionNumber"]
+            "Fn::GetAtt": [
+              "EC2LaunchTemplate",
+              "LatestVersionNumber"
+            ]
           }
         },
         "MinSize": 2,
@@ -660,7 +669,10 @@
     "LoadBalancerDNSName": {
       "Description": "DNS name of the Application Load Balancer",
       "Value": {
-        "Fn::GetAtt": ["ApplicationLoadBalancer", "DNSName"]
+        "Fn::GetAtt": [
+          "ApplicationLoadBalancer",
+          "DNSName"
+        ]
       },
       "Export": {
         "Name": {
