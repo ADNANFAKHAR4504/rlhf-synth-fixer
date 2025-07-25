@@ -125,7 +125,7 @@ class TapStack(Stack):
     self.lambda_function = _lambda.Function(
         self,
         "DynamicContentFunction",
-        runtime=_lambda.Runtime.PYTHON_3_9,
+        runtime=_lambda.Runtime.PYTHON_3_12,
         handler="lambda_function.lambda_handler",
         code=_lambda.Code.from_inline(self._get_lambda_code()),
         role=lambda_role,
