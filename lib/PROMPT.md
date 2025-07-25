@@ -7,6 +7,7 @@ You must submit a CloudFormation YAML template named:
 
 All resources must be provisioned in the **`us-east-1`** AWS region.
 
+
 ---
 
 **Constraints & Requirements:**
