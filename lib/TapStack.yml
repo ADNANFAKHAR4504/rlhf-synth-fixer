@@ -168,7 +168,7 @@ Resources:
   ALBSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: 'ALB-SecurityGroup'
+      GroupName: !Sub 'ALB-SecurityGroup-${AWS::StackName}'
       GroupDescription: 'Security group for Application Load Balancer'
       VpcId: !Ref VPC
       SecurityGroupIngress:
@@ -196,7 +196,7 @@ Resources:
   EC2SecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: 'EC2-SecurityGroup'
+      GroupName: !Sub 'EC2-SecurityGroup-${AWS::StackName}'
       GroupDescription: 'Security group for EC2 instances'
       VpcId: !Ref VPC
       SecurityGroupIngress:
@@ -265,7 +265,7 @@ Resources:
   EC2LaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
     Properties:
-      LaunchTemplateName: 'WebApp-LaunchTemplate'
+      LaunchTemplateName: !Sub 'WebApp-LaunchTemplate-${AWS::StackName}'
       LaunchTemplateData:
         ImageId: !Ref LatestAmiId
         InstanceType: 't3.micro'
@@ -309,7 +309,7 @@ Resources:
   ApplicationLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
-      Name: 'WebApp-ALB'
+      Name: !Sub 'WebApp-ALB-${AWS::StackName}'
       Scheme: internet-facing
       Type: application
       SecurityGroups:
@@ -328,7 +328,7 @@ Resources:
   ALBTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      Name: 'WebApp-TargetGroup'
+      Name: !Sub 'WebApp-TargetGroup-${AWS::StackName}'
       Port: 80
       Protocol: HTTP
       VpcId: !Ref VPC
@@ -376,7 +376,7 @@ Resources:
   AutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
-      AutoScalingGroupName: 'WebApp-AutoScalingGroup'
+      AutoScalingGroupName: !Sub 'WebApp-AutoScalingGroup-${AWS::StackName}'
       VPCZoneIdentifier:
         - !Ref PublicSubnet1
         - !Ref PublicSubnet2
@@ -424,7 +424,7 @@ Resources:
   CPUAlarmHigh:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: 'WebApp-CPU-High'
+      AlarmName: !Sub 'WebApp-CPU-High-${AWS::StackName}'
       AlarmDescription: 'Scale up on high CPU'
       MetricName: CPUUtilization
       Namespace: AWS/EC2
@@ -442,7 +442,7 @@ Resources:
   CPUAlarmLow:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: 'WebApp-CPU-Low'
+      AlarmName: !Sub 'WebApp-CPU-Low-${AWS::StackName}'
       AlarmDescription: 'Scale down on low CPU'
       MetricName: CPUUtilization
       Namespace: AWS/EC2
