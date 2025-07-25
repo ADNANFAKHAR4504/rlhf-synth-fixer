@@ -104,12 +104,9 @@ describe('TapStack CloudFormation - Integration Tests', () => {
         'PrivateSubnet1',
         'PrivateSubnet2',
         'PublicRouteTable',
-        'PrivateRouteTable',
         'PublicRoute',
         'PublicSubnet1RouteTableAssociation',
         'PublicSubnet2RouteTableAssociation',
-        'PrivateSubnet1RouteTableAssociation',
-        'PrivateSubnet2RouteTableAssociation',
       ];
 
       expectedResources.forEach(resourceName => {
@@ -265,8 +262,8 @@ describe('TapStack CloudFormation - Integration Tests', () => {
         })
       );
 
-      // Should have at least 3 route tables (1 default + 2 custom)
-      expect(routeTablesResponse.RouteTables!.length).toBeGreaterThanOrEqual(3);
+      // Should have at least 2 route tables (1 default + 1 custom public)
+      expect(routeTablesResponse.RouteTables!.length).toBeGreaterThanOrEqual(2);
 
       // Find public route table (has route to IGW)
       const publicRouteTable = routeTablesResponse.RouteTables!.find(rt =>

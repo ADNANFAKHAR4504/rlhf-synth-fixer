@@ -196,26 +196,6 @@
         ]
       }
     },
-    "PrivateRouteTable": {
-      "Type": "AWS::EC2::RouteTable",
-      "Properties": {
-        "VpcId": {
-          "Ref": "VPC"
-        },
-        "Tags": [
-          {
-            "Key": "Environment",
-            "Value": "Production"
-          },
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "PrivateRouteTable-${EnvironmentSuffix}"
-            }
-          }
-        ]
-      }
-    },
     "PublicRoute": {
       "Type": "AWS::EC2::Route",
       "DependsOn": "VPCGatewayAttachment",
@@ -248,28 +228,6 @@
         },
         "RouteTableId": {
           "Ref": "PublicRouteTable"
-        }
-      }
-    },
-    "PrivateSubnet1RouteTableAssociation": {
-      "Type": "AWS::EC2::SubnetRouteTableAssociation",
-      "Properties": {
-        "SubnetId": {
-          "Ref": "PrivateSubnet1"
-        },
-        "RouteTableId": {
-          "Ref": "PrivateRouteTable"
-        }
-      }
-    },
-    "PrivateSubnet2RouteTableAssociation": {
-      "Type": "AWS::EC2::SubnetRouteTableAssociation",
-      "Properties": {
-        "SubnetId": {
-          "Ref": "PrivateSubnet2"
-        },
-        "RouteTableId": {
-          "Ref": "PrivateRouteTable"
         }
       }
     }

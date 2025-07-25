@@ -27,9 +27,9 @@ describe('TapStack CloudFormation Template - Unit Tests', () => {
       expect(typeof template.Resources).toBe('object');
     });
 
-    test('should have at least 13 resources for complete VPC setup', () => {
+    test('should have at least 11 resources for complete VPC setup', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBeGreaterThanOrEqual(13);
+      expect(resourceCount).toBeGreaterThanOrEqual(11);
     });
   });
 
@@ -190,18 +190,8 @@ describe('TapStack CloudFormation Template - Unit Tests', () => {
       );
     });
 
-    test('should have Private Route Table', () => {
-      expect(template.Resources.PrivateRouteTable).toBeDefined();
-      expect(template.Resources.PrivateRouteTable.Type).toBe(
-        'AWS::EC2::RouteTable'
-      );
-    });
-
     test('Route Tables should reference VPC', () => {
       expect(template.Resources.PublicRouteTable.Properties.VpcId.Ref).toBe(
-        'VPC'
-      );
-      expect(template.Resources.PrivateRouteTable.Properties.VpcId.Ref).toBe(
         'VPC'
       );
     });
@@ -219,16 +209,13 @@ describe('TapStack CloudFormation Template - Unit Tests', () => {
 
     test('Route Tables should have correct tags', () => {
       const publicRT = template.Resources.PublicRouteTable;
-      const privateRT = template.Resources.PrivateRouteTable;
 
-      [publicRT, privateRT].forEach(rt => {
-        expect(rt.Properties.Tags).toBeDefined();
-        const envTag = rt.Properties.Tags.find(
-          (tag: any) => tag.Key === 'Environment'
-        );
-        expect(envTag).toBeDefined();
-        expect(envTag.Value).toBe('Production');
-      });
+      expect(publicRT.Properties.Tags).toBeDefined();
+      const envTag = publicRT.Properties.Tags.find(
+        (tag: any) => tag.Key === 'Environment'
+      );
+      expect(envTag).toBeDefined();
+      expect(envTag.Value).toBe('Production');
     });
   });
 
@@ -243,16 +230,6 @@ describe('TapStack CloudFormation Template - Unit Tests', () => {
         name: 'PublicSubnet2RouteTableAssociation',
         subnet: 'PublicSubnet2',
         routeTable: 'PublicRouteTable',
-      },
-      {
-        name: 'PrivateSubnet1RouteTableAssociation',
-        subnet: 'PrivateSubnet1',
-        routeTable: 'PrivateRouteTable',
-      },
-      {
-        name: 'PrivateSubnet2RouteTableAssociation',
-        subnet: 'PrivateSubnet2',
-        routeTable: 'PrivateRouteTable',
       },
     ];
 
@@ -346,12 +323,9 @@ describe('TapStack CloudFormation Template - Unit Tests', () => {
         'PrivateSubnet1',
         'PrivateSubnet2',
         'PublicRouteTable',
-        'PrivateRouteTable',
         'PublicRoute',
         'PublicSubnet1RouteTableAssociation',
         'PublicSubnet2RouteTableAssociation',
-        'PrivateSubnet1RouteTableAssociation',
-        'PrivateSubnet2RouteTableAssociation',
       ];
 
       requiredResources.forEach(resourceName => {
@@ -377,9 +351,9 @@ describe('TapStack CloudFormation Template - Unit Tests', () => {
       });
     });
 
-    test('should have exactly 14 resources', () => {
+    test('should have exactly 11 resources', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(14);
+      expect(resourceCount).toBe(11);
     });
 
     test('should have exactly 1 parameter', () => {
