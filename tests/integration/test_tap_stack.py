@@ -161,7 +161,7 @@ class TestTapStack(unittest.TestCase):
       self.assertEqual(response['StatusCode'], 200, 
                       "Lambda function should execute successfully within timeout")
       
-      # Verify execution time is well within 15-second timeout
+      # Verify execution time within 15-second timeout
       self.assertLess(execution_time, 15, 
                      f"Lambda execution should complete within 15-second timeout, "
                      f"took {execution_time:.2f}s")
