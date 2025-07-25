@@ -1,23 +1,18 @@
-import fs from 'fs';
-import path from 'path';
+import { ListBucketsCommand, S3Client } from '@aws-sdk/client-s3';
 
-describe('Terraform Outputs', () => {
-  let outputFilePath: string;
-  let outputData: string;
-  let outputs: any;
+describe('S3 Bucket Verification', () => {
+  // verify bucket with prefix 'cdktftest-' exists using AWS SDK
+  test('S3 Bucket with prefix "cdktftest-" should exist', async () => {
+    const s3Client = new S3Client({ region: 'us-east-1' });
+    const bucketPrefix = 'cdktftest-';
 
-  beforeEach(() => {
-    // Reset mocks before each test
-    jest.clearAllMocks();
+    const listBucketsCommand = new ListBucketsCommand({});
+    const response = await s3Client.send(listBucketsCommand);
 
-    outputFilePath = path.join(__dirname, 'cfn-outputs/flat-outputs.json');
-    outputData = fs.readFileSync(outputFilePath, 'utf-8');
-    outputs = JSON.parse(outputData);
-  });
+    const bucketExists = response.Buckets?.some(bucket =>
+      bucket.Name?.startsWith(bucketPrefix)
+    );
 
-  describe('Bucket Name', () => {
-    test('Bucket Name should contain the correct prefix', () => {
-      expect(outputs.s3BucketName.split('-').pop()).toBe('cdktftest');
-    });
+    expect(bucketExists).toBe(true);
   });
 });

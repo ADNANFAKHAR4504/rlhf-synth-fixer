@@ -1,13 +1,7 @@
 import { App, Testing } from 'cdktf';
 import { TapStack } from '../lib/tap-stack';
 
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-const stateBucket = process.env.TERRAFORM_STATE_BUCKET || 'iac-rlhf-tf-states';
-const stateBucketRegion =
-  process.env.TERRAFORM_STATE_BUCKET_REGION || 'us-east-1';
-const awsRegion = process.env.AWS_REGION || 'us-east-1';
-
-describe('TapStack', () => {
+describe('Stack Structure', () => {
   let app: App;
   let stack: TapStack;
   let synthesized: string;
@@ -15,20 +9,30 @@ describe('TapStack', () => {
   beforeEach(() => {
     // Reset mocks before each test
     jest.clearAllMocks();
-
-    app = new App();
-    stack = new TapStack(app, 'TestTapStack', {
-      environmentSuffix,
-      stateBucket,
-      stateBucketRegion,
-      awsRegion,
-    });
-    synthesized = Testing.synth(stack);
   });
 
-  describe('Stack Creation', () => {
-    test('should create a TapStack instance', () => {
-      expect(stack).toBeInstanceOf(TapStack);
+  test('TapStack instantiates successfully via props', () => {
+    app = new App();
+    stack = new TapStack(app, 'TestTapStackWithProps', {
+      environmentSuffix: 'prod',
+      stateBucket: 'custom-state-bucket',
+      stateBucketRegion: 'us-west-2',
+      awsRegion: 'us-west-2',
     });
+    synthesized = Testing.synth(stack);
+
+    // Verify that TapStack instantiates without errors via props
+    expect(stack).toBeDefined();
+    expect(synthesized).toBeDefined();
+  });
+
+  test('TapStack uses default values when no props provided', () => {
+    app = new App();
+    stack = new TapStack(app, 'TestTapStackDefault');
+    synthesized = Testing.synth(stack);
+
+    // Verify that TapStack instantiates without errors when no props are provided
+    expect(stack).toBeDefined();
+    expect(synthesized).toBeDefined();
   });
 });

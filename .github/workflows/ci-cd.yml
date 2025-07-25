@@ -232,8 +232,6 @@ jobs:
           name: cdk-artifacts
           path: |
             cdk.out/
-            cdktf.out/
-
   deploy:
     name: Deploy
     runs-on: ubuntu-24.04
@@ -285,7 +283,6 @@ jobs:
             npm run cdk:deploy
           elif [ "$PLATFORM" = "cdktf" ]; then
             echo "✅ CDKTF project detected, running CDKTF deploy..."
-            tree cdk.out/
             npm run cdktf:deploy
           elif [ "$PLATFORM" = "cfn" ] && [ "$LANGUAGE" = "yaml" ]; then
             echo "✅ CloudFormation YAML project detected, deploying with AWS CLI..."
