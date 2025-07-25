@@ -1,0 +1,262 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "A robust and secure CloudFormation template to provision a scalable and highly available web application environment with S3, EC2, and RDS in us-east-1.\n",
+    "Parameters": {
+        "EnvironmentName": {
+            "Type": "String",
+            "Description": "An environment identifier (e.g., dev, qa, prod).",
+            "Default": "dev"
+        },
+        "OwnerName": {
+            "Type": "String",
+            "Description": "The name of the resource owner.",
+            "Default": "WebAppTeam"
+        },
+        "ProjectName": {
+            "Type": "String",
+            "Description": "The name of the project.",
+            "Default": "CoreWebApp"
+        },
+        "DBMasterUsername": {
+            "Type": "String",
+            "Description": "Username for the master database user.",
+            "Default": "dbadmin",
+            "MinLength": "4",
+            "MaxLength": "16",
+            "AllowedPattern": "^[a-zA-Z][a-zA-Z0-9_]*$",
+            "ConstraintDescription": "Must begin with a letter and contain only alphanumeric characters."
+        },
+        "DBMasterUserPassword": {
+            "Type": "String",
+            "Description": "Password for the master database user.",
+            "NoEcho": true,
+            "MinLength": "8",
+            "MaxLength": "41",
+            "AllowedPattern": "^[a-zA-Z0-9!#$&*?@]*$",
+            "ConstraintDescription": "Must contain only alphanumeric characters and the symbols !#$&*?@."
+        },
+        "WebAppServerKeyName": {
+            "Type": "AWS::EC2::KeyPair::KeyName",
+            "Description": "Name of an existing EC2 KeyPair to enable SSH access to the instance."
+        }
+    },
+    "Resources": {
+        "WebAppAssets": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "aws:kms"
+                            }
+                        }
+                    ]
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "VersioningConfiguration": {
+                    "Status": "Enabled"
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentName"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "OwnerName"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
+                    }
+                ]
+            }
+        },
+        "WebAppServerSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "Enable HTTP and SSH access for the web application server",
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 80,
+                        "ToPort": 80,
+                        "CidrIp": "0.0.0.0/0"
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 22,
+                        "ToPort": 22,
+                        "CidrIp": "0.0.0.0/0"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentName"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "OwnerName"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
+                    }
+                ]
+            }
+        },
+        "WebAppDatabaseSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "Allow database access from the web application server",
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentName"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "OwnerName"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
+                    }
+                ]
+            }
+        },
+        "DBIngressRule": {
+            "Type": "AWS::EC2::SecurityGroupIngress",
+            "Properties": {
+                "GroupId": {
+                    "Fn::GetAtt": [
+                        "WebAppDatabaseSecurityGroup",
+                        "GroupId"
+                    ]
+                },
+                "IpProtocol": "tcp",
+                "FromPort": 3306,
+                "ToPort": 3306,
+                "SourceSecurityGroupId": {
+                    "Fn::GetAtt": [
+                        "WebAppServerSecurityGroup",
+                        "GroupId"
+                    ]
+                }
+            }
+        },
+        "WebAppServer": {
+            "Type": "AWS::EC2::Instance",
+            "Properties": {
+                "InstanceType": "t2.micro",
+                "ImageId": "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}",
+                "KeyName": {
+                    "Ref": "WebAppServerKeyName"
+                },
+                "SecurityGroupIds": [
+                    {
+                        "Ref": "WebAppServerSecurityGroup"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentName"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "OwnerName"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
+                    },
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-WebAppServer-${EnvironmentName}"
+                        }
+                    }
+                ]
+            }
+        },
+        "WebAppDatabase": {
+            "Type": "AWS::RDS::DBInstance",
+            "Properties": {
+                "DBInstanceClass": "db.t3.micro",
+                "Engine": "mysql",
+                "EngineVersion": "8.0",
+                "AllocatedStorage": "20",
+                "StorageType": "gp2",
+                "MultiAZ": true,
+                "DBName": {
+                    "Fn::Sub": "${ProjectName}${EnvironmentName}DB"
+                },
+                "MasterUsername": {
+                    "Ref": "DBMasterUsername"
+                },
+                "MasterUserPassword": {
+                    "Ref": "DBMasterUserPassword"
+                },
+                "VPCSecurityGroups": [
+                    {
+                        "Ref": "WebAppDatabaseSecurityGroup"
+                    }
+                ],
+                "PubliclyAccessible": false,
+                "DeletionProtection": true,
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentName"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "OwnerName"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
+                    }
+                ]
+            }
+        }
+    }
+}
