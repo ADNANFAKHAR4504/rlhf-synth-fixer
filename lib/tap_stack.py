@@ -9,6 +9,7 @@ from typing import Optional
 
 import aws_cdk as cdk
 from aws_cdk import CfnOutput, Duration, RemovalPolicy, Stack
+from aws_cdk import aws_cloudfront as cloudfront
 from aws_cdk import aws_iam as iam
 from aws_cdk import aws_lambda as _lambda
 from aws_cdk import aws_s3 as s3
@@ -31,6 +32,11 @@ class TapStackProps(cdk.StackProps):
 
   def __init__(self, environment_suffix: Optional[str] = None, **kwargs):
     super().__init__(**kwargs)
+    # Validate environment_suffix
+    if environment_suffix is not None and not isinstance(environment_suffix, str):
+      raise ValueError("environment_suffix must be a string")
+    if environment_suffix is not None and len(environment_suffix.strip()) == 0:
+      raise ValueError("environment_suffix cannot be empty")
     self.environment_suffix = environment_suffix
 
 
@@ -70,8 +76,12 @@ class TapStack(Stack):
     self.environment_suffix = (
         props.environment_suffix if props else None
     ) or self.node.try_get_context('environmentSuffix') or 'dev'
+    
+    # Validate environment_suffix
+    if not self.environment_suffix or not isinstance(self.environment_suffix, str):
+      raise ValueError("environment_suffix is required and must be a non-empty string")
 
-    # Create S3 bucket for static website hosting
+    # Create S3 bucket for static website hosting (private - accessed via CloudFront)
     self.website_bucket = s3.Bucket(
         self,
         "WebsiteBucket",
@@ -79,15 +89,9 @@ class TapStack(Stack):
         versioned=True,
         removal_policy=RemovalPolicy.DESTROY,
         auto_delete_objects=True,
-        website_index_document="index.html",
-        website_error_document="error.html",
-        public_read_access=True,
-        block_public_access=s3.BlockPublicAccess(
-            block_public_acls=False,
-            block_public_policy=False,
-            ignore_public_acls=False,
-            restrict_public_buckets=False,
-        ),
+        # Remove public access for security - CloudFront will handle access
+        public_read_access=False,
+        block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
     )
 
     # Create IAM role for Lambda function with least privilege
@@ -121,19 +125,73 @@ class TapStack(Stack):
         },
     )
 
-    # Create Lambda function for dynamic content
+    # Create Lambda function for dynamic content using external file
     self.lambda_function = _lambda.Function(
         self,
         "DynamicContentFunction",
         runtime=_lambda.Runtime.PYTHON_3_12,
-        handler="lambda_function.lambda_handler",
-        code=_lambda.Code.from_inline(self._get_lambda_code()),
+        handler="handler.lambda_handler",
+        code=_lambda.Code.from_asset("lib/lambda"),
         role=lambda_role,
         timeout=Duration.seconds(30),
         memory_size=128,
         environment={
             "WEBSITE_BUCKET": self.website_bucket.bucket_name,
         },
+        description="Lambda function for dynamic content processing"
+    )
+
+    # Create CloudFront Origin Access Identity for secure S3 access
+    origin_access_identity = cloudfront.OriginAccessIdentity(
+        self,
+        "WebsiteOAI",
+        comment=f"OAI for static website {self.environment_suffix}"
+    )
+
+    # Grant CloudFront access to S3 bucket
+    self.website_bucket.grant_read(origin_access_identity)
+
+    # Create CloudFront distribution for secure static content delivery
+    self.distribution = cloudfront.CloudFrontWebDistribution(
+        self,
+        "WebsiteDistribution",
+        origin_configs=[
+            cloudfront.SourceConfiguration(
+                s3_origin_source=cloudfront.S3OriginConfig(
+                    s3_bucket_source=self.website_bucket,
+                    origin_access_identity=origin_access_identity
+                ),
+                behaviors=[
+                    cloudfront.Behavior(
+                        is_default_behavior=True,
+                        compress=True,
+                        allowed_methods=cloudfront.CloudFrontAllowedMethods.GET_HEAD_OPTIONS,
+                        cached_methods=cloudfront.CloudFrontAllowedCachedMethods.GET_HEAD_OPTIONS,
+                        viewer_protocol_policy=cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+                        min_ttl=Duration.seconds(0),
+                        default_ttl=Duration.seconds(86400),
+                        max_ttl=Duration.seconds(31536000)
+                    )
+                ]
+            )
+        ],
+        default_root_object="index.html",
+        error_configurations=[
+            cloudfront.CfnDistribution.CustomErrorResponseProperty(
+                error_code=404,
+                response_code=200,
+                response_page_path="/error.html",
+                error_caching_min_ttl=300
+            ),
+            cloudfront.CfnDistribution.CustomErrorResponseProperty(
+                error_code=403,
+                response_code=200,
+                response_page_path="/error.html",
+                error_caching_min_ttl=300
+            )
+        ],
+        price_class=cloudfront.PriceClass.PRICE_CLASS_100,
+        enabled=True
     )
 
     # Deploy static content to S3 bucket
@@ -143,14 +201,24 @@ class TapStack(Stack):
         sources=[s3_deployment.Source.asset("lib/static_content")],
         destination_bucket=self.website_bucket,
         destination_key_prefix="",
+        # Invalidate CloudFront cache after deployment
+        distribution=self.distribution,
+        distribution_paths=["/*"]
     )
 
-    # Output the website URL and Lambda function ARN
+    # Output the CloudFront distribution URL and Lambda function ARN
     CfnOutput(
         self,
         "WebsiteURL",
-        value=self.website_bucket.bucket_website_url,
-        description="URL of the static website",
+        value=f"https://{self.distribution.distribution_domain_name}",
+        description="URL of the static website via CloudFront",
+    )
+
+    CfnOutput(
+        self,
+        "CloudFrontDistributionId",
+        value=self.distribution.distribution_id,
+        description="CloudFront Distribution ID",
     )
 
     CfnOutput(
@@ -173,65 +241,3 @@ class TapStack(Stack):
         value=self.website_bucket.bucket_name,
         description="Name of the S3 bucket",
     )
-
-  def _get_lambda_code(self) -> str:
-    """
-    Returns the Lambda function source code as a string.
-    """
-    return '''
-import json
-import boto3
-import os
-from datetime import datetime
-
-def lambda_handler(event, context):
-    """
-    Lambda function handler for dynamic content requests.
-    Returns a JSON response with current timestamp and request information.
-    """
-    try:
-        # Get the website bucket name from environment variables
-        website_bucket = os.environ.get('WEBSITE_BUCKET')
-        
-        # Create S3 client
-        s3_client = boto3.client('s3')
-        
-        # Get current timestamp
-        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        
-        # Prepare response data
-        response_data = {
-            "message": "Hello from Lambda!",
-            "timestamp": current_time,
-            "request_id": context.aws_request_id,
-            "function_name": context.function_name,
-            "website_bucket": website_bucket,
-            "event": event
-        }
-        
-        # Return successful response
-        return {
-            "statusCode": 200,
-            "headers": {
-                "Content-Type": "application/json",
-                "Access-Control-Allow-Origin": "*",
-                "Access-Control-Allow-Headers": "Content-Type",
-                "Access-Control-Allow-Methods": "GET, POST, OPTIONS"
-            },
-            "body": json.dumps(response_data, indent=2)
-        }
-        
-    except Exception as e:
-        # Return error response
-        return {
-            "statusCode": 500,
-            "headers": {
-                "Content-Type": "application/json",
-                "Access-Control-Allow-Origin": "*"
-            },
-            "body": json.dumps({
-                "error": str(e),
-                "message": "Internal server error"
-            }, indent=2)
-        }
-'''

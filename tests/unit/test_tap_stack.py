@@ -16,7 +16,7 @@ class TestTapStack(unittest.TestCase):
     """Set up a fresh CDK app for each test"""
     self.app = cdk.App()
 
-  @mark.it("creates an S3 bucket with the correct environment suffix")
+  @mark.it("creates a secure S3 bucket with the correct environment suffix")
   def test_creates_s3_bucket_with_env_suffix(self):
     env_suffix = "testenv"
     stack = TapStack(self.app, "TapStackTest",
@@ -24,18 +24,14 @@ class TestTapStack(unittest.TestCase):
     template = Template.from_stack(stack)
     template.resource_count_is("AWS::S3::Bucket", 1)
     template.has_resource_properties("AWS::S3::Bucket", {
-        "WebsiteConfiguration": {
-            "IndexDocument": "index.html",
-            "ErrorDocument": "error.html"
-        },
         "VersioningConfiguration": {
             "Status": "Enabled"
         },
         "PublicAccessBlockConfiguration": {
-            "BlockPublicAcls": False,
-            "BlockPublicPolicy": False,
-            "IgnorePublicAcls": False,
-            "RestrictPublicBuckets": False
+            "BlockPublicAcls": True,
+            "BlockPublicPolicy": True,
+            "IgnorePublicAcls": True,
+            "RestrictPublicBuckets": True
         }
     })
 
@@ -52,9 +48,10 @@ class TestTapStack(unittest.TestCase):
     template = Template.from_stack(stack)
     template.has_resource_properties("AWS::Lambda::Function", {
         "Runtime": "python3.12",
-        "Handler": "lambda_function.lambda_handler",
+        "Handler": "handler.lambda_handler",
         "MemorySize": 128,
-        "Timeout": 30
+        "Timeout": 30,
+        "Description": "Lambda function for dynamic content processing"
     })
 
   @mark.it("creates IAM role for Lambda with least privilege")
@@ -76,7 +73,7 @@ class TestTapStack(unittest.TestCase):
         }
     })
 
-  @mark.it("creates S3 bucket policy for public read access")
+  @mark.it("creates S3 bucket policy for CloudFront access")
   def test_creates_s3_bucket_policy(self):
     stack = TapStack(self.app, "TapStackTestPolicy")
     template = Template.from_stack(stack)
@@ -87,12 +84,15 @@ class TestTapStack(unittest.TestCase):
         }
     })
 
-  @mark.it("creates CDK outputs for website URL and Lambda function")
+  @mark.it("creates CDK outputs for CloudFront URL and Lambda function")
   def test_creates_cdk_outputs(self):
     stack = TapStack(self.app, "TapStackTestOutputs")
     template = Template.from_stack(stack)
     template.has_output("WebsiteURL", {
-        "Description": "URL of the static website"
+        "Description": "URL of the static website via CloudFront"
+    })
+    template.has_output("CloudFrontDistributionId", {
+        "Description": "CloudFront Distribution ID"
     })
     template.has_output("LambdaFunctionARN", {
         "Description": "ARN of the Lambda function"
@@ -104,7 +104,7 @@ class TestTapStack(unittest.TestCase):
         "Description": "Name of the S3 bucket"
     })
 
-  @mark.it("creates S3 bucket deployment for static content")
+  @mark.it("creates S3 bucket deployment for static content with CloudFront invalidation")
   def test_creates_s3_deployment(self):
     stack = TapStack(self.app, "TapStackTestDeployment")
     template = Template.from_stack(stack)
@@ -114,7 +114,8 @@ class TestTapStack(unittest.TestCase):
             "Ref": "WebsiteBucket75C24D94"
         },
         "DestinationBucketKeyPrefix": "",
-        "Prune": True
+        "Prune": True,
+        "DistributionPaths": ["/*"]
     })
 
   @mark.it("sets correct removal policy for S3 bucket")
@@ -131,6 +132,30 @@ class TestTapStack(unittest.TestCase):
     stack = TapStack(self.app, "TapStackTestCode")
     template = Template.from_stack(stack)
     template.has_resource_properties("AWS::Lambda::Function", {
-        "Handler": "lambda_function.lambda_handler",
+        "Handler": "handler.lambda_handler",
         "Runtime": "python3.12"
+    })
+
+  @mark.it("creates CloudFront distribution for secure content delivery")
+  def test_creates_cloudfront_distribution(self):
+    stack = TapStack(self.app, "TapStackTestCloudFront")
+    template = Template.from_stack(stack)
+    template.resource_count_is("AWS::CloudFront::Distribution", 1)
+    template.has_resource_properties("AWS::CloudFront::Distribution", {
+        "DistributionConfig": {
+            "Enabled": True,
+            "DefaultRootObject": "index.html",
+            "PriceClass": "PriceClass_100"
+        }
+    })
+
+  @mark.it("creates CloudFront Origin Access Identity")
+  def test_creates_cloudfront_oai(self):
+    stack = TapStack(self.app, "TapStackTestOAI")
+    template = Template.from_stack(stack)
+    template.resource_count_is("AWS::CloudFront::CloudFrontOriginAccessIdentity", 1)
+    template.has_resource_properties("AWS::CloudFront::CloudFrontOriginAccessIdentity", {
+        "CloudFrontOriginAccessIdentityConfig": {
+            "Comment": "OAI for static website dev"
+        }
     })
