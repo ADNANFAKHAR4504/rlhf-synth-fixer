@@ -74,6 +74,22 @@ describe('Elastic Beanstalk Integration Tests', () => {
     });
     const environments = await ebClient.send(describeEnvCommand);
     const cname = new URL(stackOutputs.EnvironmentURL).hostname;
+
+    console.log('--- DEBUGGING ---');
+    console.log(`Value from stack output (cname): "${cname}"`);
+    console.log(`Type: ${typeof cname}, Length: ${cname.length}`);
+    console.log('-------------------');
+
+    // Now, log the values from the array you are searching
+    environments.Environments?.forEach(env => {
+      console.log(`Checking against EndpointURL: "${env.EndpointURL}"`);
+      console.log(`Type: ${typeof env.EndpointURL}, Length: ${env.EndpointURL?.length}`);
+      console.log(`Are they equal? --> ${env.EndpointURL === cname}`);
+      console.log('---');
+    });
+
+
+
     const targetEnvironment = environments.Environments?.find(env => env.EndpointURL === cname);
     console.log(`environmnts:` , JSON.stringify(environments, null, 2));
     console.log(`cname:` , cname);
