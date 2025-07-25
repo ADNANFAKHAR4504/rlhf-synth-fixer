@@ -26,6 +26,29 @@ jobs:
           fetch-depth: 0
           ref: refs/pull/${{ github.event.pull_request.number }}/head
 
+      - name: Check for required documentation files
+        id: docs-check
+        run: |
+          if [ ! -f "lib/PROMPT.md" ]; then
+            echo "❌ lib/PROMPT.md not found, exiting with failure"
+            exit 1
+          fi
+
+          if [ ! -f "lib/MODEL_RESPONSE.md" ]; then
+            echo "❌ lib/MODEL_RESPONSE.md not found, exiting with failure"
+            exit 1
+          fi
+
+          if [ ! -f "lib/IDEAL_RESPONSE.md" ]; then
+            echo "❌ lib/IDEAL_RESPONSE.md not found, exiting with failure"
+            exit 1
+          fi
+
+          if [ ! -f "lib/MODEL_FAILURES.md" ]; then
+            echo "❌ lib/MODEL_FAILURES.md not found, exiting with failure"
+            exit 1
+          fi
+
       - name: Run Claude PR Review Action
         uses: anthropics/claude-code-action@beta
         with:
