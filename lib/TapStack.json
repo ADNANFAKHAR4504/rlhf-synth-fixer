@@ -582,7 +582,7 @@
                                             ]
                                         },
                                         {
-                                            "Fn::Sub": "${ApplicationDataBucket}/*"
+                                            "Fn::Sub": "${ApplicationDataBucket.Arn}/*"
                                         }
                                     ],
                                     "Condition": {

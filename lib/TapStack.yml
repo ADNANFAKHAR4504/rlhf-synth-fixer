@@ -304,7 +304,7 @@ Resources:
                   - 's3:ListBucket'
                 Resource:
                   - !GetAtt ApplicationDataBucket.Arn
-                  - !Sub '${ApplicationDataBucket}/*'
+                  - !Sub '${ApplicationDataBucket.Arn}/*'
                 Condition:
                   IpAddress:
                     'aws:SourceIp': !Ref AllowedIPRange
