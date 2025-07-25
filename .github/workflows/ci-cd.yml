@@ -285,8 +285,7 @@ jobs:
             npm run cdk:deploy
           elif [ "$PLATFORM" = "cdktf" ]; then
             echo "✅ CDKTF project detected, running CDKTF deploy..."
-            ls cdk.out/cdktf.out/
-            cat cdk.out/cdktf.out/cdk.tf.json || echo "No CDKTF output found"
+            tree cdk.out/
             npm run cdktf:deploy
           elif [ "$PLATFORM" = "cfn" ] && [ "$LANGUAGE" = "yaml" ]; then
             echo "✅ CloudFormation YAML project detected, deploying with AWS CLI..."
