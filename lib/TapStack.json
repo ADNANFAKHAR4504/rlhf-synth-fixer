@@ -452,9 +452,7 @@
                                                 "Arn"
                                             ]
                                         },
-                                        [
-                                            "arn:aws:iam::718240086340:user/iac-deployment-runner"
-                                        ]
+                                        "arn:aws:iam::718240086340:user/iac-deployment-runner"
                                     ]
                                 },
                                 "StringNotEqualsIfExists": {
@@ -619,7 +617,7 @@
                         {
                             "Effect": "Allow",
                             "Principal": {
-                                "Service": "rds.amazonaws.com"
+                                "Service": "monitoring.rds.amazonaws.com"
                             },
                             "Action": "sts:AssumeRole"
                         }

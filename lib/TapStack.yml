@@ -357,7 +357,7 @@ Resources:
         Statement:
           - Effect: Allow
             Principal:
-              Service: rds.amazonaws.com
+              Service: monitoring.rds.amazonaws.com
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole
