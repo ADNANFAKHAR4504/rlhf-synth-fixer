@@ -369,8 +369,9 @@ class TestTapStackIntegration(unittest.TestCase):
           (err for err in error_responses if err['ErrorCode'] == 404), None)
       self.assertIsNotNone(
           error_404, "Should have 404 error response configuration")
-      self.assertEqual(error_404['ResponseCode'],
-                       200, "404 should redirect to 200")
+      response_code = error_404['ResponseCode']
+      self.assertEqual(str(response_code), '200',
+                       "404 should redirect to 200")
       self.assertEqual(error_404['ResponsePagePath'],
                        '/error.html', "404 should serve error.html")
 
