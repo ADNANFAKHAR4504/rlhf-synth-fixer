@@ -1200,6 +1200,7 @@
                     "Version": "2012-10-17",
                     "Statement": [
                         {
+                            "Sid": "AllowCloudTrailPublish",
                             "Effect": "Allow",
                             "Principal": {
                                 "Service": "cloudtrail.amazonaws.com"
@@ -1210,9 +1211,21 @@
                             }
                         },
                         {
+                            "Sid": "AllowLambdaPublish",
                             "Effect": "Allow",
                             "Principal": {
                                 "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sns:Publish",
+                            "Resource": {
+                                "Ref": "SecurityAlertsTopic"
+                            }
+                        },
+                        {
+                            "Sid": "AllowCloudWatchAlarmsPublish",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "cloudwatch.amazonaws.com"
                             },
                             "Action": "sns:Publish",
                             "Resource": {
