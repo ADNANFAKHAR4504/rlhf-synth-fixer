@@ -50,6 +50,7 @@
     "@aws-sdk/client-opensearchserverless": "^3.846.0",
     "@aws-sdk/client-rds": "^3.848.0",
     "@aws-sdk/client-s3": "^3.850.0",
+    "@aws-sdk/client-secrets-manager": "^3.848.0",
     "@aws-sdk/client-sfn": "^3.848.0",
     "@aws-sdk/client-sns": "^3.848.0",
     "@aws-sdk/client-ssm": "^3.848.0",

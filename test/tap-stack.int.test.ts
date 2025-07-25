@@ -20,6 +20,7 @@ import {
 import {
   GetBucketEncryptionCommand,
   HeadBucketCommand,
+  GetBucketPolicyCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
 import {
@@ -42,11 +43,13 @@ import {
   GetDistributionCommand,
   GetCloudFrontOriginAccessIdentityCommand,
   CloudFrontClient,
+  ListDistributionsCommand,
 } from '@aws-sdk/client-cloudfront';
 
 import {
   GetDetectorCommand,
   GuardDutyClient,
+  ListDetectorsCommand,
 } from '@aws-sdk/client-guardduty';
 
 import {
@@ -57,7 +60,12 @@ import {
 import {
   GetTopicAttributesCommand,
   SNSClient,
+  ListTopicsCommand,
 } from '@aws-sdk/client-sns';
+import {
+  SecretsManagerClient,
+  DescribeSecretCommand,
+} from '@aws-sdk/client-secrets-manager';
 import fs from 'fs';
 
 const region = process.env.AWS_REGION || 'us-east-1';
@@ -104,7 +112,10 @@ describe('Secure Infrastructure Stack Integration Tests', () => {
 
   test('Internet Gateway should be attached to the VPC', async () => {
     const res = await ec2.send(new DescribeVpcsCommand({ VpcIds: [outputs.VPCId] }));
-    const igw = res.Vpcs?.[0]?.Attachments?.find(a => a.State === 'available');
+    const igws = await ec2.send(new DescribeInternetGatewaysCommand({
+      Filters: [{ Name: 'attachment.vpc-id', Values: [outputs.VPCId] }],
+    }));
+    const igw = igws.InternetGateways?.[0];
     expect(igw).toBeDefined();
   });
 
@@ -151,13 +162,15 @@ describe('Secure Infrastructure Stack Integration Tests', () => {
   test('App IAM role should exist with log permissions', async () => {
     const iam = new IAMClient({ region });
     const role = await iam.send(new GetRoleCommand({ RoleName: 'AppRole' }));
-    expect(role.Role.RoleName).toBe('AppRole');
+    expect(role.Role).toBeDefined();
+    expect(role.Role?.RoleName).toBe('AppRole');
   });
 
   test('Whitelisted IAM User should exist', async () => {
     const iam = new IAMClient({ region });
     const user = await iam.send(new GetUserCommand({ UserName: outputs.WhitelistedUser }));
-    expect(user.User.UserName).toBe(outputs.WhitelistedUser);
+    expect(user.User).toBeDefined();
+    expect(user.User?.UserName).toBe(outputs.WhitelistedUser);
   });
 
   test('S3 Bucket policy should exist and restrict access correctly', async () => {
@@ -167,7 +180,7 @@ describe('Secure Infrastructure Stack Integration Tests', () => {
 
   test('RDS DBSubnetGroup should exist', async () => {
     const res = await rds.send(new DescribeDBSubnetGroupsCommand({}));
-    const group = res.DBSubnetGroups?.find(g => g.DBSubnetGroupName.includes('Private'));
+    const group = res.DBSubnetGroups?.find(g => g.DBSubnetGroupName?.includes('Private'));
     expect(group).toBeDefined();
   });
 
@@ -210,7 +223,7 @@ describe('Secure Infrastructure Stack Integration Tests', () => {
   test('AWS Config recorder should be active', async () => {
     const config = new ConfigServiceClient({ region });
     const res = await config.send(new DescribeConfigurationRecordersCommand({}));
-    expect(res.ConfigurationRecorders?.[0].recordingGroup?.AllSupported).toBe(true);
+    expect(res.ConfigurationRecorders?.[0].recordingGroup?.allSupported).toBe(true);
   });
 
   test('VPC Flow Logs should be enabled', async () => {
@@ -228,7 +241,7 @@ describe('Secure Infrastructure Stack Integration Tests', () => {
   test('SNS Topic for Security Notifications should exist', async () => {
     const sns = new SNSClient({ region });
     const res = await sns.send(new ListTopicsCommand({}));
-    const topic = res.Topics?.find(t => t.TopicArn.includes('SecurityAlerts'));
+    const topic = res.Topics?.find(t => t.TopicArn?.includes('SecurityAlerts'));
     expect(topic).toBeDefined();
   });
 
