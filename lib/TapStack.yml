@@ -7,7 +7,6 @@ Metadata:
       - Label:
           default: 'Environment Configuration'
         Parameters:
-          - EnvironmentName
           - EnvironmentSuffix
           - VpcCidr
           - AllowedIPRange
@@ -18,8 +17,6 @@ Metadata:
           - CredentialRotationDays
           - LogRetentionDays
     ParameterLabels:
-      EnvironmentName:
-        default: 'Environment Name'
       EnvironmentSuffix:
         default: 'Environment Suffix'
       VpcCidr:
@@ -28,20 +25,10 @@ Metadata:
         default: 'Allowed IP Range for Access'
 
 Parameters:
-  EnvironmentName:
-    Type: String
-    Default: 'dev'
-    Description: 'Environment name for resource tagging and naming'
-    AllowedValues: ['dev', 'staging', 'prod']
-    ConstraintDescription: 'Must be dev, staging, or prod'
-
-  # Add this new parameter to match what the deployment script is passing
   EnvironmentSuffix:
     Type: String
     Default: 'dev'
     Description: 'Environment suffix for resource naming (passed from deployment script)'
-    AllowedValues: ['dev', 'staging', 'prod']
-    ConstraintDescription: 'Must be dev, staging, or prod'
 
   VpcCidr:
     Type: String

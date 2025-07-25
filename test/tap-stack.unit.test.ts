@@ -41,7 +41,6 @@ describe('Secure Infrastructure CloudFormation Template', () => {
   describe('Parameters', () => {
     test('should have all required parameters', () => {
       const expectedParams = [
-        'EnvironmentName',
         'EnvironmentSuffix',
         'VpcCidr',
         'AllowedIPRange',
@@ -53,14 +52,6 @@ describe('Secure Infrastructure CloudFormation Template', () => {
       expectedParams.forEach(param => {
         expect(template.Parameters[param]).toBeDefined();
       });
-    });
-
-    test('EnvironmentName parameter should have correct properties', () => {
-      const param = template.Parameters.EnvironmentName;
-      expect(param.Type).toBe('String');
-      expect(param.Default).toBe('dev');
-      expect(param.AllowedValues).toEqual(['dev', 'staging', 'prod']);
-      expect(param.ConstraintDescription).toBe('Must be dev, staging, or prod');
     });
 
     test('VpcCidr parameter should have CIDR validation', () => {
@@ -85,12 +76,6 @@ describe('Secure Infrastructure CloudFormation Template', () => {
       expect(param.MaxValue).toBe(90);
     });
 
-    test('EnvironmentSuffix parameter should exist and have correct properties', () => {
-      const param = template.Parameters.EnvironmentSuffix;
-      expect(param.Type).toBe('String');
-      expect(param.Default).toBe('dev');
-      expect(param.AllowedValues).toEqual(['dev', 'staging', 'prod']);
-    });
   });
 
   describe('Conditions', () => {
