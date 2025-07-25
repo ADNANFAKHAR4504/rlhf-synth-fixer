@@ -645,7 +645,6 @@ Resources:
         tag2Key: Owner
       Scope:
         ComplianceResourceTypes:
-          - "AWS::EC2::Instance"
           - "AWS::RDS::DBInstance"
           - "AWS::S3::Bucket"
           # Add other resource types as needed

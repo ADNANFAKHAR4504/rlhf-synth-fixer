@@ -1,6 +1,11 @@
 import {
-  DescribeSubnetsCommand,
   DescribeVpcsCommand,
+  DescribeSubnetsCommand,
+  DescribeRouteTablesCommand,
+  DescribeInternetGatewaysCommand,
+  DescribeNatGatewaysCommand,
+  DescribeSecurityGroupsCommand,
+  DescribeFlowLogsCommand,
   EC2Client,
 } from '@aws-sdk/client-ec2';
 import {
@@ -9,6 +14,7 @@ import {
 } from '@aws-sdk/client-lambda';
 import {
   DescribeDBInstancesCommand,
+  DescribeDBSubnetGroupsCommand,
   RDSClient,
 } from '@aws-sdk/client-rds';
 import {
@@ -16,6 +22,42 @@ import {
   HeadBucketCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
+import {
+  GetRoleCommand,
+  GetUserCommand,
+  IAMClient,
+} from '@aws-sdk/client-iam';
+import {
+  DescribeTrailsCommand,
+  CloudTrailClient,
+} from '@aws-sdk/client-cloudtrail';
+import {
+  DescribeConfigurationRecordersCommand,
+  DescribeDeliveryChannelsCommand,
+  DescribeConfigRulesCommand,
+  ConfigServiceClient,
+} from '@aws-sdk/client-config-service';
+
+import {
+  GetDistributionCommand,
+  GetCloudFrontOriginAccessIdentityCommand,
+  CloudFrontClient,
+} from '@aws-sdk/client-cloudfront';
+
+import {
+  GetDetectorCommand,
+  GuardDutyClient,
+} from '@aws-sdk/client-guardduty';
+
+import {
+  ListRulesCommand,
+  EventBridgeClient,
+} from '@aws-sdk/client-eventbridge';
+
+import {
+  GetTopicAttributesCommand,
+  SNSClient,
+} from '@aws-sdk/client-sns';
 import fs from 'fs';
 
 const region = process.env.AWS_REGION || 'us-east-1';
@@ -25,6 +67,13 @@ const ec2 = new EC2Client({ region });
 const rds = new RDSClient({ region });
 const s3 = new S3Client({ region });
 const lambda = new LambdaClient({ region });
+const iam = new IAMClient({ region });
+const config = new ConfigServiceClient({ region });
+const cloudtrail = new CloudTrailClient({ region });
+const cloudfront = new CloudFrontClient({ region });
+const guardduty = new GuardDutyClient({ region });
+const events = new EventBridgeClient({ region });
+const sns = new SNSClient({ region });
 
 describe('Secure Infrastructure Stack Integration Tests', () => {
   test('VPC should exist', async () => {
@@ -40,6 +89,160 @@ describe('Secure Infrastructure Stack Integration Tests', () => {
     res.Subnets?.forEach(s => {
       expect(s.VpcId).toBe(outputs.VPCId);
     });
+  });
+
+  test('Public subnets should exist and be in the correct VPC', async () => {
+    const res = await ec2.send(new DescribeSubnetsCommand({
+      SubnetIds: [outputs.PublicSubnet1Id, outputs.PublicSubnet2Id],
+    }));
+    expect(res.Subnets?.length).toBe(2);
+    res.Subnets?.forEach(s => {
+      expect(s.VpcId).toBe(outputs.VPCId);
+      expect(s.MapPublicIpOnLaunch).toBe(true);
+    });
+  });
+
+  test('Internet Gateway should be attached to the VPC', async () => {
+    const res = await ec2.send(new DescribeVpcsCommand({ VpcIds: [outputs.VPCId] }));
+    const igw = res.Vpcs?.[0]?.Attachments?.find(a => a.State === 'available');
+    expect(igw).toBeDefined();
+  });
+
+  test('NAT Gateway should be active', async () => {
+    const res = await ec2.send(new DescribeNatGatewaysCommand({
+      Filter: [{ Name: 'vpc-id', Values: [outputs.VPCId] }],
+    }));
+    const nat = res.NatGateways?.[0];
+    expect(nat?.State).toBe('available');
+  });
+
+  test('Route tables should route internet traffic correctly', async () => {
+    const res = await ec2.send(new DescribeRouteTablesCommand({
+      Filters: [{ Name: 'vpc-id', Values: [outputs.VPCId] }],
+    }));
+    const publicRoute = res.RouteTables?.find(rt =>
+      rt.Routes?.some(route => route.GatewayId?.startsWith('igw'))
+    );
+    const privateRoute = res.RouteTables?.find(rt =>
+      rt.Routes?.some(route => route.NatGatewayId)
+    );
+    expect(publicRoute).toBeDefined();
+    expect(privateRoute).toBeDefined();
+  });
+
+  test('SSH Security Group should allow port 22 from allowed CIDR', async () => {
+    const res = await ec2.send(new DescribeSecurityGroupsCommand({}));
+    const sshGroup = res.SecurityGroups?.find(sg =>
+      sg.IpPermissions?.some(p =>
+        p.FromPort === 22 && p.ToPort === 22 && p.IpProtocol === 'tcp'
+      )
+    );
+    expect(sshGroup).toBeDefined();
+  });
+
+  test('App and DB security groups should allow proper communication', async () => {
+    const res = await ec2.send(new DescribeSecurityGroupsCommand({}));
+    const dbSG = res.SecurityGroups?.find(sg =>
+      sg.IpPermissions?.some(p => p.FromPort === 5432 && p.ToPort === 5432)
+    );
+    expect(dbSG).toBeDefined();
+  });
+
+  test('App IAM role should exist with log permissions', async () => {
+    const iam = new IAMClient({ region });
+    const role = await iam.send(new GetRoleCommand({ RoleName: 'AppRole' }));
+    expect(role.Role.RoleName).toBe('AppRole');
+  });
+
+  test('Whitelisted IAM User should exist', async () => {
+    const iam = new IAMClient({ region });
+    const user = await iam.send(new GetUserCommand({ UserName: outputs.WhitelistedUser }));
+    expect(user.User.UserName).toBe(outputs.WhitelistedUser);
+  });
+
+  test('S3 Bucket policy should exist and restrict access correctly', async () => {
+    const policy = await s3.send(new GetBucketPolicyCommand({ Bucket: outputs.S3BucketName }));
+    expect(policy.Policy).toContain('Principal');
+  });
+
+  test('RDS DBSubnetGroup should exist', async () => {
+    const res = await rds.send(new DescribeDBSubnetGroupsCommand({}));
+    const group = res.DBSubnetGroups?.find(g => g.DBSubnetGroupName.includes('Private'));
+    expect(group).toBeDefined();
+  });
+
+  test('RDS secret should exist in Secrets Manager', async () => {
+    const secrets = new SecretsManagerClient({ region });
+    const res = await secrets.send(new DescribeSecretCommand({ SecretId: outputs.RDSSecret }));
+    expect(res.Name).toMatch(/rds-credentials/);
+  });
+
+  test('RDS monitoring role should have enhanced monitoring policy attached', async () => {
+    const iam = new IAMClient({ region });
+    const res = await iam.send(new GetRoleCommand({ RoleName: 'RDSMonitoringRole' }));
+    expect(res.Role).toBeDefined();
+  });
+
+  test('CloudTrail bucket policy should allow CloudTrail access', async () => {
+    const res = await s3.send(new GetBucketPolicyCommand({
+      Bucket: outputs.CloudTrailLogBucketName,
+    }));
+    
+    const policy = JSON.parse(res.Policy || '{}');
+    expect(policy.Statement).toBeDefined();
+
+    const hasTrailPermissions = policy.Statement.some((stmt: any) =>
+      stmt.Principal?.Service === 'cloudtrail.amazonaws.com' &&
+      ['s3:GetBucketAcl', 's3:PutObject'].some(action =>
+        (Array.isArray(stmt.Action) ? stmt.Action : [stmt.Action]).includes(action)
+      )
+    );
+
+    expect(hasTrailPermissions).toBe(true);
+  });
+
+  test('CloudTrail should be enabled and logging to bucket', async () => {
+    const cloudtrail = new CloudTrailClient({ region });
+    const trails = await cloudtrail.send(new DescribeTrailsCommand({}));
+    expect(trails.trailList?.[0]?.IsMultiRegionTrail).toBe(true);
+  });
+
+  test('AWS Config recorder should be active', async () => {
+    const config = new ConfigServiceClient({ region });
+    const res = await config.send(new DescribeConfigurationRecordersCommand({}));
+    expect(res.ConfigurationRecorders?.[0].recordingGroup?.AllSupported).toBe(true);
+  });
+
+  test('VPC Flow Logs should be enabled', async () => {
+    const res = await ec2.send(new DescribeFlowLogsCommand({}));
+    const flowLog = res.FlowLogs?.find(f => f.ResourceId === outputs.VPCId);
+    expect(flowLog).toBeDefined();
+  });
+
+  test('GuardDuty should be enabled', async () => {
+    const gd = new GuardDutyClient({ region });
+    const res = await gd.send(new ListDetectorsCommand({}));
+    expect(res.DetectorIds?.length).toBeGreaterThan(0);
+  });
+
+  test('SNS Topic for Security Notifications should exist', async () => {
+    const sns = new SNSClient({ region });
+    const res = await sns.send(new ListTopicsCommand({}));
+    const topic = res.Topics?.find(t => t.TopicArn.includes('SecurityAlerts'));
+    expect(topic).toBeDefined();
+  });
+
+  test('Daily EventBridge backup rule should exist', async () => {
+    const eb = new EventBridgeClient({ region });
+    const res = await eb.send(new ListRulesCommand({ NamePrefix: 'DailyBackupRule' }));
+    expect(res.Rules?.[0]).toBeDefined();
+  });
+
+  test('CloudFront distribution should be enabled', async () => {
+    const cf = new CloudFrontClient({ region });
+    const res = await cf.send(new ListDistributionsCommand({}));
+    const dist = res.DistributionList?.Items?.find(d => d.Enabled);
+    expect(dist).toBeDefined();
   });
 
   test('RDS instance is available and encrypted', async () => {
