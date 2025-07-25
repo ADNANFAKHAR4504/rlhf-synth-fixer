@@ -252,8 +252,8 @@ class TapStack(Stack):
     # Associate WAF with API Gateway
     wafv2.CfnWebACLAssociation(
         self, "WafApiAssociation",
-        resource_arn=f"arn:aws:apigateway:{Stack.of(self).region}::"
-        f"/apis/{http_api.api_id}/stages/$default",
+        resource_arn=f"arn:aws:apigateway:{Stack.of(self).region}:{Stack.of(self).account}:"
+        f"api/{http_api.api_id}/stage/$default",
         web_acl_arn=waf_acl.attr_arn
     )
 
@@ -297,8 +297,7 @@ class TapStack(Stack):
     oac = cloudfront.CfnOriginAccessControl(
         self,
         "CloudFrontOAC",
-        origin_access_control_config=
-        cloudfront.CfnOriginAccessControl.OriginAccessControlConfigProperty
+        origin_access_control_config=cloudfront.CfnOriginAccessControl.OriginAccessControlConfigProperty
         (
             name=f"{construct_id}-oac",
             origin_access_control_origin_type="s3",
