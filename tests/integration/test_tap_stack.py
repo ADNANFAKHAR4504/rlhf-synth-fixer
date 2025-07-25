@@ -13,7 +13,9 @@ def synth_stack():
   TapStack(app, "IntegrationTestTapStack")
   assembly = app.synth()
   stack_artifact = assembly.get_stack_by_name("IntegrationTestTapStack")
-  return json.loads(stack_artifact.template_as_json)
+  # return json.loads(stack_artifact.template_as_json)
+  return stack_artifact.template
+
 
 
 def test_stack_synthesizes():
