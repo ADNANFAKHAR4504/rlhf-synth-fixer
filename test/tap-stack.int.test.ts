@@ -17,7 +17,7 @@ describe('Terraform Outputs', () => {
 
   describe('Bucket Name', () => {
     test('Bucket Name should contain the correct prefix', () => {
-      expect(outputs.bucket_name.split('-').pop()).toBe('cdktftest');
+      expect(outputs.s3BucketName.split('-').pop()).toBe('cdktftest');
     });
   });
 });
