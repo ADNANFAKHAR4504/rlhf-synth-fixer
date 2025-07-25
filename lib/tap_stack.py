@@ -252,8 +252,7 @@ class TapStack(Stack):
     # Associate WAF with API Gateway
     wafv2.CfnWebACLAssociation(
         self, "WafApiAssociation",
-        resource_arn=f"arn:aws:apigateway:{Stack.of(self).region}::/apis/" +
-        f"{http_api.api_id}/stages/$default",
+        resource_arn=http_api.default_stage.stage_arn,
         web_acl_arn=waf_acl.attr_arn
     )
 
