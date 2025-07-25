@@ -4,7 +4,6 @@ import unittest
 from unittest.mock import MagicMock, patch
 
 import boto3
-from botocore.exceptions import ClientError
 from pytest import mark
 
 # Open file cfn-outputs/flat-outputs.json
@@ -276,13 +275,12 @@ class TestTapStackIntegration(unittest.TestCase):
     mock_lambda = MagicMock()
 
     # Configure mock to return different clients based on service
-    def mock_client(service_name, **kwargs):
+    def mock_client(service_name, **_):
       if service_name == 'iam':
         return mock_iam
-      elif service_name == 'lambda':
+      if service_name == 'lambda':
         return mock_lambda
-      else:
-        return MagicMock()
+      return MagicMock()
 
     mock_boto3_client.side_effect = mock_client
 
@@ -414,13 +412,12 @@ class TestTapStackIntegration(unittest.TestCase):
     mock_lambda.invoke.return_value = mock_response
 
     # Configure mock to return different clients based on service
-    def mock_client(service_name, **kwargs):
+    def mock_client(service_name, **_):
       if service_name == 's3':
         return mock_s3
-      elif service_name == 'lambda':
+      if service_name == 'lambda':
         return mock_lambda
-      else:
-        return MagicMock()
+      return MagicMock()
 
     mock_boto3_client.side_effect = mock_client
 
