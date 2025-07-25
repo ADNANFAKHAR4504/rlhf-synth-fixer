@@ -49,6 +49,7 @@ import subprocess
 import json
 import pytest
 
+
 STACK_NAME =  "TapStack"
 
 REGION = "us-east-1"
