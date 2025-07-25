@@ -1317,6 +1317,12 @@
             "Value": {
                 "Ref": "Project"
             }
+        },
+        "SNSTopicArn": {
+            "Description": "ARN of the secure SNS Topic",
+            "Value": {
+                "Ref": "SecureSNSTopic"
+            }
         }
     }
 }

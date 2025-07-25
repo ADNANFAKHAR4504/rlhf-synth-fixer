@@ -142,17 +142,20 @@ describe('Financial Stack Integration Tests', () => {
   });
 
   test('Private hosted zone should exist', async () => {
+    const projectName = outputs.ProjectName || 'defaultProject'; // fallback if output is missing
+
     const res = await route53.send(new ListHostedZonesByNameCommand({}));
     const zone = res.HostedZones?.find(z =>
-      z.Name === `internal.${outputs.ProjectName}.local.` && z.Config?.PrivateZone === true
+      z.Name === `internal.${projectName}.local.` && z.Config?.PrivateZone === true
     );
     expect(zone).toBeDefined();
   });
 
   test('SNS Topic should exist with SecureTransport enforced', async () => {
     const res = await sns.send(new GetTopicAttributesCommand({
-      TopicArn: `arn:aws:sns:${region}:${process.env.AWS_ACCOUNT_ID}:financial-secure-topic`,
+      TopicArn: outputs.SNSTopicArn,
     }));
+
     expect(res.Attributes?.Policy).toContain('"Condition":{"Bool":{"aws:SecureTransport":false}}');
   });
 

@@ -719,3 +719,7 @@ Outputs:
   ProjectName:
     Description: Project name
     Value: !Ref Project
+  
+  SNSTopicArn:
+    Description: ARN of the secure SNS Topic
+    Value: !Ref SecureSNSTopic
