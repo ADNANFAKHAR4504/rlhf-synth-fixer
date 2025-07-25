@@ -139,11 +139,12 @@ def test_tags_applied_to_resources():
 
   # Verify that global tags are applied to all resources that support tagging
   for resource_name, resource in template["Resources"].items():
-      tags = resource.get("Properties", {}).get("Tags", [])
-      if tags:  # Only check resources that support tags
-          tag_keys = [tag["Key"] for tag in tags]
-          assert "Project" in tag_keys
-          assert "Environment" in tag_keys
+    tags = resource.get("Properties", {}).get("Tags", [])
+    if tags:  # Only check resources that support tags
+        tag_keys = [tag["Key"] for tag in tags]
+        assert "Project" in tag_keys
+        assert "Environment" in tag_keys
+    print(resource_name)
 
 
 def test_resource_count_validation():

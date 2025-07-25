@@ -58,8 +58,8 @@ def run_cmd(cmd):
   """Helper function to run AWS CLI commands and return stdout"""
   result = subprocess.run(cmd, shell=True, capture_output=True, text=True, check=False)
   if result.returncode != 0:
-      print(f"Command failed: {cmd}\nError: {result.stderr}")
-      raise RuntimeError(result.stderr)
+    print(f"Command failed: {cmd}\nError: {result.stderr}")
+    raise RuntimeError(result.stderr)
   return result.stdout.strip()
 
 
@@ -73,7 +73,7 @@ def stack_info():
 
   outputs = {}
   for output in stack_data.get("Outputs", []):
-      outputs[output["OutputKey"]] = output["OutputValue"]
+    outputs[output["OutputKey"]] = output["OutputValue"]
 
   return {"info": stack_data, "outputs": outputs}
 
@@ -95,8 +95,8 @@ def test_vpc_exists():
 def test_security_groups():
   """Ensure at least 2 security groups exist (LB + EC2)"""
   sg_count = run_cmd(
-      f"aws ec2 describe-security-groups --filters \"Name=tag:Component,Values=LoadBalancer,EC2-Web\" "
-      f"--region {REGION} --query 'length(SecurityGroups)'"
+    f"aws ec2 describe-security-groups --filters \"Name=tag:Component,Values=LoadBalancer,EC2-Web\" "
+    f"--region {REGION} --query 'length(SecurityGroups)'"
   )
   assert int(sg_count) == 2
 
@@ -121,7 +121,7 @@ def test_cloudtrail_exists():
 def test_log_groups_exist():
   """Ensure CloudTrail and EC2 log groups exist"""
   log_groups = run_cmd(
-      f"aws logs describe-log-groups --region {REGION} --query 'logGroups[].logGroupName' --output text"
+    f"aws logs describe-log-groups --region {REGION} --query 'logGroups[].logGroupName' --output text"
   )
   assert "CloudTrailLogGroup" in log_groups
   assert "EC2LogGroup" in log_groups
@@ -136,7 +136,7 @@ def test_instance_connectivity():
   assert public_dns and public_dns != "None"
 
   try:
-      run_cmd(f"ping -c 1 -W 5 {public_dns}")
+    run_cmd(f"ping -c 1 -W 5 {public_dns}")
   except RuntimeError:
-      # If ping blocked, fallback to nslookup to confirm DNS resolution
-      run_cmd(f"nslookup {public_dns}")
+    # If ping blocked, fallback to nslookup to confirm DNS resolution
+    run_cmd(f"nslookup {public_dns}")
