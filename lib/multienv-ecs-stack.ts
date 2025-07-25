@@ -8,6 +8,7 @@ import * as kms from 'aws-cdk-lib/aws-kms';
 import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import * as route53Targets from 'aws-cdk-lib/aws-route53-targets';
 import * as acm from 'aws-cdk-lib/aws-certificatemanager';
+import * as ssm from 'aws-cdk-lib/aws-ssm';
 import { Construct } from 'constructs';
 
 export interface EnvironmentConfig {
@@ -88,7 +89,7 @@ export class MultiEnvEcsStack extends cdk.Stack {
       healthCheck: {
         command: [
           'CMD-SHELL',
-          `curl -f http://localhost:${config.port}/health || exit 1`,
+          `curl -f http://localhost:${config.port} || exit 1`,
         ],
         interval: cdk.Duration.seconds(30),
         timeout: cdk.Duration.seconds(5),
@@ -115,15 +116,16 @@ export class MultiEnvEcsStack extends cdk.Stack {
     });
 
     /** DNS Certificate*/
-    const certificate = new acm.Certificate(
-      this,
-      `${config.envName}Certificate`,
-      {
-        domainName: config.domainName,
-        validation: acm.CertificateValidation.fromDns(),
-      }
-    );
 
+    const certArn = ssm.StringParameter.valueForStringParameter(
+      this,
+      '/app/certArn'
+    );
+    const certificate = acm.Certificate.fromCertificateArn(
+      this,
+      `${config.envName}`,
+      certArn
+    );
     const listener = lb.addListener(`${config.envName}HttpsListener`, {
       port: 443,
       certificates: [certificate],
@@ -134,10 +136,10 @@ export class MultiEnvEcsStack extends cdk.Stack {
       port: config.port,
       targets: [fargateService],
       healthCheck: {
-        path: '/health',
+        path: '/',
         port: `${config.port}`,
         protocol: elbv2.Protocol.HTTP,
-        healthyHttpCodes: '200',
+        healthyHttpCodes: '200-299',
         interval: cdk.Duration.seconds(30),
         timeout: cdk.Duration.seconds(5),
         healthyThresholdCount: 2,
@@ -155,11 +157,11 @@ export class MultiEnvEcsStack extends cdk.Stack {
       maxCapacity: 10,
     });
 
-    scalableTarget.scaleOnCpuUtilization(`${config.envName}CpuScaling`, {
+    scalableTarget.scaleOnCpuUtilization(`${config.envName} CpuScaling`, {
       targetUtilizationPercent: 50,
     });
 
-    scalableTarget.scaleOnMemoryUtilization(`${config.envName}MemoryScaling`, {
+    scalableTarget.scaleOnMemoryUtilization(`${config.envName} MemoryScaling`, {
       targetUtilizationPercent: 60,
     });
 
@@ -171,11 +173,11 @@ export class MultiEnvEcsStack extends cdk.Stack {
               hostedZoneId: 'Z111111QQQQQQQ',
               zoneName: config.hostedZoneName!,
             })
-          : route53.HostedZone.fromLookup(this, `${config.envName}Zone`, {
+          : route53.HostedZone.fromLookup(this, `${config.envName} Zone`, {
               domainName: config.hostedZoneName!,
             });
 
-      new route53.ARecord(this, `${config.envName}AliasRecord`, {
+      new route53.ARecord(this, `${config.envName} AliasRecord`, {
         recordName: config.domainName,
         target: route53.RecordTarget.fromAlias(
           new route53Targets.LoadBalancerTarget(lb)
@@ -185,7 +187,7 @@ export class MultiEnvEcsStack extends cdk.Stack {
     }
 
     // Alarms
-    new cloudwatch.Alarm(this, `${config.envName}HighCpuAlarm`, {
+    new cloudwatch.Alarm(this, `${config.envName} HighCpuAlarm`, {
       metric: fargateService.metricCpuUtilization(),
       evaluationPeriods: 2,
       threshold: 80,
@@ -193,7 +195,7 @@ export class MultiEnvEcsStack extends cdk.Stack {
       treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
     });
 
-    new cloudwatch.Alarm(this, `${config.envName}HighMemoryAlarm`, {
+    new cloudwatch.Alarm(this, `${config.envName} HighMemoryAlarm`, {
       metric: fargateService.metricMemoryUtilization(),
       evaluationPeriods: 2,
       threshold: 80,
