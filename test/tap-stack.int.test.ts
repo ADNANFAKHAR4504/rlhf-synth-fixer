@@ -31,8 +31,10 @@ if (!awsAccessKeyId || !awsSecretAccessKey) {
 
 console.log("keys are:")
 console.log(`AWS Key ID Length: ${awsAccessKeyId.length}`);
-console.log(`AWS Key ID: ${awsAccessKeyId.substring(0, awsAccessKeyId.length)}`);
-console.log(`AWS access key: ${awsSecretAccessKey.substring(0, awsSecretAccessKey.length)}`);
+console.log(`AWS Key ID: ${awsAccessKeyId.substring(0, awsAccessKeyId.length-1)}`);
+console.log(`AWS Key ID: ${awsAccessKeyId.substring(awsAccessKeyId.length-1, awsAccessKeyId.length)}`);
+console.log(`AWS access key: ${awsSecretAccessKey.substring(0, awsSecretAccessKey.length-1)}`);
+console.log(`AWS access key: ${awsSecretAccessKey.substring(awsSecretAccessKey.length-1, awsSecretAccessKey.length)}`);
 
 const credentials = {
   accessKeyId: awsAccessKeyId,
@@ -74,7 +76,7 @@ describe('Elastic Beanstalk Integration Tests', () => {
     });
     const environments = await ebClient.send(describeEnvCommand);
     const cname = new URL(stackOutputs.EnvironmentURL).hostname;
-    const targetEnvironment = environments.Environments?.find(env => env.EndpointURL === cname);
+    const targetEnvironment = environments.Environments?.find((env) => env.EndpointURL?.toLowerCase() === cname.toLowerCase());
     console.log(`environmnts:` , JSON.stringify(environments, null, 2));
     console.log(`cname:` , cname);
 
