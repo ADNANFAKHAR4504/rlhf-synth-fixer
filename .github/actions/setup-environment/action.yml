@@ -1,5 +1,5 @@
 name: "Setup Environment"
-description: "Sets up Node.js and Python environment and restores build artifacts"
+description: "Sets up Node.js, Python and Terraform environment and restores build artifacts"
 inputs:
   node-version:
     description: "Node.js version to use"
@@ -13,6 +13,10 @@ inputs:
     description: "Whether to download CDK artifacts"
     required: false
     default: "false"
+  terraform-version:
+    description: "Terraform version to use"
+    required: false
+    default: "1.12.2"
 
 runs:
   using: "composite"
@@ -32,8 +36,13 @@ runs:
     - name: Setup Python 3.12.11
       uses: actions/setup-python@v5
       with:
-        python-version: '3.12.11'
+        python-version: "3.12.11"
         check-latest: true
+
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform-version: ${{ inputs.terraform-version }}
 
     - name: Install pipenv
       shell: bash

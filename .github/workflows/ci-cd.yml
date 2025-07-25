@@ -347,10 +347,10 @@ jobs:
             echo "Flat outputs:"
             cat cfn-outputs/flat-outputs.json || echo "No flat outputs"
           elif [ "$PLATFORM" = "cdktf" ]; then
-            echo "✅ CDKTF project detected, writing outputs to tf-outputs..."
-            mkdir -p tf-outputs
-            cdktf output --output-file=tf-outputs/outputs.json
-            cat tf-outputs/outputs.json || echo "No outputs found in tf-outputs/outputs.json"
+            echo "✅ CDKTF project detected, writing outputs to cfn-outputs..."
+            mkdir -p cfn-outputs
+            cdktf output --output-file=cfn-outputs/flat-outputs.json
+            cat cfn-outputs/flat-outputs.json || echo "No outputs found in cfn-outputs/flat-outputs.json"
           elif [ "${{ needs.synth.outputs.platform }}" = "cfn" ]; then
             echo "✅ CloudFormation project detected, getting stack outputs..."
             mkdir -p cfn-outputs
@@ -391,12 +391,10 @@ jobs:
       - name: Upload Deployment Outputs
         uses: actions/upload-artifact@v4
         with:
-          name: deployment-outputs
+          name: cfn-outputs
           path: |
             cfn-outputs/
             cdk-stacks.json
-            tf-outputs/
-
   lint:
     name: Lint
     runs-on: ubuntu-24.04
