@@ -60,7 +60,7 @@ describe('Elastic Beanstalk Integration Tests', () => {
       throw new Error(`Stack ${stackName} not found.`);
     }
     console.log(`stack info: ${stackInfo.Stacks.length}`);
-    console.log(`stack info: ${stackInfo.Stacks}`);
+    console.log(`stack info:`, JSON.stringify(stackInfo, null, 2));
     stackInfo.Stacks[0].Outputs?.forEach(output => {
       if (output.OutputKey) {
         stackOutputs[output.OutputKey] = output.OutputValue;
@@ -74,8 +74,8 @@ describe('Elastic Beanstalk Integration Tests', () => {
     const environments = await ebClient.send(describeEnvCommand);
     const cname = new URL(stackOutputs.EnvironmentURL).hostname;
     const targetEnvironment = environments.Environments?.find(env => env.CNAME === cname);
-    console.log(`targetEnvironment: ${targetEnvironment}`);
-    
+    console.log(`targetEnvironment:` ,JSON.stringify(targetEnvironment, null, 2));
+
     if (!targetEnvironment || !targetEnvironment.EnvironmentName) {
       throw new Error("Could not find the deployed Elastic Beanstalk environment by its CNAME.");
     }
