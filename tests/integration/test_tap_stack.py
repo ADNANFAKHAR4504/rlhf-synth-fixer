@@ -36,7 +36,8 @@ class TestTapStackIntegration(unittest.TestCase):
   def setUpClass(cls):
     """Set up AWS clients and get stack outputs once for all tests"""
     cls.region = os.environ.get('AWS_DEFAULT_REGION', 'us-east-1')
-    cls.stack_name = os.environ.get('STACK_NAME', 'TapStack')
+    environment_suffix = os.environ.get('ENVIRONMENT_SUFFIX', 'dev')
+    cls.stack_name = f"TapStack{environment_suffix}"
 
     # Initialize AWS clients
     cls.lambda_client = boto3.client('lambda', region_name=cls.region)
