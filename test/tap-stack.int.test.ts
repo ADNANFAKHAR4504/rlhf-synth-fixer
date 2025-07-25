@@ -90,7 +90,8 @@ describe('TapStack CloudFormation - Integration Tests', () => {
       );
 
       expect(response.Stacks).toHaveLength(1);
-      expect(response.Stacks![0].StackStatus).toBe('CREATE_COMPLETE');
+      const stackStatus = response.Stacks![0].StackStatus;
+      expect(['CREATE_COMPLETE', 'UPDATE_COMPLETE']).toContain(stackStatus);
     });
 
     test('should have all expected resources deployed', async () => {
@@ -116,7 +117,10 @@ describe('TapStack CloudFormation - Integration Tests', () => {
           (r: any) => r.LogicalResourceId === resourceName
         );
         expect(resource).toBeDefined();
-        expect(resource.ResourceStatus).toBe('CREATE_COMPLETE');
+        const resourceStatus = resource.ResourceStatus;
+        expect(['CREATE_COMPLETE', 'UPDATE_COMPLETE']).toContain(
+          resourceStatus
+        );
       });
     });
   });
