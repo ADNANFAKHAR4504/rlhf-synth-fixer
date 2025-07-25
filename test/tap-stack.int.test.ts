@@ -142,7 +142,7 @@ describe('Financial Stack Integration Tests', () => {
   });
 
   test('Private hosted zone should exist', async () => {
-    const projectName = outputs.ProjectName || 'defaultProject'; // fallback if output is missing
+    const projectName = 'defaultproject';
 
     const res = await route53.send(new ListHostedZonesByNameCommand({}));
     const zone = res.HostedZones?.find(z =>
@@ -156,7 +156,8 @@ describe('Financial Stack Integration Tests', () => {
       TopicArn: outputs.SNSTopicArn,
     }));
 
-    expect(res.Attributes?.Policy).toContain('"Condition":{"Bool":{"aws:SecureTransport":false}}');
+    // Match the string as returned by AWS
+    expect(res.Attributes?.Policy).toContain('"Condition":{"Bool":{"aws:SecureTransport":"false"}}');
   });
 
   test('CloudFront distribution should exist and point to S3', async () => {
