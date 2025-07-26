@@ -84,7 +84,7 @@ class TapStack(cdk.Stack):
         )
 
     # Instantiate the nested stack
-    NestedSecureInfrastructureStack(
+    self.nested_stack = NestedSecureInfrastructureStack(
         self,
         f"SecureInfrastructureStack{environment_suffix}",
         nested_props=props,
