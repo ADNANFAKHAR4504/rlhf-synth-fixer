@@ -105,7 +105,6 @@ Resources:
       FunctionName: !GetAtt GreetingFunction.Arn
       Action: lambda:InvokeFunction
       Principal: apigateway.amazonaws.com
-      # FIX: Hardcoded the method and path in the ARN to resolve linter errors.
       SourceArn: !Sub arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${GreetingApi}/*/GET/greet
 
   # --- Logging ---
@@ -113,13 +112,12 @@ Resources:
   LogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      # FIX: Decoupled the log group name from the function ref to break the circular dependency.
       LogGroupName: /aws/lambda/GreetingApiFunction
       RetentionInDays: 7
 
 Outputs:
   ApiUrl:
     Description: "URL for invoking the Greeting API"
-    # FIX: Hardcoded the stage name ('prod') to resolve linter errors.
     Value: !Sub "https://${GreetingApi}.execute-api.${AWS::Region}.amazonaws.com/prod/greet"
+
 ```
