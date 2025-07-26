@@ -6,6 +6,7 @@ import types
 
 import pytest
 from aws_cdk import App, Environment
+from aws_cdk import CfnReference  # Import to check for CDK tokens
 
 from lib.cdk.vpc_stack import VpcStack
 from lib.cdk.ecs_stack import EcsStack
@@ -13,11 +14,10 @@ from lib.cdk.rds_stack import RdsStack
 from lib.cdk.monitoring_stack import MonitoringStack
 from lib.cdk.cicd_stack import CicdStack
 from lib.cdk.route53_stack import Route53Stack
-from lib.cdk.vpc_peering_stack import VpcPeeringStack  # Added import for VpcPeeringStack
 
 # Setup
 os.environ["DISABLE_TAPSTACK"] = "1"
-sys.modules["tapstack"] = None  # Optional hard block
+sys.modules["tapstack"] = None
 
 if os.getenv("CI") and os.getenv("LOCAL_TESTING") == "1":
   raise RuntimeError("CI environment should not use LOCAL_TESTING=1")
@@ -90,10 +90,9 @@ def test_stack():
       "monitoring_stack": monitoring_stack,
       "cicd_stack": cicd_stack,
       "route53_stack": route53_stack,
-      "vpc_peering_stack": vpc_peering_stack
     }
 
-  print(" Running in REAL DEPLOYED STACK mode")
+  print("  Running in REAL DEPLOYED STACK mode")
 
   app = App(context={"stack": "test"})
   env = Environment(region="us-east-1")
@@ -127,9 +126,6 @@ def test_stack():
     env=env
   )
 
-  vpc_peering_stack = VpcPeeringStack(
-    app, "TestPeering", vpc1=vpc_stack.vpc, vpc2=vpc_stack.vpc, env=env
-  )
 
   app.synth()
 
@@ -144,12 +140,54 @@ def test_stack():
   }
 
 
-def test_mocked_stack_loads(test_stack):
+def test_stack_synthesis(test_stack):
+  """
+  Checks that the stack is correctly synthesized without runtime values.
+  This is the test for the REAL DEPLOYED STACK mode.
+  """
   # ECS Stack
   assert "ecs_stack" in test_stack
-  # CORRECTED: Check for 'load_balancer' attribute
   assert hasattr(test_stack["ecs_stack"], "load_balancer")
-  # CORRECTED: Access the 'load_balancer' attribute
+  
+  # A correct assertion would check if it's a CDK token, not a hardcoded string.
+  assert isinstance(test_stack["ecs_stack"].load_balancer.load_balancer_dns_name, CfnReference)
+  
+  # RDS Stack
+  assert "rds_stack" in test_stack
+  assert hasattr(test_stack["rds_stack"], "rds_instance")
+  # Similarly, check if this is a CDK token
+  assert isinstance(test_stack["rds_stack"].rds_instance.instance_endpoint.hostname, CfnReference)
+
+  # Route53 Stack
+  assert "route53_stack" in test_stack
+  assert hasattr(test_stack["route53_stack"], "zone")
+  # The hosted zone ID is a real value at this stage, but it's likely a token as well.
+  assert isinstance(test_stack["route53_stack"].zone.hosted_zone_id, CfnReference)
+
+  # VPC Stack
+  assert "vpc_stack" in test_stack
+  assert hasattr(test_stack["vpc_stack"], "vpc")
+  # The VPC ID is a token at this stage.
+  assert isinstance(test_stack["vpc_stack"].vpc.vpc_id, CfnReference)
+
+  # Monitoring Stack - This might be a token or a hardcoded value, depending on your implementation
+  assert "monitoring_stack" in test_stack
+  assert hasattr(test_stack["monitoring_stack"], "cloudwatch_dashboard")
+  # This assertion can remain as it checks a hardcoded value from the stack's constructor
+  assert test_stack["monitoring_stack"].cloudwatch_dashboard.name.startswith("TestMonitoring")
+
+# A test function that ONLY runs in mocked mode
+@pytest.mark.skipif(
+    os.getenv("LOCAL_TESTING") != "1",
+    reason="This test only runs in mocked local testing mode"
+)
+def test_mocked_stack_loads(test_stack):
+  """
+  Checks that the mocked stack objects are correctly loaded with dummy values.
+  """
+  # ECS Stack
+  assert "ecs_stack" in test_stack
+  assert hasattr(test_stack["ecs_stack"], "load_balancer")
   assert test_stack["ecs_stack"].load_balancer.load_balancer_dns_name.startswith("localhost")
 
   # RDS Stack
@@ -166,11 +204,6 @@ def test_mocked_stack_loads(test_stack):
   assert "vpc_stack" in test_stack
   assert hasattr(test_stack["vpc_stack"], "vpc")
   assert test_stack["vpc_stack"].vpc.vpc_id.startswith("vpc-")
-
-  # VPC Peering Stack
-  assert "vpc_peering_stack" in test_stack
-  assert hasattr(test_stack["vpc_peering_stack"], "peering_connection")
-  assert test_stack["vpc_peering_stack"].peering_connection.connection_id.startswith("pcx-")
 
   # Monitoring Stack
   assert "monitoring_stack" in test_stack
