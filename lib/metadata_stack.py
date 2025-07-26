@@ -30,6 +30,7 @@ class ServerlessStack(Stack):
     )
 
     CfnOutput(self, "VpcIdOutput", value=vpc.vpc_id, description="The VPC ID")
+    CfnOutput(self, "VpcCidrBlockOutput", value=vpc.vpc_cidr_block, description="VPC CIDR block")
     
     # Output subnet IDs for verification
     CfnOutput(
@@ -74,6 +75,11 @@ class ServerlessStack(Stack):
       self, "DynamoTableNameOutput", 
       value=table.table_name, 
       description="DynamoDB table name"
+    )
+    CfnOutput(
+      self, "DynamoTableArnOutput", 
+      value=table.table_arn, 
+      description="DynamoDB table ARN"
     )
 
     # Lambda Execution Role 
@@ -157,6 +163,11 @@ class ServerlessStack(Stack):
       value=lambda_function.function_arn, 
       description="Lambda function ARN"
     )
+    CfnOutput(
+      self, "LambdaFunctionVersionOutput", 
+      value=lambda_function.version, 
+      description="Lambda function version"
+    )
 
     # CloudWatch Alarm for Lambda Errors
     alarm = cloudwatch.Alarm(
@@ -182,6 +193,11 @@ class ServerlessStack(Stack):
 
     CfnOutput(self, "ApiGatewayIdOutput", value=api.rest_api_id, description="API Gateway ID")
     CfnOutput(self, "ApiGatewayUrlOutput", value=api.url, description="API Gateway URL")
+    CfnOutput(
+      self, "ApiGatewayStageNameOutput", 
+      value=api.deployment_stage.stage_name, 
+      description="API Gateway stage name"
+    )
 
     integration = apigateway.LambdaIntegration(lambda_function)
 

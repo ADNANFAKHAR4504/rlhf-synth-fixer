@@ -315,3 +315,81 @@ class TestTapStack(unittest.TestCase):
       
     except ClientError as e:
       self.fail(f"Lambda environment variables check failed: {e}")
+
+  @mark.it("VPC CIDR block configuration")
+  def test_vpc_cidr_block(self):
+    """Test that VPC CIDR block is properly configured"""
+    vpc_id = flat_outputs.get('VpcIdOutput')
+    cidr_block = flat_outputs.get('VpcCidrBlockOutput')
+    if not vpc_id or not cidr_block:
+      self.fail("VPC ID or CIDR block not available in deployment outputs")
+    
+    try:
+      vpcs = self.ec2.describe_vpcs(VpcIds=[vpc_id])
+      vpc = vpcs['Vpcs'][0]
+      
+      self.assertEqual(vpc['CidrBlock'], cidr_block, "VPC CIDR block should match output")
+      self.assertRegex(cidr_block, r'^\d+\.\d+\.\d+\.\d+/\d+$', "CIDR block should be valid format")
+      
+    except ClientError as e:
+      self.fail(f"VPC CIDR block check failed: {e}")
+
+  @mark.it("DynamoDB table ARN verification")
+  def test_dynamodb_table_arn(self):
+    """Test that DynamoDB table ARN is correctly configured"""
+    table_name = flat_outputs.get('DynamoTableNameOutput')
+    table_arn = flat_outputs.get('DynamoTableArnOutput')
+    if not table_name or not table_arn:
+      self.fail("DynamoDB table name or ARN not available in deployment outputs")
+    
+    try:
+      table = self.dynamodb.Table(table_name)
+      table_info = table.meta.client.describe_table(TableName=table_name)
+      
+      actual_arn = table_info['Table']['TableArn']
+      self.assertEqual(actual_arn, table_arn, "Table ARN should match output")
+      self.assertIn(table_name, table_arn, "Table ARN should contain table name")
+      
+    except ClientError as e:
+      self.fail(f"DynamoDB table ARN check failed: {e}")
+
+  @mark.it("Lambda function version verification")
+  def test_lambda_function_version(self):
+    """Test that Lambda function version is properly tracked"""
+    function_name = flat_outputs.get('LambdaFunctionNameOutput')
+    function_version = flat_outputs.get('LambdaFunctionVersionOutput')
+    if not function_name or not function_version:
+      self.fail("Lambda function name or version not available in deployment outputs")
+    
+    try:
+      response = self.lambda_client.get_function(FunctionName=function_name)
+      
+      # Check that version is available and valid
+      self.assertIsNotNone(function_version, "Lambda function version should be available")
+      self.assertRegex(function_version, r'^\$LATEST$|^\d+$', 
+                      "Function version should be $LATEST or numeric")
+      
+    except ClientError as e:
+      self.fail(f"Lambda function version check failed: {e}")
+
+  @mark.it("API Gateway stage name verification")
+  def test_api_gateway_stage_name(self):
+    """Test that API Gateway stage name is properly configured"""
+    api_id = flat_outputs.get('ApiGatewayIdOutput')
+    stage_name = flat_outputs.get('ApiGatewayStageNameOutput')
+    if not api_id or not stage_name:
+      self.fail("API Gateway ID or stage name not available in deployment outputs")
+    
+    try:
+      stages = self.apigateway.get_stages(restApiId=api_id)
+      
+      # Check that the stage exists
+      stage_names = [stage['stageName'] for stage in stages['item']]
+      self.assertIn(stage_name, stage_names, f"Stage {stage_name} should exist in API Gateway")
+      
+      # Verify stage configuration
+      stage_info = next(stage for stage in stages['item'] if stage['stageName'] == stage_name)
+      self.assertIsNotNone(stage_info, "Stage information should be available")
+      
+    except ClientError as e:
+      self.fail(f"API Gateway stage name check failed: {e}")
