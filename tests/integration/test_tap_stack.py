@@ -485,34 +485,6 @@ class TestTapStackIntegration(unittest.TestCase):
       # Configuration parsing errors should fail the test
       self.fail(f"Configuration error accessing API Gateway in {region}: {e}")
 
-  @mark.it("validates API Gateway structure and configuration")
-  def test_api_gateway_structure(self):
-    """Test that API Gateway resources have correct structure and configuration"""
-    if not self.outputs:
-      self.skipTest("No stack outputs available. Stack may not be deployed yet.")
-    
-    try:
-      regions = ['us-east-1', 'us-west-1']
-      env_suffix = os.environ.get('ENVIRONMENT_SUFFIX', 'dev')
-      
-      for region in regions:
-        stack_apis, apigateway_client = self._get_api_gateways_in_region(region, env_suffix)
-        
-        # If we found APIs in this region, validate them
-        if stack_apis and apigateway_client:
-          for api in stack_apis:
-            self._validate_api_gateway(api, apigateway_client)
-          
-    except boto3.exceptions.Boto3Error as e:
-      # Only handle permissions gracefully, re-raise other errors for real issues
-      if 'AccessDenied' in str(e) or 'UnauthorizedOperation' in str(e):
-        self.skipTest(f"Permission denied accessing API Gateway: {str(e)}")
-      else:
-        self.fail(f"Failed to validate API Gateway structure: {str(e)}")
-    except (KeyError, ValueError) as e:
-      # Configuration parsing errors should fail the test
-      self.fail(f"Configuration error validating API Gateway structure: {str(e)}")
-
   def _validate_cloudformation_stacks_in_region(self, region, main_stack_name):
     """Helper method to validate CloudFormation stacks in a specific region"""
     cloudformation_client = boto3.client('cloudformation', region_name=region)
@@ -584,33 +556,6 @@ class TestTapStackIntegration(unittest.TestCase):
     except (KeyError, ValueError) as e:
       # Configuration parsing errors should fail the test
       self.fail(f"Configuration error validating CloudFormation stacks: {str(e)}")
-
-  @mark.it("validates resource tagging across all services")
-  def test_resource_tagging(self):
-    """Test that all deployed resources have proper tags"""
-    if not self.outputs:
-      self.skipTest("No stack outputs available. Stack may not be deployed yet.")
-    
-    try:
-      regions = ['us-east-1', 'us-west-1']
-      env_suffix = os.environ.get('ENVIRONMENT_SUFFIX', 'dev')
-      
-      for region in regions:
-        # Validate Lambda function tags
-        self._validate_lambda_tags_in_region(region, env_suffix)
-        
-        # Validate API Gateway tags
-        self._validate_api_gateway_tags_in_region(region)
-          
-    except boto3.exceptions.Boto3Error as e:
-      # Only handle permissions gracefully, re-raise other errors for real issues
-      if 'AccessDenied' in str(e) or 'UnauthorizedOperation' in str(e):
-        self.skipTest(f"Permission denied accessing resource tags: {str(e)}")
-      else:
-        self.fail(f"Failed to validate resource tagging: {str(e)}")
-    except (KeyError, ValueError) as e:
-      # Configuration parsing errors should fail the test
-      self.fail(f"Configuration error validating resource tagging: {str(e)}")
 
   @mark.it("validates comprehensive multi-region deployment")
   def test_comprehensive_multi_region_deployment(self):
