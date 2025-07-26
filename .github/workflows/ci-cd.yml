@@ -275,8 +275,6 @@ jobs:
             npm run cdk:deploy
           elif [ "$PLATFORM" = "cfn" ] && [ "$LANGUAGE" = "yaml" ]; then
             echo "✅ CloudFormation YAML project detected, deploying with AWS CLI..."
-            aws cloudtrail list-trails --region us-east-1
-            aws cloudformation describe-stack-events --stack-name TapStackpr177 && npm run cfn:destroy && aws cloudformation wait stack-delete-complete --stack-name TapStackpr177
             npm run cfn:deploy-yaml
           elif [ "$PLATFORM" = "cfn" ] && [ "$LANGUAGE" = "json" ]; then
             echo "✅ CloudFormation JSON project detected, deploying with AWS CLI..."
