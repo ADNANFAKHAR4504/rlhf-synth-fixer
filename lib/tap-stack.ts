@@ -1,4 +1,3 @@
-// lib/image-processing-stack.ts
 import * as cdk from 'aws-cdk-lib';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
@@ -6,32 +5,7 @@ import * as sns from 'aws-cdk-lib/aws-sns';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import { Construct } from 'constructs';
-import { Stack, StackProps } from 'aws-cdk-lib';
-
-// cdk.json
-// {
-//   "app": "npx ts-node dev"
-// }
-
-// package.json
-// {
-//   "name": "image-processing-pipeline",
-//   "version": "1.0.0",
-//   "scripts": {
-//     "build": "tsc",
-//     "cdk": "cdk"
-//   },
-//   "dependencies": {
-//     "aws-cdk-lib": "^2.0.0",
-//     "constructs": "^10.0.0",
-//     "source-map-support": "^0.5.21"
-//   },
-//   "devDependencies": {
-//     "@types/node": "^18.0.0",
-//     "aws-cdk": "^2.0.0",
-//     "typescript": "^4.9.5"
-//   }
-// }
+import { StackProps } from 'aws-cdk-lib';
 
 export interface TapStackProps extends StackProps {
   environmentSuffix: string;
@@ -40,10 +14,6 @@ export interface TapStackProps extends StackProps {
 export class TapStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: TapStackProps) {
     super(scope, id, { ...props, env: { region: 'us-east-1' } });
-
-    // const suffix = props.environmentSuffix;
-
-    const { environmentSuffix } = props;
 
     // Reference existing S3 bucket
     const existingBucketName =
@@ -84,6 +54,7 @@ export class TapStack extends cdk.Stack {
       code: lambda.Code.fromAsset('lambda'),
       environment: {
         IMAGE_BUCKET: imageBucket.bucketName,
+        NOTIFICATION_TOPIC_ARN: notificationTopic.topicArn,
       },
       role: lambdaRole,
     });
@@ -100,39 +71,21 @@ export class TapStack extends cdk.Stack {
       new apigateway.LambdaIntegration(imageProcessor)
     );
 
-    // Output SNS topic ARN
+    // Outputs for integration tests
     new cdk.CfnOutput(this, 'NotificationTopicArn', {
       value: notificationTopic.topicArn,
     });
+
+    new cdk.CfnOutput(this, 'ImageProcessingApiRestApiId', {
+      value: api.restApiId,
+    });
+
+    new cdk.CfnOutput(this, 'ImageProcessingApiUrl', {
+      value: api.url,
+    });
+
+    new cdk.CfnOutput(this, 'ImageProcessorFunctionName', {
+      value: imageProcessor.functionName,
+    });
   }
 }
-
-// lambda/imageProcessor.ts
-import { SNSClient, PublishCommand } from '@aws-sdk/client-sns';
-
-interface ImageRequest {
-  imageKey: string;
-  metadata: Record<string, string>;
-}
-
-const snsClient = new SNSClient({});
-const TOPIC_ARN = process.env.NOTIFICATION_TOPIC_ARN || '';
-
-export const handler = async (event: ImageRequest): Promise<void> => {
-  try {
-    const { imageKey, metadata } = event;
-
-    // Simulate image processing
-    console.log(`Processing image: ${imageKey} with metadata:`, metadata);
-
-    // Publish success notification
-    await snsClient.send(
-      new PublishCommand({
-        TopicArn: TOPIC_ARN,
-        Message: `Successfully processed image: ${imageKey}`,
-      })
-    );
-  } catch (error) {
-    console.error('Processing failed:', error);
-  }
-};
