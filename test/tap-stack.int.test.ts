@@ -2,6 +2,7 @@ import {
   ElasticBeanstalkClient,
   DescribeEnvironmentsCommand,
   DescribeEnvironmentResourcesCommand,
+  DescribeConfigurationSettingsCommand, // ADDED: To check instance settings
 } from '@aws-sdk/client-elastic-beanstalk';
 import {
   AutoScalingClient,
@@ -10,7 +11,6 @@ import {
 import {
   ElasticLoadBalancingV2Client,
   DescribeListenersCommand,
-  Certificate, // Correctly imported type
 } from '@aws-sdk/client-elastic-load-balancing-v2';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -43,6 +43,7 @@ const elbv2Client = new ElasticLoadBalancingV2Client({ region, credentials });
 describe('Elastic Beanstalk Integration Tests', () => {
   let stackOutputs: any = {};
   let environmentResources: any = {};
+  let targetEnvironment: any = {}; // ADDED: To store environment details
 
   beforeAll(async () => {
     try {
@@ -61,7 +62,8 @@ describe('Elastic Beanstalk Integration Tests', () => {
     });
     const environments = await ebClient.send(describeEnvCommand);
     const cname = new URL(stackOutputs.EnvironmentURL).hostname;
-    const targetEnvironment = environments.Environments?.find((env) => env.EndpointURL?.toLowerCase() === cname.toLowerCase());
+    // UPDATED: Store the full environment object
+    targetEnvironment = environments.Environments?.find((env) => env.EndpointURL?.toLowerCase() === cname.toLowerCase());
 
     if (!targetEnvironment || !targetEnvironment.EnvironmentName) {
       throw new Error(`Could not find the deployed Elastic Beanstalk environment with CNAME: ${cname}`);
@@ -76,12 +78,63 @@ describe('Elastic Beanstalk Integration Tests', () => {
     console.log('Successfully fetched environment resources based on stack outputs.');
   }, 120000);
 
+  // ADDED: New test suite for environment health
+  describe('Environment Health and Status', () => {
+    test('Environment status should be "Ready"', () => {
+        expect(targetEnvironment.Status).toBe('Ready');
+    });
+
+    test('Environment health should be "Green"', () => {
+        expect(targetEnvironment.Health).toBe('Green');
+    });
+  });
+
   describe('Application Accessibility', () => {
     test('EnvironmentURL should be a valid HTTPS endpoint', async () => {
       const url = stackOutputs.EnvironmentURL;
       expect(url).toBeDefined();
       expect(url).toMatch(/^https:/);
-      // since self signed certificate it cannot be accessed from code
+      // As noted, a full fetch test fails due to the self-signed certificate,
+      // but this confirms the output URL format is correct.
+    });
+  });
+
+  // ADDED: New test suite for instance configuration
+  describe('EC2 Instance Configuration', () => {
+    let launchConfig: any = {};
+
+    beforeAll(async () => {
+        const command = new DescribeConfigurationSettingsCommand({
+            ApplicationName: targetEnvironment.ApplicationName,
+            EnvironmentName: targetEnvironment.EnvironmentName,
+        });
+        const settingsResult = await ebClient.send(command);
+        const launchConfigurationSettings = settingsResult.ConfigurationSettings?.[0]?.OptionSettings;
+        if (!launchConfigurationSettings) {
+            throw new Error('Could not retrieve environment configuration settings.');
+        }
+
+        const findOption = (namespace: string, optionName: string) => 
+            launchConfigurationSettings.find(opt => opt.Namespace === namespace && opt.OptionName === optionName);
+
+        launchConfig.instanceType = findOption('aws:autoscaling:launchconfiguration', 'InstanceType');
+        launchConfig.keyPair = findOption('aws:autoscaling:launchconfiguration', 'EC2KeyName');
+        launchConfig.instanceProfile = findOption('aws:autoscaling:launchconfiguration', 'IamInstanceProfile');
+    });
+
+    test('Instances should use the correct instance type', () => {
+        // This assumes the default t2.micro is used. Change if you deploy with a different type.
+        expect(launchConfig.instanceType?.Value).toBe('t2.micro');
+    });
+
+    test('Instances should be configured with the correct EC2 Key Pair', () => {
+        // This assumes the default key 'iac-rlhf-aws-trainer-instance' is used.
+        expect(launchConfig.keyPair?.Value).toBe('iac-rlhf-aws-trainer-instance');
+    });
+    
+    // ADDED: New test for IAM role attachment
+    test('Instances should have the correct IAM Instance Profile attached', () => {
+        expect(launchConfig.instanceProfile?.Value).toBe('AWSElasticBeanstalkEC2InstanceProfile');
     });
   });
 

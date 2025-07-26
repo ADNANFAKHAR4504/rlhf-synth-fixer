@@ -18,10 +18,16 @@
                 "m5.large"
             ]
         },
+        "KeyPairName": {
+            "Description": "Name of an existing EC2 KeyPair to enable SSH access to the instances.",
+            "Type": "AWS::EC2::KeyPair::KeyName",
+            "ConstraintDescription": "must be the name of an existing EC2 KeyPair.",
+            "Default": "iac-rlhf-aws-trainer-instance"
+        },
         "SSLCertificateArn": {
             "Type": "String",
             "Description": "The ARN of the ACM SSL certificate for the Application Load Balancer.",
-            "Default": "arn:aws:acm:us-east-1:123456789012:certificate/your-default-cert-id"
+            "Default": "arn:aws:acm:us-east-1:718240086340:certificate/a77b0884-1bfb-4b61-b907-6d019495d01b"
         }
     },
     "Resources": {
@@ -108,6 +114,13 @@
                         }
                     },
                     {
+                        "Namespace": "aws:autoscaling:launchconfiguration",
+                        "OptionName": "EC2KeyName",
+                        "Value": {
+                            "Ref": "KeyPairName"
+                        }
+                    },
+                    {
                         "Namespace": "aws:elasticbeanstalk:environment",
                         "OptionName": "ServiceRole",
                         "Value": {
@@ -133,6 +146,11 @@
                         "Namespace": "aws:autoscaling:asg",
                         "OptionName": "MaxSize",
                         "Value": "10"
+                    },
+                    {
+                        "Namespace": "aws:autoscaling:asg",
+                        "OptionName": "Availability Zones",
+                        "Value": "Any"
                     },
                     {
                         "Namespace": "aws:elbv2:listener:443",

@@ -19,11 +19,11 @@ Parameters:
       - t3.small
       - m5.large
       
-  # FIXED: Added KeyPairName parameter to meet template requirements.
   KeyPairName:
     Description: Name of an existing EC2 KeyPair to enable SSH access to the instances.
     Type: AWS::EC2::KeyPair::KeyName
     ConstraintDescription: must be the name of an existing EC2 KeyPair.
+    Default: iac-rlhf-aws-trainer-instance
   
   SSLCertificateArn:
     Type: String
@@ -86,7 +86,6 @@ Resources:
         - Namespace: aws:autoscaling:launchconfiguration
           OptionName: InstanceType
           Value: !Ref InstanceType
-        # FIXED: Apply the KeyPair for SSH access.
         - Namespace: aws:autoscaling:launchconfiguration
           OptionName: EC2KeyName
           Value: !Ref KeyPairName
@@ -108,7 +107,6 @@ Resources:
         - Namespace: aws:autoscaling:asg
           OptionName: MaxSize
           Value: '10'
-        # FIXED: Explicitly set Multi-AZ for the ASG to meet requirements.
         - Namespace: aws:autoscaling:asg
           OptionName: Availability Zones
           Value: Any

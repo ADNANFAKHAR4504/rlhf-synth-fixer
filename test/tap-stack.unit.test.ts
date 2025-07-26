@@ -21,7 +21,6 @@ describe('Elastic Beanstalk CloudFormation Template', () => {
     });
 
     test('should have a comprehensive description', () => {
-      // UPDATED: Description now reflects HTTPS and least-privilege roles.
       const expectedDescription = 'Deploys a highly available and scalable Node.js web application using AWS Elastic Beanstalk with a secure HTTPS endpoint. This template includes least-privilege IAM roles.';
       expect(template.Description).toBeDefined();
       expect(template.Description.trim()).toBe(expectedDescription);
@@ -30,8 +29,8 @@ describe('Elastic Beanstalk CloudFormation Template', () => {
 
   describe('Parameters', () => {
     test('should define the correct parameters', () => {
-      // UPDATED: Added SSLCertificateArn to the expected parameters.
-      const expectedParams = ['ApplicationName', 'InstanceType', 'SSLCertificateArn'];
+      // UPDATED: Added KeyPairName to the expected parameters list.
+      const expectedParams = ['ApplicationName', 'InstanceType', 'KeyPairName', 'SSLCertificateArn'];
       expect(Object.keys(template.Parameters)).toEqual(expectedParams);
     });
 
@@ -50,7 +49,15 @@ describe('Elastic Beanstalk CloudFormation Template', () => {
       expect(param.AllowedValues).toEqual(['t2.micro', 't3.micro', 't3.small', 'm5.large']);
     });
 
-    // ADDED: New test for the SSLCertificateArn parameter.
+    // ADDED: New test for the KeyPairName parameter.
+    test('KeyPairName parameter should have correct properties', () => {
+      const param = template.Parameters.KeyPairName;
+      expect(param.Type).toBe('AWS::EC2::KeyPair::KeyName');
+      expect(param.Description).toBe('Name of an existing EC2 KeyPair to enable SSH access to the instances.');
+      expect(param.ConstraintDescription).toBe('must be the name of an existing EC2 KeyPair.');
+      expect(param.Default).toBe('iac-rlhf-aws-trainer-instance');
+    });
+
     test('SSLCertificateArn parameter should have correct properties', () => {
       const param = template.Parameters.SSLCertificateArn;
       expect(param.Type).toBe('String');
@@ -66,13 +73,10 @@ describe('Elastic Beanstalk CloudFormation Template', () => {
         expect(template.Resources.AWSElasticBeanstalkEC2InstanceProfile).toBeDefined();
     });
 
-    // UPDATED: This test now checks for the correct least-privilege policies.
     test('IAM roles should use least-privilege managed policies', () => {
         const serviceRole = template.Resources.AWSElasticBeanstalkServiceRole;
         const ec2Role = template.Resources.AWSElasticBeanstalkEC2Role;
-        // Check for the more restrictive service role policy.
         expect(serviceRole.Properties.ManagedPolicyArns).toContain('arn:aws:iam::aws:policy/service-role/AWSElasticBeanstalkService');
-        // Check for the standard web tier policy.
         expect(ec2Role.Properties.ManagedPolicyArns).toContain('arn:aws:iam::aws:policy/AWSElasticBeanstalkWebTier');
     });
 
@@ -106,6 +110,15 @@ describe('Elastic Beanstalk CloudFormation Template', () => {
             const serviceRoleOption = findOption('aws:elasticbeanstalk:environment', 'ServiceRole');
             expect(serviceRoleOption.Value).toEqual({ Ref: 'AWSElasticBeanstalkServiceRole' });
         });
+        
+        // ADDED: New test for instance configuration including the KeyPair.
+        test('should configure instance properties correctly', () => {
+            const instanceTypeOption = findOption('aws:autoscaling:launchconfiguration', 'InstanceType');
+            expect(instanceTypeOption.Value).toEqual({ Ref: 'InstanceType' });
+
+            const keyNameOption = findOption('aws:autoscaling:launchconfiguration', 'EC2KeyName');
+            expect(keyNameOption.Value).toEqual({ Ref: 'KeyPairName' });
+        });
 
         test('should configure a load-balanced application environment', () => {
             const envTypeOption = findOption('aws:elasticbeanstalk:environment', 'EnvironmentType');
@@ -115,16 +128,18 @@ describe('Elastic Beanstalk CloudFormation Template', () => {
             expect(lbTypeOption.Value).toBe('application');
         });
 
-        // ADDED: New test for auto scaling settings.
-        test('should configure auto scaling group properties', () => {
+        // UPDATED: Added check for Multi-AZ setting.
+        test('should configure auto scaling group properties for high availability', () => {
             const minSizeOption = findOption('aws:autoscaling:asg', 'MinSize');
             expect(minSizeOption.Value).toBe('2');
 
             const maxSizeOption = findOption('aws:autoscaling:asg', 'MaxSize');
             expect(maxSizeOption.Value).toBe('10');
+            
+            const azOption = findOption('aws:autoscaling:asg', 'Availability Zones');
+            expect(azOption.Value).toBe('Any');
         });
 
-        // ADDED: New test for the HTTPS listener configuration.
         test('should configure a secure HTTPS listener on port 443', () => {
             const protocolOption = findOption('aws:elbv2:listener:443', 'Protocol');
             expect(protocolOption.Value).toBe('HTTPS');
@@ -133,7 +148,6 @@ describe('Elastic Beanstalk CloudFormation Template', () => {
             expect(certOption.Value).toEqual({ Ref: 'SSLCertificateArn' });
         });
 
-        // ADDED: New test for disabling the default HTTP listener.
         test('should disable the default insecure HTTP listener', () => {
             const listenerEnabledOption = findOption('aws:elbv2:listener:default', 'ListenerEnabled');
             expect(listenerEnabledOption.Value).toBe('false');
@@ -142,7 +156,6 @@ describe('Elastic Beanstalk CloudFormation Template', () => {
   });
 
   describe('Outputs', () => {
-    // UPDATED: This test now validates the HTTPS URL and description.
     test('should have a valid HTTPS EnvironmentURL output', () => {
       const output = template.Outputs.EnvironmentURL;
       expect(output).toBeDefined();
