@@ -283,6 +283,8 @@ Resources:
             Condition:
               Bool:
                 'aws:SecureTransport': 'false'
+              StringNotEquals:
+                'aws:PrincipalServiceName': 'cloudtrail.amazonaws.com'
           - Sid: RestrictIPAccess
             Effect: Deny
             Principal: '*'
@@ -293,6 +295,8 @@ Resources:
             Condition:
               NotIpAddress:
                 'aws:SourceIp': !Ref AllowedIPRange
+              StringNotEquals:
+                'aws:PrincipalServiceName': 'cloudtrail.amazonaws.com'
               Bool:
                 'aws:ViaAWSService': 'false'
 
@@ -427,7 +431,7 @@ Resources:
     Properties:
       TrailName: !Sub '${EnvironmentSuffix}-security-trail'
       S3BucketName: !Ref SecureLogBucket
-      S3KeyPrefix: !Sub 'cloudtrail-logs/AWSLogs/${AWS::AccountId}'
+      S3KeyPrefix: 'cloudtrail-logs'
       CloudWatchLogsLogGroupArn: !GetAtt CloudWatchLogGroup.Arn
       CloudWatchLogsRoleArn: !GetAtt CloudTrailRole.Arn
       KMSKeyId: !Ref ApplicationKMSKey
@@ -435,14 +439,6 @@ Resources:
       IsMultiRegionTrail: true
       IncludeGlobalServiceEvents: true
       EnableLogFileValidation: true
-      EventSelectors:
-        - ReadWriteType: All
-          IncludeManagementEvents: true
-          DataResources:
-            - Type: 'AWS::S3::Object'
-              Values:
-                - !Sub '${SecureLogBucket}/*'
-                - !Sub '${ApplicationDataBucket}/*'
       InsightSelectors:
         - InsightType: ApiCallRateInsight
       Tags:

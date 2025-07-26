@@ -12,7 +12,7 @@ Metadata:
       - Label:
           default: 'Environment Configuration'
         Parameters:
-          - EnvironmentName
+          - EnvironmentSuffix
           - VpcCidr
           - AllowedIPRange
       - Label:
@@ -22,20 +22,18 @@ Metadata:
           - CredentialRotationDays
           - LogRetentionDays
     ParameterLabels:
-      EnvironmentName:
-        default: 'Environment Name'
+      EnvironmentSuffix:
+        default: 'Environment Suffix'
       VpcCidr:
         default: 'VPC CIDR Block'
       AllowedIPRange:
         default: 'Allowed IP Range for Access'
 
 Parameters:
-  EnvironmentName:
+  EnvironmentSuffix:
     Type: String
     Default: 'dev'
-    Description: 'Environment name for resource tagging and naming'
-    AllowedValues: ['dev', 'staging', 'prod']
-    ConstraintDescription: 'Must be dev, staging, or prod'
+    Description: 'Environment suffix for resource naming (passed from deployment script)'
 
   VpcCidr:
     Type: String
@@ -69,7 +67,8 @@ Parameters:
     Description: 'CloudWatch log retention period in days'
 
 Conditions:
-  IsProdEnvironment: !Equals [!Ref EnvironmentName, 'prod']
+  # Update conditions to use EnvironmentSuffix instead of EnvironmentName
+  IsProdEnvironment: !Equals [!Ref EnvironmentSuffix, 'prod']
   EnableMFACondition: !Equals [!Ref EnableMFA, 'true']
 
 Resources:
@@ -83,9 +82,9 @@ Resources:
       EnableDnsSupport: true
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-secure-vpc'
+          Value: !Sub '${EnvironmentSuffix}-secure-vpc'
         - Key: Environment
-          Value: !Ref EnvironmentName
+          Value: !Ref EnvironmentSuffix
 
   PublicSubnet:
     Type: AWS::EC2::Subnet
@@ -96,7 +95,7 @@ Resources:
       MapPublicIpOnLaunch: false
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-public-subnet'
+          Value: !Sub '${EnvironmentSuffix}-public-subnet'
 
   PrivateSubnet:
     Type: AWS::EC2::Subnet
@@ -106,14 +105,14 @@ Resources:
       AvailabilityZone: !Select [1, !GetAZs '']
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-private-subnet'
+          Value: !Sub '${EnvironmentSuffix}-private-subnet'
 
   InternetGateway:
     Type: AWS::EC2::InternetGateway
     Properties:
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-igw'
+          Value: !Sub '${EnvironmentSuffix}-igw'
 
   AttachGateway:
     Type: AWS::EC2::VPCGatewayAttachment
@@ -121,12 +120,24 @@ Resources:
       VpcId: !Ref SecureVPC
       InternetGatewayId: !Ref InternetGateway
 
+  # Production-specific route table (uses the IsProdEnvironment condition)
+  ProductionRouteTable:
+    Type: AWS::EC2::RouteTable
+    Condition: IsProdEnvironment
+    Properties:
+      VpcId: !Ref SecureVPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentSuffix}-prod-route-table'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
   # ===== ENCRYPTION & KEY MANAGEMENT =====
   
   ApplicationKMSKey:
     Type: AWS::KMS::Key
     Properties:
-      Description: !Sub 'KMS key for encrypting ${EnvironmentName} application data'
+      Description: !Sub 'KMS key for encrypting ${EnvironmentSuffix} application data'
       EnableKeyRotation: true
       KeyPolicy:
         Version: '2012-10-17'
@@ -161,22 +172,24 @@ Resources:
             Resource: '*'
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-application-key'
+          Value: !Sub '${EnvironmentSuffix}-application-key'
         - Key: Environment
-          Value: !Ref EnvironmentName
+          Value: !Ref EnvironmentSuffix
 
   ApplicationKMSKeyAlias:
     Type: AWS::KMS::Alias
     Properties:
-      AliasName: !Sub 'alias/${EnvironmentName}-application-key'
+      AliasName: !Sub 'alias/${EnvironmentSuffix}-application-key'
       TargetKeyId: !Ref ApplicationKMSKey
 
   # ===== S3 STORAGE & POLICIES =====
   
   SecureLogBucket:
     Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
-      BucketName: !Sub '${EnvironmentName}-secure-logs-${AWS::AccountId}-${AWS::Region}'
+      BucketName: !Sub '${EnvironmentSuffix}-secure-logs-${AWS::AccountId}-${AWS::Region}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -201,66 +214,18 @@ Resources:
             Transitions:
               - StorageClass: INTELLIGENT_TIERING
                 TransitionInDays: 30
-      NotificationConfiguration:
-        CloudWatchConfigurations:
-          - Event: s3:ObjectCreated:*
-            CloudWatchConfiguration:
-              LogGroupName: !Ref S3AccessLogGroup
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-secure-log-bucket'
+          Value: !Sub '${EnvironmentSuffix}-secure-log-bucket'
         - Key: Environment
-          Value: !Ref EnvironmentName
-
-  SecureLogBucketPolicy:
-    Type: AWS::S3::BucketPolicy
-    Properties:
-      Bucket: !Ref SecureLogBucket
-      PolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Sid: DenyInsecureConnections
-            Effect: Deny
-            Principal: '*'
-            Action: 's3:*'
-            Resource:
-              - !Sub '${SecureLogBucket}/*'
-              - !GetAtt SecureLogBucket.Arn
-            Condition:
-              Bool:
-                'aws:SecureTransport': 'false'
-          - Sid: AllowCloudTrailLogging
-            Effect: Allow
-            Principal:
-              Service: cloudtrail.amazonaws.com
-            Action: 's3:PutObject'
-            Resource: !Sub '${SecureLogBucket}/cloudtrail-logs/*'
-            Condition:
-              StringEquals:
-                's3:x-amz-acl': 'bucket-owner-full-control'
-          - Sid: AllowCloudTrailLocationCheck
-            Effect: Allow
-            Principal:
-              Service: cloudtrail.amazonaws.com
-            Action: 's3:GetBucketAcl'
-            Resource: !GetAtt SecureLogBucket.Arn
-          - Sid: RestrictIPAccess
-            Effect: Deny
-            Principal: '*'
-            Action: 's3:*'
-            Resource:
-              - !Sub '${SecureLogBucket}/*'
-              - !GetAtt SecureLogBucket.Arn
-            Condition:
-              IpAddressIfExists:
-                'aws:SourceIp': !Ref AllowedIPRange
-              Bool:
-                'aws:ViaAWSService': 'false'
+          Value: !Ref EnvironmentSuffix
 
   ApplicationDataBucket:
     Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
-      BucketName: !Sub '${EnvironmentName}-app-data-${AWS::AccountId}-${AWS::Region}'
+      BucketName: !Sub '${EnvironmentSuffix}-app-data-${AWS::AccountId}-${AWS::Region}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -273,16 +238,78 @@ Resources:
         RestrictPublicBuckets: true
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-application-data'
+          Value: !Sub '${EnvironmentSuffix}-application-data'
         - Key: Environment
-          Value: !Ref EnvironmentName
+          Value: !Ref EnvironmentSuffix
+
+  # Add this missing SecureLogBucketPolicy resource
+  SecureLogBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref SecureLogBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AWSCloudTrailAclCheck
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:GetBucketAcl
+            Resource: !GetAtt SecureLogBucket.Arn
+            Condition:
+              StringEquals:
+                'AWS:SourceArn': !Sub 'arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${EnvironmentSuffix}-security-trail'
+          - Sid: AWSCloudTrailWrite
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:PutObject
+            Resource: !Sub '${SecureLogBucket.Arn}/cloudtrail-logs/AWSLogs/${AWS::AccountId}/*'
+            Condition:
+              StringEquals:
+                's3:x-amz-acl': 'bucket-owner-full-control'
+                'AWS:SourceArn': !Sub 'arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${EnvironmentSuffix}-security-trail'
+          - Sid: AWSCloudTrailBucketExistenceCheck
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:ListBucket
+            Resource: !GetAtt SecureLogBucket.Arn
+            Condition:
+              StringEquals:
+                'AWS:SourceArn': !Sub 'arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${EnvironmentSuffix}-security-trail'
+          - Sid: DenyInsecureConnections
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource:
+              - !GetAtt SecureLogBucket.Arn
+              - !Sub '${SecureLogBucket.Arn}/*'
+            Condition:
+              Bool:
+                'aws:SecureTransport': 'false'
+              StringNotEquals:
+                'aws:PrincipalServiceName': 'cloudtrail.amazonaws.com'
+          - Sid: RestrictIPAccess
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource:
+              - !GetAtt SecureLogBucket.Arn
+              - !Sub '${SecureLogBucket.Arn}/*'
+            Condition:
+              NotIpAddress:
+                'aws:SourceIp': !Ref AllowedIPRange
+              StringNotEquals:
+                'aws:PrincipalServiceName': 'cloudtrail.amazonaws.com'
+              Bool:
+                'aws:ViaAWSService': 'false'
 
   # ===== IAM ROLES & POLICIES =====
   
   EC2InstanceRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${EnvironmentName}-EC2-InstanceRole'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -303,7 +330,7 @@ Resources:
                   - 's3:ListBucket'
                 Resource:
                   - !GetAtt ApplicationDataBucket.Arn
-                  - !Sub '${ApplicationDataBucket}/*'
+                  - !Sub '${ApplicationDataBucket.Arn}/*'
                 Condition:
                   IpAddress:
                     'aws:SourceIp': !Ref AllowedIPRange
@@ -324,21 +351,19 @@ Resources:
                 Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*'
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-ec2-role'
+          Value: !Sub '${EnvironmentSuffix}-ec2-role'
         - Key: Environment
-          Value: !Ref EnvironmentName
+          Value: !Ref EnvironmentSuffix
 
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
-      InstanceProfileName: !Sub '${EnvironmentName}-EC2-InstanceProfile'
       Roles:
         - !Ref EC2InstanceRole
 
   RestrictedApplicationUser:
     Type: AWS::IAM::User
     Properties:
-      UserName: !Sub '${EnvironmentName}-RestrictedAppUser'
       Policies:
         - PolicyName: RestrictedS3ListPolicy
           PolicyDocument:
@@ -364,23 +389,23 @@ Resources:
                     'aws:SourceIp': !Ref AllowedIPRange
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-restricted-user'
+          Value: !Sub '${EnvironmentSuffix}-restricted-user'
         - Key: Environment
-          Value: !Ref EnvironmentName
+          Value: !Ref EnvironmentSuffix
 
   # ===== CLOUDTRAIL & MONITORING =====
   
   CloudWatchLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub '/aws/cloudtrail/${EnvironmentName}'
+      LogGroupName: !Sub '/aws/cloudtrail/${EnvironmentSuffix}'
       RetentionInDays: !Ref LogRetentionDays
       KmsKeyId: !GetAtt ApplicationKMSKey.Arn
 
   S3AccessLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub '/aws/s3/${EnvironmentName}'
+      LogGroupName: !Sub '/aws/s3/${EnvironmentSuffix}'
       RetentionInDays: !Ref LogRetentionDays
 
   CloudTrailRole:
@@ -409,7 +434,7 @@ Resources:
     Type: AWS::CloudTrail::Trail
     DependsOn: SecureLogBucketPolicy
     Properties:
-      TrailName: !Sub '${EnvironmentName}-security-trail'
+      TrailName: !Sub '${EnvironmentSuffix}-security-trail'
       S3BucketName: !Ref SecureLogBucket
       S3KeyPrefix: 'cloudtrail-logs'
       CloudWatchLogsLogGroupArn: !GetAtt CloudWatchLogGroup.Arn
@@ -419,32 +444,20 @@ Resources:
       IsMultiRegionTrail: true
       IncludeGlobalServiceEvents: true
       EnableLogFileValidation: true
-      EventSelectors:
-        - ReadWriteType: All
-          IncludeManagementEvents: true
-          DataResources:
-            - Type: 'AWS::S3::Object'
-              Values:
-                - !Sub '${SecureLogBucket}/*'
-                - !Sub '${ApplicationDataBucket}/*'
-            - Type: 'AWS::S3::Bucket'
-              Values:
-                - !GetAtt SecureLogBucket.Arn
-                - !GetAtt ApplicationDataBucket.Arn
       InsightSelectors:
         - InsightType: ApiCallRateInsight
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-cloudtrail'
+          Value: !Sub '${EnvironmentSuffix}-cloudtrail'
         - Key: Environment
-          Value: !Ref EnvironmentName
+          Value: !Ref EnvironmentSuffix
 
   # ===== NETWORK SECURITY =====
   
   WebApplicationSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub '${EnvironmentName}-webapp-sg'
+      GroupName: !Sub '${EnvironmentSuffix}-webapp-sg'
       GroupDescription: 'Security group for web application with restricted access'
       VpcId: !Ref SecureVPC
       SecurityGroupIngress:
@@ -481,14 +494,14 @@ Resources:
           Description: 'DNS UDP'
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-webapp-sg'
+          Value: !Sub '${EnvironmentSuffix}-webapp-sg'
         - Key: Environment
-          Value: !Ref EnvironmentName
+          Value: !Ref EnvironmentSuffix
 
   DatabaseSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub '${EnvironmentName}-database-sg'
+      GroupName: !Sub '${EnvironmentSuffix}-database-sg'
       GroupDescription: 'Security group for database with restricted access'
       VpcId: !Ref SecureVPC
       SecurityGroupIngress:
@@ -499,16 +512,15 @@ Resources:
           Description: 'MySQL access from web application'
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-database-sg'
+          Value: !Sub '${EnvironmentSuffix}-database-sg'
         - Key: Environment
-          Value: !Ref EnvironmentName
+          Value: !Ref EnvironmentSuffix
 
   # ===== CREDENTIAL ROTATION AUTOMATION =====
   
   CredentialRotationLambdaRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${EnvironmentName}-CredentialRotationRole'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -545,8 +557,8 @@ Resources:
   CredentialRotationLambda:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: !Sub '${EnvironmentName}-credential-rotation'
-      Runtime: nodejs18.x
+      FunctionName: !Sub '${EnvironmentSuffix}-credential-rotation'
+      Runtime: nodejs20.x
       Handler: index.handler
       Role: !GetAtt CredentialRotationLambdaRole.Arn
       Timeout: 300
@@ -620,14 +632,14 @@ Resources:
           };
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-credential-rotation'
+          Value: !Sub '${EnvironmentSuffix}-credential-rotation'
         - Key: Environment
-          Value: !Ref EnvironmentName
+          Value: !Ref EnvironmentSuffix
 
   CredentialRotationSchedule:
     Type: AWS::Events::Rule
     Properties:
-      Name: !Sub '${EnvironmentName}-credential-rotation-schedule'
+      Name: !Sub '${EnvironmentSuffix}-credential-rotation-schedule'
       Description: !Sub 'Rotate IAM user credentials every ${CredentialRotationDays} days'
       ScheduleExpression: !Sub 'rate(${CredentialRotationDays} days)'
       State: ENABLED
@@ -648,33 +660,33 @@ Resources:
   UserCredentialsSecret:
     Type: AWS::SecretsManager::Secret
     Properties:
-      Name: !Sub '${EnvironmentName}/app/user-credentials'
+      Name: !Sub '${EnvironmentSuffix}/app/user-credentials'
       Description: 'Secure storage for application user credentials'
       KmsKeyId: !Ref ApplicationKMSKey
-      SecretString: !Sub |
+      SecretString: |
         {
           "AccessKeyId": "PLACEHOLDER",
           "SecretAccessKey": "PLACEHOLDER"
         }
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-user-credentials'
+          Value: !Sub '${EnvironmentSuffix}-user-credentials'
         - Key: Environment
-          Value: !Ref EnvironmentName
+          Value: !Ref EnvironmentSuffix
 
   # ===== NOTIFICATIONS & ALERTING =====
   
   SecurityAlertsTopic:
     Type: AWS::SNS::Topic
     Properties:
-      TopicName: !Sub '${EnvironmentName}-security-alerts'
+      TopicName: !Sub '${EnvironmentSuffix}-security-alerts'
       DisplayName: 'Security Alerts'
       KmsMasterKeyId: !Ref ApplicationKMSKey
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-security-alerts'
+          Value: !Sub '${EnvironmentSuffix}-security-alerts'
         - Key: Environment
-          Value: !Ref EnvironmentName
+          Value: !Ref EnvironmentSuffix
 
   SecurityAlertsTopicPolicy:
     Type: AWS::SNS::TopicPolicy
@@ -684,100 +696,30 @@ Resources:
       PolicyDocument:
         Version: '2012-10-17'
         Statement:
-          - Effect: Allow
+          - Sid: AllowCloudTrailPublish
+            Effect: Allow
             Principal:
               Service: cloudtrail.amazonaws.com
             Action: sns:Publish
             Resource: !Ref SecurityAlertsTopic
-          - Effect: Allow
+          - Sid: AllowLambdaPublish
+            Effect: Allow
             Principal:
               Service: lambda.amazonaws.com
             Action: sns:Publish
             Resource: !Ref SecurityAlertsTopic
-
-  # ===== AWS CONFIG COMPLIANCE =====
-  
-  ConfigDeliveryChannel:
-    Type: AWS::Config::DeliveryChannel
-    Properties:
-      Name: !Sub '${EnvironmentName}-config-delivery-channel'
-      S3BucketName: !Ref SecureLogBucket
-      S3KeyPrefix: 'aws-config'
-
-  ConfigConfigurationRecorder:
-    Type: AWS::Config::ConfigurationRecorder
-    Properties:
-      Name: !Sub '${EnvironmentName}-config-recorder'
-      RoleARN: !GetAtt ConfigRole.Arn
-      RecordingGroup:
-        AllSupported: true
-        IncludeGlobalResourceTypes: true
-        ResourceTypes: []
-
-  ConfigRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
+          - Sid: AllowCloudWatchAlarmsPublish
+            Effect: Allow
             Principal:
-              Service: config.amazonaws.com
-            Action: sts:AssumeRole
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/ConfigRole
-      Policies:
-        - PolicyName: ConfigS3Policy
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - 's3:GetBucketAcl'
-                  - 's3:ListBucket'
-                Resource: !GetAtt SecureLogBucket.Arn
-              - Effect: Allow
-                Action: 's3:PutObject'
-                Resource: !Sub '${SecureLogBucket}/aws-config/*'
-                Condition:
-                  StringEquals:
-                    's3:x-amz-acl': 'bucket-owner-full-control'
+              Service: cloudwatch.amazonaws.com
+            Action: sns:Publish
+            Resource: !Ref SecurityAlertsTopic
 
-  # Config Rules for Compliance
-  S3BucketSSLRequestsOnlyRule:
-    Type: AWS::Config::ConfigRule
-    DependsOn: ConfigConfigurationRecorder
-    Properties:
-      ConfigRuleName: !Sub '${EnvironmentName}-s3-bucket-ssl-requests-only'
-      Description: 'Checks whether S3 buckets have policies that require requests to use SSL'
-      Source:
-        Owner: AWS
-        SourceIdentifier: S3_BUCKET_SSL_REQUESTS_ONLY
-
-  IAMPasswordPolicyRule:
-    Type: AWS::Config::ConfigRule
-    DependsOn: ConfigConfigurationRecorder
-    Properties:
-      ConfigRuleName: !Sub '${EnvironmentName}-iam-password-policy'
-      Description: 'Checks whether the account password policy meets requirements'
-      Source:
-        Owner: AWS
-        SourceIdentifier: IAM_PASSWORD_POLICY
-      InputParameters: |
-        {
-          "RequireUppercaseCharacters": "true",
-          "RequireLowercaseCharacters": "true",
-          "RequireSymbols": "true",
-          "RequireNumbers": "true",
-          "MinimumPasswordLength": "14"
-        }
-
-  # ===== CLOUDWATCH ALARMS =====
   
   UnauthorizedAPICallsAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub '${EnvironmentName}-unauthorized-api-calls'
+      AlarmName: !Sub '${EnvironmentSuffix}-unauthorized-api-calls'
       AlarmDescription: 'Alarm for unauthorized API calls'
       MetricName: 'UnauthorizedAPICalls'
       Namespace: 'CloudTrailMetrics'
@@ -793,7 +735,7 @@ Resources:
   ConsoleSignInWithoutMFAAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub '${EnvironmentName}-console-signin-without-mfa'
+      AlarmName: !Sub '${EnvironmentSuffix}-console-signin-without-mfa'
       AlarmDescription: 'Alarm for console sign-ins without MFA'
       MetricName: 'ConsoleSignInWithoutMFA'
       Namespace: 'CloudTrailMetrics'

@@ -263,15 +263,6 @@ describe('Secure Infrastructure CloudFormation Template', () => {
       expect(trail.Properties.KMSKeyId.Ref).toBe('ApplicationKMSKey');
     });
 
-    test('CloudTrail should have event selectors for S3 monitoring', () => {
-      const trail = template.Resources.SecurityCloudTrail;
-      const eventSelectors = trail.Properties.EventSelectors[0];
-      
-      expect(eventSelectors.ReadWriteType).toBe('All');
-      expect(eventSelectors.IncludeManagementEvents).toBe(true);
-      expect(eventSelectors.DataResources).toHaveLength(1); // S3 Object data resource (combining both buckets)
-    });
-
     test('should have CloudWatch log group for CloudTrail', () => {
       const logGroup = template.Resources.CloudWatchLogGroup;
       expect(logGroup.Type).toBe('AWS::Logs::LogGroup');

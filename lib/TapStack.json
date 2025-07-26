@@ -545,6 +545,9 @@
                             "Condition": {
                                 "Bool": {
                                     "aws:SecureTransport": "false"
+                                },
+                                "StringNotEquals": {
+                                    "aws:PrincipalServiceName": "cloudtrail.amazonaws.com"
                                 }
                             }
                         },
@@ -569,6 +572,9 @@
                                     "aws:SourceIp": {
                                         "Ref": "AllowedIPRange"
                                     }
+                                },
+                                "StringNotEquals": {
+                                    "aws:PrincipalServiceName": "cloudtrail.amazonaws.com"
                                 },
                                 "Bool": {
                                     "aws:ViaAWSService": "false"
@@ -842,9 +848,7 @@
                 "S3BucketName": {
                     "Ref": "SecureLogBucket"
                 },
-                "S3KeyPrefix": {
-                    "Fn::Sub": "cloudtrail-logs/AWSLogs/${AWS::AccountId}"
-                },
+                "S3KeyPrefix": "cloudtrail-logs",
                 "CloudWatchLogsLogGroupArn": {
                     "Fn::GetAtt": [
                         "CloudWatchLogGroup",
@@ -864,25 +868,6 @@
                 "IsMultiRegionTrail": true,
                 "IncludeGlobalServiceEvents": true,
                 "EnableLogFileValidation": true,
-                "EventSelectors": [
-                    {
-                        "ReadWriteType": "All",
-                        "IncludeManagementEvents": true,
-                        "DataResources": [
-                            {
-                                "Type": "AWS::S3::Object",
-                                "Values": [
-                                    {
-                                        "Fn::Sub": "${SecureLogBucket}/*"
-                                    },
-                                    {
-                                        "Fn::Sub": "${ApplicationDataBucket}/*"
-                                    }
-                                ]
-                            }
-                        ]
-                    }
-                ],
                 "InsightSelectors": [
                     {
                         "InsightType": "ApiCallRateInsight"
