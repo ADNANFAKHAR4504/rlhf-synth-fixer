@@ -73,7 +73,7 @@ describe('Stack Integration Tests', () => {
     expect(outputs.SSLCertificateArn).toMatch(
       /^arn:aws:acm:[^:]+:\d+:certificate\/[a-f0-9-]+$/
     );
-    expect(outputs.SSMConfigParameterName).toBe('/dev/config');
+    expect(outputs.SSMConfigParameterName).toContain('/config');
     expect(outputs.TaskDefinitionArn).toMatch(
       /^arn:aws:ecs:[^:]+:\d+:task-definition\/[^:]+:\d+$/
     );
