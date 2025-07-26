@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: production infrastructure with VPC, subnets, secure S3 buckets (ACL-free), IAM roles, and CloudTrail
+Description: Production infrastructure with VPC, subnets, secure S3 buckets (KMS encrypted), IAM roles, and CloudTrail
 
 Parameters:
   EnvironmentName:
@@ -11,6 +11,11 @@ Parameters:
       - stage
       - production
 
+  Owner:
+    Description: Owner team name for resource tagging
+    Type: String
+    Default: TeamA
+
 Mappings:
   AZConfig:
     us-east-1:
@@ -18,7 +23,6 @@ Mappings:
       AZ2: us-east-1b
 
 Resources:
-
   # 1. VPC Configuration
   VPC:
     Type: AWS::EC2::VPC
@@ -31,6 +35,8 @@ Resources:
           Value: !Sub "${EnvironmentName}-VPC"
         - Key: Environment
           Value: !Ref EnvironmentName
+        - Key: Owner
+          Value: !Ref Owner
 
   InternetGateway:
     Type: AWS::EC2::InternetGateway
@@ -40,6 +46,8 @@ Resources:
           Value: !Sub "${EnvironmentName}-IGW"
         - Key: Environment
           Value: !Ref EnvironmentName
+        - Key: Owner
+          Value: !Ref Owner
 
   GatewayAttachment:
     Type: AWS::EC2::VPCGatewayAttachment
@@ -60,6 +68,8 @@ Resources:
           Value: !Sub "${EnvironmentName}-PublicSubnet-AZ1"
         - Key: Environment
           Value: !Ref EnvironmentName
+        - Key: Owner
+          Value: !Ref Owner
 
   PublicSubnet2:
     Type: AWS::EC2::Subnet
@@ -73,6 +83,8 @@ Resources:
           Value: !Sub "${EnvironmentName}-PublicSubnet-AZ2"
         - Key: Environment
           Value: !Ref EnvironmentName
+        - Key: Owner
+          Value: !Ref Owner
 
   PrivateSubnet1:
     Type: AWS::EC2::Subnet
@@ -85,6 +97,8 @@ Resources:
           Value: !Sub "${EnvironmentName}-PrivateSubnet-AZ1"
         - Key: Environment
           Value: !Ref EnvironmentName
+        - Key: Owner
+          Value: !Ref Owner
 
   PrivateSubnet2:
     Type: AWS::EC2::Subnet
@@ -97,6 +111,8 @@ Resources:
           Value: !Sub "${EnvironmentName}-PrivateSubnet-AZ2"
         - Key: Environment
           Value: !Ref EnvironmentName
+        - Key: Owner
+          Value: !Ref Owner
 
   # 3. NAT Gateway
   NatGatewayEIP:
@@ -108,6 +124,8 @@ Resources:
           Value: !Sub "${EnvironmentName}-NAT-EIP"
         - Key: Environment
           Value: !Ref EnvironmentName
+        - Key: Owner
+          Value: !Ref Owner
 
   NatGateway:
     Type: AWS::EC2::NatGateway
@@ -119,6 +137,8 @@ Resources:
           Value: !Sub "${EnvironmentName}-NAT-GW"
         - Key: Environment
           Value: !Ref EnvironmentName
+        - Key: Owner
+          Value: !Ref Owner
 
   # 4. Routing
   PublicRouteTable:
@@ -130,6 +150,8 @@ Resources:
           Value: !Sub "${EnvironmentName}-Public-RT"
         - Key: Environment
           Value: !Ref EnvironmentName
+        - Key: Owner
+          Value: !Ref Owner
 
   PrivateRouteTable:
     Type: AWS::EC2::RouteTable
@@ -140,6 +162,8 @@ Resources:
           Value: !Sub "${EnvironmentName}-Private-RT"
         - Key: Environment
           Value: !Ref EnvironmentName
+        - Key: Owner
+          Value: !Ref Owner
 
   PublicRoute:
     Type: AWS::EC2::Route
@@ -180,17 +204,15 @@ Resources:
       SubnetId: !Ref PrivateSubnet2
       RouteTableId: !Ref PrivateRouteTable
 
-  # 6. AppData S3 Bucket (no ACLs)
+  # 6. AppData S3 Bucket with KMS Encryption
   AppDataBucket:
     Type: AWS::S3::Bucket
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Retain
     Properties:
-      BucketName: !Sub "prd-data-${AWS::AccountId}"
+      BucketName: !Sub "production-bucket-${AWS::AccountId}"
       PublicAccessBlockConfiguration:
-        BlockPublicAcls:       true
-        BlockPublicPolicy:     true
-        IgnorePublicAcls:      true
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
         RestrictPublicBuckets: true
       OwnershipControls:
         Rules:
@@ -198,12 +220,17 @@ Resources:
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
-              SSEAlgorithm: AES256
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: alias/aws/s3
       Tags:
         - Key: Name
           Value: !Sub "${EnvironmentName}-AppDataBucket"
         - Key: Environment
           Value: !Ref EnvironmentName
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Encryption
+          Value: Enabled-KMS
 
   AppDataBucketPolicy:
     Type: AWS::S3::BucketPolicy
@@ -222,7 +249,7 @@ Resources:
               Bool:
                 "aws:SecureTransport": "false"
 
-  # 7. IAM Role & Instance Profile for EC2 → S3
+  # 7. IAM Role with KMS Permissions
   EC2S3AccessRole:
     Type: AWS::IAM::Role
     Properties:
@@ -235,7 +262,7 @@ Resources:
             Action: ['sts:AssumeRole']
       Path: /
       Policies:
-        - PolicyName: S3AccessPolicy
+        - PolicyName: S3KMSAccessPolicy
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
@@ -247,11 +274,18 @@ Resources:
                 Resource:
                   - !GetAtt AppDataBucket.Arn
                   - !Sub "${AppDataBucket.Arn}/*"
+              - Effect: Allow
+                Action:
+                  - 'kms:Decrypt'
+                  - 'kms:GenerateDataKey'
+                Resource: "*"
       Tags:
         - Key: Name
           Value: !Sub "${EnvironmentName}-EC2-S3-Role"
         - Key: Environment
           Value: !Ref EnvironmentName
+        - Key: Owner
+          Value: !Ref Owner
 
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
@@ -294,18 +328,17 @@ Resources:
           Value: !Sub "${EnvironmentName}-EC2-SecurityGroup"
         - Key: Environment
           Value: !Ref EnvironmentName
-
-  # 9. CloudTrail S3 Bucket (no ACLs)
+        - Key: Owner
+          Value: !Ref Owner
+  # 9. CloudTrail with KMS Encryption
   CloudTrailBucket:
     Type: AWS::S3::Bucket
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Retain
     Properties:
-      BucketName: !Sub "prd-cloudtrail-logs-${AWS::AccountId}"
+      BucketName: !Sub "production-cloudtrail-log-${AWS::AccountId}"
       PublicAccessBlockConfiguration:
-        BlockPublicAcls:       true
-        BlockPublicPolicy:     true
-        IgnorePublicAcls:      true
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
         RestrictPublicBuckets: true
       OwnershipControls:
         Rules:
@@ -313,12 +346,15 @@ Resources:
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
-              SSEAlgorithm: AES256
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: alias/aws/s3
       Tags:
         - Key: Name
           Value: !Sub "${EnvironmentName}-CloudTrailBucket"
         - Key: Environment
           Value: !Ref EnvironmentName
+        - Key: Owner
+          Value: !Ref Owner
 
   CloudTrailBucketPolicy:
     Type: AWS::S3::BucketPolicy
@@ -366,6 +402,8 @@ Resources:
           Value: !Sub "${EnvironmentName}-CloudTrail"
         - Key: Environment
           Value: !Ref EnvironmentName
+        - Key: Owner
+          Value: !Ref Owner  
 
 Outputs:
   VPCId:
@@ -404,6 +442,12 @@ Outputs:
     Export:
       Name: !Sub "${AWS::StackName}-AppDataBucketName"
 
+  AppDataBucketArn:
+    Description: Application Data Bucket ARN
+    Value: !GetAtt AppDataBucket.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-AppDataBucketArn"
+
   EC2S3AccessRoleArn:
     Description: IAM Role ARN for EC2 S3 access
     Value: !GetAtt EC2S3AccessRole.Arn
@@ -421,7 +465,6 @@ Outputs:
     Value: !Ref EC2SecurityGroup
     Export:
       Name: !Sub "${AWS::StackName}-EC2SecurityGroupId"
-
   CloudTrailBucketName:
     Description: CloudTrail logs bucket name
     Value: !Ref CloudTrailBucket

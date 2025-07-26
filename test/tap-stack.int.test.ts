@@ -69,12 +69,12 @@ describe('Production Infrastructure Integration Tests', () => {
   });
 
   test('IAM Instance Profile is associated with correct role', () => {
-    const instanceProfiles = getResourceByType('AWS::IAM::InstanceProfile');
-    expect(instanceProfiles.length).toBeGreaterThan(0);
-    instanceProfiles.forEach(([, profile]) => {
-      expect(profile.Properties.Roles).toContainEqual({ Ref: 'EC2S3Role' });
-    });
+  const instanceProfiles = getResourceByType('AWS::IAM::InstanceProfile');
+  expect(instanceProfiles.length).toBeGreaterThan(0);
+  instanceProfiles.forEach(([, profile]) => {
+    expect(profile.Properties.Roles).toContainEqual({ Ref: 'EC2S3AccessRole' }); // updated to match template
   });
+});
 
   test('CloudTrail logging is enabled across all regions', () => {
     const trails = getResourceByType('AWS::CloudTrail::Trail');
@@ -141,4 +141,30 @@ describe('Production Infrastructure Integration Tests', () => {
     expect(getAcl).toBeDefined();
     expect(putObject).toBeDefined();
   });
+  test('All taggable resources must have "Owner: TeamA" tag', () => {
+  const resources = template.toJSON().Resources;
+
+  const taggableTypes = [
+    'AWS::EC2::VPC',
+    'AWS::EC2::Subnet',
+    'AWS::EC2::InternetGateway',
+    'AWS::EC2::NatGateway',
+    'AWS::EC2::EIP',
+    'AWS::EC2::RouteTable',
+    'AWS::EC2::SecurityGroup',
+    'AWS::S3::Bucket',
+    'AWS::IAM::Role',
+    'AWS::CloudTrail::Trail'
+  ];
+
+  Object.entries(resources).forEach(([logicalId, res]: [string, any]) => {
+    if (taggableTypes.includes(res.Type)) {
+      const tags = res?.Properties?.Tags;
+      expect(tags).toBeDefined();
+      const ownerTag = tags.find((t: any) => t.Key === 'Owner' && t.Value === 'TeamA');
+      expect(ownerTag).toBeDefined();
+    }
+  });
+});
+
 });
