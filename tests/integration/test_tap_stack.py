@@ -272,10 +272,14 @@ class TestTapStackIntegration(unittest.TestCase):
             lambda_functions.append(func)
       
       return lambda_functions, lambda_client
-    except boto3.exceptions.Boto3Error:
-      return [], None
-    except KeyError:
-      return [], None
+    except boto3.exceptions.Boto3Error as e:
+      # Only return empty if it's a permissions/access issue
+      if 'AccessDenied' in str(e) or 'UnauthorizedOperation' in str(e):
+        return [], None
+      raise e
+    except KeyError as e:
+      # Re-raise KeyError as it indicates a parsing problem
+      raise e
 
   @mark.it("validates Lambda functions are configured correctly")
   def test_lambda_functions_configuration(self):
@@ -376,10 +380,14 @@ class TestTapStackIntegration(unittest.TestCase):
           stack_apis.append(api)
       
       return stack_apis, apigateway_client
-    except boto3.exceptions.Boto3Error:
-      return [], None
-    except KeyError:
-      return [], None
+    except boto3.exceptions.Boto3Error as e:
+      # Only return empty if it's a permissions/access issue
+      if 'AccessDenied' in str(e) or 'UnauthorizedOperation' in str(e):
+        return [], None
+      raise e
+    except KeyError as e:
+      # Re-raise KeyError as it indicates a parsing problem
+      raise e
 
   @mark.it("validates API Gateway resources and methods are configured correctly")
   def test_api_gateway_structure(self):
@@ -469,19 +477,21 @@ class TestTapStackIntegration(unittest.TestCase):
               # Verify function has some tags (CDK adds default tags)
               self.assertIsInstance(tags.get('Tags', {}), dict,
                                   f"Function {func_name} should have tags")
-            except boto3.exceptions.Boto3Error:
-              # If we can't get tags, that's acceptable for this test
-              pass
-            except KeyError:
-              # If we can't parse tags, that's acceptable for this test
-              pass
+            except boto3.exceptions.Boto3Error as tag_error:
+              # If we can't get tags due to permissions, that's acceptable
+              if 'AccessDenied' not in str(tag_error):
+                self.fail(f"Unexpected error getting tags for {func_name}: {tag_error}")
+            except KeyError as tag_error:
+              # If we can't parse tags, that's a real issue
+              self.fail(f"Failed to parse tags for {func_name}: {tag_error}")
               
-    except boto3.exceptions.Boto3Error:
-      # If we can't access Lambda in this region, continue
-      pass
-    except KeyError:
-      # If we can't parse Lambda response, continue
-      pass
+    except boto3.exceptions.Boto3Error as e:
+      # If we can't access Lambda in this region due to permissions, continue
+      if 'AccessDenied' not in str(e) and 'UnauthorizedOperation' not in str(e):
+        self.fail(f"Unexpected error accessing Lambda in region: {e}")
+    except KeyError as e:
+      # If we can't parse Lambda response, that's a real issue
+      self.fail(f"Failed to parse Lambda response: {e}")
 
   def _validate_api_gateway_tags_in_region(self, region):
     """Helper method to validate API Gateway tags in a specific region"""
@@ -498,19 +508,21 @@ class TestTapStackIntegration(unittest.TestCase):
             # Verify API has some tags
             self.assertIsInstance(tags.get('tags', {}), dict,
                                 f"API {api_name} should have tags")
-          except boto3.exceptions.Boto3Error:
-            # If we can't get tags, that's acceptable for this test
-            pass
-          except KeyError:
-            # If we can't parse tags, that's acceptable for this test
-            pass
+          except boto3.exceptions.Boto3Error as tag_error:
+            # If we can't get tags due to permissions, that's acceptable
+            if 'AccessDenied' not in str(tag_error):
+              self.fail(f"Unexpected error getting tags for API {api_name}: {tag_error}")
+          except KeyError as tag_error:
+            # If we can't parse tags, that's a real issue
+            self.fail(f"Failed to parse tags for API {api_name}: {tag_error}")
             
-    except boto3.exceptions.Boto3Error:
-      # If we can't access API Gateway in this region, continue
-      pass
-    except KeyError:
-      # If we can't parse API Gateway response, continue
-      pass
+    except boto3.exceptions.Boto3Error as e:
+      # If we can't access API Gateway in this region due to permissions, continue
+      if 'AccessDenied' not in str(e) and 'UnauthorizedOperation' not in str(e):
+        self.fail(f"Unexpected error accessing API Gateway in region: {e}")
+    except KeyError as e:
+      # If we can't parse API Gateway response, that's a real issue
+      self.fail(f"Failed to parse API Gateway response: {e}")
 
   @mark.it("validates all deployed resources have proper tagging")
   def test_resource_tagging(self):
