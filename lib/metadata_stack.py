@@ -51,7 +51,7 @@ class MultiRegionStack(Stack):
     # Output the API Endpoint
     CfnOutput(self, "ApiEndpoint", value=api.url)
     
-    # Output Lambda function details
+    # Output Lambda function details 
     CfnOutput(self, "LambdaFunctionName", value=lambda_function.function_name)
     CfnOutput(self, "LambdaFunctionArn", value=lambda_function.function_arn)
     
