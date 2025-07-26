@@ -120,9 +120,15 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should not contain undefined outputs', () => {
       Object.entries(template.Outputs).forEach(([key, value]) => {
-        expect(value.Description).toBeDefined();
-        expect(value.Value).toBeDefined();
+        const output = value as {
+          Description: string;
+          Value: any;
+          Export?: { Name: any };
+        };
+        expect(output.Description).toBeDefined();
+        expect(output.Value).toBeDefined();
       });
+
     });
   });
 });

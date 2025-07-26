@@ -41,7 +41,8 @@ describe('Security CIS Benchmark Integration Tests', () => {
     test('should exist and be assumable by EC2', async () => {
       const roleName = EC2RoleArn.split('/').pop();
       const role = await iam.send(new GetRoleCommand({ RoleName: roleName! }));
-      const trustPolicy = JSON.stringify(role.Role.AssumeRolePolicyDocument);
+      expect(role.Role).toBeDefined();
+      const trustPolicy = JSON.stringify(role.Role!.AssumeRolePolicyDocument);
       expect(trustPolicy).toContain('ec2.amazonaws.com');
     });
   });
@@ -58,8 +59,8 @@ describe('Security CIS Benchmark Integration Tests', () => {
       const result = await ec2.send(new DescribeSecurityGroupsCommand({ GroupIds: [RestrictedSecurityGroupId] }));
       const sg = result.SecurityGroups?.[0];
       expect(sg).toBeDefined();
-
-      const sshRule = sg.IpPermissions?.find(
+      
+      const sshRule = sg!.IpPermissions?.find(
         perm => perm.FromPort === 22 && perm.ToPort === 22 && perm.IpProtocol === 'tcp'
       );
       expect(sshRule).toBeDefined();
