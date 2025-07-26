@@ -484,6 +484,53 @@ class TestTapStackIntegration(unittest.TestCase):
     except (requests.exceptions.RequestException, ClientError) as e:
       self.fail(f"Failed in end-to-end integration test: {e}")
 
+  @mark.it("tests Lambda response structure")
+  def test_lambda_response_structure(self):
+    """Test that the Lambda function returns the expected response structure"""
+    lambda_function_name = flat_outputs.get(
+        'LambdaFunctionName') if flat_outputs else self.lambda_function_name
+    test_event = {
+        "httpMethod": "GET",
+        "path": "/test-lambda-response",
+        "headers": {"User-Agent": "integration-test"},
+        "queryStringParameters": {"check": "structure"}
+    }
+
+    response = self.lambda_client.invoke(
+        FunctionName=lambda_function_name,
+        InvocationType='RequestResponse',
+        Payload=json.dumps(test_event)
+    )
+
+    self.assertEqual(response['StatusCode'], 200,
+                     "Lambda invocation should succeed")
+
+    payload_raw = response['Payload'].read()
+    payload = json.loads(payload_raw)
+
+    # Check for errors
+    if 'FunctionError' in response:
+      self.fail(f"Lambda function error: {response['FunctionError']}")
+
+    if 'errorMessage' in payload:
+      self.fail(f"Lambda execution error: {payload.get('errorMessage')}")
+
+    self.assertIn('statusCode', payload,
+                  "Lambda response should include statusCode")
+    self.assertEqual(payload['statusCode'], 200,
+                     "Lambda response statusCode should be 200")
+
+    response_body = payload.get('body')
+    if isinstance(response_body, str):
+      response_body = json.loads(response_body)
+
+    self.assertIsInstance(response_body, dict,
+                          "Response body should be a dict")
+    self.assertIn('message', response_body,
+                  "Response body should contain 'message'")
+    self.assertIn('timestamp', response_body,
+                  "Response body should contain 'timestamp'")
+
 
 if __name__ == '__main__':
   unittest.main()
