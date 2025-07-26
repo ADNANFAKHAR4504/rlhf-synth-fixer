@@ -72,7 +72,7 @@ Resources:
     Properties:
       VpcId: !Ref MyVPC
       CidrBlock: !Ref PublicSubnet1CidrBlock
-      AvailabilityZone: us-west-2a
+      AvailabilityZone: !Select [0, !GetAZs '']
       MapPublicIpOnLaunch: true
 
   PublicSubnet2:
@@ -80,7 +80,7 @@ Resources:
     Properties:
       VpcId: !Ref MyVPC
       CidrBlock: !Ref PublicSubnet2CidrBlock
-      AvailabilityZone: us-west-2b
+      AvailabilityZone: !Select [1, !GetAZs '']
       MapPublicIpOnLaunch: true
 
   PrivateSubnet1:
@@ -88,14 +88,14 @@ Resources:
     Properties:
       VpcId: !Ref MyVPC
       CidrBlock: !Ref PrivateSubnet1CidrBlock
-      AvailabilityZone: us-west-2a
+      AvailabilityZone: !Select [0, !GetAZs '']
 
   PrivateSubnet2:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref MyVPC
       CidrBlock: !Ref PrivateSubnet2CidrBlock
-      AvailabilityZone: us-west-2b
+      AvailabilityZone: !Select [1, !GetAZs '']
 
   # Internet and NAT Gateway
   InternetGateway:
@@ -215,3 +215,10 @@ Outputs:
   S3BucketName:
     Description: The name of the S3 bucket
     Value: !Ref MyS3Bucket
+
+  AvailabilityZones:
+    Description: The Availability Zones used by this stack
+    Value: !Join 
+      - ', '
+      - - !Select [0, !GetAZs '']
+        - !Select [1, !GetAZs '']
