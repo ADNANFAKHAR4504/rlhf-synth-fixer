@@ -19,7 +19,8 @@ env:
   # Use PR number for resource isolation, fallback to 'main' for main branch
   # Prefix with 'pr' to ensure AWS resource names start with a letter
   ENVIRONMENT_SUFFIX: ${{ github.event.number && format('pr{0}', github.event.number) || 'dev' }}
-  S3_BUCKET_NAME: 'iac-rlhf-aws-release'
+  S3_RELEASE_BUCKET_NAME: 'iac-rlhf-aws-release'
+  S3_PRODUCTION_BUCKET_NAME: 'iac-rlhf-production'
 
 jobs:
   detect-metadata:
@@ -627,18 +628,18 @@ jobs:
           LANGUAGE="${{ needs.detect-metadata.outputs.language }}"
 
           # Upload Docker image directly to S3
-          S3_PREFIX="${PLATFORM}-${LANGUAGE}/Pr${{ github.event.number }}"
-          echo "Uploading Docker image to S3 bucket: ${{ env.S3_BUCKET_NAME }}"
+          S3_PREFIX="docker_images/Pr${{ github.event.number }}"
+          echo "Uploading Docker image to S3 bucket: ${{ env.S3_PRODUCTION_BUCKET_NAME }}"
           echo "S3 key: ${S3_PREFIX}/docker-image-${PO_ID}.tar"
 
           # Upload Docker image to S3
           aws s3 cp docker-image-${PO_ID}.tar \
-            "s3://${{ env.S3_BUCKET_NAME }}/${S3_PREFIX}/docker-image-${PO_ID}.tar"
+            "s3://${{ env.S3_PRODUCTION_BUCKET_NAME }}/${S3_PREFIX}/docker-image-${PO_ID}.tar"
 
           echo "Docker image uploaded successfully"
 
           # Store the S3 location for reference
-          S3_LOCATION="s3://${{ env.S3_BUCKET_NAME }}/${S3_PREFIX}/docker-image-${PO_ID}.tar"
+          S3_LOCATION="s3://${{ env.S3_PRODUCTION_BUCKET_NAME }}/${S3_PREFIX}/docker-image-${PO_ID}.tar"
           echo "Docker image S3 location: $S3_LOCATION"
 
           # Save the S3 location for the next step
@@ -824,13 +825,13 @@ jobs:
           LANGUAGE="${{ steps.extract-metadata.outputs.language }}"
           S3_PREFIX="${PLATFORM}-${LANGUAGE}/Pr${{ github.event.number }}"
 
-          echo "Uploading archive folder to S3 bucket: ${{ env.S3_BUCKET_NAME }}"
+          echo "Uploading archive folder to S3 bucket: ${{ env.S3_RELEASE_BUCKET_NAME }}"
           echo "S3 prefix: $S3_PREFIX"
 
           # Check if archive folder exists
           if [ -d "archive/${S3_PREFIX}" ]; then
             # Upload the archive folder contents to S3, preserving folder structure
-            aws s3 sync "archive/${S3_PREFIX}/" "s3://${{ env.S3_BUCKET_NAME }}/${S3_PREFIX}/" \
+            aws s3 sync "archive/${S3_PREFIX}/" "s3://${{ env.S3_RELEASE_BUCKET_NAME }}/${S3_PREFIX}/" \
               --delete \
               --exclude "*.git*" \
               --exclude "node_modules/*"
@@ -846,7 +847,7 @@ jobs:
           S3_PREFIX="${PLATFORM}-${LANGUAGE}/Pr${{ github.event.number }}"
 
           echo "Verifying S3 upload for prefix: $S3_PREFIX"
-          aws s3 ls "s3://${{ env.S3_BUCKET_NAME }}/${S3_PREFIX}/" --recursive || echo "No files found or access denied"
+          aws s3 ls "s3://${{ env.S3_RELEASE_BUCKET_NAME }}/${S3_PREFIX}/" --recursive || echo "No files found or access denied"
 
   cleanup-pr:
     name: Cleanup (PR Closed)
