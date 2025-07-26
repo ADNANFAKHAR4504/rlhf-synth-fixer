@@ -6,8 +6,17 @@ name = "pypi"
 [packages]
 cfn-lint = "*"
 cfn-flip = "*"
+aws-cdk-lib = "2.202.0"
+constructs = ">=10.0.0,<11.0.0"
 
 [dev-packages]
+boto3 = "*"
+moto = "*"
+pytest-testdox = "*"
+pytest-cov = "*"
+pytest-env = "*"
+pytest = "*"
+pylint = "*"
 
 [requires]
 python_version = "3.12.11"
@@ -18,3 +27,6 @@ cfn-validate-yaml = "cfn-lint lib/TapStack.yml"
 cfn-validate-json = "cfn-lint lib/TapStack.json"
 cfn-flip-to-json = "cfn-flip  lib/TapStack.yml"
 cfn-flip-to-yaml = "cfn-flip -y lib/TapStack.json"
+test-py-unit = "python -m pytest -s tests/unit/ --cov-report=term-missing --cov-report=json:cov.json --cov-fail-under=70 --cov-branch -l --testdox"
+test-py-integration = "python -m pytest -s tests/integration/ --no-cov"
+lint = "pylint --ignore=tests lib tests"

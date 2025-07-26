@@ -14,7 +14,7 @@ module.exports = {
     '!<rootDir>/**/*.test.ts',
     '!<rootDir>/node_modules/**',
   ],
-  coverageReporters: ['text', 'lcov'],
+  coverageReporters: ['text', 'lcov', 'json-summary'],
   coverageThreshold: {
     global: {
       branches: 70,
