@@ -4,7 +4,7 @@ import unittest
 
 from pytest import mark
 
-# Open file cfn-outputs/flat-outputs.json
+# Open file cfn-outputs/flat-outputs.json 
 base_dir = os.path.dirname(os.path.abspath(__file__))
 flat_outputs_path = os.path.join(
     base_dir, '..', '..', 'cfn-outputs', 'flat-outputs.json'
