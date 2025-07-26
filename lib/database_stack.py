@@ -1,10 +1,10 @@
 from aws_cdk import (
-  Stack,
-  CfnOutput,
-  Duration,
-  RemovalPolicy,
-  aws_rds as rds,
-  aws_ec2 as ec2,
+    Stack,
+    CfnOutput,
+    Duration,
+    RemovalPolicy,
+    aws_rds as rds,
+    aws_ec2 as ec2,
 )
 from constructs import Construct
 
@@ -15,11 +15,23 @@ class DatabaseStack(Stack):
     super().__init__(scope, construct_id, **kwargs)
 
     # aurora_version = rds.AuroraMysqlEngineVersion.VER_2_08_1
-    aurora_version = rds.AuroraMysqlEngineVersion.of("8.0.mysql_aurora.3.04.1")                 
+    aurora_version = rds.AuroraMysqlEngineVersion.of("8.0.mysql_aurora.3.04.1")
+
+    # Create a new parameter group for your Aurora MySQL version
+    parameter_group = rds.ParameterGroup(
+        self, "AuroraMySQL8ParameterGroup",
+        engine=rds.DatabaseClusterEngine.aurora_mysql(version=aurora_version),
+        parameters={
+            # Example: "time_zone": "UTC",
+            # Add your custom parameters here if needed
+        }
+    )
+
     self.db_cluster = rds.DatabaseCluster(
         self, "AppDatabase",
         engine=rds.DatabaseClusterEngine.aurora_mysql(version=aurora_version),
         credentials=rds.Credentials.from_generated_secret("admin"),
+        parameter_group=parameter_group,  # explicitly set the parameter group
         instance_props=rds.InstanceProps(
             vpc=vpc,
             instance_type=ec2.InstanceType.of(
