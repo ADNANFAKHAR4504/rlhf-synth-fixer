@@ -2,7 +2,7 @@
 # This file defines who owns and can approve changes to different parts of the repository
 
 # Global ownership: @hernanmog-turing has access to all files
-* @hernanmog-turing
+* @hernanmog-turing @PranavSTuring @olaoluwa-turing @Ashwin-DevAsh @abubakarTuring
 
 # Allow anyone to approve changes in lib/ and test/ folders only
 # No owners specified = anyone can approve PRs affecting only these folders

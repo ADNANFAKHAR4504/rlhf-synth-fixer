@@ -20,15 +20,19 @@ env:
   # Prefix with 'pr' to ensure AWS resource names start with a letter
   ENVIRONMENT_SUFFIX: ${{ github.event.number && format('pr{0}', github.event.number) || 'dev' }}
   S3_BUCKET_NAME: 'iac-rlhf-aws-release'
+  TERRAFORM_STATE_BUCKET: 'iac-rlhf-tf-states'
+  TERRAFORM_STATE_BUCKET_REGION: 'us-east-1'
+  S3_PRODUCTION_BUCKET_NAME: 'iac-rlhf-production'
 
 jobs:
   detect-metadata:
     name: Detect Project Files
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
     outputs:
       platform: ${{ steps.metadata.outputs.platform }}
       language: ${{ steps.metadata.outputs.language }}
+      po_id: ${{ steps.metadata.outputs.po_id }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -43,11 +47,13 @@ jobs:
 
           PLATFORM=$(jq -r '.platform // "unknown"' metadata.json)
           LANGUAGE=$(jq -r '.language // "unknown"' metadata.json)
+          PO_ID=$(jq -r '.po_id // empty' metadata.json)
 
           echo "Detected platform: $PLATFORM, language: $LANGUAGE"
 
           echo "platform=$PLATFORM" >> $GITHUB_OUTPUT
           echo "language=$LANGUAGE" >> $GITHUB_OUTPUT
+          echo "po_id=$PO_ID" >> $GITHUB_OUTPUT
 
       - name: Check for required documentation files
         id: docs-check
@@ -64,7 +70,7 @@ jobs:
 
   version-check:
     name: Check Runtime Versions
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: detect-metadata
     if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
 
@@ -121,7 +127,7 @@ jobs:
 
   build:
     name: Build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: version-check
     if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
     environment: dev
@@ -168,7 +174,7 @@ jobs:
 
   synth:
     name: Synth
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [detect-metadata, build]
     if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
     environment: dev
@@ -205,6 +211,10 @@ jobs:
           if [ "$PLATFORM" = "cdk" ]; then
             echo "✅ CDK project detected, running CDK synth..."
             npm run cdk:synth
+          elif [ "$PLATFORM" = "cdktf" ]; then
+            echo "✅ CDKTF project detected, running CDKTF get and synth..."
+            npm run cdktf:get
+            npm run cdktf:synth
           else
             echo "ℹ️ Not a CDK project, skipping CDK synth"
             echo "This is expected for non-CDK projects like CloudFormation templates"
@@ -214,16 +224,19 @@ jobs:
           fi
         env:
           ENVIRONMENT_SUFFIX: ${{ env.ENVIRONMENT_SUFFIX }}
+          TERRAFORM_STATE_BUCKET: ${{ env.TERRAFORM_STATE_BUCKET }}
+          TERRAFORM_STATE_BUCKET_REGION: ${{ env.TERRAFORM_STATE_BUCKET_REGION }}
 
       - name: Upload Build Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: cdk-artifacts
-          path: cdk.out/
-
+          path: |
+            cdk.out/
+            cdktf.out/
   deploy:
     name: Deploy
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: synth
     if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
     environment: dev
@@ -270,6 +283,9 @@ jobs:
           if [ "$PLATFORM" = "cdk" ]; then
             echo "✅ CDK project detected, running CDK deploy..."
             npm run cdk:deploy
+          elif [ "$PLATFORM" = "cdktf" ]; then
+            echo "✅ CDKTF project detected, running CDKTF deploy..."
+            npm run cdktf:deploy
           elif [ "$PLATFORM" = "cfn" ] && [ "$LANGUAGE" = "yaml" ]; then
             echo "✅ CloudFormation YAML project detected, deploying with AWS CLI..."
             npm run cfn:deploy-yaml
@@ -284,6 +300,9 @@ jobs:
           ENVIRONMENT_SUFFIX: ${{ env.ENVIRONMENT_SUFFIX }}
           REPOSITORY: ${{ github.repository }}
           COMMIT_AUTHOR: ${{ github.event.head_commit.author.name || github.actor }}
+          AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+          TERRAFORM_STATE_BUCKET: ${{ env.TERRAFORM_STATE_BUCKET }}
+          TERRAFORM_STATE_BUCKET_REGION: ${{ env.TERRAFORM_STATE_BUCKET_REGION }}
 
       - name: Get Deployment Outputs
         run: |
@@ -326,6 +345,12 @@ jobs:
             cat cfn-outputs/all-outputs.json || echo "No consolidated outputs"
             echo "Flat outputs:"
             cat cfn-outputs/flat-outputs.json || echo "No flat outputs"
+          elif [ "$PLATFORM" = "cdktf" ]; then
+            echo "✅ CDKTF project detected, writing outputs to cfn-outputs..."
+            mkdir -p cfn-outputs/
+            touch cfn-outputs/flat-outputs.json
+            cdktf output --outputs-file cfn-outputs/flat-outputs.json
+            cat cfn-outputs/flat-outputs.json || echo "No outputs found in cfn-outputs/flat-outputs.json"
           elif [ "${{ needs.synth.outputs.platform }}" = "cfn" ]; then
             echo "✅ CloudFormation project detected, getting stack outputs..."
             mkdir -p cfn-outputs
@@ -370,10 +395,9 @@ jobs:
           path: |
             cfn-outputs/
             cdk-stacks.json
-
   lint:
     name: Lint
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [detect-metadata, build]
     if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
     environment: qa
@@ -421,7 +445,7 @@ jobs:
 
   unit-tests:
     name: Unit Testing
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: lint
     if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
     environment: qa
@@ -444,7 +468,10 @@ jobs:
 
       - name: Run unit tests
         run: |
-          if [ "${{ needs.lint.outputs.language }}" = "ts" ]; then
+          if [ "${{ needs.lint.outputs.language }}" = "ts" ] && [ "${{ needs.lint.outputs.platform }}" = "cdktf" ]; then
+            echo "✅ Terraform TypeScript project detected, running unit tests..."
+            npm run test:unit-cdktf
+          elif [ "${{ needs.lint.outputs.language }}" = "ts" ]; then
             echo "✅ TypeScript project detected, running unit tests..."
             npm run test:unit
           elif [ "${{ needs.lint.outputs.language }}" = "py" ]; then
@@ -465,7 +492,7 @@ jobs:
 
   # mocked-integration-tests:
   #   name: Mocked Integration Tests
-  #   runs-on: ubuntu-latest
+  #   runs-on: ubuntu-24.04
   #   needs: unit-tests
 
   #   steps:
@@ -488,7 +515,7 @@ jobs:
 
   integration-tests-live:
     name: Integration Tests (Live)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [lint, unit-tests, deploy]
     environment: qa
     if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
@@ -527,10 +554,13 @@ jobs:
           fi
         env:
           ENVIRONMENT_SUFFIX: ${{ env.ENVIRONMENT_SUFFIX }}
+          AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+          TERRAFORM_STATE_BUCKET: ${{ env.TERRAFORM_STATE_BUCKET }}
+          TERRAFORM_STATE_BUCKET_REGION: ${{ env.TERRAFORM_STATE_BUCKET_REGION }}
 
   cleanup:
     name: Cleanup (Destroy Resources)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [detect-metadata, integration-tests-live]
     if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
     environment: stage
@@ -561,6 +591,10 @@ jobs:
             echo "✅ CDK project detected, running CDK destroy..."
             # Try to destroy any leftover resources from PRs, but don't fail if they don't exist
             npm run cdk:destroy || echo "No resources to destroy or destruction failed"
+          elif [ "$PLATFORM" = "cdktf" ]; then
+            echo "✅ CDKTF project detected, running CDKTF destroy..."
+            # Try to destroy any leftover resources from PRs, but don't fail if they don't exist
+            npm run cdktf:destroy || echo "No resources to destroy or destruction failed"
           elif [ "$PLATFORM" = "cfn" ]; then
             echo "✅ CloudFormation project detected, running CloudFormation destroy..."
             # Try to destroy any leftover resources from PRs, but don't fail if they don't exist
@@ -571,10 +605,12 @@ jobs:
           fi
         env:
           ENVIRONMENT_SUFFIX: ${{ env.ENVIRONMENT_SUFFIX }}
+          TERRAFORM_STATE_BUCKET: ${{ env.TERRAFORM_STATE_BUCKET }}
+          TERRAFORM_STATE_BUCKET_REGION: ${{ env.TERRAFORM_STATE_BUCKET_REGION }}
 
   archive-folders:
     name: Archive Folders and Reset Repository
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [detect-metadata, cleanup]
     environment: release
     if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
@@ -595,6 +631,55 @@ jobs:
         with:
           name: coverage-reports
           path: coverage/
+
+      - name: Configure AWS
+        uses: ./.github/actions/configure-aws
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+
+      - name: Build Docker Image
+        run: |
+          # Extract po_id from metadata.json for Docker image tagging
+          PO_ID=$(jq -r '.po_id // "pr${{ github.event.number }}"' metadata.json)
+          echo "Building Docker image for po_id: $PO_ID"
+
+          # Build Docker image with po_id tag
+          docker build -t tap-app:${PO_ID} .
+
+          # Export Docker image to tar file
+          docker save tap-app:${PO_ID} -o docker-image-${PO_ID}.tar
+
+          # Check file size
+          ls -lh docker-image-${PO_ID}.tar
+          echo "Docker image built and exported successfully with po_id: $PO_ID"
+
+          # Use metadata from detect-metadata job
+          PLATFORM="${{ needs.detect-metadata.outputs.platform }}"
+          LANGUAGE="${{ needs.detect-metadata.outputs.language }}"
+
+          # Upload Docker image directly to S3
+          S3_PREFIX="docker_images/Pr${{ github.event.number }}"
+          echo "Uploading Docker image to S3 bucket: ${{ env.S3_PRODUCTION_BUCKET_NAME }}"
+          echo "S3 key: ${S3_PREFIX}/docker-image-${PO_ID}.tar"
+
+          # Upload Docker image to S3
+          aws s3 cp docker-image-${PO_ID}.tar \
+            "s3://${{ env.S3_PRODUCTION_BUCKET_NAME }}/${S3_PREFIX}/docker-image-${PO_ID}.tar"
+
+          echo "Docker image uploaded successfully"
+
+          # Store the S3 location for reference
+          S3_LOCATION="s3://${{ env.S3_PRODUCTION_BUCKET_NAME }}/${S3_PREFIX}/docker-image-${PO_ID}.tar"
+          echo "Docker image S3 location: $S3_LOCATION"
+
+          # Save the S3 location for the next step
+          echo "DOCKER_S3_LOCATION=$S3_LOCATION" >> $GITHUB_ENV
+
+          # Remove Docker image locally to save space
+          rm -f docker-image-${PO_ID}.tar
+          echo "Docker image removed locally to save space"
 
       - name: Archive folders and reset repository
         run: |
@@ -665,6 +750,15 @@ jobs:
           echo "Current directory contents before archiving:"
           ls -la
 
+          # Get Docker S3 location from the previous step and add it to metadata.json
+          DOCKER_S3_LOCATION="${DOCKER_S3_LOCATION}"
+          echo "Docker S3 location from previous step: $DOCKER_S3_LOCATION"
+
+          # Add the dockerS3Location to metadata.json
+          jq --arg location "$DOCKER_S3_LOCATION" '. + {dockerS3Location: $location}' metadata.json > metadata.json.tmp
+          mv metadata.json.tmp metadata.json
+          echo "Updated metadata.json with dockerS3Location: $DOCKER_S3_LOCATION"
+
           # Create archive directory with platform, language, and PR number
           ARCHIVE_DIR="archive/${PLATFORM}-${LANGUAGE}/Pr${{ github.event.number }}"
           mkdir -p "$ARCHIVE_DIR"
@@ -679,6 +773,8 @@ jobs:
             "cdk.json"
             "metadata.json"
             "tap.py"
+            "setup.js"
+            "cdktf.json"
             )
 
           # Move paths to archive
@@ -703,7 +799,7 @@ jobs:
 
   upload-task-to-s3:
     name: Upload Task to S3
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     environment: release
     if: ${{ github.event_name == 'pull_request' && github.event.pull_request.merged == true }}
     permissions:
@@ -763,13 +859,13 @@ jobs:
           LANGUAGE="${{ steps.extract-metadata.outputs.language }}"
           S3_PREFIX="${PLATFORM}-${LANGUAGE}/Pr${{ github.event.number }}"
 
-          echo "Uploading archive folder to S3 bucket: ${{ env.S3_BUCKET_NAME }}"
+          echo "Uploading archive folder to S3 bucket: ${{ env.S3_RELEASE_BUCKET_NAME }}"
           echo "S3 prefix: $S3_PREFIX"
 
           # Check if archive folder exists
           if [ -d "archive/${S3_PREFIX}" ]; then
             # Upload the archive folder contents to S3, preserving folder structure
-            aws s3 sync "archive/${S3_PREFIX}/" "s3://${{ env.S3_BUCKET_NAME }}/${S3_PREFIX}/" \
+            aws s3 sync "archive/${S3_PREFIX}/" "s3://${{ env.S3_RELEASE_BUCKET_NAME }}/${S3_PREFIX}/" \
               --delete \
               --exclude "*.git*" \
               --exclude "node_modules/*"
@@ -778,7 +874,6 @@ jobs:
             echo "Archive folder archive/${S3_PREFIX} not found, nothing to upload"
             exit 1
           fi
-
       - name: Verify S3 upload
         run: |
           PLATFORM="${{ steps.extract-metadata.outputs.platform }}"
@@ -786,11 +881,11 @@ jobs:
           S3_PREFIX="${PLATFORM}-${LANGUAGE}/Pr${{ github.event.number }}"
 
           echo "Verifying S3 upload for prefix: $S3_PREFIX"
-          aws s3 ls "s3://${{ env.S3_BUCKET_NAME }}/${S3_PREFIX}/" --recursive || echo "No files found or access denied"
+          aws s3 ls "s3://${{ env.S3_RELEASE_BUCKET_NAME }}/${S3_PREFIX}/" --recursive || echo "No files found or access denied"
 
   cleanup-pr:
     name: Cleanup (PR Closed)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # This job should run regardless of the [skip-jobs] tag since it's for cleanup
     if: github.event_name == 'pull_request' && github.event.action == 'closed' && !github.event.pull_request.merged
     environment: qa
@@ -827,6 +922,10 @@ jobs:
             echo "✅ CDK TypeScript project detected, running CDK destroy..."
             # Try to destroy resources, but don't fail if they don't exist
             npm run cdk:destroy || echo "No resources to destroy or destruction failed"
+          elif [ "$PLATFORM" = "cdktf" ]; then
+            echo "✅ CDKTF project detected, running CDKTF destroy..."
+            # Try to destroy resources, but don't fail if they don't exist
+            npm run cdktf:destroy || echo "No resources to destroy or destruction failed"
           elif [ "$PLATFORM" = "cfn" ]; then
             echo "✅ CloudFormation project detected, running CloudFormation destroy..."
             # Try to destroy resources, but don't fail if they don't exist
@@ -837,3 +936,5 @@ jobs:
           fi
         env:
           ENVIRONMENT_SUFFIX: ${{ env.ENVIRONMENT_SUFFIX }}
+          TERRAFORM_STATE_BUCKET: ${{ env.TERRAFORM_STATE_BUCKET }}
+          TERRAFORM_STATE_BUCKET_REGION: ${{ env.TERRAFORM_STATE_BUCKET_REGION }}
