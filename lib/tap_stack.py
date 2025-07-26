@@ -8,7 +8,7 @@ manages environment-specific configurations.
 from typing import Optional
 
 import aws_cdk as cdk
-from aws_cdk import NestedStack
+from aws_cdk import NestedStack, CfnOutput
 from constructs import Construct
 
 # Import your stacks here
@@ -78,8 +78,10 @@ class TapStack(cdk.Stack):
         super().__init__(scope, construct_id, **kwargs)
         # Deploy to multiple regions for high availability
         regions = ["us-east-1", "us-west-1"]
+        self.region_stacks = {}
         for region in regions:
-          MultiRegionStack(self, f"MultiRegionStack-{region}", region=region)
+          region_stack = MultiRegionStack(self, f"MultiRegionStack-{region}", region=region)
+          self.region_stacks[region] = region_stack
 
     # db_props = DynamoDBStackProps(
     #     environment_suffix=environment_suffix
@@ -90,6 +92,11 @@ class TapStack(cdk.Stack):
       self,
       f"MultiRegionStack{environment_suffix}"
     )
+    
+    # Add outputs that aggregate nested stack information
+    CfnOutput(self, "MainStackName", value=self.stack_name)
+    CfnOutput(self, "EnvironmentSuffix", value=environment_suffix)
+    CfnOutput(self, "DeployedRegions", value=",".join(["us-east-1", "us-west-1"]))
 
     # # Make the table available as a property of this stack
     # self.table = dynamodb_stack.table

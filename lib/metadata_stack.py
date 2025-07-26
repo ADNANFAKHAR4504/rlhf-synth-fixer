@@ -50,3 +50,21 @@ class MultiRegionStack(Stack):
 
     # Output the API Endpoint
     CfnOutput(self, "ApiEndpoint", value=api.url)
+    
+    # Output Lambda function details
+    CfnOutput(self, "LambdaFunctionName", value=lambda_function.function_name)
+    CfnOutput(self, "LambdaFunctionArn", value=lambda_function.function_arn)
+    
+    # Output IAM role details
+    CfnOutput(self, "LambdaExecutionRoleName", value=lambda_role.role_name)
+    CfnOutput(self, "LambdaExecutionRoleArn", value=lambda_role.role_arn)
+    
+    # Output API Gateway details
+    CfnOutput(self, "ApiGatewayId", value=api.rest_api_id)
+    CfnOutput(self, "ApiGatewayName", value=api.rest_api_name)
+    
+    # Output region information
+    CfnOutput(self, "DeploymentRegion", value=region)
+    
+    # Output stack information
+    CfnOutput(self, "StackName", value=self.stack_name)
