@@ -572,7 +572,6 @@ jobs:
         env:
           ENVIRONMENT_SUFFIX: ${{ env.ENVIRONMENT_SUFFIX }}
           CI: "1"           # Set CI for the entire step
-          LOCAL_TESTING: "1" # Set LOCAL_TESTING for the entire step
 
   cleanup:
     name: Cleanup (Destroy Resources)
