@@ -190,7 +190,8 @@ class TestTapStackIntegration(unittest.TestCase):
 
     try:
       # Initialize IAM client
-      iam_client = boto3.client('iam', region_name=os.environ.get('CDK_DEFAULT_REGION', 'us-east-1')) 
+      iam_client = boto3.client(
+          'iam', region_name=os.environ.get('CDK_DEFAULT_REGION', 'us-east-1'))
       
       # Find IAM roles created by our stack
       paginator = iam_client.get_paginator('list_roles')
@@ -433,9 +434,6 @@ class TestTapStackIntegration(unittest.TestCase):
       if 'AccessDenied' in str(e) or 'UnauthorizedOperation' in str(e):
         return  # Skip region validation for permission issues
       self.fail(f"Unexpected error accessing Lambda in {region}: {e}")
-    except (KeyError, ValueError) as e:
-      # Configuration parsing errors should fail the test
-      self.fail(f"Configuration error accessing Lambda in {region}: {e}")
 
   def _validate_api_gateway_tags_in_region(self, region):
     """Helper method to validate API Gateway tags in a specific region"""
