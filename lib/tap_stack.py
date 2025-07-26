@@ -53,9 +53,12 @@ class TapStack(Stack):
       self,
       scope: Construct,
       construct_id: str,
-      props: Optional[TapStackProps] = None,
+      _props: Optional[TapStackProps] = None,
       **kwargs
   ):
+    # Handle props passed as keyword argument for backward compatibility
+    if 'props' in kwargs:
+      _props = kwargs.pop('props')
     super().__init__(scope, construct_id, **kwargs)
 
     # Environment suffix is handled at the app level

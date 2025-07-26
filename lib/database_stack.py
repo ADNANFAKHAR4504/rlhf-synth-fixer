@@ -1,5 +1,6 @@
 from aws_cdk import (
   Stack,
+  CfnOutput,
   Duration,
   RemovalPolicy,
   aws_rds as rds,
@@ -30,3 +31,20 @@ class DatabaseStack(Stack):
         storage_encryption_key=kms_key,
         removal_policy=RemovalPolicy.DESTROY
     )
+
+    # Export Database outputs for integration tests
+    CfnOutput(self, "DatabaseClusterIdentifier",
+              value=self.db_cluster.cluster_identifier,
+              description="The database cluster identifier")
+
+    CfnOutput(self, "DatabaseClusterEndpoint",
+              value=self.db_cluster.cluster_endpoint.hostname,
+              description="The database cluster endpoint")
+
+    CfnOutput(self, "DatabaseClusterEngine",
+              value="aurora-mysql",
+              description="The database engine type")
+
+    CfnOutput(self, "DatabaseBackupRetention",
+              value="7",
+              description="Database backup retention in days")

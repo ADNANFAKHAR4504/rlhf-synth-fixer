@@ -1,5 +1,6 @@
 from aws_cdk import (
   Stack,
+  CfnOutput,
   aws_elasticloadbalancingv2 as elbv2,
   aws_ec2 as ec2,
 )
@@ -15,3 +16,16 @@ class AlbStack(Stack):
                                              vpc=vpc,
                                              internet_facing=True
                                              )
+
+    # Export ALB outputs for integration tests
+    CfnOutput(self, "LoadBalancerArn",
+              value=self.alb.load_balancer_arn,
+              description="The Application Load Balancer ARN")
+
+    CfnOutput(self, "LoadBalancerDnsName",
+              value=self.alb.load_balancer_dns_name,
+              description="The Application Load Balancer DNS name")
+
+    CfnOutput(self, "LoadBalancerHostedZoneId",
+              value=self.alb.load_balancer_canonical_hosted_zone_id,
+              description="The Application Load Balancer hosted zone ID")

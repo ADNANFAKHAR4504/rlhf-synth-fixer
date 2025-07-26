@@ -1,5 +1,6 @@
 from aws_cdk import (
   Stack,
+  CfnOutput,
   RemovalPolicy,
   aws_kms as kms,
 )
@@ -14,3 +15,12 @@ class KmsStack(Stack):
                        enable_key_rotation=True,
                        removal_policy=RemovalPolicy.DESTROY
                        )
+
+    # Export KMS outputs for integration tests
+    CfnOutput(self, "KmsKeyId",
+              value=self.key.key_id,
+              description="The KMS key ID")
+
+    CfnOutput(self, "KmsKeyArn",
+              value=self.key.key_arn,
+              description="The KMS key ARN")
