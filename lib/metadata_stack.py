@@ -26,7 +26,7 @@ class MultiRegionStack(Stack):
       ]
     )
 
-    # Define Lambda Function
+    # Define Lambda Function 
     self.lambda_function = _lambda.Function(
       self, "MyLambdaFunction",
       runtime=_lambda.Runtime.PYTHON_3_9,
