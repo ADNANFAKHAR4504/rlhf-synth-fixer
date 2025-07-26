@@ -13,27 +13,27 @@ Parameters:
 Resources:
 
   LogBucketKMSKey:
-  Type: AWS::KMS::Key
-  Properties:
-    Description: "KMS key for S3 Log Bucket encryption"
-    KeyPolicy:
-      Version: "2012-10-17"
-      Statement:
-        - Sid: "Allow administration of the key"
-          Effect: Allow
-          Principal:
-            AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
-          Action:
-            - "kms:*"
-          Resource: "*"
-        - Sid: "Allow S3 to use the key for encryption"
-          Effect: Allow
-          Principal:
-            Service: s3.amazonaws.com
-          Action:
-            - "kms:GenerateDataKey*"
-            - "kms:Decrypt"
-          Resource: "*"
+    Type: AWS::KMS::Key
+    Properties:
+      Description: "KMS key for S3 Log Bucket encryption"
+      KeyPolicy:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: "Allow administration of the key"
+            Effect: Allow
+            Principal:
+              AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
+            Action:
+              - "kms:*"
+            Resource: "*"
+          - Sid: "Allow S3 to use the key for encryption"
+            Effect: Allow
+            Principal:
+              Service: s3.amazonaws.com
+            Action:
+              - "kms:GenerateDataKey*"
+              - "kms:Decrypt"
+            Resource: "*"
 
   LogBucket:
     Type: AWS::S3::Bucket
