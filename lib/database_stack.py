@@ -32,7 +32,7 @@ class DatabaseStack(Stack):
         removal_policy=RemovalPolicy.DESTROY
     )
 
-    # Export Database outputs for integration tests
+    # Export Database outputs
     CfnOutput(self, "DatabaseClusterIdentifier",
               value=self.db_cluster.cluster_identifier,
               description="The database cluster identifier")
