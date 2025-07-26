@@ -263,6 +263,11 @@ jobs:
 
       - name: Bootstrap
         run: |
+          # --- ADD THIS CLEANUP STEP HERE ---
+          echo "Cleaning up cdk.out directory before bootstrap..."
+          if [ -d "cdk.out" ]; then
+            rm -rf cdk.out
+          fi
           PLATFORM="${{ needs.synth.outputs.platform }}"
           LANGUAGE="${{ needs.synth.outputs.language }}"
 
