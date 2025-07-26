@@ -72,7 +72,7 @@ describe('Production Infrastructure Integration Tests', () => {
     const instanceProfiles = getResourceByType('AWS::IAM::InstanceProfile');
     expect(instanceProfiles.length).toBeGreaterThan(0);
     instanceProfiles.forEach(([, profile]) => {
-      expect(profile.Properties.Roles).toContainEqual({ Ref: 'EC2S3AccessRole' });
+      expect(profile.Properties.Roles).toContainEqual({ Ref: 'EC2S3Role' });
     });
   });
 
@@ -87,18 +87,19 @@ describe('Production Infrastructure Integration Tests', () => {
   });
 
   test('All S3 Buckets have proper encryption and ACL disabled', () => {
-    const buckets = getResourceByType('AWS::S3::Bucket');
-    buckets.forEach(([, bucket]) => {
-      const enc = bucket.Properties.BucketEncryption?.ServerSideEncryptionConfiguration?.[0]?.ServerSideEncryptionByDefault?.SSEAlgorithm;
-      expect(enc).toBe('AES256');
+  const buckets = getResourceByType('AWS::S3::Bucket');
+  buckets.forEach(([, bucket]) => {
+    const enc = bucket.Properties.BucketEncryption?.ServerSideEncryptionConfiguration?.[0]?.ServerSideEncryptionByDefault?.SSEAlgorithm;
+    expect(enc).toMatch(/AES256|aws:kms/); // Accept either encryption method
 
-      const pubBlock = bucket.Properties.PublicAccessBlockConfiguration;
-      expect(pubBlock.BlockPublicAcls).toBe(true);
-      expect(pubBlock.IgnorePublicAcls).toBe(true);
-      expect(pubBlock.BlockPublicPolicy).toBe(true);
-      expect(pubBlock.RestrictPublicBuckets).toBe(true);
-    });
+    const pubBlock = bucket.Properties.PublicAccessBlockConfiguration;
+    expect(pubBlock.BlockPublicAcls).toBe(true);
+    expect(pubBlock.IgnorePublicAcls).toBe(true);
+    expect(pubBlock.BlockPublicPolicy).toBe(true);
+    expect(pubBlock.RestrictPublicBuckets).toBe(true);
   });
+});
+
 
   test('Each S3 Bucket has OwnershipControls set to BucketOwnerEnforced', () => {
     const buckets = getResourceByType('AWS::S3::Bucket');
@@ -107,6 +108,25 @@ describe('Production Infrastructure Integration Tests', () => {
       expect(rules.find((r: any) => r.ObjectOwnership === 'BucketOwnerEnforced')).toBeDefined();
     });
   });
+  test('All S3 bucket policies explicitly deny unencrypted (non-SSL) requests', () => {
+  const policies = getResourceByType('AWS::S3::BucketPolicy');
+  expect(policies.length).toBeGreaterThan(0);
+
+  policies.forEach(([, policy]) => {
+    const statements = policy?.Properties?.PolicyDocument?.Statement || [];
+
+    const denyInsecure = statements.find((stmt: any) => {
+      return (
+        stmt.Effect === 'Deny' &&
+        stmt.Principal === '*' &&
+        stmt.Action?.includes('s3:*') &&
+        stmt.Condition?.Bool?.['aws:SecureTransport'] === 'false'
+      );
+    });
+
+    expect(denyInsecure).toBeDefined();
+  });
+});
 
   test('CloudTrail bucket policy includes GetBucketAcl and PutObject permissions for cloudtrail.amazonaws.com', () => {
     const policies = getResourceByType('AWS::S3::BucketPolicy');

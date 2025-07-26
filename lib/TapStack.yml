@@ -1,15 +1,15 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: productionuction infrastructure with VPC, subnets, secure S3 buckets (ACL-free), IAM roles, and CloudTrail
+Description: production infrastructure with VPC, subnets, secure S3 buckets (ACL-free), IAM roles, and CloudTrail
 
 Parameters:
   EnvironmentName:
     Description: Environment name (dev/stage/production)
     Type: String
-    Default: productionuction
+    Default: production
     AllowedValues:
       - dev
       - stage
-      - productionuction
+      - production
 
 Mappings:
   AZConfig:
