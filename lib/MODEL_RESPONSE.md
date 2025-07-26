@@ -1,3 +1,8 @@
+# CloudFormation Template - Model Response
+
+This is a sample CloudFormation template for AWS infrastructure migration with best practices.
+
+```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: CloudFormation template to migrate infrastructure to AWS with best practices.
 
@@ -126,3 +131,16 @@ Outputs:
   EC2InstanceId:
     Description: EC2 Instance ID
     Value: !Ref EC2Instance
+```
+
+## Usage
+
+This template provides a basic AWS infrastructure setup including:
+
+- VPC with Internet Gateway
+- IAM roles for EC2 instances
+- Auto Scaling Group with Launch Configuration
+- S3 bucket for logging
+- Parameterized instance types and counts
+
+For the complete, production-ready template with all AWS services, see `TapStack.yml`.
