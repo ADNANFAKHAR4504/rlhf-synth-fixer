@@ -12,7 +12,7 @@ Parameters:
 
   ExistingCloudTrailName:
     Type: String
-    Description: The n ame of an existing CloudTrail trail
+    Description: The name of an existing CloudTrail trail
     Default: DemoStackpr151-SecureCloudTrail01AAEA85-bGicgEvQ7jQA 
 
 Resources:
