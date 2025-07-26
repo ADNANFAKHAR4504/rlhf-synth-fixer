@@ -19,7 +19,9 @@ env:
   # Use PR number for resource isolation, fallback to 'main' for main branch
   # Prefix with 'pr' to ensure AWS resource names start with a letter
   ENVIRONMENT_SUFFIX: ${{ github.event.number && format('pr{0}', github.event.number) || 'dev' }}
-  S3_RELEASE_BUCKET_NAME: 'iac-rlhf-aws-release'
+  S3_BUCKET_NAME: 'iac-rlhf-aws-release'
+  TERRAFORM_STATE_BUCKET: 'iac-rlhf-tf-states'
+  TERRAFORM_STATE_BUCKET_REGION: 'us-east-1'
   S3_PRODUCTION_BUCKET_NAME: 'iac-rlhf-production'
 
 jobs:
@@ -209,6 +211,10 @@ jobs:
           if [ "$PLATFORM" = "cdk" ]; then
             echo "✅ CDK project detected, running CDK synth..."
             npm run cdk:synth
+          elif [ "$PLATFORM" = "cdktf" ]; then
+            echo "✅ CDKTF project detected, running CDKTF get and synth..."
+            npm run cdktf:get
+            npm run cdktf:synth
           else
             echo "ℹ️ Not a CDK project, skipping CDK synth"
             echo "This is expected for non-CDK projects like CloudFormation templates"
@@ -218,13 +224,16 @@ jobs:
           fi
         env:
           ENVIRONMENT_SUFFIX: ${{ env.ENVIRONMENT_SUFFIX }}
+          TERRAFORM_STATE_BUCKET: ${{ env.TERRAFORM_STATE_BUCKET }}
+          TERRAFORM_STATE_BUCKET_REGION: ${{ env.TERRAFORM_STATE_BUCKET_REGION }}
 
       - name: Upload Build Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: cdk-artifacts
-          path: cdk.out/
-
+          path: |
+            cdk.out/
+            cdktf.out/
   deploy:
     name: Deploy
     runs-on: ubuntu-24.04
@@ -274,6 +283,9 @@ jobs:
           if [ "$PLATFORM" = "cdk" ]; then
             echo "✅ CDK project detected, running CDK deploy..."
             npm run cdk:deploy
+          elif [ "$PLATFORM" = "cdktf" ]; then
+            echo "✅ CDKTF project detected, running CDKTF deploy..."
+            npm run cdktf:deploy
           elif [ "$PLATFORM" = "cfn" ] && [ "$LANGUAGE" = "yaml" ]; then
             echo "✅ CloudFormation YAML project detected, deploying with AWS CLI..."
             npm run cfn:deploy-yaml
@@ -288,6 +300,9 @@ jobs:
           ENVIRONMENT_SUFFIX: ${{ env.ENVIRONMENT_SUFFIX }}
           REPOSITORY: ${{ github.repository }}
           COMMIT_AUTHOR: ${{ github.event.head_commit.author.name || github.actor }}
+          AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+          TERRAFORM_STATE_BUCKET: ${{ env.TERRAFORM_STATE_BUCKET }}
+          TERRAFORM_STATE_BUCKET_REGION: ${{ env.TERRAFORM_STATE_BUCKET_REGION }}
 
       - name: Get Deployment Outputs
         run: |
@@ -330,6 +345,12 @@ jobs:
             cat cfn-outputs/all-outputs.json || echo "No consolidated outputs"
             echo "Flat outputs:"
             cat cfn-outputs/flat-outputs.json || echo "No flat outputs"
+          elif [ "$PLATFORM" = "cdktf" ]; then
+            echo "✅ CDKTF project detected, writing outputs to cfn-outputs..."
+            mkdir -p cfn-outputs/
+            touch cfn-outputs/flat-outputs.json
+            cdktf output --outputs-file cfn-outputs/flat-outputs.json
+            cat cfn-outputs/flat-outputs.json || echo "No outputs found in cfn-outputs/flat-outputs.json"
           elif [ "${{ needs.synth.outputs.platform }}" = "cfn" ]; then
             echo "✅ CloudFormation project detected, getting stack outputs..."
             mkdir -p cfn-outputs
@@ -374,7 +395,6 @@ jobs:
           path: |
             cfn-outputs/
             cdk-stacks.json
-
   lint:
     name: Lint
     runs-on: ubuntu-24.04
@@ -448,7 +468,10 @@ jobs:
 
       - name: Run unit tests
         run: |
-          if [ "${{ needs.lint.outputs.language }}" = "ts" ]; then
+          if [ "${{ needs.lint.outputs.language }}" = "ts" ] && [ "${{ needs.lint.outputs.platform }}" = "cdktf" ]; then
+            echo "✅ Terraform TypeScript project detected, running unit tests..."
+            npm run test:unit-cdktf
+          elif [ "${{ needs.lint.outputs.language }}" = "ts" ]; then
             echo "✅ TypeScript project detected, running unit tests..."
             npm run test:unit
           elif [ "${{ needs.lint.outputs.language }}" = "py" ]; then
@@ -531,6 +554,9 @@ jobs:
           fi
         env:
           ENVIRONMENT_SUFFIX: ${{ env.ENVIRONMENT_SUFFIX }}
+          AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+          TERRAFORM_STATE_BUCKET: ${{ env.TERRAFORM_STATE_BUCKET }}
+          TERRAFORM_STATE_BUCKET_REGION: ${{ env.TERRAFORM_STATE_BUCKET_REGION }}
 
   cleanup:
     name: Cleanup (Destroy Resources)
@@ -565,6 +591,10 @@ jobs:
             echo "✅ CDK project detected, running CDK destroy..."
             # Try to destroy any leftover resources from PRs, but don't fail if they don't exist
             npm run cdk:destroy || echo "No resources to destroy or destruction failed"
+          elif [ "$PLATFORM" = "cdktf" ]; then
+            echo "✅ CDKTF project detected, running CDKTF destroy..."
+            # Try to destroy any leftover resources from PRs, but don't fail if they don't exist
+            npm run cdktf:destroy || echo "No resources to destroy or destruction failed"
           elif [ "$PLATFORM" = "cfn" ]; then
             echo "✅ CloudFormation project detected, running CloudFormation destroy..."
             # Try to destroy any leftover resources from PRs, but don't fail if they don't exist
@@ -575,6 +605,8 @@ jobs:
           fi
         env:
           ENVIRONMENT_SUFFIX: ${{ env.ENVIRONMENT_SUFFIX }}
+          TERRAFORM_STATE_BUCKET: ${{ env.TERRAFORM_STATE_BUCKET }}
+          TERRAFORM_STATE_BUCKET_REGION: ${{ env.TERRAFORM_STATE_BUCKET_REGION }}
 
   archive-folders:
     name: Archive Folders and Reset Repository
@@ -741,6 +773,8 @@ jobs:
             "cdk.json"
             "metadata.json"
             "tap.py"
+            "setup.js"
+            "cdktf.json"
             )
 
           # Move paths to archive
@@ -888,6 +922,10 @@ jobs:
             echo "✅ CDK TypeScript project detected, running CDK destroy..."
             # Try to destroy resources, but don't fail if they don't exist
             npm run cdk:destroy || echo "No resources to destroy or destruction failed"
+          elif [ "$PLATFORM" = "cdktf" ]; then
+            echo "✅ CDKTF project detected, running CDKTF destroy..."
+            # Try to destroy resources, but don't fail if they don't exist
+            npm run cdktf:destroy || echo "No resources to destroy or destruction failed"
           elif [ "$PLATFORM" = "cfn" ]; then
             echo "✅ CloudFormation project detected, running CloudFormation destroy..."
             # Try to destroy resources, but don't fail if they don't exist
@@ -898,3 +936,5 @@ jobs:
           fi
         env:
           ENVIRONMENT_SUFFIX: ${{ env.ENVIRONMENT_SUFFIX }}
+          TERRAFORM_STATE_BUCKET: ${{ env.TERRAFORM_STATE_BUCKET }}
+          TERRAFORM_STATE_BUCKET_REGION: ${{ env.TERRAFORM_STATE_BUCKET_REGION }}
