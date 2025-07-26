@@ -1,3 +1,4 @@
+import os
 import aws_cdk as cdk
 from constructs import Construct
 from aws_cdk import (
@@ -29,6 +30,35 @@ class ServerlessStack(Stack):
     )
 
     CfnOutput(self, "VpcIdOutput", value=vpc.vpc_id, description="The VPC ID")
+    
+    # Output subnet IDs for verification
+    CfnOutput(
+      self, "PublicSubnetIdsOutput", 
+      value=",".join([subnet.subnet_id for subnet in vpc.public_subnets]), 
+      description="Comma-separated list of public subnet IDs"
+    )
+    
+    # Output Internet Gateway ID
+    CfnOutput(
+      self, "InternetGatewayIdOutput", 
+      value=vpc.internet_gateway_id, 
+      description="Internet Gateway ID"
+    )
+    
+    # Security Group for Lambda
+    lambda_security_group = ec2.SecurityGroup(
+      self,
+      "LambdaSecurityGroup",
+      vpc=vpc,
+      description="Security group for Lambda function",
+      allow_all_outbound=True
+    )
+    
+    CfnOutput(
+      self, "LambdaSecurityGroupIdOutput", 
+      value=lambda_security_group.security_group_id, 
+      description="Lambda security group ID"
+    )
 
     # DynamoDB Table Creation
     table = dynamodb.Table(
@@ -91,16 +121,28 @@ class ServerlessStack(Stack):
       value=lambda_role.role_name, 
       description="Lambda execution role name"
     )
+    CfnOutput(
+      self, "LambdaRoleArnOutput", 
+      value=lambda_role.role_arn, 
+      description="Lambda execution role ARN"
+    )
 
     # Lambda Function
+    # Determine lambda asset path dynamically
+    lambda_asset_path = os.path.join(os.path.dirname(__file__), "lambda")
+    if not os.path.exists(lambda_asset_path):
+      lambda_asset_path = "lib/lambda"  # Fallback for root execution
+    
     lambda_function = _lambda.Function(
       self,
       "ItemFunction",
       runtime=_lambda.Runtime.PYTHON_3_9,
-      code=_lambda.Code.from_asset("lib/lambda"),
+      code=_lambda.Code.from_asset(lambda_asset_path),
       handler="handler.handler",
       role=lambda_role,
       vpc=vpc,
+      vpc_subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PUBLIC),
+      security_groups=[lambda_security_group],
       allow_public_subnet=True,
       environment={"TABLE_NAME": table.table_name},
     )

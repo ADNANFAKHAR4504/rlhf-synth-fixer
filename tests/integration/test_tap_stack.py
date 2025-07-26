@@ -36,6 +36,8 @@ class TestTapStack(unittest.TestCase):
     self.lambda_client = boto3.client('lambda')
     self.apigateway = boto3.client('apigateway')
     self.cloudwatch = boto3.client('cloudwatch')
+    self.iam = boto3.client('iam')
+    self.ec2 = boto3.client('ec2')
 
   @mark.it("DynamoDB table exists and is accessible")
   def test_dynamodb_table_exists(self):
@@ -167,15 +169,13 @@ class TestTapStack(unittest.TestCase):
     if not vpc_id:
       self.fail("VPC ID not available in deployment outputs")
     
-    ec2 = boto3.client('ec2')
-    
     try:
       # Verify VPC exists
-      vpcs = ec2.describe_vpcs(VpcIds=[vpc_id])
+      vpcs = self.ec2.describe_vpcs(VpcIds=[vpc_id])
       self.assertEqual(len(vpcs['Vpcs']), 1)
       
       # Check that VPC has subnets
-      subnets = ec2.describe_subnets(
+      subnets = self.ec2.describe_subnets(
         Filters=[{'Name': 'vpc-id', 'Values': [vpc_id]}]
       )
       
@@ -185,3 +185,133 @@ class TestTapStack(unittest.TestCase):
       
     except ClientError as e:
       self.fail(f"VPC configuration check failed: {e}")
+
+  @mark.it("Subnet configuration verification")
+  def test_subnet_configuration(self):
+    """Test that subnets are properly configured and accessible"""
+    subnet_ids_str = flat_outputs.get('PublicSubnetIdsOutput')
+    if not subnet_ids_str:
+      self.fail("Public subnet IDs not available in deployment outputs")
+    
+    subnet_ids = subnet_ids_str.split(',')
+    self.assertGreaterEqual(len(subnet_ids), 2, "Should have at least 2 public subnets")
+    
+    try:
+      subnets = self.ec2.describe_subnets(SubnetIds=subnet_ids)
+      
+      for subnet in subnets['Subnets']:
+        self.assertTrue(subnet.get('MapPublicIpOnLaunch', False), 
+                       "Subnet should be configured to map public IPs")
+        self.assertEqual(subnet['State'], 'available', 
+                        "Subnet should be in available state")
+      
+    except ClientError as e:
+      self.fail(f"Subnet configuration check failed: {e}")
+
+  @mark.it("Internet Gateway configuration")
+  def test_internet_gateway_configuration(self):
+    """Test that Internet Gateway is properly configured"""
+    igw_id = flat_outputs.get('InternetGatewayIdOutput')
+    if not igw_id:
+      self.fail("Internet Gateway ID not available in deployment outputs")
+    
+    vpc_id = flat_outputs.get('VpcIdOutput')
+    if not vpc_id:
+      self.fail("VPC ID not available in deployment outputs")
+    
+    try:
+      # Verify Internet Gateway exists and is attached to VPC
+      igws = self.ec2.describe_internet_gateways(InternetGatewayIds=[igw_id])
+      self.assertEqual(len(igws['InternetGateways']), 1)
+      
+      igw = igws['InternetGateways'][0]
+      self.assertEqual(igw['State'], 'available')
+      
+      # Check attachment to VPC
+      attachments = igw.get('Attachments', [])
+      self.assertEqual(len(attachments), 1)
+      self.assertEqual(attachments[0]['VpcId'], vpc_id)
+      self.assertEqual(attachments[0]['State'], 'available')
+      
+    except ClientError as e:
+      self.fail(f"Internet Gateway configuration check failed: {e}")
+
+  @mark.it("Lambda security group configuration")
+  def test_lambda_security_group(self):
+    """Test that Lambda security group is properly configured"""
+    sg_id = flat_outputs.get('LambdaSecurityGroupIdOutput')
+    if not sg_id:
+      self.fail("Lambda security group ID not available in deployment outputs")
+    
+    vpc_id = flat_outputs.get('VpcIdOutput')
+    if not vpc_id:
+      self.fail("VPC ID not available in deployment outputs")
+    
+    try:
+      # Verify security group exists
+      sgs = self.ec2.describe_security_groups(GroupIds=[sg_id])
+      self.assertEqual(len(sgs['SecurityGroups']), 1)
+      
+      sg = sgs['SecurityGroups'][0]
+      self.assertEqual(sg['VpcId'], vpc_id)
+      self.assertIn('Lambda', sg['Description'])
+      
+      # Check that outbound rules exist (allow all outbound)
+      egress_rules = sg.get('IpPermissionsEgress', [])
+      self.assertGreater(len(egress_rules), 0, "Security group should have outbound rules")
+      
+    except ClientError as e:
+      self.fail(f"Lambda security group check failed: {e}")
+
+  @mark.it("Lambda IAM role permissions")
+  def test_lambda_iam_role_permissions(self):
+    """Test that Lambda IAM role has correct permissions"""
+    role_arn = flat_outputs.get('LambdaRoleArnOutput')
+    if not role_arn:
+      self.fail("Lambda role ARN not available in deployment outputs")
+    
+    role_name = flat_outputs.get('LambdaRoleNameOutput')
+    if not role_name:
+      self.fail("Lambda role name not available in deployment outputs")
+    
+    try:
+      # Verify role exists
+      role = self.iam.get_role(RoleName=role_name)
+      self.assertEqual(role['Role']['Arn'], role_arn)
+      
+      # Check attached managed policies
+      attached_policies = self.iam.list_attached_role_policies(RoleName=role_name)
+      policy_names = [p['PolicyName'] for p in attached_policies['AttachedPolicies']]
+      self.assertIn('AWSLambdaBasicExecutionRole', policy_names)
+      
+      # Check inline policies for DynamoDB and VPC permissions
+      inline_policies = self.iam.list_role_policies(RoleName=role_name)
+      self.assertGreater(len(inline_policies['PolicyNames']), 0, 
+                        "Role should have inline policies for DynamoDB and VPC")
+      
+    except ClientError as e:
+      self.fail(f"Lambda IAM role check failed: {e}")
+
+  @mark.it("Lambda environment variables")
+  def test_lambda_environment_variables(self):
+    """Test that Lambda function has correct environment variables"""
+    function_name = flat_outputs.get('LambdaFunctionNameOutput')
+    if not function_name:
+      self.fail("Lambda function name not available in deployment outputs")
+    
+    table_name = flat_outputs.get('DynamoTableNameOutput')
+    if not table_name:
+      self.fail("DynamoDB table name not available in deployment outputs")
+    
+    try:
+      response = self.lambda_client.get_function(FunctionName=function_name)
+      
+      config = response['Configuration']
+      env_vars = config.get('Environment', {}).get('Variables', {})
+      
+      self.assertIn('TABLE_NAME', env_vars, "Lambda should have TABLE_NAME environment variable")
+      self.assertEqual(env_vars['TABLE_NAME'], table_name, 
+                      "TABLE_NAME should match DynamoDB table name")
+      
+    except ClientError as e:
+      self.fail(f"Lambda environment variables check failed: {e}")
