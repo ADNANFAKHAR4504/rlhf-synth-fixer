@@ -1,28 +1,113 @@
-Prompt: High-Availability, Multi-Region Infrastructure Migration with AWS CDK and TypeScript
-You are tasked with migrating an organization's on-premise infrastructure to a highly available, secure, and scalable multi-region architecture on AWS. The entire infrastructure must be defined and managed using the AWS Cloud Development Kit (CDK) with TypeScript.
+Insert here the prompt that made the model fail.# PROMPT
 
-The primary goal is to maintain or exceed existing service-level agreements (SLAs) by deploying resilient services across the us-east-1, eu-west-1, and ap-southeast-1 regions.
+CloudFormation Multi-Environment Management Solution
+Objective:
+Design a modular, secure, and automated AWS infrastructure-as-code solution using CloudFormation to manage development (dev), testing (test), and production (prod) environments with consistency, compliance, and scalability.
 
-Requirements:
-Multi-Region Deployment Strategy: Design the CDK application to be region-aware, capable of deploying consistent infrastructure stacks to all three target regions (us-east-1, eu-west-1, ap-southeast-1).
+Technical Requirements
+Multi-Environment Consistency:
 
-High Availability and SLAs: Implement a multi-AZ architecture within each region for critical components. This should include services like EC2 instances within an Auto Scaling Group behind an Application Load Balancer to ensure uptime and resilience.
+Deploy identical infrastructure stacks across dev, test, and prod using parameterized CloudFormation templates.
 
-Comprehensive Security:
+All environments must reside in the same AWS Region (e.g., us-east-1).
 
-Enforce encryption at rest for all storage services (e.g., EBS volumes, S3 buckets, RDS databases) using customer-managed AWS KMS keys.
+IAM Least Privilege:
 
-Ensure all data in transit is encrypted, for example, by configuring HTTPS listeners on load balancers.
+Define fine-grained IAM roles/policies for:
 
-Strict Tagging Convention: Apply a consistent tagging strategy to all resources created by the CDK. Tags must follow the specific format env-resource-name (e.g., prod-web-server-asg, dev-main-database).
+EC2 instances (web servers, worker nodes).
 
-Intelligent Autoscaling: Configure autoscaling policies for compute resources based on performance metrics like CPU utilization or request count per target. The strategy should balance performance with cost-effectiveness.
+Lambda functions (if applicable).
 
-Robust Monitoring and Alerting: Establish a comprehensive monitoring framework using AWS CloudWatch. Create custom alarms for key performance indicators (KPIs) and operational metrics (e.g., high CPU, unhealthy host count, application latency) to ensure prompt issue detection.
+CI/CD services (CodePipeline, CodeBuild).
 
-Idempotent and Reproducible Deployments: The CDK application must be designed to produce identical infrastructure when deployed multiple times, ensuring consistency across all environments.
+Restrict cross-environment access (e.g., prod roles cannot modify dev resources).
 
-Infrastructure Testing: Write unit tests for your CDK stacks and constructs using the Jest framework. The tests must validate that the created resources comply with the specified requirements, such as encryption settings, tagging conventions, and security group rules.
+Dynamic Configuration:
 
-Expected Output:
-Generate a complete and functional AWS CDK project in TypeScript that fulfills all the outlined requirements. The project should be well-structured to handle multi-region deployments. All CDK stacks must synthesize and deploy successfully, and the provided Jest tests must validate the compliance of the generated infrastructure. The final deliverable should include the CDK application code, testing files, and clear documentation in a README.md file.
+Use CloudFormation Parameters and Mappings to customize:
+
+Instance types (e.g., t3.micro for dev, m5.large for prod).
+
+Auto Scaling thresholds (min/max instances per environment).
+
+Resource naming conventions (e.g., {Project}-{Env}-{Resource}).
+
+Compliance via AWS Config:
+
+Enable AWS Config with rules such as:
+
+encrypted-volumes (EBS encryption).
+
+restricted-ssh (block public SSH access in prod).
+
+s3-bucket-public-read-prohibited.
+
+Deploy remediation actions (e.g., auto-tag non-compliant resources).
+
+CI/CD Automation:
+
+CodePipeline Setup:
+
+Source Stage: Pull infrastructure code from CodeCommit/GitHub.
+
+Build Stage: Validate templates using CodeBuild.
+
+Deploy Stage: Deploy stacks to dev → test → prod with manual approval for prod.
+
+Environment-aware deployments: Use CloudFormation StackSets or nested stacks for cross-environment updates.
+
+High Availability & Scalability:
+
+Multi-AZ deployments: Spread resources across 2+ Availability Zones.
+
+Auto Scaling Groups: Scale based on CloudWatch metrics (CPU/memory).
+
+Load Balancers: ALB/NLB for fault-tolerant traffic distribution.
+
+Monitoring with CloudWatch:
+
+Dashboards: Per-environment metrics (CPU, latency, errors).
+
+Alarms: Notify SNS for thresholds breaches (e.g., high CPU in prod).
+
+Logs: Centralized logging for EC2, Lambda, and ALB.
+
+Tagging Strategy:
+
+Enforce tags (Environment, Owner, CostCenter) on all resources.
+
+Use AWS Config Managed Rules to audit tagging compliance.
+
+Expected Deliverables
+YAML Templates:
+
+main.yaml: Root template orchestrating environment deployments.
+
+network.yaml: VPC, subnets, NAT gateways (shared across envs).
+
+iam.yaml: Least-privilege IAM roles/policies.
+
+pipeline.yaml: CI/CD pipeline definition.
+
+monitoring.yaml: CloudWatch alarms/dashboards.
+
+Parameter Files:
+
+dev-params.json, test-params.json, prod-params.json with env-specific values.
+
+Documentation:
+
+Architecture Diagram: Show multi-env workflow.
+
+Deployment Guide: Steps to deploy/update stacks.
+
+Compliance Report: How AWS Config rules enforce policies.
+
+Validation:
+
+Unit Tests: 20+ test cases (e.g., "Verify prod disallows public SSH").
+
+Integration Tests: Full deployment in a sandbox AWS account.
+
+create one single yaml cloud formation template
