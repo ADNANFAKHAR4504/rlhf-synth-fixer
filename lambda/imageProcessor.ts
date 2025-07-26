@@ -5,10 +5,17 @@ interface ImageRequest {
   metadata: Record<string, string>;
 }
 
+interface ApiGatewayResponse {
+  statusCode: number;
+  body: string;
+}
+
 const snsClient = new SNSClient({});
 const TOPIC_ARN = process.env.NOTIFICATION_TOPIC_ARN || '';
 
-export const handler = async (event: ImageRequest): Promise<any> => {
+export const handler = async (
+  event: ImageRequest
+): Promise<ApiGatewayResponse> => {
   try {
     const { imageKey, metadata } = event;
 
@@ -28,13 +35,15 @@ export const handler = async (event: ImageRequest): Promise<any> => {
       statusCode: 200,
       body: JSON.stringify({ message: 'Image processed successfully' }),
     };
-
   } catch (error) {
     console.error('Processing failed:', error);
     // ❗️Return failure with proper status code
     return {
       statusCode: 500,
-      body: JSON.stringify({ message: 'Processing failed', error: (error as any).message }),
+      body: JSON.stringify({
+        message: 'Processing failed',
+        error: (error as Error).message,
+      }),
     };
   }
 };
