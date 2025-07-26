@@ -69,4 +69,20 @@ describe('TapStack CloudFormation Template', () => {
     expect(template.Outputs.CloudFrontURL).toBeDefined();
     expect(template.Outputs.CloudFrontURL.Value).toBeDefined();
   });
+
+  it('should define a CloudWatch alarm for monitoring', () => {
+    const alarm = template.Resources.HighCPUAlarm;
+    expect(alarm).toBeDefined();
+    expect(alarm.Type).toBe('AWS::CloudWatch::Alarm');
+    expect(alarm.Properties.MetricName).toBe('CPUUtilization');
+    expect(alarm.Properties.Threshold).toBe(80);
+  });
+
+  it('should define an SNS topic for notifications', () => {
+    const topic = template.Resources.NotificationTopic;
+    expect(topic).toBeDefined();
+    expect(topic.Type).toBe('AWS::SNS::Topic');
+    expect(topic.Properties.Subscription).toBeDefined();
+    expect(topic.Properties.Subscription[0].Protocol).toBe('email');
+  });
 });
