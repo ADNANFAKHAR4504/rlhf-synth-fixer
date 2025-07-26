@@ -186,7 +186,7 @@ Resources:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
-      BucketName: !Sub "production-data-${AWS::AccountId}"
+      BucketName: !Sub "prd-data-${AWS::AccountId}"
       PublicAccessBlockConfiguration:
         BlockPublicAcls:       true
         BlockPublicPolicy:     true
@@ -301,7 +301,7 @@ Resources:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
-      BucketName: !Sub "production-cloudtrail-logs-${AWS::AccountId}"
+      BucketName: !Sub "prd-cloudtrail-logs-${AWS::AccountId}"
       PublicAccessBlockConfiguration:
         BlockPublicAcls:       true
         BlockPublicPolicy:     true
