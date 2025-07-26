@@ -302,20 +302,40 @@ class TestTapStackIntegration(unittest.TestCase):
       # List attached policies
       policies_response = self.iam_client.list_attached_role_policies(
           RoleName=role_name)
-      attached_policies = [p['PolicyName']
-                           for p in policies_response.get('AttachedRolePolicies', [])]
+      attached_policies = [p['PolicyArn'].split('/')[-1]
+                           for p in policies_response.get('AttachedPolicies', [])]
 
       # Check basic execution role is attached
       self.assertIn('AWSLambdaBasicExecutionRole', attached_policies)
-
       # List inline policies
       inline_policies_response = self.iam_client.list_role_policies(
           RoleName=role_name)
       inline_policies = inline_policies_response.get('PolicyNames', [])
 
-      # Should have inline policies for S3 and DynamoDB access
-      self.assertTrue(len(inline_policies) >= 2,
-                      "Should have at least 2 inline policies for S3 and DynamoDB")
+      # Verify at least one inline policy exists
+      self.assertTrue(len(inline_policies) > 0,
+                     "No inline policies found for Lambda role")
+
+      # Get first policy document
+      policy_response = self.iam_client.get_role_policy(
+          RoleName=role_name,
+          PolicyName=inline_policies[0]
+      )
+      policy_doc = policy_response['PolicyDocument']
+
+      # Verify statements contain required permissions
+      has_s3_access = any(
+          's3:GetObject' in stmt.get('Action', []) 
+          for stmt in policy_doc['Statement']
+      )
+      has_dynamodb_access = any(
+          any(action in stmt.get('Action', [])
+              for action in ['dynamodb:GetItem', 'dynamodb:PutItem'])
+          for stmt in policy_doc['Statement']
+      )
+
+      self.assertTrue(has_s3_access, "Missing required S3 permissions")
+      self.assertTrue(has_dynamodb_access, "Missing required DynamoDB permissions")
 
     except ClientError as e:
       self.fail(f"IAM permissions test failed: {e}")
