@@ -32,13 +32,13 @@ class DatabaseStack(Stack):
         engine=rds.DatabaseClusterEngine.aurora_mysql(version=aurora_version),
         credentials=rds.Credentials.from_generated_secret("admin"),
         parameter_group=parameter_group,  # explicitly set the parameter group
-        instance_props=rds.InstanceProps(
-            vpc=vpc,
+        writer=rds.ClusterInstance.provisioned("writer", 
             instance_type=ec2.InstanceType.of(
                 ec2.InstanceClass.BURSTABLE2, ec2.InstanceSize.SMALL),
-            vpc_subnets=ec2.SubnetSelection(
-                subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS),
         ),
+        vpc=vpc,
+        vpc_subnets=ec2.SubnetSelection(
+            subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS),
         backup=rds.BackupProps(retention=Duration.days(7)),
         storage_encrypted=True,
         storage_encryption_key=kms_key,
