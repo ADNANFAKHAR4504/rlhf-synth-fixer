@@ -1,0 +1,14 @@
+{
+  "platform": "cdktf",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "231232131",
+  "startedAt": "2025-07-25T09:22:02.031Z",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "inframarauder",
+  "dockerS3Location": "s3://iac-rlhf-aws-release/cdktf-ts/Pr132/docker-image-231232131.tar"
+}
