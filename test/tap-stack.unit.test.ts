@@ -55,7 +55,7 @@ describe('Elastic Beanstalk CloudFormation Template', () => {
       const param = template.Parameters.SSLCertificateArn;
       expect(param.Type).toBe('String');
       expect(param.Description).toBe('The ARN of the ACM SSL certificate for the Application Load Balancer.');
-      expect(param.Default).toBe('arn:aws:acm:us-east-1:123456789012:certificate/your-default-cert-id');
+      expect(param.Default).toBe('arn:aws:acm:us-east-1:718240086340:certificate/a77b0884-1bfb-4b61-b907-6d019495d01b');
     });
   });
 
