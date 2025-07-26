@@ -1,3 +1,5 @@
+# pylint: disable=duplicate-code
+from typing import Optional
 from aws_cdk import (
   Stack,
   aws_ecs as ecs,
@@ -7,13 +9,20 @@ from aws_cdk import (
   aws_iam as iam,
 )
 from constructs import Construct
-from typing import Optional
 
 
 class EcsStack(Stack):
-  def __init__(self, scope: Construct, stack_id: str, *, vpc: Optional[ec2.Vpc] = None, task_image_options=None, **kwargs):
+  def __init__(
+      self,
+      scope: Construct,
+      stack_id: str,
+      *,
+      vpc: Optional[ec2.Vpc] = None,
+      # pylint: disable=unused-argument
+      task_image_options=None,
+      **kwargs
+  ):
     super().__init__(scope, stack_id, **kwargs)
-    self.task_image_options = task_image_options
 
     # Create or use an existing VPC
     # vpc = kwargs.get("vpc")
@@ -131,3 +140,4 @@ class EcsStack(Stack):
     self.codedeploy_app = codedeploy_app
     self.deployment_group = deployment_group
     self.codedeploy_role = codedeploy_role
+    

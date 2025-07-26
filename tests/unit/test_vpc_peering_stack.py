@@ -68,3 +68,4 @@ def test_vpc_peering_connection_created(app, test_env, mock_vpcs):
 
   template = Template.from_stack(stack)
   template.resource_count_is("AWS::EC2::VPCPeeringConnection", 1)
+  

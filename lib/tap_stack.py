@@ -1,10 +1,10 @@
 """
 tap_stack.py
-This module defines the TapStack class, which serves as the main CDK stack for 
+This module defines the TapStack class, which serves as the main CDK stack for
 the TAP (Test Automation Platform) project.
 
-It orchestrates the instantiation of VPC, ECS, RDS, Monitoring, Peering, Route53, 
-and CI/CD stacks across multiple regions. The stack is parameterized for environment-specific 
+It orchestrates the instantiation of VPC, ECS, RDS, Monitoring, Peering, Route53,
+and CI/CD stacks across multiple regions. The stack is parameterized for environment-specific
 deployments and follows a modular structure.
 """
 
@@ -15,18 +15,16 @@ from typing import List
 
 from aws_cdk import Stack, Environment, NestedStack
 from constructs import Construct
-
-# Ensure import path is properly set to access other modules
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")))
-
 # Import sub-stacks
 from lib.cdk.vpc_stack import VpcStack
 from lib.cdk.ecs_stack import EcsStack
 from lib.cdk.rds_stack import RdsStack
 from lib.cdk.monitoring_stack import MonitoringStack
 from lib.cdk.cicd_stack import CicdStack
-from lib.cdk.vpc_peering_stack import VpcPeeringStack
 from lib.cdk.route53_stack import Route53Stack
+
+# Ensure import path is properly set to access other modules
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")))
 
 
 @dataclass
@@ -49,111 +47,111 @@ class TapStackProps:
 # --- Nested Stack Classes ---
 
 class NestedVpcStack(NestedStack):
-    def __init__(self, scope: Construct, construct_id: str, env: Environment, **kwargs):
-        super().__init__(scope, construct_id, **kwargs)
-        self.vpc_stack = VpcStack(self, "VpcStack", env=env)
-        self.vpc = self.vpc_stack.vpc
+  def __init__(self, scope: Construct, construct_id: str, env: Environment, **kwargs):
+    super().__init__(scope, construct_id, **kwargs)
+    self.vpc_stack = VpcStack(self, "VpcStack", env=env)
+    self.vpc = self.vpc_stack.vpc
 
 
 class NestedEcsStack(NestedStack):
-    # pylint: disable=too-many-arguments
-    def __init__(
+  # pylint: disable=too-many-arguments, too-many-positional-arguments
+  def __init__(
+      self,
+      scope: Construct,
+      construct_id: str,
+      vpc,
+      env: Environment,
+      task_image_options,
+      **kwargs
+  ):
+    super().__init__(scope, construct_id, **kwargs)
+    self.ecs_stack = EcsStack(
         self,
-        scope: Construct,
-        construct_id: str,
-        vpc,
-        env: Environment,
-        task_image_options,
-        **kwargs
-    ):
-        super().__init__(scope, construct_id, **kwargs)
-        self.ecs_stack = EcsStack(
-            self,
-            "EcsStack",
-            vpc=vpc,
-            env=env,
-            task_image_options=task_image_options
-        )
-        self.ecs_service = self.ecs_stack.ecs_service
-        self.listener = self.ecs_stack.listener
-        self.blue_target_group = self.ecs_stack.blue_target_group
-        self.green_target_group = self.ecs_stack.green_target_group
-        self.load_balancer = self.ecs_stack.load_balancer
+        "EcsStack",
+        vpc=vpc,
+        env=env,
+        task_image_options=task_image_options
+    )
+    self.ecs_service = self.ecs_stack.ecs_service
+    self.listener = self.ecs_stack.listener
+    self.blue_target_group = self.ecs_stack.blue_target_group
+    self.green_target_group = self.ecs_stack.green_target_group
+    self.load_balancer = self.ecs_stack.load_balancer
 
 
 class NestedRdsStack(NestedStack):
-    def __init__(self, scope: Construct, construct_id: str, vpc, env: Environment, **kwargs):
-        super().__init__(scope, construct_id, **kwargs)
-        self.rds_stack = RdsStack(self, "RdsStack", vpc=vpc, env=env)
-        self.rds_instance = self.rds_stack.rds_instance
+  def __init__(self, scope: Construct, construct_id: str, vpc, env: Environment, **kwargs):
+    super().__init__(scope, construct_id, **kwargs)
+    self.rds_stack = RdsStack(self, "RdsStack", vpc=vpc, env=env)
+    self.rds_instance = self.rds_stack.rds_instance
 
 
 class NestedMonitoringStack(NestedStack):
-    # pylint: disable=too-many-arguments
-    def __init__(
+  # pylint: disable=too-many-arguments, too-many-positional-arguments
+  def __init__(
+      self,
+      scope: Construct,
+      construct_id: str,
+      env: Environment,
+      ecs_service,
+      rds_instance,
+      **kwargs
+  ):
+    super().__init__(scope, construct_id, **kwargs)
+    self.monitoring_stack = MonitoringStack(
         self,
-        scope: Construct,
-        construct_id: str,
-        env: Environment,
-        ecs_service,
-        rds_instance,
-        **kwargs
-    ):
-        super().__init__(scope, construct_id, **kwargs)
-        self.monitoring_stack = MonitoringStack(
-            self,
-            "MonitoringStack",
-            ecs_service=ecs_service,
-            rds_instance=rds_instance,
-            env=env
-        )
+        "MonitoringStack",
+        ecs_service=ecs_service,
+        rds_instance=rds_instance,
+        env=env
+    )
 
 
 class NestedCicdStack(NestedStack):
-    # pylint: disable=too-many-arguments
-    def __init__(
+  # pylint: disable=too-many-arguments, too-many-positional-arguments
+  def __init__(
+      self,
+      scope: Construct,
+      construct_id: str,
+      env: Environment,
+      fargate_service,
+      listener,
+      blue_target_group,
+      green_target_group,
+      **kwargs
+  ):
+    super().__init__(scope, construct_id, **kwargs)
+    self.cicd_stack = CicdStack(
         self,
-        scope: Construct,
-        construct_id: str,
-        env: Environment,
-        fargate_service,
-        listener,
-        blue_target_group,
-        green_target_group,
-        **kwargs
-    ):
-        super().__init__(scope, construct_id, **kwargs)
-        self.cicd_stack = CicdStack(
-            self,
-            "CicdStack",
-            fargate_service=fargate_service,
-            listener=listener,
-            blue_target_group=blue_target_group,
-            green_target_group=green_target_group,
-            env=env
-        )
+        "CicdStack",
+        fargate_service=fargate_service,
+        listener=listener,
+        blue_target_group=blue_target_group,
+        green_target_group=green_target_group,
+        env=env
+    )
 
 
 class NestedRoute53Stack(NestedStack):
-    # pylint: disable=too-many-arguments
-    def __init__(
+  # pylint: disable=too-many-arguments, too-many-positional-arguments
+  def __init__(
+      self,
+      scope: Construct,
+      construct_id: str,
+      alb1,
+      alb2,
+      env: Environment,
+      **kwargs
+  ):
+    super().__init__(scope, construct_id, **kwargs)
+    self.route53_stack = Route53Stack(
         self,
-        scope: Construct,
-        construct_id: str,
-        alb1,
-        alb2,
-        env: Environment,
-        **kwargs
-    ):
-        super().__init__(scope, construct_id, **kwargs)
-        self.route53_stack = Route53Stack(
-            self,
-            "Route53Stack",
-            alb1=alb1,
-            alb2=alb2,
-            env=env,
-            cross_region_references=True
-        )
+        "Route53Stack",
+        alb1=alb1,
+        alb2=alb2,
+        env=env,
+        cross_region_references=True
+    )
 
 
 # --- Main TapStack Class ---
@@ -205,38 +203,38 @@ class TapStack(Stack):
 
       # Nested VPC stack
       vpc_stack = NestedVpcStack(
-        self,
-        f"{self.app_name}-vpc-{region}-{self.stack_suffix}",
-        env=env
+          self,
+          f"{self.app_name}-vpc-{region}-{self.stack_suffix}",
+          env=env
       )
       self.vpcs[region] = vpc_stack
 
       # Nested ECS stack
       ecs_stack = NestedEcsStack(
-        self,
-        f"{self.app_name}-ecs-{region}-{self.stack_suffix}",
-        vpc=vpc_stack.vpc,
-        env=env,
-        task_image_options=None
+          self,
+          f"{self.app_name}-ecs-{region}-{self.stack_suffix}",
+          vpc=vpc_stack.vpc,
+          env=env,
+          task_image_options=None
       )
       self.ecs_stacks[region] = ecs_stack
 
       # Nested RDS stack
       rds_stack = NestedRdsStack(
-        self,
-        f"{self.app_name}-rds-{region}-{self.stack_suffix}",
-        vpc=vpc_stack.vpc,
-        env=env
+          self,
+          f"{self.app_name}-rds-{region}-{self.stack_suffix}",
+          vpc=vpc_stack.vpc,
+          env=env
       )
       self.rds_stacks[region] = rds_stack
 
       # Nested Monitoring stack
       NestedMonitoringStack(
-        self,
-        f"{self.app_name}-monitoring-{region}-{self.stack_suffix}",
-        ecs_service=ecs_stack.ecs_service,
-        rds_instance=rds_stack.rds_instance,
-        env=env
+          self,
+          f"{self.app_name}-monitoring-{region}-{self.stack_suffix}",
+          ecs_service=ecs_stack.ecs_service,
+          rds_instance=rds_stack.rds_instance,
+          env=env
       )
 
   def _create_cicd_stack(self):
@@ -245,13 +243,13 @@ class TapStack(Stack):
     """
     ecs_stack_primary = self.ecs_stacks["us-east-1"]
     NestedCicdStack(
-      self,
-      f"{self.app_name}-cicd-{self.stack_suffix}",
-      fargate_service=ecs_stack_primary.ecs_service,
-      listener=ecs_stack_primary.listener,
-      blue_target_group=ecs_stack_primary.blue_target_group,
-      green_target_group=ecs_stack_primary.green_target_group,
-      env=self.env_us_east_1
+        self,
+        f"{self.app_name}-cicd-{self.stack_suffix}",
+        fargate_service=ecs_stack_primary.ecs_service,
+        listener=ecs_stack_primary.listener,
+        blue_target_group=ecs_stack_primary.blue_target_group,
+        green_target_group=ecs_stack_primary.green_target_group,
+        env=self.env_us_east_1
     )
 
   def _create_route53_stack(self):
@@ -259,11 +257,10 @@ class TapStack(Stack):
     Create a Route53 stack to associate DNS records with the regional load balancers.
     """
     NestedRoute53Stack(
-      self,
-      f"{self.app_name}-route53-{self.stack_suffix}",
-      alb1=self.ecs_stacks["us-east-1"].load_balancer,
-      alb2=self.ecs_stacks["us-east-2"].load_balancer,
-      env=self.env_us_east_1,
+        self,
+        f"{self.app_name}-route53-{self.stack_suffix}",
+        alb1=self.ecs_stacks["us-east-1"].load_balancer,
+        alb2=self.ecs_stacks["us-east-2"].load_balancer,
+        env=self.env_us_east_1,
     )
-
-    
+  

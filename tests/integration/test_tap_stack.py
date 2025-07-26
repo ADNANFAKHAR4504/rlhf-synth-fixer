@@ -4,6 +4,7 @@ from importlib import reload
 from unittest.mock import patch, MagicMock
 
 import pytest
+import lib.tap_stack
 
 # Ensure lib is importable
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
@@ -20,7 +21,8 @@ if not os.path.exists(init_file):
 class TestTapStackCDK:
 
   @pytest.mark.it(
-    "should synthesize the CDK app with real stacks in CI and validate all key stacks are defined"
+    "should synthesize the CDK app with real stacks in CI and validate "
+    "all key stacks are defined"
   )
   def test_synth_tap_stack(self):
     running_in_ci = os.environ.get("CI", "").lower() == "true"
@@ -28,21 +30,24 @@ class TestTapStackCDK:
     if running_in_ci:
       # In CI: Check instantiation of each real stack
       with patch("lib.tap_stack.VpcStack",
-                 wraps=lambda *args, **kwargs: MagicMock(name="VpcStack")) as mock_vpc_stack, \
+                 wraps=lambda *args, **kwargs: MagicMock(name="VpcStack")) \
+           as mock_vpc_stack, \
            patch("lib.tap_stack.EcsStack",
-                 wraps=lambda *args, **kwargs: MagicMock(name="EcsStack")) as mock_ecs_stack, \
+                 wraps=lambda *args, **kwargs: MagicMock(name="EcsStack")) \
+           as mock_ecs_stack, \
            patch("lib.tap_stack.RdsStack",
-                 wraps=lambda *args, **kwargs: MagicMock(name="RdsStack")) as mock_rds_stack, \
+                 wraps=lambda *args, **kwargs: MagicMock(name="RdsStack")) \
+           as mock_rds_stack, \
            patch("lib.tap_stack.MonitoringStack",
-                 wraps=lambda *args, **kwargs: MagicMock(name="MonitoringStack")) as mock_monitoring_stack, \
-           patch("lib.tap_stack.VpcPeeringStack",
-                 wraps=lambda *args, **kwargs: MagicMock(name="VpcPeeringStack")) as mock_vpc_peering_stack, \
+                 wraps=lambda *args, **kwargs: MagicMock(name="MonitoringStack")) \
+           as mock_monitoring_stack, \
            patch("lib.tap_stack.CicdStack",
-                 wraps=lambda *args, **kwargs: MagicMock(name="CicdStack")) as mock_cicd_stack, \
+                 wraps=lambda *args, **kwargs: MagicMock(name="CicdStack")) \
+           as mock_cicd_stack, \
            patch("lib.tap_stack.Route53Stack",
-                 wraps=lambda *args, **kwargs: MagicMock(name="Route53Stack")) as mock_route53_stack:
+                 wraps=lambda *args, **kwargs: MagicMock(name="Route53Stack")) \
+           as mock_route53_stack:
 
-        import lib.tap_stack
         reload(lib.tap_stack)
 
         # Assert that each stack was created exactly once
@@ -50,7 +55,6 @@ class TestTapStackCDK:
         mock_ecs_stack.assert_called_once()
         mock_rds_stack.assert_called_once()
         mock_monitoring_stack.assert_called_once()
-        mock_vpc_peering_stack.assert_called_once()
         mock_cicd_stack.assert_called_once()
         mock_route53_stack.assert_called_once()
 
@@ -66,9 +70,7 @@ class TestTapStackCDK:
            patch("lib.tap_stack.EcsStack", return_value=mock_ecs_stack), \
            patch("lib.tap_stack.RdsStack"), \
            patch("lib.tap_stack.MonitoringStack"), \
-           patch("lib.tap_stack.VpcPeeringStack"), \
            patch("lib.tap_stack.CicdStack"), \
            patch("lib.tap_stack.Route53Stack"):
 
-        import lib.tap_stack
         reload(lib.tap_stack)

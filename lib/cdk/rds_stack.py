@@ -25,6 +25,7 @@ class RdsStack(Stack):
       ),
     )
 
+    # pylint: disable=unused-variable
     admin_secret = secretsmanager.Secret.from_secret_name_v2(self, "AdminSecret", "admin")
 
     self.rds_instance = rds.DatabaseInstance(
@@ -86,3 +87,4 @@ class RdsStack(Stack):
         credentials=rds.Credentials.from_generated_secret("admin"),
         storage_encrypted=True,
       )
+      

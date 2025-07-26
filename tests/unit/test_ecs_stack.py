@@ -1,7 +1,7 @@
 # tests/unit/test_ecs_stack.py
 
 import pytest
-from aws_cdk import App, Stack
+from aws_cdk import App
 from aws_cdk.assertions import Template
 # No need to import MagicMock here if we're not passing a mock VPC
 # from unittest.mock import MagicMock

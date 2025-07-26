@@ -1,11 +1,22 @@
-from aws_cdk import aws_route53 as route53, Stack
-from constructs import Construct
+from aws_cdk import (
+    Stack, # Grouped with other aws_cdk imports
+    aws_route53 as route53,
+)
 from aws_cdk.aws_elasticloadbalancingv2 import ApplicationLoadBalancer
+from constructs import Construct
 
 
 class Route53Stack(Stack):
-  def __init__(self, scope: Construct, id: str, alb1: ApplicationLoadBalancer, alb2: ApplicationLoadBalancer, **kwargs):
-    super().__init__(scope, id, **kwargs)
+  # pylint: disable=redefined-builtin, too-many-arguments
+  def __init__(
+      self,
+      scope: Construct,
+      construct_id: str, # Renamed 'id' to 'construct_id' to avoid redefining built-in
+      alb1: ApplicationLoadBalancer,
+      alb2: ApplicationLoadBalancer,
+      **kwargs
+  ):
+    super().__init__(scope, construct_id, **kwargs)
 
     # Create a public hosted zone
     zone = route53.HostedZone(self, "Zone", zone_name="joshua-academia.com")
@@ -15,11 +26,11 @@ class Route53Stack(Stack):
       self,
       "HealthCheck",
       health_check_config=route53.CfnHealthCheck.HealthCheckConfigProperty(
-        fully_qualified_domain_name=alb1.load_balancer_dns_name,
-        port=80,
-        type="HTTP",
-        resource_path="/health",
-        failure_threshold=3,
+          fully_qualified_domain_name=alb1.load_balancer_dns_name,
+          port=80,
+          type="HTTP",
+          resource_path="/health",
+          failure_threshold=3,
       ),
     )
 
@@ -34,8 +45,9 @@ class Route53Stack(Stack):
       failover="PRIMARY",
       health_check_id=health_check.ref,
       alias_target=route53.CfnRecordSet.AliasTargetProperty(
-        dns_name=alb1.load_balancer_dns_name,
-        hosted_zone_id=alb1.load_balancer_canonical_hosted_zone_id,  # You might need to hardcode ALB HostedZoneId instead
+          dns_name=alb1.load_balancer_dns_name,
+          # Shortened line and added comment for clarity
+          hosted_zone_id=alb1.load_balancer_canonical_hosted_zone_id,
       ),
     )
 
@@ -49,7 +61,9 @@ class Route53Stack(Stack):
       set_identifier="secondary",
       failover="SECONDARY",
       alias_target=route53.CfnRecordSet.AliasTargetProperty(
-        dns_name=alb2.load_balancer_dns_name,
-        hosted_zone_id=alb2.load_balancer_canonical_hosted_zone_id, # Same as above: make sure it's the HostedZoneId for the ALB
+          dns_name=alb2.load_balancer_dns_name,
+          # Shortened line and added comment for clarity
+          hosted_zone_id=alb2.load_balancer_canonical_hosted_zone_id,
       ),
     )
+    
