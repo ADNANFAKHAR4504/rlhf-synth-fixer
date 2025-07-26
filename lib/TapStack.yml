@@ -29,6 +29,24 @@ Resources:
         BlockPublicPolicy: true
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
+  
+  LogBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref LogBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: EnforceSSL
+            Effect: Deny
+            Principal: "*"
+            Action: "s3:*"
+            Resource:
+              - !Sub "arn:aws:s3:::${LogBucket}"
+              - !Sub "arn:aws:s3:::${LogBucket}/*"
+            Condition:
+              Bool:
+                aws:SecureTransport: false
 
   # IAM Role for EC2
   EC2Role:
