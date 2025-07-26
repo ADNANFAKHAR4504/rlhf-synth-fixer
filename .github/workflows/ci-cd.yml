@@ -10,6 +10,8 @@ on:
   pull_request:
     branches: [main]
     types: [opened, synchronize, reopened, closed]
+  workflow_dispatch:
+  
 
 permissions:
   contents: read
