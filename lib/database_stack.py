@@ -35,7 +35,7 @@ class DatabaseStack(Stack):
         parameter_group=parameter_group,  # explicitly set the parameter group
         writer=rds.ClusterInstance.provisioned("writer", 
             instance_type=ec2.InstanceType.of(
-                ec2.InstanceClass.BURSTABLE3, ec2.InstanceSize.SMALL),
+                ec2.InstanceClass.BURSTABLE3, ec2.InstanceSize.MEDIUM),
         ),
         vpc=vpc,
         vpc_subnets=ec2.SubnetSelection(
