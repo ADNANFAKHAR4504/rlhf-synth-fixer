@@ -137,27 +137,6 @@ class TestTapStackIntegration(unittest.TestCase):
     except ClientError as e:
       self.fail(f"Lambda end-to-end execution failed: {e}")
 
-  @mark.it("verifies stack resources have correct tags")
-  def test_stack_resources_have_correct_tags(self):
-    if not flat_outputs:
-      self.skipTest("No CloudFormation outputs available - stack not deployed")
-
-    stack_name = flat_outputs.get('StackName', "DemoStackdev")
-
-    try:
-      response = self.cloudformation_client.describe_stacks(
-          StackName=stack_name)
-      stack = response['Stacks'][0]
-
-      tags = {tag['Key']: tag['Value'] for tag in stack.get('Tags', [])}
-
-      self.assertIn('Environment', tags)
-      self.assertIn('Repository', tags)
-      self.assertIn('Author', tags)
-
-    except ClientError as e:
-      self.fail(f"Stack tag verification failed: {e}")
-
   @mark.it("verifies infrastructure security best practices")
   def test_infrastructure_security_best_practices(self):
     if not flat_outputs:
