@@ -5,7 +5,6 @@ from aws_cdk.assertions import Template, Match
 from pytest import mark
 
 from lib.tap_stack import TapStack, TapStackProps
-from lib.metadata_stack import SecureInfrastructureStack
 
 
 @mark.describe("TapStack")
@@ -16,43 +15,11 @@ class TestTapStack(unittest.TestCase):
     """Set up a fresh CDK app for each test"""
     self.app = cdk.App()
 
-  @mark.it("creates nested stack structure")
-  def test_creates_nested_stack_structure(self):
-    # ARRANGE
-    stack = TapStack(self.app, "TapStackTest",
-                     TapStackProps(environment_suffix="test"))
-    template = Template.from_stack(stack)
-
-    # ASSERT
-    template.resource_count_is("AWS::CloudFormation::Stack", 1)
-    template.has_resource_properties("AWS::CloudFormation::Stack", {
-        "TemplateURL": Match.any_value()
-    })
-
-  @mark.it("has environment suffix in nested stack name")
-  def test_environment_suffix_in_nested_stack_name(self):
-    # ARRANGE
-    env_suffix = "testenv"
-    stack = TapStack(self.app, "TapStackTest",
-                     TapStackProps(environment_suffix=env_suffix))
-    template = Template.from_stack(stack)
-
-    # ASSERT - This verifies the nested stack exists with proper naming
-    template.resource_count_is("AWS::CloudFormation::Stack", 1)
-
-
-@mark.describe("SecureInfrastructureStack")
-class TestSecureInfrastructureStack(unittest.TestCase):
-  """Test cases for the SecureInfrastructureStack"""
-
-  def setUp(self):
-    """Set up a fresh CDK app for each test"""
-    self.app = cdk.App()
-
   @mark.it("creates KMS key for Lambda environment encryption")
   def test_creates_kms_key_for_lambda_encryption(self):
     # ARRANGE
-    stack = SecureInfrastructureStack(self.app, "SecureInfrastructureStackTest")
+    stack = TapStack(self.app, "TapStackTest",
+                     TapStackProps(environment_suffix="test"))
     template = Template.from_stack(stack)
 
     # ASSERT
@@ -68,7 +35,52 @@ class TestSecureInfrastructureStack(unittest.TestCase):
   @mark.it("creates Lambda function with encrypted environment variables")
   def test_creates_lambda_with_encrypted_env_vars(self):
     # ARRANGE
-    stack = SecureInfrastructureStack(self.app, "SecureInfrastructureStackTest")
+    stack = TapStack(self.app, "TapStackTest",
+                     TapStackProps(environment_suffix="test"))
+    template = Template.from_stack(stack)
+
+    # ASSERT
+    template.resource_count_is("AWS::Lambda::Function", 1)
+    template.has_resource_properties("AWS::Lambda::Function", {
+        "Runtime": "python3.8",
+        "Handler": "lambda_function.handler",
+        "Environment": {
+            "Variables": {
+                "SECRET_KEY": "my-secret-value"
+            }
+        },
+        "KmsKeyArn": Match.any_value()
+    })
+
+
+@mark.describe("TapStack Infrastructure")
+class TestTapStackInfrastructure(unittest.TestCase):
+  """Test cases for the TapStack infrastructure components"""
+
+  def setUp(self):
+    """Set up a fresh CDK app for each test"""
+    self.app = cdk.App()
+
+  @mark.it("creates KMS key for Lambda environment encryption")
+  def test_creates_kms_key_for_lambda_encryption(self):
+    # ARRANGE
+    stack = TapStack(self.app, "TapStackTest")
+    template = Template.from_stack(stack)
+
+    # ASSERT
+    template.resource_count_is("AWS::KMS::Key", 1)
+    template.has_resource_properties("AWS::KMS::Key", {
+        "Description": "KMS key for encrypting Lambda environment variables",
+        "EnableKeyRotation": True,
+        "KeyPolicy": {
+            "Statement": Match.any_value()
+        }
+    })
+
+  @mark.it("creates Lambda function with encrypted environment variables")
+  def test_creates_lambda_with_encrypted_env_vars(self):
+    # ARRANGE
+    stack = TapStack(self.app, "TapStackTest")
     template = Template.from_stack(stack)
 
     # ASSERT
@@ -87,7 +99,7 @@ class TestSecureInfrastructureStack(unittest.TestCase):
   @mark.it("creates IAM role for Lambda function")
   def test_creates_lambda_iam_role(self):
     # ARRANGE
-    stack = SecureInfrastructureStack(self.app, "SecureInfrastructureStackTest")
+    stack = TapStack(self.app, "TapStackTest")
     template = Template.from_stack(stack)
 
     # ASSERT
@@ -107,7 +119,7 @@ class TestSecureInfrastructureStack(unittest.TestCase):
   @mark.it("applies correct tags to all resources")
   def test_applies_correct_tags(self):
     # ARRANGE
-    stack = SecureInfrastructureStack(self.app, "SecureInfrastructureStackTest")
+    stack = TapStack(self.app, "TapStackTest")
     template = Template.from_stack(stack)
 
     # ASSERT - Check that resources have the required tags
@@ -128,7 +140,7 @@ class TestSecureInfrastructureStack(unittest.TestCase):
   @mark.it("verifies KMS key has correct description")
   def test_kms_key_description(self):
     # ARRANGE
-    stack = SecureInfrastructureStack(self.app, "SecureInfrastructureStackTest")
+    stack = TapStack(self.app, "TapStackTest")
     template = Template.from_stack(stack)
 
     # ASSERT
@@ -139,7 +151,7 @@ class TestSecureInfrastructureStack(unittest.TestCase):
   @mark.it("verifies Lambda function timeout configuration")
   def test_lambda_timeout_configuration(self):
     # ARRANGE
-    stack = SecureInfrastructureStack(self.app, "SecureInfrastructureStackTest")
+    stack = TapStack(self.app, "TapStackTest")
     template = Template.from_stack(stack)
 
     # ASSERT
@@ -150,7 +162,7 @@ class TestSecureInfrastructureStack(unittest.TestCase):
   @mark.it("verifies Lambda function has IAM logging permissions")
   def test_lambda_iam_logging_permissions(self):
     # ARRANGE
-    stack = SecureInfrastructureStack(self.app, "SecureInfrastructureStackTest")
+    stack = TapStack(self.app, "TapStackTest")
     template = Template.from_stack(stack)
 
     # ASSERT - Check that IAM policy allows CloudWatch logging
@@ -171,7 +183,7 @@ class TestSecureInfrastructureStack(unittest.TestCase):
   @mark.it("verifies Lambda function uses correct asset path")
   def test_lambda_asset_path(self):
     # ARRANGE
-    stack = SecureInfrastructureStack(self.app, "SecureInfrastructureStackTest")
+    stack = TapStack(self.app, "TapStackTest")
     template = Template.from_stack(stack)
 
     # ASSERT - Check that Lambda uses the correct code asset

@@ -9,11 +9,16 @@ of other resource-specific stacks and manages environment-specific configuration
 from typing import Optional
 
 import aws_cdk as cdk
-from aws_cdk import NestedStack
+from aws_cdk import (
+  Duration,
+  RemovalPolicy,
+  Tags,
+  CfnOutput,
+  aws_lambda as _lambda,
+  aws_kms as kms,
+  aws_iam as iam,
+)
 from constructs import Construct
-
-# Import your stacks here
-from .metadata_stack import SecureInfrastructureStack
 
 
 class TapStackProps(cdk.StackProps):
@@ -38,13 +43,9 @@ class TapStack(cdk.Stack):
   """
   Represents the main CDK stack for the Tap project.
 
-  This stack is responsible for orchestrating the instantiation of other resource-specific stacks.
-  It determines the environment suffix from the provided properties,
-  CDK context, or defaults to 'dev'.
-
-  Note:
-      - Do NOT create AWS resources directly in this stack.
-      - Instead, instantiate separate stacks for each resource type within this stack.
+  This stack creates secure infrastructure including KMS encryption and Lambda functions
+  with encrypted environment variables. It determines the environment suffix from the 
+  provided properties, CDK context, or defaults to 'dev'.
 
   Args:
       scope (Construct): The parent construct.
@@ -60,32 +61,82 @@ class TapStack(cdk.Stack):
       self,
       scope: Construct,
       construct_id: str,
-      props: Optional[TapStackProps] = None,
+      props: Optional[TapStackProps] = None,  # pylint: disable=unused-argument
       **kwargs,
   ):
     super().__init__(scope, construct_id, **kwargs)
 
-    # Determine environment suffix
-    environment_suffix = (
-        props.environment_suffix if props else None
-    ) or self.node.try_get_context("environmentSuffix") or "dev"
+    # Determine environment suffix (for future use if needed)
+    # environment_suffix = (
+    #     props.environment_suffix if props else None
+    # ) or self.node.try_get_context("environmentSuffix") or "dev"
 
-    # Nested stack class to instantiate SecureInfrastructureStack
-    class NestedSecureInfrastructureStack(NestedStack):
-      def __init__(self,
-                   nested_scope: Construct,
-                   nested_id: str,
-                   nested_props=None, **nested_kwargs):
-        super().__init__(nested_scope, nested_id, **nested_kwargs)
-        self.metadata_stack = SecureInfrastructureStack(
-            self,
-            "SecureInfrastructureStack",
-            env=nested_props.env if nested_props else None,
-        )
+    # Define the KMS Key for encrypting environment variables 
+    self.encryption_key = kms.Key(
+      self,
+      "LambdaEnvVarsEncryptionKey",
+      description="KMS key for encrypting Lambda environment variables",
+      enable_key_rotation=True,
+      removal_policy=RemovalPolicy.DESTROY,
+    )
+    
+    # Add alias for KMS key
+    kms.Alias(
+      self,
+      "LambdaEncryptionKeyAlias",
+      alias_name="alias/lambda-encryption-key",
+      target_key=self.encryption_key
+    )
 
-    # Instantiate the nested stack
-    self.nested_stack = NestedSecureInfrastructureStack(
+    # Define the Lambda function
+    self.lambda_function = _lambda.Function(
+      self,
+      "SecureLambdaFunction",
+      runtime=_lambda.Runtime.PYTHON_3_8,
+      handler="lambda_function.handler",
+      code=_lambda.Code.from_asset("lib/lambda"),
+      environment={
+        "SECRET_KEY": "my-secret-value"
+      },
+      environment_encryption=self.encryption_key,
+      timeout=Duration.seconds(10),
+      function_name="SecureLambdaFunction",
+    )
+
+    # IAM policy for logging
+    self.lambda_function.add_to_role_policy(
+      iam.PolicyStatement(
+        actions=[
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents",
+        ],
+        resources=["arn:aws:logs:*:*:*"],
+      )
+    )
+
+    # Apply tags
+    Tags.of(self).add("Environment", "Production")
+    Tags.of(self).add("Team", "DevOps")
+
+    # Export stack outputs for integration tests
+    CfnOutput(
         self,
-        f"SecureInfrastructureStack{environment_suffix}",
-        nested_props=props,
+        "LambdaFunctionArn",
+        value=self.lambda_function.function_arn,
+        description="ARN of the secure Lambda function"
+    )
+
+    CfnOutput(
+        self,
+        "KmsKeyId",
+        value=self.encryption_key.key_id,
+        description="ID of the KMS key used for Lambda environment encryption"
+    )
+
+    CfnOutput(
+        self,
+        "KmsKeyArn",
+        value=self.encryption_key.key_arn,
+        description="ARN of the KMS key used for Lambda environment encryption"
     )
