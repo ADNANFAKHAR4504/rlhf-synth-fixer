@@ -1,14 +1,3 @@
-# Corrected and Lint-Free AWS CloudFormation Template
-#
-# Fixes based on cfn-lint feedback:
-# 1. [E3004] Resolved Circular Dependency: The Log Group's name is now static
-#    and no longer depends on the Lambda Function's name. This breaks the
-#    circular dependency chain (Function -> Role -> LogGroup -> Function).
-# 2. [E1019] Fixed Invalid Property References: The 'SourceArn' in the Lambda
-#    permission and the 'ApiUrl' in the Outputs now use hardcoded values for the
-#    HTTP method ('GET'), path ('greet'), and stage name ('prod') instead of
-#    trying to reference properties that CloudFormation cannot resolve.
-
 AWSTemplateFormatVersion: '2010-09-09'
 Description: >
   A secure, serverless greeting API using API Gateway and Lambda. This template
