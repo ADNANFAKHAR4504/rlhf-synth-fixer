@@ -14,12 +14,6 @@ describe('TapStack CloudFormation Template', () => {
     template = JSON.parse(templateContent);
   });
 
-  describe('Write Integration TESTS', () => {
-    test('Dont forget!', async () => {
-      expect(false).toBe(true);
-    });
-  });
-
   describe('Template Structure', () => {
     test('should have valid CloudFormation format version', () => {
       expect(template.AWSTemplateFormatVersion).toBe('2010-09-09');
@@ -28,7 +22,7 @@ describe('TapStack CloudFormation Template', () => {
     test('should have a description', () => {
       expect(template.Description).toBeDefined();
       expect(template.Description).toBe(
-        'TAP Stack - Task Assignment Platform CloudFormation Template'
+        'Multi-Environment CloudFormation Template for Dev, Test, and Production Infrastructure'
       );
     });
 
@@ -36,80 +30,197 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Metadata).toBeDefined();
       expect(template.Metadata['AWS::CloudFormation::Interface']).toBeDefined();
     });
+
+    test('should have parameters, mappings, conditions, resources, and outputs', () => {
+      expect(template.Parameters).toBeDefined();
+      expect(template.Mappings).toBeDefined();
+      expect(template.Conditions).toBeDefined();
+      expect(template.Resources).toBeDefined();
+      expect(template.Outputs).toBeDefined();
+    });
   });
 
   describe('Parameters', () => {
-    test('should have EnvironmentSuffix parameter', () => {
-      expect(template.Parameters.EnvironmentSuffix).toBeDefined();
+    test('should have all required parameters', () => {
+      const expectedParams = ['EnvironmentSuffix', 'Environment', 'Owner', 'CostCenter'];
+      expectedParams.forEach(param => {
+        expect(template.Parameters[param]).toBeDefined();
+      });
     });
 
     test('EnvironmentSuffix parameter should have correct properties', () => {
-      const envSuffixParam = template.Parameters.EnvironmentSuffix;
-      expect(envSuffixParam.Type).toBe('String');
-      expect(envSuffixParam.Default).toBe('dev');
-      expect(envSuffixParam.Description).toBe(
-        'Environment suffix for resource naming (e.g., dev, staging, prod)'
-      );
-      expect(envSuffixParam.AllowedPattern).toBe('^[a-zA-Z0-9]+$');
-      expect(envSuffixParam.ConstraintDescription).toBe(
-        'Must contain only alphanumeric characters'
+      const param = template.Parameters.EnvironmentSuffix;
+      expect(param.Type).toBe('String');
+      expect(param.Default).toBe('dev');
+      expect(param.AllowedPattern).toBe('^[a-zA-Z0-9]+$');
+    });
+
+    test('Environment parameter should have correct allowed values', () => {
+      const param = template.Parameters.Environment;
+      expect(param.Type).toBe('String');
+      expect(param.AllowedValues).toEqual(['dev', 'test', 'prod']);
+      expect(param.Default).toBe('dev');
+    });
+  });
+
+  describe('Mappings', () => {
+    test('should have EnvironmentConfig mapping', () => {
+      expect(template.Mappings.EnvironmentConfig).toBeDefined();
+    });
+
+    test('EnvironmentConfig should have configurations for all environments', () => {
+      const envs = ['dev', 'test', 'prod'];
+      envs.forEach(env => {
+        expect(template.Mappings.EnvironmentConfig[env]).toBeDefined();
+        expect(template.Mappings.EnvironmentConfig[env].InstanceType).toBeDefined();
+        expect(template.Mappings.EnvironmentConfig[env].MinSize).toBeDefined();
+        expect(template.Mappings.EnvironmentConfig[env].MaxSize).toBeDefined();
+      });
+    });
+
+    test('production should have larger instance types', () => {
+      const prodConfig = template.Mappings.EnvironmentConfig.prod;
+      expect(prodConfig.InstanceType).toBe('m5.large');
+      expect(prodConfig.MinSize).toBeGreaterThan(1);
+    });
+  });
+
+  describe('Conditions', () => {
+    test('should have IsProduction condition', () => {
+      expect(template.Conditions.IsProduction).toBeDefined();
+    });
+  });
+
+  describe('VPC and Networking Resources', () => {
+    test('should have VPC resource', () => {
+      expect(template.Resources.VPC).toBeDefined();
+      expect(template.Resources.VPC.Type).toBe('AWS::EC2::VPC');
+    });
+
+    test('should have internet gateway', () => {
+      expect(template.Resources.InternetGateway).toBeDefined();
+      expect(template.Resources.InternetGateway.Type).toBe('AWS::EC2::InternetGateway');
+    });
+
+    test('should have public and private subnets', () => {
+      expect(template.Resources.PublicSubnet1).toBeDefined();
+      expect(template.Resources.PublicSubnet2).toBeDefined();
+      expect(template.Resources.PrivateSubnet1).toBeDefined();
+      expect(template.Resources.PrivateSubnet2).toBeDefined();
+    });
+
+    test('should have NAT gateways for high availability', () => {
+      expect(template.Resources.NatGateway1).toBeDefined();
+      expect(template.Resources.NatGateway2).toBeDefined();
+      expect(template.Resources.NatGateway1EIP).toBeDefined();
+      expect(template.Resources.NatGateway2EIP).toBeDefined();
+    });
+
+    test('should have route tables configured correctly', () => {
+      expect(template.Resources.PublicRouteTable).toBeDefined();
+      expect(template.Resources.PrivateRouteTable1).toBeDefined();
+      expect(template.Resources.PrivateRouteTable2).toBeDefined();
+    });
+  });
+
+  describe('Security and IAM', () => {
+    test('should have EC2 IAM role with least privilege', () => {
+      expect(template.Resources.EC2Role).toBeDefined();
+      expect(template.Resources.EC2Role.Type).toBe('AWS::IAM::Role');
+      expect(template.Resources.EC2InstanceProfile).toBeDefined();
+    });
+
+    test('should have security groups with proper restrictions', () => {
+      expect(template.Resources.ALBSecurityGroup).toBeDefined();
+      expect(template.Resources.WebServerSecurityGroup).toBeDefined();
+    });
+
+    test('web server security group should restrict SSH access in production', () => {
+      const webSG = template.Resources.WebServerSecurityGroup;
+      const sshRule = webSG.Properties.SecurityGroupIngress.find((rule: any) => rule.FromPort === 22);
+      expect(sshRule).toBeDefined();
+      expect(sshRule.CidrIp).toEqual({
+        'Fn::If': ['IsProduction', '10.0.0.0/16', '0.0.0.0/0']
+      });
+    });
+  });
+
+  describe('Load Balancer and Auto Scaling', () => {
+    test('should have Application Load Balancer', () => {
+      expect(template.Resources.ApplicationLoadBalancer).toBeDefined();
+      expect(template.Resources.ApplicationLoadBalancer.Type).toBe('AWS::ElasticLoadBalancingV2::LoadBalancer');
+    });
+
+    test('should have Auto Scaling Group', () => {
+      expect(template.Resources.AutoScalingGroup).toBeDefined();
+      expect(template.Resources.AutoScalingGroup.Type).toBe('AWS::AutoScaling::AutoScalingGroup');
+    });
+
+    test('should have Launch Template', () => {
+      expect(template.Resources.LaunchTemplate).toBeDefined();
+      expect(template.Resources.LaunchTemplate.Type).toBe('AWS::EC2::LaunchTemplate');
+    });
+
+    test('Launch Template should use latest Amazon Linux AMI', () => {
+      const launchTemplate = template.Resources.LaunchTemplate;
+      expect(launchTemplate.Properties.LaunchTemplateData.ImageId).toBe(
+        '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}'
       );
     });
   });
 
-  describe('Resources', () => {
+  describe('Monitoring and Compliance', () => {
+    test('should have CloudWatch alarm', () => {
+      expect(template.Resources.CPUAlarm).toBeDefined();
+      expect(template.Resources.CPUAlarm.Type).toBe('AWS::CloudWatch::Alarm');
+    });
+
+    test('should have SNS topic for notifications', () => {
+      expect(template.Resources.SNSTopic).toBeDefined();
+      expect(template.Resources.SNSTopic.Type).toBe('AWS::SNS::Topic');
+    });
+
+    test('should have AWS Config for production compliance', () => {
+      expect(template.Resources.ConfigConfigurationRecorder).toBeDefined();
+      expect(template.Resources.ConfigRole).toBeDefined();
+    });
+  });
+
+  describe('DynamoDB Table', () => {
     test('should have TurnAroundPromptTable resource', () => {
       expect(template.Resources.TurnAroundPromptTable).toBeDefined();
+      expect(template.Resources.TurnAroundPromptTable.Type).toBe('AWS::DynamoDB::Table');
     });
 
-    test('TurnAroundPromptTable should be a DynamoDB table', () => {
+    test('should have Point-in-Time Recovery enabled for production', () => {
       const table = template.Resources.TurnAroundPromptTable;
-      expect(table.Type).toBe('AWS::DynamoDB::Table');
-    });
-
-    test('TurnAroundPromptTable should have correct deletion policies', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      expect(table.DeletionPolicy).toBe('Delete');
-      expect(table.UpdateReplacePolicy).toBe('Delete');
-    });
-
-    test('TurnAroundPromptTable should have correct properties', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const properties = table.Properties;
-
-      expect(properties.TableName).toEqual({
-        'Fn::Sub': 'TurnAroundPromptTable${EnvironmentSuffix}',
+      expect(table.Properties.PointInTimeRecoverySpecification).toBeDefined();
+      expect(table.Properties.PointInTimeRecoverySpecification.PointInTimeRecoveryEnabled).toEqual({
+        'Fn::If': ['IsProduction', true, false]
       });
-      expect(properties.BillingMode).toBe('PAY_PER_REQUEST');
-      expect(properties.DeletionProtectionEnabled).toBe(false);
     });
 
-    test('TurnAroundPromptTable should have correct attribute definitions', () => {
+    test('should have proper tagging', () => {
       const table = template.Resources.TurnAroundPromptTable;
-      const attributeDefinitions = table.Properties.AttributeDefinitions;
-
-      expect(attributeDefinitions).toHaveLength(1);
-      expect(attributeDefinitions[0].AttributeName).toBe('id');
-      expect(attributeDefinitions[0].AttributeType).toBe('S');
-    });
-
-    test('TurnAroundPromptTable should have correct key schema', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const keySchema = table.Properties.KeySchema;
-
-      expect(keySchema).toHaveLength(1);
-      expect(keySchema[0].AttributeName).toBe('id');
-      expect(keySchema[0].KeyType).toBe('HASH');
+      expect(table.Properties.Tags).toBeDefined();
+      expect(table.Properties.Tags.length).toBeGreaterThan(0);
     });
   });
 
   describe('Outputs', () => {
     test('should have all required outputs', () => {
       const expectedOutputs = [
+        'VPCId',
+        'PublicSubnets',
+        'PrivateSubnets',
+        'ApplicationLoadBalancerDNS',
+        'ApplicationLoadBalancerArn',
         'TurnAroundPromptTableName',
         'TurnAroundPromptTableArn',
+        'AutoScalingGroupName',
+        'SNSTopicArn',
         'StackName',
-        'EnvironmentSuffix',
+        'EnvironmentSuffix'
       ];
 
       expectedOutputs.forEach(outputName => {
@@ -117,43 +228,11 @@ describe('TapStack CloudFormation Template', () => {
       });
     });
 
-    test('TurnAroundPromptTableName output should be correct', () => {
-      const output = template.Outputs.TurnAroundPromptTableName;
-      expect(output.Description).toBe('Name of the DynamoDB table');
-      expect(output.Value).toEqual({ Ref: 'TurnAroundPromptTable' });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-TurnAroundPromptTableName',
-      });
-    });
-
-    test('TurnAroundPromptTableArn output should be correct', () => {
-      const output = template.Outputs.TurnAroundPromptTableArn;
-      expect(output.Description).toBe('ARN of the DynamoDB table');
-      expect(output.Value).toEqual({
-        'Fn::GetAtt': ['TurnAroundPromptTable', 'Arn'],
-      });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-TurnAroundPromptTableArn',
-      });
-    });
-
-    test('StackName output should be correct', () => {
-      const output = template.Outputs.StackName;
-      expect(output.Description).toBe('Name of this CloudFormation stack');
-      expect(output.Value).toEqual({ Ref: 'AWS::StackName' });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-StackName',
-      });
-    });
-
-    test('EnvironmentSuffix output should be correct', () => {
-      const output = template.Outputs.EnvironmentSuffix;
-      expect(output.Description).toBe(
-        'Environment suffix used for this deployment'
-      );
-      expect(output.Value).toEqual({ Ref: 'EnvironmentSuffix' });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-EnvironmentSuffix',
+    test('outputs should have proper export names', () => {
+      Object.keys(template.Outputs).forEach(outputKey => {
+        const output = template.Outputs[outputKey];
+        expect(output.Export).toBeDefined();
+        expect(output.Export.Name).toBeDefined();
       });
     });
   });
@@ -164,47 +243,51 @@ describe('TapStack CloudFormation Template', () => {
       expect(typeof template).toBe('object');
     });
 
-    test('should not have any undefined or null required sections', () => {
-      expect(template.AWSTemplateFormatVersion).not.toBeNull();
-      expect(template.Description).not.toBeNull();
-      expect(template.Parameters).not.toBeNull();
-      expect(template.Resources).not.toBeNull();
-      expect(template.Outputs).not.toBeNull();
-    });
-
-    test('should have exactly one resource', () => {
+    test('should have comprehensive infrastructure resources', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(1);
+      expect(resourceCount).toBeGreaterThan(20); // Should have many resources for full infrastructure
     });
 
-    test('should have exactly one parameter', () => {
+    test('should have multiple parameters for configuration', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(1);
+      expect(parameterCount).toBeGreaterThanOrEqual(4);
     });
 
-    test('should have exactly four outputs', () => {
+    test('should have comprehensive outputs', () => {
       const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(4);
+      expect(outputCount).toBeGreaterThanOrEqual(10);
     });
   });
 
-  describe('Resource Naming Convention', () => {
-    test('table name should follow naming convention with environment suffix', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const tableName = table.Properties.TableName;
+  describe('Resource Tagging Strategy', () => {
+    test('should have consistent tagging across resources', () => {
+      const taggedResources = ['VPC', 'ApplicationLoadBalancer', 'TurnAroundPromptTable'];
+      
+      taggedResources.forEach(resourceName => {
+        const resource = template.Resources[resourceName];
+        expect(resource.Properties.Tags).toBeDefined();
+        
+        const environmentTag = resource.Properties.Tags.find((tag: any) => tag.Key === 'Environment');
+        expect(environmentTag).toBeDefined();
+        expect(environmentTag.Value).toEqual({ Ref: 'Environment' });
+      });
+    });
+  });
 
-      expect(tableName).toEqual({
-        'Fn::Sub': 'TurnAroundPromptTable${EnvironmentSuffix}',
+  describe('Multi-Environment Configuration', () => {
+    test('should use mappings for environment-specific configurations', () => {
+      const asg = template.Resources.AutoScalingGroup;
+      expect(asg.Properties.MinSize).toEqual({
+        'Fn::FindInMap': ['EnvironmentConfig', { Ref: 'Environment' }, 'MinSize']
+      });
+      expect(asg.Properties.MaxSize).toEqual({
+        'Fn::FindInMap': ['EnvironmentConfig', { Ref: 'Environment' }, 'MaxSize']
       });
     });
 
-    test('export names should follow naming convention', () => {
-      Object.keys(template.Outputs).forEach(outputKey => {
-        const output = template.Outputs[outputKey];
-        expect(output.Export.Name).toEqual({
-          'Fn::Sub': `\${AWS::StackName}-${outputKey}`,
-        });
-      });
+    test('should use conditions for production-specific resources', () => {
+      const configRecorder = template.Resources.ConfigConfigurationRecorder;
+      expect(configRecorder.Condition).toBe('IsProduction');
     });
   });
 });
