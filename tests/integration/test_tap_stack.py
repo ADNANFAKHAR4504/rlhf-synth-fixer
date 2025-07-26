@@ -211,7 +211,7 @@ class TestTapStackIntegration(unittest.TestCase):
         self.assertIn(basic_execution_policy, policy_arns,
                      f"Role {role_name} should have AWSLambdaBasicExecutionRole policy")
         
-    except Exception as e:
+    except (boto3.exceptions.Boto3Error, KeyError, ValueError) as e:
       self.fail(f"Failed to validate IAM roles: {str(e)}")
 
   @mark.it("validates Lambda functions are configured correctly")
@@ -279,14 +279,14 @@ class TestTapStackIntegration(unittest.TestCase):
                              f"Function {func_name} should return body")
                 self.assertIn(region, payload['body'],
                              f"Function {func_name} should return region info")
-              except Exception as invoke_error:
+              except (boto3.exceptions.Boto3Error, json.JSONDecodeError, KeyError) as invoke_error:
                 self.fail(f"Failed to invoke function {func_name}: {str(invoke_error)}")
                 
-        except Exception as region_error:
+        except (boto3.exceptions.Boto3Error, KeyError):
           # If we can't access this region, that's acceptable
           continue
           
-    except Exception as e:
+    except (boto3.exceptions.Boto3Error, KeyError, ValueError) as e:
       self.fail(f"Failed to validate Lambda functions: {str(e)}")
 
   @mark.it("validates API Gateway resources and methods are configured correctly")
@@ -321,7 +321,7 @@ class TestTapStackIntegration(unittest.TestCase):
               
               # Verify API name
               self.assertEqual(api_name, 'MultiRegionService',
-                             f"API should be named 'MultiRegionService'")
+                             "API should be named 'MultiRegionService'")
               
               # Get API resources
               resources = apigateway_client.get_resources(restApiId=api_id)
@@ -350,11 +350,11 @@ class TestTapStackIntegration(unittest.TestCase):
                   httpMethod='GET'
                 )
                 self.assertIsNotNone(method,
-                                   f"myresource should have GET method")
+                                   "myresource should have GET method")
                 
                 # Verify integration type is AWS_PROXY (Lambda proxy integration)
                 self.assertIn('methodIntegration', method,
-                             f"GET method should have integration")
+                             "GET method should have integration")
                 
               except apigateway_client.exceptions.NotFoundException:
                 self.fail(f"GET method not found on myresource in API {api_name}")
@@ -371,14 +371,14 @@ class TestTapStackIntegration(unittest.TestCase):
                 self.assertIn('prod', stage_names,
                              f"API {api_name} should have 'prod' stage")
                 
-              except Exception as deploy_error:
+              except (boto3.exceptions.Boto3Error, KeyError) as deploy_error:
                 self.fail(f"Failed to validate deployments for API {api_name}: {str(deploy_error)}")
                 
-        except Exception as region_error:
+        except (boto3.exceptions.Boto3Error, KeyError):
           # If we can't access this region, that's acceptable
           continue
           
-    except Exception as e:
+    except (boto3.exceptions.Boto3Error, KeyError, ValueError) as e:
       self.fail(f"Failed to validate API Gateway structure: {str(e)}")
 
   @mark.it("validates CloudFormation stacks are created correctly")
@@ -410,7 +410,7 @@ class TestTapStackIntegration(unittest.TestCase):
                         if r['ResourceType'] == 'AWS::CloudFormation::Stack']
         
         self.assertGreater(len(nested_stacks), 0,
-                          f"Main stack should have nested stacks")
+                          "Main stack should have nested stacks")
         
         # Verify nested stacks are in correct status
         for nested_stack in nested_stacks:
@@ -419,8 +419,8 @@ class TestTapStackIntegration(unittest.TestCase):
             nested_stack_details = cf_client.describe_stacks(StackName=nested_stack_id)
             nested_status = nested_stack_details['Stacks'][0]['StackStatus']
             self.assertEqual(nested_status, 'CREATE_COMPLETE',
-                           f"Nested stack should be in CREATE_COMPLETE status")
-          except Exception as nested_error:
+                           "Nested stack should be in CREATE_COMPLETE status")
+          except (boto3.exceptions.Boto3Error, KeyError) as nested_error:
             self.fail(f"Failed to validate nested stack {nested_stack_id}: {str(nested_error)}")
             
       except cf_client.exceptions.ClientError as e:
@@ -429,7 +429,7 @@ class TestTapStackIntegration(unittest.TestCase):
         else:
           raise
           
-    except Exception as e:
+    except (boto3.exceptions.Boto3Error, KeyError, ValueError) as e:
       self.fail(f"Failed to validate CloudFormation stacks: {str(e)}")
 
   @mark.it("validates all deployed resources have proper tagging")
@@ -458,11 +458,11 @@ class TestTapStackIntegration(unittest.TestCase):
                   # Verify function has some tags (CDK adds default tags)
                   self.assertIsInstance(tags.get('Tags', {}), dict,
                                       f"Function {func_name} should have tags")
-                except Exception:
+                except (boto3.exceptions.Boto3Error, KeyError):
                   # If we can't get tags, that's acceptable for this test
                   pass
                   
-        except Exception:
+        except (boto3.exceptions.Boto3Error, KeyError):
           # If we can't access Lambda in this region, continue
           continue
           
@@ -480,15 +480,15 @@ class TestTapStackIntegration(unittest.TestCase):
                 # Verify API has some tags
                 self.assertIsInstance(tags.get('tags', {}), dict,
                                     f"API {api_name} should have tags")
-              except Exception:
+              except (boto3.exceptions.Boto3Error, KeyError):
                 # If we can't get tags, that's acceptable for this test
                 pass
                 
-        except Exception:
+        except (boto3.exceptions.Boto3Error, KeyError):
           # If we can't access API Gateway in this region, continue
           continue
           
-    except Exception as e:
+    except (boto3.exceptions.Boto3Error, KeyError, ValueError):
       # Tag validation is nice-to-have, so we won't fail the test
       pass
 
@@ -528,7 +528,7 @@ class TestTapStackIntegration(unittest.TestCase):
               deployed_regions.add(region)
               break
               
-      except Exception:
+      except (boto3.exceptions.Boto3Error, KeyError):
         # If we can't access a region, continue checking others
         continue
     
