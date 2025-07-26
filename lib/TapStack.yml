@@ -1,0 +1,185 @@
+# webapp-environment-setup.yaml
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  A robust and secure CloudFormation template to provision a scalable and highly
+  available web application environment with S3, EC2, and RDS in us-east-1.
+
+Parameters:
+  EnvironmentName:
+    Type: String
+    Description: An environment identifier (e.g., dev, qa, prod).
+  OwnerName:
+    Type: String
+    Description: The name of the resource owner.
+  ProjectName:
+    Type: String
+    Description: The name of the project.
+  WebAppServerKeyName:
+    Type: AWS::EC2::KeyPair::KeyName
+    Description: Name of an existing EC2 KeyPair to enable SSH access to the instance.
+
+Resources:
+  # -- S3 Bucket for Static Assets --
+  WebAppAssets:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Owner
+          Value: !Ref OwnerName
+        - Key: Project
+          Value: !Ref ProjectName
+
+  # -- Security Groups --
+  WebAppServerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: "Enable HTTP and SSH access for the web application server"
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Owner
+          Value: !Ref OwnerName
+        - Key: Project
+          Value: !Ref ProjectName
+
+  WebAppDatabaseSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: "Allow database access from the web application server"
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Owner
+          Value: !Ref OwnerName
+        - Key: Project
+          Value: !Ref ProjectName
+
+  DBIngressRule:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !GetAtt WebAppDatabaseSecurityGroup.GroupId
+      IpProtocol: tcp
+      FromPort: 3306
+      ToPort: 3306
+      SourceSecurityGroupId: !GetAtt WebAppServerSecurityGroup.GroupId
+
+  # -- EC2 Instance for Web Application --
+  WebAppServer:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: t2.micro
+      ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}'
+      KeyName: !Ref WebAppServerKeyName
+      SecurityGroupIds:
+        - !GetAtt WebAppServerSecurityGroup.GroupId
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Owner
+          Value: !Ref OwnerName
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Name
+          Value: !Sub '${ProjectName}-WebAppServer-${EnvironmentName}'
+
+  # -- RDS DB Instance for Application Data --
+  WebAppDatabase:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceClass: db.t3.micro
+      Engine: mysql
+      EngineVersion: '8.0.36'
+      AllocatedStorage: '20'
+      StorageType: gp2
+      MultiAZ: true
+      DBName: !Sub '${ProjectName}${EnvironmentName}DB'
+      MasterUsername: 'dbadmin'
+      MasterUserPassword: '{{resolve:secretsmanager:MyWebAppDBPasswordSecret:SecretString:password}}'
+      VPCSecurityGroups:
+        - !GetAtt WebAppDatabaseSecurityGroup.GroupId
+      PubliclyAccessible: false
+      DeletionProtection: true
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Owner
+          Value: !Ref OwnerName
+        - Key: Project
+          Value: !Ref ProjectName
+
+  # -- Securely Generated DB Password in Secrets Manager --
+  MyWebAppDBPasswordSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Description: "Password for the WebAppDatabase master user"
+      GenerateSecretString:
+        SecretStringTemplate: '{"username": "dbadmin"}'
+        GenerateStringKey: "password"
+        PasswordLength: 16
+        ExcludeCharacters: '"@/\'
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Owner
+          Value: !Ref OwnerName
+        - Key: Project
+          Value: !Ref ProjectName
+
+Outputs:
+  WebAppServerId:
+    Description: "Instance ID of the Web Application Server"
+    Value: !Ref WebAppServer
+    Export:
+      Name: !Sub "${AWS::StackName}-WebAppServerId"
+
+  WebAppServerPublicIp:
+    Description: "Public IP address of the Web Application Server"
+    Value: !GetAtt WebAppServer.PublicIp
+    Export:
+      Name: !Sub "${AWS::StackName}-WebAppServerPublicIp"
+
+  WebAppAssetsBucketName:
+    Description: "Name of the S3 bucket for static assets"
+    Value: !Ref WebAppAssets
+    Export:
+      Name: !Sub "${AWS::StackName}-WebAppAssetsBucketName"
+
+  WebAppDatabaseEndpoint:
+    Description: "Endpoint address for the RDS database"
+    Value: !GetAtt WebAppDatabase.Endpoint.Address
+    Export:
+      Name: !Sub "${AWS::StackName}-WebAppDatabaseEndpoint"
+
+  WebAppDatabasePort:
+    Description: "Port for the RDS database"
+    Value: !GetAtt WebAppDatabase.Endpoint.Port
+    Export:
+      Name: !Sub "${AWS::StackName}-WebAppDatabasePort"
+
+  DBMasterUserSecretArn:
+    Description: "ARN of the master user secret in Secrets Manager"
+    Value: !Ref MyWebAppDBPasswordSecret
+    Export:
+      Name: !Sub "${AWS::StackName}-DBMasterUserSecretArn"
