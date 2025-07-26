@@ -90,7 +90,7 @@ class TapStack(cdk.Stack):
     # Create multi-region deployment
     NestedMultiRegionStack(
       self,
-      f"MultiRegionStack{environment_suffix}"
+      f"TapStack{environment_suffix}-MultiRegion"
     )
     
     # Add outputs that aggregate nested stack information
