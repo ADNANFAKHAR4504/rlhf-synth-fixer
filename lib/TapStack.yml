@@ -103,7 +103,6 @@ Resources:
       FunctionName: !GetAtt GreetingFunction.Arn
       Action: lambda:InvokeFunction
       Principal: apigateway.amazonaws.com
-      # FIX: Hardcoded the method and path in the ARN to resolve linter errors.
       SourceArn: !Sub arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${GreetingApi}/*/GET/greet
 
   # --- Logging ---
@@ -111,12 +110,48 @@ Resources:
   LogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      # FIX: Decoupled the log group name from the function ref to break the circular dependency.
       LogGroupName: /aws/lambda/GreetingApiFunction
       RetentionInDays: 7
 
 Outputs:
   ApiUrl:
-    Description: "URL for invoking the Greeting API"
-    # FIX: Hardcoded the stage name ('prod') to resolve linter errors.
+    Description: "URL for invoking the Greeting API endpoint"
     Value: !Sub "https://${GreetingApi}.execute-api.${AWS::Region}.amazonaws.com/prod/greet"
+
+  # --- NEW OUTPUTS FOR TESTING ---
+
+  ApiId:
+    Description: "The ID of the API Gateway REST API"
+    Value: !Ref GreetingApi
+    Export:
+      Name: !Sub "${AWS::StackName}-ApiId"
+
+  LambdaFunctionName:
+    Description: "The name of the Lambda function"
+    Value: !Ref GreetingFunction
+    Export:
+      Name: !Sub "${AWS::StackName}-LambdaFunctionName"
+
+  LambdaFunctionArn:
+    Description: "The ARN of the Lambda function"
+    Value: !GetAtt GreetingFunction.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-LambdaFunctionArn"
+
+  LambdaExecutionRoleArn:
+    Description: "The ARN of the Lambda function's execution role"
+    Value: !GetAtt LambdaExecutionRole.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-LambdaExecutionRoleArn"
+
+  CloudWatchLogGroupName:
+    Description: "The name of the CloudWatch Log Group for the Lambda function"
+    Value: !Ref LogGroup
+    Export:
+      Name: !Sub "${AWS::StackName}-CloudWatchLogGroupName"
+
+  Region:
+    Description: "The AWS Region the stack is deployed in"
+    Value: !Ref AWS::Region
+    Export:
+      Name: !Sub "${AWS::StackName}-Region"
