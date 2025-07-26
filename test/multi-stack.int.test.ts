@@ -1,13 +1,21 @@
 // Configuration - These are coming from cdk.out after cdk deploy
 import fs from 'fs';
-import { Template } from 'aws-cdk-lib/assertions';
-import { envConfig } from './multi-stack.unit.test';
+import { ECSClient, DescribeTaskDefinitionCommand } from '@aws-sdk/client-ecs';
+import {
+  ElasticLoadBalancingV2Client,
+  DescribeLoadBalancersCommand,
+  DescribeListenersCommand,
+} from '@aws-sdk/client-elastic-load-balancing-v2';
+import { SSMClient, GetParameterCommand } from '@aws-sdk/client-ssm';
+import { ACMClient, DescribeCertificateCommand } from '@aws-sdk/client-acm';
+import {
+  EC2Client,
+  DescribeSecurityGroupsCommand,
+  DescribeVpcsCommand,
+} from '@aws-sdk/client-ec2';
 
-function getStackName(envSuffix: string | undefined): string {
-  const environmentSuffix = envSuffix || 'dev';
-  return `TapStack${environmentSuffix}`;
-}
-const stackName = getStackName(process.env.ENVIRONMENT_SUFFIX);
+const environmentSuffix = process.env.CDK_CONTEXT_ENVIRONMENT_SUFFIX || 'dev';
+const REGION = 'us-east-2';
 let outputs: Record<string, any> = {};
 const outputsFile = 'cfn-outputs/flat-outputs.json';
 
@@ -23,99 +31,130 @@ if (fs.existsSync(outputsFile)) {
   );
 }
 
-const devTemplate = Template.fromJSON(outputs);
-
 describe('Stack Integration Tests', () => {
-  test('ECS Cluster exists', () => {
-    devTemplate.resourceCountIs('AWS::ECS::Cluster', 1);
+  const domain = outputs.DomainName;
+  const clusterName = outputs.ClusterName;
+  const loadBalancerArn = outputs.LoadBalancerArn;
+  const loadBalancerSecurityGroupId = outputs.LoadBalancerSecurityGroupId;
+  const fargateServiceName = outputs.FargateServiceName;
+  const ListenerArn = outputs.ListenerArn;
+  const sslCertificateArn = outputs.SSLCertificateArn;
+  const taskDefinitionArn = outputs.TaskDefinitionArn;
+  const vpcId = outputs.VpcId;
+  const loadBalanceDNS = outputs.LoadBalanceDNS;
+  const ssmConfigParameterName = outputs.SSMConfigParameterName;
+
+  test('should have all required outputs from CDK deployment', () => {
+    expect(domain).toBeDefined();
+    expect(clusterName).toBeDefined();
+    expect(loadBalancerArn).toBeDefined();
+    expect(loadBalancerSecurityGroupId).toBeDefined();
+    expect(fargateServiceName).toBeDefined();
+    expect(ListenerArn).toBeDefined();
+    expect(sslCertificateArn).toBeDefined();
+    expect(taskDefinitionArn).toBeDefined();
+    expect(vpcId).toBeDefined();
+    expect(loadBalanceDNS).toBeDefined();
+    expect(ssmConfigParameterName).toBeDefined();
   });
 
-  test('ECS is configured for Fargate with awsvpc networking', () => {
-    devTemplate.hasResourceProperties('AWS::ECS::TaskDefinition', {
-      RequiresCompatibilities: ['FARGATE'],
-      NetworkMode: 'awsvpc',
-    });
+  test('should contain required outputs with valid formats', () => {
+    expect(outputs.ClusterName).toBe(`${environmentSuffix}Tap`);
+    expect(outputs.DomainName).toBe(`api.${environmentSuffix}.local`);
+    expect(outputs.FargateServiceName).toBe(`${environmentSuffix}-svc`);
+
+    expect(outputs.ListenerArn).toMatch(
+      /^arn:aws:elasticloadbalancing:[^:]+:\d+:listener\/.*/
+    );
+    expect(outputs.LoadBalancerArn).toMatch(
+      /^arn:aws:elasticloadbalancing:[^:]+:\d+:loadbalancer\/.*/
+    );
+    expect(outputs.LoadBalancerSecurityGroupId).toMatch(/^sg-[a-f0-9]+$/);
+    expect(outputs.SSLCertificateArn).toMatch(
+      /^arn:aws:acm:[^:]+:\d+:certificate\/[a-f0-9-]+$/
+    );
+    expect(outputs.SSMConfigParameterName).toBe('/dev/config');
+    expect(outputs.TaskDefinitionArn).toMatch(
+      /^arn:aws:ecs:[^:]+:\d+:task-definition\/[^:]+:\d+$/
+    );
+    expect(outputs.VpcId).toMatch(/^vpc-[a-f0-9]+$/);
+    expect(outputs.LoadBalanceDNS).toMatch(/elb\.amazonaws\.com$/);
   });
+});
 
-  test('ECS TaskDefinition uses correct image', () => {
-    const taskDefs = devTemplate.findResources('AWS::ECS::TaskDefinition');
-    const values = Object.values(taskDefs);
+describe('AWS Resources Integration Test', () => {
+  const ecs = new ECSClient({ region: REGION });
+  const elbv2 = new ElasticLoadBalancingV2Client({ region: REGION });
+  const ssm = new SSMClient({ region: REGION });
+  const acm = new ACMClient({ region: REGION });
+  const ec2 = new EC2Client({ region: REGION });
 
-    expect(
-      values.some(resource => {
-        const containers = resource.Properties?.ContainerDefinitions || [];
-        return containers.some(
-          (c: any) =>
-            c.Image === `${envConfig.imageName}:${envConfig.imageTag}` &&
-            c.Name === 'AppContainer'
-        );
+  it('should verify ECS Task Definition exists', async () => {
+    const res = await ecs.send(
+      new DescribeTaskDefinitionCommand({
+        taskDefinition: outputs.TaskDefinitionArn,
       })
-    ).toBe(true);
+    );
+    expect(res.taskDefinition?.taskDefinitionArn).toEqual(
+      outputs.TaskDefinitionArn
+    );
   });
 
-  test('VPC has expected CIDR block', () => {
-    devTemplate.hasResourceProperties('AWS::EC2::VPC', {
-      EnableDnsHostnames: true,
-      EnableDnsSupport: true,
-      InstanceTenancy: 'default',
-    });
-  });
-  test('Auto Scaling policy is configured', () => {
-    devTemplate.hasResourceProperties(
-      'AWS::ApplicationAutoScaling::ScalableTarget',
-      {
-        MaxCapacity: 10,
-        MinCapacity: 2,
-      }
+  it('should verify Load Balancer exists', async () => {
+    const res = await elbv2.send(
+      new DescribeLoadBalancersCommand({
+        LoadBalancerArns: [outputs.LoadBalancerArn],
+      })
     );
-    devTemplate.hasResourceProperties(
-      'AWS::ApplicationAutoScaling::ScalingPolicy',
-      {
-        PolicyType: 'TargetTrackingScaling',
-      }
+    expect(res.LoadBalancers?.[0]?.LoadBalancerArn).toEqual(
+      outputs.LoadBalancerArn
     );
   });
-  test('Alarm is configured for high CPU usage', () => {
-    devTemplate.hasResourceProperties('AWS::CloudWatch::Alarm', {
-      ComparisonOperator: 'GreaterThanOrEqualToThreshold',
-      MetricName: 'CPUUtilization',
-      EvaluationPeriods: 2,
-      Namespace: 'AWS/ECS',
-      Period: 300,
-      Statistic: 'Average',
-      Threshold: 80,
-    });
+
+  it('should verify Listener exists', async () => {
+    const res = await elbv2.send(
+      new DescribeListenersCommand({
+        ListenerArns: [outputs.ListenerArn],
+      })
+    );
+    expect(res.Listeners?.[0]?.ListenerArn).toEqual(outputs.ListenerArn);
   });
-  test('Alarm is configured for high Memory usage', () => {
-    devTemplate.hasResourceProperties('AWS::CloudWatch::Alarm', {
-      ComparisonOperator: 'GreaterThanOrEqualToThreshold',
-      MetricName: 'MemoryUtilization',
-      EvaluationPeriods: 2,
-      Namespace: 'AWS/ECS',
-      Period: 300,
-      Statistic: 'Average',
-      Threshold: 80,
-    });
+
+  it('should verify SSL Certificate exists', async () => {
+    const res = await acm.send(
+      new DescribeCertificateCommand({
+        CertificateArn: outputs.SSLCertificateArn,
+      })
+    );
+    expect(res.Certificate?.CertificateArn).toEqual(outputs.SSLCertificateArn);
   });
-  test('Application LoadBalancer resource', () => {
-    devTemplate.hasResourceProperties(
-      'AWS::ElasticLoadBalancingV2::LoadBalancer',
-      {
-        Type: 'application',
-        Scheme: 'internet-facing',
-        LoadBalancerAttributes: [
-          {
-            Key: 'deletion_protection.enabled',
-            Value: 'false',
-          },
-        ],
-      }
+
+  it('should verify SSM parameter exists', async () => {
+    const res = await ssm.send(
+      new GetParameterCommand({
+        Name: outputs.SSMConfigParameterName,
+      })
+    );
+    expect(res.Parameter?.Name).toEqual(outputs.SSMConfigParameterName);
+  });
+
+  it('should verify Security Group exists', async () => {
+    const res = await ec2.send(
+      new DescribeSecurityGroupsCommand({
+        GroupIds: [outputs.LoadBalancerSecurityGroupId],
+      })
+    );
+    expect(res.SecurityGroups?.[0]?.GroupId).toEqual(
+      outputs.LoadBalancerSecurityGroupId
     );
   });
-  test('HTTP(S) listener is configured with ACM certificate', () => {
-    devTemplate.hasResourceProperties('AWS::ElasticLoadBalancingV2::Listener', {
-      Protocol: 'HTTPS',
-      Port: 443,
-    });
+
+  it('should verify VPC exists', async () => {
+    const res = await ec2.send(
+      new DescribeVpcsCommand({
+        VpcIds: [outputs.VpcId],
+      })
+    );
+    expect(res.Vpcs?.[0]?.VpcId).toEqual(outputs.VpcId);
   });
 });

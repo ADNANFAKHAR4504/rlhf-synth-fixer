@@ -93,9 +93,11 @@
     "typescript": "^5.8.3"
   },
   "dependencies": {
+    "@aws-sdk/client-acm": "^3.848.0",
+    "@aws-sdk/client-ecs": "^3.848.0",
     "@aws-sdk/client-elastic-load-balancing-v2": "^3.848.0",
-    "aws-cdk-lib": "2.202.0",
     "@aws-sdk/client-wafv2": "^3.848.0",
+    "aws-cdk-lib": "2.202.0",
     "cdktf-cli": "0.21.0",
     "constructs": "10.4.2"
   }

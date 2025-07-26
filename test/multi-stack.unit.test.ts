@@ -64,5 +64,97 @@ describe('MultiEnvEcsStack', () => {
     test('ElasticLoadBalancingV2 exists', () => {
       template.resourceCountIs('AWS::ElasticLoadBalancingV2::LoadBalancer', 1);
     });
+    test('ECS Cluster exists', () => {
+      template.resourceCountIs('AWS::ECS::Cluster', 1);
+    });
+
+    test('ECS is configured for Fargate with awsvpc networking', () => {
+      template.hasResourceProperties('AWS::ECS::TaskDefinition', {
+        RequiresCompatibilities: ['FARGATE'],
+        NetworkMode: 'awsvpc',
+      });
+    });
+
+    test('ECS TaskDefinition uses correct image', () => {
+      const taskDefs = template.findResources('AWS::ECS::TaskDefinition');
+      const values = Object.values(taskDefs);
+
+      expect(
+        values.some(resource => {
+          const containers = resource.Properties?.ContainerDefinitions || [];
+          return containers.some(
+            (c: any) =>
+              c.Image === `${envConfig.imageName}:${envConfig.imageTag}` &&
+              c.Name === 'AppContainer'
+          );
+        })
+      ).toBe(true);
+    });
+
+    test('VPC has expected CIDR block', () => {
+      template.hasResourceProperties('AWS::EC2::VPC', {
+        EnableDnsHostnames: true,
+        EnableDnsSupport: true,
+        InstanceTenancy: 'default',
+      });
+    });
+    test('Auto Scaling policy is configured', () => {
+      template.hasResourceProperties(
+        'AWS::ApplicationAutoScaling::ScalableTarget',
+        {
+          MaxCapacity: 10,
+          MinCapacity: 2,
+        }
+      );
+      template.hasResourceProperties(
+        'AWS::ApplicationAutoScaling::ScalingPolicy',
+        {
+          PolicyType: 'TargetTrackingScaling',
+        }
+      );
+    });
+    test('Alarm is configured for high CPU usage', () => {
+      template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+        ComparisonOperator: 'GreaterThanOrEqualToThreshold',
+        MetricName: 'CPUUtilization',
+        EvaluationPeriods: 2,
+        Namespace: 'AWS/ECS',
+        Period: 300,
+        Statistic: 'Average',
+        Threshold: 80,
+      });
+    });
+    test('Alarm is configured for high Memory usage', () => {
+      template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+        ComparisonOperator: 'GreaterThanOrEqualToThreshold',
+        MetricName: 'MemoryUtilization',
+        EvaluationPeriods: 2,
+        Namespace: 'AWS/ECS',
+        Period: 300,
+        Statistic: 'Average',
+        Threshold: 80,
+      });
+    });
+    test('Application LoadBalancer resource', () => {
+      template.hasResourceProperties(
+        'AWS::ElasticLoadBalancingV2::LoadBalancer',
+        {
+          Type: 'application',
+          Scheme: 'internet-facing',
+          LoadBalancerAttributes: [
+            {
+              Key: 'deletion_protection.enabled',
+              Value: 'false',
+            },
+          ],
+        }
+      );
+    });
+    test('HTTP(S) listener is configured with ACM certificate', () => {
+      template.hasResourceProperties('AWS::ElasticLoadBalancingV2::Listener', {
+        Protocol: 'HTTPS',
+        Port: 443,
+      });
+    });
   });
 });

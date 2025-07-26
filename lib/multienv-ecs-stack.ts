@@ -199,13 +199,74 @@ export class MultiEnvEcsStack extends cdk.Stack {
       treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
     });
 
-    new cdk.CfnOutput(this, 'LB-DNS', {
+    //Output
+    new cdk.CfnOutput(this, 'LoadBalanceDNS', {
       value: lb.loadBalancerDnsName,
       description: 'Load balancer dns name',
     });
+
     new cdk.CfnOutput(this, 'DomainName', {
       value: config.domainName,
       description: 'domain name',
     });
+
+    new cdk.CfnOutput(this, 'VpcId', {
+      value: vpc.vpcId,
+      description: 'VPC ID',
+    });
+
+    new cdk.CfnOutput(this, 'ClusterName', {
+      value: cluster.clusterName,
+      description: 'ECS Cluster Name',
+    });
+
+    new cdk.CfnOutput(this, 'TaskDefinitionArn', {
+      value: taskDefinition.taskDefinitionArn,
+      description: 'Task Definition ARN',
+    });
+
+    new cdk.CfnOutput(this, 'FargateServiceName', {
+      value: fargateService.serviceName,
+      description: 'Fargate Service Name',
+    });
+
+    new cdk.CfnOutput(this, 'ListenerArn', {
+      value: listener.listenerArn,
+      description: 'Load Balancer Listener ARN',
+    });
+
+    new cdk.CfnOutput(this, 'LoadBalancerArn', {
+      value: lb.loadBalancerArn,
+      description: 'Application Load Balancer ARN',
+    });
+
+    new cdk.CfnOutput(this, 'LoadBalancerSecurityGroupId', {
+      value: lb.connections.securityGroups
+        .map(sg => sg.securityGroupId)
+        .join(','),
+      description: 'Security Group of the ALB',
+    });
+
+    new cdk.CfnOutput(this, 'SSMConfigParameterName', {
+      value: `/${config.envName}/config`,
+      description: 'SSM Parameter Name',
+    });
+
+    new cdk.CfnOutput(this, 'SSLCertificateArn', {
+      value: certificate.certificateArn,
+      description: 'SSL Certificate ARN',
+    });
+
+    if (config.hostedZoneName) {
+      new cdk.CfnOutput(this, 'HostedZoneName', {
+        value: config.hostedZoneName,
+        description: 'Route53 Hosted Zone Name',
+      });
+
+      new cdk.CfnOutput(this, 'DomainARecord', {
+        value: config.domainName,
+        description: 'Route53 A Record for service',
+      });
+    }
   }
 }
