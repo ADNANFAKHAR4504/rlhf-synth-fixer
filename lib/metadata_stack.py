@@ -46,7 +46,7 @@ class ServerlessStack(Stack):
       description="DynamoDB table name"
     )
 
-    # Lambda Execution Role
+    # Lambda Execution Role 
     lambda_role = iam.Role(
       self,
       "LambdaExecutionRole",
