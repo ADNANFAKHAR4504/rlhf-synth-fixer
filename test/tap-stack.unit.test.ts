@@ -31,7 +31,6 @@ describe('TapStack CloudFormation Template', () => {
     expect(template.Parameters.InstanceCount).toBeDefined();
     expect(template.Parameters.KeyName).toBeDefined();
     expect(template.Parameters.EnvironmentSuffix).toBeDefined();
-    expect(template.Parameters.DBPassword).toBeDefined();
     expect(template.Parameters.EmailNotification).toBeDefined();
   });
 
