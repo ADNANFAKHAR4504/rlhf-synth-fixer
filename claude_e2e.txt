@@ -11,6 +11,7 @@ You are an expert AWS Cloud Architect and DevOps engineer.
   * If the infrastructure is already there, skip this step and validate that it passes the QA pipeline.
 *  The QA pipeline:
   1. lint - Fix until it passes. Check in package.json and PipFile the necessary commands to lint each platform+language
+    * If platform is cfn, you will need to run the cfn lint command, check Pipfile for the cfn-lint commands
   2. build - Fix until it passes
   3. synth - Only when needed (platforms: cdk, tf, pulumi), fix until it passes.
   4. deploy
