@@ -66,11 +66,6 @@ class TapStack(cdk.Stack):
   ):
     super().__init__(scope, construct_id, **kwargs)
 
-    # Determine environment suffix (for future use if needed)
-    # environment_suffix = (
-    #     props.environment_suffix if props else None
-    # ) or self.node.try_get_context("environmentSuffix") or "dev"
-
     # Define the KMS Key for encrypting environment variables 
     self.encryption_key = kms.Key(
       self,
