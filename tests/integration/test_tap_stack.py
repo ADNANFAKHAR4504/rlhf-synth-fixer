@@ -536,3 +536,133 @@ class TestTapStack(unittest.TestCase):
       
     except ClientError as e:
       self.fail(f"DynamoDB stream status check failed: {e}")
+
+  @mark.it("Lambda memory and timeout configuration")
+  def test_lambda_memory_timeout_configuration(self):
+    """Test that Lambda function memory and timeout are properly configured"""
+    function_name = flat_outputs.get('LambdaFunctionNameOutput')
+    memory_size = flat_outputs.get('LambdaMemorySizeOutput')
+    timeout_seconds = flat_outputs.get('LambdaTimeoutOutput')
+    
+    if not function_name or not memory_size or not timeout_seconds:
+      self.fail("Lambda function configuration outputs not available")
+    
+    try:
+      response = self.lambda_client.get_function(FunctionName=function_name)
+      config = response['Configuration']
+      
+      self.assertEqual(config['MemorySize'], int(memory_size), 
+                      "Lambda memory size should match output")
+      self.assertEqual(config['Timeout'], int(float(timeout_seconds)), 
+                      "Lambda timeout should match output")
+      
+      # Verify memory size is reasonable (between 128MB and 10240MB)
+      self.assertGreaterEqual(int(memory_size), 128, "Memory should be at least 128MB")
+      self.assertLessEqual(int(memory_size), 10240, "Memory should not exceed 10240MB")
+      
+    except ClientError as e:
+      self.fail(f"Lambda memory/timeout configuration check failed: {e}")
+
+  @mark.it("API Gateway deployment verification")
+  def test_api_gateway_deployment(self):
+    """Test that API Gateway deployment is properly configured"""
+    api_id = flat_outputs.get('ApiGatewayIdOutput')
+    deployment_id = flat_outputs.get('ApiGatewayDeploymentIdOutput')
+    
+    if not api_id or not deployment_id:
+      self.fail("API Gateway ID or deployment ID not available in deployment outputs")
+    
+    try:
+      # Verify deployment exists
+      deployment = self.apigateway.get_deployment(restApiId=api_id, deploymentId=deployment_id)
+      
+      self.assertIsNotNone(deployment, "API Gateway deployment should exist")
+      self.assertEqual(deployment['id'], deployment_id, "Deployment ID should match output")
+      
+      # Verify deployment has been created (has a creation date)
+      self.assertIn('createdDate', deployment, "Deployment should have creation date")
+      
+    except ClientError as e:
+      self.fail(f"API Gateway deployment check failed: {e}")
+
+  @mark.it("DynamoDB table operational status")
+  def test_dynamodb_table_operational_status(self):
+    """Test that DynamoDB table operational status is correct"""
+    table_name = flat_outputs.get('DynamoTableNameOutput')
+    table_status = flat_outputs.get('DynamoTableStatusOutput')
+    billing_mode = flat_outputs.get('DynamoTableBillingModeOutput')
+    
+    if not table_name or not table_status or not billing_mode:
+      self.fail("DynamoDB table operational outputs not available")
+    
+    try:
+      table = self.dynamodb.Table(table_name)
+      table_info = table.meta.client.describe_table(TableName=table_name)
+      
+      # Verify table status
+      actual_status = table_info['Table']['TableStatus']
+      self.assertEqual(actual_status, table_status, "Table status should match output")
+      
+      # Verify billing mode
+      actual_billing = table_info['Table']['BillingModeSummary']['BillingMode']
+      self.assertEqual(actual_billing, billing_mode, "Billing mode should match output")
+      
+      # Verify table is operational
+      self.assertEqual(actual_status, 'ACTIVE', "Table should be in ACTIVE state")
+      
+    except ClientError as e:
+      self.fail(f"DynamoDB table operational status check failed: {e}")
+
+  @mark.it("Lambda security group rules verification")
+  def test_lambda_security_group_rules(self):
+    """Test that Lambda security group rules are properly configured"""
+    sg_id = flat_outputs.get('LambdaSecurityGroupIdOutput')
+    egress_rule_count = flat_outputs.get('LambdaSecurityGroupEgressRuleCount')
+    
+    if not sg_id or not egress_rule_count:
+      self.fail("Lambda security group rule outputs not available")
+    
+    try:
+      sgs = self.ec2.describe_security_groups(GroupIds=[sg_id])
+      sg = sgs['SecurityGroups'][0]
+      
+      # Verify egress rules count
+      actual_egress_count = len(sg.get('IpPermissionsEgress', []))
+      self.assertEqual(actual_egress_count, int(egress_rule_count), 
+                      "Egress rules count should match output")
+      
+      # Verify outbound access is allowed (essential for Lambda in VPC)
+      self.assertGreater(actual_egress_count, 0, 
+                        "Security group should have outbound rules for Lambda functionality")
+      
+    except ClientError as e:
+      self.fail(f"Lambda security group rules check failed: {e}")
+
+  @mark.it("VPC operational state verification")
+  def test_vpc_operational_state(self):
+    """Test that VPC operational state is correct"""
+    vpc_id = flat_outputs.get('VpcIdOutput')
+    vpc_tenancy = flat_outputs.get('VpcTenancyOutput')
+    vpc_state = flat_outputs.get('VpcStateOutput')
+    
+    if not vpc_id or not vpc_tenancy or not vpc_state:
+      self.fail("VPC operational outputs not available")
+    
+    try:
+      vpcs = self.ec2.describe_vpcs(VpcIds=[vpc_id])
+      vpc = vpcs['Vpcs'][0]
+      
+      # Verify VPC state
+      actual_state = vpc['State']
+      self.assertEqual(actual_state, vpc_state, "VPC state should match output")
+      
+      # Verify VPC tenancy
+      actual_tenancy = vpc['InstanceTenancy']
+      self.assertEqual(actual_tenancy, vpc_tenancy, "VPC tenancy should match output")
+      
+      # Verify VPC is operational
+      self.assertEqual(actual_state, 'available', "VPC should be in available state")
+      self.assertEqual(actual_tenancy, 'default', "VPC should use default tenancy for cost efficiency")
+      
+    except ClientError as e:
+      self.fail(f"VPC operational state check failed: {e}")
