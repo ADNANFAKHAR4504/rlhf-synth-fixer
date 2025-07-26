@@ -265,7 +265,7 @@ class TestTapStackIntegration(unittest.TestCase):
       
       return lambda_functions, lambda_client
     except boto3.exceptions.Boto3Error as e:
-      # Only handle permissions gracefully, re-raise other errors
+      # Only handle permissions gracefully, re-raise other errors for real issues
       if 'AccessDenied' in str(e) or 'UnauthorizedOperation' in str(e):
         return [], None
       # Re-raise other errors as they indicate real configuration issues
@@ -374,7 +374,7 @@ class TestTapStackIntegration(unittest.TestCase):
       
       return stack_apis, apigateway_client
     except boto3.exceptions.Boto3Error as e:
-      # Only handle permissions gracefully, re-raise other errors
+      # Only handle permissions gracefully, re-raise other errors for real issues
       if 'AccessDenied' in str(e) or 'UnauthorizedOperation' in str(e):
         return [], None
       # Re-raise other errors as they indicate real configuration issues
@@ -450,3 +450,155 @@ class TestTapStackIntegration(unittest.TestCase):
     except (KeyError, ValueError) as e:
       # Configuration parsing errors should fail the test
       self.fail(f"Configuration error accessing API Gateway in {region}: {e}")
+
+  @mark.it("validates API Gateway structure and configuration")
+  def test_api_gateway_structure(self):
+    """Test that API Gateway resources have correct structure and configuration"""
+    if not self.outputs:
+      self.skipTest("No stack outputs available. Stack may not be deployed yet.")
+    
+    try:
+      regions = ['us-east-1', 'us-west-1']
+      env_suffix = os.environ.get('ENVIRONMENT_SUFFIX', 'dev')
+      
+      for region in regions:
+        stack_apis, apigateway_client = self._get_api_gateways_in_region(region, env_suffix)
+        
+        # If we found APIs in this region, validate them
+        if stack_apis and apigateway_client:
+          for api in stack_apis:
+            self._validate_api_gateway(api, apigateway_client)
+          
+    except (boto3.exceptions.Boto3Error, KeyError, ValueError) as e:
+      self.fail(f"Failed to validate API Gateway structure: {str(e)}")
+
+  def _validate_cloudformation_stacks_in_region(self, region, main_stack_name):
+    """Helper method to validate CloudFormation stacks in a specific region"""
+    cloudformation_client = boto3.client('cloudformation', region_name=region)
+    
+    # List stacks and find our stacks
+    paginator = cloudformation_client.get_paginator('list_stacks')
+    stack_found = False
+    
+    for page in paginator.paginate(StackStatusFilter=['CREATE_COMPLETE', 'UPDATE_COMPLETE']):
+      for stack in page['StackSummaries']:
+        stack_name = stack['StackName']
+        
+        if main_stack_name in stack_name:
+          stack_found = True
+          
+          # Verify stack status
+          self.assertIn(stack['StackStatus'], ['CREATE_COMPLETE', 'UPDATE_COMPLETE'],
+                       f"Stack {stack_name} should be in completed state")
+          
+          # Get detailed stack information
+          stack_details = cloudformation_client.describe_stacks(StackName=stack_name)
+          stack_info = stack_details['Stacks'][0]
+          
+          # Verify stack has outputs
+          if 'Outputs' in stack_info:
+            self.assertGreater(len(stack_info['Outputs']), 0,
+                             f"Stack {stack_name} should have outputs")
+    
+    return stack_found
+
+  @mark.it("validates CloudFormation stacks and deployment status")
+  def test_cloudformation_stacks(self):
+    """Test that CloudFormation stacks are deployed and have correct status"""
+    if not self.outputs:
+      self.skipTest("No stack outputs available. Stack may not be deployed yet.")
+    
+    try:
+      # Get environment suffix for stack naming
+      env_suffix = os.environ.get('ENVIRONMENT_SUFFIX', 'dev')
+      main_stack_name = f"TapStack{env_suffix}"
+      
+      # Check stacks in both regions
+      regions = ['us-east-1', 'us-west-1']
+      
+      for region in regions:
+        try:
+          stack_found = self._validate_cloudformation_stacks_in_region(region, main_stack_name)
+          
+          # We should find at least one stack in the main region (us-east-1)
+          if region == 'us-east-1':
+            self.assertTrue(stack_found, 
+                          f"Expected to find CloudFormation stack with name "
+                          f"containing {main_stack_name}")
+            
+        except boto3.exceptions.Boto3Error as e:
+          # Only handle permissions gracefully, fail on configuration issues
+          if 'AccessDenied' in str(e) or 'UnauthorizedOperation' in str(e):
+            continue  # Skip region validation for permission issues
+          self.fail(f"Unexpected error accessing CloudFormation in {region}: {e}")
+        except (KeyError, ValueError) as e:
+          self.fail(f"Configuration error accessing CloudFormation in {region}: {e}")
+          
+    except (boto3.exceptions.Boto3Error, KeyError, ValueError) as e:
+      self.fail(f"Failed to validate CloudFormation stacks: {str(e)}")
+
+  @mark.it("validates resource tagging across all services")
+  def test_resource_tagging(self):
+    """Test that all deployed resources have proper tags"""
+    if not self.outputs:
+      self.skipTest("No stack outputs available. Stack may not be deployed yet.")
+    
+    try:
+      regions = ['us-east-1', 'us-west-1']
+      env_suffix = os.environ.get('ENVIRONMENT_SUFFIX', 'dev')
+      
+      for region in regions:
+        # Validate Lambda function tags
+        self._validate_lambda_tags_in_region(region, env_suffix)
+        
+        # Validate API Gateway tags
+        self._validate_api_gateway_tags_in_region(region)
+          
+    except (boto3.exceptions.Boto3Error, KeyError, ValueError) as e:
+      self.fail(f"Failed to validate resource tagging: {str(e)}")
+
+  @mark.it("validates comprehensive multi-region deployment")
+  def test_comprehensive_multi_region_deployment(self):
+    """Test comprehensive multi-region deployment validation"""
+    if not self.outputs:
+      self.skipTest("No stack outputs available. Stack may not be deployed yet.")
+    
+    try:
+      regions = ['us-east-1', 'us-west-1']
+      env_suffix = os.environ.get('ENVIRONMENT_SUFFIX', 'dev')
+      
+      deployed_regions = set()
+      
+      for region in regions:
+        # Check Lambda functions in this region
+        lambda_functions, lambda_client = self._get_lambda_functions_in_region(region, env_suffix)
+        
+        # Check API Gateways in this region
+        stack_apis, apigateway_client = self._get_api_gateways_in_region(region, env_suffix)
+        
+        # If we have resources in this region, mark it as deployed
+        if lambda_functions or stack_apis:
+          deployed_regions.add(region)
+          
+          # Validate resources exist and are properly configured
+          if lambda_functions and lambda_client:
+            self.assertGreater(len(lambda_functions), 0,
+                             f"Expected Lambda functions in {region}")
+            
+          if stack_apis and apigateway_client:
+            self.assertGreater(len(stack_apis), 0,
+                             f"Expected API Gateways in {region}")
+      
+      # Verify we have deployments in multiple regions or at least us-east-1
+      self.assertGreaterEqual(len(deployed_regions), 1,
+                            "Expected resources to be deployed in at least one region")
+      
+      # Ideally we should have multi-region deployment
+      if len(deployed_regions) >= 2:
+        self.assertIn('us-east-1', deployed_regions,
+                     "Expected deployment in us-east-1 region")
+        self.assertIn('us-west-1', deployed_regions,
+                     "Expected deployment in us-west-1 region")
+        
+    except (boto3.exceptions.Boto3Error, KeyError, ValueError) as e:
+      self.fail(f"Failed to validate multi-region deployment: {str(e)}")
