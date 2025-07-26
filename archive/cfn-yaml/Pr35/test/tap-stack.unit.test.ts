@@ -1,344 +1,188 @@
-// Configuration - These are coming from cdk-outputs after cdk deploy
 import fs from 'fs';
-import {
-  AutoScaling,
-  CloudWatch,
-  EC2,
-  ELBv2,
-} from 'aws-sdk';
-import axios from 'axios';
+import path from 'path';
 
-const outputs = JSON.parse(
-  fs.readFileSync('cdk-outputs/flat-outputs.json', 'utf8')
-);
+const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
-// AWS Service clients
-const ec2 = new EC2();
-const elbv2 = new ELBv2();
-const autoscaling = new AutoScaling();
-const cloudwatch = new CloudWatch();
+describe('TapStack CloudFormation Template', () => {
+  let template: any;
 
-// Destructure outputs, removing Lambda-specific outputs
-// Note: MetadataBucketName removed as S3 bucket is no longer part of the stack
-
-describe('ALB Integration Tests', () => {
-  test('ALB endpoint should be reachable', async () => {
-    const url = outputs.HrALBDNSName;
-    const response = await axios.get(`http://${url}`);
-    expect(response.status).toBe(200);
+  beforeAll(() => {
+    // If youre testing a yaml template. run `pipenv run cfn-flip-to-json > lib/TapStack.json`
+    // Otherwise, ensure the template is in JSON format.
+    const templatePath = path.join(__dirname, '../lib/TapStack.json');
+    const templateContent = fs.readFileSync(templatePath, 'utf8');
+    template = JSON.parse(templateContent);
   });
 
-  test('ALB should have multiple healthy targets', async () => {
-    const albArn = outputs.HrALBArn;
-    const targetGroups = await elbv2
-      .describeTargetGroups({ LoadBalancerArn: albArn })
-      .promise();
-    expect(targetGroups.TargetGroups?.length).toBeGreaterThan(0);
+  describe('Template Structure', () => {
+    test('should have valid CloudFormation format version', () => {
+      expect(template.AWSTemplateFormatVersion).toBe('2010-09-09');
+    });
 
-    for (const tg of targetGroups.TargetGroups || []) {
-      const health = await elbv2
-        .describeTargetHealth({ TargetGroupArn: tg.TargetGroupArn! })
-        .promise();
-      const healthyCount =
-        health.TargetHealthDescriptions?.filter(
-          (desc: any) => desc.TargetHealth?.State === 'healthy'
-        ).length || 0;
-      expect(healthyCount).toBeGreaterThan(1);
-    }
-  });
-});
-
-describe('VPC and Subnet Integration Tests', () => {
-  test('VPC should exist', async () => {
-    const vpcId = outputs.VPCId;
-    const result = await ec2.describeVpcs({ VpcIds: [vpcId] }).promise();
-    expect(result.Vpcs?.length).toBe(1);
-  });
-
-  test('All public subnets should exist and be in different AZs', async () => {
-    const publicSubnetIds = outputs.PublicSubnetIds.split(',');
-    const subnets = await ec2
-      .describeSubnets({ SubnetIds: publicSubnetIds })
-      .promise();
-    expect(subnets.Subnets?.length).toBe(3);
-
-    const azs = new Set(subnets.Subnets?.map((s: any) => s.AvailabilityZone));
-    expect(azs.size).toBe(3);
-  });
-
-  test('All private subnets should exist and be in different AZs', async () => {
-    const privateSubnetIds = outputs.PrivateSubnetIds.split(',');
-    const subnets = await ec2
-      .describeSubnets({ SubnetIds: privateSubnetIds })
-      .promise();
-    expect(subnets.Subnets?.length).toBe(3);
-
-    const azs = new Set(subnets.Subnets?.map((s: any) => s.AvailabilityZone));
-    expect(azs.size).toBe(3);
-  });
-});
-
-describe('High Availability (HA) Tests', () => {
-  test('VPC should have subnets in multiple AZs', async () => {
-    const vpcId = outputs.VPCId;
-    const subnets = await ec2
-      .describeSubnets({ Filters: [{ Name: 'vpc-id', Values: [vpcId] }] })
-      .promise();
-    const azs = new Set(subnets.Subnets?.map((s: any) => s.AvailabilityZone));
-    expect(azs.size).toBeGreaterThan(1);
-  });
-});
-
-describe('🔒 Security & Access Control Tests', () => {
-  test('ALB Security Group should have correct ingress rules', async () => {
-    const sgDetails = await ec2
-      .describeSecurityGroups({
-        GroupIds: [outputs.HrALBSecurityGroupId],
-      })
-      .promise();
-
-    const sg = sgDetails.SecurityGroups![0];
-    expect(sg.IpPermissions).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          FromPort: 80,
-          ToPort: 80,
-          IpProtocol: 'tcp',
-          IpRanges: expect.arrayContaining([{ CidrIp: '0.0.0.0/0' }]),
-        }),
-        expect.objectContaining({
-          FromPort: 443,
-          ToPort: 443,
-          IpProtocol: 'tcp',
-          IpRanges: expect.arrayContaining([{ CidrIp: '0.0.0.0/0' }]),
-        }),
-      ])
-    );
-  });
-
-  test('App Security Group should only allow traffic from ALB', async () => {
-    const sgDetails = await ec2
-      .describeSecurityGroups({
-        GroupIds: [outputs.HrAppSecurityGroupId],
-      })
-      .promise();
-
-    const sg = sgDetails.SecurityGroups![0];
-    const httpRule = sg.IpPermissions?.find((rule: any) => rule.FromPort === 80);
-    const httpsRule = sg.IpPermissions?.find((rule: any) => rule.FromPort === 443);
-
-    expect(httpRule?.UserIdGroupPairs).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          GroupId: outputs.HrALBSecurityGroupId,
-        }),
-      ])
-    );
-    expect(httpsRule?.UserIdGroupPairs).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          GroupId: outputs.HrALBSecurityGroupId,
-        }),
-      ])
-    );
-  });
-});
-
-
-
-describe('⚡ Performance & Scalability Tests', () => {
-  test('ALB should have healthy targets', async () => {
-    const targetGroups = await elbv2
-      .describeTargetGroups({ LoadBalancerArn: outputs.HrALBArn })
-      .promise();
-
-    expect(targetGroups.TargetGroups?.length).toBeGreaterThan(0);
-
-    for (const tg of targetGroups.TargetGroups || []) {
-      const health = await elbv2
-        .describeTargetHealth({ TargetGroupArn: tg.TargetGroupArn! })
-        .promise();
-
-      const healthyCount =
-        health.TargetHealthDescriptions?.filter(
-          (desc: any) => desc.TargetHealth?.State === 'healthy'
-        ).length || 0;
-
-      expect(healthyCount).toBeGreaterThan(0);
-    }
-  });
-
-  test('Auto Scaling Group should have correct capacity', async () => {
-    const asgs = await autoscaling
-      .describeAutoScalingGroups({
-        AutoScalingGroupNames: [outputs.HrAutoScalingGroupName],
-      })
-      .promise();
-
-    const asg = asgs.AutoScalingGroups![0];
-    expect(asg.MinSize).toBe(2);
-    expect(asg.MaxSize).toBe(6);
-    expect(asg.DesiredCapacity).toBe(3);
-    expect(asg.Instances?.length).toBe(3);
-  });
-});
-
-describe('🔄 Resilience & Failover Tests', () => {
-  test('ALB should be in multiple AZs', async () => {
-    const albDetails = await elbv2
-      .describeLoadBalancers({
-        LoadBalancerArns: [outputs.HrALBArn],
-      })
-      .promise();
-
-    const alb = albDetails.LoadBalancers![0];
-    expect(alb.AvailabilityZones?.length).toBeGreaterThanOrEqual(2);
-  });
-
-  test('Auto Scaling instances should be distributed across AZs', async () => {
-    const asgs = await autoscaling
-      .describeAutoScalingGroups({
-        AutoScalingGroupNames: [outputs.HrAutoScalingGroupName],
-      })
-      .promise();
-
-    const asg = asgs.AutoScalingGroups![0];
-    const azs = new Set(
-      asg.Instances?.map((instance: any) => instance.AvailabilityZone)
-    );
-    expect(azs.size).toBeGreaterThan(1); // Distributed across multiple AZs
-  });
-});
-
-describe('📊 Monitoring & Observability Tests', () => {
-  test('ALB metrics should be available', async () => {
-    const albArn = outputs.HrALBArn;
-    const albName = albArn.split('/').slice(-3).join('/');
-
-    const metricData = await cloudwatch
-      .getMetricStatistics({
-        Namespace: 'AWS/ApplicationELB',
-        MetricName: 'RequestCount',
-        Dimensions: [
-          {
-            Name: 'LoadBalancer',
-            Value: albName,
-          },
-        ],
-        StartTime: new Date(Date.now() - 3600000),
-        EndTime: new Date(),
-        Period: 300,
-        Statistics: ['Sum'],
-      })
-      .promise();
-
-    expect(metricData.Datapoints).toBeDefined();
-  });
-});
-
-describe('🏷️ Configuration & Compliance Tests', () => {
-  test('All resources should have proper tags', async () => {
-    // Check ALB tags
-    const albTags = await elbv2
-      .describeTags({
-        ResourceArns: [outputs.HrALBArn],
-      })
-      .promise();
-
-    const albTagsMap = albTags.TagDescriptions![0].Tags!.reduce(
-      (acc: any, tag: any) => {
-        acc[tag.Key!] = tag.Value!;
-        return acc;
-      },
-      {} as Record<string, string>
-    );
-
-    expect(albTagsMap).toHaveProperty('Name');
-    expect(albTagsMap.Name).toContain(outputs.EnvironmentSuffix);
-  });
-
-  test('Environment-specific configurations should be correct', async () => {
-    expect(outputs.EnvironmentSuffix).toBeDefined();
-    expect(outputs.StackName).toContain(outputs.EnvironmentSuffix);
-  });
-
-  test('Network configurations should be secure', async () => {
-    const privateSubnets = outputs.PrivateSubnetIds.split(',');
-
-    for (const subnetId of privateSubnets) {
-      const routeTables = await ec2
-        .describeRouteTables({
-          Filters: [
-            {
-              Name: 'association.subnet-id',
-              Values: [subnetId.trim()],
-            },
-          ],
-        })
-        .promise();
-
-      // Private subnets should route through NAT Gateway, not Internet Gateway
-      const igwRoute = routeTables.RouteTables![0].Routes?.find((route: any) =>
-        route.GatewayId?.startsWith('igw-')
+    test('should have a description', () => {
+      expect(template.Description).toBeDefined();
+      expect(template.Description).toBe(
+        'TAP Stack - Task Assignment Platform CloudFormation Template'
       );
-      expect(igwRoute).toBeUndefined();
+    });
 
-      const natRoute = routeTables.RouteTables![0].Routes?.find((route: any) =>
-        route.NatGatewayId?.startsWith('nat-')
+    test('should have metadata section', () => {
+      expect(template.Metadata).toBeDefined();
+      expect(template.Metadata['AWS::CloudFormation::Interface']).toBeDefined();
+    });
+  });
+
+  describe('Parameters', () => {
+    test('should have EnvironmentSuffix parameter', () => {
+      expect(template.Parameters.EnvironmentSuffix).toBeDefined();
+    });
+
+    test('EnvironmentSuffix parameter should have correct properties', () => {
+      const envSuffixParam = template.Parameters.EnvironmentSuffix;
+      expect(envSuffixParam.Type).toBe('String');
+      expect(envSuffixParam.Default).toBe('dev');
+      expect(envSuffixParam.Description).toBe(
+        'Environment suffix for resource naming (e.g., dev, staging, prod)'
       );
-      expect(natRoute).toBeDefined();
-    }
-  });
-});
-
-describe('🚀 Infrastructure Validation Tests', () => {
-  test('All required outputs should be available', async () => {
-    const requiredOutputs = [
-      'VPCId',
-      'PublicSubnetIds',
-      'PrivateSubnetIds',
-      'HrALBDNSName',
-      'HrALBArn',
-      'HrTargetGroupArn',
-      'HrAutoScalingGroupName',
-    ];
-
-    for (const outputKey of requiredOutputs) {
-      expect(outputs[outputKey]).toBeDefined();
-      expect(outputs[outputKey]).not.toBe('');
-    }
+      expect(envSuffixParam.AllowedPattern).toBe('^[a-zA-Z0-9]+$');
+      expect(envSuffixParam.ConstraintDescription).toBe(
+        'Must contain only alphanumeric characters'
+      );
+    });
   });
 
-  test('VPC should have subnets in multiple AZs', async () => {
-    const privateSubnets = outputs.PrivateSubnetIds.split(',');
-    const publicSubnets = outputs.PublicSubnetIds.split(',');
+  describe('Resources', () => {
+    test('should have TurnAroundPromptTable resource', () => {
+      expect(template.Resources.TurnAroundPromptTable).toBeDefined();
+    });
 
-    const allSubnets = [...privateSubnets, ...publicSubnets];
-    const subnetDetails = await ec2
-      .describeSubnets({
-        SubnetIds: allSubnets.map(id => id.trim()),
-      })
-      .promise();
+    test('TurnAroundPromptTable should be a DynamoDB table', () => {
+      const table = template.Resources.TurnAroundPromptTable;
+      expect(table.Type).toBe('AWS::DynamoDB::Table');
+    });
 
-    const azs = new Set(
-      subnetDetails.Subnets?.map((subnet: any) => subnet.AvailabilityZone)
-    );
-    expect(azs.size).toBeGreaterThanOrEqual(2);
+    test('TurnAroundPromptTable should have correct deletion policies', () => {
+      const table = template.Resources.TurnAroundPromptTable;
+      expect(table.DeletionPolicy).toBe('Delete');
+      expect(table.UpdateReplacePolicy).toBe('Delete');
+    });
+
+    test('TurnAroundPromptTable should have correct properties', () => {
+      const table = template.Resources.TurnAroundPromptTable;
+      const properties = table.Properties;
+
+      expect(properties.TableName).toEqual({
+        'Fn::Sub': 'TurnAroundPromptTable${EnvironmentSuffix}',
+      });
+      expect(properties.BillingMode).toBe('PAY_PER_REQUEST');
+    });
+
+    test('TurnAroundPromptTable should have correct attribute definitions', () => {
+      const table = template.Resources.TurnAroundPromptTable;
+      const attributeDefinitions = table.Properties.AttributeDefinitions;
+
+      expect(attributeDefinitions).toHaveLength(1);
+      expect(attributeDefinitions[0].AttributeName).toBe('id');
+      expect(attributeDefinitions[0].AttributeType).toBe('S');
+    });
+
+    test('TurnAroundPromptTable should have correct key schema', () => {
+      const table = template.Resources.TurnAroundPromptTable;
+      const keySchema = table.Properties.KeySchema;
+
+      expect(keySchema).toHaveLength(1);
+      expect(keySchema[0].AttributeName).toBe('id');
+      expect(keySchema[0].KeyType).toBe('HASH');
+    });
   });
 
-  test('Resource naming should follow conventions', async () => {
-    const envSuffix = outputs.EnvironmentSuffix;
+  describe('Outputs', () => {
+    test('should have all required outputs', () => {
+      const expectedOutputs = [
+        'TurnAroundPromptTableName',
+        'TurnAroundPromptTableArn',
+        'StackName',
+        'EnvironmentSuffix',
+      ];
 
-    expect(outputs.HrALBName).toContain(envSuffix);
-    expect(outputs.TurnAroundPromptTableName).toContain(envSuffix);
+      expectedOutputs.forEach(outputName => {
+        expect(template.Outputs[outputName]).toBeDefined();
+      });
+    });
+
+    test('TurnAroundPromptTableName output should be correct', () => {
+      const output = template.Outputs.TurnAroundPromptTableName;
+      expect(output.Description).toBe('Name of the DynamoDB table');
+      expect(output.Value).toEqual({ Ref: 'TurnAroundPromptTable' });
+      expect(output.Export.Name).toEqual({
+        'Fn::Sub': '${AWS::StackName}-TurnAroundPromptTableName',
+      });
+    });
+
+    test('TurnAroundPromptTableArn output should be correct', () => {
+      const output = template.Outputs.TurnAroundPromptTableArn;
+      expect(output.Description).toBe('ARN of the DynamoDB table');
+      expect(output.Value).toEqual({
+        'Fn::GetAtt': ['TurnAroundPromptTable', 'Arn'],
+      });
+      expect(output.Export.Name).toEqual({
+        'Fn::Sub': '${AWS::StackName}-TurnAroundPromptTableArn',
+      });
+    });
+
+    test('StackName output should be correct', () => {
+      const output = template.Outputs.StackName;
+      expect(output.Description).toBe('Name of this CloudFormation stack');
+      expect(output.Value).toEqual({ Ref: 'AWS::StackName' });
+      expect(output.Export.Name).toEqual({
+        'Fn::Sub': '${AWS::StackName}-StackName',
+      });
+    });
+
+    test('EnvironmentSuffix output should be correct', () => {
+      const output = template.Outputs.EnvironmentSuffix;
+      expect(output.Description).toBe(
+        'Environment suffix used for this deployment'
+      );
+      expect(output.Value).toEqual({ Ref: 'EnvironmentSuffix' });
+      expect(output.Export.Name).toEqual({
+        'Fn::Sub': '${AWS::StackName}-EnvironmentSuffix',
+      });
+    });
   });
-});
 
-// Setup and teardown
-beforeAll(async () => {
-  // Test setup - no cleanup needed as S3 bucket removed from stack
-});
+  describe('Template Validation', () => {
+    test('should have valid JSON structure', () => {
+      expect(template).toBeDefined();
+      expect(typeof template).toBe('object');
+    });
 
-afterAll(async () => {
-  // Test teardown - no cleanup needed as S3 bucket removed from stack
+    test('should not have any undefined or null required sections', () => {
+      expect(template.AWSTemplateFormatVersion).not.toBeNull();
+      expect(template.Description).not.toBeNull();
+      expect(template.Parameters).not.toBeNull();
+      expect(template.Resources).not.toBeNull();
+      expect(template.Outputs).not.toBeNull();
+    });
+  });
+
+  describe('Resource Naming Convention', () => {
+    test('table name should follow naming convention with environment suffix', () => {
+      const table = template.Resources.TurnAroundPromptTable;
+      const tableName = table.Properties.TableName;
+
+      expect(tableName).toEqual({
+        'Fn::Sub': 'TurnAroundPromptTable${EnvironmentSuffix}',
+      });
+    });
+
+    test('export names should follow naming convention', () => {
+      Object.keys(template.Outputs).forEach(outputKey => {
+        const output = template.Outputs[outputKey];
+        expect(output.Export.Name).toEqual({
+          'Fn::Sub': `\${AWS::StackName}-${outputKey}`,
+        });
+      });
+    });
+  });
 });
