@@ -15,7 +15,7 @@ class Route53Stack(NestedStack):
     # Note: In production, you'd typically use an existing hosted zone
     self.hosted_zone = route53.HostedZone(
         self, "HostedZone",
-        zone_name="example.com"
+        zone_name="turing229210.com"
     )
 
     # Failover routing will be implemented when ALB targets are available
