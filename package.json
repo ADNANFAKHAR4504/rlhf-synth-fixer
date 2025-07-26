@@ -33,9 +33,9 @@
     "cdktf:synth": "cdktf synth",
     "cdktf:deploy": "cdktf deploy --auto-approve",
     "cdktf:destroy": "cdktf destroy --auto-approve",
-    "cfn:deploy-yaml": "aws cloudformation deploy --template-file lib/TapStack.yml --stack-name TapStack${ENVIRONMENT_SUFFIX:-dev} --capabilities CAPABILITY_IAM --parameter-overrides EnvironmentSuffix=${ENVIRONMENT_SUFFIX:-dev} --tags Repository=${REPOSITORY:-unknown} CommitAuthor=${COMMIT_AUTHOR:-unknown}",
-    "cfn:deploy-json": "aws cloudformation deploy --template-file lib/TapStack.json --stack-name TapStack${ENVIRONMENT_SUFFIX:-dev} --capabilities CAPABILITY_IAM --parameter-overrides EnvironmentSuffix=${ENVIRONMENT_SUFFIX:-dev} --tags Repository=${REPOSITORY:-unknown} CommitAuthor=${COMMIT_AUTHOR:-unknown}",
-    "cfn:destroy": "aws cloudformation delete-stack --stack-name TapStack${ENVIRONMENT_SUFFIX:-dev}"
+    "cfn:deploy-yaml": "aws cloudformation deploy --template-file lib/webapp-environment-setup.yaml --stack-name WebAppStack${ENVIRONMENT_SUFFIX:-dev} --capabilities CAPABILITY_IAM --parameter-overrides EnvironmentName=${ENVIRONMENT_SUFFIX:-dev} OwnerName=${COMMIT_AUTHOR:-unknown} ProjectName=${REPOSITORY:-WebApp} --tags Repository=${REPOSITORY:-unknown} CommitAuthor=${COMMIT_AUTHOR:-unknown}",
+    "cfn:deploy-json": "aws cloudformation deploy --template-file lib/webapp-environment-setup.json --stack-name WebAppStack${ENVIRONMENT_SUFFIX:-dev} --capabilities CAPABILITY_IAM --parameter-overrides EnvironmentName=${ENVIRONMENT_SUFFIX:-dev} OwnerName=${COMMIT_AUTHOR:-unknown} ProjectName=${REPOSITORY:-WebApp} --tags Repository=${REPOSITORY:-unknown} CommitAuthor=${COMMIT_AUTHOR:-unknown}",
+    "cfn:destroy": "aws cloudformation delete-stack --stack-name WebAppStack${ENVIRONMENT_SUFFIX:-dev}"
   },
   "devDependencies": {
     "@aws-sdk/client-api-gateway": "^3.848.0",
