@@ -198,4 +198,50 @@ describe('TapStack CloudFormation Integration Tests', () => {
       expect(httpsRule.CidrIp).toBe('0.0.0.0/0');
     }
   });
+
+  it('should configure CloudWatch alarm for high CPU utilization', () => {
+    const alarm = template.Resources.HighCPUAlarm;
+    expect(alarm).toBeDefined();
+    expect(alarm.Type).toBe('AWS::CloudWatch::Alarm');
+    
+    // Verify alarm configuration
+    expect(alarm.Properties.MetricName).toBe('CPUUtilization');
+    expect(alarm.Properties.Namespace).toBe('AWS/EC2');
+    expect(alarm.Properties.Statistic).toBe('Average');
+    expect(alarm.Properties.Threshold).toBe(80);
+    expect(alarm.Properties.ComparisonOperator).toBe('GreaterThanThreshold');
+    expect(alarm.Properties.EvaluationPeriods).toBe(2);
+    expect(alarm.Properties.Period).toBe(300);
+    
+    // Verify alarm actions reference SNS topic
+    expect(alarm.Properties.AlarmActions).toBeDefined();
+    expect(Array.isArray(alarm.Properties.AlarmActions)).toBe(true);
+    expect(alarm.Properties.AlarmActions.length).toBe(1);
+    
+    // Verify dimensions for AutoScaling Group
+    expect(alarm.Properties.Dimensions).toBeDefined();
+    expect(Array.isArray(alarm.Properties.Dimensions)).toBe(true);
+    const asgDimension = alarm.Properties.Dimensions.find((dim: any) => dim.Name === 'AutoScalingGroupName');
+    expect(asgDimension).toBeDefined();
+  });
+
+  it('should configure SNS topic with email subscription', () => {
+    const topic = template.Resources.NotificationTopic;
+    expect(topic).toBeDefined();
+    expect(topic.Type).toBe('AWS::SNS::Topic');
+    
+    // Verify email subscription configuration
+    expect(topic.Properties.Subscription).toBeDefined();
+    expect(Array.isArray(topic.Properties.Subscription)).toBe(true);
+    expect(topic.Properties.Subscription.length).toBe(1);
+    
+    const emailSub = topic.Properties.Subscription[0];
+    expect(emailSub.Protocol).toBe('email');
+    expect(emailSub.Endpoint).toBeDefined();
+    
+    // Verify environment tagging
+    expect(topic.Properties.Tags).toBeDefined();
+    const envTag = topic.Properties.Tags.find((tag: any) => tag.Key === 'Environment');
+    expect(envTag).toBeDefined();
+  });
 });
