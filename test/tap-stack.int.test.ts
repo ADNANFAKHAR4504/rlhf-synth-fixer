@@ -72,25 +72,35 @@ describe('VPC Infrastructure Integration Tests', () => {
     test('PublicSubnet1 should exist with correct properties', async () => {
       if (!outputs.PublicSubnet1Id) return;
 
-      const response = await ec2Client.send(new DescribeSubnetsCommand({ SubnetIds: [outputs.PublicSubnet1Id] }));
-      expect(response.Subnets?.length).toBe(1);
-      const subnet = response.Subnets?.[0];
-      expect(subnet?.CidrBlock).toBe('10.0.1.0/24');
-      expect(subnet?.VpcId).toBe(outputs.VPCId);
-      expect(subnet?.State).toBe('available');
-      expect(subnet?.MapPublicIpOnLaunch).toBe(true);
+      try {
+        const response = await ec2Client.send(new DescribeSubnetsCommand({ SubnetIds: [outputs.PublicSubnet1Id] }));
+        expect(response.Subnets?.length).toBe(1);
+        const subnet = response.Subnets?.[0];
+        expect(subnet?.CidrBlock).toBe('10.0.1.0/24');
+        expect(subnet?.VpcId).toBe(outputs.VPCId);
+        expect(subnet?.State).toBe('available');
+        expect(subnet?.MapPublicIpOnLaunch).toBe(true);
+      } catch (error) {
+        console.log(`PublicSubnet1 test failed: ${error}`);
+        throw error;
+      }
     }, 30000);
 
     test('PublicSubnet2 should exist with correct properties', async () => {
       if (!outputs.PublicSubnet2Id) return;
 
-      const response = await ec2Client.send(new DescribeSubnetsCommand({ SubnetIds: [outputs.PublicSubnet2Id] }));
-      expect(response.Subnets?.length).toBe(1);
-      const subnet = response.Subnets?.[0];
-      expect(subnet?.CidrBlock).toBe('10.0.2.0/24');
-      expect(subnet?.VpcId).toBe(outputs.VPCId);
-      expect(subnet?.State).toBe('available');
-      expect(subnet?.MapPublicIpOnLaunch).toBe(true);
+      try {
+        const response = await ec2Client.send(new DescribeSubnetsCommand({ SubnetIds: [outputs.PublicSubnet2Id] }));
+        expect(response.Subnets?.length).toBe(1);
+        const subnet = response.Subnets?.[0];
+        expect(subnet?.CidrBlock).toBe('10.0.2.0/24');
+        expect(subnet?.VpcId).toBe(outputs.VPCId);
+        expect(subnet?.State).toBe('available');
+        expect(subnet?.MapPublicIpOnLaunch).toBe(true);
+      } catch (error) {
+        console.log(`PublicSubnet2 test failed: ${error}`);
+        throw error;
+      }
     }, 30000);
 
     test('subnets should be in different availability zones', async () => {
@@ -118,12 +128,17 @@ describe('VPC Infrastructure Integration Tests', () => {
     test('Internet Gateway should exist and be attached to VPC', async () => {
       if (!outputs.InternetGatewayId) return;
 
-      const response = await ec2Client.send(new DescribeInternetGatewaysCommand({ InternetGatewayIds: [outputs.InternetGatewayId] }));
-      expect(response.InternetGateways?.length).toBe(1);
-      const igw = response.InternetGateways?.[0];
-      const attachment = igw?.Attachments?.[0];
-      expect(attachment?.VpcId).toBe(outputs.VPCId);
-      expect(attachment?.State).toBe('available');
+      try {
+        const response = await ec2Client.send(new DescribeInternetGatewaysCommand({ InternetGatewayIds: [outputs.InternetGatewayId] }));
+        expect(response.InternetGateways?.length).toBe(1);
+        const igw = response.InternetGateways?.[0];
+        const attachment = igw?.Attachments?.[0];
+        expect(attachment?.VpcId).toBe(outputs.VPCId);
+        expect(attachment?.State).toBe('available');
+      } catch (error) {
+        console.log(`Internet Gateway test failed: ${error}`);
+        throw error;
+      }
     }, 30000);
   });
 
@@ -131,17 +146,22 @@ describe('VPC Infrastructure Integration Tests', () => {
     test('Security Group should exist with correct SSH rule', async () => {
       if (!outputs.SecurityGroupId) return;
 
-      const response = await ec2Client.send(new DescribeSecurityGroupsCommand({ GroupIds: [outputs.SecurityGroupId] }));
-      expect(response.SecurityGroups?.length).toBe(1);
-      const sg = response.SecurityGroups?.[0];
-      expect(sg?.VpcId).toBe(outputs.VPCId);
-      expect(sg?.Description).toBe('Allow SSH access from anywhere');
+      try {
+        const response = await ec2Client.send(new DescribeSecurityGroupsCommand({ GroupIds: [outputs.SecurityGroupId] }));
+        expect(response.SecurityGroups?.length).toBe(1);
+        const sg = response.SecurityGroups?.[0];
+        expect(sg?.VpcId).toBe(outputs.VPCId);
+        expect(sg?.Description).toBe('Allow SSH access from anywhere');
 
-      const sshRule = sg?.IpPermissions?.find(
-        rule => rule.IpProtocol === 'tcp' && rule.FromPort === 22 && rule.ToPort === 22
-      );
-      expect(sshRule).toBeDefined();
-      expect(sshRule?.IpRanges).toContainEqual({ CidrIp: '0.0.0.0/0' });
+        const sshRule = sg?.IpPermissions?.find(
+          rule => rule.IpProtocol === 'tcp' && rule.FromPort === 22 && rule.ToPort === 22
+        );
+        expect(sshRule).toBeDefined();
+        expect(sshRule?.IpRanges).toContainEqual({ CidrIp: '0.0.0.0/0' });
+      } catch (error) {
+        console.log(`Security Group test failed: ${error}`);
+        throw error;
+      }
     }, 30000);
   });
 
