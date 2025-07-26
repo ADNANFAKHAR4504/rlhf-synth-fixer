@@ -59,12 +59,9 @@ class TapStack(cdk.Stack):
   """
 
   def __init__(
-    self,
-    scope: Construct,
-    construct_id: str,
-    props: Optional[TapStackProps] = None,
-    **kwargs,
-  ):
+        self,
+        scope: Construct,
+        construct_id: str, props: Optional[TapStackProps] = None, **kwargs):
     super().__init__(scope, construct_id, **kwargs)
 
     # Get environment suffix from props, context, or use 'dev' as default
@@ -76,7 +73,6 @@ class TapStack(cdk.Stack):
     # Do NOT create AWS resources directly in this stack.
 
     # Example: instantiate ServerlessStack as a nested stack
-    print(self.environment_suffix)
     self.serverless_stack = ServerlessStack(self, "ServerlessStack")
 
     # If needed, you can add more nested stacks here with environment suffix, etc.
