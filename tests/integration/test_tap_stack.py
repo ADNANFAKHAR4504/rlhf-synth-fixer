@@ -10,7 +10,7 @@ from pytest import mark
 # Open file cfn-outputs/flat-outputs.json
 base_dir = os.path.dirname(os.path.abspath(__file__))
 flat_outputs_path = os.path.join(
-  base_dir, '..', '..', 'cfn-outputs', 'flat-outputs.json'
+    base_dir, '..', '..', 'cfn-outputs', 'flat-outputs.json'
 )
 
 if os.path.exists(flat_outputs_path):
@@ -41,17 +41,22 @@ class TestTapStackIntegration(unittest.TestCase):
     # If no outputs are available, this means the stack hasn't been deployed yet
     # In that case, we skip these tests as per the QA pipeline instructions
     if not self.outputs:
-      self.skipTest("No stack outputs available. Stack may not be deployed yet.")
-    
+      self.skipTest(
+          "No stack outputs available. Stack may not be deployed yet.")
+
     # Verify we have some outputs
-    self.assertGreater(len(self.outputs), 0, "Expected stack outputs to be available")
+    self.assertGreater(
+        len(
+            self.outputs),
+        0,
+        "Expected stack outputs to be available")
 
   @mark.it("validates API Gateway endpoints are accessible")
   def test_api_gateway_endpoints_accessible(self):
     """Test that API Gateway endpoints are accessible and return expected responses"""
     if not self.api_endpoints:
       self.skipTest("No API Gateway endpoints found in outputs")
-    
+
     for endpoint in self.api_endpoints:
       with self.subTest(endpoint=endpoint):
         try:
@@ -62,14 +67,16 @@ class TestTapStackIntegration(unittest.TestCase):
             response_body = response.read().decode('utf-8')
             self.assertIn("Hello from Lambda", response_body)
         except (urllib.error.URLError, urllib.error.HTTPError) as e:
-          self.fail(f"Failed to access API Gateway endpoint {endpoint}: {str(e)}")
+          self.fail(
+              f"Failed to access API Gateway endpoint {endpoint}: {
+                  str(e)}")
 
   @mark.it("validates Lambda functions are working correctly")
   def test_lambda_functions_working(self):
     """Test that Lambda functions are properly integrated with API Gateway """
     if not self.api_endpoints:
       self.skipTest("No API Gateway endpoints found in outputs")
-    
+
     for endpoint in self.api_endpoints:
       with self.subTest(endpoint=endpoint):
         try:
@@ -87,10 +94,10 @@ class TestTapStackIntegration(unittest.TestCase):
     """Test that the multi-region deployment is working across regions"""
     if not self.api_endpoints:
       self.skipTest("No API Gateway endpoints found in outputs")
-    
+
     # We should have endpoints from multiple regions
     regions_found = set()
-    
+
     for endpoint in self.api_endpoints:
       try:
         full_url = f"{endpoint}myresource"
@@ -104,23 +111,25 @@ class TestTapStackIntegration(unittest.TestCase):
       except (urllib.error.URLError, urllib.error.HTTPError):
         # Continue testing other endpoints if one fails
         continue
-    
+
     # Verify we have deployments in multiple regions (as per the requirement)
-    self.assertGreaterEqual(len(regions_found), 1, 
-                           "Expected Lambda functions to be deployed in at least one region")
+    self.assertGreaterEqual(
+        len(regions_found),
+        1,
+        "Expected Lambda functions to be deployed in at least one region")
 
   @mark.it("validates API Gateway security configuration")
   def test_api_gateway_security(self):
     """Test API Gateway security configurations"""
     if not self.api_endpoints:
       self.skipTest("No API Gateway endpoints found in outputs")
-    
+
     for endpoint in self.api_endpoints:
       with self.subTest(endpoint=endpoint):
         # Test that the endpoint uses HTTPS
-        self.assertTrue(endpoint.startswith('https://'), 
-                       f"API Gateway endpoint should use HTTPS: {endpoint}")
-        
+        self.assertTrue(endpoint.startswith('https://'),
+                        f"API Gateway endpoint should use HTTPS: {endpoint}")
+
         # Test CORS headers if applicable
         try:
           full_url = f"{endpoint}myresource"
@@ -142,13 +151,14 @@ class TestTapStackIntegration(unittest.TestCase):
     """Test that infrastructure can handle basic load and error conditions"""
     if not self.api_endpoints:
       self.skipTest("No API Gateway endpoints found in outputs")
-    
+
     # Test multiple requests to the same endpoint
-    for endpoint in self.api_endpoints[:1]:  # Test first endpoint only to avoid rate limits
+    # Test first endpoint only to avoid rate limits
+    for endpoint in self.api_endpoints[:1]:
       with self.subTest(endpoint=endpoint):
         successful_requests = 0
         total_requests = 5
-        
+
         for _ in range(total_requests):
           try:
             full_url = f"{endpoint}myresource"
@@ -158,111 +168,118 @@ class TestTapStackIntegration(unittest.TestCase):
           except (urllib.error.URLError, urllib.error.HTTPError):
             # Some failures are acceptable in resilience testing
             continue
-        
+
         # At least 80% of requests should succeed
         success_rate = successful_requests / total_requests
-        self.assertGreaterEqual(success_rate, 0.8, 
-                               f"Expected at least 80% success rate, got {success_rate:.1%}")
+        self.assertGreaterEqual(
+            success_rate,
+            0.8,
+            f"Expected at least 80% success rate, got {
+                success_rate:.1%}")
 
   @mark.it("validates IAM roles and policies are created correctly")
   def test_iam_roles_and_policies(self):
     """Test that IAM roles are created with correct policies and permissions"""
     if not self.outputs:
-      self.skipTest("No stack outputs available. Stack may not be deployed yet.")
-    
+      self.skipTest(
+          "No stack outputs available. Stack may not be deployed yet.")
+
     # Get environment suffix for stack naming
     env_suffix = os.environ.get('ENVIRONMENT_SUFFIX', 'dev')
     stack_name_pattern = f"TapStack{env_suffix}"
-    
+
     try:
       # Initialize IAM client
-      default_region = os.environ.get('CDK_DEFAULT_REGION', 'us-east-1')
-      iam_client = boto3.client('iam', region_name=default_region)
+      iam_client = boto3.client('iam', region_name=os.environ.get('CDK_DEFAULT_REGION', 'us-east-1')) 
       
       # Find IAM roles created by our stack
       paginator = iam_client.get_paginator('list_roles')
       lambda_roles = []
-      
+
       for page in paginator.paginate():
         for role in page['Roles']:
           # Check if role was created by our CloudFormation stack
           role_name = role['RoleName']
           if 'LambdaExecutionRole' in role_name or stack_name_pattern in role_name:
             lambda_roles.append(role)
-      
+
       # Verify we have at least one Lambda execution role
-      self.assertGreater(len(lambda_roles), 0, 
-                        "Expected at least one Lambda execution role to be created")
-      
+      self.assertGreater(
+          len(lambda_roles),
+          0,
+          "Expected at least one Lambda execution role to be created")
+
       # Verify each role has correct trust policy and managed policies
       for role in lambda_roles:
         role_name = role['RoleName']
-        
+
         # Check trust policy allows Lambda service
         assume_policy = role['AssumeRolePolicyDocument']
-        self.assertIn('lambda.amazonaws.com', str(assume_policy),
-                     f"Role {role_name} should trust lambda.amazonaws.com service")
-        
+        self.assertIn(
+            'lambda.amazonaws.com',
+            str(assume_policy),
+            f"Role {role_name} should trust lambda.amazonaws.com service")
+
     except (boto3.exceptions.Boto3Error, KeyError, ValueError) as e:
       self.fail(f"Failed to validate IAM roles: {str(e)}")
 
   def _validate_lambda_function(self, func, region, lambda_client):
     """Helper method to validate a single Lambda function"""
     func_name = func['FunctionName']
-    
+
     # Verify runtime
     self.assertEqual(func['Runtime'], 'python3.9',
-                   f"Function {func_name} should use python3.9 runtime")
-    
+                     f"Function {func_name} should use python3.9 runtime")
+
     # Verify handler
     self.assertEqual(func['Handler'], 'index.handler',
-                   f"Function {func_name} should use index.handler")
-    
+                     f"Function {func_name} should use index.handler")
+
     # Verify function has IAM role
     self.assertIn('Role', func,
-                 f"Function {func_name} should have an IAM role")
+                  f"Function {func_name} should have an IAM role")
     self.assertTrue(func['Role'].startswith('arn:aws:iam::'),
-                  f"Function {func_name} should have valid IAM role ARN")
-    
+                    f"Function {func_name} should have valid IAM role ARN")
+
     # Test function invocation
     test_event = {}
     try:
       response = lambda_client.invoke(
-        FunctionName=func_name,
-        Payload=json.dumps(test_event)
+          FunctionName=func_name,
+          Payload=json.dumps(test_event)
       )
       self.assertEqual(response['StatusCode'], 200,
-                     f"Function {func_name} should respond with 200")
-      
+                       f"Function {func_name} should respond with 200")
+
       # Verify response payload
       payload = json.loads(response['Payload'].read())
       self.assertIn('statusCode', payload,
-                   f"Function {func_name} should return statusCode")
+                    f"Function {func_name} should return statusCode")
       self.assertEqual(payload['statusCode'], 200,
-                     f"Function {func_name} should return statusCode 200")
+                       f"Function {func_name} should return statusCode 200")
       self.assertIn('body', payload,
-                   f"Function {func_name} should return body")
+                    f"Function {func_name} should return body")
       self.assertIn(region, payload['body'],
-                   f"Function {func_name} should return region info")
+                    f"Function {func_name} should return region info")
     except (boto3.exceptions.Boto3Error, json.JSONDecodeError, KeyError) as invoke_error:
       self.fail(f"Failed to invoke function {func_name}: {str(invoke_error)}")
 
   def _get_lambda_functions_in_region(self, region, env_suffix):
     """Helper method to get Lambda functions in a specific region"""
     lambda_client = boto3.client('lambda', region_name=region)
-    
+
     try:
       # List functions in this region
       paginator = lambda_client.get_paginator('list_functions')
       lambda_functions = []
-      
+
       for page in paginator.paginate():
         for func in page['Functions']:
           func_name = func['FunctionName']
           # Check if function was created by our stack
           if 'MyLambdaFunction' in func_name or f"TapStack{env_suffix}" in func_name:
             lambda_functions.append(func)
-      
+
       return lambda_functions, lambda_client
     except boto3.exceptions.Boto3Error as e:
       # Only handle permissions gracefully, re-raise other errors for real issues
@@ -278,20 +295,22 @@ class TestTapStackIntegration(unittest.TestCase):
   def test_lambda_functions_configuration(self):
     """Test that Lambda functions have correct configuration and runtime"""
     if not self.outputs:
-      self.skipTest("No stack outputs available. Stack may not be deployed yet.")
-    
+      self.skipTest(
+          "No stack outputs available. Stack may not be deployed yet.")
+
     try:
       regions = ['us-east-1', 'us-west-1']
       env_suffix = os.environ.get('ENVIRONMENT_SUFFIX', 'dev')
-      
+
       for region in regions:
-        lambda_functions, lambda_client = self._get_lambda_functions_in_region(region, env_suffix)
-        
+        lambda_functions, lambda_client = self._get_lambda_functions_in_region(
+            region, env_suffix)
+
         # If we found functions in this region, validate them
         if lambda_functions and lambda_client:
           for func in lambda_functions:
             self._validate_lambda_function(func, region, lambda_client)
-          
+
     except (boto3.exceptions.Boto3Error, KeyError, ValueError) as e:
       self.fail(f"Failed to validate Lambda functions: {str(e)}")
 
@@ -299,79 +318,84 @@ class TestTapStackIntegration(unittest.TestCase):
     """Helper method to validate a single API Gateway"""
     api_id = api['id']
     api_name = api['name']
-    
+
     # Verify API name
     self.assertEqual(api_name, 'MultiRegionService',
-                   "API should be named 'MultiRegionService'")
-    
+                     "API should be named 'MultiRegionService'")
+
     # Get API resources
     resources = apigateway_client.get_resources(restApiId=api_id)
-    
+
     # Verify we have root resource and myresource
-    resource_paths = [r['pathPart'] for r in resources['items'] if 'pathPart' in r]
+    resource_paths = [r['pathPart']
+                      for r in resources['items'] if 'pathPart' in r]
     self.assertIn('myresource', resource_paths,
-                 f"API {api_name} should have 'myresource' path")
-    
+                  f"API {api_name} should have 'myresource' path")
+
     # Find the myresource resource
     myresource = None
     for resource in resources['items']:
       if resource.get('pathPart') == 'myresource':
         myresource = resource
         break
-    
-    self.assertIsNotNone(myresource, 
-                       f"API {api_name} should have myresource defined")
-    
+
+    self.assertIsNotNone(myresource,
+                         f"API {api_name} should have myresource defined")
+
     # Verify GET method exists on myresource
     resource_id = myresource['id']
     try:
       method = apigateway_client.get_method(
-        restApiId=api_id,
-        resourceId=resource_id,
-        httpMethod='GET'
+          restApiId=api_id,
+          resourceId=resource_id,
+          httpMethod='GET'
       )
       self.assertIsNotNone(method,
-                         "myresource should have GET method")
-      
+                           "myresource should have GET method")
+
       # Verify integration type is AWS_PROXY (Lambda proxy integration)
       self.assertIn('methodIntegration', method,
-                   "GET method should have integration")
-      
+                    "GET method should have integration")
+
     except apigateway_client.exceptions.NotFoundException:
       self.fail(f"GET method not found on myresource in API {api_name}")
-    
+
     # Verify deployment exists
     try:
       deployments = apigateway_client.get_deployments(restApiId=api_id)
       self.assertGreater(len(deployments['items']), 0,
-                       f"API {api_name} should have at least one deployment")
-      
+                         f"API {api_name} should have at least one deployment")
+
       # Verify prod stage exists
       stages = apigateway_client.get_stages(restApiId=api_id)
       stage_names = [s['stageName'] for s in stages['items']]
       self.assertIn('prod', stage_names,
-                   f"API {api_name} should have 'prod' stage")
-      
+                    f"API {api_name} should have 'prod' stage")
+
     except boto3.exceptions.Boto3Error as deploy_error:
-      self.fail(f"Failed to validate deployments for API {api_name}: {str(deploy_error)}")
+      self.fail(
+          f"Failed to validate deployments for API {api_name}: {
+              str(deploy_error)}")
     except KeyError as deploy_error:
-      self.fail(f"Failed to validate deployments for API {api_name}: {str(deploy_error)}")
+      self.fail(
+          f"Failed to validate deployments for API {api_name}: {
+              str(deploy_error)}")
 
   def _get_api_gateways_in_region(self, region, env_suffix):
     """Helper method to get API Gateways in a specific region"""
     apigateway_client = boto3.client('apigateway', region_name=region)
-    
+
     try:
       # Get all REST APIs
       apis = apigateway_client.get_rest_apis()
       stack_apis = []
-      
+
       for api in apis['items']:
         api_name = api['name']
         # Check if API was created by our stack
         if 'MultiRegionService' in api_name or f"TapStack{env_suffix}" in api_name:
           stack_apis.append(api)
-      
+
       return stack_apis, apigateway_client
     except boto3.exceptions.Boto3Error as e:
       # Only handle permissions gracefully, re-raise other errors for real issues
@@ -379,18 +403,15 @@ class TestTapStackIntegration(unittest.TestCase):
         return [], None
       # Re-raise other errors as they indicate real configuration issues
       raise e
-    except (KeyError, ValueError) as e:
-      # Configuration parsing errors should fail the test
-      raise e
 
 
   def _validate_lambda_tags_in_region(self, region, env_suffix):
     """Helper method to validate Lambda function tags in a specific region"""
     lambda_client = boto3.client('lambda', region_name=region)
-    
+
     try:
       paginator = lambda_client.get_paginator('list_functions')
-      
+
       for page in paginator.paginate():
         for func in page['Functions']:
           func_name = func['FunctionName']
@@ -400,16 +421,14 @@ class TestTapStackIntegration(unittest.TestCase):
               # Verify function has some tags (CDK adds default tags)
               self.assertIsInstance(tags.get('Tags', {}), dict,
                                   f"Function {func_name} should have tags")
-            except boto3.exceptions.Boto3Error as tag_error:
+            except (boto3.exceptions.Boto3Error, KeyError, ValueError) as tag_error:
               # Only handle permissions gracefully, fail on other errors
-              if 'AccessDenied' in str(tag_error) or 'UnauthorizedOperation' in str(tag_error):
+              if 'AccessDenied' in str(
+                      tag_error) or 'UnauthorizedOperation' in str(tag_error):
                 continue  # Skip validation for permission issues
               self.fail(f"Unexpected error getting tags for {func_name}: {tag_error}")
-            except (KeyError, ValueError) as tag_error:
-              # Configuration parsing errors should fail the test
-              self.fail(f"Tag parsing error for {func_name}: {tag_error}")
               
-    except boto3.exceptions.Boto3Error as e:
+    except (boto3.exceptions.Boto3Error, KeyError, ValueError) as e:
       # Only handle permissions gracefully, fail on configuration issues
       if 'AccessDenied' in str(e) or 'UnauthorizedOperation' in str(e):
         return  # Skip region validation for permission issues
@@ -421,10 +440,10 @@ class TestTapStackIntegration(unittest.TestCase):
   def _validate_api_gateway_tags_in_region(self, region):
     """Helper method to validate API Gateway tags in a specific region"""
     apigateway_client = boto3.client('apigateway', region_name=region)
-    
+
     try:
       apis = apigateway_client.get_rest_apis()
-      
+
       for api in apis['items']:
         api_name = api['name']
         if 'MultiRegionService' in api_name:
@@ -435,7 +454,8 @@ class TestTapStackIntegration(unittest.TestCase):
                                 f"API {api_name} should have tags")
           except boto3.exceptions.Boto3Error as tag_error:
             # Only handle permissions gracefully, fail on other errors
-            if 'AccessDenied' in str(tag_error) or 'UnauthorizedOperation' in str(tag_error):
+            if 'AccessDenied' in str(
+                    tag_error) or 'UnauthorizedOperation' in str(tag_error):
               continue  # Skip validation for permission issues
             self.fail(f"Unexpected error getting tags for API {api_name}: {tag_error}")
           except (KeyError, ValueError) as tag_error:
