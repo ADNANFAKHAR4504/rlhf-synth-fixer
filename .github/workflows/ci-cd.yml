@@ -410,6 +410,11 @@ jobs:
             echo "✅ TypeScript project detected, running ESLint..."
             npm run lint
           elif [ "$LANGUAGE" = "py" ]; then
+            # --- NEW: Install Python dev dependencies within this step ---
+            echo "Installing Python dev dependencies via pipenv..."
+            pipenv install --dev --deploy --system || { echo "❌ pipenv install failed!"; exit 1; }
+            echo "Python dev dependencies installed."
+            # --- END NEW ---
             # echo "✅ Python project detected, running Pylint..."
             # pipenv run lint
             LINT_OUTPUT=$(pipenv run lint 2>&1)
