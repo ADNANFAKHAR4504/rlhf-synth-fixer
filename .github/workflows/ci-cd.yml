@@ -493,7 +493,7 @@ jobs:
             npm run test:unit
           elif [ "${{ needs.lint.outputs.language }}" = "py" ]; then
             echo "✅ Python project detected, running pytest unit tests..."
-            pipenv run pytest tests/unit -v
+            pipenv run test-py-unit
           else
             echo "✅ Running default unit tests..."
             npm run test:unit
@@ -564,7 +564,7 @@ jobs:
         run: |
           if [ "${{ needs.lint.outputs.language }}" = "py" ]; then
             echo "✅ CDK project detected, running integration tests..."
-            pipenv run pytest tests/integration -v
+            pipenv run test-py-integration
           else
             echo "✅ Running default integration tests..."
             npm run test:integration
