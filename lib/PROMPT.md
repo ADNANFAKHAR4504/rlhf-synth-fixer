@@ -1,21 +1,20 @@
 
 ## Objective
-Migrate an existing cloud infrastructure to **AWS CloudFormation**, using **YAML** format for template definitions. The system must be logically decomposed into modular stacks, preserving service continuity, security, and cost-efficiency.
-
+Migrate an existing cloud infrastructure to AWS CloudFormation, using a **single YAML template** that defines a secure, scalable, and cost-efficient architecture. The template must maintain service continuity, modular logical separation (within the file), and follow AWS best practices.
 ---
 
 ## Requirements
 
-### 1. **Stack Modularization**
-- Convert the infrastructure into **multiple CloudFormation stacks**.
-- Each stack must be represented by a **separate `.yaml` file**.
-- Logical boundaries between stacks must be clearly defined (e.g., networking, compute, database, IAM).
+### 1. **Single Template Structure**
+- Create infrastructure using a **single CloudFormation template**.
+- The template must be in **YAML format**.
+- Maintain logical separation within the template using comments and organized sections (e.g., networking, compute, database, IAM).
 
-### 2. **Stack Dependencies**
-- Define clear **dependencies between stacks** using:
+### 2. **Resource Dependencies**
+- Define clear **dependencies between resources** using:
   - `DependsOn`
-  - `Export`/`ImportValue`
-  - Cross-stack references using `Fn::ImportValue`
+  - `Ref` and `GetAtt` for resource references
+  - Proper ordering of resource creation
 
 ### 3. **Region Configuration**
 - All resources must be created in the **`us-east-1`** AWS region.
@@ -25,8 +24,8 @@ Migrate an existing cloud infrastructure to **AWS CloudFormation**, using **YAML
   - `Ref`
   - `GetAtt`
   - `Sub`
-  - `ImportValue`
   - `Join`
+  - `Select`
 
 ### 5. **Parameterization**
 - Define **parameters** for:
@@ -49,7 +48,7 @@ Migrate an existing cloud infrastructure to **AWS CloudFormation**, using **YAML
 - Use **IAM roles** and policies for:
   - EC2 instances
   - Lambda functions
-  - Cross-stack access control
+  - Service-to-service access control
 - Ensure least-privilege principle across services.
 
 ### 9. **Data Encryption**

@@ -3,6 +3,14 @@
   "language": "yaml",
   "complexity": "hard",
   "turn_type": "single",
-  "po_id": "123456",
-  "startedAt": "2025-07-21T07:45:41.070Z"
+  "subtask": "Infrastructure Migration",
+  "po_id": "229155",
+  "subject_labels": ["Infrastructure Migration", "AWS CloudFormation", "Security Best Practices", "Multi-tier Architecture"],
+  "testDependencies": [
+    "@types/jest@^29.5.14",
+    "@types/js-yaml@^4.0.9",
+    "jest@^29.7.0",
+    "js-yaml@^4.1.0",
+    "ts-jest@^29.4.0"
+  ]
 }
