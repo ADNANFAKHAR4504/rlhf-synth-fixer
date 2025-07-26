@@ -96,6 +96,11 @@ app.synth()
 
 ### Main Infrastructure Stack (lib/tap_stack.py)
 ```python
+"""tap_stack.py
+This module defines the TapStack class, which creates a secure, auditable
+AWS cloud environment with S3, DynamoDB, Lambda, and CloudTrail resources.
+"""
+
 from typing import Optional
 
 import aws_cdk as cdk
