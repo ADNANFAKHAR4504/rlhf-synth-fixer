@@ -15,7 +15,7 @@ import {
 } from '@aws-sdk/client-ec2';
 
 const environmentSuffix = process.env.CDK_CONTEXT_ENVIRONMENT_SUFFIX || 'dev';
-const REGION = 'us-east-2';
+const REGION = process.env.AWS_REGION || 'us-east-1';
 let outputs: Record<string, any> = {};
 const outputsFile = 'cfn-outputs/flat-outputs.json';
 
