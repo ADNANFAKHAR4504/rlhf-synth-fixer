@@ -304,7 +304,6 @@ jobs:
           TERRAFORM_STATE_BUCKET: ${{ env.TERRAFORM_STATE_BUCKET }}
           TERRAFORM_STATE_BUCKET_REGION: ${{ env.TERRAFORM_STATE_BUCKET_REGION }}
 
-
       - name: Get Deployment Outputs
         run: |
           PLATFORM="${{ needs.synth.outputs.platform }}"
@@ -469,7 +468,10 @@ jobs:
 
       - name: Run unit tests
         run: |
-          if [ "${{ needs.lint.outputs.language }}" = "ts" ]; then
+          if [ "${{ needs.lint.outputs.language }}" = "ts" ] && [ "${{ needs.lint.outputs.platform }}" = "cdktf" ]; then
+            echo "✅ Terraform TypeScript project detected, running unit tests..."
+            npm run test:unit-cdktf
+          elif [ "${{ needs.lint.outputs.language }}" = "ts" ]; then
             echo "✅ TypeScript project detected, running unit tests..."
             npm run test:unit
           elif [ "${{ needs.lint.outputs.language }}" = "py" ]; then
@@ -771,6 +773,8 @@ jobs:
             "cdk.json"
             "metadata.json"
             "tap.py"
+            "setup.js"
+            "cdktf.json"
             )
 
           # Move paths to archive
