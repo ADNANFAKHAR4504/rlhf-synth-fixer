@@ -164,7 +164,7 @@ describe('Greeting API CloudFormation Template', () => {
   describe('Outputs', () => {
     test('should have exactly one output', () => {
       const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(1);
+      expect(outputCount).toBe(7); // outputs increased for better integration tests
     });
 
     test('should have the ApiUrl output', () => {
@@ -173,7 +173,7 @@ describe('Greeting API CloudFormation Template', () => {
 
     test('ApiUrl output should be correctly configured', () => {
       const output = template.Outputs.ApiUrl;
-      expect(output.Description).toBe('URL for invoking the Greeting API');
+      expect(output.Description).toBe('URL for invoking the Greeting API endpoint');
       const urlSub = output.Value['Fn::Sub'];
       expect(urlSub).toBe('https://${GreetingApi}.execute-api.${AWS::Region}.amazonaws.com/prod/greet');
     });

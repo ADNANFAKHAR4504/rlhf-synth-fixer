@@ -157,9 +157,81 @@
     },
     "Outputs": {
         "ApiUrl": {
-            "Description": "URL for invoking the Greeting API",
+            "Description": "URL for invoking the Greeting API endpoint",
             "Value": {
                 "Fn::Sub": "https://${GreetingApi}.execute-api.${AWS::Region}.amazonaws.com/prod/greet"
+            }
+        },
+        "ApiId": {
+            "Description": "The ID of the API Gateway REST API",
+            "Value": {
+                "Ref": "GreetingApi"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ApiId"
+                }
+            }
+        },
+        "LambdaFunctionName": {
+            "Description": "The name of the Lambda function",
+            "Value": {
+                "Ref": "GreetingFunction"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-LambdaFunctionName"
+                }
+            }
+        },
+        "LambdaFunctionArn": {
+            "Description": "The ARN of the Lambda function",
+            "Value": {
+                "Fn::GetAtt": [
+                    "GreetingFunction",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-LambdaFunctionArn"
+                }
+            }
+        },
+        "LambdaExecutionRoleArn": {
+            "Description": "The ARN of the Lambda function's execution role",
+            "Value": {
+                "Fn::GetAtt": [
+                    "LambdaExecutionRole",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-LambdaExecutionRoleArn"
+                }
+            }
+        },
+        "CloudWatchLogGroupName": {
+            "Description": "The name of the CloudWatch Log Group for the Lambda function",
+            "Value": {
+                "Ref": "LogGroup"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-CloudWatchLogGroupName"
+                }
+            }
+        },
+        "Region": {
+            "Description": "The AWS Region the stack is deployed in",
+            "Value": {
+                "Ref": "AWS::Region"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-Region"
+                }
             }
         }
     }
