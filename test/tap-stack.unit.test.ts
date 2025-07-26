@@ -39,6 +39,10 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
       InstanceType: 't2.micro'
     });
   });
+  test('EC2 instance has IAM Instance Profile attached', () => {
+  const ec2 = Object.values(template.findResources('AWS::EC2::Instance'))[0];
+  expect(ec2.Properties.IamInstanceProfile).toBeDefined();
+});
 
   test('Security Group allows SSH using AllowedSSHIP parameter', () => {
   const resources = template.findResources('AWS::EC2::SecurityGroup');
@@ -63,6 +67,22 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
     expect(Array.isArray(instanceProfile.Properties.Roles)).toBe(true);
     expect(instanceProfile.Properties.Roles.length).toBeGreaterThan(0);
   });
+  test('S3 Bucket has AES256 server-side encryption enabled', () => {
+  const bucket = Object.values(template.findResources('AWS::S3::Bucket'))[0];
+  const encryptionConfig = bucket?.Properties?.BucketEncryption?.ServerSideEncryptionConfiguration;
+
+  expect(Array.isArray(encryptionConfig)).toBe(true);
+  expect(encryptionConfig).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        ServerSideEncryptionByDefault: expect.objectContaining({
+          SSEAlgorithm: 'AES256'
+        })
+      })
+    ])
+  );
+});
+
 
   test('Template outputs EC2 Public IP and S3 Bucket Name', () => {
     template.hasOutput('S3BucketName', {
