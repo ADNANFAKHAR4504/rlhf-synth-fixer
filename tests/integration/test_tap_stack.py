@@ -532,7 +532,7 @@ class TestTapStackIntegration(unittest.TestCase):
         # If we can't access a region, continue checking others
         continue
     
-    # Verify we have resources in at least one region (ideally multiple)
+    # Verify resources in at least one region (ideally multiple)
     self.assertGreater(len(deployed_regions), 0,
                       "Expected resources to be deployed in at least one region")
     
