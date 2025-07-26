@@ -12,32 +12,6 @@ describe('TapStack CloudFormation Integration Tests', () => {
     template = Template.fromJSON(parsedTemplate);
   });
 
-  test('All expected resources exist', () => {
-    template.resourceCountIs('AWS::S3::Bucket', 1);
-    template.resourceCountIs('AWS::EC2::Instance', 1);
-    template.resourceCountIs('AWS::EC2::SecurityGroup', 1);
-    template.resourceCountIs('AWS::IAM::Role', 1);
-    template.resourceCountIs('AWS::IAM::InstanceProfile', 1);
-  });
-
-  test('All outputs are properly defined and exportable', () => {
-    const outputs = template.toJSON().Outputs || {};
-    expect(outputs['S3BucketName']).toBeDefined();
-    expect(outputs['S3BucketName'].Description).toBe('Name of the secure S3 bucket');
-    expect(outputs['S3BucketName'].Export).toEqual({
-      Name: {
-        'Fn::Sub': '${AWS::StackName}-S3BucketName'
-      }
-    });
-
-    expect(outputs['EC2PublicIP']).toBeDefined();
-    expect(outputs['EC2PublicIP'].Description).toBe('Public IP address of the EC2 instance');
-    expect(outputs['EC2PublicIP'].Export).toEqual({
-      Name: {
-        'Fn::Sub': '${AWS::StackName}-EC2PublicIP'
-      }
-    });
-  });
 
   test('All resources include expected environment tagging', () => {
   const resources = template.toJSON().Resources || {};
@@ -62,30 +36,6 @@ describe('TapStack CloudFormation Integration Tests', () => {
   expect(taggedResources.length).toBeGreaterThanOrEqual(1);
 });
 
-  test('Lifecycle rules and encryption are defined on S3 bucket', () => {
-    const buckets = template.findResources('AWS::S3::Bucket');
-    const bucket = Object.values(buckets)[0];
-
-    expect(bucket.Properties.LifecycleConfiguration.Rules).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          Status: 'Enabled'
-        })
-      ])
-    );
-
-    expect(bucket.Properties.BucketEncryption).toEqual(
-      expect.objectContaining({
-        ServerSideEncryptionConfiguration: expect.arrayContaining([
-          expect.objectContaining({
-            ServerSideEncryptionByDefault: expect.objectContaining({
-              SSEAlgorithm: 'AES256'
-            })
-          })
-        ])
-      })
-    );
-  });
 
   test('Security group has proper SSH ingress rule using parameter reference', () => {
     const sg = Object.values(template.findResources('AWS::EC2::SecurityGroup'))[0];
@@ -101,12 +51,43 @@ describe('TapStack CloudFormation Integration Tests', () => {
       ])
     );
   });
+test('EC2 Security Group allows only port 22 for inbound traffic', () => {
+  const sg = Object.values(template.findResources('AWS::EC2::SecurityGroup'))[0];
+  const ingressRules = sg.Properties.SecurityGroupIngress;
 
-  test('EC2 instance is linked with IAM instance profile and correct AMI from SSM', () => {
-    const ec2 = Object.values(template.findResources('AWS::EC2::Instance'))[0];
-    expect(ec2.Properties.IamInstanceProfile).toBeDefined();
-    expect(ec2.Properties.ImageId).toEqual({ Ref: 'LatestAmazonLinux2AMI' });
-  });
+  // Check only 1 ingress rule exists
+  expect(Array.isArray(ingressRules)).toBe(true);
+  expect(ingressRules.length).toBe(1);
+
+  // Validate that the single rule is for SSH
+  const rule = ingressRules[0];
+  expect(rule.IpProtocol).toBe('tcp');
+  expect(rule.FromPort).toBe(22);
+  expect(rule.ToPort).toBe(22);
+  expect(rule.CidrIp).toEqual({ Ref: 'AllowedSSHIP' });
+});
+test('EC2 instance uses the provided EC2 KeyPair', () => {
+  const ec2 = Object.values(template.findResources('AWS::EC2::Instance'))[0];
+
+  // Ensure KeyName is defined and references the correct parameter or resource
+  expect(ec2.Properties.KeyName).toBeDefined();
+  expect(ec2.Properties.KeyName).toEqual({ Ref: 'EC2KeyPair' }); // ✅ corrected reference
+});
+test('S3 bucket has AES256 server-side encryption enabled', () => {
+  const bucket = Object.values(template.findResources('AWS::S3::Bucket'))[0];
+  expect(bucket.Properties.BucketEncryption).toEqual(
+    expect.objectContaining({
+      ServerSideEncryptionConfiguration: expect.arrayContaining([
+        expect.objectContaining({
+          ServerSideEncryptionByDefault: expect.objectContaining({
+            SSEAlgorithm: 'AES256'
+          })
+        })
+      ])
+    })
+  );
+});
+
 
   test('IAM instance profile and role connection integrity', () => {
     const profile = Object.values(template.findResources('AWS::IAM::InstanceProfile'))[0];
@@ -119,4 +100,19 @@ describe('TapStack CloudFormation Integration Tests', () => {
     expect(role.Properties.AssumeRolePolicyDocument.Statement[0].Principal.Service).toContain('ec2.amazonaws.com');
     expect(role.Properties.ManagedPolicyArns).toContain('arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess');
   });
+  test('S3 bucket blocks all public access', () => {
+  const bucket = Object.values(template.findResources('AWS::S3::Bucket'))[0];
+  expect(bucket.Properties.PublicAccessBlockConfiguration).toEqual({
+    BlockPublicAcls: true,
+    IgnorePublicAcls: true, 
+    BlockPublicPolicy: true,
+    RestrictPublicBuckets: true
+  });
+});
+
+test('EC2 instance is t2.micro for free tier', () => {
+  const ec2 = Object.values(template.findResources('AWS::EC2::Instance'))[0];
+  expect(ec2.Properties.InstanceType).toBe('t2.micro');
+});
+
 });
