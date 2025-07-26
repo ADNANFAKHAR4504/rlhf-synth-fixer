@@ -50,16 +50,17 @@ class TestTapStackIntegration(unittest.TestCase):
       pytest.skip("Skipping AWS integration tests as requested")
 
     try:
-      # Initialize AWS clients
-      self.dynamodb = boto3.resource('dynamodb')
+      # Initialize AWS clients with us-west-2 region
+      aws_region = 'us-west-2'
+      self.dynamodb = boto3.resource('dynamodb', region_name=aws_region)
       table_name = (flat_outputs.get('TapStack.VisitsTableName', '') or
                     flat_outputs.get('VisitsTableName', ''))
       self.table = self.dynamodb.Table(table_name)
-      self.s3 = boto3.client('s3')
-      self.cloudwatch = boto3.client('cloudwatch')
-      self.iam = boto3.client('iam')
-      self.kms = boto3.client('kms')
-      self.lambda_client = boto3.client('lambda')
+      self.s3 = boto3.client('s3', region_name=aws_region)
+      self.cloudwatch = boto3.client('cloudwatch', region_name=aws_region)
+      self.iam = boto3.client('iam', region_name=aws_region)
+      self.kms = boto3.client('kms', region_name=aws_region)
+      self.lambda_client = boto3.client('lambda', region_name=aws_region)
       self.lambda_function_name = flat_outputs.get(
           'TapStack.LambdaFunctionName', '') or flat_outputs.get('LambdaFunctionName', '')
 
@@ -371,7 +372,7 @@ class TestTapStackIntegration(unittest.TestCase):
       }
 
       # Invoke the Lambda function directly
-      lambda_client = boto3.client("lambda")
+      lambda_client = boto3.client("lambda", region_name='us-west-2')
       response = lambda_client.invoke(
           FunctionName=self.lambda_function_name,
           InvocationType='RequestResponse',
@@ -419,7 +420,7 @@ class TestTapStackIntegration(unittest.TestCase):
       }
 
       # Invoke the Lambda function directly
-      lambda_client = boto3.client("lambda")
+      lambda_client = boto3.client("lambda", region_name='us-west-2')
       response = lambda_client.invoke(
           FunctionName=self.lambda_function_name,
           InvocationType='RequestResponse',
@@ -493,7 +494,7 @@ class TestTapStackIntegration(unittest.TestCase):
           "isBase64Encoded": False
       }
 
-      lambda_client = boto3.client("lambda")
+      lambda_client = boto3.client("lambda", region_name='us-west-2')
       lambda_response = lambda_client.invoke(
           FunctionName=self.lambda_function_name,
           InvocationType='RequestResponse',
