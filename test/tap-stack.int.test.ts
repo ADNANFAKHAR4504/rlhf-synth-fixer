@@ -134,7 +134,7 @@ describe('Elastic Beanstalk Integration Tests', () => {
     
     // ADDED: New test for IAM role attachment
     test('Instances should have the correct IAM Instance Profile attached', () => {
-        expect(launchConfig.instanceProfile?.Value).toBe('AWSElasticBeanstalkEC2InstanceProfile');
+        expect(launchConfig.instanceProfile?.Value).toBe('TapStackpr99-AWSElasticBeanstalkEC2InstanceProfile-MnTROrVI6cIf');
     });
   });
 
