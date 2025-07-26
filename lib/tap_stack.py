@@ -98,6 +98,10 @@ class TapStack(cdk.Stack):
     CfnOutput(self, "EnvironmentSuffix", value=environment_suffix)
     CfnOutput(self, "DeployedRegions", value=",".join(["us-east-1", "us-west-1"]))
     
+    # Note: Regional outputs are available directly from nested stacks
+    # The CI/CD pipeline will collect outputs from all CloudFormation stacks
+    # including the main stack and all nested stacks created within it
+    
     # Note: Comprehensive outputs are available in nested stacks
     # The CI/CD pipeline will collect outputs from all CloudFormation stacks
     # including nested stacks created by this main stack
