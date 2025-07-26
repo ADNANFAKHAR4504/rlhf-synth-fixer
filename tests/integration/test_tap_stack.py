@@ -303,7 +303,7 @@ class TestTapStackIntegration(unittest.TestCase):
       policies_response = self.iam_client.list_attached_role_policies(
           RoleName=role_name)
       attached_policies = [p['PolicyName']
-                           for p in policies_response['AttachedRolePolicies']]
+                           for p in policies_response.get('AttachedRolePolicies', [])]
 
       # Check basic execution role is attached
       self.assertIn('AWSLambdaBasicExecutionRole', attached_policies)
@@ -311,7 +311,7 @@ class TestTapStackIntegration(unittest.TestCase):
       # List inline policies
       inline_policies_response = self.iam_client.list_role_policies(
           RoleName=role_name)
-      inline_policies = inline_policies_response['PolicyNames']
+      inline_policies = inline_policies_response.get('PolicyNames', [])
 
       # Should have inline policies for S3 and DynamoDB access
       self.assertTrue(len(inline_policies) >= 2,
@@ -329,10 +329,10 @@ class TestTapStackIntegration(unittest.TestCase):
           Bucket=self.bucket_name
       )
 
-      # Check Lambda configurations exist
-      self.assertIn('LambdaConfigurations', response)
-      lambda_configs = response['LambdaConfigurations']
-      self.assertTrue(len(lambda_configs) > 0)
+      # Check Lambda function configurations exist
+      lambda_configs = response.get('LambdaFunctionConfigurations', [])
+      self.assertTrue(len(lambda_configs) > 0,
+                      "No LambdaFunctionConfigurations found in S3 notification config")
 
       # Find the configuration for our Lambda function
       lambda_found = False
