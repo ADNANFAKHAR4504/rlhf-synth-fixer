@@ -5,8 +5,7 @@ describe('CloudFormation Template for Dev/Prod Environments', () => {
   let template: any;
 
   beforeAll(() => {
-    // Ensure the YAML template has been converted to JSON and placed at this path.
-    // Example command: cfn-flip < lib/template.yml > lib/template.json
+    // Path to the JSON version of your CloudFormation template
     const templatePath = path.join(__dirname, '../lib/TapStack.json');
     const templateContent = fs.readFileSync(templatePath, 'utf8');
     template = JSON.parse(templateContent);
@@ -104,26 +103,34 @@ describe('CloudFormation Template for Dev/Prod Environments', () => {
     });
   });
 
+  // --- UPDATED SECTION ---
   describe('Production Auto Scaling', () => {
-    test('should define a Launch Configuration for Prod', () => {
-        const lc = template.Resources.ProdLaunchConfiguration;
-        expect(lc).toBeDefined();
-        expect(lc.Type).toBe('AWS::AutoScaling::LaunchConfiguration');
-        expect(lc.Properties.ImageId).toBe('ami-0c55b159cbfafe1f0');
-        expect(lc.Properties.InstanceType).toBe('t2.micro');
-        expect(lc.Properties.SecurityGroups).toEqual([{ Ref: 'ProdSecurityGroup' }]);
+    test('should define a Launch Template for Prod', () => {
+        const lt = template.Resources.ProdLaunchTemplate;
+        expect(lt).toBeDefined();
+        expect(lt.Type).toBe('AWS::EC2::LaunchTemplate');
+        expect(lt.Properties.LaunchTemplateData.ImageId).toBe('ami-0c55b159cbfafe1f0');
+        expect(lt.Properties.LaunchTemplateData.InstanceType).toBe('t2.micro');
+        expect(lt.Properties.LaunchTemplateData.SecurityGroupIds).toEqual([{ Ref: 'ProdSecurityGroup' }]);
     });
 
-    test('should define an Auto Scaling Group for Prod', () => {
+    test('should define an Auto Scaling Group for Prod using a Launch Template', () => {
         const asg = template.Resources.ProdAutoScalingGroup;
         expect(asg).toBeDefined();
         expect(asg.Type).toBe('AWS::AutoScaling::AutoScalingGroup');
         expect(asg.Properties.MinSize).toBe('1');
         expect(asg.Properties.MaxSize).toBe('3');
-        expect(asg.Properties.LaunchConfigurationName).toEqual({ Ref: 'ProdLaunchConfiguration' });
         expect(asg.Properties.VPCZoneIdentifier).toEqual([{ Ref: 'ProdPrivateSubnet' }]);
+        
+        // Verify it uses the Launch Template, not a Launch Configuration
+        expect(asg.Properties.LaunchConfigurationName).toBeUndefined();
+        expect(asg.Properties.LaunchTemplate).toEqual({
+            LaunchTemplateId: { Ref: 'ProdLaunchTemplate' },
+            Version: { 'Fn::GetAtt': ['ProdLaunchTemplate', 'LatestVersionNumber'] },
+        });
     });
   });
+  // --- END UPDATED SECTION ---
 
   describe('Outputs', () => {
     const expectedOutputs = [

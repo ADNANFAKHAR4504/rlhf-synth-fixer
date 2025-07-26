@@ -362,17 +362,19 @@
                 ]
             }
         },
-        "ProdLaunchConfiguration": {
-            "Type": "AWS::AutoScaling::LaunchConfiguration",
+        "ProdLaunchTemplate": {
+            "Type": "AWS::EC2::LaunchTemplate",
             "Properties": {
-                "LaunchConfigurationName": "ProdWebServersLaunchConfig",
-                "ImageId": "ami-0c55b159cbfafe1f0",
-                "InstanceType": "t2.micro",
-                "SecurityGroups": [
-                    {
-                        "Ref": "ProdSecurityGroup"
-                    }
-                ]
+                "LaunchTemplateName": "ProdWebServersLaunchTemplate",
+                "LaunchTemplateData": {
+                    "ImageId": "ami-0c55b159cbfafe1f0",
+                    "InstanceType": "t2.micro",
+                    "SecurityGroupIds": [
+                        {
+                            "Ref": "ProdSecurityGroup"
+                        }
+                    ]
+                }
             }
         },
         "ProdAutoScalingGroup": {
@@ -384,8 +386,16 @@
                         "Ref": "ProdPrivateSubnet"
                     }
                 ],
-                "LaunchConfigurationName": {
-                    "Ref": "ProdLaunchConfiguration"
+                "LaunchTemplate": {
+                    "LaunchTemplateId": {
+                        "Ref": "ProdLaunchTemplate"
+                    },
+                    "Version": {
+                        "Fn::GetAtt": [
+                            "ProdLaunchTemplate",
+                            "LatestVersionNumber"
+                        ]
+                    }
                 },
                 "MinSize": "1",
                 "MaxSize": "3",
