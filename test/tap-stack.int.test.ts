@@ -132,13 +132,16 @@ describe('TapStack CloudFormation Integration Tests', () => {
 
   // 🧩 Resource count sanity check
   test('Expected number of core resources are present', () => {
-    const resources = template.toJSON().Resources || {};
-    const ec2Count = Object.values(resources).filter(r => r.Type === 'AWS::EC2::Instance').length;
-    const s3Count = Object.values(resources).filter(r => r.Type === 'AWS::S3::Bucket').length;
-    const sgCount = Object.values(resources).filter(r => r.Type === 'AWS::EC2::SecurityGroup').length;
-    expect(ec2Count).toBeGreaterThanOrEqual(1);
-    expect(s3Count).toBeGreaterThanOrEqual(1);
-    expect(sgCount).toBeGreaterThanOrEqual(1);
-  });
+  const resources = template.toJSON().Resources || {};
+
+  const ec2Count = Object.values(resources).filter((r: any) => r.Type === 'AWS::EC2::Instance').length;
+  const s3Count = Object.values(resources).filter((r: any) => r.Type === 'AWS::S3::Bucket').length;
+  const sgCount = Object.values(resources).filter((r: any) => r.Type === 'AWS::EC2::SecurityGroup').length;
+
+  expect(ec2Count).toBeGreaterThanOrEqual(1);
+  expect(s3Count).toBeGreaterThanOrEqual(1);
+  expect(sgCount).toBeGreaterThanOrEqual(1);
+});
+
 
 });
