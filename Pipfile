@@ -17,9 +17,10 @@ pytest-cov = "*"
 pytest-env = "*"
 pytest = "*"
 pylint = "*"
+openapi-spec-validator = "*"
 
 [requires]
-python_version = "3.12.11"
+python_version = "3.12.3"
 
 [scripts]
 # Validation
