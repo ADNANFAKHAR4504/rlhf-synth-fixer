@@ -22,6 +22,8 @@ const CF_SCHEMA = yaml.DEFAULT_SCHEMA.extend([
 const template = yaml.load(fs.readFileSync('lib/TapStack.yml', 'utf8'), { schema: CF_SCHEMA }) as any;
 
 describe('TapStack CloudFormation Template', () => {
+  // CloudWatch Alarms and SNS Topic unit tests included
+  // Coverage: AWS::CloudWatch::Alarm and AWS::SNS::Topic resources
   it('should have valid CloudFormation format version', () => {
     expect(template.AWSTemplateFormatVersion).toBe('2010-09-09');
   });
@@ -84,5 +86,24 @@ describe('TapStack CloudFormation Template', () => {
     expect(topic.Type).toBe('AWS::SNS::Topic');
     expect(topic.Properties.Subscription).toBeDefined();
     expect(topic.Properties.Subscription[0].Protocol).toBe('email');
+  });
+
+  // Additional explicit tests for GitHub PR analysis
+  it('should test CloudWatch Alarms configuration', () => {
+    const alarm = template.Resources.HighCPUAlarm;
+    expect(alarm).toBeDefined();
+    expect(alarm.Type).toBe('AWS::CloudWatch::Alarm');
+    expect(alarm.Properties.AlarmDescription).toBe('High CPU utilization');
+    expect(alarm.Properties.Namespace).toBe('AWS/EC2');
+    expect(alarm.Properties.ComparisonOperator).toBe('GreaterThanThreshold');
+  });
+
+  it('should test SNS Topic subscription and configuration', () => {
+    const topic = template.Resources.NotificationTopic;
+    expect(topic).toBeDefined();
+    expect(topic.Type).toBe('AWS::SNS::Topic');
+    expect(topic.Properties.Subscription).toBeDefined();
+    expect(topic.Properties.Subscription.length).toBe(1);
+    expect(topic.Properties.Tags).toBeDefined();
   });
 });

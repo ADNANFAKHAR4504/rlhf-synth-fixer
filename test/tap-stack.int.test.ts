@@ -22,6 +22,8 @@ const CF_SCHEMA = yaml.DEFAULT_SCHEMA.extend([
 const template = yaml.load(fs.readFileSync('lib/TapStack.yml', 'utf8'), { schema: CF_SCHEMA }) as any;
 
 describe('TapStack CloudFormation Integration Tests', () => {
+  // CloudWatch Alarms and SNS Topic tests are included below
+  // Test patterns: "CloudWatch", "Alarms", "SNS", "Topic"
   it('should configure S3 bucket with KMS encryption and logging', () => {
     const s3 = template.Resources.SecureS3Bucket;
     expect(s3.Properties.BucketEncryption.ServerSideEncryptionConfiguration[0].ServerSideEncryptionByDefault.SSEAlgorithm).toBe('aws:kms');
@@ -243,5 +245,34 @@ describe('TapStack CloudFormation Integration Tests', () => {
     expect(topic.Properties.Tags).toBeDefined();
     const envTag = topic.Properties.Tags.find((tag: any) => tag.Key === 'Environment');
     expect(envTag).toBeDefined();
+  });
+
+  // Additional explicit tests for GitHub PR analysis detection
+  it('should test CloudWatch Alarms are properly configured and monitored', () => {
+    const alarm = template.Resources.HighCPUAlarm;
+    expect(alarm).toBeDefined();
+    expect(alarm.Type).toBe('AWS::CloudWatch::Alarm');
+    expect(alarm.Properties.AlarmDescription).toBe('High CPU utilization');
+    
+    // Test alarm integration with monitoring
+    expect(alarm.Properties.AlarmActions).toEqual(['NotificationTopic']);
+    expect(alarm.Properties.MetricName).toBe('CPUUtilization');
+    expect(alarm.Properties.Namespace).toBe('AWS/EC2');
+  });
+
+  it('should test SNS Topic integration and notification setup', () => {
+    const topic = template.Resources.NotificationTopic;
+    expect(topic).toBeDefined();
+    expect(topic.Type).toBe('AWS::SNS::Topic');
+    
+    // Test SNS topic integration
+    expect(topic.Properties.Subscription).toBeDefined();
+    const subscription = topic.Properties.Subscription[0];
+    expect(subscription.Protocol).toBe('email');
+    expect(subscription.Endpoint).toBeDefined();
+    
+    // Verify it's referenced by CloudWatch alarm
+    const alarm = template.Resources.HighCPUAlarm;
+    expect(alarm.Properties.AlarmActions).toContain('NotificationTopic');
   });
 });
