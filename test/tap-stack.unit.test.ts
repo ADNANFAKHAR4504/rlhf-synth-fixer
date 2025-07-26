@@ -38,7 +38,8 @@ describe('TapStack CloudFormation Template', () => {
 
       const props = bucket.Properties;
       expect(props.VersioningConfiguration.Status).toBe('Enabled');
-      expect(props.BucketEncryption.ServerSideEncryptionConfiguration[0].ServerSideEncryptionByDefault.SSEAlgorithm).toBe('AES256');
+      expect(props.BucketEncryption.ServerSideEncryptionConfiguration[0].ServerSideEncryptionByDefault.SSEAlgorithm).toBe('aws:kms');
+      expect(props.BucketEncryption.ServerSideEncryptionConfiguration[0].ServerSideEncryptionByDefault.KMSMasterKeyID).toBeDefined();
       expect(props.PublicAccessBlockConfiguration.BlockPublicAcls).toBe(true);
     });
 
