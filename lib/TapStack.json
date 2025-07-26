@@ -1,16 +1,21 @@
 {
     "AWSTemplateFormatVersion": "2010-09-09",
-    "Description": "productionuction infrastructure with VPC, subnets, secure S3 buckets (ACL-free), IAM roles, and CloudTrail",
+    "Description": "Production infrastructure with VPC, subnets, secure S3 buckets (KMS encrypted), IAM roles, and CloudTrail",
     "Parameters": {
         "EnvironmentName": {
             "Description": "Environment name (dev/stage/production)",
             "Type": "String",
-            "Default": "productionuction",
+            "Default": "production",
             "AllowedValues": [
                 "dev",
                 "stage",
-                "productionuction"
+                "production"
             ]
+        },
+        "Owner": {
+            "Description": "Owner team name for resource tagging",
+            "Type": "String",
+            "Default": "TeamA"
         }
     },
     "Mappings": {
@@ -40,6 +45,12 @@
                         "Value": {
                             "Ref": "EnvironmentName"
                         }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
                     }
                 ]
             }
@@ -58,6 +69,12 @@
                         "Key": "Environment",
                         "Value": {
                             "Ref": "EnvironmentName"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
                         }
                     }
                 ]
@@ -103,6 +120,12 @@
                         "Value": {
                             "Ref": "EnvironmentName"
                         }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
                     }
                 ]
             }
@@ -136,6 +159,12 @@
                         "Value": {
                             "Ref": "EnvironmentName"
                         }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
                     }
                 ]
             }
@@ -167,6 +196,12 @@
                         "Key": "Environment",
                         "Value": {
                             "Ref": "EnvironmentName"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
                         }
                     }
                 ]
@@ -200,6 +235,12 @@
                         "Value": {
                             "Ref": "EnvironmentName"
                         }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
                     }
                 ]
             }
@@ -219,6 +260,12 @@
                         "Key": "Environment",
                         "Value": {
                             "Ref": "EnvironmentName"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
                         }
                     }
                 ]
@@ -248,6 +295,12 @@
                         "Value": {
                             "Ref": "EnvironmentName"
                         }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
                     }
                 ]
             }
@@ -270,6 +323,12 @@
                         "Value": {
                             "Ref": "EnvironmentName"
                         }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
                     }
                 ]
             }
@@ -291,6 +350,12 @@
                         "Key": "Environment",
                         "Value": {
                             "Ref": "EnvironmentName"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
                         }
                     }
                 ]
@@ -366,11 +431,9 @@
         },
         "AppDataBucket": {
             "Type": "AWS::S3::Bucket",
-            "DeletionPolicy": "Retain",
-            "UpdateReplacePolicy": "Retain",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "production-data-${AWS::AccountId}"
+                    "Fn::Sub": "production-bucket-${AWS::AccountId}"
                 },
                 "PublicAccessBlockConfiguration": {
                     "BlockPublicAcls": true,
@@ -389,7 +452,8 @@
                     "ServerSideEncryptionConfiguration": [
                         {
                             "ServerSideEncryptionByDefault": {
-                                "SSEAlgorithm": "AES256"
+                                "SSEAlgorithm": "aws:kms",
+                                "KMSMasterKeyID": "alias/aws/s3"
                             }
                         }
                     ]
@@ -406,6 +470,16 @@
                         "Value": {
                             "Ref": "EnvironmentName"
                         }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    },
+                    {
+                        "Key": "Encryption",
+                        "Value": "Enabled-KMS"
                     }
                 ]
             }
@@ -466,7 +540,7 @@
                 "Path": "/",
                 "Policies": [
                     {
-                        "PolicyName": "S3AccessPolicy",
+                        "PolicyName": "S3KMSAccessPolicy",
                         "PolicyDocument": {
                             "Version": "2012-10-17",
                             "Statement": [
@@ -488,6 +562,14 @@
                                             "Fn::Sub": "${AppDataBucket.Arn}/*"
                                         }
                                     ]
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "kms:Decrypt",
+                                        "kms:GenerateDataKey"
+                                    ],
+                                    "Resource": "*"
                                 }
                             ]
                         }
@@ -504,6 +586,12 @@
                         "Key": "Environment",
                         "Value": {
                             "Ref": "EnvironmentName"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
                         }
                     }
                 ]
@@ -576,17 +664,21 @@
                         "Value": {
                             "Ref": "EnvironmentName"
                         }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
                     }
                 ]
             }
         },
         "CloudTrailBucket": {
             "Type": "AWS::S3::Bucket",
-            "DeletionPolicy": "Retain",
-            "UpdateReplacePolicy": "Retain",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "production-cloudtrail-logs-${AWS::AccountId}"
+                    "Fn::Sub": "production-cloudtrail-log-${AWS::AccountId}"
                 },
                 "PublicAccessBlockConfiguration": {
                     "BlockPublicAcls": true,
@@ -605,7 +697,8 @@
                     "ServerSideEncryptionConfiguration": [
                         {
                             "ServerSideEncryptionByDefault": {
-                                "SSEAlgorithm": "AES256"
+                                "SSEAlgorithm": "aws:kms",
+                                "KMSMasterKeyID": "alias/aws/s3"
                             }
                         }
                     ]
@@ -621,6 +714,12 @@
                         "Key": "Environment",
                         "Value": {
                             "Ref": "EnvironmentName"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
                         }
                     }
                 ]
@@ -714,6 +813,12 @@
                         "Value": {
                             "Ref": "EnvironmentName"
                         }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
                     }
                 ]
             }
@@ -783,6 +888,20 @@
             "Export": {
                 "Name": {
                     "Fn::Sub": "${AWS::StackName}-AppDataBucketName"
+                }
+            }
+        },
+        "AppDataBucketArn": {
+            "Description": "Application Data Bucket ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "AppDataBucket",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-AppDataBucketArn"
                 }
             }
         },
