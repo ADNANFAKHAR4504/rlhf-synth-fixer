@@ -30,7 +30,7 @@ class ServerlessStack(Stack):
 
     CfnOutput(self, "VpcIdOutput", value=vpc.vpc_id, description="The VPC ID")
 
-    # DynamoDB Table
+    # DynamoDB Table Creation
     table = dynamodb.Table(
       self,
       "ItemTable",
