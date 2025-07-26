@@ -8,46 +8,17 @@ Parameters:
   EnvironmentName:
     Type: String
     Description: An environment identifier (e.g., dev, qa, prod).
-    Default: dev
   OwnerName:
     Type: String
     Description: The name of the resource owner.
-    Default: WebAppTeam
   ProjectName:
     Type: String
     Description: The name of the project.
-    Default: CoreWebApp
-  DBMasterUsername:
-    Type: String
-    Description: Username for the master database user.
-    Default: dbadmin
-    MinLength: '4'
-    MaxLength: '16'
-    AllowedPattern: '^[a-zA-Z][a-zA-Z0-9_]*$'
-    ConstraintDescription: Must begin with a letter and contain only alphanumeric characters.
   WebAppServerKeyName:
     Type: AWS::EC2::KeyPair::KeyName
     Description: Name of an existing EC2 KeyPair to enable SSH access to the instance.
 
 Resources:
-  # -- Securely Generated DB Password in Secrets Manager --
-  DBMasterUserSecret:
-    Type: AWS::SecretsManager::Secret
-    Properties:
-      Description: "Credentials for the WebAppDatabase master user"
-      GenerateSecretString:
-        SecretStringTemplate: !Sub '{"username": "${DBMasterUsername}"}'
-        GenerateStringKey: "password"
-        PasswordLength: 16
-        ExcludeCharacters: '"@/\'
-      Tags:
-        - Key: Environment
-          Value: !Ref EnvironmentName
-        - Key: Owner
-          Value: !Ref OwnerName
-        - Key: Project
-          Value: !Ref ProjectName
-
   # -- S3 Bucket for Static Assets --
   WebAppAssets:
     Type: AWS::S3::Bucket
@@ -55,7 +26,7 @@ Resources:
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
-              SSEAlgorithm: aws:kms # Uses an AWS-managed KMS key for S3
+              SSEAlgorithm: aws:kms
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -122,7 +93,7 @@ Resources:
       ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}'
       KeyName: !Ref WebAppServerKeyName
       SecurityGroupIds:
-        - !GetAtt WebAppServerSecurityGroup.GroupId # FIXED: Use !GetAtt for explicit ID reference
+        - !GetAtt WebAppServerSecurityGroup.GroupId
       Tags:
         - Key: Environment
           Value: !Ref EnvironmentName
@@ -139,13 +110,13 @@ Resources:
     Properties:
       DBInstanceClass: db.t3.micro
       Engine: mysql
-      EngineVersion: '8.0.36' # FIXED: Use a specific, valid engine version
+      EngineVersion: '8.0.36'
       AllocatedStorage: '20'
       StorageType: gp2
       MultiAZ: true
       DBName: !Sub '${ProjectName}${EnvironmentName}DB'
-      MasterUsername: !Ref DBMasterUsername
-      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DBMasterUserSecret}:SecretString:password}}' # FIXED: Securely reference password from Secrets Manager
+      MasterUsername: 'dbadmin'
+      MasterUserPassword: '{{resolve:secretsmanager:MyWebAppDBPasswordSecret:SecretString:password}}'
       VPCSecurityGroups:
         - !GetAtt WebAppDatabaseSecurityGroup.GroupId
       PubliclyAccessible: false
@@ -157,3 +128,58 @@ Resources:
           Value: !Ref OwnerName
         - Key: Project
           Value: !Ref ProjectName
+
+  # -- Securely Generated DB Password in Secrets Manager --
+  MyWebAppDBPasswordSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Description: "Password for the WebAppDatabase master user"
+      GenerateSecretString:
+        SecretStringTemplate: '{"username": "dbadmin"}'
+        GenerateStringKey: "password"
+        PasswordLength: 16
+        ExcludeCharacters: '"@/\'
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Owner
+          Value: !Ref OwnerName
+        - Key: Project
+          Value: !Ref ProjectName
+
+Outputs:
+  WebAppServerId:
+    Description: "Instance ID of the Web Application Server"
+    Value: !Ref WebAppServer
+    Export:
+      Name: !Sub "${AWS::StackName}-WebAppServerId"
+
+  WebAppServerPublicIp:
+    Description: "Public IP address of the Web Application Server"
+    Value: !GetAtt WebAppServer.PublicIp
+    Export:
+      Name: !Sub "${AWS::StackName}-WebAppServerPublicIp"
+
+  WebAppAssetsBucketName:
+    Description: "Name of the S3 bucket for static assets"
+    Value: !Ref WebAppAssets
+    Export:
+      Name: !Sub "${AWS::StackName}-WebAppAssetsBucketName"
+
+  WebAppDatabaseEndpoint:
+    Description: "Endpoint address for the RDS database"
+    Value: !GetAtt WebAppDatabase.Endpoint.Address
+    Export:
+      Name: !Sub "${AWS::StackName}-WebAppDatabaseEndpoint"
+
+  WebAppDatabasePort:
+    Description: "Port for the RDS database"
+    Value: !GetAtt WebAppDatabase.Endpoint.Port
+    Export:
+      Name: !Sub "${AWS::StackName}-WebAppDatabasePort"
+
+  DBMasterUserSecretArn:
+    Description: "ARN of the master user secret in Secrets Manager"
+    Value: !Ref MyWebAppDBPasswordSecret
+    Export:
+      Name: !Sub "${AWS::StackName}-DBMasterUserSecretArn"

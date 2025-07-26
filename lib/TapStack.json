@@ -4,36 +4,15 @@
     "Parameters": {
         "EnvironmentName": {
             "Type": "String",
-            "Description": "An environment identifier (e.g., dev, qa, prod).",
-            "Default": "dev"
+            "Description": "An environment identifier (e.g., dev, qa, prod)."
         },
         "OwnerName": {
             "Type": "String",
-            "Description": "The name of the resource owner.",
-            "Default": "WebAppTeam"
+            "Description": "The name of the resource owner."
         },
         "ProjectName": {
             "Type": "String",
-            "Description": "The name of the project.",
-            "Default": "CoreWebApp"
-        },
-        "DBMasterUsername": {
-            "Type": "String",
-            "Description": "Username for the master database user.",
-            "Default": "dbadmin",
-            "MinLength": "4",
-            "MaxLength": "16",
-            "AllowedPattern": "^[a-zA-Z][a-zA-Z0-9_]*$",
-            "ConstraintDescription": "Must begin with a letter and contain only alphanumeric characters."
-        },
-        "DBMasterUserPassword": {
-            "Type": "String",
-            "Description": "Password for the master database user.",
-            "NoEcho": true,
-            "MinLength": "8",
-            "MaxLength": "41",
-            "AllowedPattern": "^[a-zA-Z0-9!#$&*?@]*$",
-            "ConstraintDescription": "Must contain only alphanumeric characters and the symbols !#$&*?@."
+            "Description": "The name of the project."
         },
         "WebAppServerKeyName": {
             "Type": "AWS::EC2::KeyPair::KeyName",
@@ -180,7 +159,10 @@
                 },
                 "SecurityGroupIds": [
                     {
-                        "Ref": "WebAppServerSecurityGroup"
+                        "Fn::GetAtt": [
+                            "WebAppServerSecurityGroup",
+                            "GroupId"
+                        ]
                     }
                 ],
                 "Tags": [
@@ -216,22 +198,21 @@
             "Properties": {
                 "DBInstanceClass": "db.t3.micro",
                 "Engine": "mysql",
-                "EngineVersion": "8.0",
+                "EngineVersion": "8.0.36",
                 "AllocatedStorage": "20",
                 "StorageType": "gp2",
                 "MultiAZ": true,
                 "DBName": {
                     "Fn::Sub": "${ProjectName}${EnvironmentName}DB"
                 },
-                "MasterUsername": {
-                    "Ref": "DBMasterUsername"
-                },
-                "MasterUserPassword": {
-                    "Ref": "DBMasterUserPassword"
-                },
+                "MasterUsername": "dbadmin",
+                "MasterUserPassword": "{{resolve:secretsmanager:MyWebAppDBPasswordSecret:SecretString:password}}",
                 "VPCSecurityGroups": [
                     {
-                        "Ref": "WebAppDatabaseSecurityGroup"
+                        "Fn::GetAtt": [
+                            "WebAppDatabaseSecurityGroup",
+                            "GroupId"
+                        ]
                     }
                 ],
                 "PubliclyAccessible": false,
@@ -256,6 +237,115 @@
                         }
                     }
                 ]
+            }
+        },
+        "MyWebAppDBPasswordSecret": {
+            "Type": "AWS::SecretsManager::Secret",
+            "Properties": {
+                "Description": "Password for the WebAppDatabase master user",
+                "GenerateSecretString": {
+                    "SecretStringTemplate": "{\"username\": \"dbadmin\"}",
+                    "GenerateStringKey": "password",
+                    "PasswordLength": 16,
+                    "ExcludeCharacters": "\"@/\\"
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentName"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "OwnerName"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
+                    }
+                ]
+            }
+        }
+    },
+    "Outputs": {
+        "WebAppServerId": {
+            "Description": "Instance ID of the Web Application Server",
+            "Value": {
+                "Ref": "WebAppServer"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-WebAppServerId"
+                }
+            }
+        },
+        "WebAppServerPublicIp": {
+            "Description": "Public IP address of the Web Application Server",
+            "Value": {
+                "Fn::GetAtt": [
+                    "WebAppServer",
+                    "PublicIp"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-WebAppServerPublicIp"
+                }
+            }
+        },
+        "WebAppAssetsBucketName": {
+            "Description": "Name of the S3 bucket for static assets",
+            "Value": {
+                "Ref": "WebAppAssets"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-WebAppAssetsBucketName"
+                }
+            }
+        },
+        "WebAppDatabaseEndpoint": {
+            "Description": "Endpoint address for the RDS database",
+            "Value": {
+                "Fn::GetAtt": [
+                    "WebAppDatabase",
+                    "Endpoint.Address"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-WebAppDatabaseEndpoint"
+                }
+            }
+        },
+        "WebAppDatabasePort": {
+            "Description": "Port for the RDS database",
+            "Value": {
+                "Fn::GetAtt": [
+                    "WebAppDatabase",
+                    "Endpoint.Port"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-WebAppDatabasePort"
+                }
+            }
+        },
+        "DBMasterUserSecretArn": {
+            "Description": "ARN of the master user secret in Secrets Manager",
+            "Value": {
+                "Ref": "MyWebAppDBPasswordSecret"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-DBMasterUserSecretArn"
+                }
             }
         }
     }
