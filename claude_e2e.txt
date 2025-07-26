@@ -24,7 +24,7 @@ You are an expert AWS Cloud Architect and DevOps engineer.
     * If its a yaml file, you will need to run pipenv run `pipenv run cfn-flip-to-json` to convert the yaml file to json and then write a test that validates the json file.
   6. run unit tests: npm run test:unit. and fix it until it passes and also passes the coverage.
   7. Write integration tests for testing the code in lib/ inside the file in test/ folder.
-    * Do not mock the responses, is cfn-outputs are missing, let the tests fail.
+    * Do not mock the responses if cfn-outputs values are missing, let the tests fail and report.
     * You will need to collect the outputs from aws. Check the .github/workflows/ci-cd.yml file to see how to collect the outputs.
     * If the outputs are not available, ignore this step until the deployment pipeline has passed.
     * Your integration tests should not only assert that the resources were created, but also that any end-to-end workflows are working as expected.

@@ -9,8 +9,7 @@
                         "default": "Environment Configuration"
                     },
                     "Parameters": [
-                        "EnvironmentSuffix",
-                        "DatabasePassword"
+                        "EnvironmentSuffix"
                     ]
                 }
             ]
@@ -23,19 +22,31 @@
             "Description": "Environment suffix for resource naming (e.g., dev, staging, prod)",
             "AllowedPattern": "^[a-zA-Z0-9]+$",
             "ConstraintDescription": "Must contain only alphanumeric characters"
-        },
-        "DatabasePassword": {
-            "Type": "String",
-            "NoEcho": true,
-            "Default": "MySecurePassword123!",
-            "Description": "Password for the RDS database master user",
-            "MinLength": 8,
-            "MaxLength": 41,
-            "AllowedPattern": "^[a-zA-Z0-9!@#$%^&*()_+=-]+$",
-            "ConstraintDescription": "Must be between 8-41 characters and contain only alphanumeric and special characters"
         }
     },
     "Resources": {
+        "DatabasePasswordSecret": {
+            "Type": "AWS::SecretsManager::Secret",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "tap-database-password-${EnvironmentSuffix}"
+                },
+                "Description": "Password for the RDS database master user",
+                "SecretString": "{\n  \"password\": \"MySecurePassword123!\"\n}\n",
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "TapDatabasePasswordSecret-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "production"
+                    }
+                ]
+            }
+        },
         "VPC": {
             "Type": "AWS::EC2::VPC",
             "Properties": {
@@ -681,6 +692,7 @@
         "Database": {
             "Type": "AWS::RDS::DBInstance",
             "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
             "Properties": {
                 "DBInstanceIdentifier": {
                     "Fn::Sub": "tap-database-${EnvironmentSuffix}"
@@ -690,7 +702,7 @@
                 "EngineVersion": "5.7.44",
                 "MasterUsername": "admin",
                 "MasterUserPassword": {
-                    "Ref": "DatabasePassword"
+                    "Fn::Sub": "{{resolve:secretsmanager:tap-database-password-${EnvironmentSuffix}:SecretString:password}}"
                 },
                 "AllocatedStorage": "20",
                 "StorageType": "gp2",

@@ -35,10 +35,6 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Parameters.EnvironmentSuffix).toBeDefined();
     });
 
-    test('should have DatabasePassword parameter', () => {
-      expect(template.Parameters.DatabasePassword).toBeDefined();
-    });
-
     test('EnvironmentSuffix parameter should have correct properties', () => {
       const envSuffixParam = template.Parameters.EnvironmentSuffix;
       expect(envSuffixParam.Type).toBe('String');
@@ -49,12 +45,8 @@ describe('TapStack CloudFormation Template', () => {
       expect(envSuffixParam.AllowedPattern).toBe('^[a-zA-Z0-9]+$');
     });
 
-    test('DatabasePassword parameter should have correct properties', () => {
-      const dbPasswordParam = template.Parameters.DatabasePassword;
-      expect(dbPasswordParam.Type).toBe('String');
-      expect(dbPasswordParam.NoEcho).toBe(true);
-      expect(dbPasswordParam.MinLength).toBe(8);
-      expect(dbPasswordParam.MaxLength).toBe(41);
+    test('should not have DatabasePassword parameter (using Secrets Manager)', () => {
+      expect(template.Parameters.DatabasePassword).toBeUndefined();
     });
   });
 
@@ -75,7 +67,9 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have Internet Gateway', () => {
       expect(template.Resources.InternetGateway).toBeDefined();
-      expect(template.Resources.InternetGateway.Type).toBe('AWS::EC2::InternetGateway');
+      expect(template.Resources.InternetGateway.Type).toBe(
+        'AWS::EC2::InternetGateway'
+      );
     });
 
     test('should have public subnets', () => {
@@ -93,13 +87,21 @@ describe('TapStack CloudFormation Template', () => {
     });
 
     test('public subnets should have correct CIDR blocks', () => {
-      expect(template.Resources.PublicSubnet1.Properties.CidrBlock).toBe('10.0.1.0/24');
-      expect(template.Resources.PublicSubnet2.Properties.CidrBlock).toBe('10.0.2.0/24');
+      expect(template.Resources.PublicSubnet1.Properties.CidrBlock).toBe(
+        '10.0.1.0/24'
+      );
+      expect(template.Resources.PublicSubnet2.Properties.CidrBlock).toBe(
+        '10.0.2.0/24'
+      );
     });
 
     test('private subnets should have correct CIDR blocks', () => {
-      expect(template.Resources.PrivateSubnet1.Properties.CidrBlock).toBe('10.0.3.0/24');
-      expect(template.Resources.PrivateSubnet2.Properties.CidrBlock).toBe('10.0.4.0/24');
+      expect(template.Resources.PrivateSubnet1.Properties.CidrBlock).toBe(
+        '10.0.3.0/24'
+      );
+      expect(template.Resources.PrivateSubnet2.Properties.CidrBlock).toBe(
+        '10.0.4.0/24'
+      );
     });
 
     test('should have NAT Gateway with EIP', () => {
@@ -113,21 +115,28 @@ describe('TapStack CloudFormation Template', () => {
   describe('Security Groups', () => {
     test('should have ALB security group', () => {
       expect(template.Resources.ALBSecurityGroup).toBeDefined();
-      expect(template.Resources.ALBSecurityGroup.Type).toBe('AWS::EC2::SecurityGroup');
+      expect(template.Resources.ALBSecurityGroup.Type).toBe(
+        'AWS::EC2::SecurityGroup'
+      );
     });
 
     test('should have WebServer security group', () => {
       expect(template.Resources.WebServerSecurityGroup).toBeDefined();
-      expect(template.Resources.WebServerSecurityGroup.Type).toBe('AWS::EC2::SecurityGroup');
+      expect(template.Resources.WebServerSecurityGroup.Type).toBe(
+        'AWS::EC2::SecurityGroup'
+      );
     });
 
     test('should have Database security group', () => {
       expect(template.Resources.DatabaseSecurityGroup).toBeDefined();
-      expect(template.Resources.DatabaseSecurityGroup.Type).toBe('AWS::EC2::SecurityGroup');
+      expect(template.Resources.DatabaseSecurityGroup.Type).toBe(
+        'AWS::EC2::SecurityGroup'
+      );
     });
 
     test('ALB security group should allow HTTP on port 80', () => {
-      const sg = template.Resources.ALBSecurityGroup.Properties.SecurityGroupIngress;
+      const sg =
+        template.Resources.ALBSecurityGroup.Properties.SecurityGroupIngress;
       expect(sg).toHaveLength(1);
       expect(sg[0].FromPort).toBe(80);
       expect(sg[0].ToPort).toBe(80);
@@ -135,7 +144,9 @@ describe('TapStack CloudFormation Template', () => {
     });
 
     test('WebServer security group should allow traffic from ALB on port 8080', () => {
-      const sg = template.Resources.WebServerSecurityGroup.Properties.SecurityGroupIngress;
+      const sg =
+        template.Resources.WebServerSecurityGroup.Properties
+          .SecurityGroupIngress;
       expect(sg).toHaveLength(1);
       expect(sg[0].FromPort).toBe(8080);
       expect(sg[0].ToPort).toBe(8080);
@@ -143,37 +154,51 @@ describe('TapStack CloudFormation Template', () => {
     });
 
     test('Database security group should allow MySQL traffic from WebServers', () => {
-      const sg = template.Resources.DatabaseSecurityGroup.Properties.SecurityGroupIngress;
+      const sg =
+        template.Resources.DatabaseSecurityGroup.Properties
+          .SecurityGroupIngress;
       expect(sg).toHaveLength(1);
       expect(sg[0].FromPort).toBe(3306);
       expect(sg[0].ToPort).toBe(3306);
-      expect(sg[0].SourceSecurityGroupId).toEqual({ Ref: 'WebServerSecurityGroup' });
+      expect(sg[0].SourceSecurityGroupId).toEqual({
+        Ref: 'WebServerSecurityGroup',
+      });
     });
   });
 
   describe('Load Balancer Resources', () => {
     test('should have Application Load Balancer', () => {
       expect(template.Resources.ApplicationLoadBalancer).toBeDefined();
-      expect(template.Resources.ApplicationLoadBalancer.Type).toBe('AWS::ElasticLoadBalancingV2::LoadBalancer');
+      expect(template.Resources.ApplicationLoadBalancer.Type).toBe(
+        'AWS::ElasticLoadBalancingV2::LoadBalancer'
+      );
     });
 
     test('should have ALB Target Group', () => {
       expect(template.Resources.ALBTargetGroup).toBeDefined();
-      expect(template.Resources.ALBTargetGroup.Type).toBe('AWS::ElasticLoadBalancingV2::TargetGroup');
+      expect(template.Resources.ALBTargetGroup.Type).toBe(
+        'AWS::ElasticLoadBalancingV2::TargetGroup'
+      );
     });
 
     test('should have ALB Listener', () => {
       expect(template.Resources.ALBListener).toBeDefined();
-      expect(template.Resources.ALBListener.Type).toBe('AWS::ElasticLoadBalancingV2::Listener');
+      expect(template.Resources.ALBListener.Type).toBe(
+        'AWS::ElasticLoadBalancingV2::Listener'
+      );
     });
 
     test('ALB should be internet-facing', () => {
-      expect(template.Resources.ApplicationLoadBalancer.Properties.Scheme).toBe('internet-facing');
+      expect(template.Resources.ApplicationLoadBalancer.Properties.Scheme).toBe(
+        'internet-facing'
+      );
     });
 
     test('Target Group should target port 8080', () => {
       expect(template.Resources.ALBTargetGroup.Properties.Port).toBe(8080);
-      expect(template.Resources.ALBTargetGroup.Properties.Protocol).toBe('HTTP');
+      expect(template.Resources.ALBTargetGroup.Properties.Protocol).toBe(
+        'HTTP'
+      );
     });
 
     test('Listener should forward HTTP traffic on port 80', () => {
@@ -185,16 +210,23 @@ describe('TapStack CloudFormation Template', () => {
   describe('Auto Scaling Resources', () => {
     test('should have Launch Template', () => {
       expect(template.Resources.LaunchTemplate).toBeDefined();
-      expect(template.Resources.LaunchTemplate.Type).toBe('AWS::EC2::LaunchTemplate');
+      expect(template.Resources.LaunchTemplate.Type).toBe(
+        'AWS::EC2::LaunchTemplate'
+      );
     });
 
     test('should have Auto Scaling Group', () => {
       expect(template.Resources.AutoScalingGroup).toBeDefined();
-      expect(template.Resources.AutoScalingGroup.Type).toBe('AWS::AutoScaling::AutoScalingGroup');
+      expect(template.Resources.AutoScalingGroup.Type).toBe(
+        'AWS::AutoScaling::AutoScalingGroup'
+      );
     });
 
     test('Launch Template should use t2.micro instances', () => {
-      expect(template.Resources.LaunchTemplate.Properties.LaunchTemplateData.InstanceType).toBe('t2.micro');
+      expect(
+        template.Resources.LaunchTemplate.Properties.LaunchTemplateData
+          .InstanceType
+      ).toBe('t2.micro');
     });
 
     test('Auto Scaling Group should have correct capacity settings', () => {
@@ -205,7 +237,9 @@ describe('TapStack CloudFormation Template', () => {
     });
 
     test('Auto Scaling Group should use ELB health checks', () => {
-      expect(template.Resources.AutoScalingGroup.Properties.HealthCheckType).toBe('ELB');
+      expect(
+        template.Resources.AutoScalingGroup.Properties.HealthCheckType
+      ).toBe('ELB');
     });
   });
 
@@ -217,7 +251,9 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have Database Subnet Group', () => {
       expect(template.Resources.DatabaseSubnetGroup).toBeDefined();
-      expect(template.Resources.DatabaseSubnetGroup.Type).toBe('AWS::RDS::DBSubnetGroup');
+      expect(template.Resources.DatabaseSubnetGroup.Type).toBe(
+        'AWS::RDS::DBSubnetGroup'
+      );
     });
 
     test('Database should use MySQL 5.7', () => {
@@ -230,10 +266,12 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Resources.Database.Properties.MultiAZ).toBe(true);
     });
 
-    test('Database should use parameter for password', () => {
-      expect(template.Resources.Database.Properties.MasterUserPassword).toEqual({
-        Ref: 'DatabasePassword'
-      });
+    test('Database should use Secrets Manager for password', () => {
+      expect(template.Resources.Database.Properties.MasterUserPassword).toEqual(
+        {
+          "Fn::Sub": "{{resolve:secretsmanager:tap-database-password-${EnvironmentSuffix}:SecretString:password}}",
+        }
+      );
     });
 
     test('Database should have deletion policy Delete', () => {
@@ -244,17 +282,32 @@ describe('TapStack CloudFormation Template', () => {
   describe('Resource Tagging', () => {
     test('all resources should have Environment: production tag', () => {
       const resourcesWithTags = [
-        'VPC', 'InternetGateway', 'PublicSubnet1', 'PublicSubnet2', 
-        'PrivateSubnet1', 'PrivateSubnet2', 'NatGateway1EIP', 'NatGateway1',
-        'PublicRouteTable', 'PrivateRouteTable1', 'ALBSecurityGroup', 
-        'WebServerSecurityGroup', 'DatabaseSecurityGroup', 'ApplicationLoadBalancer',
-        'ALBTargetGroup', 'DatabaseSubnetGroup', 'Database'
+        'DatabasePasswordSecret',
+        'VPC',
+        'InternetGateway',
+        'PublicSubnet1',
+        'PublicSubnet2',
+        'PrivateSubnet1',
+        'PrivateSubnet2',
+        'NatGateway1EIP',
+        'NatGateway1',
+        'PublicRouteTable',
+        'PrivateRouteTable1',
+        'ALBSecurityGroup',
+        'WebServerSecurityGroup',
+        'DatabaseSecurityGroup',
+        'ApplicationLoadBalancer',
+        'ALBTargetGroup',
+        'DatabaseSubnetGroup',
+        'Database',
       ];
 
       resourcesWithTags.forEach(resourceName => {
         const resource = template.Resources[resourceName];
         if (resource && resource.Properties && resource.Properties.Tags) {
-          const envTag = resource.Properties.Tags.find((tag: any) => tag.Key === 'Environment');
+          const envTag = resource.Properties.Tags.find(
+            (tag: any) => tag.Key === 'Environment'
+          );
           expect(envTag).toBeDefined();
           expect(envTag.Value).toBe('production');
         }
@@ -265,10 +318,18 @@ describe('TapStack CloudFormation Template', () => {
   describe('Outputs', () => {
     test('should have all required outputs', () => {
       const expectedOutputs = [
-        'VPCId', 'PublicSubnet1Id', 'PublicSubnet2Id', 'PrivateSubnet1Id', 
-        'PrivateSubnet2Id', 'ApplicationLoadBalancerDNS', 'ApplicationLoadBalancerArn',
-        'AutoScalingGroupName', 'DatabaseEndpoint', 'DatabasePort', 
-        'StackName', 'EnvironmentSuffix'
+        'VPCId',
+        'PublicSubnet1Id',
+        'PublicSubnet2Id',
+        'PrivateSubnet1Id',
+        'PrivateSubnet2Id',
+        'ApplicationLoadBalancerDNS',
+        'ApplicationLoadBalancerArn',
+        'AutoScalingGroupName',
+        'DatabaseEndpoint',
+        'DatabasePort',
+        'StackName',
+        'EnvironmentSuffix',
       ];
 
       expectedOutputs.forEach(outputName => {
@@ -279,14 +340,14 @@ describe('TapStack CloudFormation Template', () => {
     test('ALB DNS output should reference correct attribute', () => {
       const output = template.Outputs.ApplicationLoadBalancerDNS;
       expect(output.Value).toEqual({
-        'Fn::GetAtt': ['ApplicationLoadBalancer', 'DNSName']
+        'Fn::GetAtt': ['ApplicationLoadBalancer', 'DNSName'],
       });
     });
 
     test('Database endpoint output should reference correct attribute', () => {
       const output = template.Outputs.DatabaseEndpoint;
       expect(output.Value).toEqual({
-        'Fn::GetAtt': ['Database', 'Endpoint.Address']
+        'Fn::GetAtt': ['Database', 'Endpoint.Address'],
       });
     });
   });
@@ -297,14 +358,14 @@ describe('TapStack CloudFormation Template', () => {
       expect(typeof template).toBe('object');
     });
 
-    test('should have exactly 2 parameters', () => {
+    test('should have exactly 1 parameter', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(2);
+      expect(parameterCount).toBe(1);
     });
 
-    test('should have exactly 27 resources', () => {
+    test('should have exactly 28 resources', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(27);
+      expect(resourceCount).toBe(28);
     });
 
     test('should have exactly 12 outputs', () => {
