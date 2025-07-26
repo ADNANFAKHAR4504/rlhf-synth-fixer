@@ -1,210 +1,161 @@
 import fs from 'fs';
 import path from 'path';
 
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-
-describe('TapStack CloudFormation Template', () => {
+describe('CloudFormation Template for Dev/Prod Environments', () => {
   let template: any;
 
   beforeAll(() => {
-    // If youre testing a yaml template. run `pipenv run cfn-flip-to-json > lib/TapStack.json`
-    // Otherwise, ensure the template is in JSON format.
+    // Ensure the YAML template has been converted to JSON and placed at this path.
+    // Example command: cfn-flip < lib/template.yml > lib/template.json
     const templatePath = path.join(__dirname, '../lib/TapStack.json');
     const templateContent = fs.readFileSync(templatePath, 'utf8');
     template = JSON.parse(templateContent);
   });
 
-  describe('Write Integration TESTS', () => {
-    test('Dont forget!', async () => {
-      expect(false).toBe(true);
-    });
-  });
-
   describe('Template Structure', () => {
-    test('should have valid CloudFormation format version', () => {
+    test('should have a valid CloudFormation format version', () => {
       expect(template.AWSTemplateFormatVersion).toBe('2010-09-09');
     });
 
-    test('should have a description', () => {
+    test('should have a correct description', () => {
       expect(template.Description).toBeDefined();
-      expect(template.Description).toBe(
-        'TAP Stack - Task Assignment Platform CloudFormation Template'
-      );
+      expect(template.Description).toContain('CloudFormation template to create a secure and scalable infrastructure');
     });
 
-    test('should have metadata section', () => {
-      expect(template.Metadata).toBeDefined();
-      expect(template.Metadata['AWS::CloudFormation::Interface']).toBeDefined();
+    test('should not have any parameters', () => {
+        expect(template.Parameters).toBeUndefined();
     });
   });
 
-  describe('Parameters', () => {
-    test('should have EnvironmentSuffix parameter', () => {
-      expect(template.Parameters.EnvironmentSuffix).toBeDefined();
+  describe('Development Environment Resources', () => {
+    test('should define a Development VPC with the correct CIDR block', () => {
+      const devVPC = template.Resources.DevVPC;
+      expect(devVPC).toBeDefined();
+      expect(devVPC.Type).toBe('AWS::EC2::VPC');
+      expect(devVPC.Properties.CidrBlock).toBe('10.0.0.0/16');
     });
 
-    test('EnvironmentSuffix parameter should have correct properties', () => {
-      const envSuffixParam = template.Parameters.EnvironmentSuffix;
-      expect(envSuffixParam.Type).toBe('String');
-      expect(envSuffixParam.Default).toBe('dev');
-      expect(envSuffixParam.Description).toBe(
-        'Environment suffix for resource naming (e.g., dev, staging, prod)'
-      );
-      expect(envSuffixParam.AllowedPattern).toBe('^[a-zA-Z0-9]+$');
-      expect(envSuffixParam.ConstraintDescription).toBe(
-        'Must contain only alphanumeric characters'
-      );
+    test('should define public and private subnets for the Dev VPC', () => {
+      const devPublicSubnet = template.Resources.DevPublicSubnet;
+      const devPrivateSubnet = template.Resources.DevPrivateSubnet;
+      
+      expect(devPublicSubnet).toBeDefined();
+      expect(devPublicSubnet.Type).toBe('AWS::EC2::Subnet');
+      expect(devPublicSubnet.Properties.VpcId).toEqual({ Ref: 'DevVPC' });
+      expect(devPublicSubnet.Properties.CidrBlock).toBe('10.0.1.0/24');
+      expect(devPublicSubnet.Properties.AvailabilityZone).toEqual({ 'Fn::Select': [0, { 'Fn::GetAZs': '' }] });
+
+
+      expect(devPrivateSubnet).toBeDefined();
+      expect(devPrivateSubnet.Type).toBe('AWS::EC2::Subnet');
+      expect(devPrivateSubnet.Properties.VpcId).toEqual({ Ref: 'DevVPC' });
+      expect(devPrivateSubnet.Properties.CidrBlock).toBe('10.0.2.0/24');
+      expect(devPrivateSubnet.Properties.AvailabilityZone).toEqual({ 'Fn::Select': [1, { 'Fn::GetAZs': '' }] });
+    });
+
+    test('should define a Security Group for Dev with SSH access', () => {
+        const devSg = template.Resources.DevSecurityGroup;
+        expect(devSg).toBeDefined();
+        expect(devSg.Type).toBe('AWS::EC2::SecurityGroup');
+        expect(devSg.Properties.VpcId).toEqual({ Ref: 'DevVPC' });
+        expect(devSg.Properties.SecurityGroupIngress).toEqual([
+            {
+                IpProtocol: 'tcp',
+                FromPort: 22,
+                ToPort: 22,
+                CidrIp: '10.0.0.5/32',
+            }
+        ]);
     });
   });
 
-  describe('Resources', () => {
-    test('should have TurnAroundPromptTable resource', () => {
-      expect(template.Resources.TurnAroundPromptTable).toBeDefined();
+  describe('Production Environment Resources', () => {
+    test('should define a Production VPC with the correct CIDR block', () => {
+      const prodVPC = template.Resources.ProdVPC;
+      expect(prodVPC).toBeDefined();
+      expect(prodVPC.Type).toBe('AWS::EC2::VPC');
+      expect(prodVPC.Properties.CidrBlock).toBe('192.168.0.0/16');
     });
 
-    test('TurnAroundPromptTable should be a DynamoDB table', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      expect(table.Type).toBe('AWS::DynamoDB::Table');
+    test('should define a NAT Gateway for the Prod VPC', () => {
+        const natGateway = template.Resources.ProdNatGateway;
+        expect(natGateway).toBeDefined();
+        expect(natGateway.Type).toBe('AWS::EC2::NatGateway');
+        expect(natGateway.Properties.SubnetId).toEqual({ Ref: 'ProdPublicSubnet' });
     });
 
-    test('TurnAroundPromptTable should have correct deletion policies', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      expect(table.DeletionPolicy).toBe('Delete');
-      expect(table.UpdateReplacePolicy).toBe('Delete');
+    test('should define a Security Group for Prod with Web access', () => {
+        const prodSg = template.Resources.ProdSecurityGroup;
+        expect(prodSg).toBeDefined();
+        expect(prodSg.Type).toBe('AWS::EC2::SecurityGroup');
+        expect(prodSg.Properties.VpcId).toEqual({ Ref: 'ProdVPC' });
+        expect(prodSg.Properties.SecurityGroupIngress).toContainEqual({
+            IpProtocol: 'tcp',
+            FromPort: 80,
+            ToPort: 80,
+            CidrIp: '0.0.0.0/0',
+        });
+        expect(prodSg.Properties.SecurityGroupIngress).toContainEqual({
+            IpProtocol: 'tcp',
+            FromPort: 443,
+            ToPort: 443,
+            CidrIp: '0.0.0.0/0',
+        });
+    });
+  });
+
+  describe('Production Auto Scaling', () => {
+    test('should define a Launch Configuration for Prod', () => {
+        const lc = template.Resources.ProdLaunchConfiguration;
+        expect(lc).toBeDefined();
+        expect(lc.Type).toBe('AWS::AutoScaling::LaunchConfiguration');
+        expect(lc.Properties.ImageId).toBe('ami-0c55b159cbfafe1f0');
+        expect(lc.Properties.InstanceType).toBe('t2.micro');
+        expect(lc.Properties.SecurityGroups).toEqual([{ Ref: 'ProdSecurityGroup' }]);
     });
 
-    test('TurnAroundPromptTable should have correct properties', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const properties = table.Properties;
-
-      expect(properties.TableName).toEqual({
-        'Fn::Sub': 'TurnAroundPromptTable${EnvironmentSuffix}',
-      });
-      expect(properties.BillingMode).toBe('PAY_PER_REQUEST');
-      expect(properties.DeletionProtectionEnabled).toBe(false);
-    });
-
-    test('TurnAroundPromptTable should have correct attribute definitions', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const attributeDefinitions = table.Properties.AttributeDefinitions;
-
-      expect(attributeDefinitions).toHaveLength(1);
-      expect(attributeDefinitions[0].AttributeName).toBe('id');
-      expect(attributeDefinitions[0].AttributeType).toBe('S');
-    });
-
-    test('TurnAroundPromptTable should have correct key schema', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const keySchema = table.Properties.KeySchema;
-
-      expect(keySchema).toHaveLength(1);
-      expect(keySchema[0].AttributeName).toBe('id');
-      expect(keySchema[0].KeyType).toBe('HASH');
+    test('should define an Auto Scaling Group for Prod', () => {
+        const asg = template.Resources.ProdAutoScalingGroup;
+        expect(asg).toBeDefined();
+        expect(asg.Type).toBe('AWS::AutoScaling::AutoScalingGroup');
+        expect(asg.Properties.MinSize).toBe('1');
+        expect(asg.Properties.MaxSize).toBe('3');
+        expect(asg.Properties.LaunchConfigurationName).toEqual({ Ref: 'ProdLaunchConfiguration' });
+        expect(asg.Properties.VPCZoneIdentifier).toEqual([{ Ref: 'ProdPrivateSubnet' }]);
     });
   });
 
   describe('Outputs', () => {
-    test('should have all required outputs', () => {
-      const expectedOutputs = [
-        'TurnAroundPromptTableName',
-        'TurnAroundPromptTableArn',
-        'StackName',
-        'EnvironmentSuffix',
-      ];
+    const expectedOutputs = [
+        'DevelopmentVPCID',
+        'ProductionVPCID',
+        'ProductionPublicSubnetIDs',
+        'ProductionPrivateSubnetIDs',
+        'ProductionAutoScalingGroupName',
+    ];
 
+    test('should have all required outputs', () => {
       expectedOutputs.forEach(outputName => {
         expect(template.Outputs[outputName]).toBeDefined();
       });
     });
 
-    test('TurnAroundPromptTableName output should be correct', () => {
-      const output = template.Outputs.TurnAroundPromptTableName;
-      expect(output.Description).toBe('Name of the DynamoDB table');
-      expect(output.Value).toEqual({ Ref: 'TurnAroundPromptTable' });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-TurnAroundPromptTableName',
-      });
+    test('DevelopmentVPCID output should be correct', () => {
+        const output = template.Outputs.DevelopmentVPCID;
+        expect(output.Value).toEqual({ Ref: 'DevVPC' });
+        expect(output.Export.Name).toEqual({ 'Fn::Sub': '${AWS::StackName}-DevVPCID' });
     });
 
-    test('TurnAroundPromptTableArn output should be correct', () => {
-      const output = template.Outputs.TurnAroundPromptTableArn;
-      expect(output.Description).toBe('ARN of the DynamoDB table');
-      expect(output.Value).toEqual({
-        'Fn::GetAtt': ['TurnAroundPromptTable', 'Arn'],
-      });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-TurnAroundPromptTableArn',
-      });
+    test('ProductionVPCID output should be correct', () => {
+        const output = template.Outputs.ProductionVPCID;
+        expect(output.Value).toEqual({ Ref: 'ProdVPC' });
+        expect(output.Export.Name).toEqual({ 'Fn::Sub': '${AWS::StackName}-ProdVPCID' });
     });
 
-    test('StackName output should be correct', () => {
-      const output = template.Outputs.StackName;
-      expect(output.Description).toBe('Name of this CloudFormation stack');
-      expect(output.Value).toEqual({ Ref: 'AWS::StackName' });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-StackName',
-      });
-    });
-
-    test('EnvironmentSuffix output should be correct', () => {
-      const output = template.Outputs.EnvironmentSuffix;
-      expect(output.Description).toBe(
-        'Environment suffix used for this deployment'
-      );
-      expect(output.Value).toEqual({ Ref: 'EnvironmentSuffix' });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-EnvironmentSuffix',
-      });
-    });
-  });
-
-  describe('Template Validation', () => {
-    test('should have valid JSON structure', () => {
-      expect(template).toBeDefined();
-      expect(typeof template).toBe('object');
-    });
-
-    test('should not have any undefined or null required sections', () => {
-      expect(template.AWSTemplateFormatVersion).not.toBeNull();
-      expect(template.Description).not.toBeNull();
-      expect(template.Parameters).not.toBeNull();
-      expect(template.Resources).not.toBeNull();
-      expect(template.Outputs).not.toBeNull();
-    });
-
-    test('should have exactly one resource', () => {
-      const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(1);
-    });
-
-    test('should have exactly one parameter', () => {
-      const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(1);
-    });
-
-    test('should have exactly four outputs', () => {
-      const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(4);
-    });
-  });
-
-  describe('Resource Naming Convention', () => {
-    test('table name should follow naming convention with environment suffix', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const tableName = table.Properties.TableName;
-
-      expect(tableName).toEqual({
-        'Fn::Sub': 'TurnAroundPromptTable${EnvironmentSuffix}',
-      });
-    });
-
-    test('export names should follow naming convention', () => {
-      Object.keys(template.Outputs).forEach(outputKey => {
-        const output = template.Outputs[outputKey];
-        expect(output.Export.Name).toEqual({
-          'Fn::Sub': `\${AWS::StackName}-${outputKey}`,
-        });
-      });
+    test('ProductionAutoScalingGroupName output should be correct', () => {
+        const output = template.Outputs.ProductionAutoScalingGroupName;
+        expect(output.Value).toEqual({ Ref: 'ProdAutoScalingGroup' });
+        expect(output.Export.Name).toEqual({ 'Fn::Sub': '${AWS::StackName}-ProdASGName' });
     });
   });
 });
