@@ -181,8 +181,10 @@ Resources:
   
   SecureLogBucket:
     Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
-      BucketName: !Sub '${EnvironmentSuffix}-secure-logs-${AWS::AccountId}-${AWS::Region}-${AWS::StackId}'
+      BucketName: !Sub '${EnvironmentSuffix}-secure-logs-${AWS::AccountId}-${AWS::Region}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -215,8 +217,10 @@ Resources:
 
   ApplicationDataBucket:
     Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
-      BucketName: !Sub '${EnvironmentSuffix}-app-data-${AWS::AccountId}-${AWS::Region}-${AWS::StackId}'
+      BucketName: !Sub '${EnvironmentSuffix}-app-data-${AWS::AccountId}-${AWS::Region}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:

@@ -348,9 +348,11 @@
         },
         "SecureLogBucket": {
             "Type": "AWS::S3::Bucket",
+            "DeletionPolicy": "Retain",
+            "UpdateReplacePolicy": "Retain",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "${EnvironmentSuffix}-secure-logs-${AWS::AccountId}-${AWS::Region}-${AWS::StackId}"
+                    "Fn::Sub": "${EnvironmentSuffix}-secure-logs-${AWS::AccountId}-${AWS::Region}"
                 },
                 "BucketEncryption": {
                     "ServerSideEncryptionConfiguration": [
@@ -414,9 +416,11 @@
         },
         "ApplicationDataBucket": {
             "Type": "AWS::S3::Bucket",
+            "DeletionPolicy": "Retain",
+            "UpdateReplacePolicy": "Retain",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "${EnvironmentSuffix}-app-data-${AWS::AccountId}-${AWS::Region}-${AWS::StackId}"
+                    "Fn::Sub": "${EnvironmentSuffix}-app-data-${AWS::AccountId}-${AWS::Region}"
                 },
                 "BucketEncryption": {
                     "ServerSideEncryptionConfiguration": [
