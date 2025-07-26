@@ -165,7 +165,7 @@ class ServerlessStack(Stack):
     )
     CfnOutput(
       self, "LambdaFunctionVersionOutput", 
-      value=lambda_function.version, 
+      value="$LATEST", 
       description="Lambda function version"
     )
 
@@ -179,6 +179,33 @@ class ServerlessStack(Stack):
     )
 
     CfnOutput(self, "AlarmNameOutput", value=alarm.alarm_name, description="CloudWatch Alarm name")
+
+    # CloudWatch Log Group (automatically created by Lambda)
+    log_group_name = f"/aws/lambda/{lambda_function.function_name}"
+    CfnOutput(
+      self, "LambdaLogGroupNameOutput", 
+      value=log_group_name, 
+      description="Lambda CloudWatch log group name"
+    )
+
+    # Route Table information for VPC validation
+    # Get the route table for public subnets (automatically created by CDK)
+    route_tables = []
+    for subnet in vpc.public_subnets:
+      route_tables.append(subnet.route_table.route_table_id)
+    
+    CfnOutput(
+      self, "PublicRouteTableIdsOutput", 
+      value=",".join(route_tables), 
+      description="Comma-separated list of public route table IDs"
+    )
+
+    # Lambda VPC Configuration Details
+    CfnOutput(
+      self, "LambdaSubnetIdsOutput", 
+      value=",".join([subnet.subnet_id for subnet in vpc.public_subnets]), 
+      description="Lambda VPC subnet IDs"
+    )
 
     # API Gateway
     api = apigateway.RestApi(
@@ -203,6 +230,20 @@ class ServerlessStack(Stack):
 
     items = api.root.add_resource("item")
     items.add_method("GET", integration)
+
+    # API Gateway resource details
+    CfnOutput(
+      self, "ApiGatewayItemResourceIdOutput", 
+      value=items.resource_id, 
+      description="API Gateway /item resource ID"
+    )
+
+    # DynamoDB additional details
+    CfnOutput(
+      self, "DynamoTableStreamStatusOutput", 
+      value="DISABLED", 
+      description="DynamoDB table stream status"
+    )
 
     # Tag all resources
     cdk.Tags.of(self).add("Environment", "Production")

@@ -393,3 +393,146 @@ class TestTapStack(unittest.TestCase):
       
     except ClientError as e:
       self.fail(f"API Gateway stage name check failed: {e}")
+
+  @mark.it("Lambda CloudWatch log group exists")
+  def test_lambda_log_group(self):
+    """Test that Lambda CloudWatch log group is properly created"""
+    log_group_name = flat_outputs.get('LambdaLogGroupNameOutput')
+    if not log_group_name:
+      self.fail("Lambda log group name not available in deployment outputs")
+    
+    try:
+      # Verify log group exists
+      logs_client = boto3.client('logs')
+      response = logs_client.describe_log_groups(logGroupNamePrefix=log_group_name)
+      
+      log_groups = [lg for lg in response['logGroups'] if lg['logGroupName'] == log_group_name]
+      self.assertEqual(len(log_groups), 1, f"Log group {log_group_name} should exist")
+      
+      log_group = log_groups[0]
+      self.assertIn('/aws/lambda/', log_group['logGroupName'])
+      
+    except ClientError as e:
+      self.fail(f"Lambda log group check failed: {e}")
+
+  @mark.it("Route tables configuration")
+  def test_route_tables_configuration(self):
+    """Test that route tables are properly configured for public subnets"""
+    route_table_ids_str = flat_outputs.get('PublicRouteTableIdsOutput')
+    if not route_table_ids_str:
+      self.fail("Public route table IDs not available in deployment outputs")
+    
+    vpc_id = flat_outputs.get('VpcIdOutput')
+    igw_id = flat_outputs.get('InternetGatewayIdOutput')
+    if not vpc_id or not igw_id:
+      self.fail("VPC ID or Internet Gateway ID not available in deployment outputs")
+    
+    route_table_ids = route_table_ids_str.split(',')
+    self.assertGreater(len(route_table_ids), 0, "Should have at least one public route table")
+    
+    try:
+      # Verify route tables exist and have routes to IGW
+      route_tables = self.ec2.describe_route_tables(RouteTableIds=route_table_ids)
+      
+      for rt in route_tables['RouteTables']:
+        self.assertEqual(rt['VpcId'], vpc_id, "Route table should be in correct VPC")
+        
+        # Check for route to Internet Gateway
+        routes = rt.get('Routes', [])
+        igw_route = None
+        for route in routes:
+          if route.get('GatewayId') == igw_id:
+            igw_route = route
+            break
+        
+        self.assertIsNotNone(igw_route, "Route table should have route to Internet Gateway")
+        self.assertEqual(igw_route['State'], 'active', "IGW route should be active")
+      
+    except ClientError as e:
+      self.fail(f"Route tables configuration check failed: {e}")
+
+  @mark.it("Lambda VPC subnet configuration")
+  def test_lambda_vpc_subnets(self):
+    """Test that Lambda VPC subnet configuration is correct"""
+    lambda_subnet_ids_str = flat_outputs.get('LambdaSubnetIdsOutput')
+    public_subnet_ids_str = flat_outputs.get('PublicSubnetIdsOutput')
+    
+    if not lambda_subnet_ids_str or not public_subnet_ids_str:
+      self.fail("Lambda or public subnet IDs not available in deployment outputs")
+    
+    lambda_subnet_ids = set(lambda_subnet_ids_str.split(','))
+    public_subnet_ids = set(public_subnet_ids_str.split(','))
+    
+    # Lambda should be deployed to the same subnets as public subnets
+    self.assertEqual(lambda_subnet_ids, public_subnet_ids, 
+                    "Lambda should be deployed to the same public subnets")
+    
+    try:
+      # Verify all subnets are accessible and public
+      subnets = self.ec2.describe_subnets(SubnetIds=list(lambda_subnet_ids))
+      
+      for subnet in subnets['Subnets']:
+        self.assertTrue(subnet.get('MapPublicIpOnLaunch', False), 
+                       "Lambda subnets should be public subnets")
+        self.assertEqual(subnet['State'], 'available', 
+                        "Lambda subnets should be available")
+      
+    except ClientError as e:
+      self.fail(f"Lambda VPC subnet check failed: {e}")
+
+  @mark.it("API Gateway resource structure")
+  def test_api_gateway_resource_structure(self):
+    """Test that API Gateway resource structure is correct"""
+    api_id = flat_outputs.get('ApiGatewayIdOutput')
+    item_resource_id = flat_outputs.get('ApiGatewayItemResourceIdOutput')
+    
+    if not api_id or not item_resource_id:
+      self.fail("API Gateway ID or item resource ID not available in deployment outputs")
+    
+    try:
+      # Verify resource exists and has correct configuration
+      resource = self.apigateway.get_resource(restApiId=api_id, resourceId=item_resource_id)
+      
+      self.assertEqual(resource['pathPart'], 'item', "Resource should have 'item' path part")
+      self.assertIn('resourceMethods', resource, "Resource should have methods")
+      self.assertIn('GET', resource['resourceMethods'], "Resource should have GET method")
+      
+      # Verify GET method configuration
+      get_method = self.apigateway.get_method(
+        restApiId=api_id, 
+        resourceId=item_resource_id, 
+        httpMethod='GET'
+      )
+      
+      self.assertEqual(get_method['httpMethod'], 'GET')
+      self.assertIn('methodIntegration', get_method, "GET method should have integration")
+      self.assertEqual(get_method['methodIntegration']['type'], 'AWS_PROXY', 
+                      "Should use Lambda proxy integration")
+      
+    except ClientError as e:
+      self.fail(f"API Gateway resource structure check failed: {e}")
+
+  @mark.it("DynamoDB table stream configuration")
+  def test_dynamodb_stream_status(self):
+    """Test that DynamoDB table stream status is as expected"""
+    table_name = flat_outputs.get('DynamoTableNameOutput')
+    stream_status = flat_outputs.get('DynamoTableStreamStatusOutput')
+    
+    if not table_name or not stream_status:
+      self.fail("DynamoDB table name or stream status not available in deployment outputs")
+    
+    try:
+      table = self.dynamodb.Table(table_name)
+      table_info = table.meta.client.describe_table(TableName=table_name)
+      
+      # Verify stream configuration matches output
+      table_stream_spec = table_info['Table'].get('StreamSpecification')
+      if stream_status == "DISABLED":
+        self.assertIsNone(table_stream_spec, "Table should not have stream when status is DISABLED")
+      else:
+        self.assertIsNotNone(table_stream_spec, "Table should have stream configuration")
+        self.assertTrue(table_stream_spec.get('StreamEnabled', False), 
+                       "Stream should be enabled when status is not DISABLED")
+      
+    except ClientError as e:
+      self.fail(f"DynamoDB stream status check failed: {e}")
