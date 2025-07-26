@@ -12,13 +12,11 @@ The stack includes:
 """
 from typing import Optional
 
-from aws_cdk import CfnOutput
-from aws_cdk import Duration, RemovalPolicy, Stack, StackProps, Tags
+from aws_cdk import CfnOutput, Duration, RemovalPolicy, Stack, StackProps, Tags
 from aws_cdk import aws_apigatewayv2 as apigw
 from aws_cdk import aws_apigatewayv2_integrations as integrations
 from aws_cdk import aws_cloudwatch as cloudwatch
 from aws_cdk import aws_dynamodb as dynamodb
-from aws_cdk import aws_iam as iam
 from aws_cdk import aws_kms as kms
 from aws_cdk import aws_lambda as _lambda
 from aws_cdk import aws_logs as logs
@@ -143,7 +141,7 @@ class TapStack(Stack):
 
     # Grant least-privilege permissions to Lambda
     table.grant_write_data(lambda_function)
-    
+
     # Note: CloudWatch Logs permissions are automatically granted by CDK
     # when log_retention is set on the Lambda function
 
@@ -191,7 +189,7 @@ class TapStack(Stack):
         ),
         removal_policy=RemovalPolicy.DESTROY
     )
-    
+
     # Tag bucket with environment: production
     Tags.of(bucket).add("environment", "production")
 
