@@ -59,9 +59,12 @@ class TapStack(cdk.Stack):
   """
 
   def __init__(
-        self,
-        scope: Construct,
-        construct_id: str, props: Optional[TapStackProps] = None, **kwargs):
+    self,
+    scope: Construct,
+    construct_id: str,
+    props: Optional[TapStackProps] = None,
+    **kwargs,
+  ):
     super().__init__(scope, construct_id, **kwargs)
 
     # Get environment suffix from props, context, or use 'dev' as default
