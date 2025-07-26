@@ -4,7 +4,8 @@ import axios from 'axios';
 import {
   CloudFormationClient,
   DescribeStackResourcesCommand,
-} from '@aws-sdk/client-cloudformation'; // You'll need to install this: npm install @aws-sdk/client-cloudformation
+  StackResource, // Import the StackResource type
+} from '@aws-sdk/client-cloudformation';
 
 // --- Configuration ---
 
@@ -43,27 +44,30 @@ const cfClient = new CloudFormationClient({ region: awsRegion });
  * These tests connect to AWS to verify that the infrastructure is deployed correctly.
  */
 describe('CloudFormation Stack Validation', () => {
-  let stackResources;
+  // FIX: Initialize with a type and a default value.
+  // This resolves all 'implicitly has an 'any' type' and 'is possibly 'undefined'' errors.
+  let stackResources: StackResource[] = [];
 
   // Before running any tests in this suite, fetch the stack resources once.
   beforeAll(async () => {
     // A test will fail if a stack name is not provided.
     if (!stackName) {
       console.error('Stack name is not configured. Please set the `stackName` variable in the test file.');
-      stackResources = [];
+      // stackResources is already initialized as [], so we can just return.
       return;
     }
 
     try {
       const command = new DescribeStackResourcesCommand({ StackName: stackName });
       const response = await cfClient.send(command);
-      stackResources = response.StackResources;
+      // FIX: Handle the case where StackResources might be undefined in the response.
+      stackResources = response.StackResources || [];
       console.log(`Successfully fetched ${stackResources.length} resources for stack: ${stackName}`);
     } catch (error) {
       console.error(
         `Failed to describe stack resources for stack "${stackName}".\nPlease ensure:\n1. The stack is deployed in the '${awsRegion}' region.\n2. The stack name is correct.\n3. Your AWS credentials in the environment variables are valid and have permissions.`
       );
-      // Set to an empty array to prevent subsequent tests from failing due to an undefined variable.
+      // Set to an empty array to prevent subsequent tests from failing.
       stackResources = [];
     }
   }, 30000); // Increase timeout to 30 seconds for the AWS API call.
@@ -87,6 +91,7 @@ describe('CloudFormation Stack Validation', () => {
     ];
 
     // Extract the actual resource types from the fetched stack resources.
+    // FIX: TypeScript now correctly infers the type of 'resource' as StackResource.
     const actualResourceTypes = stackResources.map(
       (resource) => resource.ResourceType
     );
