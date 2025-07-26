@@ -97,6 +97,10 @@ class TapStack(cdk.Stack):
     CfnOutput(self, "MainStackName", value=self.stack_name)
     CfnOutput(self, "EnvironmentSuffix", value=environment_suffix)
     CfnOutput(self, "DeployedRegions", value=",".join(["us-east-1", "us-west-1"]))
+    
+    # Note: Comprehensive outputs are available in nested stacks
+    # The CI/CD pipeline will collect outputs from all CloudFormation stacks
+    # including nested stacks created by this main stack
 
     # # Make the table available as a property of this stack
     # self.table = dynamodb_stack.table
