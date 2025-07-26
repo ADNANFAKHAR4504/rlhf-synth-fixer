@@ -14,7 +14,8 @@ class DatabaseStack(Stack):
                vpc: ec2.Vpc, kms_key, **kwargs) -> None:
     super().__init__(scope, construct_id, **kwargs)
 
-    aurora_version = rds.AuroraMysqlEngineVersion.VER_2_08_1
+    # aurora_version = rds.AuroraMysqlEngineVersion.VER_2_08_1
+    aurora_version = rds.AuroraMysqlEngineVersion.of("8.0.mysql_aurora.3.04.1")                 
     self.db_cluster = rds.DatabaseCluster(
         self, "AppDatabase",
         engine=rds.DatabaseClusterEngine.aurora_mysql(version=aurora_version),
