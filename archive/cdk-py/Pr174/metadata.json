@@ -13,5 +13,11 @@
     "boto3@*",
     "pytest@*",
     "pytest-cov@*"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "hernanmog-turing",
+  "dockerS3Location": "s3://iac-rlhf-production/docker_images/Pr174/docker-image-TAP-332.tar"
 }
