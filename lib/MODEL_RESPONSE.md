@@ -9,7 +9,7 @@ Parameters:
       - t3.micro
       - m5.large
   InstanceCount:
-    Type: Number
+    Type: Number 
     Default: 2
   KeyName:
     Type: AWS::EC2::KeyPair::KeyName

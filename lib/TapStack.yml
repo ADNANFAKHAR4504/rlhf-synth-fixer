@@ -278,8 +278,32 @@ Resources:
         - Key: Environment
           Value: !Ref EnvironmentSuffix
 
+  S3LogBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref S3LogBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AWSCloudTrailAclCheck
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:GetBucketAcl
+            Resource: !GetAtt S3LogBucket.Arn
+          - Sid: AWSCloudTrailWrite
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:PutObject
+            Resource: !Sub '${S3LogBucket.Arn}/*'
+            Condition:
+              StringEquals:
+                's3:x-amz-acl': bucket-owner-full-control
+
   CloudTrail:
     Type: AWS::CloudTrail::Trail
+    DependsOn: S3LogBucketPolicy
     Properties:
       S3BucketName: !Ref S3LogBucket
       IsLogging: true
@@ -288,6 +312,7 @@ Resources:
 
   SecureS3Bucket:
     Type: AWS::S3::Bucket
+    DependsOn: S3InvokeLambdaPermission
     Properties:
       BucketName: !Sub 'secure-data-${EnvironmentSuffix}-${AWS::AccountId}'
       BucketEncryption:
@@ -337,94 +362,23 @@ Resources:
                 Action:
                   - logs:*
                 Resource: '*'
-              - Effect: Allow
-                Action:
-                  - ssm:PutParameter
-                  - ssm:GetParameter
-                  - ssm:DeleteParameter
-                Resource: '*'
       Tags:
         - Key: Environment
           Value: !Ref EnvironmentSuffix
 
-  PasswordGeneratorLambda:
-    Type: AWS::Lambda::Function
+  DBSecret:
+    Type: AWS::SecretsManager::Secret
     Properties:
-      Handler: index.handler
-      Role: !GetAtt LambdaRole.Arn
-      Runtime: nodejs22.x
-      Timeout: 60
-      Code:
-        ZipFile: |
-          const AWS = require('aws-sdk');
-          const crypto = require('crypto');
-          const response = require('cfn-response');
-          
-          exports.handler = async (event, context) => {
-            console.log('Request:', JSON.stringify(event, null, 2));
-            
-            const ssm = new AWS.SSM();
-            const parameterName = event.ResourceProperties.ParameterName;
-            
-            try {
-              if (event.RequestType === 'Delete') {
-                try {
-                  await ssm.deleteParameter({ Name: parameterName }).promise();
-                } catch (err) {
-                  console.log('Parameter may not exist:', err.message);
-                }
-                await response.send(event, context, response.SUCCESS, {});
-                return;
-              }
-              
-              if (event.RequestType === 'Create') {
-                // Check if parameter already exists
-                try {
-                  await ssm.getParameter({ Name: parameterName }).promise();
-                  console.log('Parameter already exists, skipping creation');
-                  await response.send(event, context, response.SUCCESS, {});
-                  return;
-                } catch (err) {
-                  // Parameter doesn't exist, create it
-                  if (err.code !== 'ParameterNotFound') {
-                    throw err;
-                  }
-                }
-                
-                const password = crypto.randomBytes(16).toString('base64').replace(/[^a-zA-Z0-9]/g, '').substring(0, 20);
-                
-                await ssm.putParameter({
-                  Name: parameterName,
-                  Value: password,
-                  Type: 'SecureString',
-                  Description: 'Auto-generated RDS password for CloudFormation stack',
-                  Overwrite: false
-                }).promise();
-                
-                await response.send(event, context, response.SUCCESS, {});
-                return;
-              }
-              
-              if (event.RequestType === 'Update') {
-                // Don't update passwords to avoid breaking database connections
-                await response.send(event, context, response.SUCCESS, {});
-                return;
-              }
-              
-            } catch (error) {
-              console.error('Error:', error);
-              await response.send(event, context, response.FAILED, {});
-            }
-          };
+      Name: !Sub '${AWS::StackName}-rds-password'
+      Description: 'RDS MySQL master password'
+      GenerateSecretString:
+        SecretStringTemplate: '{"username": "admin"}'
+        GenerateStringKey: 'password'
+        PasswordLength: 16
+        ExcludeCharacters: '"@/\'
       Tags:
         - Key: Environment
           Value: !Ref EnvironmentSuffix
-
-  DBPasswordParameter:
-    Type: AWS::CloudFormation::CustomResource
-    Properties:
-      ServiceToken: !GetAtt PasswordGeneratorLambda.Arn
-      ParameterName: !Sub '/aws/cfn/${AWS::StackName}/db-password'
 
   S3ProcessingLambda:
     Type: AWS::Lambda::Function
@@ -448,7 +402,7 @@ Resources:
       Action: lambda:InvokeFunction
       FunctionName: !Ref S3ProcessingLambda
       Principal: s3.amazonaws.com
-      SourceArn: !GetAtt SecureS3Bucket.Arn
+      SourceArn: !Sub 'arn:aws:s3:::secure-data-${EnvironmentSuffix}-${AWS::AccountId}'
       SourceAccount: !Ref "AWS::AccountId"
 
   LaunchTemplate:
@@ -538,7 +492,7 @@ Resources:
       EngineVersion: '8.0.35'
       DBInstanceClass: db.t3.micro
       MasterUsername: admin
-      MasterUserPassword: !Sub '{{resolve:ssm-secure:/aws/cfn/${AWS::StackName}/db-password:1}}'
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DBSecret}:SecretString:password}}'
       AllocatedStorage: 20
       StorageType: gp3
       MultiAZ: true

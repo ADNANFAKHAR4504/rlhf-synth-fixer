@@ -134,7 +134,7 @@ had gaps:
 
 ### Security Enhancements
 
-The IDEAL_RESPONSE addresses security gaps:
+The IDEAL_RESPONSE addresses security gaps: 
 
 - Network segmentation with private subnets for databases
 - Security groups with restrictive rules
