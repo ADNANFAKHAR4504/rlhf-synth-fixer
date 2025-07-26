@@ -402,7 +402,7 @@ jobs:
       - name: Run Linting
         run: |
           # Enable shell debugging - prints each command before execution
-          sex -x
+          set -x
           PLATFORM="${{ needs.detect-metadata.outputs.platform }}"
           LANGUAGE="${{ needs.detect-metadata.outputs.language }}"
 
