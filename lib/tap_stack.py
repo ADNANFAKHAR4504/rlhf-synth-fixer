@@ -59,9 +59,9 @@ class TapStack(cdk.Stack):
   """
 
   def __init__(
-        self,
-        scope: Construct,
-        construct_id: str, props: Optional[TapStackProps] = None, **kwargs):
+          self,
+          scope: Construct,
+          construct_id: str, props: Optional[TapStackProps] = None, **kwargs):
     super().__init__(scope, construct_id, **kwargs)
 
     # Get environment suffix from props, context, or use 'dev' as default
@@ -69,8 +69,10 @@ class TapStack(cdk.Stack):
       props.environment_suffix if props else None
     ) or self.node.try_get_context("environmentSuffix") or "dev"
 
-    # Create separate stacks for each resource type.
-    # Do NOT create AWS resources directly in this stack.
+    # Create separate stacks for each resource type
+
+    # ! DO not create resources directly in this stack.
+    # ! Instead, instantiate separate stacks for each resource type.
 
     # Example: instantiate ServerlessStack as a nested stack
     self.serverless_stack = ServerlessStack(self, "ServerlessStack")
