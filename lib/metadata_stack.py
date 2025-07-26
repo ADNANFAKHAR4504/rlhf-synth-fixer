@@ -15,7 +15,7 @@ class MultiRegionStack(Stack):
   def __init__(self, scope: Construct, construct_id: str, region: str, **kwargs):
     super().__init__(scope, construct_id, env=Environment(region=region), **kwargs)
 
-    # Define Lambda Execution of Role 
+    # Define Lambda Execution of Role
     self.lambda_role = iam.Role(
       self, "LambdaExecutionRole",
       assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
