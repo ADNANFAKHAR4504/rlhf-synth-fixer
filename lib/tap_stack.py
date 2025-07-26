@@ -94,6 +94,9 @@ class TapStack(cdk.Stack):
         # Set up S3 trigger for Lambda
         self._setup_s3_trigger()
 
+        # Create outputs for integration tests
+        self._create_outputs(environment_suffix)
+
     def _create_cloudtrail(self, env_suffix: str) -> cloudtrail.Trail:
         """Create CloudTrail for audit logging."""
         # Create S3 bucket for CloudTrail logs
@@ -134,7 +137,9 @@ class TapStack(cdk.Stack):
                 type=dynamodb.AttributeType.STRING
             ),
             encryption=dynamodb.TableEncryption.AWS_MANAGED,
-            point_in_time_recovery=True,
+            point_in_time_recovery_specification=dynamodb.PointInTimeRecoverySpecification(
+                point_in_time_recovery_enabled=True
+            ),
             contributor_insights_enabled=True,
             billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
             removal_policy=RemovalPolicy.DESTROY
@@ -232,4 +237,59 @@ class TapStack(cdk.Stack):
         self.s3_bucket.add_event_notification(
             s3.EventType.OBJECT_CREATED,
             s3n.LambdaDestination(self.lambda_function)
+        )
+
+    def _create_outputs(self, env_suffix: str):
+        """Create stack outputs for integration tests."""
+        # S3 Bucket outputs
+        cdk.CfnOutput(
+            self, "S3BucketName",
+            value=self.s3_bucket.bucket_name,
+            description="Name of the main S3 bucket",
+            export_name=f"TapStack{env_suffix}-S3BucketName"
+        )
+
+        cdk.CfnOutput(
+            self, "S3BucketArn",
+            value=self.s3_bucket.bucket_arn,
+            description="ARN of the main S3 bucket",
+            export_name=f"TapStack{env_suffix}-S3BucketArn"
+        )
+
+        # DynamoDB Table outputs
+        cdk.CfnOutput(
+            self, "DynamoDBTableName",
+            value=self.dynamodb_table.table_name,
+            description="Name of the DynamoDB table",
+            export_name=f"TapStack{env_suffix}-DynamoDBTableName"
+        )
+
+        cdk.CfnOutput(
+            self, "DynamoDBTableArn",
+            value=self.dynamodb_table.table_arn,
+            description="ARN of the DynamoDB table",
+            export_name=f"TapStack{env_suffix}-DynamoDBTableArn"
+        )
+
+        # Lambda Function outputs
+        cdk.CfnOutput(
+            self, "LambdaFunctionName",
+            value=self.lambda_function.function_name,
+            description="Name of the Lambda function",
+            export_name=f"TapStack{env_suffix}-LambdaFunctionName"
+        )
+
+        cdk.CfnOutput(
+            self, "LambdaFunctionArn",
+            value=self.lambda_function.function_arn,
+            description="ARN of the Lambda function",
+            export_name=f"TapStack{env_suffix}-LambdaFunctionArn"
+        )
+
+        # IAM Role outputs
+        cdk.CfnOutput(
+            self, "LambdaRoleArn",
+            value=self.lambda_function.role.role_arn,
+            description="ARN of the Lambda execution role",
+            export_name=f"TapStack{env_suffix}-LambdaRoleArn"
         )

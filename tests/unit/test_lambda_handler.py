@@ -85,7 +85,7 @@ class TestLambdaHandler(unittest.TestCase):
   @mark.it("handles missing TABLE_NAME environment variable")
   def test_lambda_handler_missing_table_name(self):
     # ARRANGE
-    with patch.dict(os.environ, {}, clear=True):
+    with patch.dict(os.environ, {'AWS_DEFAULT_REGION': 'us-west-2'}, clear=True):
       # Re-import the module to get fresh environment variables
       import importlib
       import sys

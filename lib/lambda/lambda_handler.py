@@ -9,7 +9,7 @@ proper error handling and logging.
 import json
 import logging
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict
 from urllib.parse import unquote_plus
 
@@ -107,7 +107,7 @@ def process_s3_record(record: Dict[str, Any]) -> int:
         object_metadata = get_s3_object_metadata(bucket_name, object_key)
         
         # Create DynamoDB item
-        timestamp = datetime.utcnow().isoformat()
+        timestamp = datetime.now(timezone.utc).isoformat()
         item = {
             'pk': {'S': f'OBJECT#{object_key}'},
             'sk': {'S': f'CREATED#{timestamp}'},
