@@ -38,7 +38,7 @@ class ServerlessStack(Stack):
       description="Comma-separated list of public subnet IDs"
     )
     
-    # Output Internet Gateway ID
+    # Output Internet Gateway ID 
     CfnOutput(
       self, "InternetGatewayIdOutput", 
       value=vpc.internet_gateway_id, 
