@@ -11,30 +11,56 @@
         }
     },
     "Resources": {
-        "LogBucket": {
-            "Type": "AWS::S3::Bucket",
+        "LogBucket": null,
+        "Type": "AWS::S3::Bucket",
+        "Properties": {
+            "BucketName": {
+                "Fn::Sub": "log-bucket-${AWS::Region}-${AWS::AccountId}"
+            },
+            "VersioningConfiguration": {
+                "Status": "Enabled"
+            },
+            "BucketEncryption": {
+                "ServerSideEncryptionConfiguration": [
+                    {
+                        "ServerSideEncryptionByDefault": {
+                            "SSEAlgorithm": "AES256"
+                        }
+                    }
+                ]
+            },
+            "PublicAccessBlockConfiguration": {
+                "BlockPublicAcls": true,
+                "BlockPublicPolicy": true,
+                "IgnorePublicAcls": true,
+                "RestrictPublicBuckets": true
+            }
+        },
+        "LogBucketPolicy": {
+            "Type": "AWS::S3::BucketPolicy",
             "Properties": {
-                "BucketName": {
-                    "Fn::Sub": "log-bucket-${AWS::Region}-${AWS::AccountId}"
+                "Bucket": {
+                    "Ref": "LogBucket"
                 },
-                "AccessControl": "Private",
-                "VersioningConfiguration": {
-                    "Status": "Enabled"
-                },
-                "BucketEncryption": {
-                    "ServerSideEncryptionConfiguration": [
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
                         {
-                            "ServerSideEncryptionByDefault": {
-                                "SSEAlgorithm": "AES256"
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "cloudtrail.amazonaws.com"
+                            },
+                            "Action": "s3:PutObject",
+                            "Resource": {
+                                "Fn::Sub": "arn:aws:s3:::log-bucket-${AWS::Region}-${AWS::AccountId}/*"
+                            },
+                            "Condition": {
+                                "StringEquals": {
+                                    "s3:x-amz-acl": "bucket-owner-full-control"
+                                }
                             }
                         }
                     ]
-                },
-                "PublicAccessBlockConfiguration": {
-                    "BlockPublicAcls": true,
-                    "BlockPublicPolicy": true,
-                    "IgnorePublicAcls": true,
-                    "RestrictPublicBuckets": true
                 }
             }
         },
@@ -77,6 +103,40 @@
                 ]
             }
         },
+        "EC2InstanceProfile": {
+            "Type": "AWS::IAM::InstanceProfile",
+            "Properties": {
+                "Path": "/",
+                "Roles": [
+                    {
+                        "Ref": "EC2Role"
+                    }
+                ]
+            }
+        },
+        "CloudTrailKMSKey": {
+            "Type": "AWS::KMS::Key",
+            "Properties": {
+                "Description": "KMS key for CloudTrail log encryption",
+                "EnableKeyRotation": true,
+                "KeyPolicy": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "Allow administration of the key",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                                }
+                            },
+                            "Action": "kms:*",
+                            "Resource": "*"
+                        }
+                    ]
+                }
+            }
+        },
         "CloudTrail": {
             "Type": "AWS::CloudTrail::Trail",
             "Properties": {
@@ -86,7 +146,10 @@
                     "Ref": "LogBucket"
                 },
                 "EnableLogFileValidation": true,
-                "IncludeGlobalServiceEvents": true
+                "IncludeGlobalServiceEvents": true,
+                "KMSKeyId": {
+                    "Ref": "CloudTrailKMSKey"
+                }
             }
         },
         "VPC": {
@@ -314,6 +377,137 @@
                 }
             }
         },
+        "EIPNatGateway1": {
+            "Type": "AWS::EC2::EIP",
+            "DependsOn": "InternetGateway",
+            "Properties": {
+                "Domain": "vpc"
+            }
+        },
+        "NatGateway1": {
+            "Type": "AWS::EC2::NatGateway",
+            "Properties": {
+                "AllocationId": {
+                    "Fn::GetAtt": [
+                        "EIPNatGateway1",
+                        "AllocationId"
+                    ]
+                },
+                "SubnetId": {
+                    "Ref": "PublicSubnet1"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "NatGateway1"
+                    }
+                ]
+            }
+        },
+        "PrivateRouteTable1": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "PrivateRouteTable1"
+                    }
+                ]
+            }
+        },
+        "PrivateSubnet1RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "PrivateSubnet1"
+                },
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTable1"
+                }
+            }
+        },
+        "PrivateSubnet2RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "PrivateSubnet2"
+                },
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTable1"
+                }
+            }
+        },
+        "PrivateRoute": {
+            "Type": "AWS::EC2::Route",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTable1"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "NatGatewayId": {
+                    "Ref": "NatGateway1"
+                }
+            }
+        },
+        "FlowLogsRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "vpc-flow-logs.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "Path": "/",
+                "Policies": [
+                    {
+                        "PolicyName": "FlowLogsPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "logs:CreateLogGroup",
+                                        "logs:CreateLogStream",
+                                        "logs:PutLogEvents"
+                                    ],
+                                    "Resource": "*"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "VPCFlowLog": {
+            "Type": "AWS::EC2::FlowLog",
+            "Properties": {
+                "ResourceId": {
+                    "Ref": "VPC"
+                },
+                "ResourceType": "VPC",
+                "TrafficType": "ALL",
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/vpc/flowlogs/${VPC}"
+                },
+                "DeliverLogsPermissionArn": {
+                    "Fn::GetAtt": [
+                        "FlowLogsRole",
+                        "Arn"
+                    ]
+                }
+            }
+        },
         "RestrictedSecurityGroup": {
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
@@ -360,6 +554,12 @@
                     "EC2Role",
                     "Arn"
                 ]
+            }
+        },
+        "EC2InstanceProfileArn": {
+            "Description": "The ARN of the EC2 Instance Profile",
+            "Value": {
+                "Ref": "EC2InstanceProfile"
             }
         },
         "VPCId": {
