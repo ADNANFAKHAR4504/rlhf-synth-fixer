@@ -46,7 +46,7 @@ class ServerlessStack(Stack):
       description="Internet Gateway ID"
     )
     
-    # Security Group for Lambda 
+    # Security Group for Lambda  
     lambda_security_group = ec2.SecurityGroup(
       self,
       "LambdaSecurityGroup",
