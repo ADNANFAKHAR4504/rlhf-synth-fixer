@@ -39,14 +39,14 @@ class ServerlessStack(Stack):
       description="Comma-separated list of public subnet IDs"
     )
     
-    # Output Internet Gateway ID 
+    # Output Internet Gateway ID
     CfnOutput(
       self, "InternetGatewayIdOutput", 
       value=vpc.internet_gateway_id, 
       description="Internet Gateway ID"
     )
     
-    # Security Group for Lambda
+    # Security Group for Lambda 
     lambda_security_group = ec2.SecurityGroup(
       self,
       "LambdaSecurityGroup",
