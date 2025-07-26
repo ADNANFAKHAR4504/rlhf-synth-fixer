@@ -4,7 +4,7 @@ import path from 'path';
 // --- Test Setup ---
 // Load the correct template in JSON format.
 // Note: You must convert your YAML template to JSON first for this test to work.
-const templatePath = path.join(__dirname, '../lib/TapStack.json');
+const templatePath = path.join(__dirname, '../lib/webapp-environment-setup.json');
 const template = JSON.parse(fs.readFileSync(templatePath, 'utf8'));
 
 describe('Web App Environment CloudFormation Template', () => {
