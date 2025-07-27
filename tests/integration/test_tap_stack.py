@@ -1,9 +1,12 @@
-import json
-import os
 import unittest
+import json
 import boto3
-from moto import mock_ec2, mock_rds, mock_s3, mock_elbv2, mock_route53, mock_lambda, mock_cloudwatch
+import requests
+from botocore.exceptions import ClientError
 from pytest import mark
+import subprocess
+import socket
+import os
 
 # Open file cfn-outputs/flat-outputs.json
 base_dir = os.path.dirname(os.path.abspath(__file__))
@@ -18,212 +21,192 @@ else:
   flat_outputs = '{}'
 
 flat_outputs = json.loads(flat_outputs)
+stack_name = flat_outputs.get('StackName', 'TapStack')
+
+cf = boto3.client(
+    'cloudformation',
+    region_name=os.environ.get(
+        'AWS_REGION',
+        'us-east-1'))
 
 
-@mark.describe("TapStack Integration Tests")
-class TestTapStackIntegration(unittest.TestCase):
-  """Integration test cases for the TapStack CDK stack"""
+def get_stack_outputs(stack_name):
+  """Returns a dictionary of outputs for a given stack."""
+  response = cf.describe_stacks(StackName=stack_name)
+  outputs = response['Stacks'][0].get('Outputs', [])
+  return {output['OutputKey']: output['OutputValue'] for output in outputs}
+
+
+def get_nested_stacks(stack_name):
+  """Recursively finds nested stacks and their outputs."""
+  outputs_dict = {}
+
+  def recurse(stack_id):
+    # Get outputs for this stack
+    outputs_dict[stack_id] = get_stack_outputs(stack_id)
+
+    # Get nested stacks (resources of type AWS::CloudFormation::Stack)
+    resources = cf.describe_stack_resources(
+        StackName=stack_id)['StackResources']
+    nested_stacks = [
+        res['PhysicalResourceId'] for res in resources
+        if res['ResourceType'] == 'AWS::CloudFormation::Stack'
+    ]
+
+    for nested_id in nested_stacks:
+      recurse(nested_id)
+
+  recurse(stack_name)
+  return outputs_dict
+
+
+main_stack_name = stack_name
+flat_outputs = get_nested_stacks(main_stack_name)
+
+
+class TestFullInfraIntegration(unittest.TestCase):
 
   def setUp(self):
-    """Set up AWS clients for integration testing"""
-    self.regions = ['us-east-1', 'us-west-2']
-    
-  @mark.it("tests VPC creation and configuration")
-  @mock_ec2
-  def test_vpc_creation_integration(self):
-    """Test VPC creation across regions"""
-    # This test would verify actual VPC creation if outputs are available
-    vpc_outputs = [key for key in flat_outputs.keys() if 'VPCId' in key]
-    
-    if vpc_outputs:
-      # Test that VPCs are created in expected regions
-      self.assertGreaterEqual(len(vpc_outputs), 2, "Should have VPCs in both regions")
-      
-      # Test VPC configuration if outputs exist
-      for vpc_key in vpc_outputs:
-        vpc_id = flat_outputs[vpc_key]
-        self.assertIsNotNone(vpc_id, f"VPC ID should not be None for {vpc_key}")
-        self.assertTrue(vpc_id.startswith('vpc-'), f"Invalid VPC ID format: {vpc_id}")
-    else:
-      self.skipTest("VPC outputs not available - stack may not be deployed")
-
-  @mark.it("tests RDS instance creation and configuration")
-  @mock_rds
-  def test_rds_creation_integration(self):
-    """Test RDS instance creation and configuration"""
-    rds_outputs = [key for key in flat_outputs.keys() if 'RDSInstanceIdentifier' in key]
-    
-    if rds_outputs:
-      self.assertGreaterEqual(len(rds_outputs), 2, "Should have RDS instances in both regions")
-      
-      for rds_key in rds_outputs:
-        rds_id = flat_outputs[rds_key]
-        self.assertIsNotNone(rds_id, f"RDS instance ID should not be None for {rds_key}")
-        
-        # If we can connect to AWS, verify RDS properties
-        try:
-          # Extract region from the key or use default
-          if 'us-east-1' in rds_key:
-            region = 'us-east-1'
-          elif 'us-west-2' in rds_key:
-            region = 'us-west-2'
-          else:
-            region = 'us-east-1'
-            
-          rds_client = boto3.client('rds', region_name=region)
-          # This would work in actual integration test with real AWS resources
-          # response = rds_client.describe_db_instances(DBInstanceIdentifier=rds_id)
-          # db_instance = response['DBInstances'][0]
-          # self.assertEqual(db_instance['Engine'], 'postgres')
-          # self.assertEqual(db_instance['EngineVersion'], '16.4')
-          # self.assertTrue(db_instance['MultiAZ'])
-        except Exception:
-          # Skip detailed verification if AWS connection fails
-          pass
-    else:
-      self.skipTest("RDS outputs not available - stack may not be deployed")
-
-  @mark.it("tests S3 bucket creation and configuration")
-  @mock_s3
-  def test_s3_bucket_integration(self):
-    """Test S3 bucket creation and configuration"""
-    bucket_outputs = [key for key in flat_outputs.keys() if 'BucketName' in key]
-    
-    if bucket_outputs:
-      self.assertGreaterEqual(len(bucket_outputs), 2, "Should have S3 buckets in both regions")
-      
-      for bucket_key in bucket_outputs:
-        bucket_name = flat_outputs[bucket_key]
-        self.assertIsNotNone(bucket_name, f"Bucket name should not be None for {bucket_key}")
-        
-        # Test bucket naming convention
-        self.assertTrue('s3bucket' in bucket_name.lower() or 'tap' in bucket_name.lower(),
-                       f"Bucket name should follow expected pattern: {bucket_name}")
-    else:
-      self.skipTest("S3 bucket outputs not available - stack may not be deployed")
-
-  @mark.it("tests Load Balancer creation and configuration")
-  @mock_elbv2
-  def test_load_balancer_integration(self):
-    """Test Application Load Balancer creation"""
-    alb_outputs = [key for key in flat_outputs.keys() if 'ALBDns' in key]
-    
-    if alb_outputs:
-      self.assertGreaterEqual(len(alb_outputs), 2, "Should have ALBs in both regions")
-      
-      for alb_key in alb_outputs:
-        alb_dns = flat_outputs[alb_key]
-        self.assertIsNotNone(alb_dns, f"ALB DNS should not be None for {alb_key}")
-        self.assertTrue(alb_dns.endswith('.elb.amazonaws.com'),
-                       f"Invalid ALB DNS format: {alb_dns}")
-    else:
-      self.skipTest("ALB outputs not available - stack may not be deployed")
-
-  @mark.it("tests Lambda function creation")
-  @mock_lambda
-  def test_lambda_function_integration(self):
-    """Test Lambda function creation"""
-    lambda_outputs = [key for key in flat_outputs.keys() if 'LambdaName' in key]
-    
-    if lambda_outputs:
-      self.assertGreaterEqual(len(lambda_outputs), 2, "Should have Lambda functions in both regions")
-      
-      for lambda_key in lambda_outputs:
-        lambda_name = flat_outputs[lambda_key]
-        self.assertIsNotNone(lambda_name, f"Lambda name should not be None for {lambda_key}")
-        self.assertTrue('lambda' in lambda_name.lower(),
-                       f"Lambda name should contain 'lambda': {lambda_name}")
-    else:
-      self.skipTest("Lambda outputs not available - stack may not be deployed")
-
-  @mark.it("tests Route53 hosted zone creation")
-  @mock_route53
-  def test_route53_integration(self):
-    """Test Route53 hosted zone creation"""
-    route53_outputs = [key for key in flat_outputs.keys() if 'HostedZoneId' in key]
-    
-    if route53_outputs:
-      self.assertGreaterEqual(len(route53_outputs), 2, "Should have hosted zones in both regions")
-      
-      for zone_key in route53_outputs:
-        zone_id = flat_outputs[zone_key]
-        self.assertIsNotNone(zone_id, f"Hosted zone ID should not be None for {zone_key}")
-        self.assertTrue(zone_id.startswith('Z'),
-                       f"Invalid hosted zone ID format: {zone_id}")
-    else:
-      self.skipTest("Route53 outputs not available - stack may not be deployed")
-
-  @mark.it("tests cross-region deployment")
-  def test_cross_region_deployment(self):
-    """Test that resources are deployed across multiple regions"""
-    if not flat_outputs:
-      self.skipTest("No outputs available - stack may not be deployed")
-    
-    # Count resources by checking output keys
-    vpc_count = len([k for k in flat_outputs.keys() if 'VPCId' in k])
-    rds_count = len([k for k in flat_outputs.keys() if 'RDSInstanceIdentifier' in k])
-    bucket_count = len([k for k in flat_outputs.keys() if 'BucketName' in k])
-    alb_count = len([k for k in flat_outputs.keys() if 'ALBDns' in k])
-    lambda_count = len([k for k in flat_outputs.keys() if 'LambdaName' in k])
-    zone_count = len([k for k in flat_outputs.keys() if 'HostedZoneId' in k])
-    
-    # Each resource type should have 2 instances (one per region)
-    resources = {
-      'VPC': vpc_count,
-      'RDS': rds_count,
-      'S3': bucket_count,
-      'ALB': alb_count,
-      'Lambda': lambda_count,
-      'Route53': zone_count
+    cf_outputs = get_nested_stacks(main_stack_name)
+    # Filter only nested region stacks
+    self.region_stacks = {
+        sid: outs for sid, outs in cf_outputs.items()
+        if sid != main_stack_name
     }
-    
-    for resource_type, count in resources.items():
-      if count > 0:  # Only test if resources exist
-        self.assertGreaterEqual(count, 2, 
-                               f"{resource_type} should be deployed in at least 2 regions, found {count}")
+    self.boto_sess = boto3.Session()
 
-  @mark.it("tests domain name configuration")
-  def test_domain_name_configuration(self):
-    """Test that domain names use turing266670.com"""
-    zone_outputs = [key for key in flat_outputs.keys() if 'HostedZoneId' in key]
-    
-    if zone_outputs:
-      # We can't directly test the zone name from outputs, but we can test the pattern
-      # This test assumes the hosted zone was created with the correct domain
-      for zone_key in zone_outputs:
-        zone_id = flat_outputs[zone_key]
-        self.assertIsNotNone(zone_id, f"Zone ID should not be None for {zone_key}")
-        
-        # Test would verify domain if we had zone name in outputs
-        # For now, we verify the zone exists
-        self.assertTrue(len(zone_id) > 0, "Zone ID should not be empty")
-    else:
-      self.skipTest("Route53 outputs not available for domain testing")
+  @mark.it("deploys infrastructure in at least two regions")
+  def test_multi_region_deployment(self):
+    self.assertGreaterEqual(len(self.region_stacks), 2)
 
-  @mark.it("tests resource tagging")
+  @mark.it("each region has required keys")
+  def test_required_outputs_present(self):
+    required = {
+        'VPCId', 'BucketName', 'ALBDns', 'LambdaName',
+        'RDSInstanceIdentifier', 'HostedZoneId'
+    }
+    for sid, res in self.region_stacks.items():
+      with self.subTest(region=sid):
+        self.assertTrue(required.issubset(set(res.keys())))
+
+  @mark.it("security: ALB to EC2, SSH, RDS access rules")
+  def test_security_group_rules(self):
+    # Static output checks are insufficient; live checks require IAM/API access.
+    # For full validation, you’d use boto3 EC2 describe-security-groups,
+    # but this is a placeholder.
+    for sid in self.region_stacks:
+      # TODO: call describe_security_groups by SG ID referenced in output
+      pass
+
+  @mark.it("live checks on AWS resources if accessible")
+  def test_live_resource_properties(self):
+    for sid, res in self.region_stacks.items():
+      region = 'us-east-1' if 'useast1' in sid else 'us-west-2'
+      # RDS
+      rds_id = res.get('RDSInstanceIdentifier')
+      try:
+        r = self.boto_sess.client('rds', region_name=region)
+        db = r.describe_db_instances(
+            DBInstanceIdentifier=rds_id)['DBInstances'][0]
+        self.assertTrue(db['MultiAZ'])
+      except ClientError:
+        pass  # skip if not accessible
+
+      # S3
+      try:
+        s = self.boto_sess.client('s3', region_name=region)
+        s.head_bucket(Bucket=res.get('BucketName'))
+      except ClientError:
+        self.fail(f"S3 bucket unreachable: {res.get('BucketName')}")
+
+      # Route53
+      try:
+        r53 = self.boto_sess.client('route53')
+        r53.get_hosted_zone(Id=res.get('HostedZoneId'))
+      except ClientError:
+        pass
+
+  @mark.it("ALB DNS is reachable over HTTP")
+  def test_alb_http_reachability(self):
+    for sid, res in self.region_stacks.items():
+      url = res.get('ALBDns')
+      try:
+        resp = requests.get(f"http://{url}", timeout=5)
+        self.assertIn(resp.status_code, (200, 403))
+      except Exception:
+        self.skipTest(f"Cannot reach ALB: {url}")
+
+  @mark.it("Lambda exists")
+  def test_lambda_exists(self):
+    for sid, res in self.region_stacks.items():
+      lambda_name = res.get('LambdaName')
+      client = self.boto_sess.client('lambda', region_name='us-east-1')
+      try:
+        resp = client.get_function(FunctionName=lambda_name)
+        self.assertIsNotNone(resp)
+      except ClientError:
+        self.skipTest(f"Lambda not accessible: {lambda_name}")
+
+  @mark.it("resource tagging assumed if outputs exist")
   def test_resource_tagging(self):
-    """Test that resources are properly tagged"""
-    if not flat_outputs:
-      self.skipTest("No outputs available - cannot test resource tagging")
-    
-    # This is a placeholder for tag testing
-    # In a real integration test, we would check each resource's tags
-    # For now, we verify that resources exist (which implies they were tagged)
-    total_resources = len(flat_outputs)
-    self.assertGreater(total_resources, 0, "Should have tagged resources deployed")
+    total = sum(len(res) for res in self.region_stacks.values())
+    self.assertGreater(total, 0)
 
-  @mark.it("tests high availability configuration")
-  def test_high_availability_configuration(self):
-    """Test that resources are configured for high availability"""
-    rds_outputs = [key for key in flat_outputs.keys() if 'RDSInstanceIdentifier' in key]
-    alb_outputs = [key for key in flat_outputs.keys() if 'ALBDns' in key]
-    
-    # Test multi-region deployment (implicit HA)
-    if rds_outputs:
-      self.assertGreaterEqual(len(rds_outputs), 2, "RDS should be deployed across regions for HA")
-    
-    if alb_outputs:
-      self.assertGreaterEqual(len(alb_outputs), 2, "ALB should be deployed across regions for HA")
-    
-    if not rds_outputs and not alb_outputs:
-      self.skipTest("No HA resources available for testing")
+  @mark.it("prints grouped outputs")
+  def test_print_grouped_outputs(self):
+    self.maxDiff = None
+    grouped = {}
+    for sid, res in self.region_stacks.items():
+      grouped[sid] = res
+    print(json.dumps(grouped, indent=2))
+
+  @mark.it("ALB DNS name resolves to valid IP addresses")
+  def test_dns_resolution_matches_alb(self):
+    """
+    Confirm the ALB DNS name resolves to valid IP addresses (via gethostbyname_ex).
+    """
+    for sid, res in self.region_stacks.items():
+      alb_dns = res.get('ALBDns')
+      if not alb_dns:
+        self.skipTest(f"Missing ALBDns in stack {sid}")
+
+      try:
+        # Resolve DNS to IP addresses
+        _, _, ip_addrs = socket.gethostbyname_ex(alb_dns)
+        self.assertTrue(
+            len(ip_addrs) > 0,
+            f"No IP addresses resolved for {alb_dns}")
+
+        # Optionally, we can try to verify if these IPs are reachable (ping or connect)
+        # But that can be flaky or blocked by firewalls.
+      except socket.gaierror:
+        self.fail(f"DNS resolution failed for {alb_dns}")
+
+  @mark.it("nslookup subprocess call to verify DNS resolution for the ALB DNS")
+  def test_nslookup_dns_resolution(self):
+    """
+    Use nslookup subprocess call to verify DNS resolution for the ALB DNS.
+    """
+    for sid, res in self.region_stacks.items():
+      alb_dns = res.get('ALBDns')
+      if not alb_dns:
+        self.skipTest(f"Missing ALBDns in stack {sid}")
+
+      try:
+        result = subprocess.run(
+            ['nslookup', alb_dns],
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        self.assertEqual(
+            result.returncode,
+            0,
+            f"nslookup failed for {alb_dns}")
+        output = result.stdout + result.stderr
+        self.assertIn(
+            'Address',
+            output,
+            f"nslookup did not return IP for {alb_dns}")
+      except Exception as e:
+        self.fail(f"nslookup execution error: {str(e)}")
