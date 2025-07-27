@@ -259,7 +259,7 @@ class LambdaStack(NestedStack):
             ]
         )
 
-        # Add specific permissions for DynamoDB only (S3 permissions added later)
+        # Add specific permissions for DynamoDB (S3 permissions added later)
         lambda_role.add_to_policy(
             iam.PolicyStatement(
                 effect=iam.Effect.ALLOW,
@@ -273,7 +273,7 @@ class LambdaStack(NestedStack):
             )
         )
 
-        # Create Lambda function
+        # Create Lambda function with DynamoDB info (S3 info added later)
         self.function = _lambda.Function(
             self, f"LambdaFunction{env_suffix}",
             function_name=f"proj-lambda-{env_suffix}",
@@ -283,8 +283,8 @@ class LambdaStack(NestedStack):
             role=lambda_role,
             timeout=Duration.minutes(5),
             environment={
-                "TABLE_NAME": dynamodb_table_name,
-                "BUCKET_NAME": "placeholder"
+                "TABLE_NAME": dynamodb_table_name
+                # BUCKET_NAME will be added after S3 stack is created
             }
         )
         
@@ -343,6 +343,16 @@ class TapStack(cdk.Stack):
             props=resource_props
         )
 
+        # Create S3 stack with versioning and access logging first
+        s3_stack = S3Stack(
+            self,
+            f"S3Stack{environment_suffix}",
+            props=resource_props
+        )
+
+        # Make the bucket available as a property of this stack
+        self.s3_bucket = s3_stack.bucket
+
         # Create the DynamoDB stack as a nested stack
         dynamodb_stack = NestedDynamoDBStack(
             self,
@@ -353,17 +363,7 @@ class TapStack(cdk.Stack):
         # Make the table available as a property of this stack
         self.dynamodb_table = dynamodb_stack.table
 
-        # Create S3 stack with versioning and access logging
-        s3_stack = S3Stack(
-            self,
-            f"S3Stack{environment_suffix}",
-            props=resource_props
-        )
-
-        # Make the bucket available as a property of this stack
-        self.s3_bucket = s3_stack.bucket
-
-        # Create Lambda stack with least privilege IAM role (S3 permissions added later)
+        # Create Lambda stack with DynamoDB dependencies only (S3 info added later)
         lambda_stack = LambdaStack(
             self,
             f"LambdaStack{environment_suffix}",
@@ -390,36 +390,17 @@ class TapStack(cdk.Stack):
         # Update Lambda environment variable with actual bucket name
         self.lambda_function.add_environment("BUCKET_NAME", self.s3_bucket.bucket_name)
 
-        # Set up S3 bucket to trigger Lambda on object creation
-        self.s3_bucket.add_event_notification(
-            s3.EventType.OBJECT_CREATED,
-            s3n.LambdaDestination(self.lambda_function)
-        )
-
         # Create outputs for integration tests
         self._create_outputs(environment_suffix)
 
+        # Set up S3 bucket to trigger Lambda on object creation
+        # This must be done after all stacks are created to avoid circular dependencies
+        self._setup_s3_event_notification()
 
-    def _add_s3_permissions_to_lambda(self, lambda_stack):
-        """Add S3 permissions to Lambda role after both stacks are created."""
-        lambda_stack.role.add_to_policy(
-            iam.PolicyStatement(
-                effect=iam.Effect.ALLOW,
-                actions=[
-                    "s3:GetObject",
-                    "s3:GetObjectVersion"
-                ],
-                resources=[f"{self.s3_bucket.bucket_arn}/*"]
-            )
-        )
-    
-    def _update_lambda_environment(self):
-        """Update Lambda environment variable with actual bucket name."""
-        # Update the Lambda function environment variable
-        self.lambda_function.add_environment("BUCKET_NAME", self.s3_bucket.bucket_name)
-    
-    def _setup_s3_trigger(self):
+    def _setup_s3_event_notification(self):
         """Set up S3 bucket to trigger Lambda on object creation."""
+        # Create the S3 event notification as a direct resource
+        # This avoids circular dependencies in nested stacks
         self.s3_bucket.add_event_notification(
             s3.EventType.OBJECT_CREATED,
             s3n.LambdaDestination(self.lambda_function)
