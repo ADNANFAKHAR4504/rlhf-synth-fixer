@@ -111,12 +111,8 @@ class TapStack(cdk.Stack):
         assumed_by=iam.ServicePrincipal("ec2.amazonaws.com")
     )
 
-    ec2_role.add_managed_policy(
-      iam.ManagedPolicy.from_aws_managed_policy_name("AmazonSSMManagedInstanceCore")
-    )
-    ec2_role.add_managed_policy(
-      iam.ManagedPolicy.from_aws_managed_policy_name("CloudWatchAgentServerPolicy")
-    )
+    ec2_role.add_managed_policy(iam.ManagedPolicy.from_aws_managed_policy_name("AmazonSSMManagedInstanceCore"))
+    ec2_role.add_managed_policy(iam.ManagedPolicy.from_aws_managed_policy_name("CloudWatchAgentServerPolicy"))
 
     # ----------------------
     # Security Groups
@@ -150,6 +146,22 @@ class TapStack(cdk.Stack):
         role=ec2_role
     )
 
+    # Add after VPC and security group definitions
+    lb = elbv2.ApplicationLoadBalancer(
+        self, "WebALBTuring",
+        vpc=vpc,
+        internet_facing=True,
+        security_group=lb_sg,
+        load_balancer_name="TuringWebALBTuring"
+    )
+
+    listener = lb.add_listener("HttpListener", port=80, open=True)
+    listener.add_targets(
+        "EC2Target",
+        port=80,
+        targets=[InstanceTarget(ec2_instance)]
+    )
+
     # ----------------------
     # CloudTrail for Logging
     # ----------------------
@@ -169,7 +181,7 @@ class TapStack(cdk.Stack):
     # ----------------------
     # CloudWatch Log Group for EC2 logs
     # ----------------------
-    logs.LogGroup(
+    ec2_log_group = logs.LogGroup(
         self, "EC2LogGroup",
         retention=logs.RetentionDays.ONE_WEEK,
         removal_policy=RemovalPolicy.DESTROY
@@ -180,6 +192,7 @@ class TapStack(cdk.Stack):
     # ----------------------
     Tags.of(ec2_instance).add("Name", "WebServer")
     Tags.of(ec2_sg).add("Component", "EC2-Web")
+    Tags.of(lb).add("Component", "AppLoadBalancer")
     Tags.of(lb_sg).add("Component", "LoadBalancer")
     Tags.of(trail).add("Component", "CloudTrail")
     Tags.of(vpc).add("Component", "Networking")
