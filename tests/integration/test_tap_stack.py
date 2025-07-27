@@ -1,5 +1,4 @@
-# pylint: disable=too-many-lines,too-many-locals
-
+# pylint: disable=too-many-lines,too-many-locals,line-too-long
 import time
 import uuid
 import json
@@ -62,13 +61,12 @@ def stack_outputs(request):
   return outputs
 
 
-def s3_notifications_enabled(aws_clients):
-  """Return True if the stack has S3->Lambda event notifications configured."""
-  cfn = aws_clients["cfn"]
+def s3_notifications_enabled():
+  """Check if the stack has S3→Lambda event notifications configured."""
+  cfn = boto3.client("cloudformation")
   resources = cfn.describe_stack_resources(StackName=STACK_NAME)
   for r in resources["StackResources"]:
     if r["ResourceType"] == "AWS::Lambda::Permission":
-      # Presence of S3 Lambda invoke permissions usually indicates event notifications
       return True
   return False
 
@@ -80,7 +78,7 @@ def test_stack_outputs_exist(stack_outputs):
 
 
 @pytest.mark.skipif(
-  not s3_notifications_enabled(boto3.client("cloudformation")),
+  not s3_notifications_enabled(),
   reason="S3 bucket does not trigger Lambda in this stack."
 )
 def test_valid_log_processing(stack_outputs, aws_clients):
@@ -110,7 +108,7 @@ def test_valid_log_processing(stack_outputs, aws_clients):
 
 
 @pytest.mark.skipif(
-  not s3_notifications_enabled(boto3.client("cloudformation")),
+  not s3_notifications_enabled(),
   reason="S3 bucket does not trigger Lambda in this stack."
 )
 def test_malformed_log_archiving(stack_outputs, aws_clients):
@@ -131,7 +129,7 @@ def test_malformed_log_archiving(stack_outputs, aws_clients):
 
 
 @pytest.mark.skipif(
-  not s3_notifications_enabled(boto3.client("cloudformation")),
+  not s3_notifications_enabled(),
   reason="S3 bucket does not trigger Lambda in this stack."
 )
 def test_invalid_data_archiving(stack_outputs, aws_clients):
