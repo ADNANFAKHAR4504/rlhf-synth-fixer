@@ -47,6 +47,10 @@
             "Type": "String",
             "Default": "10.0.4.0/24",
             "Description": "CIDR block for the second private subnet."
+        },
+        "LatestAmiId": {
+            "Type": "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>",
+            "Default": "/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64"
         }
     },
     "Resources": {
@@ -81,7 +85,15 @@
                     "Ref": "VpcCidrBlock"
                 },
                 "EnableDnsSupport": true,
-                "EnableDnsHostnames": true
+                "EnableDnsHostnames": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "VPC-${EnvironmentSuffix}"
+                        }
+                    }
+                ]
             }
         },
         "PublicSubnet1": {
@@ -101,7 +113,15 @@
                         }
                     ]
                 },
-                "MapPublicIpOnLaunch": true
+                "MapPublicIpOnLaunch": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "PublicSubnet1-${EnvironmentSuffix}"
+                        }
+                    }
+                ]
             }
         },
         "PublicSubnet2": {
@@ -121,7 +141,15 @@
                         }
                     ]
                 },
-                "MapPublicIpOnLaunch": true
+                "MapPublicIpOnLaunch": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "PublicSubnet2-${EnvironmentSuffix}"
+                        }
+                    }
+                ]
             }
         },
         "PrivateSubnet1": {
@@ -140,7 +168,15 @@
                             "Fn::GetAZs": ""
                         }
                     ]
-                }
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "PrivateSubnet1-${EnvironmentSuffix}"
+                        }
+                    }
+                ]
             }
         },
         "PrivateSubnet2": {
@@ -159,7 +195,15 @@
                             "Fn::GetAZs": ""
                         }
                     ]
-                }
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "PrivateSubnet2-${EnvironmentSuffix}"
+                        }
+                    }
+                ]
             }
         },
         "InternetGateway": {
@@ -294,7 +338,9 @@
             "Type": "AWS::EC2::Instance",
             "Properties": {
                 "InstanceType": "t3.micro",
-                "ImageId": "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64}}",
+                "ImageId": {
+                    "Ref": "LatestAmiId"
+                },
                 "SubnetId": {
                     "Ref": "PrivateSubnet1"
                 },
