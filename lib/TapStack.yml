@@ -228,18 +228,18 @@ Resources:
         - Key: Name
           Value: ProdSecurityGroup
 
-  # Production Launch Template (Replaces Launch Configuration)
+  # Production Launch Template
   ProdLaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
     Properties:
       LaunchTemplateName: ProdWebServersLaunchTemplate
       LaunchTemplateData:
-        ImageId: "ami-0c55b159cbfafe1f0" # Amazon Linux 2 in us-east-1
+        ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}'
         InstanceType: "t2.micro"
         SecurityGroupIds:
           - !Ref ProdSecurityGroup
 
-  # Production Auto Scaling Group (Updated to use Launch Template)
+  # Production Auto Scaling Group
   ProdAutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
