@@ -29,7 +29,7 @@ class TestTapStack(unittest.TestCase):
   def setUp(self):
     """Set up AWS clients and check for required outputs"""
     # Set default region for AWS clients
-    region = 'us-west-2'
+    region = 'us-east-1'
     
     try:
       self.api_client = boto3.client('apigateway', region_name=region)
