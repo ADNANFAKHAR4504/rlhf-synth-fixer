@@ -3,8 +3,8 @@ import path from 'path';
 import yaml from 'js-yaml';
 
 describe('Web App CloudFormation Template Integration Tests', () => {
-  const yamlTemplatePath = path.join(__dirname, '../lib/webapp-environment-setup.yaml');
-  const jsonTemplatePath = path.join(__dirname, '../lib/webapp-environment-setup.json');
+  const yamlTemplatePath = path.join(__dirname, '../lib/TapStack.yaml');
+  const jsonTemplatePath = path.join(__dirname, '../lib/TapStack.json');
 
   describe('Template File Validation', () => {
     test('YAML template should exist and be valid', () => {
