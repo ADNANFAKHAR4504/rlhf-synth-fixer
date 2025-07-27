@@ -2,8 +2,8 @@ import aws_cdk as cdk
 from aws_cdk.assertions import Template
 
 
+from lib.cdk.tap_stack import  TapStack as firstone
 from lib.tap_stack import TapStack
-
 
 def get_template() -> Template:
   """Synthesizes the CloudFormation template for TapStack."""
