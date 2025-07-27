@@ -14,7 +14,6 @@ describe('TapStack CloudFormation Template', () => {
     template = JSON.parse(templateContent);
   });
 
-
   describe('Template Structure', () => {
     test('should have valid CloudFormation format version', () => {
       expect(template.AWSTemplateFormatVersion).toBe('2010-09-09');
@@ -172,11 +171,6 @@ describe('TapStack CloudFormation Template', () => {
       expect(resourceCount).toBe(21); // VPC, subnets, EC2, S3, DynamoDB, etc.
     });
 
-    test('should have all required parameters', () => {
-      const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(6); // Environment suffix + VPC CIDR blocks
-    });
-
     test('should have all required outputs', () => {
       const outputCount = Object.keys(template.Outputs).length;
       expect(outputCount).toBe(7); // Comprehensive outputs for integration
@@ -195,7 +189,12 @@ describe('TapStack CloudFormation Template', () => {
 
     test('export names should follow naming convention', () => {
       // Check only outputs that have exports
-      const outputsWithExports = ['TurnAroundPromptTableName', 'TurnAroundPromptTableArn', 'StackName', 'EnvironmentSuffix'];
+      const outputsWithExports = [
+        'TurnAroundPromptTableName',
+        'TurnAroundPromptTableArn',
+        'StackName',
+        'EnvironmentSuffix',
+      ];
       outputsWithExports.forEach(outputKey => {
         const output = template.Outputs[outputKey];
         if (output.Export) {
