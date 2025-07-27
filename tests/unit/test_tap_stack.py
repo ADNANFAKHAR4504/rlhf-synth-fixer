@@ -13,6 +13,7 @@ from datetime import datetime
 from unittest.mock import Mock, patch
 
 import aws_cdk as cdk
+from botocore.exceptions import ClientError
 from aws_cdk.assertions import Match, Template
 from pytest import mark
 
@@ -327,7 +328,6 @@ class TestLambdaHandler(unittest.TestCase):
     def _reload_lambda_handler(self):
         """Helper method to reload lambda_handler module for fresh imports."""
         # pylint: disable=import-outside-toplevel,reimported
-        import sys
         if 'lambda_handler' in sys.modules:
             del sys.modules['lambda_handler']
         # pylint: disable=import-outside-toplevel
@@ -484,7 +484,6 @@ class TestLambdaHandler(unittest.TestCase):
     @mark.it("handles S3 head_object errors gracefully")
     def test_get_s3_object_metadata_error(self, mock_s3):
         # ARRANGE
-        from botocore.exceptions import ClientError
         mock_s3.head_object.side_effect = ClientError(
                 {'Error': {'Code': 'NoSuchKey'}},
                 'HeadObject'
@@ -501,7 +500,6 @@ class TestLambdaHandler(unittest.TestCase):
     @mark.it("handles conditional check failures in DynamoDB")
     def test_store_in_dynamodb_conditional_check_failure(self, mock_dynamodb):
         # ARRANGE
-        from botocore.exceptions import ClientError  # pylint: disable=import-outside-toplevel
         from lambda_handler import store_in_dynamodb as store_func  # pylint: disable=import-outside-toplevel
         mock_dynamodb.put_item.side_effect = ClientError(
                 {'Error': {'Code': 'ConditionalCheckFailedException'}},
@@ -525,7 +523,6 @@ class TestLambdaHandler(unittest.TestCase):
     @mark.it("handles other DynamoDB errors")
     def test_store_in_dynamodb_other_error(self, mock_boto_client):
         # ARRANGE - Reload module to pick up mocked boto3 client
-        from botocore.exceptions import ClientError  # pylint: disable=import-outside-toplevel
         lambda_mod = self._reload_lambda_handler()
         store_func = lambda_mod.store_in_dynamodb
         mock_dynamodb = Mock()
