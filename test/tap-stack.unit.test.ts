@@ -2,17 +2,12 @@ import { Template } from 'aws-cdk-lib/assertions';
 import * as fs from 'fs';
 import * as path from 'path';
 
-describe('Extended CloudFormation Template Tests', () => {
-  let template: Template;
+const templatePath = path.join(__dirname, '../lib/TapStack.json');
+const templateContent = fs.readFileSync(templatePath, 'utf8');
+const template = Template.fromString(templateContent);
 
-  beforeAll(() => {
-    const templatePath = path.join(__dirname, '../lib/TapStack.json');
-    const templateContent = JSON.parse(fs.readFileSync(templatePath, 'utf-8'));
-    template = Template.fromJSON(templateContent);
-  });
-
-  // ✅ VPC Creation
-  test('VPC is created with correct CIDR block', () => {
+describe('CloudFormation Template Validation', () => {
+  test('should create a VPC with correct CIDR block', () => {
     template.hasResourceProperties('AWS::EC2::VPC', {
       CidrBlock: '10.0.0.0/16',
       EnableDnsSupport: true,
@@ -20,8 +15,18 @@ describe('Extended CloudFormation Template Tests', () => {
     });
   });
 
-  // ✅ S3 Bucket Security
-  test('S3 bucket is encrypted and blocks public access', () => {
+
+
+  test('should attach Internet Gateway to VPC', () => {
+    template.hasResource('AWS::EC2::VPCGatewayAttachment', {
+      Properties: {
+        VpcId: { Ref: 'ProjectVPC' },
+        InternetGatewayId: { Ref: 'ProjectInternetGateway' },
+      },
+    });
+  });
+
+  test('should create an S3 bucket with encryption and public access block', () => {
     template.hasResourceProperties('AWS::S3::Bucket', {
       BucketEncryption: {
         ServerSideEncryptionConfiguration: [
@@ -29,6 +34,7 @@ describe('Extended CloudFormation Template Tests', () => {
             ServerSideEncryptionByDefault: {
               SSEAlgorithm: 'AES256',
             },
+            BucketKeyEnabled: true,
           },
         ],
       },
@@ -41,67 +47,98 @@ describe('Extended CloudFormation Template Tests', () => {
     });
   });
 
-  // ✅ IAM Group Name
-  test('IAM Group name uses Fn::Sub with correct pattern', () => {
-    Object.values(template.findResources('AWS::IAM::Group')).forEach((r: any) => {
-      expect(r.Properties.GroupName).toEqual({
-        'Fn::Sub': '${ProjectName}-s3-read-group',
-      });
+  test('should create lifecycle rule for incomplete uploads', () => {
+    template.hasResourceProperties('AWS::S3::Bucket', {
+      LifecycleConfiguration: {
+        Rules: [
+          {
+            Id: 'DeleteIncompleteMultipartUploads',
+            Status: 'Enabled',
+            AbortIncompleteMultipartUpload: {
+              DaysAfterInitiation: 7,
+            },
+          },
+        ],
+      },
     });
   });
 
-  // ✅ IAM Role Name
-  test('IAM Role name uses Fn::Sub with correct pattern', () => {
-    Object.values(template.findResources('AWS::IAM::Role')).forEach((r: any) => {
-      expect(r.Properties.RoleName).toEqual({
-        'Fn::Sub': '${ProjectName}-s3-read-role',
-      });
+  test('should create IAM role with EC2 trust policy', () => {
+    template.hasResourceProperties('AWS::IAM::Role', {
+      AssumeRolePolicyDocument: {
+        Statement: [
+          {
+            Effect: 'Allow',
+            Principal: {
+              Service: ['ec2.amazonaws.com'],
+            },
+            Action: 'sts:AssumeRole',
+          },
+        ],
+      },
     });
   });
 
-  // ✅ IAM Role Policy
-  test('IAM Role policy references correct S3 bucket ARNs', () => {
-    Object.values(template.findResources('AWS::IAM::Role')).forEach((r: any) => {
-      const statements = r.Properties.Policies[0].PolicyDocument.Statement;
-      statements.forEach((stmt: any) => {
-        expect(stmt.Resource).toEqual([
-          { 'Fn::GetAtt': ['ProjectBucket', 'Arn'] },
-          { 'Fn::Sub': '${ProjectBucket.Arn}/*' },
-        ]);
-      });
+  
+
+  test('should create instance profile referencing IAM role', () => {
+    template.hasResourceProperties('AWS::IAM::InstanceProfile', {
+      Roles: [{ Ref: 'S3ReadOnlyRole' }],
     });
   });
 
-  // ✅ Tagging Consistency
-  test('All resources have Environment and Project tags', () => {
-    const resourceTypes = ['AWS::EC2::VPC', 'AWS::S3::Bucket', 'AWS::IAM::Role'];
-    resourceTypes.forEach(type => {
-      Object.values(template.findResources(type)).forEach((resource: any) => {
-        expect(resource.Properties.Tags).toEqual(
-          expect.arrayContaining([
-            expect.objectContaining({ Key: 'Environment' }),
-            expect.objectContaining({ Key: 'Project' }),
-          ])
-        );
-      });
-    });
+  test('should export VPC ID and CIDR block', () => {
+  template.hasOutput('VPCId', {
+    Export: {
+      Name: {
+        'Fn::Sub': '${ProjectName}-${Environment}-VPC-ID',
+      },
+    },
   });
 
-  // ✅ Outputs
-  test('Outputs include VPCId, BucketName, S3ReadRoleARN, and S3AccessGroupName', () => {
-    const outputs = template.toJSON().Outputs;
-    expect(outputs).toHaveProperty('VPCId');
-    expect(outputs).toHaveProperty('BucketName');
-    expect(outputs).toHaveProperty('S3ReadRoleARN');
-    expect(outputs).toHaveProperty('S3AccessGroupName');
+  template.hasOutput('VPCCidrBlock', {
+    Export: {
+      Name: {
+        'Fn::Sub': '${ProjectName}-${Environment}-VPC-CIDR',
+      },
+    },
+  });
+});
+
+test('should export S3 bucket name and ARN', () => {
+  template.hasOutput('S3BucketName', {
+    Export: {
+      Name: {
+        'Fn::Sub': '${ProjectName}-${Environment}-S3-Bucket-Name',
+      },
+    },
   });
 
-  // ✅ Output References
-  test('Output values reference correct resources', () => {
-    const outputs = template.toJSON().Outputs;
-    expect(outputs.VPCId.Value).toMatchObject({ Ref: 'VPC' });
-    expect(outputs.BucketName.Value).toMatchObject({ Ref: 'ProjectBucket' });
-    expect(outputs.S3ReadRoleARN.Value).toMatchObject({ 'Fn::GetAtt': ['S3ReadRole', 'Arn'] });
-    expect(outputs.S3AccessGroupName.Value).toMatchObject({ Ref: 'S3ReadAccessGroup' });
+  template.hasOutput('S3BucketArn', {
+    Export: {
+      Name: {
+        'Fn::Sub': '${ProjectName}-${Environment}-S3-Bucket-ARN',
+      },
+    },
   });
+});
+
+test('should export IAM role and instance profile ARNs', () => {
+  template.hasOutput('IAMRoleArn', {
+    Export: {
+      Name: {
+        'Fn::Sub': '${ProjectName}-${Environment}-IAM-Role-ARN',
+      },
+    },
+  });
+
+  template.hasOutput('InstanceProfileArn', {
+    Export: {
+      Name: {
+        'Fn::Sub': '${ProjectName}-${Environment}-Instance-Profile-ARN',
+      },
+    },
+  });
+});
+
 });
