@@ -75,7 +75,7 @@ class RegionalRedundantStack(NestedStack):
         engine=rds.DatabaseInstanceEngine.postgres(
             version=rds.PostgresEngineVersion.VER_16_4),
         instance_type=ec2.InstanceType.of(
-            ec2.InstanceClass.BURSTABLE2,
+            ec2.InstanceClass.BURSTABLE3,
             ec2.InstanceSize.MICRO),
         vpc=vpc,
         multi_az=True,
