@@ -30,7 +30,7 @@ Resources:
       NotificationConfiguration:
         LambdaConfigurations:  # Corrected property name
           - Event: "s3:ObjectCreated:*"
-            LambdaFunctionArn: !GetAtt LambdaFunction.Arn
+            Function: !GetAtt LambdaFunction.Arn
 
   LambdaExecutionRole:
     Type: AWS::IAM::Role
@@ -101,6 +101,8 @@ Resources:
       FunctionName: !Ref LambdaFunctionName
       Principal: "s3.amazonaws.com"
       SourceArn: !GetAtt S3Bucket.Arn
+      # Ensure you include the SourceAccount property
+      SourceAccount: !Ref "AWS::AccountId"  # Add your account ID here
 
 Outputs:
   LambdaFunctionName:
