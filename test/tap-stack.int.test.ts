@@ -3,6 +3,7 @@ import fs from 'fs';
 import {
   EC2Client,
   DescribeVpcsCommand,
+  DescribeVpcAttributeCommand,
   DescribeSubnetsCommand,
   DescribeInternetGatewaysCommand,
   DescribeNatGatewaysCommand,
@@ -19,7 +20,17 @@ let outputs: any = {};
 const outputsPath = 'cfn-outputs/flat-outputs.json';
 
 if (fs.existsSync(outputsPath)) {
-  outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf8'));
+  const fileContent = fs.readFileSync(outputsPath, 'utf8').trim();
+  if (fileContent) {
+    try {
+      outputs = JSON.parse(fileContent);
+    } catch (error) {
+      console.warn('Failed to parse cfn-outputs/flat-outputs.json. Integration tests may fail without deployment outputs.');
+      outputs = {};
+    }
+  } else {
+    console.warn('cfn-outputs/flat-outputs.json is empty. Integration tests may fail without deployment outputs.');
+  }
 } else {
   console.warn('cfn-outputs/flat-outputs.json not found. Integration tests may fail without deployment outputs.');
 }
@@ -99,8 +110,24 @@ describe('VPC Infrastructure Integration Tests', () => {
       expect(vpc.VpcId).toBe(outputs.VpcId);
       expect(vpc.CidrBlock).toBe(outputs.VpcCidr || '10.0.0.0/16');
       expect(vpc.State).toBe('available');
-      expect(vpc.DnsSupport).toBe('enabled');
-      expect(vpc.DnsResolution).toBe('enabled');
+      
+      // Check DNS Support
+      const dnsSupportResponse = await ec2Client.send(
+        new DescribeVpcAttributeCommand({
+          VpcId: vpc.VpcId,
+          Attribute: 'enableDnsSupport'
+        })
+      );
+      expect(dnsSupportResponse.EnableDnsSupport?.Value).toBe(true);
+      
+      // Check DNS Resolution (Hostnames)
+      const dnsHostnamesResponse = await ec2Client.send(
+        new DescribeVpcAttributeCommand({
+          VpcId: vpc.VpcId,
+          Attribute: 'enableDnsHostnames'
+        })
+      );
+      expect(dnsHostnamesResponse.EnableDnsHostnames?.Value).toBe(true);
       
       // Check VPC tags
       const tags = vpc.Tags || [];
