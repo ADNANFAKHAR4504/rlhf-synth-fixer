@@ -51,7 +51,7 @@ export class TapStack extends cdk.Stack {
     new WebServerStack(this, 'WebServerStack', {
       environmentSuffix, vpcId: props.vpcId, env: {
         account: process.env.CDK_DEFAULT_ACCOUNT,
-        region: process.env.CDK_DEFAULT_REGION,
+        region: 'us-east-1', // process.env.CDK_DEFAULT_REGION,
       },
     })
   }
