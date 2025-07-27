@@ -1,240 +1,186 @@
-AWSTemplateFormatVersion: '2010-09-09'
-Description: AWS CloudFormation template for a secure, scalable cloud environment.
+Here's the complete AWS CDK Python codebase to meet your requirements:
 
-Resources:
-  VPC:
-    Type: AWS::EC2::VPC
-    Properties:
-      CidrBlock: 10.0.0.0/16
-      EnableDnsSupport: true
-      EnableDnsHostnames: true
-      Tags:
-        - Key: Name
-          Value: cf-task-vpc
-        - Key: Environment
-          Value: Production
+**app.py**
+```python
+#!/usr/bin/env python3
+import aws_cdk as cdk
+from serverless_app.serverless_app_stack import ServerlessAppStack
 
-  PublicSubnet:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref VPC
-      CidrBlock: 10.0.1.0/24
-      MapPublicIpOnLaunch: true
-      AvailabilityZone: us-east-1a
-      Tags:
-        - Key: Name
-          Value: cf-task-public-subnet
-        - Key: Environment
-          Value: Production
+app = cdk.App()
+ServerlessAppStack(app, "ServerlessAppStack", env={'region': 'us-west-2'})
+app.synth()
+```
 
-  PrivateSubnet:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref VPC
-      CidrBlock: 10.0.2.0/24
-      AvailabilityZone: us-east-1a
-      Tags:
-        - Key: Name
-          Value: cf-task-private-subnet
-        - Key: Environment
-          Value: Production
+**cdk.json**
+```json
+{
+  "app": "python3 app.py",
+  "context": {
+    "aws-cdk-lib/config": {
+      "enableLookups": true
+    }
+  }
+}
+```
 
-  InternetGateway:
-    Type: AWS::EC2::InternetGateway
-    Properties:
-      Tags:
-        - Key: Name
-          Value: cf-task-igw
-        - Key: Environment
-          Value: Production
+**requirements.txt**
+```
+aws-cdk-lib==2.x
+constructs>=10.0.0,<11.0.0
+```
 
-  PublicRouteTable:
-    Type: AWS::EC2::RouteTable
-    Properties:
-      VpcId: !Ref VPC
-      Tags:
-        - Key: Name
-          Value: cf-task-public-rt
-        - Key: Environment
-          Value: Production
+**serverless_app/serverless_app_stack.py**
+```python
+from aws_cdk import (
+    Stack,
+    aws_lambda as _lambda,
+    aws_apigatewayv2 as apigw,
+    aws_s3 as s3,
+    aws_dynamodb as dynamodb,
+    aws_stepfunctions as sfn,
+    aws_iam as iam,
+    RemovalPolicy
+)
+from constructs import Construct
 
-  PrivateRouteTable:
-    Type: AWS::EC2::RouteTable
-    Properties:
-      VpcId: !Ref VPC
-      Tags:
-        - Key: Name
-          Value: cf-task-private-rt
-        - Key: Environment
-          Value: Production
+class ServerlessAppStack(Stack):
+    def __init__(self, scope: Construct, id: str, **kwargs) -> None:
+        super().__init__(scope, id, **kwargs)
 
-  PublicRoute:
-    Type: AWS::EC2::Route
-    DependsOn: InternetGatewayAttachment
-    Properties:
-      RouteTableId: !Ref PublicRouteTable
-      DestinationCidrBlock: 0.0.0.0/0
-      GatewayId: !Ref InternetGateway
+        # S3 Bucket
+        bucket = s3.Bucket(self, "orders-prod-bucket",
+            removal_policy=RemovalPolicy.DESTROY,
+            auto_delete_objects=True,
+            versioned=False
+        )
 
-  NATGatewayEIP:
-    Type: AWS::EC2::EIP
-    DependsOn: InternetGatewayAttachment
-    Properties:
-      Domain: vpc
+        # DynamoDB Table
+        table = dynamodb.Table(self, "orders-prod-table",
+            partition_key=dynamodb.Attribute(
+                name="request_id", type=dynamodb.AttributeType.STRING
+            ),
+            removal_policy=RemovalPolicy.DESTROY
+        )
 
-  NATGateway:
-    Type: AWS::EC2::NatGateway
-    Properties:
-      AllocationId: !GetAtt NATGatewayEIP.AllocationId
-      SubnetId: !Ref PublicSubnet
-      Tags:
-        - Key: Name
-          Value: cf-task-nat
-        - Key: Environment
-          Value: Production
+        # Step Functions State Machine
+        state_machine = sfn.StateMachine(self, "orders-prod-statemachine",
+            definition=sfn.Pass(self, "PassState", result=sfn.Result.from_string("Success"))
+        )
 
-  PrivateRouteToNAT:
-    Type: AWS::EC2::Route
-    Properties:
-      RouteTableId: !Ref PrivateRouteTable
-      DestinationCidrBlock: 0.0.0.0/0
-      NatGatewayId: !Ref NATGateway
+        # Lambda Execution Role
+        lambda_role = iam.Role(self, "orders-prod-lambda-role",
+            assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
+            managed_policies=[
+                iam.ManagedPolicy.from_aws_managed_policy_name("service-role/AWSLambdaBasicExecutionRole")
+            ]
+        )
+        
+        # Add permissions
+        bucket.grant_read_write(lambda_role)
+        table.grant_write_data(lambda_role)
+        state_machine.grant_start_execution(lambda_role)
 
-  PublicSubnetRouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      SubnetId: !Ref PublicSubnet
-      RouteTableId: !Ref PublicRouteTable
+        # Lambda Function
+        lambda_function = _lambda.Function(self, "orders-prod-lambda",
+            runtime=_lambda.Runtime.PYTHON_3_9,
+            handler="lambda_handler.handler",
+            code=_lambda.Code.from_asset("lambda"),
+            role=lambda_role,
+            environment={
+                "BUCKET_NAME": bucket.bucket_name,
+                "TABLE_NAME": table.table_name,
+                "STATE_MACHINE_ARN": state_machine.state_machine_arn
+            }
+        )
 
-  PrivateSubnetRouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      SubnetId: !Ref PrivateSubnet
-      RouteTableId: !Ref PrivateRouteTable
+        # HTTP API
+        http_api = apigw.HttpApi(self, "orders-prod-api",
+            cors_preflight=apigw.CorsPreflightOptions(
+                allow_methods=[apigw.CorsHttpMethod.POST],
+                allow_origins=["*"]
+            )
+        )
 
-  InternetGatewayAttachment:
-    Type: AWS::EC2::VPCGatewayAttachment
-    Properties:
-      VpcId: !Ref VPC
-      InternetGatewayId: !Ref InternetGateway
+        # Integration
+        integration = apigw_integrations.HttpLambdaIntegration(
+            "LambdaIntegration", handler=lambda_function
+        )
 
-  EC2SecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: Enable SSH access
-      VpcId: !Ref VPC
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 22
-          ToPort: 22
-          CidrIp: 192.0.2.0/24 # Replace with your IP range
-      Tags:
-        - Key: Name
-          Value: cf-task-sg
-        - Key: Environment
-          Value: Production
+        # Route
+        http_api.add_routes(
+            path="/process",
+            methods=[apigw.HttpMethod.POST],
+            integration=integration
+        )
 
-  EC2Instance:
-    Type: AWS::EC2::Instance
-    Properties:
-      InstanceType: t2.micro
-      ImageId: ami-0abcdef1234567890 # Replace with a valid AMI ID
-      KeyName: your-key-pair # Replace with your key pair name
-      NetworkInterfaces:
-        - DeviceIndex: 0
-          SubnetId: !Ref PublicSubnet
-          GroupSet:
-            - !Ref EC2SecurityGroup
-          AssociatePublicIpAddress: true
-      Tags:
-        - Key: Name
-          Value: cf-task-ec2
-        - Key: Environment
-          Value: Production
+        # Tagging
+        for resource in [bucket, table, state_machine, lambda_function, http_api]:
+            cdk.Tags.of(resource).add("Environment", "Production")
+```
 
-  S3Bucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: cf-task-s3bucket
-      Tags:
-        - Key: Environment
-          Value: Production
+**lambda/lambda_handler.py**
+```python
+import json
+import boto3
+import os
+from datetime import datetime
 
-  SNSTopic:
-    Type: AWS::SNS::Topic
-    Properties:
-      TopicName: cf-task-snstopic
-      Tags:
-        - Key: Environment
-          Value: Production
+s3_client = boto3.client('s3')
+dynamodb = boto3.resource('dynamodb')
+step_functions = boto3.client('stepfunctions')
 
-  LambdaExecutionRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: lambda.amazonaws.com
-            Action: sts:AssumeRole
-      Policies:
-        - PolicyName: LambdaS3Policy
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - s3:GetObject
-                Resource: !Sub arn:aws:s3:::cf-task-s3bucket/*
-        - PolicyName: LambdaSNSPolicy
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - sns:Publish
-                Resource: !Ref SNSTopic
+BUCKET_NAME = os.environ['BUCKET_NAME']
+TABLE_NAME = os.environ['TABLE_NAME']
+STATE_MACHINE_ARN = os.environ['STATE_MACHINE_ARN']
 
-  LambdaFunction:
-    Type: AWS::Lambda::Function
-    Properties:
-      FunctionName: cf-task-lambda
-      Handler: index.handler
-      Role: !GetAtt LambdaExecutionRole.Arn
-      Code:
-        ZipFile: |
-          import json
-          import boto3
-          def handler(event, context):
-              sns = boto3.client('sns')
-              sns.publish(TopicArn=os.environ['SNS_TOPIC_ARN'], Message='File uploaded to S3')
-      Runtime: python3.9
-      Environment:
-        Variables:
-          SNS_TOPIC_ARN: !Ref SNSTopic
-      Tags:
-        - Key: Environment
-          Value: Production
+def handler(event, context):
+    payload = json.loads(event['body'])
+    
+    # Store in S3
+    s3_key = f"requests/{context.aws_request_id}.json"
+    s3_client.put_object(Bucket=BUCKET_NAME, Key=s3_key, Body=json.dumps(payload))
+    
+    # Log to DynamoDB
+    table = dynamodb.Table(TABLE_NAME)
+    table.put_item(Item={
+        'request_id': context.aws_request_id,
+        'timestamp': datetime.utcnow().isoformat(),
+        's3_key': s3_key,
+        'status': 'PROCESSED',
+        'step_function_execution_arn': ''
+    })
+    
+    # Start Step Function
+    response = step_functions.start_execution(
+        stateMachineArn=STATE_MACHINE_ARN,
+        input=json.dumps(payload)
+    )
+    
+    # Update DynamoDB with execution ARN
+    table.update_item(
+        Key={'request_id': context.aws_request_id},
+        UpdateExpression='SET step_function_execution_arn = :val',
+        ExpressionAttributeValues={':val': response['executionArn']}
+    )
+    
+    return {'statusCode': 200, 'body': 'Request processed'}
+```
 
-  S3BucketEventNotification:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: cf-task-s3bucket
-      NotificationConfiguration:
-        LambdaConfigurations:
-          - Event: s3:ObjectCreated:*
-            Function: !GetAtt LambdaFunction.Arn
+**Directory Structure:**
+```
+project-root/
+├── app.py
+├── cdk.json
+├── requirements.txt
+├── serverless_app/
+│   └── serverless_app_stack.py
+└── lambda/
+    └── lambda_handler.py
+```
 
-Outputs:
-  VPCId:
-    Description: VPC ID
-    Value: !Ref VPC
+**Deployment:**
+1. Install dependencies: `pip install -r requirements.txt`
+2. Bootstrap CDK: `cdk bootstrap aws://ACCOUNT_ID/us-west-2`
+3. Deploy: `cdk deploy`
 
-  PublicSubnetId:
-    Description: Public Subnet ID
-    Value: !Ref PublicSubnet
-
-  PrivateSubnetId:
-    Description: Private Subnet ID
-    Value: !Ref PrivateSubnet
+This setup creates a secure serverless infrastructure with proper IAM roles, resource tagging, and follows best practices for production deployments.

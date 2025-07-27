@@ -1,46 +1,70 @@
-# Prompt
+You are tasked with designing and deploying a **production-ready, serverless application infrastructure** on **AWS using the AWS Cloud Development Kit (CDK) with Python**. Your solution must meet the following requirements and constraints:
 
-Your mission is to act as an expert AWS Solutions Architect specializing in event-driven architectures and Infrastructure-as-Code using AWS CloudFormation. You will design an AWS infrastructure based on the user's requirements.
+---
 
-**Instructions:**
+### ✅ **Core Functional Requirements:**
 
-* Analyze the Requirements: Carefully review the provided task to understand each component and its desired interaction.
-* Write the Architecture in CloudFormation YAML format: Propose a robust AWS infrastructure that fulfills all stated requirements, adhering to best practices for scalability, reliability, and cost-effectiveness.
-* Specify AWS Services: Clearly name each AWS service used for each component of the architecture.
-* Do not attach AdministratorAccess policies to any IAM roles.
+1. **API Gateway + Lambda Integration:**
 
-Output Format: AWS CloudFormation + YAML
+   * Deploy an **HTTP API using AWS API Gateway** that accepts **HTTP POST requests**.
+   * Requests should invoke an **AWS Lambda function** that:
 
-**Here is the task you need to translate to CloudFormation:**
+     * Parses the request payload.
+     * Stores the payload in **Amazon S3**.
+     * Logs metadata in a **DynamoDB table**.
+     * Initiates an **AWS Step Functions state machine** for further asynchronous processing.
 
-* You will design a secure, scalable cloud environment for production using AWS CloudFormation YAML with the following requirements:
-* Create a VPC with one public subnet and one private subnet.
-* The public subnet should have a route table that routes internet traffic to an Internet Gateway.
-* Ensure the private subnet has internet access through a NAT Gateway placed in the public subnet.
-* Launch a t2.micro EC2 instance in the public subnet with SSH access (port 22) restricted to a specific IP range using a Security Group.
-* Create a Lambda function using the latest Python runtime, which is triggered by file uploads to an S3 bucket.
-* The Lambda function must publish a message to an SNS topic upon execution.
-* Create an IAM role with least privilege containing all required permissions and attach it to the Lambda function.
-* All resources must be tagged with Environment: Production.
-* All resource names should follow the convention cf-task-<resource-type>, e.g., cf-task-vpc.
-* All resources must be deployed within the us-east-1 region.
-* Ensure all dependencies between resources are handled correctly within the CloudFormation stack.
-* Use AWS best practices for security and scalability.
+2. **AWS S3:**
 
-**Expected Output:**
+   * Store **incoming request data** (payloads) in **S3 buckets**.
+   * Ensure Lambda has **read/write permissions** to the bucket.
 
-Deliver a fully functional CloudFormation YAML file that configures all resources according to the specifications, ensuring all resources are properly linked, secured, and tagged. The configuration should pass cfn-lint validation, and all unit and integration tests must pass without errors.
+3. **AWS DynamoDB:**
 
-**Summarizing:**
+   * Create a **DynamoDB table** to persist records of all processed requests.
+   * Log fields such as: `request_id`, `timestamp`, `s3_key`, `status`, and `step_function_execution_arn`.
 
-* A VPC with one public and one private subnet.
-* Internet Gateway connected to the public subnet via a route table.
-* NAT Gateway for private subnet outbound internet access.
-* t2.micro EC2 instance in the public subnet with restricted SSH (port 22).
-* A Lambda function (latest Python) triggered by S3 uploads.
-* An SNS topic notified by the Lambda function.
-* An IAM role with least privilege for the Lambda function.
-* All resources tagged with Environment: Production.
-* Resources named with the cf-task- prefix.
-* Deployment in us-east-1.
-* Output as AWS CloudFormation YAML.
+4. **AWS Step Functions:**
+
+   * Define a sample **state machine** (can be a Pass or simple Task state) triggered from Lambda.
+
+---
+
+### 🔐 **Security & IAM Requirements:**
+
+* Define **IAM roles and policies** to:
+
+  * Grant the Lambda function permission to write to S3, write to DynamoDB, and start executions in Step Functions.
+  * Ensure **least privilege** principles.
+* Secure API Gateway using **IAM-based authentication** (or optionally Lambda authorizers if applicable).
+
+---
+
+### 📦 **Infrastructure as Code (IaC) Requirements:**
+
+* Use **AWS CDK in Python** to programmatically define all resources.
+* Follow **best practices** for:
+
+  * Naming conventions: Use format like `projectname-environment-resourcetype` (e.g., `orders-prod-lambda`).
+  * Tagging: All resources must be tagged with `Environment: Production`.
+* Deploy the stack to the **us-west-2 (Oregon)** region.
+* Ensure the CDK stack can be synthesized and deployed via `cdk deploy`.
+
+---
+
+### ✅ **Success Criteria:**
+
+Your AWS CDK (Python) application should result in a **fully deployed serverless architecture** where:
+
+* An authenticated POST request to API Gateway:
+
+  * Triggers the Lambda function.
+  * Stores the request payload in S3.
+  * Logs the request in DynamoDB.
+  * Kicks off an execution of the Step Function.
+* IAM permissions are secure and auditable.
+* All resources follow naming/tagging standards.
+
+Output only the **complete AWS CDK Python codebase**.
+
+---
