@@ -3,16 +3,5 @@
   "language": "yaml",
   "complexity": "medium",
   "turn_type": "single",
-  "po_id": "229228",
-  "startedAt": "2025-07-27T17:58:00.362Z",
-  "subtask": "IAM Security Configuration",
-  "subject_labels": "IAM Security Configuration",
-  "testDependencies": [
-    "@aws-sdk/client-iam@^3.848.0",
-    "@aws-sdk/client-s3@^3.848.0",
-    "@aws-sdk/client-dynamodb@^3.848.0",
-    "jest@^29.7.0",
-    "ts-jest@^29.4.0",
-    "@types/jest@^29.5.14"
-  ]
+  "po_id": "229228"
 }
