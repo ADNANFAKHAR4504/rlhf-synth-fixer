@@ -44,4 +44,33 @@ class TestStackStructure:
         assert stack is not None
         assert synthesized is not None
 
+    def test_s3_bucket_is_created(self):
+        """Test that S3 bucket is created with correct configuration"""
+        app = App()
+        stack = TapStack(app, "TestS3Stack", environment_suffix="test")
+        synthesized = Testing.synth(stack)
+
+        # Verify that the stack has a bucket
+        assert hasattr(stack, 'bucket')
+        assert stack.bucket is not None
+
+        # Verify that bucket versioning is configured
+        assert hasattr(stack, 'bucket_versioning')
+        assert stack.bucket_versioning is not None
+
+        # Verify that bucket encryption is configured
+        assert hasattr(stack, 'bucket_encryption')
+        assert stack.bucket_encryption is not None
+
+    def test_s3_bucket_naming_convention(self):
+        """Test that S3 bucket follows naming convention"""
+        app = App()
+        stack = TapStack(app, "TestNamingStack", environment_suffix="staging")
+        
+        # Check bucket name contains environment suffix
+        bucket_name = stack.bucket.bucket
+        assert "staging" in bucket_name
+        assert "testnamingstack" in bucket_name.lower()
+        assert bucket_name.startswith("tap-app-bucket-")
+
 # add more test suites and cases as needed

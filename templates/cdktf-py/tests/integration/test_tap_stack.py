@@ -1,16 +1,17 @@
+"""
+Integration tests for TapStack
+"""
 from cdktf import Testing
-from tap_stack import TapStack
-import pytest
 
-def test_tap_stack_synthesizes():
-    app = Testing.app()
-    stack = TapStack(app, "integration")
-    synthesized = Testing.synth(stack)
-    assert isinstance(synthesized, list)
-    assert len(synthesized) > 0
+# Setup CDKTF testing environment
+Testing.setup_jest()
 
-@pytest.mark.integration
-def test_write_integration_tests():
-    # Placeholder for integration tests
-    # Replace this with actual integration test logic
-    assert False, "Don't forget to write integration tests!"
+class TestTurnAroundPromptAPIIntegrationTests:
+    """Turn Around Prompt API Integration Tests"""
+
+    class TestWriteIntegrationTests:
+        """Write Integration TESTS"""
+
+        def test_dont_forget(self):
+            """Don't forget!"""
+            assert False, "Don't forget to write integration tests!"
