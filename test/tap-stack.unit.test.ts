@@ -214,12 +214,12 @@ describe('TapStack CloudFormation Template', () => {
       const ingress = sg.Properties.SecurityGroupIngress;
 
       expect(ingress).toHaveLength(2);
-      
+
       // Check first rule (EC2)
       expect(ingress[0].FromPort).toBe(3306);
       expect(ingress[0].ToPort).toBe(3306);
       expect(ingress[0].SourceSecurityGroupId).toBeDefined();
-      
+
       // Check second rule (Lambda)
       expect(ingress[1].FromPort).toBe(3306);
       expect(ingress[1].ToPort).toBe(3306);
@@ -550,7 +550,9 @@ describe('TapStack CloudFormation Template', () => {
 
     test('RDS secret output should reference correct secret', () => {
       expect(template.Outputs.RDSSecretArn.Value.Ref).toBe('RDSSecret');
-      expect(template.Outputs.RDSSecretArn.Description).toContain('RDS credentials secret');
+      expect(template.Outputs.RDSSecretArn.Description).toContain(
+        'RDS credentials secret'
+      );
     });
   });
 

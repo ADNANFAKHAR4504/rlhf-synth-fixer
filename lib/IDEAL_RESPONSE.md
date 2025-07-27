@@ -1,3 +1,4 @@
+```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: CloudFormation template for a secure, public-facing web application infrastructure.
 
@@ -83,9 +84,24 @@ Parameters:
     Default: masteruser
 
   # Note: Password is retrieved from AWS Secrets Manager using dynamic reference
-  # Create a secret named 'rds-db-credentials' with a 'password' key before deploying this template
+  # The RDS secret will be created automatically by this template
 
 Resources:
+  # AWS Secrets Manager Secret for RDS credentials
+  RDSSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: rds-db-credentials
+      Description: RDS master password for the web application database
+      GenerateSecretString:
+        SecretStringTemplate: !Sub '{"username":"${DatabaseUsername}"}'
+        GenerateStringKey: password
+        PasswordLength: 32
+        ExcludeCharacters: '"@/\'
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-RDS-Secret
+
   # VPC
   VPC:
     Type: AWS::EC2::VPC
@@ -322,6 +338,10 @@ Resources:
           FromPort: 3306 # MySQL/Aurora default port
           ToPort: 3306
           SourceSecurityGroupId: !GetAtt EC2SecurityGroup.GroupId
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          SourceSecurityGroupId: !GetAtt LambdaSecurityGroup.GroupId
       Tags:
         - Key: Name
           Value: !Sub ${ProjectName}-RDSSecurityGroup
@@ -488,9 +508,8 @@ Resources:
       PolicyType: TargetTrackingScaling
       TargetTrackingConfiguration:
         PredefinedMetricSpecification:
-          PredefinedMetricType: ALBRequestCountPerTarget
-        TargetValue: 100 # Example: target 100 requests per target
-      Cooldown: 300
+          PredefinedMetricType: ASGAverageCPUUtilization
+        TargetValue: 70.0 # Target 70% CPU utilization
 
   # RDS Database
   RDSDBSubnetGroup:
@@ -557,6 +576,17 @@ Resources:
             Effect: Allow
             Principal:
               AWS: !GetAtt EC2Role.Arn
+            Action:
+              - kms:Encrypt
+              - kms:Decrypt
+              - kms:ReEncrypt*
+              - kms:GenerateDataKey*
+              - kms:DescribeKey
+            Resource: '*'
+          - Sid: Allow Secrets Manager to use the key
+            Effect: Allow
+            Principal:
+              Service: secretsmanager.amazonaws.com
             Action:
               - kms:Encrypt
               - kms:Decrypt
@@ -648,26 +678,13 @@ Resources:
             Action:
               - sts:AssumeRole
       Path: /
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
       Policies:
         - PolicyName: LambdaExecutionPolicy
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
-              - Effect: Allow
-                Action:
-                  - logs:CreateLogGroup
-                  - logs:CreateLogStream
-                  - logs:PutLogEvents
-                Resource: !Sub arn:aws:logs:us-east-1:${AWS::AccountId}:log-group:/aws/lambda/*
-              - Effect: Allow
-                Action:
-                  - ec2:CreateNetworkInterface
-                  - ec2:DeleteNetworkInterface
-                  - ec2:DescribeNetworkInterfaces
-                Resource: '*'
-                Condition:
-                  StringEquals:
-                    ec2:VpcId: !Ref VPC
               - Effect: Allow
                 Action:
                   - s3:GetObject
@@ -681,9 +698,14 @@ Resources:
                   - kms:Decrypt
                   - kms:GenerateDataKey
                 Resource: !GetAtt S3KMSKey.Arn
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource: !Ref RDSSecret
 
   LambdaFunction1:
     Type: AWS::Lambda::Function
+    DependsOn: LambdaFunction1LogGroup
     Properties:
       FunctionName: !Sub ${ProjectName}-Function1
       Handler: index.handler
@@ -714,6 +736,7 @@ Resources:
 
   LambdaFunction2:
     Type: AWS::Lambda::Function
+    DependsOn: LambdaFunction2LogGroup
     Properties:
       FunctionName: !Sub ${ProjectName}-Function2
       Handler: index.handler
@@ -797,7 +820,7 @@ Outputs:
   RDSJdbcConnection:
     Description: JDBC connection string for the RDS database.
     Value: !Sub jdbc:mysql://${RDSInstance.Endpoint.Address}:${RDSInstance.Endpoint.Port}/
-    
+
   WebAppS3BucketName:
     Description: Name of the WebApp S3 Bucket.
     Value: !Ref WebAppS3Bucket
@@ -805,3 +828,8 @@ Outputs:
   LogsS3BucketName:
     Description: Name of the Logs S3 Bucket.
     Value: !Ref LogsS3Bucket
+
+  RDSSecretArn:
+    Description: ARN of the RDS credentials secret in Secrets Manager.
+    Value: !Ref RDSSecret
+```
