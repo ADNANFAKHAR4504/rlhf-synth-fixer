@@ -14,7 +14,7 @@ Deploy a serverless AWS application using CDK in Python, following AWS best prac
   - Lambda should use environment variables managed safely using CDK best practices
   - Monitor Lambda execution with CloudWatch Alarms (e.g., on invocation errors)
 
-- Create a DynamoDB table:
+- Create a DynamoDB table: 
   - Primary key: `itemId` (partition key)
   - Billing mode: On-demand (pay-per-request)
 
