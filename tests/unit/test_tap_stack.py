@@ -3,7 +3,7 @@ import unittest
 import aws_cdk as cdk
 from aws_cdk.assertions import Template
 from pytest import mark
-
+from aws_cdk import App
 from lib.tap_stack import TapStack, TapStackProps
 
 
@@ -14,6 +14,10 @@ class TestTapStack(unittest.TestCase):
   def setUp(self):
     """Set up a fresh CDK app for each test"""
     self.app = cdk.App()
+
+  def test_creates_stack(self):
+      stack = TapStack(self.app, "TestStack", props=TapStackProps("test"))
+      self.assertIsNotNone(stack)
 
   @mark.it("creates multi-region infrastructure with nested stacks")
   def test_creates_multi_region_infrastructure(self):
