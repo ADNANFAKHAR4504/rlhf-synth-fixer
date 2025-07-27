@@ -118,7 +118,7 @@ Resources:
       MultiAZ: true
       DBName: !Sub '${ProjectName}${EnvironmentName}DB'
       MasterUserSecret:
-        SecretArn: !Ref MyWebAppDBPasswordSecret # <-- THIS IS THE FIX
+        SecretArn: !Ref WebAppDBMasterSecret # <-- UPDATED REFERENCE
       VPCSecurityGroups:
         - !GetAtt WebAppDatabaseSecurityGroup.GroupId
       PubliclyAccessible: false
@@ -131,15 +131,15 @@ Resources:
         - Key: Project
           Value: !Ref ProjectName
 
-  MyWebAppDBPasswordSecret:
+  WebAppDBMasterSecret:
     Type: AWS::SecretsManager::Secret
     Properties:
-      Description: "Password for the WebAppDatabase master user"
+      Description: "Master user password for the RDS WebAppDatabase"
       GenerateSecretString:
-        SecretStringTemplate: '{"username": "dbadmin"}'
+        SecretStringTemplate: '{"username": "admin"}'
         GenerateStringKey: "password"
         PasswordLength: 16
-        ExcludeCharacters: '"@/\'
+        ExcludeCharacters: "/@"
       Tags:
         - Key: Environment
           Value: !Ref EnvironmentName
@@ -181,6 +181,6 @@ Outputs:
 
   DBMasterUserSecretArn:
     Description: "ARN of the master user secret in Secrets Manager"
-    Value: !Ref MyWebAppDBPasswordSecret
+    Value: !Ref WebAppDBMasterSecret # <-- UPDATED REFERENCE
     Export:
       Name: !Sub "${AWS::StackName}-DBMasterUserSecretArn"
