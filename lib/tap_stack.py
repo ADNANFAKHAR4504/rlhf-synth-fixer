@@ -171,7 +171,7 @@ class RegionalRedundantStack(NestedStack):
         "RDSInstanceIdentifier",
         value=rds_instance.instance_identifier)
     CfnOutput(self, "HostedZoneId", value=zone.hosted_zone_id)
-    CfnOutput(self, "StackName", value=props.get('environment_suffix', 'default'))
+    CfnOutput(self, "StackName", value=f"TapStack{props.get('environment_suffix', 'default')}")
 
 
 class TapStackProps(StackProps):
