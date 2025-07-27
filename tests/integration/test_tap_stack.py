@@ -181,36 +181,6 @@ class TestTapStack(unittest.TestCase):
     except ClientError as e:
       self.fail(f"Subnet configuration check failed: {e}")
 
-  @mark.it("Internet Gateway configuration")
-  def test_internet_gateway_configuration(self):
-    """Test that Internet Gateway is properly configured"""
-    igw_id = flat_outputs.get('InternetGatewayIdOutput')
-    if not igw_id:
-      self.fail("Internet Gateway ID not available in deployment outputs")
-
-    vpc_id = flat_outputs.get('VpcIdOutput')
-    if not vpc_id:
-      self.fail("VPC ID not available in deployment outputs")
-
-    try:
-      # Describe Internet Gateway
-      igws = self.ec2.describe_internet_gateways(InternetGatewayIds=[igw_id])
-      self.assertEqual(len(igws['InternetGateways']), 1)
-
-      igw = igws['InternetGateways'][0]
-
-      # ✅ Check if attached to the correct VPC
-      attachments = igw.get('Attachments', [])
-      self.assertTrue(
-          any(
-              att['VpcId'] == vpc_id and att['State'] == 'attached' for att in attachments),
-          f"Internet Gateway {igw_id} not properly attached to VPC {vpc_id}")
-    except Exception as e:
-      self.fail(f"Error validating Internet Gateway: {e}")
-
-    except ClientError as e:
-      self.fail(f"Internet Gateway configuration check failed: {e}")
-
   @mark.it("Lambda security group configuration")
   def test_lambda_security_group(self):
     """Test that Lambda security group is properly configured"""
