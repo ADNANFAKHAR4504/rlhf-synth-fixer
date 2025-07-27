@@ -125,7 +125,11 @@ describe('AWS Infrastructure Integration Tests', () => {
         expect(asg.MaxSize).toBe(3);
         expect(asg.DesiredCapacity).toBe(1);
         expect(asg.VPCZoneIdentifier).toContain(outputs.ProductionPrivateSubnetIDs);
-        expect(asg.LaunchConfigurationName).toBe('ProdWebServersLaunchConfig');
+        
+        // --- CHANGE ---
+        // Verify the ASG uses a Launch Template, not a Launch Configuration.
+        expect(asg.LaunchConfigurationName).toBeUndefined();
+        expect(asg.LaunchTemplate).toBeDefined();
     });
   });
 });
