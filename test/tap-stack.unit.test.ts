@@ -14,9 +14,60 @@ describe('TapStack CloudFormation Template', () => {
     template = JSON.parse(templateContent);
   });
 
-  describe('Write Integration TESTS', () => {
-    test('Dont forget!', async () => {
-      expect(false).toBe(true);
+  describe('IAM Security Resources', () => {
+    test('should have TestS3Bucket resource', () => {
+      expect(template.Resources.TestS3Bucket).toBeDefined();
+      expect(template.Resources.TestS3Bucket.Type).toBe('AWS::S3::Bucket');
+    });
+
+    test('should have EC2InstanceRole resource', () => {
+      expect(template.Resources.EC2InstanceRole).toBeDefined();
+      expect(template.Resources.EC2InstanceRole.Type).toBe('AWS::IAM::Role');
+    });
+
+    test('should have EC2InstanceProfile resource', () => {
+      expect(template.Resources.EC2InstanceProfile).toBeDefined();
+      expect(template.Resources.EC2InstanceProfile.Type).toBe('AWS::IAM::InstanceProfile');
+    });
+
+    test('should have TestIAMUser resource', () => {
+      expect(template.Resources.TestIAMUser).toBeDefined();
+      expect(template.Resources.TestIAMUser.Type).toBe('AWS::IAM::User');
+    });
+
+    test('should have S3SpecificBucketReadOnlyPolicy resource', () => {
+      expect(template.Resources.S3SpecificBucketReadOnlyPolicy).toBeDefined();
+      expect(template.Resources.S3SpecificBucketReadOnlyPolicy.Type).toBe('AWS::IAM::Policy');
+    });
+
+    test('EC2InstanceRole should have S3 read-only permissions with explicit deny on write', () => {
+      const role = template.Resources.EC2InstanceRole;
+      const policy = role.Properties.Policies[0];
+      
+      expect(policy.PolicyName).toBe('S3ReadOnlyAccess');
+      expect(policy.PolicyDocument.Statement).toHaveLength(2);
+      
+      // Check allow statement
+      const allowStatement = policy.PolicyDocument.Statement[0];
+      expect(allowStatement.Effect).toBe('Allow');
+      expect(allowStatement.Action).toContain('s3:GetObject');
+      expect(allowStatement.Action).toContain('s3:ListBucket');
+      
+      // Check deny statement
+      const denyStatement = policy.PolicyDocument.Statement[1];
+      expect(denyStatement.Effect).toBe('Deny');
+      expect(denyStatement.Action).toContain('s3:PutObject');
+      expect(denyStatement.Action).toContain('s3:DeleteObject');
+    });
+
+    test('S3SpecificBucketReadOnlyPolicy should have correct read-only permissions', () => {
+      const policy = template.Resources.S3SpecificBucketReadOnlyPolicy;
+      const statement = policy.Properties.PolicyDocument.Statement[0];
+      
+      expect(statement.Effect).toBe('Allow');
+      expect(statement.Action).toContain('s3:GetObject');
+      expect(statement.Action).toContain('s3:ListBucket');
+      expect(statement.Resource).toHaveLength(2); // bucket and bucket/*
     });
   });
 
@@ -108,6 +159,12 @@ describe('TapStack CloudFormation Template', () => {
       const expectedOutputs = [
         'TurnAroundPromptTableName',
         'TurnAroundPromptTableArn',
+        'TestS3BucketName',
+        'TestS3BucketArn',
+        'EC2InstanceRoleArn',
+        'EC2InstanceProfileArn',
+        'TestIAMUserArn',
+        'S3SpecificBucketReadOnlyPolicyArn',
         'StackName',
         'EnvironmentSuffix',
       ];
@@ -172,9 +229,9 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Outputs).not.toBeNull();
     });
 
-    test('should have exactly one resource', () => {
+    test('should have exactly six resources', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(1);
+      expect(resourceCount).toBe(6); // DynamoDB, S3, IAM Role, Instance Profile, IAM User, IAM Policy
     });
 
     test('should have exactly one parameter', () => {
@@ -182,9 +239,9 @@ describe('TapStack CloudFormation Template', () => {
       expect(parameterCount).toBe(1);
     });
 
-    test('should have exactly four outputs', () => {
+    test('should have exactly ten outputs', () => {
       const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(4);
+      expect(outputCount).toBe(10); // All the security resources plus original outputs
     });
   });
 
