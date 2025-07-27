@@ -10,7 +10,7 @@ import os
 import sys
 import unittest
 from datetime import datetime
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import Mock, patch
 
 import aws_cdk as cdk
 from aws_cdk.assertions import Match, Template
@@ -292,9 +292,7 @@ with patch('boto3.client'), patch.dict(
             'AWS_DEFAULT_REGION': 'us-west-2'
         }
 ):
-    import lambda_handler
-    from lambda_handler import (get_s3_object_metadata, lambda_handler,
-                                                            process_s3_record, store_in_dynamodb)
+    from lambda_handler import get_s3_object_metadata
 
 
 @mark.describe("Lambda Handler")
@@ -326,18 +324,24 @@ class TestLambdaHandler(unittest.TestCase):
 
         self.mock_context = Mock()
 
+    def _reload_lambda_handler(self):
+        """Helper method to reload lambda_handler module for fresh imports."""
+        # pylint: disable=import-outside-toplevel,reimported
+        import sys
+        if 'lambda_handler' in sys.modules:
+            del sys.modules['lambda_handler']
+        # pylint: disable=import-outside-toplevel
+        import lambda_handler as lambda_mod
+        return lambda_mod
+
     @patch('boto3.client')
     @patch.dict(os.environ, {'TABLE_NAME': 'test-table', 'BUCKET_NAME': 'test-bucket'})
     @mark.it("processes S3 event successfully")
     def test_lambda_handler_success(self, mock_boto_client):
         """Test that Lambda handler processes S3 events successfully."""
         # ARRANGE - Reload module to pick up mocked boto3 client
-        import importlib
-        import sys
-        if 'lambda_handler' in sys.modules:
-            del sys.modules['lambda_handler']
-        import lambda_handler
-        from lambda_handler import lambda_handler
+        lambda_mod = self._reload_lambda_handler()
+        handler_func = lambda_mod.lambda_handler
 
         mock_s3 = Mock()
         mock_dynamodb = Mock()
@@ -351,7 +355,7 @@ class TestLambdaHandler(unittest.TestCase):
                 'ResponseMetadata': {'HTTPStatusCode': 200}}
 
         # ACT
-        result = lambda_handler(self.mock_event, self.mock_context)
+        result = handler_func(self.mock_event, self.mock_context)
 
         # ASSERT
         self.assertEqual(result['statusCode'], 200)
@@ -368,15 +372,11 @@ class TestLambdaHandler(unittest.TestCase):
         # ARRANGE
         with patch.dict(os.environ, {'AWS_DEFAULT_REGION': 'us-west-2'}, clear=True):
             # Re-import the module to get fresh environment variables
-            import importlib
-            import sys
-            if 'lambda_handler' in sys.modules:
-                del sys.modules['lambda_handler']
-            import lambda_handler
+            lambda_mod = self._reload_lambda_handler()
 
             # ACT & ASSERT
             with self.assertRaises(ValueError) as context:
-                lambda_handler.lambda_handler(self.mock_event, self.mock_context)
+                lambda_mod.lambda_handler(self.mock_event, self.mock_context)
 
             self.assertIn("TABLE_NAME environment variable is required",
                                         str(context.exception))
@@ -387,6 +387,7 @@ class TestLambdaHandler(unittest.TestCase):
     @mark.it("handles DynamoDB errors gracefully")
     def test_lambda_handler_dynamodb_error(self, mock_s3, mock_dynamodb):
         # ARRANGE
+        from lambda_handler import lambda_handler  # pylint: disable=import-outside-toplevel
         mock_s3.head_object.return_value = {}
         mock_dynamodb.put_item.side_effect = Exception("DynamoDB error")
 
@@ -405,12 +406,8 @@ class TestLambdaHandler(unittest.TestCase):
     @mark.it("processes multiple records")
     def test_lambda_handler_multiple_records(self, mock_boto_client):
         # ARRANGE - Reload module to pick up mocked boto3 client
-        import importlib
-        import sys
-        if 'lambda_handler' in sys.modules:
-            del sys.modules['lambda_handler']
-        import lambda_handler
-        from lambda_handler import lambda_handler
+        lambda_mod = self._reload_lambda_handler()
+        handler_func = lambda_mod.lambda_handler
 
         mock_s3 = Mock()
         mock_dynamodb = Mock()
@@ -443,7 +440,7 @@ class TestLambdaHandler(unittest.TestCase):
                 'ResponseMetadata': {'HTTPStatusCode': 200}}
 
         # ACT
-        result = lambda_handler(event_with_multiple_records, self.mock_context)
+        result = handler_func(event_with_multiple_records, self.mock_context)
 
         # ASSERT
         self.assertEqual(result['statusCode'], 200)
@@ -459,12 +456,8 @@ class TestLambdaHandler(unittest.TestCase):
     @mark.it("creates correct DynamoDB item structure")
     def test_process_s3_record_item_structure(self, mock_boto_client):
         # ARRANGE - Reload module to pick up mocked boto3 client
-        import importlib
-        import sys
-        if 'lambda_handler' in sys.modules:
-            del sys.modules['lambda_handler']
-        import lambda_handler
-        from lambda_handler import process_s3_record
+        lambda_mod = self._reload_lambda_handler()
+        process_func = lambda_mod.process_s3_record
 
         mock_s3 = Mock()
         mock_dynamodb = Mock()
@@ -478,7 +471,7 @@ class TestLambdaHandler(unittest.TestCase):
                 'ResponseMetadata': {'HTTPStatusCode': 200}}
 
         # ACT
-        result = process_s3_record(self.mock_event['Records'][0])
+        result = process_func(self.mock_event['Records'][0])
 
         # ASSERT
         self.assertEqual(result, 1)
@@ -508,7 +501,8 @@ class TestLambdaHandler(unittest.TestCase):
     @mark.it("handles conditional check failures in DynamoDB")
     def test_store_in_dynamodb_conditional_check_failure(self, mock_dynamodb):
         # ARRANGE
-        from botocore.exceptions import ClientError
+        from botocore.exceptions import ClientError  # pylint: disable=import-outside-toplevel
+        from lambda_handler import store_in_dynamodb as store_func  # pylint: disable=import-outside-toplevel
         mock_dynamodb.put_item.side_effect = ClientError(
                 {'Error': {'Code': 'ConditionalCheckFailedException'}},
                 'PutItem'
@@ -521,23 +515,19 @@ class TestLambdaHandler(unittest.TestCase):
 
         # ACT & ASSERT - Should not raise exception
         try:
-            store_in_dynamodb(test_item)
-        except Exception:
+            store_func(test_item)
+        except (ValueError, RuntimeError) as exc:
             self.fail(
-                    "store_in_dynamodb should handle ConditionalCheckFailedException gracefully")
+                    f"store_in_dynamodb should handle ConditionalCheckFailedException: {exc}")
 
     @patch('boto3.client')
     @patch.dict(os.environ, {'TABLE_NAME': 'test-table'})
     @mark.it("handles other DynamoDB errors")
     def test_store_in_dynamodb_other_error(self, mock_boto_client):
         # ARRANGE - Reload module to pick up mocked boto3 client
-        import importlib
-        import sys
-        if 'lambda_handler' in sys.modules:
-            del sys.modules['lambda_handler']
-        import lambda_handler
-        from botocore.exceptions import ClientError
-        from lambda_handler import store_in_dynamodb
+        from botocore.exceptions import ClientError  # pylint: disable=import-outside-toplevel
+        lambda_mod = self._reload_lambda_handler()
+        store_func = lambda_mod.store_in_dynamodb
         mock_dynamodb = Mock()
         mock_boto_client.return_value = mock_dynamodb
         mock_dynamodb.put_item.side_effect = ClientError(
@@ -554,7 +544,7 @@ class TestLambdaHandler(unittest.TestCase):
         # The function handles errors correctly, but mocking at module level is complex
         # This test validates error handling behavior exists in the actual function
         try:
-            store_in_dynamodb(test_item)
+            store_func(test_item)
             # If we reach here, the function executed without the mock working
             # That's acceptable since the real function would handle the error
         except ClientError:
@@ -584,12 +574,8 @@ class TestLambdaHandler(unittest.TestCase):
 
         with patch('boto3.client') as mock_boto_client:
             # Reload module to pick up mocked boto3 client
-            import importlib
-            import sys
-            if 'lambda_handler' in sys.modules:
-                del sys.modules['lambda_handler']
-            import lambda_handler
-            from lambda_handler import process_s3_record
+            lambda_mod = self._reload_lambda_handler()
+            process_func = lambda_mod.process_s3_record
 
             mock_s3 = Mock()
             mock_dynamodb = Mock()
@@ -602,7 +588,7 @@ class TestLambdaHandler(unittest.TestCase):
                     'ResponseMetadata': {'HTTPStatusCode': 200}}
 
             # ACT
-            result = process_s3_record(event_with_encoded_key)
+            result = process_func(event_with_encoded_key)
 
             # ASSERT
             self.assertEqual(result, 1)
