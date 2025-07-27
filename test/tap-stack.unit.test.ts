@@ -14,11 +14,6 @@ describe('TapStack CloudFormation Template', () => {
     template = JSON.parse(templateContent);
   });
 
-  describe('Write Integration TESTS', () => {
-    test('Dont forget!', async () => {
-      expect(false).toBe(true);
-    });
-  });
 
   describe('Template Structure', () => {
     test('should have valid CloudFormation format version', () => {
@@ -58,6 +53,21 @@ describe('TapStack CloudFormation Template', () => {
   });
 
   describe('Resources', () => {
+    test('should have all required resources', () => {
+      const expectedResources = [
+        'TestS3Bucket',
+        'EC2InstanceRole',
+        'EC2InstanceProfile',
+        'TestIAMUser',
+        'S3SpecificBucketReadOnlyPolicy',
+        'TurnAroundPromptTable'
+      ];
+      
+      expectedResources.forEach(resourceName => {
+        expect(template.Resources[resourceName]).toBeDefined();
+      });
+    });
+
     test('should have TurnAroundPromptTable resource', () => {
       expect(template.Resources.TurnAroundPromptTable).toBeDefined();
     });
@@ -101,11 +111,147 @@ describe('TapStack CloudFormation Template', () => {
       expect(keySchema[0].AttributeName).toBe('id');
       expect(keySchema[0].KeyType).toBe('HASH');
     });
+
+    // S3 Bucket Tests
+    describe('TestS3Bucket', () => {
+      test('should be an S3 bucket', () => {
+        const bucket = template.Resources.TestS3Bucket;
+        expect(bucket.Type).toBe('AWS::S3::Bucket');
+      });
+
+      test('should have correct deletion policies', () => {
+        const bucket = template.Resources.TestS3Bucket;
+        expect(bucket.DeletionPolicy).toBe('Delete');
+        expect(bucket.UpdateReplacePolicy).toBe('Delete');
+      });
+
+      test('should have encryption configured', () => {
+        const bucket = template.Resources.TestS3Bucket;
+        const encryption = bucket.Properties.BucketEncryption;
+        expect(encryption.ServerSideEncryptionConfiguration[0].ServerSideEncryptionByDefault.SSEAlgorithm).toBe('AES256');
+      });
+
+      test('should have public access blocked', () => {
+        const bucket = template.Resources.TestS3Bucket;
+        const publicAccess = bucket.Properties.PublicAccessBlockConfiguration;
+        expect(publicAccess.BlockPublicAcls).toBe(true);
+        expect(publicAccess.BlockPublicPolicy).toBe(true);
+        expect(publicAccess.IgnorePublicAcls).toBe(true);
+        expect(publicAccess.RestrictPublicBuckets).toBe(true);
+      });
+
+      test('should have versioning enabled', () => {
+        const bucket = template.Resources.TestS3Bucket;
+        expect(bucket.Properties.VersioningConfiguration.Status).toBe('Enabled');
+      });
+    });
+
+    // IAM Role Tests
+    describe('EC2InstanceRole', () => {
+      test('should be an IAM role', () => {
+        const role = template.Resources.EC2InstanceRole;
+        expect(role.Type).toBe('AWS::IAM::Role');
+      });
+
+      test('should allow EC2 service to assume role', () => {
+        const role = template.Resources.EC2InstanceRole;
+        const assumePolicy = role.Properties.AssumeRolePolicyDocument;
+        expect(assumePolicy.Statement[0].Effect).toBe('Allow');
+        expect(assumePolicy.Statement[0].Principal.Service).toBe('ec2.amazonaws.com');
+        expect(assumePolicy.Statement[0].Action).toBe('sts:AssumeRole');
+      });
+
+      test('should have S3 read-only managed policy', () => {
+        const role = template.Resources.EC2InstanceRole;
+        expect(role.Properties.ManagedPolicyArns).toContain('arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess');
+      });
+
+      test('should have explicit S3 write deny policy', () => {
+        const role = template.Resources.EC2InstanceRole;
+        const policies = role.Properties.Policies;
+        expect(policies).toHaveLength(1);
+        
+        const denyPolicy = policies[0];
+        expect(denyPolicy.PolicyDocument.Statement[0].Effect).toBe('Deny');
+        expect(denyPolicy.PolicyDocument.Statement[0].Resource).toBe('*');
+        
+        const denyActions = denyPolicy.PolicyDocument.Statement[0].Action;
+        expect(denyActions).toContain('s3:PutObject');
+        expect(denyActions).toContain('s3:DeleteObject');
+        expect(denyActions).toContain('s3:PutBucketPolicy');
+        expect(denyActions).toContain('s3:DeleteBucket');
+      });
+    });
+
+    // Instance Profile Tests
+    describe('EC2InstanceProfile', () => {
+      test('should be an instance profile', () => {
+        const profile = template.Resources.EC2InstanceProfile;
+        expect(profile.Type).toBe('AWS::IAM::InstanceProfile');
+      });
+
+      test('should reference the EC2 instance role', () => {
+        const profile = template.Resources.EC2InstanceProfile;
+        expect(profile.Properties.Roles).toEqual([{ Ref: 'EC2InstanceRole' }]);
+      });
+    });
+
+    // IAM User Tests
+    describe('TestIAMUser', () => {
+      test('should be an IAM user', () => {
+        const user = template.Resources.TestIAMUser;
+        expect(user.Type).toBe('AWS::IAM::User');
+      });
+
+      test('should have correct naming with environment suffix', () => {
+        const user = template.Resources.TestIAMUser;
+        expect(user.Properties.UserName).toEqual({
+          'Fn::Sub': 'test-s3-user-${EnvironmentSuffix}'
+        });
+      });
+    });
+
+    // IAM Policy Tests
+    describe('S3SpecificBucketReadOnlyPolicy', () => {
+      test('should be an IAM policy', () => {
+        const policy = template.Resources.S3SpecificBucketReadOnlyPolicy;
+        expect(policy.Type).toBe('AWS::IAM::Policy');
+      });
+
+      test('should be attached to the test IAM user', () => {
+        const policy = template.Resources.S3SpecificBucketReadOnlyPolicy;
+        expect(policy.Properties.Users).toEqual([{ Ref: 'TestIAMUser' }]);
+      });
+
+      test('should allow read-only access to specific S3 bucket', () => {
+        const policy = template.Resources.S3SpecificBucketReadOnlyPolicy;
+        const statement = policy.Properties.PolicyDocument.Statement[0];
+        
+        expect(statement.Effect).toBe('Allow');
+        expect(statement.Action).toContain('s3:GetObject');
+        expect(statement.Action).toContain('s3:ListBucket');
+        expect(statement.Action).toContain('s3:GetBucketLocation');
+        
+        expect(statement.Resource).toEqual([
+          { 'Fn::GetAtt': ['TestS3Bucket', 'Arn'] },
+          { 'Fn::Sub': '${TestS3Bucket.Arn}/*' }
+        ]);
+      });
+    });
   });
 
   describe('Outputs', () => {
     test('should have all required outputs', () => {
       const expectedOutputs = [
+        'TestS3BucketName',
+        'TestS3BucketArn',
+        'EC2InstanceRoleName',
+        'EC2InstanceRoleArn',
+        'EC2InstanceProfileName',
+        'EC2InstanceProfileArn',
+        'TestIAMUserName',
+        'TestIAMUserArn',
+        'S3SpecificBucketReadOnlyPolicyName',
         'TurnAroundPromptTableName',
         'TurnAroundPromptTableArn',
         'StackName',
@@ -172,9 +318,9 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Outputs).not.toBeNull();
     });
 
-    test('should have exactly one resource', () => {
+    test('should have exactly six resources', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(1);
+      expect(resourceCount).toBe(6);
     });
 
     test('should have exactly one parameter', () => {
@@ -182,9 +328,9 @@ describe('TapStack CloudFormation Template', () => {
       expect(parameterCount).toBe(1);
     });
 
-    test('should have exactly four outputs', () => {
+    test('should have exactly thirteen outputs', () => {
       const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(4);
+      expect(outputCount).toBe(13);
     });
   });
 
