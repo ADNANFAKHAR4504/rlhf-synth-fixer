@@ -209,14 +209,21 @@ describe('TapStack CloudFormation Template', () => {
       expect(ingress.some((rule: any) => rule.FromPort === 22)).toBe(true);
     });
 
-    test('RDS security group should allow MySQL from EC2 only', () => {
+    test('RDS security group should allow MySQL from EC2 and Lambda', () => {
       const sg = template.Resources.RDSSecurityGroup;
       const ingress = sg.Properties.SecurityGroupIngress;
 
-      expect(ingress).toHaveLength(1);
+      expect(ingress).toHaveLength(2);
+      
+      // Check first rule (EC2)
       expect(ingress[0].FromPort).toBe(3306);
       expect(ingress[0].ToPort).toBe(3306);
       expect(ingress[0].SourceSecurityGroupId).toBeDefined();
+      
+      // Check second rule (Lambda)
+      expect(ingress[1].FromPort).toBe(3306);
+      expect(ingress[1].ToPort).toBe(3306);
+      expect(ingress[1].SourceSecurityGroupId).toBeDefined();
     });
 
     test('Lambda security group should have outbound access', () => {
@@ -512,6 +519,7 @@ describe('TapStack CloudFormation Template', () => {
         'RDSJdbcConnection',
         'WebAppS3BucketName',
         'LogsS3BucketName',
+        'RDSSecretArn',
       ];
 
       expectedOutputs.forEach(outputName => {
@@ -539,6 +547,11 @@ describe('TapStack CloudFormation Template', () => {
       );
       expect(template.Outputs.LogsS3BucketName.Value.Ref).toBe('LogsS3Bucket');
     });
+
+    test('RDS secret output should reference correct secret', () => {
+      expect(template.Outputs.RDSSecretArn.Value.Ref).toBe('RDSSecret');
+      expect(template.Outputs.RDSSecretArn.Description).toContain('RDS credentials secret');
+    });
   });
 
   describe('Resource Count Validation', () => {
@@ -554,7 +567,7 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have correct number of outputs', () => {
       const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(11);
+      expect(outputCount).toBe(12); // Updated to include RDSSecretArn output
     });
   });
 });
