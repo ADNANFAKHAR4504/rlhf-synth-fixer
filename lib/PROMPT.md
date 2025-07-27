@@ -1,6 +1,6 @@
 You are an expert AWS infrastructure engineer. Please generate CDK code in Python that implements the infrastructure described below.
 
-## Objective:
+## Objective: 
 Deploy a serverless AWS application using CDK in Python, following AWS best practices and CDK idioms.
 
 ## Requirements:
