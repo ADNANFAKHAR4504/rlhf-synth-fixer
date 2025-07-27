@@ -3,7 +3,7 @@ import json
 import pytest
 
 
-STACK_NAME =  "TapStack"
+STACK_NAME =  "TapStackPr151"
 REGION = "us-east-1"
 
 
@@ -54,7 +54,7 @@ def test_security_groups():
     f"--region {REGION} --query 'length(SecurityGroups)'"
   )
   ec2_sg = run_cmd(
-    f"aws ec2 describe-security-groups --filters \"Name=tag:Component,Values=EC2-Web\""
+    f"aws ec2 describe-security-groups --filters \"Name=tag:Component,Values=EC2-Web\" "
     f"--region {REGION} --query 'length(SecurityGroups)'"
   )
   assert int(lb_sg) == 1
@@ -81,7 +81,7 @@ def test_log_groups_exist():
 def test_ec2_instance_running():
   """Ensure EC2 instance is running"""
   instance_state = run_cmd(
-    f"aws ec2 describe-instances --filters \"Name=tag:Name,Values=WebServer\""
+    f"aws ec2 describe-instances --filters \"Name=tag:Name,Values=WebServer\" "
     f"--region {REGION} --query 'Reservations[].Instances[].State.Name' --output text"
   )
   assert instance_state == "running"
