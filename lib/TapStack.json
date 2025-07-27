@@ -84,6 +84,29 @@
         }
     },
     "Resources": {
+        "RDSSecret": {
+            "Type": "AWS::SecretsManager::Secret",
+            "Properties": {
+                "Name": "rds-db-credentials",
+                "Description": "RDS master password for the web application database",
+                "GenerateSecretString": {
+                    "SecretStringTemplate": {
+                        "Fn::Sub": "{\"username\":\"${DatabaseUsername}\"}"
+                    },
+                    "GenerateStringKey": "password",
+                    "PasswordLength": 32,
+                    "ExcludeCharacters": "\"@/\\"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-RDS-Secret"
+                        }
+                    }
+                ]
+            }
+        },
         "VPC": {
             "Type": "AWS::EC2::VPC",
             "Properties": {
@@ -562,6 +585,17 @@
                                 "GroupId"
                             ]
                         }
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 3306,
+                        "ToPort": 3306,
+                        "SourceSecurityGroupId": {
+                            "Fn::GetAtt": [
+                                "LambdaSecurityGroup",
+                                "GroupId"
+                            ]
+                        }
                     }
                 ],
                 "Tags": [
@@ -878,11 +912,10 @@
                 "PolicyType": "TargetTrackingScaling",
                 "TargetTrackingConfiguration": {
                     "PredefinedMetricSpecification": {
-                        "PredefinedMetricType": "ALBRequestCountPerTarget"
+                        "PredefinedMetricType": "ASGAverageCPUUtilization"
                     },
-                    "TargetValue": 100
-                },
-                "Cooldown": 300
+                    "TargetValue": 70.0
+                }
             }
         },
         "RDSDBSubnetGroup": {
@@ -1001,6 +1034,21 @@
                                         "Arn"
                                     ]
                                 }
+                            },
+                            "Action": [
+                                "kms:Encrypt",
+                                "kms:Decrypt",
+                                "kms:ReEncrypt*",
+                                "kms:GenerateDataKey*",
+                                "kms:DescribeKey"
+                            ],
+                            "Resource": "*"
+                        },
+                        {
+                            "Sid": "Allow Secrets Manager to use the key",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "secretsmanager.amazonaws.com"
                             },
                             "Action": [
                                 "kms:Encrypt",
@@ -1198,6 +1246,15 @@
                                             "Arn"
                                         ]
                                     }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "secretsmanager:GetSecretValue"
+                                    ],
+                                    "Resource": {
+                                        "Ref": "RDSSecret"
+                                    }
                                 }
                             ]
                         }
@@ -1207,6 +1264,7 @@
         },
         "LambdaFunction1": {
             "Type": "AWS::Lambda::Function",
+            "DependsOn": "LambdaFunction1LogGroup",
             "Properties": {
                 "FunctionName": {
                     "Fn::Sub": "${ProjectName}-Function1"
@@ -1257,6 +1315,7 @@
         },
         "LambdaFunction2": {
             "Type": "AWS::Lambda::Function",
+            "DependsOn": "LambdaFunction2LogGroup",
             "Properties": {
                 "FunctionName": {
                     "Fn::Sub": "${ProjectName}-Function2"
@@ -1408,6 +1467,12 @@
             "Description": "Name of the Logs S3 Bucket.",
             "Value": {
                 "Ref": "LogsS3Bucket"
+            }
+        },
+        "RDSSecretArn": {
+            "Description": "ARN of the RDS credentials secret in Secrets Manager.",
+            "Value": {
+                "Ref": "RDSSecret"
             }
         }
     }
