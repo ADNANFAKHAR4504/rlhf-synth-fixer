@@ -1059,9 +1059,6 @@
         "WebAppS3Bucket": {
             "Type": "AWS::S3::Bucket",
             "Properties": {
-                "BucketName": {
-                    "Fn::Sub": "${AWS::StackName}-webapp-bucket-${AWS::AccountId}"
-                },
                 "PublicAccessBlockConfiguration": {
                     "BlockPublicAcls": true,
                     "IgnorePublicAcls": true,
@@ -1103,9 +1100,6 @@
         "LogsS3Bucket": {
             "Type": "AWS::S3::Bucket",
             "Properties": {
-                "BucketName": {
-                    "Fn::Sub": "${AWS::StackName}-logs-bucket-${AWS::AccountId}"
-                },
                 "PublicAccessBlockConfiguration": {
                     "BlockPublicAcls": true,
                     "IgnorePublicAcls": true,
