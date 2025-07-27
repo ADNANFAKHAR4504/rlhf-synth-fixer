@@ -5,14 +5,12 @@ Parameters:
   BucketName:
     Type: String
     Description: The name of the S3 bucket that will trigger the Lambda function.
+    Default: bucket-243911
   
   LambdaFunctionName:
     Type: String
     Description: The name of the Lambda function to be created.
-
-  LambdaRoleName:
-    Type: String
-    Description: The IAM Role name for the Lambda function.
+    Default: lambda-243911
 
   LambdaHandler:
     Type: String
@@ -21,7 +19,7 @@ Parameters:
 
   LambdaRuntime:
     Type: String
-    Default: "nodejs14.x"
+    Default: "nodejs22.x"
     Description: The runtime for the Lambda function.
 
 Resources:
