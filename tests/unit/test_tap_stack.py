@@ -17,7 +17,7 @@ class TestTapStack(unittest.TestCase):
 
   @mark.it("creates multi-region infrastructure with nested stacks")
   def test_creates_multi_region_infrastructure(self):
-    # ARRANGE
+    # ARRANGE 
     env_suffix = "test"
     stack = TapStack(self.app, "TapStackTest",
                      props=TapStackProps(environment_suffix=env_suffix))
