@@ -107,7 +107,7 @@
       "ConstraintDescription": "Must be a valid Aurora-compatible instance class (e.g., db.t4g.medium, db.r6g.large)."
     },
     "AmiId": {
-      "Type": "String",
+      "Type": "AWS::EC2::Image::Id",
       "Default": "ami-08a6efd148b1f7504",
       "Description": "The AMI ID for the EC2 instances"
     },
