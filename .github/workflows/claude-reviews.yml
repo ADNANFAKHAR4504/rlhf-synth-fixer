@@ -67,8 +67,4 @@ jobs:
           #   .githubusercontent.com
           #   bun.sh
           #   registry.npmjs.org
-<<<<<<< HEAD
           #   .blob.core.windows.net
-=======
-          #   .blob.core.windows.net
->>>>>>> 374761ba781929aafaf121f95ef06f1f5d700510
