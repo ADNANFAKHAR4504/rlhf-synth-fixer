@@ -72,7 +72,7 @@ def test_ec2_instance_properties():
 def test_cloudtrail_and_log_groups():
   template = get_template()
   template.resource_count_is("AWS::CloudTrail::Trail", 1)
-  template.resource_count_is("AWS::Logs::LogGroup", 2)
+  template.resource_count_is("AWS::Logs::LogGroup", 1)
 
 
 def test_tags_applied_to_resources():

@@ -73,16 +73,17 @@ class TapStack(cdk.Stack):
     super().__init__(scope, construct_id, **kwargs)
 
     # Get environment suffix from props, context, or use 'dev' as default
-    # environment_suffix = (
-    #     props.environment_suffix if props else None
-    # ) or self.node.try_get_context('environmentSuffix') or 'dev'
-    _ = props
+    environment_suffix = (
+        props.environment_suffix if props else None
+    ) or self.node.try_get_context('environmentSuffix') or 'dev'
+    
+    environment_name = environment_suffix.capitalize() if environment_suffix == 'dev' else 'Production'
 
     # ----------------------
     # Tags (Global Tags)
     # ----------------------
     Tags.of(self).add("Project", "SecureInfra")
-    Tags.of(self).add("Environment", "Production")
+    Tags.of(self).add("Environment", environment_name)
 
     # ----------------------
     # VPC Configuration
@@ -117,23 +118,29 @@ class TapStack(cdk.Stack):
     ec2_role.add_managed_policy(iam.ManagedPolicy.from_aws_managed_policy_name("CloudWatchAgentServerPolicy"))
 
     # ----------------------
-    # Security Groups
+    # Security Groups (Least Privilege Model)
     # ----------------------
     lb_sg = ec2.SecurityGroup(
         self, "LBSecurityGroup",
         vpc=vpc,
         description="Security group for Load Balancer",
-        allow_all_outbound=True
+        allow_all_outbound=False
     )
     lb_sg.add_ingress_rule(ec2.Peer.any_ipv4(), ec2.Port.tcp(80), "Allow HTTP from anywhere")
+    # Load balancer only needs to communicate with EC2 instances
+    lb_sg.add_egress_rule(ec2.Peer.any_ipv4(), ec2.Port.tcp(80), "Allow HTTP to EC2 instances")
 
     ec2_sg = ec2.SecurityGroup(
         self, "EC2SecurityGroup",
         vpc=vpc,
         description="Security group for EC2 instance",
-        allow_all_outbound=True
+        allow_all_outbound=False
     )
     ec2_sg.add_ingress_rule(lb_sg, ec2.Port.tcp(80), "Allow HTTP from Load Balancer")
+    # EC2 needs HTTPS for software updates, DNS resolution, and NTP
+    ec2_sg.add_egress_rule(ec2.Peer.any_ipv4(), ec2.Port.tcp(443), "Allow HTTPS outbound")
+    ec2_sg.add_egress_rule(ec2.Peer.any_ipv4(), ec2.Port.udp(53), "Allow DNS outbound")
+    ec2_sg.add_egress_rule(ec2.Peer.any_ipv4(), ec2.Port.udp(123), "Allow NTP outbound")
 
     # ----------------------
     # EC2 Instance
@@ -180,14 +187,6 @@ class TapStack(cdk.Stack):
     )
     trail.log_all_s3_data_events()
 
-    # ----------------------
-    # CloudWatch Log Group for EC2 logs
-    # ----------------------
-    ec2_log_group = logs.LogGroup(
-        self, "EC2LogGroup",
-        retention=logs.RetentionDays.ONE_WEEK,
-        removal_policy=RemovalPolicy.DESTROY
-    )
 
     # ----------------------
     # Tagging Resources
