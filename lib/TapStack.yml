@@ -542,10 +542,21 @@ Resources:
             Action:
               - kms:*
             Resource: '*'
-          - Sid: Allow use of the key for RDS
+          - Sid: Allow RDS service to use the key
             Effect: Allow
             Principal:
-              AWS: !Sub arn:aws:iam::${AWS::AccountId}:user/rds-service-user # Placeholder for actual RDS service principal or role
+              Service: rds.amazonaws.com
+            Action:
+              - kms:Encrypt
+              - kms:Decrypt
+              - kms:ReEncrypt*
+              - kms:GenerateDataKey*
+              - kms:DescribeKey
+            Resource: '*'
+          - Sid: Allow EC2 role to use the key
+            Effect: Allow
+            Principal:
+              AWS: !GetAtt EC2Role.Arn
             Action:
               - kms:Encrypt
               - kms:Decrypt

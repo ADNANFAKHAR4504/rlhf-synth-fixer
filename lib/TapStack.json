@@ -977,11 +977,29 @@
                             "Resource": "*"
                         },
                         {
-                            "Sid": "Allow use of the key for RDS",
+                            "Sid": "Allow RDS service to use the key",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "rds.amazonaws.com"
+                            },
+                            "Action": [
+                                "kms:Encrypt",
+                                "kms:Decrypt",
+                                "kms:ReEncrypt*",
+                                "kms:GenerateDataKey*",
+                                "kms:DescribeKey"
+                            ],
+                            "Resource": "*"
+                        },
+                        {
+                            "Sid": "Allow EC2 role to use the key",
                             "Effect": "Allow",
                             "Principal": {
                                 "AWS": {
-                                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:user/rds-service-user"
+                                    "Fn::GetAtt": [
+                                        "EC2Role",
+                                        "Arn"
+                                    ]
                                 }
                             },
                             "Action": [
