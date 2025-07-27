@@ -36,6 +36,7 @@ class RegionalRedundantStack(NestedStack):
       scope: Construct,
       stack_id: str,
       region: str,
+      props: dict = None,
       env: Optional[Environment] = None,
       **kwargs
   ) -> None:
@@ -72,7 +73,7 @@ class RegionalRedundantStack(NestedStack):
         self,
         f"RDS-{region}",
         engine=rds.DatabaseInstanceEngine.postgres(
-            version=rds.PostgresEngineVersion.VER_12_3),
+            version=rds.PostgresEngineVersion.VER_14_7),
         instance_type=ec2.InstanceType.of(
             ec2.InstanceClass.BURSTABLE2,
             ec2.InstanceSize.MICRO),
@@ -147,7 +148,7 @@ class RegionalRedundantStack(NestedStack):
     zone = route53.HostedZone(
         self,
         f"HostedZone-{region}",
-        zone_name="example.com")
+        zone_name=props.get('dns_name', f"tap-{region}-example.com")
     route53.ARecord(
         self,
         f"AliasRecord-{region}",
@@ -194,5 +195,6 @@ class TapStack(Stack):
           self,
           f"RegionalStack-{region}",
           region=region,
+          props={"dns_name": f"tap-{region}-{props.environment_suffix}.example.com"},
           env=Environment(region=region)
       )
