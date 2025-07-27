@@ -59,7 +59,7 @@ class TestTapStack(unittest.TestCase):
     template.has_resource_properties("AWS::RDS::DBInstance", {
         "Engine": "postgres",
         "EngineVersion": "16.4",
-        "DBInstanceClass": "db.t2.micro",
+        "DBInstanceClass": "db.t3.micro",
         "MultiAZ": True,
         "BackupRetentionPeriod": 7
     })
