@@ -13,14 +13,18 @@ class ErrorHandlingConstruct(Construct):
   This is a standard CDK Construct, not a NestedStack.
   """
 
-  def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
+  def __init__(self, scope: Construct, construct_id: str, 
+               queue_name: str = None, **kwargs) -> None:
     super().__init__(scope, construct_id, **kwargs)
+
+    # Use provided queue name or generate one based on construct hierarchy
+    actual_queue_name = queue_name or "TestLogPipeline-ErrorHandling-Test-LambdaDLQ"
 
     # 1. Define the SQS Dead-Letter Queue (DLQ) for Lambda
     self.dlq_queue = sqs.Queue(
         self,
         "LambdaDLQ",
-        queue_name="TestLogPipeline-ErrorHandling-Test-LambdaDLQ",
+        queue_name=actual_queue_name,
         retention_period=Duration.days(7),
         removal_policy=RemovalPolicy.DESTROY,
     )

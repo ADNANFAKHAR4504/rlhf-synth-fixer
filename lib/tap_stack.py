@@ -99,13 +99,15 @@ class TapStack(Stack):
     # 1. DynamoDB Stack
     self.dynamodb_stack = NestedDynamoDBStack(
         self,
-        f"{self.app_name}-DynamoDB-{self.stack_suffix}"
+        f"{self.app_name}-DynamoDB-{self.stack_suffix}",
+        table_name=dynamodb_table_name
     )
 
     # 2. Error Handling Stack
     self.error_handling_stack = NestedErrorHandlingStack(
         self,
-        f"{self.app_name}-ErrorHandling-{self.stack_suffix}"
+        f"{self.app_name}-ErrorHandling-{self.stack_suffix}",
+        queue_name=dlq_queue_name
     )
 
     # 3. S3 Source Stack
