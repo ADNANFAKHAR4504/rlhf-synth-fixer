@@ -12,7 +12,10 @@ import {
   GetRolePolicyCommand,
   ListAttachedRolePoliciesCommand,
 } from '@aws-sdk/client-iam';
-
+import {
+  ResourceGroupsTaggingAPIClient,
+  GetResourcesCommand,
+} from '@aws-sdk/client-resource-groups-tagging-api';
 const REGION = 'us-east-1'; // or your desired region
 
 const ec2 = new EC2Client({ region: REGION });
@@ -190,4 +193,36 @@ describe('Elastic IP Integration Test', () => {
     expect(addressInfo.PublicIp).toEqual(elasticIp);
     expect(addressInfo.InstanceId).toBeDefined();
   });
+});
+
+const client = new ResourceGroupsTaggingAPIClient({ region: 'us-east-1' });
+
+describe('Deployed resources tagging integration test', () => {
+  it('should verify that all resources have required tags', async () => {
+    const command = new GetResourcesCommand({});
+    const response = await client.send(command);
+
+    const resourceTagList = response.ResourceTagMappingList || [];
+
+    expect(resourceTagList.length).toBeGreaterThan(0);
+
+    for (const resource of resourceTagList) {
+      const arn = resource.ResourceARN;
+      const tags = resource.Tags || [];
+
+      const tagKeys = tags.map(t => t.Key);
+      const tagMap = Object.fromEntries(tags.map(t => [t.Key, t.Value]));
+
+      expect(tagKeys).toContain('Environment');
+      expect(tagMap['Environment']).toMatch(/Dev/);
+
+      // Optional: check for specific tags on certain resource types
+      if (arn?.includes('ec2')) {
+        expect(tagKeys).toContain('Name');
+      }
+
+      // Log for debug
+      console.log(`✅ Verified tags for resource: ${arn}`);
+    }
+  }, 15000); // increase timeout if needed
 });
