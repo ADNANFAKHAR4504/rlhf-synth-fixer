@@ -1,4 +1,4 @@
-Original Prompt (Medium-Level) Recap:
+Original Prompt Recap:
 Goal: Serverless data ingestion and processing pipeline for operational logs.
 
 Services:

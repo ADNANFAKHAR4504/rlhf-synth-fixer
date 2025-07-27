@@ -19,8 +19,6 @@ from aws_cdk import (
   aws_s3 as s3,
   aws_dynamodb as dynamodb,
   aws_sqs as sqs,
-  aws_s3_notifications as s3_notifications,
-  aws_iam as iam,
 )
 from constructs import Construct
 

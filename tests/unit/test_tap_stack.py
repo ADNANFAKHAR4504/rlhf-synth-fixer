@@ -1,8 +1,8 @@
+import json
 import pytest
 import aws_cdk as cdk
 from aws_cdk.assertions import Template, Match
 from lib.tap_stack import TapStack, TapStackProps
-import json
 
 # Define a mock environment for consistent testing
 MOCK_ENV = cdk.Environment(account="123456789012", region="us-east-1")
