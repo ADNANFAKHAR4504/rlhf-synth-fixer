@@ -119,28 +119,15 @@
                 ]
             }
         },
-        "LambdaS3EventSource": {
-            "Type": "AWS::Lambda::EventSourceMapping",
-            "Properties": {
-                "BatchSize": 1,
-                "EventSourceArn": {
-                    "Fn::GetAtt": [
-                        "S3Bucket",
-                        "Arn"
-                    ]
-                },
-                "FunctionName": {
-                    "Ref": "LambdaFunction"
-                },
-                "Enabled": "True"
-            }
-        },
         "LambdaInvokePermission": {
             "Type": "AWS::Lambda::Permission",
             "Properties": {
                 "Action": "lambda:InvokeFunction",
                 "FunctionName": {
-                    "Ref": "LambdaFunction"
+                    "Fn::GetAtt": [
+                        "LambdaFunction",
+                        "Arn"
+                    ]
                 },
                 "Principal": "s3.amazonaws.com",
                 "SourceArn": {

@@ -84,25 +84,19 @@ Resources:
       NotificationConfiguration:
         LambdaConfigurations:
           - Event: "s3:ObjectCreated:*"  # Event type for trigger
-            Function: !GetAtt LambdaFunction.Arn
+            Function: !GetAtt LambdaFunction.Arn # Corrected property name here
       Tags:
         - Key: "Environment"
           Value: "Production"
 
-  LambdaS3EventSource:
-    Type: AWS::Lambda::EventSourceMapping
-    Properties:
-      BatchSize: 1
-      EventSourceArn: !GetAtt S3Bucket.Arn
-      FunctionName: !Ref LambdaFunction
-      Enabled: "True"
+  # Remove LambdaS3EventSource - not needed for S3 triggers
 
   # Add Lambda permission for S3 to invoke the Lambda function
   LambdaInvokePermission:
     Type: AWS::Lambda::Permission
     Properties:
       Action: lambda:InvokeFunction
-      FunctionName: !Ref LambdaFunction
+      FunctionName: !GetAtt LambdaFunction.Arn # Use GetAtt for FunctionName here as well
       Principal: s3.amazonaws.com
       SourceArn: !Sub "arn:aws:s3:::${BucketName}"
 
