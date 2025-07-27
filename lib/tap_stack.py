@@ -20,6 +20,8 @@ from aws_cdk import (
   aws_dynamodb as dynamodb,
   aws_sqs as sqs,
   aws_s3_notifications as s3_notifications,
+  custom_resources as cr,
+  aws_iam as iam,
 )
 from constructs import Construct
 
@@ -100,14 +102,12 @@ class TapStack(Stack):
     self.dynamodb_stack = NestedDynamoDBStack(
         self,
         f"{self.app_name}-DynamoDB-{self.stack_suffix}"
-        # Removed: table_name=dynamodb_table_name
     )
 
     # 2. Error Handling Stack
     self.error_handling_stack = NestedErrorHandlingStack(
         self,
         f"{self.app_name}-ErrorHandling-{self.stack_suffix}"
-        # Removed: queue_name=dlq_queue_name
     )
 
     # 3. S3 Source Stack
@@ -127,12 +127,47 @@ class TapStack(Stack):
     )
 
     # --- Circular Dependency Fix ---
-    self.s3_source_stack.add_dependency(self.lambda_processing_stack)
+    # Remove add_dependency and use a custom resource to set bucket notification
+    # after both bucket and lambda exist.
 
-    self.s3_source_stack.s3_bucket.add_event_notification(
-        s3.EventType.OBJECT_CREATED,
-        s3_notifications.LambdaDestination(self.lambda_processing_stack.lambda_function),
-        s3.NotificationKeyFilter(prefix="raw-logs/", suffix=".json")
+    # Construct the Lambda destination configuration
+    notification_configuration = {
+      "LambdaFunctionConfigurations": [{
+        "Events": ["s3:ObjectCreated:*"],
+        "LambdaFunctionArn": self.lambda_processing_stack.lambda_function.function_arn,
+        "Filter": {
+          "Key": {
+            "FilterRules": [
+              {"Name": "prefix", "Value": "raw-logs/"},
+              {"Name": "suffix", "Value": ".json"}
+            ]
+          }
+        }
+      }]
+    }
+
+    # Grant S3 permission to invoke the Lambda function using aws_iam
+    self.lambda_processing_stack.lambda_function.add_permission(
+      "AllowS3Invoke",
+      principal=iam.ServicePrincipal("s3.amazonaws.com"),
+      source_arn=self.s3_source_stack.s3_bucket.bucket_arn
+    )
+
+    # Use a custom resource to configure bucket notification to Lambda
+    cr.AwsCustomResource(
+      self, "S3BucketNotificationCustomResource",
+      on_create=cr.AwsSdkCall(
+        service="S3",
+        action="putBucketNotificationConfiguration",
+        parameters={
+          "Bucket": self.s3_source_stack.s3_bucket.bucket_name,
+          "NotificationConfiguration": notification_configuration
+        },
+        physical_resource_id=cr.PhysicalResourceId.of(f"{self.app_name}-S3Notification-{self.stack_suffix}")
+      ),
+      policy=cr.AwsCustomResourcePolicy.from_sdk_calls(
+        resources=[self.s3_source_stack.s3_bucket.bucket_arn]
+      )
     )
 
     CfnOutput(
