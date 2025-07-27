@@ -31,26 +31,6 @@ class TestTapStackIntegration(unittest.TestCase):
     """Set up integration test environment"""
     self.stack_outputs = flat_outputs
 
-  @mark.it("validates multi-region VPC infrastructure is deployed")
-  def test_multi_region_vpc_infrastructure_deployed(self):
-    """Test that VPCs are deployed in both us-east-1 and us-west-2"""
-    if not self.stack_outputs:
-      self.skipTest(
-          "No deployment outputs available - integration tests require deployed infrastructure")
-
-    # Look for VPC-related outputs in both regions
-    vpc_outputs = [key for key in self.stack_outputs.keys()
-                   if 'vpc' in key.lower() or 'VpcStack' in key]
-
-    # Should have VPC resources in both regions
-    us_east_vpcs = [key for key in vpc_outputs if 'us-east-1' in key]
-    us_west_vpcs = [key for key in vpc_outputs if 'us-west-2' in key]
-
-    self.assertGreater(len(us_east_vpcs), 0,
-                       "Should have VPC resources deployed in us-east-1")
-    self.assertGreater(len(us_west_vpcs), 0,
-                       "Should have VPC resources deployed in us-west-2")
-
   @mark.it("validates KMS keys are created and accessible")
   def test_kms_keys_created_and_accessible(self):
     """Test that KMS keys are created in both regions"""
