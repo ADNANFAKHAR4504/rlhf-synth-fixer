@@ -1,5 +1,5 @@
 Ideal respnse is as below
-```
+```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: >
   CloudFormation template to create a secure and scalable infrastructure 
@@ -28,7 +28,7 @@ Resources:
     Properties:
       VpcId: !Ref DevVPC
       CidrBlock: 10.0.1.0/24
-      AvailabilityZone: !Select [ 0, !GetAZs '' ] # Dynamically select the first AZ
+      AvailabilityZone: !Select [ 0, !GetAZs '' ]
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -40,7 +40,7 @@ Resources:
     Properties:
       VpcId: !Ref DevVPC
       CidrBlock: 10.0.2.0/24
-      AvailabilityZone: !Select [ 1, !GetAZs '' ] # Dynamically select the second AZ
+      AvailabilityZone: !Select [ 1, !GetAZs '' ]
       Tags:
         - Key: Name
           Value: DevPrivateSubnet
@@ -119,7 +119,7 @@ Resources:
     Properties:
       VpcId: !Ref ProdVPC
       CidrBlock: 192.168.1.0/24
-      AvailabilityZone: !Select [ 0, !GetAZs '' ] # Dynamically select the first AZ
+      AvailabilityZone: !Select [ 0, !GetAZs '' ]
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -131,7 +131,7 @@ Resources:
     Properties:
       VpcId: !Ref ProdVPC
       CidrBlock: 192.168.2.0/24
-      AvailabilityZone: !Select [ 1, !GetAZs '' ] # Dynamically select the second AZ
+      AvailabilityZone: !Select [ 1, !GetAZs '' ]
       Tags:
         - Key: Name
           Value: ProdPrivateSubnet
@@ -230,23 +230,27 @@ Resources:
         - Key: Name
           Value: ProdSecurityGroup
 
-  # Auto Scaling Group resources for Production
-  ProdLaunchConfiguration:
-    Type: AWS::AutoScaling::LaunchConfiguration
+  # Production Launch Template
+  ProdLaunchTemplateV2:
+    Type: AWS::EC2::LaunchTemplate
     Properties:
-      LaunchConfigurationName: ProdWebServersLaunchConfig
-      ImageId: "ami-0c55b159cbfafe1f0" # Amazon Linux 2 in us-east-1
-      InstanceType: "t2.micro"
-      SecurityGroups:
-        - !Ref ProdSecurityGroup
+      LaunchTemplateName: ProdWebServersLaunchTemplateV2
+      LaunchTemplateData:
+        ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}'
+        InstanceType: "t2.micro"
+        SecurityGroupIds:
+          - !Ref ProdSecurityGroup
 
+  # Production Auto Scaling Group
   ProdAutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
       AutoScalingGroupName: ProdAutoScalingGroup
       VPCZoneIdentifier:
-        - !Ref ProdPrivateSubnet # Deploy instances in the private subnet
-      LaunchConfigurationName: !Ref ProdLaunchConfiguration
+        - !Ref ProdPrivateSubnet
+      LaunchTemplate:
+        LaunchTemplateId: !Ref ProdLaunchTemplateV2
+        Version: !GetAtt ProdLaunchTemplateV2.LatestVersionNumber
       MinSize: "1"
       MaxSize: "3"
       DesiredCapacity: "1"
