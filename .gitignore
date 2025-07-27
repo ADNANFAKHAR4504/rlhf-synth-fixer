@@ -4,6 +4,7 @@
 /test/*.js
 /cli/*.js
 *.d.ts
+!/test/setup.js
 
 # Dependencies
 node_modules/
@@ -74,7 +75,7 @@ cov.json
 
 cfn-outputs/*
 
-# Terraform files
+# CDK Terraform stuff
 dist/
 imports/*
 !imports/__init__.py
@@ -82,3 +83,4 @@ imports/*
 cdktf.out
 cdktf.log
 *terraform.*.tfstate*
+.gen

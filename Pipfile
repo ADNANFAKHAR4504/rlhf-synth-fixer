@@ -17,8 +17,8 @@ moto = "*"
 pytest-testdox = "*"
 pytest-cov = "*"
 pytest-env = "*"
-pytest = "*"
 pylint = "*"
+pytest = "*"
 
 [requires]
 python_version = "3.12.11"
