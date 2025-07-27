@@ -1,16 +1,15 @@
 // Configuration - These are coming from cfn-outputs after cloudformation deploy
-import fs from 'fs';
 import {
-  EC2Client,
-  DescribeVpcsCommand,
-  DescribeVpcAttributeCommand,
-  DescribeSubnetsCommand,
   DescribeInternetGatewaysCommand,
   DescribeNatGatewaysCommand,
   DescribeRouteTablesCommand,
   DescribeSecurityGroupsCommand,
-  DescribeAvailabilityZonesCommand,
+  DescribeSubnetsCommand,
+  DescribeVpcAttributeCommand,
+  DescribeVpcsCommand,
+  EC2Client,
 } from '@aws-sdk/client-ec2';
+import fs from 'fs';
 
 const region = process.env.AWS_DEFAULT_REGION || 'us-east-1';
 const ec2Client = new EC2Client({ region });
@@ -25,14 +24,20 @@ if (fs.existsSync(outputsPath)) {
     try {
       outputs = JSON.parse(fileContent);
     } catch (error) {
-      console.warn('Failed to parse cfn-outputs/flat-outputs.json. Integration tests may fail without deployment outputs.');
+      console.warn(
+        'Failed to parse cfn-outputs/flat-outputs.json. Integration tests may fail without deployment outputs.'
+      );
       outputs = {};
     }
   } else {
-    console.warn('cfn-outputs/flat-outputs.json is empty. Integration tests may fail without deployment outputs.');
+    console.warn(
+      'cfn-outputs/flat-outputs.json is empty. Integration tests may fail without deployment outputs.'
+    );
   }
 } else {
-  console.warn('cfn-outputs/flat-outputs.json not found. Integration tests may fail without deployment outputs.');
+  console.warn(
+    'cfn-outputs/flat-outputs.json not found. Integration tests may fail without deployment outputs.'
+  );
 }
 
 // Get environment suffix from environment variable (set by CI/CD pipeline)
@@ -40,7 +45,6 @@ const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 const expectedStackName = `TapStack${environmentSuffix}`;
 
 describe('VPC Infrastructure Integration Tests', () => {
-  
   describe('Stack Outputs Validation', () => {
     test('should have all required CloudFormation outputs', () => {
       const requiredOutputs = [
@@ -64,12 +68,14 @@ describe('VPC Infrastructure Integration Tests', () => {
         'PrivateRouteTable1Id',
         'PrivateRouteTable2Id',
         'StackName',
-        'EnvironmentSuffix'
+        'EnvironmentSuffix',
       ];
 
       // Only run this test if outputs are available
       if (Object.keys(outputs).length === 0) {
-        console.warn('Skipping outputs validation - no deployment outputs available');
+        console.warn(
+          'Skipping outputs validation - no deployment outputs available'
+        );
         return;
       }
 
@@ -82,7 +88,9 @@ describe('VPC Infrastructure Integration Tests', () => {
 
     test('stack name should match expected pattern', () => {
       if (Object.keys(outputs).length === 0) {
-        console.warn('Skipping stack name validation - no deployment outputs available');
+        console.warn(
+          'Skipping stack name validation - no deployment outputs available'
+        );
         return;
       }
 
@@ -94,41 +102,43 @@ describe('VPC Infrastructure Integration Tests', () => {
   describe('VPC Infrastructure Validation', () => {
     test('VPC should exist and have correct properties', async () => {
       if (!outputs.VpcId) {
-        console.warn('Skipping VPC validation - VpcId not available in outputs');
+        console.warn(
+          'Skipping VPC validation - VpcId not available in outputs'
+        );
         return;
       }
 
       const command = new DescribeVpcsCommand({
-        VpcIds: [outputs.VpcId]
+        VpcIds: [outputs.VpcId],
       });
 
       const response = await ec2Client.send(command);
-      
+
       expect(response.Vpcs).toHaveLength(1);
       const vpc = response.Vpcs![0];
-      
+
       expect(vpc.VpcId).toBe(outputs.VpcId);
       expect(vpc.CidrBlock).toBe(outputs.VpcCidr || '10.0.0.0/16');
       expect(vpc.State).toBe('available');
-      
+
       // Check DNS Support
       const dnsSupportResponse = await ec2Client.send(
         new DescribeVpcAttributeCommand({
           VpcId: vpc.VpcId,
-          Attribute: 'enableDnsSupport'
+          Attribute: 'enableDnsSupport',
         })
       );
       expect(dnsSupportResponse.EnableDnsSupport?.Value).toBe(true);
-      
+
       // Check DNS Resolution (Hostnames)
       const dnsHostnamesResponse = await ec2Client.send(
         new DescribeVpcAttributeCommand({
           VpcId: vpc.VpcId,
-          Attribute: 'enableDnsHostnames'
+          Attribute: 'enableDnsHostnames',
         })
       );
       expect(dnsHostnamesResponse.EnableDnsHostnames?.Value).toBe(true);
-      
+
       // Check VPC tags
       const tags = vpc.Tags || [];
       const nameTag = tags.find(tag => tag.Key === 'Name');
@@ -139,19 +149,21 @@ describe('VPC Infrastructure Integration Tests', () => {
 
     test('Internet Gateway should be attached to VPC', async () => {
       if (!outputs.InternetGatewayId || !outputs.VpcId) {
-        console.warn('Skipping IGW validation - required outputs not available');
+        console.warn(
+          'Skipping IGW validation - required outputs not available'
+        );
         return;
       }
 
       const command = new DescribeInternetGatewaysCommand({
-        InternetGatewayIds: [outputs.InternetGatewayId]
+        InternetGatewayIds: [outputs.InternetGatewayId],
       });
 
       const response = await ec2Client.send(command);
-      
+
       expect(response.InternetGateways).toHaveLength(1);
       const igw = response.InternetGateways![0];
-      
+
       expect(igw.InternetGatewayId).toBe(outputs.InternetGatewayId);
       expect(igw.Attachments).toHaveLength(1);
       expect(igw.Attachments![0].VpcId).toBe(outputs.VpcId);
@@ -170,26 +182,26 @@ describe('VPC Infrastructure Integration Tests', () => {
         Filters: [
           {
             Name: 'vpc-id',
-            Values: [outputs.VpcId]
-          }
-        ]
+            Values: [outputs.VpcId],
+          },
+        ],
       });
 
       const response = await ec2Client.send(command);
-      
+
       // Should have exactly 4 subnets (2 public + 2 private)
       expect(response.Subnets).toHaveLength(4);
-      
+
       const subnets = response.Subnets!;
-      
+
       // Check that we have 2 public and 2 private subnets
-      const publicSubnets = subnets.filter(subnet => 
-        subnet.MapPublicIpOnLaunch === true
+      const publicSubnets = subnets.filter(
+        subnet => subnet.MapPublicIpOnLaunch === true
       );
-      const privateSubnets = subnets.filter(subnet => 
-        subnet.MapPublicIpOnLaunch === false
+      const privateSubnets = subnets.filter(
+        subnet => subnet.MapPublicIpOnLaunch === false
       );
-      
+
       expect(publicSubnets).toHaveLength(2);
       expect(privateSubnets).toHaveLength(2);
     });
@@ -201,16 +213,16 @@ describe('VPC Infrastructure Integration Tests', () => {
       }
 
       const command = new DescribeSubnetsCommand({
-        SubnetIds: [outputs.PublicSubnet1Id, outputs.PublicSubnet2Id]
+        SubnetIds: [outputs.PublicSubnet1Id, outputs.PublicSubnet2Id],
       });
 
       const response = await ec2Client.send(command);
-      
+
       expect(response.Subnets).toHaveLength(2);
-      
+
       const az1 = response.Subnets![0].AvailabilityZone;
       const az2 = response.Subnets![1].AvailabilityZone;
-      
+
       expect(az1).not.toBe(az2);
       expect(outputs.PublicSubnet1AZ).toBe(az1);
       expect(outputs.PublicSubnet2AZ).toBe(az2);
@@ -226,17 +238,17 @@ describe('VPC Infrastructure Integration Tests', () => {
         Filters: [
           {
             Name: 'vpc-id',
-            Values: [outputs.VpcId]
-          }
-        ]
+            Values: [outputs.VpcId],
+          },
+        ],
       });
 
       const response = await ec2Client.send(command);
       const subnets = response.Subnets!;
-      
+
       const cidrBlocks = subnets.map(subnet => subnet.CidrBlock);
       const uniqueCidrBlocks = [...new Set(cidrBlocks)];
-      
+
       // All CIDR blocks should be unique (no overlaps)
       expect(cidrBlocks).toHaveLength(uniqueCidrBlocks.length);
     });
@@ -245,22 +257,24 @@ describe('VPC Infrastructure Integration Tests', () => {
   describe('NAT Gateway Configuration', () => {
     test('NAT Gateways should be properly configured', async () => {
       if (!outputs.NatGateway1Id || !outputs.NatGateway2Id) {
-        console.warn('Skipping NAT Gateway validation - NAT Gateway IDs not available');
+        console.warn(
+          'Skipping NAT Gateway validation - NAT Gateway IDs not available'
+        );
         return;
       }
 
       const command = new DescribeNatGatewaysCommand({
-        NatGatewayIds: [outputs.NatGateway1Id, outputs.NatGateway2Id]
+        NatGatewayIds: [outputs.NatGateway1Id, outputs.NatGateway2Id],
       });
 
       const response = await ec2Client.send(command);
-      
+
       expect(response.NatGateways).toHaveLength(2);
-      
+
       response.NatGateways!.forEach(natGateway => {
         expect(natGateway.State).toBe('available');
         expect(natGateway.NatGatewayAddresses).toHaveLength(1);
-        
+
         // NAT Gateway should have an Elastic IP
         const address = natGateway.NatGatewayAddresses![0];
         expect(address.AllocationId).toBeDefined();
@@ -269,20 +283,27 @@ describe('VPC Infrastructure Integration Tests', () => {
     });
 
     test('NAT Gateways should be in public subnets', async () => {
-      if (!outputs.NatGateway1Id || !outputs.NatGateway2Id || !outputs.PublicSubnet1Id || !outputs.PublicSubnet2Id) {
-        console.warn('Skipping NAT Gateway subnet validation - required IDs not available');
+      if (
+        !outputs.NatGateway1Id ||
+        !outputs.NatGateway2Id ||
+        !outputs.PublicSubnet1Id ||
+        !outputs.PublicSubnet2Id
+      ) {
+        console.warn(
+          'Skipping NAT Gateway subnet validation - required IDs not available'
+        );
         return;
       }
 
       const command = new DescribeNatGatewaysCommand({
-        NatGatewayIds: [outputs.NatGateway1Id, outputs.NatGateway2Id]
+        NatGatewayIds: [outputs.NatGateway1Id, outputs.NatGateway2Id],
       });
 
       const response = await ec2Client.send(command);
-      
+
       const natGatewaySubnets = response.NatGateways!.map(nat => nat.SubnetId);
       const publicSubnets = [outputs.PublicSubnet1Id, outputs.PublicSubnet2Id];
-      
+
       natGatewaySubnets.forEach(subnetId => {
         expect(publicSubnets).toContain(subnetId);
       });
@@ -291,25 +312,31 @@ describe('VPC Infrastructure Integration Tests', () => {
 
   describe('Route Table Configuration', () => {
     test('route tables should exist and have correct associations', async () => {
-      if (!outputs.PublicRouteTableId || !outputs.PrivateRouteTable1Id || !outputs.PrivateRouteTable2Id) {
-        console.warn('Skipping route table validation - route table IDs not available');
+      if (
+        !outputs.PublicRouteTableId ||
+        !outputs.PrivateRouteTable1Id ||
+        !outputs.PrivateRouteTable2Id
+      ) {
+        console.warn(
+          'Skipping route table validation - route table IDs not available'
+        );
         return;
       }
 
       const routeTableIds = [
         outputs.PublicRouteTableId,
         outputs.PrivateRouteTable1Id,
-        outputs.PrivateRouteTable2Id
+        outputs.PrivateRouteTable2Id,
       ];
 
       const command = new DescribeRouteTablesCommand({
-        RouteTableIds: routeTableIds
+        RouteTableIds: routeTableIds,
       });
 
       const response = await ec2Client.send(command);
-      
+
       expect(response.RouteTables).toHaveLength(3);
-      
+
       response.RouteTables!.forEach(routeTable => {
         expect(routeTable.VpcId).toBe(outputs.VpcId);
         expect(routeTable.Associations).toBeDefined();
@@ -319,23 +346,25 @@ describe('VPC Infrastructure Integration Tests', () => {
 
     test('public route table should have route to Internet Gateway', async () => {
       if (!outputs.PublicRouteTableId || !outputs.InternetGatewayId) {
-        console.warn('Skipping public route validation - required IDs not available');
+        console.warn(
+          'Skipping public route validation - required IDs not available'
+        );
         return;
       }
 
       const command = new DescribeRouteTablesCommand({
-        RouteTableIds: [outputs.PublicRouteTableId]
+        RouteTableIds: [outputs.PublicRouteTableId],
       });
 
       const response = await ec2Client.send(command);
-      
+
       expect(response.RouteTables).toHaveLength(1);
-      
+
       const routeTable = response.RouteTables![0];
-      const internetRoute = routeTable.Routes!.find(route => 
-        route.DestinationCidrBlock === '0.0.0.0/0' && route.GatewayId
+      const internetRoute = routeTable.Routes!.find(
+        route => route.DestinationCidrBlock === '0.0.0.0/0' && route.GatewayId
       );
-      
+
       expect(internetRoute).toBeDefined();
       expect(internetRoute!.GatewayId).toBe(outputs.InternetGatewayId);
       expect(internetRoute!.State).toBe('active');
@@ -343,23 +372,29 @@ describe('VPC Infrastructure Integration Tests', () => {
 
     test('private route tables should have routes to NAT Gateways', async () => {
       if (!outputs.PrivateRouteTable1Id || !outputs.PrivateRouteTable2Id) {
-        console.warn('Skipping private route validation - private route table IDs not available');
+        console.warn(
+          'Skipping private route validation - private route table IDs not available'
+        );
         return;
       }
 
       const command = new DescribeRouteTablesCommand({
-        RouteTableIds: [outputs.PrivateRouteTable1Id, outputs.PrivateRouteTable2Id]
+        RouteTableIds: [
+          outputs.PrivateRouteTable1Id,
+          outputs.PrivateRouteTable2Id,
+        ],
       });
 
       const response = await ec2Client.send(command);
-      
+
       expect(response.RouteTables).toHaveLength(2);
-      
+
       response.RouteTables!.forEach(routeTable => {
-        const natRoute = routeTable.Routes!.find(route => 
-          route.DestinationCidrBlock === '0.0.0.0/0' && route.NatGatewayId
+        const natRoute = routeTable.Routes!.find(
+          route =>
+            route.DestinationCidrBlock === '0.0.0.0/0' && route.NatGatewayId
         );
-        
+
         expect(natRoute).toBeDefined();
         expect(natRoute!.NatGatewayId).toBeDefined();
         expect(natRoute!.State).toBe('active');
@@ -370,33 +405,35 @@ describe('VPC Infrastructure Integration Tests', () => {
   describe('Security Group Configuration', () => {
     test('ICMP security group should allow ICMP traffic', async () => {
       if (!outputs.ICMPSecurityGroupId) {
-        console.warn('Skipping security group validation - security group ID not available');
+        console.warn(
+          'Skipping security group validation - security group ID not available'
+        );
         return;
       }
 
       const command = new DescribeSecurityGroupsCommand({
-        GroupIds: [outputs.ICMPSecurityGroupId]
+        GroupIds: [outputs.ICMPSecurityGroupId],
       });
 
       const response = await ec2Client.send(command);
-      
+
       expect(response.SecurityGroups).toHaveLength(1);
-      
+
       const securityGroup = response.SecurityGroups![0];
       expect(securityGroup.VpcId).toBe(outputs.VpcId);
-      
+
       // Check inbound ICMP rules
-      const inboundIcmpRule = securityGroup.IpPermissions!.find(rule => 
-        rule.IpProtocol === 'icmp'
+      const inboundIcmpRule = securityGroup.IpPermissions!.find(
+        rule => rule.IpProtocol === 'icmp'
       );
       expect(inboundIcmpRule).toBeDefined();
       expect(inboundIcmpRule!.FromPort).toBe(-1);
       expect(inboundIcmpRule!.ToPort).toBe(-1);
       expect(inboundIcmpRule!.IpRanges![0].CidrIp).toBe('0.0.0.0/0');
-      
+
       // Check outbound ICMP rules
-      const outboundIcmpRule = securityGroup.IpPermissionsEgress!.find(rule => 
-        rule.IpProtocol === 'icmp'
+      const outboundIcmpRule = securityGroup.IpPermissionsEgress!.find(
+        rule => rule.IpProtocol === 'icmp'
       );
       expect(outboundIcmpRule).toBeDefined();
       expect(outboundIcmpRule!.FromPort).toBe(-1);
@@ -407,7 +444,12 @@ describe('VPC Infrastructure Integration Tests', () => {
 
   describe('End-to-End Infrastructure Validation', () => {
     test('infrastructure should support multi-AZ deployment', async () => {
-      if (!outputs.PublicSubnet1AZ || !outputs.PublicSubnet2AZ || !outputs.PrivateSubnet1AZ || !outputs.PrivateSubnet2AZ) {
+      if (
+        !outputs.PublicSubnet1AZ ||
+        !outputs.PublicSubnet2AZ ||
+        !outputs.PrivateSubnet1AZ ||
+        !outputs.PrivateSubnet2AZ
+      ) {
         console.warn('Skipping multi-AZ validation - AZ outputs not available');
         return;
       }
@@ -417,12 +459,12 @@ describe('VPC Infrastructure Integration Tests', () => {
         outputs.PublicSubnet1AZ,
         outputs.PublicSubnet2AZ,
         outputs.PrivateSubnet1AZ,
-        outputs.PrivateSubnet2AZ
+        outputs.PrivateSubnet2AZ,
       ];
-      
+
       const uniqueAZs = [...new Set(allAZs)];
       expect(uniqueAZs).toHaveLength(2);
-      
+
       // Verify public and private subnets are paired correctly by AZ
       expect(outputs.PublicSubnet1AZ).toBe(outputs.PrivateSubnet1AZ);
       expect(outputs.PublicSubnet2AZ).toBe(outputs.PrivateSubnet2AZ);
@@ -436,20 +478,20 @@ describe('VPC Infrastructure Integration Tests', () => {
 
       // Check VPC tags as a representative example
       const vpcCommand = new DescribeVpcsCommand({
-        VpcIds: [outputs.VpcId]
+        VpcIds: [outputs.VpcId],
       });
 
       const vpcResponse = await ec2Client.send(vpcCommand);
       const vpc = vpcResponse.Vpcs![0];
       const tags = vpc.Tags || [];
-      
+
       const requiredTagKeys = ['Name', 'Environment', 'Project', 'Owner'];
       const tagKeys = tags.map(tag => tag.Key);
-      
+
       requiredTagKeys.forEach(requiredKey => {
         expect(tagKeys).toContain(requiredKey);
       });
-      
+
       // Verify Environment tag matches our environment suffix
       const environmentTag = tags.find(tag => tag.Key === 'Environment');
       expect(environmentTag!.Value).toBe(environmentSuffix);
@@ -465,11 +507,13 @@ describe('VPC Infrastructure Integration Tests', () => {
         'PrivateSubnet2Id',
         'NatGateway1Id',
         'NatGateway2Id',
-        'InternetGatewayId'
+        'InternetGatewayId',
       ];
 
       if (Object.keys(outputs).length === 0) {
-        console.warn('Skipping production readiness validation - no outputs available');
+        console.warn(
+          'Skipping production readiness validation - no outputs available'
+        );
         return;
       }
 
