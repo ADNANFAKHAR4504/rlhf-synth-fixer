@@ -1,3 +1,5 @@
+# pylint: disable=too-many-lines,too-many-locals
+
 import time
 import uuid
 import json
@@ -9,6 +11,35 @@ STACK_NAME = "tap-serverlesspr220"
 S3_SOURCE_UPLOAD_PREFIX = "raw-logs/"
 S3_ERROR_ARCHIVE_MALFORMED_PREFIX = "malformed/"
 S3_ERROR_ARCHIVE_INVALID_DATA_PREFIX = "invalid-data/"
+
+MAX_WAIT_TIME = 90  # seconds
+POLL_INTERVAL = 5   # seconds
+
+def wait_for_s3_object(s3_client, bucket, key):
+  """Poll S3 until the object exists or timeout."""
+  start = time.time()
+  while time.time() - start < MAX_WAIT_TIME:
+    try:
+      s3_client.head_object(Bucket=bucket, Key=key)
+      return True
+    except s3_client.exceptions.ClientError:
+      time.sleep(POLL_INTERVAL)
+  return False
+
+def wait_for_dynamodb_item(dynamodb_client, table_name, service_id, expected_message):
+  """Poll DynamoDB until an item with matching message exists or timeout."""
+  start = time.time()
+  while time.time() - start < MAX_WAIT_TIME:
+    response = dynamodb_client.query(
+      TableName=table_name,
+      KeyConditionExpression='serviceName = :sid',
+      ExpressionAttributeValues={':sid': {'S': service_id}}
+    )
+    items = response.get('Items', [])
+    if any(item.get('message', {}).get('S') == expected_message for item in items):
+      return True
+    time.sleep(POLL_INTERVAL)
+  return False
 
 @pytest.fixture(scope="module")
 def aws_clients():
@@ -23,13 +54,13 @@ def stack_outputs(request):
   aws_clients = request.getfixturevalue("aws_clients")
   try:
     response = aws_clients["cfn"].describe_stacks(StackName=STACK_NAME)
-    outputs = {output["OutputKey"]: output["OutputValue"]
-               for output in response["Stacks"][0]["Outputs"]}
+    outputs = {
+      output["OutputKey"]: output["OutputValue"]
+      for output in response["Stacks"][0]["Outputs"]
+    }
     return outputs
   except Exception as exc:
-    pytest.fail(
-      f"Stack '{STACK_NAME}' not found or not deployed. Error: {exc}"
-    )
+    pytest.fail(f"Stack '{STACK_NAME}' not found or not deployed. Error: {exc}")
 
 def test_stack_outputs_exist(stack_outputs):
   assert "S3SourceBucketName" in stack_outputs
@@ -43,11 +74,12 @@ def test_valid_log_processing(stack_outputs, aws_clients):
   table = stack_outputs["DynamoDBTableName"]
 
   test_service_id = f"test-valid-{uuid.uuid4().hex[:8]}"
+  test_message = "Integration test valid log"
   test_payload = {
     "serviceName": test_service_id,
     "timestamp": datetime.utcnow().isoformat(timespec='milliseconds') + "Z",
     "logLevel": "INFO",
-    "message": "Integration test valid log",
+    "message": test_message,
     "requestId": str(uuid.uuid4())
   }
   key = f"{S3_SOURCE_UPLOAD_PREFIX}{test_service_id}.json"
@@ -57,53 +89,33 @@ def test_valid_log_processing(stack_outputs, aws_clients):
     Body=json.dumps(test_payload),
     ContentType="application/json"
   )
-  time.sleep(20)
 
-  response = dynamodb.query(
-    TableName=table,
-    KeyConditionExpression='serviceName = :sid',
-    ExpressionAttributeValues={':sid': {'S': test_service_id}}
-  )
-  items = response.get('Items', [])
-  assert any(
-    item['message']['S'] == test_payload['message']
-    for item in items
-  )
+  assert wait_for_dynamodb_item(dynamodb, table, test_service_id, test_message), \
+    f"Valid log not found in DynamoDB after {MAX_WAIT_TIME}s for serviceName={test_service_id}"
 
 def test_malformed_log_archiving(stack_outputs, aws_clients):
   s3 = aws_clients["s3"]
   source_bucket = stack_outputs["S3SourceBucketName"]
   error_bucket = stack_outputs["ErrorArchiveBucketName"]
 
-  malformed_key = (
-    f"{S3_SOURCE_UPLOAD_PREFIX}malformed-{uuid.uuid4().hex[:8]}.json"
-  )
+  malformed_key = f"{S3_SOURCE_UPLOAD_PREFIX}malformed-{uuid.uuid4().hex[:8]}.json"
   s3.put_object(
     Bucket=source_bucket,
     Key=malformed_key,
     Body="not a json",
     ContentType="text/plain"
   )
-  time.sleep(20)
 
-  archived_key = (
-    f"{S3_ERROR_ARCHIVE_MALFORMED_PREFIX}{malformed_key.rsplit('/', maxsplit=1)[-1]}"
-  )
-  try:
-    s3.head_object(Bucket=error_bucket, Key=archived_key)
-  except s3.exceptions.ClientError as exc:
-    pytest.fail(
-      f"Malformed log not found in error archive: {archived_key} ({exc})"
-    )
+  archived_key = f"{S3_ERROR_ARCHIVE_MALFORMED_PREFIX}{malformed_key.rsplit('/', 1)[-1]}"
+  assert wait_for_s3_object(s3, error_bucket, archived_key), \
+    f"Malformed log not found in error archive after {MAX_WAIT_TIME}s: {archived_key}"
 
 def test_invalid_data_archiving(stack_outputs, aws_clients):
   s3 = aws_clients["s3"]
   source_bucket = stack_outputs["S3SourceBucketName"]
   error_bucket = stack_outputs["ErrorArchiveBucketName"]
 
-  invalid_key = (
-    f"{S3_SOURCE_UPLOAD_PREFIX}invalid-{uuid.uuid4().hex[:8]}.json"
-  )
+  invalid_key = f"{S3_SOURCE_UPLOAD_PREFIX}invalid-{uuid.uuid4().hex[:8]}.json"
   invalid_payload = {
     "timestamp": datetime.utcnow().isoformat(timespec='milliseconds') + "Z",
     "logLevel": "ERROR",
@@ -115,14 +127,7 @@ def test_invalid_data_archiving(stack_outputs, aws_clients):
     Body=json.dumps(invalid_payload),
     ContentType="application/json"
   )
-  time.sleep(20)
 
-  archived_key = (
-    f"{S3_ERROR_ARCHIVE_INVALID_DATA_PREFIX}{invalid_key.rsplit('/', maxsplit=1)[-1]}"
-  )
-  try:
-    s3.head_object(Bucket=error_bucket, Key=archived_key)
-  except s3.exceptions.ClientError as exc:
-    pytest.fail(
-      f"Invalid log not found in error archive: {archived_key} ({exc})"
-    )
+  archived_key = f"{S3_ERROR_ARCHIVE_INVALID_DATA_PREFIX}{invalid_key.rsplit('/', 1)[-1]}"
+  assert wait_for_s3_object(s3, error_bucket, archived_key), \
+    f"Invalid log not found in error archive after {MAX_WAIT_TIME}s: {archived_key}"
