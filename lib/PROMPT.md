@@ -48,7 +48,7 @@ Project
 
 Output Format Requirements:
 
-The entire response must be a single, valid YAML file named webapp-environment-setup.yaml.
+The entire response must be a single, valid YAML file named TapStack.yml.
 
 The response should contain only the YAML code block. Do not include any introductory text, explanations, or concluding remarks.
 

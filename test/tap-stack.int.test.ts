@@ -3,7 +3,7 @@ import path from 'path';
 import yaml from 'js-yaml';
 
 describe('Web App CloudFormation Template Integration Tests', () => {
-  const yamlTemplatePath = path.join(__dirname, '../lib/TapStack.yaml');
+  const yamlTemplatePath = path.join(__dirname, '../lib/TapStack.yml');
   const jsonTemplatePath = path.join(__dirname, '../lib/TapStack.json');
 
   describe('Template File Validation', () => {
