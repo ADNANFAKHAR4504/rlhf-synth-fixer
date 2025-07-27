@@ -1,12 +1,12 @@
 """Unit tests for TAP Stack."""
 import os
 import sys
-from cdktf import App, Testing
-from lib.tap_stack import TapStack
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
+from cdktf import App, Testing
 
+from lib.tap_stack import TapStack
 
 
 # Setup CDKTF testing environment

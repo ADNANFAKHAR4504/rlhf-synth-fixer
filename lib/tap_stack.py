@@ -6,13 +6,10 @@ from cdktf import S3Backend, TerraformStack
 from cdktf_cdktf_provider_aws.provider import AwsProvider
 from cdktf_cdktf_provider_aws.s3_bucket import S3Bucket
 from cdktf_cdktf_provider_aws.s3_bucket_server_side_encryption_configuration import (
-  S3BucketServerSideEncryptionConfiguration,
-  S3BucketServerSideEncryptionConfigurationRule,
-  S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefault,
+  S3BucketServerSideEncryptionConfigurationA,
 )
 from cdktf_cdktf_provider_aws.s3_bucket_versioning import (
-  S3BucketVersioning,
-  S3BucketVersioningVersioningConfiguration,
+  S3BucketVersioningA,
 )
 from constructs import Construct
 
@@ -79,27 +76,23 @@ class TapStack(TerraformStack):
     )
 
     # Configure bucket versioning
-    self.bucket_versioning = S3BucketVersioning(
+    self.bucket_versioning = S3BucketVersioningA(
       self,
       "app_bucket_versioning",
       bucket=self.bucket.id,
-      versioning_configuration=S3BucketVersioningVersioningConfiguration(
-        status="Enabled"
-      ),
+      versioning_configuration={
+        "status": "Enabled"
+      },
     )
 
     # Configure bucket encryption
-    self.bucket_encryption = S3BucketServerSideEncryptionConfiguration(
+    self.bucket_encryption = S3BucketServerSideEncryptionConfigurationA(
       self,
       "app_bucket_encryption",
       bucket=self.bucket.id,
-      rule=[
-        S3BucketServerSideEncryptionConfigurationRule(
-          apply_server_side_encryption_by_default=(
-            S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefault(
-              sse_algorithm="AES256"
-            )
-          )
-        )
-      ],
+      rule=[{
+        "apply_server_side_encryption_by_default": {
+          "sse_algorithm": "AES256"
+        }
+      }],
     )
