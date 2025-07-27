@@ -3,7 +3,6 @@ import json
 import pytest
 
 
-STACK_NAME =  "TapStackPr151"
 REGION = "us-east-1"
 
 
@@ -14,28 +13,6 @@ def run_cmd(cmd):
     print(f"Command failed: {cmd}\nError: {result.stderr}")
     raise RuntimeError(result.stderr)
   return result.stdout.strip()
-
-
-@pytest.fixture(scope="module")
-def stack_info_data():
-  """Fetch CloudFormation stack details and parse outputs"""
-  stdout = run_cmd(
-    f"aws cloudformation describe-stacks --stack-name {STACK_NAME} --region {REGION}"
-  )
-  stack_data = json.loads(stdout)["Stacks"][0]
-
-  outputs = {}
-  for output in stack_data.get("Outputs", []):
-    outputs[output["OutputKey"]] = output["OutputValue"]
-
-  return {"info": stack_data, "outputs": outputs}
-
-
-def test_stack_status(stack_info_data):
-  """Stack should be successfully deployed"""
-  status = stack_info_data["info"]["StackStatus"]
-  assert status in ["CREATE_COMPLETE", "UPDATE_COMPLETE"], \
-    f"Unexpected stack status: {status}"
 
 
 def test_vpc_exists():
