@@ -14,7 +14,7 @@ Use Route 53 for automated DNS management and failover routing between the two r
 
 Enable CloudWatch monitoring and logging for all services to comply with AWS security best practices.
 
-Your task:
+Your task: 
 
 Provide a CDK (Python) project structure with example stacks/modules implementing these requirements.
 
