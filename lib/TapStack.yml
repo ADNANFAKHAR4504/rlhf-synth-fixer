@@ -80,7 +80,7 @@ Resources:
   S3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Ref S3BucketName
+      BucketName: !Ref BucketName
       NotificationConfiguration:
         LambdaConfigurations:
           - Event: "s3:ObjectCreated:*"  # Event type for trigger
@@ -104,7 +104,7 @@ Resources:
       Action: lambda:InvokeFunction
       FunctionName: !Ref LambdaFunction
       Principal: s3.amazonaws.com
-      SourceArn: !Sub "arn:aws:s3:::${S3BucketName}"
+      SourceArn: !Sub "arn:aws:s3:::${BucketName}"
 
 Outputs:
   LambdaFunctionName:
@@ -115,6 +115,6 @@ Outputs:
     Description: The ARN of the IAM Role assumed by Lambda
     Value: !GetAtt LambdaExecutionRole.Arn
 
-  S3BucketName:
+  BucketName:
     Description: The name of the S3 bucket
     Value: !Ref S3Bucket

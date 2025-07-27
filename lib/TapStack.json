@@ -96,7 +96,7 @@
             "Type": "AWS::S3::Bucket",
             "Properties": {
                 "BucketName": {
-                    "Ref": "S3BucketName"
+                    "Ref": "BucketName"
                 },
                 "NotificationConfiguration": {
                     "LambdaConfigurations": [
@@ -144,7 +144,7 @@
                 },
                 "Principal": "s3.amazonaws.com",
                 "SourceArn": {
-                    "Fn::Sub": "arn:aws:s3:::${S3BucketName}"
+                    "Fn::Sub": "arn:aws:s3:::${BucketName}"
                 }
             }
         }
@@ -165,7 +165,7 @@
                 ]
             }
         },
-        "S3BucketName": {
+        "BucketName": {
             "Description": "The name of the S3 bucket",
             "Value": {
                 "Ref": "S3Bucket"
