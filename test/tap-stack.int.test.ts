@@ -123,14 +123,18 @@ describe('VPC Networking Infrastructure Integration Tests', () => {
       expect(subnets).toHaveLength(2);
 
       // Check first public subnet
-      const subnet1 = subnets.find(s => s.SubnetId === outputs.PublicSubnet1Id);
+      const subnet1 = subnets.find(
+        (s: any) => s.SubnetId === outputs.PublicSubnet1Id
+      );
       expect(subnet1?.State).toBe('available');
       expect(subnet1?.CidrBlock).toBe('10.0.1.0/24');
       expect(subnet1?.MapPublicIpOnLaunch).toBe(true);
       expect(subnet1?.VpcId).toBe(outputs.VPCId);
 
       // Check second public subnet
-      const subnet2 = subnets.find(s => s.SubnetId === outputs.PublicSubnet2Id);
+      const subnet2 = subnets.find(
+        (s: any) => s.SubnetId === outputs.PublicSubnet2Id
+      );
       expect(subnet2?.State).toBe('available');
       expect(subnet2?.CidrBlock).toBe('10.0.2.0/24');
       expect(subnet2?.MapPublicIpOnLaunch).toBe(true);
@@ -140,12 +144,12 @@ describe('VPC Networking Infrastructure Integration Tests', () => {
       expect(subnet1?.AvailabilityZone).not.toBe(subnet2?.AvailabilityZone);
 
       // Check subnet tags
-      const nameTag1 = subnet1?.Tags?.find(tag => tag.Key === 'Name');
+      const nameTag1 = subnet1?.Tags?.find((tag: any) => tag.Key === 'Name');
       expect(nameTag1?.Value).toBe(
         `TAP-Public-Subnet-AZ1-${environmentSuffix}`
       );
 
-      const typeTag1 = subnet1?.Tags?.find(tag => tag.Key === 'Type');
+      const typeTag1 = subnet1?.Tags?.find((tag: any) => tag.Key === 'Type');
       expect(typeTag1?.Value).toBe('Public');
     });
 
