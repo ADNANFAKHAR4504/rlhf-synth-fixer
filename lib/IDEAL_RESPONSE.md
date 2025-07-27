@@ -6,6 +6,7 @@ I'll create a production-grade CloudFormation YAML template that sets up a compl
 
 This CloudFormation template creates a robust VPC infrastructure spanning two availability zones with proper networking, security, and tagging configurations.
 
+
 ### Architecture Components
 
 1. **VPC**: A Virtual Private Cloud with configurable CIDR block
