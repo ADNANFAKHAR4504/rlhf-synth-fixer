@@ -42,8 +42,11 @@ Parameters:
     Default: '10.0.4.0/24'
     Description: CIDR block for the second private subnet.
 
+  LatestAmiId:
+    Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
+    Default: '/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64'
+
 Resources:
-  # DynamoDB Table
   TurnAroundPromptTable:
     Type: AWS::DynamoDB::Table
     DeletionPolicy: Delete
@@ -59,13 +62,15 @@ Resources:
       BillingMode: PAY_PER_REQUEST
       DeletionProtectionEnabled: false
 
-  # VPC and Subnets
   MyVPC:
     Type: AWS::EC2::VPC
     Properties:
       CidrBlock: !Ref VpcCidrBlock
       EnableDnsSupport: true
       EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: !Sub 'VPC-${EnvironmentSuffix}'
 
   PublicSubnet1:
     Type: AWS::EC2::Subnet
@@ -74,6 +79,9 @@ Resources:
       CidrBlock: !Ref PublicSubnet1CidrBlock
       AvailabilityZone: !Select [0, !GetAZs '']
       MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub 'PublicSubnet1-${EnvironmentSuffix}'
 
   PublicSubnet2:
     Type: AWS::EC2::Subnet
@@ -82,6 +90,9 @@ Resources:
       CidrBlock: !Ref PublicSubnet2CidrBlock
       AvailabilityZone: !Select [1, !GetAZs '']
       MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub 'PublicSubnet2-${EnvironmentSuffix}'
 
   PrivateSubnet1:
     Type: AWS::EC2::Subnet
@@ -89,6 +100,9 @@ Resources:
       VpcId: !Ref MyVPC
       CidrBlock: !Ref PrivateSubnet1CidrBlock
       AvailabilityZone: !Select [0, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub 'PrivateSubnet1-${EnvironmentSuffix}'
 
   PrivateSubnet2:
     Type: AWS::EC2::Subnet
@@ -96,8 +110,10 @@ Resources:
       VpcId: !Ref MyVPC
       CidrBlock: !Ref PrivateSubnet2CidrBlock
       AvailabilityZone: !Select [1, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub 'PrivateSubnet2-${EnvironmentSuffix}'
 
-  # Internet and NAT Gateway
   InternetGateway:
     Type: AWS::EC2::InternetGateway
 
@@ -168,24 +184,21 @@ Resources:
       SubnetId: !Ref PrivateSubnet2
       RouteTableId: !Ref PrivateRouteTable
 
-  # S3 Bucket with versioning
   MyS3Bucket:
     Type: AWS::S3::Bucket
     Properties:
       VersioningConfiguration:
         Status: Enabled
 
-  # EC2 instance with dynamic AMI lookup
   MyEC2Instance:
     Type: AWS::EC2::Instance
     Properties:
       InstanceType: t3.micro
-      ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64}}'
+      ImageId: !Ref LatestAmiId
       SubnetId: !Ref PrivateSubnet1
       SecurityGroupIds:
         - !Ref EC2SecurityGroup
 
-  # Security Group for EC2
   EC2SecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
