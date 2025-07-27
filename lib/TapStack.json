@@ -1,108 +1,69 @@
 {
     "AWSTemplateFormatVersion": "2010-09-09",
-    "Description": "AWS CloudFormation template for a secure, scalable cloud environment.",
+    "Description": "CloudFormation template for a secure, highly available web application environment",
     "Parameters": {
-        "SSHCidr": {
+        "EnvironmentSuffix": {
             "Type": "String",
-            "Description": "CIDR block for SSH access",
+            "Description": "Suffix for the environment (e.g., dev, prod)",
+            "Default": "dev",
+            "AllowedPattern": "^[a-zA-Z0-9]+$",
+            "ConstraintDescription": "Must contain only alphanumeric characters.",
+            "MaxLength": 10
+        },
+        "KeyPairName": {
+            "Type": "String",
+            "Description": "EC2 Key Pair for SSH access (leave empty to skip SSH access)",
+            "Default": "",
+            "AllowedPattern": "^$|^[a-zA-Z0-9][a-zA-Z0-9_-]*$",
+            "ConstraintDescription": "Must be a valid EC2 KeyPair name or empty string"
+        },
+        "SSHAllowedCIDR": {
+            "Type": "String",
+            "Description": "CIDR block allowed for SSH access (e.g., your office IP/32)",
             "Default": "0.0.0.0/0",
-            "AllowedPattern": "^(\\d{1,3}\\.){3}\\d{1,3}/\\d{1,2}$"
+            "AllowedPattern": "^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\\/([0-9]|[1-2][0-9]|3[0-2]))$",
+            "ConstraintDescription": "Must be a valid CIDR notation (e.g., 203.0.113.0/24)"
+        },
+        "S3BucketPrefix": {
+            "Type": "String",
+            "Description": "Prefix for S3 bucket name to ensure global uniqueness",
+            "Default": "",
+            "AllowedPattern": "^$|^[a-z0-9][a-z0-9-]*[a-z0-9]$",
+            "ConstraintDescription": "Must be lowercase letters, numbers, and hyphens only"
         },
         "LatestAmiId": {
             "Type": "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>",
             "Description": "Latest Amazon Linux 2 AMI ID",
             "Default": "/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2"
+        }
+    },
+    "Conditions": {
+        "HasKeyPair": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "KeyPairName"
+                        },
+                        ""
+                    ]
+                }
+            ]
         },
-        "StackNameSuffix": {
-            "Type": "String",
-            "Description": "Lowercase suffix for resource naming (especially S3 buckets)",
-            "Default": "tapstack-dev",
-            "AllowedPattern": "^[a-z0-9][a-z0-9-]*[a-z0-9]$"
+        "HasS3BucketPrefix": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "S3BucketPrefix"
+                        },
+                        ""
+                    ]
+                }
+            ]
         }
     },
     "Resources": {
-        "KeyPairCreatorRole": {
-            "Type": "AWS::IAM::Role",
-            "Properties": {
-                "AssumeRolePolicyDocument": {
-                    "Version": "2012-10-17",
-                    "Statement": [
-                        {
-                            "Effect": "Allow",
-                            "Principal": {
-                                "Service": "lambda.amazonaws.com"
-                            },
-                            "Action": "sts:AssumeRole"
-                        }
-                    ]
-                },
-                "ManagedPolicyArns": [
-                    "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
-                ],
-                "Policies": [
-                    {
-                        "PolicyName": "EC2KeyPairPolicy",
-                        "PolicyDocument": {
-                            "Version": "2012-10-17",
-                            "Statement": [
-                                {
-                                    "Effect": "Allow",
-                                    "Action": [
-                                        "ec2:CreateKeyPair",
-                                        "ec2:DeleteKeyPair",
-                                        "ec2:DescribeKeyPairs"
-                                    ],
-                                    "Resource": "*"
-                                }
-                            ]
-                        }
-                    }
-                ],
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": "cf-task-keypair-creator-role"
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": "Production"
-                    }
-                ]
-            }
-        },
-        "KeyPairCreatorFunction": {
-            "Type": "AWS::Lambda::Function",
-            "Properties": {
-                "FunctionName": "cf-task-keypair-creator",
-                "Handler": "index.handler",
-                "Role": {
-                    "Fn::GetAtt": ["KeyPairCreatorRole", "Arn"]
-                },
-                "Runtime": "python3.12",
-                "Timeout": 60,
-                "Code": {
-                    "ZipFile": "import boto3\nimport cfnresponse\nimport json\nimport logging\n\nlogger = logging.getLogger()\nlogger.setLevel(logging.INFO)\n\ndef handler(event, context):\n    try:\n        logger.info(f'Received event: {json.dumps(event)}')\n        \n        ec2 = boto3.client('ec2')\n        request_type = event['RequestType']\n        logical_resource_id = event['LogicalResourceId']\n        stack_name = event['StackId'].split('/')[-2]\n        \n        # Generate a unique key pair name\n        key_pair_name = f'cf-task-keypair-{stack_name}'\n        \n        if request_type == 'Create':\n            logger.info(f'Creating key pair: {key_pair_name}')\n            \n            # Check if key pair already exists\n            try:\n                response = ec2.describe_key_pairs(KeyNames=[key_pair_name])\n                logger.info(f'Key pair {key_pair_name} already exists')\n            except ec2.exceptions.ClientError as e:\n                if e.response['Error']['Code'] == 'InvalidKeyPair.NotFound':\n                    # Create the key pair\n                    response = ec2.create_key_pair(KeyName=key_pair_name)\n                    logger.info(f'Successfully created key pair: {key_pair_name}')\n                else:\n                    raise e\n            \n            cfnresponse.send(event, context, cfnresponse.SUCCESS, \n                           {'KeyPairName': key_pair_name}, key_pair_name)\n            \n        elif request_type == 'Delete':\n            logger.info(f'Deleting key pair: {key_pair_name}')\n            \n            try:\n                ec2.delete_key_pair(KeyName=key_pair_name)\n                logger.info(f'Successfully deleted key pair: {key_pair_name}')\n            except ec2.exceptions.ClientError as e:\n                if e.response['Error']['Code'] == 'InvalidKeyPair.NotFound':\n                    logger.info(f'Key pair {key_pair_name} does not exist, nothing to delete')\n                else:\n                    logger.error(f'Error deleting key pair: {str(e)}')\n                    # Don't fail the stack deletion for key pair cleanup issues\n            \n            cfnresponse.send(event, context, cfnresponse.SUCCESS, {})\n            \n        elif request_type == 'Update':\n            logger.info('Update request - no action needed for key pair')\n            cfnresponse.send(event, context, cfnresponse.SUCCESS, \n                           {'KeyPairName': key_pair_name}, key_pair_name)\n            \n    except Exception as e:\n        logger.error(f'Error: {str(e)}')\n        cfnresponse.send(event, context, cfnresponse.FAILED, {})"
-                },
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": "cf-task-keypair-creator"
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": "Production"
-                    }
-                ]
-            }
-        },
-        "KeyPairResource": {
-            "Type": "AWS::CloudFormation::CustomResource",
-            "Properties": {
-                "ServiceToken": {
-                    "Fn::GetAtt": ["KeyPairCreatorFunction", "Arn"]
-                }
-            }
-        },
         "VPC": {
             "Type": "AWS::EC2::VPC",
             "Properties": {
@@ -112,23 +73,26 @@
                 "Tags": [
                     {
                         "Key": "Name",
-                        "Value": "cf-task-vpc"
+                        "Value": {
+                            "Fn::Sub": "AppResource-${EnvironmentSuffix}-VPC"
+                        }
                     },
                     {
                         "Key": "Environment",
-                        "Value": "Production"
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
                     }
                 ]
             }
         },
-        "PublicSubnet": {
+        "PublicSubnet1": {
             "Type": "AWS::EC2::Subnet",
             "Properties": {
                 "VpcId": {
                     "Ref": "VPC"
                 },
                 "CidrBlock": "10.0.1.0/24",
-                "MapPublicIpOnLaunch": true,
                 "AvailabilityZone": {
                     "Fn::Select": [
                         0,
@@ -137,19 +101,24 @@
                         }
                     ]
                 },
+                "MapPublicIpOnLaunch": true,
                 "Tags": [
                     {
                         "Key": "Name",
-                        "Value": "cf-task-public-subnet"
+                        "Value": {
+                            "Fn::Sub": "AppResource-${EnvironmentSuffix}-PublicSubnet1"
+                        }
                     },
                     {
                         "Key": "Environment",
-                        "Value": "Production"
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
                     }
                 ]
             }
         },
-        "PrivateSubnet": {
+        "PublicSubnet2": {
             "Type": "AWS::EC2::Subnet",
             "Properties": {
                 "VpcId": {
@@ -158,6 +127,38 @@
                 "CidrBlock": "10.0.2.0/24",
                 "AvailabilityZone": {
                     "Fn::Select": [
+                        1,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "MapPublicIpOnLaunch": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "AppResource-${EnvironmentSuffix}-PublicSubnet2"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "PrivateSubnet1": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "CidrBlock": "10.0.3.0/24",
+                "AvailabilityZone": {
+                    "Fn::Select": [
                         0,
                         {
                             "Fn::GetAZs": ""
@@ -167,11 +168,46 @@
                 "Tags": [
                     {
                         "Key": "Name",
-                        "Value": "cf-task-private-subnet"
+                        "Value": {
+                            "Fn::Sub": "AppResource-${EnvironmentSuffix}-PrivateSubnet1"
+                        }
                     },
                     {
                         "Key": "Environment",
-                        "Value": "Production"
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "PrivateSubnet2": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "CidrBlock": "10.0.4.0/24",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "AppResource-${EnvironmentSuffix}-PrivateSubnet2"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
                     }
                 ]
             }
@@ -182,13 +218,28 @@
                 "Tags": [
                     {
                         "Key": "Name",
-                        "Value": "cf-task-igw"
+                        "Value": {
+                            "Fn::Sub": "AppResource-${EnvironmentSuffix}-IGW"
+                        }
                     },
                     {
                         "Key": "Environment",
-                        "Value": "Production"
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
                     }
                 ]
+            }
+        },
+        "VPCGatewayAttachment": {
+            "Type": "AWS::EC2::VPCGatewayAttachment",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "InternetGatewayId": {
+                    "Ref": "InternetGateway"
+                }
             }
         },
         "PublicRouteTable": {
@@ -200,36 +251,22 @@
                 "Tags": [
                     {
                         "Key": "Name",
-                        "Value": "cf-task-public-rt"
+                        "Value": {
+                            "Fn::Sub": "AppResource-${EnvironmentSuffix}-PublicRT"
+                        }
                     },
                     {
                         "Key": "Environment",
-                        "Value": "Production"
-                    }
-                ]
-            }
-        },
-        "PrivateRouteTable": {
-            "Type": "AWS::EC2::RouteTable",
-            "Properties": {
-                "VpcId": {
-                    "Ref": "VPC"
-                },
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": "cf-task-private-rt"
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": "Production"
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
                     }
                 ]
             }
         },
         "PublicRoute": {
             "Type": "AWS::EC2::Route",
-            "DependsOn": "InternetGatewayAttachment",
+            "DependsOn": "VPCGatewayAttachment",
             "Properties": {
                 "RouteTableId": {
                     "Ref": "PublicRouteTable"
@@ -240,240 +277,165 @@
                 }
             }
         },
-        "NATGatewayEIP": {
-            "Type": "AWS::EC2::EIP",
-            "DependsOn": "InternetGatewayAttachment",
-            "Properties": {
-                "Domain": "vpc"
-            }
-        },
-        "NATGateway": {
-            "Type": "AWS::EC2::NatGateway",
-            "Properties": {
-                "AllocationId": {
-                    "Fn::GetAtt": [
-                        "NATGatewayEIP",
-                        "AllocationId"
-                    ]
-                },
-                "SubnetId": {
-                    "Ref": "PublicSubnet"
-                },
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": "cf-task-nat"
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": "Production"
-                    }
-                ]
-            }
-        },
-        "PrivateRouteToNAT": {
-            "Type": "AWS::EC2::Route",
-            "Properties": {
-                "RouteTableId": {
-                    "Ref": "PrivateRouteTable"
-                },
-                "DestinationCidrBlock": "0.0.0.0/0",
-                "NatGatewayId": {
-                    "Ref": "NATGateway"
-                }
-            }
-        },
-        "PublicSubnetRouteTableAssociation": {
+        "PublicSubnet1RouteTableAssociation": {
             "Type": "AWS::EC2::SubnetRouteTableAssociation",
             "Properties": {
                 "SubnetId": {
-                    "Ref": "PublicSubnet"
+                    "Ref": "PublicSubnet1"
                 },
                 "RouteTableId": {
                     "Ref": "PublicRouteTable"
                 }
             }
         },
-        "PrivateSubnetRouteTableAssociation": {
+        "PublicSubnet2RouteTableAssociation": {
             "Type": "AWS::EC2::SubnetRouteTableAssociation",
             "Properties": {
                 "SubnetId": {
-                    "Ref": "PrivateSubnet"
+                    "Ref": "PublicSubnet2"
                 },
                 "RouteTableId": {
-                    "Ref": "PrivateRouteTable"
+                    "Ref": "PublicRouteTable"
                 }
             }
         },
-        "InternetGatewayAttachment": {
-            "Type": "AWS::EC2::VPCGatewayAttachment",
-            "Properties": {
-                "VpcId": {
-                    "Ref": "VPC"
-                },
-                "InternetGatewayId": {
-                    "Ref": "InternetGateway"
-                }
-            }
-        },
-        "EC2SecurityGroup": {
+        "WebServerSecurityGroup": {
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
-                "GroupDescription": "Enable SSH access",
+                "GroupDescription": "Security group for web servers",
                 "VpcId": {
                     "Ref": "VPC"
                 },
                 "SecurityGroupIngress": [
                     {
                         "IpProtocol": "tcp",
-                        "FromPort": 22,
-                        "ToPort": 22,
-                        "CidrIp": {
-                            "Ref": "SSHCidr"
-                        }
-                    }
-                ],
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": "cf-task-sg"
+                        "FromPort": 80,
+                        "ToPort": 80,
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "Allow HTTP from anywhere"
                     },
                     {
-                        "Key": "Environment",
-                        "Value": "Production"
-                    }
-                ]
-            }
-        },
-        "EC2Instance": {
-            "Type": "AWS::EC2::Instance",
-            "Properties": {
-                "InstanceType": "t2.micro",
-                "ImageId": {
-                    "Ref": "LatestAmiId"
-                },
-                "KeyName": {
-                    "Fn::GetAtt": ["KeyPairResource", "KeyPairName"]
-                },
-                "NetworkInterfaces": [
+                        "IpProtocol": "tcp",
+                        "FromPort": 443,
+                        "ToPort": 443,
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "Allow HTTPS from anywhere"
+                    },
                     {
-                        "DeviceIndex": 0,
-                        "SubnetId": {
-                            "Ref": "PublicSubnet"
-                        },
-                        "GroupSet": [
+                        "Fn::If": [
+                            "HasKeyPair",
                             {
-                                "Ref": "EC2SecurityGroup"
+                                "IpProtocol": "tcp",
+                                "FromPort": 22,
+                                "ToPort": 22,
+                                "CidrIp": {
+                                    "Ref": "SSHAllowedCIDR"
+                                },
+                                "Description": {
+                                    "Fn::Sub": "Allow SSH from ${SSHAllowedCIDR}"
+                                }
+                            },
+                            {
+                                "Ref": "AWS::NoValue"
                             }
-                        ],
-                        "AssociatePublicIpAddress": true
+                        ]
+                    }
+                ],
+                "SecurityGroupEgress": [
+                    {
+                        "IpProtocol": -1,
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "Allow all outbound traffic"
                     }
                 ],
                 "Tags": [
                     {
                         "Key": "Name",
-                        "Value": "cf-task-ec2"
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": "Production"
-                    }
-                ]
-            }
-        },
-        "S3Bucket": {
-            "Type": "AWS::S3::Bucket",
-            "Properties": {
-                "BucketName": {
-                    "Fn::Sub": "cf-task-s3bucket-${StackNameSuffix}"
-                },
-                "NotificationConfiguration": {
-                    "LambdaConfigurations": [
-                        {
-                            "Event": "s3:ObjectCreated:*",
-                            "Function": {
-                                "Fn::GetAtt": [
-                                    "LambdaFunction",
-                                    "Arn"
-                                ]
-                            }
+                        "Value": {
+                            "Fn::Sub": "AppResource-${EnvironmentSuffix}-WebSG"
                         }
-                    ]
-                },
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": "cf-task-s3bucket"
                     },
                     {
                         "Key": "Environment",
-                        "Value": "Production"
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
                     }
                 ]
             }
         },
-        "SNSTopic": {
-            "Type": "AWS::SNS::Topic",
-            "Properties": {
-                "TopicName": "cf-task-snstopic",
-                "Tags": [
-                    {
-                        "Key": "Environment",
-                        "Value": "Production"
-                    }
-                ]
-            }
-        },
-        "LambdaExecutionRole": {
+        "EC2Role": {
             "Type": "AWS::IAM::Role",
             "Properties": {
-                "RoleName": "cf-task-lambda-role",
                 "AssumeRolePolicyDocument": {
                     "Version": "2012-10-17",
                     "Statement": [
                         {
                             "Effect": "Allow",
                             "Principal": {
-                                "Service": "lambda.amazonaws.com"
+                                "Service": "ec2.amazonaws.com"
                             },
                             "Action": "sts:AssumeRole"
                         }
                     ]
                 },
                 "ManagedPolicyArns": [
-                    "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+                    "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
                 ],
                 "Policies": [
                     {
-                        "PolicyName": "LambdaS3Policy",
+                        "PolicyName": "S3AndDynamoDBAccess",
                         "PolicyDocument": {
                             "Version": "2012-10-17",
                             "Statement": [
                                 {
                                     "Effect": "Allow",
                                     "Action": [
+                                        "s3:PutObject",
+                                        "s3:PutObjectAcl",
                                         "s3:GetObject",
-                                        "s3:GetObjectVersion"
+                                        "s3:ListBucket"
                                     ],
-                                    "Resource": {
-                                        "Fn::Sub": "arn:aws:s3:::cf-task-s3bucket-${StackNameSuffix}/*"
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    {
-                        "PolicyName": "LambdaSNSPolicy",
-                        "PolicyDocument": {
-                            "Version": "2012-10-17",
-                            "Statement": [
+                                    "Resource": [
+                                        {
+                                            "Fn::GetAtt": [
+                                                "S3LoggingBucket",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::Sub": "${S3LoggingBucket.Arn}/*"
+                                        }
+                                    ]
+                                },
                                 {
                                     "Effect": "Allow",
                                     "Action": [
-                                        "sns:Publish"
+                                        "logs:CreateLogGroup",
+                                        "logs:CreateLogStream",
+                                        "logs:PutLogEvents",
+                                        "logs:DescribeLogStreams",
+                                        "logs:DescribeLogGroups"
                                     ],
                                     "Resource": {
-                                        "Ref": "SNSTopic"
+                                        "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/ec2/*"
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "dynamodb:PutItem",
+                                        "dynamodb:GetItem",
+                                        "dynamodb:UpdateItem",
+                                        "dynamodb:DeleteItem",
+                                        "dynamodb:Query",
+                                        "dynamodb:Scan"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "DynamoDBTable",
+                                            "Arn"
+                                        ]
                                     }
                                 }
                             ]
@@ -483,60 +445,297 @@
                 "Tags": [
                     {
                         "Key": "Name",
-                        "Value": "cf-task-lambda-role"
+                        "Value": {
+                            "Fn::Sub": "AppResource-${EnvironmentSuffix}-EC2Role"
+                        }
                     },
                     {
                         "Key": "Environment",
-                        "Value": "Production"
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
                     }
                 ]
             }
         },
-        "LambdaFunction": {
-            "Type": "AWS::Lambda::Function",
+        "EC2InstanceProfile": {
+            "Type": "AWS::IAM::InstanceProfile",
             "Properties": {
-                "FunctionName": "cf-task-lambda",
-                "Handler": "index.handler",
-                "Role": {
-                    "Fn::GetAtt": [
-                        "LambdaExecutionRole",
-                        "Arn"
+                "Roles": [
+                    {
+                        "Ref": "EC2Role"
+                    }
+                ]
+            }
+        },
+        "EC2Instance1": {
+            "Type": "AWS::EC2::Instance",
+            "Properties": {
+                "InstanceType": "t3.micro",
+                "ImageId": {
+                    "Ref": "LatestAmiId"
+                },
+                "KeyName": {
+                    "Fn::If": [
+                        "HasKeyPair",
+                        {
+                            "Ref": "KeyPairName"
+                        },
+                        {
+                            "Ref": "AWS::NoValue"
+                        }
                     ]
                 },
-                "Code": {
-                    "ZipFile": "import json\nimport boto3\nimport os\n\ndef handler(event, context):\n    try:\n        sns = boto3.client('sns')\n        topic_arn = os.environ['SNS_TOPIC_ARN']\n        \n        # Extract S3 bucket and object information from the event\n        bucket_name = event['Records'][0]['s3']['bucket']['name']\n        object_key = event['Records'][0]['s3']['object']['key']\n        \n        message = f'File {object_key} was uploaded to bucket {bucket_name}'\n        \n        response = sns.publish(\n            TopicArn=topic_arn,\n            Message=message,\n            Subject='S3 File Upload Notification'\n        )\n        \n        return {\n            'statusCode': 200,\n            'body': json.dumps({\n                'message': 'Notification sent successfully',\n                'messageId': response['MessageId']\n            })\n        }\n    except Exception as e:\n        print(f'Error: {str(e)}')\n        raise e\n"
+                "SubnetId": {
+                    "Ref": "PublicSubnet1"
                 },
-                "Runtime": "python3.12",
-                "Environment": {
-                    "Variables": {
-                        "SNS_TOPIC_ARN": {
-                            "Ref": "SNSTopic"
-                        }
+                "SecurityGroupIds": [
+                    {
+                        "Ref": "WebServerSecurityGroup"
+                    }
+                ],
+                "IamInstanceProfile": {
+                    "Ref": "EC2InstanceProfile"
+                },
+                "Monitoring": true,
+                "UserData": {
+                    "Fn::Base64": {
+                        "Fn::Sub": "#!/bin/bash\nyum update -y\n\n# Install CloudWatch agent\nyum install -y amazon-cloudwatch-agent\n\n# Create a basic CloudWatch agent config\ncat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << 'EOF'\n{\n  \"metrics\": {\n    \"namespace\": \"CWAgent\",\n    \"metrics_collected\": {\n      \"cpu\": {\n        \"measurement\": [\"cpu_usage_idle\", \"cpu_usage_iowait\", \"cpu_usage_user\", \"cpu_usage_system\"],\n        \"metrics_collection_interval\": 60\n      },\n      \"disk\": {\n        \"measurement\": [\"used_percent\"],\n        \"metrics_collection_interval\": 60,\n        \"resources\": [\"*\"]\n      },\n      \"mem\": {\n        \"measurement\": [\"mem_used_percent\"],\n        \"metrics_collection_interval\": 60\n      }\n    }\n  },\n  \"logs\": {\n    \"logs_collected\": {\n      \"files\": {\n        \"collect_list\": [\n          {\n            \"file_path\": \"/var/log/messages\",\n            \"log_group_name\": \"/aws/ec2/var/log/messages\",\n            \"log_stream_name\": \"{instance_id}\"\n          }\n        ]\n      }\n    }\n  }\n}\nEOF\n\n# Start CloudWatch agent\n/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \\\n  -a fetch-config -m ec2 -s -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json\n\n# Install and start Apache\nyum install -y httpd\nsystemctl start httpd\nsystemctl enable httpd\n\n# Create a simple web page\ncat > /var/www/html/index.html << EOF\n<!DOCTYPE html>\n<html>\n<head>\n  <title>Web Server 1</title>\n</head>\n<body>\n  <h1>Web Server 1 - ${EnvironmentSuffix} Environment</h1>\n  <p>Instance ID: \\$(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p>\n  <p>Availability Zone: \\$(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)</p>\n</body>\n</html>\nEOF\n"
                     }
                 },
                 "Tags": [
                     {
                         "Key": "Name",
-                        "Value": "cf-task-lambda"
+                        "Value": {
+                            "Fn::Sub": "AppResource-${EnvironmentSuffix}-WebServer1"
+                        }
                     },
                     {
                         "Key": "Environment",
-                        "Value": "Production"
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
                     }
                 ]
             }
         },
-        "LambdaInvokePermission": {
-            "Type": "AWS::Lambda::Permission",
+        "EC2Instance2": {
+            "Type": "AWS::EC2::Instance",
             "Properties": {
-                "FunctionName": {
-                    "Ref": "LambdaFunction"
+                "InstanceType": "t3.micro",
+                "ImageId": {
+                    "Ref": "LatestAmiId"
                 },
-                "Action": "lambda:InvokeFunction",
-                "Principal": "s3.amazonaws.com",
-                "SourceArn": {
-                    "Fn::Sub": "arn:aws:s3:::cf-task-s3bucket-${StackNameSuffix}"
-                }
+                "KeyName": {
+                    "Fn::If": [
+                        "HasKeyPair",
+                        {
+                            "Ref": "KeyPairName"
+                        },
+                        {
+                            "Ref": "AWS::NoValue"
+                        }
+                    ]
+                },
+                "SubnetId": {
+                    "Ref": "PublicSubnet2"
+                },
+                "SecurityGroupIds": [
+                    {
+                        "Ref": "WebServerSecurityGroup"
+                    }
+                ],
+                "IamInstanceProfile": {
+                    "Ref": "EC2InstanceProfile"
+                },
+                "Monitoring": true,
+                "UserData": {
+                    "Fn::Base64": {
+                        "Fn::Sub": "#!/bin/bash\nyum update -y\n\n# Install CloudWatch agent\nyum install -y amazon-cloudwatch-agent\n\n# Create a basic CloudWatch agent config\ncat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << 'EOF'\n{\n  \"metrics\": {\n    \"namespace\": \"CWAgent\",\n    \"metrics_collected\": {\n      \"cpu\": {\n        \"measurement\": [\"cpu_usage_idle\", \"cpu_usage_iowait\", \"cpu_usage_user\", \"cpu_usage_system\"],\n        \"metrics_collection_interval\": 60\n      },\n      \"disk\": {\n        \"measurement\": [\"used_percent\"],\n        \"metrics_collection_interval\": 60,\n        \"resources\": [\"*\"]\n      },\n      \"mem\": {\n        \"measurement\": [\"mem_used_percent\"],\n        \"metrics_collection_interval\": 60\n      }\n    }\n  },\n  \"logs\": {\n    \"logs_collected\": {\n      \"files\": {\n        \"collect_list\": [\n          {\n            \"file_path\": \"/var/log/messages\",\n            \"log_group_name\": \"/aws/ec2/var/log/messages\",\n            \"log_stream_name\": \"{instance_id}\"\n          }\n        ]\n      }\n    }\n  }\n}\nEOF\n\n# Start CloudWatch agent\n/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \\\n  -a fetch-config -m ec2 -s -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json\n\n# Install and start Apache\nyum install -y httpd\nsystemctl start httpd\nsystemctl enable httpd\n\n# Create a simple web page\ncat > /var/www/html/index.html << EOF\n<!DOCTYPE html>\n<html>\n<head>\n  <title>Web Server 2</title>\n</head>\n<body>\n  <h1>Web Server 2 - ${EnvironmentSuffix} Environment</h1>\n  <p>Instance ID: \\$(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p>\n  <p>Availability Zone: \\$(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)</p>\n</body>\n</html>\nEOF\n"
+                    }
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "AppResource-${EnvironmentSuffix}-WebServer2"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "S3LoggingBucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "BucketName": {
+                    "Fn::If": [
+                        "HasS3BucketPrefix",
+                        {
+                            "Fn::Sub": "${S3BucketPrefix}-${EnvironmentSuffix}-logs-${AWS::AccountId}"
+                        },
+                        {
+                            "Fn::Sub": "appresource-${EnvironmentSuffix}-logs-${AWS::AccountId}-${AWS::Region}"
+                        }
+                    ]
+                },
+                "VersioningConfiguration": {
+                    "Status": "Enabled"
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "AES256"
+                            },
+                            "BucketKeyEnabled": true
+                        }
+                    ]
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "LifecycleConfiguration": {
+                    "Rules": [
+                        {
+                            "Id": "DeleteOldLogs",
+                            "Status": "Enabled",
+                            "ExpirationInDays": 90,
+                            "NoncurrentVersionExpirationInDays": 30
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "AppResource-${EnvironmentSuffix}-LogsBucket"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "DynamoDBTable": {
+            "Type": "AWS::DynamoDB::Table",
+            "Properties": {
+                "AttributeDefinitions": [
+                    {
+                        "AttributeName": "Id",
+                        "AttributeType": "S"
+                    },
+                    {
+                        "AttributeName": "GSI1PK",
+                        "AttributeType": "S"
+                    }
+                ],
+                "KeySchema": [
+                    {
+                        "AttributeName": "Id",
+                        "KeyType": "HASH"
+                    }
+                ],
+                "BillingMode": "PAY_PER_REQUEST",
+                "GlobalSecondaryIndexes": [
+                    {
+                        "IndexName": "GSI1",
+                        "KeySchema": [
+                            {
+                                "AttributeName": "GSI1PK",
+                                "KeyType": "HASH"
+                            }
+                        ],
+                        "Projection": {
+                            "ProjectionType": "ALL"
+                        }
+                    }
+                ],
+                "StreamSpecification": {
+                    "StreamViewType": "NEW_AND_OLD_IMAGES"
+                },
+                "PointInTimeRecoverySpecification": {
+                    "PointInTimeRecoveryEnabled": true
+                },
+                "SSESpecification": {
+                    "SSEEnabled": true
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "AppResource-${EnvironmentSuffix}-Table"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "EC2HighCPUAlarm1": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "AppResource-${EnvironmentSuffix}-EC2-1-HighCPU"
+                },
+                "AlarmDescription": "Alarm when EC2 Instance 1 CPU exceeds 80%",
+                "MetricName": "CPUUtilization",
+                "Namespace": "AWS/EC2",
+                "Statistic": "Average",
+                "Period": 300,
+                "EvaluationPeriods": 2,
+                "Threshold": 80,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "InstanceId",
+                        "Value": {
+                            "Ref": "EC2Instance1"
+                        }
+                    }
+                ],
+                "TreatMissingData": "notBreaching"
+            }
+        },
+        "EC2HighCPUAlarm2": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "AppResource-${EnvironmentSuffix}-EC2-2-HighCPU"
+                },
+                "AlarmDescription": "Alarm when EC2 Instance 2 CPU exceeds 80%",
+                "MetricName": "CPUUtilization",
+                "Namespace": "AWS/EC2",
+                "Statistic": "Average",
+                "Period": 300,
+                "EvaluationPeriods": 2,
+                "Threshold": 80,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "InstanceId",
+                        "Value": {
+                            "Ref": "EC2Instance2"
+                        }
+                    }
+                ],
+                "TreatMissingData": "notBreaching"
             }
         }
     },
@@ -548,112 +747,177 @@
             },
             "Export": {
                 "Name": {
-                    "Fn::Sub": "${StackNameSuffix}-VPC-ID"
+                    "Fn::Sub": "${AWS::StackName}-VPC-ID"
                 }
             }
         },
-        "PublicSubnetId": {
-            "Description": "Public Subnet ID",
+        "PublicSubnet1Id": {
+            "Description": "Public Subnet 1 ID",
             "Value": {
-                "Ref": "PublicSubnet"
+                "Ref": "PublicSubnet1"
             },
             "Export": {
                 "Name": {
-                    "Fn::Sub": "${StackNameSuffix}-PublicSubnet-ID"
+                    "Fn::Sub": "${AWS::StackName}-PublicSubnet1-ID"
                 }
             }
         },
-        "PrivateSubnetId": {
-            "Description": "Private Subnet ID",
+        "PublicSubnet2Id": {
+            "Description": "Public Subnet 2 ID",
             "Value": {
-                "Ref": "PrivateSubnet"
+                "Ref": "PublicSubnet2"
             },
             "Export": {
                 "Name": {
-                    "Fn::Sub": "${StackNameSuffix}-PrivateSubnet-ID"
+                    "Fn::Sub": "${AWS::StackName}-PublicSubnet2-ID"
                 }
             }
         },
-        "EC2InstanceId": {
-            "Description": "EC2 Instance ID",
+        "PrivateSubnet1Id": {
+            "Description": "Private Subnet 1 ID",
             "Value": {
-                "Ref": "EC2Instance"
+                "Ref": "PrivateSubnet1"
             },
             "Export": {
                 "Name": {
-                    "Fn::Sub": "${StackNameSuffix}-EC2-ID"
+                    "Fn::Sub": "${AWS::StackName}-PrivateSubnet1-ID"
                 }
             }
         },
-        "EC2PublicIP": {
-            "Description": "EC2 Instance Public IP",
+        "PrivateSubnet2Id": {
+            "Description": "Private Subnet 2 ID",
+            "Value": {
+                "Ref": "PrivateSubnet2"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-PrivateSubnet2-ID"
+                }
+            }
+        },
+        "EC2Instance1Id": {
+            "Description": "EC2 Instance 1 ID",
+            "Value": {
+                "Ref": "EC2Instance1"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-EC2Instance1-ID"
+                }
+            }
+        },
+        "EC2Instance2Id": {
+            "Description": "EC2 Instance 2 ID",
+            "Value": {
+                "Ref": "EC2Instance2"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-EC2Instance2-ID"
+                }
+            }
+        },
+        "EC2Instance1PublicIP": {
+            "Description": "EC2 Instance 1 Public IP",
             "Value": {
                 "Fn::GetAtt": [
-                    "EC2Instance",
+                    "EC2Instance1",
                     "PublicIp"
                 ]
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${StackNameSuffix}-EC2-PublicIP"
-                }
+            }
+        },
+        "EC2Instance2PublicIP": {
+            "Description": "EC2 Instance 2 Public IP",
+            "Value": {
+                "Fn::GetAtt": [
+                    "EC2Instance2",
+                    "PublicIp"
+                ]
+            }
+        },
+        "EC2Instance1AZ": {
+            "Description": "EC2 Instance 1 Availability Zone",
+            "Value": {
+                "Fn::GetAtt": [
+                    "EC2Instance1",
+                    "AvailabilityZone"
+                ]
+            }
+        },
+        "EC2Instance2AZ": {
+            "Description": "EC2 Instance 2 Availability Zone",
+            "Value": {
+                "Fn::GetAtt": [
+                    "EC2Instance2",
+                    "AvailabilityZone"
+                ]
             }
         },
         "S3BucketName": {
-            "Description": "S3 Bucket Name",
+            "Description": "S3 Logging Bucket Name",
             "Value": {
-                "Ref": "S3Bucket"
+                "Ref": "S3LoggingBucket"
             },
             "Export": {
                 "Name": {
-                    "Fn::Sub": "${StackNameSuffix}-S3Bucket-Name"
+                    "Fn::Sub": "${AWS::StackName}-S3Bucket-Name"
                 }
             }
         },
-        "SNSTopicArn": {
-            "Description": "SNS Topic ARN",
+        "DynamoDBTableName": {
+            "Description": "DynamoDB Table Name",
             "Value": {
-                "Ref": "SNSTopic"
+                "Ref": "DynamoDBTable"
             },
             "Export": {
                 "Name": {
-                    "Fn::Sub": "${StackNameSuffix}-SNSTopic-ARN"
+                    "Fn::Sub": "${AWS::StackName}-DynamoDBTable-Name"
                 }
             }
         },
-        "LambdaFunctionArn": {
-            "Description": "Lambda Function ARN",
+        "WebServerURL1": {
+            "Description": "Web Server 1 URL",
             "Value": {
-                "Fn::GetAtt": [
-                    "LambdaFunction",
-                    "Arn"
+                "Fn::Sub": "http://${EC2Instance1.PublicIp}"
+            }
+        },
+        "WebServerURL2": {
+            "Description": "Web Server 2 URL",
+            "Value": {
+                "Fn::Sub": "http://${EC2Instance2.PublicIp}"
+            }
+        },
+        "EnvironmentSuffix": {
+            "Description": "Environment suffix used for this deployment",
+            "Value": {
+                "Ref": "EnvironmentSuffix"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-EnvironmentSuffix"
+                }
+            }
+        },
+        "SSHAccessInfo": {
+            "Description": "SSH Access Configuration",
+            "Value": {
+                "Fn::If": [
+                    "HasKeyPair",
+                    {
+                        "Fn::Sub": "SSH enabled from ${SSHAllowedCIDR} using key pair: ${KeyPairName}"
+                    },
+                    "SSH access disabled (no key pair specified)"
                 ]
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${StackNameSuffix}-Lambda-ARN"
-                }
             }
         },
-        "NATGatewayId": {
-            "Description": "NAT Gateway ID",
+        "SecurityGroupId": {
+            "Description": "Web Server Security Group ID",
             "Value": {
-                "Ref": "NATGateway"
+                "Ref": "WebServerSecurityGroup"
             },
             "Export": {
                 "Name": {
-                    "Fn::Sub": "${StackNameSuffix}-NATGateway-ID"
-                }
-            }
-        },
-        "KeyPairName": {
-            "Description": "EC2 Key Pair Name",
-            "Value": {
-                "Fn::GetAtt": ["KeyPairResource", "KeyPairName"]
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${StackNameSuffix}-KeyPair-Name"
+                    "Fn::Sub": "${AWS::StackName}-SecurityGroup-ID"
                 }
             }
         }
