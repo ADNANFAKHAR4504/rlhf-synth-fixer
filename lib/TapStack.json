@@ -1,0 +1,160 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "CloudFormation template to deploy a Lambda function triggered by an S3 event on object creation.",
+    "Parameters": {
+        "BucketName": {
+            "Type": "String",
+            "Description": "The name of the S3 bucket that will trigger the Lambda function."
+        },
+        "LambdaFunctionName": {
+            "Type": "String",
+            "Description": "The name of the Lambda function to be created."
+        },
+        "LambdaRoleName": {
+            "Type": "String",
+            "Description": "The IAM Role name for the Lambda function."
+        },
+        "LambdaHandler": {
+            "Type": "String",
+            "Default": "index.handler",
+            "Description": "The handler for the Lambda function."
+        },
+        "LambdaRuntime": {
+            "Type": "String",
+            "Default": "nodejs14.x",
+            "Description": "The runtime for the Lambda function."
+        }
+    },
+    "Resources": {
+        "S3Bucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "BucketName": {
+                    "Ref": "BucketName"
+                }
+            }
+        },
+        "LambdaExecutionRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "Policies": [
+                    {
+                        "PolicyName": "LambdaS3AccessPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:GetObject"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "arn:aws:s3:::${BucketName}/*"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "LambdaFunction": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Ref": "LambdaFunctionName"
+                },
+                "Handler": {
+                    "Ref": "LambdaHandler"
+                },
+                "Role": {
+                    "Fn::GetAtt": [
+                        "LambdaExecutionRole",
+                        "Arn"
+                    ]
+                },
+                "Runtime": {
+                    "Ref": "LambdaRuntime"
+                },
+                "Code": {
+                    "S3Bucket": {
+                        "Ref": "BucketName"
+                    },
+                    "S3Key": "lambda-code.zip"
+                }
+            }
+        },
+        "LambdaS3EventSource": {
+            "Type": "AWS::Lambda::EventSourceMapping",
+            "Properties": {
+                "BatchSize": 1,
+                "EventSourceArn": {
+                    "Fn::GetAtt": [
+                        "S3Bucket",
+                        "Arn"
+                    ]
+                },
+                "FunctionName": {
+                    "Ref": "LambdaFunction"
+                },
+                "Enabled": "True"
+            }
+        },
+        "BucketNotification": {
+            "Type": "AWS::S3::BucketNotification",
+            "Properties": {
+                "Bucket": {
+                    "Ref": "S3Bucket"
+                },
+                "NotificationConfiguration": {
+                    "LambdaFunctionConfigurations": [
+                        {
+                            "Event": "s3:ObjectCreated:*",
+                            "Function": {
+                                "Fn::GetAtt": [
+                                    "LambdaFunction",
+                                    "Arn"
+                                ]
+                            }
+                        }
+                    ]
+                }
+            }
+        }
+    },
+    "Outputs": {
+        "LambdaFunctionName": {
+            "Description": "The name of the Lambda function",
+            "Value": {
+                "Ref": "LambdaFunctionName"
+            }
+        },
+        "LambdaExecutionRoleArn": {
+            "Description": "The ARN of the IAM Role assumed by Lambda",
+            "Value": {
+                "Fn::GetAtt": [
+                    "LambdaExecutionRole",
+                    "Arn"
+                ]
+            }
+        },
+        "S3BucketName": {
+            "Description": "The name of the S3 bucket",
+            "Value": {
+                "Ref": "S3Bucket"
+            }
+        }
+    }
+}
