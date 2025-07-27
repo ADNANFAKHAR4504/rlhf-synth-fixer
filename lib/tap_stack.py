@@ -61,7 +61,6 @@ class CloudTrailStack(NestedStack):
         scope (Construct): The parent construct.
         construct_id (str): The unique identifier for this stack.
         props (ResourceStackProps): Properties for configuring the stack.
-        **kwargs: Additional keyword arguments passed to the CDK Stack.
 
     Attributes:
         trail (cloudtrail.Trail): The CloudTrail for audit logging.
@@ -71,10 +70,9 @@ class CloudTrailStack(NestedStack):
             self,
             scope: Construct,
             construct_id: str,
-            props: ResourceStackProps,
-            **kwargs
+            props: ResourceStackProps
     ):
-        super().__init__(scope, construct_id, **kwargs)
+        super().__init__(scope, construct_id)
 
         env_suffix = props.environment_suffix
 
@@ -101,7 +99,7 @@ class CloudTrailStack(NestedStack):
         )
 
 
-class DynamoDBStack(cdk.Stack):
+class DynamoDBStack(Construct):
     """
     DynamoDBStack creates DynamoDB table with required configurations.
     
@@ -109,7 +107,6 @@ class DynamoDBStack(cdk.Stack):
         scope (Construct): The parent construct.
         construct_id (str): The unique identifier for this stack.
         props (ResourceStackProps): Properties for configuring the stack.
-        **kwargs: Additional keyword arguments passed to the CDK Stack.
 
     Attributes:
         table (dynamodb.Table): The DynamoDB table.
@@ -119,10 +116,9 @@ class DynamoDBStack(cdk.Stack):
             self,
             scope: Construct,
             construct_id: str,
-            props: ResourceStackProps,
-            **kwargs
+            props: ResourceStackProps
     ):
-        super().__init__(scope, construct_id, **kwargs)
+        super().__init__(scope, construct_id)
 
         env_suffix = props.environment_suffix
 
@@ -155,7 +151,6 @@ class NestedDynamoDBStack(NestedStack):
         scope (Construct): The parent construct.
         construct_id (str): The unique identifier for this stack.
         props (ResourceStackProps): Properties for configuring the stack.
-        **kwargs: Additional keyword arguments passed to the NestedStack.
 
     Attributes:
         table (dynamodb.Table): The DynamoDB table from the nested stack.
@@ -165,10 +160,9 @@ class NestedDynamoDBStack(NestedStack):
             self,
             scope: Construct,
             construct_id: str,
-            props: ResourceStackProps,
-            **kwargs
+            props: ResourceStackProps
     ):
-        super().__init__(scope, construct_id, **kwargs)
+        super().__init__(scope, construct_id)
         
         # Use the original DynamoDBStack logic here
         self.ddb_stack = DynamoDBStack(self, "Resource", props=props)
@@ -183,7 +177,6 @@ class S3Stack(NestedStack):
         scope (Construct): The parent construct.
         construct_id (str): The unique identifier for this stack.
         props (ResourceStackProps): Properties for configuring the stack.
-        **kwargs: Additional keyword arguments passed to the CDK Stack.
 
     Attributes:
         bucket (s3.Bucket): The main S3 bucket.
@@ -193,10 +186,9 @@ class S3Stack(NestedStack):
             self,
             scope: Construct,
             construct_id: str,
-            props: ResourceStackProps,
-            **kwargs
+            props: ResourceStackProps
     ):
-        super().__init__(scope, construct_id, **kwargs)
+        super().__init__(scope, construct_id)
 
         env_suffix = props.environment_suffix
 
@@ -234,21 +226,24 @@ class LambdaStack(NestedStack):
         scope (Construct): The parent construct.
         construct_id (str): The unique identifier for this stack.
         props (ResourceStackProps): Properties for configuring the stack.
-        **kwargs: Additional keyword arguments passed to the CDK Stack.
-                  Must include 's3_bucket_arn', 's3_bucket_name', 
-                  'dynamodb_table_arn', and 'dynamodb_table_name' keys.
+        dynamodb_table_arn (str): ARN of the DynamoDB table for IAM permissions.
+        dynamodb_table_name (str): Name of the DynamoDB table for environment variable.
 
     Attributes:
         function (_lambda.Function): The Lambda function.
+        role (iam.Role): The Lambda execution role.
     """
 
-    def __init__(self, scope, construct_id, props, **kwargs):
-        # Extract required resource information from kwargs
-        dynamodb_table_arn = kwargs.pop('dynamodb_table_arn')
-        dynamodb_table_name = kwargs.pop('dynamodb_table_name')
-        s3_bucket_name = kwargs.pop('s3_bucket_name', 'placeholder')
-        
-        super().__init__(scope, construct_id, **kwargs)
+    def __init__(
+            self,
+            scope: Construct,
+            construct_id: str,
+            props: ResourceStackProps,
+            *,
+            dynamodb_table_arn: str,
+            dynamodb_table_name: str
+    ):
+        super().__init__(scope, construct_id)
 
         env_suffix = props.environment_suffix
 
@@ -289,7 +284,7 @@ class LambdaStack(NestedStack):
             timeout=Duration.minutes(5),
             environment={
                 "TABLE_NAME": dynamodb_table_name,
-                "BUCKET_NAME": s3_bucket_name or "placeholder"
+                "BUCKET_NAME": "placeholder"
             }
         )
         
@@ -372,7 +367,7 @@ class TapStack(cdk.Stack):
         lambda_stack = LambdaStack(
             self,
             f"LambdaStack{environment_suffix}",
-            props=resource_props,
+            resource_props,
             dynamodb_table_arn=self.dynamodb_table.table_arn,
             dynamodb_table_name=self.dynamodb_table.table_name
         )
@@ -380,14 +375,26 @@ class TapStack(cdk.Stack):
         # Make the function available as a property of this stack
         self.lambda_function = lambda_stack.function
 
-        # Add S3 permissions to Lambda role (after both stacks are created)
-        self._add_s3_permissions_to_lambda(lambda_stack)
+        # Add S3 permissions to Lambda role after both stacks are created
+        lambda_stack.role.add_to_policy(
+            iam.PolicyStatement(
+                effect=iam.Effect.ALLOW,
+                actions=[
+                    "s3:GetObject",
+                    "s3:GetObjectVersion"
+                ],
+                resources=[f"{self.s3_bucket.bucket_arn}/*"]
+            )
+        )
 
         # Update Lambda environment variable with actual bucket name
-        self._update_lambda_environment()
+        self.lambda_function.add_environment("BUCKET_NAME", self.s3_bucket.bucket_name)
 
-        # Set up S3 trigger for Lambda (done after both stacks are created)
-        self._setup_s3_trigger()
+        # Set up S3 bucket to trigger Lambda on object creation
+        self.s3_bucket.add_event_notification(
+            s3.EventType.OBJECT_CREATED,
+            s3n.LambdaDestination(self.lambda_function)
+        )
 
         # Create outputs for integration tests
         self._create_outputs(environment_suffix)
