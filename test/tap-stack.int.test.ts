@@ -1,6 +1,5 @@
 // Configuration - These are coming from cfn-outputs after cdk deploy
 import fs from 'fs';
-import * as yaml from 'js-yaml';
 import path from 'path';
 
 // Get environment suffix from environment variable (set by CI/CD pipeline)
@@ -10,10 +9,10 @@ describe('TapStack CloudFormation Template - Integration Tests', () => {
   let template: any;
 
   beforeAll(() => {
-    // Reading YAML template directly
-    const templatePath = path.join(__dirname, '../lib/TapStack.yml');
+    // Reading JSON template directly
+    const templatePath = path.join(__dirname, '../lib/TapStack.json');
     const templateContent = fs.readFileSync(templatePath, 'utf8');
-    template = yaml.load(templateContent);
+    template = JSON.parse(templateContent);
   });
 
   describe('Template Deployment Readiness', () => {
