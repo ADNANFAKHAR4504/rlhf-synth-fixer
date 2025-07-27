@@ -74,7 +74,7 @@ describe('Extended CloudFormation Template Tests', () => {
 
   // ✅ Tagging Consistency
   test('All resources have Environment and Project tags', () => {
-    const resourceTypes = ['AWS::EC2::VPC', 'AWS::S3::Bucket', 'AWS::IAM::Group', 'AWS::IAM::Role'];
+    const resourceTypes = ['AWS::EC2::VPC', 'AWS::S3::Bucket', 'AWS::IAM::Role'];
     resourceTypes.forEach(type => {
       Object.values(template.findResources(type)).forEach((resource: any) => {
         expect(resource.Properties.Tags).toEqual(

@@ -168,7 +168,7 @@ describe('TapStack CloudFormation Template Integration Tests', () => {
   });
 
   test('All resources have Environment and Project tags', () => {
-    const taggedResources = ['AWS::EC2::VPC', 'AWS::S3::Bucket', 'AWS::IAM::Group', 'AWS::IAM::Role'];
+    const taggedResources = ['AWS::EC2::VPC', 'AWS::S3::Bucket', 'AWS::IAM::Role'];
     taggedResources.forEach(type => {
       Object.values(template.findResources(type)).forEach((resource: any) => {
         expect(resource.Properties.Tags).toEqual(

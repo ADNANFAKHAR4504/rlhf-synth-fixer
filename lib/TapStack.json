@@ -24,21 +24,7 @@
             "Properties": {
                 "GroupName": {
                     "Fn::Sub": "${ProjectName}-s3-read-group"
-                },
-                "Tags": [
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "Environment"
-                        }
-                    },
-                    {
-                        "Key": "Project",
-                        "Value": {
-                            "Ref": "ProjectName"
-                        }
-                    }
-                ]
+                }
             }
         },
         "VPC": {
