@@ -72,7 +72,7 @@ describe('S3 Lambda Trigger CloudFormation Template', () => {
       const param = template.Parameters.LambdaRuntime;
       expect(param).toBeDefined();
       expect(param.Type).toBe('String');
-      expect(param.Default).toBe('nodejs14.x');
+      expect(param.Default).toBe('nodejs22.x');
     });
   });
 

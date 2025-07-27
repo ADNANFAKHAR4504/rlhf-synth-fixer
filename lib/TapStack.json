@@ -24,27 +24,6 @@
         }
     },
     "Resources": {
-        "S3Bucket": {
-            "Type": "AWS::S3::Bucket",
-            "Properties": {
-                "BucketName": {
-                    "Ref": "BucketName"
-                },
-                "NotificationConfiguration": {
-                    "LambdaConfigurations": [
-                        {
-                            "Event": "s3:ObjectCreated:*",
-                            "Function": {
-                                "Fn::GetAtt": [
-                                    "LambdaFunction",
-                                    "Arn"
-                                ]
-                            }
-                        }
-                    ]
-                }
-            }
-        },
         "LambdaExecutionRole": {
             "Type": "AWS::IAM::Role",
             "Properties": {
@@ -113,6 +92,33 @@
                 }
             }
         },
+        "S3Bucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "BucketName": {
+                    "Ref": "S3BucketName"
+                },
+                "NotificationConfiguration": {
+                    "LambdaConfigurations": [
+                        {
+                            "Event": "s3:ObjectCreated:*",
+                            "Function": {
+                                "Fn::GetAtt": [
+                                    "LambdaFunction",
+                                    "Arn"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    }
+                ]
+            }
+        },
         "LambdaS3EventSource": {
             "Type": "AWS::Lambda::EventSourceMapping",
             "Properties": {
@@ -134,17 +140,11 @@
             "Properties": {
                 "Action": "lambda:InvokeFunction",
                 "FunctionName": {
-                    "Ref": "LambdaFunctionName"
+                    "Ref": "LambdaFunction"
                 },
                 "Principal": "s3.amazonaws.com",
                 "SourceArn": {
-                    "Fn::GetAtt": [
-                        "S3Bucket",
-                        "Arn"
-                    ]
-                },
-                "SourceAccount": {
-                    "Ref": "AWS::AccountId"
+                    "Fn::Sub": "arn:aws:s3:::${S3BucketName}"
                 }
             }
         }

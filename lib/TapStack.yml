@@ -23,14 +23,6 @@ Parameters:
     Description: The runtime for the Lambda function.
 
 Resources:
-  S3Bucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: !Ref BucketName
-      NotificationConfiguration:
-        LambdaConfigurations:  # Corrected property name
-          - Event: "s3:ObjectCreated:*"
-            Function: !GetAtt LambdaFunction.Arn
 
   LambdaExecutionRole:
     Type: AWS::IAM::Role
@@ -84,6 +76,18 @@ Resources:
               body: JSON.stringify({ message: 'Lambda executed successfully' }),
             };
           };
+  
+  S3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Ref S3BucketName
+      NotificationConfiguration:
+        LambdaConfigurations:
+          - Event: "s3:ObjectCreated:*"  # Event type for trigger
+            Function: !GetAtt LambdaFunction.Arn
+      Tags:
+        - Key: "Environment"
+          Value: "Production"
 
   LambdaS3EventSource:
     Type: AWS::Lambda::EventSourceMapping
@@ -97,12 +101,10 @@ Resources:
   LambdaInvokePermission:
     Type: AWS::Lambda::Permission
     Properties:
-      Action: "lambda:InvokeFunction"
-      FunctionName: !Ref LambdaFunctionName
-      Principal: "s3.amazonaws.com"
-      SourceArn: !GetAtt S3Bucket.Arn
-      # Ensure you include the SourceAccount property
-      SourceAccount: !Ref "AWS::AccountId"  # Add your account ID here
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref LambdaFunction
+      Principal: s3.amazonaws.com
+      SourceArn: !Sub "arn:aws:s3:::${S3BucketName}"
 
 Outputs:
   LambdaFunctionName:
