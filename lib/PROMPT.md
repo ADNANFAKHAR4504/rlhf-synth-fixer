@@ -1,46 +1,70 @@
-# Prompt
+You are an expert AWS Solutions Architect. Your goal is to generate a production-grade CloudFormation YAML template that sets up a complete networking environment in AWS based on the following infrastructure design and functional requirements:
 
-Your mission is to act as an expert AWS Solutions Architect specializing in event-driven architectures and Infrastructure-as-Code using AWS CloudFormation. You will design an AWS infrastructure based on the user's requirements.
+🧩 Functional Requirements:
+VPC and Subnet Layout:
 
-**Instructions:**
+Create a VPC spanning two Availability Zones (AZs) in a specified region.
 
-* Analyze the Requirements: Carefully review the provided task to understand each component and its desired interaction.
-* Write the Architecture in CloudFormation YAML format: Propose a robust AWS infrastructure that fulfills all stated requirements, adhering to best practices for scalability, reliability, and cost-effectiveness.
-* Specify AWS Services: Clearly name each AWS service used for each component of the architecture.
-* Do not attach AdministratorAccess policies to any IAM roles.
+For each AZ, create:
 
-Output Format: AWS CloudFormation + YAML
+One public subnet
 
-**Here is the task you need to translate to CloudFormation:**
+One private subnet
 
-* You will design a secure, scalable cloud environment for production using AWS CloudFormation YAML with the following requirements:
-* Create a VPC with one public subnet and one private subnet.
-* The public subnet should have a route table that routes internet traffic to an Internet Gateway.
-* Ensure the private subnet has internet access through a NAT Gateway placed in the public subnet.
-* Launch a t2.micro EC2 instance in the public subnet with SSH access (port 22) restricted to a specific IP range using a Security Group.
-* Create a Lambda function using the latest Python runtime, which is triggered by file uploads to an S3 bucket.
-* The Lambda function must publish a message to an SNS topic upon execution.
-* Create an IAM role with least privilege containing all required permissions and attach it to the Lambda function.
-* All resources must be tagged with Environment: Production.
-* All resource names should follow the convention cf-task-<resource-type>, e.g., cf-task-vpc.
-* All resources must be deployed within the us-east-1 region.
-* Ensure all dependencies between resources are handled correctly within the CloudFormation stack.
-* Use AWS best practices for security and scalability.
+Internet and NAT Gateways:
 
-**Expected Output:**
+Attach an Internet Gateway (IGW) to the VPC.
 
-Deliver a fully functional CloudFormation YAML file that configures all resources according to the specifications, ensuring all resources are properly linked, secured, and tagged. The configuration should pass cfn-lint validation, and all unit and integration tests must pass without errors.
+Create two NAT Gateways (one in each public subnet).
 
-**Summarizing:**
+Ensure:
 
-* A VPC with one public and one private subnet.
-* Internet Gateway connected to the public subnet via a route table.
-* NAT Gateway for private subnet outbound internet access.
-* t2.micro EC2 instance in the public subnet with restricted SSH (port 22).
-* A Lambda function (latest Python) triggered by S3 uploads.
-* An SNS topic notified by the Lambda function.
-* An IAM role with least privilege for the Lambda function.
-* All resources tagged with Environment: Production.
-* Resources named with the cf-task- prefix.
-* Deployment in us-east-1.
-* Output as AWS CloudFormation YAML.
+Public subnets route internet traffic via the IGW.
+
+Private subnets route internet traffic via their respective NAT Gateway.
+
+Security and Access:
+
+Allow full ICMP traffic (inbound and outbound) in all public and private subnets (to aid in troubleshooting, e.g., for ping).
+
+Associate Route Tables correctly for each subnet type (public/private).
+
+IP Addressing:
+
+Use Elastic IPs (EIPs) for:
+
+Internet Gateway NAT translation (i.e., each NAT Gateway uses an EIP).
+
+All public IPs must be static.
+
+Tagging:
+
+Apply Tags across all AWS resources. Tags should include at least:
+
+Name
+
+Environment
+
+Project
+
+Owner
+
+📦 Output Requirements:
+A CloudFormation YAML template that:
+
+Is deployable without modification
+
+Passes deployment with aws cloudformation deploy (or equivalent) without error
+
+Fulfills all specified functional requirements
+
+Optional: Use parameters for region, CIDR blocks, environment name, and tags for reusability.
+
+🛠️ Implementation Notes:
+Use !Ref and !Sub for dynamic references.
+
+Use Mappings or Parameters for AZs and CIDR blocks if applicable.
+
+Ensure proper dependency ordering using DependsOn or implicit resource linking.
+
+Ensure all networking and routing configurations are logically and functionally correct.

@@ -1,240 +1,349 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: AWS CloudFormation template for a secure, scalable cloud environment.
+Description: >
+  AWS CloudFormation template to create a VPC with public and private subnets,
+  Internet Gateway, NAT Gateways, and necessary routing configurations.
+
+Parameters:
+  VpcCIDR:
+    Type: String
+    Default: '10.0.0.0/16'
+    Description: CIDR block for the VPC
+  PublicSubnet1CIDR:
+    Type: String
+    Default: '10.0.1.0/24'
+    Description: CIDR block for the first public subnet
+  PublicSubnet2CIDR:
+    Type: String
+    Default: '10.0.2.0/24'
+    Description: CIDR block for the second public subnet
+  PrivateSubnet1CIDR:
+    Type: String
+    Default: '10.0.101.0/24'
+    Description: CIDR block for the first private subnet
+  PrivateSubnet2CIDR:
+    Type: String
+    Default: '10.0.102.0/24'
+    Description: CIDR block for the second private subnet
+  EnvironmentName:
+    Type: String
+    Default: 'production'
+    Description: Environment name for tagging
+  ProjectName:
+    Type: String
+    Default: 'network-setup'
+    Description: Project name for tagging
+  Owner:
+    Type: String
+    Default: 'admin'
+    Description: Owner name for tagging
 
 Resources:
   VPC:
-    Type: AWS::EC2::VPC
+    Type: 'AWS::EC2::VPC'
     Properties:
-      CidrBlock: 10.0.0.0/16
+      CidrBlock: !Ref VpcCIDR
       EnableDnsSupport: true
       EnableDnsHostnames: true
       Tags:
         - Key: Name
-          Value: cf-task-vpc
+          Value: !Sub '${EnvironmentName}-vpc'
         - Key: Environment
-          Value: Production
+          Value: !Ref EnvironmentName
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Owner
+          Value: !Ref Owner
 
-  PublicSubnet:
-    Type: AWS::EC2::Subnet
+  PublicSubnet1:
+    Type: 'AWS::EC2::Subnet'
     Properties:
       VpcId: !Ref VPC
-      CidrBlock: 10.0.1.0/24
+      CidrBlock: !Ref PublicSubnet1CIDR
+      AvailabilityZone: !Select [ 0, !GetAZs '' ]
       MapPublicIpOnLaunch: true
-      AvailabilityZone: us-east-1a
       Tags:
         - Key: Name
-          Value: cf-task-public-subnet
+          Value: !Sub '${EnvironmentName}-public-subnet-1'
         - Key: Environment
-          Value: Production
+          Value: !Ref EnvironmentName
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Owner
+          Value: !Ref Owner
 
-  PrivateSubnet:
-    Type: AWS::EC2::Subnet
+  PublicSubnet2:
+    Type: 'AWS::EC2::Subnet'
     Properties:
       VpcId: !Ref VPC
-      CidrBlock: 10.0.2.0/24
-      AvailabilityZone: us-east-1a
+      CidrBlock: !Ref PublicSubnet2CIDR
+      AvailabilityZone: !Select [ 1, !GetAZs '' ]
+      MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: cf-task-private-subnet
+          Value: !Sub '${EnvironmentName}-public-subnet-2'
         - Key: Environment
-          Value: Production
+          Value: !Ref EnvironmentName
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Owner
+          Value: !Ref Owner
+
+  PrivateSubnet1:
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Ref PrivateSubnet1CIDR
+      AvailabilityZone: !Select [ 0, !GetAZs '' ]
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-private-subnet-1'
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Owner
+          Value: !Ref Owner
+
+  PrivateSubnet2:
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Ref PrivateSubnet2CIDR
+      AvailabilityZone: !Select [ 1, !GetAZs '' ]
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-private-subnet-2'
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Owner
+          Value: !Ref Owner
 
   InternetGateway:
-    Type: AWS::EC2::InternetGateway
+    Type: 'AWS::EC2::InternetGateway'
     Properties:
       Tags:
         - Key: Name
-          Value: cf-task-igw
+          Value: !Sub '${EnvironmentName}-igw'
         - Key: Environment
-          Value: Production
+          Value: !Ref EnvironmentName
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Owner
+          Value: !Ref Owner
 
-  PublicRouteTable:
-    Type: AWS::EC2::RouteTable
-    Properties:
-      VpcId: !Ref VPC
-      Tags:
-        - Key: Name
-          Value: cf-task-public-rt
-        - Key: Environment
-          Value: Production
-
-  PrivateRouteTable:
-    Type: AWS::EC2::RouteTable
-    Properties:
-      VpcId: !Ref VPC
-      Tags:
-        - Key: Name
-          Value: cf-task-private-rt
-        - Key: Environment
-          Value: Production
-
-  PublicRoute:
-    Type: AWS::EC2::Route
-    DependsOn: InternetGatewayAttachment
-    Properties:
-      RouteTableId: !Ref PublicRouteTable
-      DestinationCidrBlock: 0.0.0.0/0
-      GatewayId: !Ref InternetGateway
-
-  NATGatewayEIP:
-    Type: AWS::EC2::EIP
-    DependsOn: InternetGatewayAttachment
-    Properties:
-      Domain: vpc
-
-  NATGateway:
-    Type: AWS::EC2::NatGateway
-    Properties:
-      AllocationId: !GetAtt NATGatewayEIP.AllocationId
-      SubnetId: !Ref PublicSubnet
-      Tags:
-        - Key: Name
-          Value: cf-task-nat
-        - Key: Environment
-          Value: Production
-
-  PrivateRouteToNAT:
-    Type: AWS::EC2::Route
-    Properties:
-      RouteTableId: !Ref PrivateRouteTable
-      DestinationCidrBlock: 0.0.0.0/0
-      NatGatewayId: !Ref NATGateway
-
-  PublicSubnetRouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      SubnetId: !Ref PublicSubnet
-      RouteTableId: !Ref PublicRouteTable
-
-  PrivateSubnetRouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      SubnetId: !Ref PrivateSubnet
-      RouteTableId: !Ref PrivateRouteTable
-
-  InternetGatewayAttachment:
-    Type: AWS::EC2::VPCGatewayAttachment
+  IGWAttachment:
+    Type: 'AWS::EC2::VPCGatewayAttachment'
     Properties:
       VpcId: !Ref VPC
       InternetGatewayId: !Ref InternetGateway
 
-  EC2SecurityGroup:
-    Type: AWS::EC2::SecurityGroup
+  EIP1:
+    Type: 'AWS::EC2::EIP'
+    DependsOn: InternetGateway
     Properties:
-      GroupDescription: Enable SSH access
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-eip-1'
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Owner
+          Value: !Ref Owner
+
+  EIP2:
+    Type: 'AWS::EC2::EIP'
+    DependsOn: InternetGateway
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-eip-2'
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Owner
+          Value: !Ref Owner
+
+  NATGateway1:
+    Type: 'AWS::EC2::NatGateway'
+    Properties:
+      AllocationId: !GetAtt EIP1.AllocationId
+      SubnetId: !Ref PublicSubnet1
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-nat-gateway-1'
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Owner
+          Value: !Ref Owner
+
+  NATGateway2:
+    Type: 'AWS::EC2::NatGateway'
+    Properties:
+      AllocationId: !GetAtt EIP2.AllocationId
+      SubnetId: !Ref PublicSubnet2
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-nat-gateway-2'
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Owner
+          Value: !Ref Owner
+
+  PublicRouteTable:
+    Type: 'AWS::EC2::RouteTable'
+    Properties:
       VpcId: !Ref VPC
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 22
-          ToPort: 22
-          CidrIp: 192.0.2.0/24 # Replace with your IP range
       Tags:
         - Key: Name
-          Value: cf-task-sg
+          Value: !Sub '${EnvironmentName}-public-rt'
         - Key: Environment
-          Value: Production
+          Value: !Ref EnvironmentName
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Owner
+          Value: !Ref Owner
 
-  EC2Instance:
-    Type: AWS::EC2::Instance
+  PrivateRouteTable1:
+    Type: 'AWS::EC2::RouteTable'
     Properties:
-      InstanceType: t2.micro
-      ImageId: ami-0abcdef1234567890 # Replace with a valid AMI ID
-      KeyName: your-key-pair # Replace with your key pair name
-      NetworkInterfaces:
-        - DeviceIndex: 0
-          SubnetId: !Ref PublicSubnet
-          GroupSet:
-            - !Ref EC2SecurityGroup
-          AssociatePublicIpAddress: true
+      VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: cf-task-ec2
+          Value: !Sub '${EnvironmentName}-private-rt-1'
         - Key: Environment
-          Value: Production
+          Value: !Ref EnvironmentName
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Owner
+          Value: !Ref Owner
 
-  S3Bucket:
-    Type: AWS::S3::Bucket
+  PrivateRouteTable2:
+    Type: 'AWS::EC2::RouteTable'
     Properties:
-      BucketName: cf-task-s3bucket
+      VpcId: !Ref VPC
       Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-private-rt-2'
         - Key: Environment
-          Value: Production
+          Value: !Ref EnvironmentName
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Owner
+          Value: !Ref Owner
 
-  SNSTopic:
-    Type: AWS::SNS::Topic
+  PublicRoute:
+    Type: 'AWS::EC2::Route'
+    DependsOn: IGWAttachment
     Properties:
-      TopicName: cf-task-snstopic
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: '0.0.0.0/0'
+      GatewayId: !Ref InternetGateway
+
+  PrivateRoute1:
+    Type: 'AWS::EC2::Route'
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable1
+      DestinationCidrBlock: '0.0.0.0/0'
+      NatGatewayId: !Ref NATGateway1
+
+  PrivateRoute2:
+    Type: 'AWS::EC2::Route'
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable2
+      DestinationCidrBlock: '0.0.0.0/0'
+      NatGatewayId: !Ref NATGateway2
+
+  PublicSubnet1RouteTableAssociation:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicSubnet2RouteTableAssociation:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Properties:
+      SubnetId: !Ref PublicSubnet2
+      RouteTableId: !Ref PublicRouteTable
+
+  PrivateSubnet1RouteTableAssociation:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Properties:
+      SubnetId: !Ref PrivateSubnet1
+      RouteTableId: !Ref PrivateRouteTable1
+
+  PrivateSubnet2RouteTableAssociation:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Properties:
+      SubnetId: !Ref PrivateSubnet2
+      RouteTableId: !Ref PrivateRouteTable2
+
+  NetworkAcl:
+    Type: 'AWS::EC2::NetworkAcl'
+    Properties:
+      VpcId: !Ref VPC
       Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-network-acl'
         - Key: Environment
-          Value: Production
+          Value: !Ref EnvironmentName
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Owner
+          Value: !Ref Owner
 
-  LambdaExecutionRole:
-    Type: AWS::IAM::Role
+  InboundICMPRule:
+    Type: 'AWS::EC2::NetworkAclEntry'
     Properties:
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: lambda.amazonaws.com
-            Action: sts:AssumeRole
-      Policies:
-        - PolicyName: LambdaS3Policy
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - s3:GetObject
-                Resource: !Sub arn:aws:s3:::cf-task-s3bucket/*
-        - PolicyName: LambdaSNSPolicy
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - sns:Publish
-                Resource: !Ref SNSTopic
+      NetworkAclId: !Ref NetworkAcl
+      RuleNumber: 100
+      Protocol: 1
+      RuleAction: allow
+      Egress: false
+      CidrBlock: 0.0.0.0/0
+      Icmp:
+        Code: -1
+        Type: -1
 
-  LambdaFunction:
-    Type: AWS::Lambda::Function
+  OutboundICMPRule:
+    Type: 'AWS::EC2::NetworkAclEntry'
     Properties:
-      FunctionName: cf-task-lambda
-      Handler: index.handler
-      Role: !GetAtt LambdaExecutionRole.Arn
-      Code:
-        ZipFile: |
-          import json
-          import boto3
-          def handler(event, context):
-              sns = boto3.client('sns')
-              sns.publish(TopicArn=os.environ['SNS_TOPIC_ARN'], Message='File uploaded to S3')
-      Runtime: python3.9
-      Environment:
-        Variables:
-          SNS_TOPIC_ARN: !Ref SNSTopic
-      Tags:
-        - Key: Environment
-          Value: Production
-
-  S3BucketEventNotification:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: cf-task-s3bucket
-      NotificationConfiguration:
-        LambdaConfigurations:
-          - Event: s3:ObjectCreated:*
-            Function: !GetAtt LambdaFunction.Arn
+      NetworkAclId: !Ref NetworkAcl
+      RuleNumber: 100
+      Protocol: 1
+      RuleAction: allow
+      Egress: true
+      CidrBlock: 0.0.0.0/0
+      Icmp:
+        Code: -1
+        Type: -1
 
 Outputs:
   VPCId:
     Description: VPC ID
     Value: !Ref VPC
 
-  PublicSubnetId:
-    Description: Public Subnet ID
-    Value: !Ref PublicSubnet
+  PublicSubnet1Id:
+    Description: Public Subnet 1 ID
+    Value: !Ref PublicSubnet1
 
-  PrivateSubnetId:
-    Description: Private Subnet ID
-    Value: !Ref PrivateSubnet
+  PublicSubnet2Id:
+    Description: Public Subnet 2 ID
+    Value: !Ref PublicSubnet2
+
+  PrivateSubnet1Id:
+    Description: Private Subnet 1 ID
+    Value: !Ref PrivateSubnet1
+
+  PrivateSubnet2Id:
+    Description: Private Subnet 2 ID
+    Value: !Ref PrivateSubnet2
