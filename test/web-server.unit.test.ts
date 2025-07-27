@@ -110,22 +110,6 @@ describe('WebServerStack', () => {
     expect(typeof userDataScript).toBe('string');
     expect(userDataScript).toContain('yum install -y httpd');
     expect(userDataScript).toContain('systemctl enable httpd');
-    // template.hasResourceProperties('AWS::EC2::Instance', {
-    //   InstanceType: 't2.micro',
-    //   UserData: expect.objectContaining({
-    //     'Fn::Base64': expect.objectContaining({
-    //       'Fn::Join': expect.arrayContaining([
-    //         expect.any(String),
-    //         expect.arrayContaining([
-    //           expect.stringContaining('yum install -y httpd'),
-    //         ]),
-    //       ]),
-    //     }),
-    //   }),
-    //   //   {
-    //   //     'Fn::Base64': expect.stringContaining('#!/bin/bash\nyum update -y\nyum install -y httpd'),
-    //   //   },
-    // });
   });
 
   test('creates EIP associated with EC2 instance', () => {
