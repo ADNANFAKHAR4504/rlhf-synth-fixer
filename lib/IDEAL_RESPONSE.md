@@ -62,7 +62,6 @@ export class TapStack extends cdk.Stack {
 
 
 ``` bash
-
 import * as cdk from 'aws-cdk-lib';
 import {
   InstanceType,
@@ -80,7 +79,14 @@ import {
   DatabaseInstanceEngine,
   MysqlEngineVersion,
 } from 'aws-cdk-lib/aws-rds';
-import { Role, ServicePrincipal, ManagedPolicy } from 'aws-cdk-lib/aws-iam';
+import {
+  Role,
+  ServicePrincipal,
+  ManagedPolicy,
+  PolicyDocument,
+  PolicyStatement,
+  Effect,
+} from 'aws-cdk-lib/aws-iam';
 import { SubnetGroup } from 'aws-cdk-lib/aws-rds';
 import { Tags } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
@@ -88,6 +94,7 @@ import { Construct } from 'constructs';
 export interface WebServerProps extends cdk.StackProps {
   environmentSuffix?: string;
   vpcId: string;
+  allowedSshCidr?: string;
 }
 
 export class WebServerStack extends cdk.Stack {
@@ -99,7 +106,7 @@ export class WebServerStack extends cdk.Stack {
     const vpc = Vpc.fromLookup(this, 'ExistingVPC', {
       vpcId: props?.vpcId, //'vpc-xxxxxxxx', // Replace with your VPC ID
     });
-
+    const sshCidr = props?.allowedSshCidr ?? '10.0.0.0/16';
     // Security Group
     const securityGroup = new SecurityGroup(this, 'SecurityGroup', {
       vpc,
@@ -107,9 +114,9 @@ export class WebServerStack extends cdk.Stack {
       description: 'Allow SSH and HTTP access',
     });
     securityGroup.addIngressRule(
-      Peer.anyIpv4(),
+      Peer.ipv4(sshCidr),
       Port.tcp(22),
-      'Allow SSH access from anywhere'
+      `Secure SSH access from ${sshCidr}`
     );
     securityGroup.addIngressRule(
       Peer.anyIpv4(),
@@ -119,15 +126,28 @@ export class WebServerStack extends cdk.Stack {
 
     // EC2 Instance Role
     const ec2Role = new Role(this, 'EC2Role', {
+      roleName: `ec2-instance-role-${props?.environmentSuffix}`,
       assumedBy: new ServicePrincipal('ec2.amazonaws.com'),
+      inlinePolicies: {
+        S3ReadOnlyAccess: new PolicyDocument({
+          statements: [
+            new PolicyStatement({
+              effect: Effect.ALLOW,
+              actions: ['s3:GetObject', 's3:ListBucket'],
+              resources: ['*'],
+            }),
+          ],
+        }),
+      },
       managedPolicies: [
-        ManagedPolicy.fromAwsManagedPolicyName('AmazonS3FullAccess'),
         ManagedPolicy.fromAwsManagedPolicyName('AmazonRDSReadOnlyAccess'),
       ],
     });
 
     // EC2 Instance
+    const instanceName = `webserver-${props?.environmentSuffix}`;
     const ec2Instance = new cdk.aws_ec2.Instance(this, 'EC2Instance', {
+      instanceName,
       vpc,
       instanceType: InstanceType.of(InstanceClass.T2, InstanceSize.MICRO),
       machineImage: new cdk.aws_ec2.AmazonLinuxImage({
@@ -156,12 +176,13 @@ export class WebServerStack extends cdk.Stack {
 
     // S3 Bucket
     const s3Bucket = new Bucket(this, 'S3Bucket', {
+      bucketName: `webserver-assets-${props?.environmentSuffix}`,
       blockPublicAccess: BlockPublicAccess.BLOCK_ALL,
       versioned: true,
       removalPolicy: cdk.RemovalPolicy.RETAIN,
     });
 
-    // Create RDS Subnet Group using L2
+    // Create RDS Subnet Group
     const rdsSubnetGroup = new SubnetGroup(this, 'RdsSubnetGroup', {
       description: 'Subnet group for RDS',
       vpc,
@@ -188,6 +209,15 @@ export class WebServerStack extends cdk.Stack {
       subnetGroup: rdsSubnetGroup,
     });
 
+    new cdk.CfnOutput(this, 'EC2InstanceName', {
+      value: instanceName,
+      description: 'EC2 instance name',
+    });
+
+    new cdk.CfnOutput(this, 'EC2RoleName', {
+      value: ec2Role.roleName,
+      description: 'EC2RoleName use to acess s3 and rds',
+    });
     new cdk.CfnOutput(this, 'ElasticIP', {
       value: eip.ref,
       description: 'Elastic IP address of the instance',
