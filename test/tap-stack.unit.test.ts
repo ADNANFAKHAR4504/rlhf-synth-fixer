@@ -34,7 +34,7 @@ describe('CloudFormation Template for Dev/Prod Environments', () => {
       expect(devVPC.Properties.CidrBlock).toBe('10.0.0.0/16');
     });
 
-    test('should define public and private subnets for the Dev VPC', () => {
+test('should define public and private subnets for the Dev VPC', () => {
       const devPublicSubnet = template.Resources.DevPublicSubnet;
       const devPrivateSubnet = template.Resources.DevPrivateSubnet;
       
@@ -47,6 +47,7 @@ describe('CloudFormation Template for Dev/Prod Environments', () => {
 
       expect(devPrivateSubnet).toBeDefined();
       expect(devPrivateSubnet.Type).toBe('AWS::EC2::Subnet');
+      // Corrected line below
       expect(devPrivateSubnet.Properties.VpcId).toEqual({ Ref: 'DevVPC' });
       expect(devPrivateSubnet.Properties.CidrBlock).toBe('10.0.2.0/24');
       expect(devPrivateSubnet.Properties.AvailabilityZone).toEqual({ 'Fn::Select': [1, { 'Fn::GetAZs': '' }] });
@@ -106,10 +107,17 @@ describe('CloudFormation Template for Dev/Prod Environments', () => {
   // --- UPDATED SECTION ---
   describe('Production Auto Scaling', () => {
     test('should define a Launch Template for Prod', () => {
-        const lt = template.Resources.ProdLaunchTemplate;
+        // Check for the new logical ID: ProdLaunchTemplateV2
+        const lt = template.Resources.ProdLaunchTemplateV2;
         expect(lt).toBeDefined();
         expect(lt.Type).toBe('AWS::EC2::LaunchTemplate');
-        expect(lt.Properties.LaunchTemplateData.ImageId).toBe('ami-0c55b159cbfafe1f0');
+        
+        // Check the new physical name
+        expect(lt.Properties.LaunchTemplateName).toBe('ProdWebServersLaunchTemplateV2');
+
+        // Check for the dynamic SSM parameter instead of a hardcoded AMI ID
+        expect(lt.Properties.LaunchTemplateData.ImageId).toBe('{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}');
+        
         expect(lt.Properties.LaunchTemplateData.InstanceType).toBe('t2.micro');
         expect(lt.Properties.LaunchTemplateData.SecurityGroupIds).toEqual([{ Ref: 'ProdSecurityGroup' }]);
     });
@@ -124,9 +132,11 @@ describe('CloudFormation Template for Dev/Prod Environments', () => {
         
         // Verify it uses the Launch Template, not a Launch Configuration
         expect(asg.Properties.LaunchConfigurationName).toBeUndefined();
+        
+        // Verify it references the new launch template logical ID
         expect(asg.Properties.LaunchTemplate).toEqual({
-            LaunchTemplateId: { Ref: 'ProdLaunchTemplate' },
-            Version: { 'Fn::GetAtt': ['ProdLaunchTemplate', 'LatestVersionNumber'] },
+            LaunchTemplateId: { Ref: 'ProdLaunchTemplateV2' },
+            Version: { 'Fn::GetAtt': ['ProdLaunchTemplateV2', 'LatestVersionNumber'] },
         });
     });
   });
