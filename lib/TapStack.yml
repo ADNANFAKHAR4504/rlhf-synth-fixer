@@ -7,15 +7,19 @@ Parameters:
   EnvironmentName:
     Type: String
     Description: An environment identifier (e.g., dev, qa, prod).
+    Default: dev
   OwnerName:
     Type: String
     Description: The name of the resource owner.
+    Default: TechTeam
   ProjectName:
     Type: String
     Description: The name of the project.
+    Default: WebAppProject
   WebAppServerKeyName:
     Type: AWS::EC2::KeyPair::KeyName
     Description: Name of an existing EC2 KeyPair to enable SSH access to the instance.
+    Default: iac-rlhf-aws-trainer-instance
 
 Resources:
   WebAppAssets:
@@ -83,6 +87,7 @@ Resources:
       ToPort: 3306
       SourceSecurityGroupId: !GetAtt WebAppServerSecurityGroup.GroupId
 
+  # -- EC2 Instance --
   WebAppServer:
     Type: AWS::EC2::Instance
     Properties:
@@ -101,6 +106,7 @@ Resources:
         - Key: Name
           Value: !Sub '${ProjectName}-WebAppServer-${EnvironmentName}'
 
+  # -- RDS Database and Secret --
   WebAppDatabase:
     Type: AWS::RDS::DBInstance
     Properties:
