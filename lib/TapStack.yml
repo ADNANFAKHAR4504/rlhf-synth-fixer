@@ -213,23 +213,29 @@ Resources:
 
 Outputs:
   VPCId:
+    Condition: IsUSEast1
     Description: The ID of the created VPC
     Value: !Ref VPC
 
   PublicSubnetAId:
+    Condition: IsUSEast1
     Description: ID of Subnet A
     Value: !Ref PublicSubnetA
 
   PublicSubnetBId:
+    Condition: IsUSEast1
     Description: ID of Subnet B
     Value: !Ref PublicSubnetB
   EC2InstanceAId:
+    Condition: IsUSEast1
     Description: ID of EC2 instance in subnet A
     Value: !Ref EC2InstanceA
 
   EC2InstanceBId:
+    Condition: IsUSEast1
     Description: ID of EC2 instance in subnet B
     Value: !Ref EC2InstanceB
   KeyPairName:
+    Condition: IsUSEast1
     Description: EC2 KeyPair used
     Value: !Ref KeyPairName

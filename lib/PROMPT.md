@@ -18,13 +18,13 @@ Act as an expert **AWS CloudFormation Architect**. Design a deployable CloudForm
 
 #### 1. **Region and Tagging**
 
-* Deploy all resources strictly within the **`us-east-1`** region.
-* Apply the tag `Environment: Production` to **every resource**.
+* Deploy all resources strictly within the **`us-east-1`** region by passing as parameter for re-use.
+* Apply the tag `Environment: production` to **every resource**. pass Environment tag as parameter for better visibility
 
 #### 2. **Networking Configuration**
 
-* Create a **VPC** with the CIDR block `10.0.0.0/16`.
-* Within the VPC, create **two public subnets**:
+* Create a **VPC** with the CIDR block `10.0.0.0/16` using parameter for better use.
+* Within the VPC, create **two public subnets** using parameters for better visibility:
 
   * Subnet A: `10.0.1.0/24`
   * Subnet B: `10.0.2.0/24`
@@ -33,13 +33,13 @@ Act as an expert **AWS CloudFormation Architect**. Design a deployable CloudForm
 * Associate the route table with both public subnets.
 
 #### 3. **Compute Resources**
-
+Create key pair to be used with EC2
 * Launch **two EC2 instances**, one in each public subnet.
 * Use the **Amazon Linux 2 AMI** (latest available in `us-east-1`).
 * Associate each instance with:
 
   * The public subnet
-  * A **Security Group** allowing **inbound HTTP traffic on port 80** (CIDR: 0.0.0.0/0)
+  * A **Security Group** allowing **inbound HTTP traffic on port 80** from specific CIDR
   * A **public IP address**
   * A **KeyPair** (allow the key name to be passed as a parameter)
 
@@ -47,7 +47,7 @@ Act as an expert **AWS CloudFormation Architect**. Design a deployable CloudForm
 
 * Create a **Security Group** that:
 
-  * Allows **inbound HTTP (TCP/80)** from any IPv4 address
+  * Allows **inbound HTTP (TCP/80)** from Subnets CIDR Range
   * Allows **outbound** traffic by default
 
 #### 5. **CloudFormation Best Practices**
