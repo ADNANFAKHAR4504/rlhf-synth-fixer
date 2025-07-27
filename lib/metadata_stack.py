@@ -17,7 +17,7 @@ class ServerlessStack(Stack):
   def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
     super().__init__(scope, construct_id, **kwargs)
 
-    # VPC creation 
+    # VPC creation
     vpc = ec2.Vpc(
       self,
       "LambdaVPC",
