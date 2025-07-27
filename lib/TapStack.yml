@@ -1,4 +1,3 @@
-cat << 'EOF' > lib/TapStack.yml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: Basic Production-Ready AWS Environment in us-east-1 with secure EC2 and networking
 
@@ -249,4 +248,3 @@ Outputs:
     Condition: IsUSEast1
     Description: Public IP of EC2 instance in subnet B
     Value: !GetAtt EC2InstanceB.PublicIp
-EOF
