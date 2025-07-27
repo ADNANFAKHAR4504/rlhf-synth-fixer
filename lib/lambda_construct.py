@@ -50,6 +50,34 @@ if not ERROR_ARCHIVE_BUCKET_NAME:
 
 table = dynamodb.Table(TABLE_NAME)
 
+def check_thresholds(log_data):
+  # Check sensor data against predefined thresholds.
+  # Returns a list of threshold violation messages.
+  violations = []
+  
+  # Define threshold values (in production, these could come from environment variables or DynamoDB)
+  thresholds = {
+    'temperature': {'min': -50, 'max': 85},  # Celsius
+    'humidity': {'min': 0, 'max': 100},      # Percentage
+    'pressure': {'min': 800, 'max': 1200},   # hPa
+    'battery': {'min': 10, 'max': 100}       # Percentage
+  }
+  
+  # Check each threshold
+  for sensor, limits in thresholds.items():
+    if sensor in log_data:
+      try:
+        value = float(log_data[sensor])
+        if value < limits['min']:
+          violations.append(f"{sensor} value {value} is below minimum threshold {limits['min']}")
+        elif value > limits['max']:
+          violations.append(f"{sensor} value {value} is above maximum threshold {limits['max']}")
+      except (ValueError, TypeError):
+        # Skip non-numeric sensor values
+        continue
+  
+  return violations
+
 def lambda_handler(event, context):
   print(f"Received event: {json.dumps(event)}")
 
@@ -103,9 +131,18 @@ def lambda_handler(event, context):
       # Add ingestion timestamp
       log_data['ingestionTimestamp'] = datetime.utcnow().isoformat() + "Z"
 
+      # Check for threshold violations before storing
+      threshold_violations = check_thresholds(log_data)
+      
       # Store item in DynamoDB
       table.put_item(Item=log_data)
       print(f"Successfully stored item in DynamoDB: {log_data}")
+      
+      # Log threshold violations (in production, this could trigger SNS notifications)
+      if threshold_violations:
+        print(f"THRESHOLD ALERT: {len(threshold_violations)} violations detected for {log_data.get('serviceName', 'unknown')}")
+        for violation in threshold_violations:
+          print(f"  - {violation}")
 
     except Exception as e: # pylint: disable=broad-except
       # Catch any other unexpected errors during processing

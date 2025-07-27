@@ -35,7 +35,7 @@ props = TapStackProps(
     environment_suffix=environment_suffix,
     env=cdk.Environment(
         account=os.getenv('CDK_DEFAULT_ACCOUNT'),
-        region=os.getenv('CDK_DEFAULT_REGION')
+        region='us-east-1'  # Explicitly set to us-east-1 as per requirements
     )
 )
 

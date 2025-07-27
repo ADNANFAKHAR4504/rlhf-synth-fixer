@@ -64,10 +64,11 @@ class NestedDynamoDBStack(NestedStack):
   NestedDynamoDBStack defines a DynamoDB table within its own nested CloudFormation stack.
   It calls the DynamoDBConstruct to create the actual DynamoDB table resource.
   """
-  def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
+  def __init__(self, scope: Construct, construct_id: str, 
+               table_name: str = None, **kwargs) -> None:
     super().__init__(scope, construct_id, **kwargs)
     # Instantiate the DynamoDBConstruct from its separate file
-    dynamodb_construct = DynamoDBConstruct(self, "DynamoDBConstruct")
+    dynamodb_construct = DynamoDBConstruct(self, "DynamoDBConstruct", table_name=table_name)
     self.dynamodb_table = dynamodb_construct.dynamodb_table
 
 
@@ -77,10 +78,11 @@ class NestedErrorHandlingStack(NestedStack):
   within its own nested CloudFormation stack. It calls the ErrorHandlingConstruct
   to create these resources.
   """
-  def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
+  def __init__(self, scope: Construct, construct_id: str, 
+               queue_name: str = None, **kwargs) -> None:
     super().__init__(scope, construct_id, **kwargs)
     # Instantiate the ErrorHandlingConstruct from its separate file
-    error_handling_construct = ErrorHandlingConstruct(self, "ErrorHandlingConstruct")
+    error_handling_construct = ErrorHandlingConstruct(self, "ErrorHandlingConstruct", queue_name=queue_name)
     self.dlq_queue = error_handling_construct.dlq_queue
     self.error_archive_bucket = error_handling_construct.error_archive_bucket
 
@@ -149,16 +151,20 @@ class TapStack(Stack):
     # 1. Nested DynamoDB Stack
     # This stack is created first because the Lambda function will need
     # its table to write data.
+    dynamodb_table_name = f"{self.app_name}-ProcessedLogEntries-{self.stack_suffix}"
     self.dynamodb_stack = NestedDynamoDBStack(
         self,
-        f"{self.app_name}-DynamoDB-{self.stack_suffix}"
+        f"{self.app_name}-DynamoDB-{self.stack_suffix}",
+        table_name=dynamodb_table_name
     )
 
     # 2. Nested Error Handling Stack (SQS DLQ and Error S3 Bucket)
     # The Lambda function will need these for its DLQ and error archiving.
+    dlq_queue_name = f"{self.app_name}-LambdaDLQ-{self.stack_suffix}"
     self.error_handling_stack = NestedErrorHandlingStack(
         self,
-        f"{self.app_name}-ErrorHandling-{self.stack_suffix}"
+        f"{self.app_name}-ErrorHandling-{self.stack_suffix}",
+        queue_name=dlq_queue_name
     )
 
     # 3. Nested S3 Source Stack

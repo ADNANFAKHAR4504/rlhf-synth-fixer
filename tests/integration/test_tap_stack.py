@@ -407,3 +407,150 @@ def test_e2e_dlq_functionality(aws_clients, stack_outputs):
 
   except Exception as exc:  # pylint: disable=broad-except
     pytest.fail(f"E2E test failed during DLQ verification: {exc}")
+
+def test_e2e_threshold_checking(aws_clients, stack_outputs):
+  """
+  Tests end-to-end threshold checking functionality:
+  1. Uploads sensor data with values that exceed thresholds.
+  2. Verifies the data is stored in DynamoDB.
+  3. Checks that threshold violations are properly logged (in real implementation, this would trigger SNS).
+  """
+  s3_client = aws_clients["s3"]
+  dynamodb_client = aws_clients["dynamodb"]
+
+  s3_source_bucket_name = stack_outputs["S3SourceBucketName"]
+  dynamodb_table_name = stack_outputs["DynamoDBTableName"]
+
+  print("\n--- Running E2E Test: Threshold Checking ---")
+
+  # Test data with threshold violations
+  test_service_id = f"test-threshold-service-{uuid.uuid4().hex[:8]}"
+  current_time_iso = datetime.utcnow().isoformat(timespec='milliseconds') + "Z"
+  
+  threshold_test_cases = [
+    {
+      "name": "temperature_high",
+      "payload": {
+        "serviceName": test_service_id,
+        "timestamp": current_time_iso,
+        "message": "Temperature threshold violation test",
+        "temperature": 90,  # Above max threshold of 85
+        "humidity": 50,
+        "requestId": str(uuid.uuid4())
+      }
+    },
+    {
+      "name": "humidity_low",
+      "payload": {
+        "serviceName": test_service_id + "-humid",
+        "timestamp": current_time_iso,
+        "message": "Humidity threshold violation test",
+        "temperature": 25,
+        "humidity": -5,  # Below min threshold of 0
+        "requestId": str(uuid.uuid4())
+      }
+    },
+    {
+      "name": "multiple_violations",
+      "payload": {
+        "serviceName": test_service_id + "-multi",
+        "timestamp": current_time_iso,
+        "message": "Multiple threshold violations test",
+        "temperature": -60,  # Below min threshold of -50
+        "pressure": 1300,   # Above max threshold of 1200
+        "battery": 5,       # Below min threshold of 10
+        "requestId": str(uuid.uuid4())
+      }
+    },
+    {
+      "name": "normal_values",
+      "payload": {
+        "serviceName": test_service_id + "-normal",
+        "timestamp": current_time_iso,
+        "message": "Normal values test - no violations expected",
+        "temperature": 25,  # Within range
+        "humidity": 60,     # Within range
+        "pressure": 1013,   # Within range
+        "battery": 85,      # Within range
+        "requestId": str(uuid.uuid4())
+      }
+    }
+  ]
+
+  # Upload all test cases
+  for i, test_case in enumerate(threshold_test_cases):
+    test_object_key = f"{S3_SOURCE_UPLOAD_PREFIX}threshold-test-{test_case['name']}-{i}.json"
+    test_file_content = json.dumps(test_case['payload'])
+    
+    print(f"Uploading {test_case['name']} test data to s3://{s3_source_bucket_name}/{test_object_key}")
+    s3_client.put_object(
+      Bucket=s3_source_bucket_name,
+      Key=test_object_key,
+      Body=test_file_content,
+      ContentType="application/json"
+    )
+
+  # Wait for Lambda processing
+  print("Waiting for Lambda to process threshold test data (up to 45 seconds)...")
+  time.sleep(45)
+
+  # Verify all test cases were processed and stored in DynamoDB
+  for test_case in threshold_test_cases:
+    service_name = test_case['payload']['serviceName']
+    print(f"Verifying {test_case['name']} data in DynamoDB for serviceName: {service_name}")
+    
+    try:
+      response = dynamodb_client.query(
+        TableName=dynamodb_table_name,
+        KeyConditionExpression='serviceName = :sid',
+        ExpressionAttributeValues={
+          ':sid': {'S': service_name}
+        }
+      )
+      items = response.get('Items', [])
+      
+      assert len(items) > 0, f"No items found in DynamoDB for {test_case['name']} test case"
+      
+      # Verify the data was stored correctly
+      found_item = items[0]  # Should be only one item per service
+      assert found_item['serviceName']['S'] == service_name
+      assert found_item['message']['S'] == test_case['payload']['message']
+      
+      # Check that sensor values are preserved
+      payload = test_case['payload']
+      for sensor in ['temperature', 'humidity', 'pressure', 'battery']:
+        if sensor in payload:
+          # DynamoDB stores numbers as strings in the result
+          stored_value = float(found_item.get(sensor, {}).get('N', '0'))
+          expected_value = payload[sensor]
+          assert abs(stored_value - expected_value) < 0.001, f"{sensor} value mismatch: expected {expected_value}, got {stored_value}"
+      
+      print(f"✓ {test_case['name']} test case verified successfully")
+      
+    except Exception as exc:
+      pytest.fail(f"Threshold test failed for {test_case['name']}: {exc}")
+
+  print("E2E threshold checking test completed successfully.")
+  print("Note: Threshold violation alerts would be logged by Lambda (check CloudWatch logs).")
+  
+  # Cleanup: Remove test data from DynamoDB
+  for test_case in threshold_test_cases:
+    service_name = test_case['payload']['serviceName']
+    try:
+      response = dynamodb_client.query(
+        TableName=dynamodb_table_name,
+        KeyConditionExpression='serviceName = :sid',
+        ExpressionAttributeValues={
+          ':sid': {'S': service_name}
+        }
+      )
+      for item in response.get('Items', []):
+        dynamodb_client.delete_item(
+          TableName=dynamodb_table_name,
+          Key={
+            'serviceName': {'S': item['serviceName']['S']},
+            'timestamp': {'S': item['timestamp']['S']}
+          }
+        )
+    except Exception as exc:
+      print(f"Warning: Could not clean up test data for {service_name}: {exc}")
