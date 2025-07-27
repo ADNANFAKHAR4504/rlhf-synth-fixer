@@ -8,9 +8,39 @@ Instructions:
   * Also show the percentage of compliance.
 2. Read the test folder for a file for integration tests (not unit tests).
   * If no such file is present, report that PR is not ready and return.
-  * If it is present, report if the resources in lib/IDEAL_RESPONSE.md are covered by the integration tests.
+  * If it is present, report if the resources in lib/IDEAL_RESPONSE.md are covered and not covered by the integration tests.
   * Report the coverage of resources and features covered in a table (Requirement, Covered by test?, Notes). And recommend an action: Ready or Pending.
+3. Read lib/IDEAL_RESPONSE.md and lib/TapStack (which can be any file with a .py, .ts, .yml, etc. extension).
+  * check if the code in lib/IDEAL_RESPONSE.md and lib/TapStack are same, if not please report it
+
+OutPut:
+
+here is the example of compliance report
+
+| Requirement                                                                                 | Satisfied? | Details/Notes                                                                                         |
+|---------------------------------------------------------------------------------------------|:----------:|------------------------------------------------------------------------------------------------------|
+| 1. Deploy all resources in the 'us-east-1' region                                           | ⚠️         | Region is set at stack launch, not in template. Make sure to deploy the stack in 'us-east-1'.        |
+| 2. Include at least one EC2 instance in your stack                                          | ❌         | No EC2 instance resource defined in the template.                                                     |
+| 3. Include at least one S3 bucket in your stack                                             | ❌         | No S3 bucket resource defined in the template.                                                        |
+| 4. Ensure all resources use the tag 'Environment' with value 'Development'                  | ⚠️         | All resources are tagged with `Environment: !Ref EnvironmentSuffix` (default is 'dev', not 'Development'). |
+| 5. EC2 instance should be of type 't2.micro'                                                | ❌         | No EC2 instance present.                                                                              |
+| 6. The S3 bucket must have versioning enabled                                               | ❌         | No S3 bucket present.                                                                                 |
+| 7. Template is complete and ready for deployment without errors                             | ✅         | Template is syntactically correct for networking, but missing EC2/S3 per requirements.                |
+
+here is the expample of integration test coverage report
+
+| Requirement                                                        | Covered by Test? | Test Name/Section         | Notes                                                         |
+|--------------------------------------------------------------------|:----------------:|--------------------------|---------------------------------------------------------------|
+| All resources in 'us-east-1' region                                | ⚠️               | (Not explicitly tested)  | Region is set at deploy time; test does not check resource region. |
+| At least one EC2 instance in your stack                            | ❌               | (No test for EC2)        | No test for EC2 instance existence, type, or tags.            |
+| At least one S3 bucket in your stack                               | ❌               | (No test for S3)         | No test for S3 bucket existence, tags, or versioning.         |
+| All resources use tag 'Environment: Development'                   | ❌               | (No tag tests)           | No test checks tags on any resource.                          |
+| EC2 instance should be of type 't2.micro'                          | ❌               | (No EC2 test)            | No test for EC2 instance type.                                |
+| S3 bucket must have versioning enabled                             | ❌               | (No S3 test)             | No test for S3 bucket versioning.                             |
+| Networking (VPC, Subnets, IGW, NAT, Route Tables)                  | ✅               | All test cases in code   | All networking resources tested as per your test script.       |
+
 
 Notes:
 * Do not expect cfn-outputs to be present in the code. Those are going to be generated in the QA pipeline.
 * If lib/AWS_REGION file is present. Dont raise a warning, thats the way trainers can select custom regions to deploy, without having to change the env.
+* If a previous review is present in the comments, consider it when generating the new review. If not, proceed with the new review without referencing the previous one.
