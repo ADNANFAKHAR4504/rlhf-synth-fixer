@@ -10,17 +10,21 @@ Unable to resolve AWS account to use. It must be either configured when you defi
 
 ### Root Cause
 Two issues were preventing CDK bootstrap from working:
-1. The `cdk.json` configuration required `pipenv` which wasn't available in CI/CD environments
-2. The CDK application was requiring specific environment variables (`CDK_DEFAULT_ACCOUNT`) that may not be available in all deployment environments
+1. The `cdk.json` configuration was not using `pipenv` but the CI/CD environment expects it
+2. The CDK application needed better environment variable handling for AWS credentials
 
 ### Solution
 Applied the following fixes:
 
 1. **Fixed CDK App Configuration**:
-   - Changed `cdk.json` from `"app": "pipenv run python3 tap.py"` to `"app": "python3 tap.py"`
-   - This eliminates the pipenv dependency for CI/CD environments
+   - Changed `cdk.json` from `"app": "python3 tap.py"` to `"app": "pipenv run python3 tap.py"`
+   - This ensures compatibility with CI/CD environments that use pipenv
 
 2. **Enhanced Environment Configuration** in `tap.py`:
+   - Added debug output to show which account/region configuration is being used
+   - Improved environment variable fallback logic
+
+#### Configuration Details:
 
 1. **Region Configuration Priority**:
    - First: Check for `lib/AWS_REGION` file (for region-specific deployments)

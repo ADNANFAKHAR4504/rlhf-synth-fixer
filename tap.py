@@ -52,10 +52,12 @@ env_config = None
 # If account is explicitly provided, use it
 if account and account.strip():
     env_config = cdk.Environment(account=account, region=region)
-# For CI/CD environments without explicit account, still provide region
-# This allows CDK to resolve the account from AWS credentials while ensuring region is set
+    print(f"Using explicit account: {account} in region: {region}")
+# For CI/CD environments without explicit account, provide region and let CDK resolve account
+# This allows CDK to resolve the account from AWS credentials/IAM role while ensuring region is set
 else:
     env_config = cdk.Environment(region=region)
+    print(f"Using automatic account resolution in region: {region}")
 
 props = TapStackProps(
     environment_suffix=environment_suffix,
