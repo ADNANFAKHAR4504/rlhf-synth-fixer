@@ -28,11 +28,11 @@ class TestTapStack(unittest.TestCase):
 
   def setUp(self):
     """Set up AWS clients and check for required outputs"""
-    self.api_client = boto3.client('apigateway', region_name='us-west-2')
-    self.s3_client = boto3.client('s3', region_name='us-west-2')
-    self.dynamodb_client = boto3.client('dynamodb', region_name='us-west-2')
-    self.lambda_client = boto3.client('lambda', region_name='us-west-2')
-    self.stepfunctions_client = boto3.client('stepfunctions', region_name='us-west-2')
+    self.api_client = boto3.client('apigateway')
+    self.s3_client = boto3.client('s3')
+    self.dynamodb_client = boto3.client('dynamodb')
+    self.lambda_client = boto3.client('lambda')
+    self.stepfunctions_client = boto3.client('stepfunctions')
     
     # Check if we have deployment outputs
     self.has_outputs = bool(flat_outputs)
@@ -96,11 +96,9 @@ class TestTapStack(unittest.TestCase):
     if not self.has_outputs:
       self.skipTest("No deployment outputs available - deployment required")
       
-    # ARRANGE
     state_machine_arn = flat_outputs.get('StateMachineArn')
     self.assertIsNotNone(state_machine_arn, "StateMachineArn not found in outputs")
 
-    # ACT & ASSERT
     try:
       response = self.stepfunctions_client.describe_state_machine(
         stateMachineArn=state_machine_arn

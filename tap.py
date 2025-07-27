@@ -13,6 +13,7 @@ import os
 
 import aws_cdk as cdk
 from aws_cdk import Tags
+
 from lib.tap_stack import TapStack, TapStackProps
 
 app = cdk.App()
@@ -35,7 +36,7 @@ props = TapStackProps(
     environment_suffix=environment_suffix,
     env=cdk.Environment(
         account=os.getenv('CDK_DEFAULT_ACCOUNT'),
-        region='us-west-2'  # Deploy to Oregon region as specified in requirements
+        region=os.getenv('CDK_DEFAULT_REGION')
     )
 )
 
