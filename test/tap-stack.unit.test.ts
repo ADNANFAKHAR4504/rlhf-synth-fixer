@@ -8,7 +8,7 @@ describe('S3 Lambda Trigger CloudFormation Template', () => {
 
   beforeAll(() => {
     // Load the CloudFormation template JSON file
-    const templatePath = path.join(__dirname, '../lib/S3LambdaTriggerTemplate.json');
+    const templatePath = path.join(__dirname, '../lib/TapStack.json');
     const templateContent = fs.readFileSync(templatePath, 'utf8');
     template = JSON.parse(templateContent);
   });
