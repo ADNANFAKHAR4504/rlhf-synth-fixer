@@ -17,7 +17,7 @@ jobs:
     if: |
       (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude')) ||
       (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@claude'))
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
       pull-requests: write
@@ -44,7 +44,7 @@ jobs:
           timeout_minutes: '60'
           allowed_tools: 'Bash,Read,Write,Edit,MultiEdit,Glob,Grep,LS,Task,TodoWrite'
           custom_instructions: |
-            First read claude_prompt.txt to understand the QA pipeline.
+            First read claude_e2e.txt to understand the QA pipeline.
             Then Follow the instructions from the user.
             IMPORTANT: You MUST commit your changes back to the feature branch.
           # Optional: Restrict network access to specific domains only
