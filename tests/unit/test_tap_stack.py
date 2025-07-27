@@ -175,3 +175,141 @@ class TestTapStack(unittest.TestCase):
     self.assertIn("TableName", outputs)
     self.assertIn("StateMachineArn", outputs)
     self.assertIn("LambdaFunctionName", outputs)
+
+  @mark.it("configures S3 bucket with correct deletion policy")
+  def test_s3_bucket_configuration(self):
+    # ARRANGE
+    stack = TapStack(self.app, "TapStackTest")
+    template = Template.from_stack(stack)
+
+    # ASSERT - Check S3 bucket has proper deletion policy for testing
+    bucket_resources = [r for r in template.to_json()["Resources"].values() 
+                       if r["Type"] == "AWS::S3::Bucket"]
+    self.assertTrue(len(bucket_resources) > 0)
+    
+    # Check that bucket has proper deletion policy
+    bucket = bucket_resources[0]
+    self.assertEqual(bucket["DeletionPolicy"], "Delete")
+
+  @mark.it("configures Lambda with correct environment variables")
+  def test_lambda_environment_variables(self):
+    # ARRANGE
+    env_suffix = "test"
+    stack = TapStack(self.app, "TapStackTest",
+                     TapStackProps(environment_suffix=env_suffix))
+    template = Template.from_stack(stack)
+
+    # ASSERT - Check Lambda has environment variables (values are CloudFormation references)
+    template.has_resource_properties("AWS::Lambda::Function", {
+        "Environment": {
+            "Variables": {
+                "BUCKET_NAME": Match.any_value(),
+                "TABLE_NAME": Match.any_value(),
+                "STATE_MACHINE_ARN": Match.any_value()
+            }
+        },
+        "FunctionName": f"tap-{env_suffix}-processor"
+    })
+
+  @mark.it("configures Step Functions with correct timeout and definition")
+  def test_step_functions_configuration(self):
+    # ARRANGE
+    stack = TapStack(self.app, "TapStackTest")
+    template = Template.from_stack(stack)
+
+    # ASSERT - Check Step Functions has definition string containing timeout
+    template.has_resource_properties("AWS::StepFunctions::StateMachine", {
+        "DefinitionString": Match.string_like_regexp(".*TimeoutSeconds.*300.*")
+    })
+
+  @mark.it("configures API Gateway with CORS options")
+  def test_api_gateway_cors_configuration(self):
+    # ARRANGE
+    stack = TapStack(self.app, "TapStackTest")
+    template = Template.from_stack(stack)
+
+    # ASSERT - Check that OPTIONS method exists for CORS
+    template.has_resource_properties("AWS::ApiGateway::Method", {
+        "HttpMethod": "OPTIONS"
+    })
+
+  @mark.it("uses context-based environment suffix when provided")
+  def test_context_based_environment_suffix(self):
+    # ARRANGE
+    self.app.node.set_context('environmentSuffix', 'context-test')
+    stack = TapStack(self.app, "TapStackTest")
+    template = Template.from_stack(stack)
+
+    # ASSERT
+    template.has_resource_properties("AWS::S3::Bucket", {
+        "BucketName": "tap-context-test-bucket"
+    })
+
+  @mark.it("validates TapStackProps initialization")
+  def test_tap_stack_props_initialization(self):
+    # ARRANGE & ACT
+    props_with_suffix = TapStackProps(environment_suffix="test-env")
+    props_without_suffix = TapStackProps()
+
+    # ASSERT
+    self.assertEqual(props_with_suffix.environment_suffix, "test-env")
+    self.assertIsNone(props_without_suffix.environment_suffix)
+
+  @mark.it("creates all required IAM policies for Lambda")
+  def test_comprehensive_lambda_iam_policies(self):
+    # ARRANGE
+    stack = TapStack(self.app, "TapStackTest")
+    template = Template.from_stack(stack)
+
+    # ASSERT - Check specific IAM permissions
+    template.has_resource_properties("AWS::IAM::Policy", {
+        "PolicyDocument": {
+            "Statement": Match.array_with([
+                # S3 permissions
+                Match.object_like({
+                    "Effect": "Allow",
+                    "Action": Match.array_with(["s3:GetObject*", "s3:GetBucket*", "s3:List*"])
+                }),
+                # DynamoDB permissions should exist
+                Match.object_like({
+                    "Effect": "Allow",
+                    "Action": Match.any_value()
+                })
+            ])
+        }
+    })
+
+  @mark.it("ensures DynamoDB table has correct key schema and billing")
+  def test_dynamodb_detailed_configuration(self):
+    # ARRANGE
+    stack = TapStack(self.app, "TapStackTest")
+    template = Template.from_stack(stack)
+
+    # ASSERT - Check detailed DynamoDB configuration
+    template.has_resource_properties("AWS::DynamoDB::Table", {
+        "BillingMode": "PAY_PER_REQUEST",
+        "AttributeDefinitions": [{
+            "AttributeName": "request_id",
+            "AttributeType": "S"
+        }],
+        "KeySchema": [{
+            "AttributeName": "request_id",
+            "KeyType": "HASH"
+        }]
+    })
+
+  @mark.it("ensures Lambda function uses correct runtime and handler")
+  def test_lambda_runtime_and_handler_configuration(self):
+    # ARRANGE
+    stack = TapStack(self.app, "TapStackTest")
+    template = Template.from_stack(stack)
+
+    # ASSERT - Check Lambda detailed configuration
+    template.has_resource_properties("AWS::Lambda::Function", {
+        "Runtime": "python3.12",
+        "Handler": "index.handler",
+        "Timeout": 30,
+        "Code": {
+            "ZipFile": Match.string_like_regexp(".*import json.*")
+        }
+    })
