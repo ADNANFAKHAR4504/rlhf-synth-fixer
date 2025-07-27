@@ -175,13 +175,25 @@ Resources:
       VersioningConfiguration:
         Status: Enabled
 
-  # EC2 instance
+  # EC2 instance with dynamic AMI lookup
   MyEC2Instance:
     Type: AWS::EC2::Instance
     Properties:
       InstanceType: t3.micro
-      ImageId: ami-0abcdef1234567890 # Replace with a valid AMI ID
+      ImageId: !Sub '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64}}'
       SubnetId: !Ref PrivateSubnet1
+      SecurityGroupIds:
+        - !Ref EC2SecurityGroup
+
+  # Security Group for EC2
+  EC2SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for EC2 instance
+      VpcId: !Ref MyVPC
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
 
 Outputs:
   TurnAroundPromptTableName:
@@ -218,7 +230,7 @@ Outputs:
 
   AvailabilityZones:
     Description: The Availability Zones used by this stack
-    Value: !Join 
+    Value: !Join
       - ', '
       - - !Select [0, !GetAZs '']
         - !Select [1, !GetAZs '']
