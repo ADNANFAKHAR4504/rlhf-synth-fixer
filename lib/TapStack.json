@@ -29,6 +29,19 @@
             "Properties": {
                 "BucketName": {
                     "Ref": "BucketName"
+                },
+                "NotificationConfiguration": {
+                    "LambdaFunctionConfigurations": [
+                        {
+                            "Event": "s3:ObjectCreated:*",
+                            "LambdaFunctionArn": {
+                                "Fn::GetAtt": [
+                                    "LambdaFunction",
+                                    "Arn"
+                                ]
+                            }
+                        }
+                    ]
                 }
             }
         },
@@ -96,10 +109,7 @@
                     "Ref": "LambdaRuntime"
                 },
                 "Code": {
-                    "S3Bucket": {
-                        "Ref": "BucketName"
-                    },
-                    "S3Key": "lambda-code.zip"
+                    "ZipFile": "exports.handler = async (event) => {\n  console.log(\"Received event:\", JSON.stringify(event, null, 2));\n  \n  // Logic for processing the S3 event\n  const record = event.Records[0];\n  const s3Bucket = record.s3.bucket.name;\n  const s3Key = record.s3.object.key;\n  console.log(`New object created in bucket: ${s3Bucket} with key: ${s3Key}`);\n\n  // Example logic: You can process the object in S3 here\n  // For example, fetching the S3 object or other actions\n\n  return {\n    statusCode: 200,\n    body: JSON.stringify({ message: 'Lambda executed successfully' }),\n  };\n};\n"
                 }
             }
         },
@@ -117,27 +127,6 @@
                     "Ref": "LambdaFunction"
                 },
                 "Enabled": "True"
-            }
-        },
-        "BucketNotification": {
-            "Type": "AWS::S3::BucketNotification",
-            "Properties": {
-                "Bucket": {
-                    "Ref": "S3Bucket"
-                },
-                "NotificationConfiguration": {
-                    "LambdaFunctionConfigurations": [
-                        {
-                            "Event": "s3:ObjectCreated:*",
-                            "LambdaFunctionArn": {
-                                "Fn::GetAtt": [
-                                    "LambdaFunction",
-                                    "Arn"
-                                ]
-                            }
-                        }
-                    ]
-                }
             }
         }
     },

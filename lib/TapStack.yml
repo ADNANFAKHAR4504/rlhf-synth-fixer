@@ -27,6 +27,10 @@ Resources:
     Type: AWS::S3::Bucket
     Properties:
       BucketName: !Ref BucketName
+      NotificationConfiguration:
+        LambdaFunctionConfigurations:
+          - Event: "s3:ObjectCreated:*"
+            LambdaFunctionArn: !GetAtt LambdaFunction.Arn
 
   LambdaExecutionRole:
     Type: AWS::IAM::Role
@@ -53,7 +57,7 @@ Resources:
                   - "logs:CreateLogStream"
                   - "logs:PutLogEvents"
                 Resource: "*"
-  
+
   LambdaFunction:
     Type: AWS::Lambda::Function
     Properties:
@@ -62,9 +66,25 @@ Resources:
       Role: !GetAtt LambdaExecutionRole.Arn
       Runtime: !Ref LambdaRuntime
       Code:
-        S3Bucket: !Ref BucketName
-        S3Key: "lambda-code.zip"  # Ensure your Lambda code is uploaded to S3 under this key.
-  
+        ZipFile: |
+          exports.handler = async (event) => {
+            console.log("Received event:", JSON.stringify(event, null, 2));
+            
+            // Logic for processing the S3 event
+            const record = event.Records[0];
+            const s3Bucket = record.s3.bucket.name;
+            const s3Key = record.s3.object.key;
+            console.log(`New object created in bucket: ${s3Bucket} with key: ${s3Key}`);
+
+            // Example logic: You can process the object in S3 here
+            // For example, fetching the S3 object or other actions
+
+            return {
+              statusCode: 200,
+              body: JSON.stringify({ message: 'Lambda executed successfully' }),
+            };
+          };
+
   LambdaS3EventSource:
     Type: AWS::Lambda::EventSourceMapping
     Properties:
@@ -72,15 +92,6 @@ Resources:
       EventSourceArn: !GetAtt S3Bucket.Arn
       FunctionName: !Ref LambdaFunction
       Enabled: "True"
-  
-  BucketNotification:
-    Type: AWS::S3::BucketNotification
-    Properties:
-      Bucket: !Ref S3Bucket
-      NotificationConfiguration:
-        LambdaFunctionConfigurations:
-          - Event: "s3:ObjectCreated:*"
-            LambdaFunctionArn: !GetAtt LambdaFunction.Arn
 
 Outputs:
   LambdaFunctionName:
