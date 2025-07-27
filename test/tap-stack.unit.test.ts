@@ -61,7 +61,7 @@ describe('TapStack CloudFormation Template - Secure Web Application', () => {
         'Owner',
       ];
 
-      expectedParams.forEach(param => {
+      expectedParams.forEach((param: string) => {
         expect(template.Parameters[param]).toBeDefined();
       });
     });
@@ -90,7 +90,7 @@ describe('TapStack CloudFormation Template - Secure Web Application', () => {
 
     test('port parameters should have valid ranges', () => {
       const portParams = ['HTTPPort', 'HTTPSPort', 'DatabasePort'];
-      portParams.forEach(param => {
+      portParams.forEach((param: string) => {
         expect(template.Parameters[param].Type).toBe('Number');
         expect(template.Parameters[param].MinValue).toBe(1);
         expect(template.Parameters[param].MaxValue).toBe(65535);
@@ -409,9 +409,17 @@ describe('TapStack CloudFormation Template - Secure Web Application', () => {
 
       const tags = eventDataStore.Properties.Tags;
       expect(tags).toHaveLength(4);
-      expect(tags.find(tag => tag.Key === 'Project')).toBeDefined();
-      expect(tags.find(tag => tag.Key === 'Environment')).toBeDefined();
-      expect(tags.find(tag => tag.Key === 'Owner')).toBeDefined();
+      expect(
+        tags.find((tag: { Key: string; Value: any }) => tag.Key === 'Project')
+      ).toBeDefined();
+      expect(
+        tags.find(
+          (tag: { Key: string; Value: any }) => tag.Key === 'Environment'
+        )
+      ).toBeDefined();
+      expect(
+        tags.find((tag: { Key: string; Value: any }) => tag.Key === 'Owner')
+      ).toBeDefined();
     });
   });
 
@@ -435,11 +443,11 @@ describe('TapStack CloudFormation Template - Secure Web Application', () => {
         'CloudTrailEventDataStore',
       ];
 
-      taggedResources.forEach(resourceName => {
+      taggedResources.forEach((resourceName: string) => {
         const resource = template.Resources[resourceName];
         expect(resource.Properties.Tags).toBeDefined();
 
-        requiredTags.forEach(tagKey => {
+        requiredTags.forEach((tagKey: string) => {
           const tag = resource.Properties.Tags.find(
             (t: any) => t.Key === tagKey
           );
@@ -472,7 +480,7 @@ describe('TapStack CloudFormation Template - Secure Web Application', () => {
         'WebServerInstanceId',
       ];
 
-      expectedOutputs.forEach(output => {
+      expectedOutputs.forEach((output: string) => {
         expect(template.Outputs[output]).toBeDefined();
         expect(template.Outputs[output].Export).toBeDefined();
       });
