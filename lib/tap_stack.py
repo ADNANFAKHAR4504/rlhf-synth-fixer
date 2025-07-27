@@ -99,15 +99,15 @@ class TapStack(Stack):
     # 1. DynamoDB Stack
     self.dynamodb_stack = NestedDynamoDBStack(
         self,
-        f"{self.app_name}-DynamoDB-{self.stack_suffix}",
-        table_name=dynamodb_table_name
+        f"{self.app_name}-DynamoDB-{self.stack_suffix}"
+        # Removed: table_name=dynamodb_table_name
     )
 
     # 2. Error Handling Stack
     self.error_handling_stack = NestedErrorHandlingStack(
         self,
-        f"{self.app_name}-ErrorHandling-{self.stack_suffix}",
-        queue_name=dlq_queue_name
+        f"{self.app_name}-ErrorHandling-{self.stack_suffix}"
+        # Removed: queue_name=dlq_queue_name
     )
 
     # 3. S3 Source Stack
@@ -127,10 +127,7 @@ class TapStack(Stack):
     )
 
     # --- Circular Dependency Fix ---
-    # Ensure S3 triggers Lambda only after Lambda is created, to avoid CF cycles
     self.s3_source_stack.add_dependency(self.lambda_processing_stack)
-    # Optional: Make Lambda depend on S3
-    # self.lambda_processing_stack.add_dependency(self.s3_source_stack)
 
     self.s3_source_stack.s3_bucket.add_event_notification(
         s3.EventType.OBJECT_CREATED,
