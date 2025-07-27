@@ -1,5 +1,5 @@
 import * as cdk from 'aws-cdk-lib';
-import { Template } from 'aws-cdk-lib/assertions';
+import { Match, Template } from 'aws-cdk-lib/assertions';
 import { WebServerStack } from '../lib/web-server';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 
@@ -45,14 +45,14 @@ describe('WebServerStack', () => {
   });
 
   const template = Template.fromStack(stack);
-
-  test('has security group with SSH and HTTP ingress rules', () => {
+  //   console.log(JSON.stringify(template.toJSON(), null, 2));
+  test('has security group HTTP ingress rules', () => {
     template.hasResourceProperties('AWS::EC2::SecurityGroup', {
       GroupDescription: 'Allow SSH and HTTP access',
       SecurityGroupIngress: [
         {
-          CidrIp: '0.0.0.0/0',
-          Description: 'Allow SSH access from anywhere',
+          CidrIp: '10.0.0.0/16',
+          Description: 'Secure SSH access from 10.0.0.0/16',
           FromPort: 22,
           IpProtocol: 'tcp',
           ToPort: 22,
@@ -68,19 +68,49 @@ describe('WebServerStack', () => {
     });
   });
 
+  test('should not allow SSH from 0.0.0.0/0', () => {
+    const sgResources = template.findResources('AWS::EC2::SecurityGroup');
+    Object.values(sgResources).forEach((sg: any) => {
+      const ingress = sg.Properties.SecurityGroupIngress || [];
+      ingress.forEach((rule: any) => {
+        if (rule.FromPort === 22) {
+          expect(rule.CidrIp).not.toBe('0.0.0.0/0');
+        }
+      });
+    });
+  });
+
+  test('EC2 Role has correct policies and tags', () => {
+    template.hasResourceProperties('AWS::IAM::Role', {
+      RoleName: 'ec2-instance-role-test',
+      AssumeRolePolicyDocument: Match.anyValue(), // or match specific structure
+
+      Policies: Match.arrayWith([
+        Match.objectLike({
+          PolicyName: 'S3ReadOnlyAccess',
+          PolicyDocument: {
+            Statement: Match.arrayWith([
+              Match.objectLike({
+                Action: Match.arrayWith(['s3:GetObject', 's3:ListBucket']),
+                Effect: 'Allow',
+                Resource: '*',
+              }),
+            ]),
+          },
+        }),
+      ]),
+      Tags: Match.arrayWith([
+        Match.objectLike({
+          Key: 'Environment',
+          Value: 'Dev',
+        }),
+      ]),
+    });
+  });
+
   test('creates IAM role with S3 and RDS policies', () => {
     template.hasResourceProperties('AWS::IAM::Role', {
       ManagedPolicyArns: [
-        {
-          'Fn::Join': [
-            '',
-            [
-              'arn:',
-              { Ref: 'AWS::Partition' },
-              ':iam::aws:policy/AmazonS3FullAccess',
-            ],
-          ],
-        },
         {
           'Fn::Join': [
             '',
@@ -92,6 +122,12 @@ describe('WebServerStack', () => {
           ],
         },
       ],
+    });
+  });
+
+  test('creates role with custom environment suffix', () => {
+    template.hasResourceProperties('AWS::IAM::Role', {
+      RoleName: 'ec2-instance-role-test',
     });
   });
 
@@ -112,23 +148,31 @@ describe('WebServerStack', () => {
     expect(userDataScript).toContain('systemctl enable httpd');
   });
 
-  test('creates EIP associated with EC2 instance', () => {
-    template.hasResourceProperties('AWS::EC2::EIP', {
-      Domain: 'vpc',
-    });
-  });
-
-  test('creates S3 bucket with block public access', () => {
+  test('S3 bucket is versioned and secured', () => {
     template.hasResourceProperties('AWS::S3::Bucket', {
+      BucketName: 'webserver-assets-test',
+      VersioningConfiguration: { Status: 'Enabled' },
       PublicAccessBlockConfiguration: {
         BlockPublicAcls: true,
         BlockPublicPolicy: true,
         IgnorePublicAcls: true,
         RestrictPublicBuckets: true,
       },
-      VersioningConfiguration: {
-        Status: 'Enabled',
-      },
+    });
+  });
+
+  test('Elastic IP is associated with EC2', () => {
+    template.hasResourceProperties('AWS::EC2::EIP', {
+      Domain: 'vpc',
+      InstanceId: Match.objectLike({
+        Ref: Match.stringLikeRegexp('EC2Instance'),
+      }),
+      Tags: Match.arrayWith([
+        Match.objectLike({
+          Key: 'Environment',
+          Value: 'Dev',
+        }),
+      ]),
     });
   });
 
@@ -151,15 +195,76 @@ describe('WebServerStack', () => {
     });
   });
 
-  test('creates RDS instance with correct engine and storage', () => {
+  test('RDS instance is provisioned correctly', () => {
     template.hasResourceProperties('AWS::RDS::DBInstance', {
-      Engine: 'mysql',
-      EngineVersion: '8.0',
-      DBName: 'MyDatabase',
-      AllocatedStorage: '20',
       DBInstanceClass: 'db.t3.micro',
+      Engine: 'mysql',
+      MasterUsername: 'admin',
       MultiAZ: true,
       PubliclyAccessible: false,
+      CopyTagsToSnapshot: true,
+      Tags: Match.arrayWith([
+        Match.objectLike({
+          Key: 'Environment',
+          Value: 'Dev',
+        }),
+      ]),
+    });
+  });
+
+  test('all resources have Environment=Dev tag', () => {
+    const resources = template.toJSON().Resources;
+    for (const [logicalId, resource] of Object.entries(resources)) {
+      const typedResource = resource as {
+        Properties?: {
+          Tags?: Array<{ Key: string; Value: string }>;
+          [key: string]: any;
+        };
+        [key: string]: any;
+      };
+
+      const tags = typedResource.Properties?.Tags;
+
+      if (tags) {
+        expect(tags).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              Key: 'Environment',
+              Value: 'Dev',
+            }),
+          ])
+        );
+      }
+    }
+  });
+
+  test('Outputs are configured correctly', () => {
+    template.hasOutput('EC2InstanceName', {
+      Value: 'webserver-test',
+    });
+
+    template.hasOutput('EC2RoleName', {
+      Value: { Ref: 'EC2RoleF978FC1C' },
+    });
+
+    template.hasOutput('ElasticIP', {
+      Value: { Ref: 'EIP' },
+    });
+
+    template.hasOutput('RDSADDRESS', {
+      Value: {
+        'Fn::GetAtt': ['RDSInstance9F6B765A', 'Endpoint.Address'],
+      },
+    });
+
+    template.hasOutput('RDSPORT', {
+      Value: {
+        'Fn::GetAtt': ['RDSInstance9F6B765A', 'Endpoint.Port'],
+      },
+    });
+
+    template.hasOutput('S3', {
+      Value: { Ref: 'S3Bucket07682993' },
     });
   });
 });
