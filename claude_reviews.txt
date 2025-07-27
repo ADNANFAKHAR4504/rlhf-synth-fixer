@@ -39,6 +39,10 @@ here is the example of integration test coverage report
 | S3 bucket must have versioning enabled                             | ❌               | (No S3 test)             | No test for S3 bucket versioning.                             |
 | Networking (VPC, Subnets, IGW, NAT, Route Tables)                  | ✅               | All test cases in code   | All networking resources tested as per your test script.       |
 
+here is the example for file match
+
+IDEAL_RESPONSE and TapStack comparison: Code matches / Code does not match
+
 
 Notes:
 * Do not expect cfn-outputs to be present in the code. Those are going to be generated in the QA pipeline.
