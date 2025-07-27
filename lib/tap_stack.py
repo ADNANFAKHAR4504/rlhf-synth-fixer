@@ -20,6 +20,7 @@ from aws_cdk import (
     aws_elasticloadbalancingv2 as elbv2,
 )
 from constructs import Construct
+from aws_cdk.aws_elasticloadbalancingv2_targets import InstanceTarget
 
 # Import your stacks here
 # from .ddb_stack import DynamoDBStack, DynamoDBStackProps
