@@ -4,21 +4,7 @@ Description: CloudFormation template for a secure networking environment in us-e
 Resources:
   # VPC
   VPC:
-    Ty  PublicSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: Enable HTTP access and restricted SSH access
-      VpcId: !Ref VPC
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 80
-          ToPort: 80
-          CidrIp: 0.0.0.0/0
-        - IpProtocol: tcp
-          FromPort: 22
-          ToPort: 22
-          CidrIp: 10.0.0.0/8
-          Description: SSH access from private networks onlyVPC
+    Type: AWS::EC2::VPC
     Properties:
       CidrBlock: 10.0.0.0/16
       EnableDnsSupport: true
@@ -174,7 +160,7 @@ Resources:
   PublicSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Allow HTTP and SSH inbound traffic to public subnets
+      GroupDescription: Enable HTTP access and restricted SSH access
       VpcId: !Ref VPC
       SecurityGroupIngress:
         - IpProtocol: tcp
@@ -184,7 +170,8 @@ Resources:
         - IpProtocol: tcp
           FromPort: 22
           ToPort: 22
-          CidrIp: 0.0.0.0/0
+          CidrIp: 10.0.0.0/8
+          Description: SSH access from private networks only
       SecurityGroupEgress:
         - IpProtocol: -1 # Allow all outbound traffic
           CidrIp: 0.0.0.0/0
@@ -208,6 +195,9 @@ Outputs:
   PrivateSubnet2Id:
     Description: The ID of Private Subnet 2
     Value: !Ref PrivateSubnet2
+  InternetGatewayId:
+    Description: The ID of the Internet Gateway
+    Value: !Ref InternetGateway
   PublicSecurityGroupId:
     Description: The ID of the Public Security Group
     Value: !Ref PublicSecurityGroup
