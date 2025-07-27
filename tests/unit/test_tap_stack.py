@@ -4,12 +4,14 @@ import aws_cdk as cdk
 from aws_cdk.assertions import Template, Match
 from pytest import mark
 
-from lib.tap_stack import TapStack, TapStackProps
-from lib.stacks.dynamodb_stack import DynamoDBStack, DynamoDBStackProps
-from lib.stacks.s3_stack import S3Stack, S3StackProps
-from lib.stacks.stepfunctions_stack import StepFunctionsStack, StepFunctionsStackProps
-from lib.stacks.lambda_stack import LambdaStack, LambdaStackProps
-from lib.stacks.apigateway_stack import ApiGatewayStack, ApiGatewayStackProps
+from lib.tap_stack import (
+    TapStack, TapStackProps,
+    DynamoDBStack, DynamoDBStackProps,
+    S3Stack, S3StackProps,
+    StepFunctionsStack, StepFunctionsStackProps,
+    LambdaStack, LambdaStackProps,
+    ApiGatewayStack, ApiGatewayStackProps
+)
 
 
 @mark.describe("TapStack")
