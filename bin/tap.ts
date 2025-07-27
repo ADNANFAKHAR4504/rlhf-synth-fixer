@@ -9,7 +9,6 @@ export async function findVpcByCidr(cidr: string): Promise<string | undefined> {
   const result = await client.send(new DescribeVpcsCommand({}));
 
   const vpc = result.Vpcs?.find(v => v.CidrBlock === cidr);
-  console.log(vpc?.VpcId);
   return vpc?.VpcId;
 }
 

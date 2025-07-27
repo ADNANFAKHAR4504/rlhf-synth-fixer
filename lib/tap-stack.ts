@@ -2,7 +2,7 @@ import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { EC2Client, DescribeVpcsCommand } from '@aws-sdk/client-ec2';
 
-import { WebServerStack } from './secure-web-server';
+import { WebServerStack } from './web-server';
 
 interface TapStackProps extends cdk.StackProps {
   environmentSuffix?: string;
@@ -28,12 +28,14 @@ async function main() {
 
   const stack = new cdk.Stack(app, 'MyStack');
 
-  new TapStack(stack, 'FindVpcStack', {
+  new TapStack(stack, 'TapStack', {
     vpcId,
   });
 }
 
-main();
+if (require.main === module) {
+  main();
+}
 
 export class TapStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: TapStackProps) {
