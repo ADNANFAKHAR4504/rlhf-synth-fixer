@@ -445,9 +445,3 @@ class TestTapStackIntegration(unittest.TestCase):
             time.sleep(10)
         self.assertTrue(
                 found, "No CloudTrail log file found in CloudTrail bucket after event")
-
-    def tearDown(self):
-        """Clean up any test artifacts"""
-        # This method can be used to clean up any test-specific resources
-        # if needed, but we generally don't want to clean up the main stack
-        # resources here as they're needed for other tests
