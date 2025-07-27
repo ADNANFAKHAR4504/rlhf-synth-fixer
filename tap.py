@@ -44,12 +44,18 @@ if os.path.exists(aws_region_file):
 if not region:
     region = os.getenv('CDK_DEFAULT_REGION') or os.getenv('AWS_DEFAULT_REGION') or 'us-east-1'
 
-# For CI/CD environments, let CDK resolve account from AWS credentials
-# For local development with explicit credentials, use environment variables
+# Environment configuration - flexible for both CI/CD and local development
+# Priority: CDK_DEFAULT_ACCOUNT (if set) -> Let CDK resolve from AWS credentials
 account = os.getenv('CDK_DEFAULT_ACCOUNT')
 env_config = None
+
+# If account is explicitly provided, use it
 if account and account.strip():
     env_config = cdk.Environment(account=account, region=region)
+# For CI/CD environments without explicit account, still provide region
+# This allows CDK to resolve the account from AWS credentials while ensuring region is set
+else:
+    env_config = cdk.Environment(region=region)
 
 props = TapStackProps(
     environment_suffix=environment_suffix,
