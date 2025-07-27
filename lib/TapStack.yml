@@ -117,7 +117,8 @@ Resources:
       StorageType: gp2
       MultiAZ: true
       DBName: !Sub '${ProjectName}${EnvironmentName}DB'
-      MasterUserSecret: !Ref MyWebAppDBPasswordSecret
+      MasterUserSecret:
+        SecretArn: !Ref MyWebAppDBPasswordSecret # <-- THIS IS THE FIX
       VPCSecurityGroups:
         - !GetAtt WebAppDatabaseSecurityGroup.GroupId
       PubliclyAccessible: false
