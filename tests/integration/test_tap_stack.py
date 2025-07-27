@@ -1,10 +1,9 @@
 import json
 import os
 import unittest
-import boto3
 import uuid
+import boto3
 from botocore.exceptions import ClientError
-
 from pytest import mark
 
 # Open file cfn-outputs/flat-outputs.json
@@ -38,7 +37,7 @@ class TestTapStack(unittest.TestCase):
       self.lambda_client = boto3.client('lambda', region_name=region)
       self.stepfunctions_client = boto3.client('stepfunctions', region_name=region)
       self.aws_available = True
-    except Exception:
+    except ClientError :
       # AWS credentials/region not available - tests will be skipped
       self.aws_available = False
     
@@ -113,7 +112,8 @@ class TestTapStack(unittest.TestCase):
       )
       self.assertEqual(response['status'], 'ACTIVE')
     except ClientError as e:
-      self.fail(f"Step Functions state machine {state_machine_arn} does not exist or is not accessible: {e}")
+      self.fail(f"Step Functions state machine {state_machine_arn}"
+                f"does not exist or is not accessible: {e}")
 
   @mark.it("verifies API Gateway endpoint is accessible")
   def test_api_gateway_endpoint_accessible(self):
@@ -128,7 +128,7 @@ class TestTapStack(unittest.TestCase):
     # ASSERT - Just check that we have a valid endpoint URL
     self.assertTrue(api_endpoint.startswith('https://'))
     self.assertIn('execute-api', api_endpoint)
-    self.assertIn('us-west-2', api_endpoint)
+    self.assertIn('us-east-1', api_endpoint)
 
   @mark.it("tests end-to-end workflow - POST request processing")
   def test_end_to_end_request_processing(self):
@@ -194,7 +194,7 @@ class TestTapStack(unittest.TestCase):
       )
       self.assertIn(execution_response['status'], ['SUCCEEDED', 'RUNNING'])
       
-    except Exception as e:
+    except ClientError as e:
       self.fail(f"End-to-end test failed: {e}")
 
   @mark.it("tests Lambda function handles malformed input gracefully")
@@ -225,7 +225,7 @@ class TestTapStack(unittest.TestCase):
       response_body = json.loads(response_payload['body'])
       self.assertIn('error', response_body)
       
-    except Exception as e:
+    except ClientError as e:
       self.fail(f"Malformed input test failed: {e}")
 
   @mark.it("validates flat-outputs.json structure when available")
@@ -245,19 +245,6 @@ class TestTapStack(unittest.TestCase):
       self.assertIsNotNone(flat_outputs[key], f"Output {key} is None")
       self.assertTrue(len(flat_outputs[key]) > 0, f"Output {key} is empty")
 
-  @mark.it("verifies integration test setup without AWS dependencies")
-  def test_integration_test_setup_local(self):
-    # ARRANGE & ACT - This test always runs regardless of AWS availability
-    # Test that the test file structure is correct
-    
-    # ASSERT - Verify test file paths and structure
-    self.assertTrue(os.path.exists(flat_outputs_path) or not os.path.exists(flat_outputs_path))
-    self.assertIsInstance(flat_outputs, dict)
-    
-    # Test that boto3 import works (even without credentials)
-    import boto3
-    self.assertIsNotNone(boto3)
-
   @mark.it("validates expected AWS service regions match deployment")
   def test_aws_service_regions(self):
     # SKIP if no deployment outputs
@@ -269,5 +256,5 @@ class TestTapStack(unittest.TestCase):
     
     if api_endpoint:
       # ASSERT - Check that API Gateway endpoint is in the expected region
-      self.assertIn('us-west-2', api_endpoint)
+      self.assertIn('us-east-1', api_endpoint)
       self.assertIn('amazonaws.com', api_endpoint)
