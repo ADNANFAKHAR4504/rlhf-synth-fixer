@@ -28,7 +28,7 @@ Resources:
     Properties:
       BucketName: !Ref BucketName
       NotificationConfiguration:
-        LambdaFunctionConfigurations:
+        LambdaConfigurations:  # Corrected property name
           - Event: "s3:ObjectCreated:*"
             LambdaFunctionArn: !GetAtt LambdaFunction.Arn
 
@@ -92,6 +92,15 @@ Resources:
       EventSourceArn: !GetAtt S3Bucket.Arn
       FunctionName: !Ref LambdaFunction
       Enabled: "True"
+
+  # Add Lambda permission for S3 to invoke the Lambda function
+  LambdaInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: "lambda:InvokeFunction"
+      FunctionName: !Ref LambdaFunctionName
+      Principal: "s3.amazonaws.com"
+      SourceArn: !GetAtt S3Bucket.Arn
 
 Outputs:
   LambdaFunctionName:

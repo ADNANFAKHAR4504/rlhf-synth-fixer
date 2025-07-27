@@ -31,7 +31,7 @@
                     "Ref": "BucketName"
                 },
                 "NotificationConfiguration": {
-                    "LambdaFunctionConfigurations": [
+                    "LambdaConfigurations": [
                         {
                             "Event": "s3:ObjectCreated:*",
                             "LambdaFunctionArn": {
@@ -127,6 +127,22 @@
                     "Ref": "LambdaFunction"
                 },
                 "Enabled": "True"
+            }
+        },
+        "LambdaInvokePermission": {
+            "Type": "AWS::Lambda::Permission",
+            "Properties": {
+                "Action": "lambda:InvokeFunction",
+                "FunctionName": {
+                    "Ref": "LambdaFunctionName"
+                },
+                "Principal": "s3.amazonaws.com",
+                "SourceArn": {
+                    "Fn::GetAtt": [
+                        "S3Bucket",
+                        "Arn"
+                    ]
+                }
             }
         }
     },
