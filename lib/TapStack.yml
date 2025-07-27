@@ -47,6 +47,12 @@ Resources:
                 Action:
                   - "s3:GetObject"
                 Resource: !Sub "arn:aws:s3:::${BucketName}/*"
+              - Effect: "Allow"
+                Action:
+                  - "logs:CreateLogGroup"
+                  - "logs:CreateLogStream"
+                  - "logs:PutLogEvents"
+                Resource: "*"
   
   LambdaFunction:
     Type: AWS::Lambda::Function
@@ -74,7 +80,7 @@ Resources:
       NotificationConfiguration:
         LambdaFunctionConfigurations:
           - Event: "s3:ObjectCreated:*"
-            Function: !GetAtt LambdaFunction.Arn
+            LambdaFunctionArn: !GetAtt LambdaFunction.Arn
 
 Outputs:
   LambdaFunctionName:

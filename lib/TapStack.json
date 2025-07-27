@@ -61,6 +61,15 @@
                                     "Resource": {
                                         "Fn::Sub": "arn:aws:s3:::${BucketName}/*"
                                     }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "logs:CreateLogGroup",
+                                        "logs:CreateLogStream",
+                                        "logs:PutLogEvents"
+                                    ],
+                                    "Resource": "*"
                                 }
                             ]
                         }
@@ -120,7 +129,7 @@
                     "LambdaFunctionConfigurations": [
                         {
                             "Event": "s3:ObjectCreated:*",
-                            "Function": {
+                            "LambdaFunctionArn": {
                                 "Fn::GetAtt": [
                                     "LambdaFunction",
                                     "Arn"
