@@ -19,7 +19,6 @@ Parameters:
   WebAppServerKeyName:
     Type: AWS::EC2::KeyPair::KeyName
     Description: "Name of an existing EC2 KeyPair to enable SSH access to the instance."
-  # --- Parameters for Manual Password Management ---
   DBMasterUsername:
     Type: String
     Description: "Username for the RDS master user. Use only letters and numbers."
@@ -29,7 +28,7 @@ Parameters:
     Type: String
     Description: "Password for the RDS master user. Must be at least 8 characters and contain only allowed characters."
     MinLength: 8
-    Default: "dbpass123456"
+    Default: {{resolve:secretsmanager:MyProdDbCredentials:SecretString:password}}
 
 Resources:
   WebAppAssets:
