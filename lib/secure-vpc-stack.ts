@@ -1,9 +1,12 @@
 import { InternetGateway } from '@cdktf/provider-aws/lib/internet-gateway';
+import { NetworkAcl } from '@cdktf/provider-aws/lib/network-acl';
 import { NetworkAclRule } from '@cdktf/provider-aws/lib/network-acl-rule';
 import { RouteTable } from '@cdktf/provider-aws/lib/route-table';
 import { RouteTableAssociation } from '@cdktf/provider-aws/lib/route-table-association';
+import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
 import { SecurityGroupRule } from '@cdktf/provider-aws/lib/security-group-rule';
-import { NetworkAcl, SecurityGroup, Subnet, Vpc } from 'aws-cdk-lib/aws-ec2';
+import { Subnet } from '@cdktf/provider-aws/lib/subnet';
+import { Vpc } from '@cdktf/provider-aws/lib/vpc';
 import { TerraformOutput } from 'cdktf';
 import { Construct } from 'constructs';
 
@@ -13,7 +16,7 @@ export class SecureVpcStack extends Construct {
 
     // Create VPC
     const vpc = new Vpc(this, 'main_vpc', {
-      cidr: '10.0.0.0/16',
+      cidrBlock: '10.0.0.0/16',
     });
 
     // Get availability zones
@@ -23,7 +26,7 @@ export class SecureVpcStack extends Construct {
     const publicSubnets = availabilityZones.map(
       (az, i) =>
         new Subnet(this, `public_subnet_${i}`, {
-          vpcId: vpc.vpcId,
+          vpcId: vpc.id,
           cidrBlock: `10.0.${i}.0/24`,
           availabilityZone: az,
           mapPublicIpOnLaunch: true,
@@ -32,12 +35,12 @@ export class SecureVpcStack extends Construct {
 
     // Create Internet Gateway
     const igw = new InternetGateway(this, 'igw', {
-      vpcId: vpc.vpcId,
+      vpcId: vpc.id,
     });
 
     // Create Route Table
     const publicRouteTable = new RouteTable(this, 'public_route_table', {
-      vpcId: vpc.vpcId,
+      vpcId: vpc.id,
       route: [
         {
           cidrBlock: '0.0.0.0/0',
@@ -49,19 +52,20 @@ export class SecureVpcStack extends Construct {
     // Associate Route Table with public subnets
     publicSubnets.forEach((subnet, i) => {
       new RouteTableAssociation(this, `public_rta_${i}`, {
-        subnetId: subnet.subnetId,
+        subnetId: subnet.id,
         routeTableId: publicRouteTable.id,
       });
     });
 
     // Create Network ACL
     const networkAcl = new NetworkAcl(this, 'public_nacl', {
-      vpc: vpc,
+      vpcId: vpc.id,
+      subnetIds: publicSubnets.map(subnet => subnet.id),
     });
 
     // Allow inbound HTTP/HTTPS
     new NetworkAclRule(this, 'allow_inbound_http', {
-      networkAclId: networkAcl.networkAclId,
+      networkAclId: networkAcl.id,
       ruleNumber: 100,
       protocol: 'tcp',
       ruleAction: 'allow',
@@ -72,7 +76,7 @@ export class SecureVpcStack extends Construct {
     });
 
     new NetworkAclRule(this, 'allow_inbound_https', {
-      networkAclId: networkAcl.networkAclId,
+      networkAclId: networkAcl.id,
       ruleNumber: 110,
       protocol: 'tcp',
       ruleAction: 'allow',
@@ -84,7 +88,7 @@ export class SecureVpcStack extends Construct {
 
     // Deny all other inbound traffic
     new NetworkAclRule(this, 'deny_all_inbound', {
-      networkAclId: networkAcl.networkAclId,
+      networkAclId: networkAcl.id,
       ruleNumber: 32767,
       protocol: '-1',
       ruleAction: 'deny',
@@ -94,7 +98,7 @@ export class SecureVpcStack extends Construct {
 
     // Create Security Group
     const securityGroup = new SecurityGroup(this, 'web_sg', {
-      vpc: vpc,
+      vpcId: vpc.id,
     });
 
     // Allow inbound HTTP/HTTPS traffic in Security Group
@@ -103,7 +107,7 @@ export class SecureVpcStack extends Construct {
       fromPort: 80,
       toPort: 80,
       protocol: 'tcp',
-      securityGroupId: securityGroup.securityGroupId,
+      securityGroupId: securityGroup.id,
       cidrBlocks: ['0.0.0.0/0'],
     });
 
@@ -112,7 +116,7 @@ export class SecureVpcStack extends Construct {
       fromPort: 443,
       toPort: 443,
       protocol: 'tcp',
-      securityGroupId: securityGroup.securityGroupId,
+      securityGroupId: securityGroup.id,
       cidrBlocks: ['0.0.0.0/0'],
     });
 
@@ -122,18 +126,18 @@ export class SecureVpcStack extends Construct {
       fromPort: 0,
       toPort: 0,
       protocol: '-1',
-      securityGroupId: securityGroup.securityGroupId,
+      securityGroupId: securityGroup.id,
       cidrBlocks: ['0.0.0.0/0'],
     });
 
     // Output the VPC ID and Subnet IDs
     new TerraformOutput(this, 'vpc_id', {
-      value: vpc.vpcId,
+      value: vpc.id,
       description: 'The ID of the VPC',
     });
 
     new TerraformOutput(this, 'public_subnet_ids', {
-      value: publicSubnets.map(subnet => subnet.subnetId),
+      value: publicSubnets.map(subnet => subnet.id),
       description: 'The IDs of the public subnets',
     });
   }
