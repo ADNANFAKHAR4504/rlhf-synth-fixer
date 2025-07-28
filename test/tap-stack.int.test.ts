@@ -1,88 +1,147 @@
-import { App, Testing } from 'cdktf';
-import { TapStack } from '../lib/tap-stack';
+import {
+  DescribeInternetGatewaysCommand,
+  DescribeNetworkAclsCommand,
+  DescribeRouteTablesCommand,
+  DescribeSecurityGroupsCommand,
+  DescribeSubnetsCommand,
+  DescribeVpcsCommand,
+  EC2Client,
+} from '@aws-sdk/client-ec2';
 
-describe('TapStack Integration', () => {
-  let app: App;
-  let stack: TapStack;
-  let synthesized: string;
+// Set region to match the stack
+const REGION = 'us-west-2';
+const VPC_CIDR = '10.0.0.0/16';
+const PUBLIC_SUBNET_CIDRS = ['10.0.0.0/24', '10.0.1.0/24'];
 
-  beforeEach(() => {
-    app = new App();
-    stack = new TapStack(app, 'IntegrationTapStack', {
-      environmentSuffix: 'int',
-      stateBucket: 'iac-rlhf-tf-states',
-      stateBucketRegion: 'us-east-1',
-      awsRegion: 'us-west-2',
-      defaultTags: { tags: { Env: 'integration' } },
-    });
-    synthesized = Testing.synth(stack);
+const ec2 = new EC2Client({ region: REGION });
+
+describe('SecureVpcStack Integration (AWS SDK)', () => {
+  let vpcId: string;
+  let subnetIds: string[] = [];
+
+  it('should provision a VPC with the correct CIDR block', async () => {
+    const vpcs = await ec2.send(
+      new DescribeVpcsCommand({
+        Filters: [{ Name: 'cidr-block', Values: [VPC_CIDR] }],
+      })
+    );
+    expect(vpcs.Vpcs).toBeDefined();
+    expect(vpcs.Vpcs!.length).toBeGreaterThan(0);
+    vpcId = vpcs.Vpcs![0].VpcId!;
+    expect(vpcs.Vpcs![0].CidrBlock).toBe(VPC_CIDR);
   });
 
-  it('should synthesize valid Terraform JSON', () => {
-    expect(() => JSON.parse(synthesized)).not.toThrow();
-    const config = JSON.parse(synthesized);
-    expect(config).toHaveProperty('terraform');
-    expect(config).toHaveProperty('provider');
-    expect(config.provider.aws.region).toBe('us-west-2');
-    expect(config.terraform.backend.s3.bucket).toBe('iac-rlhf-tf-states');
-    expect(config.terraform.backend.s3.region).toBe('us-east-1');
+  it('should create two public subnets in different AZs with correct CIDRs', async () => {
+    const subnets = await ec2.send(
+      new DescribeSubnetsCommand({
+        Filters: [{ Name: 'vpc-id', Values: [vpcId] }],
+      })
+    );
+    expect(subnets.Subnets).toBeDefined();
+    // Check for both expected CIDRs
+    const foundCidrs = subnets.Subnets!.map(s => s.CidrBlock);
+    for (const cidr of PUBLIC_SUBNET_CIDRS) {
+      expect(foundCidrs).toContain(cidr);
+    }
+    // Check for different AZs
+    const azs = new Set(subnets.Subnets!.map(s => s.AvailabilityZone));
+    expect(azs.size).toBeGreaterThanOrEqual(2);
+    subnetIds = subnets.Subnets!.map(s => s.SubnetId!);
   });
 
-  it('should include SecureVpcStack resources in the output', () => {
-    const config = JSON.parse(synthesized);
-    // Check for VPC output
-    expect(config.output.vpc_id).toBeDefined();
-    expect(config.output.public_subnet_ids).toBeDefined();
-    // Check for at least one subnet and one security group rule
-    const resources = config.resource || {};
-    const hasSubnet = Object.values(resources).some(
-      (r: any) => r.type && r.type.includes('subnet')
+  it('should attach an Internet Gateway to the VPC', async () => {
+    const igws = await ec2.send(
+      new DescribeInternetGatewaysCommand({
+        Filters: [{ Name: 'attachment.vpc-id', Values: [vpcId] }],
+      })
     );
-    const hasSgRule = Object.values(resources).some(
-      (r: any) => r.type && r.type.includes('security_group_rule')
-    );
-    expect(hasSubnet).toBe(true);
-    expect(hasSgRule).toBe(true);
+    expect(igws.InternetGateways).toBeDefined();
+    expect(igws.InternetGateways!.length).toBeGreaterThan(0);
   });
 
-  it('should allow only HTTP/HTTPS inbound and deny all other inbound in NACL', () => {
-    const config = JSON.parse(synthesized);
-    const naclRules = Object.values(config.resource || {}).filter(
-      (r: any) => r.type === 'aws_network_acl_rule'
+  it('should have public route tables routing 0.0.0.0/0 to the IGW', async () => {
+    const routeTables = await ec2.send(
+      new DescribeRouteTablesCommand({
+        Filters: [{ Name: 'vpc-id', Values: [vpcId] }],
+      })
     );
-    const hasHttp = naclRules.some(
-      (r: any) => r.from_port === 80 && r.rule_action === 'allow'
+    const hasDefaultRoute = routeTables.RouteTables!.some(rt =>
+      rt.Routes?.some(
+        route =>
+          route.DestinationCidrBlock === '0.0.0.0/0' &&
+          route.GatewayId &&
+          route.GatewayId.startsWith('igw-')
+      )
     );
-    const hasHttps = naclRules.some(
-      (r: any) => r.from_port === 443 && r.rule_action === 'allow'
-    );
-    const hasDenyAll = naclRules.some(
-      (r: any) => r.rule_action === 'deny' && r.protocol === '-1'
-    );
-    expect(hasHttp).toBe(true);
-    expect(hasHttps).toBe(true);
-    expect(hasDenyAll).toBe(true);
+    expect(hasDefaultRoute).toBe(true);
   });
 
-  it('should allow all outbound traffic in the security group', () => {
-    const config = JSON.parse(synthesized);
-    const sgRules = Object.values(config.resource || {}).filter(
-      (r: any) => r.type === 'aws_security_group_rule'
+  it('should have a NACL allowing only inbound HTTP/HTTPS and denying all else', async () => {
+    const nacls = await ec2.send(
+      new DescribeNetworkAclsCommand({
+        Filters: [{ Name: 'vpc-id', Values: [vpcId] }],
+      })
     );
-    const hasAllowAllEgress = sgRules.some(
-      (r: any) =>
-        r.type === 'egress' &&
-        r.protocol === '-1' &&
-        r.cidr_blocks.includes('0.0.0.0/0')
+    expect(nacls.NetworkAcls).toBeDefined();
+    // Find NACL associated with our subnets
+    const nacl = nacls.NetworkAcls!.find(nacl =>
+      nacl.Associations?.some(assoc => subnetIds.includes(assoc.SubnetId!))
     );
-    expect(hasAllowAllEgress).toBe(true);
+    expect(nacl).toBeDefined();
+    // Check for allow rules for 80 and 443, and deny all others
+    const ingressRules = nacl!.Entries!.filter(e => !e.Egress);
+    const allow80 = ingressRules.find(
+      e =>
+        e.RuleAction === 'allow' &&
+        e.Protocol === '6' &&
+        e.PortRange?.From === 80 &&
+        e.PortRange.To === 80
+    );
+    const allow443 = ingressRules.find(
+      e =>
+        e.RuleAction === 'allow' &&
+        e.Protocol === '6' &&
+        e.PortRange?.From === 443 &&
+        e.PortRange.To === 443
+    );
+    const denyAll = ingressRules.find(
+      e => e.RuleAction === 'deny' && e.Protocol === '-1'
+    );
+    expect(allow80).toBeDefined();
+    expect(allow443).toBeDefined();
+    expect(denyAll).toBeDefined();
   });
 
-  it('should produce outputs for VPC and subnets', () => {
-    const config = JSON.parse(synthesized);
-    expect(config.output.vpc_id).toBeDefined();
-    expect(config.output.public_subnet_ids).toBeDefined();
-    expect(Array.isArray(config.output.public_subnet_ids.value)).toBe(true);
-    expect(config.output.public_subnet_ids.value.length).toBe(2);
+  it('should have a security group allowing only inbound HTTP/HTTPS from 0.0.0.0/0', async () => {
+    const sgs = await ec2.send(
+      new DescribeSecurityGroupsCommand({
+        Filters: [{ Name: 'vpc-id', Values: [vpcId] }],
+      })
+    );
+    expect(sgs.SecurityGroups).toBeDefined();
+    // Find SG with correct rules
+    const sg = sgs.SecurityGroups!.find(
+      sg =>
+        sg.IpPermissions?.some(
+          p =>
+            p.FromPort === 80 &&
+            p.ToPort === 80 &&
+            p.IpProtocol === 'tcp' &&
+            p.IpRanges?.some(r => r.CidrIp === '0.0.0.0/0')
+        ) &&
+        sg.IpPermissions?.some(
+          p =>
+            p.FromPort === 443 &&
+            p.ToPort === 443 &&
+            p.IpProtocol === 'tcp' &&
+            p.IpRanges?.some(r => r.CidrIp === '0.0.0.0/0')
+        )
+    );
+    expect(sg).toBeDefined();
+    // Should not allow other inbound ports
+    const otherIngress = sg!.IpPermissions!.filter(
+      p => ![80, 443].includes(p.FromPort ?? -1)
+    );
+    expect(otherIngress.length).toBe(0);
   });
 });
