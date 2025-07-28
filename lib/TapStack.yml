@@ -49,18 +49,6 @@ Resources:
         - Key: Environment
           Value: Development
 
-  PublicS3BucketPolicy:
-    Type: AWS::S3::BucketPolicy
-    Properties:
-      Bucket: !Ref PublicS3Bucket
-      PolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Sid: AllowPublicRead
-            Effect: Allow
-            Principal: "*"
-            Action: "s3:GetObject"
-            Resource: !Sub '${PublicS3Bucket.Arn}/*'
 
   # IAM Role for EC2 with S3 read-only access
   S3ReadOnlyInstanceRole:

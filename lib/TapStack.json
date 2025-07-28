@@ -49,25 +49,7 @@
             }
           ]
     "BucketName": {}
-        },
-        "PublicS3Bucket": {
-          "Type": "AWS::S3::Bucket",
-          "Properties": {
-            "BucketName": {
-              "Ref": "BucketName"
-            },
-            "LoggingConfiguration": {
-              "DestinationBucketName": {
-                "Ref": "S3AccessLogBucket"
-              },
-              "LogFilePrefix": "access-logs/"
-            },
-            "PublicAccessBlockConfiguration": {
-              "BlockPublicAcls": false,
-              "BlockPublicPolicy": false,
-              "IgnorePublicAcls": false,
-              "RestrictPublicBuckets": false
-            },
+      },
             "Tags": [
               {
                 "Key": "Environment",
