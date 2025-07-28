@@ -55,6 +55,12 @@
                         }
                     ]
                 },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
                 "Tags": [
                     {
                         "Key": "Environment",
@@ -67,18 +73,6 @@
                         "Value": "SampleProject"
                     }
                 ]
-            }
-        },
-        "SampleBucketPublicAccessBlock": {
-            "Type": "AWS::S3::BucketPublicAccessBlock",
-            "Properties": {
-                "Bucket": {
-                    "Ref": "SampleBucket"
-                },
-                "BlockPublicAcls": true,
-                "BlockPublicPolicy": true,
-                "IgnorePublicAcls": true,
-                "RestrictPublicBuckets": true
             }
         },
         "DevVPC": {
