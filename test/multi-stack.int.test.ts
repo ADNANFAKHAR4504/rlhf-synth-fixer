@@ -165,7 +165,6 @@ describe('AWS Resources Integration Test', () => {
 // ✅ NEW: LIVE APPLICATION TEST
 // -----------------------------
 
-
 describe('Live App Test via Load Balancer', () => {
   const loadBalancerUrl = `https://${outputs.LoadBalanceDNS}`;
 
@@ -178,7 +177,7 @@ describe('Live App Test via Load Balancer', () => {
       httpsAgent,
       timeout: 5000,
     });
-    const { status } = response
+    const { status } = response;
     expect(status).toBe(200);
   });
 
