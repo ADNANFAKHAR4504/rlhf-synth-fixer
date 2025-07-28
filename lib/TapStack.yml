@@ -335,7 +335,7 @@ Resources:
     Properties:
       LaunchTemplateName: WebAppLaunchTemplate
       LaunchTemplateData:
-        ImageId: "{{resolve:ssm-secure:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}" # Dynamically fetch latest Amazon Linux 2 AMI using dynamic reference
+        ImageId: "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}" # Dynamically fetch latest Amazon Linux 2 AMI using dynamic reference (corrected to ssm)
         InstanceType: !Ref InstanceType
         KeyName: !Ref KeyPairName
         SecurityGroupIds:
