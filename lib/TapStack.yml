@@ -344,7 +344,7 @@ Resources:
       DBInstanceIdentifier: !Sub '${Environment}-webapp-db'
       DBInstanceClass: !Ref DBInstanceType
       Engine: mysql
-      EngineVersion: '8.0'
+      EngineVersion: '8.0.41'
       AllocatedStorage: 20
       StorageType: gp2
       StorageEncrypted: true
