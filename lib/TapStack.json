@@ -5,26 +5,17 @@
         "ACMCertificateARN": {
             "Type": "String",
             "Description": "ARN of the ACM certificate",
-            "Default": "arn:aws:acm:us-west-2:123456789012:certificate/example-default-arn"
+            "Default": "arn:aws:acm:us-west-2:718240086340:certificate/3d421829-ffd2-4164-affb-167a99e907c2"
         },
         "HostedZoneId": {
             "Type": "String",
             "Description": "Route 53 Hosted Zone ID",
-            "Default": "Z0000000000000EXAMPLE"
+            "Default": "Z10367001W4ZBDH1EBSI0"
         },
         "DomainName": {
             "Type": "String",
             "Description": "Custom domain name",
-            "Default": "example.defaultdomain.com"
-        },
-        "DBMasterPassword": {
-            "Type": "String",
-            "Description": "Master password for RDS database",
-            "NoEcho": true,
-            "MinLength": 8,
-            "MaxLength": 128,
-            "AllowedPattern": "^[a-zA-Z0-9!@#$%^&*()_+=-]*$",
-            "ConstraintDescription": "Must contain only alphanumeric characters and special characters"
+            "Default": "tap-us-west-2.turing229221.com."
         }
     },
     "Resources": {
@@ -529,9 +520,7 @@
                 "AllocatedStorage": 20,
                 "Engine": "mysql",
                 "MasterUsername": "admin",
-                "MasterUserPassword": {
-                    "Ref": "DBMasterPassword"
-                },
+                "MasterUserPassword": "'{{resolve:secretsmanager:your-secret-name:SecretString:DBMasterPassword}}'\n",
                 "MultiAZ": true,
                 "VPCSecurityGroups": [
                     {
