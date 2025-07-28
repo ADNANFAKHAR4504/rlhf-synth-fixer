@@ -41,7 +41,7 @@ import {
 import axios from 'axios';
 import fs from 'fs';
 
-const environmentSuffix = 'dev';
+const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 const region = process.env.AWS_REGION || 'us-east-1';
 const stackName = `TapStack${environmentSuffix}`;
 
@@ -186,7 +186,7 @@ describe('Web Application Infrastructure - Comprehensive Integration Tests', () 
       expect(vpc.CidrBlock).toBe('10.0.0.0/16');
       expect(vpc.IsDefault).toBe(false);
       expect(vpc.Tags?.find(tag => tag.Key === 'Name')?.Value).toContain(
-        `${environmentSuffix}-webapp-vpc`
+        `dev-webapp-vpc`
       );
     });
 
@@ -620,7 +620,7 @@ describe('Web Application Infrastructure - Comprehensive Integration Tests', () 
       const template = response.LaunchTemplates![0];
       expect(template.LaunchTemplateId).toBe(outputs.LaunchTemplateId);
       expect(template.LaunchTemplateName).toContain(
-        `${environmentSuffix}-webapp-launch-template`
+        `dev-webapp-launch-template`
       );
     });
 
@@ -784,10 +784,7 @@ describe('Web Application Infrastructure - Comprehensive Integration Tests', () 
       }
 
       const command = new DescribeAlarmsCommand({
-        AlarmNames: [
-          `${environmentSuffix}-webapp-high-cpu`,
-          `${environmentSuffix}-webapp-low-cpu`,
-        ],
+        AlarmNames: [`dev-webapp-high-cpu`, `dev-webapp-low-cpu`],
       });
       const response = await cloudwatch.send(command);
 
@@ -795,10 +792,10 @@ describe('Web Application Infrastructure - Comprehensive Integration Tests', () 
       expect(response.MetricAlarms!.length).toBe(2);
 
       const highCpuAlarm = response.MetricAlarms!.find(
-        alarm => alarm.AlarmName === `${environmentSuffix}-webapp-high-cpu`
+        alarm => alarm.AlarmName === `dev-webapp-high-cpu`
       );
       const lowCpuAlarm = response.MetricAlarms!.find(
-        alarm => alarm.AlarmName === `${environmentSuffix}-webapp-low-cpu`
+        alarm => alarm.AlarmName === `dev-webapp-low-cpu`
       );
 
       expect(highCpuAlarm).toBeDefined();
@@ -928,7 +925,7 @@ describe('Web Application Infrastructure - Comprehensive Integration Tests', () 
       const vpc = vpcResponse.Vpcs![0];
       const nameTag = vpc.Tags?.find(tag => tag.Key === 'Name');
       expect(nameTag).toBeDefined();
-      expect(nameTag!.Value).toContain(environmentSuffix);
+      expect(nameTag!.Value).toContain('dev');
     });
   });
 
