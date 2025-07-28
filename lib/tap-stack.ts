@@ -143,7 +143,16 @@ export class TapStack extends cdk.Stack {
 
     // --- Monitoring (CloudWatch Alarms) ---
     new cloudwatch.Alarm(this, 'HighCpuAlarmASG', {
-      metric: asg.metric('CPUUtilization'),
+      // FIX: Manually create a new Metric object for the ASG CPU Utilization
+      metric: new cloudwatch.Metric({
+        namespace: 'AWS/AutoScaling',
+        metricName: 'CPUUtilization',
+        dimensionsMap: {
+          AutoScalingGroupName: asg.autoScalingGroupName,
+        },
+        period: cdk.Duration.minutes(5),
+        statistic: 'Average',
+      }),
       threshold: 85,
       evaluationPeriods: 2,
       alarmDescription: 'High CPU utilization on the application Auto Scaling Group.',
@@ -155,12 +164,18 @@ export class TapStack extends cdk.Stack {
     new aws_config.ManagedRule(this, 'S3VersioningEnabledRule', {
       identifier: aws_config.ManagedRuleIdentifiers.S3_BUCKET_VERSIONING_ENABLED,
     });
+
+    // FIX: This rule is designed for a specific instanceId, not an ASG name.
+    // It has been commented out to prevent deployment errors. A custom rule would
+    // be needed to check all instances within an ASG.
+    /*
     new aws_config.ManagedRule(this, 'Ec2NoPublicIpRule', {
       identifier: aws_config.ManagedRuleIdentifiers.EC2_INSTANCE_NO_PUBLIC_IP,
       inputParameters: {
-        instanceId: asg.autoScalingGroupName, // This might need adjustment based on how the rule works
+        instanceId: asg.autoScalingGroupName,
       },
     });
+    */
 
     // --- Outputs ---
     new cdk.CfnOutput(this, 'ALB_DNS', {
