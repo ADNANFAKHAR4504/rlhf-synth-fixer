@@ -1,5 +1,5 @@
-import fs from 'fs';
-import path from 'path';
+import * as fs from 'fs';
+import * as path from 'path';
 
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
@@ -208,11 +208,14 @@ describe('TapStack CloudFormation Template', () => {
     describe('TestIAMUser', () => {
       test('should be an IAM user', () => {
         const user = template.Resources.TestIAMUser;
+        expect(user).toBeDefined();
         expect(user.Type).toBe('AWS::IAM::User');
       });
 
       test('should have correct naming with environment suffix', () => {
         const user = template.Resources.TestIAMUser;
+        expect(user).toBeDefined();
+        expect(user.Properties).toBeDefined();
         expect(user.Properties.UserName).toEqual({
           'Fn::Sub': 'test-s3-user-${EnvironmentSuffix}',
         });
