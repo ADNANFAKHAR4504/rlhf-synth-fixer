@@ -9,7 +9,7 @@ describe('WebApp CloudFormation Template', () => {
     // If your template is named 'web-app-deployment.yaml', you can convert it using:
     // pipenv run cfn-flip -i web-app-deployment.yaml -o web-app-deployment.json
     // Make sure 'cfn-flip' is installed (pip install cfn-flip).
-    const templatePath = path.join(__dirname, 'web-app-deployment.json');
+    const templatePath = path.join(__dirname, 'TapStack.json');
     const templateContent = fs.readFileSync(templatePath, 'utf8');
     template = JSON.parse(templateContent);
   });
