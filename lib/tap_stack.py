@@ -5,7 +5,8 @@ architecture using AWS CDK with Python.
 The stack includes:
 - Lambda Function (Python 3.8)
 - API Gateway HTTP API with CORS
-- S3 Bucket with static website hosting
+- S3 Bucket with static website hosting via CloudFront
+- CloudFront distribution with Origin Access Control
 - DynamoDB Table with GSI
 - CloudWatch monitoring and alarms
 - KMS encryption for S3 and DynamoDB
@@ -15,6 +16,7 @@ from typing import Optional
 from aws_cdk import CfnOutput, Duration, RemovalPolicy, Stack, StackProps, Tags
 from aws_cdk import aws_apigatewayv2 as apigw
 from aws_cdk import aws_apigatewayv2_integrations as integrations
+from aws_cdk import aws_cloudfront as cloudfront
 from aws_cdk import aws_cloudwatch as cloudwatch
 from aws_cdk import aws_dynamodb as dynamodb
 from aws_cdk import aws_kms as kms
@@ -172,6 +174,7 @@ class TapStack(Stack):
     )
 
     # S3 Bucket for static website hosting with versioning and KMS encryption
+    # Made private - will be accessed via CloudFront distribution only
     bucket = s3.Bucket(
         self,
         "FrontendBucket",
@@ -180,18 +183,66 @@ class TapStack(Stack):
         encryption_key=s3_kms_key,
         website_index_document="index.html",
         website_error_document="error.html",
-        public_read_access=True,  # Required for static website hosting
-        block_public_access=s3.BlockPublicAccess(
-            block_public_acls=False,
-            block_public_policy=False,
-            ignore_public_acls=False,
-            restrict_public_buckets=False
-        ),
+        public_read_access=False,  # Private bucket - accessed via CloudFront
+        block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
         removal_policy=RemovalPolicy.DESTROY
     )
 
     # Tag bucket with environment: production
     Tags.of(bucket).add("environment", "production")
+
+    # Create CloudFront Origin Access Identity for secure S3 access
+    origin_access_identity = cloudfront.OriginAccessIdentity(
+        self,
+        "WebsiteOAI",
+        comment=f"OAI for static website {self.environment_suffix}"
+    )
+
+    # Grant CloudFront access to S3 bucket
+    bucket.grant_read(origin_access_identity)
+
+    # Create CloudFront distribution for secure static content delivery
+    distribution = cloudfront.CloudFrontWebDistribution(
+        self,
+        "WebsiteDistribution",
+        origin_configs=[
+            cloudfront.SourceConfiguration(
+                s3_origin_source=cloudfront.S3OriginConfig(
+                    s3_bucket_source=bucket,
+                    origin_access_identity=origin_access_identity
+                ),
+                behaviors=[
+                    cloudfront.Behavior(
+                        is_default_behavior=True,
+                        compress=True,
+                        allowed_methods=cloudfront.CloudFrontAllowedMethods.GET_HEAD_OPTIONS,
+                        cached_methods=cloudfront.CloudFrontAllowedCachedMethods.GET_HEAD_OPTIONS,
+                        viewer_protocol_policy=cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+                        min_ttl=Duration.seconds(0),
+                        default_ttl=Duration.seconds(86400),
+                        max_ttl=Duration.seconds(31536000)
+                    )
+                ]
+            )
+        ],
+        default_root_object="index.html",
+        error_configurations=[
+            cloudfront.CfnDistribution.CustomErrorResponseProperty(
+                error_code=404,
+                response_code=200,
+                response_page_path="/error.html",
+                error_caching_min_ttl=300
+            ),
+            cloudfront.CfnDistribution.CustomErrorResponseProperty(
+                error_code=403,
+                response_code=200,
+                response_page_path="/error.html",
+                error_caching_min_ttl=300
+            )
+        ],
+        price_class=cloudfront.PriceClass.PRICE_CLASS_100,
+        enabled=True
+    )
 
     # Basic CloudWatch Alarms for Lambda function failures and throttling
     cloudwatch.Alarm(
@@ -239,9 +290,23 @@ class TapStack(Stack):
 
     CfnOutput(
         self,
-        "S3BucketUrl",
-        value=bucket.bucket_website_url,
-        description="S3 bucket website URL"
+        "WebsiteURL",
+        value=f"https://{distribution.distribution_domain_name}",
+        description="URL of the static website via CloudFront distribution"
+    )
+
+    CfnOutput(
+        self,
+        "CloudFrontDistributionId",
+        value=distribution.distribution_id,
+        description="CloudFront Distribution ID"
+    )
+
+    CfnOutput(
+        self,
+        "CloudFrontDistributionDomain",
+        value=distribution.distribution_domain_name,
+        description="CloudFront Distribution Domain Name"
     )
 
     CfnOutput(

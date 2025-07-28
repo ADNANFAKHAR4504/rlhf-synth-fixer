@@ -102,10 +102,10 @@ class TestTapStack(unittest.TestCase):
             "ErrorDocument": "error.html"
         },
         "PublicAccessBlockConfiguration": {
-            "BlockPublicAcls": False,
-            "BlockPublicPolicy": False,
-            "IgnorePublicAcls": False,
-            "RestrictPublicBuckets": False
+            "BlockPublicAcls": True,
+            "BlockPublicPolicy": True,
+            "IgnorePublicAcls": True,
+            "RestrictPublicBuckets": True
         },
         "Tags": [
             {
@@ -252,7 +252,9 @@ class TestTapStack(unittest.TestCase):
     
     required_outputs = [
         "ApiEndpoint",
-        "S3BucketUrl", 
+        "WebsiteURL",
+        "CloudFrontDistributionId",
+        "CloudFrontDistributionDomain",
         "FrontendBucketName",
         "VisitsTableName",
         "LambdaFunctionName",
@@ -262,10 +264,49 @@ class TestTapStack(unittest.TestCase):
     for output_name in required_outputs:
       assert output_name in outputs, f"Required output {output_name} not found"
 
+  @mark.it("creates CloudFront distribution with Origin Access Identity")
+  def test_cloudfront_distribution_creation(self):
+    # Verify CloudFront distribution is created
+    self.template.resource_count_is("AWS::CloudFront::Distribution", 1)
+    self.template.has_resource_properties("AWS::CloudFront::Distribution", {
+        "DistributionConfig": Match.object_like({
+            "Enabled": True,
+            "DefaultRootObject": "index.html",
+            "PriceClass": "PriceClass_100",
+            "CustomErrorResponses": Match.array_with([
+                Match.object_like({
+                    "ErrorCode": 404,
+                    "ResponseCode": 200,
+                    "ResponsePagePath": "/error.html"
+                }),
+                Match.object_like({
+                    "ErrorCode": 403, 
+                    "ResponseCode": 200,
+                    "ResponsePagePath": "/error.html"
+                })
+            ]),
+            "Origins": Match.array_with([
+                Match.object_like({
+                    "S3OriginConfig": Match.object_like({
+                        "OriginAccessIdentity": Match.any_value()
+                    })
+                })
+            ])
+        })
+    })
+
+    # Verify Origin Access Identity is created
+    self.template.resource_count_is("AWS::CloudFront::CloudFrontOriginAccessIdentity", 1)
+    self.template.has_resource_properties("AWS::CloudFront::CloudFrontOriginAccessIdentity", {
+        "CloudFrontOriginAccessIdentityConfig": Match.object_like({
+            "Comment": Match.any_value()
+        })
+    })
+
   @mark.it("does not create over-engineered resources")
   def test_no_over_engineered_resources(self):
     # Verify that over-engineered resources are NOT created
-    self.template.resource_count_is("AWS::CloudFront::Distribution", 0)
+    # Note: CloudFront is now a required component for secure S3 hosting
     self.template.resource_count_is("AWS::WAFv2::WebACL", 0)
     self.template.resource_count_is("AWS::SecretsManager::Secret", 0)
     self.template.resource_count_is("AWS::CloudWatch::Dashboard", 0)
