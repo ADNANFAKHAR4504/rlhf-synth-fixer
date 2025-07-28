@@ -11,6 +11,16 @@
             "Type": "String",
             "Description": "The name of the Lambda function to be created.",
             "Default": "lambda-243911-228"
+        },
+        "LambdaRunTime": {
+            "Type": "String",
+            "Description": "Handler Runtime.",
+            "Default": "nodejs22.x"
+        },
+        "LambdaHandler": {
+            "Type": "String",
+            "Description": "Handler Type.",
+            "Default": "index.handler"
         }
     },
     "Resources": {
@@ -66,14 +76,18 @@
                 "FunctionName": {
                     "Ref": "LambdaFunctionName"
                 },
-                "Runtime": "nodejs22.x",
+                "Runtime": {
+                    "Ref": "LambdaRunTime"
+                },
                 "Role": {
                     "Fn::GetAtt": [
                         "LambdaExecutionRole",
                         "Arn"
                     ]
                 },
-                "Handler": "index.handler",
+                "Handler": {
+                    "Ref": "LambdaHandler"
+                },
                 "Code": {
                     "ZipFile": "exports.handler = async (event) => {\n  console.log('Event:', JSON.stringify(event, null, 2));\n  \n  // Extract bucket and key from the S3 event\n  if (event.Records && event.Records[0] && event.Records[0].s3) {\n      const s3Bucket = event.Records[0].s3.bucket.name;\n      const s3Key = event.Records[0].s3.object.key;\n      console.log(`Object '${s3Key}' created in bucket '${s3Bucket}'`);\n  }\n\n  return {\n    statusCode: 200,\n    body: 'Lambda function executed successfully'\n  };\n};\n"
                 },
@@ -153,6 +167,18 @@
             "Description": "The name of the S3 bucket",
             "Value": {
                 "Ref": "S3BucketName"
+            }
+        },
+        "RunTime": {
+            "Description": "The name of the S3 bucket",
+            "Value": {
+                "Ref": "LambdaRunTime"
+            }
+        },
+        "Handler": {
+            "Description": "The name of the S3 bucket",
+            "Value": {
+                "Ref": "LambdaHandler"
             }
         }
     }

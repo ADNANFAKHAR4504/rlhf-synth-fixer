@@ -12,6 +12,16 @@ Parameters:
     Description: The name of the Lambda function to be created.
     Default: lambda-243911-228
 
+  LambdaRunTime:
+    Type: String
+    Description: Handler Runtime.
+    Default: nodejs22.x
+  
+  LambdaHandler:
+    Type: String
+    Description: Handler Type.
+    Default: index.handler
+
 Resources:
 
   LambdaExecutionRole:
@@ -45,9 +55,9 @@ Resources:
     Type: AWS::Lambda::Function
     Properties:
       FunctionName: !Ref LambdaFunctionName
-      Runtime: nodejs22.x
+      Runtime: !Ref LambdaRunTime
       Role: !GetAtt LambdaExecutionRole.Arn
-      Handler: index.handler
+      Handler: !Ref LambdaHandler
       Code:
         ZipFile: |
           exports.handler = async (event) => {
@@ -105,4 +115,12 @@ Outputs:
 
   BucketName:
     Description: The name of the S3 bucket
-    Value: !Ref S3BucketName # Changed to S3BucketName to match the parameter name
+    Value: !Ref S3BucketName
+
+  RunTime:
+    Description: The name of the S3 bucket
+    Value: !Ref LambdaRunTime
+  
+  Handler:
+    Description: The name of the S3 bucket
+    Value: !Ref LambdaHandler
