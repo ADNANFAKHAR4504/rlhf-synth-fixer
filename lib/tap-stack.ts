@@ -44,6 +44,8 @@ export class TapStack extends TerraformStack {
     this.addOverride('terraform.backend.s3.use_lockfile', true);
 
     // ? Add your stack instantiations here
+    // add override to use us-west-2 region - specific to this task
+    this.addOverride('provider.aws.region', 'us-west-2');
     new SecureVpcStack(this, `secure-vpc-stack-${environmentSuffix}`);
   }
 }
