@@ -402,7 +402,12 @@ class TestTapStackIntegration(unittest.TestCase):
 
     @mark.it("verifies S3 access logs are delivered to the access log bucket")
     def test_s3_access_log_delivery(self):
-        """Test that S3 access logs are delivered to the access log bucket."""
+        """Test that S3 access logs are delivered to the access log bucket.
+        
+        Note: S3 server access logs can take several minutes to several hours 
+        to be delivered according to AWS documentation. This test uses an 
+        extended timeout to account for this delay.
+        """
         access_logs_bucket = FLAT_OUTPUTS.get(
                 "S3AccessLogBucketName") or getattr(self, "access_logs_bucket", None)
         bucket_name = FLAT_OUTPUTS.get(
@@ -410,38 +415,101 @@ class TestTapStackIntegration(unittest.TestCase):
         if not access_logs_bucket or not bucket_name:
             self.skipTest(
                     "S3 access log bucket or main bucket not defined in outputs")
-        test_key = f"accesslog-test-{int(time.time())}.txt"
-        self.s3_client.put_object(
-                Bucket=bucket_name, Key=test_key, Body=b"log test")
-        # Wait for access log delivery (can take several minutes, so use a short timeout for CI)
+        
+        # Create multiple test objects to increase chances of triggering access logs
+        test_keys = []
+        for i in range(3):
+            test_key = f"accesslog-test-{int(time.time())}-{i}.txt"
+            test_keys.append(test_key)
+            self.s3_client.put_object(
+                    Bucket=bucket_name, Key=test_key, Body=f"log test {i}".encode())
+        
+        # Also perform some read operations to generate more access log entries
+        for test_key in test_keys:
+            try:
+                self.s3_client.get_object(Bucket=bucket_name, Key=test_key)
+            except ClientError:
+                pass  # Ignore errors, we just want to generate access log entries
+        
+        # Wait for access log delivery with extended timeout
+        # S3 access logs can take several minutes to hours according to AWS docs
         found = False
-        for _ in range(10):
+        max_attempts = 60  # 60 attempts × 30 seconds = 30 minutes maximum wait
+        
+        print(f"Waiting for S3 access logs to be delivered to {access_logs_bucket}")
+        print("This can take several minutes according to AWS documentation...")
+        
+        for attempt in range(max_attempts):
             resp = self.s3_client.list_objects_v2(
                     Bucket=access_logs_bucket, Prefix="access-logs/")
             if resp.get("Contents"):
                 found = True
+                print(f"Found access log files after {attempt + 1} attempts ({(attempt + 1) * 30} seconds)")
                 break
-            time.sleep(10)
-        self.s3_client.delete_object(Bucket=bucket_name, Key=test_key)
+            
+            # Print progress every 5 minutes
+            if (attempt + 1) % 10 == 0:
+                elapsed_minutes = ((attempt + 1) * 30) // 60
+                print(f"Still waiting for access logs... ({elapsed_minutes} minutes elapsed)")
+            
+            time.sleep(30)  # Wait 30 seconds between checks
+        
+        # Cleanup test objects
+        for test_key in test_keys:
+            try:
+                self.s3_client.delete_object(Bucket=bucket_name, Key=test_key)
+            except ClientError:
+                pass  # Ignore cleanup errors
+        
         self.assertTrue(
-                found, "No access log file found in access log bucket after upload")
+                found, 
+                f"No access log file found in access log bucket after {max_attempts * 30} seconds. "
+                f"S3 access logs can take several minutes to hours to be delivered according to AWS documentation.")
 
     @mark.it("verifies CloudTrail logs are delivered to the CloudTrail bucket")
     def test_cloudtrail_log_delivery(self):
-        """Test that CloudTrail logs are delivered to the CloudTrail bucket."""
+        """Test that CloudTrail logs are delivered to the CloudTrail bucket.
+        
+        Note: CloudTrail typically delivers logs within 15 minutes, but can 
+        sometimes take longer during high activity periods.
+        """
         cloudtrail_bucket = FLAT_OUTPUTS.get(
                 "CloudTrailBucketName") or getattr(self, "cloudtrail_bucket", None)
         if not cloudtrail_bucket:
             self.skipTest("CloudTrail bucket not defined in outputs")
-        # Trigger an event: list S3 buckets
+        
+        # Trigger multiple events to increase chances of log delivery
+        print("Triggering CloudTrail events...")
         self.s3_client.list_buckets()
-        # Wait for CloudTrail log delivery
+        # Perform additional API calls to generate more events
+        try:
+            self.lambda_client.list_functions()
+            self.dynamodb_client.list_tables()
+        except ClientError:
+            pass  # Ignore permission errors, we just want to generate events
+        
+        # Wait for CloudTrail log delivery with extended timeout
         found = False
-        for _ in range(10):
+        max_attempts = 30  # 30 attempts × 30 seconds = 15 minutes maximum wait
+        
+        print(f"Waiting for CloudTrail logs to be delivered to {cloudtrail_bucket}")
+        print("CloudTrail typically delivers logs within 15 minutes...")
+        
+        for attempt in range(max_attempts):
             resp = self.s3_client.list_objects_v2(Bucket=cloudtrail_bucket)
             if resp.get("Contents"):
                 found = True
+                print(f"Found CloudTrail log files after {attempt + 1} attempts ({(attempt + 1) * 30} seconds)")
                 break
-            time.sleep(10)
+            
+            # Print progress every 5 minutes
+            if (attempt + 1) % 10 == 0:
+                elapsed_minutes = ((attempt + 1) * 30) // 60
+                print(f"Still waiting for CloudTrail logs... ({elapsed_minutes} minutes elapsed)")
+            
+            time.sleep(30)  # Wait 30 seconds between checks
+        
         self.assertTrue(
-                found, "No CloudTrail log file found in CloudTrail bucket after event")
+                found, 
+                f"No CloudTrail log file found in CloudTrail bucket after {max_attempts * 30} seconds. "
+                f"CloudTrail typically delivers logs within 15 minutes but can take longer during high activity.")

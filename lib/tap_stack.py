@@ -333,7 +333,7 @@ class TapStack(cdk.Stack):
 
     # Create CloudTrail resources directly in main stack
     # Create S3 bucket for CloudTrail logs
-    cloudtrail_bucket = s3.Bucket(
+    self.cloudtrail_bucket = s3.Bucket(
         self, f"CloudTrailBucket{environment_suffix}",
         bucket_name=f"proj-cloudtrail-{environment_suffix}",
         versioned=True,
@@ -348,7 +348,7 @@ class TapStack(cdk.Stack):
     cloudtrail.Trail(
         self, f"CloudTrail{environment_suffix}",
         trail_name=f"proj-trail-{environment_suffix}",
-        bucket=cloudtrail_bucket,
+        bucket=self.cloudtrail_bucket,
         is_multi_region_trail=True,
         enable_file_validation=True,
         include_global_service_events=True
@@ -377,7 +377,7 @@ class TapStack(cdk.Stack):
 
     # Create S3 resources directly in main stack
     # Create access logging bucket first
-    access_log_bucket = s3.Bucket(
+    self.access_log_bucket = s3.Bucket(
         self, f"S3AccessLogBucket{environment_suffix}",
         bucket_name=f"proj-access-logs-{environment_suffix}",
         encryption=s3.BucketEncryption.S3_MANAGED,
@@ -395,7 +395,7 @@ class TapStack(cdk.Stack):
         encryption=s3.BucketEncryption.S3_MANAGED,
         public_read_access=False,
         block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
-        server_access_logs_bucket=access_log_bucket,
+        server_access_logs_bucket=self.access_log_bucket,
         server_access_logs_prefix="access-logs/",
         removal_policy=RemovalPolicy.DESTROY,
         auto_delete_objects=True
@@ -517,4 +517,34 @@ class TapStack(cdk.Stack):
         value=self.lambda_function.role.role_arn,
         description="ARN of the Lambda execution role",
         export_name=f"TapStack{env_suffix}-LambdaRoleArn"
+    )
+
+    # S3 Access Log Bucket outputs
+    cdk.CfnOutput(
+        self, "S3AccessLogBucketName",
+        value=self.access_log_bucket.bucket_name,
+        description="Name of the S3 access log bucket",
+        export_name=f"TapStack{env_suffix}-S3AccessLogBucketName"
+    )
+
+    cdk.CfnOutput(
+        self, "S3AccessLogBucketArn",
+        value=self.access_log_bucket.bucket_arn,
+        description="ARN of the S3 access log bucket",
+        export_name=f"TapStack{env_suffix}-S3AccessLogBucketArn"
+    )
+
+    # CloudTrail Bucket outputs
+    cdk.CfnOutput(
+        self, "CloudTrailBucketName",
+        value=self.cloudtrail_bucket.bucket_name,
+        description="Name of the CloudTrail bucket",
+        export_name=f"TapStack{env_suffix}-CloudTrailBucketName"
+    )
+
+    cdk.CfnOutput(
+        self, "CloudTrailBucketArn",
+        value=self.cloudtrail_bucket.bucket_arn,
+        description="ARN of the CloudTrail bucket",
+        export_name=f"TapStack{env_suffix}-CloudTrailBucketArn"
     )
