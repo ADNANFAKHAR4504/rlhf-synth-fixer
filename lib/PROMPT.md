@@ -1,6 +1,9 @@
 # AWS CDK Python: Regionally Redundant Infrastructure Design
 
-You are a **cloud infrastructure expert**. Using the **AWS CDK with Python**, build a complete, **regionally redundant infrastructure** on AWS that meets the following requirements. Ensure all services are configured according to **best practices**, **interconnected securely**, and defined as **Infrastructure as Code** (IaC).
+You are a **cloud infrastructure expert**. Using the **AWS CDK with Python**, build a complete, 
+**regionally redundant infrastructure** on AWS that meets the following requirements. Ensure all services are 
+configured according to **best practices**, **interconnected securely**, and defined as 
+**Infrastructure as Code** (IaC).
 
 ---
 
