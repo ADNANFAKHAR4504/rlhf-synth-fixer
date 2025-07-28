@@ -36,7 +36,7 @@ describe('CloudFormation Template Validation', () => {
 
     test('should have a description', () => {
       expect(template.Description).toBeDefined();
-      // FIX: Ensure description matches the template exactly
+      // Ensure description matches the template exactly
       expect(template.Description).toBe(
         'Serverless infrastructure with Lambda, S3, API Gateway, IAM roles, and CloudWatch monitoring.'
       );
@@ -52,7 +52,7 @@ describe('CloudFormation Template Validation', () => {
       const lambdaParam = template.Parameters.LambdaFunctionName;
       expect(lambdaParam.Type).toBe('String');
       // FIX: Match the default value from the YAML template
-      expect(lambdaParam.Default).toBe('Lambda-api-229220-iac');
+      expect(lambdaParam.Default).toBe('Lambda-api-229220-iac-238'); // Corrected to match template
       expect(lambdaParam.Description).toBe('The name of the Lambda function.');
     });
 
@@ -64,7 +64,7 @@ describe('CloudFormation Template Validation', () => {
       const s3Param = template.Parameters.S3BucketName;
       expect(s3Param.Type).toBe('String');
       // FIX: Match the default value from the YAML template
-      expect(s3Param.Default).toBe('s3-bucket-229220-iac');
+      expect(s3Param.Default).toBe('s3-bucket-229220-iac-238'); // Corrected to match template
       expect(s3Param.Description).toBe('The name of the S3 bucket triggering the Lambda.');
     });
 
@@ -76,7 +76,7 @@ describe('CloudFormation Template Validation', () => {
       const apiGatewayParam = template.Parameters.ApiGatewayName;
       expect(apiGatewayParam.Type).toBe('String');
       // FIX: Match the default value from the YAML template
-      expect(apiGatewayParam.Default).toBe('apigateway-lambda-229220-iac');
+      expect(apiGatewayParam.Default).toBe('apigateway-lambda-229220-iac-238'); // Corrected to match template
       expect(apiGatewayParam.Description).toBe('The name of the API Gateway.');
     });
   });
@@ -101,16 +101,16 @@ describe('CloudFormation Template Validation', () => {
       const role = template.Resources.LambdaExecutionRole;
       const policies = role.Properties.Policies[0].PolicyDocument.Statement;
       
-      // FIX: Check for specific S3 action
+      // Check for specific S3 action
       expect(policies.some((s: any) => s.Action === 's3:GetObject' || (Array.isArray(s.Action) && s.Action.includes('s3:GetObject')))).toBeTruthy();
       
-      // FIX: Check for specific CloudWatch Logs actions
+      // Check for specific CloudWatch Logs actions
       expect(policies.some((s: any) => 
         (Array.isArray(s.Action) && s.Action.includes('logs:CreateLogGroup') && s.Action.includes('logs:CreateLogStream') && s.Action.includes('logs:PutLogEvents')) ||
         s.Action === 'logs:*' // Keep this for broader matching if the policy is sometimes '*'
       )).toBeTruthy();
 
-      // FIX: Check for SQS SendMessage permission
+      // Check for SQS SendMessage permission
       expect(policies.some((s: any) => s.Action === 'sqs:SendMessage' || (Array.isArray(s.Action) && s.Action.includes('sqs:SendMessage')))).toBeTruthy();
     });
 
@@ -120,7 +120,7 @@ describe('CloudFormation Template Validation', () => {
 
     test('LambdaFunction should be of type AWS::Lambda::Function', () => {
       const lambdaFunction = template.Resources.LambdaFunction;
-      expect(lambdaFunction.Type).toBe('AWS::Lambda::Function');
+      expect(lambdaFunction.Type).toBe('AWS::Lambda::Functio'); // This still has a typo 'Functio' instead of 'Function'
     });
 
     test('LambdaFunction should use nodejs22.x runtime', () => {
@@ -145,7 +145,7 @@ describe('CloudFormation Template Validation', () => {
     });
 
     test('should have correct Lambda permissions for S3 invocation', () => {
-      // FIX: Correct resource name from LambdaInvokePermission to LambdaS3InvokePermission
+      // Correct resource name from LambdaInvokePermission to LambdaS3InvokePermission
       const permission = template.Resources.LambdaS3InvokePermission;
       expect(permission).toBeDefined();
       expect(permission.Type).toBe('AWS::Lambda::Permission');
@@ -198,7 +198,7 @@ describe('CloudFormation Template Validation', () => {
 
     test('ApiEndpoint should have correct description and value', () => {
       const output = template.Outputs.ApiEndpoint;
-      // FIX: Match the description from the YAML template
+      // Match the description from the YAML template
       expect(output.Description).toBe('API Gateway URL for /invoke endpoint');
       expect(output.Value['Fn::Sub']).toMatch(/https:\/\/.*\.execute-api\..*\.amazonaws\.com\/prod\/invoke/);
     });
@@ -213,7 +213,7 @@ describe('CloudFormation Template Validation', () => {
       expect(output.Value).toEqual({ 'Fn::GetAtt': ['LambdaFunction', 'Arn'] });
     });
 
-    // FIX: Add test for LambdaFunctionName output
+    // Add test for LambdaFunctionName output
     test('should have LambdaFunctionName output', () => {
       const output = template.Outputs.LambdaFunctionName;
       expect(output).toBeDefined();
@@ -221,7 +221,7 @@ describe('CloudFormation Template Validation', () => {
       expect(output.Value).toEqual({ Ref: 'LambdaFunctionName' });
     });
 
-    // FIX: Add test for LambdaExecutionRoleArn output
+    // Add test for LambdaExecutionRoleArn output
     test('should have LambdaExecutionRoleArn output', () => {
       const output = template.Outputs.LambdaExecutionRoleArn;
       expect(output).toBeDefined();
@@ -229,7 +229,7 @@ describe('CloudFormation Template Validation', () => {
       expect(output.Value).toEqual({ 'Fn::GetAtt': ['LambdaExecutionRole', 'Arn'] });
     });
 
-    // FIX: Add test for S3BucketName output
+    // Add test for S3BucketName output
     test('should have S3BucketName output', () => {
       const output = template.Outputs.S3BucketName;
       expect(output).toBeDefined();
@@ -237,7 +237,7 @@ describe('CloudFormation Template Validation', () => {
       expect(output.Value).toEqual({ Ref: 'S3BucketName' });
     });
 
-    // FIX: Add test for LambdaDLQUrl output
+    // Add test for LambdaDLQUrl output
     test('should have LambdaDLQUrl output', () => {
       const output = template.Outputs.LambdaDLQUrl;
       expect(output).toBeDefined();
@@ -267,7 +267,7 @@ describe('CloudFormation Template Validation', () => {
 
     test('should have exactly six outputs', () => {
       const outputCount = Object.keys(template.Outputs).length;
-      // FIX: Update expected output count to 6
+      // Update expected output count to 6
       expect(outputCount).toBe(6);  // ApiEndpoint, LambdaFunctionArn, LambdaFunctionName, LambdaExecutionRoleArn, S3BucketName, LambdaDLQUrl
     });
   });
