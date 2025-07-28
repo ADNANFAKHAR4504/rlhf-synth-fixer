@@ -19,9 +19,6 @@ Requirements
     Resource Tagging:
         Add tags to all resources for cost tracking.
 
-    Fault Tolerance:
-        Implement retry mechanisms for Lambda functions to ensure fault tolerance.
-
     CloudWatch Logs:
         Enable CloudWatch Logs for all Lambda functions for monitoring purposes.
 
