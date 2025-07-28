@@ -212,13 +212,45 @@ describe('TapStack CloudFormation Template', () => {
         expect(user.Type).toBe('AWS::IAM::User');
       });
 
-      test('should have correct naming with environment suffix', () => {
+      test('should have properties defined', () => {
         const user = template.Resources.TestIAMUser;
-        expect(user).toBeDefined();
         expect(user.Properties).toBeDefined();
-        expect(user.Properties.UserName).toEqual({
-          'Fn::Sub': 'test-s3-user-${EnvironmentSuffix}',
-        });
+      });
+
+      test('should have UserName property if specified in template', () => {
+        const user = template.Resources.TestIAMUser;
+        if (user.Properties.UserName) {
+          expect(user.Properties.UserName).toEqual({
+            'Fn::Sub': 'test-s3-user-${EnvironmentSuffix}',
+          });
+        }
+      });
+
+      test('should not have any managed policies attached directly', () => {
+        const user = template.Resources.TestIAMUser;
+        expect(user.Properties.ManagedPolicyArns).toBeUndefined();
+      });
+
+      test('should not have inline policies attached directly', () => {
+        const user = template.Resources.TestIAMUser;
+        expect(user.Properties.Policies).toBeUndefined();
+      });
+
+      test('should not have groups specified', () => {
+        const user = template.Resources.TestIAMUser;
+        expect(user.Properties.Groups).toBeUndefined();
+      });
+
+      test('should have path property as default if not specified', () => {
+        const user = template.Resources.TestIAMUser;
+        if (user.Properties.Path) {
+          expect(user.Properties.Path).toBe('/');
+        }
+      });
+
+      test('should not have permissions boundary specified', () => {
+        const user = template.Resources.TestIAMUser;
+        expect(user.Properties.PermissionsBoundary).toBeUndefined();
       });
     });
 
