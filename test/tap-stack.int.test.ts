@@ -20,7 +20,7 @@ describe('WebApp CloudFormation Template', () => {
     // pipenv run cfn-flip -i web-app-deployment.yaml -o web-app-deployment.json
     // Make sure 'cfn-flip' is installed (pip install cfn-flip).
     // Corrected templatePath to look for 'web-app-deployment.json'
-    const templatePath = path.join(__dirname, 'web-app-deployment.json');
+    const templatePath = path.join(__dirname, '../lib/TapStack.json');
     const templateContent = fs.readFileSync(templatePath, 'utf8');
     template = JSON.parse(templateContent);
   });
