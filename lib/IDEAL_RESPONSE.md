@@ -1,3 +1,4 @@
+```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: Serverless infrastructure with Lambda, S3, API Gateway, IAM roles, and CloudWatch monitoring.
 
@@ -211,3 +212,4 @@ Outputs:
   LambdaDLQUrl:
     Description: "URL of the Lambda Dead Letter Queue"
     Value: !Ref LambdaDLQ
+```
