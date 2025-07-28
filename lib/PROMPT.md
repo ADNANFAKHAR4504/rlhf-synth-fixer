@@ -1,81 +1,103 @@
-You are a cloud infrastructure expert. Using the AWS CDK with Python, build a complete, regionally redundant infrastructure on AWS that meets the following requirements. Ensure all services are configured according to best practices, interconnected securely, and defined as Infrastructure as Code.
+# AWS CDK Python: Regionally Redundant Infrastructure Design
 
-Infrastructure Requirements:
+You are a **cloud infrastructure expert**. Using the **AWS CDK with Python**, build a complete, **regionally redundant infrastructure** on AWS that meets the following requirements. Ensure all services are configured according to **best practices**, **interconnected securely**, and defined as **Infrastructure as Code** (IaC).
 
-Deploy infrastructure in at least two AWS regions to ensure regional redundancy.
+---
 
-Create VPCs in each region, with public and private subnets spanning multiple availability zones.
+## 📌 Infrastructure Requirements
 
-Deploy EC2 Auto Scaling Groups per region:
+### 🌍 Multi-Region Deployment
+- Deploy infrastructure in **at least two AWS regions** to ensure regional redundancy.
 
-Minimum of 2, maximum of 10 instances per region.
+### 🌐 VPC Configuration
+- Create **VPCs in each region**, with:
+  - **Public and private subnets**
+  - Subnets must span **multiple Availability Zones (AZs)**
 
-Instances launched in private subnets.
+### 🚀 EC2 Auto Scaling Groups
+- Deploy **EC2 Auto Scaling Groups per region**:
+  - Minimum of **2**, maximum of **10** instances per region
+  - Instances must launch in **private subnets**
 
-Use Elastic Load Balancers (ELB) with HTTP/HTTPS listeners in public subnets to route traffic to EC2 instances.
+### ⚖️ Load Balancers
+- Use **Elastic Load Balancers (ELB)** in public subnets with:
+  - **HTTP and HTTPS** listeners
+  - Route traffic to EC2 instances in private subnets
 
-Set up security groups to:
+### 🔐 Security Groups
+- Allow **ELB to EC2** traffic on ports `80` and `443`
+- Restrict **SSH (port 22)** access to:
+  - A specific IP range or management subnet
+- Allow **EC2 to RDS** access over correct database port (e.g., `5432` for PostgreSQL)
 
-Allow ELB to connect to EC2 instances on ports 80 and 443.
+### 🛢️ Amazon RDS
+- Deploy **Amazon RDS** with the following:
+  - **Multi-AZ** enabled
+  - Located in **private subnets**
+  - Enable **automated backups** (minimum **7-day retention**)
 
-Restrict SSH access (port 22) to a specific IP range or management subnet.
+### 🌐 Route 53 DNS Management
+- Configure **Route 53** for DNS:
+  - **Hosted zones** and **record sets**
+  - Health checks
+  - **Failover routing** across regions
 
-Allow EC2 instances to access RDS over the correct database port (e.g., 5432 for PostgreSQL).
+### 📈 CloudWatch Monitoring
+Enable **Amazon CloudWatch** to monitor:
+- **EC2 metrics**: CPU, memory, disk
+- **RDS performance**: connections, IOPS
+- **VPC** networking and latency metrics
 
-Deploy Amazon RDS with multi-AZ enabled, inside private subnets. Enable automated backups with at least 7-day retention.
+### 🧠 AWS Lambda
+- Deploy **AWS Lambda** functions:
+  - Triggered on a **cron schedule**
+  - Used for lightweight serverless tasks
 
-Configure AWS Route 53 for DNS management, including:
+### 📦 Amazon S3
+- Provision **S3 buckets** with:
+  - **Versioning** enabled
+  - **Encryption at rest** using **SSE-S3** or **SSE-KMS**
 
-Hosted zones and record sets.
+### 🔐 IAM Roles and Policies
+- Define IAM roles to:
+  - **Restrict infrastructure management** to a specific team/role
+  - Enforce **least privilege** access
+- Ensure all resources are **tagged**:
+  - `Environment`, `Team`, `CostCenter`, etc.
 
-Health checks and failover routing across regions.
+### 🛠️ Systems Manager (SSM)
+- Use **AWS Systems Manager** to:
+  - **Automate patching** of EC2 instances
 
-Enable Amazon CloudWatch for monitoring:
+### 🛡️ AWS WAF
+- Attach **AWS WAF** to ELBs:
+  - Protect against common web attacks like **SQL injection** and **XSS**
 
-EC2 metrics (CPU, memory, disk)
+### 💬 Slack Notifications
+- Set up **Slack notifications** for infrastructure changes using:
+  - **AWS Chatbot**, or
+  - **Webhook-based integrations**
 
-RDS performance (connections, IOPS)
+---
 
-VPC networking and latency
+## ⚙️ Implementation Instructions
 
-Create AWS Lambda functions triggered on a cron schedule for lightweight serverless processing tasks.
+- Use **AWS CDK (Python)** as the IaC tool.
+- Organize resources using proper **CDK constructs and stacks**.
+- Ensure secure and logical connectivity between components:
+  - ELB ⇨ EC2
+  - EC2 ⇨ RDS
+  - CloudWatch ⇨ All relevant resources
+  - Lambda ⇨ S3 or EventBridge (as needed)
+- Follow **AWS best practices** for:
+  - Networking
+  - Access control
+  - Encryption
+  - Scalability
+- **Add comments** in your CDK code to document:
+  - Each major resource
+  - Important configurations and connections
 
-Provision S3 buckets with:
+---
 
-Versioning
-
-Encryption at rest using either SSE-S3 or SSE-KMS
-
-Define IAM roles and policies to:
-
-Restrict infrastructure management to a specific team or role.
-
-Enforce least privilege access control.
-
-Ensure all AWS resources are tagged (e.g., Environment, Team, CostCenter) for proper cost allocation.
-
-Use AWS Systems Manager (SSM) to automate patching of EC2 instances.
-
-Attach AWS WAF to the ELBs to defend against common web attacks (e.g., SQL injection, XSS).
-
-Configure Slack notifications for infrastructure changes using AWS Chatbot or a webhook-based integration.
-
-Instructions:
-
-Use AWS CDK with Python as the Infrastructure as Code tool.
-
-Define and organize resources using proper CDK constructs and stacks.
-
-Ensure that all services are securely connected, such as:
-
-ELB to EC2
-
-EC2 to RDS
-
-CloudWatch to all relevant resources
-
-Lambda with S3 or EventBridge triggers if needed
-
-Follow AWS best practices for networking, access control, encryption, and scalability.
-
-Include comments in the CDK code to explain each major resource and connection.
+Happy Building 🚀
