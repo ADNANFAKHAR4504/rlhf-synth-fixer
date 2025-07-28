@@ -41,15 +41,6 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Parameters.DomainName.Type).toBe('String');
       expect(template.Parameters.DomainName.Description).toContain('Custom domain name');
     });
-
-    test('should have DBMasterPassword parameter with NoEcho', () => {
-      expect(template.Parameters.DBMasterPassword).toBeDefined();
-      expect(template.Parameters.DBMasterPassword.Type).toBe('String');
-      expect(template.Parameters.DBMasterPassword.Description).toContain('Master password for RDS database');
-      expect(template.Parameters.DBMasterPassword.NoEcho).toBe(true);
-      expect(template.Parameters.DBMasterPassword.MinLength).toBe(8);
-      expect(template.Parameters.DBMasterPassword.MaxLength).toBe(128);
-    });
   });
 
   describe('VPC and Networking Resources', () => {
@@ -195,12 +186,6 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Resources.RDSInstance.Properties.Engine).toBe('mysql');
       expect(template.Resources.RDSInstance.Properties.MultiAZ).toBe(true);
       expect(template.Resources.RDSInstance.Properties.DBInstanceClass).toBe('db.t3.micro');
-    });
-
-    test('should use DBMasterPassword parameter for password', () => {
-      expect(template.Resources.RDSInstance.Properties.MasterUserPassword).toEqual({
-        Ref: 'DBMasterPassword'
-      });
     });
   });
 

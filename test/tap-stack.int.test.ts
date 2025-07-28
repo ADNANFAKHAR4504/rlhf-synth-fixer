@@ -6,7 +6,7 @@ import {
   DescribeStacksCommand 
 } from '@aws-sdk/client-cloudformation';
 import { 
-  ELBv2Client, 
+  //ELBv2Client, 
   DescribeLoadBalancersCommand,
   DescribeTargetHealthCommand 
 } from '@aws-sdk/client-elastic-load-balancing-v2';
@@ -37,7 +37,7 @@ try {
 
 describe('TapStack Infrastructure Integration Tests', () => {
   const cfnClient = new CloudFormationClient({ region: 'us-west-2' });
-  const elbClient = new ELBv2Client({ region: 'us-west-2' });
+  //const elbClient = new ELBv2Client({ region: 'us-west-2' });
   const rdsClient = new RDSClient({ region: 'us-west-2' });
   const s3Client = new S3Client({ region: 'us-west-2' });
 

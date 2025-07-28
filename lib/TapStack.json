@@ -16,15 +16,6 @@
             "Type": "String",
             "Description": "Custom domain name",
             "Default": "tap-us-west-2.turing229221.com."
-        },
-        "DBMasterPassword": {
-            "Type": "String",
-            "Description": "Database master user password",
-            "NoEcho": true,
-            "MinLength": 8,
-            "MaxLength": 128,
-            "AllowedPattern": "^[a-zA-Z0-9!@#$%^&*()_+-=\\[\\]{}|;:,.<>?]*$",
-            "ConstraintDescription": "Must be 8-128 characters with letters, numbers, and special characters"
         }
     },
     "Resources": {
@@ -529,9 +520,7 @@
                 "AllocatedStorage": 20,
                 "Engine": "mysql",
                 "MasterUsername": "admin",
-                "MasterUserPassword": {
-                    "Ref": "DBMasterPassword"
-                },
+                "MasterUserPassword": "'{{resolve:secretsmanager:your-secret-name:SecretString:DBMasterPassword}}'\n",
                 "MultiAZ": true,
                 "VPCSecurityGroups": [
                     {
