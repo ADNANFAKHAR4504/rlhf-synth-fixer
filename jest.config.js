@@ -14,6 +14,7 @@ module.exports = {
     '!<rootDir>/**/*.test.ts',
     '!<rootDir>/node_modules/**',
   ],
+  setupFilesAfterEnv: ['<rootDir>/test/setup.js'],
   coverageReporters: ['text', 'lcov', 'json-summary'],
   coverageThreshold: {
     global: {
