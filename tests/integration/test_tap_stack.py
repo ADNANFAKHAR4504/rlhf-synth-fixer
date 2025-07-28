@@ -37,11 +37,11 @@ class TestTapStackIntegration(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         """Set up AWS clients and get stack outputs"""
-        cls.s3_client = boto3.client('s3', region_name='us-east-1')
-        cls.dynamodb_client = boto3.client('dynamodb', region_name='us-east-1')
-        cls.lambda_client = boto3.client('lambda', region_name='us-east-1')
-        cls.cloudtrail_client = boto3.client('cloudtrail', region_name='us-east-1')
-        cls.iam_client = boto3.client('iam', region_name='us-east-1')
+        cls.s3_client = boto3.client('s3', region_name='us-west-2')
+        cls.dynamodb_client = boto3.client('dynamodb', region_name='us-west-2')
+        cls.lambda_client = boto3.client('lambda', region_name='us-west-2')
+        cls.cloudtrail_client = boto3.client('cloudtrail', region_name='us-west-2')
+        cls.iam_client = boto3.client('iam', region_name='us-west-2')
 
         # Get environment suffix for resource naming
         cls.env_suffix = os.getenv('ENVIRONMENT_SUFFIX', 'dev')
@@ -262,7 +262,7 @@ class TestTapStackIntegration(unittest.TestCase):
                                 "eventSource": "aws:s3",
                                 "eventName": "s3:ObjectCreated:Put",
                                 "eventTime": "2023-01-01T00:00:00.000Z",
-                                "awsRegion": "us-east-1",
+                                "awsRegion": "us-west-2",
                                 "s3": {
                                         "bucket": {"name": self.bucket_name},
                                         "object": {
