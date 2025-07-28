@@ -164,7 +164,7 @@ Resources:
   LambdaLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub "/aws/lambda/${LambdaFunctionName}"
+      LogGroupName: !Sub "/aws/lambda/Lambda-api-229220-iac"
       RetentionInDays: 7
 
 Outputs:
