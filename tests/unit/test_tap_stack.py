@@ -1,53 +1,59 @@
-# import os
-# import sys
 import unittest
-
 import aws_cdk as cdk
-# import pytest
-# from aws_cdk.assertions import Match, Template
-from aws_cdk.assertions import Template
-from pytest import mark
+from aws_cdk.assertions import Template, Match
 
-from lib.tap_stack import TapStack, TapStackProps
+from lib.tap_stack import TapStack
 
 
-@mark.describe("TapStack")
-class TestTapStack(unittest.TestCase):
-  """Test cases for the TapStack CDK stack"""
+class TestMyCompanyServerlessStack(unittest.TestCase):
+  """Unit tests for MyCompanyServerlessStack via TapStack"""
 
   def setUp(self):
-    """Set up a fresh CDK app for each test"""
     self.app = cdk.App()
+    self.tap_stack = TapStack(self.app, "TestTapStack")
+    # 👇 Access the nested stack directly
+    self.nested_stack = self.tap_stack.serverless_stack
+    self.template = Template.from_stack(self.nested_stack)
 
-  @mark.it("creates an S3 bucket with the correct environment suffix")
-  def test_creates_s3_bucket_with_env_suffix(self):
-    # ARRANGE
-    env_suffix = "testenv"
-    stack = TapStack(self.app, "TapStackTest",
-                     TapStackProps(environment_suffix=env_suffix))
-    template = Template.from_stack(stack)
-
-    # ASSERT
-    template.resource_count_is("AWS::S3::Bucket", 1)
-    template.has_resource_properties("AWS::S3::Bucket", {
-        "BucketName": f"tap-bucket-{env_suffix}"
+  def test_lambda_function_created(self):
+    self.template.has_resource_properties("AWS::Lambda::Function", {
+        "Handler": "index.handler",
+        "Runtime": "python3.8",
+        "Environment": {
+            "Variables": {
+                "LOG_LEVEL": "INFO"
+            }
+        }
     })
 
-  @mark.it("defaults environment suffix to 'dev' if not provided")
-  def test_defaults_env_suffix_to_dev(self):
-    # ARRANGE
-    stack = TapStack(self.app, "TapStackTestDefault")
-    template = Template.from_stack(stack)
-
-    # ASSERT
-    template.resource_count_is("AWS::S3::Bucket", 1)
-    template.has_resource_properties("AWS::S3::Bucket", {
-        "BucketName": "tap-bucket-dev"
+  def test_api_gateway_created(self):
+    self.template.has_resource_properties("AWS::ApiGateway::RestApi", {
+        "Name": "mycompany-Service",
+        "Description": "This service serves mycompany HTTP POST requests."
     })
 
-  @mark.it("Write Unit Tests")
-  def test_write_unit_tests(self):
-    # ARRANGE
-    self.fail(
-        "Unit test for TapStack should be implemented here."
-    )
+  def test_post_method_exists(self):
+    self.template.has_resource_properties("AWS::ApiGateway::Method", {
+        "HttpMethod": "POST"
+    })
+
+  def test_lambda_execution_role_created(self):
+    self.template.has_resource_properties("AWS::IAM::Role", {
+        "AssumeRolePolicyDocument": Match.object_like({
+            "Statement": Match.array_with([
+                Match.object_like({
+                    "Action": "sts:AssumeRole",
+                    "Principal": {
+                        "Service": "lambda.amazonaws.com"
+                    }
+                })
+            ])
+        }),
+        # ✅ Fix this line
+        "ManagedPolicyArns": Match.any_value()
+    })
+
+  def test_api_endpoint_output_exists(self):
+    self.template.has_output("ApiEndpoint", {
+        "Value": Match.any_value()  # Accepts Fn::Join or any valid value
+    })
