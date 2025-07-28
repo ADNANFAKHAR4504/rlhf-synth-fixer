@@ -36,11 +36,24 @@ Resources:
       BucketName: !Sub sample-bucket-${EnvironmentSuffix}-${AWS::AccountId}
       VersioningConfiguration:
         Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
       Tags:
         - Key: Environment
           Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: SampleProject
+  
+  SampleBucketPublicAccessBlock:
+    Type: AWS::S3::BucketPublicAccessBlock
+    Properties:
+      Bucket: !Ref SampleBucket
+      BlockPublicAcls: true
+      BlockPublicPolicy: true
+      IgnorePublicAcls: true
+      RestrictPublicBuckets: true
 
   # VPC
   DevVPC:

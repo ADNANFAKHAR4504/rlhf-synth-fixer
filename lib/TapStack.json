@@ -46,6 +46,15 @@
                 "VersioningConfiguration": {
                     "Status": "Enabled"
                 },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "AES256"
+                            }
+                        }
+                    ]
+                },
                 "Tags": [
                     {
                         "Key": "Environment",
@@ -58,6 +67,18 @@
                         "Value": "SampleProject"
                     }
                 ]
+            }
+        },
+        "SampleBucketPublicAccessBlock": {
+            "Type": "AWS::S3::BucketPublicAccessBlock",
+            "Properties": {
+                "Bucket": {
+                    "Ref": "SampleBucket"
+                },
+                "BlockPublicAcls": true,
+                "BlockPublicPolicy": true,
+                "IgnorePublicAcls": true,
+                "RestrictPublicBuckets": true
             }
         },
         "DevVPC": {
