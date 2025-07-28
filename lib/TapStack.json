@@ -247,7 +247,7 @@
             "Type": "AWS::Logs::LogGroup",
             "Properties": {
                 "LogGroupName": {
-                    "Fn::Sub": "/aws/lambda/${LambdaFunctionName}"
+                    "Fn::Sub": "/aws/lambda/Lambda-api-229220-iac"
                 },
                 "RetentionInDays": 7
             }

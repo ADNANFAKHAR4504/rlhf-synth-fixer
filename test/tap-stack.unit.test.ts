@@ -49,7 +49,7 @@ describe('CloudFormation Template Validation', () => {
     test('LambdaFunctionName parameter should have correct properties', () => {
       const lambdaParam = template.Parameters.LambdaFunctionName;
       expect(lambdaParam.Type).toBe('String');
-      expect(lambdaParam.Default).toBe('Lambda-api-229220');
+      expect(lambdaParam.Default).toBe('Lambda-api-229220-iac');
       expect(lambdaParam.Description).toBe('The name of the Lambda function.');
     });
 
@@ -60,7 +60,7 @@ describe('CloudFormation Template Validation', () => {
     test('S3BucketName parameter should have correct properties', () => {
       const s3Param = template.Parameters.S3BucketName;
       expect(s3Param.Type).toBe('String');
-      expect(s3Param.Default).toBe('s3-bucket-229220');
+      expect(s3Param.Default).toBe('s3-bucket-229220-iac');
       expect(s3Param.Description).toBe('The name of the S3 bucket triggering the Lambda.');
     });
 
@@ -71,7 +71,7 @@ describe('CloudFormation Template Validation', () => {
     test('ApiGatewayName parameter should have correct properties', () => {
       const apiGatewayParam = template.Parameters.ApiGatewayName;
       expect(apiGatewayParam.Type).toBe('String');
-      expect(apiGatewayParam.Default).toBe('apigateway-lambda-229220');
+      expect(apiGatewayParam.Default).toBe('apigateway-lambda-229220-iac');
       expect(apiGatewayParam.Description).toBe('The name of the API Gateway.');
     });
   });
