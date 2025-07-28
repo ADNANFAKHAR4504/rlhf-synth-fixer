@@ -37,11 +37,13 @@ class TestTapStackIntegration(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         """Set up AWS clients and get stack outputs"""
-        cls.s3_client = boto3.client('s3', region_name='us-west-2')
-        cls.dynamodb_client = boto3.client('dynamodb', region_name='us-west-2')
-        cls.lambda_client = boto3.client('lambda', region_name='us-west-2')
-        cls.cloudtrail_client = boto3.client('cloudtrail', region_name='us-west-2')
-        cls.iam_client = boto3.client('iam', region_name='us-west-2')
+        # Ensure we use us-west-2 region to match CDK deployment
+        region = 'us-west-2'
+        cls.s3_client = boto3.client('s3', region_name=region)
+        cls.dynamodb_client = boto3.client('dynamodb', region_name=region)
+        cls.lambda_client = boto3.client('lambda', region_name=region)
+        cls.cloudtrail_client = boto3.client('cloudtrail', region_name=region)
+        cls.iam_client = boto3.client('iam', region_name=region)
 
         # Get environment suffix for resource naming
         cls.env_suffix = os.getenv('ENVIRONMENT_SUFFIX', 'dev')
