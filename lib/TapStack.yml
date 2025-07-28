@@ -1,12 +1,12 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: CloudFormation template to deploy a Lambda function triggered by an S3 event on object creation.
+Description: CloudFormation template to deploy a Lambda function and grant S3 permission to invoke it.
 
 Parameters:
   S3BucketName:
     Type: String
     Description: The name of the S3 bucket that will trigger the Lambda function.
     Default: bucket-243911
-  
+
   LambdaFunctionName:
     Type: String
     Description: The name of the Lambda function to be created.
@@ -14,7 +14,6 @@ Parameters:
 
 Resources:
 
-  # Lambda Execution Role
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
@@ -40,7 +39,6 @@ Resources:
                   - "logs:*"
                 Resource: "*"
 
-  # Lambda Function (Main Lambda)
   LambdaFunction:
     Type: AWS::Lambda::Function
     Properties:
@@ -51,37 +49,31 @@ Resources:
       Code:
         ZipFile: |
           exports.handler = async (event) => {
-            // Lambda code goes here
-            console.log('Event:', event);
-            return { 
-              statusCode: 200, 
-              body: 'Lambda function executed successfully with inline code!' 
+            console.log('Event:', JSON.stringify(event, null, 2));
+            return {
+              statusCode: 200,
+              body: 'Lambda function executed successfully'
             };
           };
       Environment:
         Variables:
-          MY_ENV_VAR: "example-value"  # You can add environment variables if needed
-      Timeout: 10  # Lambda timeout in seconds
-      MemorySize: 128  # Lambda memory size
-      Tags:
-        - Key: "Environment"
-          Value: "Production"
+          MY_ENV_VAR: "example-value"
+      Timeout: 10
+      MemorySize: 128
       TracingConfig:
         Mode: Active
+      Tags:
+        - Key: Environment
+          Value: Production
 
   S3Bucket:
     Type: AWS::S3::Bucket
     Properties:
       BucketName: !Ref S3BucketName
-      NotificationConfiguration:
-        LambdaConfigurations:
-          - Event: "s3:ObjectCreated:*"  # Event type for trigger
-            Function: !GetAtt LambdaFunction.Arn
       Tags:
-        - Key: "Environment"
-          Value: "Production"
+        - Key: Environment
+          Value: Production
 
-  # Lambda Permission for S3 to invoke Lambda
   LambdaInvokePermission:
     Type: AWS::Lambda::Permission
     Properties:
@@ -92,7 +84,7 @@ Resources:
 
 Outputs:
   LambdaFunctionArn:
-    Description: "Lambda ARN"
+    Description: Lambda ARN
     Value: !GetAtt LambdaFunction.Arn
 
   BucketName:

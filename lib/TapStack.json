@@ -1,6 +1,6 @@
 {
     "AWSTemplateFormatVersion": "2010-09-09",
-    "Description": "CloudFormation template to deploy a Lambda function triggered by an S3 event on object creation.",
+    "Description": "CloudFormation template to deploy a Lambda function and grant S3 permission to invoke it.",
     "Parameters": {
         "S3BucketName": {
             "Type": "String",
@@ -73,7 +73,7 @@
                 },
                 "Handler": "index.handler",
                 "Code": {
-                    "ZipFile": "exports.handler = async (event) => {\n  // Lambda code goes here\n  console.log('Event:', event);\n  return { \n    statusCode: 200, \n    body: 'Lambda function executed successfully with inline code!' \n  };\n};\n"
+                    "ZipFile": "exports.handler = async (event) => {\n  console.log('Event:', JSON.stringify(event, null, 2));\n  return {\n    statusCode: 200,\n    body: 'Lambda function executed successfully'\n  };\n};\n"
                 },
                 "Environment": {
                     "Variables": {
@@ -82,15 +82,15 @@
                 },
                 "Timeout": 10,
                 "MemorySize": 128,
+                "TracingConfig": {
+                    "Mode": "Active"
+                },
                 "Tags": [
                     {
                         "Key": "Environment",
                         "Value": "Production"
                     }
-                ],
-                "TracingConfig": {
-                    "Mode": "Active"
-                }
+                ]
             }
         },
         "S3Bucket": {
@@ -98,19 +98,6 @@
             "Properties": {
                 "BucketName": {
                     "Ref": "S3BucketName"
-                },
-                "NotificationConfiguration": {
-                    "LambdaConfigurations": [
-                        {
-                            "Event": "s3:ObjectCreated:*",
-                            "Function": {
-                                "Fn::GetAtt": [
-                                    "LambdaFunction",
-                                    "Arn"
-                                ]
-                            }
-                        }
-                    ]
                 },
                 "Tags": [
                     {
