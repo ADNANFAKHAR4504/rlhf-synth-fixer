@@ -16,7 +16,9 @@ describe('S3 Lambda Trigger CloudFormation Template', () => {
     });
 
     test('should have a description', () => {
-      expect(template.Description).toBe('CloudFormation template to deploy a Lambda function triggered by an S3 event on object creation.');
+      expect(template.Description).toBe(
+        'CloudFormation template to deploy a Lambda function and grant S3 permission to invoke it.'
+      );
     });
 
     test('should have Parameters section', () => {

@@ -119,6 +119,27 @@
                     "Fn::Sub": "arn:aws:s3:::${S3BucketName}"
                 }
             }
+        },
+        "BucketNotification": {
+            "Type": "AWS::S3::BucketNotification",
+            "Properties": {
+                "Bucket": {
+                    "Ref": "S3Bucket"
+                },
+                "NotificationConfiguration": {
+                    "LambdaConfigurations": [
+                        {
+                            "Event": "s3:ObjectCreated:*",
+                            "Function": {
+                                "Fn::GetAtt": [
+                                    "LambdaFunction",
+                                    "Arn"
+                                ]
+                            }
+                        }
+                    ]
+                }
+            }
         }
     },
     "Outputs": {
