@@ -44,11 +44,11 @@ class TestTapStackIntegration(unittest.TestCase):
     headers = {"Content-Type": "application/json"}
     payload = {"test": "data"}
 
-    response = requests.post(url, headers=headers, json=payload)
+    response = requests.post(url, headers=headers, json=payload, timeout=30)
 
     self.assertEqual(response.status_code, 200)
     body = response.json()
-    self.assertEqual(body, "Hello from Turing!")
+    self.assertEqual(body, "Hello from MyCompany!")
 
   @mark.it("Lambda function exists and is active")
   def test_lambda_function_exists(self):

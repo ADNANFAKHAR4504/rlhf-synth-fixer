@@ -1,5 +1,7 @@
 # mycompany_serverless_stack.py
 
+from typing import Optional
+
 from aws_cdk import (
     aws_lambda as _lambda,
     aws_apigateway as apigw,
@@ -12,26 +14,26 @@ from aws_cdk import (
 )
 from constructs import Construct
 
-from typing import Optional
-
 
 class MyCompanyServerlessStack(NestedStack):
-  def __init__(self, scope: Construct, id: str, **kwargs):
-    super().__init__(scope, id, **kwargs)
+  def __init__(self, scope: Construct, construct_id: str, **kwargs):
+    super().__init__(scope, construct_id, **kwargs)
 
     # Define IAM Role for Lambda
     lambda_role = iam.Role(
         self, 'mycompany-LambdaExecutionRole',
         assumed_by=iam.ServicePrincipal('lambda.amazonaws.com'),
         managed_policies=[
-            iam.ManagedPolicy.from_aws_managed_policy_name('service-role/AWSLambdaBasicExecutionRole')
+            iam.ManagedPolicy.from_aws_managed_policy_name(
+                'service-role/AWSLambdaBasicExecutionRole'
+            )
         ]
     )
 
     # Define the Lambda function
     lambda_function = _lambda.Function(
         self, 'mycompany-LambdaFunction',
-        runtime=_lambda.Runtime.PYTHON_3_8,
+        runtime=_lambda.Runtime.PYTHON_3_11,
         handler='index.handler',
         code=_lambda.Code.from_inline("""
 def handler(event, context):
@@ -39,7 +41,7 @@ def handler(event, context):
     print(f"Received event: {json.dumps(event)}")
     return {
         'statusCode': 200,
-        'body': json.dumps('Hello from Turing!')
+        'body': json.dumps('Hello from MyCompany!')
     }
 """),
         role=lambda_role,

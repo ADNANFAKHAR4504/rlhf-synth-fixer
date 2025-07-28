@@ -18,7 +18,7 @@ class TestMyCompanyServerlessStack(unittest.TestCase):
   def test_lambda_function_created(self):
     self.template.has_resource_properties("AWS::Lambda::Function", {
         "Handler": "index.handler",
-        "Runtime": "python3.8",
+        "Runtime": "python3.11",
         "Environment": {
             "Variables": {
                 "LOG_LEVEL": "INFO"
