@@ -23,7 +23,7 @@ Resources:
   LambdaDLQ:
     Type: AWS::SQS::Queue
     Properties:
-      QueueName: "LambdaDLQ"
+      QueueName: "LambdaDLQ-229220-iac-238"
       MessageRetentionPeriod: 1209600  # 14 days
 
   # Lambda Execution Role
