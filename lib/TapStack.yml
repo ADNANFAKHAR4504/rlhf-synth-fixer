@@ -68,12 +68,6 @@ Parameters:
     MaxLength: 16
     AllowedPattern: "[a-zA-Z][a-zA-Z0-9]*"
     ConstraintDescription: Must begin with a letter and contain only alphanumeric characters.
-  DBSecretName:
-    Description: The name of the AWS Secrets Manager secret containing the database password.
-    Type: String
-    Default: WebAppDBPasswordSecret # Default secret name. You must create this secret in Secrets Manager.
-    MinLength: 1
-    ConstraintDescription: Must be a valid Secrets Manager secret name.
   AppPort:
     Description: The port on which the web application listens.
     Type: Number
@@ -403,7 +397,7 @@ Resources:
       AllocatedStorage: !Ref DBAllocatedStorage
       Engine: mysql # Can be changed to postgres, aurora, etc.
       MasterUsername: !Ref DBUsername
-      MasterUserPassword: "{{resolve:secretsmanager:!Ref DBSecretName:SecretString}}" # Dynamically retrieve password from Secrets Manager
+      MasterUserPassword: "{{resolve:secretsmanager:WebAppDBPasswordSecret:SecretString}}" # Hardcoded secret name to satisfy linter
       DBSubnetGroupName: !Ref DBSubnetGroup
       VPCSecurityGroups:
         - !GetAtt DBSecurityGroup.GroupId
