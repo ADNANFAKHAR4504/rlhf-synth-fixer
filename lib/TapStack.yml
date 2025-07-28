@@ -338,12 +338,11 @@ Resources:
   # RDS Instance
   RDSInstance:
     Type: AWS::RDS::DBInstance
-    DeletionPolicy: Snapshot
     Properties:
       DBInstanceIdentifier: !Sub '${Environment}-webapp-db'
       DBInstanceClass: !Ref DBInstanceType
       Engine: mysql
-      EngineVersion: '8.0'
+      EngineVersion: '8.0.34'
       AllocatedStorage: 20
       StorageType: gp2
       StorageEncrypted: true
