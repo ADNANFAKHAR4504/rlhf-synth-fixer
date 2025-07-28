@@ -11,16 +11,11 @@ interface TapStackProps extends cdk.StackProps {
 import fs from 'fs';
 import path from 'path';
 import { execSync } from 'child_process';
-import {
-  ACMClient,
-  ImportCertificateCommand,
-  GetCertificateCommand,
-} from '@aws-sdk/client-acm';
+import { ACMClient, ImportCertificateCommand } from '@aws-sdk/client-acm';
 import {
   SSMClient,
   PutParameterCommand,
   GetParameterCommand,
-  ParameterNotFound,
 } from '@aws-sdk/client-ssm';
 
 const DOMAIN = 'example.com';
@@ -32,7 +27,7 @@ const KEY_FILE = path.join(OUT_DIR, `${DOMAIN}.key`);
 const CSR_FILE = path.join(OUT_DIR, `${DOMAIN}.csr`);
 const CRT_FILE = path.join(OUT_DIR, `${DOMAIN}.crt`);
 
-( async function generateSelfSignedCertAndStore(): Promise<void> {
+(async function generateSelfSignedCertAndStore(): Promise<void> {
   const ssm = new SSMClient({ region: REGION });
 
   // Check if cert already exists in SSM
@@ -43,7 +38,8 @@ const CRT_FILE = path.join(OUT_DIR, `${DOMAIN}.crt`);
     console.log(`ℹ️ Certificate already exists: ${existing.Parameter?.Value}`);
     return;
   } catch (err) {
-    if ((err as any).name !== 'ParameterNotFound') {
+    const e = err as Record<string, unknown>;
+    if (e.name !== 'ParameterNotFound') {
       console.error('❌ Error checking SSM parameter:', err);
       throw err;
     }
@@ -98,7 +94,7 @@ const CRT_FILE = path.join(OUT_DIR, `${DOMAIN}.crt`);
   );
 
   console.log(`✅ ARN stored in SSM: ${SSM_PARAM}`);
-})()
+})();
 
 export class TapStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: TapStackProps) {
