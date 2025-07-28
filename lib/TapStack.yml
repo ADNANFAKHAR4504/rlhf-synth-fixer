@@ -9,10 +9,9 @@ Parameters:
     Description: Name for the public S3 bucket (must be globally unique)
     Type: String
     Default: my-dev-public-bucket-123456
-  EC2KeyName:
     Description: Name of an existing EC2 KeyPair for SSH access (leave empty if no SSH access needed)
     Type: String
-    Default: iac-rlhf-aws-trainer-instance
+    Default: my-dev-keypair
     AllowedPattern: "^$|^[a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9]$"
     ConstraintDescription: Must be empty or a valid EC2 KeyPair name
   SubnetId:
