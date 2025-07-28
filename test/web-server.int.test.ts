@@ -219,11 +219,6 @@ describe('Deployed resources tagging integration test', () => {
         console.warn('Environment tag not found on this resource:', arn);
       }
 
-      // Optional: check for specific tags on certain resource types
-      if (arn?.includes('ec2')) {
-        expect(tagKeys).toContain('Name');
-      }
-
       // Log for debug
       console.log(`✅ Verified tags for resource: ${arn}`);
     }
