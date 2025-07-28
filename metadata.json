@@ -4,5 +4,22 @@
   "complexity": "medium",
   "turn_type": "multi",
   "po_id": "274777",
-  "startedAt": "2025-07-28T17:34:28.668Z"
+  "startedAt": "2025-07-28T17:34:28.668Z",
+  "subtask": "Infrastructure Design",
+  "subject_labels": [
+    "VPC Infrastructure",
+    "Multi-AZ Deployment",
+    "Network Security",
+    "Cost Optimization",
+    "CloudFormation Templates"
+  ],
+  "testDependencies": [
+    "jest@^29.7.0",
+    "ts-jest@^29.4.0",
+    "typescript@^5.8.3",
+    "@types/jest@^29.5.14",
+    "@aws-sdk/client-ec2@^3.848.0",
+    "cfn-lint@*",
+    "cfn-flip@*"
+  ]
 }
