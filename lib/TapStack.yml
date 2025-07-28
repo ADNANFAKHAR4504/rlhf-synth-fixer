@@ -36,7 +36,8 @@ Parameters:
   KeyPairName:
     Description: Name of an existing EC2 KeyPair to enable SSH access to the instances.
     Type: AWS::EC2::KeyPair::KeyName
-    ConstraintDescription: Must be the name of an existing EC2 KeyPair.
+    Default: '' # Added a default empty string to allow deployment without explicit input
+    ConstraintDescription: Must be the name of an existing EC2 KeyPair. If left empty, SSH access will not be possible.
   SSHLocation:
     Description: The IP address range that can be used to SSH to the EC2 instances.
     Type: String
@@ -71,6 +72,7 @@ Parameters:
     Description: Master password for the RDS database.
     Type: String
     NoEcho: true
+    Default: ChangeMe123! # Added a default password for deployment. IMPORTANT: CHANGE THIS FOR PRODUCTION!
     MinLength: 8
     MaxLength: 41
     ConstraintDescription: Must contain only alphanumeric characters.
@@ -334,9 +336,6 @@ Resources:
       DefaultActions:
         - Type: forward
           TargetGroupArn: !Ref ALBTargetGroup
-      Tags:
-        - Key: Name
-          Value: WebAppALBListener
 
   # EC2 Auto Scaling
   WebAppLaunchTemplate:
@@ -366,9 +365,11 @@ Resources:
             # Optionally install database client for testing connectivity
             # yum install -y mysql
             # yum install -y postgresql
-        Tags:
-          - Key: Name
-            Value: WebAppInstance
+        TagSpecifications:
+          - ResourceType: instance
+            Tags:
+              - Key: Name
+                Value: WebAppInstance
 
   WebAppAutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
