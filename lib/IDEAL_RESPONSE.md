@@ -35,9 +35,10 @@ Parameters:
       - t3.large
     ConstraintDescription: Must be a valid EC2 instance type.
   KeyPairName:
-    Description: Name of an existing EC2 KeyPair to enable SSH access to the instances.
-    Type: AWS::EC2::KeyPair::KeyName
-    ConstraintDescription: Must be the name of an existing EC2 KeyPair.
+    Description: Name of an existing EC2 KeyPair to enable SSH access to the instances (optional).
+    Type: String
+    Default: ''
+    ConstraintDescription: Must be the name of an existing EC2 KeyPair, or leave empty for no SSH access.
   SSHLocation:
     Description: The IP address range that can be used to SSH to the EC2 instances.
     Type: String
@@ -68,13 +69,6 @@ Parameters:
     MaxLength: 16
     AllowedPattern: "[a-zA-Z][a-zA-Z0-9]*"
     ConstraintDescription: Must begin with a letter and contain only alphanumeric characters.
-  DBPassword:
-    Description: Master password for the RDS database.
-    Type: String
-    NoEcho: true
-    MinLength: 8
-    MaxLength: 41
-    ConstraintDescription: Must contain only alphanumeric characters.
   AppPort:
     Description: The port on which the web application listens.
     Type: Number
@@ -82,6 +76,9 @@ Parameters:
     MinValue: 1
     MaxValue: 65535
     ConstraintDescription: Must be a valid port number (1-65535).
+
+Conditions:
+  HasKeyPair: !Not [!Equals [!Ref KeyPairName, '']]
 
 Resources:
   # VPC and Networking
@@ -113,7 +110,7 @@ Resources:
     Properties:
       VpcId: !Ref WebAppVPC
       CidrBlock: !Ref PublicSubnet1CIDR
-      AvailabilityZone: !Select [ 0, !GetAZs '' ] # Select first AZ
+      AvailabilityZone: !Select [ 0, !GetAZs '' ]
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -124,7 +121,7 @@ Resources:
     Properties:
       VpcId: !Ref WebAppVPC
       CidrBlock: !Ref PublicSubnet2CIDR
-      AvailabilityZone: !Select [ 1, !GetAZs '' ] # Select second AZ
+      AvailabilityZone: !Select [ 1, !GetAZs '' ]
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -135,7 +132,7 @@ Resources:
     Properties:
       VpcId: !Ref WebAppVPC
       CidrBlock: !Ref PrivateSubnet1CIDR
-      AvailabilityZone: !Select [ 0, !GetAZs '' ] # Select first AZ
+      AvailabilityZone: !Select [ 0, !GetAZs '' ]
       Tags:
         - Key: Name
           Value: WebAppPrivateSubnet1
@@ -145,7 +142,7 @@ Resources:
     Properties:
       VpcId: !Ref WebAppVPC
       CidrBlock: !Ref PrivateSubnet2CIDR
-      AvailabilityZone: !Select [ 1, !GetAZs '' ] # Select second AZ
+      AvailabilityZone: !Select [ 1, !GetAZs '' ]
       Tags:
         - Key: Name
           Value: WebAppPrivateSubnet2
@@ -190,7 +187,7 @@ Resources:
     Type: AWS::EC2::NatGateway
     Properties:
       AllocationId: !GetAtt NatGatewayEIP.AllocationId
-      SubnetId: !Ref PublicSubnet1 # Place NAT Gateway in one of the public subnets
+      SubnetId: !Ref PublicSubnet1
       Tags:
         - Key: Name
           Value: WebAppNatGateway
@@ -284,11 +281,11 @@ Resources:
       SecurityGroupIngress:
         # Allow MySQL/PostgreSQL (default 3306/5432) from EC2 instances
         - IpProtocol: tcp
-          FromPort: 3306 # Common for MySQL
+          FromPort: 3306
           ToPort: 3306
           SourceSecurityGroupId: !GetAtt EC2SecurityGroup.GroupId
         - IpProtocol: tcp
-          FromPort: 5432 # Common for PostgreSQL
+          FromPort: 5432
           ToPort: 5432
           SourceSecurityGroupId: !GetAtt EC2SecurityGroup.GroupId
       Tags:
@@ -335,9 +332,6 @@ Resources:
       DefaultActions:
         - Type: forward
           TargetGroupArn: !Ref ALBTargetGroup
-      Tags:
-        - Key: Name
-          Value: WebAppALBListener
 
   # EC2 Auto Scaling
   WebAppLaunchTemplate:
@@ -345,13 +339,12 @@ Resources:
     Properties:
       LaunchTemplateName: WebAppLaunchTemplate
       LaunchTemplateData:
-        ImageId:
-          Fn::Transform:
-            Name: AWS::Include
-            Parameters:
-              Location: 'ssm-secure:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2' # Dynamically fetch latest Amazon Linux 2 AMI
+        ImageId: "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}"
         InstanceType: !Ref InstanceType
-        KeyName: !Ref KeyPairName
+        KeyName: !If
+          - HasKeyPair
+          - !Ref KeyPairName
+          - !Ref "AWS::NoValue"
         SecurityGroupIds:
           - !GetAtt EC2SecurityGroup.GroupId
         UserData:
@@ -367,9 +360,11 @@ Resources:
             # Optionally install database client for testing connectivity
             # yum install -y mysql
             # yum install -y postgresql
-        Tags:
-          - Key: Name
-            Value: WebAppInstance
+        TagSpecifications:
+          - ResourceType: instance
+            Tags:
+              - Key: Name
+                Value: WebAppInstance
 
   WebAppAutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
@@ -407,14 +402,14 @@ Resources:
     Properties:
       DBInstanceClass: !Ref DBInstanceClass
       AllocatedStorage: !Ref DBAllocatedStorage
-      Engine: mysql # Can be changed to postgres, aurora, etc.
+      Engine: mysql
       MasterUsername: !Ref DBUsername
-      MasterUserPassword: !Ref DBPassword
+      MasterUserPassword: "{{resolve:secretsmanager:/my-app/rds/master-password:SecretString}}" # Updated secret name
       DBSubnetGroupName: !Ref DBSubnetGroup
       VPCSecurityGroups:
         - !GetAtt DBSecurityGroup.GroupId
-      MultiAZ: true # Enable Multi-AZ for high availability
-      PubliclyAccessible: false # Database should not be publicly accessible
+      MultiAZ: true
+      PubliclyAccessible: false
       StorageType: gp2
       BackupRetentionPeriod: 7
       PreferredBackupWindow: "03:00-04:00"
@@ -430,5 +425,4 @@ Outputs:
   DBEndpoint:
     Description: Endpoint of the RDS database
     Value: !GetAtt WebAppDB.Endpoint.Address
-
 ```
