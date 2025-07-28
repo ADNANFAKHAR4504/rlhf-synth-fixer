@@ -36,10 +36,6 @@ Parameterization:
 
         LambdaRuntime: The runtime for the Lambda function.
 
-Fault Tolerance:
-
-    Ensure that the Lambda function has retry mechanisms and is triggered correctly when an object is created in the S3 bucket.
-
 CloudWatch Logs:
 
     Enable CloudWatch logs for the Lambda function to monitor execution and troubleshoot errors.
