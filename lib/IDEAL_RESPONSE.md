@@ -4,19 +4,19 @@
     "Parameters": {
         "LambdaFunctionName": {
             "Type": "String",
-            "Default": "Lambda-api-229220-iac",
+            "Default": "Lambda-api-229220-iac-238",
             "Description": "The name of the Lambda function."
         },
         "S3BucketName": {
             "Type": "String",
-            "Default": "s3-bucket-229220-iac",
+            "Default": "s3-bucket-229220-iac-238",
             "Description": "The name of the S3 bucket triggering the Lambda.",
             "AllowedPattern": "^[a-z0-9][a-z0-9.-]*[a-z0-9]$",
             "ConstraintDescription": "S3 bucket name must be between 3 and 63 characters, contain only lowercase letters, numbers, hyphens, and periods, and must start and end with a lowercase letter or number."
         },
         "ApiGatewayName": {
             "Type": "String",
-            "Default": "apigateway-lambda-229220-iac",
+            "Default": "apigateway-lambda-229220-iac-238",
             "Description": "The name of the API Gateway."
         }
     },
