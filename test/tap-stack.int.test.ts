@@ -144,8 +144,8 @@ describe('WebApp CloudFormation Template', () => {
       // ALB SG ingress
       expect(albSG.Properties.SecurityGroupIngress).toEqual(
         expect.arrayContaining([
-          expect.objectContaining({ IpProtocol: 'tcp', FromPort: 80, ToPort: 80, CidrIp: '192.161.1.1/32' }),
-          expect.objectContaining({ IpProtocol: 'tcp', FromPort: 443, ToPort: 443, CidrIp: '192.161.1.1/32' })
+          expect.objectContaining({ IpProtocol: 'tcp', FromPort: 80, ToPort: 80, CidrIp: '0.0.0.0/0' }),
+          expect.objectContaining({ IpProtocol: 'tcp', FromPort: 443, ToPort: 443, CidrIp: '0.0.0.0/0' })
         ])
       );
 
