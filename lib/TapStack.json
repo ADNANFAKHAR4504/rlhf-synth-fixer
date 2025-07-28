@@ -48,7 +48,9 @@
                                 {
                                     "Effect": "Allow",
                                     "Action": [
-                                        "logs:*"
+                                        "logs:CreateLogGroup",
+                                        "logs:CreateLogStream",
+                                        "logs:PutLogEvents"
                                     ],
                                     "Resource": "*"
                                 }
@@ -73,7 +75,7 @@
                 },
                 "Handler": "index.handler",
                 "Code": {
-                    "ZipFile": "exports.handler = async (event) => {\n  console.log('Event:', JSON.stringify(event, null, 2));\n  return {\n    statusCode: 200,\n    body: 'Lambda function executed successfully'\n  };\n};\n"
+                    "ZipFile": "exports.handler = async (event) => {\n  console.log('Event:', JSON.stringify(event, null, 2));\n  \n  // Extract bucket and key from the S3 event\n  if (event.Records && event.Records[0] && event.Records[0].s3) {\n      const s3Bucket = event.Records[0].s3.bucket.name;\n      const s3Key = event.Records[0].s3.object.key;\n      console.log(`Object '${s3Key}' created in bucket '${s3Bucket}'`);\n  }\n\n  return {\n    statusCode: 200,\n    body: 'Lambda function executed successfully'\n  };\n};\n"
                 },
                 "Environment": {
                     "Variables": {
@@ -99,6 +101,19 @@
                 "BucketName": {
                     "Ref": "S3BucketName"
                 },
+                "NotificationConfiguration": {
+                    "LambdaConfigurations": [
+                        {
+                            "Event": "s3:ObjectCreated:*",
+                            "Function": {
+                                "Fn::GetAtt": [
+                                    "LambdaFunction",
+                                    "Arn"
+                                ]
+                            }
+                        }
+                    ]
+                },
                 "Tags": [
                     {
                         "Key": "Environment",
@@ -112,32 +127,14 @@
             "Properties": {
                 "Action": "lambda:InvokeFunction",
                 "FunctionName": {
-                    "Ref": "LambdaFunction"
+                    "Fn::GetAtt": [
+                        "LambdaFunction",
+                        "Arn"
+                    ]
                 },
                 "Principal": "s3.amazonaws.com",
                 "SourceArn": {
                     "Fn::Sub": "arn:aws:s3:::${S3BucketName}"
-                }
-            }
-        },
-        "BucketNotification": {
-            "Type": "AWS::S3::BucketNotification",
-            "Properties": {
-                "Bucket": {
-                    "Ref": "S3Bucket"
-                },
-                "NotificationConfiguration": {
-                    "LambdaConfigurations": [
-                        {
-                            "Event": "s3:ObjectCreated:*",
-                            "Function": {
-                                "Fn::GetAtt": [
-                                    "LambdaFunction",
-                                    "Arn"
-                                ]
-                            }
-                        }
-                    ]
                 }
             }
         }
@@ -155,7 +152,7 @@
         "BucketName": {
             "Description": "The name of the S3 bucket",
             "Value": {
-                "Ref": "S3Bucket"
+                "Ref": "S3BucketName"
             }
         }
     }

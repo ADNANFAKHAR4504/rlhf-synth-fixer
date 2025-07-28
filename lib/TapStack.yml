@@ -36,8 +36,10 @@ Resources:
                 Resource: !Sub "arn:aws:s3:::${S3BucketName}/*"
               - Effect: "Allow"
                 Action:
-                  - "logs:*"
-                Resource: "*"
+                  - "logs:CreateLogGroup"
+                  - "logs:CreateLogStream"
+                  - "logs:PutLogEvents"
+                Resource: "*" # Changed logs:* to more specific permissions
 
   LambdaFunction:
     Type: AWS::Lambda::Function
@@ -50,6 +52,14 @@ Resources:
         ZipFile: |
           exports.handler = async (event) => {
             console.log('Event:', JSON.stringify(event, null, 2));
+            
+            // Extract bucket and key from the S3 event
+            if (event.Records && event.Records[0] && event.Records[0].s3) {
+                const s3Bucket = event.Records[0].s3.bucket.name;
+                const s3Key = event.Records[0].s3.object.key;
+                console.log(`Object '${s3Key}' created in bucket '${s3Bucket}'`);
+            }
+
             return {
               statusCode: 200,
               body: 'Lambda function executed successfully'
@@ -70,6 +80,11 @@ Resources:
     Type: AWS::S3::Bucket
     Properties:
       BucketName: !Ref S3BucketName
+      # THIS IS THE CRUCIAL PART - ADDING NOTIFICATIONCONFIGURATION
+      NotificationConfiguration:
+        LambdaConfigurations:
+          - Event: "s3:ObjectCreated:*" # Or specific events like s3:ObjectCreated:Put, s3:ObjectCreated:Post
+            Function: !GetAtt LambdaFunction.Arn # Correct property name is Function
       Tags:
         - Key: Environment
           Value: Production
@@ -78,18 +93,10 @@ Resources:
     Type: AWS::Lambda::Permission
     Properties:
       Action: lambda:InvokeFunction
-      FunctionName: !Ref LambdaFunction
+      # This needs to reference the Lambda's ARN. !GetAtt LambdaFunction.Arn is safest.
+      FunctionName: !GetAtt LambdaFunction.Arn
       Principal: s3.amazonaws.com
       SourceArn: !Sub "arn:aws:s3:::${S3BucketName}"
-
-  BucketNotification:
-    Type: AWS::S3::BucketNotification
-    Properties:
-      Bucket: !Ref S3Bucket
-      NotificationConfiguration:
-        LambdaConfigurations:
-          - Event: "s3:ObjectCreated:*"
-            Function: !GetAtt LambdaFunction.Arn
 
 Outputs:
   LambdaFunctionArn:
@@ -98,4 +105,4 @@ Outputs:
 
   BucketName:
     Description: The name of the S3 bucket
-    Value: !Ref S3Bucket
+    Value: !Ref S3BucketName # Changed to S3BucketName to match the parameter name
