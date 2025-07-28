@@ -88,15 +88,12 @@ describe('S3 Lambda Trigger CloudFormation Template', () => {
       expect(output.Description).toBe('Lambda ARN');
       expect(output.Value).toEqual({ 'Fn::GetAtt': ['LambdaFunction', 'Arn'] });
     });
-    // FIX: Changed output name expectation from 'S3BucketName' to 'BucketName'
-    test('should have BucketName output', () => {
-      const output = template.Outputs.BucketName; // Corrected output name based on provided JSON
+    test('should have S3BucketName output', () => {
+      const output = template.Outputs.S3BucketName; // Corrected output name based on provided JSON
       expect(output).toBeDefined();
       expect(output.Description).toBe('The name of the S3 bucket'); // Description from JSON
       expect(output.Value).toEqual({ Ref: 'S3BucketName' }); // Value reference from JSON
     });
-    // FIX: Removed LambdaFunctionName output test as it's not in the provided JSON
-    // FIX: Removed LambdaExecutionRoleArn output test as it's not in the provided JSON
     
     test('should have RunTime output', () => {
       const output = template.Outputs.RunTime;
