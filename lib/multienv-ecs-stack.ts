@@ -204,7 +204,10 @@ export class MultiEnvEcsStack extends cdk.Stack {
       value: lb.loadBalancerDnsName,
       description: 'Load balancer dns name',
     });
-
+    new cdk.CfnOutput(this, 'envName', {
+      value: config.envName,
+      description: 'Load balancer dns name',
+    });
     new cdk.CfnOutput(this, 'DomainName', {
       value: config.domainName,
       description: 'domain name',

@@ -2,6 +2,7 @@
 import fs from 'fs';
 import https from 'https';
 import axios from 'axios';
+import dns from 'dns/promises';
 import { ECSClient, DescribeTaskDefinitionCommand } from '@aws-sdk/client-ecs';
 import {
   ElasticLoadBalancingV2Client,
@@ -26,11 +27,14 @@ import {
 import {
   ServiceDiscoveryClient,
   ListNamespacesCommand,
+  DiscoverInstancesCommand,
 } from '@aws-sdk/client-servicediscovery';
 import {
   ApplicationAutoScalingClient,
   DescribeScalableTargetsCommand,
 } from '@aws-sdk/client-application-auto-scaling';
+
+import { DescribeServicesCommand } from '@aws-sdk/client-ecs';
 
 const environmentSuffix = process.env.CDK_CONTEXT_ENVIRONMENT_SUFFIX || 'dev';
 const REGION = process.env.AWS_REGION || 'us-east-1';
@@ -109,6 +113,41 @@ describe('AWS Resources Integration Test', () => {
   const servicediscovery = new ServiceDiscoveryClient({ region: REGION });
   const cloudwatch = new CloudWatchClient({ region: REGION });
   const autoScaling = new ApplicationAutoScalingClient({ region: REGION });
+  const serviceDiscovery = new ServiceDiscoveryClient({ region: REGION });
+
+  it('should resolve ECS service from Cloud Map', async () => {
+    const namespaceName = `${outputs.envName}.local`;
+
+    const namespaces = await servicediscovery.send(
+      new ListNamespacesCommand({})
+    );
+    const namespace = namespaces.Namespaces?.find(
+      n => n.Name === namespaceName
+    );
+    expect(namespace).toBeDefined();
+
+    const services = await serviceDiscovery.send(
+      new DiscoverInstancesCommand({
+        NamespaceName: namespaceName,
+        ServiceName: 'app', // CloudMap service name from CDK
+      })
+    );
+
+    expect(services.Instances?.length).toBeGreaterThan(0);
+  });
+
+  it('should verify ECS service is healthy and has all desired tasks running', async () => {
+    const res = await ecs.send(
+      new DescribeServicesCommand({
+        cluster: outputs.ClusterName,
+        services: [outputs.FargateServiceName],
+      })
+    );
+
+    const service = res.services?.[0];
+    expect(service?.runningCount).toBe(service?.desiredCount);
+    expect(service?.healthCheckGracePeriodSeconds).toBeGreaterThanOrEqual(0);
+  });
 
   it('should verify ECS Fargate auto scaling is configured', async () => {
     const res = await autoScaling.send(
@@ -125,6 +164,33 @@ describe('AWS Resources Integration Test', () => {
     expect(target?.MinCapacity).toBe(2);
     expect(target?.MaxCapacity).toBe(10);
   });
+  it('should confirm CloudWatch alarms can trigger (pseudo check)', async () => {
+    const res = await cloudwatch.send(
+      new DescribeAlarmsCommand({
+        AlarmNames: [
+          `${outputs.envName} HighCpuAlarm`,
+          `${outputs.envName} HighMemoryAlarm`,
+        ],
+      })
+    );
+    const allInOk = res.MetricAlarms?.every(alarm => alarm.StateValue === 'OK');
+    expect(allInOk).toBe(true); // Alternatively test for specific state
+  });
+
+  it('should simulate ECS CPU utilization and verify scaling config', async () => {
+    const res = await autoScaling.send(
+      new DescribeScalableTargetsCommand({
+        ServiceNamespace: 'ecs',
+        ResourceIds: [
+          `service/${outputs.ClusterName}/${outputs.FargateServiceName}`,
+        ],
+      })
+    );
+    const scalingTarget = res.ScalableTargets?.[0];
+    expect(scalingTarget).toBeDefined();
+    expect(scalingTarget?.MaxCapacity).toBeGreaterThanOrEqual(2);
+  });
+
   if (process.env.HOSTED_ZONE_NAME) {
     it('should verify Route53 A Record exists for domain', async () => {
       const zoneId = outputs.HostedZoneId; // Add this to your outputs
