@@ -10,7 +10,6 @@ import aws_cdk as cdk
 from aws_cdk import aws_iam as iam
 from aws_cdk import aws_s3 as s3
 from aws_cdk import aws_codebuild as codebuild
-from aws_cdk import aws_codecommit as codecommit
 from aws_cdk import aws_codepipeline as codepipeline
 from aws_cdk import aws_codepipeline_actions as codepipeline_actions
 from constructs import Construct
@@ -492,7 +491,7 @@ class CodePipelineStack(Construct):
   CodePipelineStack creates the CI/CD pipeline for automated deployments.
   
   This stack creates:
-  - CodeCommit repository for source code
+  - S3 bucket for source code artifacts
   - CodePipeline with source, build, staging, and production stages
   - Manual approval action between staging and production
   
@@ -553,13 +552,16 @@ class CodePipelineStack(Construct):
         }
       )
     
-    # Create CodeCommit repository
-    self.repository = codecommit.Repository(
+    # Create S3 bucket for source code artifacts
+    self.source_bucket = s3.Bucket(
       self,
-      "Repository",
-      repository_name=f"ciapp-{environment_suffix}-repo",
-      description=(f"Source code repository for CI/CD pipeline - "
-                   f"{environment_suffix} environment")
+      "SourceBucket",
+      bucket_name=f"ciapp-{environment_suffix}-source-{cdk.Aws.ACCOUNT_ID}",
+      versioned=True,
+      encryption=s3.BucketEncryption.S3_MANAGED,
+      block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
+      removal_policy=cdk.RemovalPolicy.DESTROY,
+      auto_delete_objects=True
     )
     
     # Define pipeline artifacts
@@ -578,12 +580,12 @@ class CodePipelineStack(Construct):
         codepipeline.StageProps(
           stage_name="Source",
           actions=[
-            codepipeline_actions.CodeCommitSourceAction(
+            codepipeline_actions.S3SourceAction(
               action_name="Source",
-              repository=self.repository,
-              branch="main",
+              bucket=self.source_bucket,
+              bucket_key="source.zip",
               output=source_output,
-              trigger=codepipeline_actions.CodeCommitTrigger.EVENTS
+              trigger=codepipeline_actions.S3Trigger.EVENTS
             )
           ]
         ),
@@ -639,12 +641,12 @@ class CodePipelineStack(Construct):
       ]
     )
     
-    # Output the repository clone URL
+    # Output the source bucket name
     cdk.CfnOutput(
       self,
-      "RepositoryCloneUrl",
-      value=self.repository.repository_clone_url_http,
-      description="HTTP clone URL for the CodeCommit repository"
+      "SourceBucketName",
+      value=self.source_bucket.bucket_name,
+      description="S3 bucket name for source code artifacts"
     )
     
     # Output the pipeline console URL
@@ -752,6 +754,6 @@ class TapStack(cdk.Stack):
     )
     
     # Make key resources available as properties of this stack
-    self.repository = self.codepipeline_stack.repository
+    self.source_bucket = self.codepipeline_stack.source_bucket
     self.pipeline = self.codepipeline_stack.pipeline
     self.artifacts_bucket = self.s3_stack.artifacts_bucket

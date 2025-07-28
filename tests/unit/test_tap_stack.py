@@ -24,20 +24,19 @@ class TestTapStack(unittest.TestCase):
     template = Template.from_stack(stack)
 
     # ASSERT - Check that resources are created (no longer using nested stacks)
-    template.resource_count_is("AWS::S3::Bucket", 1)  # S3
-    template.resource_count_is("AWS::CodeCommit::Repository", 1)  # CodeCommit
+    template.resource_count_is("AWS::S3::Bucket", 2)  # Artifacts bucket + Source bucket
     template.resource_count_is("AWS::CodePipeline::Pipeline", 1)  # CodePipeline
 
-  @mark.it("creates S3 artifacts bucket with correct naming pattern")
-  def test_creates_s3_artifacts_bucket(self):
+  @mark.it("creates S3 buckets for artifacts and source")
+  def test_creates_s3_buckets(self):
     # ARRANGE
     env_suffix = "testenv"
     stack = TapStack(self.app, "TapStackTest",
                      TapStackProps(environment_suffix=env_suffix))
     template = Template.from_stack(stack)
 
-    # ASSERT - Check that S3 bucket is created with correct naming
-    template.resource_count_is("AWS::S3::Bucket", 1)
+    # ASSERT - Check that S3 buckets are created (artifacts + source)
+    template.resource_count_is("AWS::S3::Bucket", 2)
     # BucketName is now constructed with Fn::Join, so check for versioning instead
     template.has_resource_properties("AWS::S3::Bucket", {
         "VersioningConfiguration": {"Status": "Enabled"}
@@ -67,7 +66,7 @@ class TestTapStack(unittest.TestCase):
     # Build, Deploy Staging, Deploy Production
     template.resource_count_is("AWS::CodeBuild::Project", 3)
 
-  @mark.it("creates CodeCommit repository and CodePipeline")
+  @mark.it("creates CodePipeline with S3 source")
   def test_creates_pipeline_resources(self):
     # ARRANGE
     env_suffix = "testenv"
@@ -76,8 +75,9 @@ class TestTapStack(unittest.TestCase):
     template = Template.from_stack(stack)
 
     # ASSERT - Check that pipeline resources are created
-    template.resource_count_is("AWS::CodeCommit::Repository", 1)
     template.resource_count_is("AWS::CodePipeline::Pipeline", 1)
+    # Check that we have S3 buckets for source and artifacts
+    template.resource_count_is("AWS::S3::Bucket", 2)
 
   @mark.it("defaults environment suffix to 'dev' if not provided")
   def test_defaults_env_suffix_to_dev(self):
@@ -86,7 +86,7 @@ class TestTapStack(unittest.TestCase):
     template = Template.from_stack(stack)
 
     # ASSERT - Check that resources are created with 'dev' suffix
-    template.resource_count_is("AWS::S3::Bucket", 1)
+    template.resource_count_is("AWS::S3::Bucket", 2)  # Artifacts + Source buckets
     # Check for versioning instead of bucket name (now uses Fn::Join)
     template.has_resource_properties("AWS::S3::Bucket", {
         "VersioningConfiguration": {"Status": "Enabled"}
@@ -100,8 +100,8 @@ class TestTapStack(unittest.TestCase):
                      TapStackProps(environment_suffix=env_suffix))
     template = Template.from_stack(stack)
 
-    # ASSERT - Check that S3 bucket exists and has versioning (tags are added by CDK)
-    template.resource_count_is("AWS::S3::Bucket", 1)
+    # ASSERT - Check that S3 buckets exist and have versioning (tags are added by CDK)
+    template.resource_count_is("AWS::S3::Bucket", 2)  # Artifacts + Source buckets
     template.has_resource_properties("AWS::S3::Bucket", {
         "VersioningConfiguration": {"Status": "Enabled"}
     })

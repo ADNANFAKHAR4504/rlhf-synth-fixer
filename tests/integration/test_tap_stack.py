@@ -29,7 +29,6 @@ class TestTapStackIntegration(unittest.TestCase):
     self.s3_client = boto3.client('s3', region_name='us-west-2')
     self.codepipeline_client = boto3.client('codepipeline', region_name='us-west-2') 
     self.codebuild_client = boto3.client('codebuild', region_name='us-west-2')
-    self.codecommit_client = boto3.client('codecommit', region_name='us-west-2')
     self.iam_client = boto3.client('iam', region_name='us-west-2')
 
   @mark.it("validates S3 artifacts bucket exists and is configured correctly")
@@ -51,18 +50,27 @@ class TestTapStackIntegration(unittest.TestCase):
     encryption = self.s3_client.get_bucket_encryption(Bucket=expected_bucket_name)
     self.assertIsNotNone(encryption['ServerSideEncryptionConfiguration'])
 
-  @mark.it("validates CodeCommit repository exists")
-  def test_codecommit_repository_exists(self):
-    """Test that the CodeCommit repository is created"""
+  @mark.it("validates S3 source bucket exists and is configured correctly")
+  def test_s3_source_bucket_exists(self):
+    """Test that the S3 source bucket is created and configured properly"""
     if not flat_outputs:
       self.skipTest("CloudFormation outputs not available - deployment may not be complete")
     
     environment_suffix = os.getenv('ENVIRONMENT_SUFFIX', 'dev')
-    expected_repo_name = f"ciapp-{environment_suffix}-repo"
+    account_id = boto3.client('sts').get_caller_identity()['Account']
+    expected_bucket_name = f"ciapp-{environment_suffix}-source-{account_id}"
     
-    # Verify repository exists
-    response = self.codecommit_client.get_repository(repositoryName=expected_repo_name)
-    self.assertEqual(response['repositoryMetadata']['repositoryName'], expected_repo_name)
+    # Verify bucket exists
+    response = self.s3_client.head_bucket(Bucket=expected_bucket_name)
+    self.assertEqual(response['ResponseMetadata']['HTTPStatusCode'], 200)
+    
+    # Verify bucket encryption
+    encryption = self.s3_client.get_bucket_encryption(Bucket=expected_bucket_name)
+    self.assertIsNotNone(encryption['ServerSideEncryptionConfiguration'])
+    
+    # Verify bucket versioning
+    versioning = self.s3_client.get_bucket_versioning(Bucket=expected_bucket_name)
+    self.assertEqual(versioning['Status'], 'Enabled')
 
   @mark.it("validates CodePipeline exists and has correct stages")
   def test_codepipeline_exists_with_stages(self):
