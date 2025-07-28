@@ -31,7 +31,10 @@
       "UpdateReplacePolicy": "Delete",
       "Properties": {
         "BucketName": {
-          "Fn::Sub": "test-security-bucket-${EnvironmentSuffix}"
+          "Fn::Sub": "test-security-bucket-${EnvironmentSuffix}-${AWS::AccountId}"
+        },
+        "VersioningConfiguration": {
+          "Status": "Enabled"
         },
         "BucketEncryption": {
           "ServerSideEncryptionConfiguration": [
@@ -47,9 +50,6 @@
           "BlockPublicPolicy": true,
           "IgnorePublicAcls": true,
           "RestrictPublicBuckets": true
-        },
-        "VersioningConfiguration": {
-          "Status": "Enabled"
         }
       }
     },
@@ -91,10 +91,7 @@
                     "s3:DeleteObjectVersion",
                     "s3:PutBucketPolicy",
                     "s3:DeleteBucket",
-                    "s3:PutBucketAcl",
-                    "s3:PutObjectTagging",
-                    "s3:DeleteObjectTagging",
-                    "s3:PutBucketTagging"
+                    "s3:PutBucketAcl"
                   ],
                   "Resource": "*"
                 }
@@ -171,6 +168,8 @@
         "TableName": {
           "Fn::Sub": "TurnAroundPromptTable${EnvironmentSuffix}"
         },
+        "BillingMode": "PAY_PER_REQUEST",
+        "DeletionProtectionEnabled": false,
         "AttributeDefinitions": [
           {
             "AttributeName": "id",
@@ -182,9 +181,7 @@
             "AttributeName": "id",
             "KeyType": "HASH"
           }
-        ],
-        "BillingMode": "PAY_PER_REQUEST",
-        "DeletionProtectionEnabled": false
+        ]
       }
     }
   },
