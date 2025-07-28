@@ -1,26 +1,3 @@
-# Ideal CloudFormation Template Response
-
-## Overview
-
-This document describes the ideal CloudFormation template structure for setting up AWS VPC infrastructure with proper security, availability, and best practices.
-
-## Template Requirements
-
-### Core Infrastructure Components
-
-- **VPC Configuration**: Custom VPC with CIDR block 10.0.0.0/16
-- **Subnets**: 
-  - Public subnet: 10.0.0.0/24 (with MapPublicIpOnLaunch enabled)
-  - Private subnet: 10.0.1.0/24
-- **Internet Gateway**: For public subnet internet access
-- **NAT Gateway**: For private subnet outbound internet access
-- **Route Tables**: Proper routing configuration for both subnets
-- **Security Groups**: SSH access restricted to 198.51.100.0/24 CIDR range
-- **EC2 Instances**: One instance in each subnet (t2.micro)
-
-### Template Structure
-
-```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: AWS CloudFormation template to set up a VPC, subnets, route tables, NAT Gateway, and EC2 instances.
 
@@ -29,33 +6,216 @@ Parameters:
     Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
     Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
   KeyName:
+    Description: Name of an existing EC2 KeyPair to enable SSH access
     Type: AWS::EC2::KeyPair::KeyName
-    Description: Name of an existing EC2 KeyPair for SSH access
+    ConstraintDescription: Must be the name of an existing EC2 KeyPair.
+    Default: your-dev-key
 
 Resources:
-  # VPC, subnets, gateways, route tables, security groups, EC2 instances
-  # (Full resource definitions would go here)
+  vpcDevelopment:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Environment
+          Value: Development
+
+  publicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref vpcDevelopment
+      CidrBlock: 10.0.0.0/24
+      MapPublicIpOnLaunch: true
+      AvailabilityZone: 
+        !Select 
+          - 0
+          - !GetAZs 
+              Ref: AWS::Region
+      Tags:
+        - Key: Environment
+          Value: Development
+
+  privateSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref vpcDevelopment
+      CidrBlock: 10.0.1.0/24
+      AvailabilityZone: 
+        !Select 
+          - 1
+          - !GetAZs 
+              Ref: AWS::Region
+      Tags:
+        - Key: Environment
+          Value: Development
+
+  internetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Environment
+          Value: Development
+
+  attachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref vpcDevelopment
+      InternetGatewayId: !Ref internetGateway
+
+  publicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref vpcDevelopment
+      Tags:
+        - Key: Environment
+          Value: Development
+
+  publicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: attachGateway
+    Properties:
+      RouteTableId: !Ref publicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref internetGateway
+
+  publicSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref publicSubnet
+      RouteTableId: !Ref publicRouteTable
+
+  elasticIP:
+    Type: AWS::EC2::EIP
+    DependsOn: attachGateway
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Environment
+          Value: Development
+
+  natGateway:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt elasticIP.AllocationId
+      SubnetId: !Ref publicSubnet
+      Tags:
+        - Key: Environment
+          Value: Development
+
+  privateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref vpcDevelopment
+      Tags:
+        - Key: Environment
+          Value: Development
+
+  privateRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref privateRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref natGateway
+
+  privateSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref privateSubnet
+      RouteTableId: !Ref privateRouteTable
+
+  securityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Enable SSH access
+      VpcId: !Ref vpcDevelopment
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 198.51.100.0/24
+      Tags:
+        - Key: Environment
+          Value: Development
+
+  publicInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: t2.micro
+      ImageId: !Ref LatestAmiId
+      KeyName: !Ref KeyName
+      SubnetId: !Ref publicSubnet
+      SecurityGroupIds:
+        - !Ref securityGroup
+      Tags:
+        - Key: Environment
+          Value: Development
+
+  privateInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: t2.micro
+      ImageId: !Ref LatestAmiId
+      KeyName: !Ref KeyName
+      SubnetId: !Ref privateSubnet
+      SecurityGroupIds:
+        - !Ref securityGroup
+      Tags:
+        - Key: Environment
+          Value: Development
 
 Outputs:
-  # Resource IDs for cross-stack references
-  # VPCId, SubnetIds, SecurityGroupId, InstanceIds, etc.
-```
+  VPCId:
+    Description: VPC ID
+    Value: !Ref vpcDevelopment
+    Export:
+      Name: !Sub "${AWS::StackName}-VPCId"
 
-### Best Practices Implemented
+  PublicSubnetId:
+    Description: Public Subnet ID
+    Value: !Ref publicSubnet
+    Export:
+      Name: !Sub "${AWS::StackName}-PublicSubnetId"
 
-1. **Dynamic AZ Selection**: Uses `!GetAZs` instead of hardcoded availability zones
-2. **Parameter Configuration**: Configurable AMI IDs and SSH key names
-3. **Proper Tagging**: All resources tagged with Environment: Development
-4. **Resource Dependencies**: Correct DependsOn and Ref relationships
-5. **Comprehensive Outputs**: Full outputs section for modular deployment
-6. **Security**: Restricted SSH access and proper network isolation
+  PrivateSubnetId:
+    Description: Private Subnet ID
+    Value: !Ref privateSubnet
+    Export:
+      Name: !Sub "${AWS::StackName}-PrivateSubnetId"
 
-### Key Features
+  NATGatewayId:
+    Description: NAT Gateway ID
+    Value: !Ref natGateway
+    Export:
+      Name: !Sub ${AWS::StackName}-NATGatewayId
 
-- **Reusability**: Parameterized template for multiple environments
-- **Portability**: Dynamic AZ selection works across regions
-- **Security**: Network isolation and restricted access controls
-- **Modularity**: Comprehensive outputs enable stack composition
-- **Best Practices**: Follows AWS CloudFormation recommended patterns
+  NatEIPAllocationId:
+    Description: Elastic IP Allocation ID for NAT Gateway
+    Value: !GetAtt elasticIP.AllocationId
+    Export:
+      Name: !Sub ${AWS::StackName}-NatEIPAllocationId
 
-This template provides a production-ready foundation for VPC infrastructure setup with proper security controls and architectural best practices.
+  InternetGatewayId:
+    Description: Internet Gateway ID
+    Value: !Ref internetGateway
+    Export:
+      Name: !Sub ${AWS::StackName}-InternetGatewayId
+
+  SecurityGroupId:
+    Description: Security Group ID
+    Value: !Ref securityGroup
+    Export:
+      Name: !Sub ${AWS::StackName}-SecurityGroupId
+
+  PublicInstanceId:
+    Description: EC2 Public Instance ID
+    Value: !Ref publicInstance
+    Export:
+      Name: !Sub ${AWS::StackName}-PublicInstanceId
+
+  PrivateInstanceId:
+    Description: EC2 Private Instance ID
+    Value: !Ref privateInstance
+    Export:
+      Name: !Sub ${AWS::StackName}-PrivateInstanceId
