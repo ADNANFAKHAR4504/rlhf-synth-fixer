@@ -340,7 +340,7 @@ Resources:
       LaunchTemplateData:
         ImageId: "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}"
         InstanceType: !Ref InstanceType
-        KeyName: !If # Corrected placement for !If to directly control KeyName value
+        KeyName: !If
           - HasKeyPair
           - !Ref KeyPairName
           - !Ref "AWS::NoValue"
@@ -403,7 +403,7 @@ Resources:
       AllocatedStorage: !Ref DBAllocatedStorage
       Engine: mysql
       MasterUsername: !Ref DBUsername
-      MasterUserPassword: "{{resolve:secretsmanager:WebAppDBPasswordSecret:SecretString}}"
+      MasterUserPassword: "{{resolve:secretsmanager:/my-app/rds/master-password:SecretString}}" # Updated secret name
       DBSubnetGroupName: !Ref DBSubnetGroup
       VPCSecurityGroups:
         - !GetAtt DBSecurityGroup.GroupId

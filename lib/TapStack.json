@@ -696,7 +696,7 @@
                 "MasterUsername": {
                     "Ref": "DBUsername"
                 },
-                "MasterUserPassword": "{{resolve:secretsmanager:WebAppDBPasswordSecret:SecretString}}",
+                "MasterUserPassword": "{{resolve:secretsmanager:/my-app/rds/master-password:SecretString}}",
                 "DBSubnetGroupName": {
                     "Ref": "DBSubnetGroup"
                 },
