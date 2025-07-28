@@ -21,7 +21,7 @@ import aws_cdk as cdk
 from proj_cdk.proj_cdk_stack import ProjCdkStack
 
 app = cdk.App()
-ProjCdkStack(app, "ProjCdkStack", env={'region': 'us-west-2'})
+ProjCdkStack(app, "ProjCdkStack", env={'region': 'us-east-1'})
 
 app.synth()
 ```
@@ -178,7 +178,7 @@ aws-cdk.aws-iam
 
 2. **Bootstrap CDK**:
    ```bash
-   cdk bootstrap aws://ACCOUNT-NUMBER/us-west-2
+   cdk bootstrap aws://ACCOUNT-NUMBER/us-east-1
    ```
 
 3. **Deploy**:

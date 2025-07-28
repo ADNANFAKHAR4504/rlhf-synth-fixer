@@ -37,8 +37,8 @@ class TestTapStackIntegration(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         """Set up AWS clients and get stack outputs"""
-        # Ensure we use us-west-2 region to match CDK deployment
-        region = 'us-west-2'
+        # Ensure we use us-east-1 region to match CDK deployment
+        region = 'us-east-1'
         cls.s3_client = boto3.client('s3', region_name=region)
         cls.dynamodb_client = boto3.client('dynamodb', region_name=region)
         cls.lambda_client = boto3.client('lambda', region_name=region)
@@ -264,7 +264,7 @@ class TestTapStackIntegration(unittest.TestCase):
                                 "eventSource": "aws:s3",
                                 "eventName": "s3:ObjectCreated:Put",
                                 "eventTime": "2023-01-01T00:00:00.000Z",
-                                "awsRegion": "us-west-2",
+                                "awsRegion": "us-east-1",
                                 "s3": {
                                         "bucket": {"name": self.bucket_name},
                                         "object": {

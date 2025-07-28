@@ -290,7 +290,7 @@ with patch('boto3.client'), patch.dict(
         {
             'TABLE_NAME': 'test-table', 
             'BUCKET_NAME': 'test-bucket', 
-            'AWS_DEFAULT_REGION': 'us-west-2'
+            'AWS_DEFAULT_REGION': 'us-east-1'
         }
 ):
     from lambda_handler import get_s3_object_metadata
@@ -308,7 +308,7 @@ class TestLambdaHandler(unittest.TestCase):
                                 'eventSource': 'aws:s3',
                                 'eventName': 's3:ObjectCreated:Put',
                                 'eventTime': '2023-01-01T00:00:00.000Z',
-                                'awsRegion': 'us-west-2',
+                                'awsRegion': 'us-east-1',
                                 's3': {
                                         'bucket': {
                                                 'name': 'test-bucket'
@@ -370,7 +370,7 @@ class TestLambdaHandler(unittest.TestCase):
     @mark.it("handles missing TABLE_NAME environment variable")
     def test_lambda_handler_missing_table_name(self):
         # ARRANGE
-        with patch.dict(os.environ, {'AWS_DEFAULT_REGION': 'us-west-2'}, clear=True):
+        with patch.dict(os.environ, {'AWS_DEFAULT_REGION': 'us-east-1'}, clear=True):
             # Re-import the module to get fresh environment variables
             lambda_mod = self._reload_lambda_handler()
 
@@ -420,7 +420,7 @@ class TestLambdaHandler(unittest.TestCase):
                                 'eventSource': 'aws:s3',
                                 'eventName': 's3:ObjectCreated:Copy',
                                 'eventTime': '2023-01-01T01:00:00.000Z',
-                                'awsRegion': 'us-west-2',
+                                'awsRegion': 'us-east-1',
                                 's3': {
                                         'bucket': {
                                                 'name': 'test-bucket'
@@ -556,7 +556,7 @@ class TestLambdaHandler(unittest.TestCase):
                 'eventSource': 'aws:s3',
                 'eventName': 's3:ObjectCreated:Put',
                 'eventTime': '2023-01-01T00:00:00.000Z',
-                'awsRegion': 'us-west-2',
+                'awsRegion': 'us-east-1',
                 's3': {
                         'bucket': {
                                 'name': 'test-bucket'

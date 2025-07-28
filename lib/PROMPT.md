@@ -1,6 +1,6 @@
 You are a senior AWS Cloud Architect and expert infrastructure engineer.
 
-Your task is to generate a fully functional AWS CDK program using the **Python** that defines and deploys a secure, auditable cloud environment in the **us-west-2** AWS region.
+Your task is to generate a fully functional AWS CDK program using the **Python** that defines and deploys a secure, auditable cloud environment in the **us-east-1** AWS region.
 
 ### 🔧 Infrastructure Requirements:
 
@@ -42,7 +42,7 @@ Your task is to generate a fully functional AWS CDK program using the **Python**
 
 - The CDK app should use **constructs and stacks** cleanly separated by function.
 - All resources should follow the naming convention: `proj-<resource>-<env>` (e.g., `proj-s3-prod`).
-- Deployment should default to the AWS region `us-west-2`.
+- Deployment should default to the AWS region `us-east-1`.
 - All code should be clean, readable, and **well-commented**, demonstrating **best practices**.
 - Ensure it can be deployed with a single command: `cdk deploy`.
 
