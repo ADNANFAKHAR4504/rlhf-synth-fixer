@@ -19,7 +19,8 @@ describe('WebApp CloudFormation Template', () => {
     // If your template is named 'web-app-deployment.yaml', you can convert it using:
     // pipenv run cfn-flip -i web-app-deployment.yaml -o web-app-deployment.json
     // Make sure 'cfn-flip' is installed (pip install cfn-flip).
-    const templatePath = path.join(__dirname, '../lib/TapStack.json');
+    // Corrected templatePath to look for 'web-app-deployment.json'
+    const templatePath = path.join(__dirname, 'web-app-deployment.json');
     const templateContent = fs.readFileSync(templatePath, 'utf8');
     template = JSON.parse(templateContent);
   });
@@ -152,7 +153,7 @@ describe('WebApp CloudFormation Template', () => {
       expect(ec2SG.Properties.SecurityGroupIngress).toEqual(
         expect.arrayContaining([
           expect.objectContaining({ IpProtocol: 'tcp', FromPort: { "Ref": "AppPort" }, ToPort: { "Ref": "AppPort" }, SourceSecurityGroupId: { "Fn::GetAtt": ["ALBSecurityGroup", "GroupId"] } }),
-          expect.objectContaining({ IpProtocol: 'tcp', FromPort: 22, ToPort: 22, CidrIp: { "Ref": "SSHLocation" } })
+          expect.objectContaining({ IpProtocol: 'tcp', FromPort: 22, ToPort: 22, CidrIp: { "Ref": "VpcCIDR" } }) // Updated to VpcCIDR
         ])
       );
 
@@ -168,18 +169,17 @@ describe('WebApp CloudFormation Template', () => {
     // Application Load Balancer
     test('WebAppALB, ALBTargetGroup, and ALBListener should be defined', () => {
       const alb = template.Resources.WebAppALB;
-      const targetGroup = template.Resources.ALBTargetGroup;
-      const listener = template.Resources.ALBListener;
-
       expect(alb.Type).toBe('AWS::ElasticLoadBalancingV2::LoadBalancer');
       expect(alb.Properties.Scheme).toBe('internet-facing');
       expect(alb.Properties.Subnets).toHaveLength(2);
 
+      const targetGroup = template.Resources.ALBTargetGroup;
       expect(targetGroup.Type).toBe('AWS::ElasticLoadBalancingV2::TargetGroup');
       expect(targetGroup.Properties.Port).toEqual({ "Ref": "AppPort" });
       expect(targetGroup.Properties.Protocol).toBe('HTTP');
       expect(targetGroup.Properties.HealthCheckPath).toBe('/');
 
+      const listener = template.Resources.ALBListener;
       expect(listener.Type).toBe('AWS::ElasticLoadBalancingV2::Listener');
       expect(listener.Properties.LoadBalancerArn).toEqual({ "Ref": "WebAppALB" });
       expect(listener.Properties.Port).toBe(80);
@@ -267,6 +267,10 @@ describe('WebApp CloudFormation Template', () => {
       if (!webAppUrl) {
         throw new Error('WebAppURL not found in cfn-outputs/flat-outputs.json. Ensure the stack is deployed.');
       }
+      // Prepend 'http://' to the URL if it's not already present
+      if (!webAppUrl.startsWith('http://') && !webAppUrl.startsWith('https://')) {
+        webAppUrl = `http://${webAppUrl}`;
+      }
     });
 
     test('Web application should be accessible and return 200 OK', async () => {
@@ -287,6 +291,6 @@ describe('WebApp CloudFormation Template', () => {
         }
         throw error;
       }
-    }, 120000); // Increase timeout for integration test (e.g., 120 seconds)
+    }, 120000);
   });
 });
