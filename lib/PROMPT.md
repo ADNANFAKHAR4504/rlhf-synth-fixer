@@ -34,7 +34,7 @@ Create a CloudFormation template in YAML format to automate the deployment of a 
 
 ## Deliverable
 
-- A YAML file named `web-app-deployment.yaml` that implements all of the above.
+- A YAML file named `lib/TapStack.yaml` that implements all of the above.
 - The template must pass AWS CloudFormation validation.
 - Organize the template following AWS best practices (use `Parameters`, `Mappings`, `Resources`, and `Outputs` sections appropriately).
 
