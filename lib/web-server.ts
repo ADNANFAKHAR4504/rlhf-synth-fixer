@@ -122,7 +122,7 @@ export class WebServerStack extends cdk.Stack {
     const rdsSubnetGroup = new SubnetGroup(this, 'RdsSubnetGroup', {
       description: 'Subnet group for RDS',
       vpc,
-      vpcSubnets: { subnetType: SubnetType.PRIVATE_ISOLATED },
+      vpcSubnets: { subnetType: SubnetType.PRIVATE_WITH_NAT },
       removalPolicy: cdk.RemovalPolicy.DESTROY, // optional
       subnetGroupName: 'rds-subnet-group',
     });
