@@ -15,7 +15,13 @@ interface TapStackProps extends cdk.StackProps {
 
 export class TapStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: TapStackProps) {
-    super(scope, id, props);
+    super(scope, id, {
+      ...props,
+      env: {
+        ...props?.env,
+        region: 'us-west-2', // Hardcode region as per PROMPT.md requirements
+      },
+    });
 
     // Get environment suffix from props, context, or use 'dev' as default
     const environmentSuffix =
@@ -55,16 +61,32 @@ export class TapStack extends cdk.Stack {
       ],
     });
 
+    // --- VPC Flow Logs ---
+    new ec2.FlowLog(this, 'VpcFlowLog', {
+      resourceType: ec2.FlowLogResourceType.fromVpc(vpc),
+      destination: ec2.FlowLogDestination.toCloudWatchLogs(),
+    });
+
     // --- Bastion Host for Secure Access ---
-    const bastionSg = new ec2.SecurityGroup(this, 'BastionSG', { vpc, description: 'Security group for bastion host' });
-    // IMPORTANT: Restrict this to your IP address for production use
-    bastionSg.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(22), 'Allow SSH access');
+    const bastionSg = new ec2.SecurityGroup(this, 'BastionSG', {
+      vpc,
+      description: 'Security group for bastion host',
+    });
+    // Restrict SSH access to a specific IP range for better security
+    bastionSg.addIngressRule(
+      ec2.Peer.ipv4('203.0.113.0/24'),
+      ec2.Port.tcp(22),
+      'Allow SSH access from trusted IP range'
+    );
 
     const bastionHost = new ec2.BastionHostLinux(this, 'BastionHost', {
       vpc,
       subnetSelection: { subnetType: ec2.SubnetType.PUBLIC },
       securityGroup: bastionSg,
-      instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.NANO),
+      instanceType: ec2.InstanceType.of(
+        ec2.InstanceClass.T3,
+        ec2.InstanceSize.NANO
+      ),
     });
 
     // --- S3 Bucket for Logs ---
@@ -78,8 +100,15 @@ export class TapStack extends cdk.Stack {
     });
 
     // --- Application Load Balancer ---
-    const albSg = new ec2.SecurityGroup(this, 'AlbSG', { vpc, description: 'Security group for ALB' });
-    albSg.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(80), 'Allow HTTP traffic');
+    const albSg = new ec2.SecurityGroup(this, 'AlbSG', {
+      vpc,
+      description: 'Security group for ALB',
+    });
+    albSg.addIngressRule(
+      ec2.Peer.anyIpv4(),
+      ec2.Port.tcp(80),
+      'Allow HTTP traffic'
+    );
 
     const alb = new elbv2.ApplicationLoadBalancer(this, 'AppALB', {
       vpc,
@@ -90,20 +119,28 @@ export class TapStack extends cdk.Stack {
     alb.logAccessLogs(logBucket, 'alb-logs');
 
     // --- Application Tier (Auto Scaling Group) ---
-    const appSg = new ec2.SecurityGroup(this, 'AppSG', { vpc, description: 'Security group for application instances' });
+    const appSg = new ec2.SecurityGroup(this, 'AppSG', {
+      vpc,
+      description: 'Security group for application instances',
+    });
     appSg.addIngressRule(albSg, ec2.Port.tcp(80), 'Allow traffic from ALB');
 
     const appRole = new iam.Role(this, 'AppInstanceRole', {
       assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
       managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonSSMManagedInstanceCore'), // For Systems Manager access
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'AmazonSSMManagedInstanceCore'
+        ), // For Systems Manager access
       ],
     });
 
     const asg = new autoscaling.AutoScalingGroup(this, 'AppASG', {
       vpc,
       vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
-      instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MICRO),
+      instanceType: ec2.InstanceType.of(
+        ec2.InstanceClass.T3,
+        ec2.InstanceSize.MICRO
+      ),
       machineImage: ec2.MachineImage.latestAmazonLinux2023(),
       securityGroup: appSg,
       role: appRole,
@@ -125,12 +162,24 @@ export class TapStack extends cdk.Stack {
     });
 
     // --- Database Tier (RDS MySQL) ---
-    const dbSg = new ec2.SecurityGroup(this, 'DbSG', { vpc, description: 'Security group for RDS database' });
-    dbSg.addIngressRule(appSg, ec2.Port.tcp(3306), 'Allow traffic from application instances');
+    const dbSg = new ec2.SecurityGroup(this, 'DbSG', {
+      vpc,
+      description: 'Security group for RDS database',
+    });
+    dbSg.addIngressRule(
+      appSg,
+      ec2.Port.tcp(3306),
+      'Allow traffic from application instances'
+    );
 
     const dbInstance = new rds.DatabaseInstance(this, 'MySQLDatabase', {
-      engine: rds.DatabaseInstanceEngine.mysql({ version: rds.MysqlEngineVersion.VER_8_0_35 }),
-      instanceType: ec2.InstanceType.of(ec2.InstanceClass.BURSTABLE4_GRAVITON, ec2.InstanceSize.SMALL),
+      engine: rds.DatabaseInstanceEngine.mysql({
+        version: rds.MysqlEngineVersion.VER_8_0_35,
+      }),
+      instanceType: ec2.InstanceType.of(
+        ec2.InstanceClass.BURSTABLE4_GRAVITON,
+        ec2.InstanceSize.SMALL
+      ),
       vpc,
       vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_ISOLATED },
       securityGroups: [dbSg],
@@ -155,27 +204,22 @@ export class TapStack extends cdk.Stack {
       }),
       threshold: 85,
       evaluationPeriods: 2,
-      alarmDescription: 'High CPU utilization on the application Auto Scaling Group.',
+      alarmDescription:
+        'High CPU utilization on the application Auto Scaling Group.',
       treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
     });
     // Note: Memory usage requires the CloudWatch agent installed on the EC2 instances.
 
     // --- Compliance (AWS Config Rules) ---
     new aws_config.ManagedRule(this, 'S3VersioningEnabledRule', {
-      identifier: aws_config.ManagedRuleIdentifiers.S3_BUCKET_VERSIONING_ENABLED,
+      identifier:
+        aws_config.ManagedRuleIdentifiers.S3_BUCKET_VERSIONING_ENABLED,
     });
 
-    // FIX: This rule is designed for a specific instanceId, not an ASG name.
-    // It has been commented out to prevent deployment errors. A custom rule would
-    // be needed to check all instances within an ASG.
-    /*
+    // AWS Config rule to ensure EC2 instances are not launched with public IPs
     new aws_config.ManagedRule(this, 'Ec2NoPublicIpRule', {
       identifier: aws_config.ManagedRuleIdentifiers.EC2_INSTANCE_NO_PUBLIC_IP,
-      inputParameters: {
-        instanceId: asg.autoScalingGroupName,
-      },
     });
-    */
 
     // --- Outputs ---
     new cdk.CfnOutput(this, 'ALB_DNS', {
@@ -185,6 +229,10 @@ export class TapStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'BastionHostId', {
       value: bastionHost.instanceId,
       description: 'ID of the Bastion Host instance',
+    });
+    new cdk.CfnOutput(this, 'DatabaseEndpoint', {
+      value: dbInstance.instanceEndpoint.hostname,
+      description: 'Endpoint of the MySQL database instance',
     });
   }
 }
