@@ -5,12 +5,12 @@ Parameters:
   S3BucketName:
     Type: String
     Description: The name of the S3 bucket that will trigger the Lambda function.
-    Default: bucket-243911
+    Default: bucket-243911-228
 
   LambdaFunctionName:
     Type: String
     Description: The name of the Lambda function to be created.
-    Default: lambda-243911
+    Default: lambda-243911-228
 
 Resources:
 
