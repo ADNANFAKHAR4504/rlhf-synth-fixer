@@ -35,78 +35,213 @@ class TestTapStack(unittest.TestCase):
     assert props.environment_suffix == "prod"
     assert props.description == "Test description"
 
-  @mark.it("creates nested stacks for each resource type")
-  def test_nested_stacks_creation(self):
-    # Check that all required nested stacks are created
-    self.template.resource_count_is("AWS::CloudFormation::Stack", 5)
+  @mark.it("creates all required AWS resources")
+  def test_creates_all_aws_resources(self):
+    # Check that all required AWS resources are created
+    self.template.resource_count_is("AWS::DynamoDB::Table", 1)
+    # CDK may create additional Lambda functions for internal purposes (e.g., custom resources)
+    lambda_functions = self.template.find_resources("AWS::Lambda::Function")
+    assert len(lambda_functions) >= 1, "At least one Lambda function should be created"
+    self.template.resource_count_is("AWS::ApiGatewayV2::Api", 1)
+    self.template.resource_count_is("AWS::S3::Bucket", 1)
+    self.template.resource_count_is("AWS::CloudFront::Distribution", 1)
+    self.template.resource_count_is("AWS::KMS::Key", 2)  # One for S3, one for DynamoDB
+    # Lambda errors, throttles, API latency  
+    self.template.resource_count_is("AWS::CloudWatch::Alarm", 3)
+
+  @mark.it("creates DynamoDB table with correct configuration")
+  def test_dynamodb_table_configuration(self):
+    # Check DynamoDB table exists with correct configuration
+    self.template.has_resource("AWS::DynamoDB::Table", {
+      "Properties": {
+        "AttributeDefinitions": [
+          {
+            "AttributeName": "id",
+            "AttributeType": "S"
+          },
+          {
+            "AttributeName": "timestamp", 
+            "AttributeType": "S"
+          }
+        ],
+        "BillingMode": "PAY_PER_REQUEST",
+        "KeySchema": [
+          {
+            "AttributeName": "id",
+            "KeyType": "HASH"
+          }
+        ],
+        "GlobalSecondaryIndexes": [
+          {
+            "IndexName": "timestamp-index",
+            "KeySchema": [
+              {
+                "AttributeName": "timestamp",
+                "KeyType": "HASH"
+              }
+            ],
+            "Projection": {
+              "ProjectionType": "ALL"
+            }
+          }
+        ],
+        "SSESpecification": {
+          "KMSMasterKeyId": Match.any_value(),
+          "SSEEnabled": True
+        },
+        "Tags": [
+          {
+            "Key": "environment",
+            "Value": "production"
+          }
+        ]
+      }
+    })
+
+  @mark.it("creates Lambda function with correct configuration")
+  def test_lambda_function_configuration(self):
+    # Check Lambda function exists with correct configuration
+    self.template.has_resource("AWS::Lambda::Function", {
+      "Properties": {
+        "Runtime": "python3.8",
+        "Handler": "backend_handler.handler",
+        "MemorySize": 128,
+        "Timeout": 30,
+        "Environment": {
+          "Variables": {
+            "TABLE_NAME": Match.any_value(),
+            "LOG_LEVEL": "INFO"
+          }
+        }
+      }
+    })
+
+  @mark.it("creates API Gateway with CORS configuration")
+  def test_api_gateway_configuration(self):
+    # Check API Gateway exists with CORS configuration
+    self.template.has_resource("AWS::ApiGatewayV2::Api", {
+      "Properties": {
+        "CorsConfiguration": {
+          "AllowHeaders": ["Content-Type", "Authorization"],
+          "AllowMethods": ["GET", "POST", "OPTIONS"],
+          "AllowOrigins": ["*"],
+          "MaxAge": 3600
+        },
+        "ProtocolType": "HTTP"
+      }
+    })
+
+  @mark.it("creates S3 bucket with correct configuration")
+  def test_s3_bucket_configuration(self):
+    # Check S3 bucket exists with versioning and encryption
+    self.template.has_resource("AWS::S3::Bucket", {
+      "Properties": {
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "KMSMasterKeyID": Match.any_value(),
+                "SSEAlgorithm": "aws:kms"
+              }
+            }
+          ]
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": True,
+          "BlockPublicPolicy": True,
+          "IgnorePublicAcls": True,
+          "RestrictPublicBuckets": True
+        },
+        "VersioningConfiguration": {
+          "Status": "Enabled"
+        },
+        "WebsiteConfiguration": {
+          "IndexDocument": "index.html",
+          "ErrorDocument": "error.html"
+        },
+        "Tags": [
+          {
+            "Key": "environment",
+            "Value": "production"
+          }
+        ]
+      }
+    })
+
+  @mark.it("creates CloudFront distribution with correct configuration")
+  def test_cloudfront_distribution_configuration(self):
+    # Check CloudFront distribution exists with correct configuration
+    self.template.has_resource("AWS::CloudFront::Distribution", {
+      "Properties": {
+        "DistributionConfig": {
+          "DefaultRootObject": "index.html",
+          "Enabled": True,
+          "PriceClass": "PriceClass_100",
+          "Origins": [
+            {
+              "DomainName": Match.any_value(),
+              "S3OriginConfig": {
+                "OriginAccessIdentity": Match.any_value()
+              }
+            }
+          ],
+          "DefaultCacheBehavior": {
+            "AllowedMethods": ["GET", "HEAD", "OPTIONS"],
+            "CachedMethods": ["GET", "HEAD", "OPTIONS"],
+            "Compress": True,
+            "ViewerProtocolPolicy": "redirect-to-https",
+            "MinTTL": 0,
+            "DefaultTTL": 86400,
+            "MaxTTL": 31536000
+          },
+          "CustomErrorResponses": [
+            {
+              "ErrorCode": 404,
+              "ResponseCode": 200,
+              "ResponsePagePath": "/error.html"
+            },
+            {
+              "ErrorCode": 403,
+              "ResponseCode": 200,
+              "ResponsePagePath": "/error.html"
+            }
+          ]
+        }
+      }
+    })
+
+  @mark.it("creates CloudWatch alarms for monitoring")
+  def test_cloudwatch_alarms_configuration(self):
+    # Check that all required CloudWatch alarms are created
+    alarms = self.template.find_resources("AWS::CloudWatch::Alarm")
+    assert len(alarms) == 3, f"Expected 3 CloudWatch alarms, found {len(alarms)}"
     
-    # Check for DynamoDB nested stack
-    self.template.has_resource("AWS::CloudFormation::Stack", Match.any_value())
+    # Check that alarm types are correct (we can't easily match exact properties due to references)
+    alarm_descriptions = []
+    for alarm_config in alarms.values():
+      properties = alarm_config.get("Properties", {})
+      description = properties.get("AlarmDescription", "")
+      alarm_descriptions.append(description)
     
-    # Verify stack outputs are configured correctly in main template
-    outputs = self.template.find_outputs("*")
-    required_outputs = [
-        "ApiEndpoint",
-        "WebsiteURL", 
-        "CloudFrontDistributionId",
-        "CloudFrontDistributionDomain",
-        "FrontendBucketName",
-        "VisitsTableName",
-        "LambdaFunctionName",
-        "StackName"
+    expected_descriptions = [
+      "Alarm for Lambda function errors",
+      "Alarm for Lambda function throttling", 
+      "Alarm for high API Gateway latency"
     ]
     
-    for output_name in required_outputs:
-        assert output_name in outputs, f"Required output {output_name} not found"
+    for expected_desc in expected_descriptions:
+      assert expected_desc in alarm_descriptions, f"Missing alarm: {expected_desc}"
 
-  @mark.it("validates nested stack template structure")
-  def test_nested_stack_structure(self):
-    # Get all CloudFormation stack resources (nested stacks)
-    stack_resources = self.template.find_resources("AWS::CloudFormation::Stack")
+  @mark.it("creates KMS keys for encryption")
+  def test_kms_keys_configuration(self):
+    # Check that KMS keys are created for S3 and DynamoDB
+    kms_keys = self.template.find_resources("AWS::KMS::Key")
+    assert len(kms_keys) == 2, f"Expected 2 KMS keys, found {len(kms_keys)}"
     
-    # Should have exactly 5 nested stacks
-    assert len(stack_resources) == 5, f"Expected 5 nested stacks, found {len(stack_resources)}"
-    
-    # Extract stack names to verify we have the expected stacks
-    stack_names = list(stack_resources.keys())
-    expected_stack_patterns = [
-        "DynamoDBStack",
-        "S3CloudFrontStack", 
-        "LambdaStack",
-        "ApiGatewayStack",
-        "MonitoringStack"
-    ]
-    
-    for pattern in expected_stack_patterns:
-        matching_stacks = [name for name in stack_names if pattern in name]
-        assert len(matching_stacks) == 1, f"Expected exactly 1 stack matching '{pattern}', found {len(matching_stacks)}"
-
-  @mark.it("validates stack properties and environment suffix")
-  def test_stack_environment_configuration(self):
-    # Create a stack with specific environment suffix
-    app = cdk.App()
-    props = TapStackProps(environment_suffix="test")
-    stack = TapStack(app, "TestStackWithSuffix", props=props)
-    template = Template.from_stack(stack)
-    
-    # Check that nested stacks include the environment suffix
-    stack_resources = template.find_resources("AWS::CloudFormation::Stack")
-    for stack_name in stack_resources.keys():
-        assert "test" in stack_name, f"Stack {stack_name} should include environment suffix 'test'"
-
-  @mark.it("ensures proper nested stack dependencies")
-  def test_nested_stack_dependencies(self):
-    # Check that nested stacks are properly structured without circular dependencies
-    stack_resources = self.template.find_resources("AWS::CloudFormation::Stack")
-    
-    # All nested stacks should have template URLs (indicating they're properly configured)
-    for stack_name, stack_config in stack_resources.items():
-      properties = stack_config.get("Properties", {})
-      assert "TemplateURL" in properties, f"Nested stack {stack_name} missing TemplateURL"
-      
-      # Should have proper deletion and update policies
-      assert stack_config.get("UpdateReplacePolicy") == "Delete"
-      assert stack_config.get("DeletionPolicy") == "Delete"
+    # All KMS keys should have key rotation enabled
+    for key_config in kms_keys.values():
+      properties = key_config.get("Properties", {})
+      assert properties.get("EnableKeyRotation") is True, "KMS key should have rotation enabled"
 
   @mark.it("validates stack outputs are properly configured")
   def test_stack_outputs(self):
@@ -125,43 +260,29 @@ class TestTapStack(unittest.TestCase):
     ]
     
     for output_name in required_outputs:
-        assert output_name in outputs, f"Required output {output_name} not found"
-        
-        # Each output should have a description
-        output_config = outputs[output_name]
-        assert "Description" in output_config, f"Output {output_name} missing description"
+      assert output_name in outputs, f"Required output {output_name} not found"
+      
+      # Each output should have a description
+      output_config = outputs[output_name]
+      assert "Description" in output_config, f"Output {output_name} missing description"
 
-  @mark.it("validates no over-engineered resources in main stack")
-  def test_no_over_engineered_resources_in_main_stack(self):
-    # The main stack should only contain nested stacks, not individual resources
-    # Verify that over-engineered resources are NOT in the main template
+  @mark.it("validates stack properties and environment suffix")
+  def test_stack_environment_configuration(self):
+    # Create a stack with specific environment suffix
+    app = cdk.App()
+    props = TapStackProps(environment_suffix="test")
+    stack = TapStack(app, "TestStackWithSuffix", props=props)
+    template = Template.from_stack(stack)
+    
+    # Verify that the stack was created successfully with the environment suffix
+    outputs = template.find_outputs("*")
+    assert len(outputs) == 8, "All outputs should be present regardless of environment suffix"
+
+  @mark.it("ensures no over-engineered resources are present")
+  def test_no_over_engineered_resources(self):
+    # Verify that over-engineered resources are NOT in the template
     self.template.resource_count_is("AWS::WAFv2::WebACL", 0)
     self.template.resource_count_is("AWS::SecretsManager::Secret", 0) 
     self.template.resource_count_is("AWS::CloudWatch::Dashboard", 0)
     self.template.resource_count_is("AWS::Lambda::LayerVersion", 0)
-    
-    # Main template should only have CloudFormation stacks and outputs
-    all_resources = self.template.find_resources("*")
-    for resource_type in all_resources.values():
-        assert resource_type.get("Type") == "AWS::CloudFormation::Stack", (
-            f"Main template should only contain nested stacks, found {resource_type.get('Type')}"
-        )
-
-  @mark.it("ensures nested stacks have proper naming convention")
-  def test_nested_stack_naming_convention(self):
-    # Check that nested stacks follow the expected naming pattern
-    stack_resources = self.template.find_resources("AWS::CloudFormation::Stack")
-    
-    # Expected patterns for nested stack names
-    expected_patterns = {
-        "DynamoDBStack": "DynamoDBStackdev",
-        "S3CloudFrontStack": "S3CloudFrontStackdev", 
-        "LambdaStack": "LambdaStackdev",
-        "ApiGatewayStack": "ApiGatewayStackdev",
-        "MonitoringStack": "MonitoringStackdev"
-    }
-    
-    for pattern, expected_name in expected_patterns.items():
-        matching_stacks = [name for name in stack_resources.keys() if expected_name in name]
-        assert len(matching_stacks) >= 1, f"No nested stack found matching pattern '{expected_name}'"
-
+    self.template.resource_count_is("AWS::CloudFormation::Stack", 0)  # No nested stacks
