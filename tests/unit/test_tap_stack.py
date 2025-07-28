@@ -436,3 +436,145 @@ class TestTapStack(unittest.TestCase):
     self.assertIsNotNone(stack.state_machine)
     self.assertIsNotNone(stack.lambda_function)
     self.assertIsNotNone(stack.api)
+
+  @mark.it("validates Lambda stack error handling for missing dependencies")
+  def test_lambda_stack_missing_dependencies_error(self):
+    # ARRANGE & ACT & ASSERT
+    with self.assertRaises(ValueError) as context:
+      LambdaStack(self.app, "LambdaErrorTest", 
+                  LambdaStackProps(environment_suffix="test"))
+    
+    self.assertIn("Lambda stack requires bucket, table, and state_machine dependencies", 
+                  str(context.exception))
+
+  @mark.it("validates API Gateway stack error handling for missing Lambda function")
+  def test_api_gateway_stack_missing_lambda_error(self):
+    # ARRANGE & ACT & ASSERT
+    with self.assertRaises(ValueError) as context:
+      ApiGatewayStack(self.app, "ApiErrorTest", 
+                      ApiGatewayStackProps(environment_suffix="test"))
+    
+    self.assertIn("API Gateway stack requires lambda_function dependency", 
+                  str(context.exception))
+
+  @mark.it("validates S3 bucket auto-delete configuration")
+  def test_s3_bucket_auto_delete_configuration(self):
+    # ARRANGE
+    env_suffix = "autodel"
+    s3_stack = S3Stack(self.app, "S3AutoDeleteTest",
+                       S3StackProps(environment_suffix=env_suffix))
+    template = Template.from_stack(s3_stack)
+
+    # ASSERT - Check that auto-delete is properly configured
+    template.has_resource("AWS::S3::Bucket", {
+        "DeletionPolicy": "Delete"
+    })
+
+  @mark.it("validates nested stack architecture is properly structured")
+  def test_nested_stack_architecture(self):
+    # ARRANGE & ACT - Test the TapStack which uses nested stacks
+    env_suffix = "nested"
+    stack = TapStack(self.app, "TapStackNestedTest",
+                     TapStackProps(environment_suffix=env_suffix))
+    template = Template.from_stack(stack)
+    
+    # ASSERT - Check that the TapStack creates nested stacks correctly
+    template.resource_count_is("AWS::CloudFormation::Stack", 5)
+    
+    # Verify that all properties are available from nested stacks
+    self.assertIsNotNone(stack.bucket)
+    self.assertIsNotNone(stack.table)
+    self.assertIsNotNone(stack.state_machine)
+    self.assertIsNotNone(stack.lambda_function)
+    self.assertIsNotNone(stack.api)
+
+  @mark.it("validates Lambda function code is embedded correctly")
+  def test_lambda_function_code_embedding(self):
+    # ARRANGE
+    env_suffix = "code"
+    
+    # Create dependencies
+    s3_stack = S3Stack(self.app, "S3StackForCode",
+                       S3StackProps(environment_suffix=env_suffix))
+    dynamodb_stack = DynamoDBStack(self.app, "DynamoDBStackForCode",
+                                   DynamoDBStackProps(environment_suffix=env_suffix))
+    sf_stack = StepFunctionsStack(self.app, "StepFunctionsStackForCode",
+                                  StepFunctionsStackProps(environment_suffix=env_suffix))
+    
+    lambda_stack = LambdaStack(self.app, "LambdaCodeTest",
+                               LambdaStackProps(
+                                   environment_suffix=env_suffix,
+                                   bucket=s3_stack.bucket,
+                                   table=dynamodb_stack.table,
+                                   state_machine=sf_stack.state_machine
+                               ))
+    template = Template.from_stack(lambda_stack)
+
+    # ASSERT - Check that the Lambda function has embedded code
+    template.has_resource_properties("AWS::Lambda::Function", {
+        "Code": {
+            "ZipFile": Match.string_like_regexp(".*def handler.*")
+        }
+    })
+
+  @mark.it("validates DynamoDB table removal policy")
+  def test_dynamodb_table_removal_policy(self):
+    # ARRANGE
+    env_suffix = "removal"
+    dynamodb_stack = DynamoDBStack(self.app, "DynamoDBRemovalTest",
+                                   DynamoDBStackProps(environment_suffix=env_suffix))
+    template = Template.from_stack(dynamodb_stack)
+
+    # ASSERT - Check that DeletionPolicy is set to Delete (not Retain)
+    template.has_resource("AWS::DynamoDB::Table", {
+        "DeletionPolicy": "Delete"
+    })
+
+  @mark.it("validates Step Functions state machine definition contains proper JSON")
+  def test_step_functions_definition_json(self):
+    # ARRANGE
+    env_suffix = "json"
+    sf_stack = StepFunctionsStack(self.app, "StepFunctionsJSONTest",
+                                  StepFunctionsStackProps(environment_suffix=env_suffix))
+    template = Template.from_stack(sf_stack)
+
+    # ASSERT - Check that the definition contains proper Step Functions JSON structure
+    template.has_resource_properties("AWS::StepFunctions::StateMachine", {
+        "DefinitionString": Match.string_like_regexp(".*StartAt.*")
+    })
+    template.has_resource_properties("AWS::StepFunctions::StateMachine", {
+        "DefinitionString": Match.string_like_regexp(".*States.*")
+    })
+
+  @mark.it("validates API Gateway method configuration")
+  def test_api_gateway_method_configuration(self):
+    # ARRANGE
+    env_suffix = "method"
+    
+    # Create dependencies
+    s3_stack = S3Stack(self.app, "S3StackForMethod",
+                       S3StackProps(environment_suffix=env_suffix))
+    dynamodb_stack = DynamoDBStack(self.app, "DynamoDBStackForMethod",
+                                   DynamoDBStackProps(environment_suffix=env_suffix))
+    sf_stack = StepFunctionsStack(self.app, "StepFunctionsStackForMethod",
+                                  StepFunctionsStackProps(environment_suffix=env_suffix))
+    lambda_stack = LambdaStack(self.app, "LambdaStackForMethod",
+                               LambdaStackProps(
+                                   environment_suffix=env_suffix,
+                                   bucket=s3_stack.bucket,
+                                   table=dynamodb_stack.table,
+                                   state_machine=sf_stack.state_machine
+                               ))
+    
+    api_stack = ApiGatewayStack(self.app, "ApiGatewayMethodTest",
+                                ApiGatewayStackProps(
+                                    environment_suffix=env_suffix,
+                                    lambda_function=lambda_stack.lambda_function
+                                ))
+    template = Template.from_stack(api_stack)
+
+    # ASSERT - Check that POST method is configured with IAM authorization
+    template.has_resource_properties("AWS::ApiGateway::Method", {
+        "HttpMethod": "POST",
+        "AuthorizationType": "AWS_IAM"
+    })
