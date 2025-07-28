@@ -14,7 +14,6 @@ describe('TapStack CloudFormation Template', () => {
     template = JSON.parse(templateContent);
   });
 
-
   describe('Template Structure', () => {
     test('should have valid CloudFormation format version', () => {
       expect(template.AWSTemplateFormatVersion).toBe('2010-09-09');
@@ -60,9 +59,9 @@ describe('TapStack CloudFormation Template', () => {
         'EC2InstanceProfile',
         'TestIAMUser',
         'S3SpecificBucketReadOnlyPolicy',
-        'TurnAroundPromptTable'
+        'TurnAroundPromptTable',
       ];
-      
+
       expectedResources.forEach(resourceName => {
         expect(template.Resources[resourceName]).toBeDefined();
       });
@@ -128,7 +127,10 @@ describe('TapStack CloudFormation Template', () => {
       test('should have encryption configured', () => {
         const bucket = template.Resources.TestS3Bucket;
         const encryption = bucket.Properties.BucketEncryption;
-        expect(encryption.ServerSideEncryptionConfiguration[0].ServerSideEncryptionByDefault.SSEAlgorithm).toBe('AES256');
+        expect(
+          encryption.ServerSideEncryptionConfiguration[0]
+            .ServerSideEncryptionByDefault.SSEAlgorithm
+        ).toBe('AES256');
       });
 
       test('should have public access blocked', () => {
@@ -142,7 +144,9 @@ describe('TapStack CloudFormation Template', () => {
 
       test('should have versioning enabled', () => {
         const bucket = template.Resources.TestS3Bucket;
-        expect(bucket.Properties.VersioningConfiguration.Status).toBe('Enabled');
+        expect(bucket.Properties.VersioningConfiguration.Status).toBe(
+          'Enabled'
+        );
       });
     });
 
@@ -157,24 +161,28 @@ describe('TapStack CloudFormation Template', () => {
         const role = template.Resources.EC2InstanceRole;
         const assumePolicy = role.Properties.AssumeRolePolicyDocument;
         expect(assumePolicy.Statement[0].Effect).toBe('Allow');
-        expect(assumePolicy.Statement[0].Principal.Service).toBe('ec2.amazonaws.com');
+        expect(assumePolicy.Statement[0].Principal.Service).toBe(
+          'ec2.amazonaws.com'
+        );
         expect(assumePolicy.Statement[0].Action).toBe('sts:AssumeRole');
       });
 
       test('should have S3 read-only managed policy', () => {
         const role = template.Resources.EC2InstanceRole;
-        expect(role.Properties.ManagedPolicyArns).toContain('arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess');
+        expect(role.Properties.ManagedPolicyArns).toContain(
+          'arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess'
+        );
       });
 
       test('should have explicit S3 write deny policy', () => {
         const role = template.Resources.EC2InstanceRole;
         const policies = role.Properties.Policies;
         expect(policies).toHaveLength(1);
-        
+
         const denyPolicy = policies[0];
         expect(denyPolicy.PolicyDocument.Statement[0].Effect).toBe('Deny');
         expect(denyPolicy.PolicyDocument.Statement[0].Resource).toBe('*');
-        
+
         const denyActions = denyPolicy.PolicyDocument.Statement[0].Action;
         expect(denyActions).toContain('s3:PutObject');
         expect(denyActions).toContain('s3:DeleteObject');
@@ -206,7 +214,7 @@ describe('TapStack CloudFormation Template', () => {
       test('should have correct naming with environment suffix', () => {
         const user = template.Resources.TestIAMUser;
         expect(user.Properties.UserName).toEqual({
-          'Fn::Sub': 'test-s3-user-${EnvironmentSuffix}'
+          'Fn::Sub': 'test-s3-user-${EnvironmentSuffix}',
         });
       });
     });
@@ -226,15 +234,15 @@ describe('TapStack CloudFormation Template', () => {
       test('should allow read-only access to specific S3 bucket', () => {
         const policy = template.Resources.S3SpecificBucketReadOnlyPolicy;
         const statement = policy.Properties.PolicyDocument.Statement[0];
-        
+
         expect(statement.Effect).toBe('Allow');
         expect(statement.Action).toContain('s3:GetObject');
         expect(statement.Action).toContain('s3:ListBucket');
         expect(statement.Action).toContain('s3:GetBucketLocation');
-        
+
         expect(statement.Resource).toEqual([
           { 'Fn::GetAtt': ['TestS3Bucket', 'Arn'] },
-          { 'Fn::Sub': '${TestS3Bucket.Arn}/*' }
+          { 'Fn::Sub': '${TestS3Bucket.Arn}/*' },
         ]);
       });
     });
