@@ -7,12 +7,15 @@ Parameters:
   ACMCertificateARN:
     Type: String
     Description: ARN of the ACM certificate
+    Default: arn:aws:acm:us-west-2:123456789012:certificate/example-default-arn
   HostedZoneId:
     Type: String
     Description: Route 53 Hosted Zone ID
+    Default: Z0000000000000EXAMPLE
   DomainName:
     Type: String
     Description: Custom domain name
+    Default: example.defaultdomain.com
 
 Resources:
   # VPC & Networking
