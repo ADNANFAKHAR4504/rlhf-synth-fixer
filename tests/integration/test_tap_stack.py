@@ -88,4 +88,4 @@ def test_load_balancer_ping(load_balancer_dns):
 
   # Any valid HTTP response code (even 403/404) means connectivity is working
   assert result.isdigit() and int(result) > 0, \
-      f"Load balancer not reachable, response: {result}"
+      f"Load balancer not reachable, response: {result}" 
