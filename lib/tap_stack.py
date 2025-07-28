@@ -30,7 +30,7 @@ class MyCompanyServerlessStack(NestedStack):
         ]
     )
 
-    # Define the Lambda function
+    # Define the Lambda function 
     lambda_function = _lambda.Function(
         self, 'mycompany-LambdaFunction',
         runtime=_lambda.Runtime.PYTHON_3_11,
