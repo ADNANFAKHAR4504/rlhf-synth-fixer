@@ -15,7 +15,13 @@ interface TapStackProps extends cdk.StackProps {
 
 export class TapStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: TapStackProps) {
-    super(scope, id, props);
+    super(scope, id, {
+      ...props,
+      env: {
+        ...props?.env,
+        region: 'us-west-2', // Hardcode region as per PROMPT.md requirements
+      },
+    });
 
     // Get environment suffix from props, context, or use 'dev' as default
     const environmentSuffix =
@@ -55,13 +61,23 @@ export class TapStack extends cdk.Stack {
       ],
     });
 
+    // --- VPC Flow Logs ---
+    new ec2.FlowLog(this, 'VpcFlowLog', {
+      resourceType: ec2.FlowLogResourceType.fromVpc(vpc),
+      destination: ec2.FlowLogDestination.toCloudWatchLogs(),
+    });
+
     // --- Bastion Host for Secure Access ---
     const bastionSg = new ec2.SecurityGroup(this, 'BastionSG', {
       vpc,
       description: 'Security group for bastion host',
     });
-    // SSH access removed - use AWS Systems Manager Session Manager for secure access
-    // bastionSg.addIngressRule(ec2.Peer.ipv4('10.0.0.0/8'), ec2.Port.tcp(22), 'Allow SSH from private networks only');
+    // Restrict SSH access to a specific IP range for better security
+    bastionSg.addIngressRule(
+      ec2.Peer.ipv4('203.0.113.0/24'),
+      ec2.Port.tcp(22),
+      'Allow SSH access from trusted IP range'
+    );
 
     const bastionHost = new ec2.BastionHostLinux(this, 'BastionHost', {
       vpc,
@@ -92,11 +108,6 @@ export class TapStack extends cdk.Stack {
       ec2.Peer.anyIpv4(),
       ec2.Port.tcp(80),
       'Allow HTTP traffic'
-    );
-    albSg.addIngressRule(
-      ec2.Peer.anyIpv4(),
-      ec2.Port.tcp(443),
-      'Allow HTTPS traffic'
     );
 
     const alb = new elbv2.ApplicationLoadBalancer(this, 'AppALB', {
@@ -203,9 +214,9 @@ export class TapStack extends cdk.Stack {
         aws_config.ManagedRuleIdentifiers.S3_BUCKET_VERSIONING_ENABLED,
     });
 
+    // AWS Config rule to ensure EC2 instances are not launched with public IPs
     new aws_config.ManagedRule(this, 'Ec2NoPublicIpRule', {
       identifier: aws_config.ManagedRuleIdentifiers.EC2_INSTANCE_NO_PUBLIC_IP,
-      // Removed incorrect inputParameters - this rule doesn't require instance-specific parameters for ASG monitoring
     });
 
     // --- Outputs ---
@@ -219,7 +230,7 @@ export class TapStack extends cdk.Stack {
     });
     new cdk.CfnOutput(this, 'DatabaseEndpoint', {
       value: dbInstance.instanceEndpoint.hostname,
-      description: 'RDS MySQL database endpoint',
+      description: 'Endpoint of the MySQL database instance',
     });
   }
 }
