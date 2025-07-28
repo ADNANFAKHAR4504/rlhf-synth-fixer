@@ -1,5 +1,7 @@
 // Configuration - These are coming from cdk.out after cdk deploy
 import fs from 'fs';
+import https from 'https';
+import axios from 'axios';
 import { ECSClient, DescribeTaskDefinitionCommand } from '@aws-sdk/client-ecs';
 import {
   ElasticLoadBalancingV2Client,
@@ -156,5 +158,36 @@ describe('AWS Resources Integration Test', () => {
       })
     );
     expect(res.Vpcs?.[0]?.VpcId).toEqual(outputs.VpcId);
+  });
+});
+
+// -----------------------------
+// ✅ NEW: LIVE APPLICATION TEST
+// -----------------------------
+
+
+describe('Live App Test via Load Balancer', () => {
+  const loadBalancerUrl = `https://${outputs.LoadBalanceDNS}`;
+
+  const httpsAgent = new https.Agent({
+    rejectUnauthorized: false, // <-- Accept self-signed certs
+  });
+
+  it('should respond to HTTPS request on the public ALB', async () => {
+    const response = await axios.get(loadBalancerUrl, {
+      httpsAgent,
+      timeout: 5000,
+    });
+    const { status } = response
+    expect(status).toBe(200);
+  });
+
+  it('should contain expected content in the homepage', async () => {
+    const response = await axios.get(loadBalancerUrl, {
+      httpsAgent,
+      timeout: 5000,
+    });
+
+    expect(response.data).toMatch(/welcome|ok|running|alive|Hello/i);
   });
 });
