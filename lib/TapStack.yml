@@ -2,7 +2,7 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: CloudFormation template to deploy a Lambda function triggered by an S3 event on object creation.
 
 Parameters:
-  BucketName:
+  S3BucketName:
     Type: String
     Description: The name of the S3 bucket that will trigger the Lambda function.
     Default: bucket-243911
@@ -12,18 +12,9 @@ Parameters:
     Description: The name of the Lambda function to be created.
     Default: lambda-243911
 
-  LambdaHandler:
-    Type: String
-    Default: "index.handler"
-    Description: The handler for the Lambda function.
-
-  LambdaRuntime:
-    Type: String
-    Default: "nodejs22.x"
-    Description: The runtime for the Lambda function.
-
 Resources:
 
+  # Lambda Execution Role
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
@@ -35,79 +26,80 @@ Resources:
               Service: "lambda.amazonaws.com"
             Action: "sts:AssumeRole"
       Policies:
-        - PolicyName: "LambdaS3AccessPolicy"
+        - PolicyName: "LambdaS3Policy"
           PolicyDocument:
             Version: "2012-10-17"
             Statement:
               - Effect: "Allow"
                 Action:
                   - "s3:GetObject"
-                Resource: !Sub "arn:aws:s3:::${BucketName}/*"
+                  - "s3:PutObject"
+                Resource: !Sub "arn:aws:s3:::${S3BucketName}/*"
               - Effect: "Allow"
                 Action:
-                  - "logs:CreateLogGroup"
-                  - "logs:CreateLogStream"
-                  - "logs:PutLogEvents"
+                  - "logs:*"
                 Resource: "*"
+              - Effect: "Allow"
+                Action:
+                  - "sqs:SendMessage"  # Add permission for sending messages to SQS
+                Resource: !GetAtt LambdaDLQ.Arn
 
+  # Lambda Function (Main Lambda)
   LambdaFunction:
     Type: AWS::Lambda::Function
     Properties:
       FunctionName: !Ref LambdaFunctionName
-      Handler: !Ref LambdaHandler
+      Runtime: nodejs22.x
       Role: !GetAtt LambdaExecutionRole.Arn
-      Runtime: !Ref LambdaRuntime
+      Handler: index.handler
       Code:
         ZipFile: |
           exports.handler = async (event) => {
-            console.log("Received event:", JSON.stringify(event, null, 2));
-            
-            // Logic for processing the S3 event
-            const record = event.Records[0];
-            const s3Bucket = record.s3.bucket.name;
-            const s3Key = record.s3.object.key;
-            console.log(`New object created in bucket: ${s3Bucket} with key: ${s3Key}`);
-
-            // Example logic: You can process the object in S3 here
-            // For example, fetching the S3 object or other actions
-
-            return {
-              statusCode: 200,
-              body: JSON.stringify({ message: 'Lambda executed successfully' }),
+            // Lambda code goes here
+            console.log('Event:', event);
+            return { 
+              statusCode: 200, 
+              body: 'Lambda function executed successfully with inline code!' 
             };
           };
-  
+      Environment:
+        Variables:
+          MY_ENV_VAR: "example-value"  # You can add environment variables if needed
+      Timeout: 10  # Lambda timeout in seconds
+      MemorySize: 128  # Lambda memory size
+      Tags:
+        - Key: "Environment"
+          Value: "Production"
+      TracingConfig:
+        Mode: Active
+      DeadLetterConfig:
+        TargetArn: !GetAtt LambdaDLQ.Arn
+
   S3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Ref BucketName
+      BucketName: !Ref S3BucketName
       NotificationConfiguration:
         LambdaConfigurations:
           - Event: "s3:ObjectCreated:*"  # Event type for trigger
-            Function: !GetAtt LambdaFunction.Arn # Corrected property name here
+            Function: !GetAtt LambdaFunction.Arn
       Tags:
         - Key: "Environment"
           Value: "Production"
 
-  # Remove LambdaS3EventSource - not needed for S3 triggers
-
-  # Add Lambda permission for S3 to invoke the Lambda function
+  # Lambda Permission for S3 to invoke Lambda
   LambdaInvokePermission:
     Type: AWS::Lambda::Permission
     Properties:
       Action: lambda:InvokeFunction
-      FunctionName: !GetAtt LambdaFunction.Arn # Use GetAtt for FunctionName here as well
+      FunctionName: !Ref LambdaFunction
       Principal: s3.amazonaws.com
-      SourceArn: !Sub "arn:aws:s3:::${BucketName}"
+      SourceArn: !Sub "arn:aws:s3:::${S3BucketName}"
 
 Outputs:
-  LambdaFunctionName:
-    Description: The name of the Lambda function
-    Value: !Ref LambdaFunctionName
-
-  LambdaExecutionRoleArn:
-    Description: The ARN of the IAM Role assumed by Lambda
-    Value: !GetAtt LambdaExecutionRole.Arn
+  LambdaFunctionArn:
+    Description: "Lambda ARN"
+    Value: !GetAtt LambdaFunction.Arn
 
   BucketName:
     Description: The name of the S3 bucket

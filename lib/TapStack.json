@@ -2,7 +2,7 @@
     "AWSTemplateFormatVersion": "2010-09-09",
     "Description": "CloudFormation template to deploy a Lambda function triggered by an S3 event on object creation.",
     "Parameters": {
-        "BucketName": {
+        "S3BucketName": {
             "Type": "String",
             "Description": "The name of the S3 bucket that will trigger the Lambda function.",
             "Default": "bucket-243911"
@@ -11,16 +11,6 @@
             "Type": "String",
             "Description": "The name of the Lambda function to be created.",
             "Default": "lambda-243911"
-        },
-        "LambdaHandler": {
-            "Type": "String",
-            "Default": "index.handler",
-            "Description": "The handler for the Lambda function."
-        },
-        "LambdaRuntime": {
-            "Type": "String",
-            "Default": "nodejs22.x",
-            "Description": "The runtime for the Lambda function."
         }
     },
     "Resources": {
@@ -41,27 +31,38 @@
                 },
                 "Policies": [
                     {
-                        "PolicyName": "LambdaS3AccessPolicy",
+                        "PolicyName": "LambdaS3Policy",
                         "PolicyDocument": {
                             "Version": "2012-10-17",
                             "Statement": [
                                 {
                                     "Effect": "Allow",
                                     "Action": [
-                                        "s3:GetObject"
+                                        "s3:GetObject",
+                                        "s3:PutObject"
                                     ],
                                     "Resource": {
-                                        "Fn::Sub": "arn:aws:s3:::${BucketName}/*"
+                                        "Fn::Sub": "arn:aws:s3:::${S3BucketName}/*"
                                     }
                                 },
                                 {
                                     "Effect": "Allow",
                                     "Action": [
-                                        "logs:CreateLogGroup",
-                                        "logs:CreateLogStream",
-                                        "logs:PutLogEvents"
+                                        "logs:*"
                                     ],
                                     "Resource": "*"
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "sqs:SendMessage"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "LambdaDLQ",
+                                            "Arn"
+                                        ]
+                                    }
                                 }
                             ]
                         }
@@ -75,20 +76,40 @@
                 "FunctionName": {
                     "Ref": "LambdaFunctionName"
                 },
-                "Handler": {
-                    "Ref": "LambdaHandler"
-                },
+                "Runtime": "nodejs22.x",
                 "Role": {
                     "Fn::GetAtt": [
                         "LambdaExecutionRole",
                         "Arn"
                     ]
                 },
-                "Runtime": {
-                    "Ref": "LambdaRuntime"
-                },
+                "Handler": "index.handler",
                 "Code": {
-                    "ZipFile": "exports.handler = async (event) => {\n  console.log(\"Received event:\", JSON.stringify(event, null, 2));\n  \n  // Logic for processing the S3 event\n  const record = event.Records[0];\n  const s3Bucket = record.s3.bucket.name;\n  const s3Key = record.s3.object.key;\n  console.log(`New object created in bucket: ${s3Bucket} with key: ${s3Key}`);\n\n  // Example logic: You can process the object in S3 here\n  // For example, fetching the S3 object or other actions\n\n  return {\n    statusCode: 200,\n    body: JSON.stringify({ message: 'Lambda executed successfully' }),\n  };\n};\n"
+                    "ZipFile": "exports.handler = async (event) => {\n  // Lambda code goes here\n  console.log('Event:', event);\n  return { \n    statusCode: 200, \n    body: 'Lambda function executed successfully with inline code!' \n  };\n};\n"
+                },
+                "Environment": {
+                    "Variables": {
+                        "MY_ENV_VAR": "example-value"
+                    }
+                },
+                "Timeout": 10,
+                "MemorySize": 128,
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    }
+                ],
+                "TracingConfig": {
+                    "Mode": "Active"
+                },
+                "DeadLetterConfig": {
+                    "TargetArn": {
+                        "Fn::GetAtt": [
+                            "LambdaDLQ",
+                            "Arn"
+                        ]
+                    }
                 }
             }
         },
@@ -96,7 +117,7 @@
             "Type": "AWS::S3::Bucket",
             "Properties": {
                 "BucketName": {
-                    "Ref": "BucketName"
+                    "Ref": "S3BucketName"
                 },
                 "NotificationConfiguration": {
                     "LambdaConfigurations": [
@@ -124,30 +145,21 @@
             "Properties": {
                 "Action": "lambda:InvokeFunction",
                 "FunctionName": {
-                    "Fn::GetAtt": [
-                        "LambdaFunction",
-                        "Arn"
-                    ]
+                    "Ref": "LambdaFunction"
                 },
                 "Principal": "s3.amazonaws.com",
                 "SourceArn": {
-                    "Fn::Sub": "arn:aws:s3:::${BucketName}"
+                    "Fn::Sub": "arn:aws:s3:::${S3BucketName}"
                 }
             }
         }
     },
     "Outputs": {
-        "LambdaFunctionName": {
-            "Description": "The name of the Lambda function",
-            "Value": {
-                "Ref": "LambdaFunctionName"
-            }
-        },
-        "LambdaExecutionRoleArn": {
-            "Description": "The ARN of the IAM Role assumed by Lambda",
+        "LambdaFunctionArn": {
+            "Description": "Lambda ARN",
             "Value": {
                 "Fn::GetAtt": [
-                    "LambdaExecutionRole",
+                    "LambdaFunction",
                     "Arn"
                 ]
             }
