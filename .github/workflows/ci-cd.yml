@@ -11,7 +11,6 @@ on:
     branches: [main]
     types: [opened, synchronize, reopened, closed]
   workflow_dispatch:
-  
 
 permissions:
   contents: read
@@ -21,7 +20,7 @@ env:
   # Use PR number for resource isolation, fallback to 'main' for main branch
   # Prefix with 'pr' to ensure AWS resource names start with a letter
   ENVIRONMENT_SUFFIX: ${{ github.event.number && format('pr{0}', github.event.number) || 'dev' }}
-  S3_BUCKET_NAME: 'iac-rlhf-aws-release'
+  S3_RELEASE_BUCKET_NAME: 'iac-rlhf-aws-release'
   TERRAFORM_STATE_BUCKET: 'iac-rlhf-tf-states'
   TERRAFORM_STATE_BUCKET_REGION: 'us-east-1'
   S3_PRODUCTION_BUCKET_NAME: 'iac-rlhf-production'
@@ -599,7 +598,7 @@ jobs:
           fi
         env:
           ENVIRONMENT_SUFFIX: ${{ env.ENVIRONMENT_SUFFIX }}
-          CI: "1"           # Set CI for the entire step
+          CI: '1' # Set CI for the entire step
 
   cleanup:
     name: Cleanup (Destroy Resources)
