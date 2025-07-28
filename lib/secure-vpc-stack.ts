@@ -89,7 +89,7 @@ export class SecureVpcStack extends Construct {
     // Deny all other inbound traffic
     new NetworkAclRule(this, 'deny_all_inbound', {
       networkAclId: networkAcl.id,
-      ruleNumber: 32767,
+      ruleNumber: 120,
       protocol: '-1',
       ruleAction: 'deny',
       egress: false,
