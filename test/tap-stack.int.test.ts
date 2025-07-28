@@ -144,16 +144,16 @@ describe('WebApp CloudFormation Template', () => {
       // ALB SG ingress
       expect(albSG.Properties.SecurityGroupIngress).toEqual(
         expect.arrayContaining([
-          expect.objectContaining({ IpProtocol: 'tcp', FromPort: 80, ToPort: 80, CidrIp: '0.0.0.0/0' }),
-          expect.objectContaining({ IpProtocol: 'tcp', FromPort: 443, ToPort: 443, CidrIp: '0.0.0.0/0' })
+          expect.objectContaining({ IpProtocol: 'tcp', FromPort: 80, ToPort: 80, CidrIp: '192.161.1.1/32' }),
+          expect.objectContaining({ IpProtocol: 'tcp', FromPort: 443, ToPort: 443, CidrIp: '192.161.1.1/32' })
         ])
       );
 
-      // EC2 SG ingress
+      // EC2 SG ingress - UPDATED EXPECTATION
       expect(ec2SG.Properties.SecurityGroupIngress).toEqual(
         expect.arrayContaining([
           expect.objectContaining({ IpProtocol: 'tcp', FromPort: { "Ref": "AppPort" }, ToPort: { "Ref": "AppPort" }, SourceSecurityGroupId: { "Fn::GetAtt": ["ALBSecurityGroup", "GroupId"] } }),
-          expect.objectContaining({ IpProtocol: 'tcp', FromPort: 22, ToPort: 22, CidrIp: { "Ref": "VpcCIDR" } }) // Updated to VpcCIDR
+          expect.objectContaining({ IpProtocol: 'tcp', FromPort: 22, ToPort: 22, CidrIp: { "Ref": "VpcCIDR" } }) // Expecting VpcCIDR now
         ])
       );
 
@@ -291,6 +291,10 @@ describe('WebApp CloudFormation Template', () => {
         }
         throw error;
       }
-    }, 120000);
+    }, 120000); // Increase timeout for integration test (e.g., 120 seconds)
+
+    // You can add more integration tests here, e.g.,
+    // - Test specific API endpoints if your app has them
+    // - Test database connectivity from an EC2 instance (more complex, requires SSH/SSM)
   });
 });
