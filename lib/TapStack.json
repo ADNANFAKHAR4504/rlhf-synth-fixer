@@ -23,22 +23,17 @@
             "AllowedPattern": "^[a-zA-Z0-9]+$",
             "ConstraintDescription": "Must contain only alphanumeric characters"
         },
-        "VpcId": {
-            "Type": "AWS::EC2::VPC::Id",
-            "Description": "VPC ID where the instance will be launched"
-        },
-        "PublicSubnet": {
-            "Type": "AWS::EC2::Subnet::Id",
-            "Description": "Public subnet ID where the instance will be launched"
-        },
         "KeyPairName": {
             "Type": "AWS::EC2::KeyPair::KeyName",
+            "Default": "my-dev-keypair",
             "Description": "Name of an existing EC2 KeyPair to enable SSH access to the instance"
-        },
-        "LatestAmiId": {
-            "Type": "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>",
-            "Default": "/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2",
-            "Description": "Latest Amazon Linux 2 AMI"
+        }
+    },
+    "Mappings": {
+        "RegionMap": {
+            "us-west-2": {
+                "AMI": "ami-022c7aee234b29c55"
+            }
         }
     },
     "Resources": {
@@ -65,12 +60,140 @@
                 ]
             }
         },
-        "WebSecurityGroup": {
+        "DevVPC": {
+            "Type": "AWS::EC2::VPC",
+            "Properties": {
+                "CidrBlock": "10.0.0.0/16",
+                "EnableDnsSupport": true,
+                "EnableDnsHostnames": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "DevVPC"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "SampleProject"
+                    }
+                ]
+            }
+        },
+        "DevInternetGateway": {
+            "Type": "AWS::EC2::InternetGateway",
+            "Properties": {
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": "dev"
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "SampleProject"
+                    }
+                ]
+            }
+        },
+        "DevAttachGateway": {
+            "Type": "AWS::EC2::VPCGatewayAttachment",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "DevVPC"
+                },
+                "InternetGatewayId": {
+                    "Ref": "DevInternetGateway"
+                }
+            }
+        },
+        "DevPublicSubnet": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "DevVPC"
+                },
+                "CidrBlock": "10.0.1.0/24",
+                "MapPublicIpOnLaunch": true,
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "DevPublicSubnet"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "SampleProject"
+                    }
+                ]
+            }
+        },
+        "DevRouteTable": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "DevVPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "SampleProject"
+                    }
+                ]
+            }
+        },
+        "DevRoute": {
+            "Type": "AWS::EC2::Route",
+            "DependsOn": "DevAttachGateway",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "DevRouteTable"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "GatewayId": {
+                    "Ref": "DevInternetGateway"
+                }
+            }
+        },
+        "DevSubnetRouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "DevPublicSubnet"
+                },
+                "RouteTableId": {
+                    "Ref": "DevRouteTable"
+                }
+            }
+        },
+        "DevSecurityGroup": {
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
                 "GroupDescription": "Enable SSH and HTTP access",
                 "VpcId": {
-                    "Ref": "VpcId"
+                    "Ref": "DevVPC"
                 },
                 "SecurityGroupIngress": [
                     {
@@ -100,28 +223,45 @@
                 ]
             }
         },
-        "WebServerInstance": {
+        "DevEIP": {
+            "Type": "AWS::EC2::EIP",
+            "DependsOn": "DevAttachGateway",
+            "Properties": {
+                "Domain": "vpc",
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "SampleProject"
+                    }
+                ]
+            }
+        },
+        "DevEC2Instance": {
             "Type": "AWS::EC2::Instance",
             "Properties": {
                 "InstanceType": "t2.micro",
                 "ImageId": {
-                    "Ref": "LatestAmiId"
+                    "Fn::FindInMap": [
+                        "RegionMap",
+                        "us-west-2",
+                        "AMI"
+                    ]
                 },
                 "KeyName": {
                     "Ref": "KeyPairName"
                 },
-                "NetworkInterfaces": [
+                "SubnetId": {
+                    "Ref": "DevPublicSubnet"
+                },
+                "SecurityGroupIds": [
                     {
-                        "DeviceIndex": 0,
-                        "AssociatePublicIpAddress": true,
-                        "SubnetId": {
-                            "Ref": "PublicSubnet"
-                        },
-                        "GroupSet": [
-                            {
-                                "Ref": "WebSecurityGroup"
-                            }
-                        ]
+                        "Ref": "DevSecurityGroup"
                     }
                 ],
                 "Tags": [
@@ -138,12 +278,17 @@
                 ]
             }
         },
-        "ElasticIP": {
-            "Type": "AWS::EC2::EIP",
+        "DevEIPAssociation": {
+            "Type": "AWS::EC2::EIPAssociation",
             "Properties": {
-                "Domain": "vpc",
+                "AllocationId": {
+                    "Fn::GetAtt": [
+                        "DevEIP",
+                        "AllocationId"
+                    ]
+                },
                 "InstanceId": {
-                    "Ref": "WebServerInstance"
+                    "Ref": "DevEC2Instance"
                 }
             }
         }
@@ -159,9 +304,36 @@
             "Description": "The public IP address of the EC2 instance",
             "Value": {
                 "Fn::GetAtt": [
-                    "ElasticIP",
+                    "DevEIP",
                     "PublicIp"
                 ]
+            }
+        },
+        "EC2InstanceId": {
+            "Description": "The EC2 Instance ID",
+            "Value": {
+                "Ref": "DevEC2Instance"
+            }
+        },
+        "ElasticIPAllocationId": {
+            "Description": "Allocation ID of the EIP",
+            "Value": {
+                "Fn::GetAtt": [
+                    "DevEIP",
+                    "AllocationId"
+                ]
+            }
+        },
+        "DevSecurityGroupId": {
+            "Description": "Security Group ID for the instance",
+            "Value": {
+                "Ref": "DevSecurityGroup"
+            }
+        },
+        "KeyPairName": {
+            "Description": "Key pair name used",
+            "Value": {
+                "Ref": "KeyPairName"
             }
         }
     }

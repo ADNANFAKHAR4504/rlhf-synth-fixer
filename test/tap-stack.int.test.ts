@@ -20,7 +20,7 @@ const s3 = new S3Client({ region });
 describe('Basic Dev Environment Integration Tests', () => {
   test('S3 Bucket should exist and have encryption enabled', async () => {
     const bucketName = outputs.S3BucketName;
-    await s3.send(new HeadBucketCommand({ Bucket: bucketName }));
+    await expect(s3.send(new HeadBucketCommand({ Bucket: bucketName }))).resolves.toBeDefined();
 
     const encryption = await s3.send(new GetBucketEncryptionCommand({ Bucket: bucketName }));
     expect(encryption.ServerSideEncryptionConfiguration).toBeDefined();
@@ -39,7 +39,7 @@ describe('Basic Dev Environment Integration Tests', () => {
 
   test('Security Group should allow SSH (port 22) and HTTP (port 80) from 0.0.0.0/0', async () => {
     const res = await ec2.send(new DescribeSecurityGroupsCommand({
-      GroupIds: [outputs.WebSecurityGroupId],
+      GroupIds: [outputs.DevSecurityGroupId],
     }));
 
     const group = res.SecurityGroups?.[0];
@@ -48,11 +48,11 @@ describe('Basic Dev Environment Integration Tests', () => {
     if (!group) throw new Error('Security Group not found');
 
     const sshRule = group.IpPermissions?.find(
-      (p) => p?.FromPort === 22 && p?.ToPort === 22 && p?.IpProtocol === 'tcp'
+      (p) => p.FromPort === 22 && p.ToPort === 22 && p.IpProtocol === 'tcp'
     );
 
     const httpRule = group.IpPermissions?.find(
-      (p) => p?.FromPort === 80 && p?.ToPort === 80 && p?.IpProtocol === 'tcp'
+      (p) => p.FromPort === 80 && p.ToPort === 80 && p.IpProtocol === 'tcp'
     );
 
     expect(sshRule?.IpRanges?.some((r) => r.CidrIp === '0.0.0.0/0')).toBe(true);
@@ -75,7 +75,7 @@ describe('Basic Dev Environment Integration Tests', () => {
       'EC2InstanceId',
       'EC2InstancePublicIP',
       'ElasticIPAllocationId',
-      'WebSecurityGroupId',
+      'DevSecurityGroupId',
       'KeyPairName',
     ];
 
