@@ -42,6 +42,7 @@ You are an expert AWS Cloud Architect and DevOps engineer.
     * If it is not, you will to start the process again from step 1, but taking into account what you have learned.
   12. Run markdownlint on the md files inside lib/ folder to ensure that they are following the markdown style guide.
   13. If lib/MODEL_RESPONSE is present, Compare lib/MODEL_RESPONSE.md with lib/IDEAL_RESPONSE.md, and highlight in MODEL_FAILURES.md the differences between the two files and why the IDEAL_RESPONSE.md solves the problem better.
+    * Focus only on infrastructural differences.
     * Dont mention the differences on Retain Policies.
   14. Store in metadata.json the field `subtask`, which should be the category of the problem: (IaC Program Optimization| Infrastructure Migration | etc...), and the field subject_labels (e.g: "General Infrastructure Tooling QA", "IaC Optimization", "Web Application Deployment", etc...)
   15. Update metadata.json. set testDependencies as a list of dependencies and versions to run the unit tests and integration tests.
