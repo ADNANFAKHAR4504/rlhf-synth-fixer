@@ -40,9 +40,7 @@ describe('SecureVpcStack Integration (AWS SDK)', () => {
     expect(subnets.Subnets).toBeDefined();
     // Check for both expected CIDRs
     const foundCidrs = subnets.Subnets!.map(s => s.CidrBlock);
-    for (const cidr of PUBLIC_SUBNET_CIDRS) {
-      expect(foundCidrs).toContain(cidr);
-    }
+    expect(foundCidrs).toEqual(expect.arrayContaining(PUBLIC_SUBNET_CIDRS));
     // Check for different AZs
     const azs = new Set(subnets.Subnets!.map(s => s.AvailabilityZone));
     expect(azs.size).toBeGreaterThanOrEqual(2);
@@ -87,7 +85,7 @@ describe('SecureVpcStack Integration (AWS SDK)', () => {
     const nacl = nacls.NetworkAcls!.find(nacl =>
       nacl.Associations?.some(assoc => subnetIds.includes(assoc.SubnetId!))
     );
-    expect(nacl).toBeDefined();
+    expect(nacl?.Entries).toBeDefined();
     // Check for allow rules for 80 and 443, and deny all others
     const ingressRules = nacl!.Entries!.filter(e => !e.Egress);
     const allow80 = ingressRules.find(
@@ -137,7 +135,7 @@ describe('SecureVpcStack Integration (AWS SDK)', () => {
             p.IpRanges?.some(r => r.CidrIp === '0.0.0.0/0')
         )
     );
-    expect(sg).toBeDefined();
+    expect(sg?.SecurityGroupArn).toBeDefined();
     // Should not allow other inbound ports
     const otherIngress = sg!.IpPermissions!.filter(
       p => ![80, 443].includes(p.FromPort ?? -1)
