@@ -257,6 +257,11 @@ export class MultiEnvEcsStack extends cdk.Stack {
       description: 'SSL Certificate ARN',
     });
 
+    new cdk.CfnOutput(this, 'Namespace', {
+      value: `${config.envName}.local`,
+      description: 'ECS Cloud Map namespace',
+    });
+
     if (config.hostedZoneName) {
       new cdk.CfnOutput(this, 'HostedZoneName', {
         value: config.hostedZoneName,

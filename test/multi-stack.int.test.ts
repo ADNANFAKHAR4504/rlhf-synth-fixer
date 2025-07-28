@@ -15,6 +15,22 @@ import {
   DescribeSecurityGroupsCommand,
   DescribeVpcsCommand,
 } from '@aws-sdk/client-ec2';
+import {
+  Route53Client,
+  ListResourceRecordSetsCommand,
+} from '@aws-sdk/client-route-53';
+import {
+  CloudWatchClient,
+  DescribeAlarmsCommand,
+} from '@aws-sdk/client-cloudwatch';
+import {
+  ServiceDiscoveryClient,
+  ListNamespacesCommand,
+} from '@aws-sdk/client-servicediscovery';
+import {
+  ApplicationAutoScalingClient,
+  DescribeScalableTargetsCommand,
+} from '@aws-sdk/client-application-auto-scaling';
 
 const environmentSuffix = process.env.CDK_CONTEXT_ENVIRONMENT_SUFFIX || 'dev';
 const REGION = process.env.AWS_REGION || 'us-east-1';
@@ -90,6 +106,63 @@ describe('AWS Resources Integration Test', () => {
   const ssm = new SSMClient({ region: REGION });
   const acm = new ACMClient({ region: REGION });
   const ec2 = new EC2Client({ region: REGION });
+  const servicediscovery = new ServiceDiscoveryClient({ region: REGION });
+  const cloudwatch = new CloudWatchClient({ region: REGION });
+  const autoScaling = new ApplicationAutoScalingClient({ region: REGION });
+
+  it('should verify ECS Fargate auto scaling is configured', async () => {
+    const res = await autoScaling.send(
+      new DescribeScalableTargetsCommand({
+        ServiceNamespace: 'ecs',
+        ResourceIds: [
+          `service/${outputs.ClusterName}/${outputs.FargateServiceName}`,
+        ],
+      })
+    );
+
+    const target = res.ScalableTargets?.[0];
+    expect(target).toBeDefined();
+    expect(target?.MinCapacity).toBe(2);
+    expect(target?.MaxCapacity).toBe(10);
+  });
+  if (process.env.HOSTED_ZONE_NAME) {
+    it('should verify Route53 A Record exists for domain', async () => {
+      const zoneId = outputs.HostedZoneId; // Add this to your outputs
+      const domainName = outputs.DomainARecord.endsWith('.')
+        ? outputs.DomainARecord
+        : `${outputs.DomainARecord}.`;
+      const route53 = new Route53Client({ region: REGION });
+      const res = await route53.send(
+        new ListResourceRecordSetsCommand({ HostedZoneId: zoneId })
+      );
+      const record = res.ResourceRecordSets?.find(
+        r => r.Name === domainName && r.Type === 'A'
+      );
+
+      expect(record).toBeDefined();
+    });
+  }
+
+  it('should verify ECS Cloud Map namespace is registered', async () => {
+    const res = await servicediscovery.send(new ListNamespacesCommand({}));
+
+    const ns = res.Namespaces?.find(n => n.Name);
+    expect(ns).toBeDefined();
+  });
+
+  it('should verify CloudWatch alarms exist for CPU and Memory', async () => {
+    const res = await cloudwatch.send(new DescribeAlarmsCommand({}));
+
+    const cpuAlarm = res.MetricAlarms?.find(alarm =>
+      alarm.AlarmName?.includes('HighCpuAlarm')
+    );
+    const memAlarm = res.MetricAlarms?.find(alarm =>
+      alarm.AlarmName?.includes('HighMemoryAlarm')
+    );
+
+    expect(cpuAlarm).toBeDefined();
+    expect(memAlarm).toBeDefined();
+  });
 
   it('should verify ECS Task Definition exists', async () => {
     const res = await ecs.send(
