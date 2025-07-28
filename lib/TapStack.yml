@@ -1,25 +1,35 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: >
-  A robust and secure CloudFormation template to provision a scalable and highly
-  available web application environment with S3, EC2, and RDS in us-east-1.
+  A robust CloudFormation template that provisions a web application environment 
+  using manually provided parameters for the RDS instance credentials.
 
 Parameters:
   EnvironmentName:
     Type: String
-    Description: An environment identifier (e.g., dev, qa, prod).
+    Description: "An environment identifier (e.g., dev, qa, prod)."
     Default: dev
   OwnerName:
     Type: String
-    Description: The name of the resource owner.
+    Description: "The name of the resource owner."
     Default: TechTeam
   ProjectName:
     Type: String
-    Description: The name of the project.
+    Description: "The name of the project."
     Default: WebAppProject
   WebAppServerKeyName:
     Type: AWS::EC2::KeyPair::KeyName
-    Description: Name of an existing EC2 KeyPair to enable SSH access to the instance.
-    Default: iac-rlhf-aws-trainer-instance
+    Description: "Name of an existing EC2 KeyPair to enable SSH access to the instance."
+  # --- Parameters for Manual Password Management ---
+  DBMasterUsername:
+    Type: String
+    Description: "Username for the RDS master user. Use only letters and numbers."
+    Default: "dbadmin"
+  DBMasterPassword:
+    NoEcho: true
+    Type: String
+    Description: "Password for the RDS master user. Must be at least 8 characters and contain only allowed characters."
+    MinLength: 8
+    Default: "dbpass123456"
 
 Resources:
   WebAppAssets:
@@ -69,7 +79,12 @@ Resources:
   WebAppDatabaseSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: "Allow database access from the web application server"
+      GroupDescription: "Allow database access from the web server security group"
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          SourceSecurityGroupId: !GetAtt WebAppServerSecurityGroup.GroupId
       Tags:
         - Key: Environment
           Value: !Ref EnvironmentName
@@ -77,15 +92,6 @@ Resources:
           Value: !Ref OwnerName
         - Key: Project
           Value: !Ref ProjectName
-
-  DBIngressRule:
-    Type: AWS::EC2::SecurityGroupIngress
-    Properties:
-      GroupId: !GetAtt WebAppDatabaseSecurityGroup.GroupId
-      IpProtocol: tcp
-      FromPort: 3306
-      ToPort: 3306
-      SourceSecurityGroupId: !GetAtt WebAppServerSecurityGroup.GroupId
 
   # -- EC2 Instance --
   WebAppServer:
@@ -106,7 +112,7 @@ Resources:
         - Key: Name
           Value: !Sub '${ProjectName}-WebAppServer-${EnvironmentName}'
 
-  # -- RDS Database and Secret --
+  # -- RDS Database --
   WebAppDatabase:
     Type: AWS::RDS::DBInstance
     Properties:
@@ -117,29 +123,13 @@ Resources:
       StorageType: gp2
       MultiAZ: true
       DBName: !Sub '${ProjectName}${EnvironmentName}DB'
-      MasterUserSecret:
-        SecretArn: !Ref WebAppDBMasterSecret # <-- UPDATED REFERENCE
+      # -- Using parameters directly instead of a secret --
+      MasterUsername: !Ref DBMasterUsername
+      MasterUserPassword: !Ref DBMasterPassword
       VPCSecurityGroups:
         - !GetAtt WebAppDatabaseSecurityGroup.GroupId
       PubliclyAccessible: false
       DeletionProtection: true
-      Tags:
-        - Key: Environment
-          Value: !Ref EnvironmentName
-        - Key: Owner
-          Value: !Ref OwnerName
-        - Key: Project
-          Value: !Ref ProjectName
-
-  WebAppDBMasterSecret:
-    Type: AWS::SecretsManager::Secret
-    Properties:
-      Description: "Master user password for the RDS WebAppDatabase"
-      GenerateSecretString:
-        SecretStringTemplate: '{"username": "admin"}'
-        GenerateStringKey: "password"
-        PasswordLength: 16
-        ExcludeCharacters: "/@"
       Tags:
         - Key: Environment
           Value: !Ref EnvironmentName
@@ -176,11 +166,3 @@ Outputs:
   WebAppDatabasePort:
     Description: "Port for the RDS database"
     Value: !GetAtt WebAppDatabase.Endpoint.Port
-    Export:
-      Name: !Sub "${AWS::StackName}-WebAppDatabasePort"
-
-  DBMasterUserSecretArn:
-    Description: "ARN of the master user secret in Secrets Manager"
-    Value: !Ref WebAppDBMasterSecret # <-- UPDATED REFERENCE
-    Export:
-      Name: !Sub "${AWS::StackName}-DBMasterUserSecretArn"
