@@ -21,12 +21,18 @@
     "watch": "tsc -w",
     "test": "jest --coverage",
     "test:unit": "jest --coverage --testPathPattern=\\.unit\\.test\\.ts$",
+    "test:unit-cdktf": "jest --coverage --testPathPattern=\\.unit\\.test\\.ts$ --setupFilesAfterEnv=['<rootDir>/test/setup.js']",
     "test:integration": "jest --testPathPattern=\\.int\\.test\\.ts$ --testTimeout=30000",
+    "test:integration-cdktf": "jest --testPathPattern=\\.int\\.test\\.ts$ --testTimeout=30000 --setupFilesAfterEnv=['<rootDir>/test/setup.js']",
     "cdk": "cdk",
     "cdk:synth": "npx cdk synth --context environmentSuffix=${ENVIRONMENT_SUFFIX:-dev}",
     "cdk:bootstrap": "npx cdk bootstrap --context environmentSuffix=${ENVIRONMENT_SUFFIX:-dev}",
     "cdk:deploy": "npx cdk deploy --all --require-approval never --context environmentSuffix=${ENVIRONMENT_SUFFIX:-dev}",
     "cdk:destroy": "npx cdk destroy --all --force --context environmentSuffix=${ENVIRONMENT_SUFFIX:-dev}",
+    "cdktf:get": "cdktf get",
+    "cdktf:synth": "cdktf synth",
+    "cdktf:deploy": "cdktf deploy --auto-approve",
+    "cdktf:destroy": "cdktf destroy --auto-approve",
     "cfn:deploy-yaml": "aws cloudformation deploy --template-file lib/TapStack.yml --stack-name TapStack${ENVIRONMENT_SUFFIX:-dev} --capabilities CAPABILITY_IAM --parameter-overrides EnvironmentSuffix=${ENVIRONMENT_SUFFIX:-dev} --tags Repository=${REPOSITORY:-unknown} CommitAuthor=${COMMIT_AUTHOR:-unknown}",
     "cfn:deploy-json": "aws cloudformation deploy --template-file lib/TapStack.json --stack-name TapStack${ENVIRONMENT_SUFFIX:-dev} --capabilities CAPABILITY_IAM --parameter-overrides EnvironmentSuffix=${ENVIRONMENT_SUFFIX:-dev} --tags Repository=${REPOSITORY:-unknown} CommitAuthor=${COMMIT_AUTHOR:-unknown}",
     "cfn:destroy": "aws cloudformation delete-stack --stack-name TapStack${ENVIRONMENT_SUFFIX:-dev}"
@@ -41,7 +47,7 @@
     "@aws-sdk/client-cloudwatch-logs": "^3.848.0",
     "@aws-sdk/client-config-service": "^3.848.0",
     "@aws-sdk/client-dynamodb": "^3.848.0",
-    "@aws-sdk/client-ec2": "^3.852.0",
+    "@aws-sdk/client-ec2": "^3.848.0",
     "@aws-sdk/client-elasticache": "^3.846.0",
     "@aws-sdk/client-iam": "^3.848.0",
     "@aws-sdk/client-lambda": "^3.848.0",
@@ -90,7 +96,10 @@
   },
   "dependencies": {
     "@aws-sdk/client-elastic-load-balancing-v2": "^3.848.0",
+    "@aws-sdk/client-wafv2": "^3.848.0",
+    "@cdktf/provider-aws": "21.3.0",
     "aws-cdk-lib": "2.204.0",
+    "cdktf": "^0.21.0",
     "cdktf-cli": "0.21.0",
     "constructs": "10.4.2"
   }
