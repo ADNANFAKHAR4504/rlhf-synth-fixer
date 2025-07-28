@@ -41,22 +41,9 @@ import {
 import axios from 'axios';
 import fs from 'fs';
 
-let outputs: any = {};
-
-// Try to load outputs if available, otherwise tests will be skipped
-try {
-  outputs = JSON.parse(
-    fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
-  );
-} catch (error) {
-  console.log(
-    'cfn-outputs/flat-outputs.json not found. Integration tests may fail if stack is not deployed.'
-  );
-}
-
-const environment = outputs.Environment || 'dev';
+const environmentSuffix = 'dev';
 const region = process.env.AWS_REGION || 'us-east-1';
-const stackName = `TapStack${environment}`;
+const stackName = `TapStack${environmentSuffix}`;
 
 // Initialize AWS SDK v3 clients
 const cloudformation = new CloudFormationClient({ region });
@@ -68,6 +55,20 @@ const iam = new IAMClient({ region });
 const cloudwatch = new CloudWatchClient({ region });
 
 const TEST_TIMEOUT = 60000;
+
+let outputs: any = {};
+
+// Try to load outputs if available, otherwise tests will be skipped
+try {
+  console.log('Ima here');
+  outputs = JSON.parse(
+    fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
+  );
+} catch (error) {
+  console.log(
+    'cfn-outputs/flat-outputs.json not found. Integration tests may fail if stack is not deployed.'
+  );
+}
 
 describe('Web Application Infrastructure - Comprehensive Integration Tests', () => {
   jest.setTimeout(TEST_TIMEOUT);
@@ -185,7 +186,7 @@ describe('Web Application Infrastructure - Comprehensive Integration Tests', () 
       expect(vpc.CidrBlock).toBe('10.0.0.0/16');
       expect(vpc.IsDefault).toBe(false);
       expect(vpc.Tags?.find(tag => tag.Key === 'Name')?.Value).toContain(
-        `${outputs.Environment || 'dev'}-webapp-vpc`
+        `${environmentSuffix}-webapp-vpc`
       );
     });
 
@@ -619,7 +620,7 @@ describe('Web Application Infrastructure - Comprehensive Integration Tests', () 
       const template = response.LaunchTemplates![0];
       expect(template.LaunchTemplateId).toBe(outputs.LaunchTemplateId);
       expect(template.LaunchTemplateName).toContain(
-        `${outputs.Environment || 'dev'}-webapp-launch-template`
+        `${environmentSuffix}-webapp-launch-template`
       );
     });
 
@@ -784,8 +785,8 @@ describe('Web Application Infrastructure - Comprehensive Integration Tests', () 
 
       const command = new DescribeAlarmsCommand({
         AlarmNames: [
-          `${outputs.Environment || 'dev'}-webapp-high-cpu`,
-          `${outputs.Environment || 'dev'}-webapp-low-cpu`,
+          `${environmentSuffix}-webapp-high-cpu`,
+          `${environmentSuffix}-webapp-low-cpu`,
         ],
       });
       const response = await cloudwatch.send(command);
@@ -794,12 +795,10 @@ describe('Web Application Infrastructure - Comprehensive Integration Tests', () 
       expect(response.MetricAlarms!.length).toBe(2);
 
       const highCpuAlarm = response.MetricAlarms!.find(
-        alarm =>
-          alarm.AlarmName === `${outputs.Environment || 'dev'}-webapp-high-cpu`
+        alarm => alarm.AlarmName === `${environmentSuffix}-webapp-high-cpu`
       );
       const lowCpuAlarm = response.MetricAlarms!.find(
-        alarm =>
-          alarm.AlarmName === `${outputs.Environment || 'dev'}-webapp-low-cpu`
+        alarm => alarm.AlarmName === `${environmentSuffix}-webapp-low-cpu`
       );
 
       expect(highCpuAlarm).toBeDefined();
@@ -929,7 +928,7 @@ describe('Web Application Infrastructure - Comprehensive Integration Tests', () 
       const vpc = vpcResponse.Vpcs![0];
       const nameTag = vpc.Tags?.find(tag => tag.Key === 'Name');
       expect(nameTag).toBeDefined();
-      expect(nameTag!.Value).toContain(outputs.Environment || 'dev');
+      expect(nameTag!.Value).toContain(environmentSuffix);
     });
   });
 

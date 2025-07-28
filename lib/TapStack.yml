@@ -586,12 +586,6 @@ Resources:
         - !Ref ScaleDownPolicy
 
 Outputs:
-  Environment:
-    Description: 'Environment'
-    Value: !Ref Environment
-    Export:
-      Name: !Sub '${Environment}'
-
   VPCId:
     Description: 'VPC ID'
     Value: !Ref VPC
