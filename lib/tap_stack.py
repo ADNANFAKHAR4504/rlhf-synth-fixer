@@ -42,16 +42,14 @@ class IAMStack(Construct):
   Args:
     scope (Construct): The parent construct
     construct_id (str): The unique identifier for this stack
-    props (Optional[IAMStackProps]): Optional properties for configuring the stack
-    **kwargs: Additional keyword arguments passed to the CDK NestedStack
+    environment_suffix (Optional[str]): Environment suffix for resource naming
   """
   
   def __init__(
     self,
     scope: Construct,
     construct_id: str,
-    environment_suffix: Optional[str] = None,
-    **kwargs
+    environment_suffix: Optional[str] = None
   ):
     super().__init__(scope, construct_id)
     
@@ -173,16 +171,14 @@ class S3Stack(Construct):
   Args:
     scope (Construct): The parent construct
     construct_id (str): The unique identifier for this stack
-    props (Optional[S3StackProps]): Optional properties for configuring the stack
-    **kwargs: Additional keyword arguments passed to the CDK NestedStack
+    environment_suffix (Optional[str]): Environment suffix for resource naming
   """
   
   def __init__(
     self,
     scope: Construct,
     construct_id: str,
-    environment_suffix: Optional[str] = None,
-    **kwargs
+    environment_suffix: Optional[str] = None
   ):
     super().__init__(scope, construct_id)
     
@@ -260,10 +256,10 @@ class CodeBuildStack(Construct):
     self,
     scope: Construct,
     construct_id: str,
+    *,
     environment_suffix: Optional[str] = None,
     codebuild_role: Optional[iam.Role] = None,
-    artifacts_bucket: Optional[s3.Bucket] = None,
-    **kwargs
+    artifacts_bucket: Optional[s3.Bucket] = None
   ):
     super().__init__(scope, construct_id)
     
@@ -511,13 +507,13 @@ class CodePipelineStack(Construct):
     self,
     scope: Construct,
     construct_id: str,
+    *,
     environment_suffix: Optional[str] = None,
     codepipeline_role: Optional[iam.Role] = None,
     artifacts_bucket: Optional[s3.Bucket] = None,
     build_project: Optional[codebuild.Project] = None,
     deploy_staging_project: Optional[codebuild.Project] = None,
-    deploy_production_project: Optional[codebuild.Project] = None,
-    **kwargs
+    deploy_production_project: Optional[codebuild.Project] = None
   ):
     super().__init__(scope, construct_id)
     
@@ -721,41 +717,41 @@ class TapStack(cdk.Stack):
     # ! Instead, instantiate separate stacks for each resource type.
     
     # Create IAM stack for roles and policies
-    iam_stack = IAMStack(
+    self.iam_stack = IAMStack(
       self,
       f"IAMStack{environment_suffix}",
       environment_suffix=environment_suffix
     )
     
     # Create S3 stack for artifacts storage
-    s3_stack = S3Stack(
+    self.s3_stack = S3Stack(
       self,
       f"S3Stack{environment_suffix}",
       environment_suffix=environment_suffix
     )
     
     # Create CodeBuild stack for build projects
-    codebuild_stack = CodeBuildStack(
+    self.codebuild_stack = CodeBuildStack(
       self,
       f"CodeBuildStack{environment_suffix}",
       environment_suffix=environment_suffix,
       codebuild_role=None,  # Let CodeBuild create its own service role
-      artifacts_bucket=s3_stack.artifacts_bucket
+      artifacts_bucket=self.s3_stack.artifacts_bucket
     )
     
     # Create CodePipeline stack for CI/CD orchestration
-    codepipeline_stack = CodePipelineStack(
+    self.codepipeline_stack = CodePipelineStack(
       self,
       f"CodePipelineStack{environment_suffix}",
       environment_suffix=environment_suffix,
       codepipeline_role=None,  # Let CodePipeline create its own service role
-      artifacts_bucket=s3_stack.artifacts_bucket,
-      build_project=codebuild_stack.build_project,
-      deploy_staging_project=codebuild_stack.deploy_staging_project,
-      deploy_production_project=codebuild_stack.deploy_production_project
+      artifacts_bucket=self.s3_stack.artifacts_bucket,
+      build_project=self.codebuild_stack.build_project,
+      deploy_staging_project=self.codebuild_stack.deploy_staging_project,
+      deploy_production_project=self.codebuild_stack.deploy_production_project
     )
     
     # Make key resources available as properties of this stack
-    self.repository = codepipeline_stack.repository
-    self.pipeline = codepipeline_stack.pipeline
-    self.artifacts_bucket = s3_stack.artifacts_bucket
+    self.repository = self.codepipeline_stack.repository
+    self.pipeline = self.codepipeline_stack.pipeline
+    self.artifacts_bucket = self.s3_stack.artifacts_bucket
