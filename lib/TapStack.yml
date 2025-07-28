@@ -410,7 +410,7 @@ Resources:
       Engine: mysql # Can be changed to postgres, aurora, etc.
       MasterUsername: !Ref DBUsername
       MasterUserPassword: !Ref DBPassword
-      DBSubnetGroupName: !Ref DBSubnetGroup
+      DBSubnetGroupName: !Ref DBSubnetGroup 
       VPCSecurityGroups:
         - !GetAtt DBSecurityGroup.GroupId
       MultiAZ: true # Enable Multi-AZ for high availability

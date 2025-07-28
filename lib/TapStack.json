@@ -723,7 +723,7 @@
         "WebAppURL": {
             "Description": "URL of the web application (Application Load Balancer DNS Name)",
             "Value": {
-                "Fn::GetAtt": [
+                "Fn::GetAtt": [ 
                     "WebAppALB",
                     "DNSName"
                 ]
