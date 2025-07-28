@@ -142,5 +142,42 @@ describe('CloudFormation Template Validation', () => {
       expect(route.Properties?.GatewayId).toBeDefined();
     }
   });
+  it('ensures public subnets have MapPublicIpOnLaunch set to true', () => {
+  const subnets = template.findResources('AWS::EC2::Subnet');
+  for (const [logicalId, subnet] of Object.entries(subnets)) {
+    if (logicalId.startsWith('PublicSubnet')) {
+      expect(subnet.Properties?.MapPublicIpOnLaunch).toBe(true);
+    }
+  }
+});
+it('ensures exactly one public route table exists', () => {
+  const routeTables = template.findResources('AWS::EC2::RouteTable');
+  const publicRouteTables = Object.entries(routeTables).filter(
+    ([, rt]: any) =>
+      rt.Properties?.Tags?.some(
+        (tag: any) => tag.Key === 'Type' && tag.Value === 'Public'
+      )
+  );
+  expect(publicRouteTables.length).toBe(1);
+});
+it('ensures logical IDs follow naming conventions', () => {
+  const resourceKeys = Object.keys(template.toJSON().Resources || {});
+  const expectedPrefixes = [
+    'ProductionVPC',
+    'PublicSubnetA',
+    'PublicSubnetB',
+    'PublicRouteTable',
+    'PublicRoute',
+    'PublicSubnetARouteTableAssociation',
+    'PublicSubnetBRouteTableAssociation',
+    'IGW',
+    'AttachIGW',
+  ];
+
+  expectedPrefixes.forEach(expected => {
+    const match = resourceKeys.find(id => id === expected);
+    expect(match).toBeDefined();
+  });
+});
 
 });
