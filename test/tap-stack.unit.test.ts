@@ -216,7 +216,6 @@ describe('TapStack CloudFormation Template', () => {
         const user = template.Resources.TestIAMUser;
         expect(user.Properties).toBeDefined();
       });
-
       test('should have UserName property if specified in template', () => {
         const user = template.Resources.TestIAMUser;
         if (user.Properties.UserName) {
