@@ -241,7 +241,7 @@ describe('TapStack CloudFormation Template - Web Application Infrastructure', ()
       const rdsInstance = template.Resources.RDSInstance;
       expect(rdsInstance.Type).toBe('AWS::RDS::DBInstance');
       expect(rdsInstance.Properties.Engine).toBe('mysql');
-      expect(rdsInstance.Properties.EngineVersion).toBe('8.0');
+      expect(rdsInstance.Properties.EngineVersion).toBe('8.0.41');
       expect(rdsInstance.Properties.StorageEncrypted).toBe(true);
       expect(rdsInstance.Properties.MultiAZ).toBe(true);
       expect(rdsInstance.Properties.PubliclyAccessible).toBe(false);

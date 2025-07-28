@@ -2,15 +2,6 @@
     "AWSTemplateFormatVersion": "2010-09-09",
     "Description": "High-availability web application infrastructure with ALB, VPC, and RDS",
     "Parameters": {
-        "DBMasterPassword": {
-            "Type": "String",
-            "Description": "Master password for RDS instance",
-            "MinLength": 8,
-            "MaxLength": 128,
-            "NoEcho": true,
-            "Default": "g00newrdstestJin",
-            "ConstraintDescription": "Must be between 8 and 128 characters"
-        },
         "DBInstanceType": {
             "Type": "String",
             "Default": "db.t3.micro",
@@ -20,6 +11,15 @@
                 "db.t3.small",
                 "db.t3.medium"
             ]
+        },
+        "DBMasterPassword": {
+            "Type": "String",
+            "NoEcho": true,
+            "Default": "g00newrdstestJin",
+            "Description": "Master password for RDS instance",
+            "MinLength": 8,
+            "MaxLength": 128,
+            "ConstraintDescription": "Must be between 8 and 128 characters"
         },
         "EC2InstanceType": {
             "Type": "String",
@@ -562,9 +562,22 @@
                 ]
             }
         },
+        "RDSSecret": {
+            "Type": "AWS::SecretsManager::Secret",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${Environment}-rds-credentials-${AWS::AccountId}-${AWS::Region}"
+                },
+                "Description": "RDS credentials",
+                "SecretString": {
+                    "Fn::Sub": "{\n  \"username\": \"admin\",\n  \"password\": \"${DBMasterPassword}\"\n}\n"
+                }
+            }
+        },
         "RDSInstance": {
             "Type": "AWS::RDS::DBInstance",
             "DeletionPolicy": "Snapshot",
+            "UpdateReplacePolicy": "Snapshot",
             "Properties": {
                 "DBInstanceIdentifier": {
                     "Fn::Sub": "${Environment}-webapp-db"
@@ -573,13 +586,33 @@
                     "Ref": "DBInstanceType"
                 },
                 "Engine": "mysql",
-                "EngineVersion": "8.0",
+                "EngineVersion": "8.0.41",
                 "AllocatedStorage": 20,
                 "StorageType": "gp2",
                 "StorageEncrypted": true,
-                "MasterUsername": "admin",
+                "MasterUsername": {
+                    "Fn::Join": [
+                        "",
+                        [
+                            "{{resolve:secretsmanager:",
+                            {
+                                "Ref": "RDSSecret"
+                            },
+                            ":SecretString:username}}"
+                        ]
+                    ]
+                },
                 "MasterUserPassword": {
-                    "Ref": "DBMasterPassword"
+                    "Fn::Join": [
+                        "",
+                        [
+                            "{{resolve:secretsmanager:",
+                            {
+                                "Ref": "RDSSecret"
+                            },
+                            ":SecretString:password}}"
+                        ]
+                    ]
                 },
                 "DBSubnetGroupName": {
                     "Ref": "RDSSubnetGroup"
@@ -728,7 +761,7 @@
                     ],
                     "UserData": {
                         "Fn::Base64": {
-                            "Fn::Sub": "#!/bin/bash\nyum update -y\nyum install -y httpd\nsystemctl start httpd\nsystemctl enable httpd\n\n# Create a simple health check endpoint\necho \"<html><body><h1>Health Check OK</h1><p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p></body></html>\" > /var/www/html/health\n\n# Create a simple index page\necho \"<html><body><h1>Welcome to ${Environment} Web App</h1><p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p></body></html>\" > /var/www/html/index.html\n\n# Install CloudWatch agent\nyum install -y amazon-cloudwatch-agent\n\n# Configure CloudWatch agent\ncat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << 'EOF'\n{\n  \"logs\": {\n    \"logs_collected\": {\n      \"files\": {\n        \"collect_list\": [\n          {\n            \"file_path\": \"/var/log/httpd/access_log\",\n            \"log_group_name\": \"/aws/ec2/${Environment}-webapp/httpd/access\",\n            \"log_stream_name\": \"{instance_id}\"\n          },\n          {\n            \"file_path\": \"/var/log/httpd/error_log\",\n            \"log_group_name\": \"/aws/ec2/${Environment}-webapp/httpd/error\",\n            \"log_stream_name\": \"{instance_id}\"\n          }\n        ]\n      }\n    }\n  }\n}\nEOF\n\n# Start CloudWatch agent\n/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s\n"
+                            "Fn::Sub": "#!/bin/bash\nyum update -y\nyum install -y nginx\nsystemctl start nginx\nsystemctl enable nginx\n\n# Create a simple health check endpoint\necho \"<html><body><h1>Health Check OK</h1><p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p></body></html>\" > /usr/share/nginx/html/health\n\n# Create a simple index page\necho \"<html><body><h1>Welcome to ${Environment} Web App</h1><p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p></body></html>\" > /usr/share/nginx/html/index.html\n\n# Install CloudWatch agent\nyum install -y amazon-cloudwatch-agent\n\n# Configure CloudWatch agent\ncat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << 'EOF'\n{\n  \"logs\": {\n    \"logs_collected\": {\n      \"files\": {\n        \"collect_list\": [\n          {\n            \"file_path\": \"/var/log/httpd/access_log\",\n            \"log_group_name\": \"/aws/ec2/${Environment}-webapp/httpd/access\",\n            \"log_stream_name\": \"{instance_id}\"\n          },\n          {\n            \"file_path\": \"/var/log/httpd/error_log\",\n            \"log_group_name\": \"/aws/ec2/${Environment}-webapp/httpd/error\",\n            \"log_stream_name\": \"{instance_id}\"\n          }\n        ]\n      }\n    }\n  }\n}\nEOF\n\n# Start CloudWatch agent\n/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s\n"
                         }
                     },
                     "TagSpecifications": [

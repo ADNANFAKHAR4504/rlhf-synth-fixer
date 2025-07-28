@@ -340,11 +340,11 @@ Resources:
     Properties:
       Name: !Sub '${Environment}-rds-credentials-${AWS::AccountId}-${AWS::Region}'
       Description: RDS credentials
-      GenerateSecretString:
-        SecretStringTemplate: '{"username":"admin"}'
-        GenerateStringKey: !Ref DBMasterPassword
-        PasswordLength: 16
-        ExcludeCharacters: '"@/\\'
+      SecretString: !Sub |
+        {
+          "username": "admin",
+          "password": "${DBMasterPassword}"
+        }
 
   # RDS Instance
   RDSInstance:
