@@ -47,7 +47,7 @@ You are tasked with designing and deploying a **production-ready, serverless app
 
   * Naming conventions: Use format like `projectname-environment-resourcetype` (e.g., `orders-prod-lambda`).
   * Tagging: All resources must be tagged with `Environment: Production`.
-* Deploy the stack to the **us-west-2 (Oregon)** region.
+* Deploy the stack to the **us-east-1** region.
 * Ensure the CDK stack can be synthesized and deployed via `cdk deploy`.
 
 ---

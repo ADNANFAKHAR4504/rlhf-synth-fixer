@@ -147,7 +147,7 @@ This document compares the original MODEL_RESPONSE.md with the improved IDEAL_RE
 
 The IDEAL_RESPONSE.md provides a significantly more robust, secure, and production-ready solution that:
 
-1. **Meets all specified requirements** including IAM authentication, proper naming conventions, and us-west-2 deployment
+1. **Meets all specified requirements** including IAM authentication, proper naming conventions and deployment
 2. **Follows AWS best practices** for security, cost optimization, and operational excellence
 3. **Provides comprehensive testing** for both infrastructure and end-to-end functionality
 4. **Includes proper documentation** for deployment, maintenance, and monitoring

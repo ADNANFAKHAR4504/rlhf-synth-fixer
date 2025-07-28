@@ -92,8 +92,7 @@ commit_author = os.getenv('COMMIT_AUTHOR', 'unknown')
 Tags.of(app).add('Environment', 'Production')
 Tags.of(app).add('Repository', repository_name)
 Tags.of(app).add('Author', commit_author)
-
-# Create stack with us-west-2 region
+ 
 props = TapStackProps(
     environment_suffix=environment_suffix,
     env=cdk.Environment(
