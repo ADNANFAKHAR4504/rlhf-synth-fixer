@@ -40,7 +40,7 @@ describe('TapStack CloudFormation Template - Web Application Infrastructure', ()
       'MinSize',
       'MaxSize',
       'DesiredCapacity',
-      'Environment'
+      'Environment',
     ];
 
     test('should have all required parameters', () => {
@@ -103,7 +103,9 @@ describe('TapStack CloudFormation Template - Web Application Infrastructure', ()
 
       expect(igw.Type).toBe('AWS::EC2::InternetGateway');
       expect(attachment.Type).toBe('AWS::EC2::VPCGatewayAttachment');
-      expect(attachment.Properties.InternetGatewayId).toEqual({ Ref: 'InternetGateway' });
+      expect(attachment.Properties.InternetGatewayId).toEqual({
+        Ref: 'InternetGateway',
+      });
       expect(attachment.Properties.VpcId).toEqual({ Ref: 'VPC' });
     });
 
@@ -136,7 +138,9 @@ describe('TapStack CloudFormation Template - Web Application Infrastructure', ()
       expect(natEip.Type).toBe('AWS::EC2::EIP');
       expect(natEip.Properties.Domain).toBe('vpc');
       expect(natGateway.Type).toBe('AWS::EC2::NatGateway');
-      expect(natGateway.Properties.AllocationId).toEqual({ 'Fn::GetAtt': ['NATGatewayEIP1', 'AllocationId'] });
+      expect(natGateway.Properties.AllocationId).toEqual({
+        'Fn::GetAtt': ['NATGatewayEIP1', 'AllocationId'],
+      });
     });
 
     test('should have route tables and routes configured', () => {
@@ -156,7 +160,7 @@ describe('TapStack CloudFormation Template - Web Application Infrastructure', ()
     test('should have ALB security group with correct ingress rules', () => {
       const albSg = template.Resources.ALBSecurityGroup;
       expect(albSg.Type).toBe('AWS::EC2::SecurityGroup');
-      
+
       const ingressRules = albSg.Properties.SecurityGroupIngress;
       const httpRule = ingressRules.find((rule: any) => rule.FromPort === 80);
       const httpsRule = ingressRules.find((rule: any) => rule.FromPort === 443);
@@ -170,20 +174,24 @@ describe('TapStack CloudFormation Template - Web Application Infrastructure', ()
     test('should have EC2 security group with ALB-only access', () => {
       const ec2Sg = template.Resources.EC2SecurityGroup;
       expect(ec2Sg.Type).toBe('AWS::EC2::SecurityGroup');
-      
+
       const ingressRules = ec2Sg.Properties.SecurityGroupIngress;
-      expect(ingressRules.every((rule: any) => rule.SourceSecurityGroupId)).toBe(true);
+      expect(
+        ingressRules.every((rule: any) => rule.SourceSecurityGroupId)
+      ).toBe(true);
     });
 
     test('should have RDS security group with EC2-only access', () => {
       const rdsSg = template.Resources.RDSSecurityGroup;
       expect(rdsSg.Type).toBe('AWS::EC2::SecurityGroup');
-      
+
       const ingressRules = rdsSg.Properties.SecurityGroupIngress;
       expect(ingressRules).toHaveLength(1);
       expect(ingressRules[0].FromPort).toBe(3306);
       expect(ingressRules[0].ToPort).toBe(3306);
-      expect(ingressRules[0].SourceSecurityGroupId).toEqual({ Ref: 'EC2SecurityGroup' });
+      expect(ingressRules[0].SourceSecurityGroupId).toEqual({
+        Ref: 'EC2SecurityGroup',
+      });
     });
   });
 
@@ -195,7 +203,7 @@ describe('TapStack CloudFormation Template - Web Application Infrastructure', ()
       expect(alb.Properties.Type).toBe('application');
       expect(alb.Properties.Subnets).toEqual([
         { Ref: 'PublicSubnet1' },
-        { Ref: 'PublicSubnet2' }
+        { Ref: 'PublicSubnet2' },
       ]);
     });
 
@@ -225,7 +233,7 @@ describe('TapStack CloudFormation Template - Web Application Infrastructure', ()
       expect(subnetGroup.Type).toBe('AWS::RDS::DBSubnetGroup');
       expect(subnetGroup.Properties.SubnetIds).toEqual([
         { Ref: 'PrivateSubnet1' },
-        { Ref: 'PrivateSubnet2' }
+        { Ref: 'PrivateSubnet2' },
       ]);
     });
 
@@ -246,8 +254,12 @@ describe('TapStack CloudFormation Template - Web Application Infrastructure', ()
     test('should have EC2 instance role with proper policies', () => {
       const role = template.Resources.EC2InstanceRole;
       expect(role.Type).toBe('AWS::IAM::Role');
-      expect(role.Properties.ManagedPolicyArns).toContain('arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy');
-      expect(role.Properties.ManagedPolicyArns).toContain('arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore');
+      expect(role.Properties.ManagedPolicyArns).toContain(
+        'arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy'
+      );
+      expect(role.Properties.ManagedPolicyArns).toContain(
+        'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore'
+      );
       expect(role.Properties.Policies).toHaveLength(1);
     });
 
@@ -263,9 +275,11 @@ describe('TapStack CloudFormation Template - Web Application Infrastructure', ()
       const launchTemplate = template.Resources.LaunchTemplate;
       expect(launchTemplate.Type).toBe('AWS::EC2::LaunchTemplate');
       expect(launchTemplate.Properties.LaunchTemplateData.ImageId).toEqual({
-        'Fn::FindInMap': ['RegionMap', { Ref: 'AWS::Region' }, 'AMI']
+        'Fn::FindInMap': ['RegionMap', { Ref: 'AWS::Region' }, 'AMI'],
       });
-      expect(launchTemplate.Properties.LaunchTemplateData.UserData).toBeDefined();
+      expect(
+        launchTemplate.Properties.LaunchTemplateData.UserData
+      ).toBeDefined();
     });
 
     test('should have Auto Scaling Group with proper configuration', () => {
@@ -273,7 +287,7 @@ describe('TapStack CloudFormation Template - Web Application Infrastructure', ()
       expect(asg.Type).toBe('AWS::AutoScaling::AutoScalingGroup');
       expect(asg.Properties.VPCZoneIdentifier).toEqual([
         { Ref: 'PrivateSubnet1' },
-        { Ref: 'PrivateSubnet2' }
+        { Ref: 'PrivateSubnet2' },
       ]);
       expect(asg.Properties.HealthCheckType).toBe('ELB');
       expect(asg.Properties.HealthCheckGracePeriod).toBe(300);
@@ -306,7 +320,9 @@ describe('TapStack CloudFormation Template - Web Application Infrastructure', ()
       expect(alarm.Properties.MetricName).toBe('CPUUtilization');
       expect(alarm.Properties.Threshold).toBe(25);
       expect(alarm.Properties.ComparisonOperator).toBe('LessThanThreshold');
-      expect(alarm.Properties.AlarmActions).toEqual([{ Ref: 'ScaleDownPolicy' }]);
+      expect(alarm.Properties.AlarmActions).toEqual([
+        { Ref: 'ScaleDownPolicy' },
+      ]);
     });
   });
 
@@ -335,7 +351,7 @@ describe('TapStack CloudFormation Template - Web Application Infrastructure', ()
       'ScaleUpPolicyArn',
       'ScaleDownPolicyArn',
       'HighCPUAlarmArn',
-      'LowCPUAlarmArn'
+      'LowCPUAlarmArn',
     ];
 
     test('should have all required outputs', () => {
@@ -359,12 +375,16 @@ describe('TapStack CloudFormation Template - Web Application Infrastructure', ()
 
     test('ALB DNS output should reference ALB DNSName attribute', () => {
       const output = template.Outputs.ALBDNSName;
-      expect(output.Value).toEqual({ 'Fn::GetAtt': ['ApplicationLoadBalancer', 'DNSName'] });
+      expect(output.Value).toEqual({
+        'Fn::GetAtt': ['ApplicationLoadBalancer', 'DNSName'],
+      });
     });
 
     test('RDS endpoint output should reference RDS endpoint attribute', () => {
       const output = template.Outputs.RDSEndpoint;
-      expect(output.Value).toEqual({ 'Fn::GetAtt': ['RDSInstance', 'Endpoint.Address'] });
+      expect(output.Value).toEqual({
+        'Fn::GetAtt': ['RDSInstance', 'Endpoint.Address'],
+      });
     });
   });
 
@@ -383,11 +403,17 @@ describe('TapStack CloudFormation Template - Web Application Infrastructure', ()
       const ec2Sg = template.Resources.EC2SecurityGroup;
       const rdsSg = template.Resources.RDSSecurityGroup;
 
-      const ec2HttpRule = ec2Sg.Properties.SecurityGroupIngress.find((rule: any) => rule.FromPort === 80);
-      expect(ec2HttpRule.SourceSecurityGroupId).toEqual({ Ref: 'ALBSecurityGroup' });
+      const ec2HttpRule = ec2Sg.Properties.SecurityGroupIngress.find(
+        (rule: any) => rule.FromPort === 80
+      );
+      expect(ec2HttpRule.SourceSecurityGroupId).toEqual({
+        Ref: 'ALBSecurityGroup',
+      });
 
       const rdsMysqlRule = rdsSg.Properties.SecurityGroupIngress[0];
-      expect(rdsMysqlRule.SourceSecurityGroupId).toEqual({ Ref: 'EC2SecurityGroup' });
+      expect(rdsMysqlRule.SourceSecurityGroupId).toEqual({
+        Ref: 'EC2SecurityGroup',
+      });
     });
   });
 
@@ -419,7 +445,9 @@ describe('TapStack CloudFormation Template - Web Application Infrastructure', ()
   describe('Naming Conventions', () => {
     test('resources should use environment-based naming', () => {
       const vpc = template.Resources.VPC;
-      expect(vpc.Properties.Tags[0].Value).toEqual({ 'Fn::Sub': '${Environment}-webapp-vpc' });
+      expect(vpc.Properties.Tags[0].Value).toEqual({
+        'Fn::Sub': '${Environment}-webapp-vpc',
+      });
     });
 
     test('export names should follow consistent pattern', () => {
@@ -447,7 +475,7 @@ describe('TapStack CloudFormation Template - Web Application Infrastructure', ()
       const asg = template.Resources.AutoScalingGroup;
       expect(asg.Properties.VPCZoneIdentifier).toEqual([
         { Ref: 'PrivateSubnet1' },
-        { Ref: 'PrivateSubnet2' }
+        { Ref: 'PrivateSubnet2' },
       ]);
     });
 
@@ -461,9 +489,13 @@ describe('TapStack CloudFormation Template - Web Application Infrastructure', ()
     test('should deploy across multiple availability zones', () => {
       const publicSubnet1 = template.Resources.PublicSubnet1;
       const publicSubnet2 = template.Resources.PublicSubnet2;
-      
-      expect(publicSubnet1.Properties.AvailabilityZone).toEqual({ 'Fn::Select': [0, { 'Fn::GetAZs': '' }] });
-      expect(publicSubnet2.Properties.AvailabilityZone).toEqual({ 'Fn::Select': [1, { 'Fn::GetAZs': '' }] });
+
+      expect(publicSubnet1.Properties.AvailabilityZone).toEqual({
+        'Fn::Select': [0, { 'Fn::GetAZs': '' }],
+      });
+      expect(publicSubnet2.Properties.AvailabilityZone).toEqual({
+        'Fn::Select': [1, { 'Fn::GetAZs': '' }],
+      });
     });
 
     test('RDS should be configured for Multi-AZ', () => {

@@ -47,7 +47,7 @@ Based on your architecture, generate a **single, self-contained, and runnable Cl
 - Place the EC2 instances in the **private subnets** for security isolation.
 - Place the Amazon RDS instance in the **private subnets** for isolation.
 - The IAM Role for the EC2 instances should be created with the principle of least privilege, including permissions for CloudWatch Logs, Systems Manager, and basic EC2 operations.
-- Use CloudFormation Parameters for sensitive values like the database master password, using the `NoEcho` property.
+- Use CloudFormation Parameters for sensitive values like the database master password from AWS secret manager
 - Enable encryption at rest for the Amazon RDS instance.
 - Use a Launch Template for the Auto Scaling Group to ensure consistent instance configuration.
 - Configure proper health checks for both ALB and Auto Scaling Group.

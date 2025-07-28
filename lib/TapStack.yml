@@ -2,15 +2,6 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: 'High-availability web application infrastructure with ALB, VPC, and RDS'
 
 Parameters:
-  DBMasterPassword:
-    Type: String
-    Description: 'Master password for RDS instance'
-    MinLength: 8
-    MaxLength: 128
-    NoEcho: true
-    Default: 'g00newrdstestJin'
-    ConstraintDescription: 'Must be between 8 and 128 characters'
-
   DBInstanceType:
     Type: String
     Default: 'db.t3.micro'
@@ -19,6 +10,15 @@ Parameters:
       - db.t3.micro
       - db.t3.small
       - db.t3.medium
+
+  DBMasterPassword:
+    Type: String
+    NoEcho: true
+    Default: 'g00newrdstestJin'
+    Description: 'Master password for RDS instance'
+    MinLength: 8
+    MaxLength: 128
+    ConstraintDescription: 'Must be between 8 and 128 characters'
 
   EC2InstanceType:
     Type: String
@@ -335,6 +335,17 @@ Resources:
         - Key: Name
           Value: !Sub '${Environment}-db-subnet-group'
 
+  RDSSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub '${Environment}-rds-credentials-${AWS::AccountId}-${AWS::Region}'
+      Description: RDS credentials
+      GenerateSecretString:
+        SecretStringTemplate: '{"username":"admin"}'
+        GenerateStringKey: !Ref DBMasterPassword
+        PasswordLength: 16
+        ExcludeCharacters: '"@/\\'
+
   # RDS Instance
   RDSInstance:
     Type: AWS::RDS::DBInstance
@@ -348,8 +359,24 @@ Resources:
       AllocatedStorage: 20
       StorageType: gp2
       StorageEncrypted: true
-      MasterUsername: admin
-      MasterUserPassword: !Ref DBMasterPassword
+      MasterUsername:
+        !Join [
+          '',
+          [
+            '{{resolve:secretsmanager:',
+            !Ref RDSSecret,
+            ':SecretString:username}}',
+          ],
+        ]
+      MasterUserPassword:
+        !Join [
+          '',
+          [
+            '{{resolve:secretsmanager:',
+            !Ref RDSSecret,
+            ':SecretString:password}}',
+          ],
+        ]
       DBSubnetGroupName: !Ref RDSSubnetGroup
       VPCSecurityGroups:
         - !Ref RDSSecurityGroup

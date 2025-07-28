@@ -2,16 +2,8 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'High-availability web application infrastructure with ALB, VPC, and RDS'
 
+# Remove DBMasterPassword parameter and use dynamic reference for us-east-1, else use parameter
 Parameters:
-  DBMasterPassword:
-    Type: String
-    Description: 'Master password for RDS instance'
-    MinLength: 8
-    MaxLength: 128
-    NoEcho: true
-    Default: 'g00newrdstestJin'
-    ConstraintDescription: 'Must be between 8 and 128 characters'
-
   DBInstanceType:
     Type: String
     Default: 'db.t3.micro'
@@ -336,20 +328,48 @@ Resources:
         - Key: Name
           Value: !Sub '${Environment}-db-subnet-group'
 
+  RDSSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub '${Environment}-rds-credentials-${AWS::AccountId}-${AWS::Region}'
+      Description: RDS credentials
+      GenerateSecretString:
+        SecretStringTemplate: '{"username":"admin"}'
+        GenerateStringKey: 'password'
+        PasswordLength: 16
+        ExcludeCharacters: '"@/\\'
+
   # RDS Instance
   RDSInstance:
     Type: AWS::RDS::DBInstance
     DeletionPolicy: Snapshot
+    UpdateReplacePolicy: Snapshot
     Properties:
       DBInstanceIdentifier: !Sub '${Environment}-webapp-db'
       DBInstanceClass: !Ref DBInstanceType
       Engine: mysql
-      EngineVersion: '8.0'
+      EngineVersion: '8.0.41'
       AllocatedStorage: 20
       StorageType: gp2
       StorageEncrypted: true
-      MasterUsername: admin
-      MasterUserPassword: !Ref DBMasterPassword
+      MasterUsername:
+        !Join [
+          '',
+          [
+            '{{resolve:secretsmanager:',
+            !Ref RDSSecret,
+            ':SecretString:username}}',
+          ],
+        ]
+      MasterUserPassword:
+        !Join [
+          '',
+          [
+            '{{resolve:secretsmanager:',
+            !Ref RDSSecret,
+            ':SecretString:password}}',
+          ],
+        ]
       DBSubnetGroupName: !Ref RDSSubnetGroup
       VPCSecurityGroups:
         - !Ref RDSSecurityGroup
@@ -429,15 +449,15 @@ Resources:
           Fn::Base64: !Sub |
             #!/bin/bash
             yum update -y
-            yum install -y httpd
-            systemctl start httpd
-            systemctl enable httpd
+            yum install -y nginx
+            systemctl start nginx
+            systemctl enable nginx
 
             # Create a simple health check endpoint
-            echo "<html><body><h1>Health Check OK</h1><p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p></body></html>" > /var/www/html/health
+            echo "<html><body><h1>Health Check OK</h1><p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p></body></html>" > /usr/share/nginx/html/health
 
             # Create a simple index page
-            echo "<html><body><h1>Welcome to ${Environment} Web App</h1><p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p></body></html>" > /var/www/html/index.html
+            echo "<html><body><h1>Welcome to ${Environment} Web App</h1><p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p></body></html>" > /usr/share/nginx/html/index.html
 
             # Install CloudWatch agent
             yum install -y amazon-cloudwatch-agent
