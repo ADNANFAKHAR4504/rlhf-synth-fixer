@@ -62,9 +62,13 @@
                                 {
                                     "Effect": "Allow",
                                     "Action": [
-                                        "logs:*"
+                                        "logs:CreateLogGroup",
+                                        "logs:CreateLogStream",
+                                        "logs:PutLogEvents"
                                     ],
-                                    "Resource": "*"
+                                    "Resource": {
+                                        "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${LambdaFunctionName}:*"
+                                    }
                                 },
                                 {
                                     "Effect": "Allow",
@@ -99,7 +103,7 @@
                 },
                 "Handler": "index.handler",
                 "Code": {
-                    "ZipFile": "exports.handler = async (event) => {\n  // Lambda code goes here\n  console.log('Event:', event);\n  return { \n    statusCode: 200, \n    body: 'Lambda function executed successfully with inline code!' \n  };\n};\n"
+                    "ZipFile": "exports.handler = async (event) => {\n  console.log('Event:', JSON.stringify(event, null, 2));\n  \n  // Example of handling different event sources\n  if (event.Records && event.Records[0] && event.Records[0].s3) {\n      console.log('Triggered by S3 event');\n      const s3Bucket = event.Records[0].s3.bucket.name;\n      const s3Key = event.Records[0].s3.object.key;\n      return { \n        statusCode: 200, \n        body: JSON.stringify(`Lambda processed S3 object: ${s3Bucket}/${s3Key}`)\n      };\n  } else if (event.httpMethod) {\n      console.log('Triggered by API Gateway');\n      return {\n        statusCode: 200,\n        body: JSON.stringify('Lambda function executed successfully via API Gateway!')\n      };\n  } else {\n      console.log('Triggered by unknown event source');\n      return { \n        statusCode: 200, \n        body: JSON.stringify('Lambda function executed successfully with inline code!') \n      };\n  }\n};\n"
                 },
                 "Environment": {
                     "Variables": {
@@ -154,12 +158,15 @@
                 ]
             }
         },
-        "LambdaInvokePermission": {
+        "LambdaS3InvokePermission": {
             "Type": "AWS::Lambda::Permission",
             "Properties": {
                 "Action": "lambda:InvokeFunction",
                 "FunctionName": {
-                    "Ref": "LambdaFunction"
+                    "Fn::GetAtt": [
+                        "LambdaFunction",
+                        "Arn"
+                    ]
                 },
                 "Principal": "s3.amazonaws.com",
                 "SourceArn": {
@@ -238,16 +245,22 @@
             "Properties": {
                 "Action": "lambda:InvokeFunction",
                 "FunctionName": {
-                    "Ref": "LambdaFunction"
+                    "Fn::GetAtt": [
+                        "LambdaFunction",
+                        "Arn"
+                    ]
                 },
-                "Principal": "apigateway.amazonaws.com"
+                "Principal": "apigateway.amazonaws.com",
+                "SourceArn": {
+                    "Fn::Sub": "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/*"
+                }
             }
         },
         "LambdaLogGroup": {
             "Type": "AWS::Logs::LogGroup",
             "Properties": {
                 "LogGroupName": {
-                    "Fn::Sub": "/aws/lambda/Lambda-api-229220-iac"
+                    "Fn::Sub": "/aws/lambda/${LambdaFunctionName}"
                 },
                 "RetentionInDays": 7
             }
@@ -255,7 +268,7 @@
     },
     "Outputs": {
         "ApiEndpoint": {
-            "Description": "API Gateway URL",
+            "Description": "API Gateway URL for /invoke endpoint",
             "Value": {
                 "Fn::Sub": "https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/prod/invoke"
             }
@@ -267,6 +280,33 @@
                     "LambdaFunction",
                     "Arn"
                 ]
+            }
+        },
+        "LambdaFunctionName": {
+            "Description": "The name of the Lambda function",
+            "Value": {
+                "Ref": "LambdaFunctionName"
+            }
+        },
+        "LambdaExecutionRoleArn": {
+            "Description": "The ARN of the IAM Role assumed by Lambda",
+            "Value": {
+                "Fn::GetAtt": [
+                    "LambdaExecutionRole",
+                    "Arn"
+                ]
+            }
+        },
+        "S3BucketName": {
+            "Description": "The name of the S3 bucket",
+            "Value": {
+                "Ref": "S3BucketName"
+            }
+        },
+        "LambdaDLQUrl": {
+            "Description": "URL of the Lambda Dead Letter Queue",
+            "Value": {
+                "Ref": "LambdaDLQ"
             }
         }
     }

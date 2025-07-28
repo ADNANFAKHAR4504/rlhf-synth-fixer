@@ -49,11 +49,13 @@ Resources:
                 Resource: !Sub "arn:aws:s3:::${S3BucketName}/*"
               - Effect: "Allow"
                 Action:
-                  - "logs:*"
-                Resource: "*"
+                  - "logs:CreateLogGroup"
+                  - "logs:CreateLogStream"
+                  - "logs:PutLogEvents"
+                Resource: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${LambdaFunctionName}:*" # Scoped to specific log group
               - Effect: "Allow"
                 Action:
-                  - "sqs:SendMessage"  # Add permission for sending messages to SQS
+                  - "sqs:SendMessage"
                 Resource: !GetAtt LambdaDLQ.Arn
 
   # Lambda Function (Main Lambda)
@@ -67,18 +69,36 @@ Resources:
       Code:
         ZipFile: |
           exports.handler = async (event) => {
-            // Lambda code goes here
-            console.log('Event:', event);
-            return { 
-              statusCode: 200, 
-              body: 'Lambda function executed successfully with inline code!' 
-            };
+            console.log('Event:', JSON.stringify(event, null, 2));
+            
+            // Example of handling different event sources
+            if (event.Records && event.Records[0] && event.Records[0].s3) {
+                console.log('Triggered by S3 event');
+                const s3Bucket = event.Records[0].s3.bucket.name;
+                const s3Key = event.Records[0].s3.object.key;
+                return { 
+                  statusCode: 200, 
+                  body: JSON.stringify(`Lambda processed S3 object: ${s3Bucket}/${s3Key}`)
+                };
+            } else if (event.httpMethod) {
+                console.log('Triggered by API Gateway');
+                return {
+                  statusCode: 200,
+                  body: JSON.stringify('Lambda function executed successfully via API Gateway!')
+                };
+            } else {
+                console.log('Triggered by unknown event source');
+                return { 
+                  statusCode: 200, 
+                  body: JSON.stringify('Lambda function executed successfully with inline code!') 
+                };
+            }
           };
       Environment:
         Variables:
-          MY_ENV_VAR: "example-value"  # You can add environment variables if needed
-      Timeout: 10  # Lambda timeout in seconds
-      MemorySize: 128  # Lambda memory size
+          MY_ENV_VAR: "example-value"
+      Timeout: 10
+      MemorySize: 128
       Tags:
         - Key: "Environment"
           Value: "Production"
@@ -87,26 +107,25 @@ Resources:
       DeadLetterConfig:
         TargetArn: !GetAtt LambdaDLQ.Arn
 
-  # Add an S3 event notification to trigger Lambda function
-  # S3 Bucket
+  # S3 Bucket and Notification
   S3Bucket:
     Type: AWS::S3::Bucket
     Properties:
       BucketName: !Ref S3BucketName
       NotificationConfiguration:
         LambdaConfigurations:
-          - Event: "s3:ObjectCreated:*"  # Event type for trigger
+          - Event: "s3:ObjectCreated:*"
             Function: !GetAtt LambdaFunction.Arn
       Tags:
         - Key: "Environment"
           Value: "Production"
 
   # Lambda Permission for S3 to invoke Lambda
-  LambdaInvokePermission:
+  LambdaS3InvokePermission: # Renamed for clarity
     Type: AWS::Lambda::Permission
     Properties:
       Action: lambda:InvokeFunction
-      FunctionName: !Ref LambdaFunction
+      FunctionName: !GetAtt LambdaFunction.Arn # Use GetAtt for ARN
       Principal: s3.amazonaws.com
       SourceArn: !Sub "arn:aws:s3:::${S3BucketName}"
 
@@ -129,7 +148,7 @@ Resources:
       ParentId: !GetAtt ApiGateway.RootResourceId
       PathPart: invoke
 
-  # API Gateway Method
+  # API Gateway Method (POST /invoke)
   ApiGatewayMethod:
     Type: AWS::ApiGateway::Method
     Properties:
@@ -147,7 +166,7 @@ Resources:
   # API Gateway Deployment
   ApiGatewayDeployment:
     Type: AWS::ApiGateway::Deployment
-    DependsOn: ApiGatewayMethod
+    DependsOn: ApiGatewayMethod # Ensure method is created before deployment
     Properties:
       RestApiId: !Ref ApiGateway
       StageName: prod
@@ -157,21 +176,38 @@ Resources:
     Type: AWS::Lambda::Permission
     Properties:
       Action: lambda:InvokeFunction
-      FunctionName: !Ref LambdaFunction
+      FunctionName: !GetAtt LambdaFunction.Arn # Use GetAtt for ARN
       Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/*" # Restrict to this API Gateway
 
   # CloudWatch Log Group for Lambda
   LambdaLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub "/aws/lambda/Lambda-api-229220-iac"
+      LogGroupName: !Sub "/aws/lambda/${LambdaFunctionName}"
       RetentionInDays: 7
 
 Outputs:
   ApiEndpoint:
-    Description: "API Gateway URL"
+    Description: "API Gateway URL for /invoke endpoint"
     Value: !Sub "https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/prod/invoke"
     
   LambdaFunctionArn:
     Description: "Lambda ARN"
     Value: !GetAtt LambdaFunction.Arn
+
+  LambdaFunctionName:
+    Description: "The name of the Lambda function"
+    Value: !Ref LambdaFunctionName
+
+  LambdaExecutionRoleArn:
+    Description: "The ARN of the IAM Role assumed by Lambda"
+    Value: !GetAtt LambdaExecutionRole.Arn
+
+  S3BucketName:
+    Description: "The name of the S3 bucket"
+    Value: !Ref S3BucketName
+
+  LambdaDLQUrl:
+    Description: "URL of the Lambda Dead Letter Queue"
+    Value: !Ref LambdaDLQ
