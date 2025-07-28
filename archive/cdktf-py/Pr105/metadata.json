@@ -1,0 +1,14 @@
+{
+  "platform": "cdktf",
+  "language": "py",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "123456",
+  "startedAt": "2025-07-27T14:06:37.551Z",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "aafaq-turing",
+  "dockerS3Location": "s3://iac-rlhf-production/docker_images/Pr105/docker-image-123456.tar"
+}
