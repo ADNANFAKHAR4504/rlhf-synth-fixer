@@ -81,13 +81,6 @@
             "AllowedPattern": "[a-zA-Z][a-zA-Z0-9]*",
             "ConstraintDescription": "Must begin with a letter and contain only alphanumeric characters."
         },
-        "DBSecretName": {
-            "Description": "The name of the AWS Secrets Manager secret containing the database password.",
-            "Type": "String",
-            "Default": "WebAppDBPasswordSecret",
-            "MinLength": 1,
-            "ConstraintDescription": "Must be a valid Secrets Manager secret name."
-        },
         "AppPort": {
             "Description": "The port on which the web application listens.",
             "Type": "Number",
@@ -681,7 +674,7 @@
                 "MasterUsername": {
                     "Ref": "DBUsername"
                 },
-                "MasterUserPassword": "{{resolve:secretsmanager:!Ref DBSecretName:SecretString}}",
+                "MasterUserPassword": "{{resolve:secretsmanager:WebAppDBPasswordSecret:SecretString}}",
                 "DBSubnetGroupName": {
                     "Ref": "DBSubnetGroup"
                 },
