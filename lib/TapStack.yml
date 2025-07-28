@@ -68,8 +68,6 @@ Resources:
           Value: "Production"
       TracingConfig:
         Mode: Active
-      DeadLetterConfig:
-        TargetArn: !GetAtt LambdaDLQ.Arn
 
   S3Bucket:
     Type: AWS::S3::Bucket

@@ -51,18 +51,6 @@
                                         "logs:*"
                                     ],
                                     "Resource": "*"
-                                },
-                                {
-                                    "Effect": "Allow",
-                                    "Action": [
-                                        "sqs:SendMessage"
-                                    ],
-                                    "Resource": {
-                                        "Fn::GetAtt": [
-                                            "LambdaDLQ",
-                                            "Arn"
-                                        ]
-                                    }
                                 }
                             ]
                         }
@@ -102,14 +90,6 @@
                 ],
                 "TracingConfig": {
                     "Mode": "Active"
-                },
-                "DeadLetterConfig": {
-                    "TargetArn": {
-                        "Fn::GetAtt": [
-                            "LambdaDLQ",
-                            "Arn"
-                        ]
-                    }
                 }
             }
         },
