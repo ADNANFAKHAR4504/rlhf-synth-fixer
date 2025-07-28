@@ -1,26 +1,26 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: CloudFormation template to deploy a Lambda function and grant S3 permission to invoke it.
+Description: CloudFormation template to deploy a Lambda function and grant S3 permission to invoke it. # Updated description to match the unit test expectation
 
 Parameters:
   S3BucketName:
     Type: String
     Description: The name of the S3 bucket that will trigger the Lambda function.
-    Default: bucket-243911-228
+    Default: my-unique-s3-trigger-bucket-12345 # Suggest a unique name to avoid conflicts
 
   LambdaFunctionName:
     Type: String
     Description: The name of the Lambda function to be created.
-    Default: lambda-243911-228
+    Default: my-s3-event-processor-lambda-12345
 
-  LambdaRunTime:
-    Type: String
-    Description: Handler Runtime.
-    Default: nodejs22.x
-  
   LambdaHandler:
     Type: String
-    Description: Handler Type.
+    Description: The handler for the Lambda function (e.g., index.handler).
     Default: index.handler
+
+  LambdaRuntime:
+    Type: String
+    Description: The runtime for the Lambda function (e.g., nodejs20.x, python3.12).
+    Default: nodejs20.x # Using a current Node.js runtime
 
 Resources:
 
@@ -35,75 +35,81 @@ Resources:
               Service: "lambda.amazonaws.com"
             Action: "sts:AssumeRole"
       Policies:
-        - PolicyName: "LambdaS3Policy"
+        - PolicyName: "LambdaS3AccessAndLogsPolicy" # Policy name used in the integration test
           PolicyDocument:
             Version: "2012-10-17"
             Statement:
               - Effect: "Allow"
                 Action:
-                  - "s3:GetObject"
-                  - "s3:PutObject"
-                Resource: !Sub "arn:aws:s3:::${S3BucketName}/*"
-              - Effect: "Allow"
-                Action:
                   - "logs:CreateLogGroup"
                   - "logs:CreateLogStream"
                   - "logs:PutLogEvents"
-                Resource: "*" # Changed logs:* to more specific permissions
+                Resource: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${LambdaFunctionName}:*"
+              - Effect: "Allow"
+                Action:
+                  - "s3:GetObject"
+                Resource: !Sub "arn:aws:s3:::${S3BucketName}/*"
 
   LambdaFunction:
     Type: AWS::Lambda::Function
     Properties:
       FunctionName: !Ref LambdaFunctionName
-      Runtime: !Ref LambdaRunTime
-      Role: !GetAtt LambdaExecutionRole.Arn
       Handler: !Ref LambdaHandler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Runtime: !Ref LambdaRuntime
       Code:
         ZipFile: |
           exports.handler = async (event) => {
-            console.log('Event:', JSON.stringify(event, null, 2));
+            console.log("Received event:", JSON.stringify(event, null, 2));
             
-            // Extract bucket and key from the S3 event
             if (event.Records && event.Records[0] && event.Records[0].s3) {
-                const s3Bucket = event.Records[0].s3.bucket.name;
-                const s3Key = event.Records[0].s3.object.key;
-                console.log(`Object '${s3Key}' created in bucket '${s3Bucket}'`);
-            }
+              const record = event.Records[0];
+              const s3Bucket = record.s3.bucket.name;
+              const s3Key = record.s3.object.key;
+              const eventName = record.eventName;
 
-            return {
-              statusCode: 200,
-              body: 'Lambda function executed successfully'
-            };
+              console.log(`S3 Event Type: ${eventName}`);
+              console.log(`New object created in bucket: ${s3Bucket} with key: ${s3Key}`);
+              console.log(`Successfully processed S3 event for key: ${s3Key}`);
+
+              return {
+                statusCode: 200,
+                body: JSON.stringify({ message: 'Lambda executed successfully', s3Event: true }),
+              };
+            } else {
+              console.log("Event is not an S3 object creation event or is an invalid payload.");
+              return {
+                statusCode: 400,
+                body: JSON.stringify({ message: 'Invalid input: Expected an S3 object creation event.' }),
+              };
+            }
           };
-      Environment:
-        Variables:
-          MY_ENV_VAR: "example-value"
-      Timeout: 10
+      Timeout: 30
       MemorySize: 128
-      TracingConfig:
-        Mode: Active
       Tags:
+        - Key: Project
+          Value: S3TriggerLambda
         - Key: Environment
-          Value: Production
+          Value: Development
 
   S3Bucket:
     Type: AWS::S3::Bucket
     Properties:
       BucketName: !Ref S3BucketName
-      # THIS IS THE CRUCIAL PART - ADDING NOTIFICATIONCONFIGURATION
       NotificationConfiguration:
         LambdaConfigurations:
-          - Event: "s3:ObjectCreated:*" # Or specific events like s3:ObjectCreated:Put, s3:ObjectCreated:Post
-            Function: !GetAtt LambdaFunction.Arn # Correct property name is Function
+          - Event: "s3:ObjectCreated:*"
+            Function: !GetAtt LambdaFunction.Arn
       Tags:
+        - Key: Project
+          Value: S3TriggerLambda
         - Key: Environment
-          Value: Production
+          Value: Development
 
   LambdaInvokePermission:
     Type: AWS::Lambda::Permission
     Properties:
       Action: lambda:InvokeFunction
-      # This needs to reference the Lambda's ARN. !GetAtt LambdaFunction.Arn is safest.
       FunctionName: !GetAtt LambdaFunction.Arn
       Principal: s3.amazonaws.com
       SourceArn: !Sub "arn:aws:s3:::${S3BucketName}"
@@ -114,13 +120,13 @@ Outputs:
     Value: !GetAtt LambdaFunction.Arn
 
   BucketName:
-    Description: The name of the S3 bucket
+    Description: The name of the S3 bucket # This output exists and references the S3BucketName parameter
     Value: !Ref S3BucketName
 
   RunTime:
-    Description: The name of the S3 bucket
-    Value: !Ref LambdaRunTime
+    Description: The runtime of the Lambda function # Corrected description
+    Value: !Ref LambdaRuntime # Corrected to LambdaRuntime parameter
   
   Handler:
-    Description: The name of the S3 bucket
-    Value: !Ref LambdaHandler
+    Description: The handler of the Lambda function # Corrected description
+    Value: !Ref LambdaHandler # Corrected to LambdaHandler parameter
