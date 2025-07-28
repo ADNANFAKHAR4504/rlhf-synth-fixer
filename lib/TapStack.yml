@@ -68,14 +68,12 @@ Parameters:
     MaxLength: 16
     AllowedPattern: "[a-zA-Z][a-zA-Z0-9]*"
     ConstraintDescription: Must begin with a letter and contain only alphanumeric characters.
-  DBPassword:
-    Description: Master password for the RDS database.
+  DBSecretName:
+    Description: The name of the AWS Secrets Manager secret containing the database password.
     Type: String
-    NoEcho: true
-    Default: ChangeMe123! # Added a default password for deployment. IMPORTANT: CHANGE THIS FOR PRODUCTION!
-    MinLength: 8
-    MaxLength: 41
-    ConstraintDescription: Must contain only alphanumeric characters.
+    Default: WebAppDBPasswordSecret # Default secret name. You must create this secret in Secrets Manager.
+    MinLength: 1
+    ConstraintDescription: Must be a valid Secrets Manager secret name.
   AppPort:
     Description: The port on which the web application listens.
     Type: Number
@@ -409,8 +407,8 @@ Resources:
       AllocatedStorage: !Ref DBAllocatedStorage
       Engine: mysql # Can be changed to postgres, aurora, etc.
       MasterUsername: !Ref DBUsername
-      MasterUserPassword: !Ref DBPassword
-      DBSubnetGroupName: !Ref DBSubnetGroup 
+      MasterUserPassword: "{{resolve:secretsmanager:!Ref DBSecretName:SecretString}}" # Dynamically retrieve password from Secrets Manager
+      DBSubnetGroupName: !Ref DBSubnetGroup
       VPCSecurityGroups:
         - !GetAtt DBSecurityGroup.GroupId
       MultiAZ: true # Enable Multi-AZ for high availability
