@@ -37,8 +37,6 @@ if (!lambdaFunctionName) {
   throw new Error("CloudFormation output 'LambdaFunctionName' is missing. Ensure the stack is deployed and outputs are correctly saved.");
 }
 if (!lambdaExecutionRoleArn) {
-  // This is the specific fix for the reported error.
-  // If lambdaExecutionRoleArn is undefined, we throw an error immediately.
   throw new Error("CloudFormation output 'LambdaExecutionRoleArn' is missing. Ensure the stack is deployed and outputs are correctly saved.");
 }
 
@@ -54,6 +52,7 @@ const cloudwatch = new CloudWatchLogsClient({ region: awsRegion });
 // Define test data
 const testObjectKey = `test-object-${Date.now()}.txt`; // Unique object key for each test run
 const testPayload = { key: 'value' }; // Example payload for direct Lambda invocation (if needed)
+
 
 describe('Lambda Triggered by S3 Events Integration Tests', () => {
 
@@ -126,7 +125,7 @@ describe('Lambda Triggered by S3 Events Integration Tests', () => {
 
       } catch (error) {
         console.error('Error occurred during the S3 upload or Lambda log verification:', error);
-        fail(error); // Fail the test explicitly if an error occurs
+        expect(error).toBeNull(); // Handle error gracefully
       }
     }, 30000); // Increased timeout for this test to 30 seconds
 
@@ -154,7 +153,7 @@ describe('Lambda Triggered by S3 Events Integration Tests', () => {
 
       } catch (error) {
         console.error('Error occurred while fetching IAM role policy:', error);
-        fail(error); // Fail the test explicitly if an error occurs
+        expect(error).toBeNull(); // Handle error gracefully
       }
     });
 
@@ -181,7 +180,7 @@ describe('Lambda Triggered by S3 Events Integration Tests', () => {
 
       } catch (error) {
         console.error('Error occurred while checking S3 bucket notification configuration:', error);
-        fail(error); // Fail the test explicitly if an error occurs
+        expect(error).toBeNull(); // Handle error gracefully
       }
     });
 
@@ -204,14 +203,17 @@ describe('Lambda Triggered by S3 Events Integration Tests', () => {
 
         const responsePayload = JSON.parse(new TextDecoder().decode(lambdaResponse.Payload!));
 
-        // Lambda should return an error message for invalid input as per updated Lambda code
-        expect(lambdaResponse.StatusCode).toBe(200); // Lambda always returns 200 for successful invocation, but payload indicates error
+        // Lambda always returns 200 for successful invocation, but application-level status is in payload.
+        expect(lambdaResponse.StatusCode).toBe(200); 
         expect(responsePayload).toHaveProperty('statusCode', 400);
-        expect(responsePayload).toHaveProperty('body', 'Invalid input: Expected an S3 object creation event.');
+        
+        // Parse the 'body' string within the responsePayload to check its 'message' property
+        const parsedBody = JSON.parse(responsePayload.body);
+        expect(parsedBody).toHaveProperty('message', 'Invalid input: Expected an S3 object creation event.');
 
       } catch (error) {
         console.error('Error occurred during Lambda invocation with invalid payload:', error);
-        fail(error); // Fail the test explicitly if an error occurs
+        expect(error).toBeNull(); // Handle error gracefully
       }
     });
 
@@ -245,7 +247,7 @@ describe('Lambda Triggered by S3 Events Integration Tests', () => {
 
       } catch (error) {
         console.error('Error occurred while fetching CloudWatch logs:', error);
-        fail(error); // Fail the test explicitly if an error occurs
+        expect(error).toBeNull(); // Handle error gracefully
       }
     }, 20000); // Increased timeout for log verification
   });
