@@ -1,0 +1,201 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "CloudFormation template to deploy a Lambda function and grant S3 permission to invoke it.",
+    "Parameters": {
+        "S3BucketName": {
+            "Type": "String",
+            "Description": "The name of the S3 bucket that will trigger the Lambda function.",
+            "Default": "my-unique-s3-trigger-bucket-12345"
+        },
+        "LambdaFunctionName": {
+            "Type": "String",
+            "Description": "The name of the Lambda function to be created.",
+            "Default": "my-s3-event-processor-lambda-12345"
+        },
+        "LambdaHandler": {
+            "Type": "String",
+            "Description": "The handler for the Lambda function (e.g., index.handler).",
+            "Default": "index.handler"
+        },
+        "LambdaRuntime": {
+            "Type": "String",
+            "Description": "The runtime for the Lambda function (e.g., nodejs20.x, python3.12).",
+            "Default": "nodejs20.x"
+        }
+    },
+    "Resources": {
+        "LambdaExecutionRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "Policies": [
+                    {
+                        "PolicyName": "LambdaS3AccessAndLogsPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "logs:CreateLogGroup",
+                                        "logs:CreateLogStream",
+                                        "logs:PutLogEvents"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${LambdaFunctionName}:*"
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:GetObject"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "arn:aws:s3:::${S3BucketName}/*"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "LambdaFunction": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Ref": "LambdaFunctionName"
+                },
+                "Handler": {
+                    "Ref": "LambdaHandler"
+                },
+                "Role": {
+                    "Fn::GetAtt": [
+                        "LambdaExecutionRole",
+                        "Arn"
+                    ]
+                },
+                "Runtime": {
+                    "Ref": "LambdaRuntime"
+                },
+                "Code": {
+                    "ZipFile": "exports.handler = async (event) => {\n  console.log(\"Received event:\", JSON.stringify(event, null, 2));\n  \n  if (event.Records && event.Records[0] && event.Records[0].s3) {\n    const record = event.Records[0];\n    const s3Bucket = record.s3.bucket.name;\n    const s3Key = record.s3.object.key;\n    const eventName = record.eventName;\n\n    console.log(`S3 Event Type: ${eventName}`);\n    console.log(`New object created in bucket: ${s3Bucket} with key: ${s3Key}`);\n    console.log(`Successfully processed S3 event for key: ${s3Key}`);\n\n    return {\n      statusCode: 200,\n      body: JSON.stringify({ message: 'Lambda executed successfully', s3Event: true }),\n    };\n  } else {\n    console.log(\"Event is not an S3 object creation event or is an invalid payload.\");\n    return {\n      statusCode: 400,\n      body: JSON.stringify({ message: 'Invalid input: Expected an S3 object creation event.' }),\n    };\n  }\n};\n"
+                },
+                "Timeout": 30,
+                "MemorySize": 128,
+                "Tags": [
+                    {
+                        "Key": "Project",
+                        "Value": "S3TriggerLambda"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Development"
+                    }
+                ]
+            }
+        },
+        "S3Bucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "BucketName": {
+                    "Ref": "S3BucketName"
+                },
+                "NotificationConfiguration": {
+                    "LambdaConfigurations": [
+                        {
+                            "Event": "s3:ObjectCreated:*",
+                            "Function": {
+                                "Fn::GetAtt": [
+                                    "LambdaFunction",
+                                    "Arn"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Project",
+                        "Value": "S3TriggerLambda"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Development"
+                    }
+                ]
+            }
+        },
+        "LambdaInvokePermission": {
+            "Type": "AWS::Lambda::Permission",
+            "Properties": {
+                "Action": "lambda:InvokeFunction",
+                "FunctionName": {
+                    "Fn::GetAtt": [
+                        "LambdaFunction",
+                        "Arn"
+                    ]
+                },
+                "Principal": "s3.amazonaws.com",
+                "SourceArn": {
+                    "Fn::Sub": "arn:aws:s3:::${S3BucketName}"
+                }
+            }
+        }
+    },
+    "Outputs": {
+        "LambdaFunctionArn": {
+            "Description": "Lambda ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "LambdaFunction",
+                    "Arn"
+                ]
+            }
+        },
+        "LambdaFunctionName": {
+            "Description": "The name of the Lambda function",
+            "Value": {
+                "Ref": "LambdaFunctionName"
+            }
+        },
+        "LambdaExecutionRoleArn": {
+            "Description": "The ARN of the IAM Role assumed by Lambda",
+            "Value": {
+                "Fn::GetAtt": [
+                    "LambdaExecutionRole",
+                    "Arn"
+                ]
+            }
+        },
+        "S3BucketName": {
+            "Description": "The name of the S3 bucket",
+            "Value": {
+                "Ref": "S3BucketName"
+            }
+        },
+        "RunTime": {
+            "Description": "The runtime of the Lambda function",
+            "Value": {
+                "Ref": "LambdaRuntime"
+            }
+        },
+        "Handler": {
+            "Description": "The handler of the Lambda function",
+            "Value": {
+                "Ref": "LambdaHandler"
+            }
+        }
+    }
+}
