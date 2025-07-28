@@ -4,6 +4,7 @@
 /test/*.js
 /cli/*.js
 *.d.ts
+!/test/setup.js
 
 # Dependencies
 node_modules/
@@ -74,3 +75,10 @@ cov.json
 
 cfn-outputs/*
 certs
+
+# CDK Terraform stuff
+cdktf.out
+cdktf.log
+*terraform.*.tfstate*
+.gen
+.terraform
