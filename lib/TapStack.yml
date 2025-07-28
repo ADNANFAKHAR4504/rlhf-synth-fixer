@@ -106,34 +106,34 @@ Outputs:
     Description: 'The ID of the created VPC'
     Value: !Ref ProductionVPC
     Export:
-      Name: !Sub \${AWS::StackName}-VPCId
+      Name: !Sub ${AWS::StackName}-VPCId
 
   PublicSubnetAId:
     Description: 'ID of Public Subnet A'
     Value: !Ref PublicSubnetA
     Export:
-      Name: !Sub \${AWS::StackName}-PublicSubnetAId
+      Name: !Sub ${AWS::StackName}-PublicSubnetAId
 
   PublicSubnetBId:
     Description: 'ID of Public Subnet B'
     Value: !Ref PublicSubnetB
     Export:
-      Name: !Sub \${AWS::StackName}-PublicSubnetBId
+      Name: !Sub ${AWS::StackName}-PublicSubnetBId
 
   InternetGatewayId:
     Description: 'ID of the Internet Gateway'
     Value: !Ref IGW
     Export:
-      Name: !Sub \${AWS::StackName}-InternetGatewayId
+      Name: !Sub ${AWS::StackName}-InternetGatewayId
 
   PublicRouteTableId:
     Description: 'ID of the Public Route Table'
     Value: !Ref PublicRouteTable
     Export:
-      Name: !Sub \${AWS::StackName}-PublicRouteTableId
+      Name: !Sub ${AWS::StackName}-PublicRouteTableId
 
   StackName:
     Description: 'Name of this CloudFormation stack'
     Value: !Ref AWS::StackName
     Export:
-      Name: !Sub \${AWS::StackName}-StackName
+      Name: !Sub ${AWS::StackName}-StackName

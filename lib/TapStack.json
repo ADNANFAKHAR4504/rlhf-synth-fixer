@@ -196,7 +196,7 @@
             },
             "Export": {
                 "Name": {
-                    "Fn::Sub": "\\${AWS::StackName}-VPCId"
+                    "Fn::Sub": "${AWS::StackName}-VPCId"
                 }
             }
         },
@@ -207,7 +207,7 @@
             },
             "Export": {
                 "Name": {
-                    "Fn::Sub": "\\${AWS::StackName}-PublicSubnetAId"
+                    "Fn::Sub": "${AWS::StackName}-PublicSubnetAId"
                 }
             }
         },
@@ -218,7 +218,7 @@
             },
             "Export": {
                 "Name": {
-                    "Fn::Sub": "\\${AWS::StackName}-PublicSubnetBId"
+                    "Fn::Sub": "${AWS::StackName}-PublicSubnetBId"
                 }
             }
         },
@@ -229,7 +229,7 @@
             },
             "Export": {
                 "Name": {
-                    "Fn::Sub": "\\${AWS::StackName}-InternetGatewayId"
+                    "Fn::Sub": "${AWS::StackName}-InternetGatewayId"
                 }
             }
         },
@@ -240,7 +240,7 @@
             },
             "Export": {
                 "Name": {
-                    "Fn::Sub": "\\${AWS::StackName}-PublicRouteTableId"
+                    "Fn::Sub": "${AWS::StackName}-PublicRouteTableId"
                 }
             }
         },
@@ -251,7 +251,7 @@
             },
             "Export": {
                 "Name": {
-                    "Fn::Sub": "\\${AWS::StackName}-StackName"
+                    "Fn::Sub": "${AWS::StackName}-StackName"
                 }
             }
         }
