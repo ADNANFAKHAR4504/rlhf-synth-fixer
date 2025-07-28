@@ -39,10 +39,6 @@ Resources:
                 Action:
                   - "logs:*"
                 Resource: "*"
-              - Effect: "Allow"
-                Action:
-                  - "sqs:SendMessage"  # Add permission for sending messages to SQS
-                Resource: !GetAtt LambdaDLQ.Arn
 
   # Lambda Function (Main Lambda)
   LambdaFunction:
