@@ -16,6 +16,15 @@
             "Type": "String",
             "Description": "Custom domain name",
             "Default": "example.defaultdomain.com"
+        },
+        "DBMasterPassword": {
+            "Type": "String",
+            "Description": "Master password for RDS database",
+            "NoEcho": true,
+            "MinLength": 8,
+            "MaxLength": 128,
+            "AllowedPattern": "^[a-zA-Z0-9!@#$%^&*()_+=-]*$",
+            "ConstraintDescription": "Must contain only alphanumeric characters and special characters"
         }
     },
     "Resources": {
@@ -520,7 +529,9 @@
                 "AllocatedStorage": 20,
                 "Engine": "mysql",
                 "MasterUsername": "admin",
-                "MasterUserPassword": "'{{resolve:secretsmanager:your-secret-name:SecretString:DBMasterPassword}}'\n",
+                "MasterUserPassword": {
+                    "Ref": "DBMasterPassword"
+                },
                 "MultiAZ": true,
                 "VPCSecurityGroups": [
                     {
