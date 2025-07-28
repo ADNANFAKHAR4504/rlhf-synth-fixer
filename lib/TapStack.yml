@@ -1,7 +1,8 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: >
-  A robust CloudFormation template that provisions a web application environment 
-  using manually provided parameters for the RDS instance credentials.
+  A robust CloudFormation template that provisions a web application environment.
+  It uses AWS Secrets Manager for the database password and a parameter for the username.
+  WARNING: The default IP for SSH is 0.0.0.0/0. Please change this for production.
 
 Parameters:
   EnvironmentName:
@@ -16,19 +17,26 @@ Parameters:
     Type: String
     Description: "The name of the project."
     Default: WebAppProject
+
+  # No default value is provided for the KeyPair for security reasons.
+  # This ensures you consciously select a key that you own.
   WebAppServerKeyName:
     Type: AWS::EC2::KeyPair::KeyName
     Description: "Name of an existing EC2 KeyPair to enable SSH access to the instance."
+    Default: iac-rlhf-aws-trainer-instance
+
   DBMasterUsername:
     Type: String
     Description: "Username for the RDS master user. Use only letters and numbers."
     Default: "dbadmin"
-  DBMasterPassword:
-    NoEcho: true
+
+  MyIpAddress:
     Type: String
-    Description: "Password for the RDS master user. Must be at least 8 characters and contain only allowed characters."
-    MinLength: 8
-    Default: {{resolve:secretsmanager:MyProdDbCredentials:SecretString:password}}
+    Description: "Your IP in CIDR notation (e.g., 203.0.113.5/32) for secure SSH access."
+    Default: "0.0.0.0/0" # WARNING: Insecure. Allows SSH from anywhere.
+
+Conditions:
+  IsProd: !Equals [!Ref EnvironmentName, "prod"]
 
 Resources:
   WebAppAssets:
@@ -66,7 +74,7 @@ Resources:
         - IpProtocol: tcp
           FromPort: 22
           ToPort: 22
-          CidrIp: 0.0.0.0/0
+          CidrIp: !Ref MyIpAddress
       Tags:
         - Key: Environment
           Value: !Ref EnvironmentName
@@ -96,7 +104,7 @@ Resources:
   WebAppServer:
     Type: AWS::EC2::Instance
     Properties:
-      InstanceType: t2.micro
+      InstanceType: t3.micro
       ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}'
       KeyName: !Ref WebAppServerKeyName
       SecurityGroupIds:
@@ -120,11 +128,10 @@ Resources:
       EngineVersion: '8.0.36'
       AllocatedStorage: '20'
       StorageType: gp2
-      MultiAZ: true
+      MultiAZ: !If [IsProd, true, false]
       DBName: !Sub '${ProjectName}${EnvironmentName}DB'
-      # -- Using parameters directly instead of a secret --
       MasterUsername: !Ref DBMasterUsername
-      MasterUserPassword: !Ref DBMasterPassword
+      MasterUserPassword: '{{resolve:secretsmanager:MyProdDbCredentials:SecretString:password}}'
       VPCSecurityGroups:
         - !GetAtt WebAppDatabaseSecurityGroup.GroupId
       PubliclyAccessible: false
@@ -165,3 +172,5 @@ Outputs:
   WebAppDatabasePort:
     Description: "Port for the RDS database"
     Value: !GetAtt WebAppDatabase.Endpoint.Port
+    Export:
+      Name: !Sub "${AWS::StackName}-WebAppDatabasePort"
