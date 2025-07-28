@@ -16,6 +16,14 @@ Parameters:
     Type: String
     Description: Custom domain name
     Default: tap-us-west-2.turing229221.com.
+  DBMasterPassword:
+    Type: String
+    Description: Database master user password
+    NoEcho: true
+    MinLength: 8
+    MaxLength: 128
+    AllowedPattern: '^[a-zA-Z0-9!@#$%^&*()_+-=\[\]{}|;:,.<>?]*$'
+    ConstraintDescription: Must be 8-128 characters with letters, numbers, and special characters
 
 Resources:
   # VPC & Networking
@@ -260,8 +268,7 @@ Resources:
       AllocatedStorage: 20
       Engine: mysql
       MasterUsername: admin
-      MasterUserPassword: >
-       '{{resolve:secretsmanager:your-secret-name:SecretString:DBMasterPassword}}'
+      MasterUserPassword: !Ref DBMasterPassword
       MultiAZ: true
       VPCSecurityGroups: [!Ref RDSSecurityGroup]
       DBSubnetGroupName: !Ref DBSubnetGroup
