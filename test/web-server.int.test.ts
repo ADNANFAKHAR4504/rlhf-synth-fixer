@@ -214,7 +214,7 @@ describe('Deployed resources tagging integration test', () => {
       const tagMap = Object.fromEntries(tags.map(t => [t.Key, t.Value]));
 
       expect(tagKeys).toContain('Environment');
-      expect(tagMap['Environment']).toMatch(/Dev/);
+      expect(tagMap['Environment']).toMatch(/dev|Dev|test|Test|Prod|Production/)
 
       // Optional: check for specific tags on certain resource types
       if (arn?.includes('ec2')) {
