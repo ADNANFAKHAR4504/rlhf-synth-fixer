@@ -55,6 +55,5 @@ ProductionPrivateSubnetIDs
 ProductionAutoScalingGroupName
 
 Expected Output:
-
 The final deliverable should be a single, self-contained block of YAML code representing the complete CloudFormation template. The template must be well-commented, adhere to AWS best practices, and pass all CloudFormation validation checks.
 ```
