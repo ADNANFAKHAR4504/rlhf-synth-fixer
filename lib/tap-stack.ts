@@ -21,7 +21,7 @@ export class TapStack extends TerraformStack {
     super(scope, id);
 
     const environmentSuffix = props?.environmentSuffix || 'dev';
-    const awsRegion = props?.awsRegion || 'us-east-1';
+    const awsRegion = 'us-west-2'; // hardcoded to us-west-2 as per task requirement
     const stateBucketRegion = props?.stateBucketRegion || 'us-east-1';
     const stateBucket = props?.stateBucket || 'iac-rlhf-tf-states';
     const defaultTags = props?.defaultTags ? [props.defaultTags] : [];
@@ -44,8 +44,6 @@ export class TapStack extends TerraformStack {
     this.addOverride('terraform.backend.s3.use_lockfile', true);
 
     // ? Add your stack instantiations here
-    // add override to use us-west-2 region - specific to this task
-    this.addOverride('provider.aws.region', 'us-west-2');
     new SecureVpcStack(this, `secure-vpc-stack-${environmentSuffix}`);
   }
 }
