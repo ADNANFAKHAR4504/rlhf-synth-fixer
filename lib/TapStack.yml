@@ -35,8 +35,8 @@ Parameters:
     ConstraintDescription: Must be a valid EC2 instance type.
   KeyPairName:
     Description: Name of an existing EC2 KeyPair to enable SSH access to the instances (optional).
-    Type: String # Changed type to String to allow empty default
-    Default: '' # Allows deployment without an existing KeyPair
+    Type: String
+    Default: ''
     ConstraintDescription: Must be the name of an existing EC2 KeyPair, or leave empty for no SSH access.
   SSHLocation:
     Description: The IP address range that can be used to SSH to the EC2 instances.
@@ -109,7 +109,7 @@ Resources:
     Properties:
       VpcId: !Ref WebAppVPC
       CidrBlock: !Ref PublicSubnet1CIDR
-      AvailabilityZone: !Select [ 0, !GetAZs '' ] # Select first AZ
+      AvailabilityZone: !Select [ 0, !GetAZs '' ]
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -120,7 +120,7 @@ Resources:
     Properties:
       VpcId: !Ref WebAppVPC
       CidrBlock: !Ref PublicSubnet2CIDR
-      AvailabilityZone: !Select [ 1, !GetAZs '' ] # Select second AZ
+      AvailabilityZone: !Select [ 1, !GetAZs '' ]
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -131,7 +131,7 @@ Resources:
     Properties:
       VpcId: !Ref WebAppVPC
       CidrBlock: !Ref PrivateSubnet1CIDR
-      AvailabilityZone: !Select [ 0, !GetAZs '' ] # Select first AZ
+      AvailabilityZone: !Select [ 0, !GetAZs '' ]
       Tags:
         - Key: Name
           Value: WebAppPrivateSubnet1
@@ -141,7 +141,7 @@ Resources:
     Properties:
       VpcId: !Ref WebAppVPC
       CidrBlock: !Ref PrivateSubnet2CIDR
-      AvailabilityZone: !Select [ 1, !GetAZs '' ] # Select second AZ
+      AvailabilityZone: !Select [ 1, !GetAZs '' ]
       Tags:
         - Key: Name
           Value: WebAppPrivateSubnet2
@@ -186,7 +186,7 @@ Resources:
     Type: AWS::EC2::NatGateway
     Properties:
       AllocationId: !GetAtt NatGatewayEIP.AllocationId
-      SubnetId: !Ref PublicSubnet1 # Place NAT Gateway in one of the public subnets
+      SubnetId: !Ref PublicSubnet1
       Tags:
         - Key: Name
           Value: WebAppNatGateway
@@ -280,11 +280,11 @@ Resources:
       SecurityGroupIngress:
         # Allow MySQL/PostgreSQL (default 3306/5432) from EC2 instances
         - IpProtocol: tcp
-          FromPort: 3306 # Common for MySQL
+          FromPort: 3306
           ToPort: 3306
           SourceSecurityGroupId: !GetAtt EC2SecurityGroup.GroupId
         - IpProtocol: tcp
-          FromPort: 5432 # Common for PostgreSQL
+          FromPort: 5432
           ToPort: 5432
           SourceSecurityGroupId: !GetAtt EC2SecurityGroup.GroupId
       Tags:
@@ -338,12 +338,12 @@ Resources:
     Properties:
       LaunchTemplateName: WebAppLaunchTemplate
       LaunchTemplateData:
-        ImageId: "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}" # Dynamically fetch latest Amazon Linux 2 AMI using dynamic reference (corrected to ssm)
-        # Conditionally include KeyName based on whether KeyPairName parameter is provided
-        !If
+        ImageId: "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}"
+        InstanceType: !Ref InstanceType
+        KeyName: !If # Corrected placement for !If to directly control KeyName value
           - HasKeyPair
-          - KeyName: !Ref KeyPairName
-          - !Ref "AWS::NoValue" # Use AWS::NoValue if KeyPairName is empty
+          - !Ref KeyPairName
+          - !Ref "AWS::NoValue"
         SecurityGroupIds:
           - !GetAtt EC2SecurityGroup.GroupId
         UserData:
@@ -401,14 +401,14 @@ Resources:
     Properties:
       DBInstanceClass: !Ref DBInstanceClass
       AllocatedStorage: !Ref DBAllocatedStorage
-      Engine: mysql # Can be changed to postgres, aurora, etc.
+      Engine: mysql
       MasterUsername: !Ref DBUsername
-      MasterUserPassword: "{{resolve:secretsmanager:WebAppDBPasswordSecret:SecretString}}" # Hardcoded secret name to satisfy linter
+      MasterUserPassword: "{{resolve:secretsmanager:WebAppDBPasswordSecret:SecretString}}"
       DBSubnetGroupName: !Ref DBSubnetGroup
       VPCSecurityGroups:
         - !GetAtt DBSecurityGroup.GroupId
-      MultiAZ: true # Enable Multi-AZ for high availability
-      PubliclyAccessible: false # Database should not be publicly accessible
+      MultiAZ: true
+      PubliclyAccessible: false
       StorageType: gp2
       BackupRetentionPeriod: 7
       PreferredBackupWindow: "03:00-04:00"
