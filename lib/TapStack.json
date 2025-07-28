@@ -1,101 +1,98 @@
-{
   "AWSTemplateFormatVersion": "2010-09-09",
   "Description": "CloudFormation template to set up a development environment in us-west-2 using an existing VPC and Security Group. Deploys a public S3 bucket (with public-read policy and CloudWatch logging), a t2.micro EC2 instance (EIP, S3 read-only IAM role, monitored by CloudWatch Alarm), with all resources tagged and required parameters exposed for future updates.",
   "Parameters": {
     "BucketName": {
       "Description": "Name for the public S3 bucket (must be globally unique)",
-      "Type": "String",
       "Default": "my-dev-public-bucket-123456"
     },
+    "EC2KeyName": {
       "Description": "Name of an existing EC2 KeyPair for SSH access (leave empty if no SSH access needed)",
       "Type": "String",
       "Default": "my-dev-keypair",
       "AllowedPattern": "^$|^[a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9]$",
       "ConstraintDescription": "Must be empty or a valid EC2 KeyPair name"
     },
-    "SubnetId": {
-      "Description": "Subnet ID within the existing VPC for the EC2 instance",
-      "Type": "String",
-      "Default": "subnet-03d1b6cd1d8b40c33"
-    },
-    "SecurityGroupId": {
-      "Description": "Security Group ID for the EC2 instance",
-      "Type": "String",
-      "Default": "sg-02a873ae7a82d01d7"
-    }
+    "Description": "Subnet ID within the existing VPC for the EC2 instance",
+    "Type": "String",
+    "Default": "subnet-03d1b6cd1d8b40c33"
   },
-  "Conditions": {
-    "HasKeyName": {
-      "Fn::Not": [
-        {
-          "Fn::Equals": [
-            {
-              "Ref": "EC2KeyName"
-            },
-            ""
-          ]
-        }
-      ]
-    }
-  },
-  "Resources": {
-    "S3AccessLogBucket": {
-      "Type": "AWS::S3::Bucket",
-      "Properties": {
-        "BucketName": {
-          "Fn::Sub": "${BucketName}-logs"
-        },
-        "Tags": [
+  "Description": "Security Group ID for the EC2 instance",
+  "Type": "String",
+  "Default": "sg-02a873ae7a82d01d7""Parameters": {}
+},
+"Conditions": {
+  "HasKeyName": {
+    "Fn::Not": [
+      "Parameters": {
+        "Parameters": {
           {
-            "Key": "Environment",
-            "Value": "Development"
-          }
-        ]
-      }
-    },
-    "PublicS3Bucket": {
-      "Type": "AWS::S3::Bucket",
-      "Properties": {
-        "BucketName": {
-          "Ref": "BucketName"
-        },
-        "LoggingConfiguration": {
-          "DestinationBucketName": {
-            "Ref": "S3AccessLogBucket"
-          },
-          "LogFilePrefix": "access-logs/"
-        },
-        "PublicAccessBlockConfiguration": {
-          "BlockPublicAcls": false,
-          "BlockPublicPolicy": false,
-          "IgnorePublicAcls": false,
-          "RestrictPublicBuckets": false
-        },
-        "Tags": [
-          {
-            "Key": "Environment",
-            "Value": "Development"
-          }
-        ]
-      }
-    },
-    "S3ReadOnlyInstanceRole": {
-      "Type": "AWS::IAM::Role",
-      "Properties": {
-        "AssumeRolePolicyDocument": {
-          "Version": "2012-10-17",
-          "Statement": [
-            {
-              "Effect": "Allow",
-              "Principal": {
-                "Service": "ec2.amazonaws.com"
+            "Fn::Equals": [
+              {
+                "Ref": "EC2KeyName"
               },
-              "Action": "sts:AssumeRole"
+              ""
+            ]
+          }
+        ]
+      }
+    },
+    "Resources": {
+      "S3AccessLogBucket": {
+        "Type": "AWS::S3::Bucket",
+        "Properties": {
+          "BucketName": {
+            "Fn::Sub": "${BucketName}-logs"
+          },
+          "Tags": [
+            {
+              "Key": "Environment",
+              "Value": "Development"
             }
           ]
-        },
-        "Path": "/",
-        "Policies": [
+        }
+      },
+      "PublicS3Bucket": {
+        "Type": "AWS::S3::Bucket",
+        "Properties": {
+          "BucketName": {
+            "Ref": "BucketName"
+          },
+          "LoggingConfiguration": {
+            "DestinationBucketName": {
+              "Ref": "S3AccessLogBucket"
+            },
+            "LogFilePrefix": "access-logs/"
+          },
+          "PublicAccessBlockConfiguration": {
+            "BlockPublicAcls": false,
+            "BlockPublicPolicy": false,
+            "IgnorePublicAcls": false,
+            "RestrictPublicBuckets": false
+          },
+          "Tags": [
+            {
+              "Key": "Environment",
+              "Value": "Development"
+            }
+          ]
+        }
+      },
+      "S3ReadOnlyInstanceRole": {
+        "Type": "AWS::IAM::Role",
+        "Properties": {
+          "AssumeRolePolicyDocument": {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Effect": "Allow",
+                "Principal": {
+                  "Service": "ec2.amazonaws.com"
+                },
+                "Action": "sts:AssumeRole"
+              }
+            ]
+          },
+          "Path": "/",
           {
             "PolicyName": "S3ReadOnlyAccess",
             "PolicyDocument": {
@@ -112,135 +109,136 @@
         ],
         "Tags": [
           {
-            "Key": "Environment",
-            "Value": "Development"
-          }
-        ]
-      }
-    },
-    "S3ReadOnlyInstanceProfile": {
-      "Type": "AWS::IAM::InstanceProfile",
-      "Properties": {
-        "Path": "/",
-        "Roles": [
-          {
-            "Ref": "S3ReadOnlyInstanceRole"
-          }
-        ]
-      }
-    },
-    "EC2EIP": {
-      "Type": "AWS::EC2::EIP",
-      "Properties": {
-        "Domain": "vpc",
-        "Tags": [
-          {
-            "Key": "Environment",
-            "Value": "Development"
-          }
-        ]
-      }
-    },
-    "DevInstance": {
-      "Type": "AWS::EC2::Instance",
-      "Properties": {
-        "InstanceType": "t2.micro",
-        "KeyName": {
-          "Fn::If": [
-            "HasKeyName",
-            {
-              "Ref": "EC2KeyName"
-            },
-            {
-              "Ref": "AWS::NoValue"
+            "EC2KeyName": {
+              "Key": "Environment",
+              "Value": "Development"
             }
           ]
-        },
-        "ImageId": "ami-0a70b9d193ae8a799",
-        "NetworkInterfaces": [
-          {
-            "AssociatePublicIpAddress": true,
-            "DeviceIndex": 0,
-            "SubnetId": {
-              "Ref": "SubnetId"
-            },
-            "GroupSet": [
+        }
+      },
+      "S3ReadOnlyInstanceProfile": {
+        "Type": "AWS::IAM::InstanceProfile",
+        "Properties": {
+          "Path": "/",
+          "Roles": [
+            {
+              "Ref": "S3ReadOnlyInstanceRole"
+            }
+          ]
+        }
+      },
+      "EC2EIP": {
+        "Type": "AWS::EC2::EIP",
+        "Properties": {
+          "Domain": "vpc",
+          "Tags": [
+            {
+              "Key": "Environment",
+              "Value": "Development"
+            }
+          ]
+        }
+      },
+      "DevInstance": {
+        "Type": "AWS::EC2::Instance",
+        "Properties": {
+          "InstanceType": "t2.micro",
+          "KeyName": {
+            "Fn::If": [
+              "HasKeyName",
               {
-                "Ref": "SecurityGroupId"
+                "Ref": "EC2KeyName"
+              },
+              {
+                "Ref": "AWS::NoValue"
               }
             ]
-          }
-        ],
-        "IamInstanceProfile": {
-          "Ref": "S3ReadOnlyInstanceProfile"
-        },
-        "Tags": [
-          {
-            "Key": "Environment",
-            "Value": "Development"
-          }
-        ]
-      }
-    },
-    "EIPAssociation": {
-      "Type": "AWS::EC2::EIPAssociation",
-      "Properties": {
-        "AllocationId": {
-          "Fn::GetAtt": [
-            "EC2EIP",
-            "AllocationId"
+          },
+          "ImageId": "ami-0a70b9d193ae8a799",
+          "NetworkInterfaces": [
+            {
+              "AssociatePublicIpAddress": true,
+              "DeviceIndex": 0,
+              "SubnetId": {
+                "Ref": "SubnetId"
+              },
+              "GroupSet": [
+                {
+                  "Ref": "SecurityGroupId"
+                }
+              ]
+            }
+          ],
+          "IamInstanceProfile": {
+            "Ref": "S3ReadOnlyInstanceProfile"
+          },
+          "Tags": [
+            {
+              "Key": "Environment",
+              "Value": "Development"
+            }
           ]
-        },
-        "InstanceId": {
-          "Ref": "DevInstance"
+        }
+      },
+      "EIPAssociation": {
+        "Type": "AWS::EC2::EIPAssociation",
+        "Properties": {
+          "AllocationId": {
+            "Fn::GetAtt": [
+              "EC2EIP",
+              "AllocationId"
+            ]
+          },
+          "InstanceId": {
+            "Ref": "DevInstance"
+          }
+        }
+      },
+      "CPUAlarmHigh": {
+        "Type": "AWS::CloudWatch::Alarm",
+        "Properties": {
+          "AlarmDescription": "Alarm if CPU > 80% for 5 consecutive minutes",
+          "Namespace": "AWS/EC2",
+          "MetricName": "CPUUtilization",
+          "Dimensions": [
+            {
+              "Name": "InstanceId",
+              "Value": {
+                "Ref": "DevInstance"
+              }
+            }
+          ],
+          "Statistic": "Average",
+          "Period": 60,
+          "EvaluationPeriods": 5,
+          "Threshold": 80,
+          "ComparisonOperator": "GreaterThanThreshold",
+          "AlarmActions": [],
+          "Tags": [
+            {
+              "Key": "Environment",
+              "Value": "Development"
+            }
+          ]
         }
       }
     },
-    "CPUAlarmHigh": {
-      "Type": "AWS::CloudWatch::Alarm",
-      "Properties": {
-        "AlarmDescription": "Alarm if CPU > 80% for 5 consecutive minutes",
-        "Namespace": "AWS/EC2",
-        "MetricName": "CPUUtilization",
-        "Dimensions": [
-          {
-            "Name": "InstanceId",
-            "Value": {
-              "Ref": "DevInstance"
-            }
-          }
-        ],
-        "Statistic": "Average",
-        "Period": 60,
-        "EvaluationPeriods": 5,
-        "Threshold": 80,
-        "ComparisonOperator": "GreaterThanThreshold",
-        "AlarmActions": [],
-        "Tags": [
-          {
-            "Key": "Environment",
-            "Value": "Development"
-          }
-        ]
+    "Outputs": {
+      "S3BucketName": {
+        "Description": "Name of the public S3 bucket",
+        "Value": {
+          "Ref": "PublicS3Bucket"
+        }
+      },
+      "EC2PublicIP": {
+        "Description": "Public IP of the EC2 instance",
+        "Value": {
+          "Ref": "EC2EIP"
+        }
+      },
+      "Reminder": {
+        "Description": "Note: S3 bucket public access policy removed due to account-level Block Public Access settings.",
+        "Value": "You must manually configure S3 bucket public access and verify Security Group allows SSH from 203.0.113.0/24."
       }
-    }
-  },
-  "Outputs": {
-    "S3BucketName": {
-      "Description": "Name of the public S3 bucket",
-      "Value": {
-        "Ref": "PublicS3Bucket"
-      }
-    },
-    "EC2PublicIP": {
-      "Description": "Public IP of the EC2 instance",
-      "Value": {
-        "Ref": "EC2EIP"
-      }
-    },
-    "Reminder": {
-      "Description": "Note: S3 bucket public access policy removed due to account-level Block Public Access settings.",
-      "Value": "You must manually configure S3 bucket public access and verify Security Group allows SSH from 203.0.113.0/24."
     }
   }
-}
