@@ -119,6 +119,14 @@ Outputs:
     Description: Lambda ARN
     Value: !GetAtt LambdaFunction.Arn
 
+  LambdaFunctionName:
+    Description: The name of the Lambda function
+    Value: !Ref LambdaFunctionName
+
+  LambdaExecutionRoleArn:
+    Description: The ARN of the IAM Role assumed by Lambda
+    Value: !GetAtt LambdaExecutionRole.Arn
+
   BucketName:
     Description: The name of the S3 bucket # This output exists and references the S3BucketName parameter
     Value: !Ref S3BucketName
