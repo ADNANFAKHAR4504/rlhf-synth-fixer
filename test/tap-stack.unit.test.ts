@@ -120,7 +120,7 @@ describe('CloudFormation Template Validation', () => {
 
     test('LambdaFunction should be of type AWS::Lambda::Function', () => {
       const lambdaFunction = template.Resources.LambdaFunction;
-      expect(lambdaFunction.Type).toBe('AWS::Lambda::Functio'); // This still has a typo 'Functio' instead of 'Function'
+      expect(lambdaFunction.Type).toBe('AWS::Lambda::Function');
     });
 
     test('LambdaFunction should use nodejs22.x runtime', () => {
