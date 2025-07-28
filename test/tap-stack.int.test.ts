@@ -11,7 +11,8 @@ import {
 } from '@aws-sdk/client-rds';
 import { 
   ElasticLoadBalancingV2Client, 
-  DescribeLoadBalancersCommand 
+  DescribeLoadBalancersCommand,
+  DescribeLoadBalancerAttributesCommand
 } from '@aws-sdk/client-elastic-load-balancing-v2';
 import { 
   S3Client, 
@@ -214,8 +215,12 @@ describe('TapStack Integration Tests', () => {
       expect(alb.Scheme).toBe('internet-facing');
       expect(alb.State?.Code).toBe('active');
       
-      // Check access logging is enabled
-      const accessLogsEnabled = alb.LoadBalancerAttributes?.find(attr => 
+      // Check access logging is enabled using describe attributes command
+      const attributesResponse = await elbv2Client.send(new DescribeLoadBalancerAttributesCommand({
+        LoadBalancerArn: alb.LoadBalancerArn
+      }));
+      
+      const accessLogsEnabled = attributesResponse.Attributes?.find((attr: any) => 
         attr.Key === 'access_logs.s3.enabled'
       );
       expect(accessLogsEnabled?.Value).toBe('true');

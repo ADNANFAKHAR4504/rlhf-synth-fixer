@@ -324,7 +324,7 @@ describe('TapStack', () => {
       primaryTemplate.hasOutput('DatabaseClusterIduseast1', {});
       
       // Secondary stack should not have global database output
-      secondaryTemplate.findOutputs('DatabaseClusterIdeuwest1').length === 0;
+      expect(Object.keys(secondaryTemplate.findOutputs('DatabaseClusterIdeuwest1')).length).toBe(0);
       
       // Both should have API Gateway outputs (testing if (this.apiGateway) branch)
       primaryTemplate.hasOutput('ApiGatewayUrluseast1', {});
