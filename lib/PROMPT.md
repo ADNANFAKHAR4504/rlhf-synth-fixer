@@ -1,5 +1,5 @@
 You are tasked with setting up a development environment within AWS using CloudFormation.
-All resources must be created in the us-west-2 region, within the existing VPC vpc-12345 and using the existing Security Group sg-67890.
+All resources must be created in the us-east-1 region, within the existing VPC vpc-12345 and using the existing Security Group sg-67890.
 Your CloudFormation template must fulfill the following requirements:
 
 Parameterize at least two values in the template to allow future updates.

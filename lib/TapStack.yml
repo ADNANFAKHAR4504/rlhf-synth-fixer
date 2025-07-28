@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: >
-  CloudFormation template to set up a development environment in us-west-2 using an existing VPC and Security Group.
+  CloudFormation template to set up a development environment in us-east-1 using the provided VPC, Subnet, Security Group, and Key Pair.
   Deploys a public S3 bucket (with public-read policy and CloudWatch logging), a t2.micro EC2 instance (EIP, S3 read-only IAM role, monitored by CloudWatch Alarm),
   with all resources tagged and required parameters exposed for future updates.
 
@@ -9,19 +9,20 @@ Parameters:
     Description: Name for the public S3 bucket (must be globally unique)
     Type: String
     Default: my-dev-public-bucket-123456
-    Description: Name of an existing EC2 KeyPair for SSH access (leave empty if no SSH access needed)
+  EC2KeyName:
+    Description: Name of an existing EC2 KeyPair for SSH access
     Type: String
-    Default: my-dev-keypair
+    Default: iac-rlhf-aws-trainer-instance
     AllowedPattern: "^$|^[a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9]$"
     ConstraintDescription: Must be empty or a valid EC2 KeyPair name
   SubnetId:
     Description: Subnet ID within the existing VPC for the EC2 instance
     Type: String
-    Default: subnet-03d1b6cd1d8b40c33
+    Default: subnet-0e83114b417d0c5e1
   SecurityGroupId:
     Description: Security Group ID for the EC2 instance
     Type: String
-    Default: sg-02a873ae7a82d01d7
+    Default: sg-0902318027a68026f
 
 Conditions:
   HasKeyName: !Not [!Equals [!Ref EC2KeyName, ""]]
@@ -107,7 +108,7 @@ Resources:
     Properties:
       InstanceType: t2.micro
       KeyName: !If [HasKeyName, !Ref EC2KeyName, !Ref "AWS::NoValue"]
-      ImageId: ami-0a70b9d193ae8a799  # Amazon Linux 2023 for us-west-2 (update as needed)
+      ImageId: ami-053b0d53c279acc90  # Amazon Linux 2023 for us-east-1
       NetworkInterfaces:
         - AssociatePublicIpAddress: true
           DeviceIndex: 0
