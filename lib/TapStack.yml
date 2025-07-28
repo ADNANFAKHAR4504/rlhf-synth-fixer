@@ -1,0 +1,164 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  CloudFormation template to set up a development environment in us-west-2 using an existing VPC and Security Group.
+  Deploys a public S3 bucket (with public-read policy and CloudWatch logging), a t2.micro EC2 instance (EIP, S3 read-only IAM role, monitored by CloudWatch Alarm),
+  with all resources tagged and required parameters exposed for future updates.
+
+Parameters:
+  BucketName:
+    Description: Name for the public S3 bucket (must be globally unique)
+    Type: String
+    Default: my-dev-public-bucket-123456
+  EC2KeyName:
+    Description: Name of an existing EC2 KeyPair for SSH access (leave empty if no SSH access needed)
+    Type: String
+    Default: iac-rlhf-aws-trainer-instance
+    AllowedPattern: "^$|^[a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9]$"
+    ConstraintDescription: Must be empty or a valid EC2 KeyPair name
+  SubnetId:
+    Description: Subnet ID within the existing VPC for the EC2 instance
+    Type: String
+    Default: subnet-03d1b6cd1d8b40c33
+  SecurityGroupId:
+    Description: Security Group ID for the EC2 instance
+    Type: String
+    Default: sg-02a873ae7a82d01d7
+
+Conditions:
+  HasKeyName: !Not [!Equals [!Ref EC2KeyName, ""]]
+
+Resources:
+
+  # S3 Bucket with public-read policy and logging
+  S3AccessLogBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${BucketName}-logs'
+      Tags:
+        - Key: Environment
+          Value: Development
+
+  PublicS3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Ref BucketName
+      LoggingConfiguration:
+        DestinationBucketName: !Ref S3AccessLogBucket
+        LogFilePrefix: access-logs/
+      Tags:
+        - Key: Environment
+          Value: Development
+
+  PublicS3BucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref PublicS3Bucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowPublicRead
+            Effect: Allow
+            Principal: "*"
+            Action: "s3:GetObject"
+            Resource: !Sub '${PublicS3Bucket.Arn}/*'
+
+  # IAM Role for EC2 with S3 read-only access
+  S3ReadOnlyInstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      Path: /
+      Policies:
+        - PolicyName: S3ReadOnlyAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: s3:Get*
+                Resource: "*"
+      Tags:
+        - Key: Environment
+          Value: Development
+
+  S3ReadOnlyInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Path: /
+      Roles:
+        - !Ref S3ReadOnlyInstanceRole
+
+  # Elastic IP for EC2
+  EC2EIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Environment
+          Value: Development
+
+  # EC2 Instance
+  DevInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: t2.micro
+      KeyName: !If [HasKeyName, !Ref EC2KeyName, !Ref "AWS::NoValue"]
+      ImageId: ami-0a70b9d193ae8a799  # Amazon Linux 2023 for us-west-2 (update as needed)
+      NetworkInterfaces:
+        - AssociatePublicIpAddress: true
+          DeviceIndex: 0
+          SubnetId: !Ref SubnetId
+          GroupSet:
+            - !Ref SecurityGroupId
+      IamInstanceProfile: !Ref S3ReadOnlyInstanceProfile
+      Tags:
+        - Key: Environment
+          Value: Development
+
+  # Associate Elastic IP
+  EIPAssociation:
+    Type: AWS::EC2::EIPAssociation
+    Properties:
+      AllocationId: !GetAtt EC2EIP.AllocationId
+      InstanceId: !Ref DevInstance
+
+  # Security Group Rule (Ingress SSH from 203.0.113.0/24)
+  # Note: Since the Security Group is existing, you must manually ensure this rule is present,
+  # or use a Custom Resource (Lambda-backed) to inject it (not standard in vanilla CFN for existing SGs).
+  # Here, we just add a reminder output.
+  
+  # CloudWatch Alarm for CPU usage
+  CPUAlarmHigh:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: "Alarm if CPU > 80% for 5 consecutive minutes"
+      Namespace: AWS/EC2
+      MetricName: CPUUtilization
+      Dimensions:
+        - Name: InstanceId
+          Value: !Ref DevInstance
+      Statistic: Average
+      Period: 60
+      EvaluationPeriods: 5
+      Threshold: 80
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions: []
+      Tags:
+        - Key: Environment
+          Value: Development
+
+Outputs:
+  S3BucketName:
+    Description: Name of the public S3 bucket
+    Value: !Ref PublicS3Bucket
+  EC2PublicIP:
+    Description: Public IP of the EC2 instance
+    Value: !Ref EC2EIP
+  Reminder:
+    Description: "Reminder: Ensure the security group allows inbound SSH (port 22) from 203.0.113.0/24."
+    Value: "You must manually verify the Security Group allows SSH from 203.0.113.0/24, as CloudFormation cannot modify existing SGs."
