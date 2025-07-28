@@ -34,10 +34,10 @@ Parameters:
       - t3.large
     ConstraintDescription: Must be a valid EC2 instance type.
   KeyPairName:
-    Description: Name of an existing EC2 KeyPair to enable SSH access to the instances.
-    Type: AWS::EC2::KeyPair::KeyName
-    Default: '' # Added a default empty string to allow deployment without explicit input
-    ConstraintDescription: Must be the name of an existing EC2 KeyPair. If left empty, SSH access will not be possible.
+    Description: Name of an existing EC2 KeyPair to enable SSH access to the instances (optional).
+    Type: String # Changed type to String to allow empty default
+    Default: '' # Allows deployment without an existing KeyPair
+    ConstraintDescription: Must be the name of an existing EC2 KeyPair, or leave empty for no SSH access.
   SSHLocation:
     Description: The IP address range that can be used to SSH to the EC2 instances.
     Type: String
@@ -75,6 +75,9 @@ Parameters:
     MinValue: 1
     MaxValue: 65535
     ConstraintDescription: Must be a valid port number (1-65535).
+
+Conditions:
+  HasKeyPair: !Not [!Equals [!Ref KeyPairName, '']]
 
 Resources:
   # VPC and Networking
@@ -336,8 +339,11 @@ Resources:
       LaunchTemplateName: WebAppLaunchTemplate
       LaunchTemplateData:
         ImageId: "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}" # Dynamically fetch latest Amazon Linux 2 AMI using dynamic reference (corrected to ssm)
-        InstanceType: !Ref InstanceType
-        KeyName: !Ref KeyPairName
+        # Conditionally include KeyName based on whether KeyPairName parameter is provided
+        !If
+          - HasKeyPair
+          - KeyName: !Ref KeyPairName
+          - !Ref "AWS::NoValue" # Use AWS::NoValue if KeyPairName is empty
         SecurityGroupIds:
           - !GetAtt EC2SecurityGroup.GroupId
         UserData:
