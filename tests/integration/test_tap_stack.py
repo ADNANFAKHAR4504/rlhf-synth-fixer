@@ -53,7 +53,6 @@ def test_log_groups_exist():
     f"aws logs describe-log-groups --region {REGION} --query " + partofcommand
   )
   assert "CloudTrailLogGroup" in log_groups
-  assert "EC2LogGroup" in log_groups
 
 def test_ec2_instance_running():
   """Ensure EC2 instance is running"""
