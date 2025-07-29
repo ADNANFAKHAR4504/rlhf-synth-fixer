@@ -275,4 +275,208 @@ describe('TapStack CloudFormation Integration Tests', () => {
     const alarm = template.Resources.HighCPUAlarm;
     expect(alarm.Properties.AlarmActions).toContain('NotificationTopic');
   });
+
+  // Tests addressing review comments - IAM roles and policies
+  it('should configure IAM role for EC2 instances with proper policies', () => {
+    const ec2Role = template.Resources.EC2Role;
+    expect(ec2Role).toBeDefined();
+    expect(ec2Role.Type).toBe('AWS::IAM::Role');
+    
+    // Verify assume role policy for EC2
+    expect(ec2Role.Properties.AssumeRolePolicyDocument).toBeDefined();
+    const assumePolicy = ec2Role.Properties.AssumeRolePolicyDocument;
+    expect(assumePolicy.Statement[0].Principal.Service).toBe('ec2.amazonaws.com');
+    expect(assumePolicy.Statement[0].Action).toBe('sts:AssumeRole');
+    
+    // Verify managed policies are attached
+    expect(ec2Role.Properties.ManagedPolicyArns).toBeDefined();
+    expect(ec2Role.Properties.ManagedPolicyArns).toContain('arn:aws:iam::aws:policy/AmazonSSMReadOnlyAccess');
+    expect(ec2Role.Properties.ManagedPolicyArns).toContain('arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess');
+    
+    // Verify environment tagging
+    expect(ec2Role.Properties.Tags).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ Key: 'Environment' })
+      ])
+    );
+  });
+
+  it('should configure IAM role for Lambda with proper S3 and logging permissions', () => {
+    const lambdaRole = template.Resources.LambdaRole;
+    expect(lambdaRole).toBeDefined();
+    expect(lambdaRole.Type).toBe('AWS::IAM::Role');
+    
+    // Verify assume role policy for Lambda
+    expect(lambdaRole.Properties.AssumeRolePolicyDocument).toBeDefined();
+    const assumePolicy = lambdaRole.Properties.AssumeRolePolicyDocument;
+    expect(assumePolicy.Statement[0].Principal.Service).toBe('lambda.amazonaws.com');
+    expect(assumePolicy.Statement[0].Action).toBe('sts:AssumeRole');
+    
+    // Verify inline policies
+    expect(lambdaRole.Properties.Policies).toBeDefined();
+    expect(lambdaRole.Properties.Policies).toHaveLength(1);
+    
+    const s3Policy = lambdaRole.Properties.Policies[0];
+    expect(s3Policy.PolicyName).toBe('S3Lambda');
+    
+    const policyDocument = s3Policy.PolicyDocument;
+    expect(policyDocument.Statement).toHaveLength(2);
+    
+    // Check S3 permissions
+    const s3Statement = policyDocument.Statement.find((stmt: any) => 
+      stmt.Action.includes('s3:GetObject')
+    );
+    expect(s3Statement).toBeDefined();
+    expect(s3Statement.Action).toContain('s3:GetObject');
+    expect(s3Statement.Action).toContain('s3:PutObject');
+    expect(s3Statement.Resource).toBe('*');
+    
+    // Check logging permissions
+    const logsStatement = policyDocument.Statement.find((stmt: any) => 
+      stmt.Action.includes('logs:*')
+    );
+    expect(logsStatement).toBeDefined();
+    expect(logsStatement.Action).toContain('logs:*');
+  });
+
+  it('should configure EC2 instance profile linking role to instances', () => {
+    const instanceProfile = template.Resources.EC2InstanceProfile;
+    expect(instanceProfile).toBeDefined();
+    expect(instanceProfile.Type).toBe('AWS::IAM::InstanceProfile');
+    expect(instanceProfile.Properties.Roles).toEqual(['EC2Role']);
+    
+    // Verify the launch template references the instance profile
+    const launchTemplate = template.Resources.LaunchTemplate;
+    expect(launchTemplate.Properties.LaunchTemplateData.IamInstanceProfile).toBeDefined();
+    expect(launchTemplate.Properties.LaunchTemplateData.IamInstanceProfile.Arn).toBeDefined();
+  });
+
+  // Tests for EBS volume encryption
+  it('should configure EBS volume encryption for EC2 instances', () => {
+    const launchTemplate = template.Resources.LaunchTemplate;
+    expect(launchTemplate).toBeDefined();
+    
+    const blockDeviceMappings = launchTemplate.Properties.LaunchTemplateData.BlockDeviceMappings;
+    expect(blockDeviceMappings).toBeDefined();
+    expect(blockDeviceMappings).toHaveLength(1);
+    
+    const rootVolume = blockDeviceMappings[0];
+    expect(rootVolume.DeviceName).toBe('/dev/xvda');
+    expect(rootVolume.Ebs).toBeDefined();
+    expect(rootVolume.Ebs.Encrypted).toBe(true);
+    expect(rootVolume.Ebs.VolumeType).toBe('gp3');
+    expect(rootVolume.Ebs.VolumeSize).toBe(8);
+  });
+
+  // Tests for stack-level policies beyond ASG
+  it('should verify RDS instance has proper backup and maintenance policies', () => {
+    const rds = template.Resources.RDSInstance;
+    expect(rds).toBeDefined();
+    
+    // Verify backup configuration
+    expect(rds.Properties.BackupRetentionPeriod).toBe(7);
+    expect(rds.Properties.PreferredBackupWindow).toBe('03:00-04:00');
+    expect(rds.Properties.PreferredMaintenanceWindow).toBe('sun:04:00-sun:05:00');
+    
+    // Verify deletion protection and encryption
+    expect(rds.Properties.DeletionProtection).toBe(false);
+    expect(rds.Properties.StorageEncrypted).toBe(true);
+    expect(rds.Properties.KmsKeyId).toBeDefined();
+    
+    // Verify Multi-AZ for high availability
+    expect(rds.Properties.MultiAZ).toBe(true);
+  });
+
+  // Enhanced AutoScaling tests for cost optimization
+  it('should configure AutoScaling Group for cost optimization and proper scaling', () => {
+    const asg = template.Resources.AutoScalingGroup;
+    expect(asg).toBeDefined();
+    
+    // Verify basic scaling configuration for cost optimization
+    expect(asg.Properties.MinSize).toBe(1); // Minimum instances for cost efficiency
+    expect(asg.Properties.MaxSize).toBe(5); // Reasonable maximum to prevent runaway costs
+    expect(asg.Properties.DesiredCapacity).toBeDefined(); // Should be parameterized
+    
+    // Verify launch template configuration for cost optimization
+    const launchTemplate = template.Resources.LaunchTemplate;
+    expect(launchTemplate.Properties.LaunchTemplateData.InstanceType).toBeDefined(); // Should be parameterized for cost control
+    
+    // Verify multi-AZ deployment for availability vs cost balance
+    expect(asg.Properties.VPCZoneIdentifier).toHaveLength(2);
+    
+    // Verify rolling update policy for minimal disruption
+    expect(asg.UpdatePolicy.AutoScalingRollingUpdate.MinInstancesInService).toBe(1);
+    expect(asg.UpdatePolicy.AutoScalingRollingUpdate.MaxBatchSize).toBe(1);
+    expect(asg.UpdatePolicy.AutoScalingRollingUpdate.PauseTime).toBe('PT5M');
+  });
+
+  it('should use cost-optimized instance types and storage configurations', () => {
+    const launchTemplate = template.Resources.LaunchTemplate;
+    expect(launchTemplate).toBeDefined();
+    
+    // Verify cost-optimized defaults (should be parameterized)
+    const launchTemplateData = launchTemplate.Properties.LaunchTemplateData;
+    expect(launchTemplateData.InstanceType).toBeDefined(); // Should reference parameter for t3.micro default
+    
+    // Verify cost-optimized storage
+    const blockDevice = launchTemplateData.BlockDeviceMappings[0];
+    expect(blockDevice.Ebs.VolumeType).toBe('gp3'); // More cost-effective than gp2
+    expect(blockDevice.Ebs.VolumeSize).toBe(8); // Minimal size for cost optimization
+    
+    // Verify AMI uses latest Amazon Linux (cost-effective)
+    expect(launchTemplateData.ImageId).toContain('{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}');
+  });
+
+  it('should configure KMS keys with proper rotation for security and cost balance', () => {
+    const s3KmsKey = template.Resources.S3KmsKey;
+    const rdsKmsKey = template.Resources.RDSKmsKey;
+    
+    // Verify S3 KMS key configuration
+    expect(s3KmsKey).toBeDefined();
+    expect(s3KmsKey.Type).toBe('AWS::KMS::Key');
+    expect(s3KmsKey.Properties.EnableKeyRotation).toBe(true);
+    expect(s3KmsKey.Properties.Description).toContain('S3 encryption key');
+    
+    // Verify RDS KMS key configuration
+    expect(rdsKmsKey).toBeDefined();
+    expect(rdsKmsKey.Type).toBe('AWS::KMS::Key');
+    expect(rdsKmsKey.Properties.EnableKeyRotation).toBe(true);
+    expect(rdsKmsKey.Properties.Description).toContain('RDS encryption key');
+    
+    // Verify key policies allow root access
+    [s3KmsKey, rdsKmsKey].forEach(key => {
+      expect(key.Properties.KeyPolicy.Statement[0].Principal.AWS).toContain('arn:aws:iam::${AWS::AccountId}:root');
+      expect(key.Properties.KeyPolicy.Statement[0].Action).toBe('kms:*');
+    });
+  });
+
+  it('should verify comprehensive cost optimization across all billable resources', () => {
+    // DynamoDB - pay-per-request for cost optimization
+    const dynamoDB = template.Resources.AppDynamoTable;
+    expect(dynamoDB.Properties.BillingMode).toBe('PAY_PER_REQUEST');
+    
+    // RDS - cost-optimized instance class
+    const rds = template.Resources.RDSInstance;
+    expect(rds.Properties.DBInstanceClass).toBe('db.t3.micro');
+    expect(rds.Properties.StorageType).toBe('gp3'); // More cost-effective than gp2
+    expect(rds.Properties.AllocatedStorage).toBe(20); // Minimal storage allocation
+    
+    // Lambda - appropriate timeout for cost control
+    const lambda = template.Resources.S3ProcessingLambda;
+    expect(lambda.Properties.Timeout).toBe(10); // Short timeout to prevent runaway costs
+    expect(lambda.Properties.Runtime).toBe('nodejs22.x'); // Latest runtime for efficiency
+    
+    // Verify environment-specific resource naming for cost tracking
+    const resources = ['VPC', 'S3LogBucket', 'SecureS3Bucket', 'RDSInstance', 'LaunchTemplate'];
+    resources.forEach(resourceName => {
+      const resource = template.Resources[resourceName];
+      if (resource.Properties.Tags) {
+        expect(resource.Properties.Tags).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({ Key: 'Environment' })
+          ])
+        );
+      }
+    });
+  });
 });
