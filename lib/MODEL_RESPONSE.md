@@ -1,5 +1,6 @@
 Certainly! Below is a Python CDK script that sets up a serverless HTTP endpoint using AWS API Gateway and AWS Lambda, adhering to the specified requirements.
 
+```python
 from aws_cdk import (
     aws_lambda as _lambda,
     aws_apigateway as apigw,
@@ -75,22 +76,39 @@ def handler(event, context):
 app = core.App()
 MyCompanyServerlessStack(app, "MyCompanyServerlessStack", env={'region': 'us-west-2'})
 app.synth()
-Explanation:
-Lambda Function:
-Defined using _lambda.Function with inline Python code to handle and log incoming JSON payloads.
-The handler is set to index.handler, which means the code will look for a function named handler in the index file.
-API Gateway:
-Defined using apigw.RestApi.
-A resource /myresource is added to the API root, and a POST method is configured to integrate with the Lambda function.
-IAM Role:
-An IAM role is created with basic Lambda execution permissions using iam.Role and iam.ManagedPolicy.
-Output:
-The API endpoint URL is outputted using core.CfnOutput.
-Deployment:
-Install AWS CDK:
-npm install -g aws-cdk
-Bootstrap CDK in your AWS account:
-cdk bootstrap aws://ACCOUNT-NUMBER/us-west-2
-Deploy the stack:
-cdk deploy
-This script will deploy the necessary infrastructure in the us-west-2 region, adhering to the naming conventions and requirements specified.
+```
+
+### Explanation:
+
+1. **Lambda Function**:
+   - Defined using `_lambda.Function` with inline Python code to handle and log incoming JSON payloads.
+   - The handler is set to `index.handler`, which means the code will look for a function named `handler` in the `index` file.
+
+2. **API Gateway**:
+   - Defined using `apigw.RestApi`.
+   - A resource `/myresource` is added to the API root, and a POST method is configured to integrate with the Lambda function.
+
+3. **IAM Role**:
+   - An IAM role is created with basic Lambda execution permissions using `iam.Role` and `iam.ManagedPolicy`.
+
+4. **Output**:
+   - The API endpoint URL is outputted using `core.CfnOutput`.
+
+### Deployment:
+
+1. **Install AWS CDK**:
+   ```bash
+   npm install -g aws-cdk
+   ```
+
+2. **Bootstrap CDK in your AWS account**:
+   ```bash
+   cdk bootstrap aws://ACCOUNT-NUMBER/us-west-2
+   ```
+
+3. **Deploy the stack**:
+   ```bash
+   cdk deploy
+   ```
+
+This script will deploy the necessary infrastructure in the `us-west-2` region, adhering to the naming conventions and requirements specified.
