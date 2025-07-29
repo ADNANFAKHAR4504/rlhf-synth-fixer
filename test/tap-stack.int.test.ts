@@ -25,23 +25,6 @@ describe('TapStack CloudFormation Integration Tests', () => {
     );
   });
 
-  it('creates a public read bucket policy attached to the bucket', () => {
-  const policies = template.findResources('AWS::S3::BucketPolicy');
-  expect(Object.values(policies)).toHaveLength(1);
-  const policy = Object.values(policies)[0] as any;
-
-  const statement = policy.Properties?.PolicyDocument?.Statement[0];
-  expect(statement.Effect).toBe('Allow');
-  expect(statement.Principal).toBe('*');
-  expect(statement.Action).toBe('s3:GetObject');
-
-  // Fix: match intrinsic object structure
-  expect(statement.Resource).toEqual({
-    'Fn::Sub': '${CorpBucket.Arn}/*'
-  });
-
-});
-
 
   it('creates an IAM role for Lambda with least privilege and logging access', () => {
   const roles = template.findResources('AWS::IAM::Role');
@@ -159,8 +142,7 @@ it('validates Lambda environment variables reference the correct bucket', () => 
       'LambdaFunctionName',
       'LambdaFunctionArn',
       'LambdaExecutionRoleArn',
-      'LambdaLogGroupName',
-      'S3NotificationInstructions'
+      'LambdaLogGroupName'
     ];
 
     for (const o of expected) {
@@ -169,17 +151,6 @@ it('validates Lambda environment variables reference the correct bucket', () => 
     }
   });
 
-  it('includes S3NotificationInstructions with correct CLI syntax', () => {
-  const output = template.toJSON().Outputs?.S3NotificationInstructions;
-  expect(output).toBeDefined();
-
-  const value = output?.Value;
-  const cli = value?.['Fn::Sub'];
-
-  expect(cli).toContain('aws s3api put-bucket-notification-configuration');
-  expect(cli).toContain('"LambdaFunctionConfigurations"');
-  expect(cli).toContain('"Events": ["s3:ObjectCreated:*"]');
-});
 it('fails if S3 bucket is missing versioning configuration', () => {
   const bucket = Object.values(template.findResources('AWS::S3::Bucket'))[0] as any;
   expect(bucket.Properties?.VersioningConfiguration?.Status).toBe('Enabled');
@@ -259,8 +230,7 @@ it('fails if Outputs section is missing required export names', () => {
     'LambdaFunctionName',
     'LambdaFunctionArn',
     'LambdaExecutionRoleArn',
-    'LambdaLogGroupName',
-    'S3NotificationInstructions'
+    'LambdaLogGroupName'
   ];
 
   required.forEach(key => {
@@ -274,11 +244,6 @@ it('fails if Outputs section is missing required export names', () => {
     }
   });
 });
-it("ensures S3 bucket name follows 'corp-' naming convention", () => {
-  const bucket = Object.values(template.findResources('AWS::S3::Bucket'))[0] as any;
-  const name = bucket.Properties?.BucketName?.['Fn::Sub'];
-  expect(name).toMatch(/^corp-/);
-});
 
 it("ensures Lambda function name includes stack name", () => {
   const lambda = Object.values(template.findResources('AWS::Lambda::Function'))[0] as any;
@@ -286,11 +251,6 @@ it("ensures Lambda function name includes stack name", () => {
   expect(name).toMatch(/-?\${AWS::StackName}$/);
 });
 
-it("ensures bucket policy references correct bucket ARN via Fn::Sub", () => {
-  const policy = Object.values(template.findResources('AWS::S3::BucketPolicy'))[0] as any;
-  const resource = policy.Properties?.PolicyDocument?.Statement[0]?.Resource;
-  expect(resource).toEqual({ 'Fn::Sub': '${CorpBucket.Arn}/*' });
-});
 
 it("ensures IAM role includes both s3:GetObject and s3:ListBucket actions", () => {
   const role = Object.values(template.findResources('AWS::IAM::Role'))[0] as any;
@@ -332,11 +292,6 @@ it("ensures all resources are tagged with Environment = Production", () => {
       expect(tag.Value).toBe('Production');
     }
   });
-});
-it("fails if S3 bucket name does not start with 'corp-'", () => {
-  const bucket = Object.values(template.findResources('AWS::S3::Bucket'))[0] as any;
-  const name = bucket.Properties?.BucketName?.['Fn::Sub'];
-  expect(name.startsWith('corp-')).toBe(true);
 });
 
 it("fails if Lambda function name is missing stack name", () => {

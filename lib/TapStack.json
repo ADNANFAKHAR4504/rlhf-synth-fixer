@@ -5,11 +5,28 @@
         "CorpBucket": {
             "Type": "AWS::S3::Bucket",
             "Properties": {
-                "BucketName": {
-                    "Fn::Sub": "corp-s3-assets"
-                },
+                "BucketName": "corp-s3-assets",
                 "VersioningConfiguration": {
                     "Status": "Enabled"
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "IgnorePublicAcls": true,
+                    "BlockPublicPolicy": false,
+                    "RestrictPublicBuckets": false
+                },
+                "NotificationConfiguration": {
+                    "LambdaConfigurations": [
+                        {
+                            "Event": "s3:ObjectCreated:*",
+                            "Function": {
+                                "Fn::GetAtt": [
+                                    "CorpLambdaFunction",
+                                    "Arn"
+                                ]
+                            }
+                        }
+                    ]
                 },
                 "Tags": [
                     {
@@ -41,9 +58,7 @@
                             "Effect": "Allow",
                             "Principal": "*",
                             "Action": "s3:GetObject",
-                            "Resource": {
-                                "Fn::Sub": "${CorpBucket.Arn}/*"
-                            }
+                            "Resource": "arn:aws:s3:::corp-s3-assets/*"
                         }
                     ]
                 }
@@ -86,15 +101,8 @@
                                         "s3:ListBucket"
                                     ],
                                     "Resource": [
-                                        {
-                                            "Fn::GetAtt": [
-                                                "CorpBucket",
-                                                "Arn"
-                                            ]
-                                        },
-                                        {
-                                            "Fn::Sub": "${CorpBucket.Arn}/*"
-                                        }
+                                        "arn:aws:s3:::corp-s3-assets",
+                                        "arn:aws:s3:::corp-s3-assets/*"
                                     ]
                                 }
                             ]
@@ -128,9 +136,7 @@
                 },
                 "Environment": {
                     "Variables": {
-                        "BUCKET_NAME": {
-                            "Ref": "CorpBucket"
-                        },
+                        "BUCKET_NAME": "corp-s3-assets",
                         "ENV": "Production"
                     }
                 },
@@ -169,12 +175,7 @@
                 },
                 "Action": "lambda:InvokeFunction",
                 "Principal": "s3.amazonaws.com",
-                "SourceArn": {
-                    "Fn::GetAtt": [
-                        "CorpBucket",
-                        "Arn"
-                    ]
-                },
+                "SourceArn": "arn:aws:s3:::corp-s3-assets",
                 "SourceAccount": {
                     "Ref": "AWS::AccountId"
                 }
@@ -195,12 +196,7 @@
         },
         "BucketArn": {
             "Description": "ARN of the S3 bucket",
-            "Value": {
-                "Fn::GetAtt": [
-                    "CorpBucket",
-                    "Arn"
-                ]
-            },
+            "Value": "arn:aws:s3:::corp-s3-assets",
             "Export": {
                 "Name": {
                     "Fn::Sub": "${AWS::StackName}-BucketArn"
@@ -255,12 +251,6 @@
                 "Name": {
                     "Fn::Sub": "${AWS::StackName}-LambdaLogGroupName"
                 }
-            }
-        },
-        "S3NotificationInstructions": {
-            "Description": "Manual command to configure S3 to invoke Lambda",
-            "Value": {
-                "Fn::Sub": "Run the following CLI command after deployment:\naws s3api put-bucket-notification-configuration \\\n  --bucket ${CorpBucket} \\\n  --notification-configuration '{\n    \"LambdaFunctionConfigurations\": [{\n      \"LambdaFunctionArn\": \"${CorpLambdaFunction.Arn}\",\n      \"Events\": [\"s3:ObjectCreated:*\"]\n    }]\n  }'"
             }
         }
     }

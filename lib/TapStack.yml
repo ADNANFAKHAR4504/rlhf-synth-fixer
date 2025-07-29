@@ -5,9 +5,18 @@ Resources:
   CorpBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 'corp-s3-assets'
+      BucketName: corp-s3-assets
       VersioningConfiguration:
         Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: false  # ✅ allows public bucket policy
+        RestrictPublicBuckets: false
+      NotificationConfiguration:
+        LambdaConfigurations:
+          - Event: s3:ObjectCreated:*
+            Function: !GetAtt CorpLambdaFunction.Arn
       Tags:
         - Key: Environment
           Value: Production
@@ -27,7 +36,7 @@ Resources:
             Effect: Allow
             Principal: "*"
             Action: s3:GetObject
-            Resource: !Sub '${CorpBucket.Arn}/*'
+            Resource: arn:aws:s3:::corp-s3-assets/*
 
   CorpLambdaExecutionRole:
     Type: AWS::IAM::Role
@@ -55,8 +64,8 @@ Resources:
                   - s3:GetObject
                   - s3:ListBucket
                 Resource:
-                  - !GetAtt CorpBucket.Arn
-                  - !Sub '${CorpBucket.Arn}/*'
+                  - arn:aws:s3:::corp-s3-assets
+                  - arn:aws:s3:::corp-s3-assets/*
       Tags:
         - Key: ManagedBy
           Value: CloudFormation
@@ -85,7 +94,7 @@ Resources:
           };
       Environment:
         Variables:
-          BUCKET_NAME: !Ref CorpBucket
+          BUCKET_NAME: corp-s3-assets
           ENV: Production
       Tags:
         - Key: ManagedBy
@@ -108,8 +117,8 @@ Resources:
       FunctionName: !Ref CorpLambdaFunction
       Action: lambda:InvokeFunction
       Principal: s3.amazonaws.com
-      SourceArn: !GetAtt CorpBucket.Arn
-      SourceAccount: !Ref AWS::AccountId  # ✅ REQUIRED
+      SourceArn: arn:aws:s3:::corp-s3-assets
+      SourceAccount: !Ref AWS::AccountId
 
 Outputs:
   BucketName:
@@ -120,7 +129,7 @@ Outputs:
 
   BucketArn:
     Description: ARN of the S3 bucket
-    Value: !GetAtt CorpBucket.Arn
+    Value: arn:aws:s3:::corp-s3-assets
     Export:
       Name: !Sub '${AWS::StackName}-BucketArn'
 
@@ -147,16 +156,3 @@ Outputs:
     Value: !Ref CorpLambdaLogGroup
     Export:
       Name: !Sub '${AWS::StackName}-LambdaLogGroupName'
-
-  S3NotificationInstructions:
-    Description: Manual command to configure S3 to invoke Lambda
-    Value: !Sub |
-      Run the following CLI command after deployment:
-      aws s3api put-bucket-notification-configuration \
-        --bucket ${CorpBucket} \
-        --notification-configuration '{
-          "LambdaFunctionConfigurations": [{
-            "LambdaFunctionArn": "${CorpLambdaFunction.Arn}",
-            "Events": ["s3:ObjectCreated:*"]
-          }]
-        }'
