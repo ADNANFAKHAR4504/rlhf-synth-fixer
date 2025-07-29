@@ -16,7 +16,7 @@ class TestTapStackLiveIntegration(unittest.TestCase):
 
   def setUp(self):
     """Set up integration test with live stack."""
-    self.stack_name = "tap-infra-dev"  # Your live Pulumi stack name
+    self.stack_name = "dev"  # Your live Pulumi stack name (just the env part)
     self.project_name = "tap-infra"  # Your Pulumi project name
     self.s3_client = boto3.client('s3')
 
@@ -59,14 +59,17 @@ class TestTapStackLiveIntegration(unittest.TestCase):
     )
     bucket_name = stack.outputs()["dummy_bucket_name"].value
     
-    # Get bucket tags
-    tags_response = self.s3_client.get_bucket_tagging(Bucket=bucket_name)
-    tags = {tag['Key']: tag['Value'] for tag in tags_response['TagSet']}
-    
-    # Verify expected tags
-    self.assertEqual(tags['Environment'], 'dev')
-    self.assertEqual(tags['Owner'], 'test-user')
-    self.assertEqual(tags['Project'], 'pulumi-dummy')
+    # Get bucket tags (handle case where no tags exist)
+    try:
+      tags_response = self.s3_client.get_bucket_tagging(Bucket=bucket_name)
+      tags = {tag['Key']: tag['Value'] for tag in tags_response['TagSet']}
+      
+      # Verify expected tags
+      self.assertEqual(tags['Environment'], 'dev')
+      self.assertEqual(tags['Owner'], 'test-user')
+      self.assertEqual(tags['Project'], 'pulumi-dummy')
+    except self.s3_client.exceptions.NoSuchTagSet:
+      self.fail("S3 bucket has no tags, but tags were expected")
 
 
 if __name__ == '__main__':
