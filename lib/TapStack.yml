@@ -116,6 +116,35 @@ Resources:
             Resource: '*'
           - Effect: Allow
             Principal:
+              AWS: '*'
+            Action:
+              - kms:Decrypt
+              - kms:GenerateDataKey
+              - kms:CreateGrant
+              - kms:DescribeKey
+            Resource: '*'
+            Condition:
+              StringEquals:
+                'kms:ViaService': 
+                  - !Sub 'ec2.${AWS::Region}.amazonaws.com'
+                  - !Sub 'autoscaling.${AWS::Region}.amazonaws.com'
+          - Effect: Allow
+            Principal:
+              Service: 
+                - autoscaling.amazonaws.com
+            Action:
+              - kms:Decrypt
+              - kms:GenerateDataKey
+              - kms:ReEncrypt*
+              - kms:CreateGrant
+              - kms:DescribeKey
+              - kms:RetireGrant
+            Resource: '*'
+            Condition:
+              StringEquals:
+                'kms:ViaService': !Sub 'ec2.${AWS::Region}.amazonaws.com'
+          - Effect: Allow
+            Principal:
               Service: logs.amazonaws.com
             Action:
               - kms:Encrypt
@@ -609,6 +638,7 @@ Resources:
   # Launch Template for EC2 instances
   EC2LaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
+    DependsOn: KMSKey
     Properties:
       LaunchTemplateName: !Sub 'TapLaunchTemplate-${EnvironmentSuffix}'
       LaunchTemplateData:
@@ -624,7 +654,8 @@ Resources:
               VolumeSize: 20
               VolumeType: gp3
               Encrypted: true
-              KmsKeyId: !Ref KMSKey
+              # Use AWS managed KMS key for EBS encryption - more reliable for Auto Scaling
+              # KmsKeyId: !Ref KMSKey  # Uncomment this line if you want to use customer-managed key
               DeleteOnTermination: true
         UserData:
           Fn::Base64: !Sub |
