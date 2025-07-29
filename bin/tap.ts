@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 import * as cdk from 'aws-cdk-lib';
 import { Tags } from 'aws-cdk-lib';
-import 'source-map-support/register';
 import { TapStack } from '../lib/tap-stack';
 
 const app = new cdk.App();
