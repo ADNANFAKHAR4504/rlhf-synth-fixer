@@ -5,6 +5,7 @@ I'll create a comprehensive CloudFormation YAML template that provisions a secur
 ## Solution Overview
 
 The solution creates:
+
 - **VPC** with CIDR block `10.0.0.0/16`
 - **Two public subnets** in distinct availability zones
 - **Two private subnets** in distinct availability zones
@@ -19,6 +20,7 @@ The solution creates:
 ### Primary Infrastructure Template
 
 **lib/TapStack.yml**
+
 ```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'VPC Infrastructure - Secure, scalable, and cost-effective AWS Virtual Private Cloud infrastructure for multi-AZ environment'
@@ -419,7 +421,7 @@ Outputs:
 
   AvailabilityZones:
     Description: 'Availability zones used'
-    Value: !Join 
+    Value: !Join
       - ','
       - - !Select [0, !GetAZs '']
         - !Select [1, !GetAZs '']
@@ -442,20 +444,24 @@ Outputs:
 ## Architecture Design
 
 ### Network Segmentation
+
 - **Public Subnets (10.0.1.0/24, 10.0.2.0/24)**: Host resources that need direct internet access (load balancers, bastion hosts)
 - **Private Subnets (10.0.11.0/24, 10.0.12.0/24)**: Host application servers, databases, and internal services
 
 ### High Availability
+
 - **Multi-AZ Deployment**: All subnets are distributed across two availability zones
 - **Redundant NAT Gateways**: Each private subnet has its own NAT Gateway for fault tolerance
 - **Cross-AZ Load Distribution**: Applications can be deployed across zones for resilience
 
 ### Security Best Practices
+
 - **Network Isolation**: Private subnets cannot be directly accessed from the internet
 - **Controlled Egress**: Private subnet internet access only through NAT Gateways
 - **DNS Resolution**: Enabled DNS hostnames and support for service discovery
 
 ### Cost Optimization
+
 - **Efficient CIDR Design**: Allows for future expansion while minimizing wasted IP space
 - **Shared NAT Gateways**: Each NAT Gateway serves one AZ to balance cost and availability
 - **Resource Tagging**: Comprehensive tagging strategy for cost allocation and management
@@ -463,11 +469,13 @@ Outputs:
 ## Deployment Instructions
 
 ### Prerequisites
+
 1. AWS CLI configured with appropriate permissions
 2. Access to deploy CloudFormation stacks
 3. Permissions for VPC, EC2, and networking resources
 
 ### Deployment Commands
+
 ```bash
 # Validate template syntax
 pipenv run cfn-validate-yaml
@@ -476,7 +484,7 @@ pipenv run cfn-validate-yaml
 aws cloudformation deploy \
   --template-file lib/TapStack.yml \
   --stack-name TapStack${ENVIRONMENT_SUFFIX} \
-  --capabilities CAPABILITY_IAM \
+  --capabilities CAPABILITY_NAMED_IAM \
   --parameter-overrides EnvironmentSuffix=${ENVIRONMENT_SUFFIX} \
   --tags Repository=${REPOSITORY} CommitAuthor=${COMMIT_AUTHOR}
 
@@ -487,6 +495,7 @@ aws cloudformation describe-stacks \
 ```
 
 ### Testing
+
 ```bash
 # Run unit tests
 npm run test:unit

@@ -148,7 +148,7 @@ npm run cfn:deploy-yaml
 aws cloudformation deploy \
   --template-file lib/TapStack.yml \
   --stack-name TapStack${ENVIRONMENT_SUFFIX:-dev} \
-  --capabilities CAPABILITY_IAM \
+  --capabilities CAPABILITY_NAMED_IAM \
   --parameter-overrides EnvironmentSuffix=${ENVIRONMENT_SUFFIX:-dev} \
   --tags Repository=${REPOSITORY:-unknown} CommitAuthor=${COMMIT_AUTHOR:-unknown}
 ```
