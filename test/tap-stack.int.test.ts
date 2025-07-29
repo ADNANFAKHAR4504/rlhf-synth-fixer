@@ -22,9 +22,14 @@ describe('SecureVpcStack Integration (AWS SDK)', () => {
   it('should provision a VPC with the correct CIDR block', async () => {
     const vpcs = await ec2.send(
       new DescribeVpcsCommand({
-        Filters: [{ Name: 'cidr-block', Values: [VPC_CIDR] }],
+        Filters: [
+          { Name: 'tag:commitAuthor', Values: [process.env.COMMIT_AUTHOR!] },
+        ],
       })
     );
+
+    console.log('Found VPCs:', vpcs);
+
     expect(vpcs.Vpcs).toBeDefined();
     expect(vpcs.Vpcs!.length).toBeGreaterThan(0);
     vpcId = vpcs.Vpcs![0].VpcId!;
@@ -39,14 +44,18 @@ describe('SecureVpcStack Integration (AWS SDK)', () => {
     );
     expect(subnets.Subnets).toBeDefined();
     console.log('Found Subnets:', subnets.Subnets);
-    // // Check for both expected CIDRs
-    // const foundCidrs = subnets.Subnets!.map(s => s.CidrBlock);
-    // console.log('Found CIDRs:', foundCidrs);
-    // expect(foundCidrs.length).toBe(PUBLIC_SUBNET_CIDRS.length);
-    // // Check for different AZs
-    // const azs = new Set(subnets.Subnets!.map(s => s.AvailabilityZone));
-    // expect(azs.size).toBeGreaterThanOrEqual(2);
-    // subnetIds = subnets.Subnets!.map(s => s.SubnetId!);
+
+    // Check for both expected CIDRs
+    const foundCidrs = subnets.Subnets!.map(s => s.CidrBlock);
+    expect(foundCidrs.length).toBe(PUBLIC_SUBNET_CIDRS.length);
+    foundCidrs.forEach(cid => {
+      expect(PUBLIC_SUBNET_CIDRS).toContain(cid);
+    });
+
+    // Check for 2 AZs
+    const azs = subnets.Subnets!.map(s => s.AvailabilityZone);
+    expect(azs.length).toBe(2);
+    subnetIds = subnets.Subnets!.map(s => s.SubnetId!);
   });
 
   it('should attach an Internet Gateway to the VPC', async () => {
@@ -117,30 +126,31 @@ describe('SecureVpcStack Integration (AWS SDK)', () => {
     );
     expect(sgs.SecurityGroups).toBeDefined();
     console.log('Found Security Groups:', sgs.SecurityGroups);
+
     // Find SG with correct rules
-    // const sg = sgs.SecurityGroups!.find(
-    //   sg =>
-    //     sg.IpPermissions?.some(
-    //       p =>
-    //         p.FromPort === 80 &&
-    //         p.ToPort === 80 &&
-    //         p.IpProtocol === 'tcp' &&
-    //         p.IpRanges?.some(r => r.CidrIp === '0.0.0.0/0')
-    //     ) &&
-    //     sg.IpPermissions?.some(
-    //       p =>
-    //         p.FromPort === 443 &&
-    //         p.ToPort === 443 &&
-    //         p.IpProtocol === 'tcp' &&
-    //         p.IpRanges?.some(r => r.CidrIp === '0.0.0.0/0')
-    //     )
-    // );
-    // console.log('Security Group:', sg);
-    // expect(sg).toBeDefined();
-    // // Should not allow other inbound ports
-    // const otherIngress = sg!.IpPermissions!.filter(
-    //   p => ![80, 443].includes(p.FromPort ?? -1)
-    // );
-    // expect(otherIngress.length).toBe(0);
+    const sg = sgs.SecurityGroups!.find(
+      sg =>
+        sg.IpPermissions?.some(
+          p =>
+            p.FromPort === 80 &&
+            p.ToPort === 80 &&
+            p.IpProtocol === 'tcp' &&
+            p.IpRanges?.some(r => r.CidrIp === '0.0.0.0/0')
+        ) &&
+        sg.IpPermissions?.some(
+          p =>
+            p.FromPort === 443 &&
+            p.ToPort === 443 &&
+            p.IpProtocol === 'tcp' &&
+            p.IpRanges?.some(r => r.CidrIp === '0.0.0.0/0')
+        )
+    );
+    console.log('Security Group:', sg);
+    expect(sg).toBeDefined();
+    // Should not allow other inbound ports
+    const otherIngress = sg!.IpPermissions!.filter(
+      p => ![80, 443].includes(p.FromPort ?? -1)
+    );
+    expect(otherIngress.length).toBe(0);
   });
 });
