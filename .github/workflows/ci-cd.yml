@@ -128,6 +128,12 @@ jobs:
           fi
           echo "✅ Pipenv version is correct: $PIPENV_VERSION"
 
+      - name: Install Pulumi CLI
+        if: needs.synth.outputs.platform == 'pulumi'
+        uses: pulumi/actions@v5
+        with:
+          pulumi-version: 3.109.0
+
   build:
     name: Build
     runs-on: ubuntu-24.04
@@ -258,11 +264,7 @@ jobs:
           download-artifacts: 'true'
           download-cdk-artifacts: 'true'
       
-      - name: Install Pulumi CLI
-        if: needs.synth.outputs.platform == 'pulumi'
-        uses: pulumi/actions@v5
-        with:
-          pulumi-version: 3.109.0
+
 
       - name: Configure AWS
         uses: ./.github/actions/configure-aws
@@ -273,12 +275,6 @@ jobs:
 
       - name: Bootstrap
         run: |
-          # --- ADD THIS CLEANUP STEP HERE ---
-          echo "Cleaning up cdk.out directory before bootstrap..."
-          if [ -d "cdk.out" ]; then
-            rm -rf cdk.out
-          fi
-
           PLATFORM="${{ needs.synth.outputs.platform }}"
           LANGUAGE="${{ needs.synth.outputs.language }}"
 
@@ -289,7 +285,7 @@ jobs:
           elif [ "$PLATFORM" = "pulumi" ]; then
             echo "✅ Pulumi project detected, setting up environment..."
             # Login to Pulumi S3 backend
-            pulumi login "$PULUMI_BACKEND_URL"
+            pipenv run pulumi-login
             echo "✅ Pulumi bootstrap completed"
           else
             echo "ℹ️ Unknown or unsupported platform: $PLATFORM. Skipping bootstrap."
@@ -321,9 +317,9 @@ jobs:
           elif [ "$PLATFORM" = "pulumi" ]; then
             echo "✅ Pulumi project detected, running Pulumi deploy..."
             echo "Selecting/creating stack..."
-            pipenv run pulumi stack select dev --create --secrets-provider="default"
+            pipenv run pulumi-create-stack
             echo "Deploying infrastructure..."
-            pipenv run pulumi up --yes --non-interactive 
+            pipenv run pulumi-deploy
           else
             echo "ℹ️ Unknown deployment method for platform: $PLATFORM, language: $LANGUAGE"
             echo "💡 Supported combinations: cdk+typescript, cdk+python, cfn+yaml, cfn+json"
@@ -698,11 +694,11 @@ jobs:
           elif [ "$PLATFORM" = "pulumi" ]; then
             echo "✅ Pulumi project detected, running Pulumi destroy..."
             echo "Selecting dev stack..."
-            pipenv run pulumi stack select dev --create --secrets-provider="default" || echo "Stack selection failed"
+            pipenv run pulumi-create-stack || echo "Stack selection failed"
             echo "Destroying Pulumi infrastructure..."
-            pipenv run pulumi destroy --yes --non-interactive || echo "No resources to destroy or destruction failed"
+            pipenv run pulumi-destroy || echo "No resources to destroy or destruction failed"
             echo "Removing Pulumi stack..."
-            pipenv run pulumi stack rm dev --yes --force || echo "Stack removal failed or stack doesn't exist"
+            pipenv run pulumi-remove-stack || echo "Stack removal failed or stack doesn't exist"
           else
             echo "ℹ️ Platform '$PLATFORM' with language '$LANGUAGE' not supported for destruction, skipping destroy"
             echo "💡 Consider adding cleanup logic for $PLATFORM/$LANGUAGE projects here"

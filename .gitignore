@@ -86,3 +86,5 @@ cdktf.log
 .gen
 __pycache__/
 .pulumi/
+# CDK build output
+cdk.out/
