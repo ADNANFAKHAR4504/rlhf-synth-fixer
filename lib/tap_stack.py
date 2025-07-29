@@ -43,7 +43,7 @@ class TapStackProps:
 
   Args:
     environment_suffix (Optional[str]): Optional suffix to identify the
-    deployment environment (e.g., 'dev', 'prod').
+    deployment environment (e.g., 'dev', 'prod'). 
   """
 
   def __init__(self, environment_suffix: Optional[str] = None):
