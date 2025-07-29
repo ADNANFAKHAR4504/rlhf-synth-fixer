@@ -23,14 +23,14 @@ Comparison between the MODEL_RESPONSE.md and IDEAL_RESPONSE.md reveals significa
 **Model Failure:**
 - No IAM stack implementation
 - Basic S3 bucket without encryption or lifecycle policies
-- No CodeCommit repository creation
+- No S3 source bucket for pipeline integration
 - Missing environment-specific CodeBuild projects
 
 **Ideal Solution:**
 - Complete IAMStack with CodePipeline, CodeBuild, and CloudFormation roles
 - S3Stack with encryption, versioning, lifecycle rules, and auto-delete
 - CodeBuildStack with separate build and deployment projects for staging/production
-- CodePipelineStack with CodeCommit repository and complete pipeline orchestration
+- CodePipelineStack with S3 source bucket and complete pipeline orchestration
 
 ### 3. **Incorrect Resource Naming**
 

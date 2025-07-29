@@ -13,12 +13,12 @@ The solution creates a modular, environment-aware CI/CD pipeline with the follow
 1. **IAM Stack** - Service roles for CodePipeline, CodeBuild, and CloudFormation
 2. **S3 Stack** - Encrypted artifacts bucket with lifecycle policies
 3. **CodeBuild Stack** - Build project and separate deployment projects for staging/production
-4. **CodePipeline Stack** - Full CI/CD pipeline with CodeCommit integration and manual approval
+4. **CodePipeline Stack** - Full CI/CD pipeline with S3 source integration and manual approval
 
 ### Pipeline Flow
 
 ```
-Source (CodeCommit) → Build → Deploy Staging → Manual Approval → Deploy Production
+Source (S3) → Build → Deploy Staging → Manual Approval → Deploy Production
 ```
 
 ## Files Created/Modified
@@ -80,7 +80,7 @@ The main stack file contains all resource-specific stacks consolidated into a si
 - **IAMStack**: Creates service roles for CodePipeline, CodeBuild, and CloudFormation with appropriate policies
 - **S3Stack**: Creates encrypted artifacts bucket with versioning and lifecycle rules
 - **CodeBuildStack**: Creates build project and deployment projects for staging/production environments
-- **CodePipelineStack**: Creates CodeCommit repository and CI/CD pipeline with manual approval step
+- **CodePipelineStack**: Creates S3 source bucket and CI/CD pipeline with manual approval step
 - **TapStack**: Main orchestrating stack that instantiates all component stacks
 
 #### `requirements.txt` - Python Dependencies
@@ -104,8 +104,7 @@ Comprehensive unit tests that validate:
 
 #### `tests/integration/test_tap_stack.py` - Integration Tests  
 Integration tests that validate deployed resources:
-- S3 bucket creation and encryption
-- CodeCommit repository existence
+- S3 buckets creation and encryption (artifacts and source)
 - CodePipeline stages and configuration
 - CodeBuild projects for build and deployment
 - IAM roles and policies
@@ -126,7 +125,7 @@ Integration tests that validate deployed resources:
 ### 3. CI/CD Integration
 - ✅ **AWS CodePipeline orchestration** - Complete pipeline with 5 stages
 - ✅ **AWS CodeBuild integration** - Separate build and deployment projects
-- ✅ **Automatic triggering** - Pipeline triggered by commits to CodeCommit repository
+- ✅ **Automatic triggering** - Pipeline triggered by S3 object changes (source.zip)
 - ✅ **Manual approval gate** - Production deployment requires manual approval
 
 ### 4. Pipeline Capabilities
@@ -155,6 +154,7 @@ Integration tests that validate deployed resources:
 
 ### S3 Resources
 - **Artifacts Bucket**: Versioned, encrypted bucket with lifecycle rules for artifact cleanup
+- **Source Bucket**: Versioned, encrypted bucket for source code artifacts (source.zip)
 
 ### CodeBuild Resources
 - **Build Project**: Runs tests and creates build artifacts
@@ -162,7 +162,7 @@ Integration tests that validate deployed resources:
 - **Deploy Production Project**: Deploys to production environment using CDK
 
 ### CodePipeline Resources
-- **CodeCommit Repository**: Source code repository with event-based triggering
+- **S3 Source Bucket**: Source code bucket with CloudTrail event-based triggering on source.zip changes
 - **CI/CD Pipeline**: 5-stage pipeline (Source → Build → Deploy Staging → Approval → Deploy Production)
 
 ## Deployment Instructions
@@ -185,9 +185,9 @@ cdk deploy --context environmentSuffix=dev
 ```
 
 ### Using the Pipeline
-1. Clone the CodeCommit repository (URL provided in stack outputs)
-2. Add your application code and buildspec files
-3. Commit and push to trigger the pipeline
+1. Package your application code as source.zip
+2. Upload source.zip to the S3 source bucket (name provided in stack outputs)
+3. Pipeline will automatically trigger on S3 object changes
 4. Monitor pipeline execution in AWS Console
 5. Approve production deployment when ready
 
@@ -220,7 +220,7 @@ ENVIRONMENT_SUFFIX=dev python -m pytest tests/integration/ --no-cov
 ## Outputs
 
 The stack provides the following outputs:
-- **Repository Clone URL**: HTTP clone URL for the CodeCommit repository
+- **Source Bucket Name**: S3 bucket name for uploading source code artifacts (source.zip)
 - **Pipeline Console URL**: Direct link to the CodePipeline in AWS Console
 
 This implementation fully satisfies all requirements from the original prompt, providing a complete, production-ready CI/CD pipeline infrastructure using AWS CDK in Python.
