@@ -69,10 +69,17 @@ async function copyTemplate(templateName: string): Promise<void> {
 }
 
 function getLanguageChoices(platform: string) {
-  if (platform === 'cdk' || platform === 'cdktf') {
+  if (platform === 'cdk') {
     return [
       { name: 'TypeScript', value: 'ts' },
-      // { name: 'Python', value: 'py' },
+      { name: 'Python', value: 'py' },
+    ];
+  }
+
+  if (platform === 'cdktf') {
+    return [
+      { name: 'TypeScript', value: 'ts' },
+      { name: 'Python', value: 'py' },
     ];
   }
 
