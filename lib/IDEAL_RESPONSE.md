@@ -6,8 +6,9 @@ Parameters:
   EnvironmentSuffix:
     Type: String
     Default: dev
-    Description: Environment suffix (e.g., dev, prod, staging)
-    AllowedValues: [dev, staging, prod]
+    Description: Environment suffix (e.g., dev, prod, staging, pr265, etc.)
+    AllowedPattern: ^[a-zA-Z0-9-]+$
+    ConstraintDescription: Must be a valid environment name (alphanumeric and hyphens only)
 
   Name:
     Type: String
@@ -335,6 +336,9 @@ Resources:
     Properties:
       LaunchTemplateName: !Sub ${EnvironmentSuffix}-${Name}-launch-template-${Team}
       LaunchTemplateData:
+        MetadataOptions:
+          HttpEndpoint: enabled
+          HttpTokens: required
         ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}'
         InstanceType: t3.micro
         KeyName: !Ref KeyPairName
