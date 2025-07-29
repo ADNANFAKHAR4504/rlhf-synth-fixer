@@ -1,6 +1,7 @@
 To design a secure and highly available infrastructure using AWS CDK in Python, we can follow these steps. Below is a structured approach with code examples and explanations.
 
-Project Structure
+### Project Structure
+```
 my-cdk-app/
 ├── app.py
 ├── cdk.json
@@ -13,12 +14,17 @@ my-cdk-app/
     ├── route53_stack.py
     ├── monitoring_stack.py
     └── kms_stack.py
-Key Design Decisions
-Modular Stacks: Each component (VPC, Database, ALB, etc.) is defined in its own stack to promote reusability and separation of concerns.
-Multi-Region Deployment: We will deploy stacks in both us-east-1 and us-west-2.
-Failover Handling: Using Route 53 for DNS failover routing between regions.
-Example CDK Code
-app.py
+```
+
+### Key Design Decisions
+1. **Modular Stacks**: Each component (VPC, Database, ALB, etc.) is defined in its own stack to promote reusability and separation of concerns.
+2. **Multi-Region Deployment**: We will deploy stacks in both `us-east-1` and `us-west-2`.
+3. **Failover Handling**: Using Route 53 for DNS failover routing between regions.
+
+### Example CDK Code
+
+#### `app.py`
+```python
 #!/usr/bin/env python3
 import os
 from aws_cdk import core
@@ -54,7 +60,10 @@ for region in regions:
 route53_stack = Route53Stack(app, "Route53Stack", env=core.Environment(account=os.getenv('CDK_DEFAULT_ACCOUNT'), region="us-east-1"))
 
 app.synth()
-kms_stack.py
+```
+
+#### `kms_stack.py`
+```python
 from aws_cdk import aws_kms as kms, core
 
 class KmsStack(core.Stack):
@@ -64,7 +73,10 @@ class KmsStack(core.Stack):
         self.key = kms.Key(self, "AppKey",
             enable_key_rotation=True,
             removal_policy=core.RemovalPolicy.DESTROY)
-vpc_stack.py
+```
+
+#### `vpc_stack.py`
+```python
 from aws_cdk import aws_ec2 as ec2, core
 
 class VpcStack(core.Stack):
@@ -78,7 +90,10 @@ class VpcStack(core.Stack):
                 ec2.SubnetConfiguration(name="public", subnet_type=ec2.SubnetType.PUBLIC),
                 ec2.SubnetConfiguration(name="private", subnet_type=ec2.SubnetType.PRIVATE)
             ])
-database_stack.py
+```
+
+#### `database_stack.py`
+```python
 from aws_cdk import aws_rds as rds, aws_ec2 as ec2, core
 
 class DatabaseStack(core.Stack):
@@ -97,7 +112,10 @@ class DatabaseStack(core.Stack):
             storage_encrypted=True,
             storage_encryption_key=kms_key,
             removal_policy=core.RemovalPolicy.SNAPSHOT)
-alb_stack.py
+```
+
+#### `alb_stack.py`
+```python
 from aws_cdk import aws_elasticloadbalancingv2 as elbv2, aws_ec2 as ec2, core
 
 class AlbStack(core.Stack):
@@ -107,7 +125,10 @@ class AlbStack(core.Stack):
         self.alb = elbv2.ApplicationLoadBalancer(self, "AppAlb",
             vpc=vpc,
             internet_facing=True)
-route53_stack.py
+```
+
+#### `route53_stack.py`
+```python
 from aws_cdk import aws_route53 as route53, aws_route53_targets as targets, core
 
 class Route53Stack(core.Stack):
@@ -124,7 +145,10 @@ class Route53Stack(core.Stack):
             )))
         
         # Add failover routing logic here
-monitoring_stack.py
+```
+
+#### `monitoring_stack.py`
+```python
 from aws_cdk import aws_cloudwatch as cloudwatch, core
 
 class MonitoringStack(core.Stack):
@@ -132,5 +156,7 @@ class MonitoringStack(core.Stack):
         super().__init__(scope, id, **kwargs)
         
         # Define CloudWatch alarms and logging configurations
-Conclusion
+```
+
+### Conclusion
 This CDK project structure and code provide a foundation for a secure, highly available infrastructure across multiple AWS regions. Each stack is modular, promoting reusability and maintainability. The use of customer-managed KMS keys ensures data encryption, and Route 53 facilitates DNS management and failover. This design adheres to AWS best practices and infrastructure-as-code principles.
