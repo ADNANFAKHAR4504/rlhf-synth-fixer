@@ -425,7 +425,7 @@ jobs:
             echo "Fetching outputs from Pulumi stack: $STACK_NAME"
             pulumi stack output --json > temp-${STACK_NAME}-outputs.json || echo "{}" > temp-${STACK_NAME}-outputs.json
             jq -n --arg stack "$STACK_NAME" --slurpfile outputs "temp-${STACK_NAME}-outputs.json" '{($stack): $outputs[0]}' > temp-stack.json
-            jq -s '.[0] * .[1]' cfn-outputs/all-outputs.json temp-stack.json > temp-merged.json mv temp-merged.json cfn-outputs/all-outputs.json
+            jq -s '.[0] * .[1]' cfn-outputs/all-outputs.json temp-stack.json > temp-merged.json && mv temp-merged.json cfn-outputs/all-outputs.json
             jq -r 'to_entries[] | "\(.key)=\(.value)"' "temp-${STACK_NAME}-outputs.json" | while IFS='=' read -r key value; do
               jq --arg key "$key" --arg value "$value" '. + {($key): $value}' cfn-outputs/flat-outputs.json > temp-flat.json
               mv temp-flat.json cfn-outputs/flat-outputs.json
