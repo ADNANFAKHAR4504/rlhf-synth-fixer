@@ -1,21 +1,13 @@
 // Configuration - These are coming from cfn-outputs after CloudFormation deploy
+import { DescribeInstancesCommand, DescribeInternetGatewaysCommand, DescribeSecurityGroupsCommand, DescribeSubnetsCommand, DescribeVpcAttributeCommand, DescribeVpcsCommand, EC2Client } from '@aws-sdk/client-ec2';
 import fs from 'fs';
-import { 
-  EC2Client, 
-  DescribeVpcsCommand, 
-  DescribeSubnetsCommand,
-  DescribeInstancesCommand,
-  DescribeSecurityGroupsCommand,
-  DescribeInternetGatewaysCommand,
-  DescribeRouteTablesCommand
-} from '@aws-sdk/client-ec2';
 
-import { 
-  ElasticLoadBalancingV2Client,
+import {
+  DescribeListenersCommand,
   DescribeLoadBalancersCommand,
   DescribeTargetGroupsCommand,
-  DescribeListenersCommand,
-  DescribeTargetHealthCommand
+  DescribeTargetHealthCommand,
+  ElasticLoadBalancingV2Client
 } from '@aws-sdk/client-elastic-load-balancing-v2';
 
 // Load outputs if available, otherwise skip integration tests
@@ -56,8 +48,21 @@ describe('CloudFormation High-Availability Web Application Integration Tests', (
       expect(vpc).toBeDefined();
       expect(vpc?.CidrBlock).toBe('10.0.0.0/16');
       expect(vpc?.State).toBe('available');
-      expect(vpc?.EnableDnsSupport).toBe(true);
-      expect(vpc?.EnableDnsHostnames).toBe(true);
+      const attrDnsSupport = await ec2Client.send(
+  new DescribeVpcAttributeCommand({
+    VpcId: vpcId,
+    Attribute: 'enableDnsSupport',
+  })
+);
+expect(attrDnsSupport.EnableDnsSupport?.Value).toBe(true);
+
+const attrDnsHostnames = await ec2Client.send(
+  new DescribeVpcAttributeCommand({
+    VpcId: vpcId,
+    Attribute: 'enableDnsHostnames',
+  })
+);
+expect(attrDnsHostnames.EnableDnsHostnames?.Value).toBe(true);
       
       // Check for ProdVPC tag
       const nameTag = vpc?.Tags?.find(tag => tag.Key === 'Name');
@@ -150,7 +155,7 @@ describe('CloudFormation High-Availability Web Application Integration Tests', (
       expect(securityGroups).toHaveLength(1);
       
       const albSG = securityGroups[0];
-      expect(albSG.GroupDescription).toBe('Allow HTTP traffic from the internet');
+      expect(albSG.Description).toBe('Allow HTTP traffic from the internet');
       
       // Check ingress rules
       const httpRule = albSG.IpPermissions?.find(rule => 
