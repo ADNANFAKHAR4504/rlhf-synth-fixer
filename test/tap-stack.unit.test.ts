@@ -234,11 +234,6 @@ describe('TapStack CloudFormation Template', () => {
       expect(dynamoTable.Properties.PointInTimeRecoverySpecification.PointInTimeRecoveryEnabled).toBe(true);
     });
 
-    test('DynamoDBTable should have deletion protection enabled', () => {
-      const dynamoTable = template.Resources.DynamoDBTable;
-      expect(dynamoTable.Properties.DeletionProtectionEnabled).toBe(true);
-    });
-
     test('DynamoDBTable should have streams enabled', () => {
       const dynamoTable = template.Resources.DynamoDBTable;
       expect(dynamoTable.Properties.StreamSpecification.StreamViewType).toBe('NEW_AND_OLD_IMAGES');

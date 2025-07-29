@@ -222,7 +222,7 @@
                 "PointInTimeRecoverySpecification": {
                     "PointInTimeRecoveryEnabled": true
                 },
-                "DeletionProtectionEnabled": true,
+                "DeletionProtectionEnabled": false,
                 "StreamSpecification": {
                     "StreamViewType": "NEW_AND_OLD_IMAGES"
                 },
