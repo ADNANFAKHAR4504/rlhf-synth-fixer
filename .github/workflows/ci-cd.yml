@@ -126,6 +126,9 @@ jobs:
           fi
           echo "✅ Pipenv version is correct: $PIPENV_VERSION"
 
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v2
+
   build:
     name: Build
     runs-on: ubuntu-24.04
@@ -159,6 +162,22 @@ jobs:
 
       - name: Build
         run: npm run build
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v2
+
+
+      - name: Initialize Terraform
+        run: terraform init
+        working-directory: lib
+
+      - name: Plan Terraform deployment
+        run: terraform plan -out=tfplan
+        working-directory: lib
+
+      - name: Apply Terraform deployment
+        run: terraform apply -auto-approve tfplan
+        working-directory: lib
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
