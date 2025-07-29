@@ -1,3 +1,4 @@
+```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: CloudFormation template for setting up a development environment in AWS
 

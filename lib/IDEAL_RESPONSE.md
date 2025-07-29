@@ -1,1 +1,163 @@
-Insert here the ideal response
+# AWS CloudFormation Template - Ideal Response
+
+### Description
+This CloudFormation YAML template sets up a development environment in the **us-east-1 region**, within the existing **VPC** `vpc-12345` and using the existing **Security Group** `sg-67890`. It includes parameterized values, tagging for all resources, a public S3 bucket with CloudWatch logging, an EC2 instance with SSH access restriction, a public Elastic IP, IAM roles and policies, and a CloudWatch alarm for CPU usage monitoring.
+
+```yaml
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  CloudFormation template to set up a development environment in us-east-1 using the provided VPC, Subnet, Security Group, and Key Pair.
+  Deploys a public S3 bucket (with public-read policy and CloudWatch logging), a t2.micro EC2 instance (EIP, S3 read-only IAM role, monitored by CloudWatch Alarm),
+  with all resources tagged and required parameters exposed for future updates.
+
+Parameters:
+  BucketName:
+    Description: Name for the public S3 bucket (must be globally unique)
+    Type: String
+    Default: my-dev-public-bucket-12345-new
+  EC2KeyName:
+    Description: Name of an existing EC2 KeyPair for SSH access
+    Type: String
+    Default: iac-rlhf-aws-trainer-instance
+    AllowedPattern: "^$|^[a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9]$"
+    ConstraintDescription: Must be empty or a valid EC2 KeyPair name
+  SubnetId:
+    Description: Subnet ID within the existing VPC for the EC2 instance
+    Type: String
+    Default: subnet-0e83114b417d0c5e1
+  SecurityGroupId:
+    Description: Security Group ID for the EC2 instance
+    Type: String
+    Default: sg-0902318027a68026f
+
+Conditions:
+  HasKeyName: !Not [!Equals [!Ref EC2KeyName, ""]]
+
+Resources:
+
+  S3AccessLogBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${BucketName}-logs'
+      Tags:
+        - Key: Environment
+          Value: Development
+
+  PublicS3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Ref BucketName
+      LoggingConfiguration:
+        DestinationBucketName: !Ref S3AccessLogBucket
+        LogFilePrefix: logs/
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: false
+        BlockPublicPolicy: false
+        IgnorePublicAcls: false
+        RestrictPublicBuckets: false
+      Tags:
+        - Key: Environment
+          Value: Development
+
+  S3BucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref PublicS3Bucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: "*"
+            Action: s3:GetObject
+            Resource: !Sub "${PublicS3Bucket.Arn}/*"
+
+  S3ReadOnlyInstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      Path: /
+      Policies:
+        - PolicyName: S3ReadOnlyAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: s3:Get*
+                Resource: "*"
+      Tags:
+        - Key: Environment
+          Value: Development
+
+  S3ReadOnlyInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Path: /
+      Roles:
+        - !Ref S3ReadOnlyInstanceRole
+
+  EC2EIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Environment
+          Value: Development
+
+  DevInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: t2.micro
+      KeyName: !If [HasKeyName, !Ref EC2KeyName, !Ref "AWS::NoValue"]
+      ImageId: ami-083e865b97bdf1c1b  # Amazon Linux 2023 for us-east-1
+      NetworkInterfaces:
+        - AssociatePublicIpAddress: true
+          DeviceIndex: 0
+          SubnetId: !Ref SubnetId
+          GroupSet:
+            - !Ref SecurityGroupId
+      IamInstanceProfile: !Ref S3ReadOnlyInstanceProfile
+      Tags:
+        - Key: Environment
+          Value: Development
+
+  EIPAssociation:
+    Type: AWS::EC2::EIPAssociation
+    Properties:
+      AllocationId: !GetAtt EC2EIP.AllocationId
+      InstanceId: !Ref DevInstance
+
+  CPUAlarmHigh:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: "Alarm if CPU > 80% for 5 consecutive minutes"
+      Namespace: AWS/EC2
+      MetricName: CPUUtilization
+      Dimensions:
+        - Name: InstanceId
+          Value: !Ref DevInstance
+      Statistic: Average
+      Period: 60
+      EvaluationPeriods: 5
+      Threshold: 80
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions: []
+      Tags:
+        - Key: Environment
+          Value: Development
+
+Outputs:
+  S3BucketName:
+    Description: Name of the public S3 bucket
+    Value: !Ref PublicS3Bucket
+  EC2PublicIP:
+    Description: Public IP of the EC2 instance
+    Value: !Ref EC2EIP
+  Reminder:
+    Description: "Reminder: Ensure the security group allows inbound SSH (port 22) from 203.0.113.0/24."
+    Value: "You must manually verify the Security Group allows SSH from 203.0.113.0/24, as CloudFormation cannot modify existing SGs."
