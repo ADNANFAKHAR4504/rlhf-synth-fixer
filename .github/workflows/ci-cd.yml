@@ -24,6 +24,7 @@ env:
   TERRAFORM_STATE_BUCKET: 'iac-rlhf-tf-states'
   TERRAFORM_STATE_BUCKET_REGION: 'us-east-1'
   S3_PRODUCTION_BUCKET_NAME: 'iac-rlhf-production'
+  PULUMI_STATE_BUCKET: 'iac-rlhf-pulumi-states'
 
 jobs:
   detect-metadata:
@@ -227,6 +228,7 @@ jobs:
           ENVIRONMENT_SUFFIX: ${{ env.ENVIRONMENT_SUFFIX }}
           TERRAFORM_STATE_BUCKET: ${{ env.TERRAFORM_STATE_BUCKET }}
           TERRAFORM_STATE_BUCKET_REGION: ${{ env.TERRAFORM_STATE_BUCKET_REGION }}
+          PULUMI_BACKEND_URL: s3://${{ env.PULUMI_STATE_BUCKET }}
 
       - name: Upload Build Artifacts
         uses: actions/upload-artifact@v4
@@ -267,6 +269,15 @@ jobs:
           if [ -d "cdk.out" ]; then
             rm -rf cdk.out
           fi
+          # --- CLEANUP PULUMI ---
+          if [ -f "Pulumi.yaml" ]; then
+            echo "✅ Pulumi project detected, cleaning up old state directories (if any)..."
+            if [ -d "__pycache__" ]; then
+              rm -rf __pycache__
+            fi
+            if [ -d ".pulumi" ]; then
+              rm -rf .pulumi
+            fi
           PLATFORM="${{ needs.synth.outputs.platform }}"
           LANGUAGE="${{ needs.synth.outputs.language }}"
 
@@ -276,10 +287,22 @@ jobs:
           else
             echo "ℹ️ Not a CDK project, skipping CDK bootstrap"
           fi
+
+          elif [ "$PLATFORM" = "pulumi" ]; then
+            echo "✅ Pulumi project detected, setting up environment..."
+            pip install pipenv
+            pipenv install --dev
+            # Login to Pulumi S3 backend
+            pulumi login "$PULUMI_BACKEND_URL"
+            echo "✅ Pulumi bootstrap completed"
+          else
+            echo "ℹ️ Unknown or unsupported platform: $PLATFORM. Skipping bootstrap."
+          fi
         env:
           ENVIRONMENT_SUFFIX: ${{ env.ENVIRONMENT_SUFFIX }}
           REPOSITORY: ${{ github.repository }}
           COMMIT_AUTHOR: ${{ github.event.head_commit.author.name || github.actor }}
+          PULUMI_BACKEND_URL: s3://${{ env.PULUMI_STATE_BUCKET }}
 
       - name: Deploy
         run: |
@@ -298,6 +321,10 @@ jobs:
           elif [ "$PLATFORM" = "cfn" ] && [ "$LANGUAGE" = "json" ]; then
             echo "✅ CloudFormation JSON project detected, deploying with AWS CLI..."
             npm run cfn:deploy-json
+          elif [ "$PLATFORM" = "pulumi" ]; then
+            echo "✅ Pulumi project detected, running Pulumi deploy..."
+            pulumi stack select dev
+            pulumi up --yes
           else
             echo "ℹ️ Unknown deployment method for platform: $PLATFORM, language: $LANGUAGE"
             echo "💡 Supported combinations: cdk+typescript, cdk+python, cfn+yaml, cfn+json"
@@ -386,6 +413,29 @@ jobs:
             cat cfn-outputs/all-outputs.json || echo "No consolidated outputs"
             echo "Flat outputs:"
             cat cfn-outputs/flat-outputs.json || echo "No flat outputs"
+
+          elif [ "$PLATFORM" = "pulumi" ]; then
+            echo "✅ Pulumi project detected, getting Pulumi stack outputs..."
+            mkdir -p cfn-outputs
+            echo "{}" > cfn-outputs/all-outputs.json
+            echo "{}" > cfn-outputs/flat-outputs.json
+            # Get the current stack name
+            STACK_NAME=$(pulumi stack --show-name)
+            echo "Fetching outputs from Pulumi stack: $STACK_NAME"
+            pulumi stack output --json > temp-${STACK_NAME}-outputs.json || echo "{}" > temp-${STACK_NAME}-outputs.json
+            jq -n --arg stack "$STACK_NAME" --slurpfile outputs "temp-${STACK_NAME}-outputs.json" '{($stack): $outputs[0]}' > temp-stack.json
+            jq -s '.[0] * .[1]' cfn-outputs/all-outputs.json temp-stack.json > temp-merged.json mv temp-merged.json cfn-outputs/all-outputs.json
+            jq -r 'to_entries[] | "\(.key)=\(.value)"' "temp-${STACK_NAME}-outputs.json" | while IFS='=' read -r key value; do
+              jq --arg key "$key" --arg value "$value" '. + {($key): $value}' cfn-outputs/flat-outputs.json > temp-flat.json
+              mv temp-flat.json cfn-outputs/flat-outputs.json
+            done
+            echo "Consolidated outputs:"
+            cat cfn-outputs/all-outputs.json || echo "No consolidated outputs"
+            echo "Flat outputs:"
+            cat cfn-outputs/flat-outputs.json || echo "No flat outputs"
+            rm -f temp-${STACK_NAME}-outputs.json temp-stack.json temp-merged.json temp-flat.json
+
+            
           else
             echo "ℹ️ Not a CDK TypeScript or CloudFormation project, creating empty outputs for consistency"
             mkdir -p cfn-outputs
@@ -641,6 +691,10 @@ jobs:
             echo "✅ CloudFormation project detected, running CloudFormation destroy..."
             # Try to destroy any leftover resources from PRs, but don't fail if they don't exist
             npm run cfn:destroy || echo "No resources to destroy or destruction failed"
+          elif [ "$PLATFORM" = "pulumi" ]; then
+            echo "✅ Pulumi project detected, running Pulumi destroy..."
+            # Try to destroy Pulumi stack but don't fail the pipeline if it errors out
+            pulumi destroy --yes || echo "No resources to destroy or destruction failed"
           else
             echo "ℹ️ Platform '$PLATFORM' with language '$LANGUAGE' not supported for destruction, skipping destroy"
             echo "💡 Consider adding cleanup logic for $PLATFORM/$LANGUAGE projects here"

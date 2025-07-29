@@ -17,6 +17,8 @@ pytest-cov = "*"
 pytest-env = "*"
 pylint = "*"
 pytest = "*"
+pulumi = "*"
+pulumi-aws = "*"
 
 [requires]
 python_version = "3.12.11"
