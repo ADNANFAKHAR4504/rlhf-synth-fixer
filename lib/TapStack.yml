@@ -1,4 +1,3 @@
-
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'S3 + Lambda Event Trigger Stack with Versioning and Public Read Access'
 
@@ -6,7 +5,7 @@ Resources:
   CorpBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 'corp-${AWS::StackName}-assets'
+      BucketName: !Sub 'corp-s3-assets'
       VersioningConfiguration:
         Status: Enabled
       Tags:

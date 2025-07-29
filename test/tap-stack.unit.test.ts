@@ -19,7 +19,7 @@ describe('CloudFormation Template Unit Tests - S3 Lambda Integration Stack', () 
   test('S3 Bucket is created with correct name pattern', () => {
     template.hasResourceProperties('AWS::S3::Bucket', {
       BucketName: {
-        'Fn::Sub': 'corp-${AWS::StackName}-assets'
+        'Fn::Sub': 'corp-s3-assets'
       }
     });
   });

@@ -6,7 +6,7 @@
             "Type": "AWS::S3::Bucket",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "corp-${AWS::StackName}-assets"
+                    "Fn::Sub": "corp-s3-assets"
                 },
                 "VersioningConfiguration": {
                     "Status": "Enabled"
