@@ -8,20 +8,22 @@ let apiBaseUrl: string | null = null;
 
 try {
   const outputsRaw = fs.readFileSync(outputsPath, 'utf8');
-  const outputs = JSON.parse(outputsRaw);
+  // JSON.parse might throw, so wrap in try-catch
+  const outputs: Record<string, unknown> = JSON.parse(outputsRaw);
 
-  apiBaseUrl = outputs[`TapStack${environmentSuffix}.ApiEndpoint`] || null;
-
-  if (!apiBaseUrl) {
-    console.warn(`[WARN] API endpoint not found in outputs for environment: ${environmentSuffix}`);
+  // Safely get the API endpoint string
+  const endpoint = outputs[`TapStack${environmentSuffix}.ApiEndpoint`];
+  if (typeof endpoint === 'string' && endpoint.trim() !== '') {
+    apiBaseUrl = endpoint;
+  } else {
+    console.warn(`[WARN] API endpoint not found or invalid for environment: ${environmentSuffix}`);
   }
-} catch (err: any) {
+} catch (err) {
   console.error(`[ERROR] Failed to read or parse outputs file: ${outputsPath}`, err);
 }
 
 describe('Turn Around Prompt API Integration Tests', () => {
   if (!apiBaseUrl) {
-    // Skip all integration tests when API endpoint is missing
     test.skip('Skipping integration tests because API endpoint is not available', () => {
       console.warn(`[SKIPPED] No API endpoint for environment: ${environmentSuffix}`);
     });
@@ -32,9 +34,12 @@ describe('Turn Around Prompt API Integration Tests', () => {
     test('should return 200 OK and expected JSON structure', async () => {
       try {
         const response = await fetch(`${apiBaseUrl}/health`);
-        const json = await response.json();
 
+        // Check response status
         expect(response.status).toBe(200);
+
+        // Parse JSON safely
+        const json = await response.json();
         expect(json).toBeDefined();
         expect(typeof json).toBe('object');
       } catch (error) {
