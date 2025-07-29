@@ -108,19 +108,17 @@ describe('TapStack Integration Tests', () => {
   
   describe('Application Load Balancer', () => {
     itif(hasOutputs)('should have ALB running and logging enabled', async () => {
-      // FIX: Find the ALB using tags instead of a guessed name
-      const response = await elbv2Client.send(new DescribeLoadBalancersCommand({
-        // Names cannot be used with tags, so we will query by tags and filter client-side
-      }));
+      // Get the ALB DNS from outputs to identify the correct load balancer
+      const albDns = outputs.ALB_DNS || outputs.ALBDNS;
+      expect(albDns).toBeDefined();
+      
+      const response = await elbv2Client.send(new DescribeLoadBalancersCommand({}));
       
       const allLoadBalancers = response.LoadBalancers || [];
-      const taggedLoadBalancers = allLoadBalancers.filter(lb => 
-        lb.Tags?.some(tag => tag.Key === 'Project' && tag.Value === 'SecureCloudEnvironment') &&
-        lb.Tags?.some(tag => tag.Key === 'Environment' && tag.Value === environmentSuffix)
-      );
+      const targetLoadBalancer = allLoadBalancers.find(lb => lb.DNSName === albDns);
 
-      expect(taggedLoadBalancers.length).toBe(1);
-      const alb = taggedLoadBalancers[0];
+      expect(targetLoadBalancer).toBeDefined();
+      const alb = targetLoadBalancer!;
       expect(alb.Scheme).toBe('internet-facing');
       expect(alb.State?.Code).toBe('active');
       
