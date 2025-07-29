@@ -119,7 +119,7 @@ class DatabaseStack(Stack):
     super().__init__(scope, construct_id, **kwargs)
 
     # aurora_version = rds.AuroraMysqlEngineVersion.VER_2_08_1
-    aurora_version = aurora_version = rds.AuroraMysqlEngineVersion.VER_3_04_1
+    aurora_version = rds.AuroraMysqlEngineVersion.VER_3_04_1
 
     # engine = rds.DatabaseClusterEngine.aurora_mysql(version=aurora_version)
     # Create a new parameter group for your Aurora MySQL version
