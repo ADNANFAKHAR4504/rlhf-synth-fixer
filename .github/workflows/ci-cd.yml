@@ -25,6 +25,7 @@ env:
   TERRAFORM_STATE_BUCKET_REGION: 'us-east-1'
   S3_PRODUCTION_BUCKET_NAME: 'iac-rlhf-production'
   PULUMI_STATE_BUCKET: 'iac-rlhf-pulumi-states'
+  PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
 
 jobs:
   detect-metadata:
@@ -319,9 +320,9 @@ jobs:
           elif [ "$PLATFORM" = "pulumi" ]; then
             echo "✅ Pulumi project detected, running Pulumi deploy..."
             echo "Selecting/creating stack..."
-            pipenv run pulumi stack select dev --create
+            pipenv run pulumi stack select dev --create --secrets-provider="default"
             echo "Deploying infrastructure..."
-            pipenv run pulumi up --yes --non-interactive
+            pipenv run pulumi up --yes --non-interactive 
           else
             echo "ℹ️ Unknown deployment method for platform: $PLATFORM, language: $LANGUAGE"
             echo "💡 Supported combinations: cdk+typescript, cdk+python, cfn+yaml, cfn+json"
@@ -334,6 +335,7 @@ jobs:
           TERRAFORM_STATE_BUCKET: ${{ env.TERRAFORM_STATE_BUCKET }}
           TERRAFORM_STATE_BUCKET_REGION: ${{ env.TERRAFORM_STATE_BUCKET_REGION }}
           PULUMI_BACKEND_URL: s3://${{ env.PULUMI_STATE_BUCKET }}
+          PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
 
       - name: Get Deployment Outputs
         run: |
