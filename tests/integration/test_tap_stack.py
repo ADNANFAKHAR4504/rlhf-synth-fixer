@@ -77,8 +77,11 @@ class TestTapStackLiveIntegration(unittest.TestCase):
       self.assertEqual(tags['Environment'], 'dev')
       self.assertEqual(tags['Owner'], 'test-user')
       self.assertEqual(tags['Project'], 'pulumi-dummy')
-    except self.s3_client.exceptions.NoSuchTagSet:
-      self.fail("S3 bucket has no tags, but tags were expected")
+    except Exception as e:
+      if 'NoSuchTagSet' in str(e):
+        self.fail("S3 bucket has no tags, but tags were expected")
+      else:
+        raise e
 
 
 if __name__ == '__main__':

@@ -696,8 +696,12 @@ jobs:
             npm run cfn:destroy || echo "No resources to destroy or destruction failed"
           elif [ "$PLATFORM" = "pulumi" ]; then
             echo "✅ Pulumi project detected, running Pulumi destroy..."
-            # Try to destroy Pulumi stack but don't fail the pipeline if it errors out
-            pipenv run pulumi-destroy || echo "No resources to destroy or destruction failed"
+            echo "Selecting dev stack..."
+            pipenv run pulumi stack select dev --create --secrets-provider="default" || echo "Stack selection failed"
+            echo "Destroying Pulumi infrastructure..."
+            pipenv run pulumi destroy --yes --non-interactive || echo "No resources to destroy or destruction failed"
+            echo "Removing Pulumi stack..."
+            pipenv run pulumi stack rm dev --yes --force || echo "Stack removal failed or stack doesn't exist"
           else
             echo "ℹ️ Platform '$PLATFORM' with language '$LANGUAGE' not supported for destruction, skipping destroy"
             echo "💡 Consider adding cleanup logic for $PLATFORM/$LANGUAGE projects here"
