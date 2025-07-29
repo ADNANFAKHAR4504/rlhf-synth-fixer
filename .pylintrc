@@ -9,7 +9,6 @@ disable=
     R0913, # too-many-arguments
     R0914, # too-many-locals
     R0915, # too-many-statements
-    E0401, # import-error
 
 [FORMAT]
 # Maximum number of characters on a single line
@@ -19,8 +18,8 @@ max-line-length=100
 expected-line-ending-format=LF
 
 # Indentation preference
-indent-string='    '  # 4 spaces (Python standard)
-indent-after-paren=4  # 4 spaces
+indent-string='  '  # 2 spaces
+indent-after-paren=2  # 2 spaces
 
 [BASIC]
 # Good variable names which should always be accepted
