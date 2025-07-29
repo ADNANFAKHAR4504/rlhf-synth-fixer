@@ -67,18 +67,18 @@ describe('TapStack CloudFormation Template - VPC Infrastructure', () => {
     test('VPC should have proper tags', () => {
       const vpc = template.Resources.VPC;
       const tags = vpc.Properties.Tags;
-      
+
       expect(tags).toContainEqual({
         Key: 'Name',
-        Value: { 'Fn::Sub': 'vpc-${EnvironmentSuffix}' }
+        Value: { 'Fn::Sub': 'vpc-${EnvironmentSuffix}' },
       });
       expect(tags).toContainEqual({
         Key: 'Environment',
-        Value: { Ref: 'EnvironmentSuffix' }
+        Value: { Ref: 'EnvironmentSuffix' },
       });
       expect(tags).toContainEqual({
         Key: 'Project',
-        Value: 'VPC-Infrastructure'
+        Value: 'VPC-Infrastructure',
       });
     });
   });
@@ -97,7 +97,9 @@ describe('TapStack CloudFormation Template - VPC Infrastructure', () => {
       expect(template.Resources.InternetGatewayAttachment).toBeDefined();
       const attachment = template.Resources.InternetGatewayAttachment;
       expect(attachment.Type).toBe('AWS::EC2::VPCGatewayAttachment');
-      expect(attachment.Properties.InternetGatewayId).toEqual({ Ref: 'InternetGateway' });
+      expect(attachment.Properties.InternetGatewayId).toEqual({
+        Ref: 'InternetGateway',
+      });
       expect(attachment.Properties.VpcId).toEqual({ Ref: 'VPC' });
     });
   });
@@ -119,10 +121,10 @@ describe('TapStack CloudFormation Template - VPC Infrastructure', () => {
 
       expect(publicSubnet1.Type).toBe('AWS::EC2::Subnet');
       expect(publicSubnet2.Type).toBe('AWS::EC2::Subnet');
-      
+
       expect(publicSubnet1.Properties.CidrBlock).toBe('10.0.1.0/24');
       expect(publicSubnet2.Properties.CidrBlock).toBe('10.0.2.0/24');
-      
+
       expect(publicSubnet1.Properties.MapPublicIpOnLaunch).toBe(true);
       expect(publicSubnet2.Properties.MapPublicIpOnLaunch).toBe(true);
     });
@@ -133,7 +135,7 @@ describe('TapStack CloudFormation Template - VPC Infrastructure', () => {
 
       expect(privateSubnet1.Type).toBe('AWS::EC2::Subnet');
       expect(privateSubnet2.Type).toBe('AWS::EC2::Subnet');
-      
+
       expect(privateSubnet1.Properties.CidrBlock).toBe('10.0.11.0/24');
       expect(privateSubnet2.Properties.CidrBlock).toBe('10.0.12.0/24');
     });
@@ -145,16 +147,16 @@ describe('TapStack CloudFormation Template - VPC Infrastructure', () => {
       const privateSubnet2 = template.Resources.PrivateSubnet2;
 
       expect(publicSubnet1.Properties.AvailabilityZone).toEqual({
-        'Fn::Select': [0, { 'Fn::GetAZs': '' }]
+        'Fn::Select': [0, { 'Fn::GetAZs': '' }],
       });
       expect(publicSubnet2.Properties.AvailabilityZone).toEqual({
-        'Fn::Select': [1, { 'Fn::GetAZs': '' }]
+        'Fn::Select': [1, { 'Fn::GetAZs': '' }],
       });
       expect(privateSubnet1.Properties.AvailabilityZone).toEqual({
-        'Fn::Select': [0, { 'Fn::GetAZs': '' }]
+        'Fn::Select': [0, { 'Fn::GetAZs': '' }],
       });
       expect(privateSubnet2.Properties.AvailabilityZone).toEqual({
-        'Fn::Select': [1, { 'Fn::GetAZs': '' }]
+        'Fn::Select': [1, { 'Fn::GetAZs': '' }],
       });
     });
   });
@@ -176,14 +178,14 @@ describe('TapStack CloudFormation Template - VPC Infrastructure', () => {
 
       expect(natGW1.Type).toBe('AWS::EC2::NatGateway');
       expect(natGW2.Type).toBe('AWS::EC2::NatGateway');
-      
+
       expect(natGW1.Properties.AllocationId).toEqual({
-        'Fn::GetAtt': ['NatGateway1EIP', 'AllocationId']
+        'Fn::GetAtt': ['NatGateway1EIP', 'AllocationId'],
       });
       expect(natGW2.Properties.AllocationId).toEqual({
-        'Fn::GetAtt': ['NatGateway2EIP', 'AllocationId']
+        'Fn::GetAtt': ['NatGateway2EIP', 'AllocationId'],
       });
-      
+
       expect(natGW1.Properties.SubnetId).toEqual({ Ref: 'PublicSubnet1' });
       expect(natGW2.Properties.SubnetId).toEqual({ Ref: 'PublicSubnet2' });
     });
@@ -194,10 +196,10 @@ describe('TapStack CloudFormation Template - VPC Infrastructure', () => {
 
       expect(eip1.Type).toBe('AWS::EC2::EIP');
       expect(eip2.Type).toBe('AWS::EC2::EIP');
-      
+
       expect(eip1.Properties.Domain).toBe('vpc');
       expect(eip2.Properties.Domain).toBe('vpc');
-      
+
       expect(eip1.DependsOn).toBe('InternetGatewayAttachment');
       expect(eip2.DependsOn).toBe('InternetGatewayAttachment');
     });
@@ -214,10 +216,10 @@ describe('TapStack CloudFormation Template - VPC Infrastructure', () => {
     test('should have two private route tables', () => {
       expect(template.Resources.PrivateRouteTable1).toBeDefined();
       expect(template.Resources.PrivateRouteTable2).toBeDefined();
-      
+
       const routeTable1 = template.Resources.PrivateRouteTable1;
       const routeTable2 = template.Resources.PrivateRouteTable2;
-      
+
       expect(routeTable1.Type).toBe('AWS::EC2::RouteTable');
       expect(routeTable2.Type).toBe('AWS::EC2::RouteTable');
     });
@@ -225,7 +227,7 @@ describe('TapStack CloudFormation Template - VPC Infrastructure', () => {
     test('should have default public route', () => {
       expect(template.Resources.DefaultPublicRoute).toBeDefined();
       const route = template.Resources.DefaultPublicRoute;
-      
+
       expect(route.Type).toBe('AWS::EC2::Route');
       expect(route.Properties.DestinationCidrBlock).toBe('0.0.0.0/0');
       expect(route.Properties.GatewayId).toEqual({ Ref: 'InternetGateway' });
@@ -235,19 +237,27 @@ describe('TapStack CloudFormation Template - VPC Infrastructure', () => {
     test('should have default private routes', () => {
       expect(template.Resources.DefaultPrivateRoute1).toBeDefined();
       expect(template.Resources.DefaultPrivateRoute2).toBeDefined();
-      
+
       const route1 = template.Resources.DefaultPrivateRoute1;
       const route2 = template.Resources.DefaultPrivateRoute2;
-      
+
       expect(route1.Properties.NatGatewayId).toEqual({ Ref: 'NatGateway1' });
       expect(route2.Properties.NatGatewayId).toEqual({ Ref: 'NatGateway2' });
     });
 
     test('should have route table associations', () => {
-      expect(template.Resources.PublicSubnet1RouteTableAssociation).toBeDefined();
-      expect(template.Resources.PublicSubnet2RouteTableAssociation).toBeDefined();
-      expect(template.Resources.PrivateSubnet1RouteTableAssociation).toBeDefined();
-      expect(template.Resources.PrivateSubnet2RouteTableAssociation).toBeDefined();
+      expect(
+        template.Resources.PublicSubnet1RouteTableAssociation
+      ).toBeDefined();
+      expect(
+        template.Resources.PublicSubnet2RouteTableAssociation
+      ).toBeDefined();
+      expect(
+        template.Resources.PrivateSubnet1RouteTableAssociation
+      ).toBeDefined();
+      expect(
+        template.Resources.PrivateSubnet2RouteTableAssociation
+      ).toBeDefined();
     });
   });
 
@@ -268,7 +278,7 @@ describe('TapStack CloudFormation Template - VPC Infrastructure', () => {
         'PrivateRouteTable2Id',
         'AvailabilityZones',
         'StackName',
-        'EnvironmentSuffix'
+        'EnvironmentSuffix',
       ];
 
       expectedOutputs.forEach(outputName => {
@@ -281,14 +291,14 @@ describe('TapStack CloudFormation Template - VPC Infrastructure', () => {
       expect(vpcIdOutput.Description).toBe('ID of the VPC');
       expect(vpcIdOutput.Value).toEqual({ Ref: 'VPC' });
       expect(vpcIdOutput.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-VPCId'
+        'Fn::Sub': '${AWS::StackName}-VPCId',
       });
     });
 
     test('subnet outputs should be correct', () => {
       const publicSubnet1Output = template.Outputs.PublicSubnet1Id;
       expect(publicSubnet1Output.Value).toEqual({ Ref: 'PublicSubnet1' });
-      
+
       const privateSubnet1Output = template.Outputs.PrivateSubnet1Id;
       expect(privateSubnet1Output.Value).toEqual({ Ref: 'PrivateSubnet1' });
     });
@@ -327,31 +337,41 @@ describe('TapStack CloudFormation Template - VPC Infrastructure', () => {
   describe('Cost Optimization and Tagging', () => {
     test('all resources should have proper tags for cost tracking', () => {
       const taggedResources = [
-        'VPC', 'InternetGateway', 'PublicSubnet1', 'PublicSubnet2',
-        'PrivateSubnet1', 'PrivateSubnet2', 'NatGateway1EIP', 'NatGateway2EIP',
-        'NatGateway1', 'NatGateway2', 'PublicRouteTable', 'PrivateRouteTable1', 'PrivateRouteTable2'
+        'VPC',
+        'InternetGateway',
+        'PublicSubnet1',
+        'PublicSubnet2',
+        'PrivateSubnet1',
+        'PrivateSubnet2',
+        'NatGateway1EIP',
+        'NatGateway2EIP',
+        'NatGateway1',
+        'NatGateway2',
+        'PublicRouteTable',
+        'PrivateRouteTable1',
+        'PrivateRouteTable2',
       ];
 
       taggedResources.forEach(resourceName => {
         const resource = template.Resources[resourceName];
         if (resource && resource.Properties && resource.Properties.Tags) {
           const tags = resource.Properties.Tags;
-          
+
           expect(tags).toContainEqual({
             Key: 'Environment',
-            Value: { Ref: 'EnvironmentSuffix' }
+            Value: { Ref: 'EnvironmentSuffix' },
           });
           expect(tags).toContainEqual({
             Key: 'Project',
-            Value: 'VPC-Infrastructure'
+            Value: 'VPC-Infrastructure',
           });
           expect(tags).toContainEqual({
             Key: 'Owner',
-            Value: 'DevOps-Team'
+            Value: 'DevOps-Team',
           });
           expect(tags).toContainEqual({
             Key: 'BillingCode',
-            Value: 'INFRA-001'
+            Value: 'INFRA-001',
           });
         }
       });
@@ -360,17 +380,24 @@ describe('TapStack CloudFormation Template - VPC Infrastructure', () => {
 
   describe('Multi-AZ Requirements', () => {
     test('should deploy across multiple availability zones', () => {
-      const subnets = ['PublicSubnet1', 'PublicSubnet2', 'PrivateSubnet1', 'PrivateSubnet2'];
-      
+      const subnets = [
+        'PublicSubnet1',
+        'PublicSubnet2',
+        'PrivateSubnet1',
+        'PrivateSubnet2',
+      ];
+
       subnets.forEach(subnetName => {
         const subnet = template.Resources[subnetName];
         expect(subnet.Properties.AvailabilityZone).toBeDefined();
       });
-      
+
       // Verify different AZs are used
-      const publicSubnet1AZ = template.Resources.PublicSubnet1.Properties.AvailabilityZone;
-      const publicSubnet2AZ = template.Resources.PublicSubnet2.Properties.AvailabilityZone;
-      
+      const publicSubnet1AZ =
+        template.Resources.PublicSubnet1.Properties.AvailabilityZone;
+      const publicSubnet2AZ =
+        template.Resources.PublicSubnet2.Properties.AvailabilityZone;
+
       expect(publicSubnet1AZ['Fn::Select'][0]).toBe(0);
       expect(publicSubnet2AZ['Fn::Select'][0]).toBe(1);
     });
@@ -378,10 +405,14 @@ describe('TapStack CloudFormation Template - VPC Infrastructure', () => {
     test('should have high availability NAT Gateways', () => {
       expect(template.Resources.NatGateway1).toBeDefined();
       expect(template.Resources.NatGateway2).toBeDefined();
-      
+
       // NAT Gateways should be in different subnets
-      expect(template.Resources.NatGateway1.Properties.SubnetId).toEqual({ Ref: 'PublicSubnet1' });
-      expect(template.Resources.NatGateway2.Properties.SubnetId).toEqual({ Ref: 'PublicSubnet2' });
+      expect(template.Resources.NatGateway1.Properties.SubnetId).toEqual({
+        Ref: 'PublicSubnet1',
+      });
+      expect(template.Resources.NatGateway2.Properties.SubnetId).toEqual({
+        Ref: 'PublicSubnet2',
+      });
     });
   });
 });
