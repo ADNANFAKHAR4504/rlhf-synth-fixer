@@ -257,7 +257,7 @@
                                         "kms:Decrypt"
                                     ],
                                     "Resource": {
-                                        "Ref": "KMSKey"
+                                        "Fn::Sub": "arn:aws:kms:${AWS::Region}:${AWS::AccountId}:key/${KMSKey}"
                                     }
                                 }
                             ]

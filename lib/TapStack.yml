@@ -146,7 +146,7 @@ Resources:
               - Effect: Allow
                 Action:
                   - kms:Decrypt
-                Resource: !Ref KMSKey
+                Resource: !Sub arn:aws:kms:${AWS::Region}:${AWS::AccountId}:key/${KMSKey}
 
   ApiGatewayServiceRole:
     Type: AWS::IAM::Role
