@@ -1,3 +1,4 @@
+```yml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: >
   This CloudFormation template sets up a basic cloud environment in the us-west-2 region
@@ -200,3 +201,4 @@ Outputs:
   KeyPairName:
     Description: Key pair name used
     Value: !Ref KeyPairName
+```
