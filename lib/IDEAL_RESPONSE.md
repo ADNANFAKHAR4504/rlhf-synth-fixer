@@ -1,76 +1,72 @@
 """tap_stack.py
-This module defines the TapStack class, which implements a serverless web backend 
+This module defines the TapStack class, which implements a serverless web backend
 architecture using AWS CDK with Python.
 
 The stack includes:
+
 - Lambda Function (Python 3.8)
 - API Gateway HTTP API with CORS
-- S3 Bucket with static website hosting
+- S3 Bucket with static website hosting via CloudFront
+- CloudFront distribution with Origin Access Control
 - DynamoDB Table with GSI
 - CloudWatch monitoring and alarms
 - KMS encryption for S3 and DynamoDB
-"""
-from typing import Optional
+  """
+  from typing import Optional
 
-from aws_cdk import CfnOutput
-from aws_cdk import Duration, RemovalPolicy, Stack, StackProps, Tags
+from aws_cdk import CfnOutput, Duration, RemovalPolicy, Stack, StackProps, Tags
 from aws_cdk import aws_apigatewayv2 as apigw
 from aws_cdk import aws_apigatewayv2_integrations as integrations
+from aws_cdk import aws_cloudfront as cloudfront
 from aws_cdk import aws_cloudwatch as cloudwatch
 from aws_cdk import aws_dynamodb as dynamodb
-from aws_cdk import aws_iam as iam
 from aws_cdk import aws_kms as kms
-from aws_cdk import aws_lambda as _lambda
+from aws_cdk import aws_lambda as \_lambda
 from aws_cdk import aws_logs as logs
 from aws_cdk import aws_s3 as s3
 from constructs import Construct
 
-
 class TapStackProps(StackProps):
-  """
-  TapStackProps defines the properties for the TapStack CDK stack.
+"""
+TapStackProps defines the properties for the TapStack CDK stack.
 
-  Args:
-    environment_suffix (Optional[str]): An optional suffix to identify the 
-    deployment environment (e.g., 'dev', 'prod').
-    **kwargs: Additional keyword arguments passed to the base cdk.StackProps.
+Args:
+environment_suffix (Optional[str]): An optional suffix to identify the
+deployment environment (e.g., 'dev', 'prod').
+\*\*kwargs: Additional keyword arguments passed to the base cdk.StackProps.
 
-  Attributes:
-    environment_suffix (Optional[str]): Stores the environment suffix for the stack.
-  """
+Attributes:
+environment_suffix (Optional[str]): Stores the environment suffix for the stack.
+"""
 
-  def __init__(self, environment_suffix: Optional[str] = None, **kwargs):
-    super().__init__(**kwargs)
-    self.environment_suffix = environment_suffix
-
+def **init**(self, environment_suffix: Optional[str] = None, **kwargs):
+super().**init**(**kwargs)
+self.environment_suffix = environment_suffix
 
 class TapStack(Stack):
-  """
-  Represents the main CDK stack for the Tap project.
+"""
+Represents the main CDK stack for the Tap project.
 
-  This stack is responsible for orchestrating the instantiation of other resource-specific stacks.
-  It determines the environment suffix from the provided properties, 
-    CDK context, or defaults to 'dev'.
-  Note:
-    - Do NOT create AWS resources directly in this stack.
-    - Instead, instantiate separate stacks for each resource type within this stack.
+This stack creates all AWS resources directly instead of using nested stacks.
+It determines the environment suffix from the provided properties,
+CDK context, or defaults to 'dev'.
 
-  Args:
-    scope (Construct): The parent construct.
-    construct_id (str): The unique identifier for this stack.
-    props (Optional[TapStackProps]): Optional properties for configuring the 
-      stack, including environment suffix.
-    **kwargs: Additional keyword arguments passed to the CDK Stack.
+Args:
+scope (Construct): The parent construct.
+construct_id (str): The unique identifier for this stack.
+props (Optional[TapStackProps]): Optional properties for configuring the
+stack, including environment suffix.
+\*\*kwargs: Additional keyword arguments passed to the CDK Stack.
 
-  Attributes:
-    environment_suffix (str): The environment suffix used for resource naming and configuration.
-  """
+Attributes:
+environment_suffix (str): The environment suffix used for resource naming and configuration.
+"""
 
-  def __init__(
-          self,
-          scope: Construct,
-          construct_id: str, props: Optional[TapStackProps] = None, **kwargs):
-    super().__init__(scope, construct_id, **kwargs)
+def **init**(
+self,
+scope: Construct,
+construct_id: str, props: Optional[TapStackProps] = None, **kwargs):
+super().**init**(scope, construct_id, **kwargs)
 
     # Get environment suffix from props, context, or use 'dev' as default
     # Store in a class variable if needed elsewhere in the stack
@@ -143,7 +139,7 @@ class TapStack(Stack):
 
     # Grant least-privilege permissions to Lambda
     table.grant_write_data(lambda_function)
-    
+
     # Note: CloudWatch Logs permissions are automatically granted by CDK
     # when log_retention is set on the Lambda function
 
@@ -174,6 +170,7 @@ class TapStack(Stack):
     )
 
     # S3 Bucket for static website hosting with versioning and KMS encryption
+    # Made private - will be accessed via CloudFront distribution only
     bucket = s3.Bucket(
         self,
         "FrontendBucket",
@@ -182,18 +179,66 @@ class TapStack(Stack):
         encryption_key=s3_kms_key,
         website_index_document="index.html",
         website_error_document="error.html",
-        public_read_access=True,  # Required for static website hosting
-        block_public_access=s3.BlockPublicAccess(
-            block_public_acls=False,
-            block_public_policy=False,
-            ignore_public_acls=False,
-            restrict_public_buckets=False
-        ),
+        public_read_access=False,  # Private bucket - accessed via CloudFront
+        block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
         removal_policy=RemovalPolicy.DESTROY
     )
-    
+
     # Tag bucket with environment: production
     Tags.of(bucket).add("environment", "production")
+
+    # Create CloudFront Origin Access Identity for secure S3 access
+    origin_access_identity = cloudfront.OriginAccessIdentity(
+        self,
+        "WebsiteOAI",
+        comment=f"OAI for static website {self.environment_suffix}"
+    )
+
+    # Grant CloudFront access to S3 bucket
+    bucket.grant_read(origin_access_identity)
+
+    # Create CloudFront distribution for secure static content delivery
+    distribution = cloudfront.CloudFrontWebDistribution(
+        self,
+        "WebsiteDistribution",
+        origin_configs=[
+            cloudfront.SourceConfiguration(
+                s3_origin_source=cloudfront.S3OriginConfig(
+                    s3_bucket_source=bucket,
+                    origin_access_identity=origin_access_identity
+                ),
+                behaviors=[
+                    cloudfront.Behavior(
+                        is_default_behavior=True,
+                        compress=True,
+                        allowed_methods=cloudfront.CloudFrontAllowedMethods.GET_HEAD_OPTIONS,
+                        cached_methods=cloudfront.CloudFrontAllowedCachedMethods.GET_HEAD_OPTIONS,
+                        viewer_protocol_policy=cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+                        min_ttl=Duration.seconds(0),
+                        default_ttl=Duration.seconds(86400),
+                        max_ttl=Duration.seconds(31536000)
+                    )
+                ]
+            )
+        ],
+        default_root_object="index.html",
+        error_configurations=[
+            cloudfront.CfnDistribution.CustomErrorResponseProperty(
+                error_code=404,
+                response_code=200,
+                response_page_path="/error.html",
+                error_caching_min_ttl=300
+            ),
+            cloudfront.CfnDistribution.CustomErrorResponseProperty(
+                error_code=403,
+                response_code=200,
+                response_page_path="/error.html",
+                error_caching_min_ttl=300
+            )
+        ],
+        price_class=cloudfront.PriceClass.PRICE_CLASS_100,
+        enabled=True
+    )
 
     # Basic CloudWatch Alarms for Lambda function failures and throttling
     cloudwatch.Alarm(
@@ -241,9 +286,23 @@ class TapStack(Stack):
 
     CfnOutput(
         self,
-        "S3BucketUrl",
-        value=bucket.bucket_website_url,
-        description="S3 bucket website URL"
+        "WebsiteURL",
+        value=f"https://{distribution.distribution_domain_name}",
+        description="URL of the static website via CloudFront distribution"
+    )
+
+    CfnOutput(
+        self,
+        "CloudFrontDistributionId",
+        value=distribution.distribution_id,
+        description="CloudFront Distribution ID"
+    )
+
+    CfnOutput(
+        self,
+        "CloudFrontDistributionDomain",
+        value=distribution.distribution_domain_name,
+        description="CloudFront Distribution Domain Name"
     )
 
     CfnOutput(
@@ -273,3 +332,76 @@ class TapStack(Stack):
         value=self.stack_name,
         description="Name of the CloudFormation stack"
     )
+
+import json
+import logging
+import os
+from datetime import datetime, timezone
+from typing import Any, Dict
+
+import boto3
+
+# Configure logging
+
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+
+# Initialize DynamoDB
+
+dynamodb = boto3.resource('dynamodb')
+table = dynamodb.Table(os.environ['TABLE_NAME'])
+
+def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
+"""Main Lambda handler for processing API Gateway requests."""
+try: # Parse the HTTP method and path
+http_method = event.get('requestContext', {}).get('http', {}).get('method', 'GET')
+path = event.get('pathParameters', {}).get('proxy', 'home')
+request_id = event.get('requestContext', {}).get('requestId', 'unknown')
+source_ip = event.get('requestContext', {}).get('http', {}).get('sourceIp', 'unknown')
+
+        # Generate timestamp
+        timestamp = datetime.now(timezone.utc).isoformat()
+
+        # Log visit details
+        logger.info(f"Recording visit: path=/{path}, ip={source_ip}, method={http_method}")
+
+        # Store visit in DynamoDB
+        item = {
+            'id': request_id,
+            'timestamp': timestamp,
+            'ip': source_ip,
+            'path': f"/{path}",
+            'method': http_method
+        }
+
+        table.put_item(Item=item)
+
+        # Return successful response
+        return {
+            'statusCode': 200,
+            'headers': {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*',
+                'Access-Control-Allow-Headers': 'Content-Type,Authorization',
+                'Access-Control-Allow-Methods': 'GET,POST,OPTIONS'
+            },
+            'body': json.dumps({
+                'message': 'Visit logged successfully',
+                'path': f"/{path}",
+                'timestamp': timestamp
+            })
+        }
+
+    except Exception as e:
+        logger.error(f"Error recording visit: {str(e)}")
+        return {
+            'statusCode': 500,
+            'headers': {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*'
+            },
+            'body': json.dumps({
+                'message': 'Internal server error',
+                'error': str(e)
+            })
+        }
