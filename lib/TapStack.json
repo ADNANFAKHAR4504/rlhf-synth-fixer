@@ -5,7 +5,6 @@
         "ProjectXDataProcessorRole": {
             "Type": "AWS::IAM::Role",
             "Properties": {
-                "RoleName": "projectX-dataProcessor-role",
                 "AssumeRolePolicyDocument": {
                     "Version": "2012-10-17",
                     "Statement": [
@@ -43,7 +42,6 @@
         "ProjectXResponseHandlerRole": {
             "Type": "AWS::IAM::Role",
             "Properties": {
-                "RoleName": "projectX-responseHandler-role",
                 "AssumeRolePolicyDocument": {
                     "Version": "2012-10-17",
                     "Statement": [
