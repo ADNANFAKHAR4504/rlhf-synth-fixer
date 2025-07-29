@@ -335,6 +335,9 @@ Resources:
     Properties:
       LaunchTemplateName: !Sub ${EnvironmentSuffix}-${Name}-launch-template-${Team}
       LaunchTemplateData:
+        MetadataOptions:
+          HttpEndpoint: enabled
+          HttpTokens: required
         ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}'
         InstanceType: t3.micro
         KeyName: !Ref KeyPairName

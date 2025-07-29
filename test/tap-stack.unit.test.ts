@@ -25,12 +25,12 @@ describe('TapStack CloudFormation Template', () => {
   describe('Parameters', () => {
     it('defines all required parameters with correct defaults', () => {
       expect(template.Parameters.EnvironmentSuffix).toBeDefined();
-      expect(template.Parameters.EnvironmentSuffix.Default).toBe('dev');
-      expect(template.Parameters.EnvironmentSuffix.AllowedValues).toEqual([
-        'dev',
-        'staging',
-        'prod',
-      ]);
+      expect(template.Parameters.EnvironmentSuffix.AllowedPattern).toBe(
+        '^[a-zA-Z0-9-]+$'
+      );
+      expect(
+        template.Parameters.EnvironmentSuffix.ConstraintDescription
+      ).toBeDefined();
 
       expect(template.Parameters.Name).toBeDefined();
       expect(template.Parameters.Name.Default).toBe('tapstack');
@@ -83,6 +83,41 @@ describe('TapStack CloudFormation Template', () => {
       ];
       Object.keys(template.Parameters).forEach(key => {
         expect(allowed).toContain(key);
+      });
+    });
+
+    it('validates EnvironmentSuffix AllowedPattern allows correct values', () => {
+      const allowedPattern =
+        template.Parameters.EnvironmentSuffix.AllowedPattern;
+      expect(allowedPattern).toBe('^[a-zA-Z0-9-]+$');
+
+      // Test that the pattern allows valid values
+      const validValues = [
+        'dev',
+        'prod',
+        'staging',
+        'pr256',
+        'pr265',
+        'test-123',
+        'feature-branch',
+      ];
+      const pattern = new RegExp(allowedPattern);
+
+      validValues.forEach(value => {
+        expect(pattern.test(value)).toBe(true);
+      });
+
+      // Test that the pattern rejects invalid values
+      const invalidValues = [
+        'dev@',
+        'prod#',
+        'staging$',
+        'test space',
+        'test.123',
+      ];
+
+      invalidValues.forEach(value => {
+        expect(pattern.test(value)).toBe(false);
       });
     });
   });
