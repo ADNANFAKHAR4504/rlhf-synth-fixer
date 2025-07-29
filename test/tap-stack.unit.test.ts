@@ -222,21 +222,31 @@ describe('TapStack', () => {
   });
 
   describe('with context-based environment suffix', () => {
-    beforeEach(() => {
-      app = new cdk.App({
-        context: {
-          environmentSuffix: 'staging',
-        },
-      });
-      const stack = new TapStack(app, 'TestTapStack');
-      template = Template.fromStack(stack);
-    });
-
     test('uses context environment suffix when props not provided', () => {
+      const app = new cdk.App({ context: { environmentSuffix: 'staging' } });
+      const stack = new TapStack(app, 'TestStack', {});
+      const template = Template.fromStack(stack);
+
       template.hasResourceProperties('AWS::EC2::VPC', {
         Tags: Match.arrayWith([
           Match.objectLike({ Key: 'Name', Value: 'staging-vpc' }),
         ]),
+      });
+    });
+
+    test('falls back to dev when no environment suffix provided anywhere', () => {
+      const app = new cdk.App();
+      const stack = new TapStack(app, 'TestStack', {});
+      const template = Template.fromStack(stack);
+
+      template.hasResourceProperties('AWS::EC2::VPC', {
+        Tags: Match.arrayWith([
+          Match.objectLike({ Key: 'Name', Value: 'dev-vpc' }),
+        ]),
+      });
+
+      template.hasOutput('VpcId', {
+        Export: { Name: 'dev-vpc-id' },
       });
     });
   });
@@ -272,7 +282,6 @@ describe('TapStack', () => {
     });
 
     test('all resources have proper tagging', () => {
-      // Check that all major resources have Name tag
       template.hasResourceProperties('AWS::EC2::VPC', {
         Tags: Match.arrayWith([
           Match.objectLike({ Key: 'Name', Value: 'test-vpc' }),
@@ -305,10 +314,8 @@ describe('TapStack', () => {
     });
 
     test('private subnet has no internet routes', () => {
-      // Verify there's only one route (public subnet to IGW)
       template.resourceCountIs('AWS::EC2::Route', 1);
 
-      // Verify the route is for public subnet only
       template.hasResourceProperties('AWS::EC2::Route', {
         RouteTableId: { Ref: Match.stringLikeRegexp('testpublicrt') },
       });
