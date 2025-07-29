@@ -28,8 +28,8 @@ try {
 }
 
 // Initialize AWS clients
-const ec2Client = new EC2Client({ region: 'us-east-1' });
-const elbClient = new ElasticLoadBalancingV2Client({ region: 'us-east-1' });
+const ec2Client = new EC2Client({ region: 'us-west-2' });
+const elbClient = new ElasticLoadBalancingV2Client({ region: 'us-west-2' });
 
 // --- Static resource names defined in the CloudFormation template ---
 const vpcName = 'ProdVPC';
