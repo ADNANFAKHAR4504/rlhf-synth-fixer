@@ -1,6 +1,6 @@
 {
     "AWSTemplateFormatVersion": "2010-09-09",
-    "Description": "Secure Web Application Infrastructure with KMS, API Gateway Logging, IAM Roles, VPC, and HTTPS-only Security Groups.",
+    "Description": "Secure Web Application Infrastructure: - KMS encryption for S3 - API Gateway logging - Least-privilege IAM roles - VPC with internal subnets - HTTPS-only security groups\n",
     "Parameters": {
         "EnvironmentName": {
             "Type": "String",
@@ -87,20 +87,6 @@
                 }
             }
         },
-        "ApiGatewayDeployment": {
-            "Type": "AWS::ApiGateway::Deployment",
-            "DependsOn": [
-                "ApiGatewayStage"
-            ],
-            "Properties": {
-                "RestApiId": {
-                    "Ref": "ApiGatewayRestApi"
-                },
-                "StageName": {
-                    "Ref": "EnvironmentName"
-                }
-            }
-        },
         "ApiGatewayStage": {
             "Type": "AWS::ApiGateway::Stage",
             "Properties": {
@@ -129,6 +115,18 @@
                 ]
             }
         },
+        "ApiGatewayDeployment": {
+            "Type": "AWS::ApiGateway::Deployment",
+            "DependsOn": "ApiGatewayStage",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "ApiGatewayRestApi"
+                },
+                "StageName": {
+                    "Ref": "EnvironmentName"
+                }
+            }
+        },
         "WebAppRole": {
             "Type": "AWS::IAM::Role",
             "Properties": {
@@ -149,7 +147,7 @@
                 },
                 "Policies": [
                     {
-                        "PolicyName": "S3AccessPolicy",
+                        "PolicyName": "WebAppS3Access",
                         "PolicyDocument": {
                             "Version": "2012-10-17",
                             "Statement": [
@@ -165,7 +163,9 @@
                                 },
                                 {
                                     "Effect": "Allow",
-                                    "Action": "kms:Decrypt",
+                                    "Action": [
+                                        "kms:Decrypt"
+                                    ],
                                     "Resource": {
                                         "Ref": "KMSKey"
                                     }
@@ -236,8 +236,6 @@
                 "SecurityGroupEgress": [
                     {
                         "IpProtocol": -1,
-                        "FromPort": 0,
-                        "ToPort": 0,
                         "CidrIp": "0.0.0.0/0"
                     }
                 ],

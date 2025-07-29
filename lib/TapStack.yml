@@ -1,5 +1,11 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: Secure Web Application Infrastructure with KMS, API Gateway Logging, IAM Roles, VPC, and HTTPS-only Security Groups.
+Description: >
+  Secure Web Application Infrastructure:
+  - KMS encryption for S3
+  - API Gateway logging
+  - Least-privilege IAM roles
+  - VPC with internal subnets
+  - HTTPS-only security groups
 
 Parameters:
   EnvironmentName:
@@ -9,7 +15,6 @@ Parameters:
 
 Resources:
 
-  ### 1. KMS Key for S3 Encryption ###
   KMSKey:
     Type: AWS::KMS::Key
     Properties:
@@ -30,7 +35,6 @@ Resources:
       AliasName: !Sub alias/${EnvironmentName}-s3-key
       TargetKeyId: !Ref KMSKey
 
-  ### 2. S3 Bucket with KMS Encryption ###
   AppDataBucket:
     Type: AWS::S3::Bucket
     Properties:
@@ -43,7 +47,6 @@ Resources:
       VersioningConfiguration:
         Status: Enabled
 
-  ### 3. API Gateway with Logging Enabled ###
   ApiLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
@@ -55,14 +58,8 @@ Resources:
     Properties:
       Name: !Sub ${EnvironmentName}-WebAppApi
       EndpointConfiguration:
-        Types: ["REGIONAL"]
-
-  ApiGatewayDeployment:
-    Type: AWS::ApiGateway::Deployment
-    DependsOn: [ApiGatewayStage]
-    Properties:
-      RestApiId: !Ref ApiGatewayRestApi
-      StageName: !Ref EnvironmentName
+        Types:
+          - REGIONAL
 
   ApiGatewayStage:
     Type: AWS::ApiGateway::Stage
@@ -78,22 +75,28 @@ Resources:
           LoggingLevel: INFO
           MetricsEnabled: true
 
-  ### 4. IAM Roles with Least Privilege ###
+  ApiGatewayDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn: ApiGatewayStage
+    Properties:
+      RestApiId: !Ref ApiGatewayRestApi
+      StageName: !Ref EnvironmentName
+
   WebAppRole:
     Type: AWS::IAM::Role
     Properties:
       RoleName: !Sub ${EnvironmentName}-WebAppRole
       AssumeRolePolicyDocument:
-        Version: '2012-10-17'
+        Version: "2012-10-17"
         Statement:
           - Effect: Allow
             Principal:
               Service: ec2.amazonaws.com
             Action: sts:AssumeRole
       Policies:
-        - PolicyName: S3AccessPolicy
+        - PolicyName: WebAppS3Access
           PolicyDocument:
-            Version: '2012-10-17'
+            Version: "2012-10-17"
             Statement:
               - Effect: Allow
                 Action:
@@ -101,10 +104,10 @@ Resources:
                   - s3:PutObject
                 Resource: !Sub arn:aws:s3:::${EnvironmentName}-app-data-${AWS::AccountId}/*
               - Effect: Allow
-                Action: kms:Decrypt
+                Action:
+                  - kms:Decrypt
                 Resource: !Ref KMSKey
 
-  ### 5. VPC Setup ###
   AppVPC:
     Type: AWS::EC2::VPC
     Properties:
@@ -126,7 +129,6 @@ Resources:
         - Key: Name
           Value: !Sub ${EnvironmentName}-public-subnet-1
 
-  ### 6. Security Group for HTTPS Traffic Only ###
   WebAppSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -139,8 +141,6 @@ Resources:
           CidrIp: 0.0.0.0/0
       SecurityGroupEgress:
         - IpProtocol: -1
-          FromPort: 0
-          ToPort: 0
           CidrIp: 0.0.0.0/0
       Tags:
         - Key: Name
