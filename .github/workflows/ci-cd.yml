@@ -99,6 +99,13 @@ jobs:
           python -m pip install --upgrade pip
           pip install pipenv==2025.0.4
 
+      - name: Install Pulumi CLI
+        if: needs.synth.outputs.platform == 'pulumi'
+        uses: pulumi/actions@v5
+        with:
+          pulumi-version: 3.109.0
+          
+
       - name: Verify Node.js version
         run: |
           node --version
@@ -128,11 +135,6 @@ jobs:
           fi
           echo "✅ Pipenv version is correct: $PIPENV_VERSION"
 
-      - name: Install Pulumi CLI
-        if: needs.synth.outputs.platform == 'pulumi'
-        uses: pulumi/actions@v5
-        with:
-          pulumi-version: 3.109.0
 
   build:
     name: Build
