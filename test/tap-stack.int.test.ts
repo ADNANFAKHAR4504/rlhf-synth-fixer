@@ -503,7 +503,7 @@ describe('TapStack Integration Tests', () => {
       const aliases = response.Aliases || [];
 
       const expectedAlias = `alias/tapstack-${environmentSuffix}`;
-      const alias = aliases.find(a => a.AliasName === expectedAlias);
+      const alias = aliases.find((a: any) => a.AliasName === expectedAlias);
       expect(alias).toBeDefined();
     });
   });
