@@ -26,16 +26,7 @@
                         "default": "Database Configuration"
                     },
                     "Parameters": [
-                        "DBInstanceClass",
-                        "DBPassword"
-                    ]
-                },
-                {
-                    "Label": {
-                        "default": "SSL Configuration"
-                    },
-                    "Parameters": [
-                        "DomainName"
+                        "DBInstanceClass"
                     ]
                 }
             ],
@@ -51,12 +42,6 @@
                 },
                 "DBInstanceClass": {
                     "default": "RDS Instance Class"
-                },
-                "DBPassword": {
-                    "default": "Database Password"
-                },
-                "DomainName": {
-                    "default": "Domain Name for SSL Certificate"
                 }
             }
         }
@@ -95,21 +80,6 @@
                 "db.t3.small",
                 "db.t3.medium"
             ]
-        },
-        "DBPassword": {
-            "Type": "String",
-            "Description": "Password for the RDS database (must be 8-41 characters)",
-            "MinLength": 8,
-            "MaxLength": 41,
-            "NoEcho": true,
-            "Default": "MySecurePassword123!"
-        },
-        "DomainName": {
-            "Type": "String",
-            "Default": "example.com",
-            "Description": "Domain name for SSL certificate",
-            "AllowedPattern": "^[a-zA-Z0-9][a-zA-Z0-9-]{1,61}[a-zA-Z0-9]\\.[a-zA-Z]{2,}$",
-            "ConstraintDescription": "Must be a valid domain name"
         }
     },
     "Resources": {
@@ -270,6 +240,39 @@
                 "TargetKeyId": {
                     "Ref": "KMSKey"
                 }
+            }
+        },
+        "DBSecret": {
+            "Type": "AWS::SecretsManager::Secret",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "tap-db-secret-${EnvironmentSuffix}"
+                },
+                "Description": "Database password for RDS instance",
+                "GenerateSecretString": {
+                    "SecretStringTemplate": "{\"username\": \"admin\"}",
+                    "GenerateStringKey": "password",
+                    "PasswordLength": 32,
+                    "ExcludeCharacters": " %+~`#$&*()|[]{}:;<>?!'/\"\\",
+                    "RequireEachIncludedType": true
+                },
+                "KmsKeyId": {
+                    "Ref": "KMSKey"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "TapDBSecret-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
             }
         },
         "VPC": {
@@ -1105,9 +1108,7 @@
                     "Fn::Sub": "TapLaunchTemplate-${EnvironmentSuffix}"
                 },
                 "LaunchTemplateData": {
-                    "ImageId": {
-                        "Fn::Sub": "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}"
-                    },
+                    "ImageId": "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}",
                     "InstanceType": {
                         "Ref": "InstanceType"
                     },
@@ -1343,7 +1344,7 @@
                 "EngineVersion": "8.0.35",
                 "MasterUsername": "admin",
                 "MasterUserPassword": {
-                    "Ref": "DBPassword"
+                    "Fn::Sub": "{{resolve:secretsmanager:${DBSecret}:SecretString:password}}"
                 },
                 "AllocatedStorage": 20,
                 "StorageType": "gp3",
