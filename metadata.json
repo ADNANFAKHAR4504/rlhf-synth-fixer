@@ -1,7 +1,0 @@
-{
-  "platform": "cfn",
-  "language": "yaml",
-  "complexity": "medium",
-  "turn_type": "multi",
-  "po_id": "274777"
-}
