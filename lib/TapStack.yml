@@ -96,7 +96,7 @@ Resources:
     Properties:
       InstanceType: t2.micro
       KeyName: !If [HasKeyName, !Ref EC2KeyName, !Ref "AWS::NoValue"]
-      ImageId: ami-053b0d53c279acc90  # Amazon Linux 2023 for us-east-1
+      ImageId: ami-083e865b97bdf1c1b  # Amazon Linux 2023 for us-east-1
       NetworkInterfaces:
         - AssociatePublicIpAddress: true
           DeviceIndex: 0
