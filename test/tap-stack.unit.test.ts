@@ -190,6 +190,66 @@ describe('TapStack', () => {
       expect(stack.lambdaRole).toBeDefined();
       expect(stack.logGroup).toBeDefined();
     });
+
+    test('should use custom environment suffix when provided in props', () => {
+      const customApp = new cdk.App();
+      const customStack = new TapStack(customApp, 'CustomTestStack', { 
+        environmentSuffix: 'custom-env' 
+      });
+      const customTemplate = Template.fromStack(customStack);
+
+      customTemplate.hasResourceProperties('AWS::S3::Bucket', {
+        BucketName: 'iot-data-bucket-custom-env',
+      });
+
+      customTemplate.hasResourceProperties('AWS::DynamoDB::Table', {
+        TableName: 'iot-processed-data-custom-env',
+      });
+
+      customTemplate.hasResourceProperties('AWS::IAM::Role', {
+        RoleName: 'iot-data-processor-role-custom-env',
+      });
+    });
+
+    test('should use environment suffix from CDK context', () => {
+      const contextApp = new cdk.App({
+        context: {
+          environmentSuffix: 'context-env'
+        }
+      });
+      const contextStack = new TapStack(contextApp, 'ContextTestStack');
+      const contextTemplate = Template.fromStack(contextStack);
+
+      contextTemplate.hasResourceProperties('AWS::S3::Bucket', {
+        BucketName: 'iot-data-bucket-context-env',
+      });
+
+      contextTemplate.hasResourceProperties('AWS::DynamoDB::Table', {
+        TableName: 'iot-processed-data-context-env',
+      });
+
+      contextTemplate.hasResourceProperties('AWS::IAM::Role', {
+        RoleName: 'iot-data-processor-role-context-env',
+      });
+    });
+
+    test('should use default environment suffix when neither props nor context provide it', () => {
+      const defaultApp = new cdk.App();
+      const defaultStack = new TapStack(defaultApp, 'DefaultTestStack');
+      const defaultTemplate = Template.fromStack(defaultStack);
+
+      defaultTemplate.hasResourceProperties('AWS::S3::Bucket', {
+        BucketName: 'iot-data-bucket-dev',
+      });
+
+      defaultTemplate.hasResourceProperties('AWS::DynamoDB::Table', {
+        TableName: 'iot-processed-data-dev',
+      });
+
+      defaultTemplate.hasResourceProperties('AWS::IAM::Role', {
+        RoleName: 'iot-data-processor-role-dev',
+      });
+    });
   });
 
   describe('Resource Count Validation', () => {
