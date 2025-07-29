@@ -23,7 +23,8 @@ describe('SecureVpcStack Integration (AWS SDK)', () => {
     const vpcs = await ec2.send(
       new DescribeVpcsCommand({
         Filters: [
-          { Name: 'tag:CommitAuthor', Values: [process.env.COMMIT_AUTHOR!] },
+          { Name: 'cidr', Values: [VPC_CIDR] },
+          { Name: 'tag:CommitAuthor', Values: ['inframarauder'] },
         ],
       })
     );
