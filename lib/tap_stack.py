@@ -19,62 +19,62 @@ from pulumi_aws import s3  # example import for any AWS resource
 
 
 class TapStackArgs:
-    """
-    TapStackArgs defines the input arguments for the TapStack Pulumi component.
+  """
+  TapStackArgs defines the input arguments for the TapStack Pulumi component.
 
-    Args:
-        environment_suffix (Optional[str]): An optional suffix for identifying the deployment environment (e.g., 'dev', 'prod').
-        tags (Optional[dict]): Optional default tags to apply to resources.
-    """
+  Args:
+    environment_suffix (Optional[str]): An optional suffix for identifying the deployment environment (e.g., 'dev', 'prod').
+    tags (Optional[dict]): Optional default tags to apply to resources.
+  """
 
-    def __init__(self, environment_suffix: Optional[str] = None, tags: Optional[dict] = None):
-        self.environment_suffix = environment_suffix or 'dev'
-        self.tags = tags or {
-            "Environment": self.environment_suffix,
-            "Owner": "test-user",
-            "Project": "pulumi-dummy"
-        }
+  def __init__(self, environment_suffix: Optional[str] = None, tags: Optional[dict] = None):
+    self.environment_suffix = environment_suffix or 'dev'
+    self.tags = tags or {
+      "Environment": self.environment_suffix,
+      "Owner": "test-user",
+      "Project": "pulumi-dummy"
+    }
 
 
 class TapStack(pulumi.ComponentResource):
-    """
-    Represents the main Pulumi component resource for the TAP project.
+  """
+  Represents the main Pulumi component resource for the TAP project.
 
-    This component orchestrates the instantiation of other resource-specific components
-    and manages the environment suffix used for naming and configuration.
+  This component orchestrates the instantiation of other resource-specific components
+  and manages the environment suffix used for naming and configuration.
 
-    Note:
-        - DO NOT create resources directly here unless they are truly global.
-        - Use other components (e.g., DynamoDBStack) for AWS resource definitions.
+  Note:
+    - DO NOT create resources directly here unless they are truly global.
+    - Use other components (e.g., DynamoDBStack) for AWS resource definitions.
 
-    Args:
-        name (str): The logical name of this Pulumi component.
-        args (TapStackArgs): Configuration arguments including environment suffix and tags.
-        opts (ResourceOptions): Pulumi options.
-    """
+  Args:
+    name (str): The logical name of this Pulumi component.
+    args (TapStackArgs): Configuration arguments including environment suffix and tags.
+    opts (ResourceOptions): Pulumi options.
+  """
 
-    def __init__(
-        self,
-        name: str,
-        args: TapStackArgs,
-        opts: Optional[ResourceOptions] = None
-    ):
-        super().__init__('tap:stack:TapStack', name, None, opts)
+  def __init__(
+    self,
+    name: str,
+    args: TapStackArgs,
+    opts: Optional[ResourceOptions] = None
+  ):
+    super().__init__('tap:stack:TapStack', name, None, opts)
 
-        self.environment_suffix = args.environment_suffix
-        self.tags = args.tags
+    self.environment_suffix = args.environment_suffix
+    self.tags = args.tags
 
-        # ✅ Example dummy S3 bucket to test integration
-        bucket = s3.Bucket(
-            resource_name=f"tap-dummy-bucket-{self.environment_suffix}",
-            tags=self.tags,
-            opts=ResourceOptions(parent=self)
-        )
+    # ✅ Example dummy S3 bucket to test integration
+    bucket = s3.Bucket(
+      resource_name=f"tap-dummy-bucket-{self.environment_suffix}",
+      tags=self.tags,
+      opts=ResourceOptions(parent=self)
+    )
 
-        # ✅ Optionally export the bucket name
-        pulumi.export("dummy_bucket_name", bucket.bucket)
+    # ✅ Optionally export the bucket name
+    pulumi.export("dummy_bucket_name", bucket.bucket)
 
-        # Register outputs if needed
-        self.register_outputs({
-            "dummy_bucket_name": bucket.bucket
-        })
+    # Register outputs if needed
+    self.register_outputs({
+      "dummy_bucket_name": bucket.bucket
+    })

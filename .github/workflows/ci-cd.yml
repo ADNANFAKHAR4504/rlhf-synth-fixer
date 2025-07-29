@@ -310,7 +310,7 @@ jobs:
             npm run cfn:deploy-json
           elif [ "$PLATFORM" = "pulumi" ]; then
             echo "✅ Pulumi project detected, running Pulumi deploy..."
-            pipenv run pulumi:deploy
+            pipenv run pulumi-deploy
           else
             echo "ℹ️ Unknown deployment method for platform: $PLATFORM, language: $LANGUAGE"
             echo "💡 Supported combinations: cdk+typescript, cdk+python, cfn+yaml, cfn+json"
@@ -681,7 +681,7 @@ jobs:
           elif [ "$PLATFORM" = "pulumi" ]; then
             echo "✅ Pulumi project detected, running Pulumi destroy..."
             # Try to destroy Pulumi stack but don't fail the pipeline if it errors out
-            npm run pulumi:destroy || echo "No resources to destroy or destruction failed"
+            pipenv run pulumi-destroy || echo "No resources to destroy or destruction failed"
           else
             echo "ℹ️ Platform '$PLATFORM' with language '$LANGUAGE' not supported for destruction, skipping destroy"
             echo "💡 Consider adding cleanup logic for $PLATFORM/$LANGUAGE projects here"
@@ -1016,7 +1016,7 @@ jobs:
             npm run cfn:destroy || echo "No resources to destroy or destruction failed"
           elif [ "$PLATFORM" = "pulumi" ]; then
             echo "✅ Pulumi project detected, running Pulumi destroy..."
-            npm run pulumi:destroy || echo "No resources to destroy or destruction failed"
+            pipenv run pulumi-destroy || echo "No resources to destroy or destruction failed"
           else
             echo "ℹ️ Platform '$PLATFORM' not supported for destruction, skipping destroy"
             echo "💡 Consider adding cleanup logic for $PLATFORM projects here"
