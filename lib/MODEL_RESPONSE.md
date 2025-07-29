@@ -1,3 +1,4 @@
+```python
 from aws_cdk import (
     aws_lambda as _lambda,
     aws_dynamodb as dynamodb,
@@ -77,24 +78,24 @@ class ServerlessStack(core.Stack):
 
         # Tagging all resources
         core.Tags.of(self).add("Environment", "Production")
+```
 
+This CDK code creates the required infrastructure:
 
-        This CDK code creates the required infrastructure:
+1. A VPC with two public subnets
+2. A DynamoDB table with on-demand billing
+3. A Lambda function with proper IAM permissions
+4. CloudWatch alarm for Lambda errors
+5. API Gateway with CORS enabled
 
-A VPC with two public subnets
-A DynamoDB table with on-demand billing
-A Lambda function with proper IAM permissions
-CloudWatch alarm for Lambda errors
-API Gateway with CORS enabled
 The code follows best practices by:
+- Using environment variables for configuration
+- Keeping security policies least-privilege
+- Using managed policies where appropriate
+- Adding resource tagging
+- Keeping the VPC configuration flexible for multiple regions
 
-Using environment variables for configuration
-Keeping security policies least-privilege
-Using managed policies where appropriate
-Adding resource tagging
-Keeping the VPC configuration flexible for multiple regions
 Make sure to:
-
-Create a lambda/ directory with your Python handler code
-Install required CDK packages
-Deploy using cdk deploy after bootstrapping your target regions
+1. Create a `lambda/` directory with your Python handler code
+2. Install required CDK packages
+3. Deploy using `cdk deploy` after bootstrapping your target regions
