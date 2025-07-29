@@ -5,7 +5,7 @@ import { GetBucketEncryptionCommand, GetBucketLifecycleConfigurationCommand, Get
 import { GetParameterCommand, SSMClient } from '@aws-sdk/client-ssm';
 
 // Get environment suffix from environment variable (set by CI/CD pipeline)
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'pr179';
+const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 const region = process.env.AWS_REGION || 'us-east-1';
 const stackName = `TapStack${environmentSuffix}`;
 
