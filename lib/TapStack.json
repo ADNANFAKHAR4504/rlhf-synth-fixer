@@ -1,11 +1,11 @@
 {
     "AWSTemplateFormatVersion": "2010-09-09",
-    "Description": "Secure Web Application Infrastructure: - KMS encryption for S3 - API Gateway logging - Least-privilege IAM roles - VPC with internal subnets - HTTPS-only security groups\n",
+    "Description": "Secure Web Application Infrastructure",
     "Parameters": {
         "EnvironmentName": {
             "Type": "String",
             "Default": "prod",
-            "Description": "Environment name (e.g., dev, test, prod)"
+            "Description": "Environment name"
         }
     },
     "Resources": {
@@ -65,71 +65,167 @@
                 }
             }
         },
-        "ApiLogGroup": {
-            "Type": "AWS::Logs::LogGroup",
+        "AppVPC": {
+            "Type": "AWS::EC2::VPC",
             "Properties": {
-                "LogGroupName": {
-                    "Fn::Sub": "/aws/apigateway/${EnvironmentName}-api"
-                },
-                "RetentionInDays": 14
-            }
-        },
-        "ApiGatewayRestApi": {
-            "Type": "AWS::ApiGateway::RestApi",
-            "Properties": {
-                "Name": {
-                    "Fn::Sub": "${EnvironmentName}-WebAppApi"
-                },
-                "EndpointConfiguration": {
-                    "Types": [
-                        "REGIONAL"
-                    ]
-                }
-            }
-        },
-        "ApiGatewayStage": {
-            "Type": "AWS::ApiGateway::Stage",
-            "Properties": {
-                "RestApiId": {
-                    "Ref": "ApiGatewayRestApi"
-                },
-                "StageName": {
-                    "Ref": "EnvironmentName"
-                },
-                "AccessLogSetting": {
-                    "DestinationArn": {
-                        "Fn::GetAtt": [
-                            "ApiLogGroup",
-                            "Arn"
-                        ]
-                    },
-                    "Format": "{\"requestId\":\"$context.requestId\",\"ip\":\"$context.identity.sourceIp\",\"caller\":\"$context.identity.caller\",\"requestTime\":\"$context.requestTime\",\"httpMethod\":\"$context.httpMethod\",\"resourcePath\":\"$context.resourcePath\",\"status\":\"$context.status\"}"
-                },
-                "MethodSettings": [
+                "CidrBlock": "10.0.0.0/16",
+                "EnableDnsSupport": true,
+                "EnableDnsHostnames": true,
+                "Tags": [
                     {
-                        "ResourcePath": "/*",
-                        "HttpMethod": "*",
-                        "LoggingLevel": "INFO",
-                        "MetricsEnabled": true
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-vpc"
+                        }
                     }
                 ]
             }
         },
-        "ApiGatewayDeployment": {
-            "Type": "AWS::ApiGateway::Deployment",
-            "DependsOn": "ApiGatewayStage",
+        "InternetGateway": {
+            "Type": "AWS::EC2::InternetGateway"
+        },
+        "AttachGateway": {
+            "Type": "AWS::EC2::VPCGatewayAttachment",
             "Properties": {
-                "RestApiId": {
-                    "Ref": "ApiGatewayRestApi"
+                "VpcId": {
+                    "Ref": "AppVPC"
                 },
-                "StageName": {
-                    "Ref": "EnvironmentName"
+                "InternetGatewayId": {
+                    "Ref": "InternetGateway"
                 }
+            }
+        },
+        "PublicRouteTable": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "AppVPC"
+                }
+            }
+        },
+        "PublicRoute": {
+            "Type": "AWS::EC2::Route",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "GatewayId": {
+                    "Ref": "InternetGateway"
+                }
+            }
+        },
+        "PublicSubnet1": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "AppVPC"
+                },
+                "CidrBlock": "10.0.1.0/24",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "MapPublicIpOnLaunch": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-public-subnet-1"
+                        }
+                    }
+                ]
+            }
+        },
+        "PublicSubnet2": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "AppVPC"
+                },
+                "CidrBlock": "10.0.2.0/24",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "MapPublicIpOnLaunch": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-public-subnet-2"
+                        }
+                    }
+                ]
+            }
+        },
+        "PublicSubnet1RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "PublicSubnet1"
+                },
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                }
+            }
+        },
+        "PublicSubnet2RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "PublicSubnet2"
+                },
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                }
+            }
+        },
+        "WebAppSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "Allow only HTTPS (443) traffic",
+                "VpcId": {
+                    "Ref": "AppVPC"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 443,
+                        "ToPort": 443,
+                        "CidrIp": "0.0.0.0/0"
+                    }
+                ],
+                "SecurityGroupEgress": [
+                    {
+                        "IpProtocol": -1,
+                        "CidrIp": "0.0.0.0/0"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-https-sg"
+                        }
+                    }
+                ]
             }
         },
         "WebAppRole": {
             "Type": "AWS::IAM::Role",
             "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "${EnvironmentName}-WebAppRole"
+                },
                 "AssumeRolePolicyDocument": {
                     "Version": "2012-10-17",
                     "Statement": [
@@ -173,77 +269,92 @@
                 ]
             }
         },
-        "AppVPC": {
-            "Type": "AWS::EC2::VPC",
+        "ApiGatewayServiceRole": {
+            "Type": "AWS::IAM::Role",
             "Properties": {
-                "CidrBlock": "10.0.0.0/16",
-                "EnableDnsSupport": true,
-                "EnableDnsHostnames": true,
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${EnvironmentName}-vpc"
-                        }
-                    }
-                ]
-            }
-        },
-        "PublicSubnet1": {
-            "Type": "AWS::EC2::Subnet",
-            "Properties": {
-                "VpcId": {
-                    "Ref": "AppVPC"
-                },
-                "CidrBlock": "10.0.1.0/24",
-                "AvailabilityZone": {
-                    "Fn::Select": [
-                        0,
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
                         {
-                            "Fn::GetAZs": ""
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "apigateway.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
                         }
                     ]
                 },
-                "MapPublicIpOnLaunch": true,
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${EnvironmentName}-public-subnet-1"
-                        }
-                    }
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs"
                 ]
             }
         },
-        "WebAppSecurityGroup": {
-            "Type": "AWS::EC2::SecurityGroup",
+        "ApiLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
             "Properties": {
-                "GroupDescription": "Allow only HTTPS (443) traffic",
-                "VpcId": {
-                    "Ref": "AppVPC"
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/apigateway/${EnvironmentName}-api"
                 },
-                "SecurityGroupIngress": [
+                "RetentionInDays": 14
+            }
+        },
+        "ApiGatewayRestApi": {
+            "Type": "AWS::ApiGateway::RestApi",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-WebAppApi"
+                },
+                "EndpointConfiguration": {
+                    "Types": [
+                        "REGIONAL"
+                    ]
+                }
+            }
+        },
+        "ApiGatewayDeployment": {
+            "Type": "AWS::ApiGateway::Deployment",
+            "DependsOn": "ApiGatewayRestApi",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "ApiGatewayRestApi"
+                }
+            }
+        },
+        "ApiGatewayStage": {
+            "Type": "AWS::ApiGateway::Stage",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "ApiGatewayRestApi"
+                },
+                "DeploymentId": {
+                    "Ref": "ApiGatewayDeployment"
+                },
+                "StageName": {
+                    "Ref": "EnvironmentName"
+                },
+                "AccessLogSetting": {
+                    "DestinationArn": {
+                        "Fn::GetAtt": [
+                            "ApiLogGroup",
+                            "Arn"
+                        ]
+                    },
+                    "Format": "{\"requestId\":\"$context.requestId\",\"ip\":\"$context.identity.sourceIp\",\"caller\":\"$context.identity.caller\",\"requestTime\":\"$context.requestTime\",\"httpMethod\":\"$context.httpMethod\",\"resourcePath\":\"$context.resourcePath\",\"status\":\"$context.status\"}"
+                },
+                "MethodSettings": [
                     {
-                        "IpProtocol": "tcp",
-                        "FromPort": 443,
-                        "ToPort": 443,
-                        "CidrIp": "0.0.0.0/0"
+                        "ResourcePath": "/*",
+                        "HttpMethod": "*",
+                        "LoggingLevel": "INFO",
+                        "MetricsEnabled": true
                     }
                 ],
-                "SecurityGroupEgress": [
-                    {
-                        "IpProtocol": -1,
-                        "CidrIp": "0.0.0.0/0"
-                    }
-                ],
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${EnvironmentName}-https-sg"
-                        }
-                    }
-                ]
+                "RoleArn": {
+                    "Fn::GetAtt": [
+                        "ApiGatewayServiceRole",
+                        "Arn"
+                    ]
+                }
             }
         }
     },
@@ -258,6 +369,18 @@
             "Description": "VPC ID",
             "Value": {
                 "Ref": "AppVPC"
+            }
+        },
+        "Subnet1Id": {
+            "Description": "Public Subnet 1",
+            "Value": {
+                "Ref": "PublicSubnet1"
+            }
+        },
+        "Subnet2Id": {
+            "Description": "Public Subnet 2",
+            "Value": {
+                "Ref": "PublicSubnet2"
             }
         },
         "SecurityGroupId": {
