@@ -80,6 +80,8 @@ class ServerlessStack(core.Stack):
         core.Tags.of(self).add("Environment", "Production")
 ```
 
+## Infrastructure Overview
+
 This CDK code creates the required infrastructure:
 
 1. A VPC with two public subnets

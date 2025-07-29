@@ -18,103 +18,103 @@ def template():
 
 def test_dynamodb_table_created(template):
   template.has_resource_properties("AWS::DynamoDB::Table", {
-      "BillingMode": "PAY_PER_REQUEST",
-      "KeySchema": [{"AttributeName": "itemId", "KeyType": "HASH"}],
-      "AttributeDefinitions": [{"AttributeName": "itemId", "AttributeType": "S"}],
+    "BillingMode": "PAY_PER_REQUEST",
+    "KeySchema": [{"AttributeName": "itemId", "KeyType": "HASH"}],
+    "AttributeDefinitions": [{"AttributeName": "itemId", "AttributeType": "S"}],
   })
 
 
 def test_lambda_function_created(template):
   template.has_resource_properties("AWS::Lambda::Function", {
-      "Handler": "handler.handler",
-      "Runtime": "python3.9",
-      "Environment": {
-          "Variables": {
-              "TABLE_NAME": Match.any_value()
-          }
-      },
-      "VpcConfig": Match.object_like({
-          "SubnetIds": Match.any_value()
-      })
+    "Handler": "handler.handler",
+    "Runtime": "python3.9",
+    "Environment": {
+      "Variables": {
+        "TABLE_NAME": Match.any_value()
+      }
+    },
+    "VpcConfig": Match.object_like({
+      "SubnetIds": Match.any_value()
+    })
   })
 
 
 def test_lambda_execution_role_created(template):
   template.has_resource_properties("AWS::IAM::Role", {
-      "AssumeRolePolicyDocument": Match.object_like({
-          "Statement": Match.array_with([
-              Match.object_like({
-                  "Principal": {
-                      "Service": "lambda.amazonaws.com"
-                  }
-              })
-          ])
-      })
+    "AssumeRolePolicyDocument": Match.object_like({
+      "Statement": Match.array_with([
+        Match.object_like({
+          "Principal": {
+            "Service": "lambda.amazonaws.com"
+          }
+        })
+      ])
+    })
   })
 
 
 def test_cloudwatch_alarm_created(template):
   template.has_resource_properties("AWS::CloudWatch::Alarm", {
-      "EvaluationPeriods": 1,
-      "Threshold": 1,
-      "MetricName": "Errors"
+    "EvaluationPeriods": 1,
+    "Threshold": 1,
+    "MetricName": "Errors"
   })
 
 
 def test_api_gateway_created(template):
   template.has_resource_properties("AWS::ApiGateway::RestApi", {
-      "Name": "Item Service"
+    "Name": "Item Service"
   })
 
 
 def test_lambda_log_policy(template):
   template.has_resource_properties("AWS::IAM::Policy", {
-      "PolicyDocument": {
-          "Statement": Match.array_with([
-              Match.object_like({
-                  "Action": Match.array_with(["logs:CreateLogGroup"]),
-                  "Effect": "Allow"
-              })
-          ])
-      }
+    "PolicyDocument": {
+      "Statement": Match.array_with([
+        Match.object_like({
+          "Action": Match.array_with(["logs:CreateLogGroup"]),
+          "Effect": "Allow"
+        })
+      ])
+    }
   })
 
 
 def test_api_method_created(template):
   template.has_resource_properties("AWS::ApiGateway::Method", {
-      "HttpMethod": "GET"
+    "HttpMethod": "GET"
   })
 
 
 def test_lambda_api_integration(template):
   template.has_resource_properties("AWS::ApiGateway::Method", {
-      "HttpMethod": "GET",
-      "Integration": Match.object_like({
-          "Type": "AWS_PROXY"
-      })
+    "HttpMethod": "GET",
+    "Integration": Match.object_like({
+      "Type": "AWS_PROXY"
+    })
   })
 
 
 def test_lambda_role_policy_attachment(template):
   template.has_resource_properties("AWS::IAM::Policy", {
-      "PolicyDocument": Match.object_like({
-          "Statement": Match.array_with([
-              Match.object_like({
-                  "Action": Match.array_with(["logs:PutLogEvents"]),
-                  "Effect": "Allow"
-              })
-          ])
-      })
+    "PolicyDocument": Match.object_like({
+      "Statement": Match.array_with([
+        Match.object_like({
+          "Action": Match.array_with(["logs:PutLogEvents"]),
+          "Effect": "Allow"
+        })
+      ])
+    })
   })
 
 
 def test_lambda_env_vars(template):
   template.has_resource_properties("AWS::Lambda::Function", {
-      "Environment": {
-          "Variables": {
-              "TABLE_NAME": Match.any_value()
-          }
+    "Environment": {
+      "Variables": {
+        "TABLE_NAME": Match.any_value()
       }
+    }
   })
 
 

@@ -71,9 +71,6 @@ class TapStack(cdk.Stack):
 
     # Create separate stacks for each resource type
 
-    # ! DO not create resources directly in this stack.
-    # ! Instead, instantiate separate stacks for each resource type.
-
     # Example: instantiate ServerlessStack as a nested stack
     self.serverless_stack = ServerlessStack(self, "ServerlessStack")
 
