@@ -180,37 +180,44 @@ export class MultiEnvEcsStack extends cdk.Stack {
         ),
         zone,
       });
+      new cdk.CfnOutput(this, 'HostedZoneId', {
+        value: zone.hostedZoneId,
+        description: 'Route53 Hosted Zone ID',
+      });
     }
 
     // Alarms
-    new cloudwatch.Alarm(this, `${config.envName} HighCpuAlarm`, {
+    new cloudwatch.Alarm(this, `${config.envName}:HighCpuAlarm`, {
       metric: fargateService.metricCpuUtilization(),
       evaluationPeriods: 2,
       threshold: 80,
       datapointsToAlarm: 2,
       treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+      alarmName: `${config.envName}:HighCpuAlarm`
     });
 
-    new cloudwatch.Alarm(this, `${config.envName} HighMemoryAlarm`, {
+    new cloudwatch.Alarm(this, `${config.envName}:HighMemoryAlarm`, {
       metric: fargateService.metricMemoryUtilization(),
       evaluationPeriods: 2,
       threshold: 80,
       datapointsToAlarm: 2,
       treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+      alarmName: `${config.envName}:HighMemoryAlarm`
     });
 
     //Output
+    // --- Outputs ---
     new cdk.CfnOutput(this, 'LoadBalanceDNS', {
       value: lb.loadBalancerDnsName,
       description: 'Load balancer dns name',
     });
     new cdk.CfnOutput(this, 'envName', {
       value: config.envName,
-      description: 'Load balancer dns name',
+      description: 'Environment name',
     });
     new cdk.CfnOutput(this, 'DomainName', {
       value: config.domainName,
-      description: 'domain name',
+      description: 'Application domain name',
     });
 
     new cdk.CfnOutput(this, 'VpcId', {
@@ -221,6 +228,10 @@ export class MultiEnvEcsStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'ClusterName', {
       value: cluster.clusterName,
       description: 'ECS Cluster Name',
+    });
+    new cdk.CfnOutput(this, 'ClusterArn', {
+      value: cluster.clusterArn,
+      description: 'ECS Cluster ARN',
     });
 
     new cdk.CfnOutput(this, 'TaskDefinitionArn', {
@@ -260,11 +271,13 @@ export class MultiEnvEcsStack extends cdk.Stack {
       description: 'SSL Certificate ARN',
     });
 
+    // Cloud Map Namespace output
     new cdk.CfnOutput(this, 'Namespace', {
       value: `${config.envName}.local`,
-      description: 'ECS Cloud Map namespace',
+      description: 'ECS Cloud Map namespace name',
     });
 
+    // Route 53 Outputs
     if (config.hostedZoneName) {
       new cdk.CfnOutput(this, 'HostedZoneName', {
         value: config.hostedZoneName,
