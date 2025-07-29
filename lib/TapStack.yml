@@ -322,6 +322,85 @@ Resources:
       RouteTableId: !Ref PrivateRouteTable2
       SubnetId: !Ref PrivateSubnet2
 
+  # IAM Role for EC2 Instances
+  EC2InstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "EC2InstanceRole-${EnvironmentSuffix}"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+      Tags:
+        - Key: Name
+          Value: !Sub "EC2InstanceRole-${EnvironmentSuffix}"
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: "VPC-Infrastructure"
+
+  # Instance Profile for EC2 Role
+  EC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      InstanceProfileName: !Sub "EC2InstanceProfile-${EnvironmentSuffix}"
+      Roles:
+        - !Ref EC2InstanceRole
+
+  # Test S3 Bucket
+  TestS3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "test-s3-bucket-${EnvironmentSuffix}-${AWS::AccountId}"
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Name
+          Value: !Sub "test-s3-bucket-${EnvironmentSuffix}"
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: "VPC-Infrastructure"
+
+  # Test IAM User
+  TestIAMUser:
+    Type: AWS::IAM::User
+    Properties:
+      UserName: !Sub "TestIAMUser-${EnvironmentSuffix}"
+      Policies:
+        - PolicyName: !Sub "S3BucketReadOnlyPolicy-${EnvironmentSuffix}"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:ListBucket
+                Resource:
+                  - !GetAtt TestS3Bucket.Arn
+                  - !Sub "${TestS3Bucket}/*"
+      Tags:
+        - Key: Name
+          Value: !Sub "TestIAMUser-${EnvironmentSuffix}"
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: "VPC-Infrastructure"
+
 Outputs:
   VPCId:
     Description: "ID of the VPC"
@@ -415,3 +494,21 @@ Outputs:
     Value: !Ref EnvironmentSuffix
     Export:
       Name: !Sub "${AWS::StackName}-EnvironmentSuffix"
+
+  EC2InstanceRoleName:
+    Description: "Name of the EC2 instance IAM role"
+    Value: !Ref EC2InstanceRole
+    Export:
+      Name: !Sub "${AWS::StackName}-EC2InstanceRoleName"
+
+  TestIAMUserName:
+    Description: "Name of the test IAM user"
+    Value: !Ref TestIAMUser
+    Export:
+      Name: !Sub "${AWS::StackName}-TestIAMUserName"
+
+  TestS3BucketName:
+    Description: "Name of the test S3 bucket"
+    Value: !Ref TestS3Bucket
+    Export:
+      Name: !Sub "${AWS::StackName}-TestS3BucketName"

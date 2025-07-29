@@ -310,7 +310,7 @@ describe('TapStack CloudFormation Template - VPC Infrastructure', () => {
 
     test('should have correct number of resources', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(21); // VPC, IGW, IGW attachment, 4 subnets, 2 EIPs, 2 NAT GWs, 3 route tables, 3 routes, 4 associations
+      expect(resourceCount).toBe(25); // VPC, IGW, IGW attachment, 4 subnets, 2 EIPs, 2 NAT GWs, 3 route tables, 3 routes, 4 associations, IAM role, IAM profile, S3 bucket, IAM user
     });
 
     test('should have exactly one parameter', () => {
@@ -318,9 +318,9 @@ describe('TapStack CloudFormation Template - VPC Infrastructure', () => {
       expect(parameterCount).toBe(1);
     });
 
-    test('should have fifteen outputs', () => {
+    test('should have eighteen outputs', () => {
       const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(15);
+      expect(outputCount).toBe(18);
     });
   });
 
