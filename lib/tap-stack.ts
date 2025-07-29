@@ -8,7 +8,6 @@ import * as iam from 'aws-cdk-lib/aws-iam';
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
 import * as autoscaling from 'aws-cdk-lib/aws-autoscaling';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
-import * as aws_config from 'aws-cdk-lib/aws-config';
 
 interface TapStackProps extends cdk.StackProps {
   environmentSuffix?: string;
@@ -214,15 +213,17 @@ export class TapStack extends cdk.Stack {
     // Note: Memory usage requires the CloudWatch agent installed on the EC2 instances.
 
     // --- Compliance (AWS Config Rules) ---
-    new aws_config.ManagedRule(this, 'S3VersioningEnabledRule', {
-      identifier:
-        aws_config.ManagedRuleIdentifiers.S3_BUCKET_VERSIONING_ENABLED,
-    });
+    // Note: AWS Config rules require a Configuration Recorder to be set up first
+    // Uncomment the following lines if you have AWS Config enabled in your account:
+    
+    // new aws_config.ManagedRule(this, 'S3VersioningEnabledRule', {
+    //   identifier:
+    //     aws_config.ManagedRuleIdentifiers.S3_BUCKET_VERSIONING_ENABLED,
+    // });
 
-    // AWS Config rule to ensure EC2 instances are not launched with public IPs
-    new aws_config.ManagedRule(this, 'Ec2NoPublicIpRule', {
-      identifier: aws_config.ManagedRuleIdentifiers.EC2_INSTANCE_NO_PUBLIC_IP,
-    });
+    // new aws_config.ManagedRule(this, 'Ec2NoPublicIpRule', {
+    //   identifier: aws_config.ManagedRuleIdentifiers.EC2_INSTANCE_NO_PUBLIC_IP,
+    // });
 
     // --- Outputs ---
     new cdk.CfnOutput(this, 'ALB_DNS', {
