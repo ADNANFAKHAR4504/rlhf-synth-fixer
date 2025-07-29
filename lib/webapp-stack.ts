@@ -11,6 +11,7 @@ import { Construct } from 'constructs';
 
 export interface WebAppStackProps extends cdk.StackProps {
   environmentSuffix?: string;
+  port: number
 }
 export class WebAppStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: WebAppStackProps) {
@@ -96,6 +97,7 @@ export class WebAppStack extends cdk.Stack {
     const alb = new elbv2.ApplicationLoadBalancer(this, 'WebAppALB', {
       vpc,
       internetFacing: true,
+      loadBalancerName: 'WebAppALB'
     });
 
     const listener = alb.addListener('WebAppListener', {
@@ -108,18 +110,27 @@ export class WebAppStack extends cdk.Stack {
       targets: [asg],
       healthCheck: {
         path: '/',
+        port: `${props?.port}`,
         protocol: elbv2.Protocol.HTTP,
+        healthyHttpCodes: '200-299',
+        interval: cdk.Duration.seconds(30),
+        timeout: cdk.Duration.seconds(5),
+        healthyThresholdCount: 2,
+        unhealthyThresholdCount: 2,
       },
     });
 
     listener.connections.allowDefaultPortFromAnyIpv4('Open to the world');
 
     // Redirect HTTP to HTTPS
-    listener.addRedirectResponse('HttpsRedirect', {
-      statusCode: 'HTTP_301',
-      protocol: 'HTTPS',
-      port: '443',
-    });
+    listener.addAction('Default', {
+      action: alb.listeners
+    })
+    // listener.addRedirectResponse('HttpsRedirect', {
+    //   statusCode: 'HTTP_301',
+    //   protocol: 'HTTPS',
+    //   port: '443',
+    // });
 
     // Add HTTPS listener
     const httpsListener = alb.addListener('HttpsListener', {
