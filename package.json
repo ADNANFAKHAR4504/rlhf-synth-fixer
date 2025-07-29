@@ -79,6 +79,7 @@
     "aws-cdk": "2.1020.2",
     "aws4": "^1.13.2",
     "axios": "1.10.0",
+    "conventional-changelog-conventionalcommits": "^9.1.0",
     "eslint": "^8.57.0",
     "eslint-config-airbnb-base": "15.0.0",
     "eslint-config-airbnb-typescript": "18.0.0",
