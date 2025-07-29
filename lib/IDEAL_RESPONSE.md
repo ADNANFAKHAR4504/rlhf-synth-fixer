@@ -2,13 +2,13 @@
 
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
-import { EC2Client, DescribeVpcsCommand } from "@aws-sdk/client-ec2";
+import { EC2Client, DescribeVpcsCommand } from '@aws-sdk/client-ec2';
 
 import { WebServerStack } from './web-server';
 
 interface TapStackProps extends cdk.StackProps {
   environmentSuffix?: string;
-  vpcId: string
+  vpcId: string;
 }
 
 export async function findVpcByCidr(cidr: string): Promise<string | undefined> {
@@ -22,13 +22,13 @@ export async function findVpcByCidr(cidr: string): Promise<string | undefined> {
 // async function to run before synthesis
 async function main() {
   const app = new cdk.App();
-  const cidr = "10.0.0.0/16";
+  const cidr = '10.0.0.0/16';
   const vpcId = await findVpcByCidr(cidr);
   if (!vpcId) {
-    throw new Error("VPC with given CIDR not found");
+    throw new Error('VPC with given CIDR not found');
   }
 
-  const stack = new cdk.Stack(app, "MyStack");
+  const stack = new cdk.Stack(app, 'MyStack');
 
   new TapStack(stack, 'TapStack', {
     vpcId,
@@ -49,19 +49,21 @@ export class TapStack extends cdk.Stack {
       'dev';
 
     new WebServerStack(this, 'WebServerStack', {
-      environmentSuffix, vpcId: props.vpcId, env: {
+      environmentSuffix,
+      vpcId: props.vpcId,
+      env: {
         account: process.env.CDK_DEFAULT_ACCOUNT,
         region: 'us-east-1', // process.env.CDK_DEFAULT_REGION,
       },
-    })
+    });
   }
 }
-
 
 ```
 
 
 ``` bash
+
 import * as cdk from 'aws-cdk-lib';
 import {
   InstanceType,
@@ -186,7 +188,7 @@ export class WebServerStack extends cdk.Stack {
     const rdsSubnetGroup = new SubnetGroup(this, 'RdsSubnetGroup', {
       description: 'Subnet group for RDS',
       vpc,
-      vpcSubnets: { subnetType: SubnetType.PRIVATE_ISOLATED },
+      vpcSubnets: { subnetType: SubnetType.PRIVATE_WITH_NAT },
       removalPolicy: cdk.RemovalPolicy.DESTROY, // optional
       subnetGroupName: 'rds-subnet-group',
     });
