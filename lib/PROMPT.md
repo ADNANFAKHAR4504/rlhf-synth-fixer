@@ -4,6 +4,7 @@ Design a secure, scalable, and fully serverless web application infrastructure u
 
 Your CloudFormation template must meet the following requirements:
 
+
 1. **API Gateway**:
 
    * Must be configured to handle incoming HTTP requests.
