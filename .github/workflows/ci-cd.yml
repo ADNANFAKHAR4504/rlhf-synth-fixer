@@ -942,8 +942,7 @@ jobs:
   semantic-release:
     name: Semantic Release
     runs-on: ubuntu-24.04
-    needs: upload-task-to-s3
-    if: ${{ github.event_name == 'pull_request' && github.event.pull_request.merged == true }}
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     environment: release
     permissions:
       contents: write
@@ -957,19 +956,11 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: Setup Environment
+        uses: ./.github/actions/setup-environment
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
-
-      - name: Configure Git
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-      - name: Install dependencies
-        run: npm ci
+          download-artifacts: 'false'
 
       - name: Run semantic-release
         run: npm run release
