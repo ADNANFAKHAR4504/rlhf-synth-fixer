@@ -160,6 +160,17 @@ After running the CLI, you'll have:
 - `npm run cfn:destroy-yaml` destroy CloudFormation YAML stack and all resources
 - `npm run cfn:destroy-json` destroy CloudFormation JSON stack and all resources
 
+### Terraform Commands
+Quick Note:
+Install terraform cli on your computer: https://developer.hashicorp.com/terraform/tutorials/aws-get-started/install-cli
+
+- To preview changes: `npm run tf:plan`
+- To Deploy your changes: `npm run tf:deploy`
+- To Destroy your changes: `npm run tf:destroy`
+- To Format your changes: `npm run tf:fmt`
+- For Quick reminder: `npm run tf:help`
+- For Validate Hashicorp syntax: `npm run tf:validate`
+
 ## Templates
 
 Templates are stored in the `templates/` directory and organized by platform and language:
@@ -167,8 +178,10 @@ Templates are stored in the `templates/` directory and organized by platform and
 ```text
 templates/
 ├── cdk-ts/       # CDK TypeScript template
+├── cdk-ts/       # CDK TypeScript template
 ├── cfn-yaml/     # CloudFormation YAML template
 ├── cfn-json/     # CloudFormation JSON template
+├── tf-hcl/       # Terraform Hashicorp template
 └── ...
 ```
 
