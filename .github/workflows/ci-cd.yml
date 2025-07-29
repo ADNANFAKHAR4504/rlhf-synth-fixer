@@ -237,6 +237,8 @@ jobs:
           path: |
             cdk.out/
             cdktf.out/
+
+
   deploy:
     name: Deploy
     runs-on: ubuntu-24.04
@@ -254,6 +256,12 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           download-artifacts: 'true'
           download-cdk-artifacts: 'true'
+      
+      - name: Install Pulumi CLI
+        if: needs.synth.outputs.platform == 'pulumi'
+        uses: pulumi/actions@v5
+        with:
+          pulumi-version: 3.109.0
 
       - name: Configure AWS
         uses: ./.github/actions/configure-aws
