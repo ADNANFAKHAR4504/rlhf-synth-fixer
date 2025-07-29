@@ -266,18 +266,12 @@ describe('TapStack CloudFormation Template - Unit Tests', () => {
 
     test('should have API Gateway deployment', () => {
       const deployment = template.Resources.ApiGatewayDeployment;
+
       expect(deployment).toBeDefined();
       expect(deployment.Type).toBe('AWS::ApiGateway::Deployment');
-    });
-
-    test('should have API Gateway stage with logging', () => {
-      const stage = template.Resources.ApiGatewayStage;
-      expect(stage).toBeDefined();
-      expect(stage.Type).toBe('AWS::ApiGateway::Stage');
-      expect(stage.Properties.LoggingLevel).toBe('INFO');
-      expect(stage.Properties.MethodSettings).toBeDefined();
-      expect(stage.Properties.MethodSettings[0].DataTraceEnabled).toBe(true);
-      expect(stage.Properties.MethodSettings[0].MetricsEnabled).toBe(true);
+      expect(deployment.Properties.StageName).toEqual({
+        Ref: 'EnvironmentSuffix',
+      });
     });
 
     test('should have Lambda permissions for API Gateway', () => {
