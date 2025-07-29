@@ -133,7 +133,7 @@ class TestTapStack(unittest.TestCase):
 
   @mark.it("creates S3 bucket with correct configuration")
   def test_s3_bucket_configuration(self):
-    # Check S3 bucket exists with versioning and encryption
+    # Check S3 bucket exists with versioning and encryption (private bucket for CloudFront)
     self.template.has_resource("AWS::S3::Bucket", {
       "Properties": {
         "BucketEncryption": {
@@ -155,10 +155,6 @@ class TestTapStack(unittest.TestCase):
         "VersioningConfiguration": {
           "Status": "Enabled"
         },
-        "WebsiteConfiguration": {
-          "IndexDocument": "index.html",
-          "ErrorDocument": "error.html"
-        },
         "Tags": [
           {
             "Key": "environment",
@@ -167,7 +163,6 @@ class TestTapStack(unittest.TestCase):
         ]
       }
     })
-
   @mark.it("creates CloudFront distribution with correct configuration")
   def test_cloudfront_distribution_configuration(self):
     # Check CloudFront distribution exists with correct configuration
