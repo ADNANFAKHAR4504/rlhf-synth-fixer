@@ -18,7 +18,9 @@ import {
 import { 
   S3Client, 
   GetBucketVersioningCommand,
-  GetBucketEncryptionCommand 
+  GetBucketEncryptionCommand,
+  ListBucketsCommand,
+  GetBucketTaggingCommand
 } from '@aws-sdk/client-s3';
 import { 
   AutoScalingClient, 
@@ -127,7 +129,7 @@ describe('TapStack Integration Tests', () => {
         LoadBalancerArn: alb.LoadBalancerArn
       }));
       
-      const accessLogsEnabled = attributesResponse.Attributes?.find(attr => attr.Key === 'access_logs.s3.enabled');
+      const accessLogsEnabled = attributesResponse.Attributes?.find((attr: any) => attr.Key === 'access_logs.s3.enabled');
       expect(accessLogsEnabled?.Value).toBe('true');
     });
   });
@@ -150,9 +152,12 @@ describe('TapStack Integration Tests', () => {
 
   describe('RDS Database', () => {
     itif(hasOutputs)('should have MySQL database with correct configuration', async () => {
-      // FIX: Use the DB Instance Identifier from the outputs for a reliable lookup
-      const dbIdentifier = outputs.DatabaseIdentifier;
-      expect(dbIdentifier).toBeDefined();
+      // Use the database endpoint to find the database instance
+      const dbEndpoint = outputs.DatabaseEndpoint;
+      expect(dbEndpoint).toBeDefined();
+      
+      // Extract the identifier from the endpoint (it's the part before the first dot)
+      const dbIdentifier = dbEndpoint.split('.')[0];
 
       const response = await rdsClient.send(new DescribeDBInstancesCommand({
         DBInstanceIdentifier: dbIdentifier
@@ -171,17 +176,43 @@ describe('TapStack Integration Tests', () => {
 
   describe('S3 Storage', () => {
     itif(hasOutputs)('should have S3 bucket with versioning and encryption enabled', async () => {
-      // FIX: Use the specific LogBucketName output
-      const bucketName = outputs.LogBucketName;
-      expect(bucketName).toBeDefined();
+      // Find the log bucket using tags since there's no output for it currently
+      const bucketsResponse = await s3Client.send(new ListBucketsCommand({}));
+      expect(bucketsResponse.Buckets).toBeDefined();
+      
+      let logBucket = null;
+      for (const bucket of bucketsResponse.Buckets!) {
+        try {
+          const tagsResponse = await s3Client.send(new GetBucketTaggingCommand({
+            Bucket: bucket.Name!
+          }));
+          
+          const hasProjectTag = tagsResponse.TagSet?.some(tag => 
+            tag.Key === 'Project' && tag.Value === 'SecureCloudEnvironment'
+          );
+          const hasEnvTag = tagsResponse.TagSet?.some(tag => 
+            tag.Key === 'Environment' && tag.Value === environmentSuffix
+          );
+          
+          if (hasProjectTag && hasEnvTag) {
+            logBucket = bucket.Name;
+            break;
+          }
+        } catch (error) {
+          // Bucket might not have tags, continue
+          continue;
+        }
+      }
+      
+      expect(logBucket).toBeDefined();
 
       const versioningResponse = await s3Client.send(new GetBucketVersioningCommand({
-        Bucket: bucketName
+        Bucket: logBucket!
       }));
       expect(versioningResponse.Status).toBe('Enabled');
 
       const encryptionResponse = await s3Client.send(new GetBucketEncryptionCommand({
-        Bucket: bucketName
+        Bucket: logBucket!
       }));
       expect(encryptionResponse.ServerSideEncryptionConfiguration).toBeDefined();
       expect(encryptionResponse.ServerSideEncryptionConfiguration!.Rules![0].ApplyServerSideEncryptionByDefault!.SSEAlgorithm).toBe('AES256');
