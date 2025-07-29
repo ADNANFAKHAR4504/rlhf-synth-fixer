@@ -318,7 +318,10 @@ jobs:
             npm run cfn:deploy-json
           elif [ "$PLATFORM" = "pulumi" ]; then
             echo "✅ Pulumi project detected, running Pulumi deploy..."
-            pipenv run pulumi-deploy
+            echo "Selecting/creating stack..."
+            pipenv run pulumi stack select dev --create
+            echo "Deploying infrastructure..."
+            pipenv run pulumi up --yes --non-interactive
           else
             echo "ℹ️ Unknown deployment method for platform: $PLATFORM, language: $LANGUAGE"
             echo "💡 Supported combinations: cdk+typescript, cdk+python, cfn+yaml, cfn+json"
