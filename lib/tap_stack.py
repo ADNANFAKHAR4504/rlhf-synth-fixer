@@ -1,4 +1,4 @@
-# mycompany_serverless_stack.py
+# mycompany_serverless_stack.py 
 
 from typing import Optional
 
