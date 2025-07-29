@@ -1,0 +1,14 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "243911",
+  "startedAt": "2025-07-27T16:48:27.397Z",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "sreeni-ops",
+  "dockerS3Location": "s3://iac-rlhf-production/docker_images/Pr228/docker-image-243911.tar"
+}
