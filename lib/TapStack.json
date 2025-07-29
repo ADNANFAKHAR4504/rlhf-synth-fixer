@@ -82,28 +82,6 @@
       "Description": "Lambda function timeout in seconds"
     }
   },
-  "Conditions": {
-    "IsProduction": {
-      "Fn::Or": [
-        {
-          "Fn::Equals": [
-            {
-              "Ref": "EnvironmentSuffix"
-            },
-            "prod"
-          ]
-        },
-        {
-          "Fn::Equals": [
-            {
-              "Ref": "EnvironmentSuffix"
-            },
-            "production"
-          ]
-        }
-      ]
-    }
-  },
   "Resources": {
     "VPC": {
       "Type": "AWS::EC2::VPC",
@@ -664,6 +642,27 @@
         "StageName": {
           "Ref": "EnvironmentSuffix"
         }
+      }
+    },
+    "ApiGatewayStage": {
+      "Type": "AWS::ApiGateway::Stage",
+      "Properties": {
+        "RestApiId": {
+          "Ref": "ApiGateway"
+        },
+        "StageName": {
+          "Ref": "EnvironmentSuffix"
+        },
+        "LoggingLevel": "INFO",
+        "MethodSettings": [
+          {
+            "HttpMethod": "*",
+            "ResourcePath": "/*",
+            "LoggingLevel": "INFO",
+            "DataTraceEnabled": true,
+            "MetricsEnabled": true
+          }
+        ]
       }
     },
     "LambdaInvokePermission": {

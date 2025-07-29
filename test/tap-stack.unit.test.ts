@@ -37,7 +37,6 @@ describe('TapStack CloudFormation Template - Unit Tests', () => {
 
     test('should have all required sections', () => {
       expect(template.Parameters).toBeDefined();
-      expect(template.Conditions).toBeDefined();
       expect(template.Resources).toBeDefined();
       expect(template.Outputs).toBeDefined();
     });
@@ -109,20 +108,6 @@ describe('TapStack CloudFormation Template - Unit Tests', () => {
       expect(timeoutParam.Description).toBe(
         'Lambda function timeout in seconds'
       );
-    });
-  });
-
-  describe('Conditions', () => {
-    test('should have IsProduction condition', () => {
-      const condition = template.Conditions.IsProduction;
-      expect(condition).toBeDefined();
-      expect(condition['Fn::Or']).toBeDefined();
-      expect(condition['Fn::Or']).toHaveLength(2);
-
-      // Check for 'prod' condition
-      expect(condition['Fn::Or'][0]['Fn::Equals'][1]).toBe('prod');
-      // Check for 'production' condition
-      expect(condition['Fn::Or'][1]['Fn::Equals'][1]).toBe('production');
     });
   });
 
@@ -283,6 +268,16 @@ describe('TapStack CloudFormation Template - Unit Tests', () => {
       const deployment = template.Resources.ApiGatewayDeployment;
       expect(deployment).toBeDefined();
       expect(deployment.Type).toBe('AWS::ApiGateway::Deployment');
+    });
+
+    test('should have API Gateway stage with logging', () => {
+      const stage = template.Resources.ApiGatewayStage;
+      expect(stage).toBeDefined();
+      expect(stage.Type).toBe('AWS::ApiGateway::Stage');
+      expect(stage.Properties.LoggingLevel).toBe('INFO');
+      expect(stage.Properties.MethodSettings).toBeDefined();
+      expect(stage.Properties.MethodSettings[0].DataTraceEnabled).toBe(true);
+      expect(stage.Properties.MethodSettings[0].MetricsEnabled).toBe(true);
     });
 
     test('should have Lambda permissions for API Gateway', () => {

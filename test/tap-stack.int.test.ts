@@ -223,14 +223,6 @@ describe('TapStack Integration Tests - Real Deployment', () => {
         // Check if there's an error in the Lambda response
         if (payload.errorMessage) {
           console.log('Lambda function error:', payload.errorMessage);
-          // If there's an import error, the function needs redeployment
-          if (payload.errorMessage.includes('aws_lambda_powertools')) {
-            console.log(
-              '⚠️ Lambda function needs redeployment to fix import error'
-            );
-            expect(payload.errorMessage).toContain('aws_lambda_powertools');
-            return; // Skip the rest of the test for now
-          }
           throw new Error(`Lambda function error: ${payload.errorMessage}`);
         }
 
