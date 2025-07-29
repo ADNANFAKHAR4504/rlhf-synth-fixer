@@ -308,8 +308,53 @@
                 }
             }
         },
+        "ApiGatewayRootResource": {
+            "Type": "AWS::ApiGateway::Resource",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "ApiGatewayRestApi"
+                },
+                "ParentId": {
+                    "Fn::GetAtt": [
+                        "ApiGatewayRestApi",
+                        "RootResourceId"
+                    ]
+                },
+                "PathPart": "health"
+            }
+        },
+        "ApiGatewayGetMethod": {
+            "Type": "AWS::ApiGateway::Method",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "ApiGatewayRestApi"
+                },
+                "ResourceId": {
+                    "Ref": "ApiGatewayRootResource"
+                },
+                "HttpMethod": "GET",
+                "AuthorizationType": "NONE",
+                "Integration": {
+                    "Type": "MOCK",
+                    "IntegrationResponses": [
+                        {
+                            "StatusCode": 200
+                        }
+                    ],
+                    "RequestTemplates": {
+                        "application/json": "{\"statusCode\": 200}"
+                    }
+                },
+                "MethodResponses": [
+                    {
+                        "StatusCode": 200
+                    }
+                ]
+            }
+        },
         "ApiGatewayDeployment": {
             "Type": "AWS::ApiGateway::Deployment",
+            "DependsOn": "ApiGatewayGetMethod",
             "Properties": {
                 "RestApiId": {
                     "Ref": "ApiGatewayRestApi"
