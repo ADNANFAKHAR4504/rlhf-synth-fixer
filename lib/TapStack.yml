@@ -45,15 +45,16 @@ Resources:
   DataProcessorLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: /aws/lambda/projectX-dataProcessor
+      LogGroupName: !Sub /aws/lambda/${ProjectXDataProcessorFunctionName}
       RetentionInDays: 30
 
   # CloudWatch Log Group for responseHandler
   ResponseHandlerLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: /aws/lambda/projectX-responseHandler
+      LogGroupName: !Sub /aws/lambda/${ProjectXResponseHandlerFunctionName}
       RetentionInDays: 30
+
 
   # Lambda Function: dataProcessor
   ProjectXDataProcessorFunction:

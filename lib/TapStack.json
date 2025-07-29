@@ -60,14 +60,18 @@
         "DataProcessorLogGroup": {
             "Type": "AWS::Logs::LogGroup",
             "Properties": {
-                "LogGroupName": "/aws/lambda/projectX-dataProcessor",
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/lambda/${ProjectXDataProcessorFunctionName}"
+                },
                 "RetentionInDays": 30
             }
         },
         "ResponseHandlerLogGroup": {
             "Type": "AWS::Logs::LogGroup",
             "Properties": {
-                "LogGroupName": "/aws/lambda/projectX-responseHandler",
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/lambda/${ProjectXResponseHandlerFunctionName}"
+                },
                 "RetentionInDays": 30
             }
         },
