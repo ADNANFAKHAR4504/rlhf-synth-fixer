@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
-const templatePath = path.join(__dirname, '../templates/development_stack_template.json');
+const templatePath = path.join(__dirname, '../lib/TapStack.json');
 const template = JSON.parse(fs.readFileSync(templatePath, 'utf8'));
 
 describe('CloudFormation Template Validation', () => {
