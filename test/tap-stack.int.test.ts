@@ -40,12 +40,6 @@ describe('TapStack CloudFormation Integration Tests', () => {
     'Fn::Sub': '${CorpBucket.Arn}/*'
   });
 
-  const tags = policy.Properties?.Tags || [];
-  expect(tags).toEqual(
-    expect.arrayContaining([
-      { Key: 'ManagedBy', Value: 'CloudFormation' }
-    ])
-  );
 });
 
 

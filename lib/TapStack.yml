@@ -29,9 +29,6 @@ Resources:
             Principal: "*"
             Action: s3:GetObject
             Resource: !Sub '${CorpBucket.Arn}/*'
-      Tags:
-        - Key: ManagedBy
-          Value: CloudFormation
 
   CorpLambdaExecutionRole:
     Type: AWS::IAM::Role

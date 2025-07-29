@@ -46,13 +46,7 @@
                             }
                         }
                     ]
-                },
-                "Tags": [
-                    {
-                        "Key": "ManagedBy",
-                        "Value": "CloudFormation"
-                    }
-                ]
+                }
             }
         },
         "CorpLambdaExecutionRole": {
