@@ -7,7 +7,7 @@ Parameters:
   ACMCertificateARN:
     Type: String
     Description: ARN of the ACM certificate
-    Default: arn:aws:acm:us-west-2:718240086340:certificate/3d421829-ffd2-4164-affb-167a99e907c2
+    Default: arn:aws:acm:us-west-2:718240086340:certificate/3c877c31-457c-414d-beb0-7225b03b8910
   HostedZoneId:
     Type: String
     Description: Route 53 Hosted Zone ID
@@ -151,6 +151,7 @@ Resources:
   # ALB & Target Group
   ApplicationLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    DependsOn: ALBLogsBucketPolicy
     Properties:
       Name: WebAppALB
       Subnets: [!Ref PublicSubnet1, !Ref PublicSubnet2]
@@ -213,11 +214,6 @@ Resources:
     Type: AWS::EC2::LaunchTemplate
     Properties:
       LaunchTemplateName: WebAppLaunchTemplate
-      TagSpecifications:
-        - ResourceType: instance
-          Tags: [{Key: Environment, Value: Production}]
-        - ResourceType: volume
-          Tags: [{Key: Environment, Value: Production}]
       LaunchTemplateData:
         InstanceType: t3.micro
         ImageId: ami-05134c8ef96964280 # Amazon Linux 2023 us-west-2
@@ -233,6 +229,11 @@ Resources:
             systemctl enable httpd
             echo "Hello World from HA Web App" > /var/www/html/index.html
             echo "OK" > /var/www/html/health
+        TagSpecifications:
+          - ResourceType: instance
+            Tags: [{Key: Environment, Value: Production}]
+          - ResourceType: volume
+            Tags: [{Key: Environment, Value: Production}]
 
   AutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
@@ -260,8 +261,7 @@ Resources:
       AllocatedStorage: 20
       Engine: mysql
       MasterUsername: admin
-      MasterUserPassword: >
-       '{{resolve:secretsmanager:your-secret-name:SecretString:DBMasterPassword}}'
+      MasterUserPassword: '{{resolve:secretsmanager:admin:SecretString:DBMasterPassword}}'
       MultiAZ: true
       VPCSecurityGroups: [!Ref RDSSecurityGroup]
       DBSubnetGroupName: !Ref DBSubnetGroup
@@ -271,7 +271,7 @@ Resources:
   ALBLogsBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub ${AWS::StackName}-alb-logs
+      BucketName: tapstack-pr222-alb-logs
       OwnershipControls:
         Rules:
           - ObjectOwnership: BucketOwnerPreferred
@@ -288,13 +288,12 @@ Resources:
             Principal:
               AWS: arn:aws:iam::797873946194:root
             Action: s3:PutObject
-            Resource: !Sub >
-              ${ALBLogsBucket}/AWSLogs/${AWS::AccountId}/*
+            Resource: !Sub 'arn:aws:s3:::${ALBLogsBucket}/AWSLogs/${AWS::AccountId}/*'
           - Effect: Allow
             Principal:
               Service: delivery.logs.amazonaws.com
             Action: s3:PutObject
-            Resource: !Sub ${ALBLogsBucket}/AWSLogs/${AWS::AccountId}/*
+            Resource: !Sub 'arn:aws:s3:::${ALBLogsBucket}/AWSLogs/${AWS::AccountId}/*'
             Condition:
               StringEquals:
                 's3:x-amz-acl': bucket-owner-full-control
@@ -302,12 +301,12 @@ Resources:
             Principal:
               Service: delivery.logs.amazonaws.com
             Action: s3:GetBucketAcl
-            Resource: !Ref ALBLogsBucket
+            Resource: !Sub 'arn:aws:s3:::${ALBLogsBucket}'
 
   StaticAssetsBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub ${AWS::StackName}-static-assets
+      BucketName: tapstack-pr222-static-assets
       WebsiteConfiguration:
         IndexDocument: index.html
       PublicAccessBlockConfiguration:
