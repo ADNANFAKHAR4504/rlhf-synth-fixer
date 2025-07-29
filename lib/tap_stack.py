@@ -306,8 +306,7 @@ class CodeBuildStack(Construct):
           "commands": [
             "echo Installing dependencies...",
             "pip install --upgrade pip",
-            ("pip install -r requirements.txt || "
-             "echo 'No requirements.txt found'")
+"pip install aws-cdk-lib>=2.80.0 constructs>=10.0.0"
           ]
         },
         "pre_build": {
@@ -369,8 +368,7 @@ class CodeBuildStack(Construct):
             "echo Installing AWS CDK...",
             "npm install -g aws-cdk",
             "pip install --upgrade pip",
-            ("pip install -r requirements.txt || "
-             "echo 'No requirements.txt found'")
+"pip install aws-cdk-lib>=2.80.0 constructs>=10.0.0"
           ]
         },
         "pre_build": {
@@ -414,8 +412,7 @@ class CodeBuildStack(Construct):
             "echo Installing AWS CDK...",
             "npm install -g aws-cdk",
             "pip install --upgrade pip", 
-            ("pip install -r requirements.txt || "
-             "echo 'No requirements.txt found'")
+"pip install aws-cdk-lib>=2.80.0 constructs>=10.0.0"
           ]
         },
         "pre_build": {
