@@ -278,15 +278,13 @@ jobs:
             if [ -d ".pulumi" ]; then
               rm -rf .pulumi
             fi
+          fi
           PLATFORM="${{ needs.synth.outputs.platform }}"
           LANGUAGE="${{ needs.synth.outputs.language }}"
 
           if [ "$PLATFORM" = "cdk" ]; then
             echo "✅ CDK project detected, running CDK bootstrap..."
             npm run cdk:bootstrap
-          else
-            echo "ℹ️ Not a CDK project, skipping CDK bootstrap"
-          fi
 
           elif [ "$PLATFORM" = "pulumi" ]; then
             echo "✅ Pulumi project detected, setting up environment..."
