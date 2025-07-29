@@ -1,16 +1,15 @@
 ```yaml
 AWSTemplateFormatVersion: '2010-09-09'
-Description: Secure Web Application Infrastructure with KMS, API Gateway Logging, IAM Roles, VPC, and HTTPS-only Security Groups.
+Description: Secure Web Application Infrastructure
 
 Parameters:
   EnvironmentName:
     Type: String
     Default: "prod"
-    Description: "Environment name (e.g., dev, test, prod)"
+    Description: "Environment name"
 
 Resources:
 
-  ### 1. KMS Key for S3 Encryption ###
   KMSKey:
     Type: AWS::KMS::Key
     Properties:
@@ -31,7 +30,6 @@ Resources:
       AliasName: !Sub alias/${EnvironmentName}-s3-key
       TargetKeyId: !Ref KMSKey
 
-  ### 2. S3 Bucket with KMS Encryption ###
   AppDataBucket:
     Type: AWS::S3::Bucket
     Properties:
@@ -44,68 +42,6 @@ Resources:
       VersioningConfiguration:
         Status: Enabled
 
-  ### 3. API Gateway with Logging Enabled ###
-  ApiLogGroup:
-    Type: AWS::Logs::LogGroup
-    Properties:
-      LogGroupName: !Sub /aws/apigateway/${EnvironmentName}-api
-      RetentionInDays: 14
-
-  ApiGatewayRestApi:
-    Type: AWS::ApiGateway::RestApi
-    Properties:
-      Name: !Sub ${EnvironmentName}-WebAppApi
-      EndpointConfiguration:
-        Types: ["REGIONAL"]
-
-  ApiGatewayDeployment:
-    Type: AWS::ApiGateway::Deployment
-    DependsOn: [ApiGatewayStage]
-    Properties:
-      RestApiId: !Ref ApiGatewayRestApi
-      StageName: !Ref EnvironmentName
-
-  ApiGatewayStage:
-    Type: AWS::ApiGateway::Stage
-    Properties:
-      RestApiId: !Ref ApiGatewayRestApi
-      StageName: !Ref EnvironmentName
-      AccessLogSetting:
-        DestinationArn: !GetAtt ApiLogGroup.Arn
-        Format: '{"requestId":"$context.requestId","ip":"$context.identity.sourceIp","caller":"$context.identity.caller","requestTime":"$context.requestTime","httpMethod":"$context.httpMethod","resourcePath":"$context.resourcePath","status":"$context.status"}'
-      MethodSettings:
-        - ResourcePath: "/*"
-          HttpMethod: "*"
-          LoggingLevel: INFO
-          MetricsEnabled: true
-
-  ### 4. IAM Roles with Least Privilege ###
-  WebAppRole:
-    Type: AWS::IAM::Role
-    Properties:
-      RoleName: !Sub ${EnvironmentName}-WebAppRole
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: ec2.amazonaws.com
-            Action: sts:AssumeRole
-      Policies:
-        - PolicyName: S3AccessPolicy
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - s3:GetObject
-                  - s3:PutObject
-                Resource: !Sub arn:aws:s3:::${EnvironmentName}-app-data-${AWS::AccountId}/*
-              - Effect: Allow
-                Action: kms:Decrypt
-                Resource: !Ref KMSKey
-
-  ### 5. VPC Setup ###
   AppVPC:
     Type: AWS::EC2::VPC
     Properties:
@@ -115,6 +51,27 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub ${EnvironmentName}-vpc
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref AppVPC
+      InternetGatewayId: !Ref InternetGateway
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref AppVPC
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
 
   PublicSubnet1:
     Type: AWS::EC2::Subnet
@@ -127,7 +84,29 @@ Resources:
         - Key: Name
           Value: !Sub ${EnvironmentName}-public-subnet-1
 
-  ### 6. Security Group for HTTPS Traffic Only ###
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref AppVPC
+      CidrBlock: 10.0.2.0/24
+      AvailabilityZone: !Select [ 1, !GetAZs "" ]
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-public-subnet-2
+
+  PublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet2
+      RouteTableId: !Ref PublicRouteTable
+
   WebAppSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -140,12 +119,106 @@ Resources:
           CidrIp: 0.0.0.0/0
       SecurityGroupEgress:
         - IpProtocol: -1
-          FromPort: 0
-          ToPort: 0
           CidrIp: 0.0.0.0/0
       Tags:
         - Key: Name
           Value: !Sub ${EnvironmentName}-https-sg
+
+  WebAppRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: WebAppS3Access
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                Resource: !Sub arn:aws:s3:::${EnvironmentName}-app-data-${AWS::AccountId}/*
+              - Effect: Allow
+                Action:
+                  - kms:Decrypt
+                Resource: !Sub arn:aws:kms:${AWS::Region}:${AWS::AccountId}:key/${KMSKey}
+
+  ApiGatewayServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: apigateway.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs
+
+  ApiLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/apigateway/${EnvironmentName}-api
+      RetentionInDays: 14
+
+  ApiGatewayRestApi:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: !Sub ${EnvironmentName}-WebAppApi
+      EndpointConfiguration:
+        Types:
+          - REGIONAL
+
+  ApiGatewayRootResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ApiGatewayRestApi
+      ParentId: !GetAtt ApiGatewayRestApi.RootResourceId
+      PathPart: health
+
+  ApiGatewayGetMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ApiGatewayRestApi
+      ResourceId: !Ref ApiGatewayRootResource
+      HttpMethod: GET
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - StatusCode: 200
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+      MethodResponses:
+        - StatusCode: 200
+
+  ApiGatewayDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn: ApiGatewayGetMethod
+    Properties:
+      RestApiId: !Ref ApiGatewayRestApi
+
+  ApiGatewayStage:
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      RestApiId: !Ref ApiGatewayRestApi
+      DeploymentId: !Ref ApiGatewayDeployment
+      StageName: !Ref EnvironmentName
+      AccessLogSetting:
+        DestinationArn: !GetAtt ApiLogGroup.Arn
+        Format: '{"requestId":"$context.requestId","ip":"$context.identity.sourceIp","caller":"$context.identity.caller","requestTime":"$context.requestTime","httpMethod":"$context.httpMethod","resourcePath":"$context.resourcePath","status":"$context.status"}'
+      MethodSettings:
+        - ResourcePath: "/*"
+          HttpMethod: "*"
+          LoggingLevel: INFO
+          MetricsEnabled: true
 
 Outputs:
   S3BucketName:
@@ -155,6 +228,14 @@ Outputs:
   VPCId:
     Description: "VPC ID"
     Value: !Ref AppVPC
+
+  Subnet1Id:
+    Description: "Public Subnet 1"
+    Value: !Ref PublicSubnet1
+
+  Subnet2Id:
+    Description: "Public Subnet 2"
+    Value: !Ref PublicSubnet2
 
   SecurityGroupId:
     Description: "Web application security group"
