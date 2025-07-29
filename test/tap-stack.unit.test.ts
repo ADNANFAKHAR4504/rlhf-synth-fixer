@@ -56,7 +56,7 @@ describe('TAP Stack CloudFormation Template', () => {
     test('DevS3Bucket should be versioned and have correct name', () => {
       const bucket = template.Resources.DevS3Bucket;
       expect(bucket.Type).toBe('AWS::S3::Bucket');
-      expect(bucket.Properties.BucketName).toBe('dev-bucket-tapstack-229183');
+      expect(bucket.Properties.BucketName).toBe('dev-bucket-tapstack-2291831');
       expect(bucket.Properties.VersioningConfiguration.Status || bucket.Properties.VersioningConfiguration.git).toBe('Enabled');
     });
 

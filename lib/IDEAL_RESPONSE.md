@@ -31,7 +31,7 @@ Resources:
   DevS3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: dev-bucket-tapstack-test
+      BucketName: dev-bucket-tapstack-2291831
       VersioningConfiguration:
         git: Enabled
       Tags:

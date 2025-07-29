@@ -52,7 +52,7 @@ describe('TAP Stack - Basic Resource Integration Tests', () => {
 
   test('S3 bucket name should follow TAP stack naming convention', () => {
     const bucketName = outputs.S3BucketName;
-    expect(bucketName).toMatch(/^dev-bucket-tapstack-229183$/);
+    expect(bucketName).toMatch(/^dev-bucket-tapstack-2291831$/);
   });
 
   test('All required outputs should be present', () => {

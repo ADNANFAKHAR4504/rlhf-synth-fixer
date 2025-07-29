@@ -30,7 +30,7 @@ Resources:
   DevS3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: dev-bucket-tapstack-229183
+      BucketName: dev-bucket-tapstack-2291831
       VersioningConfiguration:
         Status: Enabled
       Tags:
