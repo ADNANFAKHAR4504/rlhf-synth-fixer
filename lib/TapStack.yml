@@ -25,7 +25,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref ProdVPC
-      AvailabilityZone: !Select [0, !GetAZs "us-west-2"]
+      AvailabilityZone: !Select [0, !GetAZs ""]
       CidrBlock: 10.0.1.0/24
       MapPublicIpOnLaunch: true
       Tags:
@@ -36,7 +36,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref ProdVPC
-      AvailabilityZone: !Select [0, !GetAZs "us-west-2"]
+      AvailabilityZone: !Select [1, !GetAZs ""]
       CidrBlock: 10.0.2.0/24
       MapPublicIpOnLaunch: true
       Tags:
