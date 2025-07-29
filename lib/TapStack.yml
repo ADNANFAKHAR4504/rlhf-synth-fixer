@@ -29,7 +29,6 @@ Conditions:
 
 Resources:
 
-  # S3 Bucket with public-read policy and logging
   S3AccessLogBucket:
     Type: AWS::S3::Bucket
     Properties:
@@ -44,13 +43,28 @@ Resources:
       BucketName: !Ref BucketName
       LoggingConfiguration:
         DestinationBucketName: !Ref S3AccessLogBucket
-        LogFilePrefix: access-logs/
+        LogFilePrefix: logs/
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: false
+        BlockPublicPolicy: false
+        IgnorePublicAcls: false
+        RestrictPublicBuckets: false
       Tags:
         - Key: Environment
           Value: Development
 
+  S3BucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref PublicS3Bucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: "*"
+            Action: s3:GetObject
+            Resource: !Sub "${PublicS3Bucket.Arn}/*"
 
-  # IAM Role for EC2 with S3 read-only access
   S3ReadOnlyInstanceRole:
     Type: AWS::IAM::Role
     Properties:
@@ -81,7 +95,6 @@ Resources:
       Roles:
         - !Ref S3ReadOnlyInstanceRole
 
-  # Elastic IP for EC2
   EC2EIP:
     Type: AWS::EC2::EIP
     Properties:
@@ -90,7 +103,6 @@ Resources:
         - Key: Environment
           Value: Development
 
-  # EC2 Instance
   DevInstance:
     Type: AWS::EC2::Instance
     Properties:
@@ -108,19 +120,12 @@ Resources:
         - Key: Environment
           Value: Development
 
-  # Associate Elastic IP
   EIPAssociation:
     Type: AWS::EC2::EIPAssociation
     Properties:
       AllocationId: !GetAtt EC2EIP.AllocationId
       InstanceId: !Ref DevInstance
 
-  # Security Group Rule (Ingress SSH from 203.0.113.0/24)
-  # Note: Since the Security Group is existing, you must manually ensure this rule is present,
-  # or use a Custom Resource (Lambda-backed) to inject it (not standard in vanilla CFN for existing SGs).
-  # Here, we just add a reminder output.
-  
-  # CloudWatch Alarm for CPU usage
   CPUAlarmHigh:
     Type: AWS::CloudWatch::Alarm
     Properties:
