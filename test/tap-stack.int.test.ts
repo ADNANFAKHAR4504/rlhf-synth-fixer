@@ -23,7 +23,7 @@ describe('SecureVpcStack Integration (AWS SDK)', () => {
     const vpcs = await ec2.send(
       new DescribeVpcsCommand({
         Filters: [
-          { Name: 'tag:commitAuthor', Values: [process.env.COMMIT_AUTHOR!] },
+          { Name: 'tag:CommitAuthor', Values: [process.env.COMMIT_AUTHOR!] },
         ],
       })
     );

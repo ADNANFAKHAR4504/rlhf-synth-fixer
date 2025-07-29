@@ -21,7 +21,7 @@ const defaultTags = {
   tags: {
     Environment: environmentSuffix,
     Repository: repositoryName,
-    Author: commitAuthor,
+    CommitAuthor: commitAuthor,
   },
 };
 
