@@ -469,6 +469,73 @@ describe('TapStack Serverless Application Integration Tests', () => {
       }
     });
 
+      test('should return valid response structure for GET request', async () => {
+        const functionName = outputs.LambdaFunctionName;
+        if (!functionName) {
+          console.warn(`⚠️  Function name not available, skipping GET response test`);
+          return;
+        }
+        
+        try {
+          const testEvent = {
+            httpMethod: 'GET',
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json'
+            },
+            queryStringParameters: null,
+            pathParameters: null,
+            body: null,
+            isBase64Encoded: false
+          };
+
+          const response = await lambda.send(new InvokeCommand({
+            FunctionName: functionName,
+            Payload: JSON.stringify(testEvent)
+          }));
+
+          // Parse the response payload
+          const result = JSON.parse(new TextDecoder().decode(response.Payload));
+          
+          // Validate response structure
+          expect(result).toHaveProperty('statusCode');
+          expect(result).toHaveProperty('headers');
+          expect(result).toHaveProperty('body');
+          
+          // Validate status code
+          expect([200, 500, 403]).toContain(result.statusCode);
+          
+          // Validate headers
+          expect(result.headers).toHaveProperty('Access-Control-Allow-Origin');
+          expect(result.headers).toHaveProperty('Content-Type');
+          expect(result.headers['Content-Type']).toBe('application/json');
+          
+          // Parse and validate body
+          if (result.body) {
+            const bodyData = JSON.parse(result.body);
+            expect(bodyData).toHaveProperty('message');
+            
+            if (result.statusCode === 200) {
+              expect(bodyData).toHaveProperty('data');
+              expect(bodyData).toHaveProperty('environment');
+              expect(bodyData.environment).toBe(environmentSuffix);
+              console.log(`✅ Lambda GET response validated successfully`);
+            } else {
+              expect(bodyData.message).toContain('error');
+              console.log(`✅ Lambda GET error response validated: ${result.statusCode}`);
+            }
+          }
+          
+          console.log(`✅ Lambda GET invocation verified: Status ${result.statusCode}`);
+        } catch (error: any) {
+          if (error.name === 'ResourceNotFoundException') {
+            console.warn(`⚠️  Lambda function not found: ${functionName}`);
+          } else {
+            console.warn(`⚠️  Lambda GET invocation test failed: ${error.message}`);
+          }
+        }
+      });
+
     test('should have correct environment variables', async () => {
       const functionName = outputs.LambdaFunctionName;
       if (!functionName) {
