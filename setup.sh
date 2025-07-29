@@ -83,8 +83,8 @@ fi
 echo "✅ Pipenv version is correct: $CURRENT_PIPENV_VERSION"
 
 # Install dependencies
-echo "�📦 Installing Node.js dependencies..."
-npm install
+echo "📦 Installing Node.js dependencies..."
+npm ci
 
 echo "📦 Installing Python dependencies (if any)..."
 if [ -f "Pipfile" ]; then
