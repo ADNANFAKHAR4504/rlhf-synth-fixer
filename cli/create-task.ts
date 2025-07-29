@@ -79,7 +79,7 @@ function getLanguageChoices(platform: string) {
   if (platform === 'cdktf') {
     return [
       { name: 'TypeScript', value: 'ts' },
-      // { name: 'Python', value: 'py' },
+      { name: 'Python', value: 'py' },
     ];
   }
 
