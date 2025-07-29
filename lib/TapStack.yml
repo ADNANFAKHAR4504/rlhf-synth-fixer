@@ -178,7 +178,6 @@ Resources:
 
   ApiGatewayDeployment:
     Type: AWS::ApiGateway::Deployment
-    DependsOn: ApiGatewayRestApi
     Properties:
       RestApiId: !Ref ApiGatewayRestApi
 
@@ -186,7 +185,7 @@ Resources:
     Type: AWS::ApiGateway::Stage
     Properties:
       RestApiId: !Ref ApiGatewayRestApi
-      DeploymentId: !Ref ApiGatewayDeployment        # <--- Added DeploymentId here
+      DeploymentId: !Ref ApiGatewayDeployment
       StageName: !Ref EnvironmentName
       AccessLogSetting:
         DestinationArn: !GetAtt ApiLogGroup.Arn
@@ -196,7 +195,7 @@ Resources:
           HttpMethod: "*"
           LoggingLevel: INFO
           MetricsEnabled: true
-      RoleArn: !GetAtt ApiGatewayServiceRole.Arn
+
 
 Outputs:
   S3BucketName:

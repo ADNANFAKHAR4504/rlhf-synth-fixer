@@ -313,7 +313,6 @@
         },
         "ApiGatewayDeployment": {
             "Type": "AWS::ApiGateway::Deployment",
-            "DependsOn": "ApiGatewayRestApi",
             "Properties": {
                 "RestApiId": {
                     "Ref": "ApiGatewayRestApi"
@@ -348,13 +347,7 @@
                         "LoggingLevel": "INFO",
                         "MetricsEnabled": true
                     }
-                ],
-                "RoleArn": {
-                    "Fn::GetAtt": [
-                        "ApiGatewayServiceRole",
-                        "Arn"
-                    ]
-                }
+                ]
             }
         }
     },
