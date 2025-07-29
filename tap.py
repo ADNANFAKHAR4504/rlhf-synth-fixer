@@ -12,7 +12,7 @@ different deployment environments (development, staging, production, etc.).
 import os
 import pulumi
 from pulumi import Config, ResourceOptions
-from lib.tap_stack import TapStack
+from lib.tap_stack import TapStack, TapStackArgs
 
 # Initialize Pulumi configuration
 config = Config()
