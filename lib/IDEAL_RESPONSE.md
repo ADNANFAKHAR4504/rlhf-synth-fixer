@@ -169,16 +169,15 @@ super().**init**(scope, construct_id, **kwargs)
         )
     )
 
-    # S3 Bucket for static website hosting with versioning and KMS encryption
-    # Made private - will be accessed via CloudFront distribution only
+    # S3 Bucket for static content hosting with versioning and KMS encryption
+    # Private bucket - accessed via CloudFront distribution only (no direct S3 website hosting)
     bucket = s3.Bucket(
         self,
         "FrontendBucket",
         versioned=True,
         encryption=s3.BucketEncryption.KMS,
         encryption_key=s3_kms_key,
-        website_index_document="index.html",
-        website_error_document="error.html",
+        # Remove website hosting properties - not compatible with private bucket + OAI
         public_read_access=False,  # Private bucket - accessed via CloudFront
         block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
         removal_policy=RemovalPolicy.DESTROY
@@ -288,28 +287,28 @@ super().**init**(scope, construct_id, **kwargs)
         self,
         "WebsiteURL",
         value=f"https://{distribution.distribution_domain_name}",
-        description="URL of the static website via CloudFront distribution"
+        description="URL of the static website served via CloudFront distribution from private S3 bucket"
     )
 
     CfnOutput(
         self,
         "CloudFrontDistributionId",
         value=distribution.distribution_id,
-        description="CloudFront Distribution ID"
+        description="CloudFront Distribution ID for static content delivery"
     )
 
     CfnOutput(
         self,
         "CloudFrontDistributionDomain",
         value=distribution.distribution_domain_name,
-        description="CloudFront Distribution Domain Name"
+        description="CloudFront Distribution Domain Name for static content access"
     )
 
     CfnOutput(
         self,
         "FrontendBucketName",
         value=bucket.bucket_name,
-        description="Name of the S3 bucket for frontend hosting"
+        description="Name of the private S3 bucket for static content storage (accessed via CloudFront)"
     )
 
     CfnOutput(
