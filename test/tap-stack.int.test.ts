@@ -39,11 +39,24 @@ try {
   console.warn('cfn-outputs/flat-outputs.json not found - integration tests will be skipped');
 }
 
-// AWS clients configured for us-west-2
-const s3Client = new S3Client({ region: 'us-west-2' });
-const dynamoClient = new DynamoDBClient({ region: 'us-west-2' });
-const lambdaClient = new LambdaClient({ region: 'us-west-2' });
-const logsClient = new CloudWatchLogsClient({ region: 'us-west-2' });
+// Determine region from Lambda ARN or default to us-east-1
+const getRegionFromOutputs = () => {
+  if (outputs.LambdaFunctionArn) {
+    // Extract region from ARN: arn:aws:lambda:REGION:account:function:name
+    const arnParts = outputs.LambdaFunctionArn.split(':');
+    return arnParts[3]; // Region is the 4th part (index 3)
+  }
+  return 'us-east-1'; // Default region
+};
+
+const awsRegion = getRegionFromOutputs();
+console.log(`Using AWS region: ${awsRegion}`);
+
+// AWS clients configured for the correct region
+const s3Client = new S3Client({ region: awsRegion });
+const dynamoClient = new DynamoDBClient({ region: awsRegion });
+const lambdaClient = new LambdaClient({ region: awsRegion });
+const logsClient = new CloudWatchLogsClient({ region: awsRegion });
 
 describe('IoT Data Processor Integration Tests', () => {
   const testTimeout = 30000; // 30 seconds
