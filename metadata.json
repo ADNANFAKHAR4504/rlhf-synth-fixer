@@ -4,5 +4,17 @@
   "complexity": "hard",
   "turn_type": "single",
   "po_id": "274768",
-  "startedAt": "2025-07-29T14:17:26.597Z"
+  "startedAt": "2025-07-29T14:17:26.597Z",
+  "subtask": "Infrastructure Migration",
+  "subject_labels": "Web Application Deployment",
+  "testDependencies": [
+    "@aws-sdk/client-ec2@^3.848.0",
+    "@aws-sdk/client-s3@^3.848.0",
+    "@aws-sdk/client-rds@^3.846.0",
+    "@types/jest@^29.5.14",
+    "jest@^29.7.0",
+    "ts-jest@^29.4.0",
+    "aws-cdk-lib@2.204.0",
+    "@aws-cdk/assertions@2.204.0"
+  ]
 }
