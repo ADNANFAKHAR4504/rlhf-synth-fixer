@@ -1,50 +1,24 @@
-import {
-  AwsProvider,
-  AwsProviderDefaultTags,
-} from '@cdktf/provider-aws/lib/provider';
-import { S3Backend, TerraformStack } from 'cdktf';
-import { Construct } from 'constructs';
+terraform {
+  backend "s3" {
+    bucket         = var.state_bucket
+    key            = "${var.environment_suffix}/${var.stack_name}.tfstate"
+    region         = var.state_bucket_region
+    encrypt        = true
+    dynamodb_table = "terraform-locks" # optional for state locking
+  }
 
-// ? Import your stacks here
-// import { MyStack } from './my-stack';
-
-interface TapStackProps {
-  environmentSuffix?: string;
-  stateBucket?: string;
-  stateBucketRegion?: string;
-  awsRegion?: string;
-  defaultTags?: AwsProviderDefaultTags;
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+  }
 }
 
-export class TapStack extends TerraformStack {
-  constructor(scope: Construct, id: string, props?: TapStackProps) {
-    super(scope, id);
+provider "aws" {
+  region = var.aws_region
 
-    const environmentSuffix = props?.environmentSuffix || 'dev';
-    const awsRegion = props?.awsRegion || 'us-east-1';
-    const stateBucketRegion = props?.stateBucketRegion || 'us-east-1';
-    const stateBucket = props?.stateBucket || 'iac-rlhf-tf-states';
-    const defaultTags = props?.defaultTags ? [props.defaultTags] : [];
-
-    // Configure AWS Provider - this expects AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY to be set in the environment
-    new AwsProvider(this, 'aws', {
-      region: awsRegion,
-      defaultTags: defaultTags,
-    });
-
-    // Configure S3 Backend with native state locking
-    new S3Backend(this, {
-      bucket: stateBucket,
-      key: `${environmentSuffix}/${id}.tfstate`,
-      region: stateBucketRegion,
-      encrypt: true,
-    });
-    // Using an escape hatch instead of S3Backend construct - CDKTF still does not support S3 state locking natively
-    // ref - https://developer.hashicorp.com/terraform/cdktf/concepts/resources#escape-hatch
-    this.addOverride('terraform.backend.s3.use_lockfile', true);
-
-    // ? Add your stack instantiations here
-    // ! Do NOT create resources directly in this stack.
-    // ! Instead, create separate stacks for each resource type.
+  default_tags {
+    tags = var.default_tags
   }
 }
