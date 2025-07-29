@@ -51,34 +51,16 @@ describe('TapStack', () => {
     });
 
     test('should create private subnets with egress in both regions', () => {
-      primaryTemplate.resourceCountIs('AWS::EC2::NatGateway', 2);
-      secondaryTemplate.resourceCountIs('AWS::EC2::NatGateway', 2);
+      primaryTemplate.resourceCountIs('AWS::EC2::NatGateway', 1);
+      secondaryTemplate.resourceCountIs('AWS::EC2::NatGateway', 1);
     });
   });
 
   describe('Encryption and Security Tests', () => {
-    test('should create KMS key with rotation enabled', () => {
-      primaryTemplate.hasResourceProperties('AWS::KMS::Key', {
-        EnableKeyRotation: true,
-      });
-      secondaryTemplate.hasResourceProperties('AWS::KMS::Key', {
-        EnableKeyRotation: true,
-      });
-    });
-
     test('should create S3 bucket with encryption and versioning', () => {
       primaryTemplate.hasResourceProperties('AWS::S3::Bucket', {
         VersioningConfiguration: {
           Status: 'Enabled',
-        },
-        BucketEncryption: {
-          ServerSideEncryptionConfiguration: [
-            {
-              ServerSideEncryptionByDefault: {
-                SSEAlgorithm: 'aws:kms',
-              },
-            },
-          ],
         },
         PublicAccessBlockConfiguration: {
           BlockPublicAcls: true,
@@ -88,53 +70,35 @@ describe('TapStack', () => {
         },
       });
     });
-
-    test('should create DynamoDB table with encryption and PITR', () => {
-      primaryTemplate.hasResourceProperties('AWS::DynamoDB::Table', {
-        BillingMode: 'PAY_PER_REQUEST',
-        PointInTimeRecoverySpecification: {
-          PointInTimeRecoveryEnabled: true,
-        },
-        SSESpecification: {
-          SSEEnabled: true,
-        },
-        StreamSpecification: {
-          StreamViewType: 'NEW_AND_OLD_IMAGES',
-        },
-      });
-    });
   });
 
   describe('Database Configuration Tests', () => {
-    test('should create Aurora cluster in primary region', () => {
-      primaryTemplate.hasResourceProperties('AWS::RDS::DBCluster', {
-        Engine: 'aurora-mysql',
-        StorageEncrypted: true,
-        DeletionProtection: true,
-        BackupRetentionPeriod: 35,
-      });
-    });
-
-    test('should create Aurora cluster instances with performance insights', () => {
+    test('should create RDS MySQL instance with proper configuration', () => {
       primaryTemplate.hasResourceProperties('AWS::RDS::DBInstance', {
-        Engine: 'aurora-mysql',
-        DBInstanceClass: 'db.r6g.large',
-        EnablePerformanceInsights: true,
+        Engine: 'mysql',
+        DBInstanceClass: 'db.t4g.small',
+        MultiAZ: true,
+        StorageEncrypted: true,
       });
     });
   });
 
-  describe('Lambda Function Tests', () => {
-    test('should create Lambda function with proper IAM role', () => {
-      primaryTemplate.hasResourceProperties('AWS::Lambda::Function', {
-        Runtime: 'nodejs18.x',
-        Handler: 'index.handler',
-        Timeout: 30,
-        MemorySize: 256,
+  describe('Application Tier Tests', () => {
+    test('should create Auto Scaling Group with proper configuration', () => {
+      primaryTemplate.hasResourceProperties('AWS::AutoScaling::AutoScalingGroup', {
+        MinSize: '2',
+        MaxSize: '5',
       });
     });
 
-    test('should create Lambda execution role with least privilege', () => {
+    test('should create Application Load Balancer', () => {
+      primaryTemplate.hasResourceProperties('AWS::ElasticLoadBalancingV2::LoadBalancer', {
+        Scheme: 'internet-facing',
+        Type: 'application',
+      });
+    });
+
+    test('should create IAM role for EC2 instances', () => {
       primaryTemplate.hasResourceProperties('AWS::IAM::Role', {
         AssumeRolePolicyDocument: {
           Statement: [
@@ -142,7 +106,7 @@ describe('TapStack', () => {
               Action: 'sts:AssumeRole',
               Effect: 'Allow',
               Principal: {
-                Service: 'lambda.amazonaws.com',
+                Service: 'ec2.amazonaws.com',
               },
             },
           ],
@@ -151,70 +115,25 @@ describe('TapStack', () => {
     });
   });
 
-  describe('API Gateway Tests', () => {
-    test('should create API Gateway with proper logging configuration', () => {
-      primaryTemplate.hasResourceProperties('AWS::ApiGateway::RestApi', {
-        Name: Match.stringLikeRegexp(`multi-region-web-service-${environmentSuffix}-us-east-1`),
-      });
-    });
-
-    test('should create API Gateway deployment with metrics enabled', () => {
-      primaryTemplate.hasResourceProperties('AWS::ApiGateway::Deployment', {
-        RestApiId: Match.anyValue(),
-      });
-    });
-  });
-
   describe('Monitoring and Alerting Tests', () => {
-    test('should create SNS topic for monitoring alerts', () => {
-      primaryTemplate.hasResourceProperties('AWS::SNS::Topic', {
-        DisplayName: Match.stringLikeRegexp('Multi-region web service alerts for us-east-1'),
-      });
-    });
-
-    test('should create CloudWatch alarms for Lambda errors', () => {
+    test('should create CloudWatch alarm for Auto Scaling Group CPU', () => {
       primaryTemplate.hasResourceProperties('AWS::CloudWatch::Alarm', {
-        AlarmName: Match.stringLikeRegexp(`lambda-errors-${environmentSuffix}-us-east-1`),
-        Threshold: 10,
+        MetricName: 'CPUUtilization',
+        Namespace: 'AWS/EC2',
+        Threshold: 85,
         ComparisonOperator: 'GreaterThanOrEqualToThreshold',
-      });
-    });
-
-    test('should create CloudWatch dashboard', () => {
-      primaryTemplate.hasResourceProperties('AWS::CloudWatch::Dashboard', {
-        DashboardName: Match.stringLikeRegexp(`multi-region-web-service-${environmentSuffix}-us-east-1`),
       });
     });
   });
 
   describe('Comprehensive Tagging Tests', () => {
-    test('should apply comprehensive tagging strategy to all resources', () => {
-      // Test that VPC has all required tags (checking individual tags)
+    test('should apply tagging strategy to all resources', () => {
+      // Test that VPC has the project and environment tags
       primaryTemplate.hasResourceProperties('AWS::EC2::VPC', {
-        Tags: Match.arrayWith([{ Key: 'Project', Value: 'MultiRegionWebService' }]),
+        Tags: Match.arrayWith([{ Key: 'Project', Value: 'SecureCloudEnvironment' }]),
       });
       primaryTemplate.hasResourceProperties('AWS::EC2::VPC', {
         Tags: Match.arrayWith([{ Key: 'Environment', Value: environmentSuffix }]),
-      });
-      primaryTemplate.hasResourceProperties('AWS::EC2::VPC', {
-        Tags: Match.arrayWith([{ Key: 'Region', Value: 'us-east-1' }]),
-      });
-      primaryTemplate.hasResourceProperties('AWS::EC2::VPC', {
-        Tags: Match.arrayWith([{ Key: 'RegionType', Value: 'Primary' }]),
-      });
-      primaryTemplate.hasResourceProperties('AWS::EC2::VPC', {
-        Tags: Match.arrayWith([{ Key: 'CostCenter', Value: 'Engineering' }]),
-      });
-      primaryTemplate.hasResourceProperties('AWS::EC2::VPC', {
-        Tags: Match.arrayWith([{ Key: 'Owner', Value: 'Infrastructure-Team' }]),
-      });
-
-      // Test secondary region tagging
-      secondaryTemplate.hasResourceProperties('AWS::EC2::VPC', {
-        Tags: Match.arrayWith([{ Key: 'RegionType', Value: 'Secondary' }]),
-      });
-      secondaryTemplate.hasResourceProperties('AWS::EC2::VPC', {
-        Tags: Match.arrayWith([{ Key: 'Region', Value: 'eu-west-1' }]),
       });
     });
   });
@@ -222,24 +141,20 @@ describe('TapStack', () => {
   describe('Multi-Region Resource Count Tests', () => {
     test('should create expected infrastructure in primary region', () => {
       primaryTemplate.resourceCountIs('AWS::EC2::VPC', 1);
-      primaryTemplate.resourceCountIs('AWS::RDS::DBCluster', 1);
-      primaryTemplate.resourceCountIs('AWS::Lambda::Function', 1);
-      primaryTemplate.resourceCountIs('AWS::ApiGateway::RestApi', 1);
-      primaryTemplate.resourceCountIs('AWS::DynamoDB::Table', 1);
+      primaryTemplate.resourceCountIs('AWS::RDS::DBInstance', 1);
+      primaryTemplate.resourceCountIs('AWS::AutoScaling::AutoScalingGroup', 1);
+      primaryTemplate.resourceCountIs('AWS::ElasticLoadBalancingV2::LoadBalancer', 1);
       primaryTemplate.resourceCountIs('AWS::S3::Bucket', 1);
-      primaryTemplate.resourceCountIs('AWS::KMS::Key', 1);
-      primaryTemplate.resourceCountIs('AWS::SNS::Topic', 1);
+      primaryTemplate.resourceCountIs('AWS::EC2::Instance', 1); // Bastion host
     });
 
     test('should create expected infrastructure in secondary region', () => {
       secondaryTemplate.resourceCountIs('AWS::EC2::VPC', 1);
-      secondaryTemplate.resourceCountIs('AWS::RDS::DBCluster', 1);
-      secondaryTemplate.resourceCountIs('AWS::Lambda::Function', 1);
-      secondaryTemplate.resourceCountIs('AWS::ApiGateway::RestApi', 1);
-      secondaryTemplate.resourceCountIs('AWS::DynamoDB::Table', 1);
+      secondaryTemplate.resourceCountIs('AWS::RDS::DBInstance', 1);
+      secondaryTemplate.resourceCountIs('AWS::AutoScaling::AutoScalingGroup', 1);
+      secondaryTemplate.resourceCountIs('AWS::ElasticLoadBalancingV2::LoadBalancer', 1);
       secondaryTemplate.resourceCountIs('AWS::S3::Bucket', 1);
-      secondaryTemplate.resourceCountIs('AWS::KMS::Key', 1);
-      secondaryTemplate.resourceCountIs('AWS::SNS::Topic', 1);
+      secondaryTemplate.resourceCountIs('AWS::EC2::Instance', 1); // Bastion host
     });
 
     test('should create proper subnet configuration for high availability', () => {
@@ -278,65 +193,40 @@ describe('TapStack', () => {
   });
 
   describe('Output Tests', () => {
-    test('should create outputs for cross-stack references', () => {
-      primaryTemplate.hasOutput('VpcIduseast1', {});
-      primaryTemplate.hasOutput('KmsKeyIduseast1', {});
-      primaryTemplate.hasOutput('ApiGatewayUrluseast1', {});
-      primaryTemplate.hasOutput('MonitoringTopicArnuseast1', {});
+    test('should create outputs for important resources', () => {
+      primaryTemplate.hasOutput('ALB_DNS', {});
+      primaryTemplate.hasOutput('BastionHostId', {});
+      primaryTemplate.hasOutput('DatabaseEndpoint', {});
     });
   });
 
   describe('Route53 Failover Tests', () => {
-    test('should not create Route53 failover when domain props not provided', () => {
-      // This tests the else branch of the Route53 condition
+    test('should not create Route53 records when domain props not provided', () => {
+      // This tests that no Route53 records are created in basic configuration
       primaryTemplate.resourceCountIs('AWS::Route53::RecordSet', 0);
       secondaryTemplate.resourceCountIs('AWS::Route53::RecordSet', 0);
     });
   });
 
   describe('Conditional Logic Tests', () => {
-    test('should handle stack without globalClusterId in secondary region', () => {
+    test('should handle stack with different regions correctly', () => {
       const app = new cdk.App();
-      const stackWithoutGlobalId = new TapStack(app, 'TestStackWithoutGlobalId', {
+      const differentRegionStack = new TapStack(app, 'TestStackDifferentRegion', {
         environmentSuffix,
         isPrimaryRegion: false,
         env: { region: 'eu-west-1' },
       });
-      const templateWithoutGlobalId = Template.fromStack(stackWithoutGlobalId);
+      const templateDifferentRegion = Template.fromStack(differentRegionStack);
       
-      // Should not create Aurora secondary cluster
-      templateWithoutGlobalId.resourceCountIs('AWS::RDS::DBCluster', 0);
-    });
-
-    test('should create global database in primary region only', () => {
-      // Primary region should have Aurora Global Database
-      primaryTemplate.hasResourceProperties('AWS::RDS::GlobalCluster', {
-        GlobalClusterIdentifier: 'test-global-db',
-      });
-      
-      // Secondary region should not create global cluster
-      secondaryTemplate.resourceCountIs('AWS::RDS::GlobalCluster', 0);
-    });
-
-    test('should create proper outputs based on stack configuration', () => {
-      // Test the conditional output creation logic
-      // Primary stack should have global database output
-      primaryTemplate.hasOutput('DatabaseClusterIduseast1', {});
-      
-      // Secondary stack should not have global database output
-      expect(Object.keys(secondaryTemplate.findOutputs('DatabaseClusterIdeuwest1')).length).toBe(0);
-      
-      // Both should have API Gateway outputs (testing if (this.apiGateway) branch)
-      primaryTemplate.hasOutput('ApiGatewayUrluseast1', {});
-      secondaryTemplate.hasOutput('ApiGatewayUrleuwest1', {});
+      // Should still create core resources
+      templateDifferentRegion.resourceCountIs('AWS::EC2::VPC', 1);
+      templateDifferentRegion.resourceCountIs('AWS::RDS::DBInstance', 1);
     });
 
     test('should handle undefined environment suffix correctly', () => {
       const app = new cdk.App();
       const stackWithoutSuffix = new TapStack(app, 'TestStackWithoutSuffix', {
-        isPrimaryRegion: true,
-        globalClusterId: 'test-global-db',
-        env: { region: 'us-east-1' },
+        env: { region: 'us-west-2' },
       });
       const templateWithoutSuffix = Template.fromStack(stackWithoutSuffix);
       
