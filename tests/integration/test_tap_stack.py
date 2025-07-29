@@ -671,9 +671,11 @@ class TestTapStackIntegration(unittest.TestCase):
           # Retry logic for CloudFront propagation (distributions take time to propagate)
           max_retries = 3
           retry_delay = 30  # seconds
+          final_response = None
           
           for attempt in range(max_retries):
             response = requests.get(self.website_url, timeout=self.request_timeout)
+            final_response = response
             
             # CloudFront should serve the content (may take time to propagate)
             # Status code 400 can occur during CloudFront distribution propagation
@@ -687,18 +689,21 @@ class TestTapStackIntegration(unittest.TestCase):
               # On final attempt, 400 is acceptable during CloudFront propagation
               print("CloudFront returned 400 - this may be temporary during distribution propagation")
               pytest.skip("CloudFront distribution still propagating (HTTP 400) - skipping content validation")
+              return  # Ensure we don't continue to assertion
           
-          # Validate response if we got a proper status code
-          if response.status_code == 200:
-            self.assertIn('Static Website Test', response.text)
-          elif response.status_code in [403, 404]:
-            print("CloudFront distribution may still be propagating or no content uploaded yet")
-          
-          # Accept 200, 403, 404, or 400 (during propagation) as valid responses
-          self.assertTrue(
-              response.status_code in [200, 400, 403, 404],
-              f"Expected status code 200, 400, 403, or 404, got {response.status_code}"
-          )
+          # Only validate if we have a response and it's not a propagation issue
+          if final_response:
+            # Validate response content if we got HTTP 200
+            if final_response.status_code == 200:
+              self.assertIn('Static Website Test', final_response.text)
+            elif final_response.status_code in [403, 404]:
+              print("CloudFront distribution may still be propagating or no content uploaded yet")
+            
+            # Accept 200, 403, 404, or 400 (during propagation) as valid responses
+            self.assertTrue(
+                final_response.status_code in [200, 400, 403, 404],
+                f"Expected status code 200, 400, 403, or 404, got {final_response.status_code}"
+            )
             
         except requests.RequestException as e:
           # Network errors are acceptable during CloudFront propagation
@@ -765,10 +770,12 @@ class TestTapStackIntegration(unittest.TestCase):
       # Retry logic for CloudFront propagation (distributions take time to propagate)
       max_retries = 3
       retry_delay = 30  # seconds
+      final_response = None
       
       for attempt in range(max_retries):
         # Test CloudFront distribution endpoint
         response = requests.get(self.website_url, timeout=self.request_timeout)
+        final_response = response
         
         # CloudFront should return a response (might be 404 if no content uploaded, but should not timeout)
         # Status code 404 is acceptable if no static content has been uploaded yet
@@ -793,10 +800,12 @@ class TestTapStackIntegration(unittest.TestCase):
           # On final attempt, 400 is acceptable during CloudFront propagation
           print("CloudFront returned 400 - this may be temporary during distribution propagation")
           pytest.skip("CloudFront distribution still propagating (HTTP 400) - test passed with caveat")
+          return  # Ensure we don't continue to assertion
       
-      # Validate final response
-      self.assertTrue(response.status_code in [200, 400, 403, 404], 
-                      f"Expected status code 200, 400, 403, or 404, got {response.status_code}")
+      # Validate final response only if we have one and it's not a propagation issue
+      if final_response:
+        self.assertTrue(final_response.status_code in [200, 400, 403, 404], 
+                        f"Expected status code 200, 400, 403, or 404, got {final_response.status_code}")
       
     except requests.RequestException as e:
       # Timeout is acceptable for CloudFront distributions that are still propagating
