@@ -40,7 +40,6 @@ describe('TapStack CloudFormation Template', () => {
       const cfnInterface = template.Metadata['AWS::CloudFormation::Interface'];
       expect(cfnInterface.ParameterLabels).toBeDefined();
       expect(cfnInterface.ParameterLabels.EnvironmentSuffix).toBeDefined();
-      expect(cfnInterface.ParameterLabels.S3BucketName).toBeDefined();
     });
   });
 
@@ -62,27 +61,6 @@ describe('TapStack CloudFormation Template', () => {
       );
     });
 
-    test('should have S3BucketName parameter', () => {
-      expect(template.Parameters.S3BucketName).toBeDefined();
-    });
-
-    test('S3BucketName parameter should have correct properties', () => {
-      const s3BucketParam = template.Parameters.S3BucketName;
-      expect(s3BucketParam.Type).toBe('String');
-      expect(s3BucketParam.Default).toBe('serverless-app-data');
-      expect(s3BucketParam.Description).toBe(
-        'Name for the S3 bucket (will be suffixed with account ID and environment)'
-      );
-      expect(s3BucketParam.AllowedPattern).toBe('^[a-z0-9][a-z0-9-]*[a-z0-9]$');
-      expect(s3BucketParam.ConstraintDescription).toBe(
-        'Must be a valid S3 bucket name pattern'
-      );
-    });
-
-    test('should have exactly two parameters', () => {
-      const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(2);
-    });
   });
 
   describe('KMS Resources', () => {
@@ -135,13 +113,6 @@ describe('TapStack CloudFormation Template', () => {
     test('should have S3Bucket resource', () => {
       expect(template.Resources.S3Bucket).toBeDefined();
       expect(template.Resources.S3Bucket.Type).toBe('AWS::S3::Bucket');
-    });
-
-    test('S3Bucket should have correct naming', () => {
-      const s3Bucket = template.Resources.S3Bucket;
-      expect(s3Bucket.Properties.BucketName).toEqual({
-        'Fn::Sub': '${S3BucketName}-${AWS::AccountId}-${EnvironmentSuffix}'
-      });
     });
 
     test('S3Bucket should have KMS encryption enabled', () => {
@@ -412,11 +383,6 @@ describe('TapStack CloudFormation Template', () => {
     test('should have correct number of resources', () => {
       const resourceCount = Object.keys(template.Resources).length;
       expect(resourceCount).toBe(7); // KMSKey, KMSKeyAlias, S3Bucket, DynamoDBTable, LambdaLogGroup, LambdaExecutionRole, LambdaFunction
-    });
-
-    test('should have correct number of parameters', () => {
-      const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(2);
     });
 
     test('all resources should have Type property', () => {

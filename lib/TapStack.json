@@ -9,17 +9,13 @@
                         "default": "Environment Configuration"
                     },
                     "Parameters": [
-                        "EnvironmentSuffix",
-                        "S3BucketName"
+                        "EnvironmentSuffix"
                     ]
                 }
             ],
             "ParameterLabels": {
                 "EnvironmentSuffix": {
                     "default": "Environment Suffix"
-                },
-                "S3BucketName": {
-                    "default": "S3 Bucket Name"
                 }
             }
         }
@@ -31,13 +27,6 @@
             "Description": "Environment suffix for resource naming (e.g., dev, staging, prod)",
             "AllowedPattern": "^[a-zA-Z0-9]+$",
             "ConstraintDescription": "Must contain only alphanumeric characters"
-        },
-        "S3BucketName": {
-            "Type": "String",
-            "Default": "serverless-app-data",
-            "Description": "Name for the S3 bucket (will be suffixed with account ID and environment)",
-            "AllowedPattern": "^[a-z0-9][a-z0-9-]*[a-z0-9]$",
-            "ConstraintDescription": "Must be a valid S3 bucket name pattern"
         }
     },
     "Resources": {
@@ -120,9 +109,6 @@
         "S3Bucket": {
             "Type": "AWS::S3::Bucket",
             "Properties": {
-                "BucketName": {
-                    "Fn::Sub": "${S3BucketName}-${AWS::AccountId}-${EnvironmentSuffix}"
-                },
                 "BucketEncryption": {
                     "ServerSideEncryptionConfiguration": [
                         {
