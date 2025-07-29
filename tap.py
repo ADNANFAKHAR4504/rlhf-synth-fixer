@@ -31,10 +31,11 @@ default_tags = {
     'Author': commit_author,
 }
 
-TapStack(
-    STACK_NAME,
-    opts=ResourceOptions(
-        additional_secret_outputs=[],
-        tags=default_tags
-    )
+stack = TapStack(
+    name="tap-infra",
+    args=TapStackArgs(
+        environment_suffix="dev",
+        tags=some_tags  # ← Tags go in TapStackArgs, not ResourceOptions
+    ),
+    opts=ResourceOptions(parent=None)  # ← No tags here
 )
