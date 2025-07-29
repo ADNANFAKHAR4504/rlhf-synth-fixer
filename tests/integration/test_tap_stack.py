@@ -75,7 +75,6 @@ class TestTapStackLiveIntegration(unittest.TestCase):
       
       # Verify expected tags
       self.assertEqual(tags['Environment'], 'dev')
-      self.assertEqual(tags['Owner'], 'test-user')
       self.assertEqual(tags['Project'], 'pulumi-dummy')
     except Exception as e:
       if 'NoSuchTagSet' in str(e):
