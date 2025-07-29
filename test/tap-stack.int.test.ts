@@ -1,4 +1,5 @@
 // Integration tests for IoT Data Processor infrastructure
+//changes made
 import fs from 'fs';
 import { S3Client, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
 import { DynamoDBClient, ScanCommand, DeleteItemCommand } from '@aws-sdk/client-dynamodb';
