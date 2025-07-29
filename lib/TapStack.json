@@ -1,6 +1,6 @@
 {
     "AWSTemplateFormatVersion": "2010-09-09",
-    "Description": "Production-ready VPC infrastructure with Auto Scaling Group deployment across public subnets in us-west-2",
+    "Description": "Production-ready VPC infrastructure with Auto Scaling Group deployment across public subnets in us-east-1",
     "Parameters": {
         "EnvironmentSuffix": {
             "Type": "String",
@@ -50,12 +50,12 @@
     },
     "Mappings": {
         "AZConfig": {
-            "us-west-2": {
+            "us-east-1": {
                 "AZ1": [
-                    "us-west-2a"
+                    "us-east-1a"
                 ],
                 "AZ2": [
-                    "us-west-2b"
+                    "us-east-1b"
                 ]
             }
         }
@@ -170,7 +170,7 @@
                         {
                             "Fn::FindInMap": [
                                 "AZConfig",
-                                "us-west-2",
+                                "us-east-1",
                                 "AZ1"
                             ]
                         }
@@ -228,7 +228,7 @@
                         {
                             "Fn::FindInMap": [
                                 "AZConfig",
-                                "us-west-2",
+                                "us-east-1",
                                 "AZ2"
                             ]
                         }
@@ -286,7 +286,7 @@
                         {
                             "Fn::FindInMap": [
                                 "AZConfig",
-                                "us-west-2",
+                                "us-east-1",
                                 "AZ1"
                             ]
                         }
@@ -343,7 +343,7 @@
                         {
                             "Fn::FindInMap": [
                                 "AZConfig",
-                                "us-west-2",
+                                "us-east-1",
                                 "AZ2"
                             ]
                         }
@@ -937,7 +937,7 @@
             }
         },
         "PublicSubnet1Id": {
-            "Description": "Public Subnet 1 ID (us-west-2a)",
+            "Description": "Public Subnet 1 ID (us-east-1a)",
             "Value": {
                 "Ref": "PublicSubnet1"
             },
@@ -948,7 +948,7 @@
             }
         },
         "PublicSubnet2Id": {
-            "Description": "Public Subnet 2 ID (us-west-2b)",
+            "Description": "Public Subnet 2 ID (us-east-1b)",
             "Value": {
                 "Ref": "PublicSubnet2"
             },
@@ -959,7 +959,7 @@
             }
         },
         "PrivateSubnet1Id": {
-            "Description": "Private Subnet 1 ID (us-west-2a)",
+            "Description": "Private Subnet 1 ID (us-east-1a)",
             "Value": {
                 "Ref": "PrivateSubnet1"
             },
@@ -970,7 +970,7 @@
             }
         },
         "PrivateSubnet2Id": {
-            "Description": "Private Subnet 2 ID (us-west-2b)",
+            "Description": "Private Subnet 2 ID (us-east-1b)",
             "Value": {
                 "Ref": "PrivateSubnet2"
             },

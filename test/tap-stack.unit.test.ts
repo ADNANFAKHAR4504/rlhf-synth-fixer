@@ -123,14 +123,14 @@ describe('TapStack CloudFormation Template', () => {
   });
 
   describe('Mappings', () => {
-    it('defines AZ mapping for us-west-2', () => {
+    it('defines AZ mapping for us-east-1', () => {
       expect(template.Mappings.AZConfig).toBeDefined();
-      expect(template.Mappings.AZConfig['us-west-2']).toBeDefined();
-      expect(template.Mappings.AZConfig['us-west-2'].AZ1).toEqual([
-        'us-west-2a',
+      expect(template.Mappings.AZConfig['us-east-1']).toBeDefined();
+      expect(template.Mappings.AZConfig['us-east-1'].AZ1).toEqual([
+        'us-east-1a',
       ]);
-      expect(template.Mappings.AZConfig['us-west-2'].AZ2).toEqual([
-        'us-west-2b',
+      expect(template.Mappings.AZConfig['us-east-1'].AZ2).toEqual([
+        'us-east-1b',
       ]);
     });
   });
@@ -178,7 +178,7 @@ describe('TapStack CloudFormation Template', () => {
       expect(subnet.Properties.CidrBlock).toBe('10.0.1.0/24');
       expect(subnet.Properties.AvailabilityZone['Fn::Select']).toEqual([
         0,
-        { 'Fn::FindInMap': ['AZConfig', 'us-west-2', 'AZ1'] },
+        { 'Fn::FindInMap': ['AZConfig', 'us-east-1', 'AZ1'] },
       ]);
       expect(subnet.Properties.MapPublicIpOnLaunch).toBe(true);
     });
@@ -191,7 +191,7 @@ describe('TapStack CloudFormation Template', () => {
       expect(subnet.Properties.CidrBlock).toBe('10.0.2.0/24');
       expect(subnet.Properties.AvailabilityZone['Fn::Select']).toEqual([
         0,
-        { 'Fn::FindInMap': ['AZConfig', 'us-west-2', 'AZ2'] },
+        { 'Fn::FindInMap': ['AZConfig', 'us-east-1', 'AZ2'] },
       ]);
       expect(subnet.Properties.MapPublicIpOnLaunch).toBe(true);
     });
@@ -204,7 +204,7 @@ describe('TapStack CloudFormation Template', () => {
       expect(subnet.Properties.CidrBlock).toBe('10.0.3.0/24');
       expect(subnet.Properties.AvailabilityZone['Fn::Select']).toEqual([
         0,
-        { 'Fn::FindInMap': ['AZConfig', 'us-west-2', 'AZ1'] },
+        { 'Fn::FindInMap': ['AZConfig', 'us-east-1', 'AZ1'] },
       ]);
       expect(subnet.Properties.MapPublicIpOnLaunch).toBeUndefined();
     });
@@ -217,7 +217,7 @@ describe('TapStack CloudFormation Template', () => {
       expect(subnet.Properties.CidrBlock).toBe('10.0.4.0/24');
       expect(subnet.Properties.AvailabilityZone['Fn::Select']).toEqual([
         0,
-        { 'Fn::FindInMap': ['AZConfig', 'us-west-2', 'AZ2'] },
+        { 'Fn::FindInMap': ['AZConfig', 'us-east-1', 'AZ2'] },
       ]);
       expect(subnet.Properties.MapPublicIpOnLaunch).toBeUndefined();
     });
@@ -626,22 +626,22 @@ describe('TapStack CloudFormation Template', () => {
         template.Resources.PublicSubnet1.Properties.AvailabilityZone[
           'Fn::Select'
         ]
-      ).toEqual([0, { 'Fn::FindInMap': ['AZConfig', 'us-west-2', 'AZ1'] }]);
+      ).toEqual([0, { 'Fn::FindInMap': ['AZConfig', 'us-east-1', 'AZ1'] }]);
       expect(
         template.Resources.PublicSubnet2.Properties.AvailabilityZone[
           'Fn::Select'
         ]
-      ).toEqual([0, { 'Fn::FindInMap': ['AZConfig', 'us-west-2', 'AZ2'] }]);
+      ).toEqual([0, { 'Fn::FindInMap': ['AZConfig', 'us-east-1', 'AZ2'] }]);
       expect(
         template.Resources.PrivateSubnet1.Properties.AvailabilityZone[
           'Fn::Select'
         ]
-      ).toEqual([0, { 'Fn::FindInMap': ['AZConfig', 'us-west-2', 'AZ1'] }]);
+      ).toEqual([0, { 'Fn::FindInMap': ['AZConfig', 'us-east-1', 'AZ1'] }]);
       expect(
         template.Resources.PrivateSubnet2.Properties.AvailabilityZone[
           'Fn::Select'
         ]
-      ).toEqual([0, { 'Fn::FindInMap': ['AZConfig', 'us-west-2', 'AZ2'] }]);
+      ).toEqual([0, { 'Fn::FindInMap': ['AZConfig', 'us-east-1', 'AZ2'] }]);
     });
   });
 });

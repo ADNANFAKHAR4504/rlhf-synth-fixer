@@ -1,6 +1,6 @@
 ```yaml
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'Production-ready VPC infrastructure with Auto Scaling Group deployment across public subnets in us-west-2'
+Description: 'Production-ready VPC infrastructure with Auto Scaling Group deployment across public subnets in us-east-1'
 
 Parameters:
   EnvironmentSuffix:
@@ -49,9 +49,9 @@ Parameters:
 
 Mappings:
   AZConfig:
-    us-west-2:
-      AZ1: [us-west-2a]
-      AZ2: [us-west-2b]
+    us-east-1:
+      AZ1: [us-east-1a]
+      AZ2: [us-east-1b]
 
 Resources:
   # VPC Configuration
@@ -105,7 +105,7 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       CidrBlock: 10.0.1.0/24
-      AvailabilityZone: !Select [0, !FindInMap [AZConfig, us-west-2, AZ1]]
+      AvailabilityZone: !Select [0, !FindInMap [AZConfig, us-east-1, AZ1]]
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -126,7 +126,7 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       CidrBlock: 10.0.2.0/24
-      AvailabilityZone: !Select [0, !FindInMap [AZConfig, us-west-2, AZ2]]
+      AvailabilityZone: !Select [0, !FindInMap [AZConfig, us-east-1, AZ2]]
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -148,7 +148,7 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       CidrBlock: 10.0.3.0/24
-      AvailabilityZone: !Select [0, !FindInMap [AZConfig, us-west-2, AZ1]]
+      AvailabilityZone: !Select [0, !FindInMap [AZConfig, us-east-1, AZ1]]
       Tags:
         - Key: Name
           Value: !Sub ${EnvironmentSuffix}-${Name}-private-subnet-1-${Team}
@@ -168,7 +168,7 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       CidrBlock: 10.0.4.0/24
-      AvailabilityZone: !Select [0, !FindInMap [AZConfig, us-west-2, AZ2]]
+      AvailabilityZone: !Select [0, !FindInMap [AZConfig, us-east-1, AZ2]]
       Tags:
         - Key: Name
           Value: !Sub ${EnvironmentSuffix}-${Name}-private-subnet-2-${Team}
@@ -432,25 +432,25 @@ Outputs:
       Name: !Sub ${EnvironmentSuffix}-${Name}-private-subnets-${Team}
 
   PublicSubnet1Id:
-    Description: Public Subnet 1 ID (us-west-2a)
+    Description: Public Subnet 1 ID (us-east-1a)
     Value: !Ref PublicSubnet1
     Export:
       Name: !Sub ${EnvironmentSuffix}-${Name}-public-subnet-1-${Team}
 
   PublicSubnet2Id:
-    Description: Public Subnet 2 ID (us-west-2b)
+    Description: Public Subnet 2 ID (us-east-1b)
     Value: !Ref PublicSubnet2
     Export:
       Name: !Sub ${EnvironmentSuffix}-${Name}-public-subnet-2-${Team}
 
   PrivateSubnet1Id:
-    Description: Private Subnet 1 ID (us-west-2a)
+    Description: Private Subnet 1 ID (us-east-1a)
     Value: !Ref PrivateSubnet1
     Export:
       Name: !Sub ${EnvironmentSuffix}-${Name}-private-subnet-1-${Team}
 
   PrivateSubnet2Id:
-    Description: Private Subnet 2 ID (us-west-2b)
+    Description: Private Subnet 2 ID (us-east-1b)
     Value: !Ref PrivateSubnet2
     Export:
       Name: !Sub ${EnvironmentSuffix}-${Name}-private-subnet-2-${Team}

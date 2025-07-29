@@ -19,6 +19,7 @@ import fs from 'fs';
 
 // Read AWS region from file
 const awsRegion = fs.readFileSync('lib/AWS_REGION', 'utf8').trim();
+const expectedEnvironmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'pr265';
 
 const outputs = JSON.parse(
   fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
@@ -110,22 +111,22 @@ describe('TapStack VPC Infrastructure Integration Tests', () => {
       );
       expect(Subnets).toHaveLength(2);
 
-      // Check subnet 1 (us-west-2a)
+      // Check subnet 1 (us-east-1a)
       const subnet1 = Subnets!.find(
         s => s.SubnetId === outputs.PublicSubnet1Id
       );
       expect(subnet1).toBeDefined();
-      expect(subnet1!.AvailabilityZone).toBe('us-west-2a');
+      expect(subnet1!.AvailabilityZone).toBe('us-east-1a');
       expect(subnet1!.CidrBlock).toBe('10.0.1.0/24');
       expect(subnet1!.MapPublicIpOnLaunch).toBe(true);
       expect(subnet1!.State).toBe('available');
 
-      // Check subnet 2 (us-west-2b)
+      // Check subnet 2 (us-east-1b)
       const subnet2 = Subnets!.find(
         s => s.SubnetId === outputs.PublicSubnet2Id
       );
       expect(subnet2).toBeDefined();
-      expect(subnet2!.AvailabilityZone).toBe('us-west-2b');
+      expect(subnet2!.AvailabilityZone).toBe('us-east-1b');
       expect(subnet2!.CidrBlock).toBe('10.0.2.0/24');
       expect(subnet2!.MapPublicIpOnLaunch).toBe(true);
       expect(subnet2!.State).toBe('available');
@@ -144,22 +145,22 @@ describe('TapStack VPC Infrastructure Integration Tests', () => {
       );
       expect(Subnets).toHaveLength(2);
 
-      // Check subnet 1 (us-west-2a)
+      // Check subnet 1 (us-east-1a)
       const subnet1 = Subnets!.find(
         s => s.SubnetId === outputs.PrivateSubnet1Id
       );
       expect(subnet1).toBeDefined();
-      expect(subnet1!.AvailabilityZone).toBe('us-west-2a');
+      expect(subnet1!.AvailabilityZone).toBe('us-east-1a');
       expect(subnet1!.CidrBlock).toBe('10.0.3.0/24');
       expect(subnet1!.MapPublicIpOnLaunch).toBe(false);
       expect(subnet1!.State).toBe('available');
 
-      // Check subnet 2 (us-west-2b)
+      // Check subnet 2 (us-east-1b)
       const subnet2 = Subnets!.find(
         s => s.SubnetId === outputs.PrivateSubnet2Id
       );
       expect(subnet2).toBeDefined();
-      expect(subnet2!.AvailabilityZone).toBe('us-west-2b');
+      expect(subnet2!.AvailabilityZone).toBe('us-east-1b');
       expect(subnet2!.CidrBlock).toBe('10.0.4.0/24');
       expect(subnet2!.MapPublicIpOnLaunch).toBe(false);
       expect(subnet2!.State).toBe('available');
@@ -353,8 +354,8 @@ describe('TapStack VPC Infrastructure Integration Tests', () => {
       // Verify instances are in different AZs
       const azs = asg.Instances!.map(i => i.AvailabilityZone);
       expect(new Set(azs).size).toBe(2);
-      expect(azs).toContain('us-west-2a');
-      expect(azs).toContain('us-west-2b');
+      expect(azs).toContain('us-east-1a');
+      expect(azs).toContain('us-east-1b');
     });
 
     test('EC2 instances are launched in public subnets with public IPs', async () => {
@@ -479,7 +480,7 @@ describe('TapStack VPC Infrastructure Integration Tests', () => {
         const ownerTag = tags.find(t => t.Key === 'Owner');
         const costCenterTag = tags.find(t => t.Key === 'CostCenter');
 
-        expect(envTag?.Value).toBe('dev');
+        expect(envTag?.Value).toBe(expectedEnvironmentSuffix);
         expect(projectTag?.Value).toBe('infrastructure');
         expect(ownerTag?.Value).toBe('devops-team');
         expect(costCenterTag?.Value).toBe('engineering');
@@ -515,7 +516,7 @@ describe('TapStack VPC Infrastructure Integration Tests', () => {
       const ownerTag = tags.find(t => t.Key === 'Owner');
       const costCenterTag = tags.find(t => t.Key === 'CostCenter');
 
-      expect(envTag?.Value).toBe('dev');
+      expect(envTag?.Value).toBe(expectedEnvironmentSuffix);
       expect(projectTag?.Value).toBe('infrastructure');
       expect(ownerTag?.Value).toBe('devops-team');
       expect(costCenterTag?.Value).toBe('engineering');
@@ -552,7 +553,7 @@ describe('TapStack VPC Infrastructure Integration Tests', () => {
       const ownerTag = tags.find(t => t.Key === 'Owner');
       const costCenterTag = tags.find(t => t.Key === 'CostCenter');
 
-      expect(envTag?.Value).toBe('dev');
+      expect(envTag?.Value).toBe(expectedEnvironmentSuffix);
       expect(projectTag?.Value).toBe('infrastructure');
       expect(ownerTag?.Value).toBe('devops-team');
       expect(costCenterTag?.Value).toBe('engineering');
@@ -610,7 +611,7 @@ describe('TapStack VPC Infrastructure Integration Tests', () => {
         const ownerTag = tags.find(t => t.Key === 'Owner');
         const costCenterTag = tags.find(t => t.Key === 'CostCenter');
 
-        expect(envTag?.Value).toBe('dev');
+        expect(envTag?.Value).toBe(expectedEnvironmentSuffix);
         expect(projectTag?.Value).toBe('infrastructure');
         expect(ownerTag?.Value).toBe('devops-team');
         expect(costCenterTag?.Value).toBe('engineering');
@@ -664,7 +665,7 @@ describe('TapStack VPC Infrastructure Integration Tests', () => {
           const ownerTag = tags.find(t => t.Key === 'Owner');
           const costCenterTag = tags.find(t => t.Key === 'CostCenter');
 
-          expect(envTag?.Value).toBe('dev');
+          expect(envTag?.Value).toBe(expectedEnvironmentSuffix);
           expect(projectTag?.Value).toBe('infrastructure');
           expect(ownerTag?.Value).toBe('devops-team');
           expect(costCenterTag?.Value).toBe('engineering');
@@ -812,10 +813,10 @@ describe('TapStack VPC Infrastructure Integration Tests', () => {
       // Verify we have 2 distinct AZs
       expect(new Set(publicAzs).size).toBe(2);
       expect(new Set(privateAzs).size).toBe(2);
-      expect(publicAzs).toContain('us-west-2a');
-      expect(publicAzs).toContain('us-west-2b');
-      expect(privateAzs).toContain('us-west-2a');
-      expect(privateAzs).toContain('us-west-2b');
+      expect(publicAzs).toContain('us-east-1a');
+      expect(publicAzs).toContain('us-east-1b');
+      expect(privateAzs).toContain('us-east-1a');
+      expect(privateAzs).toContain('us-east-1b');
     });
 
     test('Auto Scaling Group distributes instances across AZs', async () => {
@@ -831,8 +832,8 @@ describe('TapStack VPC Infrastructure Integration Tests', () => {
 
       // Should have instances in both AZs
       expect(new Set(azs).size).toBe(2);
-      expect(azs).toContain('us-west-2a');
-      expect(azs).toContain('us-west-2b');
+      expect(azs).toContain('us-east-1a');
+      expect(azs).toContain('us-east-1b');
     });
   });
 

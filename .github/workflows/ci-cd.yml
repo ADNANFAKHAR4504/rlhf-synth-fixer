@@ -294,20 +294,10 @@ jobs:
             npm run cdktf:deploy
           elif [ "$PLATFORM" = "cfn" ] && [ "$LANGUAGE" = "yaml" ]; then
             echo "✅ CloudFormation YAML project detected, deploying with AWS CLI..."
-            REGION=$(cat lib/AWS_REGION 2>/dev/null | tr -d '\n' | tr -d '\r')
-            if [ -z "$REGION" ]; then
-              REGION="us-east-1"
-            fi
-            echo "Using region: $REGION"
-            AWS_REGION="$REGION" npm run cfn:deploy-yaml
+            npm run cfn:deploy-yaml
           elif [ "$PLATFORM" = "cfn" ] && [ "$LANGUAGE" = "json" ]; then
             echo "✅ CloudFormation JSON project detected, deploying with AWS CLI..."
-            REGION=$(cat lib/AWS_REGION 2>/dev/null | tr -d '\n' | tr -d '\r')
-            if [ -z "$REGION" ]; then
-              REGION="us-east-1"
-            fi
-            echo "Using region: $REGION"
-            AWS_REGION="$REGION" npm run cfn:deploy-json
+            npm run cfn:deploy-json
           else
             echo "ℹ️ Unknown deployment method for platform: $PLATFORM, language: $LANGUAGE"
             echo "💡 Supported combinations: cdk+typescript, cdk+python, cfn+yaml, cfn+json"

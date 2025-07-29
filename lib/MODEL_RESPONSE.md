@@ -18,8 +18,8 @@ Parameters:
 
 Mappings:
   RegionMap:
-    us-west-2:
-      AMI: ami-0c94855ba95c574c8 # Amazon Linux 2 AMI ID for us-west-2
+    us-east-1:
+      AMI: ami-0c94855ba95c574c8 # Amazon Linux 2 AMI ID for us-east-1
 
 Resources:
   MainVPC:
@@ -39,7 +39,7 @@ Resources:
     Properties:
       VpcId: !Ref MainVPC
       CidrBlock: 10.0.1.0/24
-      AvailabilityZone: us-west-2a
+      AvailabilityZone: us-east-1a
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -50,7 +50,7 @@ Resources:
     Properties:
       VpcId: !Ref MainVPC
       CidrBlock: 10.0.2.0/24
-      AvailabilityZone: us-west-2b
+      AvailabilityZone: us-east-1b
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -61,7 +61,7 @@ Resources:
     Properties:
       VpcId: !Ref MainVPC
       CidrBlock: 10.0.3.0/24
-      AvailabilityZone: us-west-2a
+      AvailabilityZone: us-east-1a
       Tags:
         - Key: Name
           Value: !Sub ${Project}-PrivateSubnet-A
@@ -71,7 +71,7 @@ Resources:
     Properties:
       VpcId: !Ref MainVPC
       CidrBlock: 10.0.4.0/24
-      AvailabilityZone: us-west-2b
+      AvailabilityZone: us-east-1b
       Tags:
         - Key: Name
           Value: !Sub ${Project}-PrivateSubnet-B

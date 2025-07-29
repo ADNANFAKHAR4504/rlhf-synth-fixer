@@ -9,50 +9,52 @@ This document provides a comprehensive analysis comparing the MODEL_TEMPLATE (`l
 **IDEAL_TEMPLATE**: `lib/IDEAL_RESPONSE.md` - Production-ready VPC infrastructure with comprehensive governance  
 **MODEL_TEMPLATE**: `lib/MODEL_RESPONSE.md` - Basic VPC infrastructure with minimal enterprise features  
 **Use Case**: VPC infrastructure with Auto Scaling Group deployment  
-**Region**: us-west-2  
+**Region**: us-east-1
 
 ## Key Differences and Critical Analysis
 
-| Category | MODEL_TEMPLATE (Current) | IDEAL_TEMPLATE (Target) | Severity | Impact |
-|----------|---------------------------|-------------------------|----------|---------|
-| **Parameter Strategy** | 5 basic parameters | 8 comprehensive parameters with validation | High | Governance & Flexibility |
-| **Resource Naming** | Simple naming (`${Project}-VPC`) | Enterprise naming (`${EnvironmentSuffix}-${Name}-vpc-${Team}`) | Medium | Operations & Management |
-| **Tagging Strategy** | Minimal tags (Name, Environment) | Comprehensive governance tags (6+ required tags) | High | Cost Control & Compliance |
-| **AMI Management** | Hardcoded AMI mapping | Dynamic SSM parameter resolution | High | Maintenance & Security |
-| **Security Configuration** | Basic security group, no egress rules | Enhanced security with explicit egress rules | Medium | Security Posture |
-| **Launch Template** | Missing KeyPair parameter | Comprehensive launch template with SSH key | High | Access Management |
-| **Instance Configuration** | t2.micro (older generation) | t3.micro (current generation) | Low | Performance & Cost |
-| **Availability Zone Strategy** | Hardcoded AZ values | Dynamic AZ mapping with FindInMap | Medium | Portability & Resilience |
-| **Outputs Strategy** | Basic outputs without exports | Comprehensive outputs with cross-stack exports | High | Integration & Reusability |
-| **Dependency Management** | Missing critical dependencies | Proper DependsOn declarations | Medium | Deployment Reliability |
-| **Resource Organization** | No comments or sections | Well-organized with section comments | Low | Maintainability |
+| Category                       | MODEL_TEMPLATE (Current)              | IDEAL_TEMPLATE (Target)                                        | Severity | Impact                    |
+| ------------------------------ | ------------------------------------- | -------------------------------------------------------------- | -------- | ------------------------- |
+| **Parameter Strategy**         | 5 basic parameters                    | 8 comprehensive parameters with validation                     | High     | Governance & Flexibility  |
+| **Resource Naming**            | Simple naming (`${Project}-VPC`)      | Enterprise naming (`${EnvironmentSuffix}-${Name}-vpc-${Team}`) | Medium   | Operations & Management   |
+| **Tagging Strategy**           | Minimal tags (Name, Environment)      | Comprehensive governance tags (6+ required tags)               | High     | Cost Control & Compliance |
+| **AMI Management**             | Hardcoded AMI mapping                 | Dynamic SSM parameter resolution                               | High     | Maintenance & Security    |
+| **Security Configuration**     | Basic security group, no egress rules | Enhanced security with explicit egress rules                   | Medium   | Security Posture          |
+| **Launch Template**            | Missing KeyPair parameter             | Comprehensive launch template with SSH key                     | High     | Access Management         |
+| **Instance Configuration**     | t2.micro (older generation)           | t3.micro (current generation)                                  | Low      | Performance & Cost        |
+| **Availability Zone Strategy** | Hardcoded AZ values                   | Dynamic AZ mapping with FindInMap                              | Medium   | Portability & Resilience  |
+| **Outputs Strategy**           | Basic outputs without exports         | Comprehensive outputs with cross-stack exports                 | High     | Integration & Reusability |
+| **Dependency Management**      | Missing critical dependencies         | Proper DependsOn declarations                                  | Medium   | Deployment Reliability    |
+| **Resource Organization**      | No comments or sections               | Well-organized with section comments                           | Low      | Maintainability           |
 
 ## Detailed Technical Analysis
 
 ### 1. Parameter and Configuration Management
 
 #### ❌ **MODEL_TEMPLATE Critical Deficiencies**
+
 ```yaml
 # MODEL: Minimal parameter set - lacks enterprise governance
 Parameters:
-  Environment: [Production, Development, Staging]  # Limited options
-  Project: String                                  # No validation
-  Owner: String                                    # No constraints
-  SSHLocation: String                             # Basic CIDR, no validation
+  Environment: [Production, Development, Staging] # Limited options
+  Project: String # No validation
+  Owner: String # No constraints
+  SSHLocation: String # Basic CIDR, no validation
 ```
 
 #### ✅ **IDEAL_TEMPLATE Enterprise Standards**
+
 ```yaml
 # IDEAL: Comprehensive parameter governance
 Parameters:
   EnvironmentSuffix:
-    AllowedValues: [dev, staging, prod]           # Controlled values
-    Default: dev                                  # Safe defaults
+    AllowedValues: [dev, staging, prod] # Controlled values
+    Default: dev # Safe defaults
   AllowedSSHCidr:
-    AllowedPattern: ^([0-9]{1,3}\.){3}[0-9]{1,3}\/[0-9]{1,2}$  # CIDR validation
+    AllowedPattern: ^([0-9]{1,3}\.){3}[0-9]{1,3}\/[0-9]{1,2}$ # CIDR validation
     ConstraintDescription: Must be a valid CIDR block
   KeyPairName:
-    Type: AWS::EC2::KeyPair::KeyName             # AWS-validated type
+    Type: AWS::EC2::KeyPair::KeyName # AWS-validated type
 ```
 
 **Impact**: MODEL template lacks input validation, secure defaults, and comprehensive configuration options essential for enterprise deployment.
@@ -60,15 +62,17 @@ Parameters:
 ### 2. AMI Management and Security
 
 #### ❌ **MODEL_TEMPLATE Critical Security Issue**
+
 ```yaml
 # MODEL: Hardcoded AMI - major security and maintenance risk
 Mappings:
   RegionMap:
-    us-west-2:
-      AMI: ami-0c94855ba95c574c8    # Static AMI ID - becomes stale/vulnerable
+    us-east-1:
+      AMI: ami-0c94855ba95c574c8 # Static AMI ID - becomes stale/vulnerable
 ```
 
 #### ✅ **IDEAL_TEMPLATE Dynamic AMI Resolution**
+
 ```yaml
 # IDEAL: Dynamic AMI from AWS Systems Manager
 LaunchTemplateData:
@@ -80,16 +84,18 @@ LaunchTemplateData:
 ### 3. Enterprise Tagging and Governance
 
 #### ❌ **MODEL_TEMPLATE Insufficient Governance**
+
 ```yaml
 # MODEL: Minimal tagging - fails enterprise compliance
 Tags:
   - Key: Name
     Value: !Sub ${Project}-VPC
-  - Key: Environment  
+  - Key: Environment
     Value: !Ref Environment
 ```
 
 #### ✅ **IDEAL_TEMPLATE Comprehensive Governance**
+
 ```yaml
 # IDEAL: Enterprise-grade tagging for governance
 Tags:
@@ -112,20 +118,22 @@ Tags:
 ### 4. Infrastructure Reliability and Dependencies
 
 #### ❌ **MODEL_TEMPLATE Missing Dependencies**
+
 ```yaml
 # MODEL: Missing critical dependency declarations
 PublicRoute:
   Type: AWS::EC2::Route
-  Properties:                    # No DependsOn - potential race condition
+  Properties: # No DependsOn - potential race condition
     RouteTableId: !Ref PublicRouteTable
 ```
 
 #### ✅ **IDEAL_TEMPLATE Proper Dependency Management**
+
 ```yaml
 # IDEAL: Explicit dependency management
 PublicRoute:
   Type: AWS::EC2::Route
-  DependsOn: AttachGateway      # Ensures proper resource ordering
+  DependsOn: AttachGateway # Ensures proper resource ordering
   Properties:
     RouteTableId: !Ref PublicRouteTable
 ```
@@ -133,6 +141,7 @@ PublicRoute:
 ### 5. Security Group Configuration
 
 #### ❌ **MODEL_TEMPLATE Security Gap**
+
 ```yaml
 # MODEL: Missing explicit egress rules - relies on defaults
 InstanceSecurityGroup:
@@ -143,6 +152,7 @@ InstanceSecurityGroup:
 ```
 
 #### ✅ **IDEAL_TEMPLATE Explicit Security Control**
+
 ```yaml
 # IDEAL: Explicit security group rules
 EC2SecurityGroup:
@@ -151,7 +161,7 @@ EC2SecurityGroup:
     SecurityGroupEgress:
       - IpProtocol: -1
         CidrIp: 0.0.0.0/0
-        Description: All outbound traffic  # Explicit and documented
+        Description: All outbound traffic # Explicit and documented
 ```
 
 ## Critical Failure Analysis
@@ -197,12 +207,14 @@ EC2SecurityGroup:
 ### **Immediate (Critical Priority)**
 
 1. **Replace Hardcoded AMI with SSM Parameter**
+
    ```yaml
    # Replace MODEL mapping with IDEAL dynamic resolution
    ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}'
    ```
 
 2. **Add SSH Key Management**
+
    ```yaml
    # Add missing KeyPair parameter
    KeyPairName:
@@ -215,7 +227,7 @@ EC2SecurityGroup:
    # Add comprehensive tagging to all resources
    - Key: CostCenter
      Value: !Ref CostCenter
-   - Key: Owner  
+   - Key: Owner
      Value: !Ref Owner
    - Key: Purpose
      Value: [Resource-specific purpose]
@@ -248,14 +260,14 @@ EC2SecurityGroup:
 
 ## Template Quality Score Comparison
 
-| Category | MODEL_TEMPLATE | IDEAL_TEMPLATE | Gap |
-|----------|---------------|----------------|-----|
-| Security | 4/10 | 8/10 | -4 |
-| Governance | 3/10 | 9/10 | -6 |
-| Reliability | 6/10 | 9/10 | -3 |
-| Maintainability | 5/10 | 8/10 | -3 |
-| Portability | 4/10 | 8/10 | -4 |
-| **Overall Score** | **4.4/10** | **8.4/10** | **-4.0** |
+| Category          | MODEL_TEMPLATE | IDEAL_TEMPLATE | Gap      |
+| ----------------- | -------------- | -------------- | -------- |
+| Security          | 4/10           | 8/10           | -4       |
+| Governance        | 3/10           | 9/10           | -6       |
+| Reliability       | 6/10           | 9/10           | -3       |
+| Maintainability   | 5/10           | 8/10           | -3       |
+| Portability       | 4/10           | 8/10           | -4       |
+| **Overall Score** | **4.4/10**     | **8.4/10**     | **-4.0** |
 
 ## Conclusion
 
@@ -264,12 +276,14 @@ The MODEL_TEMPLATE represents a basic functional CloudFormation template but fal
 The IDEAL_TEMPLATE demonstrates enterprise-grade CloudFormation patterns with comprehensive governance, security best practices, and operational excellence. The 4-point quality gap represents fundamental architectural and implementation differences that require systematic remediation.
 
 ### Recommended Action Plan
+
 1. **Phase 1**: Address critical security and access issues (AMI management, SSH keys)
-2. **Phase 2**: Implement enterprise governance (tagging, parameter validation)  
+2. **Phase 2**: Implement enterprise governance (tagging, parameter validation)
 3. **Phase 3**: Enhance operational excellence (cross-stack integration, documentation)
 4. **Phase 4**: Establish ongoing template governance and maintenance processes
 
 ---
-*Generated on: 2025-07-28*  
-*Analysis Type: MODEL vs IDEAL Template Comparison*  
-*Reviewer: AWS Solutions Architect*
+
+_Generated on: 2025-07-28_  
+_Analysis Type: MODEL vs IDEAL Template Comparison_  
+_Reviewer: AWS Solutions Architect_

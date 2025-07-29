@@ -30,24 +30,24 @@ You are tasked with setting up a cloud environment using AWS CloudFormation. The
 
 - **Tool**: AWS CloudFormation
 - **Language**: YAML
-- **Region**: us-west-2
+- **Region**: us-east-1
 - **Template**: Single, self-contained file that can be deployed directly
-- **AMI**: Use Mappings section to find the latest Amazon Linux 2 AMI ID for us-west-2 region
+- **AMI**: Use Mappings section to find the latest Amazon Linux 2 AMI ID for us-east-1 region
 
 ## Additional Constraints
 
-- **Region**: The infrastructure must be deployed in the us-west-2 region
+- **Region**: The infrastructure must be deployed in the us-east-1 region
 - **Resource Naming**: Utilize existing resource naming conventions with prefixes for easy identification
 - **Cost Tracking**: Ensure all resources are tagged for cost tracking purposes
-- **Availability Zones**: Use us-west-2a and us-west-2b for subnet distribution
+- **Availability Zones**: Use us-east-1a and us-east-1b for subnet distribution
 
 ## Required Components
 
 ### 1. VPC and Networking
 
 - VPC with CIDR 10.0.0.0/16
-- 2 Public subnets (us-west-2a, us-west-2b)
-- 2 Private subnets (us-west-2a, us-west-2b)
+- 2 Public subnets (us-east-1a, us-east-1b)
+- 2 Private subnets (us-east-1a, us-east-1b)
 - Internet Gateway attached to VPC
 - NAT Gateway in one of the public subnets
 - Route tables for public and private subnets
