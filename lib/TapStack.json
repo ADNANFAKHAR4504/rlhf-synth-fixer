@@ -1,0 +1,148 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "CloudFormation template for projectX - Deploys two serverless functions with IAM roles and CloudWatch Logs retention.\n",
+    "Resources": {
+        "ProjectXDataProcessorRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": "projectX-dataProcessor-role",
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "Policies": [
+                    {
+                        "PolicyName": "projectX-dataProcessor-logging",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "logs:CreateLogGroup",
+                                        "logs:CreateLogStream",
+                                        "logs:PutLogEvents"
+                                    ],
+                                    "Resource": "arn:aws:logs:us-east-1:*:*"
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Path": "/"
+            }
+        },
+        "ProjectXResponseHandlerRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": "projectX-responseHandler-role",
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "Policies": [
+                    {
+                        "PolicyName": "projectX-responseHandler-logging",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "logs:CreateLogGroup",
+                                        "logs:CreateLogStream",
+                                        "logs:PutLogEvents"
+                                    ],
+                                    "Resource": "arn:aws:logs:us-east-1:*:*"
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Path": "/"
+            }
+        },
+        "ProjectXDataProcessorFunction": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": "projectX-dataProcessor",
+                "Runtime": "python3.12",
+                "Handler": "index.handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "ProjectXDataProcessorRole",
+                        "Arn"
+                    ]
+                },
+                "Code": {
+                    "ZipFile": "def handler(event, context):\n    print(\"Processing data\")\n    return {\"statusCode\": 200, \"body\": \"Data processed\"}\n"
+                },
+                "Timeout": 10,
+                "MemorySize": 128
+            }
+        },
+        "ProjectXResponseHandlerFunction": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": "projectX-responseHandler",
+                "Runtime": "python3.12",
+                "Handler": "index.handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "ProjectXResponseHandlerRole",
+                        "Arn"
+                    ]
+                },
+                "Code": {
+                    "ZipFile": "def handler(event, context):\n    print(\"Handling response\")\n    return {\"statusCode\": 200, \"body\": \"Response handled\"}\n"
+                },
+                "Timeout": 10,
+                "MemorySize": 128
+            }
+        },
+        "DataProcessorLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": "/aws/lambda/projectX-dataProcessor",
+                "RetentionInDays": 30
+            }
+        },
+        "ResponseHandlerLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": "/aws/lambda/projectX-responseHandler",
+                "RetentionInDays": 30
+            }
+        }
+    },
+    "Outputs": {
+        "DataProcessorFunctionName": {
+            "Description": "Lambda Function Name for dataProcessor",
+            "Value": {
+                "Ref": "ProjectXDataProcessorFunction"
+            }
+        },
+        "ResponseHandlerFunctionName": {
+            "Description": "Lambda Function Name for responseHandler",
+            "Value": {
+                "Ref": "ProjectXResponseHandlerFunction"
+            }
+        }
+    }
+}

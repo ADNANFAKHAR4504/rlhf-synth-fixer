@@ -1,0 +1,113 @@
+```yaml
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  CloudFormation template for projectX - Deploys two serverless functions with
+  IAM roles and CloudWatch Logs retention.
+
+Resources:
+
+  # IAM Role for dataProcessor Lambda
+  ProjectXDataProcessorRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: projectX-dataProcessor-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: projectX-dataProcessor-logging
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: arn:aws:logs:us-east-1:*:*
+      Path: /
+
+  # IAM Role for responseHandler Lambda
+  ProjectXResponseHandlerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: projectX-responseHandler-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: projectX-responseHandler-logging
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: arn:aws:logs:us-east-1:*:*
+      Path: /
+
+  # Lambda Function: dataProcessor
+  ProjectXDataProcessorFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: projectX-dataProcessor
+      Runtime: python3.12
+      Handler: index.handler
+      Role: !GetAtt ProjectXDataProcessorRole.Arn
+      Code:
+        ZipFile: |
+          def handler(event, context):
+              print("Processing data")
+              return {"statusCode": 200, "body": "Data processed"}
+      Timeout: 10
+      MemorySize: 128
+
+  # Lambda Function: responseHandler
+  ProjectXResponseHandlerFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: projectX-responseHandler
+      Runtime: python3.12
+      Handler: index.handler
+      Role: !GetAtt ProjectXResponseHandlerRole.Arn
+      Code:
+        ZipFile: |
+          def handler(event, context):
+              print("Handling response")
+              return {"statusCode": 200, "body": "Response handled"}
+      Timeout: 10
+      MemorySize: 128
+
+  # CloudWatch Log Group for dataProcessor
+  DataProcessorLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /aws/lambda/projectX-dataProcessor
+      RetentionInDays: 30
+
+  # CloudWatch Log Group for responseHandler
+  ResponseHandlerLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /aws/lambda/projectX-responseHandler
+      RetentionInDays: 30
+
+Outputs:
+  DataProcessorFunctionName:
+    Description: Lambda Function Name for dataProcessor
+    Value: !Ref ProjectXDataProcessorFunction
+
+  ResponseHandlerFunctionName:
+    Description: Lambda Function Name for responseHandler
+    Value: !Ref ProjectXResponseHandlerFunction
+```
