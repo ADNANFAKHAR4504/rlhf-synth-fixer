@@ -25,6 +25,45 @@ describe('TapStack Unit Tests', () => {
     template = Template.fromStack(stack);
   });
 
+  describe('Environment Suffix Logic', () => {
+    test('should use environmentSuffix from props when provided', () => {
+      const testApp = new cdk.App();
+      const testStack = new TapStack(testApp, 'TestStack1', { environmentSuffix: 'prod' });
+      const testTemplate = Template.fromStack(testStack);
+      
+      testTemplate.hasResourceProperties('AWS::EC2::VPC', {
+        Tags: Match.arrayWith([
+          { Key: 'Environment', Value: 'prod' }
+        ]),
+      });
+    });
+
+    test('should use environmentSuffix from context when props not provided', () => {
+      const testApp = new cdk.App();
+      testApp.node.setContext('environmentSuffix', 'staging');
+      const testStack = new TapStack(testApp, 'TestStack2');
+      const testTemplate = Template.fromStack(testStack);
+      
+      testTemplate.hasResourceProperties('AWS::EC2::VPC', {
+        Tags: Match.arrayWith([
+          { Key: 'Environment', Value: 'staging' }
+        ]),
+      });
+    });
+
+    test('should default to dev when neither props nor context provided', () => {
+      const testApp = new cdk.App();
+      const testStack = new TapStack(testApp, 'TestStack3');
+      const testTemplate = Template.fromStack(testStack);
+      
+      testTemplate.hasResourceProperties('AWS::EC2::VPC', {
+        Tags: Match.arrayWith([
+          { Key: 'Environment', Value: 'dev' }
+        ]),
+      });
+    });
+  });
+
   describe('VPC Configuration', () => {
     test('should create a VPC with the correct CIDR from context', () => {
       template.hasResourceProperties('AWS::EC2::VPC', {
@@ -82,6 +121,97 @@ describe('TapStack Unit Tests', () => {
         Tags: Match.arrayWith([
           { Key: 'Environment', Value: environmentSuffix }
         ]),
+      });
+    });
+  });
+
+  describe('Load Balancer Configuration', () => {
+    test('should create an Application Load Balancer', () => {
+      template.hasResourceProperties('AWS::ElasticLoadBalancingV2::LoadBalancer', {
+        Scheme: 'internet-facing',
+        Type: 'application',
+      });
+    });
+
+    test('should create ALB target group', () => {
+      template.hasResourceProperties('AWS::ElasticLoadBalancingV2::TargetGroup', {
+        HealthCheckPath: '/health',
+        Port: 80,
+        Protocol: 'HTTP',
+      });
+    });
+  });
+
+  describe('Auto Scaling Configuration', () => {
+    test('should create an Auto Scaling Group', () => {
+      template.hasResourceProperties('AWS::AutoScaling::AutoScalingGroup', {
+        MinSize: '2',
+        MaxSize: '5',
+      });
+    });
+
+    test('should create scaling policies', () => {
+      template.hasResourceProperties('AWS::AutoScaling::ScalingPolicy', {
+        PolicyType: 'TargetTrackingScaling',
+      });
+    });
+  });
+
+  describe('Security Groups', () => {
+    test('should create bastion security group with SSH access', () => {
+      template.hasResourceProperties('AWS::EC2::SecurityGroup', {
+        GroupDescription: 'Security group for bastion host',
+        SecurityGroupIngress: [
+          {
+            CidrIp: '203.0.113.0/24',
+            Description: 'Allow SSH access from trusted IP range',
+            FromPort: 22,
+            IpProtocol: 'tcp',
+            ToPort: 22,
+          },
+        ],
+      });
+    });
+
+    test('should create ALB security group with HTTP access', () => {
+      template.hasResourceProperties('AWS::EC2::SecurityGroup', {
+        GroupDescription: 'Security group for ALB',
+        SecurityGroupIngress: [
+          {
+            CidrIp: '0.0.0.0/0',
+            Description: 'Allow HTTP traffic',
+            FromPort: 80,
+            IpProtocol: 'tcp',
+            ToPort: 80,
+          },
+        ],
+      });
+    });
+  });
+
+  describe('CloudWatch Configuration', () => {
+    test('should create CloudWatch alarms', () => {
+      template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+        ComparisonOperator: 'GreaterThanOrEqualToThreshold',
+        MetricName: 'CPUUtilization',
+        Namespace: 'AWS/EC2',
+      });
+    });
+  });
+
+  describe('VPC Flow Logs', () => {
+    test('should create VPC Flow Logs', () => {
+      template.hasResourceProperties('AWS::EC2::FlowLog', {
+        ResourceType: 'VPC',
+        TrafficType: 'ALL',
+      });
+    });
+  });
+
+  describe('Bastion Host Configuration', () => {
+    test('should create bastion host instance', () => {
+      template.hasResourceProperties('AWS::EC2::Instance', {
+        InstanceType: 't3.nano',
       });
     });
   });
