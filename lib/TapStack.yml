@@ -7,15 +7,15 @@ Parameters:
   ACMCertificateARN:
     Type: String
     Description: ARN of the ACM certificate
-    Default: arn:aws:acm:us-west-2:718240086340:certificate/3c877c31-457c-414d-beb0-7225b03b8910
+    Default: arn:aws:acm:us-east-1:718240086340:certificate/6f65b67a-bb90-471b-ab0b-8727ad2d7583
   HostedZoneId:
     Type: String
     Description: Route 53 Hosted Zone ID
-    Default: Z10367001W4ZBDH1EBSI0
+    Default: Z0457876OLTG958Q3IXN
   DomainName:
     Type: String
     Description: Custom domain name
-    Default: tap-us-west-2.turing229221.com.
+    Default: tap-us-east-1.turing229221.com.
 
 Resources:
   # VPC & Networking
@@ -216,7 +216,7 @@ Resources:
       LaunchTemplateName: WebAppLaunchTemplate
       LaunchTemplateData:
         InstanceType: t3.micro
-        ImageId: ami-05134c8ef96964280 # Amazon Linux 2023 us-west-2
+        ImageId: ami-0c101f26f147fa7fd
         SecurityGroupIds: [!Ref ASGSecurityGroup]
         IamInstanceProfile:
           Arn: !GetAtt EC2InstanceProfile.Arn
@@ -284,24 +284,21 @@ Resources:
       PolicyDocument:
         Version: '2012-10-17'
         Statement:
-          - Effect: Allow
+          - Sid: ALBAccessLogs
+            Effect: Allow
             Principal:
-              AWS: arn:aws:iam::797873946194:root
-            Action: s3:PutObject
-            Resource: !Sub 'arn:aws:s3:::${ALBLogsBucket}/AWSLogs/${AWS::AccountId}/*'
-          - Effect: Allow
-            Principal:
-              Service: delivery.logs.amazonaws.com
-            Action: s3:PutObject
-            Resource: !Sub 'arn:aws:s3:::${ALBLogsBucket}/AWSLogs/${AWS::AccountId}/*'
+              Service: "logdelivery.elasticloadbalancing.amazonaws.com"
+            Action: "s3:PutObject"
+            Resource: !Sub "arn:aws:s3:::${ALBLogsBucket}/AWSLogs/${AWS::AccountId}/*"
             Condition:
               StringEquals:
-                's3:x-amz-acl': bucket-owner-full-control
-          - Effect: Allow
+                "s3:x-amz-acl": "bucket-owner-full-control"
+          - Sid: AllowBucketACL
+            Effect: Allow
             Principal:
-              Service: delivery.logs.amazonaws.com
-            Action: s3:GetBucketAcl
-            Resource: !Sub 'arn:aws:s3:::${ALBLogsBucket}'
+              Service: "logdelivery.elasticloadbalancing.amazonaws.com"
+            Action: "s3:GetBucketAcl"
+            Resource: !Sub "arn:aws:s3:::${ALBLogsBucket}"
 
   StaticAssetsBucket:
     Type: AWS::S3::Bucket

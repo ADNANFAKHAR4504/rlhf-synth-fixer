@@ -5,17 +5,17 @@
         "ACMCertificateARN": {
             "Type": "String",
             "Description": "ARN of the ACM certificate",
-            "Default": "arn:aws:acm:us-west-2:718240086340:certificate/3d421829-ffd2-4164-affb-167a99e907c2"
+            "Default": "arn:aws:acm:us-east-1:718240086340:certificate/6f65b67a-bb90-471b-ab0b-8727ad2d7583"
         },
         "HostedZoneId": {
             "Type": "String",
             "Description": "Route 53 Hosted Zone ID",
-            "Default": "Z10367001W4ZBDH1EBSI0"
+            "Default": "Z0457876OLTG958Q3IXN"
         },
         "DomainName": {
             "Type": "String",
             "Description": "Custom domain name",
-            "Default": "tap-us-west-2.turing229221.com."
+            "Default": "tap-us-east-1.turing229221.com."
         }
     },
     "Resources": {
@@ -296,6 +296,7 @@
         },
         "ApplicationLoadBalancer": {
             "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
+            "DependsOn": "ALBLogsBucketPolicy",
             "Properties": {
                 "Name": "WebAppALB",
                 "Subnets": [
@@ -428,29 +429,9 @@
             "Type": "AWS::EC2::LaunchTemplate",
             "Properties": {
                 "LaunchTemplateName": "WebAppLaunchTemplate",
-                "TagSpecifications": [
-                    {
-                        "ResourceType": "instance",
-                        "Tags": [
-                            {
-                                "Key": "Environment",
-                                "Value": "Production"
-                            }
-                        ]
-                    },
-                    {
-                        "ResourceType": "volume",
-                        "Tags": [
-                            {
-                                "Key": "Environment",
-                                "Value": "Production"
-                            }
-                        ]
-                    }
-                ],
                 "LaunchTemplateData": {
                     "InstanceType": "t3.micro",
-                    "ImageId": "ami-05134c8ef96964280",
+                    "ImageId": "ami-0c101f26f147fa7fd",
                     "SecurityGroupIds": [
                         {
                             "Ref": "ASGSecurityGroup"
@@ -466,7 +447,27 @@
                     },
                     "UserData": {
                         "Fn::Base64": "#!/bin/bash\ndnf update -y\ndnf install -y httpd\nsystemctl start httpd\nsystemctl enable httpd\necho \"Hello World from HA Web App\" > /var/www/html/index.html\necho \"OK\" > /var/www/html/health\n"
-                    }
+                    },
+                    "TagSpecifications": [
+                        {
+                            "ResourceType": "instance",
+                            "Tags": [
+                                {
+                                    "Key": "Environment",
+                                    "Value": "Production"
+                                }
+                            ]
+                        },
+                        {
+                            "ResourceType": "volume",
+                            "Tags": [
+                                {
+                                    "Key": "Environment",
+                                    "Value": "Production"
+                                }
+                            ]
+                        }
+                    ]
                 }
             }
         },
@@ -520,7 +521,7 @@
                 "AllocatedStorage": 20,
                 "Engine": "mysql",
                 "MasterUsername": "admin",
-                "MasterUserPassword": "'{{resolve:secretsmanager:your-secret-name:SecretString:DBMasterPassword}}'\n",
+                "MasterUserPassword": "{{resolve:secretsmanager:admin:SecretString:DBMasterPassword}}",
                 "MultiAZ": true,
                 "VPCSecurityGroups": [
                     {
@@ -541,9 +542,7 @@
         "ALBLogsBucket": {
             "Type": "AWS::S3::Bucket",
             "Properties": {
-                "BucketName": {
-                    "Fn::Sub": "${AWS::StackName}-alb-logs"
-                },
+                "BucketName": "tapstack-pr222-alb-logs",
                 "OwnershipControls": {
                     "Rules": [
                         {
@@ -569,23 +568,14 @@
                     "Version": "2012-10-17",
                     "Statement": [
                         {
+                            "Sid": "ALBAccessLogs",
                             "Effect": "Allow",
                             "Principal": {
-                                "AWS": "arn:aws:iam::797873946194:root"
+                                "Service": "logdelivery.elasticloadbalancing.amazonaws.com"
                             },
                             "Action": "s3:PutObject",
                             "Resource": {
-                                "Fn::Sub": "${ALBLogsBucket}/AWSLogs/${AWS::AccountId}/*\n"
-                            }
-                        },
-                        {
-                            "Effect": "Allow",
-                            "Principal": {
-                                "Service": "delivery.logs.amazonaws.com"
-                            },
-                            "Action": "s3:PutObject",
-                            "Resource": {
-                                "Fn::Sub": "${ALBLogsBucket}/AWSLogs/${AWS::AccountId}/*"
+                                "Fn::Sub": "arn:aws:s3:::${ALBLogsBucket}/AWSLogs/${AWS::AccountId}/*"
                             },
                             "Condition": {
                                 "StringEquals": {
@@ -594,13 +584,14 @@
                             }
                         },
                         {
+                            "Sid": "AllowBucketACL",
                             "Effect": "Allow",
                             "Principal": {
-                                "Service": "delivery.logs.amazonaws.com"
+                                "Service": "logdelivery.elasticloadbalancing.amazonaws.com"
                             },
                             "Action": "s3:GetBucketAcl",
                             "Resource": {
-                                "Ref": "ALBLogsBucket"
+                                "Fn::Sub": "arn:aws:s3:::${ALBLogsBucket}"
                             }
                         }
                     ]
@@ -610,9 +601,7 @@
         "StaticAssetsBucket": {
             "Type": "AWS::S3::Bucket",
             "Properties": {
-                "BucketName": {
-                    "Fn::Sub": "${AWS::StackName}-static-assets"
-                },
+                "BucketName": "tapstack-pr222-static-assets",
                 "WebsiteConfiguration": {
                     "IndexDocument": "index.html"
                 },
