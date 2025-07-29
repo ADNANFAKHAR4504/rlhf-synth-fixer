@@ -650,6 +650,8 @@ jobs:
         env:
           ENVIRONMENT_SUFFIX: ${{ env.ENVIRONMENT_SUFFIX }}
           CI: '1' # Set CI for the entire step
+          PULUMI_BACKEND_URL: s3://${{ env.PULUMI_STATE_BUCKET }}
+          PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
 
   cleanup:
     name: Cleanup (Destroy Resources)
