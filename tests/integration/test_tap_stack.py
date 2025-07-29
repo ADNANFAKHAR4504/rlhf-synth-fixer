@@ -50,8 +50,8 @@ class TestTapStackIntegration(unittest.TestCase):
       pytest.skip("Skipping AWS integration tests as requested")
 
     try:
-      # Initialize AWS clients with us-west-2 region
-      aws_region = 'us-west-2'
+      # Initialize AWS clients with us-east-1 region
+      aws_region = 'us-east-1'
       self.dynamodb = boto3.resource('dynamodb', region_name=aws_region)
       table_name = (flat_outputs.get('TapStack.VisitsTableName', '') or
                     flat_outputs.get('VisitsTableName', ''))
