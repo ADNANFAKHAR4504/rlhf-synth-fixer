@@ -193,7 +193,7 @@ export class MultiEnvEcsStack extends cdk.Stack {
       threshold: 80,
       datapointsToAlarm: 2,
       treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-      alarmName: `${config.envName}:HighCpuAlarm`
+      alarmName: `${config.envName}:HighCpuAlarm`,
     });
 
     new cloudwatch.Alarm(this, `${config.envName}:HighMemoryAlarm`, {
@@ -202,7 +202,7 @@ export class MultiEnvEcsStack extends cdk.Stack {
       threshold: 80,
       datapointsToAlarm: 2,
       treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-      alarmName: `${config.envName}:HighMemoryAlarm`
+      alarmName: `${config.envName}:HighMemoryAlarm`,
     });
 
     //Output
