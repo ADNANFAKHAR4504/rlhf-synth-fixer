@@ -9,12 +9,6 @@ Parameters:
     Description: Environment name (e.g., dev, prod)
     Default: dev
 
-Mappings:
-  RegionMap:
-    us-west-2:
-      AZ1: us-west-2a
-      AZ2: us-west-2b
-
 Resources:
   VPC:
     Type: AWS::EC2::VPC
@@ -33,7 +27,7 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       CidrBlock: 10.0.1.0/24
-      AvailabilityZone: !FindInMap [RegionMap, !Ref "AWS::Region", AZ1]
+      AvailabilityZone: !Select [0, !GetAZs !Ref "AWS::Region"]
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -46,7 +40,7 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       CidrBlock: 10.0.2.0/24
-      AvailabilityZone: !FindInMap [RegionMap, !Ref "AWS::Region", AZ2]
+      AvailabilityZone: !Select [1, !GetAZs !Ref "AWS::Region"]
       Tags:
         - Key: Name
           Value: !Sub ${EnvironmentName}-PrivateSubnet
@@ -185,9 +179,28 @@ Resources:
   CloudWatchLogsBucket:
     Type: AWS::S3::Bucket
     Properties:
-      AccessControl: LogDeliveryWrite
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerPreferred
       Tags:
         - Key: Name
           Value: !Sub ${EnvironmentName}-cloudwatch-logs
         - Key: Environment
           Value: !Ref EnvironmentName
+
+  CloudWatchLogsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref CloudWatchLogsBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowCloudWatchLogsPutObject
+            Effect: Allow
+            Principal:
+              Service: !Sub logs.${AWS::Region}.amazonaws.com
+            Action: s3:PutObject
+            Resource: !Sub "${CloudWatchLogsBucket.Arn}/*"
+            Condition:
+              StringEquals:
+                "s3:x-amz-acl": "bucket-owner-full-control"
