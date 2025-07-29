@@ -1,7 +1,7 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: >
   CloudFormation template for projectX - Deploys two serverless functions with
-  externally provided IAM roles and CloudWatch Logs retention.
+  IAM role and CloudWatch Logs retention.
 
 Parameters:
 
@@ -9,11 +9,11 @@ Parameters:
     Type: String
     Description: The name of the Lambda function to be created.
     Default: ProjectXDataProcessor-274774
-  
+
   ProjectXResponseHandlerFunctionName:
     Type: String
     Description: The name of the Lambda function to be created.
-    Default: ProjectXResponseHandlerFunction-274774 
+    Default: ProjectXResponseHandlerFunction-274774
 
 Resources:
 
@@ -28,7 +28,7 @@ Resources:
               Service: "lambda.amazonaws.com"
             Action: "sts:AssumeRole"
       Policies:
-        - PolicyName: "LambdaS3AccessAndLogsPolicy-274774" # Policy name used in the integration test
+        - PolicyName: "LambdaS3AccessAndLogsPolicy-274774"
           PolicyDocument:
             Version: "2012-10-17"
             Statement:
@@ -37,7 +37,9 @@ Resources:
                   - "logs:CreateLogGroup"
                   - "logs:CreateLogStream"
                   - "logs:PutLogEvents"
-                Resource: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${LambdaFunctionName}:*"
+                Resource:
+                  - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${ProjectXDataProcessorFunctionName}:*"
+                  - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${ProjectXResponseHandlerFunctionName}:*"
 
   # CloudWatch Log Group for dataProcessor
   DataProcessorLogGroup:
@@ -61,7 +63,7 @@ Resources:
       FunctionName: !Ref ProjectXDataProcessorFunctionName
       Runtime: python3.12
       Handler: index.handler
-      Role: !Ref LambdaExecutionRole.Arn
+      Role: !GetAtt LambdaExecutionRole.Arn
       Code:
         ZipFile: |
           def handler(event, context):
@@ -77,12 +79,12 @@ Resources:
   # Lambda Function: responseHandler
   ProjectXResponseHandlerFunction:
     Type: AWS::Lambda::Function
-    DependsOn: !Ref ProjectXResponseHandlerFunctionName
+    DependsOn: ResponseHandlerLogGroup
     Properties:
-      FunctionName: projectX-responseHandler
+      FunctionName: !Ref ProjectXResponseHandlerFunctionName
       Runtime: python3.12
       Handler: index.handler
-      Role: !Ref ResponseHandlerRoleArn
+      Role: !GetAtt LambdaExecutionRole.Arn
       Code:
         ZipFile: |
           def handler(event, context):
@@ -98,8 +100,8 @@ Resources:
 Outputs:
   DataProcessorFunctionName:
     Description: Lambda Function Name for dataProcessor
-    Value: !Ref ProjectXDataProcessorFunctionName
+    Value: !Ref ProjectXDataProcessorFunction
 
   ResponseHandlerFunctionName:
     Description: Lambda Function Name for responseHandler
-    Value: !Ref ProjectXResponseHandlerFunctionName
+    Value: !Ref ProjectXResponseHandlerFunction
