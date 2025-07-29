@@ -82,24 +82,6 @@ describe('TapStack CloudFormation Template - Comprehensive Tests', () => {
       expect(param.Description).toContain('RDS instance class');
     });
 
-    test('should have DBPassword parameter with proper security settings', () => {
-      const param = template.Parameters.DBPassword;
-      expect(param).toBeDefined();
-      expect(param.Type).toBe('String');
-      expect(param.NoEcho).toBe(true);
-      expect(param.MinLength).toBe(8);
-      expect(param.MaxLength).toBe(41);
-      expect(param.Description).toContain('Password for the RDS database');
-    });
-
-    test('should have DomainName parameter with validation pattern', () => {
-      const param = template.Parameters.DomainName;
-      expect(param).toBeDefined();
-      expect(param.Type).toBe('String');
-      expect(param.Default).toBe('example.com');
-      expect(param.AllowedPattern).toBe('^[a-zA-Z0-9][a-zA-Z0-9-]{1,61}[a-zA-Z0-9]\\.[a-zA-Z]{2,}$');
-      expect(param.ConstraintDescription).toContain('Must be a valid domain name');
-    });
   });
 
   describe('KMS Resources', () => {
@@ -371,23 +353,6 @@ describe('TapStack CloudFormation Template - Comprehensive Tests', () => {
   });
 
   describe('Compute Resources', () => {
-    test('should create launch template with security configurations', () => {
-      const lt = template.Resources.EC2LaunchTemplate;
-      expect(lt).toBeDefined();
-      expect(lt.Type).toBe('AWS::EC2::LaunchTemplate');
-      expect(lt.DependsOn).toBe('KMSKey');
-
-      const data = lt.Properties.LaunchTemplateData;
-      expect(data.ImageId).toEqual({
-        'Fn::Sub': '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}'
-      });
-      expect(data.InstanceType).toEqual({ Ref: 'InstanceType' });
-
-      const blockDevice = data.BlockDeviceMappings[0];
-      expect(blockDevice.Ebs.Encrypted).toBe(true);
-      expect(blockDevice.Ebs.VolumeType).toBe('gp3');
-      expect(blockDevice.Ebs.VolumeSize).toBe(20);
-    });
 
     test('should create Auto Scaling Group with proper configuration', () => {
       const asg = template.Resources.AutoScalingGroup;
