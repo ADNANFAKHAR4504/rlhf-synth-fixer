@@ -58,7 +58,7 @@ class RegionalRedundantStack(NestedStack):
         ]
     )
 
-    # Security Groups
+    # Security Groups 
     ec2_sg = ec2.SecurityGroup(self, f"EC2SecurityGroup-{region}", vpc=vpc)
     ec2_sg.add_ingress_rule(
         ec2.Peer.ipv4('10.0.0.0/16'),
