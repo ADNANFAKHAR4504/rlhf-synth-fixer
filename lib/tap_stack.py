@@ -7,7 +7,6 @@ manages environment-specific configurations.
 
 from typing import Optional
 from aws_cdk import (
-    Stack,
     aws_s3 as s3,
     aws_s3_deployment as s3_deploy,
     aws_iam as iam,

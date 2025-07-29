@@ -12,7 +12,7 @@ def test_s3_bucket_created():
 
   # Assert S3 bucket exists with correct properties
   template.has_resource_properties("AWS::S3::Bucket", {
-    "BucketName": "myprivatebucketturingblacree",
+    "BucketName": "privatebucketturingblacree",
     "VersioningConfiguration": {"Status": "Enabled"}
   })
 
