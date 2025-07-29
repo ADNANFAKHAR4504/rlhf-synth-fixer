@@ -2,7 +2,7 @@
 
 This document compares the original MODEL_RESPONSE.md with the IDEAL_RESPONSE.md, highlighting infrastructural differences and explaining why the ideal response provides a better solution.
 
-## Critical Infrastructure Failures in MODEL_RESPONSE.md
+## Critical Infrastructure Failures in MODEL_RESPONSE.md 
 
 ### 1. **Deprecated CDK Version and Runtime**
 
