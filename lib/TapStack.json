@@ -5,7 +5,7 @@
     "BucketName": {
       "Description": "Name for the public S3 bucket (must be globally unique)",
       "Type": "String",
-      "Default": "my-dev-public-bucket-123456"
+      "Default": "my-dev-public-bucket-123456-new"
     },
     "EC2KeyName": {
       "Description": "Name of an existing EC2 KeyPair to enable SSH access",
