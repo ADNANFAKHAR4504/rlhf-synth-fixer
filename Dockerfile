@@ -17,7 +17,15 @@ RUN apt-get update && apt-get install -y \
     tk-dev \
     libffi-dev \
     liblzma-dev \
+    unzip \
+    jq \
     && rm -rf /var/lib/apt/lists/*
+
+# Install AWS CLI
+RUN curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip" && \
+    unzip awscliv2.zip && \
+    ./aws/install && \
+    rm -rf awscliv2.zip aws/
 
 # Install pyenv
 RUN curl https://pyenv.run | bash
@@ -55,8 +63,26 @@ ENV PATH="/root/.nvm/versions/node/v22.17.0/bin:$PATH"
 RUN python -m pip install --upgrade pip && \
     pip install pipenv==2025.0.4
 
+# Initialize pyenv and nvm in shell profile for faster container startup
+RUN echo 'export PATH="/root/.pyenv/bin:$PATH"' >> /root/.bashrc && \
+    echo 'export PYENV_ROOT="/root/.pyenv"' >> /root/.bashrc && \
+    echo 'export PATH="/root/.pyenv/versions/3.12.11/bin:$PATH"' >> /root/.bashrc && \
+    echo 'export NVM_DIR="/root/.nvm"' >> /root/.bashrc && \
+    echo 'export PATH="$NVM_DIR:$PATH"' >> /root/.bashrc && \
+    echo 'export PATH="/root/.nvm/versions/node/v22.17.0/bin:$PATH"' >> /root/.bashrc && \
+    echo 'eval "$(pyenv init --path)"' >> /root/.bashrc && \
+    echo 'eval "$(pyenv init -)"' >> /root/.bashrc && \
+    echo '[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"' >> /root/.bashrc
+
+# Copy dockerEntryPoint.sh script
+COPY dockerEntryPoint.sh /dockerEntryPoint.sh
+RUN chmod +x /dockerEntryPoint.sh
+
 # Set working directory
 WORKDIR /app
 
 # Copy application code
 COPY . .
+
+# Set entrypoint    
+ENTRYPOINT ["/dockerEntryPoint.sh"]
