@@ -392,7 +392,7 @@ Resources:
                   - s3:ListBucket
                 Resource:
                   - !GetAtt TestS3Bucket.Arn
-                  - !Sub "${TestS3Bucket}/*"
+                  - !Sub "${TestS3Bucket.Arn}/*"
       Tags:
         - Key: Name
           Value: !Sub "TestIAMUser-${EnvironmentSuffix}"
