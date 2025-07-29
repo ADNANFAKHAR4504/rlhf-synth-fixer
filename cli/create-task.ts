@@ -116,7 +116,7 @@ async function main(): Promise<void> {
         { name: 'CDK', value: 'cdk' },
         { name: 'CDK Terraform', value: 'cdktf' },
         { name: 'CloudFormation', value: 'cfn' },
-        { name: 'Terraform', value: 'hcl' },
+        { name: 'Terraform', value: 'tf' },
       ],
     });
 
@@ -154,7 +154,6 @@ async function main(): Promise<void> {
 
     // Generate template folder name
     const templateName = `${platform}-${language}`;
-
     // Check if template exists
     const templatesDir = path.join(__dirname, '..', 'templates');
     const templatePath = path.join(templatesDir, templateName);
