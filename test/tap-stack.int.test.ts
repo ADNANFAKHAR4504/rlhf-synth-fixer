@@ -265,7 +265,7 @@ describe('TapStack Integration Tests', () => {
       const igws = response.InternetGateways || [];
 
       expect(igws).toHaveLength(1);
-      expect(igws[0].State).toBe('available');
+      // Internet Gateway doesn't have a State property, check attachments instead
       expect(igws[0].Attachments?.[0]?.State).toBe('available');
     });
 
@@ -643,9 +643,15 @@ describe('TapStack Integration Tests', () => {
       const trails = response.trailList || [];
 
       expect(trails).toHaveLength(1);
-      expect(trails[0].IsLogging).toBe(true);
       expect(trails[0].LogFileValidationEnabled).toBe(true);
-      expect(trails[0].KMSKeyId).toBeDefined();
+      expect(trails[0].KmsKeyId).toBeDefined();
+
+      // Check if CloudTrail is logging
+      const statusCommand = new GetTrailStatusCommand({
+        Name: trails[0].TrailARN,
+      });
+      const statusResponse = await cloudTrailClient.send(statusCommand);
+      expect(statusResponse.IsLogging).toBe(true);
     });
 
     test('should create AWS Config recorder', async () => {
@@ -723,8 +729,10 @@ describe('TapStack Integration Tests', () => {
       const natGateways = response.NatGateways || [];
 
       expect(natGateways).toHaveLength(2);
-      const azs = new Set(natGateways.map(nat => nat.AvailabilityZone));
-      expect(azs.size).toBe(2);
+      // NAT Gateways don't have AvailabilityZone property directly, check via subnet
+      const subnetIds = natGateways.map(nat => nat.SubnetId);
+      expect(subnetIds).toContain(stackOutputs.PublicSubnet1Id);
+      expect(subnetIds).toContain(stackOutputs.PublicSubnet2Id);
     });
   });
 
