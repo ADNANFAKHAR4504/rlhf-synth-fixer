@@ -36,10 +36,10 @@ try {
 }
 
 describe('TapStack Infrastructure Integration Tests', () => {
-  const cfnClient = new CloudFormationClient({ region: 'us-west-2' });
-  //const elbClient = new ELBv2Client({ region: 'us-west-2' });
-  const rdsClient = new RDSClient({ region: 'us-west-2' });
-  const s3Client = new S3Client({ region: 'us-west-2' });
+  const cfnClient = new CloudFormationClient({ region: 'us-east-1' });
+  //const elbClient = new ELBv2Client({ region: 'us-east-1' });
+  const rdsClient = new RDSClient({ region: 'us-east-1' });
+  const s3Client = new S3Client({ region: 'us-east-1' });
 
   beforeAll(() => {
     if (!outputs) {
@@ -73,7 +73,7 @@ describe('TapStack Infrastructure Integration Tests', () => {
       
       const albDnsName = outputs.ALBDNSName;
       expect(albDnsName).toBeDefined();
-      expect(albDnsName).toMatch(/^[a-zA-Z0-9-]+\.us-west-2\.elb\.amazonaws\.com$/);
+      expect(albDnsName).toMatch(/^[a-zA-Z0-9-]+\.us-east-1\.elb\.amazonaws\.com$/);
     });
 
     test('ALB target group should have healthy targets', async () => {
