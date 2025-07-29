@@ -28,12 +28,10 @@ describe('SecureVpcStack Integration (AWS SDK)', () => {
         ],
       })
     );
-
-    console.log('Found VPCs:', vpcs);
+    vpcId = vpcs.Vpcs![0].VpcId!;
 
     expect(vpcs.Vpcs).toBeDefined();
     expect(vpcs.Vpcs!.length).toBeGreaterThan(0);
-    vpcId = vpcs.Vpcs![0].VpcId!;
     expect(vpcs.Vpcs![0].CidrBlock).toBe(VPC_CIDR);
   });
 
@@ -43,8 +41,9 @@ describe('SecureVpcStack Integration (AWS SDK)', () => {
         Filters: [{ Name: 'vpc-id', Values: [vpcId] }],
       })
     );
+    subnetIds = subnets.Subnets!.map(s => s.SubnetId!);
+
     expect(subnets.Subnets).toBeDefined();
-    console.log('Found Subnets:', subnets.Subnets);
 
     // Check for both expected CIDRs
     const foundCidrs = subnets.Subnets!.map(s => s.CidrBlock);
@@ -56,7 +55,6 @@ describe('SecureVpcStack Integration (AWS SDK)', () => {
     // Check for 2 AZs
     const azs = subnets.Subnets!.map(s => s.AvailabilityZone);
     expect(azs.length).toBe(2);
-    subnetIds = subnets.Subnets!.map(s => s.SubnetId!);
   });
 
   it('should attach an Internet Gateway to the VPC', async () => {
@@ -126,7 +124,6 @@ describe('SecureVpcStack Integration (AWS SDK)', () => {
       })
     );
     expect(sgs.SecurityGroups).toBeDefined();
-    console.log('Found Security Groups:', sgs.SecurityGroups);
 
     // Find SG with correct rules
     const sg = sgs.SecurityGroups!.find(
@@ -146,7 +143,6 @@ describe('SecureVpcStack Integration (AWS SDK)', () => {
             p.IpRanges?.some(r => r.CidrIp === '0.0.0.0/0')
         )
     );
-    console.log('Security Group:', sg);
     expect(sg).toBeDefined();
     // Should not allow other inbound ports
     const otherIngress = sg!.IpPermissions!.filter(

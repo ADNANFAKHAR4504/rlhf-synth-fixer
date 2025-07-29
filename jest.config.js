@@ -1,6 +1,5 @@
 module.exports = {
   testEnvironment: 'node',
-  rootDir: '.',
   roots: ['<rootDir>/test'],
   testMatch: ['**/*.test.ts'],
   transform: {
