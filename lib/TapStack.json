@@ -1,4 +1,4 @@
-﻿{
+{
     "AWSTemplateFormatVersion": "2010-09-09",
     "Description": "Secure Web Application Infrastructure - VPC, EC2, RDS, and ALB with security best practices for us-east-1",
     "Metadata": {
