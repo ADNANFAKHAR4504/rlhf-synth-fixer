@@ -83,6 +83,12 @@ function getLanguageChoices(platform: string) {
     ];
   }
 
+  if (platform === 'tf') {
+    return [
+      { name: 'Terraform', value: 'hcl' },
+    ];
+  }
+
   return [
     { name: 'YAML', value: 'yaml' },
     { name: 'JSON', value: 'json' },
@@ -110,6 +116,7 @@ async function main(): Promise<void> {
         { name: 'CDK', value: 'cdk' },
         { name: 'CDK Terraform', value: 'cdktf' },
         { name: 'CloudFormation', value: 'cfn' },
+        { name: 'Terraform', value: 'hcl' },
       ],
     });
 
