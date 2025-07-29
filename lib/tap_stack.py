@@ -1,5 +1,5 @@
 """
-tap_stack.py
+tap_stack.py 
 This module defines the TapStack class, which serves as the main CDK stack for
 the TAP (Test Automation Platform) project.
 It orchestrates the instantiation of other resource-specific stacks and
