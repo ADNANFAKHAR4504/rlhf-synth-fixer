@@ -74,7 +74,6 @@ coverage.xml
 cov.json
 
 cfn-outputs/*
-certs
 
 # CDK Terraform stuff
 dist/
