@@ -1,4 +1,5 @@
 // Configuration - These are coming from cfn-outputs after cdk deploy
+//resolve conflicts
 import fs from 'fs';
 import {
   S3Client,
