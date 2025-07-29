@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "9f94a93dc6d4876275393645cd9c162430e546c51504623ddc8826de54a96c66"
+            "sha256": "47f87c7f39e6c9f0298b795e6d10724689844a7ae561f75a8599f15ca7dad49f"
         },
         "pipfile-spec": 6,
         "requires": {
@@ -96,6 +96,24 @@
             ],
             "markers": "python_version >= '3.8'",
             "version": "==24.1.3"
+        },
+        "cdktf": {
+            "hashes": [
+                "sha256:0a897ff88729bbd37d4d712b55bdc05d130a8786de537beb1951cc029334dd09",
+                "sha256:7025510eb043317ab6fdf20f81d696cb682fed537eed060d9bdd9809b19903e6"
+            ],
+            "index": "pypi",
+            "markers": "python_version ~= '3.9'",
+            "version": "==0.21.0"
+        },
+        "cdktf-cdktf-provider-aws": {
+            "hashes": [
+                "sha256:55d04b5016893c1f01f9144031841d8cd67311642e94819b95ca0de1fe023319",
+                "sha256:cfe7c4edac87b0420ca04c68c4951c24cd62c6242ad6809cd28b558ac8a837e1"
+            ],
+            "index": "pypi",
+            "markers": "python_version ~= '3.9'",
+            "version": "==21.3.0"
         },
         "cfn-flip": {
             "hashes": [

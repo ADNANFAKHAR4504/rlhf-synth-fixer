@@ -35,7 +35,10 @@
     "cdktf:destroy": "cdktf destroy --auto-approve",
     "cfn:deploy-yaml": "aws cloudformation deploy --template-file lib/TapStack.yml --stack-name TapStack${ENVIRONMENT_SUFFIX:-dev} --capabilities CAPABILITY_IAM --parameter-overrides EnvironmentSuffix=${ENVIRONMENT_SUFFIX:-dev} --tags Repository=${REPOSITORY:-unknown} CommitAuthor=${COMMIT_AUTHOR:-unknown}",
     "cfn:deploy-json": "aws cloudformation deploy --template-file lib/TapStack.json --stack-name TapStack${ENVIRONMENT_SUFFIX:-dev} --capabilities CAPABILITY_IAM --parameter-overrides EnvironmentSuffix=${ENVIRONMENT_SUFFIX:-dev} --tags Repository=${REPOSITORY:-unknown} CommitAuthor=${COMMIT_AUTHOR:-unknown}",
-    "cfn:destroy": "aws cloudformation delete-stack --stack-name TapStack${ENVIRONMENT_SUFFIX:-dev}"
+    "cfn:destroy": "aws cloudformation delete-stack --stack-name TapStack${ENVIRONMENT_SUFFIX:-dev}",
+    "pulumi:deploy": "pulumi stack select dev && pulumi up --yes",
+    "pulumi:destroy": "pulumi destroy --yes || echo \"No resources to destroy or destruction failed\""
+    
   },
   "devDependencies": {
     "@aws-sdk/client-api-gateway": "^3.848.0",
