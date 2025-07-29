@@ -110,6 +110,7 @@ Resources:
       Action: lambda:InvokeFunction
       Principal: s3.amazonaws.com
       SourceArn: !GetAtt CorpBucket.Arn
+      SourceAccount: !Ref AWS::AccountId  # ✅ REQUIRED
 
 Outputs:
   BucketName:
