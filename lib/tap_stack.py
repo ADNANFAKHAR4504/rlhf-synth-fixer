@@ -333,9 +333,9 @@ echo "<h1>Hello from $(hostname -f)</h1>" > /var/www/html/index.html
       image_id="ami-0c02fb55956c7d316",  # Amazon Linux 2 AMI
       instance_type=self.instance_type,
       vpc_security_group_ids=[self.instance_security_group.id],
-      iam_instance_profile=[{
+      iam_instance_profile={
         "name": self.instance_profile.name
-      }],
+      },
       user_data=user_data,
       tag_specifications=[{
         "resource_type": "instance",
