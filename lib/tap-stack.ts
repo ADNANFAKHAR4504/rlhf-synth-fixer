@@ -111,7 +111,7 @@ export class TapStack extends TerraformStack {
 
     // Package Lambda function code
     const lambdaAsset = new TerraformAsset(this, 'LambdaAsset', {
-      path: path.join(__dirname, '..', 'dist', 'lambda'),
+      path: path.join(__dirname, '..', 'lib', 'lambda'),
       type: AssetType.ARCHIVE,
     });
 
