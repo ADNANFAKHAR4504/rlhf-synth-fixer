@@ -75,11 +75,13 @@ describe('ServerlessApp Infrastructure', () => {
   describe('IAM Role and Policy', () => {
     it('creates an IAM role for the Lambda function with correct tags', async () => {
       expect(stack.lambdaRole).toBeDefined();
-      const policy = await promiseOf(stack.lambdaRole.assumeRolePolicy);
-      const tags = await promiseOf(stack.lambdaRole.tags);
+      const policyString = await promiseOf(stack.lambdaRole.assumeRolePolicy);
+      const policyObject = JSON.parse(policyString); 
 
-      // The assumeRolePolicy is an object, not a string.
-      expect(policy.Statement[0].Principal.Service).toBe(
+      // Add this line to declare the 'tags' variable
+      const tags = await promiseOf(stack.lambdaRole.tags); 
+
+      expect(policyObject.Statement[0].Principal.Service).toBe(
         'lambda.amazonaws.com'
       );
       expect(tags).toEqual(mockTags);

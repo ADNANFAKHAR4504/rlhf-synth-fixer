@@ -9,7 +9,7 @@
  * 3. The following dependencies must be installed:
  * `npm install --save-dev @pulumi/automation jest-fetch-mock node-fetch`
  */
-import { LocalWorkspace } from '@pulumi/pulumi/automation';
+import { LocalWorkspace, Stack } from '@pulumi/pulumi/automation';
 import 'jest';
 import fetch from 'node-fetch';
 
@@ -19,12 +19,18 @@ jest.setTimeout(60000); // 1 minute
 describe('ServerlessApp Integration Tests', () => {
   let apiUrl: string;
 
-  // Before running the tests, get the API URL from the deployed stack.
   beforeAll(async () => {
-    // This uses the Pulumi Automation API to get the outputs of the
-    // stack that is currently selected in your local environment.
     const workspace = await LocalWorkspace.create({});
-    const stack = await workspace.selectStack(await workspace.getCurrentlySelectedStackName());
+    
+    const stackSummary = await workspace.stack();
+    if (!stackSummary) {
+      throw new Error("No stack is currently selected. Please run `pulumi stack select <stack-name>` first.");
+    }
+
+    // 2. Use the static 'Stack.select()' method to get the stack object
+    const stack = await Stack.select(stackSummary.name, workspace);
+    
+    // Now you can correctly get the outputs from the Stack object
     const outputs = await stack.outputs();
     
     if (!outputs.apiUrl || !outputs.apiUrl.value) {

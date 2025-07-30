@@ -11,7 +11,7 @@
  */
 import 'source-map-support/register';
 import * as pulumi from '@pulumi/pulumi';
-import { TapStack, TapStackArgs } from '../lib/tap-stack';
+import { TapStack, TapStackArgs } from './lib/tap-stack';
 
 // Initialize Pulumi configuration for the current stack.
 const config = new pulumi.Config();
