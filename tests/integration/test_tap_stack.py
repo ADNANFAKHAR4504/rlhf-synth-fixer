@@ -3,7 +3,14 @@ import os
 import sys
 import pytest
 from aws_cdk import assertions, App, Stack
-from lib.tap_stack import TapStack, TapStackProps, SecureS3NestedStack
+
+# Add the parent directory to Python path
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..')))
+
+try:
+  from lib.tap_stack import TapStack, TapStackProps, SecureS3NestedStack
+except ImportError:
+  from tap_stack import TapStack, TapStackProps, SecureS3NestedStack
 
 
 @pytest.fixture(name="app")
