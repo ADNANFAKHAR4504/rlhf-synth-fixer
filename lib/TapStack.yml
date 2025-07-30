@@ -14,7 +14,7 @@ Parameters:
     Description: 'Environment type for resource tagging'
 
   LatestAmiId:
-    Type: 'AWS::SSM::Parameter::Value<String>'
+    Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
     Default: '/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2'
     Description: 'SSM Parameter for the latest Amazon Linux 2 AMI ID.'
 
@@ -428,7 +428,7 @@ Resources:
         - !Ref BastionSecurityGroup
       IamInstanceProfile: !Ref BastionHostInstanceProfile
       UserData:
-        Fn::Base64: !Sub |
+        Fn::Base64: |
           #!/bin/bash
           yum update -y
           yum install -y amazon-cloudwatch-agent
@@ -453,7 +453,7 @@ Resources:
         - !Ref PrivateInstanceSecurityGroup
       IamInstanceProfile: !Ref PrivateInstanceProfile
       UserData:
-        Fn::Base64: !Sub |
+        Fn::Base64: |
           #!/bin/bash
           yum update -y
           yum install -y amazon-cloudwatch-agent
@@ -478,7 +478,7 @@ Resources:
         - !Ref PrivateInstanceSecurityGroup
       IamInstanceProfile: !Ref PrivateInstanceProfile
       UserData:
-        Fn::Base64: !Sub |
+        Fn::Base64: |
           #!/bin/bash
           yum update -y
           yum install -y amazon-cloudwatch-agent
