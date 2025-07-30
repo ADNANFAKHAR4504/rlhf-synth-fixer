@@ -1,4 +1,5 @@
 import fs from 'fs';
+import path from 'path';
 
 // Import all necessary AWS SDK clients
 import {
@@ -12,7 +13,7 @@ import {
 import {
   CloudTrailClient,
   DescribeTrailsCommand,
-} from '@aws-sdk/client-cloudtrail'; // Added DescribeTrailsCommand
+} from '@aws-sdk/client-cloudtrail';
 import {
   CloudWatchClient,
   DescribeAlarmsCommand,
@@ -21,6 +22,7 @@ import { DescribeTableCommand, DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import {
   DescribeInstancesCommand,
   DescribeLaunchTemplatesCommand, // Correct client for DescribeLaunchTemplatesCommand
+  DescribeLaunchTemplateVersionsCommand, // New: for getting LT data by version
   DescribeNatGatewaysCommand, // New: for NAT Gateway tests
   DescribeNetworkAclsCommand,
   DescribeSecurityGroupsCommand,
@@ -34,7 +36,7 @@ import {
   DescribeTargetGroupsCommand,
   ElasticLoadBalancingV2Client,
 } from '@aws-sdk/client-elastic-load-balancing-v2';
-import { GuardDutyClient } from '@aws-sdk/client-guardduty'; // Added GetDetectorCommand
+import { GuardDutyClient } from '@aws-sdk/client-guardduty';
 import {
   GetAccountPasswordPolicyCommand,
   GetUserCommand,
@@ -50,7 +52,7 @@ import {
 } from '@aws-sdk/client-s3';
 import { GetTopicAttributesCommand, SNSClient } from '@aws-sdk/client-sns';
 import { GetParameterCommand, SSMClient } from '@aws-sdk/client-ssm';
-import { WAFV2Client } from '@aws-sdk/client-wafv2'; // Corrected: WAFV2Client (uppercase V), Added GetWebACLCommand
+import { WAFV2Client } from '@aws-sdk/client-wafv2'; // Corrected: WAFV2Client (uppercase V)
 
 // Get environment suffix from environment variable (set by CI/CD pipeline)
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
@@ -101,10 +103,22 @@ const cloudWatchClient = new CloudWatchClient({
 });
 
 let outputs: { [key: string]: string } = {}; // Explicitly type outputs object
+let template: any; // **FIXED: Declared template at the top level**
 
 describe('Secure Web Application Infrastructure Integration Tests', () => {
   beforeAll(async () => {
     try {
+      // Load template for unit-like checks within integration tests
+      const templatePath = path.join(__dirname, '../lib/TapStack.json');
+      if (fs.existsSync(templatePath)) {
+        const templateContent = fs.readFileSync(templatePath, 'utf8');
+        template = JSON.parse(templateContent);
+      } else {
+        console.warn(
+          'TapStack.json not found. Unit-like tests within integration suite may fail.'
+        );
+      }
+
       // Try to load outputs from file if available (e.g., from a previous deploy step)
       if (fs.existsSync('cfn-outputs/flat-outputs.json')) {
         outputs = JSON.parse(
@@ -129,7 +143,10 @@ describe('Secure Web Application Infrastructure Integration Tests', () => {
         }
       }
     } catch (error) {
-      console.warn('Could not load stack outputs. Some tests may fail.', error);
+      console.warn(
+        'Could not load stack outputs or template. Some tests may fail.',
+        error
+      );
     }
   }, 60000); // Increased timeout for beforeAll
 
@@ -199,6 +216,7 @@ describe('Secure Web Application Infrastructure Integration Tests', () => {
 
     test('all outputs should have proper descriptions', () => {
       // This test reads from the 'template' variable, which is the JSON of the CFN template
+      if (!template) fail('Template not loaded for unit-like output checks.'); // Added check
       Object.keys(template.Outputs).forEach(outputKey => {
         const output = template.Outputs[outputKey];
         expect(output.Description).toBeDefined();
@@ -208,6 +226,7 @@ describe('Secure Web Application Infrastructure Integration Tests', () => {
 
     test('all outputs should have export names for cross-stack references', () => {
       // This test reads from the 'template' variable
+      if (!template) fail('Template not loaded for unit-like output checks.'); // Added check
       Object.keys(template.Outputs).forEach(outputKey => {
         const output = template.Outputs[outputKey];
         expect(output.Export).toBeDefined();
@@ -233,14 +252,10 @@ describe('Secure Web Application Infrastructure Integration Tests', () => {
 
       const vpc = response.Vpcs![0];
       expect(vpc.State).toBe('available');
-      expect(vpc.CidrBlock).toBe(template.Parameters.VpcCidr.Default);
-      // **FIXED: Accessing EnableDnsHostnames and EnableDnsSupport via Vpc.Options**
-      // Note: Vpc.Options is not directly on the Vpc object in all SDK versions.
-      // If this continues to cause TS errors, you might need to check vpc.DhcpOptionsId and then describe DhcpOptions
-      // or simply remove these specific checks if they are not critical for the integration test.
-      // For now, assuming they are available via Options.
-      expect(vpc.Options?.EnableDnsHostnames).toBe(true);
-      expect(vpc.Options?.EnableDnsSupport).toBe(true);
+      expect(vpc.CidrBlock).toBe(template.Parameters.VpcCidr.Default); // **FIXED: Accessing template.Parameters.VpcCidr.Default**
+      // **FIXED: Accessing EnableDnsHostnames and EnableDnsSupport directly on Vpc object**
+      expect(vpc.EnableDnsHostnames).toBe(true);
+      expect(vpc.EnableDnsSupport).toBe(true);
     });
 
     // Updated: Check for all 6 subnets (2 public, 2 private, 2 database)
@@ -258,7 +273,6 @@ describe('Secure Web Application Infrastructure Integration Tests', () => {
         console.warn(
           'Not all 6 subnet IDs are available in outputs. Skipping detailed subnet AZ checks.'
         );
-        // fail('Not all 6 subnet IDs are available in outputs'); // Uncomment if strict
       }
 
       const response = await ec2Client.send(
@@ -290,12 +304,9 @@ describe('Secure Web Application Infrastructure Integration Tests', () => {
     });
 
     test('should have Internet Gateway and NAT Gateway', async () => {
-      // IGW is implicitly tested by VPC attachment and route table.
-      // NAT Gateway EIP and NAT Gateway existence
       if (!outputs.NATGatewayId || !outputs.NATGatewayEIPId) {
         fail('NAT Gateway outputs not available');
       }
-      // **FIXED: Corrected DescribeNatGatewaysCommand import and usage**
       const natGatewayResponse = await ec2Client.send(
         new DescribeNatGatewaysCommand({
           NatGatewayIds: [outputs.NATGatewayId],
@@ -423,7 +434,6 @@ describe('Secure Web Application Infrastructure Integration Tests', () => {
             )
           ).toBe(true);
         }
-        // Add more specific checks for Private and Database NACLs based on your template
         // Example for Private NACL:
         if (nacl.NetworkAclId === outputs.PrivateNetworkACLId) {
           expect(
@@ -442,7 +452,7 @@ describe('Secure Web Application Infrastructure Integration Tests', () => {
                 e.PortRange?.From === 22 &&
                 e.RuleAction === 'allow'
             )
-          ).toBe(true); // SSH from bastion
+          ).toBe(true);
           expect(
             nacl.Entries!.some(
               e =>
@@ -451,7 +461,7 @@ describe('Secure Web Application Infrastructure Integration Tests', () => {
                 e.PortRange?.To === 65535 &&
                 e.RuleAction === 'allow'
             )
-          ).toBe(true); // Ephemeral
+          ).toBe(true);
         }
         // Example for Database NACL:
         if (nacl.NetworkAclId === outputs.DatabaseNetworkACLId) {
@@ -471,7 +481,7 @@ describe('Secure Web Application Infrastructure Integration Tests', () => {
                 e.PortRange?.From === 22 &&
                 e.RuleAction === 'allow'
             )
-          ).toBe(true); // SSH from bastion
+          ).toBe(true);
           expect(
             nacl.Entries!.some(
               e =>
@@ -480,7 +490,7 @@ describe('Secure Web Application Infrastructure Integration Tests', () => {
                 e.PortRange?.To === 65535 &&
                 e.RuleAction === 'allow'
             )
-          ).toBe(true); // Ephemeral
+          ).toBe(true);
         }
       });
     });
@@ -843,12 +853,12 @@ describe('Secure Web Application Infrastructure Integration Tests', () => {
       const ltData = lt.LatestVersionNumber
         ? (
             await ec2Client.send(
-              new DescribeLaunchTemplatesCommand({
-                LaunchTemplateIds: [ltId],
+              new DescribeLaunchTemplateVersionsCommand({
+                LaunchTemplateId: ltId,
                 Versions: [lt.LatestVersionNumber],
               })
             )
-          ).LaunchTemplates![0].LaunchTemplateData
+          ).LaunchTemplateVersions![0].LaunchTemplateData
         : undefined;
       expect(ltData).toBeDefined();
       expect(ltData!.ImageId).toBe(outputs.WebServerAmiId);
