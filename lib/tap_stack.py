@@ -1,6 +1,7 @@
 """TAP Stack module for CDKTF Python infrastructure."""
 
 import os
+import sys
 from cdktf import App, TerraformStack, S3Backend
 from constructs import Construct
 from cdktf_cdktf_provider_aws.provider import AwsProvider
@@ -8,6 +9,9 @@ from cdktf_cdktf_provider_aws.provider import AwsProvider
 # Import the SecureAwsEnvironment stack from your tap.py file
 # Make sure tap.py is in the same directory or accessible in your Python path
 from cdktf_cdktf_provider_aws.s3_bucket import S3Bucket
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 from tap import SecureAwsEnvironment # This imports the SecureAwsEnvironment class
 
 # ----- ENVIRONMENT CONFIG (Global variables for the entire script) -----
@@ -19,16 +23,9 @@ global_aws_region = os.getenv("AWS_REGION", "us-east-1")
 global_repository_name = os.getenv("REPOSITORY", "unknown")
 global_commit_author = os.getenv("COMMIT_AUTHOR", "unknown")
 
-# os.environ.setdefault("DEV_ACCOUNT_ID",  "718240086340")  # dummy for tests
-# os.environ.setdefault("PROD_ACCOUNT_ID", "111111111111")  # dummy for tests
-
 # Define DEV_ACCOUNT_ID and PROD_ACCOUNT_ID globally by reading from environment variables
 DEV_ACCOUNT_ID = os.getenv("DEV_ACCOUNT_ID")
 PROD_ACCOUNT_ID = os.getenv("PROD_ACCOUNT_ID")
-
-# # Ensure account IDs are set, otherwise raise an error
-# if not DEV_ACCOUNT_ID or not PROD_ACCOUNT_ID:
-#   raise ValueError("DEV_ACCOUNT_ID and PROD_ACCOUNT_ID must be set as environment variables.")
 
 # Define accounts and regions for SecureAwsEnvironment instantiations globally
 # CORRECTED: This should be a dictionary, not a set containing a dictionary
