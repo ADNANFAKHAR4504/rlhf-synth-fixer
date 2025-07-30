@@ -3,10 +3,6 @@
 Secure multi-account / multi-region CDKTF stack.
 Implements strong RDS passwords, KMS encryption, no-SSH SG, GuardDuty, Shield, etc.
 """
-import os
-os.environ.setdefault("DEV_ACCOUNT_ID",  "718240086340")  # dummy for tests
-os.environ.setdefault("PROD_ACCOUNT_ID", "111111111111")  # dummy for tests
-
 import os, json
 from constructs import Construct
 
@@ -40,6 +36,9 @@ from cdktf_cdktf_provider_aws.secretsmanager_secret import SecretsmanagerSecret
 from cdktf_cdktf_provider_aws.secretsmanager_secret_version import SecretsmanagerSecretVersion
 # from cdktf_cdktf_provider_random.provider import RandomProvider
 # from cdktf_cdktf_provider_random.password import Password as RandomPassword
+
+# os.environ.setdefault("DEV_ACCOUNT_ID",  "718240086340")  # dummy for tests
+# os.environ.setdefault("PROD_ACCOUNT_ID", "111111111111")  # dummy for tests
 
 #global env config
 ENV_SUFFIX     = os.getenv("ENVIRONMENT_SUFFIX", "dev")
