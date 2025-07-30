@@ -1,5 +1,3 @@
-# MODEL_RESPONSE.md
-
 This document describes how the CDK constructs infrastructure based on the given requirements: integrating an existing S3 bucket, Lambda function, API Gateway, IAM roles, and SNS topic in a secure, modular, and testable way.
 
 ---
