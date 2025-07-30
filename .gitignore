@@ -84,5 +84,7 @@ cdktf.out
 cdktf.log
 *terraform.*.tfstate*
 .gen
-
-task-status.md
+__pycache__/
+.pulumi/
+# CDK build output
+cdk.out/
