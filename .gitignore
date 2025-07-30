@@ -84,4 +84,5 @@ cdktf.out
 cdktf.log
 *terraform.*.tfstate*
 .gen
-.terraform
+
+task-status.md
