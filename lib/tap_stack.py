@@ -6,6 +6,7 @@ manages environment-specific configurations.
 """
 
 from typing import Optional
+from textwrap import dedent
 from aws_cdk import (
     Duration,
     aws_lambda as _lambda,
@@ -76,141 +77,133 @@ class TapStack(cdk.Stack):
     stack_prefix = f"tap-{environment_suffix}"
 
     # Lambda function for Hello World endpoint
+    # Lambda function for Hello World endpoint
     hello_lambda = _lambda.Function(
-        self, "HelloWorldFunction",
-        runtime=_lambda.Runtime.PYTHON_3_9,
-        handler="index.lambda_handler",
-        code=_lambda.Code.from_inline("""
-import json
-import datetime
+      self,
+      "HelloWorldFunction",
+      runtime=_lambda.Runtime.PYTHON_3_9,
+      handler="index.lambda_handler",
+      code=_lambda.Code.from_inline(dedent("""\
+          import json
+          import datetime
 
-def lambda_handler(event, context):
-return {
-    'statusCode': 200,
-    'headers': {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type'
-    },
-    'body': json.dumps({
-        'message': 'Hello, World!',
-        'timestamp': datetime.datetime.utcnow().isoformat(),
-        'path': event.get('rawPath', '/'),
-        'method': event.get('requestContext', {}).get('http', {}).get('method', 'UNKNOWN')
-    })
-}
-        """),
-        timeout=Duration.seconds(30),  # Free tier friendly
-        memory_size=128,  # Minimum memory for cost optimization
-        description="Simple Hello World Lambda function",
-        # Log retention to manage costs
-        log_retention=logs.RetentionDays.ONE_WEEK
+          def lambda_handler(event, context):
+            return {
+                'statusCode': 200,
+                'headers': {
+                    'Content-Type': 'application/json',
+                    'Access-Control-Allow-Origin': '*',
+                    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+                    'Access-Control-Allow-Headers': 'Content-Type'
+                },
+                'body': json.dumps({
+                    'message': 'Hello, World!',
+                    'timestamp': datetime.datetime.utcnow().isoformat(),
+                    'path': event.get('rawPath', '/'),
+                    'method': event.get('requestContext', {}).get('http', {}).get('method', 'UNKNOWN')
+                })
+            }
+      """)),
+      timeout=Duration.seconds(30),
+      memory_size=128,
+      description="Simple Hello World Lambda function",
+      log_retention=logs.RetentionDays.ONE_WEEK
     )
 
     # Lambda function for user info endpoint
     user_info_lambda = _lambda.Function(
-        self, "UserInfoFunction",
-        runtime=_lambda.Runtime.PYTHON_3_9,
-        handler="index.lambda_handler",
-        code=_lambda.Code.from_inline("""
-import json
-import datetime
+      self,
+      "UserInfoFunction",
+      runtime=_lambda.Runtime.PYTHON_3_9,
+      handler="index.lambda_handler",
+      code=_lambda.Code.from_inline(dedent("""\
+        import json
+        import datetime
 
-def lambda_handler(event, context):
-# Extract user info from query parameters or path parameters
-query_params = event.get('queryStringParameters') or {}
-path_params = event.get('pathParameters') or {}
+        def lambda_handler(event, context):
+          query_params = event.get('queryStringParameters') or {}
+          path_params = event.get('pathParameters') or {}
 
-user_id = path_params.get('userId', 'anonymous')
+          user_id = path_params.get('userId', 'anonymous')
 
-return {
-    'statusCode': 200,
-    'headers': {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type'
-    },
-    'body': json.dumps({
-        'userId': user_id,
-        'message': f'Hello, {user_id}!',
-        'timestamp': datetime.datetime.utcnow().isoformat(),
-        'queryParams': query_params,
-        'requestId': context.aws_request_id
-    })
-}
-        """),
+          return {
+              'statusCode': 200,
+              'headers': {
+                  'Content-Type': 'application/json',
+                  'Access-Control-Allow-Origin': '*',
+                  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+                  'Access-Control-Allow-Headers': 'Content-Type'
+              },
+              'body': json.dumps({
+                  'userId': user_id,
+                  'message': f'Hello, {user_id}!',
+                  'timestamp': datetime.datetime.utcnow().isoformat(),
+                  'queryParams': query_params,
+                  'requestId': context.aws_request_id
+              })
+          }
+    """)),
         timeout=Duration.seconds(30),
         memory_size=128,
         description="User info Lambda function",
         log_retention=logs.RetentionDays.ONE_WEEK
     )
 
-    # HTTP API Gateway (more cost-effective than REST API)
     http_api = apigw.HttpApi(
-        self, "TapHttpApi",
-        api_name=f"{stack_prefix}-serverless-api",
-        description="Serverless API for TAP application",
-        # CORS configuration
-        cors_preflight=apigw.CorsPreflightOptions(
-            allow_origins=["*"],
-            allow_methods=[
-                apigw.CorsHttpMethod.GET,
-                apigw.CorsHttpMethod.POST,
-                apigw.CorsHttpMethod.OPTIONS
-            ],
-            allow_headers=["Content-Type", "Authorization"]
-        )
+      self,
+      "TapHttpApi",
+      api_name=f"{stack_prefix}-serverless-api",
+      description="Serverless API for TAP application",
+      cors_preflight=apigw.CorsPreflightOptions(
+        allow_origins=["*"],
+        allow_methods=[
+            apigw.CorsHttpMethod.GET,
+            apigw.CorsHttpMethod.POST,
+            apigw.CorsHttpMethod.OPTIONS
+        ],
+        allow_headers=["Content-Type", "Authorization"]
+      )
     )
 
-    # Create integrations
     hello_integration = integrations.HttpLambdaIntegration(
-        "HelloIntegration",
-        hello_lambda
-    )
+      "HelloIntegration", hello_lambda)
 
     user_info_integration = integrations.HttpLambdaIntegration(
-        "UserInfoIntegration",
-        user_info_lambda
-    )
+      "UserInfoIntegration", user_info_lambda)
 
-    # Add routes
     http_api.add_routes(
-        path="/hello",
-        methods=[apigw.HttpMethod.GET, apigw.HttpMethod.POST],
-        integration=hello_integration
+      path="/hello",
+      methods=[apigw.HttpMethod.GET, apigw.HttpMethod.POST],
+      integration=hello_integration
     )
 
     http_api.add_routes(
-        path="/user/{userId}",
-        methods=[apigw.HttpMethod.GET],
-        integration=user_info_integration
+      path="/user/{userId}",
+      methods=[apigw.HttpMethod.GET],
+      integration=user_info_integration
     )
 
     http_api.add_routes(
-        path="/user",
-        methods=[apigw.HttpMethod.GET],
-        integration=user_info_integration
-    )
-
-    # Output the API URL
-    CfnOutput(
-        self, "ApiUrl",
-        value=http_api.url,
-        description="HTTP API Gateway URL",
-        export_name="TapApiUrl"
-    )
-
-    # Output individual endpoint URLs for convenience
-    CfnOutput(
-        self, "HelloEndpoint",
-        value=f"{http_api.url}hello",
-        description="Hello World endpoint URL"
+      path="/user",
+      methods=[apigw.HttpMethod.GET],
+      integration=user_info_integration
     )
 
     CfnOutput(
-        self, "UserEndpoint",
-        value=f"{http_api.url}user/{{userId}}",
-        description="User info endpoint URL (replace {{userId}} with actual user ID)"
+      self, "ApiUrl",
+      value=http_api.url,
+      description="HTTP API Gateway URL",
+      export_name="TapApiUrl"
+    )
+
+    CfnOutput(
+      self, "HelloEndpoint",
+      value=f"{http_api.url}hello",
+      description="Hello World endpoint URL"
+    )
+
+    CfnOutput(
+      self, "UserEndpoint",
+      value=f"{http_api.url}user/{{userId}}",
+      description="User info endpoint URL (replace {{userId}} with actual user ID)"
     )
