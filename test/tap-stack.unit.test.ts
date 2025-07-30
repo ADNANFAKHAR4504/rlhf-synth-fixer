@@ -36,7 +36,7 @@ describe('Secure CloudFormation Stack Unit Tests', () => {
 
       expect(params.LatestAmiId).toBeDefined();
       expect(params.LatestAmiId.Type).toBe(
-        'AWS::SSM::Parameter::Value<String>'
+        'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
       );
 
       // Verify old parameters are removed
