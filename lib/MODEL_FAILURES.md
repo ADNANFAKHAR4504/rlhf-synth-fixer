@@ -132,3 +132,33 @@ Tags.of(this).add('Environment', 'Test');
 **Failure Point**: QA deploy fails due to missing mandatory metadata.
 
 ---
+
+## Summary
+
+The common failure patterns identified above highlight critical areas where models frequently struggle when implementing serverless image processing infrastructure:
+
+### 🎯 Key Failure Categories
+
+1. **Security & Permissions** - Overly broad IAM policies or missing permissions
+2. **Configuration Issues** - Missing environment variables and runtime settings  
+3. **Infrastructure Misunderstanding** - Creating new resources instead of referencing existing ones
+4. **Integration Gaps** - Missing API Gateway endpoints or SNS integrations
+5. **Compliance Violations** - Missing required tags and metadata
+
+### 🛠 Prevention Strategies
+
+- Always use CDK's built-in `grant*` methods for least-privilege access
+- Reference existing resources using `fromBucketName` or similar patterns
+- Include comprehensive environment variable configuration
+- Explicitly specify runtime versions and handler paths
+- Apply consistent resource tagging for QA compliance
+
+### 📋 Testing Requirements
+
+All implementations must pass:
+- Unit tests validating stack resource creation
+- Integration tests confirming end-to-end functionality  
+- Linting and security policy checks
+- QA pipeline compliance validation
+
+These failure examples serve as a reference for avoiding common pitfalls and ensuring robust, secure infrastructure implementations.
