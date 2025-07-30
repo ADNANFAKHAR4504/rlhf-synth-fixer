@@ -1,4 +1,4 @@
-// Configuration - These are coming from cfn-outputs after CloudFormation deploy
+// Configuration - These are coming from cfn-outputs after the CloudFormation deploy
 import {
   CloudFormationClient,
   DescribeStacksCommand,
