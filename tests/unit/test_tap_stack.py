@@ -22,10 +22,7 @@ class TestTapStackArgs(unittest.TestCase):
     args = TapStackArgs()
     
     self.assertEqual(args.environment_suffix, 'dev')
-    self.assertIsInstance(args.tags, dict)
-    self.assertEqual(args.tags['Environment'], 'dev')
-    self.assertEqual(args.tags['Owner'], 'test-user')
-    self.assertEqual(args.tags['Project'], 'pulumi-dummy')
+    self.assertIsNone(args.tags)
 
   def test_tap_stack_args_custom_environment(self):
     """Test TapStackArgs with custom environment suffix."""
@@ -33,7 +30,7 @@ class TestTapStackArgs(unittest.TestCase):
     args = TapStackArgs(environment_suffix=custom_env)
     
     self.assertEqual(args.environment_suffix, custom_env)
-    self.assertEqual(args.tags['Environment'], custom_env)
+    self.assertIsNone(args.tags)
 
   def test_tap_stack_args_custom_tags(self):
     """Test TapStackArgs with custom tags."""
@@ -52,8 +49,7 @@ class TestTapStackArgs(unittest.TestCase):
     args = TapStackArgs(environment_suffix=None, tags=None)
     
     self.assertEqual(args.environment_suffix, 'dev')
-    self.assertIsInstance(args.tags, dict)
-    self.assertIn('Environment', args.tags)
+    self.assertIsNone(args.tags)
 
 
 class TestTapStack(unittest.TestCase):
@@ -83,8 +79,7 @@ class TestTapStack(unittest.TestCase):
     
     # Verify stack properties
     self.assertEqual(stack.environment_suffix, 'dev')
-    self.assertIsInstance(stack.tags, dict)
-    self.assertEqual(stack.tags['Environment'], 'dev')
+    self.assertIsNone(stack.tags)
 
   @pulumi.runtime.test
   def test_tap_stack_creation_custom_args(self):
@@ -229,7 +224,7 @@ class MockResourceProvider:
       f"{args.name}-id",  # Resource ID
       {
         "bucket": f"{args.name}-bucket-name",
-        "tags": getattr(args.inputs, 'tags', {}),
+        "tags": getattr(args.inputs, 'tags', None),
       }  # Resource outputs
     ]
 
