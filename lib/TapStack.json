@@ -15,15 +15,6 @@
             "MaxLength": 63,
             "AllowedPattern": "^[a-zA-Z][a-zA-Z0-9]*$"
         },
-        "DBMasterPassword": {
-            "Type": "String",
-            "Description": "Master password for RDS PostgreSQL instance",
-            "NoEcho": true,
-            "MinLength": 8,
-            "MaxLength": 128,
-            "AllowedPattern": "^[a-zA-Z0-9!@#$%^&*()_+=-]*$",
-            "Default": "TempPassword123!"
-        },
         "SSLCertificateArn": {
             "Type": "String",
             "Description": "SSL Certificate ARN for HTTPS listener (leave empty to disable HTTPS)",
@@ -500,6 +491,30 @@
                 ]
             }
         },
+        "RDSPasswordSecret": {
+            "Type": "AWS::SecretsManager::Secret",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-rds-password"
+                },
+                "Description": "Master password for RDS PostgreSQL instance",
+                "GenerateSecretString": {
+                    "SecretStringTemplate": {
+                        "Fn::Sub": "{\"username\": \"${DBMasterUsername}\"}"
+                    },
+                    "GenerateStringKey": "password",
+                    "PasswordLength": 32,
+                    "ExcludeCharacters": "\"@/\\",
+                    "RequireEachIncludedType": true
+                },
+                "Tags": [
+                    {
+                        "Key": "Project",
+                        "Value": "WebApp"
+                    }
+                ]
+            }
+        },
         "RDSInstance": {
             "Type": "AWS::RDS::DBInstance",
             "Properties": {
@@ -509,7 +524,7 @@
                     "Ref": "DBMasterUsername"
                 },
                 "MasterUserPassword": {
-                    "Ref": "DBMasterPassword"
+                    "Fn::Sub": "{{resolve:secretsmanager:${RDSPasswordSecret}:SecretString:password}}"
                 },
                 "AllocatedStorage": 20,
                 "StorageEncrypted": true,
@@ -806,6 +821,33 @@
                 "Fn::GetAtt": [
                     "CloudFrontDistribution",
                     "DomainName"
+                ]
+            }
+        },
+        "CloudFrontDistributionDomainName": {
+            "Description": "Domain name of the CloudFront distribution",
+            "Value": {
+                "Fn::GetAtt": [
+                    "CloudFrontDistribution",
+                    "DomainName"
+                ]
+            }
+        },
+        "LoadBalancerDNSName": {
+            "Description": "DNS name of the Application Load Balancer",
+            "Value": {
+                "Fn::GetAtt": [
+                    "ApplicationLoadBalancer",
+                    "DNSName"
+                ]
+            }
+        },
+        "RDSEndpoint": {
+            "Description": "Endpoint of the RDS instance",
+            "Value": {
+                "Fn::GetAtt": [
+                    "RDSInstance",
+                    "Endpoint.Address"
                 ]
             }
         }

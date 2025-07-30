@@ -15,14 +15,6 @@ Parameters:
     MaxLength: 63
     AllowedPattern: ^[a-zA-Z][a-zA-Z0-9]*$
   
-  DBMasterPassword:
-    Type: String
-    Description: Master password for RDS PostgreSQL instance
-    NoEcho: true
-    MinLength: 8
-    MaxLength: 128
-    AllowedPattern: ^[a-zA-Z0-9!@#$%^&*()_+=-]*$
-    Default: TempPassword123!
   
   SSLCertificateArn:
     Type: String
@@ -263,6 +255,22 @@ Resources:
         - Key: Project
           Value: WebApp
 
+  # RDS Password Secret
+  RDSPasswordSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub '${AWS::StackName}-rds-password'
+      Description: Master password for RDS PostgreSQL instance
+      GenerateSecretString:
+        SecretStringTemplate: !Sub '{"username": "${DBMasterUsername}"}'
+        GenerateStringKey: 'password'
+        PasswordLength: 32
+        ExcludeCharacters: '"@/\'
+        RequireEachIncludedType: true
+      Tags:
+        - Key: Project
+          Value: WebApp
+
   # RDS Instance
   RDSInstance:
     Type: AWS::RDS::DBInstance
@@ -270,7 +278,7 @@ Resources:
       DBInstanceClass: db.t3.micro
       Engine: postgres
       MasterUsername: !Ref DBMasterUsername
-      MasterUserPassword: !Ref DBMasterPassword
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${RDSPasswordSecret}:SecretString:password}}'
       AllocatedStorage: 20
       StorageEncrypted: true
       MultiAZ: true

@@ -36,7 +36,7 @@ The solution implements a 3-tier architecture:
 - Security groups with least privilege access
 - S3 bucket with public access blocked
 - CloudFront Origin Access Identity for S3 access control
-- Database credentials parameterized for security
+- Database credentials managed by AWS Secrets Manager for enhanced security
 - Storage encryption enabled for RDS
 
 ## File Structure
@@ -80,14 +80,6 @@ Parameters:
     MaxLength: 63
     AllowedPattern: ^[a-zA-Z][a-zA-Z0-9]*$
   
-  DBMasterPassword:
-    Type: String
-    Description: Master password for RDS PostgreSQL instance
-    NoEcho: true
-    MinLength: 8
-    MaxLength: 128
-    AllowedPattern: ^[a-zA-Z0-9!@#$%^&*()_+=-]*$
-    Default: TempPassword123!
   
   SSLCertificateArn:
     Type: String
@@ -327,13 +319,29 @@ Resources:
         - Key: Project
           Value: WebApp
 
+  # RDS Password Secret
+  RDSPasswordSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub '${AWS::StackName}-rds-password'
+      Description: Master password for RDS PostgreSQL instance
+      GenerateSecretString:
+        SecretStringTemplate: !Sub '{"username": "${DBMasterUsername}"}'
+        GenerateStringKey: 'password'
+        PasswordLength: 32
+        ExcludeCharacters: '"@/\'
+        RequireEachIncludedType: true
+      Tags:
+        - Key: Project
+          Value: WebApp
+
   RDSInstance:
     Type: AWS::RDS::DBInstance
     Properties:
       DBInstanceClass: db.t3.micro
       Engine: postgres
       MasterUsername: !Ref DBMasterUsername
-      MasterUserPassword: !Ref DBMasterPassword
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${RDSPasswordSecret}:SecretString:password}}'
       AllocatedStorage: 20
       StorageEncrypted: true
       MultiAZ: true
@@ -601,7 +609,6 @@ End-to-end integration tests that validate:
      --stack-name WebAppStack \
      --capabilities CAPABILITY_IAM \
      --parameter-overrides \
-       DBMasterPassword=YourSecurePassword123! \
        SSLCertificateArn=arn:aws:acm:us-east-1:123456789012:certificate/12345678-1234-1234-1234-123456789012
    ```
 
@@ -666,7 +673,7 @@ This solution follows AWS Well-Architected Framework principles:
 - **Cost Optimization**: Right-sized instances with auto scaling
 - **Operational Excellence**: Comprehensive monitoring and automation
 
-The template passes AWS CloudFormation validation and cfn-lint checks with only minor warnings about security best practices (using AWS Secrets Manager for database passwords).
+The template passes AWS CloudFormation validation and cfn-lint checks with full compliance to security best practices, including the use of AWS Secrets Manager for database credentials.
 
 ## Troubleshooting
 

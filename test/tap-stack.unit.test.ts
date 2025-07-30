@@ -38,11 +38,6 @@ describe('Web Application Stack CloudFormation Template', () => {
       expect(template.Parameters.DBMasterUsername.Default).toBe('webappadmin');
     });
 
-    test('should have DBMasterPassword parameter', () => {
-      expect(template.Parameters.DBMasterPassword).toBeDefined();
-      expect(template.Parameters.DBMasterPassword.Type).toBe('String');
-      expect(template.Parameters.DBMasterPassword.NoEcho).toBe(true);
-    });
 
     test('should have SSLCertificateArn parameter', () => {
       expect(template.Parameters.SSLCertificateArn).toBeDefined();
@@ -134,6 +129,12 @@ describe('Web Application Stack CloudFormation Template', () => {
       expect(template.Resources.RDSSubnetGroup.Type).toBe('AWS::RDS::DBSubnetGroup');
     });
 
+    test('should have RDS password secret', () => {
+      expect(template.Resources.RDSPasswordSecret).toBeDefined();
+      expect(template.Resources.RDSPasswordSecret.Type).toBe('AWS::SecretsManager::Secret');
+      expect(template.Resources.RDSPasswordSecret.Properties.GenerateSecretString).toBeDefined();
+    });
+
     test('RDS should be PostgreSQL', () => {
       const rds = template.Resources.RDSInstance;
       expect(rds.Properties.Engine).toBe('postgres');
@@ -147,6 +148,12 @@ describe('Web Application Stack CloudFormation Template', () => {
     test('RDS should have Multi-AZ enabled', () => {
       const rds = template.Resources.RDSInstance;
       expect(rds.Properties.MultiAZ).toBe(true);
+    });
+
+    test('RDS should use Secrets Manager for password', () => {
+      const rds = template.Resources.RDSInstance;
+      expect(rds.Properties.MasterUserPassword).toBeDefined();
+      expect(rds.Properties.MasterUserPassword['Fn::Sub']).toContain('{{resolve:secretsmanager:${RDSPasswordSecret}:SecretString:password}}');
     });
   });
 
@@ -276,7 +283,7 @@ describe('Web Application Stack CloudFormation Template', () => {
 
     test('should have expected number of parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(4); // VpcCidr, DBMasterUsername, DBMasterPassword, SSLCertificateArn
+      expect(parameterCount).toBe(3); // VpcCidr, DBMasterUsername, SSLCertificateArn
     });
   });
 });
