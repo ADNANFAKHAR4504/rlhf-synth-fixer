@@ -42,6 +42,6 @@ variable "default_tags" {
 
 variable "s3_bucket_name" {
   type        = string
-  default     = "rlhf-demo_54321"
+  default     = "rlhf-demo-54321"
   description = "Demo to create a bucket"
 }
