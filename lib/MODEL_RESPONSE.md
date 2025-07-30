@@ -1,3 +1,13 @@
+# Model Response: AWS VPC Infrastructure
+
+## Overview
+
+This document contains the model's response to the AWS VPC provisioning task using Terraform CDK and TypeScript.
+
+## Implementation
+
+The following TypeScript code implements a secure AWS VPC infrastructure with public subnets, Internet Gateway, and security configurations:
+
 ```typescript
 import { Construct } from "constructs";
 import { AwsProvider, Vpc, Subnet, InternetGateway, RouteTable, RouteTableAssociation, NetworkAcl, NetworkAclRule, SecurityGroup, SecurityGroupRule } from "cdktf";
