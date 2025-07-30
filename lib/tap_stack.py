@@ -8,7 +8,7 @@ from cdktf_cdktf_provider_aws.provider import AwsProvider
 # Import the SecureAwsEnvironment stack from your tap.py file
 # Make sure tap.py is in the same directory or accessible in your Python path
 from cdktf_cdktf_provider_aws.s3_bucket import S3Bucket
-from tap import SecureAwsEnvironment
+from tap import SecureAwsEnvironment # This imports the SecureAwsEnvironment class
 
 # ----- ENVIRONMENT CONFIG (Global variables for the entire script) -----
 # These are the primary source of configuration values from environment variables
@@ -19,10 +19,19 @@ global_aws_region = os.getenv("AWS_REGION", "us-east-1")
 global_repository_name = os.getenv("REPOSITORY", "unknown")
 global_commit_author = os.getenv("COMMIT_AUTHOR", "unknown")
 
-# Define accounts and regions for SecureAwsEnvironment instantiations
+# Define DEV_ACCOUNT_ID and PROD_ACCOUNT_ID globally by reading from environment variables
+DEV_ACCOUNT_ID = os.getenv("DEV_ACCOUNT_ID")
+PROD_ACCOUNT_ID = os.getenv("PROD_ACCOUNT_ID")
+
+# Ensure account IDs are set, otherwise raise an error
+if not DEV_ACCOUNT_ID or not PROD_ACCOUNT_ID:
+  raise ValueError("DEV_ACCOUNT_ID and PROD_ACCOUNT_ID must be set as environment variables.")
+
+# Define accounts and regions for SecureAwsEnvironment instantiations globally
+# CORRECTED: This should be a dictionary, not a set containing a dictionary
 accounts = {
-    "dev": "405184066547",
-    "prod": "405184066547"
+    "dev": DEV_ACCOUNT_ID,
+    "prod": PROD_ACCOUNT_ID
 }
 regions = ["us-east-1", "eu-west-1"]
 
@@ -86,10 +95,10 @@ class TapStack(TerraformStack):
     # ! Do NOT create resources directly in this stack.
     # ! Instead, create separate stacks for each resource type.
 
-    # Instantiate SecureAwsEnvironment stacks for each account and region
-    # These also need to be inside the __init__ method to have access to 'self'
-    for env, account_id in accounts.items():
-      for region in regions:
+    # Loop through the globally defined accounts and regions to \
+    # instantiate SecureAwsEnvironment stacks
+    for env, account_id in accounts.items(): # Use the global 'accounts' dictionary
+      for region in regions: # Use the global 'regions' list
         SecureAwsEnvironment(
           self,  # Use 'self' as the scope for these nested stacks
           f"SecureStack-{env}-{region.replace('-', '')}",
@@ -97,7 +106,6 @@ class TapStack(TerraformStack):
           region=region,
           environment=env,
         )
-
 
 # ----- STACK EXECUTION -----
 # This is the entry point for your CDKTF application
