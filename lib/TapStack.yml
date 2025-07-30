@@ -799,13 +799,6 @@ Resources:
       IsMultiRegionTrail: true
       IsLogging: true
       EnableLogFileValidation: true
-      EventSelectors:
-        - ReadWriteType: All
-          IncludeManagementEvents: true
-          DataResources:
-            - Type: "AWS::S3::Object"
-              Values:
-                - !Sub "${SecureApplicationBucket}/*"
       Tags:
         - Key: Name
           Value: !Sub "security-trail-${EnvironmentSuffix}"

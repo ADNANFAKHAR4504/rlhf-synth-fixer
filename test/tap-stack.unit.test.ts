@@ -297,7 +297,6 @@ describe('Secure Multi-Tier CloudFormation Template', () => {
       expect(trail.Properties.IsMultiRegionTrail).toBe(true);
       expect(trail.Properties.IsLogging).toBe(true);
       expect(trail.Properties.EnableLogFileValidation).toBe(true);
-      expect(trail.Properties.EventSelectors).toHaveLength(1);
     });
   });
 

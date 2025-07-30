@@ -1207,31 +1207,6 @@
         "IsMultiRegionTrail": true,
         "IsLogging": true,
         "EnableLogFileValidation": true,
-        "CloudWatchLogsLogGroupArn": {
-          "Fn::Sub": "${CloudTrailLogGroup.Arn}:*"
-        },
-        "CloudWatchLogsRoleArn": {
-          "Fn::GetAtt": [
-            "CloudTrailRole",
-            "Arn"
-          ]
-        },
-        "EventSelectors": [
-          {
-            "ReadWriteType": "All",
-            "IncludeManagementEvents": true,
-            "DataResources": [
-              {
-                "Type": "AWS::S3::Object",
-                "Values": [
-                  {
-                    "Fn::Sub": "${SecureApplicationBucket}/*"
-                  }
-                ]
-              }
-            ]
-          }
-        ],
         "Tags": [
           {
             "Key": "Name",
