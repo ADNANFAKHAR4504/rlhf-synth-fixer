@@ -34,7 +34,6 @@ cfn-flip-to-yaml = "cfn-flip -y lib/TapStack.json"
 test-py-unit = "python -m pytest -s tests/unit/ --cov=lib/ --cov-report=term-missing --cov-report=json:cov.json --cov-fail-under=70 --cov-branch -l --testdox"
 test-py-integration = "python -m pytest -s tests/integration/ --no-cov"
 pulumi-login = "pulumi login \"$PULUMI_BACKEND_URL\""
-[scripts]
 pulumi-create-stack = "pulumi stack select \"TapStack${ENVIRONMENT_SUFFIX}\" --create || (pulumi stack init \"TapStack${ENVIRONMENT_SUFFIX}\" && pulumi config set aws:region us-east-1 --stack \"TapStack${ENVIRONMENT_SUFFIX}\" && pulumi config set tap:env \"${ENVIRONMENT_SUFFIX}\" --stack \"TapStack${ENVIRONMENT_SUFFIX}\")"
 pulumi-deploy = "pulumi up --yes --stack TapStack${ENVIRONMENT_SUFFIX}"
 pulumi-destroy = "pulumi destroy --yes --non-interactive"
