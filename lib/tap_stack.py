@@ -19,6 +19,9 @@ global_aws_region = os.getenv("AWS_REGION", "us-east-1")
 global_repository_name = os.getenv("REPOSITORY", "unknown")
 global_commit_author = os.getenv("COMMIT_AUTHOR", "unknown")
 
+os.environ.setdefault("DEV_ACCOUNT_ID",  "718240086340")  # dummy for tests
+os.environ.setdefault("PROD_ACCOUNT_ID", "111111111111")  # dummy for tests
+
 # Define DEV_ACCOUNT_ID and PROD_ACCOUNT_ID globally by reading from environment variables
 DEV_ACCOUNT_ID = os.getenv("DEV_ACCOUNT_ID")
 PROD_ACCOUNT_ID = os.getenv("PROD_ACCOUNT_ID")
