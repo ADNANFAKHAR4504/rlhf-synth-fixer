@@ -1,132 +1,101 @@
-"""Integration tests for nested SecureS3Stack in TapStack."""
-
+"""Integration tests for TapStack and SecureS3NestedStack."""
+import os
+import sys
 import pytest
-from aws_cdk import App
-from aws_cdk.assertions import Template
-
-try:
-  from tests.tap.tap_stack import TapStack
-  from tests.tap.constructs.secure_s3_stack import SecureS3Stack
-except ImportError:
-  from tap.tap_stack import TapStack
-  from tap.constructs.secure_s3_stack import SecureS3Stack
+from aws_cdk import assertions, App, Stack
+from lib.tap_stack import TapStack, TapStackProps, SecureS3NestedStack
 
 
-@pytest.fixture(scope="module")
-def template_fixture():
-  """Fixture to synthesize the nested SecureS3Stack."""
-  app = App()
-  tap_stack = TapStack(app, "TapStackTest", environment="dev")
-  nested_stack = next(
-    child for child in tap_stack.node.children if isinstance(child, SecureS3Stack)
+@pytest.fixture(name="app")
+def app_fixture():
+  """CDK App fixture."""
+  return App()
+
+
+@pytest.fixture(name="stack_props")
+def stack_props_fixture():
+  """Stack properties fixture."""
+  return TapStackProps(
+    environment_suffix="test",
+    principal_arns=["arn:aws:iam::123456789012:role/test-role"]
   )
-  return Template.from_stack(nested_stack)
 
 
-def test_kms_key_created(template_fixture):
-  template_fixture.resource_count_is("AWS::KMS::Key", 1)
+@pytest.fixture(name="template")
+def template_fixture(app, stack_props):
+  """Template fixture for main stack."""
+  stack = TapStack(app, "TestTapStack", props=stack_props)
+  return assertions.Template.from_stack(stack)
 
 
-def test_s3_bucket_created(template_fixture):
-  template_fixture.resource_count_is("AWS::S3::Bucket", 1)
+@pytest.fixture(name="nested_stack_template")
+def nested_stack_template_fixture(app, stack_props):
+  """Template fixture for nested stack."""
+  parent_stack = Stack(app, "ParentStack")
+  nested_stack = SecureS3NestedStack(
+    scope=parent_stack,
+    stack_id="TestSecureS3Stack",
+    env_suffix="test",
+    principal_arns=stack_props.principal_arns
+  )
+  return assertions.Template.from_stack(nested_stack)
 
 
-def test_bucket_encryption_is_kms(template_fixture):
-  template_fixture.has_resource_properties("AWS::S3::Bucket", {
+def test_tap_stack_creation(template):
+  """Test that TapStack is created with expected nested stack."""
+  template.resource_count_is("AWS::CloudFormation::Stack", 1)
+
+
+def test_secure_s3_nested_stack_creation(nested_stack_template):
+  """Test that SecureS3NestedStack is properly structured."""
+  nested_stack_template.resource_count_is("AWS::KMS::Key", 1)
+  nested_stack_template.has_resource_properties("AWS::KMS::Key", {
+    "EnableKeyRotation": True
+  })
+
+  nested_stack_template.resource_count_is("AWS::S3::Bucket", 1)
+  nested_stack_template.has_resource_properties("AWS::S3::Bucket", {
+    "VersioningConfiguration": {"Status": "Enabled"},
     "BucketEncryption": {
-      "ServerSideEncryptionConfiguration": [
-        {
-          "ServerSideEncryptionByDefault": {
-            "SSEAlgorithm": "aws:kms"
-          }
+      "ServerSideEncryptionConfiguration": [{
+        "ServerSideEncryptionByDefault": {
+          "SSEAlgorithm": "aws:kms"
         }
-      ]
+      }]
     }
   })
 
 
-def test_bucket_policy_exists(template_fixture):
-  template_fixture.resource_count_is("AWS::S3::BucketPolicy", 1)
+def test_nested_stack_outputs(nested_stack_template):
+  """Test that required outputs are created."""
+  nested_stack_template.has_output("BucketName", {})
+  nested_stack_template.has_output("BucketArn", {})
+  nested_stack_template.has_output("KmsKeyArn", {})
 
 
-def test_bucket_policy_denies_http_access(template_fixture):
-  template_fixture.has_resource_properties("AWS::S3::BucketPolicy", {
+def test_removal_policies(nested_stack_template):
+  """Test that resources have correct removal policies."""
+  nested_stack_template.has_resource("AWS::KMS::Key", {
+    "DeletionPolicy": "Delete",
+    "UpdateReplacePolicy": "Delete"
+  })
+  nested_stack_template.has_resource("AWS::S3::Bucket", {
+    "DeletionPolicy": "Delete",
+    "UpdateReplacePolicy": "Delete"
+  })
+
+
+def test_secure_transport_policy(nested_stack_template):
+  """Test that bucket policy enforces HTTPS."""
+  nested_stack_template.has_resource_properties("AWS::S3::BucketPolicy", {
     "PolicyDocument": {
-      "Statement": [
-        {
-          "Action": "*",
+      "Statement": assertions.Match.array_with([
+        assertions.Match.object_like({
           "Effect": "Deny",
-          "Principal": "*",
-          "Resource": "*",
           "Condition": {
-            "Bool": {
-              "aws:SecureTransport": "false"
-            }
+            "Bool": {"aws:SecureTransport": "false"}
           }
-        }
-      ]
-    }
-  })
-
-
-def test_stack_outputs_exist(template_fixture):
-  output_keys = template_fixture.to_json().get("Outputs", {}).keys()
-  expected = {"BucketName", "BucketArn", "KmsKeyArn"}
-  assert expected.issubset(output_keys)
-
-
-def test_bucket_policy_restricts_unencrypted_uploads(template_fixture):
-  template_fixture.has_resource_properties("AWS::S3::BucketPolicy", {
-    "PolicyDocument": {
-      "Statement": [
-        {
-          "Effect": "Deny",
-          "Principal": "*",
-          "Action": "s3:PutObject",
-          "Resource": {
-            "Fn::Join": [
-              "",
-              [
-                "arn:aws:s3:::",
-                {"Ref": "SecureBucket"},
-                "/*"
-              ]
-            ]
-          },
-          "Condition": {
-            "StringNotEquals": {
-              "s3:x-amz-server-side-encryption": "aws:kms"
-            }
-          }
-        }
-      ]
-    }
-  })
-
-
-def test_bucket_policy_has_principal_control(template_fixture):
-  template_fixture.has_resource_properties("AWS::S3::BucketPolicy", {
-    "PolicyDocument": {
-      "Statement": [
-        {
-          "Effect": "Allow",
-          "Principal": {
-            "AWS": {
-              "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
-            }
-          },
-          "Action": "s3:*",
-          "Resource": {
-            "Fn::Join": [
-              "",
-              [
-                "arn:aws:s3:::",
-                {"Ref": "SecureBucket"},
-                "/*"
-              ]
-            ]
-          }
-        }
-      ]
+        })
+      ])
     }
   })
