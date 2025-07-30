@@ -26,36 +26,15 @@ describe('TAP Stack Integration Tests', () => {
   });
 
   test('Public subnets exist in different AZs and are mapped to VPC', async () => {
-    const result = await client.send(new DescribeSubnetsCommand({
-      Filters: [{ Name: 'vpc-id', Values: [vpcId] }]
-    }));
+    const result = await client.send(new DescribeSubnetsCommand({ Filters: [{ Name: 'vpc-id', Values: [vpcId] }] }));
     const subnets = result.Subnets || [];
 
-    // 🔍 Log all subnet info
-    console.log('--- All Subnets ---');
-    subnets.forEach((s) => {
-      console.log(`SubnetId: ${s.SubnetId}, AZ: ${s.AvailabilityZone}, MapPublicIpOnLaunch: ${s.MapPublicIpOnLaunch}, Tags: ${JSON.stringify(s.Tags)}`);
-    });
+    const publicSubnets = subnets.filter((s) => s.MapPublicIpOnLaunch);
+    expect(publicSubnets.length).toBe(2);
 
-    // ✅ Prefer MapPublicIpOnLaunch if available
-    let publicSubnets = subnets.filter((s) => s.MapPublicIpOnLaunch);
-
-    // 🔁 Fallback to Environment tag if not enough public subnets are detected
-    if (publicSubnets.length < 2) {
-      console.warn('⚠️ Detected fewer than 2 subnets with MapPublicIpOnLaunch=true, falling back to tag-based filter...');
-      publicSubnets = subnets.filter((s) =>
-        s.Tags?.some((t) => t.Key === 'Environment' && t.Value?.toLowerCase() === 'dev')
-      );
-    }
-
-    // ✅ Assertion for 2 public subnets
-    expect(publicSubnets.length).toBeGreaterThanOrEqual(2);
-
-    // ✅ Subnets must be in different AZs
     const azSet = new Set(publicSubnets.map((s) => s.AvailabilityZone));
-    expect(azSet.size).toBeGreaterThanOrEqual(2);
+    expect(azSet.size).toBe(2); // different AZs
 
-    // ✅ Save subnet IDs for downstream tests
     subnetIds = publicSubnets.map((s) => s.SubnetId!);
   });
 
