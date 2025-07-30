@@ -39,7 +39,12 @@
     "release": "semantic-release"
   },
   "devDependencies": {
+<<<<<<< HEAD
     "@aws-sdk/client-api-gateway": "^3.855.0",
+=======
+    "@aws-sdk/client-api-gateway": "^3.848.0",
+    "@aws-sdk/client-apigatewayv2": "^3.856.0",
+>>>>>>> 6bbcb5d59230e57730cf0984cd760c351580463a
     "@aws-sdk/client-auto-scaling": "^3.846.0",
     "@aws-sdk/client-cloudformation": "^3.848.0",
     "@aws-sdk/client-cloudfront": "^3.846.0",
