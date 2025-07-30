@@ -222,13 +222,28 @@
                 "Fn::Sub": "https://${projectXHttpApi}.execute-api.${AWS::Region}.amazonaws.com"
             }
         },
-        "LambdaFunctionArn": {
-            "Description": "ARN of the Lambda function",
+        "LambdaFunctionName": {
+            "Description": "Name of the Lambda function",
             "Value": {
-                "Fn::GetAtt": [
-                    "projectXLambdaFunction",
-                    "Arn"
-                ]
+                "Ref": "projectXLambdaFunction"
+            }
+        },
+        "ApiGatewayId": {
+            "Description": "ID of the API Gateway",
+            "Value": {
+                "Ref": "projectXHttpApi"
+            }
+        },
+        "ApiIntegrationId": {
+            "Description": "ID of the Lambda integration with API Gateway",
+            "Value": {
+                "Ref": "projectXLambdaIntegration"
+            }
+        },
+        "LambdaLogGroupName": {
+            "Description": "Name of the CloudWatch Log Group for Lambda",
+            "Value": {
+                "Ref": "projectXLambdaLogGroup"
             }
         }
     }

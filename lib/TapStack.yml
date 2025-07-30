@@ -150,6 +150,19 @@ Outputs:
   ApiGatewayUrl:
     Description: URL of the API Gateway
     Value: !Sub "https://${projectXHttpApi}.execute-api.${AWS::Region}.amazonaws.com"
-  LambdaFunctionArn:
-    Description: ARN of the Lambda function
-    Value: !GetAtt projectXLambdaFunction.Arn
+
+  LambdaFunctionName:
+    Description: Name of the Lambda function
+    Value: !Ref projectXLambdaFunction
+
+  ApiGatewayId:
+    Description: ID of the API Gateway
+    Value: !Ref projectXHttpApi
+
+  ApiIntegrationId:
+    Description: ID of the Lambda integration with API Gateway
+    Value: !Ref projectXLambdaIntegration
+
+  LambdaLogGroupName:
+    Description: Name of the CloudWatch Log Group for Lambda
+    Value: !Ref projectXLambdaLogGroup
