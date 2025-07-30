@@ -19,8 +19,6 @@
     "start": "ts-node cli/create-task.ts",
     "lint": "eslint .",
     "watch": "tsc -w",
-    "format": "prettier --write 'lib/*.{ts,tsx}' 'test/*.{ts,tsx}'",
-    "format:check": "prettier --check 'lib/*.{ts,tsx}'",
     "test": "jest --coverage",
     "test:unit": "jest --coverage --testPathPattern=\\.unit\\.test\\.ts$",
     "test:unit-cdktf": "jest --coverage --testPathPattern=\\.unit\\.test\\.ts$ --setupFilesAfterEnv=['<rootDir>/test/setup.js']",
@@ -42,7 +40,7 @@
   },
   "devDependencies": {
     "@aws-sdk/client-api-gateway": "^3.848.0",
-    "@aws-sdk/client-application-auto-scaling": "^3.855.0",
+    "@aws-sdk/client-apigatewayv2": "^3.856.0",
     "@aws-sdk/client-auto-scaling": "^3.846.0",
     "@aws-sdk/client-cloudformation": "^3.848.0",
     "@aws-sdk/client-cloudfront": "^3.846.0",
@@ -59,9 +57,9 @@
     "@aws-sdk/client-rds": "^3.846.0",
     "@aws-sdk/client-route-53": "^3.848.0",
     "@aws-sdk/client-s3": "^3.848.0",
-    "@aws-sdk/client-servicediscovery": "^3.855.0",
     "@aws-sdk/client-sfn": "^3.848.0",
     "@aws-sdk/client-sns": "^3.846.0",
+    "@aws-sdk/client-ssm": "^3.848.0",
     "@aws-sdk/client-wafv2": "^3.848.0",
     "@aws-sdk/credential-provider-node": "^3.846.0",
     "@inquirer/prompts": "^7.7.1",
@@ -104,13 +102,10 @@
     "typescript": "^5.8.3"
   },
   "dependencies": {
-    "@aws-sdk/client-acm": "^3.848.0",
-    "@aws-sdk/client-ecs": "^3.848.0",
     "@aws-sdk/client-elastic-load-balancing-v2": "^3.848.0",
-    "@aws-sdk/client-ssm": "^3.848.0",
     "@aws-sdk/client-wafv2": "^3.848.0",
     "@cdktf/provider-aws": "21.3.0",
-    "aws-cdk-lib": "2.202.0",
+    "aws-cdk-lib": "2.204.0",
     "cdktf": "^0.21.0",
     "cdktf-cli": "0.21.0",
     "constructs": "10.4.2"
