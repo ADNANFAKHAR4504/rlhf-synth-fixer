@@ -338,13 +338,13 @@ import { Construct } from 'constructs';
 
 ```typescript
 new TapStack(app, `TapStack${env}`, {
-  env: { region: 'us-west-2' }, // Hardcoded region
+  env: { region: 'us-east-1' }, // Hardcoded region
 });
 ```
 
 **PROMPT Requirements:**
 
-- Deploy in 'us-west-2' region ✅
+- Deploy in 'us-east-1' region ✅
 - Support environment-specific deployments ✅
 
 **IDEAL_RESPONSE Solution:**

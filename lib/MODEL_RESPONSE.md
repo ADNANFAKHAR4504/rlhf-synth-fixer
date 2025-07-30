@@ -73,6 +73,6 @@ class TapStack extends cdk.Stack {
 const app = new cdk.App();
 const env = app.node.tryGetContext('environmentSuffix') || 'dev';
 new TapStack(app, `TapStack${env}`, {
-  env: { region: 'us-west-2' },
+  env: { region: 'us-east-1' },
 });
 ```

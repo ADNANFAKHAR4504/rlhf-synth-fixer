@@ -9,7 +9,7 @@ As a cloud engineer, your task is to set up a basic cloud environment using AWS 
    - Configure the bucket with `blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL` to ensure it remains private
 
 2. **EC2 Instance Setup**
-   - Deploy a 't2.micro' EC2 instance in the 'us-west-2' region
+   - Deploy a 't2.micro' EC2 instance in the 'us-east-1' region
    - Use the latest Amazon Linux 2 AMI for the EC2 instance
    - Since a custom VPC is not requested, deploy the EC2 instance into the default VPC for simplicity
 
@@ -35,7 +35,7 @@ As a cloud engineer, your task is to set up a basic cloud environment using AWS 
 - **Tool**: AWS CDK
 - **Language**: TypeScript
 - **Cloud Provider**: AWS
-- **Region**: us-west-2
+- **Region**: us-east-1
 - **Template**: Single, self-contained file that can be deployed directly
 - **Stack Naming**: Use `TapStack${ENVIRONMENT_SUFFIX}` pattern for environment-specific deployments
 - **Context Support**: Stack must support `environmentSuffix` context parameter from CDK commands

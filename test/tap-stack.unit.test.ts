@@ -1,5 +1,5 @@
 import * as cdk from 'aws-cdk-lib';
-import { Template, Match } from 'aws-cdk-lib/assertions';
+import { Match, Template } from 'aws-cdk-lib/assertions';
 import { TapStack } from '../lib/tap-stack';
 
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
@@ -8,31 +8,32 @@ const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 function createAppWithVpcContext(additionalContext?: any): cdk.App {
   return new cdk.App({
     context: {
-      'vpc-provider:account=123456789012:filter.isDefault=true:region=us-west-2:returnAsymmetricSubnets=true': {
-        vpcId: 'vpc-12345',
-        vpcCidrBlock: '172.31.0.0/16',
-        availabilityZones: ['us-west-2a', 'us-west-2b'],
-        subnetGroups: [
-          {
-            name: 'Public',
-            type: 'Public',
-            subnets: [
-              {
-                subnetId: 'subnet-12345',
-                cidr: '172.31.0.0/20',
-                availabilityZone: 'us-west-2a',
-                routeTableId: 'rtb-12345',
-              },
-              {
-                subnetId: 'subnet-67890',
-                cidr: '172.31.16.0/20',
-                availabilityZone: 'us-west-2b',
-                routeTableId: 'rtb-67890',
-              },
-            ],
-          },
-        ],
-      },
+      'vpc-provider:account=123456789012:filter.isDefault=true:region=us-east-1:returnAsymmetricSubnets=true':
+        {
+          vpcId: 'vpc-12345',
+          vpcCidrBlock: '172.31.0.0/16',
+          availabilityZones: ['us-east-1a', 'us-east-1b'],
+          subnetGroups: [
+            {
+              name: 'Public',
+              type: 'Public',
+              subnets: [
+                {
+                  subnetId: 'subnet-12345',
+                  cidr: '172.31.0.0/20',
+                  availabilityZone: 'us-east-1a',
+                  routeTableId: 'rtb-12345',
+                },
+                {
+                  subnetId: 'subnet-67890',
+                  cidr: '172.31.16.0/20',
+                  availabilityZone: 'us-east-1b',
+                  routeTableId: 'rtb-67890',
+                },
+              ],
+            },
+          ],
+        },
       ...additionalContext,
     },
   });
@@ -45,11 +46,11 @@ describe('TapStack Unit Tests', () => {
 
   beforeEach(() => {
     app = createAppWithVpcContext();
-    stack = new TapStack(app, 'TestTapStack', { 
+    stack = new TapStack(app, 'TestTapStack', {
       environmentSuffix,
       env: {
         account: '123456789012',
-        region: 'us-west-2',
+        region: 'us-east-1',
       },
     });
     template = Template.fromStack(stack);
@@ -63,28 +64,30 @@ describe('TapStack Unit Tests', () => {
 
     test('TapStack uses environmentSuffix from props', () => {
       const customApp = createAppWithVpcContext();
-      const customStack = new TapStack(customApp, 'TestTapStackWithProps', { 
+      const customStack = new TapStack(customApp, 'TestTapStackWithProps', {
         environmentSuffix: 'prod',
         env: {
           account: '123456789012',
-          region: 'us-west-2',
+          region: 'us-east-1',
         },
       });
-      
+
       expect(customStack).toBeDefined();
       const customTemplate = Template.fromStack(customStack);
       expect(customTemplate).toBeDefined();
     });
 
     test('TapStack uses environmentSuffix from context', () => {
-      const customApp = createAppWithVpcContext({ environmentSuffix: 'staging' });
+      const customApp = createAppWithVpcContext({
+        environmentSuffix: 'staging',
+      });
       const customStack = new TapStack(customApp, 'TestTapStackWithContext', {
         env: {
           account: '123456789012',
-          region: 'us-west-2',
+          region: 'us-east-1',
         },
       });
-      
+
       expect(customStack).toBeDefined();
       const customTemplate = Template.fromStack(customStack);
       expect(customTemplate).toBeDefined();
@@ -95,10 +98,10 @@ describe('TapStack Unit Tests', () => {
       const customStack = new TapStack(customApp, 'TestTapStackDefault', {
         env: {
           account: '123456789012',
-          region: 'us-west-2',
+          region: 'us-east-1',
         },
       });
-      
+
       expect(customStack).toBeDefined();
       const customTemplate = Template.fromStack(customStack);
       expect(customTemplate).toBeDefined();
@@ -109,10 +112,12 @@ describe('TapStack Unit Tests', () => {
     test('creates AllowedSshIp parameter with correct properties', () => {
       template.hasParameter('AllowedSshIp', {
         Type: 'String',
-        Description: 'IP address allowed for SSH access to EC2 instance',
-        Default: '0.0.0.0/0',
+        Description:
+          'IP address range allowed for SSH access to EC2 instance (CIDR format)',
+        Default: '10.0.0.0/8',
         AllowedPattern: '^(?:[0-9]{1,3}\\.){3}[0-9]{1,3}/[0-9]{1,2}$',
-        ConstraintDescription: 'Must be a valid IP address in CIDR format (e.g., 1.2.3.4/32)',
+        ConstraintDescription:
+          'Must be a valid IP address range in CIDR format (e.g., 10.0.0.0/16 or 192.168.1.0/24)',
       });
     });
   });
@@ -168,7 +173,8 @@ describe('TapStack Unit Tests', () => {
           ],
           Version: '2012-10-17',
         },
-        Description: 'IAM role for TapStack EC2 instance',
+        Description:
+          'IAM role for TapStack EC2 instance with least privilege access',
       });
     });
 
@@ -210,13 +216,14 @@ describe('TapStack Unit Tests', () => {
   describe('Security Group Configuration', () => {
     test('creates security group with SSH access rule', () => {
       template.hasResourceProperties('AWS::EC2::SecurityGroup', {
-        GroupDescription: 'Security group for TapStack EC2 instance',
+        GroupDescription:
+          'Security group for TapStack EC2 instance with restricted access',
         SecurityGroupIngress: [
           {
             CidrIp: {
               Ref: 'AllowedSshIp',
             },
-            Description: 'SSH access from specified IP',
+            Description: 'SSH access from specified IP range only',
             FromPort: 22,
             IpProtocol: 'tcp',
             ToPort: 22,
@@ -297,7 +304,7 @@ describe('TapStack Unit Tests', () => {
     test('applies consistent tags to all resources', () => {
       const resources = template.findResources('AWS::S3::Bucket');
       const bucketLogicalId = Object.keys(resources)[0];
-      
+
       expect(resources[bucketLogicalId].Properties?.Tags).toEqual(
         expect.arrayContaining([
           { Key: 'Environment', Value: environmentSuffix },
@@ -373,11 +380,11 @@ describe('TapStack Unit Tests', () => {
   describe('Environment Suffix Integration', () => {
     test('resource names include environment suffix', () => {
       const customApp = createAppWithVpcContext();
-      const customStack = new TapStack(customApp, 'TestTapStackCustom', { 
+      const customStack = new TapStack(customApp, 'TestTapStackCustom', {
         environmentSuffix: 'test',
         env: {
           account: '123456789012',
-          region: 'us-west-2',
+          region: 'us-east-1',
         },
       });
       const customTemplate = Template.fromStack(customStack);
