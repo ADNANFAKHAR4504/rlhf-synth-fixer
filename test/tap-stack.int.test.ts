@@ -28,7 +28,7 @@ describe('projectX Serverless Stack Integration Tests', () => {
 
     expect(res.Configuration?.FunctionName).toBe(outputs.LambdaFunctionName);
     expect(res.Configuration?.Runtime).toBeDefined();
-    expect(res.Configuration?.Role).toContain('lambda');
+    expect(res.Configuration?.Role).toMatch(/^arn:aws:iam::\d{12}:role\/.+/);
   });
 
   test('API Gateway should exist and match expected name', async () => {
@@ -43,7 +43,7 @@ describe('projectX Serverless Stack Integration Tests', () => {
   test('API Gateway integration should be valid', async () => {
     const res = await apigw.send(new GetIntegrationCommand({
       ApiId: outputs.ApiGatewayId,
-      IntegrationId: outputs.ApiGatewayIntegrationId,
+      IntegrationId: outputs.ApiIntegrationId,
     }));
 
     expect(res.IntegrationType).toBe('AWS_PROXY');
@@ -67,7 +67,7 @@ describe('projectX Serverless Stack Integration Tests', () => {
       'LambdaFunctionName',
       'LambdaFunctionArn',
       'ApiGatewayId',
-      'ApiGatewayIntegrationId',
+      'ApiIntegrationId',
       'ApiGatewayUrl',
     ];
 
