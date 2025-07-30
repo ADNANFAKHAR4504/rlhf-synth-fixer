@@ -7,6 +7,15 @@ function promiseOf<T>(output: pulumi.Output<T>): Promise<T> {
   return new Promise(resolve => output.apply(resolve));
 }
 
+// Define the shape of the IAM policy for TypeScript
+interface IamPolicy {
+  Statement: {
+    Principal: {
+      Service: string;
+    };
+  }[];
+}
+
 describe('ServerlessApp Infrastructure', () => {
   let stack: TapStack;
   const mockTags = {
@@ -75,11 +84,13 @@ describe('ServerlessApp Infrastructure', () => {
   describe('IAM Role and Policy', () => {
     it('creates an IAM role for the Lambda function with correct tags', async () => {
       expect(stack.lambdaRole).toBeDefined();
-      const policyString = await promiseOf(stack.lambdaRole.assumeRolePolicy);
-      const policyObject = JSON.parse(policyString); 
 
-      // Add this line to declare the 'tags' variable
-      const tags = await promiseOf(stack.lambdaRole.tags); 
+      // FIX: Cast the result to the IamPolicy interface instead of 'any'.
+      const policyObject = (await promiseOf(
+        stack.lambdaRole.assumeRolePolicy as any
+      )) as IamPolicy;
+
+      const tags = await promiseOf(stack.lambdaRole.tags);
 
       expect(policyObject.Statement[0].Principal.Service).toBe(
         'lambda.amazonaws.com'
