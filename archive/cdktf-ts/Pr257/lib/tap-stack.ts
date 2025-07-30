@@ -6,7 +6,7 @@ import { S3Backend, TerraformStack } from 'cdktf';
 import { Construct } from 'constructs';
 
 // ? Import your stacks here
-// import { MyStack } from './my-stack';
+import { SecureVpcStack } from './secure-vpc-stack';
 
 interface TapStackProps {
   environmentSuffix?: string;
@@ -18,8 +18,7 @@ interface TapStackProps {
 
 // If you need to override the AWS Region for the terraform provider for any particular task,
 // you can set it here. Otherwise, it will default to 'us-east-1'.
-
-const AWS_REGION_OVERRIDE = '';
+const AWS_REGION_OVERRIDE = 'us-west-2'; // hardcoded to us-west-2 as per task requirement
 
 export class TapStack extends TerraformStack {
   constructor(scope: Construct, id: string, props?: TapStackProps) {
@@ -51,7 +50,6 @@ export class TapStack extends TerraformStack {
     this.addOverride('terraform.backend.s3.use_lockfile', true);
 
     // ? Add your stack instantiations here
-    // ! Do NOT create resources directly in this stack.
-    // ! Instead, create separate stacks for each resource type.
+    new SecureVpcStack(this, `secure-vpc-stack-${environmentSuffix}`);
   }
 }

@@ -173,3 +173,16 @@ templates/
 ```
 
 Each template contains a complete project structure that gets copied when creating a new RLHF task.
+
+## Special Instructions/Guidelines for CDK Terraform
+
+- The workflow has been created in a way that the trainer does not need to worry about configuring the AWS Provider or the Remote S3 Backend - it comes configured in the `lib/tap-stack.ts` or `lib/tap-stack.py` file.
+- To ensure the above setup executes correctly, please make any stacks you create extend the `Construct` class instead of the `TerraformStack` class, as opposed to the usual practice. The `TerraformStack` requires its own backend to be configured and we do not want a situation of duplicate backends in the same application, across stacks.
+- Please prompt the LLM models you use for the problem accordingly - include something like the following snippet in your prompt - 
+  ```
+  - Complete **CDKTF code in TypeScript**, including all necessary imports and constructs
+    - Create the entire solution as a single stack. 
+    - Make the stack extend the Construct class instead of the TerraformStack class. 
+    - Omit code to initialize AWS Providers or backends.
+    - Generate only the code for this stack, do not include main entrypoint code.
+  ```
