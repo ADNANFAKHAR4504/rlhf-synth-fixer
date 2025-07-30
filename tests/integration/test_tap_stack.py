@@ -123,22 +123,22 @@ PIPELINE_NAME = "TuringCodePipelineTerraform"  # Must match the pipeline_name in
 REGION = "us-east-1"  # Change to your desired region
 
 def run_cli(command):
-    """Run a shell command and return its output."""
-    result = subprocess.run(command, shell=True, capture_output=True, text=True)
-    if result.returncode != 0:
-        raise RuntimeError(f"Command failed: {command}\n{result.stderr}")
-    return result.stdout
+  """Run a shell command and return its output."""
+  result = subprocess.run(command, shell=True, capture_output=True, text=True, check=False)
+  if result.returncode != 0:
+    raise RuntimeError(f"Command failed: {command}\n{result.stderr}")
+  return result.stdout
 
 
 def test_pipeline_exists():
-    """Check if the specified CodePipeline exists."""
-    print(f"[INFO] Checking if pipeline '{PIPELINE_NAME}' exists...")
+  """Check if the specified CodePipeline exists."""
+  print(f"[INFO] Checking if pipeline '{PIPELINE_NAME}' exists...")
 
-    # List pipelines and check for the target pipeline name
-    pipelines_output = run_cli(f"aws codepipeline list-pipelines --region {REGION}")
-    pipelines_data = json.loads(pipelines_output)
+  # List pipelines and check for the target pipeline name
+  pipelines_output = run_cli(f"aws codepipeline list-pipelines --region {REGION}")
+  pipelines_data = json.loads(pipelines_output)
 
-    pipeline_names = [p["name"] for p in pipelines_data.get("pipelines", [])]
-    
-    assert PIPELINE_NAME in pipeline_names, f"[FAIL] Pipeline '{PIPELINE_NAME}' does not exist."
-    print(f"[OK] Pipeline '{PIPELINE_NAME}' exists.")
+  pipeline_names = [p["name"] for p in pipelines_data.get("pipelines", [])]
+  
+  assert PIPELINE_NAME in pipeline_names, f"[FAIL] Pipeline '{PIPELINE_NAME}' does not exist."
+  print(f"[OK] Pipeline '{PIPELINE_NAME}' exists.")

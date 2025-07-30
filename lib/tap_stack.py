@@ -5,6 +5,8 @@ It orchestrates the instantiation of other resource-specific stacks and
 manages environment-specific configurations.
 """
 
+import os
+import zipfile
 from typing import Optional
 from aws_cdk import (
     aws_s3 as s3,
@@ -16,25 +18,25 @@ from aws_cdk import (
     aws_codebuild as codebuild,
     RemovalPolicy,
 )
-import os
+
 import aws_cdk as cdk
 from constructs import Construct
-import zipfile
+
 
 def zip_directory_contents(source_dir: str, output_zip: str):
-    """
-    Zip all contents (files & subfolders) inside `source_dir` into `output_zip`
-    without including the top-level folder itself.
-    """
-    with zipfile.ZipFile(output_zip, 'w', zipfile.ZIP_DEFLATED) as zipf:
-      for root, dirs, files in os.walk(source_dir):
-        for file in files:
-          # Skip hidden files if necessary
-          if file.startswith('.'):
-            continue
-          file_path = os.path.join(root, file)
-          arcname = os.path.relpath(file_path, source_dir)
-          zipf.write(file_path, arcname)
+  """
+  Zip all contents (files & subfolders) inside `source_dir` into `output_zip`
+  without including the top-level folder itself.
+  """
+  with zipfile.ZipFile(output_zip, 'w', zipfile.ZIP_DEFLATED) as zipf:
+    for root, dirs, files in os.walk(source_dir):
+      for file in files:
+        # Skip hidden files if necessary
+        if file.startswith('.'):
+          continue
+        file_path = os.path.join(root, file)
+        arcname = os.path.relpath(file_path, source_dir)
+        zipf.write(file_path, arcname)
 
 
 class TapStackProps(cdk.StackProps):
@@ -220,8 +222,3 @@ class TapStack(cdk.Stack):
     )
 
     pipeline.add_stage(stage_name="Deploy", actions=[deploy_action])
-
-
-
-
-
