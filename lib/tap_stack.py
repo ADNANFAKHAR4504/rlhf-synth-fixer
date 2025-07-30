@@ -29,11 +29,7 @@ class TapStackArgs:
 
   def __init__(self, environment_suffix: Optional[str] = None, tags: Optional[dict] = None):
     self.environment_suffix = environment_suffix or 'dev'
-    self.tags = tags or {
-      "Environment": self.environment_suffix,
-      "Owner": "test-user",
-      "Project": "pulumi-dummy"
-    }
+    self.tags = tags
 
 
 class TapStack(pulumi.ComponentResource):

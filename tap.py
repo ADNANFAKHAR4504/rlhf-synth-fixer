@@ -33,9 +33,5 @@ default_tags = {
 
 stack = TapStack(
     name="tap-infra",
-    args=TapStackArgs(
-        environment_suffix="dev",
-        tags=default_tags  # ← Tags go in TapStackArgs, not ResourceOptions
-    ),
-    opts=ResourceOptions(parent=None)  # ← No tags here
+    args=TapStackArgs(environment_suffix=environment_suffix),
 )
