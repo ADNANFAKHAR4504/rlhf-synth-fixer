@@ -195,10 +195,10 @@ class TestTapStackIntegration(unittest.TestCase):
     try:
       # Step 1: Upload a file to S3
       self.s3_client.put_object(
-      Bucket=self.bucket_name,
-      Key=test_key,
-      Body=test_content.encode('utf-8'),
-      ContentType='text/plain'
+        Bucket=self.bucket_name,
+        Key=test_key,
+        Body=test_content.encode('utf-8'),
+        ContentType='text/plain'
       )
 
       # Step 2: Wait for Lambda to process the event
@@ -214,7 +214,7 @@ class TestTapStackIntegration(unittest.TestCase):
             TableName=self.table_name,
             FilterExpression='object_key = :key',
             ExpressionAttributeValues={
-                    ':key': {'S': test_key}
+              ':key': {'S': test_key}
             }
           )
 
@@ -259,30 +259,30 @@ class TestTapStackIntegration(unittest.TestCase):
   def test_lambda_direct_invocation(self):
     """Test that Lambda function can be invoked directly with a mock S3 event"""
     test_event = {
-    "Records": [
-    {
-            "eventSource": "aws:s3",
-            "eventName": "s3:ObjectCreated:Put",
-            "eventTime": "2023-01-01T00:00:00.000Z",
-            "awsRegion": "us-east-1",
-            "s3": {
-                    "bucket": {"name": self.bucket_name},
-                    "object": {
-                            "key": f"direct-test-{int(time.time())}.txt",
-                            "size": 1024,
-                            "eTag": "test-etag"
-                    }
+      "Records": [
+        {
+          "eventSource": "aws:s3",
+          "eventName": "s3:ObjectCreated:Put",
+          "eventTime": "2023-01-01T00:00:00.000Z",
+          "awsRegion": "us-east-1",
+          "s3": {
+            "bucket": {"name": self.bucket_name},
+            "object": {
+              "key": f"direct-test-{int(time.time())}.txt",
+              "size": 1024,
+              "eTag": "test-etag"
             }
-    }
-    ]
+          }
+        }
+      ]
     }
 
     try:
       # Invoke Lambda function directly
       response = self.lambda_client.invoke(
-      FunctionName=self.lambda_name,
-      InvocationType='RequestResponse',
-      Payload=json.dumps(test_event)
+        FunctionName=self.lambda_name,
+        InvocationType='RequestResponse',
+        Payload=json.dumps(test_event)
       )
 
       # Check response
@@ -305,43 +305,43 @@ class TestTapStackIntegration(unittest.TestCase):
     try:
       # Get Lambda function to find its role
       function_response = self.lambda_client.get_function(
-      FunctionName=self.lambda_name)
+        FunctionName=self.lambda_name)
       role_arn = function_response['Configuration']['Role']
       role_name = role_arn.split('/')[-1]
 
       # List attached policies
       policies_response = self.iam_client.list_attached_role_policies(
-      RoleName=role_name)
+        RoleName=role_name)
       attached_policies = [p['PolicyArn'].split('/')[-1]
-       for p in policies_response.get('AttachedPolicies', [])]
+                           for p in policies_response.get('AttachedPolicies', [])]
 
       # Check basic execution role is attached
       self.assertIn('AWSLambdaBasicExecutionRole', attached_policies)
       # List inline policies
       inline_policies_response = self.iam_client.list_role_policies(
-      RoleName=role_name)
+        RoleName=role_name)
       inline_policies = inline_policies_response.get('PolicyNames', [])
 
       # Verify at least one inline policy exists
       self.assertTrue(len(inline_policies) > 0,
-     "No inline policies found for Lambda role")
+                      "No inline policies found for Lambda role")
 
       # Get first policy document
       policy_response = self.iam_client.get_role_policy(
-      RoleName=role_name,
-      PolicyName=inline_policies[0]
+        RoleName=role_name,
+        PolicyName=inline_policies[0]
       )
       policy_doc = policy_response['PolicyDocument']
 
       # Verify statements contain required permissions
       has_s3_access = any(
-      's3:GetObject' in stmt.get('Action', []) 
-      for stmt in policy_doc['Statement']
+        's3:GetObject' in stmt.get('Action', [])
+        for stmt in policy_doc['Statement']
       )
       has_dynamodb_access = any(
-      any(action in stmt.get('Action', [])
-        for action in ['dynamodb:GetItem', 'dynamodb:PutItem'])
-      for stmt in policy_doc['Statement']
+        any(action in stmt.get('Action', [])
+            for action in ['dynamodb:GetItem', 'dynamodb:PutItem'])
+        for stmt in policy_doc['Statement']
       )
 
       self.assertTrue(has_s3_access, "Missing required S3 permissions")
@@ -356,7 +356,7 @@ class TestTapStackIntegration(unittest.TestCase):
     try:
       # Get bucket notification configuration
       response = self.s3_client.get_bucket_notification_configuration(
-      Bucket=self.bucket_name
+        Bucket=self.bucket_name
       )
 
       # Check Lambda function configurations exist
@@ -411,9 +411,9 @@ class TestTapStackIntegration(unittest.TestCase):
     extended timeout to account for this delay.
     """
     access_logs_bucket = FLAT_OUTPUTS.get(
-    "S3AccessLogBucketName") or getattr(self, "access_logs_bucket", None)
+      "S3AccessLogBucketName") or getattr(self, "access_logs_bucket", None)
     bucket_name = FLAT_OUTPUTS.get(
-    "S3BucketName") or getattr(self, "bucket_name", None)
+      "S3BucketName") or getattr(self, "bucket_name", None)
     if not access_logs_bucket or not bucket_name:
       self.skipTest(
         "S3 access log bucket or main bucket not defined in outputs")
@@ -477,7 +477,7 @@ class TestTapStackIntegration(unittest.TestCase):
     sometimes take longer during high activity periods.
     """
     cloudtrail_bucket = FLAT_OUTPUTS.get(
-    "CloudTrailBucketName") or getattr(self, "cloudtrail_bucket", None)
+      "CloudTrailBucketName") or getattr(self, "cloudtrail_bucket", None)
     if not cloudtrail_bucket:
       self.skipTest("CloudTrail bucket not defined in outputs")
   
