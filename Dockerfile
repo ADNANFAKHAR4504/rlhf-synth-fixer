@@ -83,6 +83,6 @@ WORKDIR /app
 
 # Copy application code
 COPY . .
-
+RUN chmod -R +x scripts
 # Set entrypoint    
 ENTRYPOINT ["/dockerEntryPoint.sh"]
