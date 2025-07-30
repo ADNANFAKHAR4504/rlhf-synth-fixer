@@ -1,6 +1,7 @@
-variable "secret_key" {}
-variable "access_key" {}
-variable "region" {}
+variable "region" {
+  type = string
+  default = "us-east-1"
+}
 variable "environment_suffix" {
   type        = string
   default     = "dev"
@@ -38,4 +39,10 @@ variable "default_tags" {
     Owner   = "DevOps"
   }
   description = "Default tags applied to all resources"
+}
+
+variable "s3_bucket_name" {
+  type        = string
+  default     = "rlhf-demo-54321"
+  description = "Demo to create a bucket"
 }

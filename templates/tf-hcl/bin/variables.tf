@@ -39,3 +39,9 @@ variable "default_tags" {
   }
   description = "Default tags applied to all resources"
 }
+
+variable "s3_bucket_name" {
+  type        = string
+  default     = "rlhf-demo_54321"
+  description = "Demo to create a bucket"
+}
