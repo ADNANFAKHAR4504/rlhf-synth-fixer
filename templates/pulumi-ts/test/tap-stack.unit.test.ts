@@ -1,40 +1,71 @@
-import { App, Testing } from 'cdktf';
-import { TapStack } from '../lib/tap-stack';
+import * as pulumi from "@pulumi/pulumi";
+import * as aws from "@pulumi/aws";
+import { TapStack } from "../lib/tap-stack";
 
-describe('Stack Structure', () => {
-  let app: App;
+// Enable Pulumi mocking
+jest.mock("@pulumi/pulumi");
+jest.mock("@pulumi/aws");
+
+describe("TapStack Structure", () => {
   let stack: TapStack;
-  let synthesized: string;
 
   beforeEach(() => {
-    // Reset mocks before each test
+    // Reset all mocks before each test
     jest.clearAllMocks();
+    
+    // Mock Pulumi runtime behavior
+    (pulumi as any).all = jest.fn().mockImplementation((values) => Promise.resolve(values));
+    (pulumi as any).Output = jest.fn().mockImplementation((value) => ({ 
+      promise: () => Promise.resolve(value),
+      apply: (fn: any) => fn(value)
+    }));
   });
 
-  test('TapStack instantiates successfully via props', () => {
-    app = new App();
-    stack = new TapStack(app, 'TestTapStackWithProps', {
-      environmentSuffix: 'prod',
-      stateBucket: 'custom-state-bucket',
-      stateBucketRegion: 'us-west-2',
-      awsRegion: 'us-west-2',
+  describe("with props", () => {
+    beforeAll(() => {
+      stack = new TapStack("TestTapStackWithProps", {
+        environmentSuffix: "prod",
+        stateBucket: "custom-state-bucket",
+        stateBucketRegion: "us-west-2",
+        awsRegion: "us-west-2",
+      });
     });
-    synthesized = Testing.synth(stack);
 
-    // Verify that TapStack instantiates without errors via props
-    expect(stack).toBeDefined();
-    expect(synthesized).toBeDefined();
+    it("instantiates successfully", () => {
+      expect(stack).toBeDefined();
+    });
+
+    it("creates AWS provider with correct region", async () => {
+      expect(aws.Provider).toHaveBeenCalledWith(
+        "aws",
+        expect.objectContaining({
+          region: "us-west-2"
+        })
+      );
+    });
+
+    it("uses custom state bucket name", async () => {
+      expect(pulumi.Config).toHaveBeenCalledWith("tapstack");
+      // Add assertions for your state bucket configuration
+    });
   });
 
-  test('TapStack uses default values when no props provided', () => {
-    app = new App();
-    stack = new TapStack(app, 'TestTapStackDefault');
-    synthesized = Testing.synth(stack);
+  describe("with default values", () => {
+    beforeAll(() => {
+      stack = new TapStack("TestTapStackDefault");
+    });
 
-    // Verify that TapStack instantiates without errors when no props are provided
-    expect(stack).toBeDefined();
-    expect(synthesized).toBeDefined();
+    it("instantiates successfully", () => {
+      expect(stack).toBeDefined();
+    });
+
+    it("uses default AWS region", async () => {
+      expect(aws.Provider).toHaveBeenCalledWith(
+        "aws",
+        expect.objectContaining({
+          region: expect.any(String) // Your default region
+        })
+      );
+    });
   });
 });
-
-// add more test suites and cases as needed
