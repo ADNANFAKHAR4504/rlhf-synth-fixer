@@ -30,7 +30,7 @@ Resources:
       AvailabilityZone:
         Fn::Select:
           - 0
-          - Fn::GetAZs: !Ref "AWS::Region"
+          - Fn::GetAZs: !Ref 'AWS::Region'
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -46,7 +46,7 @@ Resources:
       AvailabilityZone:
         Fn::Select:
           - 1
-          - Fn::GetAZs: !Ref "AWS::Region"
+          - Fn::GetAZs: !Ref 'AWS::Region'
       Tags:
         - Key: Name
           Value: !Sub ${EnvironmentName}-PrivateSubnet
@@ -155,7 +155,7 @@ Resources:
                 Action:
                   - s3:Get*
                   - s3:List*
-                Resource: "*"
+                Resource: '*'
       Tags:
         - Key: Name
           Value: !Sub ${EnvironmentName}-S3ReadOnlyRole
@@ -167,7 +167,7 @@ Resources:
     Properties:
       Roles:
         - !Ref S3ReadOnlyRole
-      Path: "/"
+      Path: '/'
 
   EC2Instance:
     Type: AWS::EC2::Instance
@@ -206,7 +206,8 @@ Resources:
             Principal:
               Service: !Sub logs.${AWS::Region}.amazonaws.com
             Action: s3:PutObject
-            Resource: !Sub "arn:aws:s3:::${CloudWatchLogsBucket}/*"
+            Resource: !Sub 'arn:aws:s3:::${CloudWatchLogsBucket}/*'
             Condition:
               StringEquals:
-                "s3:x-amz-acl": "bucket-owner-full-control"
+                's3:x-amz-acl': 'bucket-owner-full-control'
+#avcs
