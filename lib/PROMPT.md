@@ -27,13 +27,12 @@ Create a secure AWS S3 bucket infrastructure using AWS CDK (Python) that impleme
    - No Retain policies (all resources must be destroyable for testing)
    - Implement defense-in-depth security controls
    - Use principle of least privilege for all access policies
-   - Enable audit logging capabilities
 
 ## Technical Specifications
 
 - **Platform**: AWS CDK (Python)
-- **Bucket naming**: `secure-{environment}-data-bucket`
-- **KMS key alias**: `alias/secure-s3-key`
+- **Bucket naming**: `secure-{environment}-data-bucket-1`
+- **KMS key alias**: `alias/secure-s3-key-1`
 - **Default environment**: `dev`
 - **Resource cleanup**: All resources must be destroyable (RemovalPolicy.DESTROY)
 
@@ -42,7 +41,6 @@ Create a secure AWS S3 bucket infrastructure using AWS CDK (Python) that impleme
 The stack should provide CloudFormation outputs for:
 - S3 bucket name and ARN
 - KMS key ARN
-- IAM policy ARN for bucket access
 
 ## Integration Requirements
 
