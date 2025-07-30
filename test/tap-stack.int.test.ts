@@ -444,6 +444,8 @@ describe('TapStack Integration Tests', () => {
       // Should have a specific IP range
       expect(sshRule!.IpRanges?.length).toBeGreaterThan(0);
     });
+  });
+
   describe('Logging Configuration', () => {
     itif(hasOutputs)('should have VPC Flow Logs enabled', async () => {
       const vpcResponse = await ec2Client.send(new DescribeVpcsCommand({
