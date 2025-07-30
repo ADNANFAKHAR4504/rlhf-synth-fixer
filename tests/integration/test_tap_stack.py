@@ -297,7 +297,7 @@ class TestTapStackIntegration(unittest.TestCase):
       self.assertEqual(response_body['error_count'], 0)
 
     except ClientError as e:
-    self.fail(f"Lambda direct invocation test failed: {e}")
+      self.fail(f"Lambda direct invocation test failed: {e}")
 
   @mark.it("verifies IAM permissions are correctly configured")
   def test_iam_permissions(self):
@@ -348,7 +348,7 @@ class TestTapStackIntegration(unittest.TestCase):
       self.assertTrue(has_dynamodb_access, "Missing required DynamoDB permissions")
 
     except ClientError as e:
-    self.fail(f"IAM permissions test failed: {e}")
+      self.fail(f"IAM permissions test failed: {e}")
 
   @mark.it("verifies S3 bucket notification configuration")
   def test_s3_notification_configuration(self):
@@ -367,18 +367,18 @@ class TestTapStackIntegration(unittest.TestCase):
       # Find the configuration for our Lambda function
       lambda_found = False
       for config in lambda_configs:
-      if self.lambda_name in config['LambdaFunctionArn']:
-      lambda_found = True
-      # Check events
-      events = config['Events']
-      self.assertIn('s3:ObjectCreated:*', events)
-      break
+        if self.lambda_name in config['LambdaFunctionArn']:
+          lambda_found = True
+          # Check events
+          events = config['Events']
+          self.assertIn('s3:ObjectCreated:*', events)
+          break
 
       self.assertTrue(lambda_found,
         f"Lambda function {self.lambda_name} not found in S3 notifications")
 
     except ClientError as e:
-    self.fail(f"S3 notification configuration test failed: {e}")
+      self.fail(f"S3 notification configuration test failed: {e}")
 
   @mark.it("tests resource cleanup and no retain policies")
   def test_no_retain_policies_validation(self):
@@ -400,7 +400,7 @@ class TestTapStackIntegration(unittest.TestCase):
       # unless retain policies are set (which we've avoided in the CDK code)
 
     except ClientError as e:
-    self.fail(f"Resource accessibility test failed: {e}")
+      self.fail(f"Resource accessibility test failed: {e}")
 
   @mark.it("verifies S3 access logs are delivered to the access log bucket")
   def test_s3_access_log_delivery(self):
@@ -415,23 +415,23 @@ class TestTapStackIntegration(unittest.TestCase):
     bucket_name = FLAT_OUTPUTS.get(
     "S3BucketName") or getattr(self, "bucket_name", None)
     if not access_logs_bucket or not bucket_name:
-    self.skipTest(
-    "S3 access log bucket or main bucket not defined in outputs")
+      self.skipTest(
+        "S3 access log bucket or main bucket not defined in outputs")
   
     # Create multiple test objects to increase chances of triggering access logs
     test_keys = []
     for i in range(3):
-    test_key = f"accesslog-test-{int(time.time())}-{i}.txt"
-    test_keys.append(test_key)
-    self.s3_client.put_object(
-    Bucket=bucket_name, Key=test_key, Body=f"log test {i}".encode())
+      test_key = f"accesslog-test-{int(time.time())}-{i}.txt"
+      test_keys.append(test_key)
+      self.s3_client.put_object(
+        Bucket=bucket_name, Key=test_key, Body=f"log test {i}".encode())
   
     # Also perform some read operations to generate more access log entries
     for test_key in test_keys:
-    try:
-      self.s3_client.get_object(Bucket=bucket_name, Key=test_key)
-    except ClientError:
-    pass  # Ignore errors, we just want to generate access log entries
+      try:
+        self.s3_client.get_object(Bucket=bucket_name, Key=test_key)
+      except ClientError:
+        pass  # Ignore errors, we just want to generate access log entries
   
     # Wait for access log delivery with extended timeout
     # S3 access logs can take several minutes to hours according to AWS docs
@@ -442,32 +442,32 @@ class TestTapStackIntegration(unittest.TestCase):
     print("This can take several minutes according to AWS documentation...")
   
     for attempt in range(max_attempts):
-    resp = self.s3_client.list_objects_v2(
-    Bucket=access_logs_bucket, Prefix="access-logs/")
-    if resp.get("Contents"):
-    found = True
-    print(f"Found access log files after {attempt + 1} attempts ({(attempt + 1) * 30} seconds)")
-    break
-    
-    # Print progress every 5 minutes
-    if (attempt + 1) % 10 == 0:
-    elapsed_minutes = ((attempt + 1) * 30) // 60
-    print(f"Still waiting for access logs... ({elapsed_minutes} minutes elapsed)")
-    
-    time.sleep(30)  # Wait 30 seconds between checks
+      resp = self.s3_client.list_objects_v2(
+        Bucket=access_logs_bucket, Prefix="access-logs/")
+      if resp.get("Contents"):
+        found = True
+        print(f"Found access log files after {attempt + 1} attempts ({(attempt + 1) * 30} seconds)")
+        break
+      
+      # Print progress every 5 minutes
+      if (attempt + 1) % 10 == 0:
+        elapsed_minutes = ((attempt + 1) * 30) // 60
+        print(f"Still waiting for access logs... ({elapsed_minutes} minutes elapsed)")
+      
+      time.sleep(30)  # Wait 30 seconds between checks
   
     # Cleanup test objects
     for test_key in test_keys:
-    try:
-      self.s3_client.delete_object(Bucket=bucket_name, Key=test_key)
-    except ClientError:
-    pass  # Ignore cleanup errors
+      try:
+        self.s3_client.delete_object(Bucket=bucket_name, Key=test_key)
+      except ClientError:
+        pass  # Ignore cleanup errors
   
     self.assertTrue(
-    found, 
-    f"No access log file found in access log bucket after {max_attempts * 30} seconds. "
-    "S3 access logs can take several minutes to hours to be delivered "
-    "according to AWS documentation.")
+      found, 
+      f"No access log file found in access log bucket after {max_attempts * 30} seconds. "
+      "S3 access logs can take several minutes to hours to be delivered "
+      "according to AWS documentation.")
 
   @mark.it("verifies CloudTrail logs are delivered to the CloudTrail bucket")
   def test_cloudtrail_log_delivery(self):
@@ -479,7 +479,7 @@ class TestTapStackIntegration(unittest.TestCase):
     cloudtrail_bucket = FLAT_OUTPUTS.get(
     "CloudTrailBucketName") or getattr(self, "cloudtrail_bucket", None)
     if not cloudtrail_bucket:
-    self.skipTest("CloudTrail bucket not defined in outputs")
+      self.skipTest("CloudTrail bucket not defined in outputs")
   
     # Trigger multiple events to increase chances of log delivery
     print("Triggering CloudTrail events...")
@@ -489,7 +489,7 @@ class TestTapStackIntegration(unittest.TestCase):
       self.lambda_client.list_functions()
       self.dynamodb_client.list_tables()
     except ClientError:
-    pass  # Ignore permission errors, we just want to generate events
+      pass  # Ignore permission errors, we just want to generate events
   
     # Wait for CloudTrail log delivery with extended timeout
     found = False
@@ -499,21 +499,22 @@ class TestTapStackIntegration(unittest.TestCase):
     print("CloudTrail typically delivers logs within 15 minutes...")
   
     for attempt in range(max_attempts):
-    resp = self.s3_client.list_objects_v2(Bucket=cloudtrail_bucket)
-    if resp.get("Contents"):
-    found = True
-    print(f"Found CloudTrail log files after {attempt + 1} attempts ({(attempt + 1) * 30} seconds)")
-    break
-    
-    # Print progress every 5 minutes
-    if (attempt + 1) % 10 == 0:
-    elapsed_minutes = ((attempt + 1) * 30) // 60
-    print(f"Still waiting for CloudTrail logs... ({elapsed_minutes} minutes elapsed)")
-    
-    time.sleep(30)  # Wait 30 seconds between checks
+      resp = self.s3_client.list_objects_v2(Bucket=cloudtrail_bucket)
+      if resp.get("Contents"):
+        found = True
+        print(f"Found CloudTrail log files after {attempt + 1} attempts "
+              f"({(attempt + 1) * 30} seconds)")
+        break
+      
+      # Print progress every 5 minutes
+      if (attempt + 1) % 10 == 0:
+        elapsed_minutes = ((attempt + 1) * 30) // 60
+        print(f"Still waiting for CloudTrail logs... ({elapsed_minutes} minutes elapsed)")
+      
+      time.sleep(30)  # Wait 30 seconds between checks
   
     self.assertTrue(
-    found, 
-    f"No CloudTrail log file found in CloudTrail bucket after {max_attempts * 30} seconds. "
-    "CloudTrail typically delivers logs within 15 minutes but can take longer "
-    "during high activity.")
+      found, 
+      f"No CloudTrail log file found in CloudTrail bucket after {max_attempts * 30} seconds. "
+      "CloudTrail typically delivers logs within 15 minutes but can take longer "
+      "during high activity.")

@@ -293,7 +293,7 @@ with patch('boto3.client'), patch.dict(
     'AWS_DEFAULT_REGION': 'us-east-1'
     }
 ):
-    from lambda_handler import get_s3_object_metadata
+  from lambda_handler import get_s3_object_metadata
 
 
 @mark.describe("Lambda Handler")
