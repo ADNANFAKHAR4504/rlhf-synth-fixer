@@ -752,16 +752,6 @@ Resources:
         IncludeGlobalResourceTypes: true
         ResourceTypes: []
 
-  # AWS Config Delivery Channel
-  ConfigDeliveryChannel:
-    Type: AWS::Config::DeliveryChannel
-    Properties:
-      Name: !Sub 'config-delivery-channel-${EnvironmentSuffix}'
-      S3BucketName: !Ref ConfigBucket
-      S3KeyPrefix: 'config-history'
-      ConfigSnapshotDeliveryProperties:
-        DeliveryFrequency: 'TwentyFour_Hours'
-
   # AWS Config Rules
   S3BucketPublicAccessProhibited:
     Type: AWS::Config::ConfigRule
