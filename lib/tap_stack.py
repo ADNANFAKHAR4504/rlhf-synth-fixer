@@ -35,7 +35,6 @@ accounts = {
 }
 regions = ["us-east-1", "eu-west-1"]
 
-
 class TapStack(TerraformStack):
   """CDKTF Python stack for TAP infrastructure."""
 

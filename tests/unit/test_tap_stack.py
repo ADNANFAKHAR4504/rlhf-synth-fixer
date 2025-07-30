@@ -5,6 +5,7 @@ import json
 from cdktf import App, Testing
 from lib.tap_stack import TapStack
 
+# check file path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 
 class TestStackStructure:
