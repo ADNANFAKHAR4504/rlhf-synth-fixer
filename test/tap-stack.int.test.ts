@@ -31,7 +31,7 @@ import { S3Client, GetBucketAclCommand, GetBucketEncryptionCommand, GetBucketVer
 import { IAMClient, GetAccountPasswordPolicyCommand, GetUserCommand } from '@aws-sdk/client-iam';
 import { SNSClient, GetTopicAttributesCommand } from '@aws-sdk/client-sns';
 import { SSMClient, GetParameterCommand } from '@aws-sdk/client-ssm';
-import { AutoScalingClient, DescribeAutoScalingGroupsCommand } } from '@aws-sdk/client-auto-scaling'; // **FIXED: Removed DescribeLaunchTemplatesCommand from here**
+import { AutoScalingClient, DescribeAutoScalingGroupsCommand } from '@aws-sdk/client-auto-scaling'; // **FIXED: Removed DescribeLaunchTemplatesCommand from here**
 import { CloudWatchClient, DescribeAlarmsCommand } from '@aws-sdk/client-cloudwatch';
 
 // Get environment suffix from environment variable (set by CI/CD pipeline)
