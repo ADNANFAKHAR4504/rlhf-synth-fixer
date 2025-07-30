@@ -7,9 +7,8 @@ from cdktf_cdktf_provider_aws.provider import AwsProvider
 
 # Import the SecureAwsEnvironment stack from your tap.py file
 # Make sure tap.py is in the same directory or accessible in your Python path
-from tap import SecureAwsEnvironment
 from cdktf_cdktf_provider_aws.s3_bucket import S3Bucket
-
+from tap import SecureAwsEnvironment
 
 # ----- ENVIRONMENT CONFIG (Global variables for the entire script) -----
 # These are the primary source of configuration values from environment variables
@@ -90,14 +89,14 @@ class TapStack(TerraformStack):
     # Instantiate SecureAwsEnvironment stacks for each account and region
     # These also need to be inside the __init__ method to have access to 'self'
     for env, account_id in accounts.items():
-        for region in regions:
-            SecureAwsEnvironment(
-                self,  # Use 'self' as the scope for these nested stacks
-                f"SecureStack-{env}-{region.replace('-', '')}",
-                account_id=account_id,
-                region=region,
-                environment=env,
-            )
+      for region in regions:
+        SecureAwsEnvironment(
+          self,  # Use 'self' as the scope for these nested stacks
+          f"SecureStack-{env}-{region.replace('-', '')}",
+          account_id=account_id,
+          region=region,
+          environment=env,
+        )
 
 
 # ----- STACK EXECUTION -----
