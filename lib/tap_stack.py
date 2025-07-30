@@ -4,7 +4,7 @@ Implements: VPC + Multi-AZ + ASG + ELB + NAT Gateway + State Management
 
 import json
 from constructs import Construct
-from cdktf import TerraformStack, TerraformOutput, S3Backend, App
+from cdktf import TerraformStack, TerraformOutput, S3Backend, App, Fn
 from cdktf_cdktf_provider_aws.provider import AwsProvider
 from cdktf_cdktf_provider_aws.vpc import Vpc
 from cdktf_cdktf_provider_aws.subnet import Subnet
@@ -74,7 +74,6 @@ class TapStack(TerraformStack):
     self.azs = DataAwsAvailabilityZones(self, "azs", state="available")
     
     # Get availability zone names as a list
-    from cdktf import Fn
     self.az_names = Fn.tolist(self.azs.names)
 
     # Create state management resources
