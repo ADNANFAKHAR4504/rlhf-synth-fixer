@@ -169,15 +169,15 @@ jobs:
 
       - name: Initialize Terraform
         run: terraform init
-        working-directory: lib
+        working-directory: bin
 
       - name: Plan Terraform deployment
         run: terraform plan -out=tfplan
-        working-directory: lib
+        working-directory: bin
 
       - name: Apply Terraform deployment
         run: terraform apply -auto-approve tfplan
-        working-directory: lib
+        working-directory: bin
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
