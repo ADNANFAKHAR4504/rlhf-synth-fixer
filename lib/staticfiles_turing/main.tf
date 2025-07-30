@@ -449,3 +449,18 @@ resource "aws_backup_selection" "s3_selection" {
     aws_s3_bucket.staticfilesbucket.arn
   ]
 }
+
+
+# Save the CloudFront domain name to a local file
+resource "local_file" "cloudfront_domain_file" {
+  content  = aws_cloudfront_distribution.turing_distribution.domain_name
+  filename = "cloudfront_domain.txt"
+}
+
+
+resource "aws_s3_object" "upload_cloudfront_domain" {
+  bucket = aws_s3_bucket.staticfilesbucket.bucket
+  key    = "cloudfront_domain.txt"
+  source = local_file.cloudfront_domain_file.filename
+  etag   = filemd5(local_file.cloudfront_domain_file.filename)
+}
