@@ -4,23 +4,5 @@
   "complexity": "hard",
   "turn_type": "single",
   "po_id": "229213",
-  "startedAt": "2025-07-28T14:34:57.425Z",
-  "subtask": "Infrastructure Migration",
-  "subject_labels": "Web Application Deployment",
-  "testDependencies": [
-    "@aws-sdk/client-ec2@^3.848.0",
-    "@aws-sdk/client-rds@^3.846.0",
-    "@aws-sdk/client-elastic-load-balancing-v2@^3.848.0",
-    "@aws-sdk/client-s3@^3.848.0",
-    "@aws-sdk/client-auto-scaling@^3.846.0",
-    "@aws-sdk/client-cloudwatch@^3.846.0",
-    "@aws-sdk/client-config-service@^3.848.0",
-    "@aws-sdk/client-cloudwatch-logs@^3.848.0",
-    "@aws-sdk/client-iam@^3.848.0",
-    "jest@^29.7.0",
-    "ts-jest@^29.4.0",
-    "@types/jest@^29.5.14",
-    "aws-cdk-lib@2.204.0",
-    "constructs@10.4.2"
-  ]
+  "startedAt": "2025-07-28T14:34:57.425Z"
 }
