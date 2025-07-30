@@ -24,7 +24,7 @@ from cdktf_cdktf_provider_aws.iam_role import IamRole
 from cdktf_cdktf_provider_aws.iam_instance_profile import IamInstanceProfile
 from cdktf_cdktf_provider_aws.iam_role_policy_attachment import IamRolePolicyAttachment
 from cdktf_cdktf_provider_aws.s3_bucket import S3Bucket
-from cdktf_cdktf_provider_aws.s3_bucket_versioning import S3BucketVersioning
+from cdktf_cdktf_provider_aws.s3_bucket_versioning import S3BucketVersioningA
 from cdktf_cdktf_provider_aws.s3_bucket_public_access_block import S3BucketPublicAccessBlock
 from cdktf_cdktf_provider_aws.dynamodb_table import DynamodbTable
 from cdktf_cdktf_provider_aws.data_aws_availability_zones import DataAwsAvailabilityZones
@@ -106,7 +106,7 @@ class TapStack(TerraformStack):
       tags=self.common_tags
     )
     
-    S3BucketVersioning(self, "state-versioning",
+    S3BucketVersioningA(self, "state-versioning",
       bucket=self.state_bucket_resource.id,
       versioning_configuration=[{
         "status": "Enabled"
