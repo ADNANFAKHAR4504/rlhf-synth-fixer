@@ -470,10 +470,10 @@ Outputs:
     Value: !GetAtt ApplicationLoadBalancer.DNSName
 
   RDSEndpoint:
-    Description: Endpoint of the RDS instance
-    Value: !GetAtt RDSInstance.Endpoint.Address
+    Description: RDS endpoint with port
+    Value: !Join [ ":", [ !GetAtt RDSInstance.Endpoint.Address, "5432" ] ]
 
-    VPCId:
+  VPCId:
     Description: VPC ID
     Value: !Ref WebAppVPC
 
@@ -496,7 +496,3 @@ Outputs:
   CloudFrontDistributionId:
     Description: CloudFront Distribution ID
     Value: !Ref CloudFrontDistribution
-
-  DatabaseEndpoint:
-    Description: RDS Endpoint with port 5432
-    Value: !Join [ ":", [ !GetAtt RDSInstance.Endpoint.Address, "5432" ] ]
