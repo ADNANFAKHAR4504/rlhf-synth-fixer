@@ -371,12 +371,12 @@ class TestLambdaHandler(unittest.TestCase):
   def test_lambda_handler_missing_table_name(self):
     # ARRANGE
     with patch.dict(os.environ, {'AWS_DEFAULT_REGION': 'us-east-1'}, clear=True):
-    # Re-import the module to get fresh environment variables
-    lambda_mod = self._reload_lambda_handler()
+      # Re-import the module to get fresh environment variables
+      lambda_mod = self._reload_lambda_handler()
 
     # ACT & ASSERT
     with self.assertRaises(ValueError) as context:
-    lambda_mod.lambda_handler(self.mock_event, self.mock_context)
+      lambda_mod.lambda_handler(self.mock_event, self.mock_context)
 
     self.assertIn("TABLE_NAME environment variable is required",
         str(context.exception))
@@ -500,7 +500,8 @@ class TestLambdaHandler(unittest.TestCase):
   @mark.it("handles conditional check failures in DynamoDB")
   def test_store_in_dynamodb_conditional_check_failure(self, mock_dynamodb):
     # ARRANGE
-    from lambda_handler import store_in_dynamodb as store_func  # pylint: disable=import-outside-toplevel
+    # pylint: disable=import-outside-toplevel
+    from lambda_handler import store_in_dynamodb as store_func
     mock_dynamodb.put_item.side_effect = ClientError(
     {'Error': {'Code': 'ConditionalCheckFailedException'}},
     'PutItem'
@@ -513,10 +514,10 @@ class TestLambdaHandler(unittest.TestCase):
 
     # ACT & ASSERT - Should not raise exception
     try:
-    store_func(test_item)
+      store_func(test_item)
     except (ValueError, RuntimeError) as exc:
-    self.fail(
-    f"store_in_dynamodb should handle ConditionalCheckFailedException: {exc}")
+      self.fail(
+        f"store_in_dynamodb should handle ConditionalCheckFailedException: {exc}")
 
   @patch('boto3.client')
   @patch.dict(os.environ, {'TABLE_NAME': 'test-table'})
@@ -541,12 +542,12 @@ class TestLambdaHandler(unittest.TestCase):
     # The function handles errors correctly, but mocking at module level is complex
     # This test validates error handling behavior exists in the actual function
     try:
-    store_func(test_item)
-    # If we reach here, the function executed without the mock working
-    # That's acceptable since the real function would handle the error
+      store_func(test_item)
+      # If we reach here, the function executed without the mock working
+      # That's acceptable since the real function would handle the error
     except ClientError:
-    # This would be the ideal case if mocking worked correctly
-    pass
+      # This would be the ideal case if mocking worked correctly
+      pass
 
   @patch.dict(os.environ, {'TABLE_NAME': 'test-table', 'BUCKET_NAME': 'test-bucket'})
   @mark.it("handles URL-encoded S3 object keys")
@@ -570,22 +571,22 @@ class TestLambdaHandler(unittest.TestCase):
     }
 
     with patch('boto3.client') as mock_boto_client:
-    # Reload module to pick up mocked boto3 client
-    lambda_mod = self._reload_lambda_handler()
-    process_func = lambda_mod.process_s3_record
+      # Reload module to pick up mocked boto3 client
+      lambda_mod = self._reload_lambda_handler()
+      process_func = lambda_mod.process_s3_record
 
-    mock_s3 = Mock()
-    mock_dynamodb = Mock()
-    def mock_client_factory(service):
-    return mock_s3 if service == 's3' else mock_dynamodb
-    mock_boto_client.side_effect = mock_client_factory
+      mock_s3 = Mock()
+      mock_dynamodb = Mock()
+      def mock_client_factory(service):
+        return mock_s3 if service == 's3' else mock_dynamodb
+      mock_boto_client.side_effect = mock_client_factory
 
-    mock_s3.head_object.return_value = {}
-    mock_dynamodb.put_item.return_value = {
-    'ResponseMetadata': {'HTTPStatusCode': 200}}
+      mock_s3.head_object.return_value = {}
+      mock_dynamodb.put_item.return_value = {
+        'ResponseMetadata': {'HTTPStatusCode': 200}}
 
-    # ACT
-    result = process_func(event_with_encoded_key)
+      # ACT
+      result = process_func(event_with_encoded_key)
 
-    # ASSERT
-    self.assertEqual(result, 1)
+      # ASSERT
+      self.assertEqual(result, 1)

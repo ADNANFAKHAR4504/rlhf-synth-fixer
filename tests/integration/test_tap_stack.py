@@ -139,52 +139,52 @@ class TestTapStackIntegration(unittest.TestCase):
   def test_lambda_function_configuration(self):
     """Test that Lambda function exists with proper configuration"""
     try:
-    # Get function configuration
-    response = self.lambda_client.get_function(FunctionName=self.lambda_name)
-    config = response['Configuration']
+      # Get function configuration
+      response = self.lambda_client.get_function(FunctionName=self.lambda_name)
+      config = response['Configuration']
 
-    # Check basic properties
-    self.assertEqual(config['FunctionName'], self.lambda_name)
-    self.assertEqual(config['Runtime'], 'python3.12')
-    self.assertEqual(config['Handler'], 'lambda_handler.lambda_handler')
-    self.assertEqual(config['Timeout'], 300)
+      # Check basic properties
+      self.assertEqual(config['FunctionName'], self.lambda_name)
+      self.assertEqual(config['Runtime'], 'python3.12')
+      self.assertEqual(config['Handler'], 'lambda_handler.lambda_handler')
+      self.assertEqual(config['Timeout'], 300)
 
-    # Check environment variables
-    env_vars = config['Environment']['Variables']
-    self.assertEqual(env_vars['TABLE_NAME'], self.table_name)
-    self.assertEqual(env_vars['BUCKET_NAME'], self.bucket_name)
+      # Check environment variables
+      env_vars = config['Environment']['Variables']
+      self.assertEqual(env_vars['TABLE_NAME'], self.table_name)
+      self.assertEqual(env_vars['BUCKET_NAME'], self.bucket_name)
 
-    # Check IAM role exists
-    role_arn = config['Role']
-    role_name = role_arn.split('/')[-1]
-    self.assertEqual(role_name, f"proj-lambda-role-{self.env_suffix}")
+      # Check IAM role exists
+      role_arn = config['Role']
+      role_name = role_arn.split('/')[-1]
+      self.assertEqual(role_name, f"proj-lambda-role-{self.env_suffix}")
 
     except ClientError as e:
-    self.fail(f"Lambda function configuration test failed: {e}")
+      self.fail(f"Lambda function configuration test failed: {e}")
 
   @mark.it("verifies CloudTrail exists and has correct configuration")
   def test_cloudtrail_configuration(self):
     """Test that CloudTrail exists with proper configuration"""
     try:
-    # Describe trail
-    response = self.cloudtrail_client.describe_trails(
-    trailNameList=[self.trail_name]
-    )
-    trails = response['trailList']
-    self.assertEqual(len(trails), 1)
+      # Describe trail
+      response = self.cloudtrail_client.describe_trails(
+        trailNameList=[self.trail_name]
+      )
+      trails = response['trailList']
+      self.assertEqual(len(trails), 1)
 
-    trail = trails[0]
-    self.assertEqual(trail['Name'], self.trail_name)
-    self.assertTrue(trail['IsMultiRegionTrail'])
-    self.assertTrue(trail['LogFileValidationEnabled'])
-    self.assertTrue(trail['IncludeGlobalServiceEvents'])
+      trail = trails[0]
+      self.assertEqual(trail['Name'], self.trail_name)
+      self.assertTrue(trail['IsMultiRegionTrail'])
+      self.assertTrue(trail['LogFileValidationEnabled'])
+      self.assertTrue(trail['IncludeGlobalServiceEvents'])
 
-    # Check CloudTrail bucket exists
-    response = self.s3_client.head_bucket(Bucket=self.cloudtrail_bucket)
-    self.assertEqual(response['ResponseMetadata']['HTTPStatusCode'], 200)
+      # Check CloudTrail bucket exists
+      response = self.s3_client.head_bucket(Bucket=self.cloudtrail_bucket)
+      self.assertEqual(response['ResponseMetadata']['HTTPStatusCode'], 200)
 
     except ClientError as e:
-    self.fail(f"CloudTrail configuration test failed: {e}")
+      self.fail(f"CloudTrail configuration test failed: {e}")
 
   @mark.it("tests end-to-end S3 to Lambda to DynamoDB workflow")
   def test_e2e_s3_lambda_dynamodb_workflow(self):
@@ -193,67 +193,67 @@ class TestTapStackIntegration(unittest.TestCase):
     test_content = f"Integration test content at {datetime.now().isoformat()}"
 
     try:
-    # Step 1: Upload a file to S3
-    self.s3_client.put_object(
-    Bucket=self.bucket_name,
-    Key=test_key,
-    Body=test_content.encode('utf-8'),
-    ContentType='text/plain'
-    )
+      # Step 1: Upload a file to S3
+      self.s3_client.put_object(
+      Bucket=self.bucket_name,
+      Key=test_key,
+      Body=test_content.encode('utf-8'),
+      ContentType='text/plain'
+      )
 
-    # Step 2: Wait for Lambda to process the event
-    # Note: This is asynchronous, so we need to wait and retry
-    max_retries = 30
-    retry_delay = 2
+      # Step 2: Wait for Lambda to process the event
+      # Note: This is asynchronous, so we need to wait and retry
+      max_retries = 30
+      retry_delay = 2
 
-    item_found = False
-    for _ in range(max_retries):
-    try:
-    # Step 3: Check if the item was created in DynamoDB
-    response = self.dynamodb_client.scan(
-        TableName=self.table_name,
-        FilterExpression='object_key = :key',
-        ExpressionAttributeValues={
-                ':key': {'S': test_key}
-        }
-    )
+      item_found = False
+      for _ in range(max_retries):
+        try:
+          # Step 3: Check if the item was created in DynamoDB
+          response = self.dynamodb_client.scan(
+            TableName=self.table_name,
+            FilterExpression='object_key = :key',
+            ExpressionAttributeValues={
+                    ':key': {'S': test_key}
+            }
+          )
 
-    if response['Items']:
-    item_found = True
-    item = response['Items'][0]
+          if response['Items']:
+            item_found = True
+            item = response['Items'][0]
 
-    # Verify item structure
-    self.assertEqual(item['object_key']['S'], test_key)
-    self.assertEqual(item['bucket_name']['S'], self.bucket_name)
-    self.assertEqual(item['event_source']['S'], 'aws:s3')
-    self.assertIn('event_name', item)
-    self.assertIn('created_at', item)
-    self.assertIn('pk', item)
-    self.assertIn('sk', item)
+            # Verify item structure
+            self.assertEqual(item['object_key']['S'], test_key)
+            self.assertEqual(item['bucket_name']['S'], self.bucket_name)
+            self.assertEqual(item['event_source']['S'], 'aws:s3')
+            self.assertIn('event_name', item)
+            self.assertIn('created_at', item)
+            self.assertIn('pk', item)
+            self.assertIn('sk', item)
 
-    # Check that pk follows the pattern
-    self.assertTrue(item['pk']['S'].startswith(f'OBJECT#{test_key}'))
-    self.assertTrue(item['sk']['S'].startswith('CREATED#'))
+            # Check that pk follows the pattern
+            self.assertTrue(item['pk']['S'].startswith(f'OBJECT#{test_key}'))
+            self.assertTrue(item['sk']['S'].startswith('CREATED#'))
 
-    break
+            break
 
-    except ClientError:
-    pass
+        except ClientError:
+          pass
 
-    time.sleep(retry_delay)
+        time.sleep(retry_delay)
 
-    self.assertTrue(item_found,
-        f"DynamoDB item for {test_key} not found after {max_retries} attempts")
+      self.assertTrue(item_found,
+          f"DynamoDB item for {test_key} not found after {max_retries} attempts")
 
     except (ClientError, ValueError, AssertionError) as e:
-    self.fail(f"End-to-end workflow test failed: {e}")
+      self.fail(f"End-to-end workflow test failed: {e}")
 
     finally:
-    # Cleanup: Delete the test object
-    try:
-    self.s3_client.delete_object(Bucket=self.bucket_name, Key=test_key)
-    except ClientError:
-    pass  # Ignore cleanup errors
+      # Cleanup: Delete the test object
+      try:
+        self.s3_client.delete_object(Bucket=self.bucket_name, Key=test_key)
+      except ClientError:
+        pass  # Ignore cleanup errors
 
   @mark.it("tests Lambda function can be invoked directly")
   def test_lambda_direct_invocation(self):
@@ -278,23 +278,23 @@ class TestTapStackIntegration(unittest.TestCase):
     }
 
     try:
-    # Invoke Lambda function directly
-    response = self.lambda_client.invoke(
-    FunctionName=self.lambda_name,
-    InvocationType='RequestResponse',
-    Payload=json.dumps(test_event)
-    )
+      # Invoke Lambda function directly
+      response = self.lambda_client.invoke(
+      FunctionName=self.lambda_name,
+      InvocationType='RequestResponse',
+      Payload=json.dumps(test_event)
+      )
 
-    # Check response
-    self.assertEqual(response['StatusCode'], 200)
+      # Check response
+      self.assertEqual(response['StatusCode'], 200)
 
-    # Parse response payload
-    payload = json.loads(response['Payload'].read().decode('utf-8'))
-    self.assertEqual(payload['statusCode'], 200)
+      # Parse response payload
+      payload = json.loads(response['Payload'].read().decode('utf-8'))
+      self.assertEqual(payload['statusCode'], 200)
 
-    response_body = json.loads(payload['body'])
-    self.assertEqual(response_body['processed_count'], 1)
-    self.assertEqual(response_body['error_count'], 0)
+      response_body = json.loads(payload['body'])
+      self.assertEqual(response_body['processed_count'], 1)
+      self.assertEqual(response_body['error_count'], 0)
 
     except ClientError as e:
     self.fail(f"Lambda direct invocation test failed: {e}")
@@ -303,49 +303,49 @@ class TestTapStackIntegration(unittest.TestCase):
   def test_iam_permissions(self):
     """Test that IAM role has correct permissions"""
     try:
-    # Get Lambda function to find its role
-    function_response = self.lambda_client.get_function(
-    FunctionName=self.lambda_name)
-    role_arn = function_response['Configuration']['Role']
-    role_name = role_arn.split('/')[-1]
+      # Get Lambda function to find its role
+      function_response = self.lambda_client.get_function(
+      FunctionName=self.lambda_name)
+      role_arn = function_response['Configuration']['Role']
+      role_name = role_arn.split('/')[-1]
 
-    # List attached policies
-    policies_response = self.iam_client.list_attached_role_policies(
-    RoleName=role_name)
-    attached_policies = [p['PolicyArn'].split('/')[-1]
+      # List attached policies
+      policies_response = self.iam_client.list_attached_role_policies(
+      RoleName=role_name)
+      attached_policies = [p['PolicyArn'].split('/')[-1]
        for p in policies_response.get('AttachedPolicies', [])]
 
-    # Check basic execution role is attached
-    self.assertIn('AWSLambdaBasicExecutionRole', attached_policies)
-    # List inline policies
-    inline_policies_response = self.iam_client.list_role_policies(
-    RoleName=role_name)
-    inline_policies = inline_policies_response.get('PolicyNames', [])
+      # Check basic execution role is attached
+      self.assertIn('AWSLambdaBasicExecutionRole', attached_policies)
+      # List inline policies
+      inline_policies_response = self.iam_client.list_role_policies(
+      RoleName=role_name)
+      inline_policies = inline_policies_response.get('PolicyNames', [])
 
-    # Verify at least one inline policy exists
-    self.assertTrue(len(inline_policies) > 0,
+      # Verify at least one inline policy exists
+      self.assertTrue(len(inline_policies) > 0,
      "No inline policies found for Lambda role")
 
-    # Get first policy document
-    policy_response = self.iam_client.get_role_policy(
-    RoleName=role_name,
-    PolicyName=inline_policies[0]
-    )
-    policy_doc = policy_response['PolicyDocument']
+      # Get first policy document
+      policy_response = self.iam_client.get_role_policy(
+      RoleName=role_name,
+      PolicyName=inline_policies[0]
+      )
+      policy_doc = policy_response['PolicyDocument']
 
-    # Verify statements contain required permissions
-    has_s3_access = any(
-    's3:GetObject' in stmt.get('Action', []) 
-    for stmt in policy_doc['Statement']
-    )
-    has_dynamodb_access = any(
-    any(action in stmt.get('Action', [])
+      # Verify statements contain required permissions
+      has_s3_access = any(
+      's3:GetObject' in stmt.get('Action', []) 
+      for stmt in policy_doc['Statement']
+      )
+      has_dynamodb_access = any(
+      any(action in stmt.get('Action', [])
         for action in ['dynamodb:GetItem', 'dynamodb:PutItem'])
-    for stmt in policy_doc['Statement']
-    )
+      for stmt in policy_doc['Statement']
+      )
 
-    self.assertTrue(has_s3_access, "Missing required S3 permissions")
-    self.assertTrue(has_dynamodb_access, "Missing required DynamoDB permissions")
+      self.assertTrue(has_s3_access, "Missing required S3 permissions")
+      self.assertTrue(has_dynamodb_access, "Missing required DynamoDB permissions")
 
     except ClientError as e:
     self.fail(f"IAM permissions test failed: {e}")
@@ -354,27 +354,27 @@ class TestTapStackIntegration(unittest.TestCase):
   def test_s3_notification_configuration(self):
     """Test that S3 bucket has correct Lambda notification configuration"""
     try:
-    # Get bucket notification configuration
-    response = self.s3_client.get_bucket_notification_configuration(
-    Bucket=self.bucket_name
-    )
+      # Get bucket notification configuration
+      response = self.s3_client.get_bucket_notification_configuration(
+      Bucket=self.bucket_name
+      )
 
-    # Check Lambda function configurations exist
-    lambda_configs = response.get('LambdaFunctionConfigurations', [])
-    self.assertTrue(len(lambda_configs) > 0,
+      # Check Lambda function configurations exist
+      lambda_configs = response.get('LambdaFunctionConfigurations', [])
+      self.assertTrue(len(lambda_configs) > 0,
         "No LambdaFunctionConfigurations found in S3 notification config")
 
-    # Find the configuration for our Lambda function
-    lambda_found = False
-    for config in lambda_configs:
-    if self.lambda_name in config['LambdaFunctionArn']:
-    lambda_found = True
-    # Check events
-    events = config['Events']
-    self.assertIn('s3:ObjectCreated:*', events)
-    break
+      # Find the configuration for our Lambda function
+      lambda_found = False
+      for config in lambda_configs:
+      if self.lambda_name in config['LambdaFunctionArn']:
+      lambda_found = True
+      # Check events
+      events = config['Events']
+      self.assertIn('s3:ObjectCreated:*', events)
+      break
 
-    self.assertTrue(lambda_found,
+      self.assertTrue(lambda_found,
         f"Lambda function {self.lambda_name} not found in S3 notifications")
 
     except ClientError as e:
@@ -391,13 +391,13 @@ class TestTapStackIntegration(unittest.TestCase):
     # The actual retain policy validation happens during stack deletion
 
     try:
-    # Just verify resources exist and are in deletable state
-    self.s3_client.head_bucket(Bucket=self.bucket_name)
-    self.dynamodb_client.describe_table(TableName=self.table_name)
-    self.lambda_client.get_function(FunctionName=self.lambda_name)
+      # Just verify resources exist and are in deletable state
+      self.s3_client.head_bucket(Bucket=self.bucket_name)
+      self.dynamodb_client.describe_table(TableName=self.table_name)
+      self.lambda_client.get_function(FunctionName=self.lambda_name)
 
-    # If we can access all resources, they exist and deletion should work
-    # unless retain policies are set (which we've avoided in the CDK code)
+      # If we can access all resources, they exist and deletion should work
+      # unless retain policies are set (which we've avoided in the CDK code)
 
     except ClientError as e:
     self.fail(f"Resource accessibility test failed: {e}")
@@ -429,7 +429,7 @@ class TestTapStackIntegration(unittest.TestCase):
     # Also perform some read operations to generate more access log entries
     for test_key in test_keys:
     try:
-    self.s3_client.get_object(Bucket=bucket_name, Key=test_key)
+      self.s3_client.get_object(Bucket=bucket_name, Key=test_key)
     except ClientError:
     pass  # Ignore errors, we just want to generate access log entries
   
@@ -459,14 +459,15 @@ class TestTapStackIntegration(unittest.TestCase):
     # Cleanup test objects
     for test_key in test_keys:
     try:
-    self.s3_client.delete_object(Bucket=bucket_name, Key=test_key)
+      self.s3_client.delete_object(Bucket=bucket_name, Key=test_key)
     except ClientError:
     pass  # Ignore cleanup errors
   
     self.assertTrue(
     found, 
     f"No access log file found in access log bucket after {max_attempts * 30} seconds. "
-    f"S3 access logs can take several minutes to hours to be delivered according to AWS documentation.")
+    "S3 access logs can take several minutes to hours to be delivered "
+    "according to AWS documentation.")
 
   @mark.it("verifies CloudTrail logs are delivered to the CloudTrail bucket")
   def test_cloudtrail_log_delivery(self):
@@ -485,8 +486,8 @@ class TestTapStackIntegration(unittest.TestCase):
     self.s3_client.list_buckets()
     # Perform additional API calls to generate more events
     try:
-    self.lambda_client.list_functions()
-    self.dynamodb_client.list_tables()
+      self.lambda_client.list_functions()
+      self.dynamodb_client.list_tables()
     except ClientError:
     pass  # Ignore permission errors, we just want to generate events
   
@@ -514,4 +515,5 @@ class TestTapStackIntegration(unittest.TestCase):
     self.assertTrue(
     found, 
     f"No CloudTrail log file found in CloudTrail bucket after {max_attempts * 30} seconds. "
-    f"CloudTrail typically delivers logs within 15 minutes but can take longer during high activity.")
+    "CloudTrail typically delivers logs within 15 minutes but can take longer "
+    "during high activity.")
