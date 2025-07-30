@@ -264,6 +264,10 @@ jobs:
           download-artifacts: 'true'
           download-cdk-artifacts: 'true'
 
+      - name: Install Node.js Dependencies
+        if: needs.synth.outputs.platform == 'pulumi' && needs.synth.outputs.language == 'ts'
+        run: npm ci     
+
       - name: Configure AWS
         uses: ./.github/actions/configure-aws
         with:
