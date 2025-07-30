@@ -272,6 +272,7 @@ jobs:
 
           if [ "$PLATFORM" = "cdk" ]; then
             echo "✅ CDK project detected, running CDK bootstrap..."
+            rm -rf cdk.out
             npm run cdk:bootstrap
           else
             echo "ℹ️ Not a CDK project, skipping CDK bootstrap"
