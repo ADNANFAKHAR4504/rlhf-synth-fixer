@@ -30,7 +30,7 @@ describe('Secure Multi-Tier CloudFormation Template', () => {
       expect(template.Metadata['AWS::CloudFormation::Interface']).toBeDefined();
       expect(
         template.Metadata['AWS::CloudFormation::Interface'].ParameterGroups
-      ).toHaveLength(2);
+      ).toHaveLength(3);
     });
 
     test('should have mappings for AMI IDs', () => {
@@ -48,6 +48,8 @@ describe('Secure Multi-Tier CloudFormation Template', () => {
         'EnvironmentSuffix',
         'AllowedSSHCidr',
         'InstanceType',
+        'ExistingConfigRecorderName',
+        'ExistingConfigDeliveryChannelName',
       ];
       expectedParams.forEach(param => {
         expect(template.Parameters[param]).toBeDefined();
@@ -257,26 +259,24 @@ describe('Secure Multi-Tier CloudFormation Template', () => {
   });
 
   describe('AWS Config Resources', () => {
-    test('should have configuration recorder', () => {
-      const recorder = template.Resources.ConfigurationRecorder;
-      expect(recorder.Type).toBe('AWS::Config::ConfigurationRecorder');
-      expect(recorder.Properties.RecordingGroup.AllSupported).toBe(true);
-      expect(
-        recorder.Properties.RecordingGroup.IncludeGlobalResourceTypes
-      ).toBe(true);
+    // Note: Using existing ConfigurationRecorder and ConfigDeliveryChannel
+    // Only test if delivery channel is present (not created by this template)
+    test('should use existing configuration recorder', () => {
+      // Verify that we have the parameter for the existing recorder
+      expect(template.Parameters.ExistingConfigRecorderName).toBeDefined();
+      expect(template.Parameters.ExistingConfigRecorderName.Default).toBe(
+        'TapConfigRecorder-pr287'
+      );
     });
 
-    // Only test if delivery channel is present
-    test('should have delivery channel', () => {
-      const channel = template.Resources.ConfigDeliveryChannel;
-      if (!channel) {
-        // Delivery channel not managed by this template, skip test
-        return;
-      }
-      expect(channel.Type).toBe('AWS::Config::DeliveryChannel');
+    test('should use existing delivery channel', () => {
+      // Verify that we have the parameter for the existing delivery channel
       expect(
-        channel.Properties.ConfigSnapshotDeliveryProperties.DeliveryFrequency
-      ).toBe('TwentyFour_Hours');
+        template.Parameters.ExistingConfigDeliveryChannelName
+      ).toBeDefined();
+      expect(
+        template.Parameters.ExistingConfigDeliveryChannelName.Default
+      ).toBe('TapConfigDeliveryChannel-pr28');
     });
 
     test('should have Config rules for security compliance', () => {
@@ -316,6 +316,8 @@ describe('Secure Multi-Tier CloudFormation Template', () => {
         'SecurityCloudTrailArn',
         'StackName',
         'EnvironmentSuffix',
+        'ExistingConfigRecorderName',
+        'ExistingConfigDeliveryChannelName',
       ];
 
       expectedOutputs.forEach(outputName => {
@@ -352,7 +354,6 @@ describe('Secure Multi-Tier CloudFormation Template', () => {
         'AWS::EC2::Instance',
         'AWS::S3::Bucket',
         'AWS::IAM::Role',
-        'AWS::Config::ConfigurationRecorder',
         'AWS::CloudTrail::Trail',
         'AWS::Logs::LogGroup',
       ];

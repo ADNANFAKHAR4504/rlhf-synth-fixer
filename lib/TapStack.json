@@ -20,6 +20,15 @@
             "AllowedSSHCidr",
             "InstanceType"
           ]
+        },
+        {
+          "Label": {
+            "default": "AWS Config Configuration"
+          },
+          "Parameters": [
+            "ExistingConfigRecorderName",
+            "ExistingConfigDeliveryChannelName"
+          ]
         }
       ]
     }
@@ -48,6 +57,16 @@
         "t3.small",
         "t3.medium"
       ]
+    },
+    "ExistingConfigRecorderName": {
+      "Type": "String",
+      "Default": "TapConfigRecorder-pr287",
+      "Description": "Name of the existing AWS Config Configuration Recorder to use"
+    },
+    "ExistingConfigDeliveryChannelName": {
+      "Type": "String",
+      "Default": "TapConfigDeliveryChannel-pr28",
+      "Description": "Name of the existing AWS Config Delivery Channel to use"
     }
   },
   "Mappings": {
@@ -1137,28 +1156,8 @@
         ]
       }
     },
-    "ConfigurationRecorder": {
-      "Type": "AWS::Config::ConfigurationRecorder",
-      "Properties": {
-        "Name": {
-          "Fn::Sub": "config-recorder-${EnvironmentSuffix}"
-        },
-        "RoleARN": {
-          "Fn::GetAtt": [
-            "ConfigServiceRole",
-            "Arn"
-          ]
-        },
-        "RecordingGroup": {
-          "AllSupported": true,
-          "IncludeGlobalResourceTypes": true,
-          "ResourceTypes": []
-        }
-      }
-    },
     "S3BucketPublicAccessProhibited": {
       "Type": "AWS::Config::ConfigRule",
-      "DependsOn": "ConfigurationRecorder",
       "Properties": {
         "ConfigRuleName": "s3-bucket-public-access-prohibited",
         "Description": "Checks that your Amazon S3 buckets do not allow public access",
@@ -1170,7 +1169,6 @@
     },
     "RootAccessKeyCheck": {
       "Type": "AWS::Config::ConfigRule",
-      "DependsOn": "ConfigurationRecorder",
       "Properties": {
         "ConfigRuleName": "root-access-key-check",
         "Description": "Checks whether the root user access key is available",
@@ -1182,7 +1180,6 @@
     },
     "EC2SecurityGroupAttachedToENI": {
       "Type": "AWS::Config::ConfigRule",
-      "DependsOn": "ConfigurationRecorder",
       "Properties": {
         "ConfigRuleName": "ec2-security-group-attached-to-eni",
         "Description": "Checks that security groups are attached to Amazon EC2 instances or ENIs",
@@ -1368,6 +1365,28 @@
       "Export": {
         "Name": {
           "Fn::Sub": "${AWS::StackName}-EnvironmentSuffix"
+        }
+      }
+    },
+    "ExistingConfigRecorderName": {
+      "Description": "Name of the existing AWS Config Configuration Recorder being used",
+      "Value": {
+        "Ref": "ExistingConfigRecorderName"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-ExistingConfigRecorderName"
+        }
+      }
+    },
+    "ExistingConfigDeliveryChannelName": {
+      "Description": "Name of the existing AWS Config Delivery Channel being used",
+      "Value": {
+        "Ref": "ExistingConfigDeliveryChannelName"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-ExistingConfigDeliveryChannelName"
         }
       }
     }

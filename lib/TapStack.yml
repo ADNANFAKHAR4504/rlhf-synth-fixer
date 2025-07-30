@@ -17,6 +17,7 @@ Metadata:
           default: "AWS Config Configuration"
         Parameters:
           - ExistingConfigRecorderName
+          - ExistingConfigDeliveryChannelName
 
 Parameters:
   EnvironmentSuffix:
@@ -46,6 +47,11 @@ Parameters:
     Type: String
     Default: "TapConfigRecorder-pr287"
     Description: "Name of the existing AWS Config Configuration Recorder to use"
+
+  ExistingConfigDeliveryChannelName:
+    Type: String
+    Default: "TapConfigDeliveryChannel-pr28"
+    Description: "Name of the existing AWS Config Delivery Channel to use"
 
 Mappings:
   RegionMap:
@@ -713,17 +719,8 @@ Resources:
   # AWS CONFIG
   # ========================================
 
-  # AWS Config Delivery Channel (works with existing ConfigurationRecorder)
-  ConfigDeliveryChannel:
-    Type: AWS::Config::DeliveryChannel
-    Properties:
-      Name: !Sub "config-delivery-channel-${EnvironmentSuffix}"
-      S3BucketName: !Ref ConfigBucket
-      S3KeyPrefix: "config-history"
-      ConfigSnapshotDeliveryProperties:
-        DeliveryFrequency: "TwentyFour_Hours"
-
   # AWS Config Rules (automatically use existing ConfigurationRecorder: TapConfigRecorder-pr287)
+  # and existing ConfigDeliveryChannel: TapConfigDeliveryChannel-pr28
   S3BucketPublicAccessProhibited:
     Type: AWS::Config::ConfigRule
     Properties:
@@ -857,3 +854,9 @@ Outputs:
     Value: !Ref ExistingConfigRecorderName
     Export:
       Name: !Sub "${AWS::StackName}-ExistingConfigRecorderName"
+
+  ExistingConfigDeliveryChannelName:
+    Description: "Name of the existing AWS Config Delivery Channel being used"
+    Value: !Ref ExistingConfigDeliveryChannelName
+    Export:
+      Name: !Sub "${AWS::StackName}-ExistingConfigDeliveryChannelName"
