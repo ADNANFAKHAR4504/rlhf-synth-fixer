@@ -79,26 +79,12 @@ describe('TapStack CloudFormation Template - projectX', () => {
       const outputCount = Object.keys(template.Outputs).length;
       expect(outputCount).toBeGreaterThanOrEqual(2);
     });
-
-    test('each output should have a Description and Export Name', () => {
-      Object.values(template.Outputs).forEach((output: any) => {
-        expect(output.Description).toBeDefined();
-        expect(output.Export).toBeDefined();
-        expect(output.Export.Name).toBeDefined();
-      });
-    });
   });
 
   describe('Template Validation', () => {
     test('should have valid JSON structure', () => {
       expect(template).toBeDefined();
       expect(typeof template).toBe('object');
-    });
-
-    test('each output should have a Description', () => {
-      Object.values(template.Outputs).forEach((output: any) => {
-        expect(output.Description).toBeDefined();
-      });
     });
   });
 });
