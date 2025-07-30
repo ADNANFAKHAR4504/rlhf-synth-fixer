@@ -98,10 +98,25 @@ class TestTapStack(unittest.TestCase):
 
   @mark.it("OPTIONS preflight supports CORS")
   def test_cors_configuration(self):
-    response = self._safe_options(self.hello_endpoint, headers={'Origin': 'https://example.com'})
+    response = self._safe_options(
+      self.hello_endpoint,
+      headers={
+        'Origin': 'https://example.com',
+        'Access-Control-Request-Method': 'POST',
+        'Access-Control-Request-Headers': 'Content-Type'
+      }
+    )
     self.assertIn(response.status_code, [200, 204])
+
+    # Print headers for debugging if test fails
     cors_headers = {k.lower() for k in response.headers.keys()}
-    self.assertIn('access-control-allow-origin', cors_headers)
+    if 'access-control-allow-origin' not in cors_headers:
+      print("CORS headers missing. Actual headers:", response.headers)
+    self.assertIn(
+      'access-control-allow-origin',
+      cors_headers,
+      "'access-control-allow-origin' header missing in response"
+    ).assertIn('access-control-allow-origin', cors_headers)
 
   @mark.it("HTTPS URLs only")
   def test_https_enforcement(self):
