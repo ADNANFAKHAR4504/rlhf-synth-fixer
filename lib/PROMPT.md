@@ -17,7 +17,7 @@ The solution must consist of the following integrated components:
 
 - **Framework:** AWS CloudFormation
 - **Language:** YAML
-- **Region:** us-west-2
+- **Region:** us-east-1
 - **Deployment:** Infrastructure as Code with event-driven automation
 - **Security:** No additional ports, secure communication via AWS Systems Manager
 
@@ -26,22 +26,27 @@ The solution must consist of the following integrated components:
 Carefully analyze the requirements in the Problem Statement and adhere to all Constraints. The core of this task is to connect these services using a modern, event-driven, and secure pattern.
 
 ### 1. Architectural Outline
+
 Before writing code, provide a summary of the proposed architecture inside a `<thinking>` block. **Crucially, explain the end-to-end workflow**:
+
 - An **Amazon EventBridge (CloudWatch Events) Rule** triggers on a daily schedule
 - The rule invokes the **AWS Lambda function**
 - The Lambda function uses the **AWS Systems Manager (SSM) Run Command** to execute a script on the EC2 instance
 - The script on the EC2 instance creates a compressed archive of application data and uploads it directly to the **S3 backup bucket**
 
 ### 2. Infrastructure as Code Implementation
+
 Based on this architecture, generate a **single, self-contained CloudFormation template** in YAML.
 
 ### 3. Resource Connectivity (Critical)
+
 - **EventBridge to Lambda**: The EventBridge Rule must be configured to target the Lambda function. The Lambda function needs resource-based permissions to be invoked by EventBridge
 - **Lambda to SSM**: The Lambda function's IAM Role needs `ssm:SendCommand` permissions. Scope this permission to only allow commands to be run on EC2 instances with a specific tag (e.g., `Backup: Enabled`)
 - **SSM to EC2**: The EC2 instance's IAM Role is critical. It needs the `AmazonSSMManagedInstanceCore` policy to be managed by Systems Manager
 - **EC2 to S3**: The EC2 instance's IAM Role must also have `s3:PutObject` permissions, restricted to the specific S3 backup bucket
 
 ### 4. Security Best Practices
+
 - The S3 backup bucket must have `PublicAccessBlockConfiguration` enabled and server-side encryption configured
 - The EC2 security group should **only** allow HTTPS (port 443) as specified. Do not add any ports for the backup process; SSM handles communication securely over its agent
 - All IAM Roles must follow the principle of least privilege. The policies should be specific to the resources they interact with (e.g., specify the ARN of the S3 bucket and the Lambda function)
@@ -49,6 +54,7 @@ Based on this architecture, generate a **single, self-contained CloudFormation t
 ## Expected Output
 
 ### Template Requirements
+
 - The entire solution **must** be contained within a single YAML file
 - Include a `Description` for the template explaining the automated backup workflow
 - Create the `AWS::Events::Rule` with a daily schedule (e.g., `rate(1 day)` or a cron expression)
@@ -59,7 +65,7 @@ Based on this architecture, generate a **single, self-contained CloudFormation t
 ## Success Criteria
 
 1. CloudFormation template synthesizes without errors
-2. Deployment succeeds in us-west-2 region
+2. Deployment succeeds in us-east-1 region
 3. All security requirements are implemented (encryption, least privilege IAM, no additional ports)
 4. Event-driven architecture functions correctly (EventBridge → Lambda → SSM → EC2 → S3)
 5. Resources can be destroyed cleanly

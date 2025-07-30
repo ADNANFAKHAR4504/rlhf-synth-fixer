@@ -417,7 +417,7 @@ Resources:
                   S3_KEY="backups/${{HOSTNAME}}/${{TIMESTAMP}}/backup_${{HOSTNAME}}_${{TIMESTAMP}}.tar.gz"
                   echo "Uploading to s3://${{BUCKET_NAME}}/${{S3_KEY}}"
                   
-                  aws s3 cp "$BACKUP_FILE" "s3://${{BUCKET_NAME}}/${{S3_KEY}}" --region us-west-2 || {{
+                  aws s3 cp "$BACKUP_FILE" "s3://${{BUCKET_NAME}}/${{S3_KEY}}" --region us-east-1 || {{
                     echo "Error: Failed to upload backup to S3"
                     rm -f "$BACKUP_FILE"
                     exit 1

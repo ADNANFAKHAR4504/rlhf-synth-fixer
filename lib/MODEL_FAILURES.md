@@ -17,13 +17,15 @@ The MODEL_RESPONSE.md provides a comprehensive CloudFormation template that cont
 ### Key Improvements in IDEAL_RESPONSE
 
 **✅ Technical Fixes Applied:**
+
 1. **Removed Custom SSM Document**: Uses built-in `AWS-RunShellScript` instead of creating custom SSM document
-2. **Simplified IAM Policies**: Better resource ARN targeting and cleaner permission structure  
+2. **Simplified IAM Policies**: Better resource ARN targeting and cleaner permission structure
 3. **Improved Error Handling**: Better exception handling in Lambda function
 4. **Consistent Naming**: More consistent resource naming conventions
 5. **Better Tagging**: Proper environment and name tags throughout resources
 
 **❌ Critical Technical Issues Fixed:**
+
 1. **Parameter Contradiction Resolved**: IDEAL_RESPONSE removes confusing InstanceId parameter that conflicted with created instance
 2. **Resource Optimization**: IDEAL_RESPONSE eliminates unnecessary custom SSM document, reducing complexity
 3. **IAM Policy Improvements**: Better resource ARN targeting and permission scoping
@@ -31,14 +33,14 @@ The MODEL_RESPONSE.md provides a comprehensive CloudFormation template that cont
 
 ### Comparison Table
 
-| Aspect | MODEL_RESPONSE | IDEAL_RESPONSE | Technical Impact |
-|--------|----------------|----------------|------------------|
-| **SSM Document** | ❌ Custom document (unnecessary complexity) | ✅ Built-in AWS-RunShellScript | Reduced deployment complexity |
-| **Parameter Logic** | ❌ Conflicting InstanceId parameter | ✅ Clean parameter structure | Eliminates deployment confusion |
-| **IAM Policies** | ❌ Over-complex resource ARNs | ✅ Simplified and targeted | Better security and maintainability |
-| **Lambda Code** | ✅ Functional but basic | ✅ Enhanced error handling | Improved operational reliability |
-| **Resource Naming** | ❌ Inconsistent conventions | ✅ Consistent naming pattern | Better resource management |
-| **Pipeline Validation** | ❌ Deployment issues | ✅ Passes all QA tests | Production-ready solution |
+| Aspect                  | MODEL_RESPONSE                              | IDEAL_RESPONSE                 | Technical Impact                    |
+| ----------------------- | ------------------------------------------- | ------------------------------ | ----------------------------------- |
+| **SSM Document**        | ❌ Custom document (unnecessary complexity) | ✅ Built-in AWS-RunShellScript | Reduced deployment complexity       |
+| **Parameter Logic**     | ❌ Conflicting InstanceId parameter         | ✅ Clean parameter structure   | Eliminates deployment confusion     |
+| **IAM Policies**        | ❌ Over-complex resource ARNs               | ✅ Simplified and targeted     | Better security and maintainability |
+| **Lambda Code**         | ✅ Functional but basic                     | ✅ Enhanced error handling     | Improved operational reliability    |
+| **Resource Naming**     | ❌ Inconsistent conventions                 | ✅ Consistent naming pattern   | Better resource management          |
+| **Pipeline Validation** | ❌ Deployment issues                        | ✅ Passes all QA tests         | Production-ready solution           |
 
 ---
 
@@ -189,7 +191,7 @@ Condition:
 
 **PROMPT Success Criteria (Line 62):**
 
-- "Deployment succeeds in us-west-2 region"
+- "Deployment succeeds in us-east-1 region"
 - Clear expectation of working with existing infrastructure
 
 **MODEL_RESPONSE Contradiction:**
@@ -232,7 +234,7 @@ Condition:
 
 ```yaml
 Runtime: python3.9 # Should be parameterized or use latest
-Region: us-west-2 # Hard-coded in script, not using AWS::Region
+Region: us-east-1 # Hard-coded in script, not using AWS::Region
 ```
 
 ---
@@ -303,6 +305,7 @@ Based on analysis of 15+ archive projects (Pr101, Pr107, Pr119, Pr100, etc.), su
 ### IDEAL_RESPONSE Improvements Over MODEL_RESPONSE
 
 **✅ Technical Quality Improvements:**
+
 1. **SSM Simplification**: Removes custom SSM document, uses built-in `AWS-RunShellScript`
 2. **Cleaner IAM Policies**: Better resource ARN references and permission scoping
 3. **Improved Lambda Code**: Better error handling and logging practices
@@ -311,6 +314,7 @@ Based on analysis of 15+ archive projects (Pr101, Pr107, Pr119, Pr100, etc.), su
 
 **✅ Key Technical Achievements in IDEAL_RESPONSE:**
 The IDEAL_RESPONSE successfully addresses the core technical failures:
+
 - Eliminates unnecessary custom SSM document complexity
 - Provides clean, maintainable Lambda code with proper error handling
 - Uses standard AWS service capabilities effectively
@@ -319,6 +323,7 @@ The IDEAL_RESPONSE successfully addresses the core technical failures:
 ### Technical Success Metrics
 
 **IDEAL_RESPONSE Achievements:**
+
 - ✅ **Deployment Success**: Passes `npm run cfn:deploy-yaml` without errors
 - ✅ **Test Coverage**: Achieves 100% unit test coverage (50/50 tests passing)
 - ✅ **Integration Validation**: 30/31 integration tests passing with live AWS resources
@@ -331,8 +336,9 @@ The IDEAL_RESPONSE successfully addresses the core technical failures:
 - **IDEAL_RESPONSE Severity**: RESOLVED (all critical technical issues fixed, passes QA pipeline)
 
 **Key Improvements:**
+
 - Custom SSM document eliminated → Uses standard AWS services
-- Parameter contradictions resolved → Clean, consistent parameter structure  
+- Parameter contradictions resolved → Clean, consistent parameter structure
 - IAM policies simplified → Better security and maintainability
 - Lambda code enhanced → Proper error handling and operational reliability
 - Complete validation success → Production-ready solution
