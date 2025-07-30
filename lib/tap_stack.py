@@ -399,17 +399,17 @@ echo "<h1>Hello from $(hostname -f)</h1>" > /var/www/html/index.html
       max_size=self.max_size,
       min_size=self.min_size,
       vpc_zone_identifier=[subnet.id for subnet in self.private_subnets],
-      launch_template=[{
+      launch_template={
         "id": self.launch_template.id,
         "version": "$Latest"
-      }],
+      },
       target_group_arns=[self.target_group.arn],
       health_check_type="ELB",
       health_check_grace_period=300,
       tag=[{
         "key": "Name",
         "value": "prod-asg-instance",
-        "propagate_at_launch": True
+        "propagateAtLaunch": True
       }]
     )
 
@@ -437,7 +437,12 @@ echo "<h1>Hello from $(hostname -f)</h1>" > /var/www/html/index.html
     )
 
 
-# CDKTF App Entry Point
-app = App()
-TapStack(app, "production-infrastructure")
-app.synth()
+# CDKTF App Entry Point - only run when executed directly
+if __name__ == "__main__":
+  from cdktf import App
+  app = App()
+  TapStack(app, "production-infrastructure")
+  app.synth()
+
+
+
