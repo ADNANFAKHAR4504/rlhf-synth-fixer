@@ -1,4 +1,3 @@
-
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
@@ -15,7 +14,7 @@ import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 interface EnvironmentConfig {
   lambdaMemory: number;
   dynamoDbReadCapacity: number;
-  dynamoDbWriteCapacity: number; 
+  dynamoDbWriteCapacity: number;
   enableFeatureX: boolean; // Example feature flag
 }
 
@@ -36,17 +35,17 @@ export class TapStack extends cdk.Stack {
     // --- Environment and Feature Flag Configuration Strategy ---
     // Define sensible defaults for a 'dev' environment
     const defaultConfig: EnvironmentConfig = {
-        lambdaMemory: 128,
-        dynamoDbReadCapacity: 5,
-        dynamoDbWriteCapacity: 5,
-        enableFeatureX: false,
+      lambdaMemory: 128,
+      dynamoDbReadCapacity: 5,
+      dynamoDbWriteCapacity: 5,
+      enableFeatureX: false,
     };
 
     // Read environment-specific configuration and merge with defaults
     // This allows for overriding only specific values per environment.
     const envConfig: EnvironmentConfig = {
-        ...defaultConfig,
-        ...this.node.tryGetContext(environmentSuffix),
+      ...defaultConfig,
+      ...this.node.tryGetContext(environmentSuffix),
     };
 
     // --- Comprehensive Tagging Strategy ---
@@ -58,13 +57,19 @@ export class TapStack extends cdk.Stack {
 
     // --- Account-Level Setup: API Gateway CloudWatch Logs Role ---
     // This part ensures that API Gateway has the necessary permissions to push logs to CloudWatch.
-    const apiGatewayCloudWatchRole = new iam.Role(this, 'ApiGatewayCloudWatchLogsRole', {
-      assumedBy: new iam.ServicePrincipal('apigateway.amazonaws.com'),
-      managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AmazonAPIGatewayPushToCloudWatchLogs'),
-      ],
-      description: 'IAM role for API Gateway to push logs to CloudWatch Logs',
-    });
+    const apiGatewayCloudWatchRole = new iam.Role(
+      this,
+      'ApiGatewayCloudWatchLogsRole',
+      {
+        assumedBy: new iam.ServicePrincipal('apigateway.amazonaws.com'),
+        managedPolicies: [
+          iam.ManagedPolicy.fromAwsManagedPolicyName(
+            'service-role/AmazonAPIGatewayPushToCloudWatchLogs'
+          ),
+        ],
+        description: 'IAM role for API Gateway to push logs to CloudWatch Logs',
+      }
+    );
 
     new apigw.CfnAccount(this, 'ApiGatewayAccountSettings', {
       cloudWatchRoleArn: apiGatewayCloudWatchRole.roleArn,
@@ -72,7 +77,8 @@ export class TapStack extends cdk.Stack {
 
     new cdk.CfnOutput(this, 'ApiGatewayCloudWatchLogsRoleArn', {
       value: apiGatewayCloudWatchRole.roleArn,
-      description: 'ARN of the IAM role used by API Gateway for CloudWatch Logs',
+      description:
+        'ARN of the IAM role used by API Gateway for CloudWatch Logs',
     });
 
     // --- Product Microservice Components ---
@@ -83,7 +89,10 @@ export class TapStack extends cdk.Stack {
       billingMode: dynamodb.BillingMode.PROVISIONED,
       readCapacity: envConfig.dynamoDbReadCapacity,
       writeCapacity: envConfig.dynamoDbWriteCapacity,
-      removalPolicy: environmentSuffix === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
+      removalPolicy:
+        environmentSuffix === 'prod'
+          ? cdk.RemovalPolicy.RETAIN
+          : cdk.RemovalPolicy.DESTROY,
       // FIX: Use pointInTimeRecoverySpecification instead of the deprecated pointInTimeRecovery
       pointInTimeRecoverySpecification: { pointInTimeRecoveryEnabled: true },
       encryption: dynamodb.TableEncryption.AWS_MANAGED,
@@ -107,7 +116,9 @@ export class TapStack extends cdk.Stack {
     const productLambdaRole = new iam.Role(this, 'ProductLambdaRole', {
       assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
       managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicExecutionRole'),
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'service-role/AWSLambdaBasicExecutionRole'
+        ),
       ],
     });
 
@@ -115,11 +126,18 @@ export class TapStack extends cdk.Stack {
     productEventsTopic.grantPublish(productLambdaRole);
 
     // FIX: Explicitly create a LogGroup to manage retention, replacing the deprecated `logRetention` property.
-    const productLambdaLogGroup = new logs.LogGroup(this, 'ProductLambdaLogGroup', {
+    const productLambdaLogGroup = new logs.LogGroup(
+      this,
+      'ProductLambdaLogGroup',
+      {
         retention: logs.RetentionDays.ONE_WEEK,
         // Ensure the log group is destroyed when the stack is destroyed for non-prod environments
-        removalPolicy: environmentSuffix === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
-    });
+        removalPolicy:
+          environmentSuffix === 'prod'
+            ? cdk.RemovalPolicy.RETAIN
+            : cdk.RemovalPolicy.DESTROY,
+      }
+    );
 
     // Lambda Function for Product API
     const productLambda = new lambda.Function(this, 'ProductLambda', {
@@ -163,40 +181,53 @@ export class TapStack extends cdk.Stack {
     cdk.Tags.of(api).add('Service', 'ProductService');
 
     const productsResource = api.root.addResource('products');
-    productsResource.addMethod('GET', new apigw.LambdaIntegration(productLambda));
-    productsResource.addMethod('POST', new apigw.LambdaIntegration(productLambda));
+    productsResource.addMethod(
+      'GET',
+      new apigw.LambdaIntegration(productLambda)
+    );
+    productsResource.addMethod(
+      'POST',
+      new apigw.LambdaIntegration(productLambda)
+    );
 
     // --- Observability: CloudWatch Alarms ---
     // Alarm for Lambda errors
-    productLambda.metricErrors().with({ statistic: 'Sum', period: Duration.minutes(1) })
+    productLambda
+      .metricErrors()
+      .with({ statistic: 'Sum', period: Duration.minutes(1) })
       .createAlarm(this, 'ProductLambdaErrorsAlarm', {
         threshold: 1,
         evaluationPeriods: 1,
-        comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+        comparisonOperator:
+          cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
         alarmDescription: 'Alarm if Product Lambda function has errors',
       });
 
     // Alarm for API Gateway 5xx errors
-    api.metricServerError({ period: Duration.minutes(1), statistic: 'Sum' })
+    api
+      .metricServerError({ period: Duration.minutes(1), statistic: 'Sum' })
       .createAlarm(this, 'ProductApi5xxErrorsAlarm', {
         threshold: 1,
         evaluationPeriods: 1,
-        comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+        comparisonOperator:
+          cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
         alarmDescription: 'Alarm if Product API Gateway has 5xx errors',
       });
 
     // Alarm for DynamoDB throttled requests
-    const dynamoDbThrottleMetric = productsTable.metricThrottledRequestsForOperations({
-      operations: [dynamodb.Operation.GET_ITEM, dynamodb.Operation.QUERY],
-      statistic: 'Sum',
-      period: Duration.minutes(5),
-    });
+    const dynamoDbThrottleMetric =
+      productsTable.metricThrottledRequestsForOperations({
+        operations: [dynamodb.Operation.GET_ITEM, dynamodb.Operation.QUERY],
+        statistic: 'Sum',
+        period: Duration.minutes(5),
+      });
 
     new cloudwatch.Alarm(this, 'DynamoDbReadThrottleAlarm', {
       metric: dynamoDbThrottleMetric,
       threshold: 10,
       evaluationPeriods: 1,
-      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+      comparisonOperator:
+        cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
       alarmDescription: 'Alarm if DynamoDB read capacity is throttled',
     });
 
@@ -220,7 +251,6 @@ export class TapStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'ProductLambdaFunctionName', {
       value: productLambda.functionName,
       description: 'The name of the Product Lambda function',
-});
+    });
   }
 }
-
