@@ -278,6 +278,7 @@ jobs:
 
           if [ "$PLATFORM" = "cdk" ]; then
             echo "✅ CDK project detected, running CDK bootstrap..."
+            rm -rf cdk.out
             npm run cdk:bootstrap
 
           elif [ "$PLATFORM" = "pulumi" ]; then
