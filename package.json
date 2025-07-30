@@ -111,6 +111,7 @@
     "aws-cdk-lib": "2.204.0",
     "cdktf": "^0.21.0",
     "cdktf-cli": "0.21.0",
-    "constructs": "10.4.2"
+    "constructs": "10.4.2",
+    "source-map-support": "^0.5.21"
   }
 }

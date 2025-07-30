@@ -282,7 +282,7 @@ export class TapStack extends pulumi.ComponentResource {
 
     // Register outputs for the component resource.
     this.registerOutputs({
-        apiUrl: this.apiUrl,
+      apiUrl: this.apiUrl,
     });
   }
 }
