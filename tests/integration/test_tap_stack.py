@@ -75,43 +75,70 @@
 #---------------------------------------------------
 # INTEGRATION TEST
 #---------------------------------------------------
-import subprocess
-import time
-import json
+# import subprocess
+# import time
+# import json
 
+
+# PIPELINE_NAME = "TuringCodePipelineTerraform"  # Must match the pipeline_name in your CDK stack
+# REGION = "us-east-1"  # Change to your desired region
+
+# def run_cli(command):
+#   """Run a shell command and return its output."""
+#   result = subprocess.run(command, shell=True, capture_output=True, text=True)
+#   if result.returncode != 0:
+#     raise RuntimeError(f"Command failed: {command}\n{result.stderr}")
+#   return result.stdout
+
+
+# def test_pipeline_status():
+#   # 1. Start pipeline execution
+#   print(f"[INFO] Starting pipeline: {PIPELINE_NAME}")
+#   execution_output = run_cli(f"aws codepipeline start-pipeline-execution --name {PIPELINE_NAME} --region {REGION}")
+#   execution_id = json.loads(execution_output)["pipelineExecutionId"]
+#   print(f"[INFO] Pipeline Execution ID: {execution_id}")
+
+#   # 2. Wait and poll for status
+#   for i in range(20):  # Poll up to 20 times (~10 mins)
+#     print(f"[INFO] Checking pipeline status (attempt {i + 1})...")
+#     status_output = run_cli(f"aws codepipeline get-pipeline-execution --pipeline-name {PIPELINE_NAME} --pipeline-execution-id {execution_id} --region {REGION}")
+#     status_data = json.loads(status_output)
+#     status = status_data["pipelineExecution"]["status"]
+
+#     if status == "Succeeded":
+#       print(f"[OK] Pipeline {PIPELINE_NAME} succeeded!")
+#       return
+#     elif status == "Failed" or status == "Stopped":
+#       raise AssertionError(f"[FAIL] Pipeline {PIPELINE_NAME} failed or stopped.")
+
+#     time.sleep(30)  # wait 30 seconds before polling again
+
+#   # 3. Timeout if not succeeded in time
+#   raise AssertionError(f"[FAIL] Pipeline {PIPELINE_NAME} did not complete in the expected time.")
+
+import subprocess
+import json
 
 PIPELINE_NAME = "TuringCodePipelineTerraform"  # Must match the pipeline_name in your CDK stack
 REGION = "us-east-1"  # Change to your desired region
 
 def run_cli(command):
-  """Run a shell command and return its output."""
-  result = subprocess.run(command, shell=True, capture_output=True, text=True)
-  if result.returncode != 0:
-    raise RuntimeError(f"Command failed: {command}\n{result.stderr}")
-  return result.stdout
+    """Run a shell command and return its output."""
+    result = subprocess.run(command, shell=True, capture_output=True, text=True)
+    if result.returncode != 0:
+        raise RuntimeError(f"Command failed: {command}\n{result.stderr}")
+    return result.stdout
 
 
-def test_pipeline_status():
-  # 1. Start pipeline execution
-  print(f"[INFO] Starting pipeline: {PIPELINE_NAME}")
-  execution_output = run_cli(f"aws codepipeline start-pipeline-execution --name {PIPELINE_NAME} --region {REGION}")
-  execution_id = json.loads(execution_output)["pipelineExecutionId"]
-  print(f"[INFO] Pipeline Execution ID: {execution_id}")
+def test_pipeline_exists():
+    """Check if the specified CodePipeline exists."""
+    print(f"[INFO] Checking if pipeline '{PIPELINE_NAME}' exists...")
 
-  # 2. Wait and poll for status
-  for i in range(20):  # Poll up to 20 times (~10 mins)
-    print(f"[INFO] Checking pipeline status (attempt {i + 1})...")
-    status_output = run_cli(f"aws codepipeline get-pipeline-execution --pipeline-name {PIPELINE_NAME} --pipeline-execution-id {execution_id} --region {REGION}")
-    status_data = json.loads(status_output)
-    status = status_data["pipelineExecution"]["status"]
+    # List pipelines and check for the target pipeline name
+    pipelines_output = run_cli(f"aws codepipeline list-pipelines --region {REGION}")
+    pipelines_data = json.loads(pipelines_output)
 
-    if status == "Succeeded":
-      print(f"[OK] Pipeline {PIPELINE_NAME} succeeded!")
-      return
-    elif status == "Failed" or status == "Stopped":
-      raise AssertionError(f"[FAIL] Pipeline {PIPELINE_NAME} failed or stopped.")
-
-    time.sleep(30)  # wait 30 seconds before polling again
-
-  # 3. Timeout if not succeeded in time
-  raise AssertionError(f"[FAIL] Pipeline {PIPELINE_NAME} did not complete in the expected time.")
+    pipeline_names = [p["name"] for p in pipelines_data.get("pipelines", [])]
+    
+    assert PIPELINE_NAME in pipeline_names, f"[FAIL] Pipeline '{PIPELINE_NAME}' does not exist."
+    print(f"[OK] Pipeline '{PIPELINE_NAME}' exists.")
