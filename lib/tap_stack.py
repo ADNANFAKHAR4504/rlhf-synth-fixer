@@ -4,7 +4,7 @@ Implements: VPC + Multi-AZ + ASG + ELB + NAT Gateway + State Management
 
 import json
 from constructs import Construct
-from cdktf import TerraformStack, TerraformOutput, S3Backend
+from cdktf import TerraformStack, TerraformOutput, S3Backend, App
 from cdktf_cdktf_provider_aws.provider import AwsProvider
 from cdktf_cdktf_provider_aws.vpc import Vpc
 from cdktf_cdktf_provider_aws.subnet import Subnet
@@ -435,3 +435,9 @@ echo "<h1>Hello from $(hostname -f)</h1>" > /var/www/html/index.html
       value=self.state_bucket_resource.id,
       description="Terraform State Bucket Name"
     )
+
+
+# CDKTF App Entry Point
+app = App()
+TapStack(app, "production-infrastructure")
+app.synth()
