@@ -3,6 +3,7 @@ import { App } from 'cdktf';
 import { TapStack } from '../lib/tap-stack';
 
 const app = new App();
+//new TapStack(app, "image-processing-pipeline");
 
 // Get environment variables from the environment or use defaults
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
