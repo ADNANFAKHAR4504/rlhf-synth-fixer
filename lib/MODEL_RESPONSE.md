@@ -1,89 +1,232 @@
-# MODEL_RESPONSE.md
+<yaml_code>
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Highly available web application infrastructure with ALB, ASG, RDS, and S3
 
-This document describes the model's response to provisioning a high-availability web application infrastructure on AWS using CloudFormation. The model provisions all required components including ALB, Auto Scaling Group, RDS (Multi-AZ), S3 buckets, and Route 53, adhering to security and scalability best practices.
+Parameters:
+  ACMCertificateARN:
+    Type: String
+    Description: ARN of the ACM certificate
+  HostedZoneId:
+    Type: String
+    Description: Route 53 Hosted Zone ID
+  DomainName:
+    Type: String
+    Description: Custom domain name
+  DBMasterPassword:
+    Type: String
+    NoEcho: true
+    Description: Master password for RDS
 
----
+Resources:
+  # VPC & Networking
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties: 
+      CidrBlock: 10.0.0.0/16
+      EnableDnsSupport: true
+      Tags: [{Key: Environment, Value: Production}]
 
-## ✅ Infrastructure Components Created
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.1.0/24
+      AvailabilityZone: us-west-2a
+      Tags: [{Key: Environment, Value: Production}]
 
-### 1. **Networking**
-- **VPC** with CIDR `10.0.0.0/16` and DNS support enabled.
-- **2 Public Subnets** for ALB and EC2 in different AZs.
-- **2 Private Subnets** for RDS in different AZs.
-- **Internet Gateway** and attachment to the VPC.
-- **Route Table** and associations for public subnets.
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.2.0/24
+      AvailabilityZone: us-west-2b
+      Tags: [{Key: Environment, Value: Production}]
 
-### 2. **Security Groups**
-- **ALBSecurityGroup**: Allows inbound HTTPS (443) from internet.
-- **ASGSecurityGroup**: Allows HTTP (80) from ALB SG.
-- **RDSSecurityGroup**: Allows MySQL (3306) from ASG SG.
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties: {}
 
-### 3. **Load Balancing**
-- **Application Load Balancer**:
-  - Internet-facing
-  - Access logs enabled to S3 (`tapstack-pr222-alb-logs`)
-- **HTTPS Listener**:
-  - Uses certificate from ACM (parameterized)
-  - Forwards to target group
+  IGWAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
 
-### 4. **Compute Layer**
-- **LaunchTemplate** for EC2 instances:
-  - Amazon Linux AMI
-  - Installs and starts Apache
-  - Echoes health page
-- **AutoScalingGroup**:
-  - Min 2, Max 4 instances
-  - Spreads across 2 AZs
-  - Connected to ALB Target Group
+  # Security Groups
+  ALBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow HTTPS from internet
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+      Tags: [{Key: Environment, Value: Production}]
 
-### 5. **Database Layer**
-- **RDS (MySQL)**:
-  - Multi-AZ deployment
-  - Username/password from Secrets Manager
-  - Located in private subnets
+  ASGSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow HTTP from ALB
+      VpcId: !Ref VPC
+      Tags: [{Key: Environment, Value: Production}]
 
-### 6. **S3 Buckets**
-- **ALBLogsBucket**:
-  - Bucket policy allows ELB log delivery
-- **StaticAssetsBucket**:
-  - Configured for static website hosting
-  - Blocked public ACLs & policies
+  RDSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow MySQL from ASG
+      VpcId: !Ref VPC
+      Tags: [{Key: Environment, Value: Production}]
 
-### 7. **Route 53 DNS**
-- A record alias for ALB DNS
-- Domain name passed via parameter
+  RDSIngressRule:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref RDSSecurityGroup
+      IpProtocol: tcp
+      FromPort: 3306
+      ToPort: 3306
+      SourceSecurityGroupId: !Ref ASGSecurityGroup
 
----
+  # ALB & Target Group
+  ApplicationLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: WebAppALB
+      Subnets: [!Ref PublicSubnet1, !Ref PublicSubnet2]
+      SecurityGroups: [!Ref ALBSecurityGroup]
+      Scheme: internet-facing
 
-## 🛡️ Security & Best Practices
+  ALBListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref ApplicationLoadBalancer
+      Port: 443
+      Protocol: HTTPS
+      Certificates: [!Ref ACMCertificateARN]
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref WebAppTargetGroup
 
-- Uses **parameterized** values for certificate ARN, domain, and hosted zone.
-- IAM role for EC2 instance only allows `s3:GetObject` on specific bucket.
-- Access logs for ALB are securely stored.
-- Tagging all resources with `Environment: Production`.
+  WebAppTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      VpcId: !Ref VPC
+      Port: 80
+      Protocol: HTTP
+      HealthCheckPath: /health
 
----
+  # EC2 & ASG
+  EC2InstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: {Service: ec2.amazonaws.com}
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: S3ReadOnly
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: s3:GetObject
+                Resource: !Sub arn:aws:s3:::${StaticAssetsBucket}/*
 
-## 📦 Output Variables
+  LaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: WebAppLaunchTemplate
+      LaunchTemplateData:
+        InstanceType: t3.micro
+        ImageId: ami-0abcdef1234567890 # Amazon Linux 2
+        SecurityGroupIds: [!Ref ASGSecurityGroup]
+        IamInstanceProfile:
+          Arn: !GetAtt EC2InstanceRole.Arn
+        UserData:
+          Fn::Base64: |
+            #!/bin/bash
+            yum update -y
+            yum install -y httpd
+            systemctl start httpd
+            echo "Hello World" > /var/www/html/index.html
 
-- `ALBDNSName`: DNS name of the ALB
-- `StaticAssetsURL`: Public website link for static assets
-- `Route53Record`: Full domain name mapped to ALB
+  AutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      VPCZoneIdentifier: [!Ref PublicSubnet1, !Ref PublicSubnet2]
+      LaunchTemplate:
+        LaunchTemplateId: !Ref LaunchTemplate
+        Version: !GetAtt LaunchTemplate.LatestVersionNumber
+      MinSize: 2
+      MaxSize: 4
+      TargetGroupARNs: [!Ref WebAppTargetGroup]
+      Tags:
+        - Key: Name
+          Value: WebAppInstance
+          PropagateAtLaunch: true
 
----
+  # RDS Database
+  RDSInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceClass: db.t3.micro
+      AllocatedStorage: 20
+      Engine: mysql
+      MasterUsername: admin
+      MasterUserPassword: !Ref DBMasterPassword
+      MultiAZ: true
+      VPCSecurityGroups: [!Ref RDSSecurityGroup]
+      DBSubnetGroupName: !Ref DefaultDBSubnetGroup
 
-## 📁 File & Template Source
+  # S3 Buckets
+  ALBLogsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub ${AWS::StackName}-alb-logs
+      AccessControl: LogDeliveryWrite
 
-- Source: `lib/TapStack.yml`
-- Format: CloudFormation YAML
-- Deployment method: CI/CD pipeline or manual using `aws cloudformation deploy`
+  StaticAssetsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub ${AWS::StackName}-static-assets
+      WebsiteConfiguration:
+        IndexDocument: index.html
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: false
+        IgnorePublicAcls: false
+        BlockPublicPolicy: false
+        RestrictPublicBuckets: false
 
----
+  # Route 53
+  DNSRecord:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Ref DomainName
+      Type: A
+      AliasTarget:
+        DNSName: !GetAtt ApplicationLoadBalancer.DNSName
+        HostedZoneId: !GetAtt ApplicationLoadBalancer.CanonicalHostedZoneID
 
-## ✅ Summary
+Outputs:
+  ALBDNSName:
+    Value: !GetAtt ApplicationLoadBalancer.DNSName
+  StaticAssetsURL:
+    Value: !Sub http://${StaticAssetsBucket}.s3-website-${AWS::Region}.amazonaws.com
+  Route53Record:
+    Value: !Ref DNSRecord
+</yaml_code>
 
-The model meets all requirements:
-- High availability via Multi-AZ ASG and RDS
-- Secure by design using VPC, SGs, and Secrets Manager
-- Scalable and observable with ALB logs, ASG
-- DNS-resolved HTTPS endpoint with ACM & Route 53
+**Key Security Considerations:**
+1. HTTPS enforced through ALB
+2. RDS Multi-AZ with restricted security group
+3. IAM role with minimal S3 permissions
+4. NoEcho parameter for database password
+5. Security groups with least privilege access
+```
+
+This implementation follows AWS best practices for high availability through multi-AZ deployments, security through IAM roles and security groups, and maintainability through proper resource tagging and parameterization. The template is structured for clarity and uses intrinsic functions for dynamic configuration.

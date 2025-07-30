@@ -426,24 +426,56 @@ Outputs:
 
 ## Deployment Commands
 
+### Option 1: Automated Deployment with Output Collection (Recommended)
+
+```bash
+# Deploy stack and collect outputs in one command
+npm run cfn:deploy-with-outputs
+
+# Or set environment variables first
+export ENVIRONMENT_SUFFIX=dev
+export REPOSITORY=TuringGpt/iac-test-automations
+export COMMIT_AUTHOR="Your Name"
+npm run cfn:deploy-with-outputs
+
+# Destroy stack and cleanup outputs
+npm run cfn:destroy-with-cleanup
+```
+
+### Option 2: Manual Deployment Commands
+
 ```bash
 # Deploy the stack
 aws cloudformation deploy \
   --template-file lib/TapStack.yml \
-  --stack-name TapStack \
+  --stack-name TapStack${ENVIRONMENT_SUFFIX:-dev} \
   --capabilities CAPABILITY_IAM \
   --parameter-overrides \
+    EnvironmentSuffix=${ENVIRONMENT_SUFFIX:-dev} \
     ACMCertificateARN=arn:aws:acm:us-west-2:123456789012:certificate/your-cert \
     HostedZoneId=Z1ABC2DE3FGHIJ \
     DomainName=mywebapp.example.com \
     DBMasterPassword=SecurePassword123!
 
-# Collect outputs for integration testing
+# Manually collect outputs for integration testing
+mkdir -p cfn-outputs
 aws cloudformation describe-stacks \
-  --stack-name TapStack \
+  --stack-name TapStack${ENVIRONMENT_SUFFIX:-dev} \
   --query 'Stacks[0].Outputs' \
   --output json > cfn-outputs/flat-outputs.json
 ```
+
+### Environment Variables
+
+- `ENVIRONMENT_SUFFIX`: Suffix for stack name (default: `dev`)
+- `REPOSITORY`: Repository name for tagging (default: `unknown`)
+- `COMMIT_AUTHOR`: Author name for tagging (default: `unknown`)
+
+### Deployment Scripts
+
+- `lib/deploy-and-collect-outputs.sh`: Deploys stack and collects outputs
+- `lib/destroy-stack.sh`: Destroys stack and cleans up output files
+- `cfn-outputs/flat-outputs.json`: Integration test outputs (created after deployment)
 
 ## Testing Strategy
 
