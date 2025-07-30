@@ -166,7 +166,7 @@ describe('Secure Multi-Tier CloudFormation Template', () => {
       const role = template.Resources.ConfigServiceRole;
       expect(role.Type).toBe('AWS::IAM::Role');
       expect(role.Properties.ManagedPolicyArns).toContain(
-        'arn:aws:iam::aws:policy/service-role/ConfigRole'
+        'arn:aws:iam::aws:policy/service-role/AWS_ConfigRole'
       );
     });
 

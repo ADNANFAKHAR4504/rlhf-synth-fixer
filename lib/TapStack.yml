@@ -752,6 +752,16 @@ Resources:
         IncludeGlobalResourceTypes: true
         ResourceTypes: []
 
+  # AWS Config Delivery Channel
+  ConfigDeliveryChannel:
+    Type: AWS::Config::DeliveryChannel
+    Properties:
+      Name: !Sub "config-delivery-channel-${EnvironmentSuffix}"
+      S3BucketName: !Ref ConfigBucket
+      S3KeyPrefix: "config"
+      ConfigSnapshotDeliveryProperties:
+        DeliveryFrequency: TwentyFour_Hours
+
   # AWS Config Rules
   S3BucketPublicAccessProhibited:
     Type: AWS::Config::ConfigRule
@@ -799,8 +809,6 @@ Resources:
       IsMultiRegionTrail: true
       IsLogging: true
       EnableLogFileValidation: true
-      CloudWatchLogsLogGroupArn: !Sub "${CloudTrailLogGroup.Arn}:*"
-      CloudWatchLogsRoleArn: !GetAtt CloudTrailRole.Arn
       EventSelectors:
         - ReadWriteType: All
           IncludeManagementEvents: true
