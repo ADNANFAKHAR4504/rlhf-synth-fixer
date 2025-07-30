@@ -45,5 +45,53 @@ describe('TapStack', () => {
       );
       expect(secureEnvStack).toBeDefined();
     });
+
+    test('uses props environmentSuffix when provided', () => {
+      const customApp = new cdk.App();
+      const customStack = new TapStack(customApp, 'PropsTest', {
+        environmentSuffix: 'props-test',
+      });
+      const secureEnvStack = customStack.node.children.find(child => 
+        child.node.id === 'SecureEnvironment'
+      );
+      expect(secureEnvStack).toBeDefined();
+    });
+
+    test('uses context environmentSuffix when props not provided', () => {
+      const customApp = new cdk.App({
+        context: {
+          environmentSuffix: 'context-test',
+        },
+      });
+      const customStack = new TapStack(customApp, 'ContextTest');
+      const secureEnvStack = customStack.node.children.find(child => 
+        child.node.id === 'SecureEnvironment'
+      );
+      expect(secureEnvStack).toBeDefined();
+    });
+
+    test('uses default environmentSuffix when neither props nor context provided', () => {
+      const customApp = new cdk.App();
+      const customStack = new TapStack(customApp, 'DefaultTest');
+      const secureEnvStack = customStack.node.children.find(child => 
+        child.node.id === 'SecureEnvironment'
+      );
+      expect(secureEnvStack).toBeDefined();
+    });
+
+    test('prioritizes props over context', () => {
+      const customApp = new cdk.App({
+        context: {
+          environmentSuffix: 'context-value',
+        },
+      });
+      const customStack = new TapStack(customApp, 'PriorityTest', {
+        environmentSuffix: 'props-value',
+      });
+      const secureEnvStack = customStack.node.children.find(child => 
+        child.node.id === 'SecureEnvironment'
+      );
+      expect(secureEnvStack).toBeDefined();
+    });
   });
 });

@@ -17,6 +17,30 @@ describe('SecureEnvironmentStack', () => {
     template = Template.fromStack(stack);
   });
 
+  describe('Environment Suffix Handling', () => {
+    test('uses provided environmentSuffix when passed in props', () => {
+      const customApp = new cdk.App();
+      const customStack = new SecureEnvironmentStack(customApp, 'CustomStack', {
+        environmentSuffix: 'custom',
+      });
+      const customTemplate = Template.fromStack(customStack);
+
+      customTemplate.hasResourceProperties('AWS::Logs::LogGroup', {
+        LogGroupName: '/aws/vpc/flowlogs/custom',
+      });
+    });
+
+    test('uses default environmentSuffix when not provided', () => {
+      const customApp = new cdk.App();
+      const customStack = new SecureEnvironmentStack(customApp, 'DefaultStack');
+      const customTemplate = Template.fromStack(customStack);
+
+      customTemplate.hasResourceProperties('AWS::Logs::LogGroup', {
+        LogGroupName: '/aws/vpc/flowlogs/dev',
+      });
+    });
+  });
+
   describe('VPC Configuration', () => {
     test('creates VPC with correct CIDR and subnets', () => {
       template.hasResourceProperties('AWS::EC2::VPC', {
