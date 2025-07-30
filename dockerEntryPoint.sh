@@ -3,7 +3,8 @@ set -e
 
 echo "=== Docker Entry Point - Starting CI/CD Pipeline ==="
 
-chmod -R +x scripts
+# Run setup.sh to prepare the environment
+./scripts/setup.sh
 
 # Set up AWS credentials if they exist
 if [ -n "$AWS_ACCESS_KEY_ID" ] && [ -n "$AWS_SECRET_ACCESS_KEY" ]; then
