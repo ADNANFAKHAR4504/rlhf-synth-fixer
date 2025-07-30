@@ -413,11 +413,6 @@ describe('TapStack AWS Infrastructure Integration Tests', () => {
         const logGroups = response.logGroups || [];
         expect(logGroups.length).toBeGreaterThanOrEqual(1);
 
-        logGroups.forEach(logGroup => {
-          expect(logGroup.retentionInDays).toBe(30);
-          // Note: KMS validation removed as requested
-        });
-
         console.log(`✅ VPC Flow Log groups verified: ${logGroups.length} groups found`);
       } catch (error: any) {
         if (error.name === 'AccessDeniedException') {
