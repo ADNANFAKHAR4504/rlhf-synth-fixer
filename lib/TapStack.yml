@@ -13,6 +13,10 @@ Metadata:
         Parameters:
           - AllowedSSHCidr
           - InstanceType
+      - Label:
+          default: "AWS Config Configuration"
+        Parameters:
+          - ExistingConfigRecorderName
 
 Parameters:
   EnvironmentSuffix:
@@ -37,6 +41,11 @@ Parameters:
       - t3.micro
       - t3.small
       - t3.medium
+
+  ExistingConfigRecorderName:
+    Type: String
+    Default: "TapConfigRecorder-pr287"
+    Description: "Name of the existing AWS Config Configuration Recorder to use"
 
 Mappings:
   RegionMap:
@@ -704,7 +713,7 @@ Resources:
   # AWS CONFIG
   # ========================================
 
-  # AWS Config Delivery Channel (using existing ConfigurationRecorder: TapConfigRecorder-pr287)
+  # AWS Config Delivery Channel (works with existing ConfigurationRecorder)
   ConfigDeliveryChannel:
     Type: AWS::Config::DeliveryChannel
     Properties:
@@ -714,11 +723,11 @@ Resources:
       ConfigSnapshotDeliveryProperties:
         DeliveryFrequency: "TwentyFour_Hours"
 
-  # AWS Config Rules (using existing ConfigurationRecorder: TapConfigRecorder-pr287)
+  # AWS Config Rules (automatically use existing ConfigurationRecorder: TapConfigRecorder-pr287)
   S3BucketPublicAccessProhibited:
     Type: AWS::Config::ConfigRule
     Properties:
-      ConfigRuleName: "s3-bucket-public-access-prohibited"
+      ConfigRuleName: !Sub "s3-bucket-public-access-prohibited-${EnvironmentSuffix}"
       Description: "Checks that your Amazon S3 buckets do not allow public access"
       Source:
         Owner: AWS
@@ -727,7 +736,7 @@ Resources:
   RootAccessKeyCheck:
     Type: AWS::Config::ConfigRule
     Properties:
-      ConfigRuleName: "root-access-key-check"
+      ConfigRuleName: !Sub "root-access-key-check-${EnvironmentSuffix}"
       Description: "Checks whether the root user access key is available"
       Source:
         Owner: AWS
@@ -736,7 +745,7 @@ Resources:
   EC2SecurityGroupAttachedToENI:
     Type: AWS::Config::ConfigRule
     Properties:
-      ConfigRuleName: "ec2-security-group-attached-to-eni"
+      ConfigRuleName: !Sub "ec2-security-group-attached-to-eni-${EnvironmentSuffix}"
       Description: "Checks that security groups are attached to Amazon EC2 instances or ENIs"
       Source:
         Owner: AWS
@@ -842,3 +851,9 @@ Outputs:
     Value: !Ref EnvironmentSuffix
     Export:
       Name: !Sub "${AWS::StackName}-EnvironmentSuffix"
+
+  ExistingConfigRecorderName:
+    Description: "Name of the existing AWS Config Configuration Recorder being used"
+    Value: !Ref ExistingConfigRecorderName
+    Export:
+      Name: !Sub "${AWS::StackName}-ExistingConfigRecorderName"
