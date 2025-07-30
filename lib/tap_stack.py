@@ -5,14 +5,14 @@ import sys
 from cdktf import App, TerraformStack, S3Backend
 from constructs import Construct
 from cdktf_cdktf_provider_aws.provider import AwsProvider
+from cdktf_cdktf_provider_aws.s3_bucket import S3Bucket
+
+from tap import SecureAwsEnvironment
 
 # Import the SecureAwsEnvironment stack from your tap.py file
 # Make sure tap.py is in the same directory or accessible in your Python path
-from cdktf_cdktf_provider_aws.s3_bucket import S3Bucket
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
-from tap import SecureAwsEnvironment # This imports the SecureAwsEnvironment class
 
 # ----- ENVIRONMENT CONFIG (Global variables for the entire script) -----
 # These are the primary source of configuration values from environment variables
