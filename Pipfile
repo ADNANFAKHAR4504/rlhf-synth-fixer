@@ -19,7 +19,7 @@ pytest-cov = "*"
 pytest-env = "*"
 pylint = "*"
 pytest = "*"
-pulumi = "*"
+pulumi = "==3.109.0" 
 pulumi-aws = "*"
 
 [requires]

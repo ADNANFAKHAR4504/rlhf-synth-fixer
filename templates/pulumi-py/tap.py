@@ -12,7 +12,7 @@ different deployment environments (development, staging, production, etc.).
 import os
 import pulumi
 from pulumi import Config, ResourceOptions
-from lib.tap_stack import TapStack
+from lib.tap_stack import TapStack, TapStackArgs
 
 # Initialize Pulumi configuration
 config = Config()
@@ -31,10 +31,7 @@ default_tags = {
     'Author': commit_author,
 }
 
-TapStack(
-    STACK_NAME,
-    opts=ResourceOptions(
-        additional_secret_outputs=[],
-        tags=default_tags
-    )
+stack = TapStack(
+    name="pulumi-infra",
+    args=TapStackArgs(environment_suffix=environment_suffix),
 )

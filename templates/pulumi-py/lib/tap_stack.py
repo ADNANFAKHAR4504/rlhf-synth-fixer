@@ -19,17 +19,17 @@ from pulumi_aws import s3  # example import for any AWS resource
 
 
 class TapStackArgs:
-    """
-    TapStackArgs defines the input arguments for the TapStack Pulumi component.
+  """
+  TapStackArgs defines the input arguments for the TapStack Pulumi component.
 
-    Args:
-        environment_suffix (Optional[str]): An optional suffix for identifying the deployment environment (e.g., 'dev', 'prod').
-        tags (Optional[dict]): Optional default tags to apply to resources.
-    """
+  Args:
+    environment_suffix (Optional[str]): An optional suffix for identifying the deployment environment (e.g., 'dev', 'prod').
+    tags (Optional[dict]): Optional default tags to apply to resources.
+  """
 
-    def __init__(self, environment_suffix: Optional[str] = None, tags: Optional[dict] = None):
-        self.environment_suffix = environment_suffix or 'dev'
-        self.tags = tags or {}
+  def __init__(self, environment_suffix: Optional[str] = None, tags: Optional[dict] = None):
+    self.environment_suffix = environment_suffix or 'dev'
+    self.tags = tags
 
 
 class TapStack(pulumi.ComponentResource):
@@ -62,9 +62,10 @@ class TapStack(pulumi.ComponentResource):
 
         # Example usage of suffix and tags
         # You would replace this with instantiation of imported components like DynamoDBStack
-        s3.Bucket(f"tap-bucket-{self.environment_suffix}",
-                  tags=self.tags,
-                  opts=ResourceOptions(parent=self))
+        
+        # s3.Bucket(f"tap-bucket-{self.environment_suffix}",
+        #           tags=self.tags,
+        #           opts=ResourceOptions(parent=self))
 
         # self.table = dynamodb_stack.table if you instantiate one
 

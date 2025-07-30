@@ -32,6 +32,6 @@ default_tags = {
 }
 
 stack = TapStack(
-    name="tap-infra",
+    name="pulumi-infra",
     args=TapStackArgs(environment_suffix=environment_suffix),
 )
