@@ -1,3 +1,4 @@
+```typescript
 import { Construct } from "constructs";
 import { AwsProvider, Vpc, Subnet, InternetGateway, RouteTable, RouteTableAssociation, NetworkAcl, NetworkAclRule, SecurityGroup, SecurityGroupRule } from "cdktf";
 
@@ -97,3 +98,4 @@ export class SecureVpcStack extends Construct {
     });
   }
 }
+```

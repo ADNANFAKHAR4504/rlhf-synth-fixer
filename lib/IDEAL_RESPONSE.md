@@ -1,3 +1,4 @@
+```typescript
 import { InternetGateway } from '@cdktf/provider-aws/lib/internet-gateway';
 import { NetworkAcl } from '@cdktf/provider-aws/lib/network-acl';
 import { NetworkAclRule } from '@cdktf/provider-aws/lib/network-acl-rule';
@@ -142,3 +143,4 @@ export class SecureVpcStack extends Construct {
     });
   }
 }
+```
