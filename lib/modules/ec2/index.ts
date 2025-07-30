@@ -14,7 +14,7 @@ export class Ec2Module extends Construct {
     const { subnetsModule, environment } = props;
 
     new Instance(this, 'DevInstance', {
-      ami: 'ami-0c55b159cbfafe1f0',
+      ami: 'ami-083e865b97bdf1c1b',
       instanceType: 't2.micro',
       subnetId: subnetsModule.publicSubnets[0].id,
       associatePublicIpAddress: true,
