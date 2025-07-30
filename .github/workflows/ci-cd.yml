@@ -334,7 +334,6 @@ jobs:
           PULUMI_BACKEND_URL: s3://${{ env.PULUMI_STATE_BUCKET }}
           PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
           AWS_DEFAULT_REGION: ${{ env.AWS_DEFAULT_REGION }}
-         
 
       - name: Get Deployment Outputs
         run: |
@@ -837,6 +836,7 @@ jobs:
             "tap.py"
             "setup.js"
             "cdktf.json"
+            "Pulumi.yaml"
             )
 
           # Move paths to archive
