@@ -8,8 +8,14 @@
   "subtask": "Infrastructure QA and Management",
   "subject_labels": [
     "Multi-Region Infrastructure Deployment",
-    "AWS CDK Python Implementation", 
+    "AWS CDK Python Implementation",
     "Security and Encryption Best Practices",
     "High Availability Architecture Design"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajendra-s-aws",
+  "dockerS3Location": ""
 }
