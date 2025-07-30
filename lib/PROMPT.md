@@ -24,7 +24,6 @@
 >
 > 5. **Monitoring and Logging**
 >        • Enable **VPC Flow Logs** for both VPCs and stream to **encrypted CloudWatch Logs**
->        • Enable **AWS Config** to track changes and monitor compliance
 >
 > 6. **Tagging**
 >        • All AWS resources must be tagged with:

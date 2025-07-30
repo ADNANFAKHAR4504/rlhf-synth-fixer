@@ -50,21 +50,6 @@ Resources:
               - 'kms:GenerateDataKey*'
               - 'kms:DescribeKey'
             Resource: '*'
-          # ✅ ADDED: Allow AWS Config Service
-          - Sid: Allow Config Service
-            Effect: Allow
-            Principal:
-              Service: config.amazonaws.com
-            Action:
-              - 'kms:Encrypt'
-              - 'kms:Decrypt'
-              - 'kms:ReEncrypt*'
-              - 'kms:GenerateDataKey*'
-              - 'kms:DescribeKey'
-            Resource: '*'
-            Condition:
-              StringEquals:
-                'aws:SourceAccount': !Ref 'AWS::AccountId'
       Tags:
         - Key: Environment
           Value: !Ref EnvironmentSuffix
@@ -444,26 +429,6 @@ Resources:
         - Key: Project
           Value: !Ref ProjectName
 
-  # Config Service Role - Allows AWS Config to access AWS resources and deliver configuration snapshots
-  ConfigServiceRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: config.amazonaws.com
-            Action: sts:AssumeRole
-            Condition:
-              StringEquals:
-                'aws:SourceAccount': !Ref 'AWS::AccountId'
-      Tags:
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Project
-          Value: !Ref ProjectName
-
   # FIXED: EC2 Instance Role - Minimal permissions for web application instances
   EC2InstanceRole:
     Type: AWS::IAM::Role
@@ -601,63 +566,6 @@ Resources:
               Bool:
                 'aws:SecureTransport': 'false'
 
-  # FIXED: Config Bucket Policy - Complete Version
-  ConfigBucketPolicy:
-    Type: AWS::S3::BucketPolicy
-    Properties:
-      Bucket: !Ref ConfigBucket
-      PolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Sid: AWSConfigBucketPermissionsCheck
-            Effect: Allow
-            Principal:
-              Service: config.amazonaws.com
-            Action: s3:GetBucketAcl
-            Resource: !GetAtt ConfigBucket.Arn
-            Condition:
-              StringEquals:
-                'AWS:SourceAccount': !Ref 'AWS::AccountId'
-          - Sid: AWSConfigBucketExistenceCheck
-            Effect: Allow
-            Principal:
-              Service: config.amazonaws.com
-            Action: s3:ListBucket
-            Resource: !GetAtt ConfigBucket.Arn
-            Condition:
-              StringEquals:
-                'AWS:SourceAccount': !Ref 'AWS::AccountId'
-          - Sid: AWSConfigBucketDelivery
-            Effect: Allow
-            Principal:
-              Service: config.amazonaws.com
-            Action: s3:PutObject
-            Resource: !Sub '${ConfigBucket.Arn}/*'
-            Condition:
-              StringEquals:
-                's3:x-amz-acl': bucket-owner-full-control
-                'AWS:SourceAccount': !Ref 'AWS::AccountId'
-          - Sid: AWSConfigBucketDeliveryCheck
-            Effect: Allow
-            Principal:
-              Service: config.amazonaws.com
-            Action: s3:GetBucketAcl
-            Resource: !GetAtt ConfigBucket.Arn
-            Condition:
-              StringEquals:
-                'AWS:SourceAccount': !Ref 'AWS::AccountId'
-          # ✅ ADDED: Deny insecure transport for Config bucket too
-          - Sid: DenyInsecureConnections
-            Effect: Deny
-            Principal: '*'
-            Action: 's3:*'
-            Resource:
-              - !Sub '${ConfigBucket.Arn}/*'
-              - !GetAtt ConfigBucket.Arn
-            Condition:
-              Bool:
-                'aws:SecureTransport': 'false'
-
   # =====================================================
   # CloudWatch Log Groups for VPC Flow Logs
   # =====================================================
@@ -717,46 +625,6 @@ Resources:
           Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref ProjectName
-
-  # =====================================================
-  # AWS Config Configuration
-  # =====================================================
-  ConfigBucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketEncryption:
-        ServerSideEncryptionConfiguration:
-          - ServerSideEncryptionByDefault:
-              SSEAlgorithm: aws:kms
-              KMSMasterKeyID: !Ref KMSKey
-            BucketKeyEnabled: true
-      VersioningConfiguration:
-        Status: Enabled
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-      Tags:
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Project
-          Value: !Ref ProjectName
-
-  ConfigurationRecorder:
-    Type: AWS::Config::ConfigurationRecorder
-    Properties:
-      Name: !Sub '${ProjectName}-ConfigRecorder'
-      RoleARN: !GetAtt ConfigServiceRole.Arn
-      RecordingGroup:
-        AllSupported: true
-        IncludeGlobalResourceTypes: true
-
-  ConfigDeliveryChannel:
-    Type: AWS::Config::DeliveryChannel
-    Properties:
-      Name: !Sub '${ProjectName}-ConfigDeliveryChannel'
-      S3BucketName: !Ref ConfigBucket
 
 Outputs:
   ProductionVPCId:

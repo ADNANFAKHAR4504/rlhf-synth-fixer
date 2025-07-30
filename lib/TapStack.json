@@ -56,28 +56,6 @@
                                 "kms:DescribeKey"
                             ],
                             "Resource": "*"
-                        },
-                        {
-                            "Sid": "Allow Config Service",
-                            "Effect": "Allow",
-                            "Principal": {
-                                "Service": "config.amazonaws.com"
-                            },
-                            "Action": [
-                                "kms:Encrypt",
-                                "kms:Decrypt",
-                                "kms:ReEncrypt*",
-                                "kms:GenerateDataKey*",
-                                "kms:DescribeKey"
-                            ],
-                            "Resource": "*",
-                            "Condition": {
-                                "StringEquals": {
-                                    "aws:SourceAccount": {
-                                        "Ref": "AWS::AccountId"
-                                    }
-                                }
-                            }
                         }
                     ]
                 },
@@ -814,44 +792,6 @@
                 ]
             }
         },
-        "ConfigServiceRole": {
-            "Type": "AWS::IAM::Role",
-            "Properties": {
-                "AssumeRolePolicyDocument": {
-                    "Version": "2012-10-17",
-                    "Statement": [
-                        {
-                            "Effect": "Allow",
-                            "Principal": {
-                                "Service": "config.amazonaws.com"
-                            },
-                            "Action": "sts:AssumeRole",
-                            "Condition": {
-                                "StringEquals": {
-                                    "aws:SourceAccount": {
-                                        "Ref": "AWS::AccountId"
-                                    }
-                                }
-                            }
-                        }
-                    ]
-                },
-                "Tags": [
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "EnvironmentSuffix"
-                        }
-                    },
-                    {
-                        "Key": "Project",
-                        "Value": {
-                            "Ref": "ProjectName"
-                        }
-                    }
-                ]
-            }
-        },
         "EC2InstanceRole": {
             "Type": "AWS::IAM::Role",
             "Properties": {
@@ -1105,123 +1045,6 @@
                 }
             }
         },
-        "ConfigBucketPolicy": {
-            "Type": "AWS::S3::BucketPolicy",
-            "Properties": {
-                "Bucket": {
-                    "Ref": "ConfigBucket"
-                },
-                "PolicyDocument": {
-                    "Version": "2012-10-17",
-                    "Statement": [
-                        {
-                            "Sid": "AWSConfigBucketPermissionsCheck",
-                            "Effect": "Allow",
-                            "Principal": {
-                                "Service": "config.amazonaws.com"
-                            },
-                            "Action": "s3:GetBucketAcl",
-                            "Resource": {
-                                "Fn::GetAtt": [
-                                    "ConfigBucket",
-                                    "Arn"
-                                ]
-                            },
-                            "Condition": {
-                                "StringEquals": {
-                                    "AWS:SourceAccount": {
-                                        "Ref": "AWS::AccountId"
-                                    }
-                                }
-                            }
-                        },
-                        {
-                            "Sid": "AWSConfigBucketExistenceCheck",
-                            "Effect": "Allow",
-                            "Principal": {
-                                "Service": "config.amazonaws.com"
-                            },
-                            "Action": "s3:ListBucket",
-                            "Resource": {
-                                "Fn::GetAtt": [
-                                    "ConfigBucket",
-                                    "Arn"
-                                ]
-                            },
-                            "Condition": {
-                                "StringEquals": {
-                                    "AWS:SourceAccount": {
-                                        "Ref": "AWS::AccountId"
-                                    }
-                                }
-                            }
-                        },
-                        {
-                            "Sid": "AWSConfigBucketDelivery",
-                            "Effect": "Allow",
-                            "Principal": {
-                                "Service": "config.amazonaws.com"
-                            },
-                            "Action": "s3:PutObject",
-                            "Resource": {
-                                "Fn::Sub": "${ConfigBucket.Arn}/*"
-                            },
-                            "Condition": {
-                                "StringEquals": {
-                                    "s3:x-amz-acl": "bucket-owner-full-control",
-                                    "AWS:SourceAccount": {
-                                        "Ref": "AWS::AccountId"
-                                    }
-                                }
-                            }
-                        },
-                        {
-                            "Sid": "AWSConfigBucketDeliveryCheck",
-                            "Effect": "Allow",
-                            "Principal": {
-                                "Service": "config.amazonaws.com"
-                            },
-                            "Action": "s3:GetBucketAcl",
-                            "Resource": {
-                                "Fn::GetAtt": [
-                                    "ConfigBucket",
-                                    "Arn"
-                                ]
-                            },
-                            "Condition": {
-                                "StringEquals": {
-                                    "AWS:SourceAccount": {
-                                        "Ref": "AWS::AccountId"
-                                    }
-                                }
-                            }
-                        },
-                        {
-                            "Sid": "DenyInsecureConnections",
-                            "Effect": "Deny",
-                            "Principal": "*",
-                            "Action": "s3:*",
-                            "Resource": [
-                                {
-                                    "Fn::Sub": "${ConfigBucket.Arn}/*"
-                                },
-                                {
-                                    "Fn::GetAtt": [
-                                        "ConfigBucket",
-                                        "Arn"
-                                    ]
-                                }
-                            ],
-                            "Condition": {
-                                "Bool": {
-                                    "aws:SecureTransport": "false"
-                                }
-                            }
-                        }
-                    ]
-                }
-            }
-        },
         "ProductionVPCFlowLogGroup": {
             "Type": "AWS::Logs::LogGroup",
             "Properties": {
@@ -1346,76 +1169,6 @@
                         }
                     }
                 ]
-            }
-        },
-        "ConfigBucket": {
-            "Type": "AWS::S3::Bucket",
-            "Properties": {
-                "BucketEncryption": {
-                    "ServerSideEncryptionConfiguration": [
-                        {
-                            "ServerSideEncryptionByDefault": {
-                                "SSEAlgorithm": "aws:kms",
-                                "KMSMasterKeyID": {
-                                    "Ref": "KMSKey"
-                                }
-                            },
-                            "BucketKeyEnabled": true
-                        }
-                    ]
-                },
-                "VersioningConfiguration": {
-                    "Status": "Enabled"
-                },
-                "PublicAccessBlockConfiguration": {
-                    "BlockPublicAcls": true,
-                    "BlockPublicPolicy": true,
-                    "IgnorePublicAcls": true,
-                    "RestrictPublicBuckets": true
-                },
-                "Tags": [
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "EnvironmentSuffix"
-                        }
-                    },
-                    {
-                        "Key": "Project",
-                        "Value": {
-                            "Ref": "ProjectName"
-                        }
-                    }
-                ]
-            }
-        },
-        "ConfigurationRecorder": {
-            "Type": "AWS::Config::ConfigurationRecorder",
-            "Properties": {
-                "Name": {
-                    "Fn::Sub": "${ProjectName}-ConfigRecorder"
-                },
-                "RoleARN": {
-                    "Fn::GetAtt": [
-                        "ConfigServiceRole",
-                        "Arn"
-                    ]
-                },
-                "RecordingGroup": {
-                    "AllSupported": true,
-                    "IncludeGlobalResourceTypes": true
-                }
-            }
-        },
-        "ConfigDeliveryChannel": {
-            "Type": "AWS::Config::DeliveryChannel",
-            "Properties": {
-                "Name": {
-                    "Fn::Sub": "${ProjectName}-ConfigDeliveryChannel"
-                },
-                "S3BucketName": {
-                    "Ref": "ConfigBucket"
-                }
             }
         }
     },
