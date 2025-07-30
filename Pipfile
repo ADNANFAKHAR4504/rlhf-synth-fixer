@@ -20,7 +20,7 @@ pytest-env = "*"
 pylint = "*"
 pytest = "*"
 pulumi = "==3.109.0" 
-pulumi-aws = "*"
+pulumi-aws = ">=6.0.0,<7.0.0"
 
 [requires]
 python_version = "3.12.11"
