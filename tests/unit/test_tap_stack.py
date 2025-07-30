@@ -19,8 +19,36 @@ class TestTapStack(unittest.TestCase):
     """Set up a fresh CDK app for each test"""
     self.app = cdk.App()
 
-  @mark.it("creates an S3 bucket with the correct environment suffix")
-  def test_creates_s3_bucket_with_env_suffix(self):
+  @mark.it("creates Lambda functions for HTTP request handling")
+  def test_creates_lambda_functions(self):
+    # ARRANGE
+    stack = TapStack(self.app, "TapStackTest")
+    template = Template.from_stack(stack)
+
+    # ASSERT
+    # Should have 3 Lambda functions (hello world + user info + log retention)
+    template.resource_count_is("AWS::Lambda::Function", 3)
+    
+    # Check Hello World Lambda properties
+    template.has_resource_properties("AWS::Lambda::Function", {
+        "Runtime": "python3.9",
+        "Handler": "index.lambda_handler",
+        "MemorySize": 128,
+        "Timeout": 30,
+        "Description": "Simple Hello World Lambda function"
+    })
+    
+    # Check User Info Lambda properties
+    template.has_resource_properties("AWS::Lambda::Function", {
+        "Runtime": "python3.9", 
+        "Handler": "index.lambda_handler",
+        "MemorySize": 128,
+        "Timeout": 30,
+        "Description": "User info Lambda function"
+    })
+
+  @mark.it("creates HTTP API Gateway with proper configuration")
+  def test_creates_http_api_gateway(self):
     # ARRANGE
     env_suffix = "testenv"
     stack = TapStack(self.app, "TapStackTest",
@@ -28,9 +56,16 @@ class TestTapStack(unittest.TestCase):
     template = Template.from_stack(stack)
 
     # ASSERT
-    template.resource_count_is("AWS::S3::Bucket", 1)
-    template.has_resource_properties("AWS::S3::Bucket", {
-        "BucketName": f"tap-bucket-{env_suffix}"
+    template.resource_count_is("AWS::ApiGatewayV2::Api", 1)
+    template.has_resource_properties("AWS::ApiGatewayV2::Api", {
+        "Name": f"tap-{env_suffix}-serverless-api",
+        "ProtocolType": "HTTP",
+        "Description": "Serverless API for TAP application",
+        "CorsConfiguration": {
+            "AllowOrigins": ["*"],
+            "AllowMethods": ["GET", "POST", "OPTIONS"],
+            "AllowHeaders": ["Content-Type", "Authorization"]
+        }
     })
 
   @mark.it("defaults environment suffix to 'dev' if not provided")
@@ -40,14 +75,132 @@ class TestTapStack(unittest.TestCase):
     template = Template.from_stack(stack)
 
     # ASSERT
-    template.resource_count_is("AWS::S3::Bucket", 1)
-    template.has_resource_properties("AWS::S3::Bucket", {
-        "BucketName": "tap-bucket-dev"
+    template.has_resource_properties("AWS::ApiGatewayV2::Api", {
+        "Name": "tap-dev-serverless-api"
     })
 
-  @mark.it("Write Unit Tests")
-  def test_write_unit_tests(self):
+  @mark.it("creates proper API Gateway routes and integrations")
+  def test_creates_api_routes_and_integrations(self):
     # ARRANGE
-    self.fail(
-        "Unit test for TapStack should be implemented here."
-    )
+    stack = TapStack(self.app, "TapStackTest")
+    template = Template.from_stack(stack)
+
+    # ASSERT
+    # Should have integrations for Lambda functions
+    template.resource_count_is("AWS::ApiGatewayV2::Integration", 2)
+    
+    # Should have proper routes
+    template.resource_count_is("AWS::ApiGatewayV2::Route", 4)  # GET/POST /hello, GET /user, GET /user/{userId}
+    
+    # Check route configurations
+    template.has_resource_properties("AWS::ApiGatewayV2::Route", {
+        "RouteKey": "GET /hello",
+        "AuthorizationType": "NONE"
+    })
+    
+    template.has_resource_properties("AWS::ApiGatewayV2::Route", {
+        "RouteKey": "POST /hello",
+        "AuthorizationType": "NONE"
+    })
+    
+    template.has_resource_properties("AWS::ApiGatewayV2::Route", {
+        "RouteKey": "GET /user/{userId}",
+        "AuthorizationType": "NONE"
+    })
+    
+    template.has_resource_properties("AWS::ApiGatewayV2::Route", {
+        "RouteKey": "GET /user",
+        "AuthorizationType": "NONE"
+    })
+
+  @mark.it("creates proper IAM roles for Lambda functions")
+  def test_creates_lambda_iam_roles(self):
+    # ARRANGE
+    stack = TapStack(self.app, "TapStackTest")
+    template = Template.from_stack(stack)
+
+    # ASSERT
+    # Should have IAM roles for Lambda functions
+    template.resource_count_is("AWS::IAM::Role", 3)  # 2 Lambda roles + 1 LogRetention role
+    
+    # Check Lambda execution role properties
+    template.has_resource_properties("AWS::IAM::Role", {
+        "AssumeRolePolicyDocument": {
+            "Statement": [
+                {
+                    "Action": "sts:AssumeRole",
+                    "Effect": "Allow",
+                    "Principal": {
+                        "Service": "lambda.amazonaws.com"
+                    }
+                }
+            ],
+            "Version": "2012-10-17"
+        }
+    })
+
+  @mark.it("creates Lambda permissions for API Gateway invocation")
+  def test_creates_lambda_permissions(self):
+    # ARRANGE  
+    stack = TapStack(self.app, "TapStackTest")
+    template = Template.from_stack(stack)
+
+    # ASSERT
+    # Should have Lambda permissions for API Gateway
+    template.resource_count_is("AWS::Lambda::Permission", 4)  # Permissions for each route
+    
+    # Check permission properties
+    template.has_resource_properties("AWS::Lambda::Permission", {
+        "Action": "lambda:InvokeFunction",
+        "Principal": "apigateway.amazonaws.com"
+    })
+
+  @mark.it("creates CloudFormation outputs for API endpoints")
+  def test_creates_cfn_outputs(self):
+    # ARRANGE
+    stack = TapStack(self.app, "TapStackTest")
+    template = Template.from_stack(stack)
+
+    # ASSERT
+    # Check outputs exist
+    outputs = template.find_outputs("*")
+    output_keys = list(outputs.keys())
+    
+    self.assertIn("ApiUrl", output_keys)
+    self.assertIn("HelloEndpoint", output_keys)
+    self.assertIn("UserEndpoint", output_keys)
+    
+    # Check export name for main API URL
+    self.assertEqual(outputs["ApiUrl"]["Export"]["Name"], "TapApiUrl")
+
+  @mark.it("configures Lambda functions with Free Tier optimized settings")
+  def test_lambda_free_tier_optimization(self):
+    # ARRANGE
+    stack = TapStack(self.app, "TapStackTest")
+    template = Template.from_stack(stack)
+
+    # ASSERT
+    # All Lambda functions should have Free Tier friendly settings
+    lambda_functions = template.find_resources("AWS::Lambda::Function")
+    
+    for function_key, function_props in lambda_functions.items():
+        if "LogRetention" not in function_key:  # Skip LogRetention Lambda
+            properties = function_props["Properties"]
+            self.assertEqual(properties["MemorySize"], 128, "Lambda should use minimum memory")
+            self.assertEqual(properties["Timeout"], 30, "Lambda should have reasonable timeout")
+            self.assertEqual(properties["Runtime"], "python3.9", "Lambda should use Python 3.9")
+
+  @mark.it("configures log retention for cost optimization")
+  def test_log_retention_configuration(self):
+    # ARRANGE
+    stack = TapStack(self.app, "TapStackTest")
+    template = Template.from_stack(stack)
+
+    # ASSERT
+    # Should have log retention resources
+    template.resource_count_is("Custom::LogRetention", 2)  # One for each Lambda
+    
+    # Check log retention period
+    template.has_resource_properties("Custom::LogRetention", {
+        "RetentionInDays": 7
+    })

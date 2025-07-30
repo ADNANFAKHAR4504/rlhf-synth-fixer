@@ -8,16 +8,13 @@ manages environment-specific configurations.
 from typing import Optional
 from aws_cdk import (
     Duration,
-    Stack,
     aws_lambda as _lambda,
     aws_apigatewayv2 as apigw,
     aws_apigatewayv2_integrations as integrations,
     aws_logs as logs,
-    RemovalPolicy,
     CfnOutput
 )
 import aws_cdk as cdk
-from aws_cdk import NestedStack
 from constructs import Construct
 
 # Import your stacks here
@@ -74,6 +71,9 @@ class TapStack(cdk.Stack):
     environment_suffix = (
         props.environment_suffix if props else None
     ) or self.node.try_get_context('environmentSuffix') or 'dev'
+    
+    # Use environment suffix in resource naming for uniqueness
+    stack_prefix = f"tap-{environment_suffix}"
 
     # Lambda function for Hello World endpoint
     hello_lambda = _lambda.Function(
@@ -150,12 +150,16 @@ return {
     # HTTP API Gateway (more cost-effective than REST API)
     http_api = apigw.HttpApi(
         self, "TapHttpApi",
-        api_name="tap-serverless-api",
+        api_name=f"{stack_prefix}-serverless-api",
         description="Serverless API for TAP application",
         # CORS configuration
         cors_preflight=apigw.CorsPreflightOptions(
             allow_origins=["*"],
-            allow_methods=[apigw.CorsHttpMethod.GET, apigw.CorsHttpMethod.POST, apigw.CorsHttpMethod.OPTIONS],
+            allow_methods=[
+                apigw.CorsHttpMethod.GET,
+                apigw.CorsHttpMethod.POST,
+                apigw.CorsHttpMethod.OPTIONS
+            ],
             allow_headers=["Content-Type", "Authorization"]
         )
     )
