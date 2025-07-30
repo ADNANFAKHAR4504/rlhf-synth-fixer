@@ -6,7 +6,7 @@ import os
 import tempfile
 import zipfile
 
-from cdktf import TerraformStack, TerraformOutput
+from cdktf import TerraformOutput
 from constructs import Construct
 from cdktf_cdktf_provider_aws.s3_bucket import S3Bucket
 from cdktf_cdktf_provider_aws.s3_bucket_versioning import S3BucketVersioningA
@@ -25,10 +25,6 @@ from cdktf_cdktf_provider_aws.s3_bucket_server_side_encryption_configuration imp
 from cdktf_cdktf_provider_aws.s3_bucket_public_access_block import (
   S3BucketPublicAccessBlock
 )
-from cdktf_cdktf_provider_aws.s3_bucket_lifecycle_configuration import (
-  S3BucketLifecycleConfiguration
-)
-
 
 class ServerlessImageProcessingStack(Construct):
   """Serverless Image Processing Stack for S3 event-driven thumbnail generation."""
@@ -517,9 +513,8 @@ def detect_image_format(file_content):
       timeout=30,  # Security: Reduced timeout to minimize exposure
       memory_size=256,  # Reduced memory since no image processing
       reserved_concurrent_executions=10,  # Security: Limit concurrent executions
-      dead_letter_config={
-        "target_arn": self.log_group.arn  # Send failures to CloudWatch
-      },
+      # Note: Dead letter config removed - CloudWatch logs are not supported for DLQ
+      # Errors will be logged to CloudWatch through standard logging
       environment={
         "variables": {
           "BUCKET_NAME": self.s3_bucket.id,
