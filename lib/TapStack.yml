@@ -6,6 +6,31 @@ Parameters:
     Type: String
     Description: CIDR block for the VPC
     Default: 10.0.0.0/16
+  
+  DBMasterUsername:
+    Type: String
+    Description: Master username for RDS PostgreSQL instance
+    Default: webappadmin
+    MinLength: 1
+    MaxLength: 63
+    AllowedPattern: ^[a-zA-Z][a-zA-Z0-9]*$
+  
+  DBMasterPassword:
+    Type: String
+    Description: Master password for RDS PostgreSQL instance
+    NoEcho: true
+    MinLength: 8
+    MaxLength: 128
+    AllowedPattern: ^[a-zA-Z0-9!@#$%^&*()_+=-]*$
+    Default: TempPassword123!
+  
+  SSLCertificateArn:
+    Type: String
+    Description: SSL Certificate ARN for HTTPS listener (leave empty to disable HTTPS)
+    Default: ""
+
+Conditions:
+  HasSSLCertificate: !Not [!Equals [!Ref SSLCertificateArn, ""]]
 
 Resources:
   # VPC
@@ -25,7 +50,7 @@ Resources:
     Properties:
       VpcId: !Ref WebAppVPC
       CidrBlock: !Select [ 0, !Cidr [ !Ref VpcCidr, 4, 8 ] ]
-      AvailabilityZone: us-east-1a
+      AvailabilityZone: !Select [0, !GetAZs '']
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Project
@@ -36,7 +61,7 @@ Resources:
     Properties:
       VpcId: !Ref WebAppVPC
       CidrBlock: !Select [ 1, !Cidr [ !Ref VpcCidr, 4, 8 ] ]
-      AvailabilityZone: us-east-1b
+      AvailabilityZone: !Select [1, !GetAZs '']
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Project
@@ -47,7 +72,7 @@ Resources:
     Properties:
       VpcId: !Ref WebAppVPC
       CidrBlock: !Select [ 2, !Cidr [ !Ref VpcCidr, 4, 8 ] ]
-      AvailabilityZone: us-east-1a
+      AvailabilityZone: !Select [0, !GetAZs '']
       Tags:
         - Key: Project
           Value: WebApp
@@ -57,7 +82,7 @@ Resources:
     Properties:
       VpcId: !Ref WebAppVPC
       CidrBlock: !Select [ 3, !Cidr [ !Ref VpcCidr, 4, 8 ] ]
-      AvailabilityZone: us-east-1b
+      AvailabilityZone: !Select [1, !GetAZs '']
       Tags:
         - Key: Project
           Value: WebApp
@@ -86,13 +111,25 @@ Resources:
         - Key: Project
           Value: WebApp
 
-  PrivateRouteTable:
+  PrivateRouteTable1:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref WebAppVPC
       Tags:
         - Key: Project
           Value: WebApp
+        - Key: Name
+          Value: Private Route Table 1
+
+  PrivateRouteTable2:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref WebAppVPC
+      Tags:
+        - Key: Project
+          Value: WebApp
+        - Key: Name
+          Value: Private Route Table 2
 
   # Routes
   PublicRoute:
@@ -131,14 +168,14 @@ Resources:
   PrivateRoute1:
     Type: AWS::EC2::Route
     Properties:
-      RouteTableId: !Ref PrivateRouteTable
+      RouteTableId: !Ref PrivateRouteTable1
       DestinationCidrBlock: 0.0.0.0/0
       NatGatewayId: !Ref NatGateway1
 
   PrivateRoute2:
     Type: AWS::EC2::Route
     Properties:
-      RouteTableId: !Ref PrivateRouteTable
+      RouteTableId: !Ref PrivateRouteTable2
       DestinationCidrBlock: 0.0.0.0/0
       NatGatewayId: !Ref NatGateway2
 
@@ -159,13 +196,13 @@ Resources:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       SubnetId: !Ref PrivateSubnet1
-      RouteTableId: !Ref PrivateRouteTable
+      RouteTableId: !Ref PrivateRouteTable1
 
   PrivateSubnet2RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       SubnetId: !Ref PrivateSubnet2
-      RouteTableId: !Ref PrivateRouteTable
+      RouteTableId: !Ref PrivateRouteTable2
 
   # Security Groups
   ALBSecurityGroup:
@@ -232,8 +269,8 @@ Resources:
     Properties:
       DBInstanceClass: db.t3.micro
       Engine: postgres
-      MasterUsername: !Ref AWS::NoValue
-      MasterUserPassword: !Ref AWS::NoValue
+      MasterUsername: !Ref DBMasterUsername
+      MasterUserPassword: !Ref DBMasterPassword
       AllocatedStorage: 20
       StorageEncrypted: true
       MultiAZ: true
@@ -287,12 +324,13 @@ Resources:
 
   HTTPSListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
+    Condition: HasSSLCertificate
     Properties:
       LoadBalancerArn: !Ref ApplicationLoadBalancer
       Port: 443
       Protocol: HTTPS
       Certificates:
-        - CertificateArn: !Ref AWS::NoValue  # Replace with your certificate ARN
+        - CertificateArn: !Ref SSLCertificateArn
       DefaultActions:
         - Type: forward
           TargetGroupArn: !Ref TargetGroup
@@ -303,14 +341,14 @@ Resources:
     Properties:
       LaunchTemplateName: web-app-lt
       LaunchTemplateData:
-        ImageId: !Sub '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}'
+        ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}'
         InstanceType: t3.micro
         SecurityGroupIds:
           - !Ref EC2SecurityGroup
         IamInstanceProfile:
           Arn: !GetAtt EC2InstanceProfile.Arn
         UserData:
-          Fn::Base64: !Sub |
+          Fn::Base64: |
             #!/bin/bash
             # Install web server and other dependencies
             yum update -y
@@ -342,7 +380,11 @@ Resources:
     Type: AWS::S3::Bucket
     Properties:
       BucketName: !Sub 'web-app-bucket-${AWS::AccountId}-${AWS::Region}'
-      AccessControl: Private
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
 
   # CloudFront
   CloudFrontOAI:
@@ -398,7 +440,7 @@ Resources:
               - Effect: Allow
                 Action:
                   - s3:GetObject
-                Resource: !Sub 'arn:aws:s3::::web-app-bucket-${AWS::AccountId}-${AWS::Region}/*'
+                Resource: !Sub 'arn:aws:s3:::web-app-bucket-${AWS::AccountId}-${AWS::Region}/*'
 
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
