@@ -503,7 +503,7 @@ def detect_image_format(file_content):
     self.lambda_function = LambdaFunction(
       self, "ImageThumbnailProcessor",
       function_name="image-thumbnail-processor",
-      runtime="python3.9",
+      runtime="python3.12",
       handler="lambda_function.lambda_handler",
       role=self.lambda_role.arn,
       filename=lambda_zip_path,
