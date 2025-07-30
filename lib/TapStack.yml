@@ -27,7 +27,7 @@ Parameters:
   Runtime:
     Type: String
     Description: The runtime environment for the Lambda function.
-    Default: python3.11
+    Default: nodejs18.x
     AllowedValues:
       - nodejs18.x
       - python3.11
@@ -63,7 +63,7 @@ Resources:
                   - logs:CreateLogGroup
                   - logs:CreateLogStream
                   - logs:PutLogEvents
-                Resource: arn:aws:logs:*:*:*
+                Resource: !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/projectXFunction:*
 
   # Lambda Function
   projectXLambdaFunction:
@@ -166,3 +166,7 @@ Outputs:
   LambdaLogGroupName:
     Description: Name of the CloudWatch Log Group for Lambda
     Value: !Ref projectXLambdaLogGroup
+  
+  LambdaFunctionArn:
+    Description: ARN of the Lambda function
+    Value: !GetAtt projectXLambdaFunction.Arn
