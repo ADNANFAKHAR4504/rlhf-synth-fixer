@@ -36,7 +36,6 @@ import {
   DescribeScalableTargetsCommand,
   DescribeScalingPoliciesCommand,
 } from '@aws-sdk/client-application-auto-scaling';
-// import { AutoScalingClient, DescribeAutoScalingGroupsCommand, DescribePoliciesCommand } from '@aws-sdk/client-autoscaling';
 
 import { DescribeServicesCommand } from '@aws-sdk/client-ecs';
 
