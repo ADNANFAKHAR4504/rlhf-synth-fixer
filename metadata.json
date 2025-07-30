@@ -3,25 +3,5 @@
   "language": "yaml",
   "complexity": "expert",
   "turn_type": "multi",
-  "po_id": "284722",
-  "startedAt": "2025-07-30T14:50:29.287Z",
-  "subtask": "Secure Multi-Tier Infrastructure Implementation",
-  "subject_labels": [
-    "Infrastructure Security",
-    "AWS CloudFormation",
-    "Multi-Tier Architecture",
-    "Compliance and Auditing",
-    "Network Security",
-    "Identity and Access Management"
-  ],
-  "testDependencies": [
-    "@aws-sdk/client-ec2@^3.848.0",
-    "@aws-sdk/client-s3@^3.848.0",
-    "@aws-sdk/client-iam@^3.848.0",
-    "@aws-sdk/client-cloudtrail@^3.848.0",
-    "@aws-sdk/client-config-service@^3.848.0",
-    "@aws-sdk/client-cloudwatch-logs@^3.848.0",
-    "jest@^29.7.0",
-    "ts-jest@^29.4.0"
-  ]
+  "po_id": "284722"
 }
