@@ -26,7 +26,7 @@ repository_name = os.getenv('REPOSITORY', 'unknown')
 commit_author = os.getenv('COMMIT_AUTHOR', 'unknown')
 
 # Apply tags to all stacks in this app (optional - you can do this at stack level instead)
-Tags.of(app).add('Environment', environment_suffix)
+Tags.of(app).add('Environment', 'Production')
 Tags.of(app).add('Repository', repository_name)
 Tags.of(app).add('Author', commit_author)
 
@@ -36,7 +36,7 @@ props = TapStackProps(
     environment_suffix=environment_suffix,
     env=cdk.Environment(
         account=os.getenv('CDK_DEFAULT_ACCOUNT'),
-        region=os.getenv('CDK_DEFAULT_REGION')
+        region='us-east-1'  # Deploy to us-east-1 as specified in requirements
     )
 )
 

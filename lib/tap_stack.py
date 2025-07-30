@@ -190,13 +190,10 @@ class S3Stack(cdk.Stack):
       **kwargs):
     super().__init__(scope, construct_id, **kwargs)
     
-    # Get environment suffix
-    environment_suffix = props.environment_suffix if props else 'dev'
-    
     # S3 bucket for storing request payloads
+    # Let AWS generate unique bucket name to avoid global naming conflicts
     self.bucket = s3.Bucket(
       self, "RequestBucket",
-      bucket_name=f"tap-{environment_suffix}-bucket",
       removal_policy=RemovalPolicy.DESTROY,
       auto_delete_objects=True,
       versioned=False,
