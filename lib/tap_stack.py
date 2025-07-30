@@ -60,13 +60,13 @@ class SecureS3NestedStack(NestedStack):
   ):
     super().__init__(scope, stack_id, **kwargs)
 
-    bucket_name = f"secure-{env_suffix}-bucket"
+    bucket_name = f"secure-{env_suffix}-bucket-assets"
 
     # 🔐 KMS Key
     kms_key = kms.Key(
       self,
       "SecureS3KmsKey",
-      alias="alias/secure-s3-key",
+      alias="alias/secure-s3-bucket-key",
       enable_key_rotation=True,
       removal_policy=RemovalPolicy.DESTROY,
     )
