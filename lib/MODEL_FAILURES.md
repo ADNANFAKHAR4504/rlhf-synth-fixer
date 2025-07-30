@@ -1,3 +1,9 @@
+# Common Model Failures - Serverless Image Processing Infrastructure
+
+This document catalogs typical failure patterns and implementation errors encountered when building serverless image processing pipelines with AWS CDK, along with their solutions and prevention strategies.
+
+---
+
 ## Failure: Lambda Missing SNS Publish Permissions
 
 **Issue**: The model created an SNS topic and a Lambda function that is expected to publish messages upon task completion. However, it failed to attach the required `sns:Publish` permission to the Lambda's IAM role.
