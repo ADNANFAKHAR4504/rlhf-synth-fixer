@@ -1,5 +1,5 @@
 ```yaml
-AWSTemplateFormatVersion: '2010-09-09'
+AWSTemplateFormatVersion: 2010-09-09
 Resources:
   WebAppVPC:
     Type: AWS::EC2::VPC
@@ -17,7 +17,6 @@ Resources:
       VpcId: !Ref WebAppVPC
       CidrBlock: 10.0.1.0/24
       AvailabilityZone: us-east-1a
-      MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
           Value: PublicSubnet1
@@ -28,7 +27,6 @@ Resources:
       VpcId: !Ref WebAppVPC
       CidrBlock: 10.0.2.0/24
       AvailabilityZone: us-east-1b
-      MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
           Value: PublicSubnet2
@@ -40,7 +38,7 @@ Resources:
         - Key: Name
           Value: WebAppIGW
 
-  InternetGatewayAttachment:
+  IGWAttachment:
     Type: AWS::EC2::VPCGatewayAttachment
     Properties:
       VpcId: !Ref WebAppVPC
@@ -56,7 +54,7 @@ Resources:
 
   PublicRoute:
     Type: AWS::EC2::Route
-    DependsOn: InternetGatewayAttachment
+    DependsOn: IGWAttachment
     Properties:
       RouteTableId: !Ref PublicRouteTable
       DestinationCidrBlock: 0.0.0.0/0
@@ -78,7 +76,7 @@ Resources:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
-        Version: '2012-10-17'
+        Version: 2012-10-17
         Statement:
           - Effect: Allow
             Principal:
@@ -87,14 +85,13 @@ Resources:
       Policies:
         - PolicyName: EC2S3Policy
           PolicyDocument:
-            Version: '2012-10-17'
+            Version: 2012-10-17
             Statement:
               - Effect: Allow
                 Action:
                   - s3:GetObject
                   - s3:ListBucket
-                Resource:
-                  - !Sub arn:aws:s3:::webapp-bucket-*
+                Resource: !Sub arn:aws:s3:::webapp-bucket-*
 
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
@@ -102,33 +99,14 @@ Resources:
       Roles:
         - !Ref EC2IAMRole
 
-  WebAppSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: Enable HTTP and HTTPS access
-      VpcId: !Ref WebAppVPC
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 80
-          ToPort: 80
-          CidrIp: 0.0.0.0/0
-        - IpProtocol: tcp
-          FromPort: 443
-          ToPort: 443
-          CidrIp: 0.0.0.0/0
-      Tags:
-        - Key: Name
-          Value: WebAppSecurityGroup
-
   KMSKey:
     Type: AWS::KMS::Key
     Properties:
       Description: KMS key for S3 encryption
       KeyPolicy:
-        Version: '2012-10-17'
+        Version: 2012-10-17
         Statement:
-          - Sid: Enable IAM User Permissions
-            Effect: Allow
+          - Effect: Allow
             Principal:
               AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
             Action: kms:*
@@ -143,27 +121,56 @@ Resources:
               SSEAlgorithm: aws:kms
               KMSMasterKeyID: !Ref KMSKey
 
-  LaunchConfiguration:
-    Type: AWS::AutoScaling::LaunchConfiguration
+  WebAppSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
     Properties:
-      ImageId: ami-0abcdef1234567890
-      InstanceType: t2.micro
-      IamInstanceProfile: !Ref EC2InstanceProfile
-      SecurityGroups:
-        - !Ref WebAppSecurityGroup
+      GroupDescription: Allow HTTP and HTTPS traffic
+      VpcId: !Ref WebAppVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: WebAppSecurityGroup
+        - Key: Purpose
+          Value: Allow HTTP and HTTPS traffic
 
-  AutoScalingGroup:
-    Type: AWS::AutoScaling::AutoScalingGroup
+  RDSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
     Properties:
-      LaunchConfigurationName: !Ref LaunchConfiguration
-      MinSize: 1
-      MaxSize: 3
-      DesiredCapacity: 2
-      VPCZoneIdentifier:
-        - !Ref PublicSubnet1
-        - !Ref PublicSubnet2
+      GroupDescription: Allow EC2 to RDS traffic
+      VpcId: !Ref WebAppVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          SourceSecurityGroupId: !Ref WebAppSecurityGroup
+      Tags:
+        - Key: Name
+          Value: RDSSecurityGroup
+        - Key: Purpose
+          Value: Allow EC2 to RDS traffic
 
-  RDSSubnetGroup:
+  WebAppDB:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceClass: db.t2.micro
+      Engine: MySQL
+      MasterUsername: admin
+      MasterUserPassword: SecurePassword123!
+      MultiAZ: true
+      AllocatedStorage: 20
+      VPCSecurityGroups:
+        - !Ref RDSSecurityGroup
+      DBSubnetGroupName: !Ref DBSubnetGroup
+
+  DBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
       DBSubnetGroupDescription: Subnets for RDS
@@ -171,23 +178,11 @@ Resources:
         - !Ref PublicSubnet1
         - !Ref PublicSubnet2
 
-  RDSInstance:
-    Type: AWS::RDS::DBInstance
-    Properties:
-      DBInstanceClass: db.t2.micro
-      Engine: mysql
-      MasterUsername: admin
-      MasterUserPassword: SecurePassword123!
-      MultiAZ: true
-      DBSubnetGroupName: !Ref RDSSubnetGroup
-      VPCSecurityGroups:
-        - !Ref WebAppSecurityGroup
-
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
-        Version: '2012-10-17'
+        Version: 2012-10-17
         Statement:
           - Effect: Allow
             Principal:
@@ -196,30 +191,50 @@ Resources:
       Policies:
         - PolicyName: LambdaLoggingPolicy
           PolicyDocument:
-            Version: '2012-10-17'
+            Version: 2012-10-17
             Statement:
               - Effect: Allow
                 Action:
                   - logs:CreateLogGroup
                   - logs:CreateLogStream
                   - logs:PutLogEvents
-                Resource: arn:aws:logs:*:*:*
+                Resource: !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/*
 
-  LambdaFunction:
+  WebAppLambda:
     Type: AWS::Lambda::Function
     Properties:
       Handler: index.handler
       Role: !GetAtt LambdaExecutionRole.Arn
       Code:
         S3Bucket: !Ref S3Bucket
-        S3Key: lambda-function.zip
+        S3Key: lambda-code.zip
       Runtime: nodejs14.x
       Environment:
         Variables:
           BUCKET_NAME: !Ref S3Bucket
 
+  LaunchConfiguration:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Properties:
+      ImageId: ami-0abcdef1234567890
+      SecurityGroups:
+        - !Ref WebAppSecurityGroup
+      IamInstanceProfile: !Ref EC2InstanceProfile
+      InstanceType: t2.micro
+
+  AutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      LaunchConfigurationName: !Ref LaunchConfiguration
+      MinSize: 2
+      MaxSize: 4
+      DesiredCapacity: 2
+      VPCZoneIdentifier:
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
+
 Outputs:
   WebsiteURL:
     Description: URL for the web application
-    Value: !Sub http://${AutoScalingGroup}.s3-website-${AWS::Region}.amazonaws.com
+    Value: !Sub http://${WebAppLoadBalancer.DNSName}
 ```
