@@ -16,15 +16,15 @@ permissions:
   contents: read
 
 env:
-  NODE_VERSION: '22.17.0'
+  NODE_VERSION: "22.17.0"
   # Use PR number for resource isolation, fallback to 'main' for main branch
   # Prefix with 'pr' to ensure AWS resource names start with a letter
   ENVIRONMENT_SUFFIX: ${{ github.event.number && format('pr{0}', github.event.number) || 'dev' }}
-  S3_RELEASE_BUCKET_NAME: 'iac-rlhf-aws-release'
-  TERRAFORM_STATE_BUCKET: 'iac-rlhf-tf-states'
-  TERRAFORM_STATE_BUCKET_REGION: 'us-east-1'
-  S3_PRODUCTION_BUCKET_NAME: 'iac-rlhf-production'
-  PULUMI_STATE_BUCKET: 'iac-rlhf-pulumi-states'
+  S3_RELEASE_BUCKET_NAME: "iac-rlhf-aws-release"
+  TERRAFORM_STATE_BUCKET: "iac-rlhf-tf-states"
+  TERRAFORM_STATE_BUCKET_REGION: "us-east-1"
+  S3_PRODUCTION_BUCKET_NAME: "iac-rlhf-production"
+  PULUMI_STATE_BUCKET: "iac-rlhf-pulumi-states"
   PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
   AAWS_DEFAULT_REGION: ${{ vars.AWS_REGION }}
 
@@ -85,14 +85,14 @@ jobs:
       - name: Setup Node.js 22.17.0
         uses: actions/setup-node@v4
         with:
-          node-version: '22.17.0'
-          node-version-file: '.nvmrc'
-          cache: 'npm'
+          node-version: "22.17.0"
+          node-version-file: ".nvmrc"
+          cache: "npm"
 
       - name: Setup Python 3.12.11
         uses: actions/setup-python@v5
         with:
-          python-version: '3.12.11'
+          python-version: "3.12.11"
           check-latest: true
 
       - name: Install pipenv
@@ -150,12 +150,12 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
+          cache: "npm"
 
       - name: Setup Python 3.12.11
         uses: actions/setup-python@v5
         with:
-          python-version: '3.12.11'
+          python-version: "3.12.11"
           check-latest: true
 
       - name: Install pipenv
@@ -202,7 +202,7 @@ jobs:
         uses: ./.github/actions/setup-environment
         with:
           node-version: ${{ env.NODE_VERSION }}
-          download-artifacts: 'true'
+          download-artifacts: "true"
 
       - name: Configure AWS
         uses: ./.github/actions/configure-aws
@@ -261,8 +261,8 @@ jobs:
         uses: ./.github/actions/setup-environment
         with:
           node-version: ${{ env.NODE_VERSION }}
-          download-artifacts: 'true'
-          download-cdk-artifacts: 'true'
+          download-artifacts: "true"
+          download-cdk-artifacts: "true"
 
       - name: Configure AWS
         uses: ./.github/actions/configure-aws
@@ -277,7 +277,10 @@ jobs:
           LANGUAGE="${{ needs.synth.outputs.language }}"
 
           if [ "$PLATFORM" = "cdk" ]; then
+            echo "Cleaning up cdk.out folder..."
+            rm -rf cdk.out
             echo "✅ CDK project detected, running CDK bootstrap..."
+            rm -rf cdk.out
             npm run cdk:bootstrap
 
           elif [ "$PLATFORM" = "pulumi" ]; then
@@ -467,7 +470,7 @@ jobs:
         uses: ./.github/actions/setup-environment
         with:
           node-version: ${{ env.NODE_VERSION }}
-          download-artifacts: 'true'
+          download-artifacts: "true"
 
       # Python setup is handled by the setup-environment action
 
@@ -550,7 +553,7 @@ jobs:
         uses: ./.github/actions/setup-environment
         with:
           node-version: ${{ env.NODE_VERSION }}
-          download-artifacts: 'true'
+          download-artifacts: "true"
 
       - name: Convert YAML to JSON for CloudFormation projects
         if: ${{ needs.lint.outputs.platform == 'cfn' && needs.lint.outputs.language == 'yaml' }}
@@ -620,7 +623,7 @@ jobs:
         uses: ./.github/actions/setup-environment
         with:
           node-version: ${{ env.NODE_VERSION }}
-          download-artifacts: 'true'
+          download-artifacts: "true"
 
       - name: Download Deployment Outputs
         uses: actions/download-artifact@v4
@@ -646,7 +649,7 @@ jobs:
           fi
         env:
           ENVIRONMENT_SUFFIX: ${{ env.ENVIRONMENT_SUFFIX }}
-          CI: '1' # Set CI for the entire step
+          CI: "1" # Set CI for the entire step
           PULUMI_BACKEND_URL: s3://${{ env.PULUMI_STATE_BUCKET }}
           PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
           AWS_DEFAULT_REGION: ${{ env.AWS_DEFAULT_REGION }}
@@ -666,7 +669,7 @@ jobs:
         uses: ./.github/actions/setup-environment
         with:
           node-version: ${{ env.NODE_VERSION }}
-          download-artifacts: 'false'
+          download-artifacts: "false"
 
       - name: Configure AWS
         uses: ./.github/actions/configure-aws
@@ -960,7 +963,7 @@ jobs:
         uses: ./.github/actions/setup-environment
         with:
           node-version: ${{ env.NODE_VERSION }}
-          download-artifacts: 'false'
+          download-artifacts: "false"
 
       - name: Configure AWS
         uses: ./.github/actions/configure-aws
