@@ -36,7 +36,7 @@ props = TapStackProps(
     environment_suffix=environment_suffix,
     env=cdk.Environment(
         account=os.getenv('CDK_DEFAULT_ACCOUNT'),
-        region='us-east-1'  # Deploy to us-east-1 as specified in requirements
+        region=os.getenv('CDK_DEFAULT_REGION')
     )
 )
 
