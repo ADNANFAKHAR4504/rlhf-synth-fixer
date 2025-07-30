@@ -36,8 +36,8 @@ from cdktf_cdktf_provider_aws.cloudfront_distribution import (
 from cdktf_cdktf_provider_aws.shield_protection import ShieldProtection
 from cdktf_cdktf_provider_aws.secretsmanager_secret import SecretsmanagerSecret
 from cdktf_cdktf_provider_aws.secretsmanager_secret_version import SecretsmanagerSecretVersion
-from cdktf_cdktf_provider_random.provider import RandomProvider
-from cdktf_cdktf_provider_random.password import Password as RandomPassword
+# from cdktf_cdktf_provider_random.provider import RandomProvider
+# from cdktf_cdktf_provider_random.password import Password as RandomPassword
 
 #global env config
 ENV_SUFFIX     = os.getenv("ENVIRONMENT_SUFFIX", "dev")
@@ -71,7 +71,7 @@ class SecureAwsEnvironment(TerraformStack):
                 "Author":      COMMIT_AUTHOR,
             })],
         )
-        RandomProvider(self, "random")
+        # RandomProvider(self, "random")
 
         tags = {
             "Environment": environment,
@@ -114,17 +114,6 @@ class SecureAwsEnvironment(TerraformStack):
             description=f"KMS for RDS {region}", enable_key_rotation=True,
             tags={**tags, "Name": f"kms-rds-{environment}-{region}"})
 
-        # secret + random password
-        secret = SecretsmanagerSecret(self, f"DbSecret-{region}",
-            name=f"rds-password-{environment}-{region}",
-            description="RDS master password",
-            tags={**tags, "Name": f"rds-secret-{environment}-{region}"})
-        pwd = RandomPassword(self, f"DbPwd-{region}", length=32, special=True, override_special="_@")
-        SecretsmanagerSecretVersion(self, f"DbSecretVer-{region}",
-            secret_id=secret.id,
-            secret_string=json.dumps({"password": pwd.result}),
-            version_stages=["AWSCURRENT"])
-
         # DB subnet group
         db_subnet_group = DbSubnetGroup(self, f"DbSubnets-{region}",
             name=f"db-subnet-{environment}-{region}",
@@ -136,7 +125,9 @@ class SecureAwsEnvironment(TerraformStack):
             allocated_storage=20,
             engine="postgres", engine_version="16.1",
             instance_class="db.t3.micro",
-            db_name="appdb", username="dbuser", password=pwd.result,
+            db_name="appdb", username="dbuser",
+            manage_master_user_password=True,
+            master_user_secret_kms_key_id=kms.key_id,
             vpc_security_group_ids=[rds_sg.id],
             db_subnet_group_name=db_subnet_group.name,
             storage_encrypted=True, kms_key_id=kms.arn,
