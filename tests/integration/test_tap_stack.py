@@ -108,15 +108,18 @@ class TestTapStack(unittest.TestCase):
     )
     self.assertIn(response.status_code, [200, 204])
 
-    # Print headers for debugging if test fails
+    # Print headers for debugging if CORS is missing
     cors_headers = {k.lower() for k in response.headers.keys()}
     if 'access-control-allow-origin' not in cors_headers:
-      print("CORS headers missing. Actual headers:", response.headers)
+      print("\n❌ CORS headers missing. Actual headers:")
+      for k, v in response.headers.items():
+        print(f"  {k}: {v}")
+
     self.assertIn(
       'access-control-allow-origin',
       cors_headers,
       "'access-control-allow-origin' header missing in response"
-    ).assertIn('access-control-allow-origin', cors_headers)
+    )
 
   @mark.it("HTTPS URLs only")
   def test_https_enforcement(self):
