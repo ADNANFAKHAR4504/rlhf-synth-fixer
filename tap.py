@@ -265,8 +265,8 @@ class SecureAwsEnvironment(TerraformStack):
 
 # ----- STACK EXECUTION -----
 accounts = {
-    "dev": "405184066549",
-    "prod": "405184066549"
+    "dev": "718240086340",
+    "prod": "718240086340"
 }
 regions = ["us-east-1", "eu-west-1"]
 
