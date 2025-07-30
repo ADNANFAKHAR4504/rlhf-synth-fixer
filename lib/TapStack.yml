@@ -323,43 +323,6 @@ Resources:
       Roles:
         - !Ref EC2InstanceRole
 
-  # AWS Config Service Role
-  ConfigServiceRole:
-    Type: AWS::IAM::Role
-    Properties:
-      RoleName: !Sub "config-service-role-${EnvironmentSuffix}"
-      AssumeRolePolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: config.amazonaws.com
-            Action: sts:AssumeRole
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWS_ConfigRole
-      Policies:
-        - PolicyName: ConfigS3DeliveryPolicy
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              - Effect: Allow
-                Action:
-                  - s3:GetBucketAcl
-                  - s3:GetBucketLocation
-                  - s3:ListBucket
-                Resource: !Sub "${ConfigBucket.Arn}"
-              - Effect: Allow
-                Action:
-                  - s3:PutObject
-                  - s3:GetObject
-                Resource: !Sub "${ConfigBucket.Arn}/*"
-                Condition:
-                  StringEquals:
-                    "s3:x-amz-acl": "bucket-owner-full-control"
-      Tags:
-        - Key: EnvironmentSuffix
-          Value: !Ref EnvironmentSuffix
-
   # CloudTrail Service Role
   CloudTrailRole:
     Type: AWS::IAM::Role
@@ -741,21 +704,19 @@ Resources:
   # AWS CONFIG
   # ========================================
 
-  # AWS Config Configuration Recorder
-  ConfigurationRecorder:
-    Type: AWS::Config::ConfigurationRecorder
+  # AWS Config Delivery Channel (using existing ConfigurationRecorder: TapConfigRecorder-pr287)
+  ConfigDeliveryChannel:
+    Type: AWS::Config::DeliveryChannel
     Properties:
-      Name: !Sub "config-recorder-${EnvironmentSuffix}"
-      RoleARN: !GetAtt ConfigServiceRole.Arn
-      RecordingGroup:
-        AllSupported: true
-        IncludeGlobalResourceTypes: true
-        ResourceTypes: []
+      Name: !Sub "config-delivery-channel-${EnvironmentSuffix}"
+      S3BucketName: !Ref ConfigBucket
+      S3KeyPrefix: "config-history"
+      ConfigSnapshotDeliveryProperties:
+        DeliveryFrequency: "TwentyFour_Hours"
 
-  # AWS Config Rules
+  # AWS Config Rules (using existing ConfigurationRecorder: TapConfigRecorder-pr287)
   S3BucketPublicAccessProhibited:
     Type: AWS::Config::ConfigRule
-    DependsOn: ConfigurationRecorder
     Properties:
       ConfigRuleName: "s3-bucket-public-access-prohibited"
       Description: "Checks that your Amazon S3 buckets do not allow public access"
@@ -765,7 +726,6 @@ Resources:
 
   RootAccessKeyCheck:
     Type: AWS::Config::ConfigRule
-    DependsOn: ConfigurationRecorder
     Properties:
       ConfigRuleName: "root-access-key-check"
       Description: "Checks whether the root user access key is available"
@@ -775,7 +735,6 @@ Resources:
 
   EC2SecurityGroupAttachedToENI:
     Type: AWS::Config::ConfigRule
-    DependsOn: ConfigurationRecorder
     Properties:
       ConfigRuleName: "ec2-security-group-attached-to-eni"
       Description: "Checks that security groups are attached to Amazon EC2 instances or ENIs"
