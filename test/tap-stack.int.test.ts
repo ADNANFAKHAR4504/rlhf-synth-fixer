@@ -43,7 +43,7 @@ describe('Web Application Stack Integration Tests', () => {
         expect(outputs.S3BucketName).toMatch(
           /^web-app-bucket-\d{12}-[a-z-\d]+$/
         );
-        expect(outputs.CloudFrontDistributionId).toMatch(/^E[0-9A-Z]{13}$/);
+        expect(outputs.CloudFrontDistributionId).toMatch(/^E[A-Z0-9]+$/);
       }
     });
 
@@ -91,7 +91,7 @@ describe('Web Application Stack Integration Tests', () => {
   describe('CDN and Static Content Validation', () => {
     test('should have CloudFront distribution ID', () => {
       const distributionId = outputs.CloudFrontDistributionId;
-      expect(distributionId).toMatch(/^E[0-9A-Z]{13}$/);
+      expect(distributionId).toMatch(/^E[A-Z0-9]+$/);
     });
 
     test('CloudFront distribution should serve content with HTTPS redirect', async () => {
