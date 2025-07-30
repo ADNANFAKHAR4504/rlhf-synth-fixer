@@ -72,6 +72,10 @@ class TapStack(TerraformStack):
     # Get current AWS account and availability zones
     self.current = DataAwsCallerIdentity(self, "current")
     self.azs = DataAwsAvailabilityZones(self, "azs", state="available")
+    
+    # Get availability zone names as a list
+    from cdktf import Fn
+    self.az_names = Fn.tolist(self.azs.names)
 
     # Create state management resources
     self.create_state_management()
@@ -157,25 +161,44 @@ class TapStack(TerraformStack):
     self.public_subnets = []
     self.private_subnets = []
     
-    for i, az in enumerate(self.azs.names[:2]):  # Use first 2 AZs
-      # Public subnet
-      public_subnet = Subnet(self, f"public-subnet-{i}",
-        vpc_id=self.vpc.id,
-        cidr_block=f"10.0.{i+1}.0/24",
-        availability_zone=az,
-        map_public_ip_on_launch=True,
-        tags={**self.common_tags, "Name": f"public-subnet-{i}", "Type": "public"}
-      )
-      self.public_subnets.append(public_subnet)
-      
-      # Private subnet
-      private_subnet = Subnet(self, f"private-subnet-{i}",
-        vpc_id=self.vpc.id,
-        cidr_block=f"10.0.{i+10}.0/24",
-        availability_zone=az,
-        tags={**self.common_tags, "Name": f"private-subnet-{i}", "Type": "private"}
-      )
-      self.private_subnets.append(private_subnet)
+    # Create subnets for first 2 AZs using proper token handling
+    # Public subnet 1
+    public_subnet_1 = Subnet(self, "public-subnet-1",
+      vpc_id=self.vpc.id,
+      cidr_block="10.0.1.0/24",
+      availability_zone=Fn.element(self.az_names, 0),
+      map_public_ip_on_launch=True,
+      tags={**self.common_tags, "Name": "public-subnet-1", "Type": "public"}
+    )
+    self.public_subnets.append(public_subnet_1)
+    
+    # Private subnet 1
+    private_subnet_1 = Subnet(self, "private-subnet-1",
+      vpc_id=self.vpc.id,
+      cidr_block="10.0.10.0/24",
+      availability_zone=Fn.element(self.az_names, 0),
+      tags={**self.common_tags, "Name": "private-subnet-1", "Type": "private"}
+    )
+    self.private_subnets.append(private_subnet_1)
+    
+    # Public subnet 2
+    public_subnet_2 = Subnet(self, "public-subnet-2",
+      vpc_id=self.vpc.id,
+      cidr_block="10.0.2.0/24",
+      availability_zone=Fn.element(self.az_names, 1),
+      map_public_ip_on_launch=True,
+      tags={**self.common_tags, "Name": "public-subnet-2", "Type": "public"}
+    )
+    self.public_subnets.append(public_subnet_2)
+    
+    # Private subnet 2
+    private_subnet_2 = Subnet(self, "private-subnet-2",
+      vpc_id=self.vpc.id,
+      cidr_block="10.0.11.0/24",
+      availability_zone=Fn.element(self.az_names, 1),
+      tags={**self.common_tags, "Name": "private-subnet-2", "Type": "private"}
+    )
+    self.private_subnets.append(private_subnet_2)
     
     # Create Internet Gateway
     self.internet_gateway = InternetGateway(self, "internet-gateway",
@@ -216,11 +239,15 @@ class TapStack(TerraformStack):
     )
     
     # Associate public subnets with public route table
-    for i, subnet in enumerate(self.public_subnets):
-      RouteTableAssociation(self, f"public-rta-{i}",
-        subnet_id=subnet.id,
-        route_table_id=self.public_route_table.id
-      )
+    RouteTableAssociation(self, "public-rta-1",
+      subnet_id=self.public_subnets[0].id,
+      route_table_id=self.public_route_table.id
+    )
+    
+    RouteTableAssociation(self, "public-rta-2",
+      subnet_id=self.public_subnets[1].id,
+      route_table_id=self.public_route_table.id
+    )
     
     # Private route table
     self.private_route_table = RouteTable(self, "private-route-table",
@@ -236,11 +263,15 @@ class TapStack(TerraformStack):
     )
     
     # Associate private subnets with private route table
-    for i, subnet in enumerate(self.private_subnets):
-      RouteTableAssociation(self, f"private-rta-{i}",
-        subnet_id=subnet.id,
-        route_table_id=self.private_route_table.id
-      )
+    RouteTableAssociation(self, "private-rta-1",
+      subnet_id=self.private_subnets[0].id,
+      route_table_id=self.private_route_table.id
+    )
+    
+    RouteTableAssociation(self, "private-rta-2",
+      subnet_id=self.private_subnets[1].id,
+      route_table_id=self.private_route_table.id
+    )
 
   def create_security_groups(self):
     """Create security groups for load balancer and EC2 instances"""
@@ -353,7 +384,7 @@ echo "<h1>Hello from $(hostname -f)</h1>" > /var/www/html/index.html
       internal=False,
       load_balancer_type="application",
       security_groups=[self.lb_security_group.id],
-      subnets=[subnet.id for subnet in self.public_subnets],
+      subnets=[self.public_subnets[0].id, self.public_subnets[1].id],
       enable_deletion_protection=False,
       tags={**self.common_tags, "Name": "prod-alb"}
     )
@@ -398,7 +429,7 @@ echo "<h1>Hello from $(hostname -f)</h1>" > /var/www/html/index.html
       desired_capacity=self.desired_capacity,
       max_size=self.max_size,
       min_size=self.min_size,
-      vpc_zone_identifier=[subnet.id for subnet in self.private_subnets],
+      vpc_zone_identifier=[self.private_subnets[0].id, self.private_subnets[1].id],
       launch_template={
         "id": self.launch_template.id,
         "version": "$Latest"
