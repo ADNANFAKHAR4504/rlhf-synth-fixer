@@ -1405,13 +1405,15 @@ Resources:
               VolumeType: gp2
               Encrypted: true # Ensure EBS is encrypted
               KmsKeyId: !Ref SecurityKMSKey
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-web-lt'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Project
-          Value: !Ref ProjectName
+        TagSpecifications:
+          - ResourceType: instance
+            Tags:
+              - Key: Name
+                Value: !Sub '${ProjectName}-${EnvironmentSuffix}-web-instance'
+              - Key: Environment
+                Value: !Ref EnvironmentSuffix
+              - Key: Project
+                Value: !Ref ProjectName
 
   WebServerTargetGroup: # New resource
     Type: AWS::ElasticLoadBalancingV2::TargetGroup

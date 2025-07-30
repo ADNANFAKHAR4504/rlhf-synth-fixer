@@ -21,7 +21,7 @@ describe('Secure Web Application Infrastructure CloudFormation Template', () => 
     test('should have a description for secure web application', () => {
       expect(template.Description).toBeDefined();
       expect(template.Description).toBe(
-        'Secure Web Application Infrastructure - CloudFormation Template'
+        'Secure, scalable web application infrastructure with multi-region deployment, GDPR compliance, and comprehensive security controls.'
       );
     });
 
