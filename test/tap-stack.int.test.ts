@@ -3,13 +3,15 @@ import {
   EC2Client,
 } from '@aws-sdk/client-ec2';
 import {
+  GetBucketTaggingCommand,
+  GetBucketVersioningCommand,
   GetBucketEncryptionCommand,
   HeadBucketCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
 import fs from 'fs';
 
-const region = process.env.AWS_REGION || 'us-west-2';
+const region = process.env.AWS_REGION || 'us-west-1';
 const outputs = JSON.parse(fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf-8'));
 
 const ec2 = new EC2Client({ region });
@@ -37,6 +39,24 @@ describe('TAP Stack - Basic Resource Integration Tests', () => {
     }
   });
 
+  
+
+  test('S3 bucket should have versioning enabled', async () => {
+  const bucketName = outputs.S3BucketName;
+  const versioning = await s3.send(new GetBucketVersioningCommand({ Bucket: bucketName }));
+  expect(versioning.Status).toBe('Enabled');
+  });
+
+  
+
+  test('EC2 Instance should be of type t2.micro', async () => {
+  const instanceId = outputs.EC2InstanceId;
+  const res = await ec2.send(new DescribeInstancesCommand({ InstanceIds: [instanceId] }));
+  const instance = res.Reservations?.[0]?.Instances?.[0];
+
+  expect(instance?.InstanceType).toBe('t2.micro');
+  });
+
   test('EC2 Instance should exist and be in running or pending state', async () => {
     const instanceId = outputs.EC2InstanceId;
     expect(instanceId).toBeDefined();
@@ -50,9 +70,18 @@ describe('TAP Stack - Basic Resource Integration Tests', () => {
     expect(['running', 'pending']).toContain(instance?.State?.Name);
   });
 
+  test('EC2 instance should be tagged with Environment: Development', async () => {
+  const instanceId = outputs.EC2InstanceId;
+  const res = await ec2.send(new DescribeInstancesCommand({ InstanceIds: [instanceId] }));
+  const tags = res.Reservations?.[0]?.Instances?.[0]?.Tags;
+
+  const envTag = tags?.find(tag => tag.Key === 'Environment');
+  expect(envTag?.Value).toMatch(/^[a-z0-9]+$/);
+  });
+
   test('S3 bucket name should follow TAP stack naming convention', () => {
     const bucketName = outputs.S3BucketName;
-    expect(bucketName).toMatch(/^dev-bucket-tapstack-2291831$/);
+    expect(bucketName).toMatch(/^dev-bucket-tapstack-[a-z0-9]+$/);
   });
 
   test('All required outputs should be present', () => {

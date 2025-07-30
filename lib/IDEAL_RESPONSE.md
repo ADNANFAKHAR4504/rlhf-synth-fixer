@@ -18,12 +18,18 @@ Parameters:
     AllowedPattern: '^[a-zA-Z0-9]+$'
     ConstraintDescription: 'Must contain only alphanumeric characters'
 
+Mappings:
+  RegionMap:
+    us-east-1:
+      AMI: ami-08a6efd148b1f7504
+
+
 Resources:
   DevEC2Instance:
     Type: AWS::EC2::Instance
     Properties:
       InstanceType: t2.micro
-      ImageId: ami-08a6efd148b1f7504
+      ImageId: !FindInMap [RegionMap, us-east-1, AMI]
       Tags:
         - Key: Environment
           Value: !Ref EnvironmentSuffix
@@ -33,7 +39,7 @@ Resources:
     Properties:
       BucketName: dev-bucket-tapstack-2291831
       VersioningConfiguration:
-        git: Enabled
+        Status: Enabled
       Tags:
         - Key: Environment
           Value: !Ref EnvironmentSuffix
@@ -46,4 +52,5 @@ Outputs:
   S3BucketName:
     Description: The name of the S3 bucket
     Value: !Ref DevS3Bucket
+
 ```

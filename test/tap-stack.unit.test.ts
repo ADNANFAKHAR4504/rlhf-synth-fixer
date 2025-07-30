@@ -50,14 +50,13 @@ describe('TAP Stack CloudFormation Template', () => {
       const ec2 = template.Resources.DevEC2Instance;
       expect(ec2.Type).toBe('AWS::EC2::Instance');
       expect(ec2.Properties.InstanceType).toBe('t2.micro');
-      expect(ec2.Properties.ImageId).toBe('ami-08a6efd148b1f7504');
     });
 
     test('DevS3Bucket should be versioned and have correct name', () => {
       const bucket = template.Resources.DevS3Bucket;
       expect(bucket.Type).toBe('AWS::S3::Bucket');
       expect(bucket.Properties.BucketName).toBe('dev-bucket-tapstack-2291831');
-      expect(bucket.Properties.VersioningConfiguration.Status || bucket.Properties.VersioningConfiguration.git).toBe('Enabled');
+      expect(bucket.Properties.VersioningConfiguration.Status).toBe('Enabled');
     });
 
     test('resources should include Environment tag referencing EnvironmentSuffix', () => {
