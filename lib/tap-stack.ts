@@ -47,12 +47,21 @@ export class TapStack extends TerraformStack {
     this.addOverride('terraform.backend.s3.use_lockfile', true);
 
     // Initialize VPC Module
-    const vpcModule = new VpcModule(this, 'VpcModule');
+    const vpcModule = new VpcModule(this, 'VpcModule', {
+      cidrBlock: '10.0.0.0/16',
+      environment: environmentSuffix,
+    });
 
     // Initialize Subnets Module
-    const subnetsModule = new SubnetsModule(this, 'SubnetsModule', vpcModule);
+    const subnetsModule = new SubnetsModule(this, 'SubnetsModule', {
+      vpcModule,
+      environment: environmentSuffix,
+    });
 
     // Initialize EC2 Module
-    new Ec2Module(this, 'Ec2Module', subnetsModule);
+    new Ec2Module(this, 'Ec2Module', {
+      subnetsModule,
+      environment: environmentSuffix,
+    });
   }
 }

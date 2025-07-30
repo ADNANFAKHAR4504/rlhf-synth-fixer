@@ -1,16 +1,21 @@
-import { TerraformStack } from 'cdktf';
+import { Construct } from 'constructs';
 import { Subnet } from '@cdktf/provider-aws/lib/subnet';
 import { RouteTableAssociation } from '@cdktf/provider-aws/lib/route-table-association';
 import { VpcModule } from '../vpc';
-import { Construct } from 'constructs';
 
-export class SubnetsModule extends TerraformStack {
+export interface SubnetsModuleProps {
+  vpcModule: VpcModule;
+  environment: string;
+}
+
+export class SubnetsModule extends Construct {
   public readonly publicSubnets: Subnet[];
 
-  constructor(scope: Construct, id: string, vpcModule: VpcModule) {
+  constructor(scope: Construct, id: string, props: SubnetsModuleProps) {
     super(scope, id);
 
-    // Create Public Subnets
+    const { vpcModule, environment } = props;
+
     this.publicSubnets = [
       new Subnet(this, 'DevPublicSubnet1', {
         vpcId: vpcModule.vpc.id,
@@ -18,7 +23,7 @@ export class SubnetsModule extends TerraformStack {
         availabilityZone: 'us-east-1a',
         mapPublicIpOnLaunch: true,
         tags: {
-          Environment: 'Dev',
+          Environment: environment,
         },
       }),
       new Subnet(this, 'DevPublicSubnet2', {
@@ -27,12 +32,11 @@ export class SubnetsModule extends TerraformStack {
         availabilityZone: 'us-east-1b',
         mapPublicIpOnLaunch: true,
         tags: {
-          Environment: 'Dev',
+          Environment: environment,
         },
       }),
     ];
 
-    // Associate Subnets with Route Table
     this.publicSubnets.forEach((subnet, index) => {
       new RouteTableAssociation(this, `SubnetAssoc${index + 1}`, {
         subnetId: subnet.id,

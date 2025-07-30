@@ -1,20 +1,25 @@
-import { TerraformStack } from 'cdktf';
+import { Construct } from 'constructs';
 import { Instance } from '@cdktf/provider-aws/lib/instance';
 import { SubnetsModule } from '../subnets';
-import { Construct } from 'constructs';
 
-export class Ec2Module extends TerraformStack {
-  constructor(scope: Construct, id: string, subnetsModule: SubnetsModule) {
+export interface Ec2ModuleProps {
+  subnetsModule: SubnetsModule;
+  environment: string;
+}
+
+export class Ec2Module extends Construct {
+  constructor(scope: Construct, id: string, props: Ec2ModuleProps) {
     super(scope, id);
 
-    // Create EC2 Instance
+    const { subnetsModule, environment } = props;
+
     new Instance(this, 'DevInstance', {
       ami: 'ami-0c55b159cbfafe1f0',
       instanceType: 't2.micro',
       subnetId: subnetsModule.publicSubnets[0].id,
       associatePublicIpAddress: true,
       tags: {
-        Environment: 'Dev',
+        Environment: environment,
       },
     });
   }
