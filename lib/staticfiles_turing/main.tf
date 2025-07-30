@@ -392,3 +392,60 @@ resource "aws_s3_bucket_policy" "staticfilesbucket_policy" {
 
   depends_on = [ aws_cloudfront_distribution.turing_distribution ]
 }
+
+# -----------------------
+# CLOUDFRONT DISTRIBUTION
+# -----------------------
+
+resource "aws_backup_vault" "s3_backup_vault" {
+  name = "s3-backup-vault"
+  tags = {
+    Purpose = "S3 Backup Vault"
+  }
+}
+
+resource "aws_backup_plan" "s3_backup_plan" {
+  name = "s3-daily-backup-plan-blacree"
+
+  rule {
+    rule_name         = "daily-s3-backup"
+    target_vault_name = aws_backup_vault.s3_backup_vault.name
+    schedule          = "cron(0 5 * * ? *)"  # Daily at 5 AM UTC
+
+    lifecycle {
+      delete_after = 30
+    }
+  }
+}
+
+resource "aws_iam_role" "backup_role" {
+  name = "AWSBackupRole"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Action    = "sts:AssumeRole",
+        Effect    = "Allow",
+        Principal = {
+          Service = "backup.amazonaws.com"
+        }
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "backup_policy_attach" {
+  role       = aws_iam_role.backup_role.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForS3Backup"
+}
+
+resource "aws_backup_selection" "s3_selection" {
+  name         = "s3-backup-selection"
+  plan_id      = aws_backup_plan.s3_backup_plan.id
+  iam_role_arn = aws_iam_role.backup_role.arn
+
+  resources = [
+    aws_s3_bucket.staticfilesbucket.arn
+  ]
+}
