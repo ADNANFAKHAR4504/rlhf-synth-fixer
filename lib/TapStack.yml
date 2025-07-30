@@ -45,7 +45,6 @@ Resources:
   projectXLambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: projectXLambdaExecutionRole
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
