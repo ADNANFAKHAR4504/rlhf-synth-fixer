@@ -44,7 +44,8 @@
     "tf:output": "cd bin && terraform show -json > ../cfn-outputs/tfplan.json",
     "cfn:deploy-yaml": "aws cloudformation deploy --template-file lib/TapStack.yml --stack-name TapStack${ENVIRONMENT_SUFFIX:-dev} --capabilities CAPABILITY_IAM --parameter-overrides EnvironmentSuffix=${ENVIRONMENT_SUFFIX:-dev} --tags Repository=${REPOSITORY:-unknown} CommitAuthor=${COMMIT_AUTHOR:-unknown}",
     "cfn:deploy-json": "aws cloudformation deploy --template-file lib/TapStack.json --stack-name TapStack${ENVIRONMENT_SUFFIX:-dev} --capabilities CAPABILITY_IAM --parameter-overrides EnvironmentSuffix=${ENVIRONMENT_SUFFIX:-dev} --tags Repository=${REPOSITORY:-unknown} CommitAuthor=${COMMIT_AUTHOR:-unknown}",
-    "cfn:destroy": "aws cloudformation delete-stack --stack-name TapStack${ENVIRONMENT_SUFFIX:-dev}"
+    "cfn:destroy": "aws cloudformation delete-stack --stack-name TapStack${ENVIRONMENT_SUFFIX:-dev}",
+    "release": "semantic-release"
   },
   "devDependencies": {
     "@aws-sdk/client-api-gateway": "^3.848.0",
@@ -69,8 +70,12 @@
     "@aws-sdk/client-ssm": "^3.848.0",
     "@aws-sdk/client-wafv2": "^3.848.0",
     "@aws-sdk/credential-provider-node": "^3.846.0",
-    "@inquirer/prompts": "^7.6.0",
+    "@inquirer/prompts": "^7.7.1",
     "@opensearch-project/opensearch": "^3.5.1",
+    "@semantic-release/changelog": "6.0.3",
+    "@semantic-release/commit-analyzer": "13.0.0",
+    "@semantic-release/git": "10.0.1",
+    "@semantic-release/release-notes-generator": "14.0.1",
     "@types/fs-extra": "^11.0.4",
     "@types/inquirer": "^9.0.8",
     "@types/jest": "^29.5.14",
@@ -83,6 +88,7 @@
     "aws-cdk": "2.1020.2",
     "aws4": "^1.13.2",
     "axios": "1.10.0",
+    "conventional-changelog-conventionalcommits": "^9.1.0",
     "eslint": "^8.57.0",
     "eslint-config-airbnb-base": "15.0.0",
     "eslint-config-airbnb-typescript": "18.0.0",

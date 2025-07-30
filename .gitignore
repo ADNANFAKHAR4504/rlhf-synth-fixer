@@ -85,3 +85,5 @@ cdktf.log
 *terraform.*.tfstate*
 .gen
 bin/.terraform.lock.hcl
+
+task-status.md
