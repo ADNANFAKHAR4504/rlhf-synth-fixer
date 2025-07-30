@@ -464,10 +464,10 @@ class TestTapStackIntegration(unittest.TestCase):
         pass  # Ignore cleanup errors
   
     self.assertTrue(
-    found, 
-    f"No access log file found in access log bucket after {max_attempts * 30} seconds. "
-    "S3 access logs can take several minutes to hours to be delivered "
-    "according to AWS documentation.")
+      found, 
+      f"No access log file found in access log bucket after {max_attempts * 30} seconds. "
+      "S3 access logs can take several minutes to hours to be delivered "
+      "according to AWS documentation.")
 
   @mark.it("verifies CloudTrail logs are delivered to the CloudTrail bucket")
   def test_cloudtrail_log_delivery(self):
@@ -514,7 +514,7 @@ class TestTapStackIntegration(unittest.TestCase):
       time.sleep(30)  # Wait 30 seconds between checks
   
     self.assertTrue(
-    found, 
-    f"No CloudTrail log file found in CloudTrail bucket after {max_attempts * 30} seconds. "
-    "CloudTrail typically delivers logs within 15 minutes but can take longer "
-    "during high activity.")
+      found, 
+      f"No CloudTrail log file found in CloudTrail bucket after {max_attempts * 30} seconds. "
+      "CloudTrail typically delivers logs within 15 minutes but can take longer "
+      "during high activity.")
