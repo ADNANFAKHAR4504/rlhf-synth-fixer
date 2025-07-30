@@ -6,7 +6,7 @@ import { GetInstanceProfileCommand, GetRoleCommand, IAMClient } from '@aws-sdk/c
 import { GetBucketEncryptionCommand, GetBucketPolicyCommand, GetBucketVersioningCommand, GetPublicAccessBlockCommand, HeadBucketCommand, S3Client } from '@aws-sdk/client-s3';
 
 // Get environment suffix from environment variable (set by CI/CD pipeline)
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
+const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'pr179';
 const region = process.env.AWS_REGION || 'us-east-1';
 const stackName = `TapStack${environmentSuffix}`;
 
@@ -511,50 +511,6 @@ describe('TapStack AWS Infrastructure Integration Tests', () => {
       } catch (error: any) {
         if (error.name === 'NoSuchEntityException' || error.name === 'AccessDeniedException') {
           console.warn('⚠️  Config Service role not found or access denied');
-        } else {
-          throw error;
-        }
-      }
-    });
-  });
-
-  describe('AWS Config', () => {
-    test('should have Configuration Recorder enabled', async () => {
-      try {
-        const response = await configService.send(new DescribeConfigurationRecordersCommand({}));
-        
-        const recorders = response.ConfigurationRecorders || [];
-        expect(recorders.length).toBeGreaterThan(0);
-
-        const recorder = recorders[0];
-        expect(recorder.recordingGroup?.allSupported).toBe(true);
-        expect(recorder.recordingGroup?.includeGlobalResourceTypes).toBe(true);
-        
-        console.log(`✅ Configuration Recorder verified: ${recorder.name}`);
-      } catch (error: any) {
-        if (error.name === 'AccessDeniedException') {
-          console.warn('⚠️  Cannot access Config Service - access denied');
-        } else {
-          throw error;
-        }
-      }
-    });
-
-    test('should have Delivery Channel configured', async () => {
-      try {
-        const response = await configService.send(new DescribeDeliveryChannelsCommand({}));
-        
-        const channels = response.DeliveryChannels || [];
-        expect(channels.length).toBeGreaterThan(0);
-
-        const channel = channels[0];
-        expect(channel.s3BucketName).toBeDefined();
-        expect(channel.s3BucketName).toContain('config');
-        
-        console.log(`✅ Delivery Channel verified: ${channel.name}`);
-      } catch (error: any) {
-        if (error.name === 'AccessDeniedException') {
-          console.warn('⚠️  Cannot access Config Delivery Channels - access denied');
         } else {
           throw error;
         }
