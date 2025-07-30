@@ -109,7 +109,7 @@
     "@aws-sdk/client-ssm": "^3.848.0",
     "@aws-sdk/client-wafv2": "^3.848.0",
     "@cdktf/provider-aws": "21.3.0",
-    "aws-cdk-lib": "2.204.0",
+    "aws-cdk-lib": "2.202.0",
     "cdktf": "^0.21.0",
     "cdktf-cli": "0.21.0",
     "constructs": "10.4.2"
