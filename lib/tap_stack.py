@@ -365,7 +365,7 @@ echo "<h1>Hello from $(hostname -f)</h1>" > /var/www/html/index.html
       protocol="HTTP",
       vpc_id=self.vpc.id,
       target_type="instance",
-      health_check=[{
+      health_check={
         "enabled": True,
         "healthy_threshold": 2,
         "interval": 30,
@@ -375,7 +375,7 @@ echo "<h1>Hello from $(hostname -f)</h1>" > /var/www/html/index.html
         "protocol": "HTTP",
         "timeout": 5,
         "unhealthy_threshold": 2
-      }],
+      },
       tags={**self.common_tags, "Name": "prod-target-group"}
     )
     
