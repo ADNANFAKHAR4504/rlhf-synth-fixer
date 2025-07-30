@@ -108,9 +108,9 @@ class TapStack(TerraformStack):
     
     S3BucketVersioningA(self, "state-versioning",
       bucket=self.state_bucket_resource.id,
-      versioning_configuration=[{
+      versioning_configuration={
         "status": "Enabled"
-      }]
+      }
     )
     
     S3BucketPublicAccessBlock(self, "state-public-access-block",
