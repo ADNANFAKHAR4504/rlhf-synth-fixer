@@ -190,7 +190,7 @@ class TapStack(cdk.Stack):
     )
 
     # 5. Pipeline Artifacts
-    source_output = codepipeline.Artifact()
+    source_output = codepipeline.Artifact() 
 
     # 6. CodePipeline
     pipeline = codepipeline.Pipeline(
