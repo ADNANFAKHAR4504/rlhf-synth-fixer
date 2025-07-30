@@ -49,7 +49,7 @@ if not DEV_ACCOUNT_ID or not PROD_ACCOUNT_ID:
 
 app = App()
 
-#secure stack definition ───────────────────────────────────────────────────
+#secure stack definition
 class SecureAwsEnvironment(TerraformStack):
     def __init__(self, scope: Construct, stack_id: str, *, account_id: str, region: str, environment: str):
         super().__init__(scope, stack_id)
@@ -117,7 +117,7 @@ class SecureAwsEnvironment(TerraformStack):
             name=f"rds-password-{environment}-{region}",
             description="RDS master password",
             tags={**tags, "Name": f"rds-secret-{environment}-{region}"})
-        pwd = RandomPassword(self, f"DbPwd-{region}", length=32, special=True, override_characters="_@")
+        pwd = RandomPassword(self, f"DbPwd-{region}", length=32, special=True, override_special="_@")
         SecretsmanagerSecretVersion(self, f"DbSecretVer-{region}",
             secret_id=secret.id,
             secret_string=json.dumps({"password": pwd.result}),
