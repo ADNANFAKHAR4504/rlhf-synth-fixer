@@ -46,8 +46,8 @@ COMMIT_AUTHOR  = os.getenv("COMMIT_AUTHOR", "unknown")
 
 DEV_ACCOUNT_ID  = os.getenv("DEV_ACCOUNT_ID")
 PROD_ACCOUNT_ID = os.getenv("PROD_ACCOUNT_ID")
-if not DEV_ACCOUNT_ID or not PROD_ACCOUNT_ID:
-    raise ValueError("DEV_ACCOUNT_ID and PROD_ACCOUNT_ID must be set")
+# if not DEV_ACCOUNT_ID or not PROD_ACCOUNT_ID:
+#     raise ValueError("DEV_ACCOUNT_ID and PROD_ACCOUNT_ID must be set")
 
 app = App()
 
