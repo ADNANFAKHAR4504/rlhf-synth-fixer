@@ -1,34 +1,78 @@
-import json
-import os
-import unittest
+import pytest
+from aws_cdk import App
+from aws_cdk.assertions import Template
 
-from pytest import mark
-
-# Open file cfn-outputs/flat-outputs.json
-base_dir = os.path.dirname(os.path.abspath(__file__))
-flat_outputs_path = os.path.join(
-    base_dir, '..', '..', 'cfn-outputs', 'flat-outputs.json'
-)
-
-if os.path.exists(flat_outputs_path):
-  with open(flat_outputs_path, 'r', encoding='utf-8') as f:
-    flat_outputs = f.read()
-else:
-  flat_outputs = '{}'
-
-flat_outputs = json.loads(flat_outputs)
+from lib.tap_stack import TapStack, TapStackProps
 
 
-@mark.describe("TapStack")
-class TestTapStack(unittest.TestCase):
-  """Test cases for the TapStack CDK stack"""
-
-  def setUp(self):
-    """Set up a fresh CDK app for each test"""
-
-  @mark.it("Write Integration Tests")
-  def test_write_unit_tests(self):
-    # ARRANGE
-    self.fail(
-        "Unit test for TapStack should be implemented here."
+@pytest.fixture(scope="module")
+def synthesized_template():
+  app = App()
+  stack = TapStack(
+    app,
+    "IntegrationTestTapStack",
+    props=TapStackProps(
+      environment_suffix="int",
+      principal_arns=["arn:aws:iam::123456789012:user/test-user"]
     )
+  )
+  return Template.from_stack(stack)
+
+
+def test_kms_key_created(synthesized_template):
+  template = synthesized_template
+  template.resource_count_is("AWS::KMS::Key", 1)
+
+
+def test_s3_bucket_created(synthesized_template):
+  template = synthesized_template
+  template.resource_count_is("AWS::S3::Bucket", 1)
+
+
+def test_bucket_encryption_is_kms(synthesized_template):
+  template = synthesized_template
+  template.has_resource_properties("AWS::S3::Bucket", {
+    "BucketEncryption": {
+      "ServerSideEncryptionConfiguration": [
+        {
+          "ServerSideEncryptionByDefault": {
+            "SSEAlgorithm": "aws:kms"
+          }
+        }
+      ]
+    }
+  })
+
+
+def test_bucket_policy_exists(synthesized_template):
+  template = synthesized_template
+  template.resource_count_is("AWS::S3::BucketPolicy", 1)
+
+
+def test_bucket_policy_denies_http_access(synthesized_template):
+  template = synthesized_template
+  template.has_resource_properties("AWS::S3::BucketPolicy", {
+    "PolicyDocument": {
+      "Statement": [
+        {
+          "Action": "*",
+          "Effect": "Deny",
+          "Principal": "*",
+          "Resource": "*",
+          "Condition": {
+            "Bool": {
+              "aws:SecureTransport": "false"
+            }
+          }
+        }
+      ]
+    }
+  })
+
+
+def test_stack_outputs_exist(synthesized_template):
+  template = synthesized_template
+  output_keys = template.to_json().get("Outputs", {}).keys()
+  expected = {"BucketName", "BucketArn", "KmsKeyArn"}
+  assert expected.issubset(output_keys)
+
