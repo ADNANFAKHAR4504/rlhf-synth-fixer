@@ -85,7 +85,7 @@ class TapStack(cdk.Stack):
     # 3. Create the zip (only contents)
     zip_directory_contents(static_folder, zip_file)
 
-    # Uplaod pipeline zip file to s3 bucket
+    # Upload pipeline zip file to s3 bucket
     s3_deploy.BucketDeployment(
       self,
       "UploadZipFile",
@@ -144,11 +144,6 @@ class TapStack(cdk.Stack):
       self, "CodeBuildRole",
       assumed_by=iam.ServicePrincipal("codebuild.amazonaws.com")
     )
-
-    codebuild_role.add_managed_policy(
-      iam.ManagedPolicy.from_aws_managed_policy_name("AmazonS3FullAccess")
-    )
-
     codebuild_role.add_managed_policy(
       iam.ManagedPolicy.from_aws_managed_policy_name("CloudWatchLogsFullAccess")
     )
@@ -156,9 +151,29 @@ class TapStack(cdk.Stack):
     codebuild_role.add_to_policy(
       iam.PolicyStatement(
         actions=[
-          "cloudfront:*",
-          "route53:*",
-          "acm:*",
+          "route53:ChangeResourceRecordSets",
+          "route53:ListHostedZones",
+          "route53:GetHostedZone",
+          "route53:ListResourceRecordSets",
+          "acm:RequestCertificate",
+          "acm:DescribeCertificate",
+          "acm:DeleteCertificate",
+          "acm:ListCertificates",
+          "cloudfront:CreateDistribution",
+          "cloudfront:UpdateDistribution",
+          "cloudfront:GetDistribution",
+          "cloudfront:DeleteDistribution",
+          "cloudfront:ListDistributions",
+          "s3:CreateBucket",
+          "s3:PutBucketPolicy",
+          "s3:GetBucketPolicy",
+          "s3:PutBucketAcl",
+          "s3:GetBucketAcl",
+          "s3:DeleteBucket",
+          "s3:PutObject",
+          "s3:GetObject",
+          "s3:DeleteObject",
+          "s3:ListBucket"
         ],
         resources=["*"]  # Can restrict to specific ARNs if desired
       )

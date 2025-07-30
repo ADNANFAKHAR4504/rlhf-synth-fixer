@@ -73,7 +73,7 @@
 
 
 #---------------------------------------------------
-# INTEGRATION TEST
+# INTEGRATION TEST - Ensure pipeline is successfull. Could not use route53 as not public hosted zone in account. Discussed with Pranav
 #---------------------------------------------------
 # import subprocess
 # import time

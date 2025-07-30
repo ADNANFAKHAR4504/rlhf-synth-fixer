@@ -432,3 +432,230 @@ resource "aws_route53_record" "alias_to_cloudfront" {
     evaluate_target_health = false
   }
 }
+
+
+
+
+# **AWS Static Website Deployment Documentation with Terraform**
+
+## **Introduction**
+This document provides comprehensive deployment instructions for provisioning a static website on AWS using **Terraform**. The infrastructure includes an **S3 bucket**, **CloudFront distribution**, **ACM certificate**, and **Route53 DNS records**. It is designed for production-ready environments and follows AWS best practices for state management, security, and automation.
+
+---
+
+## **Prerequisites**
+Before starting, ensure the following:
+1. **AWS Account:** You have an active AWS account with appropriate permissions.
+2. **Terraform Installed:** Install Terraform (v1.x or later) on your workstation or ensure it is available in your CI/CD pipeline (AWS CodeBuild).
+3. **Domain Registered in Route53:** The target domain must be managed in AWS Route53.
+4. **IAM Role:** AWS CodeBuild will execute Terraform using an assigned IAM Role (detailed below).
+
+---
+
+## **Terraform Backend Setup**
+Terraform requires a remote backend to store its state securely and enable collaboration. Storing state locally can lead to **state drift** and conflicts when multiple engineers work on the same infrastructure.
+
+### **Why Remote Backend?**
+- **Collaboration:** Multiple team members can work simultaneously.
+- **State Locking:** Prevents concurrent changes.
+- **Disaster Recovery:** State is securely stored and backed up.
+
+### **Example Backend Configuration**
+```hcl
+terraform {
+  backend "s3" {
+    bucket         = "terraform-state-bucket"
+    key            = "prod/static-website/terraform.tfstate"
+    region         = "us-east-1"
+    dynamodb_table = "terraform-lock-table"
+    encrypt        = true
+  }
+}
+```
+
+### **Steps:**
+1. Create an S3 bucket for state storage.
+2. Create a DynamoDB table for state locking (optional but recommended).
+
+---
+
+## **IAM Role Usage**
+The **AWS CodeBuild project** will run Terraform commands using its **assigned IAM Role**.  
+This IAM Role must include permissions for the following actions:
+- **S3:** Create, update, and manage buckets and bucket policies.
+- **CloudFront:** Create and manage CloudFront distributions.
+- **ACM:** Request and validate certificates.
+- **Route53:** Create and update DNS records and query hosted zone IDs.
+
+### **Example IAM Policy**
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "route53:ChangeResourceRecordSets",
+        "route53:ListHostedZones",
+        "route53:GetHostedZone",
+        "route53:ListResourceRecordSets",
+        "acm:RequestCertificate",
+        "acm:DescribeCertificate",
+        "acm:DeleteCertificate",
+        "acm:ListCertificates",
+        "cloudfront:CreateDistribution",
+        "cloudfront:UpdateDistribution",
+        "cloudfront:GetDistribution",
+        "cloudfront:DeleteDistribution",
+        "cloudfront:ListDistributions",
+        "s3:CreateBucket",
+        "s3:PutBucketPolicy",
+        "s3:GetBucketPolicy",
+        "s3:PutBucketAcl",
+        "s3:GetBucketAcl",
+        "s3:DeleteBucket",
+        "s3:PutObject",
+        "s3:GetObject",
+        "s3:DeleteObject",
+        "s3:ListBucket"
+      ],
+      "Resource": "*"
+    }
+  ]
+}
+```
+> **Note:** The IAM Role is assumed automatically by CodeBuild; you do not need to configure AWS credentials locally.
+
+---
+
+## **Resource Details**
+
+### **1. S3 Bucket**
+The S3 bucket hosts static files. Public access is blocked, and CloudFront is used as the distribution layer.
+
+```hcl
+resource "aws_s3_bucket" "static_site" {
+  bucket = "my-static-site-bucket"
+}
+
+resource "aws_s3_bucket_public_access_block" "static_site_block" {
+  bucket                  = aws_s3_bucket.static_site.id
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+```
+
+---
+
+### **2. ACM Certificate**
+An ACM certificate is required to enable HTTPS on the CloudFront distribution. It will be validated via Route53 DNS records.
+
+```hcl
+resource "aws_acm_certificate" "site_cert" {
+  domain_name       = "www.example.com"
+  validation_method = "DNS"
+}
+
+resource "aws_route53_record" "cert_validation" {
+  for_each = {
+    for dvo in aws_acm_certificate.site_cert.domain_validation_options : dvo.domain_name => {
+      name   = dvo.resource_record_name
+      record = dvo.resource_record_value
+      type   = dvo.resource_record_type
+    }
+  }
+
+  zone_id = aws_route53_zone.primary.zone_id
+  name    = each.value.name
+  type    = each.value.type
+  ttl     = 60
+  records = [each.value.record]
+}
+```
+
+---
+
+### **3. CloudFront Distribution**
+CloudFront delivers static content from the S3 bucket to users worldwide.
+
+```hcl
+resource "aws_cloudfront_distribution" "cdn" {
+  enabled             = true
+  default_root_object = "index.html"
+  origin {
+    domain_name = aws_s3_bucket.static_site.bucket_regional_domain_name
+    origin_id   = "s3-origin"
+  }
+
+  default_cache_behavior {
+    target_origin_id       = "s3-origin"
+    viewer_protocol_policy = "redirect-to-https"
+    allowed_methods        = ["GET", "HEAD"]
+    cached_methods         = ["GET", "HEAD"]
+  }
+
+  viewer_certificate {
+    acm_certificate_arn           = aws_acm_certificate.site_cert.arn
+    ssl_support_method             = "sni-only"
+    minimum_protocol_version       = "TLSv1.2_2021"
+  }
+}
+```
+
+---
+
+### **4. Route53 Record**
+Route53 creates an alias record mapping the custom domain to the CloudFront distribution.
+
+```hcl
+data "aws_route53_zone" "primary" {
+  name         = "example.com"
+  private_zone = false
+}
+
+resource "aws_route53_record" "alias" {
+  zone_id = data.aws_route53_zone.primary.zone_id
+  name    = "www.example.com"
+  type    = "A"
+
+  alias {
+    name                   = aws_cloudfront_distribution.cdn.domain_name
+    zone_id                = aws_cloudfront_distribution.cdn.hosted_zone_id
+    evaluate_target_health = false
+  }
+}
+```
+
+---
+
+## **How the Resources Work Together**
+1. **Route53 validation records** allow ACM to issue a trusted HTTPS certificate.
+2. **CloudFront** uses the ACM certificate and serves content from the S3 bucket.
+3. **Route53 alias record** maps your domain to the CloudFront endpoint.
+
+---
+
+## **Deployment Steps**
+1. **Configure Terraform Backend State**
+   - Set up the backend as shown above.
+2. **Set Variables**
+   - Create a `.tfvars` file or set environment variables for your domain and bucket names.
+3. **Initialize Terraform**
+   ```bash
+   terraform init
+   ```
+4. **Plan & Apply**
+   ```bash
+   terraform plan
+   terraform apply
+   ```
+   > If using **AWS CodeBuild**, these commands are automatically run by the pipeline using the assigned IAM Role.
+
+---
+
+## **Verification**
+1. Access the CloudFront distribution domain from the Terraform output.
+2. Confirm the Route53 alias resolves correctly.
+3. Ensure the ACM certificate enables **HTTPS** (you should see a padlock icon in the browser).

@@ -291,7 +291,7 @@ resource "aws_s3_bucket_versioning" "staticfilesbucket_versioning" {
   bucket = aws_s3_bucket.staticfilesbucket.id
 
   versioning_configuration {
-    status = "Disabled" # 
+    status = "Enabled" # 
   }
 }
 
