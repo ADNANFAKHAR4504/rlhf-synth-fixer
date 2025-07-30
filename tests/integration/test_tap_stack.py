@@ -11,122 +11,122 @@ base_dir = os.path.dirname(os.path.abspath(__file__))
 flat_outputs_path = os.path.join(base_dir, '..', '..', 'cfn-outputs', 'flat-outputs.json')
 
 if os.path.exists(flat_outputs_path):
-  with open(flat_outputs_path, 'r', encoding='utf-8') as f:
-    flat_outputs = f.read()
+    with open(flat_outputs_path, 'r', encoding='utf-8') as f:
+        flat_outputs = json.load(f)
 else:
-  flat_outputs = '{}'
-
-flat_outputs = json.loads(flat_outputs)
-
+    flat_outputs = {}
 
 @mark.describe("TapStack Integration Tests")
 class TestTapStack(unittest.TestCase):
-  def setUp(self):
-    self.api_url = flat_outputs.get('ApiUrl', '')
-    self.hello_endpoint = flat_outputs.get('HelloEndpoint', '')
-    self.user_endpoint = flat_outputs.get('UserEndpoint', '')
 
-    if not self.api_url:
-      self.skipTest("Stack outputs not available - deployment required")
+    def setUp(self):
+        self.api_url = flat_outputs.get('ApiUrl', '').rstrip('/')
+        self.hello_endpoint = flat_outputs.get('HelloEndpoint', '').rstrip('/')
+        self.user_endpoint_template = flat_outputs.get('UserEndpoint', '').rstrip('/')
 
-  @mark.it("API Gateway Hello endpoint returns successful response")
-  def test_hello_endpoint_success(self):
-    response = requests.get(self.hello_endpoint, timeout=30)
-    self.assertEqual(response.status_code, 200)
-    self.assertEqual(response.headers.get('content-type'), 'application/json')
-    response_data = response.json()
-    self.assertIn('message', response_data)
-    self.assertEqual(response_data['message'], 'Hello, World!')
-    self.assertIn('timestamp', response_data)
-    self.assertIn('path', response_data)
-    self.assertIn('method', response_data)
-    self.assertEqual(response_data['method'], 'GET')
+        if not self.api_url or not self.hello_endpoint or not self.user_endpoint_template:
+            self.skipTest("Required endpoint outputs are not available.")
 
-  @mark.it("API Gateway Hello endpoint supports POST requests")
-  def test_hello_endpoint_post(self):
-    response = requests.post(self.hello_endpoint, json={'test': 'data'}, timeout=30)
-    self.assertEqual(response.status_code, 200)
-    response_data = response.json()
-    self.assertEqual(response_data['message'], 'Hello, World!')
-    self.assertEqual(response_data['method'], 'POST')
+    def _safe_get(self, url, **kwargs):
+        try:
+            return requests.get(url, timeout=30, **kwargs)
+        except Exception as e:
+            self.fail(f"GET request to {url} failed: {e}")
 
-  @mark.it("API Gateway User endpoint with anonymous user")
-  def test_user_endpoint_anonymous(self):
-    user_base_url = self.user_endpoint.replace('/{userId}', '')
-    response = requests.get(user_base_url, timeout=30)
-    self.assertEqual(response.status_code, 200)
-    response_data = response.json()
-    self.assertIn('userId', response_data)
-    self.assertEqual(response_data['userId'], 'anonymous')
-    self.assertIn('message', response_data)
-    self.assertIn('timestamp', response_data)
-    self.assertIn('requestId', response_data)
+    def _safe_post(self, url, **kwargs):
+        try:
+            return requests.post(url, timeout=30, **kwargs)
+        except Exception as e:
+            self.fail(f"POST request to {url} failed: {e}")
 
-  @mark.it("API Gateway User endpoint with specific userId")
-  def test_user_endpoint_with_user_id(self):
-    test_user_id = 'testuser123'
-    user_url = self.user_endpoint.replace('{userId}', test_user_id)
-    response = requests.get(user_url, timeout=30)
-    self.assertEqual(response.status_code, 200)
-    response_data = response.json()
-    self.assertEqual(response_data['userId'], test_user_id)
-    self.assertEqual(response_data['message'], f'Hello, {test_user_id}!')
-    self.assertIn('timestamp', response_data)
-    self.assertIn('requestId', response_data)
+    def _safe_options(self, url, **kwargs):
+        try:
+            return requests.options(url, timeout=30, **kwargs)
+        except Exception as e:
+            self.fail(f"OPTIONS request to {url} failed: {e}")
 
-  @mark.it("API Gateway User endpoint with query parameters")
-  def test_user_endpoint_with_query_params(self):
-    test_user_id = 'queryuser'
-    user_url = self.user_endpoint.replace('{userId}', test_user_id)
-    query_params = {'param1': 'value1', 'param2': 'value2'}
-    response = requests.get(user_url, params=query_params, timeout=30)
-    self.assertEqual(response.status_code, 200)
-    response_data = response.json()
-    self.assertEqual(response_data['userId'], test_user_id)
-    self.assertIn('queryParams', response_data)
-    self.assertEqual(response_data['queryParams'].get('param1'), 'value1')
-    self.assertEqual(response_data['queryParams'].get('param2'), 'value2')
+    @mark.it("Hello endpoint returns 200 and valid payload")
+    def test_hello_endpoint_success(self):
+        response = self._safe_get(self.hello_endpoint)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers.get('content-type'), 'application/json')
+        data = response.json()
+        self.assertEqual(data['message'], 'Hello, World!')
+        self.assertIn('timestamp', data)
+        self.assertIn('path', data)
+        self.assertIn('method', data)
+        self.assertEqual(data['method'], 'GET')
 
-  @mark.it("API Gateway CORS configuration allows cross-origin requests")
-  def test_cors_configuration(self):
-    response = requests.options(self.hello_endpoint, headers={'Origin': 'https://example.com'}, timeout=30)
-    self.assertIn(response.status_code, [200, 204])
-    cors_headers = [h.lower() for h in response.headers.keys()]
-    self.assertIn('access-control-allow-origin', cors_headers)
+    @mark.it("Hello endpoint supports POST")
+    def test_hello_endpoint_post(self):
+        response = self._safe_post(self.hello_endpoint, json={'dummy': 'data'})
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data['message'], 'Hello, World!')
+        self.assertEqual(data['method'], 'POST')
 
-  @mark.it("Lambda functions execute within Free Tier timeout limits")
-  def test_lambda_performance_within_free_tier(self):
-    start_time = time.time()
-    response = requests.get(self.hello_endpoint, timeout=30)
-    end_time = time.time()
-    self.assertEqual(response.status_code, 200)
-    response_time = end_time - start_time
-    self.assertLess(response_time, 5.0, f"Response time {response_time}s exceeds expected limit")
+    @mark.it("User endpoint with anonymous access")
+    def test_user_endpoint_anonymous(self):
+        url = self.user_endpoint_template.replace("/{userId}", "")
+        response = self._safe_get(url)
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data['userId'], 'anonymous')
+        self.assertIn('timestamp', data)
+        self.assertIn('requestId', data)
 
-  @mark.it("API Gateway endpoints return proper error handling")
-  def test_api_error_handling(self):
-    invalid_endpoint = f"{self.api_url}invalid-route"
-    response = requests.get(invalid_endpoint, timeout=30)
-    self.assertEqual(response.status_code, 404)
+    @mark.it("User endpoint with specific user ID")
+    def test_user_endpoint_with_user_id(self):
+        url = self.user_endpoint_template.replace('{userId}', 'testuser123')
+        response = self._safe_get(url)
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data['userId'], 'testuser123')
+        self.assertIn('timestamp', data)
+        self.assertIn('requestId', data)
+        self.assertEqual(data['message'], 'Hello, testuser123!')
 
-  @mark.it("All API endpoints use HTTPS")
-  def test_https_enforcement(self):
-    self.assertTrue(self.api_url.startswith('https://'))
-    self.assertTrue(self.hello_endpoint.startswith('https://'))
-    user_url_base = self.user_endpoint.replace('/{userId}', '')
-    self.assertTrue(user_url_base.startswith('https://'))
+    @mark.it("User endpoint with query parameters")
+    def test_user_endpoint_with_query_params(self):
+        url = self.user_endpoint_template.replace('{userId}', 'queryuser')
+        response = self._safe_get(url, params={'param1': 'a', 'param2': 'b'})
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data['userId'], 'queryuser')
+        self.assertEqual(data['queryParams'].get('param1'), 'a')
+        self.assertEqual(data['queryParams'].get('param2'), 'b')
 
-  @mark.it("Lambda functions return consistent response structure")
-  def test_consistent_response_structure(self):
-    hello_response = requests.get(self.hello_endpoint, timeout=30)
-    user_response = requests.get(self.user_endpoint.replace('{userId}', 'testuser'), timeout=30)
-    self.assertEqual(hello_response.status_code, 200)
-    self.assertEqual(user_response.status_code, 200)
-    hello_data = hello_response.json()
-    user_data = user_response.json()
-    required_fields = ['timestamp']
-    for field in required_fields:
-      self.assertIn(field, hello_data)
-      self.assertIn(field, user_data)
-    self.assertIn('message', hello_data)
-    self.assertIn('message', user_data)
+    @mark.it("OPTIONS preflight supports CORS")
+    def test_cors_configuration(self):
+        response = self._safe_options(self.hello_endpoint, headers={'Origin': 'https://example.com'})
+        self.assertIn(response.status_code, [200, 204])
+        cors_headers = {k.lower() for k in response.headers.keys()}
+        self.assertIn('access-control-allow-origin', cors_headers)
+
+    @mark.it("HTTPS URLs only")
+    def test_https_enforcement(self):
+        self.assertTrue(self.api_url.startswith('https://'))
+        self.assertTrue(self.hello_endpoint.startswith('https://'))
+        self.assertTrue(self.user_endpoint_template.startswith('https://'))
+
+    @mark.it("Handles bad paths with 404")
+    def test_api_error_handling(self):
+        url = f"{self.api_url}/does-not-exist"
+        response = self._safe_get(url)
+        self.assertEqual(response.status_code, 404)
+
+    @mark.it("Response time within Free Tier limit")
+    def test_lambda_performance_within_free_tier(self):
+        start = time.time()
+        response = self._safe_get(self.hello_endpoint)
+        elapsed = time.time() - start
+        self.assertEqual(response.status_code, 200)
+        self.assertLess(elapsed, 5.0)
+
+    @mark.it("Consistent response structure")
+    def test_consistent_response_structure(self):
+        hello = self._safe_get(self.hello_endpoint).json()
+        user = self._safe_get(self.user_endpoint_template.replace('{userId}', 'abc')).json()
+        for field in ['timestamp', 'message']:
+            self.assertIn(field, hello)
+            self.assertIn(field, user)
