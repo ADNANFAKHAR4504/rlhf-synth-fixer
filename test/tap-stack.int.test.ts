@@ -190,7 +190,7 @@ describe('AWS Resources Integration Test', () => {
     expect(target?.MaxCapacity).toBe(10);
   });
   it('should confirm CloudWatch alarms can trigger (pseudo check)', async () => {
-    const res = await cloudwatch.send(
+    const res = await cloudwatch.send(//
       new DescribeAlarmsCommand({
         AlarmNames: [
           `${outputs.envName}:HighCpuAlarm`,
@@ -348,20 +348,6 @@ describe('AWS Resources Integration Test', () => {
       memoryScalingPolicy?.TargetTrackingScalingPolicyConfiguration?.TargetValue
     ).toBe(60);
   });
-
-  // it('should simulate ECS CPU utilization and verify scaling config', async () => {
-  //   const res = await autoScaling.send(
-  //     new DescribeScalableTargetsCommand({
-  //       ServiceNamespace: 'ecs',
-  //       ResourceIds: [
-  //         `service/${outputs.ClusterName}/${outputs.FargateServiceName}`,
-  //       ],
-  //     })
-  //   );
-  //   const scalingTarget = res.ScalableTargets?.[0];
-  //   expect(scalingTarget).toBeDefined();
-  //   expect(scalingTarget?.MaxCapacity).toBeGreaterThanOrEqual(2);
-  // });
 
   if (process.env.HOSTED_ZONE_NAME) {
     it('should verify Route53 A Record exists for domain', async () => {
