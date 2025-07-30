@@ -8,6 +8,7 @@ import * as iam from 'aws-cdk-lib/aws-iam';
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
 import * as autoscaling from 'aws-cdk-lib/aws-autoscaling';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
+import * as config from 'aws-cdk-lib/aws-config';
 
 interface TapStackProps extends cdk.StackProps {
   environmentSuffix?: string;
@@ -135,8 +136,54 @@ export class TapStack extends cdk.Stack {
         iam.ManagedPolicy.fromAwsManagedPolicyName(
           'AmazonSSMManagedInstanceCore'
         ), // For Systems Manager access
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'CloudWatchAgentServerPolicy'
+        ), // For CloudWatch agent
       ],
     });
+
+    // User data script to install and configure CloudWatch agent
+    const userData = ec2.UserData.forLinux();
+    userData.addCommands(
+      'yum update -y',
+      'yum install -y amazon-cloudwatch-agent',
+      'cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << EOF',
+      JSON.stringify({
+        metrics: {
+          namespace: 'CWAgent',
+          metrics_collected: {
+            cpu: {
+              measurement: ['cpu_usage_idle', 'cpu_usage_iowait', 'cpu_usage_user', 'cpu_usage_system'],
+              metrics_collection_interval: 60,
+            },
+            disk: {
+              measurement: ['used_percent'],
+              metrics_collection_interval: 60,
+              resources: ['*'],
+            },
+            diskio: {
+              measurement: ['io_time'],
+              metrics_collection_interval: 60,
+              resources: ['*'],
+            },
+            mem: {
+              measurement: ['mem_used_percent'],
+              metrics_collection_interval: 60,
+            },
+            netstat: {
+              measurement: ['tcp_established', 'tcp_time_wait'],
+              metrics_collection_interval: 60,
+            },
+            swap: {
+              measurement: ['swap_used_percent'],
+              metrics_collection_interval: 60,
+            },
+          },
+        },
+      }),
+      'EOF',
+      '/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s'
+    );
 
     const asg = new autoscaling.AutoScalingGroup(this, 'AppASG', {
       vpc,
@@ -148,6 +195,7 @@ export class TapStack extends cdk.Stack {
       machineImage: ec2.MachineImage.latestAmazonLinux2023(),
       securityGroup: appSg,
       role: appRole,
+      userData: userData,
       minCapacity: 2,
       maxCapacity: 5,
     });
@@ -210,20 +258,72 @@ export class TapStack extends cdk.Stack {
         'High CPU utilization on the application Auto Scaling Group.',
       treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
     });
-    // Note: Memory usage requires the CloudWatch agent installed on the EC2 instances.
+
+    // Memory usage alarm using CloudWatch agent metrics
+    new cloudwatch.Alarm(this, 'HighMemoryAlarmASG', {
+      metric: new cloudwatch.Metric({
+        namespace: 'CWAgent',
+        metricName: 'mem_used_percent',
+        dimensionsMap: {
+          AutoScalingGroupName: asg.autoScalingGroupName,
+        },
+        statistic: 'Average',
+      }),
+      threshold: 80,
+      evaluationPeriods: 2,
+      alarmDescription:
+        'High memory utilization on the application Auto Scaling Group.',
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+    });
 
     // --- Compliance (AWS Config Rules) ---
-    // Note: AWS Config rules require a Configuration Recorder to be set up first
-    // Uncomment the following lines if you have AWS Config enabled in your account:
-    
-    // new aws_config.ManagedRule(this, 'S3VersioningEnabledRule', {
-    //   identifier:
-    //     aws_config.ManagedRuleIdentifiers.S3_BUCKET_VERSIONING_ENABLED,
-    // });
+    // AWS Config requires a configuration recorder and delivery channel
+    const configBucket = new s3.Bucket(this, 'ConfigBucket', {
+      encryption: s3.BucketEncryption.S3_MANAGED,
+      versioned: true,
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      enforceSSL: true,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      autoDeleteObjects: true,
+    });
 
-    // new aws_config.ManagedRule(this, 'Ec2NoPublicIpRule', {
-    //   identifier: aws_config.ManagedRuleIdentifiers.EC2_INSTANCE_NO_PUBLIC_IP,
-    // });
+    const configRole = new iam.Role(this, 'ConfigRole', {
+      assumedBy: new iam.ServicePrincipal('config.amazonaws.com'),
+      managedPolicies: [
+        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWS_ConfigRole'),
+      ],
+    });
+
+    configBucket.grantWrite(configRole);
+
+    const configurationRecorder = new config.CfnConfigurationRecorder(this, 'ConfigRecorder', {
+      name: 'default',
+      roleArn: configRole.roleArn,
+      recordingGroup: {
+        allSupported: true,
+        includeGlobalResourceTypes: true,
+      },
+    });
+
+    const deliveryChannel = new config.CfnDeliveryChannel(this, 'ConfigDeliveryChannel', {
+      name: 'default',
+      s3BucketName: configBucket.bucketName,
+    });
+
+    // Config rules
+    const s3VersioningRule = new config.ManagedRule(this, 'S3VersioningEnabledRule', {
+      identifier: config.ManagedRuleIdentifiers.S3_BUCKET_VERSIONING_ENABLED,
+    });
+
+    const ec2NoPublicIpRule = new config.ManagedRule(this, 'Ec2NoPublicIpRule', {
+      identifier: config.ManagedRuleIdentifiers.EC2_INSTANCE_NO_PUBLIC_IP,
+    });
+
+    // Ensure Config rules depend on the recorder and delivery channel
+    s3VersioningRule.node.addDependency(configurationRecorder);
+    s3VersioningRule.node.addDependency(deliveryChannel);
+    ec2NoPublicIpRule.node.addDependency(configurationRecorder);
+    ec2NoPublicIpRule.node.addDependency(deliveryChannel);
 
     // --- Outputs ---
     new cdk.CfnOutput(this, 'ALB_DNS', {
