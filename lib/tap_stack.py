@@ -60,7 +60,7 @@ class SecureS3NestedStack(NestedStack):
   ):
     super().__init__(scope, stack_id, **kwargs)
 
-    bucket_name = f"secure-{env_suffix}-data-bucket"
+    bucket_name = f"secure-{env_suffix}-bucket"
 
     # 🔐 KMS Key
     kms_key = kms.Key(
