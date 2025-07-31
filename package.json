@@ -16,7 +16,7 @@
     "check-versions": "npm run check-node && npm run check-python && npm run check-pipenv",
     "preinstall": "npm run check-versions",
     "build": "tsc",
-    "start": "ts-node cli/create-task.ts",
+    "start": "ts-node cli/create-task.ts", 
     "lint": "eslint .",
     "watch": "tsc -w",
     "test": "jest --coverage",
