@@ -1,4 +1,3 @@
-/* eslint-disable prettier/prettier */
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { NetworkingConstruct } from './networking-construct';
