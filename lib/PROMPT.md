@@ -8,8 +8,4 @@
 > 3. Expose the Lambda function via an API Gateway (REST or HTTP API).
 > 4. Ensure API Gateway has CORS enabled.
 >
-> **Constraints:**
-
-> * The infrastructure must only be deployed in the `us-east-1` region.
->
 > Output a single valid CloudFormation YAML file (`serverless-stack.yaml`) that meets all the above requirements.
