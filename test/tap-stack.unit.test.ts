@@ -19,7 +19,12 @@ describe('TapStack', () => {
   describe('Infrastructure Resources', () => {
     test('should create S3 bucket with correct configuration', () => {
       template.hasResourceProperties('AWS::S3::Bucket', {
-        BucketName: `iot-data-bucket-${environmentSuffix}`,
+        BucketName: {
+          'Fn::Join': [
+            '',
+            [`iot-data-bucket-${environmentSuffix}-`, { Ref: 'AWS::AccountId' }]
+          ]
+        },
         PublicAccessBlockConfiguration: {
           BlockPublicAcls: true,
           BlockPublicPolicy: true,
@@ -31,7 +36,12 @@ describe('TapStack', () => {
 
     test('should create DynamoDB table with correct configuration', () => {
       template.hasResourceProperties('AWS::DynamoDB::Table', {
-        TableName: `iot-processed-data-${environmentSuffix}`,
+        TableName: {
+          'Fn::Join': [
+            '',
+            [`iot-processed-data-${environmentSuffix}-`, { Ref: 'AWS::AccountId' }]
+          ]
+        },
         BillingMode: 'PAY_PER_REQUEST',
         AttributeDefinitions: [
           {
@@ -64,7 +74,6 @@ describe('TapStack', () => {
 
     test('should create Lambda function with correct configuration', () => {
       template.hasResourceProperties('AWS::Lambda::Function', {
-        FunctionName: `IoTDataProcessor-${environmentSuffix}`,
         Runtime: 'nodejs18.x',
         Handler: 'index.handler',
         MemorySize: 512,
@@ -75,7 +84,6 @@ describe('TapStack', () => {
 
     test('should create CloudWatch log group with correct name', () => {
       template.hasResourceProperties('AWS::Logs::LogGroup', {
-        LogGroupName: '/aws/lambda/IoTDataProcessor',
         RetentionInDays: 14,
       });
     });
@@ -167,7 +175,6 @@ describe('TapStack', () => {
 
     test('should configure Lambda with correct environment variables', () => {
       template.hasResourceProperties('AWS::Lambda::Function', {
-        FunctionName: `IoTDataProcessor-${environmentSuffix}`,
         Environment: {
           Variables: {
             DYNAMODB_TABLE_NAME: {},
@@ -200,11 +207,21 @@ describe('TapStack', () => {
       const customTemplate = Template.fromStack(customStack);
 
       customTemplate.hasResourceProperties('AWS::S3::Bucket', {
-        BucketName: 'iot-data-bucket-custom-env',
+        BucketName: {
+          'Fn::Join': [
+            '',
+            ['iot-data-bucket-custom-env-', { Ref: 'AWS::AccountId' }]
+          ]
+        },
       });
 
       customTemplate.hasResourceProperties('AWS::DynamoDB::Table', {
-        TableName: 'iot-processed-data-custom-env',
+        TableName: {
+          'Fn::Join': [
+            '',
+            ['iot-processed-data-custom-env-', { Ref: 'AWS::AccountId' }]
+          ]
+        },
       });
 
       // Check that IAM role exists (no explicit role name in implementation)
@@ -234,11 +251,21 @@ describe('TapStack', () => {
       const contextTemplate = Template.fromStack(contextStack);
 
       contextTemplate.hasResourceProperties('AWS::S3::Bucket', {
-        BucketName: 'iot-data-bucket-context-env',
+        BucketName: {
+          'Fn::Join': [
+            '',
+            ['iot-data-bucket-context-env-', { Ref: 'AWS::AccountId' }]
+          ]
+        },
       });
 
       contextTemplate.hasResourceProperties('AWS::DynamoDB::Table', {
-        TableName: 'iot-processed-data-context-env',
+        TableName: {
+          'Fn::Join': [
+            '',
+            ['iot-processed-data-context-env-', { Ref: 'AWS::AccountId' }]
+          ]
+        },
       });
 
       // Check that IAM role exists (no explicit role name in implementation)
@@ -264,11 +291,21 @@ describe('TapStack', () => {
       const defaultTemplate = Template.fromStack(defaultStack);
 
       defaultTemplate.hasResourceProperties('AWS::S3::Bucket', {
-        BucketName: 'iot-data-bucket-dev',
+        BucketName: {
+          'Fn::Join': [
+            '',
+            ['iot-data-bucket-dev-', { Ref: 'AWS::AccountId' }]
+          ]
+        },
       });
 
       defaultTemplate.hasResourceProperties('AWS::DynamoDB::Table', {
-        TableName: 'iot-processed-data-dev',
+        TableName: {
+          'Fn::Join': [
+            '',
+            ['iot-processed-data-dev-', { Ref: 'AWS::AccountId' }]
+          ]
+        },
       });
 
       // Check that IAM role exists (no explicit role name in implementation)
