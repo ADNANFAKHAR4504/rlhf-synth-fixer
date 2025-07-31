@@ -5,24 +5,25 @@ Here's how you can structure the code:
 ### Directory Structure
 ```
 lib/
-├── modules/
-│   ├── vpc/
-│   │   └── index.ts
-│   ├── subnets/
-│   │   └── index.ts
-│   └── ec2/
-│       └── index.ts
+├── modules.ts
 └── tap-stack.ts
 ```
 
-### lib/modules/vpc/index.ts
+### lib/modules.ts
 ```typescript
 import { Construct } from 'constructs';
 import { Vpc } from '@cdktf/provider-aws/lib/vpc';
 import { InternetGateway } from '@cdktf/provider-aws/lib/internet-gateway';
 import { RouteTable } from '@cdktf/provider-aws/lib/route-table';
 import { Route } from '@cdktf/provider-aws/lib/route';
+import { Subnet } from '@cdktf/provider-aws/lib/subnet';
+import { RouteTableAssociation } from '@cdktf/provider-aws/lib/route-table-association';
+import { Instance } from '@cdktf/provider-aws/lib/instance';
 
+//
+// ==============================
+// VPC MODULE
+// ==============================
 export interface VpcModuleProps {
   cidrBlock: string;
   environment: string;
@@ -64,21 +65,15 @@ export class VpcModule extends Construct {
     });
   }
 
-  // Optional: expose output values like VPC ID
   get vpcId() {
     return this.vpc.id;
   }
 }
 
-```
-
-### lib/modules/subnets/index.ts
-```typescript
-import { Construct } from 'constructs';
-import { Subnet } from '@cdktf/provider-aws/lib/subnet';
-import { RouteTableAssociation } from '@cdktf/provider-aws/lib/route-table-association';
-import { VpcModule } from '../vpc';
-
+//
+// ==============================
+// SUBNETS MODULE
+// ==============================
 export interface SubnetsModuleProps {
   vpcModule: VpcModule;
   environment: string;
@@ -121,14 +116,11 @@ export class SubnetsModule extends Construct {
     });
   }
 }
-```
 
-### lib/modules/ec2/index.ts
-```typescript
-import { Construct } from 'constructs';
-import { Instance } from '@cdktf/provider-aws/lib/instance';
-import { SubnetsModule } from '../subnets';
-
+//
+// ==============================
+// EC2 MODULE
+// ==============================
 export interface Ec2ModuleProps {
   subnetsModule: SubnetsModule;
   environment: string;
@@ -151,6 +143,7 @@ export class Ec2Module extends Construct {
     });
   }
 }
+
 ```
 
 ### lib/tap-stack.ts
