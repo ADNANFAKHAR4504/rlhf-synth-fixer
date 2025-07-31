@@ -1,11 +1,8 @@
 import { DescribeSubnetsCommand, DescribeTagsCommand, DescribeVpcsCommand, EC2Client } from '@aws-sdk/client-ec2';
 import { App } from 'cdktf';
-import { config } from 'dotenv';
 import { TapStack } from '../lib/tap-stack';
 
-// Load AWS credentials from .env if needed
-config();
-
+// Use region from env or default
 const REGION = process.env.AWS_REGION || 'us-east-1';
 const client = new EC2Client({ region: REGION });
 
@@ -16,9 +13,8 @@ describe('🧪 Real AWS Integration: TapStack VPC Deployment', () => {
   beforeAll(async () => {
     const app = new App();
     new TapStack(app, 'IntegrationTestStack');
-    await app.synth(); // optionally synth only, but real test should assume deployed already
+    await app.synth();
 
-    // Fetch all VPCs and find one with the tag Name: TapVpc or similar
     const response = await client.send(new DescribeVpcsCommand({}));
 
     const matchingVpc = response.Vpcs?.find(vpc =>
@@ -35,7 +31,9 @@ describe('🧪 Real AWS Integration: TapStack VPC Deployment', () => {
   });
 
   test('✅ Subnets should be created within the VPC', async () => {
-    const subnets = await client.send(new DescribeSubnetsCommand({ Filters: [{ Name: 'vpc-id', Values: [vpcId!] }] }));
+    const subnets = await client.send(new DescribeSubnetsCommand({
+      Filters: [{ Name: 'vpc-id', Values: [vpcId!] }]
+    }));
     expect(subnets.Subnets?.length).toBeGreaterThan(0);
   });
 
