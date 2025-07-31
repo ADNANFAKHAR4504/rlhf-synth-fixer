@@ -305,7 +305,6 @@ Resources:
   EC2InstanceRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub "ec2-instance-role-${EnvironmentSuffix}"
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -334,7 +333,6 @@ Resources:
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
-      InstanceProfileName: !Sub "ec2-instance-profile-${EnvironmentSuffix}"
       Roles:
         - !Ref EC2InstanceRole
 
@@ -342,7 +340,6 @@ Resources:
   CloudTrailRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub "cloudtrail-role-${EnvironmentSuffix}"
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -369,7 +366,6 @@ Resources:
   ConfigServiceRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub "config-service-role-${EnvironmentSuffix}"
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
