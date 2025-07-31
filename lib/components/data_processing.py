@@ -26,7 +26,7 @@ class DataProcessingInfrastructure(pulumi.ComponentResource):
 
     self.processed_data_bucket = aws.s3.Bucket(
       f"{name}-processed-data", # Pulumi resource name
-      bucket=f"{name}-processed-data-bucket-{pulumi.get_stack()}", # Actual S3 bucket name
+      # Let AWS auto-generate a unique bucket name
       acl="private",
       server_side_encryption_configuration=aws.s3.BucketServerSideEncryptionConfigurationArgs(
         rule=aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
