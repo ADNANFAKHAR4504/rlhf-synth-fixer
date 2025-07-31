@@ -111,8 +111,25 @@ Parameters:
     Description: 'Email address for security notifications and MFA setup'
     AllowedPattern: '^[^\s@]+@[^\s@]+\.[^\s@]+$'
 
+  AdminUserPassword:
+    Type: String
+    NoEcho: true
+    MinLength: 14
+    Description: "Admin user password"
+
+  AdminUserEmail:
+    Type: String
+    Description: "Email for the admin user"
+
+  SecondaryRegionVpcCidr:
+    Type: String
+    Default: "10.100.0.0/16"
+    Description: "CIDR for the VPC in the secondary region"
+
+
 Conditions:
   EnforceMfa: !Equals [!Ref AdminMfaRequired, 'true']
+
 
 Resources:
   # =============================================================================
