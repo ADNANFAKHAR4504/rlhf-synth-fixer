@@ -39,7 +39,7 @@ describe('TapStack CloudFormation Integration Tests', () => {
     const res = await iam.send(new GetRoleCommand({
       RoleName: outputs.LambdaRoleName,
     }));
-    expect(res.Role.Arn).toMatch(/^arn:aws:iam::\d{12}:role\//);
+    expect(res.Role?.Arn).toMatch(/^arn:aws:iam::\d{12}:role\//);
   });
 
   test('API Gateway should exist', async () => {
