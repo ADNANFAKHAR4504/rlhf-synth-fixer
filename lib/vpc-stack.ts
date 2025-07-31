@@ -35,29 +35,31 @@ export class VpcStack extends TerraformStack {
       },
     });
 
-    const publicSubnets = Array.from({ length: 2 }).map((_, index) =>
-      new Subnet(this, `publicSubnet${index + 1}`, {
-        vpcId: vpc.id,
-        cidrBlock: `10.0.${index}.0/24`,
-        availabilityZone: `us-east-1a`,
-        mapPublicIpOnLaunch: true,
-        tags: {
-          Name: `public-subnet-${index + 1}`,
-          Environment: 'Production',
-        },
-      })
+    const publicSubnets = Array.from({ length: 2 }).map(
+      (_, index) =>
+        new Subnet(this, `publicSubnet${index + 1}`, {
+          vpcId: vpc.id,
+          cidrBlock: `10.0.${index}.0/24`,
+          availabilityZone: 'us-east-1a',
+          mapPublicIpOnLaunch: true,
+          tags: {
+            Name: `public-subnet-${index + 1}`,
+            Environment: 'Production',
+          },
+        })
     );
 
-    const privateSubnets = Array.from({ length: 2 }).map((_, index) =>
-      new Subnet(this, `privateSubnet${index + 1}`, {
-        vpcId: vpc.id,
-        cidrBlock: `10.0.${index + 2}.0/24`,
-        availabilityZone: `us-east-1a`,
-        tags: {
-          Name: `private-subnet-${index + 1}`,
-          Environment: 'Production',
-        },
-      })
+    const privateSubnets = Array.from({ length: 2 }).map(
+      (_, index) =>
+        new Subnet(this, `privateSubnet${index + 1}`, {
+          vpcId: vpc.id,
+          cidrBlock: `10.0.${index + 2}.0/24`,
+          availabilityZone: 'us-east-1a',
+          tags: {
+            Name: `private-subnet-${index + 1}`,
+            Environment: 'Production',
+          },
+        })
     );
 
     const igw = new InternetGateway(this, 'mainIgw', {
