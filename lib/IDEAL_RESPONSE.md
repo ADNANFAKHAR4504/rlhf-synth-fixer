@@ -1,13 +1,3 @@
-
-
-"""
-This module defines the TapStack class, the main Pulumi ComponentResource for
-the Multi-Tiered Web Application project.
-
-It orchestrates the instantiation of other resource-specific components
-and manages environment-specific configurations.
-"""
-
 # lib/tap_stack.py
 
 from typing import Optional
@@ -19,6 +9,14 @@ from .components.frontend import FrontendInfrastructure
 from .components.backend import BackendInfrastructure
 from .components.data_processing import DataProcessingInfrastructure
 from .components.monitoring import MonitoringInfrastructure
+
+"""
+This module defines the TapStack class, the main Pulumi ComponentResource for
+the Multi-Tiered Web Application project.
+
+It orchestrates the instantiation of other resource-specific components
+and manages environment-specific configurations.
+"""
 
 class TapStackArgs:
   def __init__(self, environment_suffix: Optional[str] = None, tags: Optional[dict] = None):
@@ -86,3 +84,9 @@ class TapStack(pulumi.ComponentResource):
       "kinesis_stream_name": self.data_processing.kinesis_stream.name,
       "sns_topic_arn": self.monitoring.sns_topic.arn,
     })
+
+    # Export outputs at stack level
+    pulumi.export("vpc_id", self.network.vpc.id)
+    pulumi.export("cloudfront_domain", self.frontend.cloudfront_distribution.domain_name)  
+    pulumi.export("kinesis_stream_name", self.data_processing.kinesis_stream.name)
+    pulumi.export("sns_topic_arn", self.monitoring.sns_topic.arn)
