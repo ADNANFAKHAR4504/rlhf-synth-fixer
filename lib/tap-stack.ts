@@ -1,4 +1,5 @@
 // lib/tap-stack.ts
+import { IamInstanceProfile } from '@cdktf/provider-aws/lib/iam-instance-profile';
 import { IamPolicy } from '@cdktf/provider-aws/lib/iam-policy';
 import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
 import { IamRolePolicyAttachment } from '@cdktf/provider-aws/lib/iam-role-policy-attachment';
@@ -17,7 +18,6 @@ import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
 import { Subnet } from '@cdktf/provider-aws/lib/subnet';
 import { Vpc } from '@cdktf/provider-aws/lib/vpc';
 import { TerraformStack } from 'cdktf';
-import { IamInstanceProfile } from '@cdktf/provider-aws/lib/iam-instance-profile';
 import { Construct } from 'constructs';
 
 interface TapStackProps {
@@ -182,10 +182,14 @@ export class TapStack extends TerraformStack {
     });
 
     // Create IAM Instance Profile for EC2
-    const ec2InstanceProfile = new IamInstanceProfile(this, 'EC2InstanceProfile', {
-      name: `ec2-log-writer-profile-${name}`,
-      role: ec2Role.name,
-    });
+    const ec2InstanceProfile = new IamInstanceProfile(
+      this,
+      'EC2InstanceProfile',
+      {
+        name: `ec2-log-writer-profile-${name}`,
+        role: ec2Role.name,
+      }
+    );
 
     const ec2Policy = new IamPolicy(this, 'EC2S3LogPolicy', {
       name: `ec2-s3-log-policy-${name}`,
