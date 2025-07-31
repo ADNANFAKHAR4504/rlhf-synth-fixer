@@ -18,7 +18,11 @@ export class IoTDataProcessorConstruct extends Construct {
   public readonly lambdaRole: iam.Role;
   public readonly logGroup: logs.LogGroup;
 
-  constructor(scope: Construct, id: string, props: IoTDataProcessorConstructProps) {
+  constructor(
+    scope: Construct,
+    id: string,
+    props: IoTDataProcessorConstructProps
+  ) {
     super(scope, id);
 
     const { environmentSuffix } = props;

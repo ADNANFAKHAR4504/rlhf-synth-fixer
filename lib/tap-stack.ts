@@ -27,9 +27,13 @@ export class TapStack extends cdk.Stack {
       'dev';
 
     // Instantiate the IoT Data Processor construct
-    this.iotDataProcessor = new IoTDataProcessorConstruct(this, 'IoTDataProcessor', {
-      environmentSuffix,
-    });
+    this.iotDataProcessor = new IoTDataProcessorConstruct(
+      this,
+      'IoTDataProcessor',
+      {
+        environmentSuffix,
+      }
+    );
 
     // Output important values
     new cdk.CfnOutput(this, 'S3BucketName', {
