@@ -139,23 +139,6 @@
                 }
             ]
         },
-        "RestrictedAccessCondition": {
-            "Fn::Not": [
-                {
-                    "Fn::Equals": [
-                        {
-                            "Fn::Select": [
-                                0,
-                                {
-                                    "Ref": "AllowedCIDRs"
-                                }
-                            ]
-                        },
-                        "0.0.0.0/0"
-                    ]
-                }
-            ]
-        },
         "SupportsPerformanceInsights": {
             "Fn::Not": [
                 {
@@ -1530,7 +1513,7 @@
                 "PerformanceInsightsRetentionPeriod": {
                     "Fn::If": [
                         "SupportsPerformanceInsights",
-                        90,
+                        7,
                         {
                             "Ref": "AWS::NoValue"
                         }
