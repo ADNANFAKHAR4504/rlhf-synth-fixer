@@ -2,24 +2,27 @@ import json
 
 from cdktf_cdktf_provider_aws.cloudtrail import Cloudtrail
 from cdktf_cdktf_provider_aws.cloudwatch_log_group import CloudwatchLogGroup
-from cdktf_cdktf_provider_aws.cloudwatch_metric_alarm import CloudwatchMetricAlarm
-from cdktf_cdktf_provider_aws.data_aws_caller_identity import DataAwsCallerIdentity
+from cdktf_cdktf_provider_aws.cloudwatch_metric_alarm import \
+    CloudwatchMetricAlarm
+from cdktf_cdktf_provider_aws.data_aws_caller_identity import \
+    DataAwsCallerIdentity
 from cdktf_cdktf_provider_aws.data_aws_region import DataAwsRegion
 from cdktf_cdktf_provider_aws.db_instance import DbInstance
 from cdktf_cdktf_provider_aws.iam_policy import IamPolicy
 from cdktf_cdktf_provider_aws.iam_role import IamRole
-from cdktf_cdktf_provider_aws.iam_role_policy_attachment import IamRolePolicyAttachment
+from cdktf_cdktf_provider_aws.iam_role_policy_attachment import \
+    IamRolePolicyAttachment
 from cdktf_cdktf_provider_aws.kms_alias import KmsAlias
 from cdktf_cdktf_provider_aws.kms_key import KmsKey
 from cdktf_cdktf_provider_aws.lambda_function import LambdaFunction
 from cdktf_cdktf_provider_aws.launch_template import LaunchTemplate
 from cdktf_cdktf_provider_aws.s3_bucket import S3Bucket
-from cdktf_cdktf_provider_aws.s3_bucket_public_access_block import S3BucketPublicAccessBlock
+from cdktf_cdktf_provider_aws.s3_bucket_public_access_block import \
+    S3BucketPublicAccessBlock
 from cdktf_cdktf_provider_aws.s3_bucket_server_side_encryption_configuration import (
-  S3BucketServerSideEncryptionConfiguration,
-  S3BucketServerSideEncryptionConfigurationRule,
-  S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefault
-)
+    S3BucketServerSideEncryptionConfiguration,
+    S3BucketServerSideEncryptionConfigurationRule,
+    S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefault)
 from cdktf_cdktf_provider_aws.sns_topic import SnsTopic
 from cdktf_cdktf_provider_aws.vpc import Vpc
 from cdktf_cdktf_provider_aws.vpc_flow_log import VpcFlowLog
@@ -518,10 +521,3 @@ class EnterpriseSecurityStack(Construct):
     # )
     # No-op for now
     return
-    # )
-    # No-op for now
-    return
-        #     resource_arn="arn:aws:elasticloadbalancing:region:account:loadbalancer/app/example/1234567890"
-        # )
-
-        pass  # Shield Standard is enabled by default
