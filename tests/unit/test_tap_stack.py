@@ -68,46 +68,49 @@ class TestTapStack(unittest.TestCase):
 
   @mark.it("creates an IAM role for EC2 with least privilege policy")
   def test_iam_role_with_ec2_assume_and_policy(self):
-    stack = TapStack(
-      self.app,
-      "TapStackIAM",
-      TapStackProps(environment_suffix="leastpriv")
-    )
-    template = Template.from_stack(stack)
+      stack = TapStack(
+          self.app,
+          "TapStackIAM",
+          TapStackProps(environment_suffix="leastpriv")
+      )
 
-    template.has_resource(
-      "AWS::IAM::Role",
-      Match.object_like({
-        "Properties": Match.object_like({
-          "AssumeRolePolicyDocument": Match.object_like({
-            "Statement": Match.array_with([
-              Match.object_like({
-                "Effect": "Allow",
-                "Principal": {"Service": "ec2.amazonaws.com"},
-                "Action": "sts:AssumeRole"
+      # FIX: Get the nested IAMStack instead of TapStack
+      template = Template.from_stack(stack.iam_stack)
+
+      template.has_resource(
+          "AWS::IAM::Role",
+          Match.object_like({
+              "Properties": Match.object_like({
+                  "AssumeRolePolicyDocument": Match.object_like({
+                      "Statement": Match.array_with([
+                          Match.object_like({
+                              "Effect": "Allow",
+                              "Principal": {"Service": "ec2.amazonaws.com"},
+                              "Action": "sts:AssumeRole"
+                          })
+                      ])
+                  }),
+                  "Policies": Match.array_with([
+                      Match.object_like({
+                          "PolicyName": Match.string_like_regexp("CustomEC2ReadOnlyPolicy"),
+                          "PolicyDocument": Match.object_like({
+                              "Statement": Match.array_with([
+                                  Match.object_like({
+                                      "Effect": "Allow",
+                                      "Action": Match.array_with([
+                                          "ec2:DescribeInstances",
+                                          "ec2:DescribeTags"
+                                      ]),
+                                      "Resource": ["*"]
+                                  })
+                              ])
+                          })
+                      })
+                  ])
               })
-            ])
-          }),
-          "Policies": Match.array_with([
-            Match.object_like({
-              "PolicyName": Match.string_like_regexp("CustomEC2ReadOnlyPolicy"),
-              "PolicyDocument": Match.object_like({
-                "Statement": Match.array_with([
-                  Match.object_like({
-                    "Effect": "Allow",
-                    "Action": Match.array_with([
-                      "ec2:DescribeInstances",
-                      "ec2:DescribeTags"
-                    ]),
-                    "Resource": ["*"]
-                  })
-                ])
-              })
-            })
-          ])
-        })
-      })
-    )
+          })
+      )
+
 
   @mark.it("ensures the S3 bucket is KMS encrypted")
   def test_s3_bucket_is_kms_encrypted(self):
