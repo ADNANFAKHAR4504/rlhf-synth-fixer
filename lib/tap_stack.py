@@ -86,8 +86,8 @@ class TapStack(cdk.Stack):
     
     # Grant Lambda permissions to read SSM parameters
     self._grant_ssm_permissions()
-    
-    def _create_ssm_parameters(self, project_name: str) -> None:
+
+  def _create_ssm_parameters(self, project_name: str) -> None:
       """Create SSM Parameters for secure environment variable storage"""
       
       # Example SSM parameters - customize as needed
@@ -115,11 +115,10 @@ class TapStack(cdk.Stack):
         f"{project_name}-ssm-secret-token",
         parameter_name=f"/{project_name}/auth/token",
         string_value="super-secret-token",  # Replace with actual value
-        description="Secret authentication token",
-        type=ssm.ParameterType.SECURE_STRING
+        description="Secret authentication token"
       )
-    
-    def _create_lambda_function(self, project_name: str) -> None:
+
+  def _create_lambda_function(self, project_name: str) -> None:
       """Create the Lambda function with required configurations"""
         
       # Create CloudWatch Log Group with 1-week retention
@@ -149,8 +148,7 @@ class TapStack(cdk.Stack):
         environment={
           "DATABASE_URL_PARAM": self.database_url_param.parameter_name,
           "API_KEY_PARAM": self.api_key_param.parameter_name,
-          "SECRET_TOKEN_PARAM": self.secret_token_param.parameter_name,
-          "AWS_REGION": self.region
+          "SECRET_TOKEN_PARAM": self.secret_token_param.parameter_name
         },
         
         # Link to the log group
@@ -159,8 +157,8 @@ class TapStack(cdk.Stack):
         # Enable detailed monitoring
         insights_version=_lambda.LambdaInsightsVersion.VERSION_1_0_229_0
       )
-    
-    def _grant_ssm_permissions(self) -> None:
+
+  def _grant_ssm_permissions(self) -> None:
       """Grant Lambda function permissions to read SSM parameters"""
       
       # Create IAM policy for SSM parameter access
@@ -196,8 +194,8 @@ class TapStack(cdk.Stack):
       )
         
       self.lambda_function.add_to_role_policy(kms_policy)
-    
-    def _get_lambda_code(self) -> str:
+
+  def _get_lambda_code(self) -> str:
       """Return the Lambda function code as a dedented string"""
       return textwrap.dedent("""
                             import json
