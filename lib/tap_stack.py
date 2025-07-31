@@ -1,9 +1,11 @@
 import re
 from typing import Optional, Dict, List
 from dataclasses import dataclass, field
+import hashlib
 import pulumi
 from pulumi import ResourceOptions, Config, Output
 import pulumi_aws as aws
+
 
 # Import your nested stacks here (uncomment as you create them)
 # from .vpc_stack import VpcStack
@@ -84,9 +86,17 @@ class TapStack(pulumi.ComponentResource):
 
   def _sanitize_bucket_name(self, name: str) -> str:
     name = name.lower()
-    name = re.sub(r'[^a-z0-9-]', '-', name)       # replace invalid characters
-    name = re.sub(r'-+', '-', name).strip('-')    # remove extra/misplaced hyphens
-    return name[:63] 
+    name = re.sub(r'[^a-z0-9.-]', '-', name)     # only allow valid S3 characters
+    name = re.sub(r'-+', '-', name).strip('-')   # clean up hyphens
+    name = re.sub(r'\.+', '.', name).strip('.')  # clean up dots
+    name = re.sub(r'^[^a-z0-9]+', '', name)      # ensure starts with alphanumeric
+    name = re.sub(r'[^a-z0-9]+$', '', name)      # ensure ends with alphanumeric
+    name = name[:63]                             # max length for S3
+    if re.match(r'^\d{1,3}(\.\d{1,3}){3}$', name):
+      raise ValueError(f"Bucket name '{name}' cannot look like an IP address.")
+    if len(name) < 3:
+      raise ValueError(f"Bucket name '{name}' is too short after sanitization.")
+    return name
   
 
   def _create_infrastructure(self) -> None:
@@ -97,6 +107,11 @@ class TapStack(pulumi.ComponentResource):
     self._create_compute()
     self._create_monitoring()
     pulumi.log.info("TAP infrastructure creation completed")
+
+  def _unique_suffix(self, base: str) -> str:
+    hash_str = hashlib.sha1(base.encode()).hexdigest()[:6]
+    return f"{base}-{hash_str}"
+  
 
   def _create_networking(self) -> None:
     pulumi.log.info("Creating networking infrastructure...")
@@ -125,9 +140,9 @@ class TapStack(pulumi.ComponentResource):
 
   def _create_storage(self) -> None:
     pulumi.log.info("Creating storage infrastructure...")
-    bucket_name = self._sanitize_bucket_name(
-    f"tap-test-artifacts-{self.environment_suffix}-{pulumi.get_stack()}"
-)
+    raw_name = f"tap-test-artifacts-{self.environment_suffix}-{pulumi.get_stack()}"
+    bucket_name = self._sanitize_bucket_name(self._unique_suffix(raw_name))
+
 
 
     self.artifacts_bucket = aws.s3.Bucket(
