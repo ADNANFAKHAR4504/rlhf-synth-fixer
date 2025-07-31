@@ -107,6 +107,11 @@
             "Default": "false",
             "Description": "Enable HTTPS listener for ALB",
             "AllowedValues": ["true", "false"]
+        },
+        "AllowedCIDRs": {
+            "Type": "CommaDelimitedList",
+            "Default": "0.0.0.0/0",
+            "Description": "Comma-delimited list of CIDR blocks allowed to access the ALB (e.g., 203.0.113.0/24,198.51.100.0/24). Use 0.0.0.0/0 for unrestricted access."
         }
     },
     "Conditions": {
@@ -130,6 +135,35 @@
                                 ""
                             ]
                         }
+                    ]
+                }
+            ]
+        },
+        "RestrictedAccessCondition": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Fn::Select": [
+                                0,
+                                {
+                                    "Ref": "AllowedCIDRs"
+                                }
+                            ]
+                        },
+                        "0.0.0.0/0"
+                    ]
+                }
+            ]
+        },
+        "SupportsPerformanceInsights": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "DBInstanceClass"
+                        },
+                        "db.t3.micro"
                     ]
                 }
             ]
@@ -306,7 +340,7 @@
                     "SecretStringTemplate": "{\"username\": \"admin\"}",
                     "GenerateStringKey": "password",
                     "PasswordLength": 32,
-                    "ExcludeCharacters": " %+~`#$&*()|[]{}:;<>?!'/\"\\",
+                    "ExcludeCharacters": " @/\"\\",
                     "RequireEachIncludedType": true
                 },
                 "KmsKeyId": {
@@ -338,20 +372,6 @@
                     "Ref": "RDSInstance"
                 },
                 "TargetType": "AWS::RDS::DBInstance"
-            }
-        },
-        "DBSecretRotationSchedule": {
-            "Type": "AWS::SecretsManager::RotationSchedule",
-            "Properties": {
-                "SecretId": {
-                    "Ref": "DBSecret"
-                },
-                "RotationLambdaARN": {
-                    "Fn::Sub": "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:SecretsManagerRDSMySQLRotationSingleUser"
-                },
-                "RotationRules": {
-                    "AutomaticallyAfterDays": 30
-                }
             }
         },
         "VPC": {
@@ -547,21 +567,6 @@
                 ]
             }
         },
-        "NatGateway2EIP": {
-            "Type": "AWS::EC2::EIP",
-            "DependsOn": "InternetGatewayAttachment",
-            "Properties": {
-                "Domain": "vpc",
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "TapNatGW2EIP-${EnvironmentSuffix}"
-                        }
-                    }
-                ]
-            }
-        },
         "NatGateway1": {
             "Type": "AWS::EC2::NatGateway",
             "Properties": {
@@ -579,28 +584,6 @@
                         "Key": "Name",
                         "Value": {
                             "Fn::Sub": "TapNatGW1-${EnvironmentSuffix}"
-                        }
-                    }
-                ]
-            }
-        },
-        "NatGateway2": {
-            "Type": "AWS::EC2::NatGateway",
-            "Properties": {
-                "AllocationId": {
-                    "Fn::GetAtt": [
-                        "NatGateway2EIP",
-                        "AllocationId"
-                    ]
-                },
-                "SubnetId": {
-                    "Ref": "PublicSubnet2"
-                },
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "TapNatGW2-${EnvironmentSuffix}"
                         }
                     }
                 ]
@@ -720,7 +703,7 @@
                 },
                 "DestinationCidrBlock": "0.0.0.0/0",
                 "NatGatewayId": {
-                    "Ref": "NatGateway2"
+                    "Ref": "NatGateway1"
                 }
             }
         },
@@ -919,22 +902,6 @@
                 "VpcId": {
                     "Ref": "VPC"
                 },
-                "SecurityGroupIngress": [
-                    {
-                        "IpProtocol": "tcp",
-                        "FromPort": 80,
-                        "ToPort": 80,
-                        "CidrIp": "0.0.0.0/0",
-                        "Description": "Allow HTTP traffic from internet"
-                    },
-                    {
-                        "IpProtocol": "tcp",
-                        "FromPort": 443,
-                        "ToPort": 443,
-                        "CidrIp": "0.0.0.0/0",
-                        "Description": "Allow HTTPS traffic from internet"
-                    }
-                ],
                 "Tags": [
                     {
                         "Key": "Name",
@@ -949,6 +916,46 @@
                         }
                     }
                 ]
+            }
+        },
+        "ALBSecurityGroupHTTPRule": {
+            "Type": "AWS::EC2::SecurityGroupIngress",
+            "Properties": {
+                "GroupId": {
+                    "Ref": "ALBSecurityGroup"
+                },
+                "IpProtocol": "tcp",
+                "FromPort": 80,
+                "ToPort": 80,
+                "CidrIp": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Ref": "AllowedCIDRs"
+                        }
+                    ]
+                },
+                "Description": "Allow HTTP traffic from allowed IPs"
+            }
+        },
+        "ALBSecurityGroupHTTPSRule": {
+            "Type": "AWS::EC2::SecurityGroupIngress",
+            "Properties": {
+                "GroupId": {
+                    "Ref": "ALBSecurityGroup"
+                },
+                "IpProtocol": "tcp",
+                "FromPort": 443,
+                "ToPort": 443,
+                "CidrIp": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Ref": "AllowedCIDRs"
+                        }
+                    ]
+                },
+                "Description": "Allow HTTPS traffic from allowed IPs"
             }
         },
         "EC2SecurityGroup": {
@@ -1169,6 +1176,32 @@
                                 }
                             ]
                         }
+                    },
+                    {
+                        "PolicyName": "CloudWatchLogsAccess",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "logs:CreateLogGroup",
+                                        "logs:CreateLogStream",
+                                        "logs:PutLogEvents",
+                                        "logs:DescribeLogGroups",
+                                        "logs:DescribeLogStreams"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/ec2/${EnvironmentSuffix}/*"
+                                        },
+                                        {
+                                            "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:TapStack/${EnvironmentSuffix}:*"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
                     }
                 ],
                 "Tags": [
@@ -1235,7 +1268,7 @@
                     ],
                     "UserData": {
                         "Fn::Base64": {
-                            "Fn::Sub": "#!/bin/bash\nyum update -y\nyum install -y amazon-cloudwatch-agent\nyum install -y httpd\nsystemctl start httpd\nsystemctl enable httpd\necho \"<h1>Secure Web Application - ${EnvironmentSuffix}</h1>\" > /var/www/html/index.html\necho \"<p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p>\" >> /var/www/html/index.html\n/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c default\n"
+                            "Fn::Sub": "#!/bin/bash\n# System updates and package installation\nyum update -y\nyum install -y amazon-cloudwatch-agent\nyum install -y httpd\nyum install -y awslogs\n\n# Configure httpd\nsystemctl start httpd\nsystemctl enable httpd\n\n# Create application content\necho \"<h1>Secure Web Application - ${EnvironmentSuffix}</h1>\" > /var/www/html/index.html\necho \"<p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p>\" >> /var/www/html/index.html\necho \"<p>Deployment Time: $(date)</p>\" >> /var/www/html/index.html\n\n# Configure CloudWatch agent with custom configuration\ncat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << 'EOF'\n{\n  \"agent\": {\n    \"metrics_collection_interval\": 60,\n    \"run_as_user\": \"cwagent\"\n  },\n  \"logs\": {\n    \"logs_collected\": {\n      \"files\": {\n        \"collect_list\": [\n          {\n            \"file_path\": \"/var/log/httpd/access_log\",\n            \"log_group_name\": \"/aws/ec2/${EnvironmentSuffix}/httpd/access\",\n            \"log_stream_name\": \"{instance_id}\",\n            \"timestamp_format\": \"%d/%b/%Y:%H:%M:%S %z\"\n          },\n          {\n            \"file_path\": \"/var/log/httpd/error_log\",\n            \"log_group_name\": \"/aws/ec2/${EnvironmentSuffix}/httpd/error\",\n            \"log_stream_name\": \"{instance_id}\",\n            \"timestamp_format\": \"%a %b %d %H:%M:%S %Y\"\n          },\n          {\n            \"file_path\": \"/var/log/messages\",\n            \"log_group_name\": \"/aws/ec2/${EnvironmentSuffix}/system/messages\",\n            \"log_stream_name\": \"{instance_id}\",\n            \"timestamp_format\": \"%b %d %H:%M:%S\"\n          },\n          {\n            \"file_path\": \"/var/log/secure\",\n            \"log_group_name\": \"/aws/ec2/${EnvironmentSuffix}/system/secure\",\n            \"log_stream_name\": \"{instance_id}\",\n            \"timestamp_format\": \"%b %d %H:%M:%S\"\n          }\n        ]\n      }\n    }\n  },\n  \"metrics\": {\n    \"namespace\": \"TapStack/${EnvironmentSuffix}\",\n    \"metrics_collected\": {\n      \"cpu\": {\n        \"measurement\": [\n          \"cpu_usage_idle\",\n          \"cpu_usage_iowait\",\n          \"cpu_usage_user\",\n          \"cpu_usage_system\"\n        ],\n        \"metrics_collection_interval\": 60\n      },\n      \"disk\": {\n        \"measurement\": [\n          \"used_percent\"\n        ],\n        \"metrics_collection_interval\": 60,\n        \"resources\": [\n          \"*\"\n        ]\n      },\n      \"diskio\": {\n        \"measurement\": [\n          \"io_time\"\n        ],\n        \"metrics_collection_interval\": 60,\n        \"resources\": [\n          \"*\"\n        ]\n      },\n      \"mem\": {\n        \"measurement\": [\n          \"mem_used_percent\"\n        ],\n        \"metrics_collection_interval\": 60\n      },\n      \"swap\": {\n        \"measurement\": [\n          \"swap_used_percent\"\n        ],\n        \"metrics_collection_interval\": 60\n      }\n    }\n  }\n}\nEOF\n\n# Start CloudWatch agent with configuration\n/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -s -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json\n\n# Configure httpd security headers\ncat >> /etc/httpd/conf/httpd.conf << 'EOF'\n\n# Security Headers\nHeader always set X-Content-Type-Options nosniff\nHeader always set X-Frame-Options DENY\nHeader always set X-XSS-Protection \"1; mode=block\"\nHeader always set Strict-Transport-Security \"max-age=63072000; includeSubDomains; preload\"\nHeader always set Referrer-Policy \"strict-origin-when-cross-origin\"\nHeader always set Content-Security-Policy \"default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self';\"\n\n# Hide server information\nServerTokens Prod\nServerSignature Off\nEOF\n\n# Restart httpd to apply security headers\nsystemctl restart httpd\n\n# Enable and start services\nsystemctl enable amazon-cloudwatch-agent\nsystemctl enable awslogs\nsystemctl start awslogs\n"
                         }
                     },
                     "TagSpecifications": [
@@ -1476,6 +1509,33 @@
                         "Arn"
                     ]
                 },
+                "EnablePerformanceInsights": {
+                    "Fn::If": [
+                        "SupportsPerformanceInsights",
+                        true,
+                        false
+                    ]
+                },
+                "PerformanceInsightsKMSKeyId": {
+                    "Fn::If": [
+                        "SupportsPerformanceInsights",
+                        {
+                            "Ref": "KMSKey"
+                        },
+                        {
+                            "Ref": "AWS::NoValue"
+                        }
+                    ]
+                },
+                "PerformanceInsightsRetentionPeriod": {
+                    "Fn::If": [
+                        "SupportsPerformanceInsights",
+                        90,
+                        {
+                            "Ref": "AWS::NoValue"
+                        }
+                    ]
+                },
                 "CACertificateIdentifier": "rds-ca-rsa2048-g1",
                 "Tags": [
                     {
@@ -1491,6 +1551,126 @@
                         }
                     }
                 ]
+            }
+        },
+        "WAFWebACL": {
+            "Type": "AWS::WAFv2::WebACL",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "TapWAF-${EnvironmentSuffix}"
+                },
+                "Description": "WAF for secure web application protection",
+                "Scope": "REGIONAL",
+                "DefaultAction": {
+                    "Allow": {}
+                },
+                "Rules": [
+                    {
+                        "Name": "AWSManagedRulesCommonRuleSet",
+                        "Priority": 1,
+                        "Statement": {
+                            "ManagedRuleGroupStatement": {
+                                "VendorName": "AWS",
+                                "Name": "AWSManagedRulesCommonRuleSet"
+                            }
+                        },
+                        "OverrideAction": {
+                            "None": {}
+                        },
+                        "VisibilityConfig": {
+                            "SampledRequestsEnabled": true,
+                            "CloudWatchMetricsEnabled": true,
+                            "MetricName": "CommonRuleSetMetric"
+                        }
+                    },
+                    {
+                        "Name": "AWSManagedRulesKnownBadInputsRuleSet",
+                        "Priority": 2,
+                        "Statement": {
+                            "ManagedRuleGroupStatement": {
+                                "VendorName": "AWS",
+                                "Name": "AWSManagedRulesKnownBadInputsRuleSet"
+                            }
+                        },
+                        "OverrideAction": {
+                            "None": {}
+                        },
+                        "VisibilityConfig": {
+                            "SampledRequestsEnabled": true,
+                            "CloudWatchMetricsEnabled": true,
+                            "MetricName": "KnownBadInputsRuleSetMetric"
+                        }
+                    },
+                    {
+                        "Name": "AWSManagedRulesLinuxRuleSet",
+                        "Priority": 3,
+                        "Statement": {
+                            "ManagedRuleGroupStatement": {
+                                "VendorName": "AWS",
+                                "Name": "AWSManagedRulesLinuxRuleSet"
+                            }
+                        },
+                        "OverrideAction": {
+                            "None": {}
+                        },
+                        "VisibilityConfig": {
+                            "SampledRequestsEnabled": true,
+                            "CloudWatchMetricsEnabled": true,
+                            "MetricName": "LinuxRuleSetMetric"
+                        }
+                    },
+                    {
+                        "Name": "RateLimitRule",
+                        "Priority": 4,
+                        "Statement": {
+                            "RateBasedStatement": {
+                                "Limit": 10000,
+                                "AggregateKeyType": "IP"
+                            }
+                        },
+                        "Action": {
+                            "Block": {}
+                        },
+                        "VisibilityConfig": {
+                            "SampledRequestsEnabled": true,
+                            "CloudWatchMetricsEnabled": true,
+                            "MetricName": "RateLimitRuleMetric"
+                        }
+                    }
+                ],
+                "VisibilityConfig": {
+                    "SampledRequestsEnabled": true,
+                    "CloudWatchMetricsEnabled": true,
+                    "MetricName": "TapWAFMetric"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "TapWAF-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "WAFWebACLAssociation": {
+            "Type": "AWS::WAFv2::WebACLAssociation",
+            "Properties": {
+                "ResourceArn": {
+                    "Ref": "ApplicationLoadBalancer"
+                },
+                "WebACLArn": {
+                    "Fn::GetAtt": [
+                        "WAFWebACL",
+                        "Arn"
+                    ]
+                }
             }
         },
         "ApplicationLoadBalancer": {
@@ -1591,10 +1771,33 @@
             "Properties": {
                 "DefaultActions": [
                     {
-                        "Type": "forward",
-                        "TargetGroupArn": {
-                            "Ref": "TargetGroup"
-                        }
+                        "Fn::If": [
+                            "EnableHTTPSCondition",
+                            {
+                                "Type": "redirect",
+                                "RedirectConfig": {
+                                    "Protocol": "HTTPS",
+                                    "Port": "443",
+                                    "StatusCode": "HTTP_301"
+                                }
+                            },
+                            {
+                                "Type": "forward",
+                                "TargetGroupArn": {
+                                    "Ref": "TargetGroup"
+                                },
+                                "ForwardConfig": {
+                                    "TargetGroups": [
+                                        {
+                                            "TargetGroupArn": {
+                                                "Ref": "TargetGroup"
+                                            },
+                                            "Weight": 100
+                                        }
+                                    ]
+                                }
+                            }
+                        ]
                     }
                 ],
                 "LoadBalancerArn": {
@@ -1769,6 +1972,105 @@
                         "Name": "DBInstanceIdentifier",
                         "Value": {
                             "Ref": "RDSInstance"
+                        }
+                    }
+                ],
+                "AlarmActions": [
+                    {
+                        "Ref": "SNSTopic"
+                    }
+                ]
+            }
+        },
+        "WAFBlockedRequestsAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "TapWAFBlockedRequests-${EnvironmentSuffix}"
+                },
+                "AlarmDescription": "High number of blocked requests by WAF",
+                "MetricName": "BlockedRequests",
+                "Namespace": "AWS/WAFV2",
+                "Statistic": "Sum",
+                "Period": 300,
+                "EvaluationPeriods": 2,
+                "Threshold": 100,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "WebACL",
+                        "Value": {
+                            "Fn::Sub": "TapWAF-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Name": "Region",
+                        "Value": {
+                            "Ref": "AWS::Region"
+                        }
+                    }
+                ],
+                "AlarmActions": [
+                    {
+                        "Ref": "SNSTopic"
+                    }
+                ]
+            }
+        },
+        "ALBTargetResponseTimeAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "TapALBHighResponseTime-${EnvironmentSuffix}"
+                },
+                "AlarmDescription": "High response time from ALB targets",
+                "MetricName": "TargetResponseTime",
+                "Namespace": "AWS/ApplicationELB",
+                "Statistic": "Average",
+                "Period": 300,
+                "EvaluationPeriods": 2,
+                "Threshold": 2,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "LoadBalancer",
+                        "Value": {
+                            "Fn::GetAtt": [
+                                "ApplicationLoadBalancer",
+                                "LoadBalancerFullName"
+                            ]
+                        }
+                    }
+                ],
+                "AlarmActions": [
+                    {
+                        "Ref": "SNSTopic"
+                    }
+                ]
+            }
+        },
+        "UnhealthyTargetsAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "TapUnhealthyTargets-${EnvironmentSuffix}"
+                },
+                "AlarmDescription": "Unhealthy targets detected",
+                "MetricName": "UnHealthyHostCount",
+                "Namespace": "AWS/ApplicationELB",
+                "Statistic": "Average",
+                "Period": 300,
+                "EvaluationPeriods": 2,
+                "Threshold": 0,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "TargetGroup",
+                        "Value": {
+                            "Fn::GetAtt": [
+                                "TargetGroup",
+                                "TargetGroupFullName"
+                            ]
                         }
                     }
                 ],
@@ -2017,12 +2319,26 @@
                 "LifecycleConfiguration": {
                     "Rules": [
                         {
-                            "Id": "DeleteEverything",
+                            "Id": "ConfigLogRetention",
                             "Status": "Enabled",
-                            "ExpirationInDays": 1,
-                            "NoncurrentVersionExpirationInDays": 1,
+                            "Transitions": [
+                                {
+                                    "TransitionInDays": 30,
+                                    "StorageClass": "STANDARD_IA"
+                                },
+                                {
+                                    "TransitionInDays": 90,
+                                    "StorageClass": "GLACIER"
+                                },
+                                {
+                                    "TransitionInDays": 365,
+                                    "StorageClass": "DEEP_ARCHIVE"
+                                }
+                            ],
+                            "ExpirationInDays": 2555,
+                            "NoncurrentVersionExpirationInDays": 90,
                             "AbortIncompleteMultipartUpload": {
-                                "DaysAfterInitiation": 1
+                                "DaysAfterInitiation": 7
                             }
                         }
                     ]
@@ -2383,6 +2699,40 @@
             "Export": {
                 "Name": {
                     "Fn::Sub": "${AWS::StackName}-EnvironmentSuffix"
+                }
+            }
+        },
+        "WAFWebACLArn": {
+            "Description": "ARN of the WAF WebACL protecting the application",
+            "Value": {
+                "Fn::GetAtt": [
+                    "WAFWebACL",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-WAFWebACLArn"
+                }
+            }
+        },
+        "SecurityMetricsNamespace": {
+            "Description": "CloudWatch namespace for security metrics",
+            "Value": {
+                "Fn::Sub": "TapStack/${EnvironmentSuffix}"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-SecurityMetricsNamespace"
+                }
+            }
+        },
+        "SecurityHeaders": {
+            "Description": "Security headers implemented in the web server",
+            "Value": "X-Content-Type-Options, X-Frame-Options, X-XSS-Protection, Strict-Transport-Security, Referrer-Policy, Content-Security-Policy",
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-SecurityHeaders"
                 }
             }
         }

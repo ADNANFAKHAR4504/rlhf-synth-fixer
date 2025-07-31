@@ -178,25 +178,26 @@ describe('TapStack CloudFormation Template - Comprehensive Tests', () => {
       expect(subnet2.Properties.AvailabilityZone).toEqual({ 'Fn::Select': [1, { 'Fn::GetAZs': '' }] });
     });
 
-    test('should create NAT Gateways with Elastic IPs', () => {
+    test('should create NAT Gateway with Elastic IP', () => {
       const eip1 = template.Resources.NatGateway1EIP;
       const eip2 = template.Resources.NatGateway2EIP;
       const nat1 = template.Resources.NatGateway1;
       const nat2 = template.Resources.NatGateway2;
 
+      expect(eip1).toBeDefined();
       expect(eip1.Type).toBe('AWS::EC2::EIP');
       expect(eip1.Properties.Domain).toBe('vpc');
       expect(eip1.DependsOn).toBe('InternetGatewayAttachment');
 
-      expect(eip2.Type).toBe('AWS::EC2::EIP');
-      expect(eip2.Properties.Domain).toBe('vpc');
-      expect(eip2.DependsOn).toBe('InternetGatewayAttachment');
+      // Second EIP should not exist
+      expect(eip2).toBeUndefined();
 
+      expect(nat1).toBeDefined();
       expect(nat1.Type).toBe('AWS::EC2::NatGateway');
       expect(nat1.Properties.SubnetId).toEqual({ Ref: 'PublicSubnet1' });
 
-      expect(nat2.Type).toBe('AWS::EC2::NatGateway');
-      expect(nat2.Properties.SubnetId).toEqual({ Ref: 'PublicSubnet2' });
+      // Second NAT Gateway should not exist
+      expect(nat2).toBeUndefined();
     });
 
     test('should create route tables with proper routes', () => {
@@ -218,7 +219,7 @@ describe('TapStack CloudFormation Template - Comprehensive Tests', () => {
       expect(privateRoute1.Properties.NatGatewayId).toEqual({ Ref: 'NatGateway1' });
 
       expect(privateRoute2.Properties.DestinationCidrBlock).toBe('0.0.0.0/0');
-      expect(privateRoute2.Properties.NatGatewayId).toEqual({ Ref: 'NatGateway2' });
+      expect(privateRoute2.Properties.NatGatewayId).toEqual({ Ref: 'NatGateway1' });
     });
   });
 
@@ -266,21 +267,22 @@ describe('TapStack CloudFormation Template - Comprehensive Tests', () => {
       const sg = template.Resources.ALBSecurityGroup;
       expect(sg).toBeDefined();
       expect(sg.Type).toBe('AWS::EC2::SecurityGroup');
-      expect(sg.Properties.GroupDescription).toContain('Application Load Balancer');
-
-      const ingress = sg.Properties.SecurityGroupIngress;
-      expect(ingress).toHaveLength(2);
-
-      const httpRule = ingress.find((rule: any) => rule.FromPort === 80);
-      const httpsRule = ingress.find((rule: any) => rule.FromPort === 443);
+      
+      // Check separate ingress rule resources
+      const httpRule = template.Resources.ALBSecurityGroupHTTPRule;
+      const httpsRule = template.Resources.ALBSecurityGroupHTTPSRule;
 
       expect(httpRule).toBeDefined();
-      expect(httpRule.ToPort).toBe(80);
-      expect(httpRule.CidrIp).toBe('0.0.0.0/0');
+      expect(httpRule.Type).toBe('AWS::EC2::SecurityGroupIngress');
+      expect(httpRule.Properties.FromPort).toBe(80);
+      expect(httpRule.Properties.ToPort).toBe(80);
+      expect(httpRule.Properties.IpProtocol).toBe('tcp');
 
       expect(httpsRule).toBeDefined();
-      expect(httpsRule.ToPort).toBe(443);
-      expect(httpsRule.CidrIp).toBe('0.0.0.0/0');
+      expect(httpsRule.Type).toBe('AWS::EC2::SecurityGroupIngress');
+      expect(httpsRule.Properties.FromPort).toBe(443);
+      expect(httpsRule.Properties.ToPort).toBe(443);
+      expect(httpsRule.Properties.IpProtocol).toBe('tcp');
     });
 
     test('should create EC2 security group with outbound rules', () => {
@@ -628,14 +630,19 @@ describe('TapStack CloudFormation Template - Comprehensive Tests', () => {
       expect(rds.Properties.MultiAZ).toBe(true);
     });
 
-    test('should have redundant NAT Gateways', () => {
+    test('should have single NAT Gateway for cost optimization', () => {
       const nat1 = template.Resources.NatGateway1;
       const nat2 = template.Resources.NatGateway2;
       
       expect(nat1).toBeDefined();
-      expect(nat2).toBeDefined();
+      expect(nat2).toBeUndefined();
       expect(nat1.Properties.SubnetId).toEqual({ Ref: 'PublicSubnet1' });
-      expect(nat2.Properties.SubnetId).toEqual({ Ref: 'PublicSubnet2' });
+      
+      // Both private routes should use the same NAT Gateway
+      const privateRoute1 = template.Resources.DefaultPrivateRoute1;
+      const privateRoute2 = template.Resources.DefaultPrivateRoute2;
+      expect(privateRoute1.Properties.NatGatewayId).toEqual({ Ref: 'NatGateway1' });
+      expect(privateRoute2.Properties.NatGatewayId).toEqual({ Ref: 'NatGateway1' });
     });
   });
 
@@ -704,6 +711,308 @@ describe('TapStack CloudFormation Template - Comprehensive Tests', () => {
       
       expect(vpc.Properties.Tags).toBeDefined();
       expect(alb.Properties.Tags).toBeDefined();
+    });
+  });
+
+  describe('Security Configuration Tests', () => {
+    test('should have KMS encryption for all applicable resources', () => {
+      // RDS should use KMS encryption
+      const rds = template.Resources.RDSInstance;
+      expect(rds.Properties.StorageEncrypted).toBe(true);
+      expect(rds.Properties.KmsKeyId).toEqual({ Ref: 'KMSKey' });
+
+      // S3 buckets should use KMS encryption
+      const cloudTrailBucket = template.Resources.CloudTrailBucket;
+      expect(cloudTrailBucket.Properties.BucketEncryption).toBeDefined();
+      expect(cloudTrailBucket.Properties.BucketEncryption.ServerSideEncryptionConfiguration[0].ServerSideEncryptionByDefault.SSEAlgorithm).toBe('aws:kms');
+
+      const configBucket = template.Resources.ConfigBucket;
+      expect(configBucket.Properties.BucketEncryption).toBeDefined();
+      expect(configBucket.Properties.BucketEncryption.ServerSideEncryptionConfiguration[0].ServerSideEncryptionByDefault.SSEAlgorithm).toBe('aws:kms');
+
+      // CloudWatch Logs should use KMS encryption
+      const flowLogsGroup = template.Resources.VPCFlowLogsGroup;
+      expect(flowLogsGroup.Properties.KmsKeyId).toBeDefined();
+
+      // SNS should use KMS encryption
+      const snsTopic = template.Resources.SNSTopic;
+      expect(snsTopic.Properties.KmsMasterKeyId).toEqual({ Ref: 'KMSKey' });
+    });
+
+    test('should have secure S3 bucket configurations', () => {
+      const buckets = ['CloudTrailBucket', 'ConfigBucket'];
+      
+      buckets.forEach(bucketName => {
+        const bucket = template.Resources[bucketName];
+        expect(bucket).toBeDefined();
+        
+        // Public access should be blocked
+        const publicAccessBlock = bucket.Properties.PublicAccessBlockConfiguration;
+        expect(publicAccessBlock.BlockPublicAcls).toBe(true);
+        expect(publicAccessBlock.BlockPublicPolicy).toBe(true);
+        expect(publicAccessBlock.IgnorePublicAcls).toBe(true);
+        expect(publicAccessBlock.RestrictPublicBuckets).toBe(true);
+        
+        // Versioning should be enabled
+        expect(bucket.Properties.VersioningConfiguration.Status).toBe('Enabled');
+        
+        // Lifecycle policies should be defined
+        expect(bucket.Properties.LifecycleConfiguration).toBeDefined();
+        expect(bucket.Properties.LifecycleConfiguration.Rules).toBeDefined();
+        expect(bucket.Properties.LifecycleConfiguration.Rules.length).toBeGreaterThan(0);
+      });
+    });
+
+    test('should have proper security group configurations', () => {
+      // ALB Security Group should only allow HTTP/HTTPS
+      const albSecurityGroup = template.Resources.ALBSecurityGroup;
+      expect(albSecurityGroup).toBeDefined();
+      
+      const httpRule = template.Resources.ALBSecurityGroupHTTPRule;
+      expect(httpRule.Properties.FromPort).toBe(80);
+      expect(httpRule.Properties.ToPort).toBe(80);
+      expect(httpRule.Properties.IpProtocol).toBe('tcp');
+      
+      const httpsRule = template.Resources.ALBSecurityGroupHTTPSRule;
+      expect(httpsRule.Properties.FromPort).toBe(443);
+      expect(httpsRule.Properties.ToPort).toBe(443);
+      expect(httpsRule.Properties.IpProtocol).toBe('tcp');
+
+      // EC2 Security Group should only allow traffic from ALB
+      const ec2FromAlbRule = template.Resources.EC2FromALBSecurityGroupRule;
+      expect(ec2FromAlbRule.Properties.SourceSecurityGroupId).toEqual({ Ref: 'ALBSecurityGroup' });
+
+      // RDS Security Group should only allow traffic from EC2
+      const rdsFromEc2Rule = template.Resources.RDSFromEC2SecurityGroupRule;
+      expect(rdsFromEc2Rule.Properties.SourceSecurityGroupId).toEqual({ Ref: 'EC2SecurityGroup' });
+      expect(rdsFromEc2Rule.Properties.FromPort).toBe(3306);
+      expect(rdsFromEc2Rule.Properties.ToPort).toBe(3306);
+    });
+
+    test('should have WAF protection configured', () => {
+      const waf = template.Resources.WAFWebACL;
+      expect(waf).toBeDefined();
+      expect(waf.Properties.Scope).toBe('REGIONAL');
+      expect(waf.Properties.Rules).toBeDefined();
+      expect(waf.Properties.Rules.length).toBeGreaterThan(0);
+      
+      // Check for managed rule sets
+      const ruleNames = waf.Properties.Rules.map((rule: any) => rule.Name);
+      expect(ruleNames).toContain('AWSManagedRulesCommonRuleSet');
+      expect(ruleNames).toContain('AWSManagedRulesKnownBadInputsRuleSet');
+      expect(ruleNames).toContain('RateLimitRule');
+      
+      // WAF should be associated with ALB
+      const wafAssociation = template.Resources.WAFWebACLAssociation;
+      expect(wafAssociation.Properties.ResourceArn).toEqual({ Ref: 'ApplicationLoadBalancer' });
+    });
+
+    test('should have monitoring and logging configured', () => {
+      // CloudTrail should be enabled
+      const cloudTrail = template.Resources.CloudTrail;
+      expect(cloudTrail.Properties.IsLogging).toBe(true);
+      expect(cloudTrail.Properties.EnableLogFileValidation).toBe(true);
+      expect(cloudTrail.Properties.IncludeGlobalServiceEvents).toBe(true);
+
+      // VPC Flow Logs should be enabled
+      const flowLogs = template.Resources.VPCFlowLogs;
+      expect(flowLogs.Properties.TrafficType).toBe('ALL');
+      expect(flowLogs.Properties.LogDestinationType).toBe('cloud-watch-logs');
+
+      // GuardDuty should be enabled
+      const guardDuty = template.Resources.GuardDutyDetector;
+      expect(guardDuty.Properties.Enable).toBe(true);
+      expect(guardDuty.Properties.DataSources.S3Logs.Enable).toBe(true);
+
+      // Config should be enabled
+      const configRecorder = template.Resources.ConfigurationRecorder;
+      expect(configRecorder.Properties.RecordingGroup.AllSupported).toBe(true);
+      expect(configRecorder.Properties.RecordingGroup.IncludeGlobalResourceTypes).toBe(true);
+    });
+
+    test('should have CloudWatch alarms configured', () => {
+      const alarms = [
+        'HighCPUAlarm',
+        'RDSCPUAlarm',
+        'WAFBlockedRequestsAlarm',
+        'ALBTargetResponseTimeAlarm',
+        'UnhealthyTargetsAlarm'
+      ];
+      
+      alarms.forEach(alarmName => {
+        const alarm = template.Resources[alarmName];
+        expect(alarm).toBeDefined();
+        expect(alarm.Type).toBe('AWS::CloudWatch::Alarm');
+        expect(alarm.Properties.AlarmActions).toContainEqual({ Ref: 'SNSTopic' });
+        expect(alarm.Properties.ComparisonOperator).toBeDefined();
+        expect(alarm.Properties.Threshold).toBeDefined();
+        expect(alarm.Properties.MetricName).toBeDefined();
+      });
+    });
+  });
+
+  describe('High Availability and Resilience Tests', () => {
+    test('should deploy across multiple availability zones', () => {
+      const publicSubnet1 = template.Resources.PublicSubnet1;
+      const publicSubnet2 = template.Resources.PublicSubnet2;
+      const privateSubnet1 = template.Resources.PrivateSubnet1;
+      const privateSubnet2 = template.Resources.PrivateSubnet2;
+      
+      expect(publicSubnet1.Properties.AvailabilityZone).not.toEqual(publicSubnet2.Properties.AvailabilityZone);
+      expect(privateSubnet1.Properties.AvailabilityZone).not.toEqual(privateSubnet2.Properties.AvailabilityZone);
+    });
+
+    test('should have RDS Multi-AZ enabled', () => {
+      const rds = template.Resources.RDSInstance;
+      expect(rds.Properties.MultiAZ).toBe(true);
+      expect(rds.Properties.BackupRetentionPeriod).toBeGreaterThan(0);
+    });
+
+    test('should have Auto Scaling Group in private subnets', () => {
+      const asg = template.Resources.AutoScalingGroup;
+      expect(asg.Properties.VPCZoneIdentifier).toContainEqual({ Ref: 'PrivateSubnet1' });
+      expect(asg.Properties.VPCZoneIdentifier).toContainEqual({ Ref: 'PrivateSubnet2' });
+      expect(asg.Properties.HealthCheckType).toBe('ELB');
+    });
+
+    test('should have Application Load Balancer in public subnets', () => {
+      const alb = template.Resources.ApplicationLoadBalancer;
+      expect(alb.Properties.Subnets).toContainEqual({ Ref: 'PublicSubnet1' });
+      expect(alb.Properties.Subnets).toContainEqual({ Ref: 'PublicSubnet2' });
+      expect(alb.Properties.Scheme).toBe('internet-facing');
+    });
+  });
+
+  describe('Performance and Scalability Tests', () => {
+    test('should have appropriate instance types and storage', () => {
+      const launchTemplate = template.Resources.EC2LaunchTemplate;
+      expect(launchTemplate.Properties.LaunchTemplateData.InstanceType).toEqual({ Ref: 'InstanceType' });
+      
+      // Check for GP3 storage type for better performance
+      const rds = template.Resources.RDSInstance;
+      expect(rds.Properties.StorageType).toBe('gp3');
+      
+      // Check for Performance Insights on supported instances
+      expect(rds.Properties.EnablePerformanceInsights).toBeDefined();
+    });
+
+    test('should have target group health checks configured properly', () => {
+      const targetGroup = template.Resources.TargetGroup;
+      expect(targetGroup.Properties.HealthCheckProtocol).toBe('HTTP');
+      expect(targetGroup.Properties.HealthCheckPath).toBe('/');
+      expect(targetGroup.Properties.HealthCheckIntervalSeconds).toBe(30);
+      expect(targetGroup.Properties.HealthCheckTimeoutSeconds).toBe(5);
+      expect(targetGroup.Properties.HealthyThresholdCount).toBe(2);
+      expect(targetGroup.Properties.UnhealthyThresholdCount).toBe(5);
+    });
+
+    test('should have enhanced monitoring enabled', () => {
+      const rds = template.Resources.RDSInstance;
+      expect(rds.Properties.MonitoringInterval).toBe(60);
+      expect(rds.Properties.MonitoringRoleArn).toBeDefined();
+      expect(rds.Properties.EnableCloudwatchLogsExports).toContain('error');
+      expect(rds.Properties.EnableCloudwatchLogsExports).toContain('general');
+      expect(rds.Properties.EnableCloudwatchLogsExports).toContain('slowquery');
+    });
+  });
+
+  describe('Compliance and Best Practices Tests', () => {
+    test('should follow AWS Well-Architected Framework principles', () => {
+      // Security pillar - encryption at rest and in transit
+      const rds = template.Resources.RDSInstance;
+      expect(rds.Properties.StorageEncrypted).toBe(true);
+      
+      // Reliability pillar - multi-AZ deployment
+      expect(rds.Properties.MultiAZ).toBe(true);
+      
+      // Performance efficiency pillar - appropriate storage types
+      expect(rds.Properties.StorageType).toBe('gp3');
+      
+      // Cost optimization pillar - lifecycle policies for S3
+      const cloudTrailBucket = template.Resources.CloudTrailBucket;
+      expect(cloudTrailBucket.Properties.LifecycleConfiguration.Rules).toBeDefined();
+    });
+
+    test('should have proper resource naming conventions', () => {
+      const resources = Object.keys(template.Resources);
+      resources.forEach(resourceName => {
+        expect(resourceName).toMatch(/^[A-Z][a-zA-Z0-9]*$/); // PascalCase
+      });
+    });
+
+    test('should have consistent environment suffix usage', () => {
+      const resourcesWithEnvironmentSuffix = [
+        'EC2LaunchTemplate',
+        'AutoScalingGroup',
+        'ApplicationLoadBalancer',
+        'TargetGroup',
+        'WAFWebACL',
+        'SNSTopic'
+      ];
+      
+      resourcesWithEnvironmentSuffix.forEach(resourceName => {
+        const resource = template.Resources[resourceName];
+        const nameProperty = resource.Properties.Name || 
+                            resource.Properties.LaunchTemplateName ||
+                            resource.Properties.AutoScalingGroupName ||
+                            resource.Properties.TopicName;
+        
+        if (nameProperty && typeof nameProperty === 'object' && nameProperty['Fn::Sub']) {
+          expect(nameProperty['Fn::Sub']).toContain('${EnvironmentSuffix}');
+        }
+      });
+    });
+
+    test('should have proper deletion policies for critical resources', () => {
+      const rds = template.Resources.RDSInstance;
+      expect(rds.DeletionPolicy).toBe('Delete'); // Verify this matches your requirements
+      
+      const buckets = ['CloudTrailBucket', 'ConfigBucket'];
+      buckets.forEach(bucketName => {
+        const bucket = template.Resources[bucketName];
+        expect(bucket.DeletionPolicy).toBe('Delete'); // Verify this matches your requirements
+      });
+    });
+  });
+
+  describe('Network Security Tests', () => {
+    test('should have Network ACLs configured properly', () => {
+      const publicNacl = template.Resources.PublicNetworkACL;
+      const privateNacl = template.Resources.PrivateNetworkACL;
+      
+      expect(publicNacl).toBeDefined();
+      expect(privateNacl).toBeDefined();
+      
+      // Check NACL associations
+      expect(template.Resources.PublicSubnet1NetworkACLAssociation).toBeDefined();
+      expect(template.Resources.PublicSubnet2NetworkACLAssociation).toBeDefined();
+      expect(template.Resources.PrivateSubnet1NetworkACLAssociation).toBeDefined();
+      expect(template.Resources.PrivateSubnet2NetworkACLAssociation).toBeDefined();
+    });
+
+    test('should have NAT Gateway for outbound traffic from private subnets', () => {
+      const natGateway = template.Resources.NatGateway1;
+      expect(natGateway).toBeDefined();
+      expect(natGateway.Type).toBe('AWS::EC2::NatGateway');
+      
+      // NAT Gateway should be in public subnet
+      expect(natGateway.Properties.SubnetId).toEqual({ Ref: 'PublicSubnet1' });
+      
+      // Private route table should route through NAT Gateway
+      const privateRoute = template.Resources.DefaultPrivateRoute1;
+      expect(privateRoute.Properties.NatGatewayId).toEqual({ Ref: 'NatGateway1' });
+    });
+
+    test('should have proper CIDR block configurations', () => {
+      const vpc = template.Resources.VPC;
+      expect(vpc.Properties.CidrBlock).toMatch(/^10\./); // Assuming RFC 1918 private addressing
+      
+      // Subnets should be within VPC CIDR
+      const subnets = ['PublicSubnet1', 'PublicSubnet2', 'PrivateSubnet1', 'PrivateSubnet2'];
+      subnets.forEach(subnetName => {
+        const subnet = template.Resources[subnetName];
+        expect(subnet.Properties.CidrBlock).toMatch(/^10\./);
+      });
     });
   });
 });

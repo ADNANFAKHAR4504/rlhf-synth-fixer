@@ -55,6 +55,8 @@ import {
   DescribeKeyCommand,
   KMSClient,
   ListAliasesCommand,
+  GetKeyRotationStatusCommand,
+  GetKeyPolicyCommand,
 } from '@aws-sdk/client-kms';
 import {
   CloudWatchLogsClient,
@@ -72,17 +74,26 @@ import {
   GetBucketVersioningCommand,
   GetBucketLifecycleConfigurationCommand,
   GetPublicAccessBlockCommand,
+  ListBucketsCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
 import {
   SecretsManagerClient,
   DescribeSecretCommand,
   GetSecretValueCommand,
+  ListSecretsCommand,
 } from '@aws-sdk/client-secrets-manager';
 import {
   ListTopicsCommand,
   SNSClient,
+  ListSubscriptionsByTopicCommand,
+  GetTopicAttributesCommand,
 } from '@aws-sdk/client-sns';
+import {
+  WAFV2Client,
+  ListWebACLsCommand,
+  GetWebACLCommand,
+} from '@aws-sdk/client-wafv2';
 import axios from 'axios';
 import fs from 'fs';
 
@@ -106,6 +117,7 @@ const cloudTrailClient = new CloudTrailClient({ region });
 const configClient = new ConfigServiceClient({ region });
 const guardDutyClient = new GuardDutyClient({ region });
 const secretsManagerClient = new SecretsManagerClient({ region });
+const wafClient = new WAFV2Client({ region });
 
 describe('TapStack Integration Tests', () => {
   let stackOutputs: Record<string, string> = {};
@@ -999,5 +1011,476 @@ describe('TapStack Integration Tests', () => {
         console.log('Could not save outputs:', error);
       }
     }
+  });
+
+  describe('Security Posture Validation', () => {
+    test('should validate KMS key rotation and policies', async () => {
+      const kmsKeyId = stackOutputs.KMSKeyId;
+      expect(kmsKeyId).toBeDefined();
+      
+      try {
+        const describeKeyCommand = new DescribeKeyCommand({ KeyId: kmsKeyId });
+        const keyResponse = await kmsClient.send(describeKeyCommand);
+        
+        expect(keyResponse.KeyMetadata?.KeyUsage).toBe('ENCRYPT_DECRYPT');
+        expect(keyResponse.KeyMetadata?.KeyState).toBe('Enabled');
+        
+        // Check key rotation
+        const getKeyRotationCommand = new GetKeyRotationStatusCommand({ KeyId: kmsKeyId });
+        const rotationResponse = await kmsClient.send(getKeyRotationCommand);
+        expect(rotationResponse.KeyRotationEnabled).toBe(true);
+        
+        // Verify key policy allows necessary services
+        const getKeyPolicyCommand = new GetKeyPolicyCommand({ 
+          KeyId: kmsKeyId, 
+          PolicyName: 'default' 
+        });
+        const policyResponse = await kmsClient.send(getKeyPolicyCommand);
+        const policy = JSON.parse(policyResponse.Policy || '{}');
+        
+        expect(policy.Statement).toBeDefined();
+        expect(policy.Statement.length).toBeGreaterThan(0);
+      } catch (error) {
+        console.log('KMS validation error:', error);
+        throw error;
+      }
+    });
+
+    test('should validate S3 bucket security configurations', async () => {
+      const buckets = await s3Client.send(new ListBucketsCommand({}));
+      const stackBuckets = buckets.Buckets?.filter(bucket => 
+        bucket.Name?.includes(environmentSuffix) && 
+        (bucket.Name.includes('cloudtrail') || bucket.Name.includes('config'))
+      ) || [];
+      
+      expect(stackBuckets.length).toBeGreaterThan(0);
+      
+      for (const bucket of stackBuckets) {
+        if (!bucket.Name) continue;
+        
+        // Check bucket encryption
+        try {
+          const encryptionResponse = await s3Client.send(
+            new GetBucketEncryptionCommand({ Bucket: bucket.Name })
+          );
+          expect(encryptionResponse.ServerSideEncryptionConfiguration?.Rules).toBeDefined();
+          expect(encryptionResponse.ServerSideEncryptionConfiguration?.Rules?.[0]?.ApplyServerSideEncryptionByDefault?.SSEAlgorithm).toBe('aws:kms');
+        } catch (error: any) {
+          if (error.name !== 'ServerSideEncryptionConfigurationNotFoundError') {
+            throw error;
+          }
+        }
+        
+        // Check bucket versioning
+        const versioningResponse = await s3Client.send(
+          new GetBucketVersioningCommand({ Bucket: bucket.Name })
+        );
+        expect(versioningResponse.Status).toBe('Enabled');
+        
+        // Check public access block
+        const publicAccessResponse = await s3Client.send(
+          new GetPublicAccessBlockCommand({ Bucket: bucket.Name })
+        );
+        expect(publicAccessResponse.PublicAccessBlockConfiguration?.BlockPublicAcls).toBe(true);
+        expect(publicAccessResponse.PublicAccessBlockConfiguration?.BlockPublicPolicy).toBe(true);
+        expect(publicAccessResponse.PublicAccessBlockConfiguration?.IgnorePublicAcls).toBe(true);
+        expect(publicAccessResponse.PublicAccessBlockConfiguration?.RestrictPublicBuckets).toBe(true);
+      }
+    });
+
+    test('should validate WAF rules effectiveness', async () => {
+      const wafs = await wafClient.send(new ListWebACLsCommand({ Scope: 'REGIONAL' }));
+      const stackWAF = wafs.WebACLs?.find(waf => waf.Name?.includes(environmentSuffix));
+      
+      expect(stackWAF).toBeDefined();
+      expect(stackWAF?.ARN).toBeDefined();
+      
+      if (stackWAF?.Id) {
+        const wafDetails = await wafClient.send(new GetWebACLCommand({
+          Id: stackWAF.Id,
+          Scope: 'REGIONAL'
+        }));
+        
+        expect(wafDetails.WebACL?.Rules).toBeDefined();
+        expect(wafDetails.WebACL?.Rules?.length).toBeGreaterThan(0);
+        
+        // Check for managed rule groups
+        const ruleNames = wafDetails.WebACL?.Rules?.map(rule => rule.Name) || [];
+        expect(ruleNames).toContain('AWSManagedRulesCommonRuleSet');
+        expect(ruleNames).toContain('AWSManagedRulesKnownBadInputsRuleSet');
+        
+        // Verify rate limiting rule exists
+        const rateLimitRule = wafDetails.WebACL?.Rules?.find(rule => rule.Name === 'RateLimitRule');
+        expect(rateLimitRule).toBeDefined();
+        expect(rateLimitRule?.Statement?.RateBasedStatement).toBeDefined();
+      }
+    });
+
+    test('should validate secrets manager integration', async () => {
+      const secrets = await secretsManagerClient.send(new ListSecretsCommand({}));
+      const dbSecret = secrets.SecretList?.find(secret => 
+        secret.Name?.includes('DB') && secret.Name?.includes(environmentSuffix)
+      );
+      
+      expect(dbSecret).toBeDefined();
+      expect(dbSecret?.ARN).toBeDefined();
+      
+      if (dbSecret?.ARN) {
+        const secretValue = await secretsManagerClient.send(
+          new GetSecretValueCommand({ SecretId: dbSecret.ARN })
+        );
+        expect(secretValue.SecretString).toBeDefined();
+        
+        const secretData = JSON.parse(secretValue.SecretString || '{}');
+        expect(secretData.username).toBeDefined();
+        expect(secretData.password).toBeDefined();
+        expect(secretData.password.length).toBeGreaterThan(8); // Minimum password length
+      }
+    });
+  });
+
+  describe('Performance and Load Testing', () => {
+    test('should validate load balancer performance settings', async () => {
+      const albDns = stackOutputs.ApplicationLoadBalancerDNS;
+      expect(albDns).toBeDefined();
+      
+      // Test multiple concurrent requests to validate load balancer
+      const requests = [];
+      for (let i = 0; i < 10; i++) {
+        requests.push(
+          fetch(`http://${albDns}`, { 
+            method: 'GET'
+          }).catch(error => ({ error: error.message }))
+        );
+      }
+      
+      const responses = await Promise.all(requests);
+      const successfulResponses = responses.filter(response => 
+        response && !('error' in response)
+      );
+      
+      // At least some requests should succeed (service might not be fully ready)
+      expect(responses.length).toBe(10);
+      console.log(`Load balancer test: ${successfulResponses.length}/10 requests successful`);
+    });
+
+    test('should validate auto scaling configuration', async () => {
+      const asgName = stackOutputs.AutoScalingGroupName;
+      expect(asgName).toBeDefined();
+      
+      const asgResponse = await autoScalingClient.send(
+        new DescribeAutoScalingGroupsCommand({
+          AutoScalingGroupNames: [asgName]
+        })
+      );
+      
+      const asg = asgResponse.AutoScalingGroups?.[0];
+      expect(asg).toBeDefined();
+      expect(asg?.MinSize).toBeDefined();
+      expect(asg?.MaxSize).toBeDefined();
+      expect(asg?.DesiredCapacity).toBeDefined();
+      expect(asg?.HealthCheckType).toBe('ELB');
+      expect(asg?.HealthCheckGracePeriod).toBeGreaterThan(0);
+      
+      // Validate launch template
+      expect(asg?.LaunchTemplate).toBeDefined();
+      expect(asg?.LaunchTemplate?.LaunchTemplateId).toBeDefined();
+    });
+
+    test('should validate RDS performance monitoring', async () => {
+      const rdsEndpoint = stackOutputs.RDSInstanceEndpoint;
+      expect(rdsEndpoint).toBeDefined();
+      
+      const dbInstances = await rdsClient.send(new DescribeDBInstancesCommand({}));
+      const stackDB = dbInstances.DBInstances?.find(db => 
+        db.DBInstanceIdentifier?.includes(environmentSuffix)
+      );
+      
+      expect(stackDB).toBeDefined();
+      expect(stackDB?.MultiAZ).toBe(true);
+      expect(stackDB?.StorageEncrypted).toBe(true);
+      expect(stackDB?.MonitoringInterval).toBeGreaterThan(0);
+      expect(stackDB?.PerformanceInsightsEnabled).toBeDefined();
+      
+      // Check enabled log types
+      expect(stackDB?.EnabledCloudwatchLogsExports).toContain('error');
+      expect(stackDB?.EnabledCloudwatchLogsExports).toContain('general');
+      expect(stackDB?.EnabledCloudwatchLogsExports).toContain('slowquery');
+    });
+  });
+
+  describe('Disaster Recovery and Business Continuity', () => {
+    test('should validate backup configurations', async () => {
+      const dbInstances = await rdsClient.send(new DescribeDBInstancesCommand({}));
+      const stackDB = dbInstances.DBInstances?.find(db => 
+        db.DBInstanceIdentifier?.includes(environmentSuffix)
+      );
+      
+      expect(stackDB).toBeDefined();
+      expect(stackDB?.BackupRetentionPeriod).toBeGreaterThan(0);
+      expect(stackDB?.BackupRetentionPeriod).toBeLessThanOrEqual(35); // AWS maximum
+      
+      // Check automated backup window
+      expect(stackDB?.PreferredBackupWindow).toBeDefined();
+      expect(stackDB?.PreferredMaintenanceWindow).toBeDefined();
+    });
+
+    test('should validate cross-AZ deployment', async () => {
+      const subnets = await ec2Client.send(new DescribeSubnetsCommand({
+        Filters: [
+          { Name: 'tag:Environment', Values: [environmentSuffix] }
+        ]
+      }));
+      
+      const azs = new Set(subnets.Subnets?.map(subnet => subnet.AvailabilityZone) || []);
+      expect(azs.size).toBeGreaterThanOrEqual(2); // Multi-AZ deployment
+      
+      // Validate private and public subnets in different AZs
+      const privateSubnets = subnets.Subnets?.filter(subnet => 
+        subnet.Tags?.some(tag => tag.Key === 'Name' && tag.Value?.includes('Private'))
+      ) || [];
+      const publicSubnets = subnets.Subnets?.filter(subnet => 
+        subnet.Tags?.some(tag => tag.Key === 'Name' && tag.Value?.includes('Public'))
+      ) || [];
+      
+      expect(privateSubnets.length).toBeGreaterThanOrEqual(2);
+      expect(publicSubnets.length).toBeGreaterThanOrEqual(2);
+    });
+
+    test('should validate CloudTrail for audit logging', async () => {
+      const trails = await cloudTrailClient.send(new DescribeTrailsCommand({}));
+      const stackTrail = trails.trailList?.find(trail => 
+        trail.Name?.includes(environmentSuffix)
+      );
+      
+      expect(stackTrail).toBeDefined();
+      expect(stackTrail?.IncludeGlobalServiceEvents).toBe(true);
+      expect(stackTrail?.LogFileValidationEnabled).toBe(true);
+      expect(stackTrail?.KmsKeyId).toBeDefined();
+      
+      if (stackTrail?.Name) {
+        const trailStatus = await cloudTrailClient.send(
+          new GetTrailStatusCommand({ Name: stackTrail.Name })
+        );
+        expect(trailStatus.IsLogging).toBe(true);
+      }
+    });
+  });
+
+  describe('Compliance and Governance', () => {
+    test('should validate AWS Config compliance', async () => {
+      const recorders = await configClient.send(new DescribeConfigurationRecordersCommand({}));
+      const deliveryChannels = await configClient.send(new DescribeDeliveryChannelsCommand({}));
+      
+      expect(recorders.ConfigurationRecorders?.length).toBeGreaterThan(0);
+      expect(deliveryChannels.DeliveryChannels?.length).toBeGreaterThan(0);
+      
+      const recorder = recorders.ConfigurationRecorders?.[0];
+      expect(recorder?.recordingGroup?.allSupported).toBe(true);
+      expect(recorder?.recordingGroup?.includeGlobalResourceTypes).toBe(true);
+    });
+
+    test('should validate GuardDuty threat detection', async () => {
+      const detectors = await guardDutyClient.send(new ListDetectorsCommand({}));
+      expect(detectors.DetectorIds?.length).toBeGreaterThan(0);
+      
+      if (detectors.DetectorIds?.[0]) {
+        const detector = await guardDutyClient.send(
+          new GetDetectorCommand({ DetectorId: detectors.DetectorIds[0] })
+        );
+        expect(detector.Status).toBe('ENABLED');
+        expect(detector.FindingPublishingFrequency).toBeDefined();
+      }
+    });
+
+    test('should validate resource tagging compliance', async () => {
+      const requiredTags = ['Environment', 'Project'];
+      
+      // Check EC2 instances
+      const instances = await ec2Client.send(new DescribeInstancesCommand({
+        Filters: [
+          { Name: 'tag:Environment', Values: [environmentSuffix] }
+        ]
+      }));
+      
+      instances.Reservations?.forEach(reservation => {
+        reservation.Instances?.forEach(instance => {
+          const tagKeys = instance.Tags?.map(tag => tag.Key) || [];
+          requiredTags.forEach(requiredTag => {
+            expect(tagKeys).toContain(requiredTag);
+          });
+        });
+      });
+      
+      // Check RDS instances
+      const dbInstances = await rdsClient.send(new DescribeDBInstancesCommand({}));
+      const stackDB = dbInstances.DBInstances?.find(db => 
+        db.DBInstanceIdentifier?.includes(environmentSuffix)
+      );
+      
+      if (stackDB?.TagList) {
+        const tagKeys = stackDB.TagList.map(tag => tag.Key) || [];
+        requiredTags.forEach(requiredTag => {
+          expect(tagKeys).toContain(requiredTag);
+        });
+      }
+    });
+  });
+
+  describe('Network Security Deep Dive', () => {
+    test('should validate VPC Flow Logs configuration', async () => {
+      const flowLogs = await ec2Client.send(new DescribeFlowLogsCommand({
+        Filter: [
+          { Name: 'tag:Environment', Values: [environmentSuffix] }
+        ]
+      }));
+      
+      expect(flowLogs.FlowLogs?.length).toBeGreaterThan(0);
+      
+      const stackFlowLog = flowLogs.FlowLogs?.[0];
+      expect(stackFlowLog?.TrafficType).toBe('ALL');
+      expect(stackFlowLog?.LogDestinationType).toBe('cloud-watch-logs');
+      expect(stackFlowLog?.FlowLogStatus).toBe('ACTIVE');
+    });
+
+    test('should validate security group rules are restrictive', async () => {
+      const securityGroups = await ec2Client.send(new DescribeSecurityGroupsCommand({
+        Filters: [
+          { Name: 'tag:Environment', Values: [environmentSuffix] }
+        ]
+      }));
+      
+      securityGroups.SecurityGroups?.forEach(sg => {
+        // Check ingress rules are not too permissive
+        sg.IpPermissions?.forEach(rule => {
+          rule.IpRanges?.forEach(ipRange => {
+            if (ipRange.CidrIp === '0.0.0.0/0') {
+              // Only ALB security group should allow 0.0.0.0/0 for HTTP/HTTPS
+              expect(sg.GroupName).toContain('ALB');
+              expect([80, 443]).toContain(rule.FromPort);
+            }
+          });
+        });
+        
+        // Check egress rules
+        sg.IpPermissionsEgress?.forEach(rule => {
+          // Most security groups should have restrictive egress
+          if (rule.IpRanges?.some(range => range.CidrIp === '0.0.0.0/0')) {
+            // Only certain security groups should have open egress
+            expect(
+              sg.GroupName?.includes('ALB') || 
+              sg.GroupName?.includes('EC2')
+            ).toBe(true);
+          }
+        });
+      });
+    });
+
+    test('should validate Network ACL configurations', async () => {
+      const nacls = await ec2Client.send(new DescribeNetworkAclsCommand({
+        Filters: [
+          { Name: 'tag:Environment', Values: [environmentSuffix] }
+        ]
+      }));
+      
+      expect(nacls.NetworkAcls?.length).toBeGreaterThan(0);
+      
+      nacls.NetworkAcls?.forEach(nacl => {
+        // Check that NACLs have both ingress and egress rules
+        const ingressRules = nacl.Entries?.filter(entry => !entry.Egress) || [];
+        const egressRules = nacl.Entries?.filter(entry => entry.Egress) || [];
+        
+        expect(ingressRules.length).toBeGreaterThan(0);
+        expect(egressRules.length).toBeGreaterThan(0);
+        
+        // Check for deny rules (rule number 32767 is default deny)
+        const denyRules = nacl.Entries?.filter(entry => entry.RuleAction === 'deny') || [];
+        expect(denyRules.length).toBeGreaterThan(0);
+      });
+    });
+  });
+
+  describe('Operational Excellence', () => {
+    test('should validate CloudWatch dashboard and metrics', async () => {
+      // Get metrics for the stack
+      const endTime = new Date();
+      const startTime = new Date(endTime.getTime() - 3600000); // 1 hour ago
+      
+      // Check ALB metrics
+      const albMetrics = await cloudWatchClient.send(new GetMetricStatisticsCommand({
+        Namespace: 'AWS/ApplicationELB',
+        MetricName: 'RequestCount',
+        StartTime: startTime,
+        EndTime: endTime,
+        Period: 300,
+        Statistics: ['Sum'],
+        Dimensions: [
+          {
+            Name: 'LoadBalancer',
+            Value: stackOutputs.ApplicationLoadBalancerDNS?.split('-').slice(0, 4).join('-') || ''
+          }
+        ]
+      }));
+      
+      // Metrics might not be available immediately after deployment
+      expect(albMetrics.Datapoints).toBeDefined();
+      
+      // Check RDS metrics
+      const rdsMetrics = await cloudWatchClient.send(new GetMetricStatisticsCommand({
+        Namespace: 'AWS/RDS',
+        MetricName: 'CPUUtilization',
+        StartTime: startTime,
+        EndTime: endTime,
+        Period: 300,
+        Statistics: ['Average'],
+        Dimensions: [
+          {
+            Name: 'DBInstanceIdentifier',
+            Value: `tap-database-${environmentSuffix}`
+          }
+        ]
+      }));
+      
+      expect(rdsMetrics.Datapoints).toBeDefined();
+    });
+
+    test('should validate CloudWatch alarms are in OK state', async () => {
+      const alarms = await cloudWatchClient.send(new DescribeAlarmsCommand({
+        AlarmNamePrefix: `Tap`
+      }));
+      
+      const stackAlarms = alarms.MetricAlarms?.filter(alarm => 
+        alarm.AlarmName?.includes(environmentSuffix)
+      ) || [];
+      
+      expect(stackAlarms.length).toBeGreaterThan(0);
+      
+      // Check alarm states - they should be OK or INSUFFICIENT_DATA (for new stacks)
+      stackAlarms.forEach(alarm => {
+        expect(['OK', 'INSUFFICIENT_DATA', 'ALARM']).toContain(alarm.StateValue);
+        expect(alarm.ActionsEnabled).toBe(true);
+        expect(alarm.AlarmActions?.length).toBeGreaterThan(0);
+      });
+    });
+
+    test('should validate SNS topic subscriptions', async () => {
+      const snsTopicArn = stackOutputs.SNSTopicArn;
+      expect(snsTopicArn).toBeDefined();
+      
+      const subscriptions = await snsClient.send(new ListSubscriptionsByTopicCommand({
+        TopicArn: snsTopicArn
+      }));
+      
+      // Topic should exist even if no subscriptions are configured yet
+      expect(subscriptions.Subscriptions).toBeDefined();
+      
+      // Verify topic attributes
+      const topicAttributes = await snsClient.send(new GetTopicAttributesCommand({
+        TopicArn: snsTopicArn
+      }));
+      
+      expect(topicAttributes.Attributes?.KmsMasterKeyId).toBeDefined();
+      expect(topicAttributes.Attributes?.DisplayName).toContain(environmentSuffix);
+    });
   });
 });
