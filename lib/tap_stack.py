@@ -15,6 +15,7 @@ from cdktf_cdktf_provider_aws.route_table import RouteTable
 from cdktf_cdktf_provider_aws.route_table_association import RouteTableAssociation
 from cdktf_cdktf_provider_aws.route import Route
 from cdktf_cdktf_provider_aws.security_group import SecurityGroup
+from cdktf_cdktf_provider_aws.security_group_rule import SecurityGroupRule
 from cdktf_cdktf_provider_aws.launch_template import LaunchTemplate
 from cdktf_cdktf_provider_aws.autoscaling_group import AutoscalingGroup
 from cdktf_cdktf_provider_aws.lb import Lb
@@ -274,19 +275,6 @@ class TapStack(TerraformStack):
       name="lb-security-group",
       description="Security group for load balancer",
       vpc_id=self.vpc.id,
-      ingress=[{
-        "description": "HTTP from internet",
-        "from_port": 80,
-        "to_port": 80,
-        "protocol": "tcp",
-        "cidr_blocks": ["0.0.0.0/0"]
-      }],
-      egress=[{
-        "from_port": 0,
-        "to_port": 0,
-        "protocol": "-1",
-        "cidr_blocks": ["0.0.0.0/0"]
-      }],
       tags={**self.common_tags, "Name": "lb-security-group"}
     )
     
@@ -295,20 +283,47 @@ class TapStack(TerraformStack):
       name="instance-security-group",
       description="Security group for EC2 instances",
       vpc_id=self.vpc.id,
-      ingress=[{
-        "description": "HTTP from load balancer",
-        "from_port": 80,
-        "to_port": 80,
-        "protocol": "tcp",
-        "security_groups": [self.lb_security_group.id]
-      }],
-      egress=[{
-        "from_port": 0,
-        "to_port": 0,
-        "protocol": "-1",
-        "cidr_blocks": ["0.0.0.0/0"]
-      }],
       tags={**self.common_tags, "Name": "instance-security-group"}
+    )
+    
+    # Add rules to load balancer security group
+    SecurityGroupRule(self, "lb-ingress-http",
+      type="ingress",
+      from_port=80,
+      to_port=80,
+      protocol="tcp",
+      cidr_blocks=["0.0.0.0/0"],
+      security_group_id=self.lb_security_group.id,
+      description="HTTP from internet"
+    )
+    
+    SecurityGroupRule(self, "lb-egress-all",
+      type="egress",
+      from_port=0,
+      to_port=0,
+      protocol="-1",
+      cidr_blocks=["0.0.0.0/0"],
+      security_group_id=self.lb_security_group.id
+    )
+    
+    # Add rules to instance security group
+    SecurityGroupRule(self, "instance-ingress-http",
+      type="ingress",
+      from_port=80,
+      to_port=80,
+      protocol="tcp",
+      source_security_group_id=self.lb_security_group.id,
+      security_group_id=self.instance_security_group.id,
+      description="HTTP from load balancer"
+    )
+    
+    SecurityGroupRule(self, "instance-egress-all",
+      type="egress",
+      from_port=0,
+      to_port=0,
+      protocol="-1",
+      cidr_blocks=["0.0.0.0/0"],
+      security_group_id=self.instance_security_group.id
     )
 
   def create_iam_resources(self):
