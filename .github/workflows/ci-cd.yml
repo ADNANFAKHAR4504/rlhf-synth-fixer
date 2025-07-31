@@ -136,7 +136,7 @@ jobs:
           echo "✅ Pipenv version is correct: $PIPENV_VERSION"
 
       - name: Set up Terraform
-        uses: hashicorp/setup-terraform@v2
+        uses: hashicorp/setup-terraform@v3
 
   build:
     name: Build
