@@ -801,7 +801,13 @@ def test_performance_timing_simulation(mock_time, cdktf_app):
   """Test performance timing simulation for stack creation."""
   # Mock timing for performance testing with realistic timestamps (after 1980)
   base_time = 1000000000  # January 9, 2001 (well after 1980)
-  mock_time.side_effect = [base_time, base_time + 1.5, base_time + 3.0]  # Simulate timing
+  call_count = [0]  # Use list to maintain state across calls
+  
+  def mock_time_func():
+    call_count[0] += 1
+    return base_time + (call_count[0] * 0.5)  # Increment by 0.5 seconds each call
+  
+  mock_time.side_effect = mock_time_func
   
   start_time = mock_time()
   
