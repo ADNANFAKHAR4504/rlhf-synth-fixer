@@ -5,7 +5,7 @@ I'll create a complete AWS CDK (Python) application that meets all your requirem
 ```
 .
 ├── tap.py                   # CDK app entrypoint
-└── lin/
+└── lib/
     └── tap_stack.py        # Stack definition
 ```
 
@@ -16,7 +16,7 @@ I'll create a complete AWS CDK (Python) application that meets all your requirem
 ```python
 #!/usr/bin/env python3
 import aws_cdk as cdk
-from lin.tap_stack import TapStack
+from lib.tap_stack import TapStack
 
 app = cdk.App()
 
@@ -30,7 +30,7 @@ TapStack(
 app.synth()
 ```
 
-### `lin/tap_stack.py` (Stack Definition)
+### `lib/tap_stack.py` (Stack Definition)
 
 ```python
 from aws_cdk import (

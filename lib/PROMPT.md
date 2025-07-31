@@ -37,14 +37,14 @@ Copy
 Edit
 .
 ├── tap.py                   # CDK app entrypoint (like app.py)
-└── lin/
+└── lib/
     └── tap_stack.py        # Stack definition
 ✅ CDK Output Expectations:
 Full implementation in Python CDK (v2)
 
 Reusable and readable structure
 
-Stack defined in lin/tap_stack.py, instantiated in tap.py
+Stack defined in lib/tap_stack.py, instantiated in tap.py
 
 Uses aws_cdk.aws_lambda, aws_cdk.aws_ssm, and aws_cdk.aws_logs modules
 
