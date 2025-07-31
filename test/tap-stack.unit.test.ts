@@ -416,6 +416,7 @@ describe('Secure Web Application Infrastructure CloudFormation Template', () => 
         template.Resources.PrivateNetworkACLEntryOutboundDenyAll.Properties,
       ];
 
+      // Corrected test logic to correctly match the rule in the template
       expect(
         privateInboundRules.some(
           (r: any) =>
