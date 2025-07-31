@@ -1,5 +1,4 @@
 import unittest
-
 from pytest import mark, skip
 from aws_cdk.assertions import Match, Template
 from lib.tap_stack import TapStack, TapStackProps
@@ -76,19 +75,37 @@ class TestTapStack(unittest.TestCase):
     )
     template = Template.from_stack(stack)
 
-    template.has_resource_properties(
+    template.has_resource(
       "AWS::IAM::Role",
       Match.object_like({
-        "AssumeRolePolicyDocument": Match.object_like({
-          "Statement": Match.array_with([
+        "Properties": Match.object_like({
+          "AssumeRolePolicyDocument": Match.object_like({
+            "Statement": Match.array_with([
+              Match.object_like({
+                "Effect": "Allow",
+                "Principal": {"Service": "ec2.amazonaws.com"},
+                "Action": "sts:AssumeRole"
+              })
+            ])
+          }),
+          "Policies": Match.array_with([
             Match.object_like({
-              "Effect": "Allow",
-              "Principal": {"Service": "ec2.amazonaws.com"},
-              "Action": "sts:AssumeRole"
+              "PolicyName": Match.string_like_regexp("CustomEC2ReadOnlyPolicy"),
+              "PolicyDocument": Match.object_like({
+                "Statement": Match.array_with([
+                  Match.object_like({
+                    "Effect": "Allow",
+                    "Action": Match.array_with([
+                      "ec2:DescribeInstances",
+                      "ec2:DescribeTags"
+                    ]),
+                    "Resource": ["*"]
+                  })
+                ])
+              })
             })
           ])
-        }),
-        "Policies": Match.any_value()
+        })
       })
     )
 
