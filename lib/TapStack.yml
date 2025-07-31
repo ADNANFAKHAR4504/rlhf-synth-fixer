@@ -30,6 +30,12 @@ Metadata:
           - DataRetentionDays
           - AdminMfaRequired
           - AdminUserEmail # New parameter for admin user email for MFA
+      - Label:
+          default: 'Security Parameters'
+        Parameters:
+          - AdminMfaRequired
+          - AdminUserPassword
+          - AdminUserEmail
 
 Parameters:
   EnvironmentSuffix:
