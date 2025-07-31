@@ -1125,10 +1125,39 @@ describe('TapStack Integration Tests', () => {
     });
 
     test('should validate secrets manager integration', async () => {
-      const secrets = await secretsManagerClient.send(new ListSecretsCommand({}));
-      const dbSecret = secrets.SecretList?.find(secret => 
-        secret.Name?.includes('tap-db-secret') && secret.Name?.includes(environmentSuffix)
-      );
+      // First try to find the secret using stack resources (more reliable)
+      const dbSecretArn = stackResources.find(
+        resource => resource.LogicalResourceId === 'DBSecret'
+      )?.PhysicalResourceId;
+      
+      let dbSecret;
+      
+      if (dbSecretArn) {
+        // Use the ARN from stack resources
+        try {
+          const describeCommand = new DescribeSecretCommand({ SecretId: dbSecretArn });
+          dbSecret = await secretsManagerClient.send(describeCommand);
+        } catch (error) {
+          console.log('Could not describe secret from stack resources:', error);
+        }
+      }
+      
+      // Fallback: search by name pattern if stack resource lookup failed
+      if (!dbSecret) {
+        const secrets = await secretsManagerClient.send(new ListSecretsCommand({}));
+        const foundSecret = secrets.SecretList?.find(secret => 
+          (secret.Name?.includes('tap-db-secret') || secret.Name?.includes('TapDB')) && 
+          secret.Name?.includes(environmentSuffix)
+        );
+        if (foundSecret?.ARN) {
+          try {
+            const describeCommand = new DescribeSecretCommand({ SecretId: foundSecret.ARN });
+            dbSecret = await secretsManagerClient.send(describeCommand);
+          } catch (error) {
+            console.log('Could not describe secret from name search:', error);
+          }
+        }
+      }
       
       expect(dbSecret).toBeDefined();
       expect(dbSecret?.ARN).toBeDefined();
