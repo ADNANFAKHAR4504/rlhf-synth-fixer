@@ -74,4 +74,151 @@ describe('TapStack Unit Tests', () => {
       })
     );
   });
+
+  it('creates an IAM instance profile for EC2', () => {
+    expect(
+      synthObj.resource.aws_iam_instance_profile.EC2InstanceProfile
+    ).toEqual(
+      expect.objectContaining({
+        name: expect.stringContaining('my-new-profile-'),
+        role: expect.stringMatching(/^\$\{aws_iam_role\.EC2LogRole\.name\}$/),
+      })
+    );
+  });
+
+  it('creates an IAM role for EC2', () => {
+    expect(synthObj.resource.aws_iam_role.EC2LogRole).toEqual(
+      expect.objectContaining({
+        name: expect.stringContaining('my-new-role-'),
+        assume_role_policy: expect.stringContaining('ec2.amazonaws.com'),
+        tags: expect.objectContaining({
+          Environment: 'Production',
+        }),
+      })
+    );
+  });
+
+  it('attaches IAM policy to EC2 role', () => {
+    expect(
+      synthObj.resource.aws_iam_role_policy_attachment.AttachS3Policy
+    ).toEqual(
+      expect.objectContaining({
+        role: expect.stringMatching(/^\$\{aws_iam_role\.EC2LogRole\.name\}$/),
+        policy_arn: expect.stringMatching(
+          /^\$\{aws_iam_policy\.EC2S3LogPolicy\.arn\}$/
+        ),
+      })
+    );
+  });
+
+  it('creates an S3 bucket with correct prefix and tags', () => {
+    expect(synthObj.resource.aws_s3_bucket.LogBucket).toEqual(
+      expect.objectContaining({
+        bucket_prefix: 'secure-app-logs-',
+        force_destroy: true,
+        tags: expect.objectContaining({
+          Environment: 'Production',
+        }),
+      })
+    );
+  });
+
+  it('outputs the VPC ID', () => {
+    expect(synthObj.output.VpcIdOutput).toEqual(
+      expect.objectContaining({
+        value: expect.stringMatching(/aws_vpc\.SecureVpc\.id/),
+        description: 'The ID of the created VPC',
+      })
+    );
+  });
+});
+
+describe('TapStack Unit Tests - Branch Coverage', () => {
+  it('uses awsRegion instead of region', () => {
+    const stack = new TapStack(undefined as any, 'unit-test-stack-alt', {
+      awsRegion: 'us-west-2',
+      amiId: 'ami-87654321',
+    });
+    const synthesized = Testing.synth(stack);
+    let synthObj;
+    try {
+      synthObj =
+        typeof synthesized === 'string' ? JSON.parse(synthesized) : synthesized;
+    } catch (e) {
+      synthObj = {};
+    }
+    expect(synthObj.resource.aws_vpc.SecureVpc).toEqual(
+      expect.objectContaining({
+        tags: expect.objectContaining({
+          Environment: 'Production',
+          Name: 'secure-network',
+        }),
+      })
+    );
+    expect(synthObj.resource.aws_instance.WebInstance).toEqual(
+      expect.objectContaining({
+        ami: 'ami-87654321',
+        instance_type: 't3.micro',
+      })
+    );
+  });
+
+  it('uses region us-east-1 when both region and awsRegion are provided', () => {
+    const stack = new TapStack(undefined as any, 'unit-test-stack-alt', {
+      region: 'us-east-1',
+      awsRegion: 'us-west-2',
+      amiId: 'ami-87654321',
+    });
+    const synthesized = Testing.synth(stack);
+    let synthObj;
+    try {
+      synthObj =
+        typeof synthesized === 'string' ? JSON.parse(synthesized) : synthesized;
+    } catch (e) {
+      synthObj = {};
+    }
+    expect(synthObj.resource.aws_vpc.SecureVpc).toEqual(
+      expect.objectContaining({
+        tags: expect.objectContaining({
+          Environment: 'Production',
+          Name: 'secure-network',
+        }),
+      })
+    );
+    expect(synthObj.resource.aws_instance.WebInstance).toEqual(
+      expect.objectContaining({
+        ami: 'ami-87654321',
+        instance_type: 't3.micro',
+      })
+    );
+    // Check that subnet AZ uses us-east-1a
+    expect(synthObj.resource.aws_subnet.PublicSubnet).toEqual(
+      expect.objectContaining({
+        availability_zone: 'us-east-1a',
+      })
+    );
+  });
+
+  it('uses default region and amiId when none provided', () => {
+    const stack = new TapStack(
+      undefined as any,
+      'unit-test-stack-defaults',
+      {}
+    );
+    const synthesized = Testing.synth(stack);
+    let synthObj;
+    try {
+      synthObj =
+        typeof synthesized === 'string' ? JSON.parse(synthesized) : synthesized;
+    } catch (e) {
+      synthObj = {};
+    }
+    expect(synthObj.resource.aws_vpc.SecureVpc).toBeDefined();
+    expect(synthObj.resource.aws_instance.WebInstance).toEqual(
+      expect.objectContaining({
+        ami: 'ami-009698a58cf38bf4e',
+        instance_type: 't3.micro',
+      })
+    );
+  });
 });

@@ -39,6 +39,10 @@ export class TapStack extends TerraformStack {
     // Official Amazon Linux 2 AMI for us-east-1 as of July 2025
     const amiId = props.amiId || 'ami-009698a58cf38bf4e';
     const tags = { Environment: 'Production' };
+    // Use environmentSuffix for resource names if provided
+    const nameSuffix = props.environmentSuffix
+      ? `${name}-${props.environmentSuffix}`
+      : name;
 
     new AwsProvider(this, 'aws', { region });
 
@@ -167,7 +171,7 @@ export class TapStack extends TerraformStack {
     );
 
     const ec2Role: IamRole = new IamRole(this, 'EC2LogRole', {
-      name: `my-new-role-${name}`,
+      name: `my-new-role-${nameSuffix}`,
       assumeRolePolicy: JSON.stringify({
         Version: '2012-10-17',
         Statement: [
@@ -186,13 +190,13 @@ export class TapStack extends TerraformStack {
       this,
       'EC2InstanceProfile',
       {
-        name: `my-new-profile-${name}`,
+        name: `my-new-profile-${nameSuffix}`,
         role: ec2Role.name,
       }
     );
 
     const ec2Policy = new IamPolicy(this, 'EC2S3LogPolicy', {
-      name: `my-new-policy-${name}`,
+      name: `my-new-policy-${nameSuffix}`,
       policy: JSON.stringify({
         Version: '2012-10-17',
         Statement: [
