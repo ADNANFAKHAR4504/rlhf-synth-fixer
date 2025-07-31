@@ -1,9 +1,11 @@
 """TAP Stack module for CDKTF Python infrastructure."""
 
-from cdktf import TerraformStack, S3Backend
-from constructs import Construct
+from cdktf import S3Backend, TerraformStack
 from cdktf_cdktf_provider_aws.provider import AwsProvider
 from cdktf_cdktf_provider_aws.s3_bucket import S3Bucket
+from constructs import Construct
+
+from .enterprise_security_stack import EnterpriseSecurityStack
 
 
 class TapStack(TerraformStack):
@@ -60,7 +62,9 @@ class TapStack(TerraformStack):
             }
         )
 
+        # Instantiate the enterprise security stack
+        EnterpriseSecurityStack(self, "EnterpriseSecurity")
+
         # ? Add your stack instantiations here
         # ! Do NOT create resources directly in this stack.
         # ! Instead, create separate stacks for each resource type.
-pe.
