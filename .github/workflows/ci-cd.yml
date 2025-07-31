@@ -27,7 +27,7 @@ env:
   PULUMI_STATE_BUCKET: 'iac-rlhf-pulumi-states'
   PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
   AAWS_DEFAULT_REGION: ${{ vars.AWS_REGION }}
-  PULUMI_ORG: 'Turing'
+  PULUMI_ORG: 'organization'
 
 jobs:
   detect-metadata:
