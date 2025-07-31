@@ -590,50 +590,120 @@ describe('Serverless Data Processing Pipeline Integration Tests', () => {
       }
     });
 
-    test('should have CloudWatch alarm for Lambda error monitoring', async () => {
-      const cloudWatch = new CloudFormation.CloudFormationClient({ region });
-      const stacks = await cloudWatch.send(
-        new CloudFormation.DescribeStacksCommand({
-          StackName: `TapStack${environmentSuffix}`,
-        })
-      );
+    test('should have comprehensive CloudWatch monitoring with proper thresholds', async () => {
+      const cloudWatch = new CloudWatch.CloudWatchClient({ region });
 
-      const stack = stacks.Stacks?.[0];
-      expect(stack).toBeDefined();
-      // Stack can be in CREATE_COMPLETE or UPDATE_COMPLETE state
-      expect(['CREATE_COMPLETE', 'UPDATE_COMPLETE']).toContain(
-        stack?.StackStatus
-      );
-
-      // Since the CloudWatch alarm is in a nested stack and outputs aren't exposed,
-      // let's verify the alarm exists directly via CloudWatch API instead
-      const cloudWatchClient = new CloudWatch.CloudWatchClient({ region });
-
-      // Get the expected alarm name from the ServerlessStack
-      const expectedAlarmName = `${environmentSuffix}-lambda-error-alarm-backend`;
+      // Define expected alarms with their configurations
+      const expectedAlarms = [
+        {
+          name: `${environmentSuffix}-lambda-error-alarm-backend`,
+          description: 'Alarm for Lambda function errors',
+          threshold: 5,
+          evaluationPeriods: 1,
+        },
+        {
+          name: `${environmentSuffix}-lambda-duration-alarm-backend`,
+          description: 'Alarm for Lambda function duration approaching timeout',
+          threshold: 240000, // 4 minutes in milliseconds
+          evaluationPeriods: 2,
+        },
+        {
+          name: `${environmentSuffix}-lambda-memory-alarm-backend`,
+          description: 'Alarm for Lambda function memory usage',
+          threshold: 200, // MB
+          evaluationPeriods: 2,
+        },
+        {
+          name: `${environmentSuffix}-dlq-message-alarm-backend`,
+          description: 'Alarm for messages in Dead Letter Queue',
+          threshold: 10,
+          evaluationPeriods: 1,
+        },
+        {
+          name: `${environmentSuffix}-sqs-age-alarm-backend`,
+          description: 'Alarm for old messages in SQS queue',
+          threshold: 300, // 5 minutes in seconds
+          evaluationPeriods: 2,
+        },
+        {
+          name: `${environmentSuffix}-stream-iterator-age-alarm-backend`,
+          description: 'Alarm for DynamoDB stream iterator age',
+          threshold: 60000, // 1 minute in milliseconds
+          evaluationPeriods: 2,
+        },
+        {
+          name: `${environmentSuffix}-lambda-throttle-alarm-backend`,
+          description: 'Alarm for Lambda function throttles',
+          threshold: 1,
+          evaluationPeriods: 1,
+        },
+        {
+          name: `${environmentSuffix}-s3-error-alarm-backend`,
+          description: 'Alarm for S3 operation errors',
+          threshold: 1,
+          evaluationPeriods: 1,
+        },
+        {
+          name: `${environmentSuffix}-dynamo-read-alarm-backend`,
+          description: 'Alarm for DynamoDB read capacity throttling',
+          threshold: 1,
+          evaluationPeriods: 1,
+        },
+        {
+          name: `${environmentSuffix}-dynamo-write-alarm-backend`,
+          description: 'Alarm for DynamoDB write capacity throttling',
+          threshold: 1,
+          evaluationPeriods: 1,
+        },
+      ];
 
       try {
-        const alarmResponse = await cloudWatchClient.send(
+        // Get all alarms
+        const alarmResponse = await cloudWatch.send(
           new CloudWatch.DescribeAlarmsCommand({
-            AlarmNames: [expectedAlarmName],
+            AlarmNames: expectedAlarms.map(alarm => alarm.name),
           })
         );
 
         expect(alarmResponse.MetricAlarms).toBeDefined();
-        expect(alarmResponse.MetricAlarms?.length).toBeGreaterThan(0);
+        expect(alarmResponse.MetricAlarms?.length).toBe(expectedAlarms.length);
 
-        const alarm = alarmResponse.MetricAlarms?.[0];
-        expect(alarm?.AlarmName).toBe(expectedAlarmName);
-        expect(alarm?.AlarmDescription).toBe(
-          'Alarm for Lambda function errors'
+        // Verify each alarm configuration
+        for (const expectedAlarm of expectedAlarms) {
+          const alarm = alarmResponse.MetricAlarms?.find(
+            a => a.AlarmName === expectedAlarm.name
+          );
+
+          expect(alarm).toBeDefined();
+          expect(alarm?.AlarmName).toBe(expectedAlarm.name);
+          expect(alarm?.AlarmDescription).toBe(expectedAlarm.description);
+          expect(alarm?.Threshold).toBe(expectedAlarm.threshold);
+          expect(alarm?.EvaluationPeriods).toBe(
+            expectedAlarm.evaluationPeriods
+          );
+
+          // Verify alarm is properly configured
+          expect(alarm?.ActionsEnabled).toBe(true);
+          expect(alarm?.Period).toBe(300); // 5 minutes
+
+          console.log(`✅ CloudWatch alarm verified: ${alarm?.AlarmName}`);
+        }
+
+        // Test alarm state (should be OK initially)
+        const alarmStates = await cloudWatch.send(
+          new CloudWatch.DescribeAlarmsCommand({
+            StateValue: 'OK',
+            AlarmNames: expectedAlarms.map(alarm => alarm.name),
+          })
         );
-        expect(alarm?.Threshold).toBe(5);
-        expect(alarm?.EvaluationPeriods).toBe(1);
+
+        // All alarms should be in OK state initially
+        expect(alarmStates.MetricAlarms?.length).toBe(expectedAlarms.length);
       } catch (error) {
-        console.error('Error checking CloudWatch alarm:', error);
+        console.error('Error checking CloudWatch alarms:', error);
         throw error;
       }
-    }, 10000);
+    }, 15000);
   });
 
   describe('Security and Permissions Tests', () => {

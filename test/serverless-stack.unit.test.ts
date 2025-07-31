@@ -1,5 +1,5 @@
 import * as cdk from 'aws-cdk-lib';
-import { Template, Match } from 'aws-cdk-lib/assertions';
+import { Match, Template } from 'aws-cdk-lib/assertions';
 import { ServerlessStack } from '../lib/serverless-stack';
 
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
@@ -11,7 +11,9 @@ describe('ServerlessStack Unit Tests', () => {
 
   beforeEach(() => {
     app = new cdk.App();
-    stack = new ServerlessStack(app, 'TestServerlessStack', { environmentSuffix });
+    stack = new ServerlessStack(app, 'TestServerlessStack', {
+      environmentSuffix: 'dev',
+    });
     template = Template.fromStack(stack);
   });
 
@@ -22,19 +24,19 @@ describe('ServerlessStack Unit Tests', () => {
         AttributeDefinitions: [
           {
             AttributeName: 'orderId',
-            AttributeType: 'S'
-          }
+            AttributeType: 'S',
+          },
         ],
         KeySchema: [
           {
             AttributeName: 'orderId',
-            KeyType: 'HASH'
-          }
+            KeyType: 'HASH',
+          },
         ],
         StreamSpecification: {
-          StreamViewType: 'NEW_AND_OLD_IMAGES'
+          StreamViewType: 'NEW_AND_OLD_IMAGES',
         },
-        BillingMode: 'PAY_PER_REQUEST'
+        BillingMode: 'PAY_PER_REQUEST',
       });
     });
 
@@ -44,26 +46,26 @@ describe('ServerlessStack Unit Tests', () => {
         AttributeDefinitions: Match.arrayWith([
           {
             AttributeName: 'auditId',
-            AttributeType: 'S'
+            AttributeType: 'S',
           },
           {
             AttributeName: 'timestamp',
-            AttributeType: 'S'
+            AttributeType: 'S',
           },
           {
             AttributeName: 'failureType',
-            AttributeType: 'S'
-          }
+            AttributeType: 'S',
+          },
         ]),
         KeySchema: [
           {
             AttributeName: 'auditId',
-            KeyType: 'HASH'
+            KeyType: 'HASH',
           },
           {
             AttributeName: 'timestamp',
-            KeyType: 'RANGE'
-          }
+            KeyType: 'RANGE',
+          },
         ],
         GlobalSecondaryIndexes: [
           {
@@ -71,19 +73,19 @@ describe('ServerlessStack Unit Tests', () => {
             KeySchema: [
               {
                 AttributeName: 'failureType',
-                KeyType: 'HASH'
+                KeyType: 'HASH',
               },
               {
                 AttributeName: 'timestamp',
-                KeyType: 'RANGE'
-              }
+                KeyType: 'RANGE',
+              },
             ],
             Projection: {
-              ProjectionType: 'ALL'
-            }
-          }
+              ProjectionType: 'ALL',
+            },
+          },
         ],
-        BillingMode: 'PAY_PER_REQUEST'
+        BillingMode: 'PAY_PER_REQUEST',
       });
     });
   });
@@ -95,28 +97,28 @@ describe('ServerlessStack Unit Tests', () => {
           BlockPublicAcls: true,
           BlockPublicPolicy: true,
           IgnorePublicAcls: true,
-          RestrictPublicBuckets: true
+          RestrictPublicBuckets: true,
         },
         BucketEncryption: {
           ServerSideEncryptionConfiguration: [
             {
               ServerSideEncryptionByDefault: {
-                SSEAlgorithm: 'AES256'
-              }
-            }
-          ]
+                SSEAlgorithm: 'AES256',
+              },
+            },
+          ],
         },
         VersioningConfiguration: {
-          Status: 'Enabled'
-        }
+          Status: 'Enabled',
+        },
       });
     });
 
     test('should create S3 bucket with correct naming pattern', () => {
       template.hasResourceProperties('AWS::S3::Bucket', {
         BucketName: {
-          'Fn::Join': Match.anyValue()
-        }
+          'Fn::Join': Match.anyValue(),
+        },
       });
     });
   });
@@ -126,7 +128,7 @@ describe('ServerlessStack Unit Tests', () => {
       template.hasResourceProperties('AWS::SQS::Queue', {
         QueueName: `${environmentSuffix}-processing-dlq-backend`,
         MessageRetentionPeriod: 1209600, // 14 days in seconds
-        VisibilityTimeout: 720 // 12 minutes
+        VisibilityTimeout: 720, // 12 minutes
       });
     });
   });
@@ -137,7 +139,7 @@ describe('ServerlessStack Unit Tests', () => {
         FunctionName: `${environmentSuffix}-order-processor-lambda-backend`,
         Runtime: 'nodejs20.x',
         Handler: 'index.handler',
-        Timeout: 300 // 5 minutes
+        Timeout: 300, // 5 minutes
       });
     });
 
@@ -146,7 +148,7 @@ describe('ServerlessStack Unit Tests', () => {
         FunctionName: `${environmentSuffix}-audit-lambda-backend`,
         Runtime: 'nodejs20.x',
         Handler: 'index.handler',
-        Timeout: 120 // 2 minutes
+        Timeout: 120, // 2 minutes
       });
     });
 
@@ -154,8 +156,8 @@ describe('ServerlessStack Unit Tests', () => {
       template.hasResourceProperties('AWS::Lambda::Function', {
         FunctionName: `${environmentSuffix}-order-processor-lambda-backend`,
         Code: {
-          ZipFile: Match.stringLikeRegexp('.*S3Client.*PutObjectCommand.*')
-        }
+          ZipFile: Match.stringLikeRegexp('.*S3Client.*PutObjectCommand.*'),
+        },
       });
     });
 
@@ -163,8 +165,8 @@ describe('ServerlessStack Unit Tests', () => {
       template.hasResourceProperties('AWS::Lambda::Function', {
         FunctionName: `${environmentSuffix}-audit-lambda-backend`,
         Code: {
-          ZipFile: Match.stringLikeRegexp('.*DynamoDBClient.*PutItemCommand.*')
-        }
+          ZipFile: Match.stringLikeRegexp('.*DynamoDBClient.*PutItemCommand.*'),
+        },
       });
     });
   });
@@ -179,11 +181,11 @@ describe('ServerlessStack Unit Tests', () => {
               Action: 'sts:AssumeRole',
               Effect: 'Allow',
               Principal: {
-                Service: 'lambda.amazonaws.com'
-              }
-            }
-          ]
-        }
+                Service: 'lambda.amazonaws.com',
+              },
+            },
+          ],
+        },
       });
 
       // Check for DynamoDB stream permissions
@@ -196,12 +198,12 @@ describe('ServerlessStack Unit Tests', () => {
                 'dynamodb:DescribeStream',
                 'dynamodb:GetRecords',
                 'dynamodb:GetShardIterator',
-                'dynamodb:ListStreams'
+                'dynamodb:ListStreams',
               ],
-              Resource: Match.anyValue()
-            }
-          ])
-        }
+              Resource: Match.anyValue(),
+            },
+          ]),
+        },
       });
 
       // Check for S3 permissions
@@ -210,14 +212,11 @@ describe('ServerlessStack Unit Tests', () => {
           Statement: Match.arrayWith([
             {
               Effect: 'Allow',
-              Action: [
-                's3:PutObject',
-                's3:PutObjectAcl'
-              ],
-              Resource: Match.anyValue()
-            }
-          ])
-        }
+              Action: ['s3:PutObject', 's3:PutObjectAcl'],
+              Resource: Match.anyValue(),
+            },
+          ]),
+        },
       });
     });
 
@@ -230,11 +229,11 @@ describe('ServerlessStack Unit Tests', () => {
               Action: 'sts:AssumeRole',
               Effect: 'Allow',
               Principal: {
-                Service: 'lambda.amazonaws.com'
-              }
-            }
-          ]
-        }
+                Service: 'lambda.amazonaws.com',
+              },
+            },
+          ],
+        },
       });
 
       // Check for DynamoDB audit table permissions
@@ -246,12 +245,12 @@ describe('ServerlessStack Unit Tests', () => {
               Action: [
                 'dynamodb:PutItem',
                 'dynamodb:UpdateItem',
-                'dynamodb:GetItem'
+                'dynamodb:GetItem',
               ],
-              Resource: Match.anyValue()
-            }
-          ])
-        }
+              Resource: Match.anyValue(),
+            },
+          ]),
+        },
       });
 
       // Check for SQS DLQ permissions
@@ -263,12 +262,12 @@ describe('ServerlessStack Unit Tests', () => {
               Action: [
                 'sqs:ReceiveMessage',
                 'sqs:DeleteMessage',
-                'sqs:GetQueueAttributes'
+                'sqs:GetQueueAttributes',
               ],
-              Resource: Match.anyValue()
-            }
-          ])
-        }
+              Resource: Match.anyValue(),
+            },
+          ]),
+        },
       });
     });
   });
@@ -280,7 +279,7 @@ describe('ServerlessStack Unit Tests', () => {
         FunctionName: Match.anyValue(),
         StartingPosition: 'TRIM_HORIZON',
         BatchSize: 10,
-        MaximumRetryAttempts: 3
+        MaximumRetryAttempts: 3,
       });
     });
 
@@ -289,12 +288,12 @@ describe('ServerlessStack Unit Tests', () => {
         EventSourceArn: Match.anyValue(),
         FunctionName: Match.anyValue(),
         BatchSize: 10,
-        MaximumBatchingWindowInSeconds: 5
+        MaximumBatchingWindowInSeconds: 5,
       });
     });
   });
 
-  describe('CloudWatch Alarm', () => {
+  describe('CloudWatch Monitoring Suite', () => {
     test('should create Lambda error alarm', () => {
       template.hasResourceProperties('AWS::CloudWatch::Alarm', {
         AlarmName: `${environmentSuffix}-lambda-error-alarm-backend`,
@@ -305,7 +304,134 @@ describe('ServerlessStack Unit Tests', () => {
         Period: 300,
         EvaluationPeriods: 1,
         Threshold: 5,
-        ComparisonOperator: 'GreaterThanOrEqualToThreshold'
+        ComparisonOperator: 'GreaterThanOrEqualToThreshold',
+      });
+    });
+
+    test('should create Lambda duration alarm', () => {
+      template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+        AlarmName: `${environmentSuffix}-lambda-duration-alarm-backend`,
+        AlarmDescription:
+          'Alarm for Lambda function duration approaching timeout',
+        MetricName: 'Duration',
+        Namespace: 'AWS/Lambda',
+        ExtendedStatistic: 'p95',
+        Period: 300,
+        EvaluationPeriods: 2,
+        Threshold: 240000,
+        ComparisonOperator: 'GreaterThanThreshold',
+      });
+    });
+
+    test('should create Lambda memory alarm', () => {
+      template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+        AlarmName: `${environmentSuffix}-lambda-memory-alarm-backend`,
+        AlarmDescription: 'Alarm for Lambda function memory usage',
+        MetricName: 'UsedMemory',
+        Namespace: 'AWS/Lambda',
+        ExtendedStatistic: 'p95',
+        Period: 300,
+        EvaluationPeriods: 2,
+        Threshold: 200,
+        ComparisonOperator: 'GreaterThanThreshold',
+      });
+    });
+
+    test('should create DLQ message alarm', () => {
+      template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+        AlarmName: `${environmentSuffix}-dlq-message-alarm-backend`,
+        AlarmDescription: 'Alarm for messages in Dead Letter Queue',
+        MetricName: 'ApproximateNumberOfVisibleMessages',
+        Namespace: 'AWS/SQS',
+        Statistic: 'Sum',
+        Period: 300,
+        EvaluationPeriods: 1,
+        Threshold: 10,
+        ComparisonOperator: 'GreaterThanThreshold',
+      });
+    });
+
+    test('should create SQS message age alarm', () => {
+      template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+        AlarmName: `${environmentSuffix}-sqs-age-alarm-backend`,
+        AlarmDescription: 'Alarm for old messages in SQS queue',
+        MetricName: 'ApproximateAgeOfOldestMessage',
+        Namespace: 'AWS/SQS',
+        Statistic: 'Maximum',
+        Period: 300,
+        EvaluationPeriods: 2,
+        Threshold: 300,
+        ComparisonOperator: 'GreaterThanThreshold',
+      });
+    });
+
+    test('should create DynamoDB stream iterator age alarm', () => {
+      template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+        AlarmName: `${environmentSuffix}-stream-iterator-age-alarm-backend`,
+        AlarmDescription: 'Alarm for DynamoDB stream iterator age',
+        MetricName: 'GetRecords.IteratorAgeMilliseconds',
+        Namespace: 'AWS/DynamoDBStreams',
+        ExtendedStatistic: 'p95',
+        Period: 300,
+        EvaluationPeriods: 2,
+        Threshold: 60000,
+        ComparisonOperator: 'GreaterThanThreshold',
+      });
+    });
+
+    test('should create Lambda throttle alarm', () => {
+      template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+        AlarmName: `${environmentSuffix}-lambda-throttle-alarm-backend`,
+        AlarmDescription: 'Alarm for Lambda function throttles',
+        MetricName: 'Throttles',
+        Namespace: 'AWS/Lambda',
+        Statistic: 'Sum',
+        Period: 300,
+        EvaluationPeriods: 1,
+        Threshold: 1,
+        ComparisonOperator: 'GreaterThanThreshold',
+      });
+    });
+
+    test('should create S3 error alarm', () => {
+      template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+        AlarmName: `${environmentSuffix}-s3-error-alarm-backend`,
+        AlarmDescription: 'Alarm for S3 operation errors',
+        MetricName: '5xxError',
+        Namespace: 'AWS/S3',
+        Statistic: 'Sum',
+        Period: 300,
+        EvaluationPeriods: 1,
+        Threshold: 1,
+        ComparisonOperator: 'GreaterThanThreshold',
+      });
+    });
+
+    test('should create DynamoDB read throttle alarm', () => {
+      template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+        AlarmName: `${environmentSuffix}-dynamo-read-alarm-backend`,
+        AlarmDescription: 'Alarm for DynamoDB read capacity throttling',
+        MetricName: 'ReadThrottleEvents',
+        Namespace: 'AWS/DynamoDB',
+        Statistic: 'Sum',
+        Period: 300,
+        EvaluationPeriods: 1,
+        Threshold: 1,
+        ComparisonOperator: 'GreaterThanThreshold',
+      });
+    });
+
+    test('should create DynamoDB write throttle alarm', () => {
+      template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+        AlarmName: `${environmentSuffix}-dynamo-write-alarm-backend`,
+        AlarmDescription: 'Alarm for DynamoDB write capacity throttling',
+        MetricName: 'WriteThrottleEvents',
+        Namespace: 'AWS/DynamoDB',
+        Statistic: 'Sum',
+        Period: 300,
+        EvaluationPeriods: 1,
+        Threshold: 1,
+        ComparisonOperator: 'GreaterThanThreshold',
       });
     });
   });
@@ -315,50 +441,50 @@ describe('ServerlessStack Unit Tests', () => {
       template.hasOutput('DynamoDBTableName', {
         Description: 'DynamoDB Table Name for orders',
         Export: {
-          Name: `DynamoDBTableName-${environmentSuffix}`
-        }
+          Name: `DynamoDBTableName-${environmentSuffix}`,
+        },
       });
 
       template.hasOutput('LambdaFunctionName', {
         Description: 'Lambda function name for order processing',
         Export: {
-          Name: `LambdaFunctionName-${environmentSuffix}`
-        }
+          Name: `LambdaFunctionName-${environmentSuffix}`,
+        },
       });
 
       template.hasOutput('S3BucketName', {
         Description: 'S3 bucket name for processed data',
         Export: {
-          Name: `S3BucketName-${environmentSuffix}`
-        }
+          Name: `S3BucketName-${environmentSuffix}`,
+        },
       });
 
       template.hasOutput('DLQUrl', {
         Description: 'Dead Letter Queue URL',
         Export: {
-          Name: `DLQUrl-${environmentSuffix}`
-        }
+          Name: `DLQUrl-${environmentSuffix}`,
+        },
       });
 
       template.hasOutput('CloudWatchAlarmName', {
         Description: 'CloudWatch Alarm name for Lambda errors',
         Export: {
-          Name: `CloudWatchAlarmName-${environmentSuffix}`
-        }
+          Name: `CloudWatchAlarmName-${environmentSuffix}`,
+        },
       });
 
       template.hasOutput('AuditTableName', {
         Description: 'DynamoDB table name for audit logs',
         Export: {
-          Name: `AuditTableName-${environmentSuffix}`
-        }
+          Name: `AuditTableName-${environmentSuffix}`,
+        },
       });
 
       template.hasOutput('AuditLambdaName', {
         Description: 'Lambda function name for audit processing',
         Export: {
-          Name: `AuditLambdaName-${environmentSuffix}`
-        }
+          Name: `AuditLambdaName-${environmentSuffix}`,
+        },
       });
     });
   });
@@ -366,7 +492,9 @@ describe('ServerlessStack Unit Tests', () => {
   describe('Resource Count Validation', () => {
     test('should create expected number of resources', () => {
       const resourceCounts = template.toJSON().Resources;
-      const resourceTypes: Record<string, number> = Object.values(resourceCounts).reduce((acc: Record<string, number>, resource: any) => {
+      const resourceTypes: Record<string, number> = Object.values(
+        resourceCounts
+      ).reduce((acc: Record<string, number>, resource: any) => {
         acc[resource.Type] = (acc[resource.Type] || 0) + 1;
         return acc;
       }, {});
@@ -378,7 +506,7 @@ describe('ServerlessStack Unit Tests', () => {
       expect(resourceTypes['AWS::Lambda::Function']).toBeGreaterThanOrEqual(2); // main + audit lambdas (may include custom resource functions)
       expect(resourceTypes['AWS::IAM::Role']).toBeGreaterThanOrEqual(2); // main + audit lambda roles (may include custom resource roles)
       expect(resourceTypes['AWS::Lambda::EventSourceMapping']).toBe(2); // DynamoDB + SQS mappings
-      expect(resourceTypes['AWS::CloudWatch::Alarm']).toBe(1);
+      expect(resourceTypes['AWS::CloudWatch::Alarm']).toBe(10); // Enhanced monitoring suite
     });
   });
 
@@ -387,9 +515,9 @@ describe('ServerlessStack Unit Tests', () => {
       // Check that stack-level tags are applied
       expect(stack.tags.tagValues()).toEqual(
         expect.objectContaining({
-          'Environment': environmentSuffix,
-          'ManagedBy': 'CDK',
-          'Project': 'ServerlessDataProcessing'
+          Environment: environmentSuffix,
+          ManagedBy: 'CDK',
+          Project: 'ServerlessDataProcessing',
         })
       );
     });

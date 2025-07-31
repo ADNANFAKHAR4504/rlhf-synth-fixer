@@ -20,6 +20,7 @@ Develop a complete serverless data processing pipeline. The core of the system i
 ### 1. Architectural Design
 
 Before writing code, provide a summary inside a `<thinking>` block. Describe the end-to-end data flow:
+
 - A new item is written to the **DynamoDB table**
 - The change is captured by **DynamoDB Streams**
 - An **Event Source Mapping** invokes the **Lambda function**, passing the stream data
@@ -32,10 +33,12 @@ Before writing code, provide a summary inside a `<thinking>` block. Describe the
 ### 2. Infrastructure Components
 
 #### DynamoDB Configuration
+
 - **DynamoDB Stream**: The DynamoDB table must have streaming enabled, specifically `stream: dynamodb.StreamViewType.NEW_AND_OLD_IMAGES`
 - **Partition Key**: The table must define a partition key (e.g., `orderId` of type `string`)
 
 #### Lambda Function Configuration
+
 - **Event Source Mapping**: The Lambda function must be configured with an event source from the DynamoDB table's stream. Set a batch size for processing records
 - **Runtime**: Use the latest supported Node.js runtime
 - **Handler Code**: The Lambda function must:
@@ -44,6 +47,7 @@ Before writing code, provide a summary inside a `<thinking>` block. Describe the
   - Store the enriched data as JSON files in the S3 bucket with a structured key pattern (e.g., `processed-data/year/month/day/record-id.json`)
 
 #### S3 Bucket Configuration
+
 - **Private S3 Bucket**: Create a private S3 bucket for storing processed data
 - **Security**: The bucket must block all public access
 - **Encryption**: Enable server-side encryption (SSE-S3)
@@ -51,8 +55,9 @@ Before writing code, provide a summary inside a `<thinking>` block. Describe the
 - **Object Key Structure**: Use a hierarchical structure for organized storage
 
 #### Audit System Configuration
+
 - **Audit DynamoDB Table**: Create a separate DynamoDB table for storing audit logs of failed processing events
-- **Table Schema**: 
+- **Table Schema**:
   - Partition key: `auditId` (string)
   - Sort key: `timestamp` (string)
   - Global Secondary Index: `failure-type-index` for querying by failure type and timestamp
@@ -63,12 +68,14 @@ Before writing code, provide a summary inside a `<thinking>` block. Describe the
 #### IAM Permissions (Critical)
 
 **Main Processing Lambda Role** must grant **only** the following permissions (least privilege):
+
 - To read from the DynamoDB stream (`dynamodb:GetRecords`, `dynamodb:GetShardIterator`, `dynamodb:DescribeStream`)
 - To write objects to the S3 bucket (`s3:PutObject`, `s3:PutObjectAcl`)
 - To write logs to CloudWatch (`logs:CreateLogGroup`, `logs:CreateLogStream`, `logs:PutLogEvents`)
 - Note: SQS DLQ permissions are handled automatically by the Event Source Mapping's `onFailure` configuration
 
 **Audit Lambda Role** must grant **only** the following permissions (least privilege):
+
 - To write to the audit DynamoDB table (`dynamodb:PutItem`, `dynamodb:UpdateItem`, `dynamodb:GetItem`)
 - To read and delete messages from the SQS DLQ (`sqs:ReceiveMessage`, `sqs:DeleteMessage`, `sqs:GetQueueAttributes`)
 - To write logs to CloudWatch (`logs:CreateLogGroup`, `logs:CreateLogStream`, `logs:PutLogEvents`)
@@ -76,17 +83,20 @@ Before writing code, provide a summary inside a `<thinking>` block. Describe the
 ### 3. Error Handling and Monitoring
 
 #### Dead-Letter Queue (DLQ)
+
 - Create an SQS queue to act as a DLQ for the Lambda function
 - Configure the Lambda's `onFailure` property to point to this SQS queue
 - This captures failed processing events after retry attempts are exhausted
 
 #### Audit System
+
 - **Audit Lambda Integration**: Configure the audit Lambda function to be triggered by DLQ messages
 - **Permanent Storage**: Failed events are automatically processed by the audit Lambda and stored in the audit DynamoDB table
 - **Structured Audit Records**: Each audit record includes failure type, request context, stream information, and complete DLQ message for comprehensive analysis
 - **Query Capabilities**: Support querying audit logs by failure type, timestamp, and other criteria using DynamoDB queries and GSI
 
 #### CloudWatch Monitoring
+
 - Create a CloudWatch Alarm that monitors the Lambda function's `Errors` metric
 - The alarm should trigger if the error count is greater than or equal to 5 within a 5-minute period
 
@@ -98,7 +108,6 @@ Before writing code, provide a summary inside a `<thinking>` block. Describe the
 
 ## Output Requirements
 
-- The entire solution **must** be contained within a single TypeScript file
 - The code must be complete and self-contained, including all necessary imports, the Stack definition, and the App instantiation
 - Strictly adhere to the `dev-<resource>-<team>` naming convention for all constructs
 - Use `CfnOutput` to export the DynamoDB table name, Lambda function name, S3 bucket name, audit table name, and audit Lambda function name
@@ -120,5 +129,4 @@ The solution should demonstrate:
 10. ✅ Comprehensive audit records with failure context and DLQ message details
 11. ✅ CloudWatch Alarm for Lambda error monitoring
 12. ✅ Consistent naming convention across all resources
-13. ✅ Complete and deployable single-file solution
-14. ✅ Proper resource outputs for integration testing (DynamoDB, Lambda, S3, Audit resources)
+13. ✅ Proper resource outputs for integration testing (DynamoDB, Lambda, S3, Audit resources)

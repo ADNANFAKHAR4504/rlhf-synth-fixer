@@ -311,7 +311,8 @@ export class ServerlessStack extends cdk.Stack {
       })
     );
 
-    // 7. CloudWatch Alarm for Lambda Errors
+    // 7. Enhanced CloudWatch Monitoring Suite
+    // 7.1. Lambda Error Alarm (existing)
     const lambdaErrorAlarm = new cloudwatch.Alarm(this, 'LambdaErrorAlarm', {
       alarmName: `${environmentSuffix}-lambda-error-alarm-backend`,
       alarmDescription: 'Alarm for Lambda function errors',
@@ -322,6 +323,168 @@ export class ServerlessStack extends cdk.Stack {
       evaluationPeriods: 1,
       comparisonOperator:
         cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+    });
+
+    // 7.2. Lambda Duration Alarm (NEW)
+    const lambdaDurationAlarm = new cloudwatch.Alarm(
+      this,
+      'LambdaDurationAlarm',
+      {
+        alarmName: `${environmentSuffix}-lambda-duration-alarm-backend`,
+        alarmDescription:
+          'Alarm for Lambda function duration approaching timeout',
+        metric: orderProcessorLambda.metricDuration({
+          period: cdk.Duration.minutes(5),
+          statistic: 'p95', // 95th percentile
+        }),
+        threshold: 240000, // 4 minutes in milliseconds (80% of 5-minute timeout)
+        evaluationPeriods: 2,
+        comparisonOperator:
+          cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+      }
+    );
+
+    // 7.3. Lambda Memory Usage Alarm (NEW)
+    const lambdaMemoryAlarm = new cloudwatch.Alarm(this, 'LambdaMemoryAlarm', {
+      alarmName: `${environmentSuffix}-lambda-memory-alarm-backend`,
+      alarmDescription: 'Alarm for Lambda function memory usage',
+      metric: orderProcessorLambda.metric('UsedMemory', {
+        period: cdk.Duration.minutes(5),
+        statistic: 'p95',
+      }),
+      threshold: 200, // MB (assuming 256MB memory allocation)
+      evaluationPeriods: 2,
+      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+    });
+
+    // 7.4. DLQ Message Count Alarm (NEW)
+    const dlqMessageAlarm = new cloudwatch.Alarm(this, 'DLQMessageAlarm', {
+      alarmName: `${environmentSuffix}-dlq-message-alarm-backend`,
+      alarmDescription: 'Alarm for messages in Dead Letter Queue',
+      metric: new cloudwatch.Metric({
+        namespace: 'AWS/SQS',
+        metricName: 'ApproximateNumberOfVisibleMessages',
+        dimensionsMap: {
+          QueueName: processingDlq.queueName,
+        },
+        period: cdk.Duration.minutes(5),
+        statistic: 'Sum',
+      }),
+      threshold: 10,
+      evaluationPeriods: 1,
+      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+    });
+
+    // 7.5. SQS Queue Age Alarm (NEW)
+    const sqsAgeAlarm = new cloudwatch.Alarm(this, 'SQSMessageAgeAlarm', {
+      alarmName: `${environmentSuffix}-sqs-age-alarm-backend`,
+      alarmDescription: 'Alarm for old messages in SQS queue',
+      metric: new cloudwatch.Metric({
+        namespace: 'AWS/SQS',
+        metricName: 'ApproximateAgeOfOldestMessage',
+        dimensionsMap: {
+          QueueName: processingDlq.queueName,
+        },
+        period: cdk.Duration.minutes(5),
+        statistic: 'Maximum',
+      }),
+      threshold: 300, // 5 minutes in seconds
+      evaluationPeriods: 2,
+      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+    });
+
+    // 7.6. DynamoDB Stream Iterator Age Alarm (NEW)
+    const streamIteratorAlarm = new cloudwatch.Alarm(
+      this,
+      'StreamIteratorAgeAlarm',
+      {
+        alarmName: `${environmentSuffix}-stream-iterator-age-alarm-backend`,
+        alarmDescription: 'Alarm for DynamoDB stream iterator age',
+        metric: new cloudwatch.Metric({
+          namespace: 'AWS/DynamoDBStreams',
+          metricName: 'GetRecords.IteratorAgeMilliseconds',
+          dimensionsMap: {
+            StreamName:
+              ordersTable.tableStreamArn?.split('/').pop() || 'unknown',
+          },
+          period: cdk.Duration.minutes(5),
+          statistic: 'p95',
+        }),
+        threshold: 60000, // 1 minute in milliseconds
+        evaluationPeriods: 2,
+        comparisonOperator:
+          cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+      }
+    );
+
+    // 7.7. Lambda Throttles Alarm (NEW)
+    const lambdaThrottleAlarm = new cloudwatch.Alarm(
+      this,
+      'LambdaThrottleAlarm',
+      {
+        alarmName: `${environmentSuffix}-lambda-throttle-alarm-backend`,
+        alarmDescription: 'Alarm for Lambda function throttles',
+        metric: orderProcessorLambda.metricThrottles({
+          period: cdk.Duration.minutes(5),
+        }),
+        threshold: 1,
+        evaluationPeriods: 1,
+        comparisonOperator:
+          cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+      }
+    );
+
+    // 7.8. S3 Error Rate Alarm (NEW)
+    const s3ErrorAlarm = new cloudwatch.Alarm(this, 'S3ErrorAlarm', {
+      alarmName: `${environmentSuffix}-s3-error-alarm-backend`,
+      alarmDescription: 'Alarm for S3 operation errors',
+      metric: new cloudwatch.Metric({
+        namespace: 'AWS/S3',
+        metricName: '5xxError',
+        dimensionsMap: {
+          BucketName: processedDataBucket.bucketName,
+        },
+        period: cdk.Duration.minutes(5),
+        statistic: 'Sum',
+      }),
+      threshold: 1,
+      evaluationPeriods: 1,
+      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+    });
+
+    // 7.9. DynamoDB Read/Write Capacity Alarm (NEW)
+    const dynamoReadAlarm = new cloudwatch.Alarm(this, 'DynamoReadAlarm', {
+      alarmName: `${environmentSuffix}-dynamo-read-alarm-backend`,
+      alarmDescription: 'Alarm for DynamoDB read capacity throttling',
+      metric: new cloudwatch.Metric({
+        namespace: 'AWS/DynamoDB',
+        metricName: 'ReadThrottleEvents',
+        dimensionsMap: {
+          TableName: ordersTable.tableName,
+        },
+        period: cdk.Duration.minutes(5),
+        statistic: 'Sum',
+      }),
+      threshold: 1,
+      evaluationPeriods: 1,
+      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+    });
+
+    const dynamoWriteAlarm = new cloudwatch.Alarm(this, 'DynamoWriteAlarm', {
+      alarmName: `${environmentSuffix}-dynamo-write-alarm-backend`,
+      alarmDescription: 'Alarm for DynamoDB write capacity throttling',
+      metric: new cloudwatch.Metric({
+        namespace: 'AWS/DynamoDB',
+        metricName: 'WriteThrottleEvents',
+        dimensionsMap: {
+          TableName: ordersTable.tableName,
+        },
+        period: cdk.Duration.minutes(5),
+        statistic: 'Sum',
+      }),
+      threshold: 1,
+      evaluationPeriods: 1,
+      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
     });
 
     // CloudFormation Outputs
@@ -353,6 +516,61 @@ export class ServerlessStack extends cdk.Stack {
       value: lambdaErrorAlarm.alarmName,
       description: 'CloudWatch Alarm name for Lambda errors',
       exportName: `CloudWatchAlarmName-${environmentSuffix}`,
+    });
+
+    // Enhanced monitoring outputs
+    new cdk.CfnOutput(this, 'LambdaDurationAlarmName', {
+      value: lambdaDurationAlarm.alarmName,
+      description: 'CloudWatch Alarm name for Lambda duration',
+      exportName: `LambdaDurationAlarmName-${environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'LambdaMemoryAlarmName', {
+      value: lambdaMemoryAlarm.alarmName,
+      description: 'CloudWatch Alarm name for Lambda memory usage',
+      exportName: `LambdaMemoryAlarmName-${environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'DLQMessageAlarmName', {
+      value: dlqMessageAlarm.alarmName,
+      description: 'CloudWatch Alarm name for DLQ messages',
+      exportName: `DLQMessageAlarmName-${environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'SQSMessageAgeAlarmName', {
+      value: sqsAgeAlarm.alarmName,
+      description: 'CloudWatch Alarm name for SQS message age',
+      exportName: `SQSMessageAgeAlarmName-${environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'StreamIteratorAlarmName', {
+      value: streamIteratorAlarm.alarmName,
+      description: 'CloudWatch Alarm name for DynamoDB stream iterator age',
+      exportName: `StreamIteratorAlarmName-${environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'LambdaThrottleAlarmName', {
+      value: lambdaThrottleAlarm.alarmName,
+      description: 'CloudWatch Alarm name for Lambda throttles',
+      exportName: `LambdaThrottleAlarmName-${environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'S3ErrorAlarmName', {
+      value: s3ErrorAlarm.alarmName,
+      description: 'CloudWatch Alarm name for S3 errors',
+      exportName: `S3ErrorAlarmName-${environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'DynamoReadAlarmName', {
+      value: dynamoReadAlarm.alarmName,
+      description: 'CloudWatch Alarm name for DynamoDB read throttles',
+      exportName: `DynamoReadAlarmName-${environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'DynamoWriteAlarmName', {
+      value: dynamoWriteAlarm.alarmName,
+      description: 'CloudWatch Alarm name for DynamoDB write throttles',
+      exportName: `DynamoWriteAlarmName-${environmentSuffix}`,
     });
 
     new cdk.CfnOutput(this, 'AuditTableName', {
