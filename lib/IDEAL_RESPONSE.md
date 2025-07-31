@@ -1,42 +1,25 @@
 ```bash
+// lib/vpc-utils.ts
+import { EC2Client, DescribeVpcsCommand } from '@aws-sdk/client-ec2';
+
+export async function findVpcByCidr(cidr: string): Promise<string | undefined> {
+  const client = new EC2Client({ region: 'us-east-1' });
+  const result = await client.send(new DescribeVpcsCommand({}));
+  return result.Vpcs?.find(v => v.CidrBlock === cidr)?.VpcId;
+}
+```
+
+```bash
+// lib/tap-stack.ts
 
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
-import { EC2Client, DescribeVpcsCommand } from '@aws-sdk/client-ec2';
 
 import { WebServerStack } from './web-server';
 
 interface TapStackProps extends cdk.StackProps {
   environmentSuffix?: string;
   vpcId: string;
-}
-
-export async function findVpcByCidr(cidr: string): Promise<string | undefined> {
-  const client = new EC2Client({ region: 'us-east-1' });
-  const result = await client.send(new DescribeVpcsCommand({}));
-
-  const vpc = result.Vpcs?.find(v => v.CidrBlock === cidr);
-  return vpc?.VpcId;
-}
-
-// async function to run before synthesis
-async function main() {
-  const app = new cdk.App();
-  const cidr = '10.0.0.0/16';
-  const vpcId = await findVpcByCidr(cidr);
-  if (!vpcId) {
-    throw new Error('VPC with given CIDR not found');
-  }
-
-  const stack = new cdk.Stack(app, 'MyStack');
-
-  new TapStack(stack, 'TapStack', {
-    vpcId,
-  });
-}
-
-if (require.main === module) {
-  main();
 }
 
 export class TapStack extends cdk.Stack {
@@ -47,7 +30,6 @@ export class TapStack extends cdk.Stack {
       props?.environmentSuffix ||
       this.node.tryGetContext('environmentSuffix') ||
       'dev';
-
     new WebServerStack(this, 'WebServerStack', {
       environmentSuffix,
       vpcId: props.vpcId,
@@ -59,10 +41,12 @@ export class TapStack extends cdk.Stack {
   }
 }
 
+
+
 ```
 
-
 ``` bash
+// lib/web-stack.ts
 
 import * as cdk from 'aws-cdk-lib';
 import {
@@ -97,6 +81,12 @@ export interface WebServerProps extends cdk.StackProps {
   environmentSuffix?: string;
   vpcId: string;
   allowedSshCidr?: string;
+}
+
+function generateUniqueBucketName(): string {
+  const timestamp = Date.now().toString(36); // base36 for compactness
+  const random = Math.random().toString(36).substring(2, 8); // 6-char random string
+  return `webserver-assets-${timestamp}-${random}`;
 }
 
 export class WebServerStack extends cdk.Stack {
@@ -177,8 +167,9 @@ export class WebServerStack extends cdk.Stack {
     });
 
     // S3 Bucket
+    const bucketID = generateUniqueBucketName();
     const s3Bucket = new Bucket(this, 'S3Bucket', {
-      bucketName: `webserver-assets-${props?.environmentSuffix}`,
+      bucketName: `webserver-assets-${bucketID}`,
       blockPublicAccess: BlockPublicAccess.BLOCK_ALL,
       versioned: true,
       removalPolicy: cdk.RemovalPolicy.RETAIN,
@@ -188,7 +179,7 @@ export class WebServerStack extends cdk.Stack {
     const rdsSubnetGroup = new SubnetGroup(this, 'RdsSubnetGroup', {
       description: 'Subnet group for RDS',
       vpc,
-      vpcSubnets: { subnetType: SubnetType.PRIVATE_WITH_NAT },
+      vpcSubnets: { subnetType: SubnetType.PRIVATE_WITH_NAT }, // PRIVATE_WITH_NAT, PRIVATE_WITH_EGRESS it should be private but available type for cicd is public
       removalPolicy: cdk.RemovalPolicy.DESTROY, // optional
       subnetGroupName: 'rds-subnet-group',
     });

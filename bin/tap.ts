@@ -35,13 +35,11 @@ async function main() {
     environmentSuffix: environmentSuffix, // Pass the suffix to the stack
     env: {
       account: process.env.CDK_DEFAULT_ACCOUNT,
-      region: process.env.CDK_DEFAULT_REGION,
+      region: 'us-east-1', // process.env.CDK_DEFAULT_REGION,
     },
     vpcId,
   });
 }
-
-main();
 
 if (require.main === module) {
   main();

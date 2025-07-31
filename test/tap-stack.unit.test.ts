@@ -87,7 +87,7 @@ describe('TapStack', () => {
     const tapStack = new TapStack(stack, 'TestTapStack', {
       vpcId: 'vpc-12345678',
       env,
-      environmentSuffix: 'dev'
+      environmentSuffix: 'dev',
     });
 
     // Load the synthesized template of the TapStack
@@ -140,9 +140,13 @@ describe('TapStack', () => {
       env,
     });
 
-    const webServer = tapStack.node.tryFindChild('WebServerStack') as WebServerStack;
+    const webServer = tapStack.node.tryFindChild(
+      'WebServerStack'
+    ) as WebServerStack;
     expect(webServer).toBeDefined();
-    expect(webServer.node.tryGetContext('environmentSuffix') ?? 'staging').toBe('staging');
+    expect(webServer.node.tryGetContext('environmentSuffix') ?? 'staging').toBe(
+      'staging'
+    );
   });
 
   test('should inject account and region into WebServerStack', () => {
@@ -155,9 +159,10 @@ describe('TapStack', () => {
       env,
     });
 
-    const webServer = tapStack.node.tryFindChild('WebServerStack') as WebServerStack;
+    const webServer = tapStack.node.tryFindChild(
+      'WebServerStack'
+    ) as WebServerStack;
     expect(webServer).toBeDefined();
     expect(webServer.region).toBe(env.region);
   });
-
 });

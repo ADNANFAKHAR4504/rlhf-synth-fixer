@@ -25,7 +25,6 @@ import {
 } from 'aws-cdk-lib/aws-iam';
 import { SubnetGroup } from 'aws-cdk-lib/aws-rds';
 import { Tags } from 'aws-cdk-lib';
-import { v4 as uuidv4 } from 'uuid';
 import { Construct } from 'constructs';
 
 export interface WebServerProps extends cdk.StackProps {
@@ -35,8 +34,9 @@ export interface WebServerProps extends cdk.StackProps {
 }
 
 function generateUniqueBucketName(): string {
-  const shortUuid = uuidv4().split('-')[0]; // keep it short
-  return `webserver-assets-${shortUuid}`;
+  const timestamp = Date.now().toString(36); // base36 for compactness
+  const random = Math.random().toString(36).substring(2, 8); // 6-char random string
+  return `webserver-assets-${timestamp}-${random}`;
 }
 
 export class WebServerStack extends cdk.Stack {
