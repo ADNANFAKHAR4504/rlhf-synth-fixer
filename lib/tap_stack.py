@@ -180,10 +180,10 @@ class TapStack(TerraformStack):
     super().__init__(scope, construct_id)
 
     # Extract configuration from kwargs - These must be inside __init__
-    environment_suffix = kwargs.get('environment_suffix', global_environment_suffix) # Use global for defaults
+    environment_suffix = kwargs.get('environment_suffix', global_environment_suffix).lower() # Use global for defaults
     aws_region = kwargs.get('aws_region', global_aws_region) # Use global for defaults
     state_bucket_region = kwargs.get('state_bucket_region', global_state_bucket_region) # Use global for defaults
-    state_bucket = kwargs.get('state_bucket', global_state_bucket) # Use global for defaults
+    state_bucket = kwargs.get('state_bucket', global_state_bucket).lower() # Use global for defaults
     default_tags = kwargs.get('default_tags', {})
 
     # Configure AWS Provider
@@ -198,7 +198,7 @@ class TapStack(TerraformStack):
     S3Backend(
       self,
       bucket=state_bucket,
-      key=f"{environment_suffix}/{construct_id}.tfstate",
+      key=f"{environment_suffix}/{construct_id.lower()}.tfstate",
       region=state_bucket_region,
       encrypt=True,
     )
