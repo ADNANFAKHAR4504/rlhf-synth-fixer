@@ -1852,30 +1852,6 @@ Resources:
       ScalingAdjustment: -1
       Cooldown: 300
 
-  BastionHost:
-    Type: AWS::EC2::Instance
-    Properties:
-      ImageId: !Ref WebServerAmiId
-      InstanceType: t3.micro
-      KeyName: !Sub '${ProjectName}-${EnvironmentSuffix}-key' # Requires an EC2 Key Pair to exist
-      SubnetId: !Ref PublicSubnet # Deploy in a public subnet
-      SecurityGroupIds:
-        - !Ref BastionSecurityGroup
-      IamInstanceProfile: !Ref WebApplicationInstanceProfile # Use the web application's instance profile for demo
-      UserData:
-        Fn::Base64: |
-          #!/bin/bash
-          echo "Hello from CloudFormation bastion host!" > /tmp/bastion_message.txt
-          yum update -y
-          yum install -y mysql # Example: install mysql client for DB access from bastion
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-bastion'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Project
-          Value: !Ref ProjectName
-
 Outputs:
   VPCId:
     Description: 'ID of the created VPC'
