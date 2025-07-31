@@ -574,11 +574,11 @@ def handler(event, context):
         dict: Response with status code and body
     """
     return {
-        'statusCode': 200,
-        'body': {
-            'message': 'Hello from secure Lambda!',
-            'environment': 'production',
-            'timestamp': context.aws_request_id if context else 'unknown'
+        "statusCode": 200,
+        "body": {
+            "message": "Hello from secure Lambda!",
+            "environment": "production",
+            "timestamp": context.aws_request_id if context else "unknown"
         }
     }
 '''
@@ -595,7 +595,7 @@ def handler(event, context):
     self.secure_lambda = LambdaFunction(
       self, "secure_lambda_function",
       function_name="enterprise-secure-function",
-      role=self.lambda_execution_role.arn,  # Use restricted role
+      role=self.lambda_execution_role.arn,
       handler="index.handler",
       runtime="python3.9",
       filename=zip_path,
@@ -607,9 +607,9 @@ def handler(event, context):
           "LOG_LEVEL": "INFO"
         }
       },
-      kms_key_arn=self.kms_key.arn,  # Encrypt environment variables
+      kms_key_arn=self.kms_key.arn,
       tracing_config={
-        "mode": "Active"  # Enable X-Ray tracing
+        "mode": "Active"
       },
       tags={
         "Name": "EnterpriseSecureLambda",

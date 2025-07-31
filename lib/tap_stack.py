@@ -3,6 +3,11 @@
 from cdktf import S3Backend, TerraformStack
 from cdktf_cdktf_provider_aws.provider import AwsProvider
 from cdktf_cdktf_provider_aws.s3_bucket import S3Bucket
+from cdktf_cdktf_provider_aws.s3_bucket_server_side_encryption_configuration import (
+    S3BucketServerSideEncryptionConfigurationA,
+    S3BucketServerSideEncryptionConfigurationRuleA,
+    S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultA)
+from cdktf_cdktf_provider_aws.s3_bucket_versioning import S3BucketVersioning
 from constructs import Construct
 
 from .enterprise_security_stack import EnterpriseSecurityStack
@@ -66,8 +71,6 @@ class TapStack(TerraformStack):
     )
 
     # Use separate resource for bucket versioning
-    from cdktf_cdktf_provider_aws.s3_bucket_versioning import \
-        S3BucketVersioning
     S3BucketVersioning(
       self,
       "tap_bucket_versioning", 
@@ -78,11 +81,6 @@ class TapStack(TerraformStack):
     )
 
     # Use separate resource for server-side encryption
-    from cdktf_cdktf_provider_aws.s3_bucket_server_side_encryption_configuration import (
-        S3BucketServerSideEncryptionConfigurationA,
-        S3BucketServerSideEncryptionConfigurationRuleA,
-        S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultA)
-    
     S3BucketServerSideEncryptionConfigurationA(
       self,
       "tap_bucket_encryption",
@@ -114,4 +112,5 @@ class TapStack(TerraformStack):
 
     # ? Add your stack instantiations here
     # ! Do NOT create resources directly in this stack.
+    # ! Instead, create separate stacks for each resource type.
     # ! Instead, create separate stacks for each resource type.
