@@ -1,6 +1,7 @@
 """Integration tests for TAP stack."""
 
 from cdktf import App
+
 from lib.tap_stack import TapStack
 
 
