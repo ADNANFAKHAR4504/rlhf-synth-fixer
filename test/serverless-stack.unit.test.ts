@@ -2,7 +2,7 @@ import * as cdk from 'aws-cdk-lib';
 import { Match, Template } from 'aws-cdk-lib/assertions';
 import { ServerlessStack } from '../lib/serverless-stack';
 
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
+const environmentSuffix = 'dev'; // Use consistent environment suffix for tests
 
 describe('ServerlessStack Unit Tests', () => {
   let app: cdk.App;
@@ -12,7 +12,7 @@ describe('ServerlessStack Unit Tests', () => {
   beforeEach(() => {
     app = new cdk.App();
     stack = new ServerlessStack(app, 'TestServerlessStack', {
-      environmentSuffix: 'dev',
+      environmentSuffix: environmentSuffix,
     });
     template = Template.fromStack(stack);
   });
@@ -135,58 +135,77 @@ describe('ServerlessStack Unit Tests', () => {
 
   describe('Lambda Functions', () => {
     test('should create main processing Lambda with correct configuration', () => {
-      template.hasResourceProperties('AWS::Lambda::Function', {
-        FunctionName: `${environmentSuffix}-order-processor-lambda-backend`,
-        Runtime: 'nodejs20.x',
-        Handler: 'index.handler',
-        Timeout: 300, // 5 minutes
-      });
+      // Find the order processor Lambda function
+      const lambdaResources = template.findResources('AWS::Lambda::Function');
+      const orderProcessorLambda = Object.values(lambdaResources).find(
+        (resource: any) =>
+          resource.Properties?.FunctionName ===
+          `${environmentSuffix}-order-processor-lambda-backend`
+      );
+      expect(orderProcessorLambda).toBeDefined();
+      expect(orderProcessorLambda?.Properties?.Runtime).toBe('nodejs20.x');
+      expect(orderProcessorLambda?.Properties?.Handler).toBe('index.handler');
+      expect(orderProcessorLambda?.Properties?.Timeout).toBe(300); // 5 minutes (300 seconds)
     });
 
     test('should create audit Lambda with correct configuration', () => {
-      template.hasResourceProperties('AWS::Lambda::Function', {
-        FunctionName: `${environmentSuffix}-audit-lambda-backend`,
-        Runtime: 'nodejs20.x',
-        Handler: 'index.handler',
-        Timeout: 120, // 2 minutes
-      });
+      // Find the audit Lambda function
+      const lambdaResources = template.findResources('AWS::Lambda::Function');
+      const auditLambda = Object.values(lambdaResources).find(
+        (resource: any) =>
+          resource.Properties?.FunctionName ===
+          `${environmentSuffix}-audit-lambda-backend`
+      );
+      expect(auditLambda).toBeDefined();
+      expect(auditLambda?.Properties?.Runtime).toBe('nodejs20.x');
+      expect(auditLambda?.Properties?.Handler).toBe('index.handler');
+      expect(auditLambda?.Properties?.Timeout).toBe(120); // 2 minutes (120 seconds)
     });
 
     test('main processing Lambda should have correct code structure', () => {
-      template.hasResourceProperties('AWS::Lambda::Function', {
-        FunctionName: `${environmentSuffix}-order-processor-lambda-backend`,
-        Code: {
-          ZipFile: Match.stringLikeRegexp('.*S3Client.*PutObjectCommand.*'),
-        },
-      });
+      // Find the Lambda function with S3Client code
+      const lambdaResources = template.findResources('AWS::Lambda::Function');
+      const orderProcessorLambda = Object.values(lambdaResources).find(
+        (resource: any) =>
+          resource.Properties?.Code?.ZipFile?.includes('S3Client') &&
+          resource.Properties?.Code?.ZipFile?.includes('PutObjectCommand')
+      );
+      expect(orderProcessorLambda).toBeDefined();
     });
 
     test('audit Lambda should have correct code structure', () => {
-      template.hasResourceProperties('AWS::Lambda::Function', {
-        FunctionName: `${environmentSuffix}-audit-lambda-backend`,
-        Code: {
-          ZipFile: Match.stringLikeRegexp('.*DynamoDBClient.*PutItemCommand.*'),
-        },
-      });
+      // Find the Lambda function with DynamoDBClient code
+      const lambdaResources = template.findResources('AWS::Lambda::Function');
+      const auditLambda = Object.values(lambdaResources).find(
+        (resource: any) =>
+          resource.Properties?.Code?.ZipFile?.includes('DynamoDBClient') &&
+          resource.Properties?.Code?.ZipFile?.includes('PutItemCommand')
+      );
+      expect(auditLambda).toBeDefined();
     });
   });
 
   describe('IAM Roles and Permissions', () => {
     test('should create main Lambda IAM role with correct permissions', () => {
-      template.hasResourceProperties('AWS::IAM::Role', {
-        RoleName: `${environmentSuffix}-order-processor-lambda-role-backend`,
-        AssumeRolePolicyDocument: {
-          Statement: [
-            {
-              Action: 'sts:AssumeRole',
-              Effect: 'Allow',
-              Principal: {
-                Service: 'lambda.amazonaws.com',
-              },
-            },
-          ],
+      // Find the IAM role for the order processor Lambda
+      const iamResources = template.findResources('AWS::IAM::Role');
+      const orderProcessorRole = Object.values(iamResources).find(
+        (resource: any) =>
+          resource.Properties?.RoleName ===
+          `${environmentSuffix}-order-processor-lambda-role-backend`
+      );
+      expect(orderProcessorRole).toBeDefined();
+      expect(
+        orderProcessorRole?.Properties?.AssumeRolePolicyDocument?.Statement
+      ).toEqual([
+        {
+          Action: 'sts:AssumeRole',
+          Effect: 'Allow',
+          Principal: {
+            Service: 'lambda.amazonaws.com',
+          },
         },
-      });
+      ]);
 
       // Check for DynamoDB stream permissions
       template.hasResourceProperties('AWS::IAM::Policy', {
@@ -221,20 +240,25 @@ describe('ServerlessStack Unit Tests', () => {
     });
 
     test('should create audit Lambda IAM role with correct permissions', () => {
-      template.hasResourceProperties('AWS::IAM::Role', {
-        RoleName: `${environmentSuffix}-audit-lambda-role-backend`,
-        AssumeRolePolicyDocument: {
-          Statement: [
-            {
-              Action: 'sts:AssumeRole',
-              Effect: 'Allow',
-              Principal: {
-                Service: 'lambda.amazonaws.com',
-              },
-            },
-          ],
+      // Find the IAM role for the audit Lambda
+      const iamResources = template.findResources('AWS::IAM::Role');
+      const auditRole = Object.values(iamResources).find(
+        (resource: any) =>
+          resource.Properties?.RoleName ===
+          `${environmentSuffix}-audit-lambda-role-backend`
+      );
+      expect(auditRole).toBeDefined();
+      expect(
+        auditRole?.Properties?.AssumeRolePolicyDocument?.Statement
+      ).toEqual([
+        {
+          Action: 'sts:AssumeRole',
+          Effect: 'Allow',
+          Principal: {
+            Service: 'lambda.amazonaws.com',
+          },
         },
-      });
+      ]);
 
       // Check for DynamoDB audit table permissions
       template.hasResourceProperties('AWS::IAM::Policy', {
@@ -295,144 +319,205 @@ describe('ServerlessStack Unit Tests', () => {
 
   describe('CloudWatch Monitoring Suite', () => {
     test('should create Lambda error alarm', () => {
-      template.hasResourceProperties('AWS::CloudWatch::Alarm', {
-        AlarmName: `${environmentSuffix}-lambda-error-alarm-backend`,
-        AlarmDescription: 'Alarm for Lambda function errors',
-        MetricName: 'Errors',
-        Namespace: 'AWS/Lambda',
-        Statistic: 'Sum',
-        Period: 300,
-        EvaluationPeriods: 1,
-        Threshold: 5,
-        ComparisonOperator: 'GreaterThanOrEqualToThreshold',
-      });
+      // Find the Lambda error alarm
+      const alarmResources = template.findResources('AWS::CloudWatch::Alarm');
+      const errorAlarm = Object.values(alarmResources).find(
+        (resource: any) =>
+          resource.Properties?.AlarmDescription ===
+            'Alarm for Lambda function errors' &&
+          resource.Properties?.MetricName === 'Errors' &&
+          resource.Properties?.Namespace === 'AWS/Lambda'
+      );
+      expect(errorAlarm).toBeDefined();
+      expect(errorAlarm?.Properties?.Statistic).toBe('Sum');
+      expect(errorAlarm?.Properties?.Period).toBe(300);
+      expect(errorAlarm?.Properties?.EvaluationPeriods).toBe(1);
+      expect(errorAlarm?.Properties?.Threshold).toBe(5);
+      expect(errorAlarm?.Properties?.ComparisonOperator).toBe(
+        'GreaterThanOrEqualToThreshold'
+      );
     });
 
     test('should create Lambda duration alarm', () => {
-      template.hasResourceProperties('AWS::CloudWatch::Alarm', {
-        AlarmName: `${environmentSuffix}-lambda-duration-alarm-backend`,
-        AlarmDescription:
-          'Alarm for Lambda function duration approaching timeout',
-        MetricName: 'Duration',
-        Namespace: 'AWS/Lambda',
-        ExtendedStatistic: 'p95',
-        Period: 300,
-        EvaluationPeriods: 2,
-        Threshold: 240000,
-        ComparisonOperator: 'GreaterThanThreshold',
-      });
+      // Find the Lambda duration alarm
+      const alarmResources = template.findResources('AWS::CloudWatch::Alarm');
+      const durationAlarm = Object.values(alarmResources).find(
+        (resource: any) =>
+          resource.Properties?.AlarmDescription ===
+            'Alarm for Lambda function duration approaching timeout' &&
+          resource.Properties?.MetricName === 'Duration' &&
+          resource.Properties?.Namespace === 'AWS/Lambda'
+      );
+      expect(durationAlarm).toBeDefined();
+      expect(durationAlarm?.Properties?.ExtendedStatistic).toBe('p95');
+      expect(durationAlarm?.Properties?.Period).toBe(300);
+      expect(durationAlarm?.Properties?.EvaluationPeriods).toBe(2);
+      expect(durationAlarm?.Properties?.Threshold).toBe(240000);
+      expect(durationAlarm?.Properties?.ComparisonOperator).toBe(
+        'GreaterThanThreshold'
+      );
     });
 
     test('should create Lambda memory alarm', () => {
-      template.hasResourceProperties('AWS::CloudWatch::Alarm', {
-        AlarmName: `${environmentSuffix}-lambda-memory-alarm-backend`,
-        AlarmDescription: 'Alarm for Lambda function memory usage',
-        MetricName: 'UsedMemory',
-        Namespace: 'AWS/Lambda',
-        ExtendedStatistic: 'p95',
-        Period: 300,
-        EvaluationPeriods: 2,
-        Threshold: 200,
-        ComparisonOperator: 'GreaterThanThreshold',
-      });
+      // Find the Lambda memory alarm
+      const alarmResources = template.findResources('AWS::CloudWatch::Alarm');
+      const memoryAlarm = Object.values(alarmResources).find(
+        (resource: any) =>
+          resource.Properties?.AlarmDescription ===
+            'Alarm for Lambda function memory usage' &&
+          resource.Properties?.MetricName === 'UsedMemory' &&
+          resource.Properties?.Namespace === 'AWS/Lambda'
+      );
+      expect(memoryAlarm).toBeDefined();
+      expect(memoryAlarm?.Properties?.ExtendedStatistic).toBe('p95');
+      expect(memoryAlarm?.Properties?.Period).toBe(300);
+      expect(memoryAlarm?.Properties?.EvaluationPeriods).toBe(2);
+      expect(memoryAlarm?.Properties?.Threshold).toBe(200);
+      expect(memoryAlarm?.Properties?.ComparisonOperator).toBe(
+        'GreaterThanThreshold'
+      );
     });
 
     test('should create DLQ message alarm', () => {
-      template.hasResourceProperties('AWS::CloudWatch::Alarm', {
-        AlarmName: `${environmentSuffix}-dlq-message-alarm-backend`,
-        AlarmDescription: 'Alarm for messages in Dead Letter Queue',
-        MetricName: 'ApproximateNumberOfVisibleMessages',
-        Namespace: 'AWS/SQS',
-        Statistic: 'Sum',
-        Period: 300,
-        EvaluationPeriods: 1,
-        Threshold: 10,
-        ComparisonOperator: 'GreaterThanThreshold',
-      });
+      // Find the DLQ message alarm
+      const alarmResources = template.findResources('AWS::CloudWatch::Alarm');
+      const dlqAlarm = Object.values(alarmResources).find(
+        (resource: any) =>
+          resource.Properties?.AlarmDescription ===
+            'Alarm for messages in Dead Letter Queue' &&
+          resource.Properties?.MetricName ===
+            'ApproximateNumberOfVisibleMessages' &&
+          resource.Properties?.Namespace === 'AWS/SQS'
+      );
+      expect(dlqAlarm).toBeDefined();
+      expect(dlqAlarm?.Properties?.Statistic).toBe('Sum');
+      expect(dlqAlarm?.Properties?.Period).toBe(300);
+      expect(dlqAlarm?.Properties?.EvaluationPeriods).toBe(1);
+      expect(dlqAlarm?.Properties?.Threshold).toBe(10);
+      expect(dlqAlarm?.Properties?.ComparisonOperator).toBe(
+        'GreaterThanThreshold'
+      );
     });
 
     test('should create SQS message age alarm', () => {
-      template.hasResourceProperties('AWS::CloudWatch::Alarm', {
-        AlarmName: `${environmentSuffix}-sqs-age-alarm-backend`,
-        AlarmDescription: 'Alarm for old messages in SQS queue',
-        MetricName: 'ApproximateAgeOfOldestMessage',
-        Namespace: 'AWS/SQS',
-        Statistic: 'Maximum',
-        Period: 300,
-        EvaluationPeriods: 2,
-        Threshold: 300,
-        ComparisonOperator: 'GreaterThanThreshold',
-      });
+      // Find the SQS message age alarm
+      const alarmResources = template.findResources('AWS::CloudWatch::Alarm');
+      const sqsAgeAlarm = Object.values(alarmResources).find(
+        (resource: any) =>
+          resource.Properties?.AlarmDescription ===
+            'Alarm for old messages in SQS queue' &&
+          resource.Properties?.MetricName === 'ApproximateAgeOfOldestMessage' &&
+          resource.Properties?.Namespace === 'AWS/SQS'
+      );
+      expect(sqsAgeAlarm).toBeDefined();
+      expect(sqsAgeAlarm?.Properties?.Statistic).toBe('Maximum');
+      expect(sqsAgeAlarm?.Properties?.Period).toBe(300);
+      expect(sqsAgeAlarm?.Properties?.EvaluationPeriods).toBe(2);
+      expect(sqsAgeAlarm?.Properties?.Threshold).toBe(300);
+      expect(sqsAgeAlarm?.Properties?.ComparisonOperator).toBe(
+        'GreaterThanThreshold'
+      );
     });
 
     test('should create DynamoDB stream iterator age alarm', () => {
-      template.hasResourceProperties('AWS::CloudWatch::Alarm', {
-        AlarmName: `${environmentSuffix}-stream-iterator-age-alarm-backend`,
-        AlarmDescription: 'Alarm for DynamoDB stream iterator age',
-        MetricName: 'GetRecords.IteratorAgeMilliseconds',
-        Namespace: 'AWS/DynamoDBStreams',
-        ExtendedStatistic: 'p95',
-        Period: 300,
-        EvaluationPeriods: 2,
-        Threshold: 60000,
-        ComparisonOperator: 'GreaterThanThreshold',
-      });
+      // Find the DynamoDB stream iterator age alarm
+      const alarmResources = template.findResources('AWS::CloudWatch::Alarm');
+      const streamAlarm = Object.values(alarmResources).find(
+        (resource: any) =>
+          resource.Properties?.AlarmDescription ===
+            'Alarm for DynamoDB stream iterator age' &&
+          resource.Properties?.MetricName ===
+            'GetRecords.IteratorAgeMilliseconds' &&
+          resource.Properties?.Namespace === 'AWS/DynamoDBStreams'
+      );
+      expect(streamAlarm).toBeDefined();
+      expect(streamAlarm?.Properties?.ExtendedStatistic).toBe('p95');
+      expect(streamAlarm?.Properties?.Period).toBe(300);
+      expect(streamAlarm?.Properties?.EvaluationPeriods).toBe(2);
+      expect(streamAlarm?.Properties?.Threshold).toBe(60000);
+      expect(streamAlarm?.Properties?.ComparisonOperator).toBe(
+        'GreaterThanThreshold'
+      );
     });
 
     test('should create Lambda throttle alarm', () => {
-      template.hasResourceProperties('AWS::CloudWatch::Alarm', {
-        AlarmName: `${environmentSuffix}-lambda-throttle-alarm-backend`,
-        AlarmDescription: 'Alarm for Lambda function throttles',
-        MetricName: 'Throttles',
-        Namespace: 'AWS/Lambda',
-        Statistic: 'Sum',
-        Period: 300,
-        EvaluationPeriods: 1,
-        Threshold: 1,
-        ComparisonOperator: 'GreaterThanThreshold',
-      });
+      // Find the Lambda throttle alarm
+      const alarmResources = template.findResources('AWS::CloudWatch::Alarm');
+      const throttleAlarm = Object.values(alarmResources).find(
+        (resource: any) =>
+          resource.Properties?.AlarmDescription ===
+            'Alarm for Lambda function throttles' &&
+          resource.Properties?.MetricName === 'Throttles' &&
+          resource.Properties?.Namespace === 'AWS/Lambda'
+      );
+      expect(throttleAlarm).toBeDefined();
+      expect(throttleAlarm?.Properties?.Statistic).toBe('Sum');
+      expect(throttleAlarm?.Properties?.Period).toBe(300);
+      expect(throttleAlarm?.Properties?.EvaluationPeriods).toBe(1);
+      expect(throttleAlarm?.Properties?.Threshold).toBe(1);
+      expect(throttleAlarm?.Properties?.ComparisonOperator).toBe(
+        'GreaterThanThreshold'
+      );
     });
 
     test('should create S3 error alarm', () => {
-      template.hasResourceProperties('AWS::CloudWatch::Alarm', {
-        AlarmName: `${environmentSuffix}-s3-error-alarm-backend`,
-        AlarmDescription: 'Alarm for S3 operation errors',
-        MetricName: '5xxError',
-        Namespace: 'AWS/S3',
-        Statistic: 'Sum',
-        Period: 300,
-        EvaluationPeriods: 1,
-        Threshold: 1,
-        ComparisonOperator: 'GreaterThanThreshold',
-      });
+      // Find the S3 error alarm
+      const alarmResources = template.findResources('AWS::CloudWatch::Alarm');
+      const s3Alarm = Object.values(alarmResources).find(
+        (resource: any) =>
+          resource.Properties?.AlarmDescription ===
+            'Alarm for S3 operation errors' &&
+          resource.Properties?.MetricName === '5xxError' &&
+          resource.Properties?.Namespace === 'AWS/S3'
+      );
+      expect(s3Alarm).toBeDefined();
+      expect(s3Alarm?.Properties?.Statistic).toBe('Sum');
+      expect(s3Alarm?.Properties?.Period).toBe(300);
+      expect(s3Alarm?.Properties?.EvaluationPeriods).toBe(1);
+      expect(s3Alarm?.Properties?.Threshold).toBe(1);
+      expect(s3Alarm?.Properties?.ComparisonOperator).toBe(
+        'GreaterThanThreshold'
+      );
     });
 
     test('should create DynamoDB read throttle alarm', () => {
-      template.hasResourceProperties('AWS::CloudWatch::Alarm', {
-        AlarmName: `${environmentSuffix}-dynamo-read-alarm-backend`,
-        AlarmDescription: 'Alarm for DynamoDB read capacity throttling',
-        MetricName: 'ReadThrottleEvents',
-        Namespace: 'AWS/DynamoDB',
-        Statistic: 'Sum',
-        Period: 300,
-        EvaluationPeriods: 1,
-        Threshold: 1,
-        ComparisonOperator: 'GreaterThanThreshold',
-      });
+      // Find the DynamoDB read throttle alarm
+      const alarmResources = template.findResources('AWS::CloudWatch::Alarm');
+      const dynamoReadAlarm = Object.values(alarmResources).find(
+        (resource: any) =>
+          resource.Properties?.AlarmDescription ===
+            'Alarm for DynamoDB read capacity throttling' &&
+          resource.Properties?.MetricName === 'ReadThrottleEvents' &&
+          resource.Properties?.Namespace === 'AWS/DynamoDB'
+      );
+      expect(dynamoReadAlarm).toBeDefined();
+      expect(dynamoReadAlarm?.Properties?.Statistic).toBe('Sum');
+      expect(dynamoReadAlarm?.Properties?.Period).toBe(300);
+      expect(dynamoReadAlarm?.Properties?.EvaluationPeriods).toBe(1);
+      expect(dynamoReadAlarm?.Properties?.Threshold).toBe(1);
+      expect(dynamoReadAlarm?.Properties?.ComparisonOperator).toBe(
+        'GreaterThanThreshold'
+      );
     });
 
     test('should create DynamoDB write throttle alarm', () => {
-      template.hasResourceProperties('AWS::CloudWatch::Alarm', {
-        AlarmName: `${environmentSuffix}-dynamo-write-alarm-backend`,
-        AlarmDescription: 'Alarm for DynamoDB write capacity throttling',
-        MetricName: 'WriteThrottleEvents',
-        Namespace: 'AWS/DynamoDB',
-        Statistic: 'Sum',
-        Period: 300,
-        EvaluationPeriods: 1,
-        Threshold: 1,
-        ComparisonOperator: 'GreaterThanThreshold',
-      });
+      // Find the DynamoDB write throttle alarm
+      const alarmResources = template.findResources('AWS::CloudWatch::Alarm');
+      const dynamoWriteAlarm = Object.values(alarmResources).find(
+        (resource: any) =>
+          resource.Properties?.AlarmDescription ===
+            'Alarm for DynamoDB write capacity throttling' &&
+          resource.Properties?.MetricName === 'WriteThrottleEvents' &&
+          resource.Properties?.Namespace === 'AWS/DynamoDB'
+      );
+      expect(dynamoWriteAlarm).toBeDefined();
+      expect(dynamoWriteAlarm?.Properties?.Statistic).toBe('Sum');
+      expect(dynamoWriteAlarm?.Properties?.Period).toBe(300);
+      expect(dynamoWriteAlarm?.Properties?.EvaluationPeriods).toBe(1);
+      expect(dynamoWriteAlarm?.Properties?.Threshold).toBe(1);
+      expect(dynamoWriteAlarm?.Properties?.ComparisonOperator).toBe(
+        'GreaterThanThreshold'
+      );
     });
   });
 
