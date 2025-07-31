@@ -9,7 +9,7 @@
  * different deployment environments (development, staging, production, etc.).
  */
 import * as pulumi from '@pulumi/pulumi';
-import { TapStack } from './lib/tap-stack';
+import { TapStack } from '../lib/tap-stack';
 
 // Initialize Pulumi configuration for the current stack.
 const config = new pulumi.Config();
