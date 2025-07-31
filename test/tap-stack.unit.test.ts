@@ -6,7 +6,7 @@ import { mockClient } from 'aws-sdk-client-mock';
 import { Template } from 'aws-cdk-lib/assertions';
 import { TapStack } from '../lib/tap-stack'; // Adjust import path
 import { WebServerStack } from '../lib/web-server';
-import { findVpcByCidr } from '../bin/tap';
+import { findVpcByCidr } from '../lib/vpc-utils';
 
 // Create mock
 const ec2Mock = mockClient(EC2Client);
@@ -87,11 +87,13 @@ describe('TapStack', () => {
     const tapStack = new TapStack(stack, 'TestTapStack', {
       vpcId: 'vpc-12345678',
       env,
+      environmentSuffix: 'dev'
     });
 
     // Load the synthesized template of the TapStack
     const template = Template.fromStack(tapStack);
 
+    console.log(JSON.stringify(template.toJSON(), null, 2));
     // Ensure WebServerStack is defined
     const webServer = tapStack.node.tryFindChild(
       'WebServerStack'
@@ -124,4 +126,38 @@ describe('TapStack', () => {
       'prod'
     );
   });
+
+  test('should fallback to context environmentSuffix if not provided in props', () => {
+    const app = new cdk.App({
+      context: {
+        environmentSuffix: 'staging',
+      },
+    });
+
+    const rootStack = new cdk.Stack(app, 'TestRootStack');
+    const tapStack = new TapStack(rootStack, 'TestTapStack', {
+      vpcId: 'vpc-xyz456',
+      env,
+    });
+
+    const webServer = tapStack.node.tryFindChild('WebServerStack') as WebServerStack;
+    expect(webServer).toBeDefined();
+    expect(webServer.node.tryGetContext('environmentSuffix') ?? 'staging').toBe('staging');
+  });
+
+  test('should inject account and region into WebServerStack', () => {
+    const app = new cdk.App();
+    const rootStack = new cdk.Stack(app, 'TestRootStack');
+
+    const tapStack = new TapStack(rootStack, 'TestTapStack', {
+      vpcId: 'vpc-789',
+      environmentSuffix: 'dev',
+      env,
+    });
+
+    const webServer = tapStack.node.tryFindChild('WebServerStack') as WebServerStack;
+    expect(webServer).toBeDefined();
+    expect(webServer.region).toBe(env.region);
+  });
+
 });

@@ -2,15 +2,7 @@
 import * as cdk from 'aws-cdk-lib';
 import { Tags } from 'aws-cdk-lib';
 import { TapStack } from '../lib/tap-stack';
-import { EC2Client, DescribeVpcsCommand } from '@aws-sdk/client-ec2';
-
-export async function findVpcByCidr(cidr: string): Promise<string | undefined> {
-  const client = new EC2Client({ region: 'us-east-1' });
-  const result = await client.send(new DescribeVpcsCommand({}));
-
-  const vpc = result.Vpcs?.find(v => v.CidrBlock === cidr);
-  return vpc?.VpcId;
-}
+import { findVpcByCidr } from '../lib/vpc-utils';
 
 async function main() {
   const app = new cdk.App();
