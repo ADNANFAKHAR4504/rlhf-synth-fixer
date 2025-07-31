@@ -29,6 +29,7 @@ Metadata:
         Parameters:
           - DataRetentionDays
           - AdminMfaRequired
+          # Removed AdminUserPassword from Parameter Group
           - AdminUserEmail
 
 Parameters:
@@ -71,6 +72,7 @@ Parameters:
   WebServerAmiId:
     Type: AWS::EC2::Image::Id
     Description: 'AMI ID for web servers (e.g., ami-0abcdef1234567890 for Amazon Linux 2)'
+    Default: 'ami-0abcdef1234567890'
 
   InstanceType:
     Type: String
@@ -104,6 +106,13 @@ Parameters:
     Default: 'true'
     AllowedValues: ['true', 'false']
     Description: 'Set to true to enforce MFA for admin users (IAM Account Password Policy)'
+
+  # AdminUserPassword parameter removed as it will be managed by Secrets Manager
+  # AdminUserPassword:
+  #   Type: String
+  #   Description: 'Initial password for the Admin IAM User'
+  #   NoEcho: true
+  #   MinLength: 14
 
   AdminUserEmail:
     Type: String
@@ -161,11 +170,11 @@ Resources:
             Principal:
               Service: dynamodb.amazonaws.com
             Action:
-              - kms:Encrypt
-              - kms:Decrypt
-              - kms:ReEncrypt*
-              - kms:GenerateDataKey*
-              - kms:DescribeKey
+              - 'kms:Encrypt' # Corrected version
+              - 'kms:Decrypt'
+              - 'kms:ReEncrypt*'
+              - 'kms:GenerateDataKey*'
+              - 'kms:DescribeKey'
             Resource: '*'
       Tags:
         - Key: Name
@@ -667,6 +676,16 @@ Resources:
       RuleAction: allow
       CidrBlock: 0.0.0.0/0
 
+  PublicNetworkACLEntryOutboundDenyAll:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      NetworkAclId: !Ref PublicNetworkACL
+      RuleNumber: 2000
+      Protocol: -1
+      RuleAction: deny
+      CidrBlock: 0.0.0.0/0
+      Egress: true
+
   PublicSubnetNetworkACLAssociation:
     Type: AWS::EC2::SubnetNetworkAclAssociation
     Properties:
@@ -709,7 +728,7 @@ Resources:
       RuleNumber: 110
       Protocol: 6
       RuleAction: allow
-      CidrBlock: !Ref PublicSubnetCidr
+      CidrBlock: !Ref BastionSshCidr
       PortRange: { From: 22, To: 22 }
       Egress: false
 
@@ -733,6 +752,16 @@ Resources:
       Egress: true
       RuleAction: allow
       CidrBlock: 0.0.0.0/0
+
+  PrivateNetworkACLEntryOutboundDenyAll:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      NetworkAclId: !Ref PrivateNetworkACL
+      RuleNumber: 2000
+      Protocol: -1
+      RuleAction: deny
+      CidrBlock: 0.0.0.0/0
+      Egress: true
 
   PrivateSubnetNetworkACLAssociation:
     Type: AWS::EC2::SubnetNetworkAclAssociation
@@ -769,6 +798,17 @@ Resources:
       PortRange: { From: 3306, To: 3306 }
       Egress: false
 
+  DatabaseNetworkACLEntryInboundSsh:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      NetworkAclId: !Ref DatabaseNetworkACL
+      RuleNumber: 110
+      Protocol: 6
+      RuleAction: allow
+      CidrBlock: !Ref BastionSshCidr
+      PortRange: { From: 22, To: 22 }
+      Egress: false
+
   DatabaseNetworkACLEntryInboundEphemeral:
     Type: AWS::EC2::NetworkAclEntry
     Properties:
@@ -789,6 +829,16 @@ Resources:
       Egress: true
       RuleAction: allow
       CidrBlock: 0.0.0.0/0
+
+  DatabaseNetworkACLEntryOutboundDenyAll:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      NetworkAclId: !Ref DatabaseNetworkACL
+      RuleNumber: 2000
+      Protocol: -1
+      RuleAction: deny
+      CidrBlock: 0.0.0.0/0
+      Egress: true
 
   DatabaseSubnet1NetworkACLAssociation:
     Type: AWS::EC2::SubnetNetworkAclAssociation
@@ -846,7 +896,7 @@ Resources:
                   - 's3:GetObject'
                   - 's3:ListBucket'
                   - 's3:PutObject'
-                Resource:
+                Resource: # Ensured Resources are arrays
                   - !Sub 'arn:aws:s3:::${ProjectName}-${EnvironmentSuffix}-static-content/*'
                   - !Sub 'arn:aws:s3:::${ProjectName}-${EnvironmentSuffix}-app-logs/*'
                   - !Sub 'arn:aws:s3:::${ProjectName}-${EnvironmentSuffix}-static-content'
@@ -883,20 +933,45 @@ Resources:
       MaxPasswordAge: 90
       PasswordReusePrevention: 5
 
+  # Secret for Admin IAM User Password
+  AdminUserSecret:
+    Type: AWS::SecretsManager::Secret
+    Condition: EnforceMfa
+    Properties:
+      Name: !Sub '${ProjectName}-${EnvironmentSuffix}-admin-user-password'
+      Description: 'Initial password for Admin IAM User'
+      GenerateSecretString:
+        # Generates a random password. For initial setup, you might manually retrieve it.
+        # For programmatic access, ensure IAM role has secretsmanager:GetSecretValue permission.
+        PasswordLength: 32
+        ExcludeCharacters: "\"@/\\'" # Exclude characters that might cause issues in various contexts
+      KmsKeyId: !Ref SecurityKMSKey # Encrypt with the common security KMS key
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-admin-user-secret'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: !Ref ProjectName
+
   AdminUser:
     Type: AWS::IAM::User
     Condition: EnforceMfa
     Properties:
       UserName: !Sub 'admin-${ProjectName}-${EnvironmentSuffix}'
       Path: '/'
+      LoginProfile:
+        # Use dynamic reference to retrieve password from Secrets Manager
+        Password: !Sub '{{resolve:secretsmanager:${AdminUserSecret}}}'
+        PasswordResetRequired: true
       Policies:
         - PolicyName: AdminAccessPolicy
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
               - Effect: Allow
-                Action: '*'
-                Resource: '*'
+                Action: ['*']
+                Resource: ['*']
                 Condition:
                   Bool:
                     'aws:MultiFactorAuthPresent': 'true'
@@ -1437,13 +1512,14 @@ Resources:
           - !Ref WebApplicationSecurityGroup
         IamInstanceProfile:
           Arn: !GetAtt WebApplicationInstanceProfile.Arn
-        UserData: !Base64 |
-          #!/bin/bash
-          echo "Hello from CloudFormation web server!" > /var/www/html/index.html
-          yum update -y
-          yum install -y httpd
-          systemctl start httpd
-          systemctl enable httpd
+        UserData:
+          Fn::Base64: |
+            #!/bin/bash
+            echo "Hello from CloudFormation web server!" > /var/www/html/index.html
+            yum update -y
+            yum install -y httpd
+            systemctl start httpd
+            systemctl enable httpd
         BlockDeviceMappings:
           - DeviceName: /dev/xvda
             Ebs:
