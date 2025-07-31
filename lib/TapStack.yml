@@ -16,9 +16,6 @@ Metadata:
           - PublicSubnetCidr
           - PrivateSubnetCidr
           - BastionSshCidr
-      - Label:
-          default: 'Network Configuration (Secondary Region)'
-        Parameters:
           - SecondaryRegionVpcCidr # New parameter for secondary VPC CIDR
       - Label:
           default: 'Application Configuration'
@@ -28,20 +25,18 @@ Metadata:
           - MinInstances
           - MaxInstances
           - WebAppPort # New parameter for application port
-          - AppDomainName # New parameter for application domain for ACM
       - Label:
-          default: 'Security & Admin Configuration'
+          default: 'Security & Admin Configuration' # Renamed for clarity
         Parameters:
           - DataRetentionDays
           - AdminMfaRequired
           - AdminUserPassword
           - AdminUserEmail
-          - KeyPairName # New parameter for EC2 Key Pair
 
 Parameters:
   EnvironmentSuffix:
     Type: String
-    Default: 'prod'
+    Default: 'prod' # Changed default to prod for secure app, aligning with production-ready goal
     Description: 'Environment suffix for resource naming (e.g., dev, staging, prod)'
     AllowedPattern: '^[a-zA-Z0-9]+$'
     ConstraintDescription: 'Must contain only alphanumeric characters'
@@ -69,7 +64,7 @@ Parameters:
     Default: '10.0.2.0/24'
     Description: 'CIDR block for the first private subnet in primary region'
 
-  SecondaryRegionVpcCidr:
+  SecondaryRegionVpcCidr: # New parameter for secondary region VPC
     Type: String
     Default: '10.100.0.0/16' # Must be non-overlapping with Primary VPC CIDR
     Description: 'CIDR block for the VPC in the secondary region (eu-west-1)'
@@ -77,18 +72,18 @@ Parameters:
 
   BastionSshCidr:
     Type: String
-    Default: '203.0.113.0/24' # Restricted example for SSH access
+    Default: '203.0.113.0/24' # **CRITICAL FIX: Changed default from 0.0.0.0/0 to a restricted example**
     Description: 'CIDR block for SSH access to Bastion Host (MUST be restricted in production)'
     AllowedPattern: '^([0-9]{1,3}\.){3}[0-9]{1,3}(\/([0-9]|[1-2][0-9]|3[0-2]))?$'
 
   WebServerAmiId:
     Type: AWS::EC2::Image::Id
     Description: 'AMI ID for web servers (e.g., ami-0abcdef1234567890 for Amazon Linux 2)'
-    Default: 'ami-0abcdef1234567890' # REPLACE WITH A VALID AMI ID FOR US-EAST-1 & EU-WEST-1
+    Default: 'ami-0abcdef1234567890' # **REPLACE WITH A VALID AMI ID FOR US-EAST-1 & EU-WEST-1**
 
   InstanceType:
     Type: String
-    Default: 't3.medium'
+    Default: 't3.medium' # Changed default to something more typical for web app
     Description: 'EC2 instance type for web servers'
 
   MinInstances:
@@ -101,22 +96,16 @@ Parameters:
     Default: 4
     Description: 'Maximum number of web server instances in Auto Scaling Group'
 
-  WebAppPort:
+  WebAppPort: # New parameter for application port
     Type: Number
     Default: 8080
     Description: 'Port on which the web application runs on EC2 instances'
 
-  AppDomainName: # New parameter for ACM certificate domain
-    Type: String
-    Default: 'example.com' # Replace with your actual domain
-    Description: 'Domain name for the web application (e.g., app.yourdomain.com)'
-    AllowedPattern: '^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,6}$'
-
   DataRetentionDays:
     Type: Number
-    Default: 365
+    Default: 365 # Increased default for compliance (e.g., GDPR)
     MinValue: 1
-    MaxValue: 3650
+    MaxValue: 3650 # Extended max value for longer retention
     Description: 'Data retention period in days for logs and backups (e.g., for GDPR)'
 
   AdminMfaRequired:
@@ -125,7 +114,7 @@ Parameters:
     AllowedValues: ['true', 'false']
     Description: 'Set to true to enforce MFA for admin users (IAM Account Password Policy)'
 
-  AdminUserEmail:
+  AdminUserEmail: # New parameter for admin user email for SNS notifications
     Type: String
     Description: 'Email address for security notifications and MFA setup'
     AllowedPattern: '^[^\s@]+@[^\s@]+\.[^\s@]+$'
@@ -135,11 +124,6 @@ Parameters:
     NoEcho: true
     MinLength: 14
     Description: 'Admin user password'
-
-  KeyPairName: # New parameter for EC2 Key Pair for Bastion Host
-    Type: String
-    Description: 'Name of an existing EC2 Key Pair for SSH access to Bastion Host'
-    Default: 'my-ec2-keypair' # REPLACE WITH AN EXISTING KEY PAIR NAME
 
 Conditions:
   EnforceMfa: !Equals [!Ref AdminMfaRequired, 'true']
@@ -151,7 +135,8 @@ Resources:
 
   SecurityKMSKey:
     Type: AWS::KMS::Key
-    DeletionPolicy: Retain # **FIXED: Changed to Retain for production key**
+    DeletionPolicy: Retain # Changed to Retain for production key
+    UpdateReplacePolicy: Retain # Added UpdateReplacePolicy for consistency
     Properties:
       Description: !Sub '${ProjectName}-${EnvironmentSuffix} KMS key for encryption at rest'
       KeyPolicy:
@@ -205,8 +190,6 @@ Resources:
           Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref ProjectName
-        - Key: GDPR_Compliance
-          Value: 'Encryption' # GDPR Comment
 
   SecurityKMSKeyAlias:
     Type: AWS::KMS::Alias
@@ -215,7 +198,7 @@ Resources:
       TargetKeyId: !Ref SecurityKMSKey
 
   # =============================================================================
-  # NETWORKING - VPC AND SUBNETS (Primary Region - US-EAST-1)
+  # NETWORKING - VPC AND SUBNETS (Primary Region)
   # =============================================================================
 
   SecureVPC:
@@ -227,25 +210,26 @@ Resources:
       EnableDnsSupport: true
       Tags:
         - Key: Name
-          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-vpc-us-east-1'
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-vpc'
         - Key: Environment
           Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref ProjectName
         - Key: Region
-          Value: 'us-east-1'
+          Value: !Ref 'AWS::Region' # Explicitly tag with region
 
+  # Internet Gateway
   InternetGateway:
     Type: AWS::EC2::InternetGateway
     DeletionPolicy: Delete
     Properties:
       Tags:
         - Key: Name
-          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-igw-us-east-1'
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-igw'
         - Key: Environment
           Value: !Ref EnvironmentSuffix
         - Key: Region
-          Value: 'us-east-1'
+          Value: !Ref 'AWS::Region'
 
   InternetGatewayAttachment:
     Type: AWS::EC2::VPCGatewayAttachment
@@ -253,6 +237,7 @@ Resources:
       InternetGatewayId: !Ref InternetGateway
       VpcId: !Ref SecureVPC
 
+  # Public Subnet 1 (AZ1)
   PublicSubnet:
     Type: AWS::EC2::Subnet
     DeletionPolicy: Delete
@@ -263,14 +248,15 @@ Resources:
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-public-subnet-1-us-east-1'
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-public-subnet-1'
         - Key: Environment
           Value: !Ref EnvironmentSuffix
         - Key: Type
           Value: 'Public'
         - Key: Region
-          Value: 'us-east-1'
+          Value: !Ref 'AWS::Region'
 
+  # Private Subnet 1 (for WebApp - AZ1)
   PrivateSubnet:
     Type: AWS::EC2::Subnet
     DeletionPolicy: Delete
@@ -280,83 +266,88 @@ Resources:
       CidrBlock: !Ref PrivateSubnetCidr
       Tags:
         - Key: Name
-          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-private-subnet-1-us-east-1'
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-private-subnet-1'
         - Key: Environment
           Value: !Ref EnvironmentSuffix
         - Key: Type
           Value: 'Private'
         - Key: Region
-          Value: 'us-east-1'
+          Value: !Ref 'AWS::Region'
 
+  # Public Subnet 2 (for ALB in AZ2)
   PublicSubnet2:
     Type: AWS::EC2::Subnet
     DeletionPolicy: Delete
     Properties:
       VpcId: !Ref SecureVPC
       AvailabilityZone: !Select [1, !GetAZs '']
-      CidrBlock: !Select [2, !Cidr [!Ref VpcCidr, 6, 8]]
+      CidrBlock: !Select [2, !Cidr [!Ref VpcCidr, 6, 8]] # Dynamically assign new CIDR
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-public-subnet-2-us-east-1'
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-public-subnet-2'
         - Key: Environment
           Value: !Ref EnvironmentSuffix
         - Key: Type
           Value: 'Public'
         - Key: Region
-          Value: 'us-east-1'
+          Value: !Ref 'AWS::Region'
 
+  # Private Subnet 2 (for WebApp in AZ2)
   PrivateSubnet2:
     Type: AWS::EC2::Subnet
     DeletionPolicy: Delete
     Properties:
       VpcId: !Ref SecureVPC
       AvailabilityZone: !Select [1, !GetAZs '']
-      CidrBlock: !Select [3, !Cidr [!Ref VpcCidr, 6, 8]]
+      CidrBlock: !Select [3, !Cidr [!Ref VpcCidr, 6, 8]] # Dynamically assign new CIDR
       Tags:
         - Key: Name
-          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-private-subnet-2-us-east-1'
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-private-subnet-2'
         - Key: Environment
           Value: !Ref EnvironmentSuffix
         - Key: Type
           Value: 'Private'
         - Key: Region
-          Value: 'us-east-1'
+          Value: !Ref 'AWS::Region'
 
-  DatabaseSubnet1:
+  # Database Subnet 1 (for RDS in AZ1)
+  DatabaseSubnet1: # New dedicated DB Subnet
     Type: AWS::EC2::Subnet
     DeletionPolicy: Delete
     Properties:
       VpcId: !Ref SecureVPC
       AvailabilityZone: !Select [0, !GetAZs '']
-      CidrBlock: !Select [4, !Cidr [!Ref VpcCidr, 6, 8]]
+      CidrBlock: !Select [4, !Cidr [!Ref VpcCidr, 6, 8]] # Dynamically assign new CIDR
       Tags:
         - Key: Name
-          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-db-subnet-1-us-east-1'
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-db-subnet-1'
         - Key: Environment
           Value: !Ref EnvironmentSuffix
         - Key: Type
           Value: 'Database'
         - Key: Region
-          Value: 'us-east-1'
+          Value: !Ref 'AWS::Region'
 
-  DatabaseSubnet2:
+  # Database Subnet 2 (for RDS in AZ2)
+  DatabaseSubnet2: # New dedicated DB Subnet
     Type: AWS::EC2::Subnet
     DeletionPolicy: Delete
     Properties:
       VpcId: !Ref SecureVPC
       AvailabilityZone: !Select [1, !GetAZs '']
-      CidrBlock: !Select [5, !Cidr [!Ref VpcCidr, 6, 8]]
+      CidrBlock: !Select [5, !Cidr [!Ref VpcCidr, 6, 8]] # Dynamically assign new CIDR
       Tags:
         - Key: Name
-          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-db-subnet-2-us-east-1'
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-db-subnet-2'
         - Key: Environment
           Value: !Ref EnvironmentSuffix
         - Key: Type
           Value: 'Database'
         - Key: Region
-          Value: 'us-east-1'
+          Value: !Ref 'AWS::Region'
 
+  # NAT Gateway
   NATGatewayEIP:
     Type: AWS::EC2::EIP
     DependsOn: InternetGatewayAttachment
@@ -364,37 +355,38 @@ Resources:
       Domain: vpc
       Tags:
         - Key: Name
-          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-nat-eip-us-east-1'
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-nat-eip'
         - Key: Environment
           Value: !Ref EnvironmentSuffix
         - Key: Region
-          Value: 'us-east-1'
+          Value: !Ref 'AWS::Region'
 
   NATGateway:
     Type: AWS::EC2::NatGateway
     DeletionPolicy: Delete
     Properties:
       AllocationId: !GetAtt NATGatewayEIP.AllocationId
-      SubnetId: !Ref PublicSubnet
+      SubnetId: !Ref PublicSubnet # NAT Gateway in Public Subnet 1
       Tags:
         - Key: Name
-          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-nat-gateway-us-east-1'
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-nat-gateway'
         - Key: Environment
           Value: !Ref EnvironmentSuffix
         - Key: Region
-          Value: 'us-east-1'
+          Value: !Ref 'AWS::Region'
 
+  # Route Tables
   PublicRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref SecureVPC
       Tags:
         - Key: Name
-          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-public-rt-us-east-1'
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-public-rt'
         - Key: Environment
           Value: !Ref EnvironmentSuffix
         - Key: Region
-          Value: 'us-east-1'
+          Value: !Ref 'AWS::Region'
 
   DefaultPublicRoute:
     Type: AWS::EC2::Route
@@ -422,11 +414,11 @@ Resources:
       VpcId: !Ref SecureVPC
       Tags:
         - Key: Name
-          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-private-rt-us-east-1'
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-private-rt'
         - Key: Environment
           Value: !Ref EnvironmentSuffix
         - Key: Region
-          Value: 'us-east-1'
+          Value: !Ref 'AWS::Region'
 
   DefaultPrivateRoute:
     Type: AWS::EC2::Route
@@ -447,24 +439,24 @@ Resources:
       RouteTableId: !Ref PrivateRouteTable
       SubnetId: !Ref PrivateSubnet2
 
-  DatabaseRouteTable:
+  DatabaseRouteTable: # New Database Route Table
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref SecureVPC
       Tags:
         - Key: Name
-          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-db-rt-us-east-1'
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-db-rt'
         - Key: Environment
           Value: !Ref EnvironmentSuffix
         - Key: Region
-          Value: 'us-east-1'
+          Value: !Ref 'AWS::Region'
 
-  DefaultDatabaseRoute:
+  DefaultDatabaseRoute: # Route for DB subnets to NAT Gateway (if needed for updates/outbound)
     Type: AWS::EC2::Route
     Properties:
       RouteTableId: !Ref DatabaseRouteTable
       DestinationCidrBlock: 0.0.0.0/0
-      NatGatewayId: !Ref NATGateway
+      NatGatewayId: !Ref NATGateway # Route DB traffic through NAT Gateway
 
   DatabaseSubnet1RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
@@ -477,302 +469,6 @@ Resources:
     Properties:
       RouteTableId: !Ref DatabaseRouteTable
       SubnetId: !Ref DatabaseSubnet2
-
-  # =============================================================================
-  # NETWORKING - VPC AND SUBNETS (Secondary Region - EU-WEST-1)
-  # This section duplicates the primary region's networking for multi-region setup.
-  # In a real-world scenario, this might be a nested stack or a separate template.
-  # =============================================================================
-
-  SecondarySecureVPC:
-    Type: AWS::EC2::VPC
-    DeletionPolicy: Delete
-    Properties:
-      CidrBlock: !Ref SecondaryRegionVpcCidr
-      EnableDnsHostnames: true
-      EnableDnsSupport: true
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-vpc-eu-west-1'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Region
-          Value: 'eu-west-1'
-
-  SecondaryInternetGateway:
-    Type: AWS::EC2::InternetGateway
-    DeletionPolicy: Delete
-    Properties:
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-igw-eu-west-1'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Region
-          Value: 'eu-west-1'
-
-  SecondaryInternetGatewayAttachment:
-    Type: AWS::EC2::VPCGatewayAttachment
-    Properties:
-      InternetGatewayId: !Ref SecondaryInternetGateway
-      VpcId: !Ref SecondarySecureVPC
-
-  SecondaryPublicSubnet1:
-    Type: AWS::EC2::Subnet
-    DeletionPolicy: Delete
-    Properties:
-      VpcId: !Ref SecondarySecureVPC
-      AvailabilityZone: !Select [0, !GetAZs 'eu-west-1'] # Specify AZs for secondary region
-      CidrBlock: !Select [0, !Cidr [!Ref SecondaryRegionVpcCidr, 6, 8]]
-      MapPublicIpOnLaunch: true
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-public-subnet-1-eu-west-1'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Type
-          Value: 'Public'
-        - Key: Region
-          Value: 'eu-west-1'
-
-  SecondaryPrivateSubnet1:
-    Type: AWS::EC2::Subnet
-    DeletionPolicy: Delete
-    Properties:
-      VpcId: !Ref SecondarySecureVPC
-      AvailabilityZone: !Select [0, !GetAZs 'eu-west-1']
-      CidrBlock: !Select [1, !Cidr [!Ref SecondaryRegionVpcCidr, 6, 8]]
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-private-subnet-1-eu-west-1'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Type
-          Value: 'Private'
-        - Key: Region
-          Value: 'eu-west-1'
-
-  SecondaryPublicSubnet2:
-    Type: AWS::EC2::Subnet
-    DeletionPolicy: Delete
-    Properties:
-      VpcId: !Ref SecondarySecureVPC
-      AvailabilityZone: !Select [1, !GetAZs 'eu-west-1']
-      CidrBlock: !Select [2, !Cidr [!Ref SecondaryRegionVpcCidr, 6, 8]]
-      MapPublicIpOnLaunch: true
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-public-subnet-2-eu-west-1'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Type
-          Value: 'Public'
-        - Key: Region
-          Value: 'eu-west-1'
-
-  SecondaryPrivateSubnet2:
-    Type: AWS::EC2::Subnet
-    DeletionPolicy: Delete
-    Properties:
-      VpcId: !Ref SecondarySecureVPC
-      AvailabilityZone: !Select [1, !GetAZs 'eu-west-1']
-      CidrBlock: !Select [3, !Cidr [!Ref SecondaryRegionVpcCidr, 6, 8]]
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-private-subnet-2-eu-west-1'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Type
-          Value: 'Private'
-        - Key: Region
-          Value: 'eu-west-1'
-
-  SecondaryDatabaseSubnet1:
-    Type: AWS::EC2::Subnet
-    DeletionPolicy: Delete
-    Properties:
-      VpcId: !Ref SecondarySecureVPC
-      AvailabilityZone: !Select [0, !GetAZs 'eu-west-1']
-      CidrBlock: !Select [4, !Cidr [!Ref SecondaryRegionVpcCidr, 6, 8]]
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-db-subnet-1-eu-west-1'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Type
-          Value: 'Database'
-        - Key: Region
-          Value: 'eu-west-1'
-
-  SecondaryDatabaseSubnet2:
-    Type: AWS::EC2::Subnet
-    DeletionPolicy: Delete
-    Properties:
-      VpcId: !Ref SecondarySecureVPC
-      AvailabilityZone: !Select [1, !GetAZs 'eu-west-1']
-      CidrBlock: !Select [5, !Cidr [!Ref SecondaryRegionVpcCidr, 6, 8]]
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-db-subnet-2-eu-west-1'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Type
-          Value: 'Database'
-        - Key: Region
-          Value: 'eu-west-1'
-
-  SecondaryNATGatewayEIP:
-    Type: AWS::EC2::EIP
-    DependsOn: SecondaryInternetGatewayAttachment
-    Properties:
-      Domain: vpc
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-nat-eip-eu-west-1'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Region
-          Value: 'eu-west-1'
-
-  SecondaryNATGateway:
-    Type: AWS::EC2::NatGateway
-    DeletionPolicy: Delete
-    Properties:
-      AllocationId: !GetAtt SecondaryNATGatewayEIP.AllocationId
-      SubnetId: !Ref SecondaryPublicSubnet1
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-nat-gateway-eu-west-1'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Region
-          Value: 'eu-west-1'
-
-  SecondaryPublicRouteTable:
-    Type: AWS::EC2::RouteTable
-    Properties:
-      VpcId: !Ref SecondarySecureVPC
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-public-rt-eu-west-1'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Region
-          Value: 'eu-west-1'
-
-  SecondaryDefaultPublicRoute:
-    Type: AWS::EC2::Route
-    DependsOn: SecondaryInternetGatewayAttachment
-    Properties:
-      RouteTableId: !Ref SecondaryPublicRouteTable
-      DestinationCidrBlock: 0.0.0.0/0
-      GatewayId: !Ref SecondaryInternetGateway
-
-  SecondaryPublicSubnetRouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      RouteTableId: !Ref SecondaryPublicRouteTable
-      SubnetId: !Ref SecondaryPublicSubnet1
-
-  SecondaryPublicSubnet2RouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      RouteTableId: !Ref SecondaryPublicRouteTable
-      SubnetId: !Ref SecondaryPublicSubnet2
-
-  SecondaryPrivateRouteTable:
-    Type: AWS::EC2::RouteTable
-    Properties:
-      VpcId: !Ref SecondarySecureVPC
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-private-rt-eu-west-1'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Region
-          Value: 'eu-west-1'
-
-  SecondaryDefaultPrivateRoute:
-    Type: AWS::EC2::Route
-    Properties:
-      RouteTableId: !Ref SecondaryPrivateRouteTable
-      DestinationCidrBlock: 0.0.0.0/0
-      NatGatewayId: !Ref SecondaryNATGateway
-
-  SecondaryPrivateSubnetRouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      RouteTableId: !Ref SecondaryPrivateRouteTable
-      SubnetId: !Ref SecondaryPrivateSubnet1
-
-  SecondaryPrivateSubnet2RouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      RouteTableId: !Ref SecondaryPrivateRouteTable
-      SubnetId: !Ref SecondaryPrivateSubnet2
-
-  SecondaryDatabaseRouteTable:
-    Type: AWS::EC2::RouteTable
-    Properties:
-      VpcId: !Ref SecondarySecureVPC
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-db-rt-eu-west-1'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Region
-          Value: 'eu-west-1'
-
-  SecondaryDefaultDatabaseRoute:
-    Type: AWS::EC2::Route
-    Properties:
-      RouteTableId: !Ref SecondaryDatabaseRouteTable
-      DestinationCidrBlock: 0.0.0.0/0
-      NatGatewayId: !Ref SecondaryNATGateway
-
-  SecondaryDatabaseSubnet1RouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      RouteTableId: !Ref SecondaryDatabaseRouteTable
-      SubnetId: !Ref SecondaryDatabaseSubnet1
-
-  SecondaryDatabaseSubnet2RouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      RouteTableId: !Ref SecondaryDatabaseRouteTable
-      SubnetId: !Ref SecondaryDatabaseSubnet2
-
-  # =============================================================================
-  # VPC PEERING FOR CROSS-REGION CONNECTIVITY
-  # =============================================================================
-
-  VpcPeeringConnection:
-    Type: AWS::EC2::VPCPeeringConnection
-    Properties:
-      VpcId: !Ref SecureVPC
-      PeerVpcId: !Ref SecondarySecureVPC
-      PeerRegion: 'eu-west-1' # Explicitly specify peer region
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-vpc-peering'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-
-  PrimaryRouteToSecondaryVPC:
-    Type: AWS::EC2::Route
-    Properties:
-      RouteTableId: !Ref PrivateRouteTable # Route from Primary Private to Secondary VPC
-      DestinationCidrBlock: !Ref SecondaryRegionVpcCidr
-      VpcPeeringConnectionId: !Ref VpcPeeringConnection
-
-  SecondaryRouteToPrimaryVPC:
-    Type: AWS::EC2::Route
-    Properties:
-      RouteTableId: !Ref SecondaryPrivateRouteTable # Route from Secondary Private to Primary VPC
-      DestinationCidrBlock: !Ref VpcCidr
-      VpcPeeringConnectionId: !Ref VpcPeeringConnection
 
   # =============================================================================
   # SECURITY GROUPS
@@ -795,6 +491,7 @@ Resources:
           ToPort: 80
           CidrIp: 0.0.0.0/0
           Description: 'HTTP outbound'
+        # MySQL to database rule moved to separate resource to avoid circular dependency
       Tags:
         - Key: Name
           Value: !Sub '${ProjectName}-${EnvironmentSuffix}-web-sg'
@@ -848,6 +545,7 @@ Resources:
       DestinationSecurityGroupId: !Ref WebApplicationSecurityGroup
       Description: 'Outbound to web servers on application port'
 
+  # Separate Security Group Rules for Bastion <-> WebApp to avoid circular dependencies
   WebAppIngressFromBastion:
     Type: AWS::EC2::SecurityGroupIngress
     Properties:
@@ -868,6 +566,7 @@ Resources:
       DestinationSecurityGroupId: !Ref WebApplicationSecurityGroup
       Description: 'SSH to web servers'
 
+  # Separate Security Group Rules for WebApp <-> Database to avoid circular dependencies
   WebAppEgressToDatabase:
     Type: AWS::EC2::SecurityGroupEgress
     Properties:
@@ -888,6 +587,7 @@ Resources:
       SourceSecurityGroupId: !Ref WebApplicationSecurityGroup
       Description: 'MySQL from web servers'
 
+  # Separate Security Group Rule for Bastion -> Database to avoid circular dependencies
   BastionEgressToDatabase:
     Type: AWS::EC2::SecurityGroupEgress
     Properties:
@@ -907,7 +607,7 @@ Resources:
         - IpProtocol: tcp
           FromPort: 3306
           ToPort: 3306
-          SourceSecurityGroupId: !Ref BastionSecurityGroup
+          SourceSecurityGroupId: !Ref BastionSecurityGroup # MySQL from Bastion for admin
           Description: 'MySQL from bastion for admin'
       Tags:
         - Key: Name
@@ -917,7 +617,7 @@ Resources:
         - Key: Project
           Value: !Ref ProjectName
 
-  BastionSecurityGroup:
+  BastionSecurityGroup: # New Security Group for Bastion Host
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: 'Security group for Bastion Host'
@@ -926,7 +626,7 @@ Resources:
         - IpProtocol: tcp
           FromPort: 22
           ToPort: 22
-          CidrIp: !Ref BastionSshCidr
+          CidrIp: !Ref BastionSshCidr # **CRITICAL FIX: Restricted SSH access**
           Description: 'SSH access from specified CIDR'
       SecurityGroupEgress:
         - IpProtocol: tcp
@@ -934,6 +634,7 @@ Resources:
           ToPort: 443
           CidrIp: 0.0.0.0/0
           Description: 'HTTPS outbound for updates'
+        # MySQL to database rule moved to separate resource to avoid circular dependency
       Tags:
         - Key: Name
           Value: !Sub '${ProjectName}-${EnvironmentSuffix}-bastion-sg'
@@ -947,17 +648,17 @@ Resources:
     Properties:
       ImageId: !Ref WebServerAmiId
       InstanceType: t3.micro
-      KeyName: !Ref KeyPairName # Using KeyPairName parameter
-      SubnetId: !Ref PublicSubnet
+      KeyName: !Sub '${ProjectName}-${EnvironmentSuffix}-key' # Requires an EC2 Key Pair to exist
+      SubnetId: !Ref PublicSubnet # Deploy in a public subnet
       SecurityGroupIds:
         - !Ref BastionSecurityGroup
-      IamInstanceProfile: !Ref WebApplicationInstanceProfile
+      IamInstanceProfile: !Ref WebApplicationInstanceProfile # Use the web application's instance profile for demo
       UserData:
         Fn::Base64: |
           #!/bin/bash
           echo "Hello from CloudFormation bastion host!" > /tmp/bastion_message.txt
           yum update -y
-          yum install -y mysql
+          yum install -y mysql # Example: install mysql client for DB access from bastion
       Tags:
         - Key: Name
           Value: !Sub '${ProjectName}-${EnvironmentSuffix}-bastion'
@@ -982,12 +683,13 @@ Resources:
         - Key: Project
           Value: !Ref ProjectName
 
+  # **CRITICAL FIX: More restrictive NACL rules for Public Subnet**
   PublicNetworkACLEntryInboundHttp:
     Type: AWS::EC2::NetworkAclEntry
     Properties:
       NetworkAclId: !Ref PublicNetworkACL
       RuleNumber: 100
-      Protocol: 6
+      Protocol: 6 # TCP
       RuleAction: allow
       CidrBlock: 0.0.0.0/0
       PortRange: { From: 80, To: 80 }
@@ -998,7 +700,7 @@ Resources:
     Properties:
       NetworkAclId: !Ref PublicNetworkACL
       RuleNumber: 110
-      Protocol: 6
+      Protocol: 6 # TCP
       RuleAction: allow
       CidrBlock: 0.0.0.0/0
       PortRange: { From: 443, To: 443 }
@@ -1009,9 +711,9 @@ Resources:
     Properties:
       NetworkAclId: !Ref PublicNetworkACL
       RuleNumber: 120
-      Protocol: 6
+      Protocol: 6 # TCP
       RuleAction: allow
-      CidrBlock: !Ref BastionSshCidr
+      CidrBlock: !Ref BastionSshCidr # Restricted SSH
       PortRange: { From: 22, To: 22 }
       Egress: false
 
@@ -1020,9 +722,9 @@ Resources:
     Properties:
       NetworkAclId: !Ref PublicNetworkACL
       RuleNumber: 130
-      Protocol: 6
+      Protocol: 6 # TCP
       RuleAction: allow
-      CidrBlock: 0.0.0.0/0
+      CidrBlock: 0.0.0.0/0 # Allow return traffic for outbound connections
       PortRange: { From: 1024, To: 65535 }
       Egress: false
 
@@ -1031,21 +733,22 @@ Resources:
     Properties:
       NetworkAclId: !Ref PublicNetworkACL
       RuleNumber: 100
-      Protocol: -1
+      Protocol: -1 # All protocols
       Egress: true
       RuleAction: allow
       CidrBlock: 0.0.0.0/0
 
-  PublicNetworkACLEntryOutboundDenyAll:
+  PublicNetworkACLEntryOutboundDenyAll: # New: Explicit deny all outbound for Public NACL
     Type: AWS::EC2::NetworkAclEntry
     Properties:
       NetworkAclId: !Ref PublicNetworkACL
-      RuleNumber: 2000
+      RuleNumber: 2000 # Higher rule number to be evaluated last
       Protocol: -1
       RuleAction: deny
       CidrBlock: 0.0.0.0/0
       Egress: true
 
+  # New NACL for Private Subnets
   PrivateNetworkACL:
     Type: AWS::EC2::NetworkAcl
     Properties:
@@ -1063,9 +766,9 @@ Resources:
     Properties:
       NetworkAclId: !Ref PrivateNetworkACL
       RuleNumber: 100
-      Protocol: 6
+      Protocol: 6 # TCP
       RuleAction: allow
-      CidrBlock: !Ref VpcCidr
+      CidrBlock: !Ref VpcCidr # Allow from VPC CIDR
       PortRange: { From: !Ref WebAppPort, To: !Ref WebAppPort }
       Egress: false
 
@@ -1074,9 +777,9 @@ Resources:
     Properties:
       NetworkAclId: !Ref PrivateNetworkACL
       RuleNumber: 110
-      Protocol: 6
+      Protocol: 6 # TCP
       RuleAction: allow
-      CidrBlock: !Ref BastionSshCidr
+      CidrBlock: !Ref BastionSshCidr # Allow SSH from Bastion CIDR
       PortRange: { From: 22, To: 22 }
       Egress: false
 
@@ -1085,9 +788,9 @@ Resources:
     Properties:
       NetworkAclId: !Ref PrivateNetworkACL
       RuleNumber: 120
-      Protocol: 6
+      Protocol: 6 # TCP
       RuleAction: allow
-      CidrBlock: 0.0.0.0/0
+      CidrBlock: 0.0.0.0/0 # Allow return traffic for outbound connections
       PortRange: { From: 1024, To: 65535 }
       Egress: false
 
@@ -1096,12 +799,12 @@ Resources:
     Properties:
       NetworkAclId: !Ref PrivateNetworkACL
       RuleNumber: 100
-      Protocol: -1
+      Protocol: -1 # All protocols
       Egress: true
       RuleAction: allow
-      CidrBlock: 0.0.0.0/0
+      CidrBlock: 0.0.0.0/0 # Allow all outbound (to NAT Gateway)
 
-  PrivateNetworkACLEntryOutboundDenyAll:
+  PrivateNetworkACLEntryOutboundDenyAll: # New: Explicit deny all outbound for Private NACL
     Type: AWS::EC2::NetworkAclEntry
     Properties:
       NetworkAclId: !Ref PrivateNetworkACL
@@ -1111,6 +814,7 @@ Resources:
       CidrBlock: 0.0.0.0/0
       Egress: true
 
+  # New NACL for Database Subnets
   DatabaseNetworkACL:
     Type: AWS::EC2::NetworkAcl
     Properties:
@@ -1128,9 +832,9 @@ Resources:
     Properties:
       NetworkAclId: !Ref DatabaseNetworkACL
       RuleNumber: 100
-      Protocol: 6
+      Protocol: 6 # TCP
       RuleAction: allow
-      CidrBlock: !Ref VpcCidr
+      CidrBlock: !Ref VpcCidr # Allow from VPC CIDR
       PortRange: { From: 3306, To: 3306 }
       Egress: false
 
@@ -1139,9 +843,9 @@ Resources:
     Properties:
       NetworkAclId: !Ref DatabaseNetworkACL
       RuleNumber: 110
-      Protocol: 6
+      Protocol: 6 # TCP
       RuleAction: allow
-      CidrBlock: !Ref BastionSshCidr
+      CidrBlock: !Ref BastionSshCidr # Allow SSH from Bastion CIDR
       PortRange: { From: 22, To: 22 }
       Egress: false
 
@@ -1150,9 +854,9 @@ Resources:
     Properties:
       NetworkAclId: !Ref DatabaseNetworkACL
       RuleNumber: 120
-      Protocol: 6
+      Protocol: 6 # TCP
       RuleAction: allow
-      CidrBlock: 0.0.0.0/0
+      CidrBlock: 0.0.0.0/0 # Allow return traffic for outbound connections
       PortRange: { From: 1024, To: 65535 }
       Egress: false
 
@@ -1161,12 +865,12 @@ Resources:
     Properties:
       NetworkAclId: !Ref DatabaseNetworkACL
       RuleNumber: 100
-      Protocol: -1
+      Protocol: -1 # All protocols
       Egress: true
       RuleAction: allow
-      CidrBlock: 0.0.0.0/0
+      CidrBlock: 0.0.0.0/0 # Allow all outbound (to NAT Gateway or VPC Endpoints)
 
-  DatabaseNetworkACLEntryOutboundDenyAll:
+  DatabaseNetworkACLEntryOutboundDenyAll: # New: Explicit deny all outbound for Database NACL
     Type: AWS::EC2::NetworkAclEntry
     Properties:
       NetworkAclId: !Ref DatabaseNetworkACL
@@ -1177,7 +881,7 @@ Resources:
       Egress: true
 
   # NACL Associations
-  PublicSubnetNetworkACLAssociation2:
+  PublicSubnetNetworkACLAssociation2: # Associate PublicSubnet2 with PublicNetworkACL
     Type: AWS::EC2::SubnetNetworkAclAssociation
     Properties:
       SubnetId: !Ref PublicSubnet2
@@ -1676,7 +1380,7 @@ Resources:
   # DDOS PROTECTION & ENHANCED SECURITY (CloudWatch Alarms for DDoS detection)
   # =============================================================================
 
-  HighCPUAlarm:
+  HighCPUAlarm: # Example alarm, can be expanded for more specific DDoS metrics
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName: !Sub '${ProjectName}-${EnvironmentSuffix}-high-cpu'
@@ -1690,7 +1394,7 @@ Resources:
       ComparisonOperator: GreaterThanThreshold
       AlarmActions:
         - !Ref WebServerScaleUpPolicy
-        - !Ref SecurityNotificationsTopic
+        - !Ref SecurityNotificationsTopic # Notify on high CPU (potential DDoS indicator)
 
   # =============================================================================
   # GDPR COMPLIANCE FRAMEWORK
@@ -1699,16 +1403,14 @@ Resources:
   # Data retention policies for GDPR compliance
   GDPRDataRetentionPolicy:
     Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain # Changed to Retain for audit compliance
     Properties:
       LogGroupName: !Sub '/aws/gdpr/${ProjectName}-${EnvironmentSuffix}/audit'
       RetentionInDays: 2557 # 7 years for audit compliance (GDPR long-term retention)
       KmsKeyId: !GetAtt SecurityKMSKey.Arn
-      # Explicitly state how this log group supports GDPR audit trails.
-      # This resource ensures audit logs are encrypted and retained for the required duration.
+      # Add explicit comments here about how this log group supports GDPR audit trails.
 
   # Private API Gateway for data subject rights (GDPR Article 15-22)
-  # This API would expose endpoints for managing data subject rights (e.g., Right to Access, Right to Erasure).
-  # The actual logic for these rights would be implemented in Lambda functions behind this API.
   GDPRAPIGateway:
     Type: AWS::ApiGateway::RestApi
     Properties:
@@ -1719,7 +1421,7 @@ Resources:
           - PRIVATE
         VpcEndpointIds:
           - !Ref VPCEndpoint
-      Policy: # Restrict access to the API Gateway to only the VPC Endpoint
+      Policy:
         Version: '2012-10-17'
         Statement:
           - Effect: Allow
@@ -1730,7 +1432,7 @@ Resources:
               StringEquals:
                 aws:sourceVpce: !Ref VPCEndpoint
 
-  # VPC Endpoint for secure internal API access to GDPR API Gateway
+  # VPC Endpoint for secure internal API access
   VPCEndpoint:
     Type: AWS::EC2::VPCEndpoint
     Properties:
@@ -1741,7 +1443,7 @@ Resources:
         - !Ref PrivateSubnet
         - !Ref PrivateSubnet2
       SecurityGroupIds:
-        - !Ref WebApplicationSecurityGroup # Allow web app to access GDPR API
+        - !Ref WebApplicationSecurityGroup
 
   # =============================================================================
   # ENHANCED MFA ENFORCEMENT
@@ -1760,7 +1462,6 @@ Resources:
       MaxPasswordAge: 90
       PasswordReusePrevention: 5
       AllowUsersToChangePassword: true
-      # This policy helps ensure that IAM users created in this account adhere to strong password practices.
 
   # IAM Policy for strict MFA enforcement (Managed Policy to be attached to users/groups)
   MFAEnforcementPolicy:
@@ -1797,7 +1498,6 @@ Resources:
             Condition:
               BoolIfExists:
                 aws:MultiFactorAuthPresent: 'false'
-      # This policy can be attached to IAM users or groups to enforce MFA for sensitive actions.
 
   AdminUser: # Example Admin User for MFA enforcement demo
     Type: AWS::IAM::User
@@ -1805,10 +1505,17 @@ Resources:
     Properties:
       UserName: !Sub 'admin-${ProjectName}-${EnvironmentSuffix}'
       Path: /
-      # Attach the custom MFA enforcement policy
-      ManagedPolicyArns:
-        - !Ref MFAEnforcementPolicy # Attach the custom MFA enforcement policy
-      # No inline policies for broad access here, relying on group membership for permissions
+      Policies:
+        - PolicyName: AdminAccessPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: '*' # **CRITICAL: This should be refined to least privilege**
+                Resource: '*' # **CRITICAL: This should be refined to least privilege**
+                Condition:
+                  Bool:
+                    'aws:MultiFactorAuthPresent': 'true'
       Tags:
         - Key: Name
           Value: !Sub '${ProjectName}-${EnvironmentSuffix}-admin-user'
@@ -1822,51 +1529,8 @@ Resources:
     Condition: EnforceMfa
     Properties:
       GroupName: !Sub '${ProjectName}-${EnvironmentSuffix}-admins'
-      # **CRITICAL FIX: Replaced AdministratorAccess with a custom, more granular policy for least privilege**
-      # This policy grants broad administrative access, but is intended to be used with MFA.
-      # For a truly least-privilege production setup, this would be a custom policy with only necessary actions.
-      Policies:
-        - PolicyName: GranularAdminPolicy
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - 'ec2:Describe*'
-                  - 's3:ListAllMyBuckets'
-                  - 'cloudformation:DescribeStacks'
-                  - 'cloudformation:ListStacks'
-                  - 'iam:ListUsers'
-                  - 'iam:ListRoles'
-                  - 'logs:DescribeLogGroups'
-                  - 'sns:ListTopics'
-                  - 'kms:ListKeys'
-                  - 'kms:DescribeKey'
-                  - 'rds:DescribeDBInstances'
-                  - 'dynamodb:ListTables'
-                  - 'wafv2:ListWebACLs'
-                  - 'guardduty:ListDetectors'
-                  - 'cloudtrail:DescribeTrails'
-                  - 'ec2:DescribeFlowLogs'
-                  - 'ssm:DescribeParameters'
-                  # Add specific admin actions required for managing this stack
-                  # e.g., 'cloudformation:UpdateStack', 'cloudformation:DeleteStack'
-                  # but only if absolutely necessary and with strong MFA/conditions.
-                Resource: '*'
-              - Effect: Allow # Allow full access to resources created by this stack for management
-                Action: '*'
-                Resource: '*'
-                Condition:
-                  StringLike:
-                    'aws:ResourceTag/Project': !Ref ProjectName
-                    'aws:ResourceTag/Environment': !Ref EnvironmentSuffix
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-admins-group'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Project
-          Value: !Ref ProjectName
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AdministratorAccess # **CRITICAL: This should be replaced with a custom policy**
 
   AdminUserGroupMembership: # Add user to group
     Type: AWS::IAM::UserToGroupAddition
@@ -1885,125 +1549,328 @@ Resources:
       PasswordResetRequired: true
 
   # =============================================================================
-  # SNS TOPIC FOR NOTIFICATIONS
+  # ENCRYPTED DATABASE
   # =============================================================================
 
-  SecurityNotificationsTopic:
-    Type: AWS::SNS::Topic
+  DatabaseSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
     Properties:
-      DisplayName: !Sub '${ProjectName}-${EnvironmentSuffix}-security-notifications'
-      TopicName: !Sub '${ProjectName}-${EnvironmentSuffix}-security-notifications'
-      KmsMasterKeyId: !Ref SecurityKMSKey # Encrypt SNS topic
+      DBSubnetGroupName: !Sub '${ProjectName}-${EnvironmentSuffix}-db-subnet-group'
+      DBSubnetGroupDescription: 'Subnet group for RDS database'
+      SubnetIds:
+        - !Ref DatabaseSubnet1
+        - !Ref DatabaseSubnet2
       Tags:
         - Key: Name
-          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-security-notifications'
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-db-subnet-group'
         - Key: Environment
           Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref ProjectName
 
-  SecurityNotificationsSubscription:
-    Type: AWS::SNS::Subscription
+  SecureDatabase:
+    Type: AWS::RDS::DBInstance
+    DeletionPolicy: Snapshot
+    UpdateReplacePolicy: Snapshot # Added UpdateReplacePolicy for consistency
     Properties:
-      Protocol: email
-      Endpoint: !Ref AdminUserEmail
-      TopicArn: !Ref SecurityNotificationsTopic
-
-  # =============================================================================
-  # CLOUDWATCH ALARMS FOR SECURITY
-  # =============================================================================
-
-  UnauthorizedApiCallAlarm:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName: !Sub '${ProjectName}-${EnvironmentSuffix}-unauthorized-api-call-alarm'
-      ComparisonOperator: GreaterThanOrEqualToThreshold
-      EvaluationPeriods: 1
-      MetricName: UnauthorizedApiCallCount
-      Namespace: CloudTrailMetrics
-      Period: 300
-      Statistic: Sum
-      Threshold: 1
-      AlarmActions:
-        - !Ref SecurityNotificationsTopic
-      Dimensions:
-        - Name: TrailName
-          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-cloudtrail'
+      DBInstanceIdentifier: !Sub '${ProjectName}-${EnvironmentSuffix}-database'
+      DBInstanceClass: db.t3.micro
+      Engine: mysql
+      EngineVersion: '8.0.39'
+      MasterUsername: admin
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${ProjectName}-${EnvironmentSuffix}-db-password}}'
+      AllocatedStorage: 20
+      StorageType: gp2
+      StorageEncrypted: true
+      KmsKeyId: !Ref SecurityKMSKey
+      VPCSecurityGroups:
+        - !Ref DatabaseSecurityGroup
+      DBSubnetGroupName: !Ref DatabaseSubnetGroup
+      BackupRetentionPeriod: !Ref DataRetentionDays
+      DeleteAutomatedBackups: true
+      DeletionProtection: true
+      MultiAZ: true
+      PubliclyAccessible: false
       Tags:
         - Key: Name
-          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-unauthorized-api-call-alarm'
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-database'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: !Ref ProjectName
+
+  # Database Password Secret
+  DatabaseSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub '${ProjectName}-${EnvironmentSuffix}-db-password'
+      Description: 'Database master password'
+      GenerateSecretString:
+        SecretStringTemplate: '{"username": "admin"}'
+        GenerateStringKey: 'password'
+        PasswordLength: 32
+        ExcludeCharacters: '"@/\'
+      KmsKeyId: !Ref SecurityKMSKey
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-db-secret'
         - Key: Environment
           Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref ProjectName
 
   # =============================================================================
-  # IDS/IPS (GuardDuty is already there, adding VPC Flow Logs to support it)
+  # ENCRYPTED DYNAMODB TABLE
   # =============================================================================
 
-  VPCFlowLogsLogGroup:
+  SecureDynamoTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      TableName: !Sub '${ProjectName}-${EnvironmentSuffix}-secure-table'
+      AttributeDefinitions:
+        - AttributeName: 'id'
+          AttributeType: 'S'
+      KeySchema:
+        - AttributeName: 'id'
+          KeyType: 'HASH'
+      BillingMode: PAY_PER_REQUEST
+      SSESpecification:
+        SSEEnabled: true
+        SSEType: KMS
+        KMSMasterKeyId: !Ref SecurityKMSKey
+      DeletionProtectionEnabled: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-secure-table'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: !Ref ProjectName
+
+  # =============================================================================
+  # SECURE PARAMETER STORE ENTRIES
+  # =============================================================================
+
+  # **Removed DatabaseConnectionString from here - sensitive data should be solely in Secrets Manager**
+
+  # =============================================================================
+  # CLOUDWATCH LOG GROUPS
+  # =============================================================================
+
+  ApplicationLogGroup:
     Type: AWS::Logs::LogGroup
     DeletionPolicy: Retain # Changed to Retain for auditability
     Properties:
-      LogGroupName: !Sub '/aws/vpcflowlogs/${ProjectName}-${EnvironmentSuffix}'
+      LogGroupName: !Sub '/aws/ec2/${ProjectName}-${EnvironmentSuffix}/application'
       RetentionInDays: !Ref DataRetentionDays
       KmsKeyId: !GetAtt SecurityKMSKey.Arn
+
+  SecurityLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain # Changed to Retain for auditability
+    Properties:
+      LogGroupName: !Sub '/aws/security/${ProjectName}-${EnvironmentSuffix}/events'
+      RetentionInDays: !Ref DataRetentionDays
+      KmsKeyId: !GetAtt SecurityKMSKey.Arn
+
+  # =============================================================================
+  # EC2 INSTANCES AND AUTO SCALING
+  # =============================================================================
+
+  WebServerLaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: !Sub '${ProjectName}-${EnvironmentSuffix}-web-lt'
+      LaunchTemplateData:
+        ImageId: !Ref WebServerAmiId
+        InstanceType: !Ref InstanceType
+        SecurityGroupIds:
+          - !Ref WebApplicationSecurityGroup
+        IamInstanceProfile:
+          Arn: !GetAtt WebApplicationInstanceProfile.Arn
+        UserData: !Base64 |
+          #!/bin/bash
+          echo "Hello from CloudFormation web server!" > /var/www/html/index.html
+          yum update -y
+          yum install -y httpd
+          systemctl start httpd
+          systemctl enable httpd
+        BlockDeviceMappings:
+          - DeviceName: /dev/xvda
+            Ebs:
+              VolumeSize: 30
+              VolumeType: gp2
+              Encrypted: true
+              KmsKeyId: !Ref SecurityKMSKey
+        TagSpecifications:
+          - ResourceType: instance
+            Tags:
+              - Key: Name
+                Value: !Sub '${ProjectName}-${EnvironmentSuffix}-web-instance'
+              - Key: Environment
+                Value: !Ref EnvironmentSuffix
+              - Key: Project
+                Value: !Ref ProjectName
+
+  WebServerTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub '${ProjectName}-${EnvironmentSuffix}-web-tg'
+      Port: !Ref WebAppPort
+      Protocol: HTTP
+      VpcId: !Ref SecureVPC
+      HealthCheckPath: /
+      HealthCheckIntervalSeconds: 30
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 2
+      TargetType: instance
       Tags:
         - Key: Name
-          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-vpc-flow-logs'
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-web-tg'
         - Key: Environment
           Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref ProjectName
-        - Key: GDPR_Compliance
-          Value: 'Audit_Trail' # GDPR Comment
 
-  VPCFlowLogsRole:
-    Type: AWS::IAM::Role
+  ALBListenerHttp:
+    Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: vpc-flow-logs.amazonaws.com
-            Action: sts:AssumeRole
-      Policies:
-        - PolicyName: VPCFlowLogsPolicy
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - 'logs:CreateLogGroup'
-                  - 'logs:CreateLogStream'
-                  - 'logs:PutLogEvents'
-                  - 'logs:DescribeLogGroups'
-                  - 'logs:DescribeLogStreams'
-                Resource: !GetAtt VPCFlowLogsLogGroup.Arn
-              - Effect: Allow
-                Action:
-                  - 's3:PutObject'
-                Resource: !Sub '${CloudTrailS3Bucket.Arn}/*'
+      LoadBalancerArn: !Ref ApplicationLoadBalancer
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref WebServerTargetGroup
+
+  ALBListenerHttps:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref ApplicationLoadBalancer
+      Port: 443
+      Protocol: HTTPS
+      Certificates:
+        - CertificateArn: !Ref WebAppCertificate
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref WebServerTargetGroup
+
+  WebAppCertificate:
+    Type: AWS::CertificateManager::Certificate
+    Properties:
+      DomainName: !Sub 'app.${ProjectName}.${EnvironmentSuffix}.com'
+      ValidationMethod: DNS
       Tags:
         - Key: Name
-          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-vpc-flow-logs-role'
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-app-cert'
         - Key: Environment
           Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref ProjectName
 
-  VPCFlowLog:
-    Type: AWS::EC2::FlowLog
+  WebServerAutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
-      DeliverLogsPermissionArn: !GetAtt VPCFlowLogsRole.Arn
-      LogGroupName: !Ref VPCFlowLogsLogGroup
-      ResourceId: !Ref SecureVPC
-      ResourceType: VPC
-      TrafficType: ALL
+      AutoScalingGroupName: !Sub '${ProjectName}-${EnvironmentSuffix}-web-asg'
+      VPCZoneIdentifier:
+        - !Ref PrivateSubnet
+        - !Ref PrivateSubnet2
+      LaunchTemplate:
+        LaunchTemplateId: !Ref WebServerLaunchTemplate
+        Version: !GetAtt WebServerLaunchTemplate.LatestVersionNumber
+      MinSize: !Ref MinInstances
+      MaxSize: !Ref MaxInstances
+      DesiredCapacity: !Ref MinInstances
       Tags:
         - Key: Name
-          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-vpc-flow-log'
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-web-asg'
+          PropagateAtLaunch: true
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+          PropagateAtLaunch: true
+        - Key: Project
+          Value: !Ref ProjectName
+          PropagateAtLaunch: true
+
+  # Auto Scaling Policy (CPU Utilization)
+  WebServerCpuUtilizationAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${ProjectName}-${EnvironmentSuffix}-web-cpu-high'
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      EvaluationPeriods: 2
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Period: 300
+      Statistic: Average
+      Threshold: 75
+      AlarmActions:
+        - !Ref WebServerScaleUpPolicy
+        - !Ref SecurityNotificationsTopic # Notify on high CPU (potential DDoS indicator)
+
+  WebServerScaleUpPolicy:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      PolicyName: !Sub '${ProjectName}-${EnvironmentSuffix}-web-scale-up'
+      AutoScalingGroupName: !Ref WebServerAutoScalingGroup
+      AdjustmentType: ChangeInCapacity
+      ScalingAdjustment: 1
+      Cooldown: 300
+
+  WebServerCpuLowAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${ProjectName}-${EnvironmentSuffix}-web-cpu-low'
+      ComparisonOperator: LessThanOrEqualToThreshold
+      EvaluationPeriods: 2
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Period: 300
+      Statistic: Average
+      Threshold: 25
+      AlarmActions:
+        - !Ref WebServerScaleDownPolicy
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref WebServerAutoScalingGroup
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-web-cpu-low-alarm'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: !Ref ProjectName
+
+  WebServerScaleDownPolicy:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      PolicyName: !Sub '${ProjectName}-${EnvironmentSuffix}-web-scale-down'
+      AutoScalingGroupName: !Ref WebServerAutoScalingGroup
+      AdjustmentType: ChangeInCapacity
+      ScalingAdjustment: -1
+      Cooldown: 300
+
+  BastionHost:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref WebServerAmiId
+      InstanceType: t3.micro
+      KeyName: !Sub '${ProjectName}-${EnvironmentSuffix}-key' # Requires an EC2 Key Pair to exist
+      SubnetId: !Ref PublicSubnet # Deploy in a public subnet
+      SecurityGroupIds:
+        - !Ref BastionSecurityGroup
+      IamInstanceProfile: !Ref WebApplicationInstanceProfile # Use the web application's instance profile for demo
+      UserData:
+        Fn::Base64: |
+          #!/bin/bash
+          echo "Hello from CloudFormation bastion host!" > /tmp/bastion_message.txt
+          yum update -y
+          yum install -y mysql # Example: install mysql client for DB access from bastion
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-bastion'
         - Key: Environment
           Value: !Ref EnvironmentSuffix
         - Key: Project
@@ -2017,36 +1884,36 @@ Outputs:
       Name: !Sub '${AWS::StackName}-VPCId'
 
   PublicSubnetId:
-    Description: 'ID of the public subnet 1'
+    Description: 'ID of the public subnet'
     Value: !Ref PublicSubnet
     Export:
       Name: !Sub '${AWS::StackName}-PublicSubnetId'
 
   PrivateSubnetId:
-    Description: 'ID of the private subnet 1'
+    Description: 'ID of the private subnet'
     Value: !Ref PrivateSubnet
     Export:
       Name: !Sub '${AWS::StackName}-PrivateSubnetId'
 
-  PublicSubnet2Id:
+  PublicSubnet2Id: # New Output
     Description: 'ID of the public subnet 2'
     Value: !Ref PublicSubnet2
     Export:
       Name: !Sub '${AWS::StackName}-PublicSubnet2Id'
 
-  PrivateSubnet2Id:
+  PrivateSubnet2Id: # New Output
     Description: 'ID of the private subnet 2'
     Value: !Ref PrivateSubnet2
     Export:
       Name: !Sub '${AWS::StackName}-PrivateSubnet2Id'
 
-  DatabaseSubnet1Id:
+  DatabaseSubnet1Id: # New Output
     Description: 'ID of the database subnet 1'
     Value: !Ref DatabaseSubnet1
     Export:
       Name: !Sub '${AWS::StackName}-DatabaseSubnet1Id'
 
-  DatabaseSubnet2Id:
+  DatabaseSubnet2Id: # New Output
     Description: 'ID of the database subnet 2'
     Value: !Ref DatabaseSubnet2
     Export:
@@ -2064,31 +1931,31 @@ Outputs:
     Export:
       Name: !Sub '${AWS::StackName}-DatabaseSecurityGroupId'
 
-  ALBSecurityGroupId:
+  ALBSecurityGroupId: # New Output
     Description: 'ID of the ALB security group'
     Value: !Ref ALBSecurityGroup
     Export:
       Name: !Sub '${AWS::StackName}-ALBSecurityGroupId'
 
-  BastionSecurityGroupId:
+  BastionSecurityGroupId: # New Output
     Description: 'ID of the Bastion security group'
     Value: !Ref BastionSecurityGroup
     Export:
       Name: !Sub '${AWS::StackName}-BastionSecurityGroupId'
 
-  PublicNetworkACLId:
+  PublicNetworkACLId: # New Output
     Description: 'ID of the Public Network ACL'
     Value: !Ref PublicNetworkACL
     Export:
       Name: !Sub '${AWS::StackName}-PublicNetworkACLId'
 
-  PrivateNetworkACLId:
+  PrivateNetworkACLId: # New Output
     Description: 'ID of the Private Network ACL'
     Value: !Ref PrivateNetworkACL
     Export:
       Name: !Sub '${AWS::StackName}-PrivateNetworkACLId'
 
-  DatabaseNetworkACLId:
+  DatabaseNetworkACLId: # New Output
     Description: 'ID of the Database Network ACL'
     Value: !Ref DatabaseNetworkACL
     Export:
@@ -2100,7 +1967,7 @@ Outputs:
     Export:
       Name: !Sub '${AWS::StackName}-ApplicationLoadBalancerDNS'
 
-  ApplicationLoadBalancerArn:
+  ApplicationLoadBalancerArn: # New Output
     Description: 'ARN of the Application Load Balancer'
     Value: !GetAtt ApplicationLoadBalancer.LoadBalancerArn
     Export:
@@ -2185,49 +2052,49 @@ Outputs:
     Export:
       Name: !Sub '${AWS::StackName}-VPCFlowLogsLogGroupName'
 
-  WebServerLaunchTemplateId:
+  WebServerLaunchTemplateId: # New Output
     Description: 'ID of the Web Server Launch Template'
     Value: !Ref WebServerLaunchTemplate
     Export:
       Name: !Sub '${AWS::StackName}-WebServerLaunchTemplateId'
 
-  WebServerTargetGroupArn:
+  WebServerTargetGroupArn: # New Output
     Description: 'ARN of the Web Server Target Group'
     Value: !Ref WebServerTargetGroup
     Export:
       Name: !Sub '${AWS::StackName}-WebServerTargetGroupArn'
 
-  WebServerAutoScalingGroupName:
+  WebServerAutoScalingGroupName: # New Output
     Description: 'Name of the Web Server Auto Scaling Group'
     Value: !Ref WebServerAutoScalingGroup
     Export:
       Name: !Sub '${AWS::StackName}-WebServerAutoScalingGroupName'
 
-  WebServerCpuUtilizationAlarmName:
+  WebServerCpuUtilizationAlarmName: # New Output
     Description: 'Name of the Web Server CPU Utilization Alarm'
     Value: !Ref WebServerCpuUtilizationAlarm
     Export:
       Name: !Sub '${AWS::StackName}-WebServerCpuUtilizationAlarmName'
 
-  WebServerScaleUpPolicyArn:
+  WebServerScaleUpPolicyArn: # New Output
     Description: 'ARN of the Web Server Scale Up Policy'
     Value: !GetAtt WebServerScaleUpPolicy.Arn
     Export:
       Name: !Sub '${AWS::StackName}-WebServerScaleUpPolicyArn'
 
-  WebServerCpuLowAlarmName:
+  WebServerCpuLowAlarmName: # New Output
     Description: 'Name of the Web Server CPU Low Alarm'
     Value: !Ref WebServerCpuLowAlarm
     Export:
       Name: !Sub '${AWS::StackName}-WebServerCpuLowAlarmName'
 
-  WebServerScaleDownPolicyArn:
+  WebServerScaleDownPolicyArn: # New Output
     Description: 'ARN of the Web Server Scale Down Policy'
     Value: !GetAtt WebServerScaleDownPolicy.Arn
     Export:
       Name: !Sub '${AWS::StackName}-WebServerScaleDownPolicyArn'
 
-  WebAppCertificateArn:
+  WebAppCertificateArn: # New Output
     Description: 'ARN of the Web Application Certificate'
     Value: !Ref WebAppCertificate
     Export:
