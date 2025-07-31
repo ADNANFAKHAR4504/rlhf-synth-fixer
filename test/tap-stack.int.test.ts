@@ -7,43 +7,36 @@ describe('TapStack Integration Tests', () => {
     region: 'us-east-1',
     amiId: 'ami-0453898e98046c639',
   });
-  const synthesized = Testing.synthScope(scope => {
-  new TapStack(scope, 'test', {
-    region: 'us-west-2',
-    amiId: 'ami-12345678'
-  });
-});
-
+  const synthesized = Testing.synthScope(stack);
 
   it('has a public subnet', () => {
     expect(synthesized).toHaveResource('aws_subnet', {
       cidr_block: '10.0.1.0/24',
-      map_public_ip_on_launch: true
+      map_public_ip_on_launch: true,
     });
   });
 
   it('includes a route to internet gateway', () => {
     expect(synthesized).toHaveResource('aws_route', {
-      destination_cidr_block: '0.0.0.0/0'
+      destination_cidr_block: '0.0.0.0/0',
     });
   });
 
   it('creates a security group for HTTP and HTTPS', () => {
     expect(synthesized).toHaveResource('aws_security_group', {
-      description: 'Allow HTTP and HTTPS'
+      description: 'Allow HTTP and HTTPS',
     });
   });
 
   it('has an S3 bucket with expected prefix', () => {
     expect(synthesized).toHaveResource('aws_s3_bucket', {
-      force_destroy: true
+      force_destroy: true,
     });
   });
 
   it('creates IAM role for EC2', () => {
     expect(synthesized).toHaveResource('aws_iam_role', {
-      name: 'ec2-log-writer-role'
+      name: 'ec2-log-writer-role',
     });
   });
 });
-```
