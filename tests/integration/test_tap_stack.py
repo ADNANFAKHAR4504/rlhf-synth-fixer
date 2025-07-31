@@ -1,5 +1,6 @@
 import json
 import os
+import uuid
 import unittest
 import subprocess
 from pytest import mark
@@ -18,16 +19,12 @@ else:
 @mark.describe("TapStack Integration Tests")
 class TestTapStackIntegration(unittest.TestCase):
   
-  def get_git_branch_suffix():
-    try:
-        branch = subprocess.check_output(["git", "rev-parse", "--abbrev-ref", "HEAD"]).decode().strip()
-        return branch.replace("/", "-")
-    except Exception:
-        return "dev"
+  def get_random_suffix(self):
+    return uuid.uuid4().hex[:6]
 
   def setUp(self):
     self.outputs = flat_outputs
-    self.env_suffix = self.get_git_branch_suffix()
+    self.env_suffix = self.get_random_suffix()
 
   @mark.it("has a VPC ID output for each deployed environment")
   def test_vpc_id_outputs_exist(self):
