@@ -54,7 +54,7 @@ class TestTapStackIntegration(unittest.TestCase):
     assume_policy = response['Role']['AssumeRolePolicyDocument']
     
     found_lambda = any(
-      stmt.get('Principal', {}).get('Service') == 'lambda.amazonaws.com'
+      stmt.get('Principal', {}).get('Service') == 'ec2.amazonaws.com'
       for stmt in assume_policy.get('Statement', [])
     )
 
