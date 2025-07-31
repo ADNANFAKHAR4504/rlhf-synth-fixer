@@ -180,6 +180,7 @@ jobs:
             package*.json
             tsconfig.json
             cdk.json
+            Pulumi.yaml
             metadata.json
 
   synth:
