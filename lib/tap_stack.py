@@ -65,9 +65,12 @@ class VPCStack(NestedStack):
   def __init__(self, scope: Construct, construct_id: str, environment_suffix: str, **kwargs):
     super().__init__(scope, construct_id, **kwargs)
 
+    # Sanitize environment_suffix for resource names
+    safe_environment_suffix = environment_suffix.replace('_', '-')
+
     self.vpc = ec2.Vpc(
       self,
-      f"TapVpc-{environment_suffix}",
+      f"TapVpc-{safe_environment_suffix}",
       max_azs=2,
       cidr="10.0.0.0/16",
       subnet_configuration=[
@@ -89,9 +92,9 @@ class VPCStack(NestedStack):
 
     CfnOutput(
       self,
-      f"VpcIdOutput-{environment_suffix}",
+      f"VpcIdOutput-{safe_environment_suffix}",
       value=self.vpc.vpc_id,
-      export_name=f"VpcId-{environment_suffix}",
+      export_name=f"VpcId-{safe_environment_suffix}",
     )
 
 
@@ -99,6 +102,9 @@ class VPCStack(NestedStack):
 class IAMStack(NestedStack):
   def __init__(self, scope: Construct, construct_id: str, environment_suffix: str, **kwargs):
     super().__init__(scope, construct_id, **kwargs)
+
+    # Sanitize environment_suffix for resource names
+    safe_environment_suffix = environment_suffix.replace('_', '-')
 
     custom_policy = iam.PolicyDocument(
       statements=[
@@ -114,7 +120,7 @@ class IAMStack(NestedStack):
 
     self.role = iam.Role(
       self,
-      f"TapRole-{environment_suffix}",
+      f"TapRole-{safe_environment_suffix}",
       assumed_by=iam.ServicePrincipal("ec2.amazonaws.com"),
       inline_policies={"CustomEC2ReadOnlyPolicy": custom_policy},
     )
@@ -124,9 +130,9 @@ class IAMStack(NestedStack):
 
     CfnOutput(
       self,
-      f"RoleArnOutput-{environment_suffix}",
+      f"RoleArnOutput-{safe_environment_suffix}",
       value=self.role.role_arn,
-      export_name=f"RoleArn-{environment_suffix}",
+      export_name=f"RoleArn-{safe_environment_suffix}",
     )
 
 # ---------- Main Tap Stack ----------
@@ -159,10 +165,12 @@ class TapStack(cdk.Stack):
     )
 
     # Secure S3 Bucket stack
+    # Sanitize environment_suffix specifically for S3 bucket names
+    s3_bucket_env_suffix = environment_suffix.replace('_', '-')
     self.secure_bucket = SecureS3Bucket(
       self,
       "SecureBucketConstruct",
-      bucket_name=f"tap-secure-data-{environment_suffix}"
+      bucket_name=f"tap-secure-data-{s3_bucket_env_suffix}"
     )
 
     # Output references
@@ -183,4 +191,3 @@ class TapStack(cdk.Stack):
       value=self.iam_stack.role.role_name,
       export_name="TapStackIamRoleName"
     )
-
