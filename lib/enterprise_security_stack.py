@@ -2,32 +2,27 @@ import json
 
 from cdktf_cdktf_provider_aws.cloudtrail import Cloudtrail
 from cdktf_cdktf_provider_aws.cloudwatch_log_group import CloudwatchLogGroup
-from cdktf_cdktf_provider_aws.cloudwatch_metric_alarm import (
-  CloudwatchMetricAlarm
-)
-from cdktf_cdktf_provider_aws.data_aws_caller_identity import (
-  DataAwsCallerIdentity
-)
+from cdktf_cdktf_provider_aws.cloudwatch_metric_alarm import \
+    CloudwatchMetricAlarm
+from cdktf_cdktf_provider_aws.data_aws_caller_identity import \
+    DataAwsCallerIdentity
 from cdktf_cdktf_provider_aws.data_aws_region import DataAwsRegion
 from cdktf_cdktf_provider_aws.db_instance import DbInstance
 from cdktf_cdktf_provider_aws.iam_policy import IamPolicy
 from cdktf_cdktf_provider_aws.iam_role import IamRole
-from cdktf_cdktf_provider_aws.iam_role_policy_attachment import (
-  IamRolePolicyAttachment
-)
+from cdktf_cdktf_provider_aws.iam_role_policy_attachment import \
+    IamRolePolicyAttachment
 from cdktf_cdktf_provider_aws.kms_alias import KmsAlias
 from cdktf_cdktf_provider_aws.kms_key import KmsKey
 from cdktf_cdktf_provider_aws.lambda_function import LambdaFunction
 from cdktf_cdktf_provider_aws.launch_template import LaunchTemplate
 from cdktf_cdktf_provider_aws.s3_bucket import S3Bucket
-from cdktf_cdktf_provider_aws.s3_bucket_public_access_block import (
-  S3BucketPublicAccessBlock
-)
+from cdktf_cdktf_provider_aws.s3_bucket_public_access_block import \
+    S3BucketPublicAccessBlock
 from cdktf_cdktf_provider_aws.s3_bucket_server_side_encryption_configuration import (
-  S3BucketServerSideEncryptionConfigurationA,
-  S3BucketServerSideEncryptionConfigurationRuleA,
-  S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefault
-)
+    S3BucketServerSideEncryptionConfigurationA,
+    S3BucketServerSideEncryptionConfigurationRuleA,
+    S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultA)
 from cdktf_cdktf_provider_aws.sns_topic import SnsTopic
 from cdktf_cdktf_provider_aws.vpc import Vpc
 
@@ -54,9 +49,9 @@ class EnterpriseSecurityStack(Construct):  # pylint: disable=too-many-instance-a
 
     # Initialize security components
     self._create_kms_keys()
-    self._create_cloudtrail_logging()
     self._create_s3_security_configuration()
     self._create_iam_security_policies()
+    self._create_cloudtrail_logging()
     self._create_vpc_security_configuration()
     self._create_cloudwatch_monitoring()
     self._create_ec2_security_configuration()
@@ -126,7 +121,7 @@ class EnterpriseSecurityStack(Construct):  # pylint: disable=too-many-instance-a
       rule=[
         S3BucketServerSideEncryptionConfigurationRuleA(
           apply_server_side_encryption_by_default=
-            S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefault(
+            S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultA(
               sse_algorithm="aws:kms",
               kms_master_key_id=self.kms_key.arn
             ),
@@ -162,7 +157,7 @@ class EnterpriseSecurityStack(Construct):  # pylint: disable=too-many-instance-a
       rule=[
         S3BucketServerSideEncryptionConfigurationRuleA(
           apply_server_side_encryption_by_default=
-            S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefault(
+            S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultA(
               sse_algorithm="aws:kms",
               kms_master_key_id=self.kms_key.arn
             ),

@@ -1,22 +1,27 @@
-"""Integration tests for TapStack."""
-from cdktf import App, Testing
+"""Integration tests for TAP stack."""
 
+from cdktf import App
 from lib.tap_stack import TapStack
 
 
-class TestTurnAroundPromptAPIIntegrationTests:
-    """Turn Around Prompt API Integration Tests."""
+class TestTapStackIntegration:
+    """Integration test cases for TapStack class."""
 
-    def test_terraform_configuration_synthesis(self):
-        """Test that stack instantiates properly."""
+    def test_stack_synthesis(self):
+        """Test that the entire stack can be synthesized."""
         app = App()
-        stack = TapStack(
+        TapStack(
             app,
-            "IntegrationTestStack",
-            environment_suffix="test",
+            "integration-test-stack",
+            environment_suffix="integration",
             aws_region="us-east-1",
+            default_tags={
+                "Environment": "integration",
+                "Project": "tap",
+            },
         )
 
-        # Verify basic structure
-        assert stack is not None
+        # This should not raise any exceptions
+        synth = app.synth()
+        assert synth is not None
 
