@@ -115,21 +115,15 @@ Parameters:
     Type: String
     NoEcho: true
     MinLength: 14
-    Description: "Admin user password"
-
-  AdminUserEmail:
-    Type: String
-    Description: "Email for the admin user"
+    Description: 'Admin user password'
 
   SecondaryRegionVpcCidr:
     Type: String
-    Default: "10.100.0.0/16"
-    Description: "CIDR for the VPC in the secondary region"
-
+    Default: '10.100.0.0/16'
+    Description: 'CIDR for the VPC in the secondary region'
 
 Conditions:
   EnforceMfa: !Equals [!Ref AdminMfaRequired, 'true']
-
 
 Resources:
   # =============================================================================
@@ -482,7 +476,7 @@ Resources:
     Properties:
       GroupDescription: 'Security group for web application servers'
       VpcId: !Ref SecureVPC
-      SecurityGroupIngress: []  # Will be added via separate rules to avoid circular dependency
+      SecurityGroupIngress: [] # Will be added via separate rules to avoid circular dependency
       SecurityGroupEgress:
         - IpProtocol: tcp
           FromPort: 443
@@ -1803,8 +1797,8 @@ Resources:
   # IAM ACCOUNT PASSWORD POLICY (Note: Not available as CloudFormation resource)
   # =============================================================================
   # Account password policy would need to be set via AWS CLI or Console:
-  # aws iam update-account-password-policy --minimum-password-length 14 
-  # --require-numbers --require-symbols --require-uppercase-characters 
+  # aws iam update-account-password-policy --minimum-password-length 14
+  # --require-numbers --require-symbols --require-uppercase-characters
   # --require-lowercase-characters --max-password-age 90 --password-reuse-prevention 5
 
   AdminUser: # New resource - Example Admin User for MFA enforcement demo
