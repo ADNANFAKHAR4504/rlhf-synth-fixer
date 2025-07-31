@@ -72,11 +72,16 @@ class TapStack(cdk.Stack):
     super().__init__(scope, construct_id, **kwargs)
 
     # Get environment suffix from props, context, or use 'dev' as default
-    environment_suffix = (
+    self.environment_suffix = (
         props.environment_suffix if props else None
     ) or self.node.try_get_context('environmentSuffix') or 'dev'
 
-    self.allowed_ip_ranges = allowed_ip_ranges
+    # Define allowed IP ranges for security groups (defaulting to common private ranges)
+    self.allowed_ip_ranges = [
+        "10.0.0.0/8",      # Private IP range
+        "172.16.0.0/12",   # Private IP range
+        "192.168.0.0/16"   # Private IP range
+    ]
         
     # Common tags for all resources
     self.common_tags = {
@@ -211,8 +216,8 @@ class TapStack(cdk.Stack):
         "s3:ListBucket"
       ],
       resources=[
-        f"arn:aws:s3:::tap-secure-bucket-{self.account}",
-        f"arn:aws:s3:::tap-secure-bucket-{self.account}/*"
+        f"arn:aws:s3:::tap-bucket-{self.environment_suffix}",
+        f"arn:aws:s3:::tap-bucket-{self.environment_suffix}/*"
       ]
       )
     )
@@ -265,7 +270,7 @@ class TapStack(cdk.Stack):
     self.s3_bucket = s3.Bucket(
       self,
       "TapSecureBucket",
-      bucket_name=f"tap-secure-bucket-{self.account}",
+      bucket_name=f"tap-bucket-{self.environment_suffix}",
       encryption=s3.BucketEncryption.KMS,
       encryption_key=self.kms_key,
       block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
@@ -342,12 +347,7 @@ class TapStack(cdk.Stack):
     """Create EC2 instance in public subnet"""
     
     # Get latest Amazon Linux 2 AMI
-    amzn_linux = ec2.MachineImage.latest_amazon_linux(
-      generation=ec2.AmazonLinuxGeneration.AMAZON_LINUX_2,
-      edition=ec2.AmazonLinuxEdition.STANDARD,
-      virtualization=ec2.AmazonLinuxVirt.HVM,
-      storage=ec2.AmazonLinuxStorage.GENERAL_PURPOSE
-    )
+    amzn_linux = ec2.MachineImage.latest_amazon_linux2()
     
     # User data script for basic setup
     user_data = ec2.UserData.for_linux()
@@ -459,7 +459,6 @@ class TapStack(cdk.Stack):
       port=80,
       protocol=elbv2.ApplicationProtocol.HTTP,
       target_type=elbv2.TargetType.INSTANCE,
-      targets=[elbv2.InstanceTarget(self.ec2_instance)],
       health_check=elbv2.HealthCheck(
         enabled=True,
         healthy_http_codes="200",
@@ -471,6 +470,12 @@ class TapStack(cdk.Stack):
         unhealthy_threshold_count=3,
         healthy_threshold_count=2
       )
+    )
+    
+    # Add EC2 instance to target group
+    from aws_cdk.aws_elasticloadbalancingv2_targets import InstanceTarget
+    self.target_group.add_target(
+      InstanceTarget(self.ec2_instance)
     )
     
     # Create listener
