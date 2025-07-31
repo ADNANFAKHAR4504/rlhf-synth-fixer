@@ -383,10 +383,9 @@ describe('Secure Web Application Infrastructure CloudFormation Template', () => 
         template.Resources.PrivateNetworkACLEntryOutboundDenyAll.Properties,
       ];
 
-      // Direct check against the known resource for better accuracy
       const inboundAppRule = template.Resources.PrivateNetworkACLEntryInboundApp.Properties;
       expect(inboundAppRule.RuleNumber).toBe(100);
-      expect(inboundAppRule.PortRange.From).toEqual(template.Parameters.WebAppPort.Default);
+      expect(inboundAppRule.PortRange.From).toEqual({ 'Ref': 'WebAppPort' }); // Corrected assertion
       expect(inboundAppRule.CidrBlock.Ref).toBe('VpcCidr');
       
       expect(privateInboundRules.some((r: any) => r.RuleNumber === 110 && r.PortRange.From === 22 && r.CidrBlock['Ref'] === 'BastionSshCidr')).toBe(true);
@@ -923,10 +922,9 @@ describe('Secure Web Application Infrastructure CloudFormation Template', () => 
         template.Resources.PrivateNetworkACLEntryOutboundDenyAll.Properties,
       ];
 
-      // Direct check against the known resource for better accuracy
       const inboundAppRule = template.Resources.PrivateNetworkACLEntryInboundApp.Properties;
       expect(inboundAppRule.RuleNumber).toBe(100);
-      expect(inboundAppRule.PortRange.From).toEqual(template.Parameters.WebAppPort.Default);
+      expect(inboundAppRule.PortRange.From).toEqual({ 'Ref': 'WebAppPort' });
       expect(inboundAppRule.CidrBlock.Ref).toBe('VpcCidr');
       
       expect(privateInboundRules.some((r: any) => r.RuleNumber === 110 && r.PortRange.From === 22 && r.CidrBlock['Ref'] === 'BastionSshCidr')).toBe(true);
