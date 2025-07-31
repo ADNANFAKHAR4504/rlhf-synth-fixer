@@ -8,7 +8,7 @@ Incorrect backend setup	Nova does not include any Terraform backend configuratio
 No use of AwsProviderDefaultTags	Your code supports default tags across resources, but Nova doesn’t apply provider-level tagging or expose this as a parameter.
 No modular parameterization	Nova hardcodes region, bucket names, and other values rather than exposing them via constructor props like your TapStackProps interface does.
 No escape hatch override for backend lockfile	As you correctly added this.addOverride('terraform.backend.s3.use_lockfile', true), Nova skips it entirely—this would break locking functionality in CDKTF.
-No proper interface use in module constructors	Your Ec2Module, SubnetsModule, and VpcModule use clearly typed Props interfaces. Nova omits these, which is poor practice for modular CDKTF.
+No proper interface use in module constructors	Your Ec2Module, SubnetsModule, and VpcModule use clearly typed Props interfaces. Nova omits these, which is poor practice for modular CDKTF. 
 
 Summary of Nova Model Failures
 Area	Nova Issue
