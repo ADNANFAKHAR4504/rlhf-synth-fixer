@@ -45,9 +45,45 @@ class TestTapStack(unittest.TestCase):
         "BucketName": "tap-bucket-dev"
     })
 
-  @mark.it("Write Unit Tests")
-  def test_write_unit_tests(self):
-    # ARRANGE
-    self.fail(
-        "Unit test for TapStack should be implemented here."
-    )
+  def test_vpc_created_with_correct_cidr(self):
+    stack = TapStack(self.app, "TapStackVpc")
+    template = Template.from_stack(stack)
+    template.has_resource_properties("AWS::EC2::VPC", {
+      "CidrBlock": "10.0.0.0/16"
+    })
+
+  def test_iam_instance_profile_created(self):
+    stack = TapStack(self.app, "TapStackIAM")
+    template = Template.from_stack(stack)
+    template.resource_count_is("AWS::IAM::InstanceProfile", 1)
+
+  def test_ec2_instance_type(self):
+    stack = TapStack(self.app, "TapStackEC2")
+    template = Template.from_stack(stack)
+    template.has_resource_properties("AWS::EC2::Instance", {
+      "InstanceType": "t3.micro"
+    })
+
+  def test_rds_instance_created(self):
+    stack = TapStack(self.app, "TapStackRDS")
+    template = Template.from_stack(stack)
+    template.resource_count_is("AWS::RDS::DBInstance", 1)
+    template.has_resource_properties("AWS::RDS::DBInstance", {
+      "Engine": "postgres"
+    })
+
+  def test_alb_listener_created(self):
+    stack = TapStack(self.app, "TapStackALB")
+    template = Template.from_stack(stack)
+    template.has_resource_properties("AWS::ElasticLoadBalancingV2::Listener", {
+      "Port": 80
+    })
+
+  def test_outputs_are_defined(self):
+    stack = TapStack(self.app, "TapStackOutputs")
+    template = Template.from_stack(stack)
+    for output_name in [
+      "VPCId", "EC2InstanceId", "ElasticIP",
+      "ALBDNSName", "RDSEndpoint", "S3BucketName", "KMSKeyId"
+    ]:
+      template.has_output(output_name)
