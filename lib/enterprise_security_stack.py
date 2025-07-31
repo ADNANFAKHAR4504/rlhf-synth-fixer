@@ -495,20 +495,16 @@ class EnterpriseSecurityStack(Construct):  # pylint: disable=too-many-instance-a
       filename="lambda_function.zip",  # This would need to be provided
       timeout=30,
       memory_size=128,
-      environment=[
-        {
-          "variables": {
-            "ENVIRONMENT": "production",
-            "LOG_LEVEL": "INFO"
-          }
+      environment={
+        "variables": {
+          "ENVIRONMENT": "production",
+          "LOG_LEVEL": "INFO"
         }
-      ],
+      },
       kms_key_arn=self.kms_key.arn,  # Encrypt environment variables
-      tracing_config=[
-        {
-          "mode": "Active"  # Enable X-Ray tracing
-        }
-      ],
+      tracing_config={
+        "mode": "Active"  # Enable X-Ray tracing
+      },
       tags={
         "Name": "EnterpriseSecureLambda",
         "Environment": "Production",
@@ -527,6 +523,10 @@ class EnterpriseSecurityStack(Construct):  # pylint: disable=too-many-instance-a
     #   resource_arn=(
     #     "arn:aws:elasticloadbalancing:region:account:"
     #     "loadbalancer/app/example/1234567890"
+    #   )
+    # )
+    # No-op for now
+    return
     #   )
     # )
     # No-op for now
