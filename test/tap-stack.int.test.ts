@@ -1,6 +1,6 @@
-//fix int test
-//make changes
-//changes done
+// Fix integration test
+// Make changes
+// Changes done
 import fs from 'fs';
 import {
   S3Client,
