@@ -25,14 +25,9 @@ Metadata:
           - MaxInstances
           - WebAppPort # New parameter for application port
       - Label:
-          default: 'Security Configuration'
+          default: 'Security & Admin Configuration' # Renamed for clarity
         Parameters:
           - DataRetentionDays
-          - AdminMfaRequired
-          - AdminUserEmail # New parameter for admin user email for MFA
-      - Label:
-          default: 'Security Parameters'
-        Parameters:
           - AdminMfaRequired
           - AdminUserPassword
           - AdminUserEmail
