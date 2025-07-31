@@ -24,6 +24,8 @@ class TapStack(TerraformStack):
     state_bucket_region = kwargs.get('state_bucket_region', 'us-east-1')
     state_bucket = kwargs.get('state_bucket', 'iac-rlhf-tf-states')
     default_tags = kwargs.get('default_tags', {})
+    lambda_timeout = kwargs.get('lambda_timeout', None)
+    lambda_memory_size = kwargs.get('lambda_memory_size', None)
 
     # Configure AWS Provider
     AwsProvider(
@@ -49,5 +51,7 @@ class TapStack(TerraformStack):
     self.serverless_stack = ServerlessImageProcessingStack(
       self,
       "serverless-image-processing",
-      aws_region=aws_region
+      aws_region=aws_region,
+      lambda_timeout=lambda_timeout,
+      lambda_memory_size=lambda_memory_size
     )

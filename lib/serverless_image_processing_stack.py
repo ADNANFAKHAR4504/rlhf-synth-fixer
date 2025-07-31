@@ -30,9 +30,14 @@ class ServerlessImageProcessingStack(Construct):
   """Serverless Image Processing Stack for S3 event-driven thumbnail generation."""
 
   def __init__(
-    self, scope: Construct, construct_id: str, aws_region: str = "us-east-1"
+    self, scope: Construct, construct_id: str, *, aws_region: str = "us-east-1",
+    lambda_timeout: int = None, lambda_memory_size: int = None
   ):
     super().__init__(scope, construct_id)
+    
+    # Configuration with defaults
+    self._lambda_timeout = lambda_timeout or int(os.getenv("LAMBDA_TIMEOUT", "30"))
+    self._lambda_memory_size = lambda_memory_size or int(os.getenv("LAMBDA_MEMORY_SIZE", "256"))
 
     # S3 Bucket for image storage
     self.s3_bucket = S3Bucket(
@@ -75,10 +80,6 @@ class ServerlessImageProcessingStack(Construct):
         "bucket_key_enabled": True
       }]
     )
-
-    # Security: S3 bucket lifecycle policy to manage storage costs and retention
-    # Temporarily disabled to debug synthesis issues
-    # S3BucketLifecycleConfiguration will be re-added with correct syntax
 
     # CloudWatch Log Group for Lambda function with security settings
     self.log_group = CloudwatchLogGroup(
@@ -507,11 +508,9 @@ def detect_image_format(file_content):
       handler="lambda_function.lambda_handler",
       role=self.lambda_role.arn,
       filename=lambda_zip_path,
-      source_code_hash=base64.b64encode(
-        open(lambda_zip_path, "rb").read()  # pylint: disable=consider-using-with
-      ).decode(),
-      timeout=30,  # Security: Reduced timeout to minimize exposure
-      memory_size=256,  # Reduced memory since no image processing
+      source_code_hash=self._get_lambda_source_hash(lambda_zip_path),
+      timeout=self._lambda_timeout,  # Configurable timeout
+      memory_size=self._lambda_memory_size,  # Configurable memory size
       reserved_concurrent_executions=10,  # Security: Limit concurrent executions
       # Note: Dead letter config removed - CloudWatch logs are not supported for DLQ
       # Errors will be logged to CloudWatch through standard logging
@@ -591,3 +590,8 @@ def detect_image_format(file_content):
       }),
       description="Security features implemented in the stack"
     )
+
+  def _get_lambda_source_hash(self, lambda_zip_path: str) -> str:
+    """Get the base64 encoded hash of the Lambda deployment package with proper file handling."""
+    with open(lambda_zip_path, "rb") as f:
+      return base64.b64encode(f.read()).decode()
