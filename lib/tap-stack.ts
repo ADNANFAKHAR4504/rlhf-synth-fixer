@@ -1,18 +1,42 @@
 import { Construct } from 'constructs';
 import { TerraformStack } from 'cdktf';
-import { AwsProvider, Vpc, Subnet, InternetGateway, RouteTable, Route, RouteTableAssociation, SecurityGroup, Instance, S3Bucket, S3BucketServerSideEncryptionConfiguration, IamRole, IamPolicy, IamRolePolicyAttachment } from '@cdktf/provider-aws';
+import {
+  AwsProvider,
+  Vpc,
+  Subnet,
+  InternetGateway,
+  RouteTable,
+  Route,
+  RouteTableAssociation,
+  SecurityGroup,
+  Instance,
+  S3Bucket,
+  S3BucketServerSideEncryptionConfiguration,
+  IamRole,
+  IamPolicy,
+  IamRolePolicyAttachment,
+  NetworkAcl,
+  NetworkAclRule,
+  NetworkAclAssociation,
+} from '@cdktf/provider-aws';
+
+interface TapStackProps {
+  region?: string;
+  amiId: string;
+}
 
 export class TapStack extends TerraformStack {
-  constructor(scope: Construct, name: string) {
+  constructor(scope: Construct, name: string, props: TapStackProps) {
     super(scope, name);
 
+    const region = props.region ?? 'us-east-1';
+
     new AwsProvider(this, 'aws', {
-      region: 'us-east-1',
+      region,
     });
 
     const tags = { Environment: 'Production' };
 
-    // ✅ VPC
     const vpc = new Vpc(this, 'SecureVpc', {
       cidrBlock: '10.0.0.0/16',
       enableDnsSupport: true,
@@ -20,22 +44,19 @@ export class TapStack extends TerraformStack {
       tags: { ...tags, Name: 'secure-network' },
     });
 
-    // ✅ Subnet (public)
     const subnet = new Subnet(this, 'PublicSubnet', {
       vpcId: vpc.id,
       cidrBlock: '10.0.1.0/24',
-      availabilityZone: 'us-east-1a',
+      availabilityZone: region + 'a',
       mapPublicIpOnLaunch: true,
       tags,
     });
 
-    // ✅ Internet Gateway
     const igw = new InternetGateway(this, 'Igw', {
       vpcId: vpc.id,
       tags,
     });
 
-    // ✅ Route Table and association
     const routeTable = new RouteTable(this, 'RouteTable', {
       vpcId: vpc.id,
       tags,
@@ -52,7 +73,6 @@ export class TapStack extends TerraformStack {
       routeTableId: routeTable.id,
     });
 
-    // ✅ Security Group (Allow only HTTP + HTTPS)
     const sg = new SecurityGroup(this, 'WebSg', {
       name: 'web-secure-sg',
       description: 'Allow HTTP and HTTPS',
@@ -67,7 +87,48 @@ export class TapStack extends TerraformStack {
       tags,
     });
 
-    // ✅ S3 Bucket for logs with server-side encryption
+    const nacl = new NetworkAcl(this, 'PublicNacl', {
+      vpcId: vpc.id,
+      subnetIds: [subnet.id],
+      tags,
+    });
+
+    new NetworkAclRule(this, 'InboundHttp', {
+      networkAclId: nacl.id,
+      ruleNumber: 100,
+      protocol: '6',
+      ruleAction: 'allow',
+      egress: false,
+      cidrBlock: '0.0.0.0/0',
+      fromPort: 80,
+      toPort: 80,
+    });
+
+    new NetworkAclRule(this, 'InboundHttps', {
+      networkAclId: nacl.id,
+      ruleNumber: 101,
+      protocol: '6',
+      ruleAction: 'allow',
+      egress: false,
+      cidrBlock: '0.0.0.0/0',
+      fromPort: 443,
+      toPort: 443,
+    });
+
+    new NetworkAclRule(this, 'OutboundAll', {
+      networkAclId: nacl.id,
+      ruleNumber: 100,
+      protocol: '-1',
+      ruleAction: 'allow',
+      egress: true,
+      cidrBlock: '0.0.0.0/0',
+    });
+
+    new NetworkAclAssociation(this, 'NaclAssoc', {
+      networkAclId: nacl.id,
+      subnetId: subnet.id,
+    });
+
     const logBucket = new S3Bucket(this, 'LogBucket', {
       bucketPrefix: 'secure-app-logs-',
       forceDestroy: true,
@@ -83,7 +144,6 @@ export class TapStack extends TerraformStack {
       }],
     });
 
-    // ✅ IAM Role for EC2
     const ec2Role = new IamRole(this, 'EC2LogRole', {
       name: 'ec2-log-writer-role',
       assumeRolePolicy: JSON.stringify({
@@ -97,7 +157,6 @@ export class TapStack extends TerraformStack {
       tags,
     });
 
-    // ✅ IAM Policy (least privilege) for S3 logging
     const ec2Policy = new IamPolicy(this, 'EC2S3LogPolicy', {
       name: 'ec2-s3-log-policy',
       policy: JSON.stringify({
@@ -105,7 +164,7 @@ export class TapStack extends TerraformStack {
         Statement: [{
           Effect: 'Allow',
           Action: ['s3:PutObject'],
-          Resource: [`${logBucket.arn}/*`],
+          Resource: [`\${logBucket.arn}/*`],
         }],
       }),
       tags,
@@ -116,9 +175,8 @@ export class TapStack extends TerraformStack {
       policyArn: ec2Policy.arn,
     });
 
-    // ✅ EC2 Instance (Amazon Linux 2 for us-east-1)
     new Instance(this, 'WebInstance', {
-      ami: 'ami-0453898e98046c639', // Amazon Linux 2 (July 2025)
+      ami: props.amiId,
       instanceType: 't3.micro',
       subnetId: subnet.id,
       vpcSecurityGroupIds: [sg.id],
