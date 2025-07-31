@@ -278,10 +278,7 @@ class EnterpriseSecurityStack(Construct):
               "logs:CreateLogStream",
               "logs:PutLogEvents"
             ],
-            "Resource": (
-              f"arn:aws:logs:{self.current_region.name}:":
-              f"{self.current_account.account_id}:*"
-            )
+            "Resource": f"arn:aws:logs:{self.current_region.name}:{self.current_account.account_id}:*"
           }
         ]
       })
@@ -518,6 +515,9 @@ class EnterpriseSecurityStack(Construct):
     #   self, "shield_protection_example",
     #   name="enterprise-shield-protection",
     #   resource_arn="arn:aws:elasticloadbalancing:region:account:loadbalancer/app/example/1234567890"
+    # )
+    # No-op for now
+    return
     # )
     # No-op for now
     return
