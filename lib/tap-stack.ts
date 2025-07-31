@@ -11,7 +11,7 @@ import { RouteTableAssociation } from '@cdktf/provider-aws/lib/route-table-assoc
 import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
 import { Instance } from '@cdktf/provider-aws/lib/instance';
 import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
-import { S3BucketServerSideEncryptionConfiguration } from '@cdktf/provider-aws/lib/s3-bucket-server-side-encryption-configuration';
+import { S3BucketServerSideEncryptionConfigurationA } from '@cdktf/provider-aws/lib/s3-bucket-server-side-encryption-configuration';
 import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
 import { IamPolicy } from '@cdktf/provider-aws/lib/iam-policy';
 import { IamRolePolicyAttachment } from '@cdktf/provider-aws/lib/iam-role-policy-attachment';
@@ -132,7 +132,7 @@ export class TapStack extends TerraformStack {
       tags,
     });
 
-    new S3BucketServerSideEncryptionConfiguration(this, 'LogBucketEncryption', {
+    new S3BucketServerSideEncryptionConfigurationA(this, 'LogBucketEncryption', {
       bucket: logBucket.bucket,
       rule: [
         {

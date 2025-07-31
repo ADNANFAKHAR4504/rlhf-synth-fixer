@@ -1,9 +1,13 @@
+```ts
 import { Testing } from 'cdktf';
 import { TapStack } from '../lib/tap-stack';
 
 describe('TapStack Unit Tests', () => {
   const app = Testing.app();
-  const stack = new TapStack(app, 'unit-test-stack', 'us-west-2', 'ami-12345678'); // Pass required params
+  const stack = new TapStack(app, 'unit-test-stack', {
+    region: 'us-west-2',
+    amiId: 'ami-12345678',
+  });
   const synthesized = Testing.synthScope(stack);
 
   it('creates a VPC with correct CIDR and tags', () => {
@@ -45,3 +49,4 @@ describe('TapStack Unit Tests', () => {
     });
   });
 });
+```

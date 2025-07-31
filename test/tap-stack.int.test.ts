@@ -3,8 +3,17 @@ import { TapStack } from '../lib/tap-stack';
 
 describe('TapStack Integration Tests', () => {
   const app = Testing.app();
-  const stack = new TapStack(app, 'integration-test-stack', 'us-east-1', 'ami-0453898e98046c639');
-  const synthesized = Testing.synthScope(stack);
+  const stack = new TapStack(app, 'integration-test-stack', {
+    region: 'us-east-1',
+    amiId: 'ami-0453898e98046c639',
+  });
+  const synthesized = Testing.synthScope(scope => {
+  new TapStack(scope, 'test', {
+    region: 'us-west-2',
+    amiId: 'ami-12345678'
+  });
+});
+
 
   it('has a public subnet', () => {
     expect(synthesized).toHaveResource('aws_subnet', {
@@ -37,3 +46,4 @@ describe('TapStack Integration Tests', () => {
     });
   });
 });
+```
