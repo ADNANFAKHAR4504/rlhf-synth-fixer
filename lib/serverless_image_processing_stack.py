@@ -179,7 +179,7 @@ class ServerlessImageProcessingStack(Construct):
     )
 
     # Attach the custom policy to the Lambda role
-    IamRolePolicyAttachment(
+    self.lambda_policy_attachment = IamRolePolicyAttachment(
       self, "LambdaS3CloudWatchPolicyAttachment",
       role=self.lambda_role.name,
       policy_arn=self.lambda_policy.arn
@@ -512,6 +512,7 @@ def detect_image_format(file_content):
       timeout=self._lambda_timeout,  # Configurable timeout
       memory_size=self._lambda_memory_size,  # Configurable memory size
       reserved_concurrent_executions=10,  # Security: Limit concurrent executions
+      publish=True,  # Ensure the function is published with a version
       # Note: Dead letter config removed - CloudWatch logs are not supported for DLQ
       # Errors will be logged to CloudWatch through standard logging
       environment={
@@ -522,7 +523,8 @@ def detect_image_format(file_content):
           "LOG_LEVEL": "INFO"
         }
       },
-      depends_on=[self.log_group],
+      depends_on=[self.log_group, self.lambda_role, self.lambda_policy, 
+                  self.lambda_policy_attachment],
       tags={
         "Name": "ImageMetadataProcessor",
         "Environment": "Production",
@@ -532,17 +534,18 @@ def detect_image_format(file_content):
     )
 
     # Lambda permission to allow S3 to invoke the function
-    LambdaPermission(
+    self.lambda_permission = LambdaPermission(
       self, "S3InvokeLambdaPermission",
       statement_id="AllowExecutionFromS3Bucket",
       action="lambda:InvokeFunction",
       function_name=self.lambda_function.function_name,
       principal="s3.amazonaws.com",
-      source_arn=self.s3_bucket.arn
+      source_arn=self.s3_bucket.arn,
+      depends_on=[self.lambda_function]
     )
 
     # S3 bucket notification configuration
-    S3BucketNotification(
+    self.s3_notification = S3BucketNotification(
       self, "S3BucketNotification",
       bucket=self.s3_bucket.id,
       lambda_function=[{
@@ -551,7 +554,7 @@ def detect_image_format(file_content):
         "filter_prefix": "",
         "filter_suffix": ""
       }],
-      depends_on=[self.lambda_function]
+      depends_on=[self.lambda_function, self.lambda_permission]
     )
 
     # Outputs
