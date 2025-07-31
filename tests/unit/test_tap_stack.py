@@ -13,33 +13,33 @@ from lib.tap_stack import TapStack
 
 
 class TestStackStructure:
-    """Test suite for Stack Structure."""
+  """Test suite for Stack Structure."""
 
-    def test_tap_stack_instantiates_successfully_via_props(self):
-        """TapStack instantiates successfully via props."""
-        app = App()
-        stack = TapStack(
-            app,
-            "TestTapStackWithProps",
-            environment_suffix="prod",
-            state_bucket="custom-state-bucket",
-            state_bucket_region="us-west-2",
-            aws_region="us-west-2",
-        )
+  def test_tap_stack_instantiates_successfully_via_props(self):
+    """TapStack instantiates successfully via props."""
+    app = App()
+    stack = TapStack(
+      app,
+      "TestTapStackWithProps",
+      environment_suffix="prod",
+      state_bucket="custom-state-bucket",
+      state_bucket_region="us-west-2",
+      aws_region="us-west-2",
+    )
 
-        # Verify that TapStack instantiates without errors via props
-        assert stack is not None
-        assert hasattr(stack, "bucket")
-        assert hasattr(stack, "bucket_versioning")
-        assert hasattr(stack, "bucket_encryption")
+    # Verify that TapStack instantiates without errors via props
+    assert stack is not None
+    assert hasattr(stack, "bucket")
+    assert hasattr(stack, "bucket_versioning")
+    assert hasattr(stack, "bucket_encryption")
 
-    def test_tap_stack_uses_default_values_when_no_props_provided(self):
-        """TapStack uses default values when no props provided."""
-        app = App()
-        stack = TapStack(app, "TestTapStackDefault")
+  def test_tap_stack_uses_default_values_when_no_props_provided(self):
+      """TapStack uses default values when no props provided."""
+      app = App()
+      stack = TapStack(app, "TestTapStackDefault")
 
-        # Verify that TapStack instantiates without errors when no props provided
-        assert stack is not None
-        assert hasattr(stack, "bucket")
-        assert hasattr(stack, "bucket_versioning")
-        assert hasattr(stack, "bucket_encryption")
+      # Verify that TapStack instantiates without errors when no props provided
+      assert stack is not None
+      assert hasattr(stack, "bucket")
+      assert hasattr(stack, "bucket_versioning")
+      assert hasattr(stack, "bucket_encryption")
