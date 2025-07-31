@@ -17,6 +17,7 @@ Parameters:
     MinLength: 8
     MaxLength: 41
     AllowedPattern: '[a-zA-Z0-9]*'
+    Default: MySecureDefault123
 
   InstanceType:
     Type: String
