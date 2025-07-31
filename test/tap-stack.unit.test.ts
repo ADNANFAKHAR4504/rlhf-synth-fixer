@@ -14,9 +14,50 @@ describe('TapStack CloudFormation Template', () => {
     template = JSON.parse(templateContent);
   });
 
-  describe('Write Integration TESTS', () => {
-    test('Dont forget!', async () => {
-      expect(false).toBe(true);
+  describe('Security Validation', () => {
+    test('DynamoDB table should have deletion protection disabled for testing', () => {
+      const table = template.Resources.TurnAroundPromptTable;
+      expect(table.Properties.DeletionProtectionEnabled).toBe(false);
+    });
+
+    test('DynamoDB table should have appropriate deletion policies', () => {
+      const table = template.Resources.TurnAroundPromptTable;
+      expect(table.DeletionPolicy).toBe('Delete');
+      expect(table.UpdateReplacePolicy).toBe('Delete');
+    });
+  });
+
+  describe('Cost Optimization', () => {
+    test('DynamoDB table should use pay-per-request billing', () => {
+      const table = template.Resources.TurnAroundPromptTable;
+      expect(table.Properties.BillingMode).toBe('PAY_PER_REQUEST');
+    });
+  });
+
+  describe('Compliance and Best Practices', () => {
+    test('should use consistent naming conventions', () => {
+      const table = template.Resources.TurnAroundPromptTable;
+      expect(table.Properties.TableName).toEqual({
+        'Fn::Sub': 'TurnAroundPromptTable${EnvironmentSuffix}',
+      });
+    });
+
+    test('should have proper export naming for cross-stack references', () => {
+      Object.keys(template.Outputs).forEach(outputKey => {
+        const output = template.Outputs[outputKey];
+        expect(output.Export).toBeDefined();
+        expect(output.Export.Name).toEqual({
+          'Fn::Sub': `\${AWS::StackName}-${outputKey}`,
+        });
+      });
+    });
+
+    test('should have descriptive output descriptions', () => {
+      Object.keys(template.Outputs).forEach(outputKey => {
+        const output = template.Outputs[outputKey];
+        expect(output.Description).toBeDefined();
+        expect(output.Description.length).toBeGreaterThan(0);
+      });
     });
   });
 
