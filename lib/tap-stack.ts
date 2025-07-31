@@ -44,8 +44,10 @@ export class TapStack extends TerraformStack {
       ...props.defaultTags.tags,
     };
 
-    // Generate unique suffix for bucket name
-    const uniqueSuffix = Math.random().toString(36).substring(2, 8);
+    // Generate deterministic unique suffix for bucket name based on environment and timestamp
+    // This ensures uniqueness while being more predictable for cleanup
+    const timestamp = Date.now().toString().slice(-6);
+    const uniqueSuffix = `${props.environmentSuffix}-${timestamp}`;
 
     // Create SQS Dead Letter Queue for Lambda function
     const dlqQueue = new SqsQueue(this, 'ImageProcessingDLQ', {
@@ -144,7 +146,7 @@ export class TapStack extends TerraformStack {
 
     // Create S3 bucket for image processing
     const s3Bucket = new S3Bucket(this, 'ImageProcessingBucket', {
-      bucket: `image-processing-source-bucket-${props.environmentSuffix}-${uniqueSuffix}`,
+      bucket: `image-processing-source-bucket-${uniqueSuffix}`,
       tags: commonTags,
     });
 
