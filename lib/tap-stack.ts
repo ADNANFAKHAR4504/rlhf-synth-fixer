@@ -10,7 +10,7 @@ interface TapStackProps extends cdk.StackProps {
   hostedZoneId?: string;
   domainName?: string;
 }
-
+//fix issues
 export class TapStack extends cdk.Stack {
   public readonly iotDataProcessor: IoTDataProcessorConstruct;
 
