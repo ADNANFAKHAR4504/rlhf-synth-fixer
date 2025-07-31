@@ -31,7 +31,9 @@ export class TapStack extends cdk.Stack {
       'dev';
 
     // --- Environment Configuration Strategy ---
-    const envConfig: EnvironmentConfig = this.node.tryGetContext(environmentSuffix) || {
+    const envConfig: EnvironmentConfig = this.node.tryGetContext(
+      environmentSuffix
+    ) || {
       instanceSize: 'MICRO',
       vpcCidr: '10.0.0.0/16',
     };

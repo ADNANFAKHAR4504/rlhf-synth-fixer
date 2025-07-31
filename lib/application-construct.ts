@@ -20,10 +20,18 @@ export class ApplicationConstruct extends Construct {
   constructor(scope: Construct, id: string, props: ApplicationConstructProps) {
     super(scope, id);
 
-    const { vpc, assetBucket, databaseSecurityGroup, instanceSize, environmentSuffix } = props;
+    const {
+      vpc,
+      assetBucket,
+      databaseSecurityGroup,
+      instanceSize,
+      environmentSuffix,
+    } = props;
 
     // Convert string to InstanceSize enum
-    const ec2InstanceSize = (ec2.InstanceSize as any)[instanceSize] || ec2.InstanceSize.MICRO;
+    const ec2InstanceSize =
+      (ec2.InstanceSize as Record<string, ec2.InstanceSize>)[instanceSize] ||
+      ec2.InstanceSize.MICRO;
 
     // --- Application Security Group ---
     this.securityGroup = new ec2.SecurityGroup(this, 'AppSG', {
@@ -52,10 +60,7 @@ export class ApplicationConstruct extends Construct {
     this.instance = new ec2.Instance(this, 'AppInstance', {
       vpc,
       vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
-      instanceType: ec2.InstanceType.of(
-        ec2.InstanceClass.T3,
-        ec2InstanceSize
-      ),
+      instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2InstanceSize),
       machineImage: ec2.MachineImage.latestAmazonLinux2023(),
       securityGroup: this.securityGroup,
       role: this.role,

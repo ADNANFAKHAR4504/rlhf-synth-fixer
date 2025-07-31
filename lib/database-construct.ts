@@ -19,7 +19,9 @@ export class DatabaseConstruct extends Construct {
     const { vpc, instanceSize, environmentSuffix } = props;
 
     // Convert string to InstanceSize enum
-    const ec2InstanceSize = (ec2.InstanceSize as any)[instanceSize] || ec2.InstanceSize.MICRO;
+    const ec2InstanceSize =
+      (ec2.InstanceSize as Record<string, ec2.InstanceSize>)[instanceSize] ||
+      ec2.InstanceSize.MICRO;
 
     // --- Database Security Group ---
     this.securityGroup = new ec2.SecurityGroup(this, 'DatabaseSG', {
