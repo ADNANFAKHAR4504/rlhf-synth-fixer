@@ -11,7 +11,6 @@ on:
     branches: [main]
     types: [opened, synchronize, reopened, closed]
   workflow_dispatch:
-  
 
 permissions:
   contents: read
@@ -21,10 +20,14 @@ env:
   # Use PR number for resource isolation, fallback to 'main' for main branch
   # Prefix with 'pr' to ensure AWS resource names start with a letter
   ENVIRONMENT_SUFFIX: ${{ github.event.number && format('pr{0}', github.event.number) || 'dev' }}
-  S3_BUCKET_NAME: 'iac-rlhf-aws-release'
+  S3_RELEASE_BUCKET_NAME: 'iac-rlhf-aws-release'
   TERRAFORM_STATE_BUCKET: 'iac-rlhf-tf-states'
   TERRAFORM_STATE_BUCKET_REGION: 'us-east-1'
   S3_PRODUCTION_BUCKET_NAME: 'iac-rlhf-production'
+  PULUMI_STATE_BUCKET: 'iac-rlhf-pulumi-states'
+  PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
+  AAWS_DEFAULT_REGION: ${{ vars.AWS_REGION }}
+  PULUMI_ORG: 'organization'
 
 jobs:
   detect-metadata:
@@ -97,6 +100,12 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install pipenv==2025.0.4
+
+      - name: Install Pulumi CLI
+        if: needs.synth.outputs.platform == 'pulumi'
+        uses: pulumi/actions@v5
+        with:
+          pulumi-version: 3.109.0
 
       - name: Verify Node.js version
         run: |
@@ -228,6 +237,8 @@ jobs:
           ENVIRONMENT_SUFFIX: ${{ env.ENVIRONMENT_SUFFIX }}
           TERRAFORM_STATE_BUCKET: ${{ env.TERRAFORM_STATE_BUCKET }}
           TERRAFORM_STATE_BUCKET_REGION: ${{ env.TERRAFORM_STATE_BUCKET_REGION }}
+          PULUMI_BACKEND_URL: s3://${{ env.PULUMI_STATE_BUCKET }}
+          PULUMI_ORG: ${{ env.PULUMI_ORG }}
 
       - name: Upload Build Artifacts
         uses: actions/upload-artifact@v4
@@ -236,6 +247,7 @@ jobs:
           path: |
             cdk.out/
             cdktf.out/
+
   deploy:
     name: Deploy
     runs-on: ubuntu-24.04
@@ -263,24 +275,30 @@ jobs:
 
       - name: Bootstrap
         run: |
-          # --- ADD THIS CLEANUP STEP HERE ---
-          echo "Cleaning up cdk.out directory before bootstrap..."
-          if [ -d "cdk.out" ]; then
-            rm -rf cdk.out
-          fi
           PLATFORM="${{ needs.synth.outputs.platform }}"
           LANGUAGE="${{ needs.synth.outputs.language }}"
 
           if [ "$PLATFORM" = "cdk" ]; then
+            echo "Cleaning up cdk.out folder..."
             echo "✅ CDK project detected, running CDK bootstrap..."
+            rm -rf cdk.out
             npm run cdk:bootstrap
+
+          elif [ "$PLATFORM" = "pulumi" ]; then
+            echo "✅ Pulumi project detected, setting up environment..."
+            # Login to Pulumi S3 backend
+            pipenv run pulumi-login
+            echo "✅ Pulumi bootstrap completed"
           else
-            echo "ℹ️ Not a CDK project, skipping CDK bootstrap"
+            echo "ℹ️ Unknown or unsupported platform: $PLATFORM. Skipping bootstrap."
           fi
         env:
           ENVIRONMENT_SUFFIX: ${{ env.ENVIRONMENT_SUFFIX }}
           REPOSITORY: ${{ github.repository }}
           COMMIT_AUTHOR: ${{ github.event.head_commit.author.name || github.actor }}
+          PULUMI_BACKEND_URL: s3://${{ env.PULUMI_STATE_BUCKET }}
+          AWS_DEFAULT_REGION: ${{ env.AWS_DEFAULT_REGION }}
+          PULUMI_ORG: ${{ env.PULUMI_ORG }}
 
       - name: Deploy
         run: |
@@ -299,6 +317,14 @@ jobs:
           elif [ "$PLATFORM" = "cfn" ] && [ "$LANGUAGE" = "json" ]; then
             echo "✅ CloudFormation JSON project detected, deploying with AWS CLI..."
             npm run cfn:deploy-json
+          elif [ "$PLATFORM" = "pulumi" ]; then
+            echo "✅ Pulumi project detected, running Pulumi deploy..."
+            echo "Using environment suffix: $ENVIRONMENT_SUFFIX"
+            echo "Selecting or creating Pulumi stack Using ENVIRONMENT_SUFFIX=$ENVIRONMENT_SUFFIX"
+            export PYTHONPATH=.
+            pipenv run pulumi-create-stack
+            echo "Deploying infrastructure ..."
+            pipenv run pulumi-deploy
           else
             echo "ℹ️ Unknown deployment method for platform: $PLATFORM, language: $LANGUAGE"
             echo "💡 Supported combinations: cdk+typescript, cdk+python, cfn+yaml, cfn+json"
@@ -310,6 +336,10 @@ jobs:
           AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
           TERRAFORM_STATE_BUCKET: ${{ env.TERRAFORM_STATE_BUCKET }}
           TERRAFORM_STATE_BUCKET_REGION: ${{ env.TERRAFORM_STATE_BUCKET_REGION }}
+          PULUMI_BACKEND_URL: s3://${{ env.PULUMI_STATE_BUCKET }}
+          PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
+          AWS_DEFAULT_REGION: ${{ env.AWS_DEFAULT_REGION }}
+          PULUMI_ORG: ${{ env.PULUMI_ORG }}
 
       - name: Get Deployment Outputs
         run: |
@@ -387,6 +417,29 @@ jobs:
             cat cfn-outputs/all-outputs.json || echo "No consolidated outputs"
             echo "Flat outputs:"
             cat cfn-outputs/flat-outputs.json || echo "No flat outputs"
+
+          elif [ "$PLATFORM" = "pulumi" ]; then
+            echo "✅ Pulumi project detected, getting Pulumi stack outputs..."
+            mkdir -p cfn-outputs
+            echo "{}" > cfn-outputs/all-outputs.json
+            echo "{}" > cfn-outputs/flat-outputs.json
+            # Get the current stack name
+            STACK_NAME=$(pulumi stack --show-name)
+            echo "Fetching outputs from Pulumi stack: $STACK_NAME"
+            pulumi stack output --json > temp-${STACK_NAME}-outputs.json || echo "{}" > temp-${STACK_NAME}-outputs.json
+            jq -n --arg stack "$STACK_NAME" --slurpfile outputs "temp-${STACK_NAME}-outputs.json" '{($stack): $outputs[0]}' > temp-stack.json
+            jq -s '.[0] * .[1]' cfn-outputs/all-outputs.json temp-stack.json > temp-merged.json && mv temp-merged.json cfn-outputs/all-outputs.json
+            jq -r 'to_entries[] | "\(.key)=\(.value)"' "temp-${STACK_NAME}-outputs.json" | while IFS='=' read -r key value; do
+              jq --arg key "$key" --arg value "$value" '. + {($key): $value}' cfn-outputs/flat-outputs.json > temp-flat.json
+              mv temp-flat.json cfn-outputs/flat-outputs.json
+            done
+            echo "Consolidated outputs:"
+            cat cfn-outputs/all-outputs.json || echo "No consolidated outputs"
+            echo "Flat outputs:"
+            cat cfn-outputs/flat-outputs.json || echo "No flat outputs"
+            rm -f temp-${STACK_NAME}-outputs.json temp-stack.json temp-merged.json temp-flat.json
+
+            
           else
             echo "ℹ️ Not a CDK TypeScript or CloudFormation project, creating empty outputs for consistency"
             mkdir -p cfn-outputs
@@ -599,7 +652,11 @@ jobs:
           fi
         env:
           ENVIRONMENT_SUFFIX: ${{ env.ENVIRONMENT_SUFFIX }}
-          CI: "1"           # Set CI for the entire step
+          CI: '1' # Set CI for the entire step
+          PULUMI_BACKEND_URL: s3://${{ env.PULUMI_STATE_BUCKET }}
+          PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
+          AWS_DEFAULT_REGION: ${{ env.AWS_DEFAULT_REGION }}
+          PULUMI_ORG: ${{ env.PULUMI_ORG }}
 
   cleanup:
     name: Cleanup (Destroy Resources)
@@ -642,6 +699,14 @@ jobs:
             echo "✅ CloudFormation project detected, running CloudFormation destroy..."
             # Try to destroy any leftover resources from PRs, but don't fail if they don't exist
             npm run cfn:destroy || echo "No resources to destroy or destruction failed"
+          elif [ "$PLATFORM" = "pulumi" ]; then
+            echo "✅ Pulumi project detected, running Pulumi destroy..."
+            echo "Selecting dev stack..."
+            pipenv run pulumi-create-stack || echo "Stack selection failed"
+            echo "Destroying Pulumi infrastructure..."
+            pipenv run pulumi-destroy || echo "No resources to destroy or destruction failed"
+            echo "Removing Pulumi stack..."
+            pipenv run pulumi-remove-stack || echo "Stack removal failed or stack doesn't exist"
           else
             echo "ℹ️ Platform '$PLATFORM' with language '$LANGUAGE' not supported for destruction, skipping destroy"
             echo "💡 Consider adding cleanup logic for $PLATFORM/$LANGUAGE projects here"
@@ -650,6 +715,9 @@ jobs:
           ENVIRONMENT_SUFFIX: ${{ env.ENVIRONMENT_SUFFIX }}
           TERRAFORM_STATE_BUCKET: ${{ env.TERRAFORM_STATE_BUCKET }}
           TERRAFORM_STATE_BUCKET_REGION: ${{ env.TERRAFORM_STATE_BUCKET_REGION }}
+          PULUMI_BACKEND_URL: s3://${{ env.PULUMI_STATE_BUCKET }}
+          AWS_DEFAULT_REGION: ${{ env.AWS_DEFAULT_REGION }}
+          PULUMI_ORG: ${{ env.PULUMI_ORG }}
 
   archive-folders:
     name: Archive Folders and Reset Repository
@@ -681,48 +749,6 @@ jobs:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
-
-      - name: Build Docker Image
-        run: |
-          # Extract po_id from metadata.json for Docker image tagging
-          PO_ID=$(jq -r '.po_id // "pr${{ github.event.number }}"' metadata.json)
-          echo "Building Docker image for po_id: $PO_ID"
-
-          # Build Docker image with po_id tag
-          docker build -t tap-app:${PO_ID} .
-
-          # Export Docker image to tar file
-          docker save tap-app:${PO_ID} -o docker-image-${PO_ID}.tar
-
-          # Check file size
-          ls -lh docker-image-${PO_ID}.tar
-          echo "Docker image built and exported successfully with po_id: $PO_ID"
-
-          # Use metadata from detect-metadata job
-          PLATFORM="${{ needs.detect-metadata.outputs.platform }}"
-          LANGUAGE="${{ needs.detect-metadata.outputs.language }}"
-
-          # Upload Docker image directly to S3
-          S3_PREFIX="docker_images/Pr${{ github.event.number }}"
-          echo "Uploading Docker image to S3 bucket: ${{ env.S3_PRODUCTION_BUCKET_NAME }}"
-          echo "S3 key: ${S3_PREFIX}/docker-image-${PO_ID}.tar"
-
-          # Upload Docker image to S3
-          aws s3 cp docker-image-${PO_ID}.tar \
-            "s3://${{ env.S3_PRODUCTION_BUCKET_NAME }}/${S3_PREFIX}/docker-image-${PO_ID}.tar"
-
-          echo "Docker image uploaded successfully"
-
-          # Store the S3 location for reference
-          S3_LOCATION="s3://${{ env.S3_PRODUCTION_BUCKET_NAME }}/${S3_PREFIX}/docker-image-${PO_ID}.tar"
-          echo "Docker image S3 location: $S3_LOCATION"
-
-          # Save the S3 location for the next step
-          echo "DOCKER_S3_LOCATION=$S3_LOCATION" >> $GITHUB_ENV
-
-          # Remove Docker image locally to save space
-          rm -f docker-image-${PO_ID}.tar
-          echo "Docker image removed locally to save space"
 
       - name: Archive folders and reset repository
         run: |
@@ -818,6 +844,7 @@ jobs:
             "tap.py"
             "setup.js"
             "cdktf.json"
+            "Pulumi.yaml"
             )
 
           # Move paths to archive
@@ -973,6 +1000,9 @@ jobs:
             echo "✅ CloudFormation project detected, running CloudFormation destroy..."
             # Try to destroy resources, but don't fail if they don't exist
             npm run cfn:destroy || echo "No resources to destroy or destruction failed"
+          elif [ "$PLATFORM" = "pulumi" ]; then
+            echo "✅ Pulumi project detected, running Pulumi destroy..."
+            pipenv run pulumi-destroy || echo "No resources to destroy or destruction failed"
           else
             echo "ℹ️ Platform '$PLATFORM' not supported for destruction, skipping destroy"
             echo "💡 Consider adding cleanup logic for $PLATFORM projects here"
@@ -981,3 +1011,35 @@ jobs:
           ENVIRONMENT_SUFFIX: ${{ env.ENVIRONMENT_SUFFIX }}
           TERRAFORM_STATE_BUCKET: ${{ env.TERRAFORM_STATE_BUCKET }}
           TERRAFORM_STATE_BUCKET_REGION: ${{ env.TERRAFORM_STATE_BUCKET_REGION }}
+          PULUMI_BACKEND_URL: s3://${{ env.PULUMI_STATE_BUCKET }}
+          AWS_DEFAULT_REGION: ${{ env.AWS_DEFAULT_REGION }}
+          PULUMI_ORG: ${{ env.PULUMI_ORG }}
+
+  # TODO: For future use
+  # ? Need fine-grained Personal Access Token from repo owner
+  # semantic-release:
+  #   name: Semantic Release
+  #   runs-on: ubuntu-24.04
+  #   if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+  #   permissions:
+  #     contents: write
+  #     issues: write
+  #     pull-requests: write
+
+  #   steps:
+  #     - name: Checkout code
+  #       uses: actions/checkout@v4
+  #       with:
+  #         token: ${{ secrets.GITHUB_TOKEN }}
+  #         fetch-depth: 0
+
+  #     - name: Setup Environment
+  #       uses: ./.github/actions/setup-environment
+  #       with:
+  #         node-version: ${{ env.NODE_VERSION }}
+  #         download-artifacts: 'false'
+
+  #     - name: Run semantic-release
+  #       run: npm run release
+  #       env:
+  #         GITHUB_TOKEN: ${{ secrets.SEMANTIC_RELEASE_TOKEN }}
