@@ -133,7 +133,7 @@ describe('TapStack Unit Tests', () => {
 
     test('should create Lambda function with correct configuration', () => {
       expect(synthesized).toContain('"aws_lambda_function"');
-      expect(synthesized).toContain('"function_name": "image-processing-function-${props.environmentSuffix}"');
+      expect(synthesized).toContain('"function_name": "image-processing-function-test');
       expect(synthesized).toContain('"runtime": "python3.8"');
       expect(synthesized).toContain('"handler": "index.lambda_handler"');
       expect(synthesized).toContain('"timeout": 30');
@@ -170,7 +170,7 @@ describe('TapStack Unit Tests', () => {
 
     test('should create IAM role for Lambda execution', () => {
       expect(synthesized).toContain('"aws_iam_role"');
-      expect(synthesized).toContain('"name": "image-processing-lambda-role-${props.environmentSuffix}"');
+      expect(synthesized).toContain('"name": "image-processing-lambda-role-test');
       expect(synthesized).toContain('lambda.amazonaws.com');
       expect(synthesized).toContain('sts:AssumeRole');
     });
@@ -215,7 +215,7 @@ describe('TapStack Unit Tests', () => {
 
     test('should create SNS topic with correct name', () => {
       expect(synthesized).toContain('"aws_sns_topic"');
-      expect(synthesized).toContain('"name": "image-processing-completion-notifications"');
+      expect(synthesized).toContain('"name": "image-processing-completion-notifications-test"');
     });
 
     test('should apply consistent tags to SNS topic', () => {
@@ -240,7 +240,7 @@ describe('TapStack Unit Tests', () => {
 
     test('should create SQS queue for dead letter handling', () => {
       expect(synthesized).toContain('"aws_sqs_queue"');
-      expect(synthesized).toContain('"name": "image-processing-lambda-dlq"');
+      expect(synthesized).toContain('"name": "image-processing-lambda-dlq-test"');
     });
 
     test('should apply consistent tags to SQS queue', () => {
@@ -265,7 +265,7 @@ describe('TapStack Unit Tests', () => {
 
     test('should create CloudWatch log group for Lambda', () => {
       expect(synthesized).toContain('"aws_cloudwatch_log_group"');
-      expect(synthesized).toContain('"/aws/lambda/image-processing-function-${props.environmentSuffix}"');
+      expect(synthesized).toContain('"/aws/lambda/image-processing-function-test');
       expect(synthesized).toContain('"retention_in_days": 14');
     });
 

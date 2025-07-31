@@ -44,13 +44,13 @@ export class TapStack extends TerraformStack {
 
     // Create SQS Dead Letter Queue for Lambda function
     const dlqQueue = new SqsQueue(this, 'ImageProcessingDLQ', {
-      name: 'image-processing-lambda-dlq',
+      name: `image-processing-lambda-dlq-${props.environmentSuffix}`,
       tags: commonTags,
     });
 
     // Create SNS Topic for success notifications
     const snsTopic = new SnsTopic(this, 'ImageProcessingTopic', {
-      name: 'image-processing-completion-notifications',
+      name: `image-processing-completion-notifications-${props.environmentSuffix}`,
       tags: commonTags,
     });
 
