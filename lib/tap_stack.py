@@ -136,14 +136,8 @@ class TapStack(TerraformStack):
       tags=self.common_tags
     )
     
-    # Configure backend
-    S3Backend(self,
-      bucket=self.state_bucket_resource.id,
-      key="terraform.tfstate",
-      region=self.aws_region,
-      dynamodb_table=self.state_lock_table.name,
-      encrypt=True
-    )
+    # Note: S3 backend configuration removed to avoid circular dependency
+    # The backend should be configured externally or in a separate stack
 
   def create_vpc_resources(self):
     """Create VPC with multi-AZ subnets, Internet Gateway, and NAT Gateway"""
