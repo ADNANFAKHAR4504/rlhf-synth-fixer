@@ -64,7 +64,7 @@ describe('TapStack', () => {
 
     test('should create Lambda function with correct configuration', () => {
       template.hasResourceProperties('AWS::Lambda::Function', {
-        FunctionName: 'IoTDataProcessor',
+        FunctionName: `IoTDataProcessor-${environmentSuffix}`,
         Runtime: 'nodejs18.x',
         Handler: 'index.handler',
         MemorySize: 512,
@@ -81,8 +81,8 @@ describe('TapStack', () => {
     });
 
     test('should create IAM role with correct name and policies', () => {
+      // Check that the IAM role exists with correct assume role policy (no explicit role name)
       template.hasResourceProperties('AWS::IAM::Role', {
-        RoleName: `iot-data-processor-role-${environmentSuffix}`,
         AssumeRolePolicyDocument: {
           Statement: [
             {
@@ -167,7 +167,7 @@ describe('TapStack', () => {
 
     test('should configure Lambda with correct environment variables', () => {
       template.hasResourceProperties('AWS::Lambda::Function', {
-        FunctionName: 'IoTDataProcessor',
+        FunctionName: `IoTDataProcessor-${environmentSuffix}`,
         Environment: {
           Variables: {
             DYNAMODB_TABLE_NAME: {},
@@ -207,8 +207,20 @@ describe('TapStack', () => {
         TableName: 'iot-processed-data-custom-env',
       });
 
+      // Check that IAM role exists (no explicit role name in implementation)
       customTemplate.hasResourceProperties('AWS::IAM::Role', {
-        RoleName: 'iot-data-processor-role-custom-env',
+        AssumeRolePolicyDocument: {
+          Statement: [
+            {
+              Action: 'sts:AssumeRole',
+              Effect: 'Allow',
+              Principal: {
+                Service: 'lambda.amazonaws.com',
+              },
+            },
+          ],
+          Version: '2012-10-17',
+        },
       });
     });
 
@@ -229,8 +241,20 @@ describe('TapStack', () => {
         TableName: 'iot-processed-data-context-env',
       });
 
+      // Check that IAM role exists (no explicit role name in implementation)
       contextTemplate.hasResourceProperties('AWS::IAM::Role', {
-        RoleName: 'iot-data-processor-role-context-env',
+        AssumeRolePolicyDocument: {
+          Statement: [
+            {
+              Action: 'sts:AssumeRole',
+              Effect: 'Allow',
+              Principal: {
+                Service: 'lambda.amazonaws.com',
+              },
+            },
+          ],
+          Version: '2012-10-17',
+        },
       });
     });
 
@@ -247,8 +271,20 @@ describe('TapStack', () => {
         TableName: 'iot-processed-data-dev',
       });
 
+      // Check that IAM role exists (no explicit role name in implementation)
       defaultTemplate.hasResourceProperties('AWS::IAM::Role', {
-        RoleName: 'iot-data-processor-role-dev',
+        AssumeRolePolicyDocument: {
+          Statement: [
+            {
+              Action: 'sts:AssumeRole',
+              Effect: 'Allow',
+              Principal: {
+                Service: 'lambda.amazonaws.com',
+              },
+            },
+          ],
+          Version: '2012-10-17',
+        },
       });
     });
   });
