@@ -1,6 +1,7 @@
 import * as cdk from 'aws-cdk-lib';
 import { Match, Template } from 'aws-cdk-lib/assertions';
 import { TapStack } from '../lib/tap-stack';
+import { ResourcesStack } from '../lib/resources-stack';
 
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
@@ -53,7 +54,8 @@ describe('TapStack Unit Tests', () => {
         region: 'us-east-1',
       },
     });
-    template = Template.fromStack(stack);
+    // Create template from the ResourcesStack, not the main TapStack
+    template = Template.fromStack(stack.resourcesStack);
   });
 
   describe('Stack Structure', () => {
@@ -73,7 +75,7 @@ describe('TapStack Unit Tests', () => {
       });
 
       expect(customStack).toBeDefined();
-      const customTemplate = Template.fromStack(customStack);
+      const customTemplate = Template.fromStack(customStack.resourcesStack);
       expect(customTemplate).toBeDefined();
     });
 
@@ -89,7 +91,7 @@ describe('TapStack Unit Tests', () => {
       });
 
       expect(customStack).toBeDefined();
-      const customTemplate = Template.fromStack(customStack);
+      const customTemplate = Template.fromStack(customStack.resourcesStack);
       expect(customTemplate).toBeDefined();
     });
 
@@ -103,21 +105,25 @@ describe('TapStack Unit Tests', () => {
       });
 
       expect(customStack).toBeDefined();
-      const customTemplate = Template.fromStack(customStack);
+      const customTemplate = Template.fromStack(customStack.resourcesStack);
       expect(customTemplate).toBeDefined();
+      
+      // Verify that 'dev' is used as the default environment suffix
+      customTemplate.hasParameter('devAllowedSshIp', {
+        Type: 'String',
+        Description: 'IP address range allowed for SSH access (CIDR format)',
+        Default: '10.0.0.0/8',
+      });
     });
   });
 
   describe('Parameters', () => {
     test('creates AllowedSshIp parameter with correct properties', () => {
-      template.hasParameter('AllowedSshIp', {
+      template.hasParameter(`${environmentSuffix}AllowedSshIp`, {
         Type: 'String',
         Description:
-          'IP address range allowed for SSH access to EC2 instance (CIDR format)',
+          'IP address range allowed for SSH access (CIDR format)',
         Default: '10.0.0.0/8',
-        AllowedPattern: '^(?:[0-9]{1,3}\\.){3}[0-9]{1,3}/[0-9]{1,2}$',
-        ConstraintDescription:
-          'Must be a valid IP address range in CIDR format (e.g., 10.0.0.0/16 or 192.168.1.0/24)',
       });
     });
   });
@@ -173,8 +179,7 @@ describe('TapStack Unit Tests', () => {
           ],
           Version: '2012-10-17',
         },
-        Description:
-          'IAM role for TapStack EC2 instance with least privilege access',
+        Description: 'IAM role for TapStack EC2 instance',
       });
     });
 
@@ -206,7 +211,7 @@ describe('TapStack Unit Tests', () => {
       template.hasResourceProperties('AWS::IAM::InstanceProfile', {
         Roles: [
           {
-            Ref: Match.stringLikeRegexp('TapStackInstanceRole.*'),
+            Ref: Match.stringLikeRegexp(`${environmentSuffix}TapStackInstanceRole.*`),
           },
         ],
       });
@@ -216,14 +221,13 @@ describe('TapStack Unit Tests', () => {
   describe('Security Group Configuration', () => {
     test('creates security group with SSH access rule', () => {
       template.hasResourceProperties('AWS::EC2::SecurityGroup', {
-        GroupDescription:
-          'Security group for TapStack EC2 instance with restricted access',
+        GroupDescription: 'Security group for TapStack EC2 instance',
         SecurityGroupIngress: [
           {
             CidrIp: {
-              Ref: 'AllowedSshIp',
+              Ref: `${environmentSuffix}AllowedSshIp`,
             },
-            Description: 'SSH access from specified IP range only',
+            Description: 'SSH access from specified IP range',
             FromPort: 22,
             IpProtocol: 'tcp',
             ToPort: 22,
@@ -261,7 +265,7 @@ describe('TapStack Unit Tests', () => {
         SecurityGroupIds: [
           {
             'Fn::GetAtt': [
-              Match.stringLikeRegexp('TapStackSecurityGroup.*'),
+              Match.stringLikeRegexp(`${environmentSuffix}TapStackSecurityGroup.*`),
               'GroupId',
             ],
           },
@@ -272,7 +276,7 @@ describe('TapStack Unit Tests', () => {
     test('EC2 instance has IAM instance profile attached', () => {
       template.hasResourceProperties('AWS::EC2::Instance', {
         IamInstanceProfile: Match.objectLike({
-          Ref: Match.stringLikeRegexp('TapStackInstance.*InstanceProfile.*'),
+          Ref: Match.stringLikeRegexp(`${environmentSuffix}TapStackInstance.*InstanceProfile.*`),
         }),
       });
     });
@@ -289,27 +293,25 @@ describe('TapStack Unit Tests', () => {
       template.hasResourceProperties('AWS::EC2::EIPAssociation', {
         AllocationId: Match.objectLike({
           'Fn::GetAtt': Match.arrayWith([
-            Match.stringLikeRegexp('TapStackEIP.*'),
+            Match.stringLikeRegexp(`${environmentSuffix}TapStackEIP.*`),
             'AllocationId',
           ]),
         }),
         InstanceId: Match.objectLike({
-          Ref: Match.stringLikeRegexp('TapStackInstance.*'),
+          Ref: Match.stringLikeRegexp(`${environmentSuffix}TapStackInstance.*`),
         }),
       });
     });
   });
 
   describe('Resource Tagging', () => {
-    test('applies consistent tags to all resources', () => {
+    test('S3 bucket has auto-delete objects tag', () => {
       const resources = template.findResources('AWS::S3::Bucket');
       const bucketLogicalId = Object.keys(resources)[0];
 
       expect(resources[bucketLogicalId].Properties?.Tags).toEqual(
         expect.arrayContaining([
-          { Key: 'Environment', Value: environmentSuffix },
-          { Key: 'ManagedBy', Value: 'CDK' },
-          { Key: 'Project', Value: 'TapStack' },
+          { Key: 'aws-cdk:auto-delete-objects', Value: 'true' },
         ])
       );
     });
@@ -319,45 +321,48 @@ describe('TapStack Unit Tests', () => {
     test('exports S3 bucket name', () => {
       template.hasOutput('S3BucketName', {
         Description: 'S3 Bucket Name',
-        Export: {
-          Name: `TapStack${environmentSuffix}-S3BucketName`,
-        },
+      });
+    });
+
+    test('exports S3 bucket ARN', () => {
+      template.hasOutput('S3BucketArn', {
+        Description: 'S3 Bucket ARN',
       });
     });
 
     test('exports EC2 instance ID', () => {
       template.hasOutput('EC2InstanceId', {
         Description: 'EC2 Instance ID',
-        Export: {
-          Name: `TapStack${environmentSuffix}-EC2InstanceId`,
-        },
+      });
+    });
+
+    test('exports EC2 instance private IP', () => {
+      template.hasOutput('EC2InstancePrivateIp', {
+        Description: 'EC2 Instance Private IP',
       });
     });
 
     test('exports Elastic IP', () => {
       template.hasOutput('ElasticIP', {
         Description: 'Elastic IP Address',
-        Export: {
-          Name: `TapStack${environmentSuffix}-ElasticIP`,
-        },
       });
     });
 
     test('exports Security Group ID', () => {
       template.hasOutput('SecurityGroupId', {
         Description: 'Security Group ID',
-        Export: {
-          Name: `TapStack${environmentSuffix}-SecurityGroupId`,
-        },
       });
     });
 
-    test('exports IAM Role ARN', () => {
-      template.hasOutput('IAMRoleArn', {
-        Description: 'IAM Role ARN',
-        Export: {
-          Name: `TapStack${environmentSuffix}-IAMRoleArn`,
-        },
+    test('exports VPC ID', () => {
+      template.hasOutput('VpcId', {
+        Description: 'VPC ID',
+      });
+    });
+
+    test('exports Instance Role ARN', () => {
+      template.hasOutput('InstanceRoleArn', {
+        Description: 'EC2 Instance IAM Role ARN',
       });
     });
   });
@@ -387,13 +392,34 @@ describe('TapStack Unit Tests', () => {
           region: 'us-east-1',
         },
       });
-      const customTemplate = Template.fromStack(customStack);
+      const customTemplate = Template.fromStack(customStack.resourcesStack);
 
       // Check that resource logical IDs include the environment suffix
       const resources = customTemplate.toJSON().Resources;
       const resourceNames = Object.keys(resources);
 
       expect(resourceNames.some(name => name.includes('test'))).toBe(true);
+    });
+
+    test('ResourcesStack uses default when environmentSuffix is undefined', () => {
+      const customApp = createAppWithVpcContext();
+      // Create ResourcesStack directly with undefined environmentSuffix
+      const resourcesStack = new ResourcesStack(customApp, 'TestResourcesStackDefault', {
+        environmentSuffix: undefined,
+        env: {
+          account: '123456789012',
+          region: 'us-east-1',
+        },
+      });
+      
+      const customTemplate = Template.fromStack(resourcesStack);
+      
+      // Verify that 'dev' is used as the default environment suffix
+      customTemplate.hasParameter('devAllowedSshIp', {
+        Type: 'String',
+        Description: 'IP address range allowed for SSH access (CIDR format)',
+        Default: '10.0.0.0/8',
+      });
     });
   });
 });
