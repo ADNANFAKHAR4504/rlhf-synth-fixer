@@ -40,12 +40,27 @@ class EnterpriseSecurityStack(Construct):  # pylint: disable=too-many-instance-a
   Implements all required security controls across multi-region deployment.
   """
 
-  def __init__(self, scope: Construct, construct_id: str) -> None:
+  def __init__(self, scope: Construct, construct_id: str, region: str = None, provider_alias: str = None) -> None:
     super().__init__(scope, construct_id)
 
+    self.region = region or "us-east-1"
+    self.provider_alias = provider_alias
+
     # Data sources for account and region information
-    self.current_account = DataAwsCallerIdentity(self, "current")
-    self.current_region = DataAwsRegion(self, "current_region")
+    if provider_alias:
+      # Use specific provider for multi-region setup
+      self.current_account = DataAwsCallerIdentity(
+        self, "current", 
+        provider=f"aws.{provider_alias}"
+      )
+      self.current_region = DataAwsRegion(
+        self, "current_region",
+        provider=f"aws.{provider_alias}"
+      )
+    else:
+      # Use default provider
+      self.current_account = DataAwsCallerIdentity(self, "current")
+      self.current_region = DataAwsRegion(self, "current_region")
 
     # Initialize security components
     self._create_kms_keys()
@@ -104,14 +119,15 @@ class EnterpriseSecurityStack(Construct):  # pylint: disable=too-many-instance-a
   def _create_s3_security_configuration(self) -> None:
     """Configure S3 buckets with mandatory server-side encryption."""
 
-    # CloudTrail S3 bucket with encryption
+    # CloudTrail S3 bucket with encryption (region-specific naming)
     self.cloudtrail_bucket = S3Bucket(
       self, "cloudtrail_logs_bucket",
       bucket=(
         f"enterprise-cloudtrail-logs-{self.current_account.account_id}-"
-        f"{self.current_region.id}"
+        f"{self.region}"
       ),
-      force_destroy=True
+      force_destroy=True,
+      provider=f"aws.{self.provider_alias}" if self.provider_alias else None
     )
 
     # CloudTrail bucket policy to allow CloudTrail access
@@ -180,7 +196,7 @@ class EnterpriseSecurityStack(Construct):  # pylint: disable=too-many-instance-a
       self, "vpc_flow_logs_bucket",
       bucket=(
         f"enterprise-vpc-flow-logs-{self.current_account.account_id}-"
-        f"{self.current_region.id}"
+        f"{self.region}"
       ),
       force_destroy=True
     )
@@ -540,20 +556,39 @@ class EnterpriseSecurityStack(Construct):  # pylint: disable=too-many-instance-a
   def _create_lambda_security_configuration(self) -> None:
     """Configure Lambda functions with restricted IAM permissions."""
 
-    # Create a simple Lambda deployment package
-    import zipfile
-    import os
-    
-    lambda_code = '''
+    # Lambda function code inline
+    lambda_code = '''"""
+Simple Lambda function for enterprise security stack.
+"""
+
+
 def handler(event, context):
+    """
+    Lambda handler function.
+    
+    Args:
+        event: The event data passed to the function
+        context: Runtime information about the Lambda function
+        
+    Returns:
+        dict: Response with status code and body
+    """
     return {
         'statusCode': 200,
-        'body': 'Hello from secure Lambda!'
+        'body': {
+            'message': 'Hello from secure Lambda!',
+            'environment': 'production',
+            'timestamp': context.aws_request_id if context else 'unknown'
+        }
     }
 '''
     
     # Create lambda function zip file
-    with zipfile.ZipFile('lambda_function.zip', 'w') as zip_file:
+    import zipfile
+    import os
+    
+    zip_path = os.path.join(os.path.dirname(__file__), 'lambda_function.zip')
+    with zipfile.ZipFile(zip_path, 'w') as zip_file:
       zip_file.writestr('index.py', lambda_code)
 
     # Example Lambda function with restricted permissions
@@ -563,7 +598,7 @@ def handler(event, context):
       role=self.lambda_execution_role.arn,  # Use restricted role
       handler="index.handler",
       runtime="python3.9",
-      filename="lambda_function.zip",
+      filename=zip_path,
       timeout=30,
       memory_size=128,
       environment={

@@ -27,11 +27,21 @@ class TapStack(TerraformStack):
     state_bucket = kwargs.get('state_bucket', 'iac-rlhf-tf-states')
     default_tags = kwargs.get('default_tags', {})
 
-    # Configure AWS Provider
+    # Configure AWS Provider for primary region
     AwsProvider(
       self,
       "aws",
       region=aws_region,
+      default_tags=[default_tags],
+    )
+
+    # Configure AWS Provider for secondary region (for multi-region deployment)
+    secondary_region = kwargs.get('secondary_region', 'us-west-2')
+    AwsProvider(
+      self,
+      "aws_secondary",
+      alias="secondary",
+      region=secondary_region,
       default_tags=[default_tags],
     )
 
@@ -87,8 +97,20 @@ class TapStack(TerraformStack):
       ]
     )
 
-    # Instantiate the enterprise security stack
-    EnterpriseSecurityStack(self, "EnterpriseSecurity")
+    # Instantiate the enterprise security stack for primary region
+    self.primary_security_stack = EnterpriseSecurityStack(
+      self, 
+      "EnterpriseSecurity-Primary",
+      region=aws_region
+    )
+
+    # Instantiate the enterprise security stack for secondary region
+    self.secondary_security_stack = EnterpriseSecurityStack(
+      self, 
+      "EnterpriseSecurity-Secondary", 
+      region=secondary_region,
+      provider_alias="secondary"
+    )
 
     # ? Add your stack instantiations here
     # ! Do NOT create resources directly in this stack.
