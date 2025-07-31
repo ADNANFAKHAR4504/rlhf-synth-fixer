@@ -1,20 +1,23 @@
+//fix issues
+//fix another issue
+//improve test coverage
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
-import { SecureCloudEnvironmentConstruct } from './secure-cloud-environment-construct';
+import { IoTDataProcessorConstruct } from './iot-data-processor-construct';
 
 interface TapStackProps extends cdk.StackProps {
   environmentSuffix?: string;
 }
 
 export class TapStack extends cdk.Stack {
-  public readonly secureEnvironment: SecureCloudEnvironmentConstruct;
+  public readonly iotDataProcessor: IoTDataProcessorConstruct;
 
   constructor(scope: Construct, id: string, props?: TapStackProps) {
     super(scope, id, {
       ...props,
       env: {
+        region: 'us-west-2',
         ...props?.env,
-        region: 'us-west-2', // Hardcode region as per PROMPT.md requirements
       },
     });
 
@@ -24,27 +27,39 @@ export class TapStack extends cdk.Stack {
       this.node.tryGetContext('environmentSuffix') ||
       'dev';
 
-    // Instantiate the Secure Cloud Environment construct
-    this.secureEnvironment = new SecureCloudEnvironmentConstruct(
+    // Instantiate the IoT Data Processor construct
+    this.iotDataProcessor = new IoTDataProcessorConstruct(
       this,
-      'SecureEnvironment',
+      'IoTDataProcessor',
       {
         environmentSuffix,
       }
     );
 
-    // --- Outputs ---
-    new cdk.CfnOutput(this, 'ALB_DNS', {
-      value: this.secureEnvironment.alb.loadBalancerDnsName,
-      description: 'DNS name of the Application Load Balancer',
+    // Output important values
+    new cdk.CfnOutput(this, 'S3BucketName', {
+      value: this.iotDataProcessor.s3Bucket.bucketName,
+      description: 'S3 bucket for IoT data uploads',
     });
-    new cdk.CfnOutput(this, 'BastionHostId', {
-      value: this.secureEnvironment.bastionHost.instanceId,
-      description: 'ID of the Bastion Host instance',
+
+    new cdk.CfnOutput(this, 'DynamoDBTableName', {
+      value: this.iotDataProcessor.dynamoTable.tableName,
+      description: 'DynamoDB table for processed IoT data',
     });
-    new cdk.CfnOutput(this, 'DatabaseEndpoint', {
-      value: this.secureEnvironment.database.instanceEndpoint.hostname,
-      description: 'Endpoint of the MySQL database instance',
+
+    new cdk.CfnOutput(this, 'LambdaFunctionName', {
+      value: this.iotDataProcessor.lambdaFunction.functionName,
+      description: 'Lambda function for processing IoT data',
+    });
+
+    new cdk.CfnOutput(this, 'LambdaFunctionArn', {
+      value: this.iotDataProcessor.lambdaFunction.functionArn,
+      description: 'Lambda function ARN',
+    });
+
+    new cdk.CfnOutput(this, 'LogGroupName', {
+      value: this.iotDataProcessor.logGroup.logGroupName,
+      description: 'CloudWatch log group for Lambda function',
     });
   }
 }
