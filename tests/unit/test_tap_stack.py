@@ -47,28 +47,25 @@ class TestTapStack(unittest.TestCase):
     )
     template = Template.from_stack(stack)
 
-    try:
-      template.has_resource(
-        "AWS::S3::BucketPolicy",
-        Match.object_like({
-          "Properties": Match.object_like({
-            "PolicyDocument": Match.object_like({
-              "Statement": Match.array_with([
-                Match.object_like({
-                  "Effect": "Deny",
-                  "Principal": {"AWS": "*"},
-                  "Action": "s3:*",
-                  "Condition": {
-                    "Bool": {"aws:SecureTransport": "false"}
-                  }
-                })
-              ])
-            })
+    template.has_resource(
+      "AWS::S3::BucketPolicy",
+      Match.object_like({
+        "Properties": Match.object_like({
+          "PolicyDocument": Match.object_like({
+            "Statement": Match.array_with([
+              Match.object_like({
+                "Effect": "Deny",
+                "Principal": {"AWS": "*"},
+                "Action": "s3:*",
+                "Condition": {
+                  "Bool": {"aws:SecureTransport": "false"}
+                }
+              })
+            ])
           })
         })
-      )
-    except AssertionError as e:
-      skip(f"Skipping test: BucketPolicy not found or improperly defined: {e}")
+      })
+    )
 
   @mark.it("creates an IAM role for EC2 with least privilege policy")
   def test_iam_role_with_ec2_assume_and_policy(self):
@@ -79,26 +76,21 @@ class TestTapStack(unittest.TestCase):
     )
     template = Template.from_stack(stack)
 
-    try:
-      template.has_resource_properties(
-        "AWS::IAM::Role",
-        Match.object_like({
-          "AssumeRolePolicyDocument": Match.object_like({
-            "Statement": Match.array_with([
-              Match.object_like({
-                "Effect": "Allow",
-                "Principal": {"Service": "ec2.amazonaws.com"},
-                "Action": "sts:AssumeRole"
-              })
-            ])
-          }),
-          "Policies": Match.any_value()
-        })
-      )
-    except AssertionError as e:
-      skip(f"Skipping test: IAM Role with EC2 assume role not found: {e}")
-
-
+    template.has_resource_properties(
+      "AWS::IAM::Role",
+      Match.object_like({
+        "AssumeRolePolicyDocument": Match.object_like({
+          "Statement": Match.array_with([
+            Match.object_like({
+              "Effect": "Allow",
+              "Principal": {"Service": "ec2.amazonaws.com"},
+              "Action": "sts:AssumeRole"
+            })
+          ])
+        }),
+        "Policies": Match.any_value()
+      })
+    )
 
   @mark.it("ensures the S3 bucket is KMS encrypted")
   def test_s3_bucket_is_kms_encrypted(self):
