@@ -17,6 +17,18 @@
     ]
   },
   "context": {
+    "dev": {
+      "instanceSize": "MICRO",
+      "vpcCidr": "10.0.0.0/16"
+    },
+    "staging": {
+      "instanceSize": "SMALL",
+      "vpcCidr": "10.1.0.0/16"
+    },
+    "prod": {
+      "instanceSize": "MEDIUM",
+      "vpcCidr": "10.2.0.0/16"
+    },
     "@aws-cdk/aws-lambda:recognizeLayerVersion": true,
     "@aws-cdk/core:checkSecretUsage": true,
     "@aws-cdk/core:target-partitions": [

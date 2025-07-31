@@ -1,6 +1,4 @@
 // Configuration - These are coming from cfn-outputs after cdk deploy
-// changes done 
-// changes made in unit test
 import fs from 'fs';
 import {
   EC2Client,

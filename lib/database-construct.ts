@@ -18,10 +18,19 @@ export class DatabaseConstruct extends Construct {
 
     const { vpc, instanceSize, environmentSuffix } = props;
 
-    // Convert string to InstanceSize enum
-    const ec2InstanceSize =
-      (ec2.InstanceSize as Record<string, ec2.InstanceSize>)[instanceSize] ||
-      ec2.InstanceSize.MICRO;
+    // Convert string to InstanceSize enum with validation
+    const getInstanceSize = (size: string): ec2.InstanceSize => {
+      const sizeMap: Record<string, ec2.InstanceSize> = {
+        NANO: ec2.InstanceSize.NANO,
+        MICRO: ec2.InstanceSize.MICRO,
+        SMALL: ec2.InstanceSize.SMALL,
+        MEDIUM: ec2.InstanceSize.MEDIUM,
+        LARGE: ec2.InstanceSize.LARGE,
+        XLARGE: ec2.InstanceSize.XLARGE,
+      };
+      return sizeMap[size?.toUpperCase() || 'MICRO'] || ec2.InstanceSize.MICRO;
+    };
+    const ec2InstanceSize = getInstanceSize(instanceSize);
 
     // --- Database Security Group ---
     this.securityGroup = new ec2.SecurityGroup(this, 'DatabaseSG', {
