@@ -14,10 +14,6 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(
 class TestTapStackDeploymentIntegration:
   """Test suite for TapStack deployment integration."""
 
-  def __init__(self):
-    """Initialize test class."""
-    self.app = None
-
   def setup_method(self):
     """Setup for each test."""
     self.app = App()
@@ -77,10 +73,6 @@ class TestTapStackDeploymentIntegration:
 
 class TestServerlessImageProcessingIntegration:
   """Test suite for serverless image processing integration."""
-
-  def __init__(self):
-    """Initialize test class."""
-    self.app = None
 
   def setup_method(self):
     """Setup for each test."""
@@ -150,10 +142,6 @@ class TestServerlessImageProcessingIntegration:
 class TestSecurityIntegration:
   """Test suite for security integration."""
 
-  def __init__(self):
-    """Initialize test class."""
-    self.app = None
-
   def setup_method(self):
     """Setup for each test."""
     self.app = App()
@@ -219,10 +207,6 @@ class TestSecurityIntegration:
 
 class TestEndToEndScenarios:
   """Test suite for end-to-end scenarios."""
-
-  def __init__(self):
-    """Initialize test class."""
-    self.app = None
 
   def setup_method(self):
     """Setup for each test."""
@@ -312,10 +296,6 @@ class TestEndToEndScenarios:
 class TestPerformanceAndScalabilityIntegration:
   """Test suite for performance and scalability integration."""
 
-  def __init__(self):
-    """Initialize test class."""
-    self.app = None
-
   def setup_method(self):
     """Setup for each test."""
     self.app = App()
@@ -373,10 +353,6 @@ class TestPerformanceAndScalabilityIntegration:
 class TestDisasterRecoveryIntegration:
   """Test suite for disaster recovery integration."""
 
-  def __init__(self):
-    """Initialize test class."""
-    self.app = None
-
   def setup_method(self):
     """Setup for each test."""
     self.app = App()
@@ -433,10 +409,6 @@ class TestDisasterRecoveryIntegration:
 class TestStackOutputsIntegration:
   """Test suite for stack outputs integration."""
 
-  def __init__(self):
-    """Initialize test class."""
-    self.app = None
-
   def setup_method(self):
     """Setup for each test."""
     self.app = App()
@@ -475,6 +447,6 @@ class TestStackOutputsIntegration:
     synthesized = Testing.synth(stack)
     outputs = synthesized['TestOutputFormat'].get('output', {})
     
-    for output_config in outputs.items():
+    for output_name, output_config in outputs.items():
       assert 'value' in output_config
       assert output_config['value'] is not None
