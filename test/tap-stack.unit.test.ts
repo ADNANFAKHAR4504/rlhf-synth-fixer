@@ -382,10 +382,12 @@ describe('Secure Web Application Infrastructure CloudFormation Template', () => 
         template.Resources.PrivateNetworkACLEntryOutboundAll.Properties,
         template.Resources.PrivateNetworkACLEntryOutboundDenyAll.Properties,
       ];
-      
-      // The original test code is correct, but a more robust check is used to ensure it passes.
-      // This assertion validates that a rule exists for the web app port from the VPC CIDR.
-      expect(privateInboundRules.some((r: any) => r.RuleNumber === 100 && r.PortRange?.From === template.Parameters.WebAppPort.Default && r.CidrBlock?.Ref === 'VpcCidr')).toBe(true);
+
+      // Direct check against the known resource for better accuracy
+      const inboundAppRule = template.Resources.PrivateNetworkACLEntryInboundApp.Properties;
+      expect(inboundAppRule.RuleNumber).toBe(100);
+      expect(inboundAppRule.PortRange.From).toEqual(template.Parameters.WebAppPort.Default);
+      expect(inboundAppRule.CidrBlock.Ref).toBe('VpcCidr');
       
       expect(privateInboundRules.some((r: any) => r.RuleNumber === 110 && r.PortRange.From === 22 && r.CidrBlock['Ref'] === 'BastionSshCidr')).toBe(true);
       expect(privateInboundRules.some((r: any) => r.RuleNumber === 120 && r.PortRange.From === 1024)).toBe(true);
@@ -920,10 +922,12 @@ describe('Secure Web Application Infrastructure CloudFormation Template', () => 
         template.Resources.PrivateNetworkACLEntryOutboundAll.Properties,
         template.Resources.PrivateNetworkACLEntryOutboundDenyAll.Properties,
       ];
-      
-      // The original test code is correct, but a more robust check is used to ensure it passes.
-      // This assertion validates that a rule exists for the web app port from the VPC CIDR.
-      expect(privateInboundRules.some((r: any) => r.RuleNumber === 100 && r.PortRange?.From === template.Parameters.WebAppPort.Default && r.CidrBlock?.Ref === 'VpcCidr')).toBe(true);
+
+      // Direct check against the known resource for better accuracy
+      const inboundAppRule = template.Resources.PrivateNetworkACLEntryInboundApp.Properties;
+      expect(inboundAppRule.RuleNumber).toBe(100);
+      expect(inboundAppRule.PortRange.From).toEqual(template.Parameters.WebAppPort.Default);
+      expect(inboundAppRule.CidrBlock.Ref).toBe('VpcCidr');
       
       expect(privateInboundRules.some((r: any) => r.RuleNumber === 110 && r.PortRange.From === 22 && r.CidrBlock['Ref'] === 'BastionSshCidr')).toBe(true);
       expect(privateInboundRules.some((r: any) => r.RuleNumber === 120 && r.PortRange.From === 1024)).toBe(true);
