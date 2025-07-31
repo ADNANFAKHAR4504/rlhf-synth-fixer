@@ -12,7 +12,7 @@ from cdktf_cdktf_provider_aws.route import Route
 from cdktf_cdktf_provider_aws.security_group import SecurityGroup
 from cdktf_cdktf_provider_aws.security_group_rule import SecurityGroupRule
 from cdktf_cdktf_provider_aws.instance import Instance
-from cdktf_cdktf_provider_aws.data_aws_availability_zones import DataAwsAvailabilityZones
+from cdktf_cdktf_provider_aws.data_aws_ami import DataAwsAmi
 
 
 class TapStack(TerraformStack):
@@ -29,7 +29,6 @@ class TapStack(TerraformStack):
         vpc_cidr: str = "10.0.0.0/16",
         public_subnet_cidrs: Sequence[str] = ("10.0.1.0/24", "10.0.2.0/24"),
         instance_type: str = "t2.micro",
-        ami_id: str = "ami-0c55b159cbfafe1f0",
         allowed_ssh_cidr: str = "0.0.0.0/0",
         allowed_http_cidr: str = "0.0.0.0/0",
         project_name: str = "tap"
@@ -160,13 +159,31 @@ class TapStack(TerraformStack):
             security_group_id=sg.id
         )
 
-        # EC2 Instances
+        # Get latest Amazon Linux 2023 AMI
+        amazon_linux = DataAwsAmi(
+            self,
+            "amazon-linux-2023",
+            most_recent=True,
+            owners=["amazon"],
+            filters=[
+                {
+                    "name": "name",
+                    "values": ["al2023-ami-2023.*-x86_64"]
+                },
+                {
+                    "name": "virtualization-type",
+                    "values": ["hvm"]
+                }
+            ]
+        )
+
+        # EC2 Instances with dynamic AMI ID
         instances = []
         for idx, subnet in enumerate(subnets):
             instance = Instance(
                 self,
                 f"WebServer{idx+1}",
-                ami=ami_id,
+                ami=amazon_linux.id,  # Use the discovered AMI ID
                 instance_type=instance_type,
                 subnet_id=subnet.id,
                 vpc_security_group_ids=[sg.id],
