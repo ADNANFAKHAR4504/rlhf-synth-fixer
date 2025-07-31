@@ -22,6 +22,7 @@ import { NetworkAclAssociation } from '@cdktf/provider-aws/lib/network-acl-assoc
 interface TapStackProps {
   region: string;
   amiId: string;
+  environmentSuffix?: string;
 }
 
 export class TapStack extends TerraformStack {
