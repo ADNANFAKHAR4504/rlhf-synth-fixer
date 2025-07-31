@@ -136,8 +136,6 @@ describe('Secure Web Application Infrastructure CloudFormation Template', () => 
       expect(emailParam.Type).toBe('String');
       expect(emailParam.AllowedPattern).toBeDefined();
     });
-
-    // Removed outdated parameter tests
   });
 
   describe('Conditions', () => {
@@ -419,7 +417,6 @@ describe('Secure Web Application Infrastructure CloudFormation Template', () => 
         template.Resources.PrivateNetworkACLEntryOutboundDenyAll.Properties,
       ];
 
-      // Fixed the test logic to correctly check for the CIDR Block reference.
       expect(
         privateInboundRules.some(
           (r: any) =>
