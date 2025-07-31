@@ -93,7 +93,7 @@ describe('IoT Data Processor Integration Tests', () => {
 
       const response = await lambdaClient.send(command);
 
-      expect(response.Configuration?.FunctionName).toBe('IoTDataProcessor');
+     expect(response.Configuration?.FunctionName).toBe(outputs.LambdaFunctionName);
       expect(response.Configuration?.Runtime).toBe('nodejs18.x');
       expect(response.Configuration?.Handler).toBe('index.handler');
       expect(response.Configuration?.MemorySize).toBe(512);
@@ -101,7 +101,9 @@ describe('IoT Data Processor Integration Tests', () => {
       // ReservedConcurrentExecutions property may not be available in the response
       // but the function should still be configured correctly
       // expect(response.Configuration?.ReservedConcurrentExecutions).toBe(500);
-      
+      // Verify environment variables have correct values
+expect(response.Configuration?.Environment?.Variables?.DYNAMODB_TABLE_NAME).toBe(outputs.DynamoDBTableName);
+expect(response.Configuration?.Environment?.Variables?.LOG_GROUP_NAME).toBe(outputs.LogGroupName);
       // Check environment variables
       expect(response.Configuration?.Environment?.Variables).toHaveProperty('DYNAMODB_TABLE_NAME');
       expect(response.Configuration?.Environment?.Variables).toHaveProperty('LOG_GROUP_NAME');
@@ -124,7 +126,7 @@ describe('IoT Data Processor Integration Tests', () => {
       
       const logGroup = response.logGroups?.find(lg => lg.logGroupName === outputs.LogGroupName);
       expect(logGroup).toBeDefined();
-      expect(logGroup?.logGroupName).toBe('/aws/lambda/IoTDataProcessor');
+     expect(logGroup?.logGroupName).toBe(outputs.LogGroupName);
       expect(logGroup?.retentionInDays).toBe(14);
     }, testTimeout);
   });
