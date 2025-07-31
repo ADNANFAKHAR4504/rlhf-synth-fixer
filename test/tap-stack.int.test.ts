@@ -8,11 +8,35 @@ describe('Image Processing Infrastructure Integration Tests', () => {
     // Load deployment outputs from CDKTF deployment
     // In a real QA pipeline, this would be populated after deployment
     try {
-      const outputsPath = join(__dirname, '..', 'cfn-outputs', 'flat-outputs.json');
-      const outputsContent = readFileSync(outputsPath, 'utf-8');
-      outputs = JSON.parse(outputsContent);
+      // Try multiple possible locations for the outputs file
+      const possiblePaths = [
+        join(__dirname, '..', 'cfn-outputs', 'flat-outputs.json'), // Root directory
+        join(__dirname, 'cfn-outputs', 'flat-outputs.json'), // Test directory
+        'cfn-outputs/flat-outputs.json' // Current working directory
+      ];
+      
+      let outputsContent = '';
+      let outputsPath = '';
+      
+      for (const path of possiblePaths) {
+        try {
+          outputsContent = readFileSync(path, 'utf-8');
+          outputsPath = path;
+          break;
+        } catch (err) {
+          // Continue to next path
+        }
+      }
+      
+      if (outputsContent) {
+        outputs = JSON.parse(outputsContent);
+        console.log(`Loaded outputs from: ${outputsPath}`);
+      } else {
+        throw new Error('No outputs file found in any expected location');
+      }
     } catch (error) {
       console.warn('Could not load deployment outputs, using mock values for testing');
+      console.warn('Error details:', error instanceof Error ? error.message : String(error));
       // Mock outputs for development/testing when not deployed
       outputs = {
         s3_bucket_name: 'image-processing-source-bucket-test123',
