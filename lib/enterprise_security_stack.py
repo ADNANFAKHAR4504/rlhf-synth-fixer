@@ -47,20 +47,10 @@ class EnterpriseSecurityStack(Construct):  # pylint: disable=too-many-instance-a
     self.provider_alias = provider_alias
 
     # Data sources for account and region information
-    if provider_alias:
-      # Use specific provider for multi-region setup
-      self.current_account = DataAwsCallerIdentity(
-        self, "current", 
-        provider=f"aws.{provider_alias}"
-      )
-      self.current_region = DataAwsRegion(
-        self, "current_region",
-        provider=f"aws.{provider_alias}"
-      )
-    else:
-      # Use default provider
-      self.current_account = DataAwsCallerIdentity(self, "current")
-      self.current_region = DataAwsRegion(self, "current_region")
+    # Note: For multi-region setup, we'll use the default provider for now
+    # Provider references need to be handled differently in CDKTF
+    self.current_account = DataAwsCallerIdentity(self, "current")
+    self.current_region = DataAwsRegion(self, "current_region")
 
     # Initialize security components
     self._create_kms_keys()
@@ -126,8 +116,7 @@ class EnterpriseSecurityStack(Construct):  # pylint: disable=too-many-instance-a
         f"enterprise-cloudtrail-logs-{self.current_account.account_id}-"
         f"{self.region}"
       ),
-      force_destroy=True,
-      provider=f"aws.{self.provider_alias}" if self.provider_alias else None
+      force_destroy=True
     )
 
     # CloudTrail bucket policy to allow CloudTrail access
@@ -621,6 +610,17 @@ def handler(event, context):
   def _create_shield_protection(self) -> None:
     """Implement AWS Shield protection for publicly accessible endpoints."""
     # AWS Shield Standard is enabled by default
+    # AWS Shield Advanced requires subscription and can be enabled for specific resources
+    # This is a placeholder for Shield Advanced protection on specific resources
+    # ShieldProtection(
+    #   self, "shield_protection_example",
+    #   name="enterprise-shield-protection",
+    #   resource_arn=(
+    #     "arn:aws:elasticloadbalancing:region:account:"
+    #     "loadbalancer/app/example/1234567890"
+    #   )
+    # )
+    # No-op for now
     # AWS Shield Advanced requires subscription and can be enabled for specific resources
     # This is a placeholder for Shield Advanced protection on specific resources
     # ShieldProtection(
