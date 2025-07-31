@@ -1,8 +1,10 @@
 import { CloudwatchLogGroup } from '@cdktf/provider-aws/lib/cloudwatch-log-group';
+import { Eip } from '@cdktf/provider-aws/lib/eip';
 import { FlowLog } from '@cdktf/provider-aws/lib/flow-log';
 import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
 import { IamRolePolicy } from '@cdktf/provider-aws/lib/iam-role-policy';
 import { InternetGateway } from '@cdktf/provider-aws/lib/internet-gateway';
+import { NatGateway } from '@cdktf/provider-aws/lib/nat-gateway';
 import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
 import { RouteTable } from '@cdktf/provider-aws/lib/route-table';
 import { RouteTableAssociation } from '@cdktf/provider-aws/lib/route-table-association';
@@ -15,7 +17,6 @@ export class VpcStack extends TerraformStack {
   constructor(scope: Construct, id: string) {
     super(scope, id);
 
-    // ✅ Correct defaultTags usage as array
     new AwsProvider(this, 'aws', {
       region: 'us-east-1',
       defaultTags: [
@@ -35,12 +36,13 @@ export class VpcStack extends TerraformStack {
       },
     });
 
+    // Create 2 public subnets across AZs
     const publicSubnets = Array.from({ length: 2 }).map(
       (_, index) =>
         new Subnet(this, `publicSubnet${index + 1}`, {
           vpcId: vpc.id,
           cidrBlock: `10.0.${index}.0/24`,
-          availabilityZone: 'us-east-1a',
+          availabilityZone: `us-east-1${String.fromCharCode(97 + index)}`, // a, b
           mapPublicIpOnLaunch: true,
           tags: {
             Name: `public-subnet-${index + 1}`,
@@ -49,12 +51,13 @@ export class VpcStack extends TerraformStack {
         })
     );
 
+    // Create 2 private subnets across AZs
     const privateSubnets = Array.from({ length: 2 }).map(
       (_, index) =>
         new Subnet(this, `privateSubnet${index + 1}`, {
           vpcId: vpc.id,
           cidrBlock: `10.0.${index + 2}.0/24`,
-          availabilityZone: 'us-east-1a',
+          availabilityZone: `us-east-1${String.fromCharCode(97 + index)}`, // a, b
           tags: {
             Name: `private-subnet-${index + 1}`,
             Environment: 'Production',
@@ -70,7 +73,7 @@ export class VpcStack extends TerraformStack {
       },
     });
 
-    const routeTable = new RouteTable(this, 'publicRouteTable', {
+    const publicRouteTable = new RouteTable(this, 'publicRouteTable', {
       vpcId: vpc.id,
       route: [
         {
@@ -87,13 +90,50 @@ export class VpcStack extends TerraformStack {
     publicSubnets.forEach((subnet, index) => {
       new RouteTableAssociation(this, `publicRta${index + 1}`, {
         subnetId: subnet.id,
-        routeTableId: routeTable.id,
+        routeTableId: publicRouteTable.id,
+      });
+    });
+
+    const eip = new Eip(this, 'natEip', {
+      tags: {
+        Name: 'nat-eip',
+        Environment: 'Production',
+      },
+    });
+
+    const natGateway = new NatGateway(this, 'natGateway', {
+      subnetId: publicSubnets[0].id,
+      allocationId: eip.id,
+      tags: {
+        Name: 'nat-gateway',
+        Environment: 'Production',
+      },
+    });
+
+    const privateRouteTable = new RouteTable(this, 'privateRouteTable', {
+      vpcId: vpc.id,
+      route: [
+        {
+          cidrBlock: '0.0.0.0/0',
+          natGatewayId: natGateway.id,
+        },
+      ],
+      tags: {
+        Name: 'private-route-table',
+        Environment: 'Production',
+      },
+    });
+
+    privateSubnets.forEach((subnet, index) => {
+      new RouteTableAssociation(this, `privateRta${index + 1}`, {
+        subnetId: subnet.id,
+        routeTableId: privateRouteTable.id,
       });
     });
 
     const logGroup = new CloudwatchLogGroup(this, 'vpcFlowLogs', {
       name: '/aws/vpc/flow-logs',
-      retentionInDays: 14,
+      retentionInDays: 30,
       tags: {
         Name: 'vpc-flow-logs',
         Environment: 'Production',
@@ -135,13 +175,12 @@ export class VpcStack extends TerraformStack {
               'logs:DescribeLogStreams',
             ],
             Effect: 'Allow',
-            Resource: '*',
+            Resource: logGroup.arn,
           },
         ],
       }),
     });
 
-    // ✅ Correct FlowLog with logDestination (ARN), not logGroupName
     new FlowLog(this, 'vpcFlowLog', {
       iamRoleArn: iamRole.arn,
       logDestination: logGroup.arn,
@@ -153,5 +192,8 @@ export class VpcStack extends TerraformStack {
         Environment: 'Production',
       },
     });
+
+    // ✅ Optional: Use privateSubnets somewhere to avoid lint error
+    console.log(`Configured ${privateSubnets.length} private subnets`);
   }
 }
