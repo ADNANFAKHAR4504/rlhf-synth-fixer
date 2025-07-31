@@ -69,8 +69,8 @@ class IAMStack(Construct):
       # Removed role_name to use CDK's automatic unique naming
       assumed_by=iam.ServicePrincipal("codepipeline.amazonaws.com"),
       managed_policies=[
-        iam.ManagedPolicy.from_aws_managed_policy_name("AWSCodePipelineFullAccess"),
-        iam.ManagedPolicy.from_aws_managed_policy_name("AWSCodeBuildDeveloperAccess"),
+        iam.ManagedPolicy.from_aws_managed_policy_name("AWSCodePipelineServiceRole"),
+        iam.ManagedPolicy.from_aws_managed_policy_name("AWSCodeBuildAdminAccess"),
         iam.ManagedPolicy.from_aws_managed_policy_name("AmazonS3FullAccess"),
         iam.ManagedPolicy.from_aws_managed_policy_name("AWSCloudFormationFullAccess")
       ],
@@ -533,8 +533,8 @@ class CodePipelineStack(Construct):
         # Removed role_name to use CDK's automatic unique naming
         assumed_by=iam.ServicePrincipal("codepipeline.amazonaws.com"),
         managed_policies=[
-          iam.ManagedPolicy.from_aws_managed_policy_name("AWSCodePipelineFullAccess"),
-          iam.ManagedPolicy.from_aws_managed_policy_name("AWSCodeBuildDeveloperAccess"),
+                  iam.ManagedPolicy.from_aws_managed_policy_name("AWSCodePipelineServiceRole"),
+        iam.ManagedPolicy.from_aws_managed_policy_name("AWSCodeBuildAdminAccess"),
           iam.ManagedPolicy.from_aws_managed_policy_name("AmazonS3FullAccess"),
           iam.ManagedPolicy.from_aws_managed_policy_name("AWSCloudFormationFullAccess")
         ],
