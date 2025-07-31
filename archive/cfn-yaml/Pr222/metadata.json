@@ -17,5 +17,11 @@
     "@aws-sdk/client-s3@^3.848.0",
     "cfn-lint@*",
     "cfn-flip@*"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Prakhar12s",
+  "dockerS3Location": ""
 }
