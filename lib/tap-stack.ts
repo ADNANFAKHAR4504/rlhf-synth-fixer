@@ -17,7 +17,7 @@ import { S3BucketServerSideEncryptionConfigurationA } from '@cdktf/provider-aws/
 import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
 import { Subnet } from '@cdktf/provider-aws/lib/subnet';
 import { Vpc } from '@cdktf/provider-aws/lib/vpc';
-import { TerraformStack } from 'cdktf';
+import { TerraformOutput, TerraformStack } from 'cdktf';
 import { Construct } from 'constructs';
 
 interface TapStackProps {
@@ -219,6 +219,12 @@ export class TapStack extends TerraformStack {
       associatePublicIpAddress: true,
       iamInstanceProfile: ec2InstanceProfile.name,
       tags,
+    });
+
+    // Example: Output the VPC ID
+    new TerraformOutput(this, 'VpcIdOutput', {
+      value: vpc.id,
+      description: 'The ID of the created VPC',
     });
   }
 }
