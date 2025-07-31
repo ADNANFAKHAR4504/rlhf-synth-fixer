@@ -169,11 +169,6 @@ export class TapStack extends TerraformStack {
 
     const ec2Role: IamRole = new IamRole(this, 'EC2LogRole', {
       name: `ec2-log-writer-role-${name}`,
-    // Create IAM Instance Profile for EC2
-    const ec2InstanceProfile = new IamInstanceProfile(this, 'EC2InstanceProfile', {
-      name: `ec2-log-writer-profile-${name}`,
-      role: ec2Role.name,
-    });
       assumeRolePolicy: JSON.stringify({
         Version: '2012-10-17',
         Statement: [
@@ -185,6 +180,12 @@ export class TapStack extends TerraformStack {
         ],
       }),
       tags,
+    });
+
+    // Create IAM Instance Profile for EC2
+    const ec2InstanceProfile = new IamInstanceProfile(this, 'EC2InstanceProfile', {
+      name: `ec2-log-writer-profile-${name}`,
+      role: ec2Role.name,
     });
 
     const ec2Policy = new IamPolicy(this, 'EC2S3LogPolicy', {
