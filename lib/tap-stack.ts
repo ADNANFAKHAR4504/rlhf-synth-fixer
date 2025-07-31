@@ -1,17 +1,14 @@
-/* eslint-disable prettier/prettier */
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
+import { SecureCloudEnvironmentConstruct } from './secure-cloud-environment-construct';
 import { SecureCloudEnvironmentConstruct } from './secure-cloud-environment-construct';
 
 interface TapStackProps extends cdk.StackProps {
   environmentSuffix?: string;
-  isPrimaryRegion?: boolean;
-  globalClusterId?: string;
-  hostedZoneId?: string;
-  domainName?: string;
 }
-//fix issues
+
 export class TapStack extends cdk.Stack {
+  public readonly secureEnvironment: SecureCloudEnvironmentConstruct;
   public readonly secureEnvironment: SecureCloudEnvironmentConstruct;
 
   constructor(scope: Construct, id: string, props?: TapStackProps) {
@@ -47,5 +44,6 @@ export class TapStack extends cdk.Stack {
       value: this.secureEnvironment.database.instanceEndpoint.hostname,
       description: 'Endpoint of the MySQL database instance',
     });
+  }
   }
 }
