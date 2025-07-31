@@ -25,12 +25,18 @@ import {
 } from 'aws-cdk-lib/aws-iam';
 import { SubnetGroup } from 'aws-cdk-lib/aws-rds';
 import { Tags } from 'aws-cdk-lib';
+import { v4 as uuidv4 } from 'uuid';
 import { Construct } from 'constructs';
 
 export interface WebServerProps extends cdk.StackProps {
   environmentSuffix?: string;
   vpcId: string;
   allowedSshCidr?: string;
+}
+
+function generateUniqueBucketName(): string {
+  const shortUuid = uuidv4().split('-')[0]; // keep it short
+  return `webserver-assets-${shortUuid}`;
 }
 
 export class WebServerStack extends cdk.Stack {
@@ -111,8 +117,9 @@ export class WebServerStack extends cdk.Stack {
     });
 
     // S3 Bucket
+    const bucketID = generateUniqueBucketName()
     const s3Bucket = new Bucket(this, 'S3Bucket', {
-      bucketName: `webserver-assets-${props?.environmentSuffix}`,
+      bucketName: `webserver-assets-${bucketID}`,
       blockPublicAccess: BlockPublicAccess.BLOCK_ALL,
       versioned: true,
       removalPolicy: cdk.RemovalPolicy.RETAIN,

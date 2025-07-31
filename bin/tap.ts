@@ -33,7 +33,6 @@ async function main() {
 
   const cidr = '10.0.0.0/16';
   const vpcId = await findVpcByCidr(cidr); // Resolve Promise here
-
   const stack = new cdk.Stack(app, 'MyStack');
   if (!vpcId) {
     throw new Error('VPC with given CIDR not found');
@@ -51,3 +50,7 @@ async function main() {
 }
 
 main();
+
+if (require.main === module) {
+  main();
+}

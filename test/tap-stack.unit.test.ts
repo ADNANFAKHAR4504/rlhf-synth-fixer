@@ -4,8 +4,9 @@ import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import { EC2Client, DescribeVpcsCommand } from '@aws-sdk/client-ec2';
 import { mockClient } from 'aws-sdk-client-mock';
 import { Template } from 'aws-cdk-lib/assertions';
-import { TapStack, findVpcByCidr } from '../lib/tap-stack'; // Adjust import path
+import { TapStack } from '../lib/tap-stack'; // Adjust import path
 import { WebServerStack } from '../lib/web-server';
+import { findVpcByCidr } from '../bin/tap'
 
 // Create mock
 const ec2Mock = mockClient(EC2Client);

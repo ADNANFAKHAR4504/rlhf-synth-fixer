@@ -1,3 +1,4 @@
+import fs from 'fs';
 import * as cdk from 'aws-cdk-lib';
 import { Match, Template } from 'aws-cdk-lib/assertions';
 import { WebServerStack } from '../lib/web-server';
@@ -45,7 +46,6 @@ describe('WebServerStack', () => {
   });
 
   const template = Template.fromStack(stack);
-  //   console.log(JSON.stringify(template.toJSON(), null, 2));
   test('has security group HTTP ingress rules', () => {
     template.hasResourceProperties('AWS::EC2::SecurityGroup', {
       GroupDescription: 'Allow SSH and HTTP access',
@@ -150,7 +150,6 @@ describe('WebServerStack', () => {
 
   test('S3 bucket is versioned and secured', () => {
     template.hasResourceProperties('AWS::S3::Bucket', {
-      BucketName: 'webserver-assets-test',
       VersioningConfiguration: { Status: 'Enabled' },
       PublicAccessBlockConfiguration: {
         BlockPublicAcls: true,

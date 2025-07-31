@@ -9,34 +9,6 @@ interface TapStackProps extends cdk.StackProps {
   vpcId: string;
 }
 
-export async function findVpcByCidr(cidr: string): Promise<string | undefined> {
-  const client = new EC2Client({ region: 'us-east-1' });
-  const result = await client.send(new DescribeVpcsCommand({}));
-
-  const vpc = result.Vpcs?.find(v => v.CidrBlock === cidr);
-  return vpc?.VpcId;
-}
-
-// async function to run before synthesis
-async function main() {
-  const app = new cdk.App();
-  const cidr = '10.0.0.0/16';
-  const vpcId = await findVpcByCidr(cidr);
-  if (!vpcId) {
-    throw new Error('VPC with given CIDR not found');
-  }
-
-  const stack = new cdk.Stack(app, 'MyStack');
-
-  new TapStack(stack, 'TapStack', {
-    vpcId,
-  });
-}
-
-if (require.main === module) {
-  main();
-}
-
 export class TapStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: TapStackProps) {
     super(scope, id, props);
@@ -45,7 +17,7 @@ export class TapStack extends cdk.Stack {
       props?.environmentSuffix ||
       this.node.tryGetContext('environmentSuffix') ||
       'dev';
-
+    console.log(process.env.CDK_DEFAULT_ACCOUNT)
     new WebServerStack(this, 'WebServerStack', {
       environmentSuffix,
       vpcId: props.vpcId,
