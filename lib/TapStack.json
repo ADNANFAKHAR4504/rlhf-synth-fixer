@@ -28,6 +28,15 @@
                     "Parameters": [
                         "DBInstanceClass"
                     ]
+                },
+                {
+                    "Label": {
+                        "default": "SSL Configuration"
+                    },
+                    "Parameters": [
+                        "SSLCertificateArn",
+                        "EnableHTTPS"
+                    ]
                 }
             ],
             "ParameterLabels": {
@@ -42,6 +51,12 @@
                 },
                 "DBInstanceClass": {
                     "default": "RDS Instance Class"
+                },
+                "SSLCertificateArn": {
+                    "default": "SSL Certificate ARN"
+                },
+                "EnableHTTPS": {
+                    "default": "Enable HTTPS"
                 }
             }
         }
@@ -79,6 +94,44 @@
                 "db.t3.micro",
                 "db.t3.small",
                 "db.t3.medium"
+            ]
+        },
+        "SSLCertificateArn": {
+            "Type": "String",
+            "Default": "",
+            "Description": "ARN of the SSL certificate for HTTPS (leave empty to disable HTTPS)",
+            "AllowedPattern": "(^$|^arn:aws:acm:.*)"
+        },
+        "EnableHTTPS": {
+            "Type": "String",
+            "Default": "false",
+            "Description": "Enable HTTPS listener for ALB",
+            "AllowedValues": ["true", "false"]
+        }
+    },
+    "Conditions": {
+        "EnableHTTPSCondition": {
+            "Fn::And": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "EnableHTTPS"
+                        },
+                        "true"
+                    ]
+                },
+                {
+                    "Fn::Not": [
+                        {
+                            "Fn::Equals": [
+                                {
+                                    "Ref": "SSLCertificateArn"
+                                },
+                                ""
+                            ]
+                        }
+                    ]
+                }
             ]
         }
     },
@@ -248,7 +301,7 @@
                 "Name": {
                     "Fn::Sub": "tap-db-secret-${EnvironmentSuffix}"
                 },
-                "Description": "Database password for RDS instance",
+                "Description": "Database password for RDS instance with automatic rotation",
                 "GenerateSecretString": {
                     "SecretStringTemplate": "{\"username\": \"admin\"}",
                     "GenerateStringKey": "password",
@@ -273,6 +326,32 @@
                         }
                     }
                 ]
+            }
+        },
+        "DBSecretTargetAttachment": {
+            "Type": "AWS::SecretsManager::SecretTargetAttachment",
+            "Properties": {
+                "SecretId": {
+                    "Ref": "DBSecret"
+                },
+                "TargetId": {
+                    "Ref": "RDSInstance"
+                },
+                "TargetType": "AWS::RDS::DBInstance"
+            }
+        },
+        "DBSecretRotationSchedule": {
+            "Type": "AWS::SecretsManager::RotationSchedule",
+            "Properties": {
+                "SecretId": {
+                    "Ref": "DBSecret"
+                },
+                "RotationLambdaArn": {
+                    "Fn::Sub": "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:SecretsManagerRDSMySQLRotationSingleUser"
+                },
+                "RotationRules": {
+                    "AutomaticallyAfterDays": 30
+                }
             }
         },
         "VPC": {
@@ -1072,6 +1151,24 @@
                                 }
                             ]
                         }
+                    },
+                    {
+                        "PolicyName": "SecretsManagerAccess",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "secretsmanager:GetSecretValue",
+                                        "secretsmanager:DescribeSecret"
+                                    ],
+                                    "Resource": {
+                                        "Ref": "DBSecret"
+                                    }
+                                }
+                            ]
+                        }
                     }
                 ],
                 "Tags": [
@@ -1507,6 +1604,33 @@
                 "Protocol": "HTTP"
             }
         },
+        "ALBHTTPSListener": {
+            "Type": "AWS::ElasticLoadBalancingV2::Listener",
+            "Condition": "EnableHTTPSCondition",
+            "Properties": {
+                "DefaultActions": [
+                    {
+                        "Type": "forward",
+                        "TargetGroupArn": {
+                            "Ref": "TargetGroup"
+                        }
+                    }
+                ],
+                "LoadBalancerArn": {
+                    "Ref": "ApplicationLoadBalancer"
+                },
+                "Port": 443,
+                "Protocol": "HTTPS",
+                "Certificates": [
+                    {
+                        "CertificateArn": {
+                            "Ref": "SSLCertificateArn"
+                        }
+                    }
+                ],
+                "SslPolicy": "ELBSecurityPolicy-TLS-1-2-2017-01"
+            }
+        },
         "VPCFlowLogsRole": {
             "Type": "AWS::IAM::Role",
             "Properties": {
@@ -1718,12 +1842,26 @@
                 "LifecycleConfiguration": {
                     "Rules": [
                         {
-                            "Id": "DeleteEverything",
+                            "Id": "CloudTrailLogRetention",
                             "Status": "Enabled",
-                            "ExpirationInDays": 1,
-                            "NoncurrentVersionExpirationInDays": 1,
+                            "Transitions": [
+                                {
+                                    "Days": 30,
+                                    "StorageClass": "STANDARD_IA"
+                                },
+                                {
+                                    "Days": 90,
+                                    "StorageClass": "GLACIER"
+                                },
+                                {
+                                    "Days": 365,
+                                    "StorageClass": "DEEP_ARCHIVE"
+                                }
+                            ],
+                            "ExpirationInDays": 2555,
+                            "NoncurrentVersionExpirationInDays": 30,
                             "AbortIncompleteMultipartUpload": {
-                                "DaysAfterInitiation": 1
+                                "DaysAfterInitiation": 7
                             }
                         }
                     ]
@@ -2153,6 +2291,18 @@
             "Export": {
                 "Name": {
                     "Fn::Sub": "${AWS::StackName}-ApplicationLoadBalancerDNS"
+                }
+            }
+        },
+        "ApplicationLoadBalancerHTTPSURL": {
+            "Description": "HTTPS URL of the Application Load Balancer (only available when HTTPS is enabled)",
+            "Condition": "EnableHTTPSCondition",
+            "Value": {
+                "Fn::Sub": "https://${ApplicationLoadBalancer.DNSName}"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ApplicationLoadBalancerHTTPSURL"
                 }
             }
         },
