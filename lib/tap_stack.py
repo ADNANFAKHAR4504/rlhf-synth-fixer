@@ -141,7 +141,7 @@ class TapStack(cdk.Stack):
       memory_size=512,
       
       # Set reserved concurrency to handle at least 1000 concurrent executions
-      reserved_concurrent_executions=900,
+      reserved_concurrent_executions=500,
       
       # Environment variables pointing to SSM parameter names
       environment={

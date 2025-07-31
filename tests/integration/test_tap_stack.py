@@ -79,7 +79,7 @@ class TestTapStackIntegration(unittest.TestCase):
       self.assertEqual(config['Handler'], 'index.lambda_handler')
       self.assertEqual(config['MemorySize'], 512)
       self.assertEqual(config['Timeout'], 30)
-      self.assertEqual(config['ReservedConcurrencyConfig']['ReservedConcurrency'], 900)
+      self.assertEqual(config['ReservedConcurrencyConfig']['ReservedConcurrency'], 500)
       
       # ASSERT environment variables are set
       env_vars = config['Environment']['Variables']
@@ -254,7 +254,7 @@ class TestTapStackIntegration(unittest.TestCase):
       config = response['Configuration']
       
       # ASSERT reserved concurrency is set to 1000
-      self.assertEqual(config['ReservedConcurrencyConfig']['ReservedConcurrency'], 900)
+      self.assertEqual(config['ReservedConcurrencyConfig']['ReservedConcurrency'], 500)
         
     except Exception as e:
       self.fail(f"Failed to validate concurrency configuration: {str(e)}")
