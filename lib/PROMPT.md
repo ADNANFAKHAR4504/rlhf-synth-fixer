@@ -18,7 +18,7 @@ Problem statement Environment:
 
 ### Expected output
 
-The expected result is a YAML file named `serverless_template.yaml`. The template must define all necessary resources and configurations. It should pass validation with the AWS CloudFormation Linter and deploy successfully in the specified AWS region, handling S3 events as described."
+The expected result is a CDKTF PYTHON file named `serverless_image_processing_stack.py`. The code must define all necessary resources and configurations. It should pass validation with the Linter and deploy successfully in the specified AWS region, handling S3 events as described."
 
 Problem Statement:
 The target environment is an AWS cloud infrastructure in the us-east-1 region, where all components of a serverless application should be deployed.
