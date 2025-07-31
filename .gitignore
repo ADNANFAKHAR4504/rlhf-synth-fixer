@@ -91,3 +91,5 @@ __pycache__/
 .pulumi/
 # CDK build output
 cdk.out/
+# Terraform output
+tf-outputs/*
