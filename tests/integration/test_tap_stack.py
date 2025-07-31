@@ -35,10 +35,10 @@ class TestTapStackDeploymentIntegration:
     synthesized = self._synth_and_parse(stack)
     
     assert synthesized is not None
-    assert 'TestFullDeployment' in synthesized
+    assert 'resource' in synthesized
     
     # Verify all required resources are present
-    resources = synthesized['TestFullDeployment']['resource']
+    resources = synthesized['resource']
     
     # Core infrastructure components
     assert 'aws_s3_bucket' in resources
@@ -97,7 +97,7 @@ class TestServerlessImageProcessingIntegration:
     )
     
     synthesized = self._synth_and_parse(stack)
-    resources = synthesized['TestS3Lambda']['resource']
+    resources = synthesized['resource']
     
     # Verify S3 bucket notification configuration
     s3_notifications = resources.get('aws_s3_bucket_notification', {})
@@ -113,7 +113,7 @@ class TestServerlessImageProcessingIntegration:
     )
     
     synthesized = self._synth_and_parse(stack)
-    resources = synthesized['TestLambdaConfig']['resource']
+    resources = synthesized['resource']
     
     # Verify Lambda function configuration
     lambda_functions = resources.get('aws_lambda_function', {})
@@ -129,7 +129,7 @@ class TestServerlessImageProcessingIntegration:
     )
     
     synthesized = self._synth_and_parse(stack)
-    resources = synthesized['TestIAMIntegration']['resource']
+    resources = synthesized['resource']
     
     # Verify IAM role configuration
     iam_roles = resources.get('aws_iam_role', {})
@@ -145,7 +145,7 @@ class TestServerlessImageProcessingIntegration:
     )
     
     synthesized = self._synth_and_parse(stack)
-    resources = synthesized['TestCloudWatch']['resource']
+    resources = synthesized['resource']
     
     # Verify CloudWatch log groups
     log_groups = resources.get('aws_cloudwatch_log_group', {})
@@ -174,7 +174,7 @@ class TestSecurityIntegration:
     )
     
     synthesized = self._synth_and_parse(stack)
-    resources = synthesized['TestS3Security']['resource']
+    resources = synthesized['resource']
     
     # Verify S3 encryption configuration
     s3_encryption = resources.get('aws_s3_bucket_server_side_encryption_configuration', {})
@@ -190,7 +190,7 @@ class TestSecurityIntegration:
     )
     
     synthesized = self._synth_and_parse(stack)
-    resources = synthesized['TestLambdaSecurity']['resource']
+    resources = synthesized['resource']
     
     # Verify Lambda execution role
     lambda_functions = resources.get('aws_lambda_function', {})
@@ -210,7 +210,7 @@ class TestSecurityIntegration:
     )
     
     synthesized = self._synth_and_parse(stack)
-    resources = synthesized['TestLeastPrivilege']['resource']
+    resources = synthesized['resource']
     
     # Verify IAM policies follow least privilege
     iam_policies = resources.get('aws_iam_policy', {})
@@ -270,7 +270,7 @@ class TestEndToEndScenarios:
     )
     
     synthesized = self._synth_and_parse(stack)
-    resources = synthesized['TestThumbnail']['resource']
+    resources = synthesized['resource']
     
     # Verify Lambda function has correct environment variables for processing
     lambda_functions = resources.get('aws_lambda_function', {})
@@ -286,7 +286,7 @@ class TestEndToEndScenarios:
     )
     
     synthesized = self._synth_and_parse(stack)
-    resources = synthesized['TestErrorHandling']['resource']
+    resources = synthesized['resource']
     
     # Verify dead letter queue configuration
     lambda_functions = resources.get('aws_lambda_function', {})
@@ -306,7 +306,7 @@ class TestEndToEndScenarios:
     )
     
     synthesized = self._synth_and_parse(stack)
-    resources = synthesized['TestScalability']['resource']
+    resources = synthesized['resource']
     
     # Verify Lambda concurrency settings
     lambda_functions = resources.get('aws_lambda_function', {})
@@ -339,7 +339,7 @@ class TestPerformanceAndScalabilityIntegration:
     )
     
     synthesized = self._synth_and_parse(stack)
-    resources = synthesized['TestPerformance']['resource']
+    resources = synthesized['resource']
     
     lambda_functions = resources.get('aws_lambda_function', {})
     
@@ -360,7 +360,7 @@ class TestPerformanceAndScalabilityIntegration:
     )
     
     synthesized = self._synth_and_parse(stack)
-    resources = synthesized['TestLifecycle']['resource']
+    resources = synthesized['resource']
     
     # Verify lifecycle configuration
     lifecycle_configs = resources.get('aws_s3_bucket_lifecycle_configuration', {})
@@ -376,7 +376,7 @@ class TestPerformanceAndScalabilityIntegration:
     )
     
     synthesized = self._synth_and_parse(stack)
-    resources = synthesized['TestMonitoring']['resource']
+    resources = synthesized['resource']
     
     # Verify CloudWatch log groups
     log_groups = resources.get('aws_cloudwatch_log_group', {})
@@ -405,7 +405,7 @@ class TestDisasterRecoveryIntegration:
     )
     
     synthesized = self._synth_and_parse(stack)
-    resources = synthesized['TestBackup']['resource']
+    resources = synthesized['resource']
     
     # Verify S3 versioning
     versioning_configs = resources.get('aws_s3_bucket_versioning', {})
@@ -421,7 +421,7 @@ class TestDisasterRecoveryIntegration:
     )
     
     synthesized = self._synth_and_parse(stack)
-    resources = synthesized['TestReplication']['resource']
+    resources = synthesized['resource']
     
     # Verify S3 bucket configuration supports replication
     s3_buckets = resources.get('aws_s3_bucket', {})
@@ -440,7 +440,7 @@ class TestDisasterRecoveryIntegration:
     )
     
     synthesized = self._synth_and_parse(stack)
-    resources = synthesized['TestRetention']['resource']
+    resources = synthesized['resource']
     
     # Verify lifecycle policies for retention
     lifecycle_configs = resources.get('aws_s3_bucket_lifecycle_configuration', {})
@@ -471,7 +471,7 @@ class TestStackOutputsIntegration:
     synthesized = self._synth_and_parse(stack)
     
     # Verify outputs are present
-    outputs = synthesized['TestOutputs'].get('output', {})
+    outputs = synthesized.get('output', {})
     
     expected_outputs = [
       'bucket_name',
@@ -492,7 +492,7 @@ class TestStackOutputsIntegration:
     )
     
     synthesized = self._synth_and_parse(stack)
-    outputs = synthesized['TestOutputFormat'].get('output', {})
+    outputs = synthesized.get('output', {})
     
     for output_name, output_config in outputs.items():
       assert 'value' in output_config
