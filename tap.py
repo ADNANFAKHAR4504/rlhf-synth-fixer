@@ -175,5 +175,3 @@ class SecureAwsEnvironment(TerraformStack):
           tags={**tags, "Name":"app-cloudfront"})
       ShieldProtection(self, "Shield", name=f"shield-{environment}", resource_arn=cf.arn)
       TerraformOutput(self, "cloudfront_domain_name", value=cf.domain_name)
-
-# app.synth()

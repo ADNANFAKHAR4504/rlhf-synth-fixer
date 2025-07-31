@@ -82,13 +82,6 @@ class TestTapStack:
       .get("sse_algorithm")
     ) == "AES256"
 
-  def test_s3_backend_uses_lockfile(self):
-    app = App()
-    stack = TapStack(app, "LockTestStack", environment_suffix="dev")
-    synth_str = Testing.synth(stack)
-    synth = json.loads(synth_str)
-    # assert synth["terraform"]["backend"]["s3"]["use_lockfile"] is True
-
   def test_aws_provider_is_configured(self):
     app = App()
     stack = TapStack(app, "ProviderTestStack", aws_region="eu-central-1")
