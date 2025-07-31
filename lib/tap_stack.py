@@ -5,6 +5,8 @@ manages environment-specific configurations.
 """
 
 from typing import Optional
+import random
+import string
 
 import aws_cdk as cdk
 from aws_cdk import aws_iam as iam
@@ -13,6 +15,11 @@ from aws_cdk import aws_codebuild as codebuild
 from aws_cdk import aws_codepipeline as codepipeline
 from aws_cdk import aws_codepipeline_actions as codepipeline_actions
 from constructs import Construct
+
+
+def generate_random_suffix(length: int = 6) -> str:
+  """Generate a random alphanumeric suffix for resource uniqueness."""
+  return ''.join(random.choices(string.ascii_lowercase + string.digits, k=length))
 
 
 class IAMStackProps(cdk.StackProps):
@@ -53,12 +60,13 @@ class IAMStack(Construct):
     super().__init__(scope, construct_id)
     
     environment_suffix = environment_suffix or 'dev'
+    random_suffix = generate_random_suffix()
     
-    # CodePipeline service role
+    # CodePipeline service role - Using CDK default naming for uniqueness
     self.codepipeline_role = iam.Role(
       self,
-      "CodePipelineRole",
-      role_name=f"ciapp-{environment_suffix}-codepipeline-role",
+      f"CodePipelineRole{random_suffix}",
+      # Removed role_name to use CDK's automatic unique naming
       assumed_by=iam.ServicePrincipal("codepipeline.amazonaws.com"),
       managed_policies=[
         iam.ManagedPolicy.from_aws_managed_policy_name("AWSCodePipelineFullAccess"),
@@ -87,11 +95,11 @@ class IAMStack(Construct):
       }
     )
     
-    # CodeBuild service role
+    # CodeBuild service role - Using CDK default naming for uniqueness
     self.codebuild_role = iam.Role(
       self,
-      "CodeBuildRole", 
-      role_name=f"ciapp-{environment_suffix}-codebuild-role",
+      f"CodeBuildRole{random_suffix}", 
+      # Removed role_name to use CDK's automatic unique naming
       assumed_by=iam.ServicePrincipal("codebuild.amazonaws.com"),
       managed_policies=[
         iam.ManagedPolicy.from_aws_managed_policy_name("CloudWatchLogsFullAccess"),
@@ -117,11 +125,11 @@ class IAMStack(Construct):
       }
     )
     
-    # CloudFormation execution role for deployments
+    # CloudFormation execution role for deployments - Using CDK default naming for uniqueness
     self.cloudformation_role = iam.Role(
       self,
-      "CloudFormationRole",
-      role_name=f"ciapp-{environment_suffix}-cloudformation-role", 
+      f"CloudFormationRole{random_suffix}",
+      # Removed role_name to use CDK's automatic unique naming
       assumed_by=iam.ServicePrincipal("cloudformation.amazonaws.com"),
       managed_policies=[
         iam.ManagedPolicy.from_aws_managed_policy_name("PowerUserAccess")
@@ -183,11 +191,11 @@ class S3Stack(Construct):
     
     environment_suffix = environment_suffix or 'dev'
     
-    # S3 bucket for pipeline artifacts
+    # S3 bucket for pipeline artifacts - Using CDK automatic naming for uniqueness
     self.artifacts_bucket = s3.Bucket(
       self,
       "ArtifactsBucket",
-      bucket_name=f"ciapp-{environment_suffix}-artifacts-{cdk.Aws.ACCOUNT_ID}",
+      # Removed bucket_name to use CDK's automatic unique naming
       versioned=True,
       encryption=s3.BucketEncryption.S3_MANAGED,
       block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
@@ -263,13 +271,14 @@ class CodeBuildStack(Construct):
     super().__init__(scope, construct_id)
     
     environment_suffix = environment_suffix or 'dev'
+    random_suffix = generate_random_suffix()
     
     # Create CodeBuild service role if not provided
     if codebuild_role is None:
       codebuild_role = iam.Role(
         self,
-        "CodeBuildRole", 
-        role_name=f"ciapp-{environment_suffix}-codebuild-role",
+        f"CodeBuildRole{random_suffix}", 
+        # Removed role_name to use CDK's automatic unique naming
         assumed_by=iam.ServicePrincipal("codebuild.amazonaws.com"),
         managed_policies=[
           iam.ManagedPolicy.from_aws_managed_policy_name("CloudWatchLogsFullAccess"),
@@ -514,13 +523,14 @@ class CodePipelineStack(Construct):
     super().__init__(scope, construct_id)
     
     environment_suffix = environment_suffix or 'dev'
+    random_suffix = generate_random_suffix()
     
     # Create CodePipeline service role if not provided
     if codepipeline_role is None:
       codepipeline_role = iam.Role(
         self,
-        "CodePipelineRole",
-        role_name=f"ciapp-{environment_suffix}-codepipeline-role",
+        f"CodePipelineRole{random_suffix}",
+        # Removed role_name to use CDK's automatic unique naming
         assumed_by=iam.ServicePrincipal("codepipeline.amazonaws.com"),
         managed_policies=[
           iam.ManagedPolicy.from_aws_managed_policy_name("AWSCodePipelineFullAccess"),
@@ -549,11 +559,11 @@ class CodePipelineStack(Construct):
         }
       )
     
-    # Create S3 bucket for source code artifacts
+    # Create S3 bucket for source code artifacts - Using CDK automatic naming for uniqueness
     self.source_bucket = s3.Bucket(
       self,
       "SourceBucket",
-      bucket_name=f"ciapp-{environment_suffix}-source-{cdk.Aws.ACCOUNT_ID}",
+      # Removed bucket_name to use CDK's automatic unique naming
       versioned=True,
       encryption=s3.BucketEncryption.S3_MANAGED,
       block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
