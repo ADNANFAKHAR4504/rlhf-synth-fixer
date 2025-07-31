@@ -8,7 +8,6 @@ Creates Amazon Kinesis Data Stream, an AWS Lambda consumer, and an S3 bucket for
 import pulumi
 import pulumi_aws as aws
 import json
-import base64
 
 class DataProcessingInfrastructure(pulumi.ComponentResource):
   def __init__(self, name: str, vpc_id: pulumi.Output, private_subnet_ids: list,

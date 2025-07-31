@@ -1,13 +1,3 @@
-
-
-"""
-This module defines the TapStack class, the main Pulumi ComponentResource for
-the Multi-Tiered Web Application project.
-
-It orchestrates the instantiation of other resource-specific components
-and manages environment-specific configurations.
-"""
-
 # lib/tap_stack.py
 
 from typing import Optional
@@ -19,6 +9,14 @@ from .components.frontend import FrontendInfrastructure
 from .components.backend import BackendInfrastructure
 from .components.data_processing import DataProcessingInfrastructure
 from .components.monitoring import MonitoringInfrastructure
+
+"""
+This module defines the TapStack class, the main Pulumi ComponentResource for
+the Multi-Tiered Web Application project.
+
+It orchestrates the instantiation of other resource-specific components
+and manages environment-specific configurations.
+"""
 
 class TapStackArgs:
   def __init__(self, environment_suffix: Optional[str] = None, tags: Optional[dict] = None):

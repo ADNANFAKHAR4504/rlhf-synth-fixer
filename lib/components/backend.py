@@ -286,120 +286,120 @@ sns_topic_arn = os.environ.get('SNS_TOPIC_ARN')
 table = dynamodb.Table(table_name)
 
 def lambda_handler(event, context):
-    print(f"Received event: {json.dumps(event)}")
+  print(f"Received event: {json.dumps(event)}")
+  
+  try:
+    http_method = event['httpMethod']
+    path = event['path']
     
+    if http_method == 'GET' and path == '/items':
+      return get_all_items()
+    elif http_method == 'POST' and path == '/items':
+      return create_item(event)
+    elif http_method == 'GET' and '/items/' in path:
+      item_id = event['pathParameters']['id']
+      return get_item(item_id)
+    else:
+      return {
+        'statusCode': 404,
+        'headers': {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*'
+        },
+        'body': json.dumps({'message': 'Endpoint not found'})
+      }
+      
+  except Exception as e:
+    print(f"Error: {str(e)}")
+    # Send error notification
     try:
-        http_method = event['httpMethod']
-        path = event['path']
-        
-        if http_method == 'GET' and path == '/items':
-            return get_all_items()
-        elif http_method == 'POST' and path == '/items':
-            return create_item(event)
-        elif http_method == 'GET' and '/items/' in path:
-            item_id = event['pathParameters']['id']
-            return get_item(item_id)
-        else:
-            return {
-                'statusCode': 404,
-                'headers': {
-                    'Content-Type': 'application/json',
-                    'Access-Control-Allow-Origin': '*'
-                },
-                'body': json.dumps({'message': 'Endpoint not found'})
-            }
-            
-    except Exception as e:
-        print(f"Error: {str(e)}")
-        # Send error notification
-        try:
-            sns.publish(
-                TopicArn=sns_topic_arn,
-                Message=f"Lambda function error: {str(e)}",
-                Subject="Backend API Error"
-            )
-        except:
-            pass
-            
-        return {
-            'statusCode': 500,
-            'headers': {
-                'Content-Type': 'application/json',
-                'Access-Control-Allow-Origin': '*'
-            },
-            'body': json.dumps({'message': 'Internal server error'})
-        }
+      sns.publish(
+        TopicArn=sns_topic_arn,
+        Message=f"Lambda function error: {str(e)}",
+        Subject="Backend API Error"
+      )
+    except:
+      pass
+      
+    return {
+      'statusCode': 500,
+      'headers': {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*'
+      },
+      'body': json.dumps({'message': 'Internal server error'})
+    }
 
 def get_all_items():
-    try:
-        response = table.scan()
-        items = response.get('Items', [])
-        
-        return {
-            'statusCode': 200,
-            'headers': {
-                'Content-Type': 'application/json',
-                'Access-Control-Allow-Origin': '*'
-            },
-            'body': json.dumps({
-                'items': items,
-                'count': len(items)
-            })
-        }
-    except Exception as e:
-        print(f"Error getting items: {str(e)}")
-        raise
+  try:
+    response = table.scan()
+    items = response.get('Items', [])
+    
+    return {
+      'statusCode': 200,
+      'headers': {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*'
+      },
+      'body': json.dumps({
+        'items': items,
+        'count': len(items)
+      })
+    }
+  except Exception as e:
+    print(f"Error getting items: {str(e)}")
+    raise
 
 def create_item(event):
-    try:
-        body = json.loads(event['body'])
-        item_id = str(uuid.uuid4())
-        
-        item = {
-            'id': item_id,
-            'name': body.get('name', ''),
-            'description': body.get('description', ''),
-            'created_at': str(datetime.now()),
-            'updated_at': str(datetime.now())
-        }
-        
-        table.put_item(Item=item)
-        
-        return {
-            'statusCode': 201,
-            'headers': {
-                'Content-Type': 'application/json',
-                'Access-Control-Allow-Origin': '*'
-            },
-            'body': json.dumps(item)
-        }
-    except Exception as e:
-        print(f"Error creating item: {str(e)}")
-        raise
+  try:
+    body = json.loads(event['body'])
+    item_id = str(uuid.uuid4())
+    
+    item = {
+      'id': item_id,
+      'name': body.get('name', ''),
+      'description': body.get('description', ''),
+      'created_at': str(datetime.now()),
+      'updated_at': str(datetime.now())
+    }
+    
+    table.put_item(Item=item)
+    
+    return {
+      'statusCode': 201,
+      'headers': {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*'
+      },
+      'body': json.dumps(item)
+    }
+  except Exception as e:
+    print(f"Error creating item: {str(e)}")
+    raise
 
 def get_item(item_id):
-    try:
-        response = table.get_item(Key={'id': item_id})
-        
-        if 'Item' in response:
-            return {
-                'statusCode': 200,
-                'headers': {
-                    'Content-Type': 'application/json',
-                    'Access-Control-Allow-Origin': '*'
-                },
-                'body': json.dumps(response['Item'])
-            }
-        else:
-            return {
-                'statusCode': 404,
-                'headers': {
-                    'Content-Type': 'application/json',
-                    'Access-Control-Allow-Origin': '*'
-                },
-                'body': json.dumps({'message': 'Item not found'})
-            }
-    except Exception as e:
-        print(f"Error getting item: {str(e)}")
-        raise
+  try:
+    response = table.get_item(Key={'id': item_id})
+    
+    if 'Item' in response:
+      return {
+        'statusCode': 200,
+        'headers': {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*'
+        },
+        'body': json.dumps(response['Item'])
+      }
+    else:
+      return {
+        'statusCode': 404,
+        'headers': {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*'
+        },
+        'body': json.dumps({'message': 'Item not found'})
+      }
+  except Exception as e:
+    print(f"Error getting item: {str(e)}")
+    raise
 """
