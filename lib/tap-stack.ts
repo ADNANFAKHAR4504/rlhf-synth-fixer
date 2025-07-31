@@ -1,4 +1,3 @@
-import { IamInstanceProfile } from '@cdktf/provider-aws/lib/iam-instance-profile';
 // lib/tap-stack.ts
 import { IamPolicy } from '@cdktf/provider-aws/lib/iam-policy';
 import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
