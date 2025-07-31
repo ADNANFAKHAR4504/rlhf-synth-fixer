@@ -1,6 +1,8 @@
 import { App, Testing } from 'cdktf';
 import { TapStack } from '../lib/tap-stack';
 
+Testing.setupJest();
+
 describe('TapStack Unit Tests', () => {
   let app: App;
   let stack: TapStack;
