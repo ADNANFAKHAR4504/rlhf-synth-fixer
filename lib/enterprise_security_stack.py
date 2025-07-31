@@ -338,7 +338,7 @@ class EnterpriseSecurityStack(Construct):  # pylint: disable=too-many-instance-a
               "logs:PutLogEvents"
             ],
             "Resource": (
-              f"arn:aws:logs:{self.current_region.id}:":
+              f"arn:aws:logs:{self.current_region.id}:"
               f"{self.current_account.account_id}:*"
             )
           }
@@ -584,8 +584,8 @@ def handler(event, context):
 '''
     
     # Create lambda function zip file
-    import zipfile
     import os
+    import zipfile
     
     zip_path = os.path.join(os.path.dirname(__file__), 'lambda_function.zip')
     with zipfile.ZipFile(zip_path, 'w') as zip_file:
