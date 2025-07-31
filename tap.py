@@ -43,7 +43,7 @@ COMMIT_AUTHOR  = os.getenv("COMMIT_AUTHOR", "unknown")
 DEV_ACCOUNT_ID  = os.getenv("DEV_ACCOUNT_ID")
 PROD_ACCOUNT_ID = os.getenv("PROD_ACCOUNT_ID")
 
-app = App()
+# app = App()
 
 #secure stack definition
 class SecureAwsEnvironment(TerraformStack):
@@ -176,4 +176,4 @@ class SecureAwsEnvironment(TerraformStack):
       ShieldProtection(self, "Shield", name=f"shield-{environment}", resource_arn=cf.arn)
       TerraformOutput(self, "cloudfront_domain_name", value=cf.domain_name)
 
-app.synth()
+# app.synth()
