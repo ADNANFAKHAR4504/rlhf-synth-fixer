@@ -2,23 +2,6 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Production-grade high-availability infrastructure with VPC, RDS, ALB, Auto Scaling, and monitoring'
 
 Parameters:
-  DBUsername:
-    Type: String
-    Default: admin
-    Description: Database administrator username
-    MinLength: 1
-    MaxLength: 16
-    AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
-
-  DBPassword:
-    Type: String
-    NoEcho: true
-    Description: Database administrator password
-    MinLength: 8
-    MaxLength: 41
-    AllowedPattern: '[a-zA-Z0-9]*'
-    Default: MySecureDefault123
-
   InstanceType:
     Type: String
     Default: t3.medium
@@ -54,6 +37,17 @@ Resources:
           Value: Production-VPC
         - Key: environment
           Value: production
+  
+  DBSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: DBSecret
+      Description:  credentials for DB Password
+      GenerateSecretString:
+        SecretStringTemplate: '{"username":"dbadmin"}'
+        GenerateStringKey: "password"
+        PasswordLength: 16
+        ExcludeCharacters: '"@/\\'
 
   # Internet Gateway
   InternetGateway:
@@ -355,8 +349,8 @@ Resources:
       DBInstanceClass: db.t3.micro
       Engine: postgres
       EngineVersion: '15.7'
-      MasterUsername: !Ref DBUsername
-      MasterUserPassword: !Ref DBPassword
+      MasterUsername: !Join [ '', [ '{{resolve:secretsmanager:', !Ref DBSecret, ':SecretString:username}}' ] ]
+      MasterUserPassword: !Join [ '', [ '{{resolve:secretsmanager:', !Ref DBSecret, ':SecretString:password}}' ] ]
       AllocatedStorage: 20
       StorageType: gp2
       StorageEncrypted: true
@@ -447,7 +441,7 @@ Resources:
         SecurityGroupIds:
           - !Ref WebServerSecurityGroup
         UserData:
-          Fn::Base64: !Sub |
+          Fn::Base64: |
             #!/bin/bash
             yum update -y
             yum install -y httpd
