@@ -1,6 +1,3 @@
-//fix int test
-//make changes
-//changes done
 import { 
   EC2Client, 
   DescribeVpcsCommand, 
