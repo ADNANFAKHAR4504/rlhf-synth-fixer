@@ -48,9 +48,52 @@ def test_outputs_exist(templates):
 
 def test_bucket_tags(templates):
   tmpl = templates["nested"]
-  tmpl.has_resource("AWS::S3::Bucket", {
+  tmpl.has_resource_properties("AWS::S3::Bucket", {
     "Tags": [
       {"Key": "Environment", "Value": "dev"},
       {"Key": "Project", "Value": "SecureStorage"}
     ]
   })
+def test_principal_access_control(templates):
+  tmpl = templates["nested"]
+
+  # Validate KMS key policy includes principal
+  tmpl.has_resource("AWS::KMS::Key", {
+    "KeyPolicy": {
+      "Statement": [
+        {
+          "Action": ["kms:Encrypt", "kms:Decrypt", "kms:GenerateDataKey"],
+          "Principal": {
+            "AWS": "arn:aws:iam::123456789012:user/TestUser"
+          },
+          "Effect": "Allow",
+          "Resource": "*"
+        }
+      ]
+    }
+  })
+
+  # Validate S3 bucket policy includes principal access
+  tmpl.has_resource("AWS::S3::BucketPolicy", {
+    "PolicyDocument": {
+      "Statement": [
+        {
+          "Action": ["s3:GetObject", "s3:PutObject", "s3:ListBucket"],
+          "Principal": {
+            "AWS": "arn:aws:iam::123456789012:user/TestUser"
+          },
+          "Effect": "Allow",
+          "Resource": {
+            "Fn::Join": [
+              "",
+              [
+                {"Fn::GetAtt": ["SecureDataBucket", "Arn"]},
+                "/*"
+              ]
+            ]
+          }
+        }
+      ]
+    }
+  })
+
