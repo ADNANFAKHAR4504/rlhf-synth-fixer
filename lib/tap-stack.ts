@@ -18,7 +18,7 @@ export class TapStack extends TerraformStack {
   constructor(
     scope: Construct,
     id: string,
-    _props: {
+    props: {
       environmentSuffix: string;
       stateBucket: string;
       stateBucketRegion: string;
@@ -28,14 +28,15 @@ export class TapStack extends TerraformStack {
   ) {
     super(scope, id);
 
-    // Configure AWS Provider for us-east-1 region
+    // Configure AWS Provider using the provided region
     new AwsProvider(this, 'AWS', {
-      region: 'us-east-1',
+      region: props.awsRegion,
     });
 
-    // Common tags for all resources
+    // Use provided tags with fallback to Production
     const commonTags = {
-      Environment: 'Production',
+      Environment: props.defaultTags.tags.Environment || 'Production',
+      ...props.defaultTags.tags,
     };
 
     // Generate unique suffix for bucket name
@@ -111,7 +112,7 @@ export class TapStack extends TerraformStack {
 
     // Package Lambda function code
     const lambdaAsset = new TerraformAsset(this, 'LambdaAsset', {
-      path: path.join(__dirname, '..', 'lib', 'lambda'),
+      path: path.join(__dirname, 'lambda'),
       type: AssetType.ARCHIVE,
     });
 
@@ -138,7 +139,7 @@ export class TapStack extends TerraformStack {
 
     // Create S3 bucket for image processing
     const s3Bucket = new S3Bucket(this, 'ImageProcessingBucket', {
-      bucket: `image-processing-source-bucket-${uniqueSuffix}`,
+      bucket: `image-processing-source-bucket-${props.environmentSuffix}-${uniqueSuffix}`,
       tags: commonTags,
     });
 
