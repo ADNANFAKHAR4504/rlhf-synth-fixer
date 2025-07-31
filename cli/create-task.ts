@@ -83,7 +83,7 @@ function getLanguageChoices(platform: string) {
     ];
   }
 
-    if (platform === 'pulumi') {
+  if (platform === 'pulumi') {
     return [
       { name: 'Python', value: 'py' }, // Pulumi Python
     ];
