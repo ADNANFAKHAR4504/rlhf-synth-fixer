@@ -422,11 +422,13 @@ class EnterpriseSecurityStack(Construct):  # pylint: disable=too-many-instance-a
       image_id="ami-0abcdef1234567890",  # Replace with actual AMI ID
       instance_type="t3.micro",
       vpc_security_group_ids=[],  # Security groups would be defined separately
-      network_interfaces={
-        "associate_public_ip_address": False,  # No public IP by default
-        "delete_on_termination": True,
-        "device_index": 0
-      },
+      network_interfaces=[
+        {
+          "associate_public_ip_address": False,  # No public IP by default
+          "delete_on_termination": True,
+          "device_index": 0
+        }
+      ],
       metadata_options={
         "http_endpoint": "enabled",
         "http_tokens": "required",  # Enforce IMDSv2
@@ -435,14 +437,16 @@ class EnterpriseSecurityStack(Construct):  # pylint: disable=too-many-instance-a
       monitoring={
         "enabled": True
       },
-      tag_specifications={
-        "resource_type": "instance",
-        "tags": {
-          "Name": "EnterpriseSecureInstance",
-          "Environment": "Production",
-          "SecurityCompliant": "true"
+      tag_specifications=[
+        {
+          "resource_type": "instance",
+          "tags": {
+            "Name": "EnterpriseSecureInstance",
+            "Environment": "Production",
+            "SecurityCompliant": "true"
+          }
         }
-      }
+      ]
     )
 
   def _create_rds_security_configuration(self) -> None:
