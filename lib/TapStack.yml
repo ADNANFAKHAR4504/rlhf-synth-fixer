@@ -573,7 +573,7 @@ Resources:
   S3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 'production-app-bucket-${AWS::AccountId}-${AWS::Region}'
+      BucketName: !Sub 'production-bucket-${AWS::AccountId}-${AWS::Region}'
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
