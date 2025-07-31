@@ -346,7 +346,7 @@
                 "SecretId": {
                     "Ref": "DBSecret"
                 },
-                "RotationLambdaArn": {
+                "RotationLambdaARN": {
                     "Fn::Sub": "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:SecretsManagerRDSMySQLRotationSingleUser"
                 },
                 "RotationRules": {
