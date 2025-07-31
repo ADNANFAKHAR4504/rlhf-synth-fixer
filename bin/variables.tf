@@ -1,7 +1,6 @@
-variable "region" {
-  type = string
-  default = "us-east-1"
-}
+variable "secret_key" {}
+variable "access_key" {}
+variable "region" {}
 variable "environment_suffix" {
   type        = string
   default     = "dev"
