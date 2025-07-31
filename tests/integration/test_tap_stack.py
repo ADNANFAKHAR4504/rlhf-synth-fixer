@@ -1,7 +1,6 @@
 import pytest
 from aws_cdk import App
 from aws_cdk.assertions import Template
-
 from lib.tap_stack import TapStack, TapStackProps
 
 @pytest.fixture
@@ -12,9 +11,10 @@ def templates():
     principal_arns=["arn:aws:iam::123456789012:user/TestUser"]
   )
   stack = TapStack(app, "TapStackdev", props=props)
+  nested = stack.node.find_child("SecureS3Stack-dev")
   return {
     "tap": Template.from_stack(stack),
-    "nested": Template.from_stack(stack.node.find_child("SecureS3Stack-dev"))
+    "nested": Template.from_stack(nested)
   }
 
 def test_bucket_config(templates):
@@ -37,7 +37,7 @@ def test_kms_key_properties(templates):
     "EnableKeyRotation": True
   })
 
-def test_bucket_policy_deny_unencrypted_uploads(templates):
+def test_bucket_policy_exists(templates):
   tmpl = templates["nested"]
   tmpl.resource_count_is("AWS::S3::BucketPolicy", 1)
 
@@ -46,6 +46,11 @@ def test_outputs_exist(templates):
   for output_key in ["BucketName", "BucketArn", "KmsKeyArn"]:
     tmpl.has_output(output_key, {})
 
-def test_stack_tagging(templates):
-  tmpl = templates["tap"]
-  tmpl.has_resource("AWS::CloudFormation::Stack", {})
+def test_bucket_tags(templates):
+  tmpl = templates["nested"]
+  tmpl.has_resource("AWS::S3::Bucket", {
+    "Tags": [
+      {"Key": "Environment", "Value": "dev"},
+      {"Key": "Project", "Value": "SecureStorage"}
+    ]
+  })
