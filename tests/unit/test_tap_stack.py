@@ -8,7 +8,8 @@ class TestTapStack(unittest.TestCase):
     def setUp(self):
         self.app = App()
         self.env_suffix = "test"
-        self.stack = TapStack(self.app, "TapStackTest", TapStackProps(environment_suffix=self.env_suffix))
+        props = TapStackProps(environment_suffix=self.env_suffix)
+        self.stack = TapStack(self.app, "TapStackTest", props=props)
 
         # Extract nested stacks
         self.vpc_stack = self.stack.vpc_stack
@@ -17,17 +18,19 @@ class TestTapStack(unittest.TestCase):
     def test_vpc_is_created_with_public_and_private_subnets(self):
         vpc_template = Template.from_stack(self.vpc_stack)
 
-        # Validate one VPC
+        # Assert VPC exists
         vpc_template.resource_count_is("AWS::EC2::VPC", 1)
 
-        # Validate two public and two private subnets (adjust if your config differs)
+        # Assert 2 public and 2 private subnets (total 4)
         vpc_template.resource_count_is("AWS::EC2::Subnet", 4)
 
     def test_iam_role_is_created_with_ec2_read_only_policy(self):
         iam_template = Template.from_stack(self.iam_stack)
 
+        # Assert one IAM role is created
         iam_template.resource_count_is("AWS::IAM::Role", 1)
 
+        # Check AssumeRole policy
         iam_template.has_resource_properties(
             "AWS::IAM::Role",
             {
@@ -40,9 +43,22 @@ class TestTapStack(unittest.TestCase):
                         })
                     ])
                 }),
+                # Check inline policies
                 "Policies": Match.array_with([
                     Match.object_like({
-                        "PolicyName": Match.string_like_regexp(".*ReadOnly.*")
+                        "PolicyDocument": Match.object_like({
+                            "Statement": Match.array_with([
+                                Match.object_like({
+                                    "Action": Match.array_with([
+                                        "ec2:DescribeInstances",
+                                        "ec2:DescribeTags"
+                                    ]),
+                                    "Effect": "Allow",
+                                    "Resource": "*"
+                                })
+                            ])
+                        }),
+                        "PolicyName": Match.any_value()  # Accepts any generated name
                     })
                 ])
             }
