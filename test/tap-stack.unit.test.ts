@@ -80,7 +80,7 @@ describe('TapStack', () => {
       );
 
       expect(iotProcessorFunction).toBeDefined();
-      expect(iotProcessorFunction.Properties).toMatchObject({
+      expect(iotProcessorFunction?.Properties).toMatchObject({
         Runtime: 'nodejs18.x',
         Handler: 'index.handler',
         MemorySize: 512,
@@ -88,7 +88,7 @@ describe('TapStack', () => {
       });
 
       // ReservedConcurrentExecutions is commented out in the construct, so we don't expect it
-      expect(iotProcessorFunction.Properties.ReservedConcurrentExecutions).toBeUndefined();
+      expect(iotProcessorFunction?.Properties.ReservedConcurrentExecutions).toBeUndefined();
     });
 
     test('should create CloudWatch log group with correct name', () => {
@@ -190,8 +190,8 @@ describe('TapStack', () => {
       );
 
       expect(iotProcessorFunction).toBeDefined();
-      expect(iotProcessorFunction.Properties.Environment.Variables).toHaveProperty('DYNAMODB_TABLE_NAME');
-      expect(iotProcessorFunction.Properties.Environment.Variables).toHaveProperty('LOG_GROUP_NAME');
+      expect(iotProcessorFunction?.Properties.Environment.Variables).toHaveProperty('DYNAMODB_TABLE_NAME');
+      expect(iotProcessorFunction?.Properties.Environment.Variables).toHaveProperty('LOG_GROUP_NAME');
     });
   });
 
