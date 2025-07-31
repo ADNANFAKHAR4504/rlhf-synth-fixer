@@ -73,7 +73,7 @@ class TestTapStack(unittest.TestCase):
       "Handler": "index.lambda_handler",
       "MemorySize": 512,
       "Timeout": 30,
-      "ReservedConcurrentExecutions": 1000
+      "ReservedConcurrentExecutions": 900
     })
 
   @mark.it("creates Lambda function with correct environment variables")
