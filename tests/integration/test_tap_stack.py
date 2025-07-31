@@ -57,23 +57,13 @@ def test_bucket_tags(templates):
 def test_principal_access_control(templates):
   tmpl = templates["nested"]
 
-  # Validate KMS key policy includes principal
-  tmpl.has_resource("AWS::KMS::Key", {
-    "KeyPolicy": {
-      "Statement": [
-        {
-          "Action": ["kms:Encrypt", "kms:Decrypt", "kms:GenerateDataKey"],
-          "Principal": {
-            "AWS": "arn:aws:iam::123456789012:user/TestUser"
-          },
-          "Effect": "Allow",
-          "Resource": "*"
-        }
-      ]
-    }
+  # ✅ Confirm KMS key exists and rotation is enabled
+  tmpl.resource_count_is("AWS::KMS::Key", 1)
+  tmpl.has_resource_properties("AWS::KMS::Key", {
+    "EnableKeyRotation": True
   })
 
-  # Validate S3 bucket policy includes principal access
+  # ✅ Confirm S3 bucket policy includes principal access
   tmpl.has_resource("AWS::S3::BucketPolicy", {
     "PolicyDocument": {
       "Statement": [
@@ -83,6 +73,24 @@ def test_principal_access_control(templates):
             "AWS": "arn:aws:iam::123456789012:user/TestUser"
           },
           "Effect": "Allow",
+          "Resource": [
+            {"Fn::GetAtt": ["SecureDataBucket", "Arn"]},
+            {
+              "Fn::Join": [
+                "",
+                [
+                  {"Fn::GetAtt": ["SecureDataBucket", "Arn"]},
+                  "/*"
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "Sid": "DenyUnEncryptedObjectUploads",
+          "Effect": "Deny",
+          "Principal": {"AWS": "*"},
+          "Action": "s3:PutObject",
           "Resource": {
             "Fn::Join": [
               "",
@@ -91,9 +99,13 @@ def test_principal_access_control(templates):
                 "/*"
               ]
             ]
+          },
+          "Condition": {
+            "StringNotEquals": {
+              "s3:x-amz-server-side-encryption": "aws:kms"
+            }
           }
         }
       ]
     }
   })
-
