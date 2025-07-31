@@ -198,8 +198,8 @@ exports.handler = async (event) => {
       },
       timeout: cdk.Duration.minutes(5),
       memorySize: 512,
-      // Remove reserved concurrency to avoid account limits - Lambda will auto-scale as needed
-      // reservedConcurrentExecutions: 500, // Commented out to avoid account concurrency limits
+      // Reserved concurrency configuration has been removed to avoid account limits.
+      // For details on configuring reserved concurrency, refer to the project configuration guide.
       logGroup: this.logGroup,
     });
 

@@ -1,6 +1,3 @@
-//fix int test
-//make changes
-//changes done
 import { 
   EC2Client, 
   DescribeVpcsCommand, 
@@ -186,7 +183,7 @@ describe('TapStack Integration Tests', () => {
 
   describe('Auto Scaling Group', () => {
     itif(hasOutputs)('should have ASG with correct configuration', async () => {
-      // FIX: Find the ASG using tags
+      // Find the ASG using tags
       const response = await autoScalingClient.send(new DescribeAutoScalingGroupsCommand({
         Filters: createTagFilter().map(f => ({ Name: `tag:${f.Name.split(':')[1]}`, Values: f.Values }))
       }));
@@ -516,7 +513,7 @@ describe('TapStack Integration Tests', () => {
       expect(response.MetricAlarms!.length).toBeGreaterThan(0);
       const alarm = response.MetricAlarms![0];
       expect(alarm.MetricName).toBe('CPUUtilization');
-      // FIX: The namespace for ASG CPU metrics is AWS/EC2, aggregated by ASG name.
+      // The namespace for ASG CPU metrics is AWS/EC2, aggregated by ASG name.
       expect(alarm.Namespace).toBe('AWS/EC2');
       expect(alarm.Threshold).toBe(85);
       expect(alarm.ComparisonOperator).toBe('GreaterThanOrEqualToThreshold');
