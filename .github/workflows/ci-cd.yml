@@ -277,7 +277,9 @@ jobs:
           LANGUAGE="${{ needs.synth.outputs.language }}"
 
           if [ "$PLATFORM" = "cdk" ]; then
+            echo "Cleaning up cdk.out folder..."
             echo "✅ CDK project detected, running CDK bootstrap..."
+            rm -rf cdk.out
             npm run cdk:bootstrap
 
           elif [ "$PLATFORM" = "pulumi" ]; then
