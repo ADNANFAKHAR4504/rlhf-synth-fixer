@@ -448,8 +448,8 @@ Resources:
           Value: !Sub '${ProjectName}-${EnvironmentSuffix}-db-rt'
         - Key: Environment
           Value: !Ref EnvironmentSuffix
-        - Key: Region
-          Value: !Ref 'AWS::Region'
+        - Key: Project
+          Value: !Ref ProjectName
 
   DefaultDatabaseRoute: # Route for DB subnets to NAT Gateway (if needed for updates/outbound)
     Type: AWS::EC2::Route
@@ -1480,7 +1480,7 @@ Resources:
               - iam:EnableMFADevice
               - iam:GetUser
               - iam:ListMFADevices
-              - iam:ListVirtualMFADevices
+              - iam:ListVirtualMFADevice
               - iam:ResyncMFADevice
               - sts:GetSessionToken
             Resource: '*'
@@ -1851,6 +1851,30 @@ Resources:
       AdjustmentType: ChangeInCapacity
       ScalingAdjustment: -1
       Cooldown: 300
+
+  BastionHost:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref WebServerAmiId
+      InstanceType: t3.micro
+      KeyName: !Sub '${ProjectName}-${EnvironmentSuffix}-key' # Requires an EC2 Key Pair to exist
+      SubnetId: !Ref PublicSubnet # Deploy in a public subnet
+      SecurityGroupIds:
+        - !Ref BastionSecurityGroup
+      IamInstanceProfile: !Ref WebApplicationInstanceProfile # Use the web application's instance profile for demo
+      UserData:
+        Fn::Base64: |
+          #!/bin/bash
+          echo "Hello from CloudFormation bastion host!" > /tmp/bastion_message.txt
+          yum update -y
+          yum install -y mysql # Example: install mysql client for DB access from bastion
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-bastion'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: !Ref ProjectName
 
 Outputs:
   VPCId:
