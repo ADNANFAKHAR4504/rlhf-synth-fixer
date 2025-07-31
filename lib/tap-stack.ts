@@ -4,9 +4,10 @@ import {
 } from '@cdktf/provider-aws/lib/provider';
 import { S3Backend, TerraformStack } from 'cdktf';
 import { Construct } from 'constructs';
-import { VpcModule } from './modules/vpc';
-import { SubnetsModule } from './modules/subnets';
-import { Ec2Module } from './modules/ec2';
+// import { VpcModule } from './modules/vpc';
+// import { SubnetsModule } from './modules/subnets';
+// import { Ec2Module } from './modules/ec2';
+import { VpcModule, SubnetsModule, Ec2Module } from './modules';
 
 // ? Import your stacks here
 // import { MyStack } from './my-stack';
