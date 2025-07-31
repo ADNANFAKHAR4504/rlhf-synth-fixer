@@ -448,8 +448,8 @@ Resources:
           Value: !Sub '${ProjectName}-${EnvironmentSuffix}-db-rt'
         - Key: Environment
           Value: !Ref EnvironmentSuffix
-        - Key: Project
-          Value: !Ref ProjectName
+        - Key: Region
+          Value: !Ref 'AWS::Region'
 
   DefaultDatabaseRoute: # Route for DB subnets to NAT Gateway (if needed for updates/outbound)
     Type: AWS::EC2::Route
@@ -1480,7 +1480,7 @@ Resources:
               - iam:EnableMFADevice
               - iam:GetUser
               - iam:ListMFADevices
-              - iam:ListVirtualMFADevice
+              - iam:ListVirtualMFADevices
               - iam:ResyncMFADevice
               - sts:GetSessionToken
             Resource: '*'
