@@ -65,7 +65,6 @@ export class IoTDataProcessorConstruct extends Construct {
 
     // Create IAM role for Lambda with least privilege access
     this.lambdaRole = new iam.Role(this, 'IoTDataProcessorRole', {
-      roleName: `iot-data-processor-role-${environmentSuffix}`,
       assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
       managedPolicies: [
         iam.ManagedPolicy.fromAwsManagedPolicyName(
@@ -105,7 +104,7 @@ export class IoTDataProcessorConstruct extends Construct {
 
     // Create Lambda function for IoT data processing
     this.lambdaFunction = new lambda.Function(this, 'IoTDataProcessor', {
-      functionName: 'IoTDataProcessor',
+      functionName: `IoTDataProcessor-${environmentSuffix}`,
       runtime: lambda.Runtime.NODEJS_18_X,
       handler: 'index.handler',
       role: this.lambdaRole,
