@@ -28,7 +28,7 @@ class TestStackStructure:
     assert stack is not None
 
   def test_tap_stack_uses_default_values_when_no_props_provided(self):
-    """TapStack uses default values when no props provided."""
+    """TapStack uses default values when no props provided"""
     app = App()
     stack = TapStack(app, "TestTapStackDefault")
     assert stack is not None
