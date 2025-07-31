@@ -383,10 +383,6 @@ echo "<h1>Hello from $(hostname -f)</h1>" > /var/www/html/index.html
         "name": self.instance_profile.name
       },
       user_data=user_data,
-      tag_specifications=[{
-        "resource_type": "instance",
-        "tags": self.common_tags
-      }],
       tags={**self.common_tags, "Name": "asg-launch-template"}
     )
 
