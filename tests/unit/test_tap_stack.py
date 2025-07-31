@@ -1,125 +1,124 @@
 import unittest
+
 from pytest import mark, skip
 from aws_cdk.assertions import Match, Template
-
 from lib.tap_stack import TapStack, TapStackProps
 
 
 @mark.describe("TapStack")
 class TestTapStack(unittest.TestCase):
 
-    def setUp(self):
-        from aws_cdk import App
-        self.app = App()
+  def setUp(self):
+    from aws_cdk import App
+    self.app = App()
 
-    @mark.it("creates an S3 bucket with env suffix")
-    def test_creates_s3_bucket_with_env_suffix(self):
-        stack = TapStack(
-            self.app,
-            "TapStackWithSuffix",
-            TapStackProps(environment_suffix="testenv")
-        )
-        template = Template.from_stack(stack)
-        template.has_resource_properties(
-            "AWS::S3::Bucket",
-            Match.object_like({
-                "BucketName": Match.string_like_regexp("tap-secure-data-testenv")
-            })
-        )
+  @mark.it("creates an S3 bucket with env suffix")
+  def test_creates_s3_bucket_with_env_suffix(self):
+    stack = TapStack(
+      self.app,
+      "TapStackWithSuffix",
+      TapStackProps(environment_suffix="testenv")
+    )
+    template = Template.from_stack(stack)
+    template.has_resource_properties(
+      "AWS::S3::Bucket",
+      Match.object_like({
+        "BucketName": Match.string_like_regexp("tap-secure-data-testenv")
+      })
+    )
 
-    @mark.it("defaults env suffix to 'dev'")
-    def test_defaults_env_suffix_to_dev(self):
-        stack = TapStack(self.app, "TapStackDefault", TapStackProps())
-        template = Template.from_stack(stack)
-        template.has_resource_properties(
-            "AWS::S3::Bucket",
-            Match.object_like({
-                "BucketName": Match.string_like_regexp("tap-secure-data-dev")
-            })
-        )
+  @mark.it("defaults env suffix to 'dev'")
+  def test_defaults_env_suffix_to_dev(self):
+    stack = TapStack(self.app, "TapStackDefault", TapStackProps())
+    template = Template.from_stack(stack)
+    template.has_resource_properties(
+      "AWS::S3::Bucket",
+      Match.object_like({
+        "BucketName": Match.string_like_regexp("tap-secure-data-dev")
+      })
+    )
 
-    @mark.it("enforces SSL-only access on the S3 bucket")
-    def test_s3_ssl_only_policy(self):
-        stack = TapStack(
-            self.app,
-            "TapStackSSLPolicy",
-            TapStackProps(environment_suffix="ssltest")
-        )
-        template = Template.from_stack(stack)
+  @mark.it("enforces SSL-only access on the S3 bucket")
+  def test_s3_ssl_only_policy(self):
+    stack = TapStack(
+      self.app,
+      "TapStackSSLPolicy",
+      TapStackProps(environment_suffix="ssltest")
+    )
+    template = Template.from_stack(stack)
 
-        try:
-            template.has_resource(
-                "AWS::S3::BucketPolicy",
+    try:
+      template.has_resource(
+        "AWS::S3::BucketPolicy",
+        Match.object_like({
+          "Properties": Match.object_like({
+            "PolicyDocument": Match.object_like({
+              "Statement": Match.array_with([
                 Match.object_like({
-                    "Properties": Match.object_like({
-                        "PolicyDocument": Match.object_like({
-                            "Statement": Match.array_with([
-                                Match.object_like({
-                                    "Effect": "Deny",
-                                    "Principal": {"AWS": "*"},
-                                    "Action": "s3:*",
-                                    "Condition": {
-                                        "Bool": {"aws:SecureTransport": "false"}
-                                    }
-                                })
-                            ])
-                        })
-                    })
+                  "Effect": "Deny",
+                  "Principal": {"AWS": "*"},
+                  "Action": "s3:*",
+                  "Condition": {
+                    "Bool": {"aws:SecureTransport": "false"}
+                  }
                 })
-            )
-        except AssertionError as e:
-            skip(f"Skipping test: BucketPolicy not found or improperly defined: {e}")
-
-    @mark.it("creates an IAM role for Lambda with least privilege policy")
-    def test_iam_role_with_lambda_assume_and_policy(self):
-        stack = TapStack(
-            self.app,
-            "TapStackIAM",
-            TapStackProps(environment_suffix="leastpriv")
-        )
-        template = Template.from_stack(stack)
-
-        try:
-            template.has_resource_properties(
-                "AWS::IAM::Role",
-                Match.object_like({
-                    "AssumeRolePolicyDocument": Match.object_like({
-                        "Statement": Match.array_with([
-                            Match.object_like({
-                                "Effect": "Allow",
-                                "Principal": {"Service": "lambda.amazonaws.com"},
-                                "Action": "sts:AssumeRole"
-                            })
-                        ])
-                    }),
-                    # Optional: check ManagedPolicyArns instead of inline policy
-                    "ManagedPolicyArns": Match.array_with([
-                        Match.any_value()
-                    ])
-                })
-            )
-        except AssertionError as e:
-            skip(f"Skipping test: IAM Role with Lambda assume role not found: {e}")
-
-    @mark.it("ensures the S3 bucket is KMS encrypted")
-    def test_s3_bucket_is_kms_encrypted(self):
-        stack = TapStack(
-            self.app,
-            "TapStackEncrypted",
-            TapStackProps(environment_suffix="encrypted")
-        )
-        template = Template.from_stack(stack)
-        template.has_resource_properties(
-            "AWS::S3::Bucket",
-            Match.object_like({
-                "BucketEncryption": Match.object_like({
-                    "ServerSideEncryptionConfiguration": Match.array_with([
-                        Match.object_like({
-                            "ServerSideEncryptionByDefault": Match.object_like({
-                                "SSEAlgorithm": "aws:kms"
-                            })
-                        })
-                    ])
-                })
+              ])
             })
-        )
+          })
+        })
+      )
+    except AssertionError as e:
+      skip(f"Skipping test: BucketPolicy not found or improperly defined: {e}")
+
+  @mark.it("creates an IAM role for Lambda with least privilege policy")
+  def test_iam_role_with_lambda_assume_and_policy(self):
+    stack = TapStack(
+      self.app,
+      "TapStackIAM",
+      TapStackProps(environment_suffix="leastpriv")
+    )
+    template = Template.from_stack(stack)
+
+    try:
+      template.has_resource_properties(
+        "AWS::IAM::Role",
+        Match.object_like({
+          "AssumeRolePolicyDocument": Match.object_like({
+            "Statement": Match.array_with([
+              Match.object_like({
+                "Effect": "Allow",
+                "Principal": {"Service": "lambda.amazonaws.com"},
+                "Action": "sts:AssumeRole"
+              })
+            ])
+          }),
+          "ManagedPolicyArns": Match.array_with([
+            Match.any_value()
+          ])
+        })
+      )
+    except AssertionError as e:
+      skip(f"Skipping test: IAM Role with Lambda assume role not found: {e}")
+
+  @mark.it("ensures the S3 bucket is KMS encrypted")
+  def test_s3_bucket_is_kms_encrypted(self):
+    stack = TapStack(
+      self.app,
+      "TapStackEncrypted",
+      TapStackProps(environment_suffix="encrypted")
+    )
+    template = Template.from_stack(stack)
+    template.has_resource_properties(
+      "AWS::S3::Bucket",
+      Match.object_like({
+        "BucketEncryption": Match.object_like({
+          "ServerSideEncryptionConfiguration": Match.array_with([
+            Match.object_like({
+              "ServerSideEncryptionByDefault": Match.object_like({
+                "SSEAlgorithm": "aws:kms"
+              })
+            })
+          ])
+        })
+      })
+    )
