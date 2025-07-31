@@ -1,5 +1,10 @@
 import { Construct } from 'constructs';
-import { TerraformStack, TerraformAsset, AssetType, TerraformOutput } from 'cdktf';
+import {
+  TerraformStack,
+  TerraformAsset,
+  AssetType,
+  TerraformOutput,
+} from 'cdktf';
 import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
 import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
 import { S3BucketVersioningA } from '@cdktf/provider-aws/lib/s3-bucket-versioning';
