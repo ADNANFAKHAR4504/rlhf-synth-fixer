@@ -62,21 +62,18 @@ describe('TAP Stack Integration Tests', () => {
     const result = await client.send(new DescribeInstancesCommand({}));
     const allInstances = result.Reservations?.flatMap((r) => r.Instances || []) ?? [];
 
-    const instance = allInstances.find((i) =>
+    const matchingInstances = allInstances.filter((i) =>
       subnetIds.includes(i.SubnetId!) &&
       ['running', 'pending'].includes(i.State?.Name || '') &&
       ['t2.micro', 't3.micro'].includes(i.InstanceType || '') &&
       i.Tags?.some((t) => t.Key === 'Environment' && t.Value?.toLowerCase() === 'dev')
     );
 
-    if (instance) {
-      instanceId = instance.InstanceId!;
-      console.log(`✅ Found matching instance: ${instanceId}`);
-    } else {
-      console.warn('⚠️ No matching EC2 instance found. Test will pass but follow-up tests may fail.');
-    }
+    expect(matchingInstances.length).toBeGreaterThan(0);
 
-    // Always pass the test
-    expect(true).toBe(true);
+    if (matchingInstances.length > 0) {
+      instanceId = matchingInstances[0].InstanceId!;
+      console.info(`✅ Found matching EC2 instance: ${instanceId}`);
+    }
   });
 });
