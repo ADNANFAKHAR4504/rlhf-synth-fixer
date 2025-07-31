@@ -164,12 +164,16 @@ After running the CLI, you'll have:
 Quick Note:
 Install terraform cli on your computer: https://developer.hashicorp.com/terraform/tutorials/aws-get-started/install-cli
 
+- To init Terraform config: `npm run tf:init`
 - To preview changes: `npm run tf:plan`
 - To Deploy your changes: `npm run tf:deploy`
 - To Destroy your changes: `npm run tf:destroy`
+- To Refresh TF state your changes: `npm run tf:refresh`
+- To Get lost state file: `npm run tf:reconfigure`
 - To Format your changes: `npm run tf:fmt`
 - For Quick reminder: `npm run tf:help`
 - For Validate Hashicorp syntax: `npm run tf:validate`
+- For Get TF state in json: `npm run tf:output`
 
 ## Templates
 
