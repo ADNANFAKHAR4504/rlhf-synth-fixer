@@ -16,5 +16,11 @@
     "pytest-env==*",
     "boto3==*",
     "moto==*"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "santhosh-swe",
+  "dockerS3Location": ""
 }
