@@ -1,7 +1,13 @@
 """Integration tests for TapStack."""
-from cdktf import App #,  Testing
-
+import os
+import sys
+from cdktf_cdktf_provider_aws.s3_bucket import S3Bucket
+from cdktf_cdktf_provider_aws.security_group import SecurityGroup
+from cdktf import App #, Testing
 from lib.tap_stack import TapStack
+from tap import SecureAwsEnvironment
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 
 class TestTurnAroundPromptAPIIntegrationTests:
   """Turn Around Prompt API Integration Tests."""
@@ -25,6 +31,7 @@ class TestTurnAroundPromptAPIIntegrationTests:
     Ensure the S3 bucket created by TapStack has versioning enabled
     and uses AES-256 server-side encryption.
     """
+    # Set environment variable for the test run
     os.environ["ENVIRONMENT_SUFFIX"] = "int"
     app = App()
     stack = TapStack(
@@ -35,6 +42,9 @@ class TestTurnAroundPromptAPIIntegrationTests:
     )
 
     # Locate the first S3 bucket in the stack
+    # Note: This assumes only one S3Bucket is directly created in TapStack.
+    # If there are multiple, you might need a more specific way to identify 'tap_bucket'.
+    # For now, relying on the type check.
     bucket = next(
       (c for c in stack.node.children if isinstance(c, S3Bucket)),
       None,
@@ -65,6 +75,8 @@ class TestTurnAroundPromptAPIIntegrationTests:
     )
 
     # Locate the no-SSH security group
+    # This assumes SecurityGroup is a direct child of SecureAwsEnvironment
+    # and its name attribute can be checked.
     no_ssh_sg = next(
         (
           sg
