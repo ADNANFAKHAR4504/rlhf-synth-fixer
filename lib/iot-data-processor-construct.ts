@@ -29,7 +29,7 @@ export class IoTDataProcessorConstruct extends Construct {
 
     // Create S3 bucket for IoT data uploads
     this.s3Bucket = new s3.Bucket(this, 'IoTDataBucket', {
-      bucketName: `iot-data-bucket-${environmentSuffix}`,
+      bucketName: `iot-data-bucket-${environmentSuffix}-${cdk.Aws.ACCOUNT_ID}`,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
       autoDeleteObjects: true,
       versioned: false,
@@ -39,7 +39,7 @@ export class IoTDataProcessorConstruct extends Construct {
 
     // Create DynamoDB table for processed data with high-traffic configuration
     this.dynamoTable = new dynamodb.Table(this, 'IoTProcessedDataTable', {
-      tableName: `iot-processed-data-${environmentSuffix}`,
+      tableName: `iot-processed-data-${environmentSuffix}-${cdk.Aws.ACCOUNT_ID}`,
       partitionKey: {
         name: 'deviceId',
         type: dynamodb.AttributeType.STRING,
@@ -56,9 +56,8 @@ export class IoTDataProcessorConstruct extends Construct {
       encryption: dynamodb.TableEncryption.AWS_MANAGED,
     });
 
-    // Create CloudWatch Log Group with specific name
+    // Create CloudWatch Log Group - let CDK generate unique name to avoid conflicts
     this.logGroup = new logs.LogGroup(this, 'IoTDataProcessorLogGroup', {
-      logGroupName: '/aws/lambda/IoTDataProcessor',
       retention: logs.RetentionDays.TWO_WEEKS,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
@@ -104,7 +103,6 @@ export class IoTDataProcessorConstruct extends Construct {
 
     // Create Lambda function for IoT data processing
     this.lambdaFunction = new lambda.Function(this, 'IoTDataProcessor', {
-      functionName: `IoTDataProcessor-${environmentSuffix}`,
       runtime: lambda.Runtime.NODEJS_18_X,
       handler: 'index.handler',
       role: this.lambdaRole,
