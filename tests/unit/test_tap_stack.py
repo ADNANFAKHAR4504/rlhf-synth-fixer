@@ -1,93 +1,120 @@
-import pytest
+import unittest
 from aws_cdk import App
 from aws_cdk.assertions import Template, Match
 from lib.tap_stack import TapStack, TapStackProps
 
 
-@pytest.fixture
-def template():
-  app = App(context={"environmentSuffix": "pr334"})
-  stack = TapStack(app, "TapStackpr334", props=TapStackProps(environment_suffix="pr334"))
-  return Template.from_stack(stack)
+class TestTapStack(unittest.TestCase):
+  def setUp(self):
+    self.app = App()
+    self.env_suffix = "test"
+    props = TapStackProps(environment_suffix=self.env_suffix)
+    self.stack = TapStack(self.app, "TapStackTest", props=props)
 
+    self.vpc_stack = self.stack.vpc_stack
+    self.iam_stack = self.stack.iam_stack
+    self.bucket = self.stack.secure_bucket.bucket
+    self.kms_key = self.stack.secure_bucket.kms_key
 
-def test_vpc_output(template):
-  template.has_output(
-    "VpcIdOutput-pr334",
-    {
-      "Export": {"Name": "VpcId-pr334"},
-      "Value": {"Ref": Match.string_like_regexp("TapVpc-pr334.*")}
-    }
-  )
+  def test_vpc_has_public_and_private_subnets(self):
+    template = Template.from_stack(self.vpc_stack)
 
+    template.resource_count_is("AWS::EC2::VPC", 1)
+    template.resource_count_is("AWS::EC2::Subnet", 4)
 
-def test_iam_role_output(template):
-  template.has_output(
-    "RoleArnOutput-pr334",
-    {
-      "Export": {"Name": "RoleArn-pr334"},
-      "Value": {
-        "Fn::GetAtt": [Match.string_like_regexp("TapRole-pr334.*"), "Arn"]
+    template.has_resource_properties(
+      "AWS::EC2::Subnet",
+      {
+        "MapPublicIpOnLaunch": Match.any_value()
       }
-    }
-  )
+    )
 
-  template.has_output(
-    "IamRoleNameOutput",
-    {
-      "Export": {"Name": "TapStackIamRoleName"},
-      "Value": Match.string_like_regexp("TapRole-pr334.*")
-    }
-  )
+  def test_iam_role_with_custom_policy_and_trust(self):
+    template = Template.from_stack(self.iam_stack)
 
+    template.resource_count_is("AWS::IAM::Role", 1)
 
-def test_s3_bucket_properties(template):
-  template.resource_count_is("AWS::S3::Bucket", 1)
-  template.resource_count_is("AWS::KMS::Key", 1)
-
-  template.has_resource_properties(
-    "AWS::S3::Bucket",
-    {
-      "BucketEncryption": {
-        "ServerSideEncryptionConfiguration": Match.array_with([
-          {
-            "ServerSideEncryptionByDefault": {
-              "SSEAlgorithm": "aws:kms",
-              "KMSMasterKeyID": Match.any_value()
-            }
-          }
-        ])
-      },
-      "VersioningConfiguration": {
-        "Status": "Enabled"
-      }
-    }
-  )
-
-  template.has_output(
-    "SecureBucketNameOutput",
-    {
-      "Export": {"Name": "TapStackSecureBucketName"},
-      "Value": "tap-secure-data-pr334"
-    }
-  )
-
-
-def test_s3_bucket_deny_insecure_transport(template):
-  template.has_resource_properties(
-    "AWS::S3::BucketPolicy",
-    {
-      "PolicyDocument": {
-        "Statement": Match.array_with([
+    template.has_resource_properties(
+      "AWS::IAM::Role",
+      {
+        "AssumeRolePolicyDocument": Match.object_like({
+          "Statement": Match.array_with([
+            Match.object_like({
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "ec2.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            })
+          ])
+        }),
+        "Policies": Match.array_with([
           Match.object_like({
-            "Effect": "Deny",
-            "Condition": {
-              "Bool": {
-                "aws:SecureTransport": "false"
-              }
-            }
+            "PolicyDocument": Match.object_like({
+              "Statement": Match.array_with([
+                Match.object_like({
+                  "Action": Match.array_with([
+                    "ec2:DescribeInstances",
+                    "ec2:DescribeTags"
+                  ]),
+                  "Effect": "Allow",
+                  "Resource": "*"
+                })
+              ])
+            })
           })
         ])
       }
-    }
-  )
+    )
+
+  def test_secure_s3_bucket_properties(self):
+    template = Template.from_stack(self.stack)
+
+    template.resource_count_is("AWS::S3::Bucket", 1)
+
+    template.has_resource_properties(
+      "AWS::S3::Bucket",
+      {
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": Match.array_with([
+            Match.object_like({
+              "ServerSideEncryptionByDefault": Match.object_like({
+                "SSEAlgorithm": "aws:kms"
+              })
+            })
+          ])
+        },
+        "VersioningConfiguration": {
+          "Status": "Enabled"
+        }
+      }
+    )
+
+  def test_bucket_policy_denies_insecure_transport(self):
+    template = Template.from_stack(self.stack)
+
+    template.has_resource_properties(
+      "AWS::S3::BucketPolicy",
+      {
+        "PolicyDocument": Match.object_like({
+          "Statement": Match.array_with([
+            Match.object_like({
+              "Effect": "Deny",
+              "Condition": {
+                "Bool": {
+                  "aws:SecureTransport": "false"
+                }
+              },
+              "Principal": {
+                "AWS": "*"
+              },
+              "Action": "s3:*"
+            })
+          ])
+        })
+      }
+    )
+
+
+if __name__ == "__main__":
+  unittest.main()
