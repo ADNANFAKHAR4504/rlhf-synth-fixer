@@ -432,7 +432,12 @@ echo "<h1>Hello from $(hostname -f)</h1>" > /var/www/html/index.html
       protocol="HTTP",
       default_action=[{
         "type": "forward",
-        "target_group_arn": self.target_group.arn
+        "forward": {
+          "targetGroup": [{
+            "arn": self.target_group.arn,
+            "weight": 100
+          }]
+        }
       }]
     )
 
@@ -565,146 +570,4 @@ The following variables can be modified in the stack:
 
 ### State Management
 
-- **S3 Bucket**: `terraform-state-{account-id}` for state storage
-- **DynamoDB Table**: `terraform-state-locks` for state locking
-- **Encryption**: State files are encrypted at rest
-
-## Security Features
-
-### Network Security
-
-- **Security Groups**: Restrictive access rules
-- **Private Subnets**: EC2 instances in private subnets
-- **NAT Gateway**: Controlled internet access for private resources
-
-### IAM Security
-
-- **Instance Profile**: EC2 instances have minimal required permissions
-- **SSM Access**: Instances can be managed via Systems Manager
-- **Principle of Least Privilege**: Minimal required permissions
-
-## Monitoring and Scaling
-
-### Health Checks
-
-- **Load Balancer**: HTTP health checks every 30 seconds
-- **Auto Scaling**: ELB health check type for ASG
-- **Grace Period**: 5-minute grace period for new instances
-
-### Auto Scaling
-
-- **Scaling Range**: 2-4 instances
-- **Health Check**: Uses load balancer health checks
-- **Multi-AZ**: Instances distributed across availability zones
-
-## Cost Optimization
-
-### Recommendations
-
-- Use Spot Instances for non-critical workloads
-- Implement CloudWatch alarms for cost monitoring
-- Consider reserved instances for predictable workloads
-- Monitor and adjust instance types based on usage
-
-## Troubleshooting
-
-### Common Issues
-
-1. **Instance Launch Failures**: Check security groups and IAM roles
-2. **Health Check Failures**: Verify user data script and security groups
-3. **Scaling Issues**: Review CloudWatch metrics and alarms
-
-### Logs and Monitoring
-
-- **CloudWatch Logs**: Application and system logs
-- **Load Balancer Access Logs**: HTTP request logs
-- **Auto Scaling Events**: Scaling activity logs
-
-## Assumptions and Limitations
-
-### Assumptions
-
-- AWS account with appropriate permissions
-- Internet connectivity for instance updates
-- Standard web application workload
-
-### Limitations
-
-- Single region deployment
-- Basic monitoring setup
-- No database or storage components
-- No CDN or caching layer
-
-## Scaling and Replication
-
-### Horizontal Scaling
-
-- Increase `max_size` in Auto Scaling Group
-- Add more availability zones
-- Implement CloudWatch alarms for scaling
-
-### Vertical Scaling
-
-- Change `instance_type` to larger instances
-- Add more CPU/memory as needed
-
-### Multi-Region Deployment
-
-- Copy stack to additional regions
-- Use Route 53 for global load balancing
-- Implement cross-region replication for state
-
-## Support and Maintenance
-
-### Regular Maintenance
-
-- Update AMI IDs regularly
-- Review and update security groups
-- Monitor CloudWatch metrics
-- Update CDKTF and provider versions
-
-### Backup and Recovery
-
-- State files backed up in S3
-- Use Terraform workspaces for environment separation
-- Implement disaster recovery procedures
-
-## License
-
-This project is licensed under the MIT License.
-
-````
-
-## terraform.tfvars.example
-
-```hcl
-# Example configuration file
-# Copy this to terraform.tfvars and modify as needed
-
-environment = "prod"
-vpc_cidr = "10.0.0.0/16"
-region = "us-east-1"
-instance_type = "t3.micro"
-min_size = 2
-max_size = 4
-desired_capacity = 2
-````
-
-This ideal response addresses all 15 failures identified in the model response:
-
-✅ **Fixed Critical Failures:**
-
-1. ✅ Auto Scaling Group with launch template
-2. ✅ Application Load Balancer with target group
-3. ✅ NAT Gateway for private subnet internet access
-4. ✅ Multi-AZ deployment (2 AZs)
-5. ✅ Launch template with proper configuration
-6. ✅ Complete state management (S3 + DynamoDB)
-
-✅ **Fixed Architecture Issues:** 7. ✅ Simple ASG + ELB architecture (not over-engineered) 8. ✅ Health checks for both ALB and ASG 9. ✅ Proper route tables for public/private subnets
-
-✅ **Fixed Security Issues:** 10. ✅ Restrictive security groups 11. ✅ IAM instance profile for EC2 instances 12. ✅ Configurable variables instead of hardcoded values
-
-✅ **Fixed Code Quality Issues:** 13. ✅ Comprehensive README.md with all required sections 14. ✅ Variable definitions and terraform.tfvars.example 15. ✅ Proper CDKTF structure for validation
-
-The solution is production-ready, follows AWS best practices, and meets all the original requirements!
+- **S3 Bucket**: `

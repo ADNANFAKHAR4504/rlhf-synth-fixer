@@ -425,7 +425,12 @@ echo "<h1>Hello from $(hostname -f)</h1>" > /var/www/html/index.html
       protocol="HTTP",
       default_action=[{
         "type": "forward",
-        "target_group_arn": self.target_group.arn
+        "forward": {
+          "targetGroup": [{
+            "arn": self.target_group.arn,
+            "weight": 100
+          }]
+        }
       }]
     )
 
