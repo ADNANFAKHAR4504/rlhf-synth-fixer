@@ -129,7 +129,6 @@ class IAMStack(NestedStack):
       export_name=f"RoleArn-{environment_suffix}",
     )
 
-
 # ---------- Main Tap Stack ----------
 class TapStack(cdk.Stack):
   def __init__(
@@ -170,3 +169,18 @@ class TapStack(cdk.Stack):
     self.vpc = self.vpc_stack.vpc
     self.iam_role = self.iam_stack.role
     self.s3_bucket = self.secure_bucket.bucket
+    
+    CfnOutput(
+      self,
+      "SecureBucketNameOutput",
+      value=self.secure_bucket.bucket.bucket_name,
+      export_name="TapStackSecureBucketName"
+    )
+
+    CfnOutput(
+      self,
+      "IamRoleNameOutput",
+      value=self.iam_stack.role.role_name,
+      export_name="TapStackIamRoleName"
+    )
+

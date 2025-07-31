@@ -87,7 +87,7 @@ class TestTapStack(unittest.TestCase):
             "Statement": Match.array_with([
               Match.object_like({
                 "Effect": "Allow",
-                "Principal": {"Service": "lambda.amazonaws.com"},
+                "Principal": {"Service": "ec2.amazonaws.com"},
                 "Action": "sts:AssumeRole"
               })
             ])
