@@ -363,46 +363,13 @@ describe('Secure Web Application Infrastructure CloudFormation Template', () => 
         template.Resources.PublicNetworkACLEntryOutboundAll.Properties,
         template.Resources.PublicNetworkACLEntryOutboundDenyAll.Properties,
       ];
-
-      expect(
-        publicInboundRules.some(
-          (r: any) => r.RuleNumber === 100 && r.PortRange.From === 80
-        )
-      ).toBe(true);
-      expect(
-        publicInboundRules.some(
-          (r: any) => r.RuleNumber === 110 && r.PortRange.From === 443
-        )
-      ).toBe(true);
-      expect(
-        publicInboundRules.some(
-          (r: any) =>
-            r.RuleNumber === 120 &&
-            r.PortRange.From === 22 &&
-            r.CidrBlock['Ref'] === 'BastionSshCidr'
-        )
-      ).toBe(true);
-      expect(
-        publicInboundRules.some(
-          (r: any) =>
-            r.RuleNumber === 130 &&
-            r.PortRange.From === 1024 &&
-            r.PortRange.To === 65535
-        )
-      ).toBe(true);
-      expect(
-        publicOutboundRules.some(
-          (r: any) =>
-            r.RuleNumber === 2000 &&
-            r.RuleAction === 'deny' &&
-            r.Egress === true
-        )
-      ).toBe(true);
-      expect(
-        publicOutboundRules.some(
-          (r: any) => r.RuleNumber === 100 && r.Protocol === -1
-        )
-      ).toBe(true);
+      
+      expect(publicInboundRules.some((r: any) => r.RuleNumber === 100 && r.PortRange.From === 80)).toBe(true);
+      expect(publicInboundRules.some((r: any) => r.RuleNumber === 110 && r.PortRange.From === 443)).toBe(true);
+      expect(publicInboundRules.some((r: any) => r.RuleNumber === 120 && r.PortRange.From === 22 && r.CidrBlock['Ref'] === 'BastionSshCidr')).toBe(true);
+      expect(publicInboundRules.some((r: any) => r.RuleNumber === 130 && r.PortRange.From === 1024 && r.PortRange.To === 65535)).toBe(true);
+      expect(publicOutboundRules.some((r: any) => r.RuleNumber === 2000 && r.RuleAction === 'deny' && r.Egress === true)).toBe(true);
+      expect(publicOutboundRules.some((r: any) => r.RuleNumber === 100 && r.Protocol === -1)).toBe(true);
     });
 
     test('PrivateNetworkACL should have granular inbound and outbound rules', () => {
@@ -417,40 +384,11 @@ describe('Secure Web Application Infrastructure CloudFormation Template', () => 
       ];
 
       // Corrected test logic to correctly match the rule in the template
-      expect(
-        privateInboundRules.some(
-          (r: any) =>
-            r.RuleNumber === 100 &&
-            r.PortRange.From === template.Parameters.WebAppPort.Default &&
-            r.CidrBlock['Ref'] === 'VpcCidr'
-        )
-      ).toBe(true);
-      expect(
-        privateInboundRules.some(
-          (r: any) =>
-            r.RuleNumber === 110 &&
-            r.PortRange.From === 22 &&
-            r.CidrBlock['Ref'] === 'BastionSshCidr'
-        )
-      ).toBe(true);
-      expect(
-        privateInboundRules.some(
-          (r: any) => r.RuleNumber === 120 && r.PortRange.From === 1024
-        )
-      ).toBe(true);
-      expect(
-        privateOutboundRules.some(
-          (r: any) =>
-            r.RuleNumber === 2000 &&
-            r.RuleAction === 'deny' &&
-            r.Egress === true
-        )
-      ).toBe(true);
-      expect(
-        privateOutboundRules.some(
-          (r: any) => r.RuleNumber === 100 && r.Protocol === -1
-        )
-      ).toBe(true);
+      expect(privateInboundRules.some((r: any) => r.RuleNumber === 100 && r.PortRange.From === template.Parameters.WebAppPort.Default && r.CidrBlock['Ref'] === 'VpcCidr')).toBe(true);
+      expect(privateInboundRules.some((r: any) => r.RuleNumber === 110 && r.PortRange.From === 22 && r.CidrBlock['Ref'] === 'BastionSshCidr')).toBe(true);
+      expect(privateInboundRules.some((r: any) => r.RuleNumber === 120 && r.PortRange.From === 1024)).toBe(true);
+      expect(privateOutboundRules.some((r: any) => r.RuleNumber === 2000 && r.RuleAction === 'deny' && r.Egress === true)).toBe(true);
+      expect(privateOutboundRules.some((r: any) => r.RuleNumber === 100 && r.Protocol === -1)).toBe(true);
     });
 
     test('DatabaseNetworkACL should have granular inbound and outbound rules', () => {
@@ -464,34 +402,11 @@ describe('Secure Web Application Infrastructure CloudFormation Template', () => 
         template.Resources.DatabaseNetworkACLEntryOutboundDenyAll.Properties,
       ];
 
-      expect(
-        dbInboundRules.some(
-          (r: any) => r.RuleNumber === 100 && r.PortRange.From === 3306
-        )
-      ).toBe(true);
-      expect(
-        dbInboundRules.some(
-          (r: any) => r.RuleNumber === 110 && r.PortRange.From === 22
-        )
-      ).toBe(true);
-      expect(
-        dbInboundRules.some(
-          (r: any) => r.RuleNumber === 120 && r.PortRange.From === 1024
-        )
-      ).toBe(true);
-      expect(
-        dbOutboundRules.some(
-          (r: any) =>
-            r.RuleNumber === 2000 &&
-            r.RuleAction === 'deny' &&
-            r.Egress === true
-        )
-      ).toBe(true);
-      expect(
-        dbOutboundRules.some(
-          (r: any) => r.RuleNumber === 100 && r.Protocol === -1
-        )
-      ).toBe(true);
+      expect(dbInboundRules.some((r: any) => r.RuleNumber === 100 && r.PortRange.From === 3306)).toBe(true);
+      expect(dbInboundRules.some((r: any) => r.RuleNumber === 110 && r.PortRange.From === 22)).toBe(true);
+      expect(dbInboundRules.some((r: any) => r.RuleNumber === 120 && r.PortRange.From === 1024)).toBe(true);
+      expect(dbOutboundRules.some((r: any) => r.RuleNumber === 2000 && r.RuleAction === 'deny' && r.Egress === true)).toBe(true);
+      expect(dbOutboundRules.some((r: any) => r.RuleNumber === 100 && r.Protocol === -1)).toBe(true);
     });
   });
 
@@ -611,20 +526,13 @@ describe('Secure Web Application Infrastructure CloudFormation Template', () => 
       expect(
         policyStatements.some((s: any) => s.Action.includes('s3:GetObject'))
       ).toBe(true);
-
+      
       // Fixed the TypeError by handling both string and array formats for the Resource property
       expect(
         policyStatements.some((s: any) =>
-          Array.isArray(s.Resource)
-            ? s.Resource.some((r: string) =>
-                r.includes(
-                  '${ProjectName}-${EnvironmentSuffix}-static-content/*'
-                )
-              )
-            : typeof s.Resource === 'string' &&
-              s.Resource.includes(
-                '${ProjectName}-${EnvironmentSuffix}-static-content/*'
-              )
+          (Array.isArray(s.Resource)
+            ? s.Resource.some((r: string) => r.includes('${ProjectName}-${EnvironmentSuffix}-static-content/*'))
+            : typeof s.Resource === 'string' && s.Resource.includes('${ProjectName}-${EnvironmentSuffix}-static-content/*'))
         )
       ).toBe(true);
     });
@@ -670,17 +578,10 @@ describe('Secure Web Application Infrastructure CloudFormation Template', () => 
     });
 
     test('AdminUserLoginProfile should be part of AdminUser and be conditionally applied', () => {
-      expect(
-        template.Resources.AdminUser.Properties.LoginProfile
-      ).toBeDefined();
-      expect(
-        template.Resources.AdminUser.Properties.LoginProfile.Password
-      ).toBeDefined();
-      expect(
-        template.Resources.AdminUser.Properties.LoginProfile
-          .PasswordResetRequired
-      ).toBe(true);
-      expect(template.Resources.AdminUser.Condition).toBe('EnforceMfa');
+        expect(template.Resources.AdminUser.Properties.LoginProfile).toBeDefined();
+        expect(template.Resources.AdminUser.Properties.LoginProfile.Password).toBeDefined();
+        expect(template.Resources.AdminUser.Properties.LoginProfile.PasswordResetRequired).toBe(true);
+        expect(template.Resources.AdminUser.Condition).toBe('EnforceMfa');
     });
   });
 
@@ -993,46 +894,13 @@ describe('Secure Web Application Infrastructure CloudFormation Template', () => 
         template.Resources.PublicNetworkACLEntryOutboundAll.Properties,
         template.Resources.PublicNetworkACLEntryOutboundDenyAll.Properties,
       ];
-
-      expect(
-        publicInboundRules.some(
-          (r: any) => r.RuleNumber === 100 && r.PortRange.From === 80
-        )
-      ).toBe(true);
-      expect(
-        publicInboundRules.some(
-          (r: any) => r.RuleNumber === 110 && r.PortRange.From === 443
-        )
-      ).toBe(true);
-      expect(
-        publicInboundRules.some(
-          (r: any) =>
-            r.RuleNumber === 120 &&
-            r.PortRange.From === 22 &&
-            r.CidrBlock['Ref'] === 'BastionSshCidr'
-        )
-      ).toBe(true);
-      expect(
-        publicInboundRules.some(
-          (r: any) =>
-            r.RuleNumber === 130 &&
-            r.PortRange.From === 1024 &&
-            r.PortRange.To === 65535
-        )
-      ).toBe(true);
-      expect(
-        publicOutboundRules.some(
-          (r: any) =>
-            r.RuleNumber === 2000 &&
-            r.RuleAction === 'deny' &&
-            r.Egress === true
-        )
-      ).toBe(true);
-      expect(
-        publicOutboundRules.some(
-          (r: any) => r.RuleNumber === 100 && r.Protocol === -1
-        )
-      ).toBe(true);
+      
+      expect(publicInboundRules.some((r: any) => r.RuleNumber === 100 && r.PortRange.From === 80)).toBe(true);
+      expect(publicInboundRules.some((r: any) => r.RuleNumber === 110 && r.PortRange.From === 443)).toBe(true);
+      expect(publicInboundRules.some((r: any) => r.RuleNumber === 120 && r.PortRange.From === 22 && r.CidrBlock['Ref'] === 'BastionSshCidr')).toBe(true);
+      expect(publicInboundRules.some((r: any) => r.RuleNumber === 130 && r.PortRange.From === 1024 && r.PortRange.To === 65535)).toBe(true);
+      expect(publicOutboundRules.some((r: any) => r.RuleNumber === 2000 && r.RuleAction === 'deny' && r.Egress === true)).toBe(true);
+      expect(publicOutboundRules.some((r: any) => r.RuleNumber === 100 && r.Protocol === -1)).toBe(true);
     });
 
     test('PrivateNetworkACL should have granular inbound and outbound rules', () => {
@@ -1046,40 +914,11 @@ describe('Secure Web Application Infrastructure CloudFormation Template', () => 
         template.Resources.PrivateNetworkACLEntryOutboundDenyAll.Properties,
       ];
 
-      expect(
-        privateInboundRules.some(
-          (r: any) =>
-            r.RuleNumber === 100 &&
-            r.PortRange.From === template.Parameters.WebAppPort.Default &&
-            r.CidrBlock['Ref'] === 'VpcCidr'
-        )
-      ).toBe(true);
-      expect(
-        privateInboundRules.some(
-          (r: any) =>
-            r.RuleNumber === 110 &&
-            r.PortRange.From === 22 &&
-            r.CidrBlock['Ref'] === 'BastionSshCidr'
-        )
-      ).toBe(true);
-      expect(
-        privateInboundRules.some(
-          (r: any) => r.RuleNumber === 120 && r.PortRange.From === 1024
-        )
-      ).toBe(true);
-      expect(
-        privateOutboundRules.some(
-          (r: any) =>
-            r.RuleNumber === 2000 &&
-            r.RuleAction === 'deny' &&
-            r.Egress === true
-        )
-      ).toBe(true);
-      expect(
-        privateOutboundRules.some(
-          (r: any) => r.RuleNumber === 100 && r.Protocol === -1
-        )
-      ).toBe(true);
+      expect(privateInboundRules.some((r: any) => r.RuleNumber === 100 && r.PortRange.From === template.Parameters.WebAppPort.Default && r.CidrBlock['Ref'] === 'VpcCidr')).toBe(true);
+      expect(privateInboundRules.some((r: any) => r.RuleNumber === 110 && r.PortRange.From === 22 && r.CidrBlock['Ref'] === 'BastionSshCidr')).toBe(true);
+      expect(privateInboundRules.some((r: any) => r.RuleNumber === 120 && r.PortRange.From === 1024)).toBe(true);
+      expect(privateOutboundRules.some((r: any) => r.RuleNumber === 2000 && r.RuleAction === 'deny' && r.Egress === true)).toBe(true);
+      expect(privateOutboundRules.some((r: any) => r.RuleNumber === 100 && r.Protocol === -1)).toBe(true);
     });
 
     test('DatabaseNetworkACL should have granular inbound and outbound rules', () => {
@@ -1093,34 +932,11 @@ describe('Secure Web Application Infrastructure CloudFormation Template', () => 
         template.Resources.DatabaseNetworkACLEntryOutboundDenyAll.Properties,
       ];
 
-      expect(
-        dbInboundRules.some(
-          (r: any) => r.RuleNumber === 100 && r.PortRange.From === 3306
-        )
-      ).toBe(true);
-      expect(
-        dbInboundRules.some(
-          (r: any) => r.RuleNumber === 110 && r.PortRange.From === 22
-        )
-      ).toBe(true);
-      expect(
-        dbInboundRules.some(
-          (r: any) => r.RuleNumber === 120 && r.PortRange.From === 1024
-        )
-      ).toBe(true);
-      expect(
-        dbOutboundRules.some(
-          (r: any) =>
-            r.RuleNumber === 2000 &&
-            r.RuleAction === 'deny' &&
-            r.Egress === true
-        )
-      ).toBe(true);
-      expect(
-        dbOutboundRules.some(
-          (r: any) => r.RuleNumber === 100 && r.Protocol === -1
-        )
-      ).toBe(true);
+      expect(dbInboundRules.some((r: any) => r.RuleNumber === 100 && r.PortRange.From === 3306)).toBe(true);
+      expect(dbInboundRules.some((r: any) => r.RuleNumber === 110 && r.PortRange.From === 22)).toBe(true);
+      expect(dbInboundRules.some((r: any) => r.RuleNumber === 120 && r.PortRange.From === 1024)).toBe(true);
+      expect(dbOutboundRules.some((r: any) => r.RuleNumber === 2000 && r.RuleAction === 'deny' && r.Egress === true)).toBe(true);
+      expect(dbOutboundRules.some((r: any) => r.RuleNumber === 100 && r.Protocol === -1)).toBe(true);
     });
 
     test('should follow naming convention with project and environment', () => {
