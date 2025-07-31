@@ -33,7 +33,10 @@ cdktf-cdktf-provider-aws>=5.0.0
 import os
 from constructs import Construct
 from cdktf import App, TerraformStack, TerraformVariable, TerraformOutput
-from imports.aws import AwsProvider, Vpc, Subnet, InternetGateway, RouteTable, RouteTableAssociation, SecurityGroup, SecurityGroupRule, Instance, Tag
+from imports.aws import (
+    AwsProvider, Vpc, Subnet, InternetGateway, RouteTable, RouteTableAssociation,
+    SecurityGroup, SecurityGroupRule, Instance, DataAwsAvailabilityZones, Route
+)
 
 class WebAppStack(TerraformStack):
     def __init__(self, scope: Construct, ns: str):
@@ -75,14 +78,20 @@ class WebAppStack(TerraformStack):
         rt = RouteTable(self, 'PublicRouteTable',
                         vpc_id=vpc.id,
                         tags=tags('public-rt'))
-        rt.add_route('DefaultRoute',
-                     destination_cidr_block='0.0.0.0/0',
-                     gateway_id=igw.id)
+
+        # Route for Internet access
+        Route(self, "DefaultRoute",
+              route_table_id=rt.id,
+              destination_cidr_block="0.0.0.0/0",
+              gateway_id=igw.id)
+
+        # Availability Zones Data Source
+        azs = DataAwsAvailabilityZones(self, "available")
 
         # Public Subnets and Associations
         subnets = []
         for idx, cidr in enumerate(public_subnets):
-            az = f"${{data.aws_availability_zones.available.names[{idx}]}}"
+            az = azs.names[idx]
             subnet = Subnet(self, f"PublicSubnet{idx+1}",
                             vpc_id=vpc.id,
                             cidr_block=cidr,
@@ -115,6 +124,14 @@ class WebAppStack(TerraformStack):
                           protocol='tcp',
                           cidr_blocks=[allowed_http_cidr],
                           security_group_id=sg.id)
+        # Explicit egress rule (optional, but recommended)
+        SecurityGroupRule(self, 'AllEgress',
+                          type='egress',
+                          from_port=0,
+                          to_port=0,
+                          protocol='-1',
+                          cidr_blocks=['0.0.0.0/0'],
+                          security_group_id=sg.id)
 
         # EC2 Instances
         instances = []
@@ -144,7 +161,7 @@ app.synth()
 
 * **Variable-Driven Configuration**: All CIDRs, AMI, instance types, and environment/project identifiers are exposed as TerraformVariables.
 * **Networking**: A VPC with two public subnets, an Internet Gateway, and a public route table are created and linked.
-* **Security**: A single Security Group allows SSH and HTTP from the defined CIDR blocks.
+* **Security**: A single Security Group allows SSH and HTTP from the defined CIDR blocks, and all outbound traffic is explicitly allowed.
 * **Compute**: Two EC2 instances are launched into separate subnets with variable-driven AMI and instance types.
 * **Tagging**: A helper function ensures consistent `Name`, `Environment`, and `Project` tags across all resources.
 * **Outputs**: VPC ID, subnet IDs, and instance public IPs are exposed for easy reference.

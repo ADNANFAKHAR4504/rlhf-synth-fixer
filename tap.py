@@ -1,43 +1,45 @@
 #!/usr/bin/env python
-import sys
-import os
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
+import os
+from pathlib import Path
 from cdktf import App
+
+# Import your custom stack (ensure lib/__init__.py exists and tap_stack.py defines TapStack)
 from lib.tap_stack import TapStack
 
-# Get environment variables from the environment or use defaults
-environment_suffix = os.getenv("ENVIRONMENT_SUFFIX", "dev")
-state_bucket = os.getenv("TERRAFORM_STATE_BUCKET", "iac-rlhf-tf-states")
-state_bucket_region = os.getenv("TERRAFORM_STATE_BUCKET_REGION", "us-east-1")
-aws_region = os.getenv("AWS_REGION", "us-east-1")
-repository_name = os.getenv("REPOSITORY", "unknown")
-commit_author = os.getenv("COMMIT_AUTHOR", "unknown")
+# Resolve environment variables with sensible defaults
+ENVIRONMENT_SUFFIX = os.getenv("ENVIRONMENT_SUFFIX", "dev").lower()
+TERRAFORM_STATE_BUCKET = os.getenv("TERRAFORM_STATE_BUCKET", "iac-rlhf-tf-states")
+TERRAFORM_STATE_BUCKET_REGION = os.getenv("TERRAFORM_STATE_BUCKET_REGION", "us-east-1")
+AWS_REGION = os.getenv("AWS_REGION", "us-east-1")
+REPOSITORY_NAME = os.getenv("REPOSITORY", "unknown")
+COMMIT_AUTHOR = os.getenv("COMMIT_AUTHOR", "unknown")
 
-# Calculate the stack name
-stack_name = f"TapStack{environment_suffix}"
+# Construct stack name with sanitized suffix
+STACK_NAME = f"TapStack{ENVIRONMENT_SUFFIX.capitalize()}"
 
-# default_tags is structured in adherence to the AwsProvider default_tags interface
-default_tags = {
+# Define AWS default tags in a structure compatible with AwsProvider.default_tags
+DEFAULT_TAGS = {
     "tags": {
-        "Environment": environment_suffix,
-        "Repository": repository_name,
-        "Author": commit_author,
+        "Environment": ENVIRONMENT_SUFFIX,
+        "Repository": REPOSITORY_NAME,
+        "Author": COMMIT_AUTHOR,
     }
 }
 
+# Create the CDKTF application
 app = App()
 
-# Create the TapStack with the calculated properties
+# Instantiate your custom stack
 TapStack(
-    app,
-    stack_name,
-    environment_suffix=environment_suffix,
-    state_bucket=state_bucket,
-    state_bucket_region=state_bucket_region,
-    aws_region=aws_region,
-    default_tags=default_tags,
+    scope=app,
+    id=STACK_NAME,
+    environment_suffix=ENVIRONMENT_SUFFIX,
+    state_bucket=TERRAFORM_STATE_BUCKET,
+    state_bucket_region=TERRAFORM_STATE_BUCKET_REGION,
+    aws_region=AWS_REGION,
+    default_tags=DEFAULT_TAGS,
 )
 
-# Synthesize the app to generate the Terraform configuration
+# Generate Terraform JSON files
 app.synth()
