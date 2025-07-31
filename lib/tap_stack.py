@@ -7,7 +7,7 @@ from cdktf_cdktf_provider_aws.s3_bucket_server_side_encryption_configuration imp
     S3BucketServerSideEncryptionConfigurationA,
     S3BucketServerSideEncryptionConfigurationRuleA,
     S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultA)
-from cdktf_cdktf_provider_aws.s3_bucket_versioning import S3BucketVersioning
+from cdktf_cdktf_provider_aws.s3_bucket_versioning import S3BucketVersioningA
 from constructs import Construct
 
 from .enterprise_security_stack import EnterpriseSecurityStack
@@ -71,7 +71,7 @@ class TapStack(TerraformStack):
     )
 
     # Use separate resource for bucket versioning
-    S3BucketVersioning(
+    S3BucketVersioningA(
       self,
       "tap_bucket_versioning", 
       bucket=self.tap_bucket.id,
