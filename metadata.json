@@ -4,5 +4,32 @@
   "complexity": "medium",
   "turn_type": "single",
   "po_id": "229213",
-  "startedAt": "2025-07-28T14:34:57.425Z"
+  "startedAt": "2025-07-28T14:34:57.425Z",
+  "subtask": "Infrastructure Migration",
+  "subject_labels": "Web Application Deployment",
+  "testDependencies": {
+    "@aws-sdk/client-api-gateway": "^3.855.0",
+    "@aws-sdk/client-apigatewayv2": "^3.856.0",
+    "@aws-sdk/client-auto-scaling": "^3.846.0",
+    "@aws-sdk/client-cloudformation": "^3.848.0",
+    "@aws-sdk/client-cloudfront": "^3.846.0",
+    "@aws-sdk/client-cloudwatch": "^3.846.0",
+    "@aws-sdk/client-cloudwatch-logs": "^3.848.0",
+    "@aws-sdk/client-config-service": "^3.848.0",
+    "@aws-sdk/client-dynamodb": "^3.855.0",
+    "@aws-sdk/client-ec2": "^3.848.0",
+    "@aws-sdk/client-elasticache": "^3.846.0",
+    "@aws-sdk/client-iam": "^3.848.0",
+    "@aws-sdk/client-lambda": "^3.855.0",
+    "@aws-sdk/client-opensearchserverless": "^3.846.0",
+    "@aws-sdk/client-rds": "^3.846.0",
+    "@aws-sdk/client-s3": "^3.848.0",
+    "@aws-sdk/client-sfn": "^3.848.0",
+    "@aws-sdk/client-sns": "^3.855.0",
+    "@aws-sdk/client-ssm": "^3.848.0",
+    "@aws-sdk/credential-provider-node": "^3.846.0",
+    "@aws-sdk/client-elastic-load-balancing-v2": "^3.848.0",
+    "@aws-sdk/client-sqs": "^3.855.0",
+    "@aws-sdk/client-wafv2": "^3.848.0"
+  }
 }

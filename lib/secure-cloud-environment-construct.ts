@@ -21,7 +21,11 @@ export class SecureCloudEnvironmentConstruct extends Construct {
   public readonly bastionHost: ec2.BastionHostLinux;
   public readonly logBucket: s3.Bucket;
 
-  constructor(scope: Construct, id: string, props: SecureCloudEnvironmentConstructProps) {
+  constructor(
+    scope: Construct,
+    id: string,
+    props: SecureCloudEnvironmentConstructProps
+  ) {
     super(scope, id);
 
     const { environmentSuffix } = props;
@@ -145,7 +149,12 @@ export class SecureCloudEnvironmentConstruct extends Construct {
           namespace: 'CWAgent',
           metrics_collected: {
             cpu: {
-              measurement: ['cpu_usage_idle', 'cpu_usage_iowait', 'cpu_usage_user', 'cpu_usage_system'],
+              measurement: [
+                'cpu_usage_idle',
+                'cpu_usage_iowait',
+                'cpu_usage_user',
+                'cpu_usage_system',
+              ],
               metrics_collection_interval: 60,
             },
             disk: {
@@ -282,34 +291,52 @@ export class SecureCloudEnvironmentConstruct extends Construct {
     const configRole = new iam.Role(this, 'ConfigRole', {
       assumedBy: new iam.ServicePrincipal('config.amazonaws.com'),
       managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWS_ConfigRole'),
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'service-role/AWS_ConfigRole'
+        ),
       ],
     });
 
     configBucket.grantWrite(configRole);
 
-    const configurationRecorder = new config.CfnConfigurationRecorder(this, 'ConfigRecorder', {
-      name: 'default',
-      roleArn: configRole.roleArn,
-      recordingGroup: {
-        allSupported: true,
-        includeGlobalResourceTypes: true,
-      },
-    });
+    const configurationRecorder = new config.CfnConfigurationRecorder(
+      this,
+      'ConfigRecorder',
+      {
+        name: 'default',
+        roleArn: configRole.roleArn,
+        recordingGroup: {
+          allSupported: true,
+          includeGlobalResourceTypes: true,
+        },
+      }
+    );
 
-    const deliveryChannel = new config.CfnDeliveryChannel(this, 'ConfigDeliveryChannel', {
-      name: 'default',
-      s3BucketName: configBucket.bucketName,
-    });
+    const deliveryChannel = new config.CfnDeliveryChannel(
+      this,
+      'ConfigDeliveryChannel',
+      {
+        name: 'default',
+        s3BucketName: configBucket.bucketName,
+      }
+    );
 
     // Config rules
-    const s3VersioningRule = new config.ManagedRule(this, 'S3VersioningEnabledRule', {
-      identifier: config.ManagedRuleIdentifiers.S3_BUCKET_VERSIONING_ENABLED,
-    });
+    const s3VersioningRule = new config.ManagedRule(
+      this,
+      'S3VersioningEnabledRule',
+      {
+        identifier: config.ManagedRuleIdentifiers.S3_BUCKET_VERSIONING_ENABLED,
+      }
+    );
 
-    const ec2NoPublicIpRule = new config.ManagedRule(this, 'Ec2NoPublicIpRule', {
-      identifier: config.ManagedRuleIdentifiers.EC2_INSTANCE_NO_PUBLIC_IP,
-    });
+    const ec2NoPublicIpRule = new config.ManagedRule(
+      this,
+      'Ec2NoPublicIpRule',
+      {
+        identifier: config.ManagedRuleIdentifiers.EC2_INSTANCE_NO_PUBLIC_IP,
+      }
+    );
 
     // Ensure Config rules depend on the recorder and delivery channel
     s3VersioningRule.node.addDependency(configurationRecorder);
