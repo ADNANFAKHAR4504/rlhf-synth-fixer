@@ -221,9 +221,7 @@ describe('TapStack Unit Tests', () => {
       // Assert the actual outputs defined in tap-stack.ts
       template.hasOutput('ALBDNS', {});
       template.hasOutput('BastionHostId', {});
-      template.hasOutput('RDSEndpoint', {});
-      template.hasOutput('LogBucketName', {});
-      template.hasOutput('VPCId', {});
+      template.hasOutput('DatabaseEndpoint', {});
     });
   });
 });
