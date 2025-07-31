@@ -135,48 +135,48 @@ class TestTapStack(unittest.TestCase):
 
   @mark.it("exports VPC ID from nested stack")
   def test_exports_vpc_id(self):
-    stack = TapStack(self.app, "TapStackVpcOutput", TapStackProps(environment_suffix="vpc_out"))
+    stack = TapStack(self.app, "TapStackVpcOutput", TapStackProps(environment_suffix="vpc-out")) # Changed to hyphen
     template = Template.from_stack(stack)
     template.has_output(
-      f"VpcIdOutput-vpc_out", # Output name from VPCStack
+      f"VpcIdOutput-vpc-out", # Changed to hyphen
       Match.object_like({
         "Value": {"Ref": Match.any_value()}, # VPC ID is typically a Ref to the VPC resource
-        "Export": {"Name": f"VpcId-vpc_out"}
+        "Export": {"Name": f"VpcId-vpc-out"} # Changed to hyphen
       })
     )
 
   @mark.it("exports IAM Role ARN from nested stack")
   def test_exports_iam_role_arn(self):
-    stack = TapStack(self.app, "TapStackIamOutput", TapStackProps(environment_suffix="iam_out"))
+    stack = TapStack(self.app, "TapStackIamOutput", TapStackProps(environment_suffix="iam-out")) # Changed to hyphen
     template = Template.from_stack(stack)
     template.has_output(
-      f"RoleArnOutput-iam_out", # Output name from IAMStack
+      f"RoleArnOutput-iam-out", # Changed to hyphen
       Match.object_like({
         "Value": {"Fn::GetAtt": [Match.any_value(), "Arn"]}, # Role ARN is typically a GetAtt to the Role's Arn
-        "Export": {"Name": f"RoleArn-iam_out"}
+        "Export": {"Name": f"RoleArn-iam-out"} # Changed to hyphen
       })
     )
 
   @mark.it("exports SecureBucketNameOutput")
   def test_exports_secure_bucket_name_output(self):
-    stack = TapStack(self.app, "TapStackBucketNameOutput", TapStackProps(environment_suffix="bucket_out"))
+    stack = TapStack(self.app, "TapStackBucketNameOutput", TapStackProps(environment_suffix="bucket-out")) # Changed to hyphen
     template = Template.from_stack(stack)
     template.has_output(
       "SecureBucketNameOutput",
       Match.object_like({
-        "Value": f"tap-secure-data-bucket_out", # Direct bucket name as string
+        "Value": f"tap-secure-data-bucket-out", # Changed to hyphen
         "Export": {"Name": "TapStackSecureBucketName"}
       })
     )
 
   @mark.it("exports IamRoleNameOutput")
   def test_exports_iam_role_name_output(self):
-    stack = TapStack(self.app, "TapStackRoleNameOutput", TapStackProps(environment_suffix="role_name_out"))
+    stack = TapStack(self.app, "TapStackRoleNameOutput", TapStackProps(environment_suffix="role-name-out")) # Changed to hyphen
     template = Template.from_stack(stack)
     template.has_output(
       "IamRoleNameOutput",
       Match.object_like({
-        "Value": f"TapRole-role_name_out", # Direct role name as string
+        "Value": f"TapRole-role-name-out", # Changed to hyphen
         "Export": {"Name": "TapStackIamRoleName"}
       })
     )
