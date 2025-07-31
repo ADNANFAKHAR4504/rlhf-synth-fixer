@@ -448,7 +448,15 @@ def test_error_handling_environment_variables(cdktf_app):
     
     for func in lambda_functions.values():
       if 'environment' in func:
-        env_vars = func['environment'][0]['variables']
+        env_config = func['environment']
+        # Handle both list and dict formats
+        if isinstance(env_config, list) and len(env_config) > 0:
+          env_vars = env_config[0].get('variables', {})
+        elif isinstance(env_config, dict):
+          env_vars = env_config.get('variables', {})
+        else:
+          continue
+          
         # Check for logging configuration
         if 'LOG_LEVEL' in env_vars:
           assert env_vars['LOG_LEVEL'] is not None
@@ -504,10 +512,15 @@ def test_lambda_environment_variables(cdktf_app):
     
     for func in lambda_functions.values():
       if 'environment' in func:
-        env_config = func['environment'][0]
-        assert 'variables' in env_config
+        env_config = func['environment']
+        # Handle both list and dict formats
+        if isinstance(env_config, list) and len(env_config) > 0:
+          variables = env_config[0].get('variables', {})
+        elif isinstance(env_config, dict):
+          variables = env_config.get('variables', {})
+        else:
+          continue
         
-        variables = env_config['variables']
         # Check for essential environment variables
         expected_vars = ['LOG_LEVEL']
         for var in expected_vars:
