@@ -202,7 +202,7 @@ describe('AWS Resources Integration Test', () => {
     if (res.ScalableTargets && res.ScalableTargets.length > 0) {
       const target = res.ScalableTargets[0];
       expect(target.MinCapacity).toBeGreaterThanOrEqual(1);
-      expect(target.MaxCapacity).toBeGreaterThanOrEqual(target.MinCapacity);
+      expect(target.MaxCapacity).toBeGreaterThanOrEqual(target.MinCapacity || 0);
     } else {
       console.warn('No auto scaling targets found - auto scaling may not be configured');
       expect(res.ScalableTargets).toBeDefined();
