@@ -1,3 +1,4 @@
+import re
 from typing import Optional, Dict, List
 from dataclasses import dataclass, field
 import pulumi
@@ -81,6 +82,13 @@ class TapStack(pulumi.ComponentResource):
     self._create_infrastructure()
     self._register_outputs()
 
+  def _sanitize_bucket_name(self, name: str) -> str:
+    name = name.lower()
+    name = re.sub(r'[^a-z0-9-]', '-', name)       # replace invalid characters
+    name = re.sub(r'-+', '-', name).strip('-')    # remove extra/misplaced hyphens
+    return name[:63] 
+  
+
   def _create_infrastructure(self) -> None:
     pulumi.log.info(f"Creating TAP infrastructure for environment: {self.environment_suffix}")
     self._create_networking()
@@ -117,16 +125,21 @@ class TapStack(pulumi.ComponentResource):
 
   def _create_storage(self) -> None:
     pulumi.log.info("Creating storage infrastructure...")
+    bucket_name = self._sanitize_bucket_name(
+    f"tap-test-artifacts-{self.environment_suffix}-{pulumi.get_stack()}"
+)
+
 
     self.artifacts_bucket = aws.s3.Bucket(
-      f"tap-artifacts-{self.environment_suffix}",
-      bucket=f"tap-test-artifacts-{self.environment_suffix}-{pulumi.get_stack()}",
-      tags=self._merge_tags({
-        "Name": f"TAP-Artifacts-{self.environment_suffix}",
-        "Purpose": "TestArtifacts"
-      }),
-      opts=ResourceOptions(parent=self)
+        f"tap-artifacts-{self.environment_suffix}",
+        bucket=bucket_name,
+        tags=self._merge_tags({
+            "Name": f"TAP-Artifacts-{self.environment_suffix}",
+            "Purpose": "TestArtifacts"
+        }),
+        opts=ResourceOptions(parent=self)
     )
+
 
     aws.s3.BucketVersioningV2(
       f"tap-artifacts-versioning-{self.environment_suffix}",
