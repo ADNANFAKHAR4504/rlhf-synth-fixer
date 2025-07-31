@@ -83,6 +83,11 @@ function getLanguageChoices(platform: string) {
     ];
   }
 
+  if (platform === 'pulumi') {
+    return [
+      { name: 'Python', value: 'py' }, // Pulumi Python
+    ];
+  }
   if (platform === 'tf') {
     return [
       { name: 'Terraform', value: 'hcl' },
@@ -117,6 +122,7 @@ async function main(): Promise<void> {
         { name: 'CDK Terraform', value: 'cdktf' },
         { name: 'CloudFormation', value: 'cfn' },
         { name: 'Terraform', value: 'tf' },
+        { name: 'Pulumi', value: 'pulumi' },
       ],
     });
 
