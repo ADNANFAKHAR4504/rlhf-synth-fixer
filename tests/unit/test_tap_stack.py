@@ -1,7 +1,7 @@
 import unittest
-from pytest import mark, skip
+from pytest import mark
 from aws_cdk.assertions import Match, Template
-from lib.tap_stack import TapStack, TapStackProps
+from lib.tap_stack import TapStack, TapStackProps, VPCStack, IAMStack # Import nested stacks for output names
 
 
 @mark.describe("TapStack")
@@ -54,7 +54,7 @@ class TestTapStack(unittest.TestCase):
             "Statement": Match.array_with([
               Match.object_like({
                 "Effect": "Deny",
-                "Principal": {"AWS": "*"},
+                "Principal": {"AWS": "*"}, # Correct for iam.AnyPrincipal()
                 "Action": "s3:*",
                 "Condition": {
                   "Bool": {"aws:SecureTransport": "false"}
@@ -68,49 +68,46 @@ class TestTapStack(unittest.TestCase):
 
   @mark.it("creates an IAM role for EC2 with least privilege policy")
   def test_iam_role_with_ec2_assume_and_policy(self):
-      stack = TapStack(
-          self.app,
-          "TapStackIAM",
-          TapStackProps(environment_suffix="leastpriv")
-      )
+    stack = TapStack(
+      self.app,
+      "TapStackIAM",
+      TapStackProps(environment_suffix="leastpriv")
+    )
+    template = Template.from_stack(stack)
 
-      # FIX: Get the nested IAMStack instead of TapStack
-      template = Template.from_stack(stack.iam_stack)
-
-      template.has_resource(
-          "AWS::IAM::Role",
-          Match.object_like({
-              "Properties": Match.object_like({
-                  "AssumeRolePolicyDocument": Match.object_like({
-                      "Statement": Match.array_with([
-                          Match.object_like({
-                              "Effect": "Allow",
-                              "Principal": {"Service": "ec2.amazonaws.com"},
-                              "Action": "sts:AssumeRole"
-                          })
-                      ])
-                  }),
-                  "Policies": Match.array_with([
-                      Match.object_like({
-                          "PolicyName": Match.string_like_regexp("CustomEC2ReadOnlyPolicy"),
-                          "PolicyDocument": Match.object_like({
-                              "Statement": Match.array_with([
-                                  Match.object_like({
-                                      "Effect": "Allow",
-                                      "Action": Match.array_with([
-                                          "ec2:DescribeInstances",
-                                          "ec2:DescribeTags"
-                                      ]),
-                                      "Resource": ["*"]
-                                  })
-                              ])
-                          })
-                      })
-                  ])
+    template.has_resource(
+      "AWS::IAM::Role",
+      Match.object_like({
+        "Properties": Match.object_like({
+          "AssumeRolePolicyDocument": Match.object_like({
+            "Statement": Match.array_with([
+              Match.object_like({
+                "Effect": "Allow",
+                "Principal": {"Service": "ec2.amazonaws.com"},
+                "Action": "sts:AssumeRole"
               })
-          })
-      )
-
+            ])
+          }),
+          "Policies": Match.array_with([
+            Match.object_like({
+              "PolicyName": Match.string_like_regexp("CustomEC2ReadOnlyPolicy"),
+              "PolicyDocument": Match.object_like({
+                "Statement": Match.array_with([
+                  Match.object_like({
+                    "Effect": "Allow",
+                    "Action": Match.array_with([
+                      "ec2:DescribeInstances",
+                      "ec2:DescribeTags"
+                    ]),
+                    "Resource": "*" # Corrected: Resource is a string "*" not a list ["*"]
+                  })
+                ])
+              })
+            })
+          ])
+        })
+      })
+    )
 
   @mark.it("ensures the S3 bucket is KMS encrypted")
   def test_s3_bucket_is_kms_encrypted(self):
@@ -127,10 +124,59 @@ class TestTapStack(unittest.TestCase):
           "ServerSideEncryptionConfiguration": Match.array_with([
             Match.object_like({
               "ServerSideEncryptionByDefault": Match.object_like({
-                "SSEAlgorithm": "aws:kms"
+                "SSEAlgorithm": "aws:kms",
+                "KMSMasterKeyID": Match.any_value() # Added assertion for KMSMasterKeyID
               })
             })
           ])
         })
+      })
+    )
+
+  @mark.it("exports VPC ID from nested stack")
+  def test_exports_vpc_id(self):
+    stack = TapStack(self.app, "TapStackVpcOutput", TapStackProps(environment_suffix="vpc_out"))
+    template = Template.from_stack(stack)
+    template.has_output(
+      f"VpcIdOutput-vpc_out", # Output name from VPCStack
+      Match.object_like({
+        "Value": {"Ref": Match.any_value()}, # VPC ID is typically a Ref to the VPC resource
+        "Export": {"Name": f"VpcId-vpc_out"}
+      })
+    )
+
+  @mark.it("exports IAM Role ARN from nested stack")
+  def test_exports_iam_role_arn(self):
+    stack = TapStack(self.app, "TapStackIamOutput", TapStackProps(environment_suffix="iam_out"))
+    template = Template.from_stack(stack)
+    template.has_output(
+      f"RoleArnOutput-iam_out", # Output name from IAMStack
+      Match.object_like({
+        "Value": {"Fn::GetAtt": [Match.any_value(), "Arn"]}, # Role ARN is typically a GetAtt to the Role's Arn
+        "Export": {"Name": f"RoleArn-iam_out"}
+      })
+    )
+
+  @mark.it("exports SecureBucketNameOutput")
+  def test_exports_secure_bucket_name_output(self):
+    stack = TapStack(self.app, "TapStackBucketNameOutput", TapStackProps(environment_suffix="bucket_out"))
+    template = Template.from_stack(stack)
+    template.has_output(
+      "SecureBucketNameOutput",
+      Match.object_like({
+        "Value": f"tap-secure-data-bucket_out", # Direct bucket name as string
+        "Export": {"Name": "TapStackSecureBucketName"}
+      })
+    )
+
+  @mark.it("exports IamRoleNameOutput")
+  def test_exports_iam_role_name_output(self):
+    stack = TapStack(self.app, "TapStackRoleNameOutput", TapStackProps(environment_suffix="role_name_out"))
+    template = Template.from_stack(stack)
+    template.has_output(
+      "IamRoleNameOutput",
+      Match.object_like({
+        "Value": f"TapRole-role_name_out", # Direct role name as string
+        "Export": {"Name": "TapStackIamRoleName"}
       })
     )
