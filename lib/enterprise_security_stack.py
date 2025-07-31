@@ -109,9 +109,44 @@ class EnterpriseSecurityStack(Construct):  # pylint: disable=too-many-instance-a
       self, "cloudtrail_logs_bucket",
       bucket=(
         f"enterprise-cloudtrail-logs-{self.current_account.account_id}-"
-        f"{self.current_region.name}"
+        f"{self.current_region.id}"
       ),
       force_destroy=True
+    )
+
+    # CloudTrail bucket policy to allow CloudTrail access
+    from cdktf_cdktf_provider_aws.s3_bucket_policy import S3BucketPolicy
+    S3BucketPolicy(
+      self, "cloudtrail_bucket_policy",
+      bucket=self.cloudtrail_bucket.id,
+      policy=json.dumps({
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Sid": "AWSCloudTrailAclCheck",
+            "Effect": "Allow",
+            "Principal": {
+              "Service": "cloudtrail.amazonaws.com"
+            },
+            "Action": "s3:GetBucketAcl",
+            "Resource": self.cloudtrail_bucket.arn
+          },
+          {
+            "Sid": "AWSCloudTrailWrite",
+            "Effect": "Allow",
+            "Principal": {
+              "Service": "cloudtrail.amazonaws.com"
+            },
+            "Action": "s3:PutObject",
+            "Resource": f"{self.cloudtrail_bucket.arn}/*",
+            "Condition": {
+              "StringEquals": {
+                "s3:x-amz-acl": "bucket-owner-full-control"
+              }
+            }
+          }
+        ]
+      })
     )
 
     # Enable server-side encryption for CloudTrail bucket
@@ -145,7 +180,7 @@ class EnterpriseSecurityStack(Construct):  # pylint: disable=too-many-instance-a
       self, "vpc_flow_logs_bucket",
       bucket=(
         f"enterprise-vpc-flow-logs-{self.current_account.account_id}-"
-        f"{self.current_region.name}"
+        f"{self.current_region.id}"
       ),
       force_destroy=True
     )
@@ -287,7 +322,7 @@ class EnterpriseSecurityStack(Construct):  # pylint: disable=too-many-instance-a
               "logs:PutLogEvents"
             ],
             "Resource": (
-              f"arn:aws:logs:{self.current_region.name}:"
+              f"arn:aws:logs:{self.current_region.id}:":
               f"{self.current_account.account_id}:*"
             )
           }
@@ -346,12 +381,11 @@ class EnterpriseSecurityStack(Construct):  # pylint: disable=too-many-instance-a
       }
     )
 
-    # CloudWatch Log Group for VPC Flow Logs
+    # CloudWatch Log Group for VPC Flow Logs (without KMS encryption for now)
     self.vpc_flow_logs_group = CloudwatchLogGroup(
       self, "vpc_flow_logs_group",
       name=f"/aws/vpc/flowlogs/{self.vpc.id}",
-      retention_in_days=30,
-      kms_key_id=self.kms_key.arn
+      retention_in_days=30
     )
 
     # Enable VPC Flow Logs if available
@@ -416,10 +450,29 @@ class EnterpriseSecurityStack(Construct):  # pylint: disable=too-many-instance-a
   def _create_ec2_security_configuration(self) -> None:
     """Configure EC2 instances without public IP addresses by default."""
 
+    # Use a valid AMI ID data source
+    from cdktf_cdktf_provider_aws.data_aws_ami import DataAwsAmi
+    
+    ubuntu_ami = DataAwsAmi(
+      self, "ubuntu_ami",
+      most_recent=True,
+      owners=["099720109477"],  # Canonical
+      filter=[
+        {
+          "name": "name",
+          "values": ["ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-amd64-server-*"]
+        },
+        {
+          "name": "virtualization-type",
+          "values": ["hvm"]
+        }
+      ]
+    )
+
     self.secure_launch_template = LaunchTemplate(
       self, "secure_launch_template",
       name_prefix="enterprise-secure-",
-      image_id="ami-0abcdef1234567890",  # Replace with actual AMI ID
+      image_id=ubuntu_ami.id,
       instance_type="t3.micro",
       vpc_security_group_ids=[],  # Security groups would be defined separately
       network_interfaces=[
@@ -461,6 +514,8 @@ class EnterpriseSecurityStack(Construct):  # pylint: disable=too-many-instance-a
       engine_version="8.0",
       instance_class="db.t3.micro",
       allocated_storage=20,
+      username="admin",  # Required field
+      password="tempPassword123!",  # In production, use AWS Secrets Manager
       storage_encrypted=True,  # Mandatory encryption
       kms_key_id=self.kms_key.arn,  # Use enterprise KMS key
       backup_retention_period=7,
@@ -485,6 +540,22 @@ class EnterpriseSecurityStack(Construct):  # pylint: disable=too-many-instance-a
   def _create_lambda_security_configuration(self) -> None:
     """Configure Lambda functions with restricted IAM permissions."""
 
+    # Create a simple Lambda deployment package
+    import zipfile
+    import os
+    
+    lambda_code = '''
+def handler(event, context):
+    return {
+        'statusCode': 200,
+        'body': 'Hello from secure Lambda!'
+    }
+'''
+    
+    # Create lambda function zip file
+    with zipfile.ZipFile('lambda_function.zip', 'w') as zip_file:
+      zip_file.writestr('index.py', lambda_code)
+
     # Example Lambda function with restricted permissions
     self.secure_lambda = LambdaFunction(
       self, "secure_lambda_function",
@@ -492,7 +563,7 @@ class EnterpriseSecurityStack(Construct):  # pylint: disable=too-many-instance-a
       role=self.lambda_execution_role.arn,  # Use restricted role
       handler="index.handler",
       runtime="python3.9",
-      filename="lambda_function.zip",  # This would need to be provided
+      filename="lambda_function.zip",
       timeout=30,
       memory_size=128,
       environment={

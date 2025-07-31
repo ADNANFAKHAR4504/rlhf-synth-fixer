@@ -47,19 +47,44 @@ class TapStack(TerraformStack):
     # Add S3 state locking using escape hatch
     self.add_override("terraform.backend.s3.use_lockfile", True)
 
-    # Create S3 bucket for demonstration
-    S3Bucket(
+    # Create S3 bucket for demonstration with valid name
+    self.tap_bucket = S3Bucket(
       self,
       "tap_bucket",
-      bucket=f"tap-bucket-{environment_suffix}-{construct_id}",
-      versioning={"enabled": True},
-      server_side_encryption_configuration={
-        "rule": {
-          "apply_server_side_encryption_by_default": {
-            "sse_algorithm": "AES256"
-          }
-        }
+      bucket=f"tap-bucket-{environment_suffix}-{construct_id}".lower().replace("_", "-")[:63],
+      force_destroy=True
+    )
+
+    # Use separate resource for bucket versioning
+    from cdktf_cdktf_provider_aws.s3_bucket_versioning import \
+        S3BucketVersioning
+    S3BucketVersioning(
+      self,
+      "tap_bucket_versioning", 
+      bucket=self.tap_bucket.id,
+      versioning_configuration={
+        "status": "Enabled"
       }
+    )
+
+    # Use separate resource for server-side encryption
+    from cdktf_cdktf_provider_aws.s3_bucket_server_side_encryption_configuration import (
+        S3BucketServerSideEncryptionConfigurationA,
+        S3BucketServerSideEncryptionConfigurationRuleA,
+        S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultA)
+    
+    S3BucketServerSideEncryptionConfigurationA(
+      self,
+      "tap_bucket_encryption",
+      bucket=self.tap_bucket.id,
+      rule=[
+        S3BucketServerSideEncryptionConfigurationRuleA(
+          apply_server_side_encryption_by_default=
+            S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultA(
+              sse_algorithm="AES256"
+            )
+        )
+      ]
     )
 
     # Instantiate the enterprise security stack
