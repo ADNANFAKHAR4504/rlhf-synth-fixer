@@ -387,7 +387,7 @@ Resources:
   S3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 'web-app-bucket-${AWS::AccountId}-${AWS::Region}'
+      BucketName: !Sub 'web-app-newpr-bucket-${AWS::AccountId}-${AWS::Region}'
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
