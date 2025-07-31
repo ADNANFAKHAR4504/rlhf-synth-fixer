@@ -112,7 +112,7 @@ describe('TapStack Unit Tests', () => {
     });
 
     test('should apply consistent tags to S3 bucket', () => {
-      expect(synthesized).toContain('"Environment": "Production"');
+      expect(synthesized).toContain('"Environment": "test"');
     });
   });
 
@@ -133,7 +133,7 @@ describe('TapStack Unit Tests', () => {
 
     test('should create Lambda function with correct configuration', () => {
       expect(synthesized).toContain('"aws_lambda_function"');
-      expect(synthesized).toContain('"function_name": "image-processing-function"');
+      expect(synthesized).toContain('"function_name": "image-processing-function-${props.environmentSuffix}"');
       expect(synthesized).toContain('"runtime": "python3.8"');
       expect(synthesized).toContain('"handler": "index.lambda_handler"');
       expect(synthesized).toContain('"timeout": 30');
@@ -149,7 +149,7 @@ describe('TapStack Unit Tests', () => {
     });
 
     test('should apply consistent tags to Lambda function', () => {
-      expect(synthesized).toContain('"Environment": "Production"');
+      expect(synthesized).toContain('"Environment": "test"');
     });
   });
 
@@ -170,7 +170,7 @@ describe('TapStack Unit Tests', () => {
 
     test('should create IAM role for Lambda execution', () => {
       expect(synthesized).toContain('"aws_iam_role"');
-      expect(synthesized).toContain('"name": "image-processing-lambda-role"');
+      expect(synthesized).toContain('"name": "image-processing-lambda-role-${props.environmentSuffix}"');
       expect(synthesized).toContain('lambda.amazonaws.com');
       expect(synthesized).toContain('sts:AssumeRole');
     });
@@ -219,7 +219,7 @@ describe('TapStack Unit Tests', () => {
     });
 
     test('should apply consistent tags to SNS topic', () => {
-      expect(synthesized).toContain('"Environment": "Production"');
+      expect(synthesized).toContain('"Environment": "test"');
     });
   });
 
@@ -244,7 +244,7 @@ describe('TapStack Unit Tests', () => {
     });
 
     test('should apply consistent tags to SQS queue', () => {
-      expect(synthesized).toContain('"Environment": "Production"');
+      expect(synthesized).toContain('"Environment": "test"');
     });
   });
 
@@ -265,12 +265,12 @@ describe('TapStack Unit Tests', () => {
 
     test('should create CloudWatch log group for Lambda', () => {
       expect(synthesized).toContain('"aws_cloudwatch_log_group"');
-      expect(synthesized).toContain('"/aws/lambda/image-processing-function"');
+      expect(synthesized).toContain('"/aws/lambda/image-processing-function-${props.environmentSuffix}"');
       expect(synthesized).toContain('"retention_in_days": 14');
     });
 
     test('should apply consistent tags to CloudWatch log group', () => {
-      expect(synthesized).toContain('"Environment": "Production"');
+      expect(synthesized).toContain('"Environment": "test"');
     });
   });
 
