@@ -1,0 +1,108 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  CloudFormation template for projectX - Deploys two serverless functions with
+  IAM role and CloudWatch Logs retention.
+
+Parameters:
+
+  ProjectXDataProcessorFunctionName:
+    Type: String
+    Description: The name of the Lambda function to be created.
+    Default: ProjectXDataProcessor-274774
+
+  ProjectXResponseHandlerFunctionName:
+    Type: String
+    Description: The name of the Lambda function to be created.
+    Default: ProjectXResponseHandlerFunction-274774
+
+Resources:
+
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service: "lambda.amazonaws.com"
+            Action: "sts:AssumeRole"
+      Policies:
+        - PolicyName: "LambdaS3AccessAndLogsPolicy-274774"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: "Allow"
+                Action:
+                  - "logs:CreateLogGroup"
+                  - "logs:CreateLogStream"
+                  - "logs:PutLogEvents"
+                Resource:
+                  - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${ProjectXDataProcessorFunctionName}:*"
+                  - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${ProjectXResponseHandlerFunctionName}:*"
+
+  # CloudWatch Log Group for dataProcessor
+  DataProcessorLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${ProjectXDataProcessorFunctionName}
+      RetentionInDays: 30
+
+  # CloudWatch Log Group for responseHandler
+  ResponseHandlerLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${ProjectXResponseHandlerFunctionName}
+      RetentionInDays: 30
+
+
+  # Lambda Function: dataProcessor
+  ProjectXDataProcessorFunction:
+    Type: AWS::Lambda::Function
+    DependsOn: DataProcessorLogGroup
+    Properties:
+      FunctionName: !Ref ProjectXDataProcessorFunctionName
+      Runtime: python3.12
+      Handler: index.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Code:
+        ZipFile: |
+          def handler(event, context):
+              try:
+                  print("Processing data")
+                  return {"statusCode": 200, "body": "Data processed"}
+              except Exception as e:
+                  print(f"Error: {e}")
+                  return {"statusCode": 500, "body": "Processing error"}
+      Timeout: 10
+      MemorySize: 128
+
+  # Lambda Function: responseHandler
+  ProjectXResponseHandlerFunction:
+    Type: AWS::Lambda::Function
+    DependsOn: ResponseHandlerLogGroup
+    Properties:
+      FunctionName: !Ref ProjectXResponseHandlerFunctionName
+      Runtime: python3.12
+      Handler: index.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Code:
+        ZipFile: |
+          def handler(event, context):
+              try:
+                  print("Handling response")
+                  return {"statusCode": 200, "body": "Response handled"}
+              except Exception as e:
+                  print(f"Error: {e}")
+                  return {"statusCode": 500, "body": "Handler error"}
+      Timeout: 10
+      MemorySize: 128
+
+Outputs:
+  DataProcessorFunctionName:
+    Description: Lambda Function Name for dataProcessor
+    Value: !Ref ProjectXDataProcessorFunction
+
+  ResponseHandlerFunctionName:
+    Description: Lambda Function Name for responseHandler
+    Value: !Ref ProjectXResponseHandlerFunction
