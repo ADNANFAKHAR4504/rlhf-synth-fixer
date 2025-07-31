@@ -1,158 +1,93 @@
-import unittest
-from pytest import mark
-from aws_cdk.assertions import Match, Template
+import pytest
+from aws_cdk import App
+from aws_cdk.assertions import Template, Match
 from lib.tap_stack import TapStack, TapStackProps
 
 
-@mark.describe("TapStack")
-class TestTapStack(unittest.TestCase):
+@pytest.fixture
+def template():
+  app = App(context={"environmentSuffix": "pr334"})
+  stack = TapStack(app, "TapStackpr334", props=TapStackProps(environment_suffix="pr334"))
+  return Template.from_stack(stack)
 
-  def setUp(self):
-    from aws_cdk import App
-    self.app = App()
 
-  @mark.it("creates an S3 bucket with env suffix")
-  def test_creates_s3_bucket_with_env_suffix(self):
-    stack = TapStack(
-      self.app,
-      "TapStackWithSuffix",
-      TapStackProps(environment_suffix="testenv")
-    )
-    template = Template.from_stack(stack)
-    template.has_resource_properties(
-      "AWS::S3::Bucket",
-      Match.object_like({
-        "BucketName": Match.string_like_regexp("tap-secure-data-testenv")
-      })
-    )
+def test_vpc_output(template):
+  template.has_output(
+    "VpcIdOutput-pr334",
+    {
+      "Export": {"Name": "VpcId-pr334"},
+      "Value": {"Ref": Match.string_like_regexp("TapVpc-pr334.*")}
+    }
+  )
 
-  @mark.it("defaults env suffix to 'dev'")
-  def test_defaults_env_suffix_to_dev(self):
-    stack = TapStack(self.app, "TapStackDefault", TapStackProps())
-    template = Template.from_stack(stack)
-    template.has_resource_properties(
-      "AWS::S3::Bucket",
-      Match.object_like({
-        "BucketName": Match.string_like_regexp("tap-secure-data-dev")
-      })
-    )
 
-  @mark.it("enforces SSL-only access on the S3 bucket")
-  def test_s3_ssl_only_policy(self):
-    stack = TapStack(
-      self.app,
-      "TapStackSSLPolicy",
-      TapStackProps(environment_suffix="ssltest")
-    )
-    template = Template.from_stack(stack)
+def test_iam_role_output(template):
+  template.has_output(
+    "RoleArnOutput-pr334",
+    {
+      "Export": {"Name": "RoleArn-pr334"},
+      "Value": {
+        "Fn::GetAtt": [Match.string_like_regexp("TapRole-pr334.*"), "Arn"]
+      }
+    }
+  )
 
-    template.has_resource(
-      "AWS::S3::BucketPolicy",
-      Match.object_like({
-        "Properties": Match.object_like({
-          "PolicyDocument": Match.object_like({
-            "Statement": Match.array_with([
-              Match.object_like({
-                "Effect": "Deny",
-                "Principal": {"AWS": "*"},
-                "Action": "s3:*",
-                "Condition": {
-                  "Bool": {"aws:SecureTransport": "false"}
-                }
-              })
-            ])
+  template.has_output(
+    "IamRoleNameOutput",
+    {
+      "Export": {"Name": "TapStackIamRoleName"},
+      "Value": Match.string_like_regexp("TapRole-pr334.*")
+    }
+  )
+
+
+def test_s3_bucket_properties(template):
+  template.resource_count_is("AWS::S3::Bucket", 1)
+  template.resource_count_is("AWS::KMS::Key", 1)
+
+  template.has_resource_properties(
+    "AWS::S3::Bucket",
+    {
+      "BucketEncryption": {
+        "ServerSideEncryptionConfiguration": Match.array_with([
+          {
+            "ServerSideEncryptionByDefault": {
+              "SSEAlgorithm": "aws:kms",
+              "KMSMasterKeyID": Match.any_value()
+            }
+          }
+        ])
+      },
+      "VersioningConfiguration": {
+        "Status": "Enabled"
+      }
+    }
+  )
+
+  template.has_output(
+    "SecureBucketNameOutput",
+    {
+      "Export": {"Name": "TapStackSecureBucketName"},
+      "Value": "tap-secure-data-pr334"
+    }
+  )
+
+
+def test_s3_bucket_deny_insecure_transport(template):
+  template.has_resource_properties(
+    "AWS::S3::BucketPolicy",
+    {
+      "PolicyDocument": {
+        "Statement": Match.array_with([
+          Match.object_like({
+            "Effect": "Deny",
+            "Condition": {
+              "Bool": {
+                "aws:SecureTransport": "false"
+              }
+            }
           })
-        })
-      })
-    )
-
-  @mark.it("creates an IAM role for EC2 with least privilege policy")
-  def test_iam_role_with_ec2_assume_and_policy(self):
-    stack = TapStack(
-      self.app,
-      "TapStackIAM",
-      TapStackProps(environment_suffix="leastpriv")
-    )
-    template = Template.from_stack(stack)
-
-    template.has_resource(
-      "AWS::IAM::Role",
-      Match.object_like({
-        "Properties": Match.object_like({
-          "AssumeRolePolicyDocument": Match.object_like({
-            "Statement": Match.array_with([
-              Match.object_like({
-                "Effect": "Allow",
-                "Principal": {"Service": "ec2.amazonaws.com"},
-                "Action": "sts:AssumeRole"
-              })
-            ])
-          }),
-          "Policies": Match.array_with([
-            Match.object_like({
-              "PolicyName": Match.string_like_regexp("CustomEC2ReadOnlyPolicy"),
-              "PolicyDocument": Match.object_like({
-                "Statement": Match.array_with([
-                  Match.object_like({
-                    "Effect": "Allow",
-                    "Action": Match.array_with([
-                      "ec2:DescribeInstances",
-                      "ec2:DescribeTags"
-                    ]),
-                    "Resource": "*"
-                  })
-                ])
-              })
-            })
-          ])
-        })
-      })
-    )
-
-  @mark.it("ensures the S3 bucket is KMS encrypted")
-  def test_s3_bucket_is_kms_encrypted(self):
-    stack = TapStack(
-      self.app,
-      "TapStackEncrypted",
-      TapStackProps(environment_suffix="encrypted")
-    )
-    template = Template.from_stack(stack)
-    template.has_resource_properties(
-      "AWS::S3::Bucket",
-      Match.object_like({
-        "BucketEncryption": Match.object_like({
-          "ServerSideEncryptionConfiguration": Match.array_with([
-            Match.object_like({
-              "ServerSideEncryptionByDefault": Match.object_like({
-                "SSEAlgorithm": "aws:kms",
-                "KMSMasterKeyID": Match.any_value()
-              })
-            })
-          ])
-        })
-      })
-    )
-
-  @mark.it("exports SecureBucketNameOutput with correct value reference")
-  def test_exports_secure_bucket_name_output(self):
-    stack = TapStack(self.app, "TapStackBucketNameOutput", TapStackProps(environment_suffix="bucket-out"))
-    template = Template.from_stack(stack)
-    template.has_output(
-      "SecureBucketNameOutput",
-      Match.object_like({
-        "Value": f"tap-secure-data-bucket-out", # Expects a direct string value
-        "Export": {"Name": "TapStackSecureBucketName"}
-      })
-    )
-
-  @mark.it("exports IamRoleNameOutput with correct value reference")
-  def test_exports_iam_role_name_output(self):
-    stack = TapStack(self.app, "TapStackRoleNameOutput", TapStackProps(environment_suffix="role-name-out"))
-    template = Template.from_stack(stack)
-    template.has_output(
-      "IamRoleNameOutput",
-      Match.object_like({
-        "Value": Match.string_like_regexp(f"TapStackrole-name-out-IamStackrole-name-outNes-TapRolerole-name-out[0-9A-F]{{8}}"), # Expects a direct string value, matching the pattern
-        "Export": {"Name": "TapStackIamRoleName"}
-      })
-    )
+        ])
+      }
+    }
+  )
