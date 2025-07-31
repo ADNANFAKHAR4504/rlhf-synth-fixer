@@ -1,23 +1,23 @@
 // lib/tap-stack.ts
-import { Construct } from 'constructs';
-import { TerraformStack } from 'cdktf';
-import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
-import { Vpc } from '@cdktf/provider-aws/lib/vpc';
-import { Subnet } from '@cdktf/provider-aws/lib/subnet';
-import { InternetGateway } from '@cdktf/provider-aws/lib/internet-gateway';
-import { RouteTable } from '@cdktf/provider-aws/lib/route-table';
-import { Route } from '@cdktf/provider-aws/lib/route';
-import { RouteTableAssociation } from '@cdktf/provider-aws/lib/route-table-association';
-import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
+import { IamPolicy } from '@cdktf/provider-aws/lib/iam-policy';
+import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
+import { IamRolePolicyAttachment } from '@cdktf/provider-aws/lib/iam-role-policy-attachment';
 import { Instance } from '@cdktf/provider-aws/lib/instance';
+import { InternetGateway } from '@cdktf/provider-aws/lib/internet-gateway';
+import { NetworkAcl } from '@cdktf/provider-aws/lib/network-acl';
+import { NetworkAclAssociation } from '@cdktf/provider-aws/lib/network-acl-association';
+import { NetworkAclRule } from '@cdktf/provider-aws/lib/network-acl-rule';
+import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
+import { Route } from '@cdktf/provider-aws/lib/route';
+import { RouteTable } from '@cdktf/provider-aws/lib/route-table';
+import { RouteTableAssociation } from '@cdktf/provider-aws/lib/route-table-association';
 import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
 import { S3BucketServerSideEncryptionConfigurationA } from '@cdktf/provider-aws/lib/s3-bucket-server-side-encryption-configuration';
-import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
-import { IamPolicy } from '@cdktf/provider-aws/lib/iam-policy';
-import { IamRolePolicyAttachment } from '@cdktf/provider-aws/lib/iam-role-policy-attachment';
-import { NetworkAcl } from '@cdktf/provider-aws/lib/network-acl';
-import { NetworkAclRule } from '@cdktf/provider-aws/lib/network-acl-rule';
-import { NetworkAclAssociation } from '@cdktf/provider-aws/lib/network-acl-association';
+import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
+import { Subnet } from '@cdktf/provider-aws/lib/subnet';
+import { Vpc } from '@cdktf/provider-aws/lib/vpc';
+import { TerraformStack } from 'cdktf';
+import { Construct } from 'constructs';
 
 interface TapStackProps {
   region?: string;
@@ -33,9 +33,10 @@ export class TapStack extends TerraformStack {
   constructor(scope: Construct, name: string, props: TapStackProps) {
     super(scope, name);
 
-    // Set defaults if properties are missing
+    // Use provided values or hardcoded defaults for us-east-1
     const region = props.region || props.awsRegion || 'us-east-1';
-    const amiId = props.amiId || 'ami-12345678';
+    // Official Amazon Linux 2 AMI for us-east-1 as of July 2025
+    const amiId = props.amiId || 'ami-009698a58cf38bf4e';
     const tags = { Environment: 'Production' };
 
     new AwsProvider(this, 'aws', { region });
@@ -124,8 +125,18 @@ export class TapStack extends TerraformStack {
       description: 'Allow HTTP and HTTPS',
       vpcId: vpc.id,
       ingress: [
-        { fromPort: 80, toPort: 80, protocol: 'tcp', cidrBlocks: ['0.0.0.0/0'] },
-        { fromPort: 443, toPort: 443, protocol: 'tcp', cidrBlocks: ['0.0.0.0/0'] },
+        {
+          fromPort: 80,
+          toPort: 80,
+          protocol: 'tcp',
+          cidrBlocks: ['0.0.0.0/0'],
+        },
+        {
+          fromPort: 443,
+          toPort: 443,
+          protocol: 'tcp',
+          cidrBlocks: ['0.0.0.0/0'],
+        },
       ],
       egress: [
         { fromPort: 0, toPort: 0, protocol: '-1', cidrBlocks: ['0.0.0.0/0'] },
@@ -139,16 +150,20 @@ export class TapStack extends TerraformStack {
       tags,
     });
 
-    new S3BucketServerSideEncryptionConfigurationA(this, 'LogBucketEncryption', {
-      bucket: logBucket.bucket,
-      rule: [
-        {
-          applyServerSideEncryptionByDefault: {
-            sseAlgorithm: 'AES256',
+    new S3BucketServerSideEncryptionConfigurationA(
+      this,
+      'LogBucketEncryption',
+      {
+        bucket: logBucket.bucket,
+        rule: [
+          {
+            applyServerSideEncryptionByDefault: {
+              sseAlgorithm: 'AES256',
+            },
           },
-        },
-      ],
-    });
+        ],
+      }
+    );
 
     const ec2Role = new IamRole(this, 'EC2LogRole', {
       name: 'ec2-log-writer-role',
