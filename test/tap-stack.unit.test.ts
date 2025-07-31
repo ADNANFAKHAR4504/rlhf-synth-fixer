@@ -363,7 +363,7 @@ describe('Secure Web Application Infrastructure CloudFormation Template', () => 
         template.Resources.PublicNetworkACLEntryOutboundAll.Properties,
         template.Resources.PublicNetworkACLEntryOutboundDenyAll.Properties,
       ];
-      
+
       expect(publicInboundRules.some((r: any) => r.RuleNumber === 100 && r.PortRange.From === 80)).toBe(true);
       expect(publicInboundRules.some((r: any) => r.RuleNumber === 110 && r.PortRange.From === 443)).toBe(true);
       expect(publicInboundRules.some((r: any) => r.RuleNumber === 120 && r.PortRange.From === 22 && r.CidrBlock['Ref'] === 'BastionSshCidr')).toBe(true);
@@ -526,12 +526,17 @@ describe('Secure Web Application Infrastructure CloudFormation Template', () => 
       expect(
         policyStatements.some((s: any) => s.Action.includes('s3:GetObject'))
       ).toBe(true);
-      
-      // Fixed the TypeError by handling both string and array formats for the Resource property
+
+      // Corrected the test logic to handle both string and object types for the Resource property
       expect(
         policyStatements.some((s: any) =>
           (Array.isArray(s.Resource)
-            ? s.Resource.some((r: string) => r.includes('${ProjectName}-${EnvironmentSuffix}-static-content/*'))
+            ? s.Resource.some((r: any) => {
+                if (r && typeof r === 'object' && r['Fn::Sub']) {
+                  return typeof r['Fn::Sub'] === 'string' && r['Fn::Sub'].includes('${ProjectName}-${EnvironmentSuffix}-static-content/*');
+                }
+                return typeof r === 'string' && r.includes('${ProjectName}-${EnvironmentSuffix}-static-content/*');
+              })
             : typeof s.Resource === 'string' && s.Resource.includes('${ProjectName}-${EnvironmentSuffix}-static-content/*'))
         )
       ).toBe(true);
@@ -894,7 +899,7 @@ describe('Secure Web Application Infrastructure CloudFormation Template', () => 
         template.Resources.PublicNetworkACLEntryOutboundAll.Properties,
         template.Resources.PublicNetworkACLEntryOutboundDenyAll.Properties,
       ];
-      
+
       expect(publicInboundRules.some((r: any) => r.RuleNumber === 100 && r.PortRange.From === 80)).toBe(true);
       expect(publicInboundRules.some((r: any) => r.RuleNumber === 110 && r.PortRange.From === 443)).toBe(true);
       expect(publicInboundRules.some((r: any) => r.RuleNumber === 120 && r.PortRange.From === 22 && r.CidrBlock['Ref'] === 'BastionSshCidr')).toBe(true);
