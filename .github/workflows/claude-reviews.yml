@@ -58,7 +58,7 @@ jobs:
           allowed_tools: 'Bash,Read,Write,Edit,MultiEdit,Glob,Grep,LS,Task,TodoWrite'
           trigger_phrase: ''
           custom_instructions: |
-            Follow instructions in claude_reviews.txt
+            Follow instructions in .claude/agents/iac-code-reviewer.md
           # Optional: Restrict network access to specific domains only
           # experimental_allowed_domains: |
           #   .anthropic.com
