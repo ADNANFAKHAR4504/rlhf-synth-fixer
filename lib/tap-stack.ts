@@ -56,14 +56,14 @@ export class TapStack extends TerraformStack {
 
     // Create CloudWatch Log Group for Lambda function
     const logGroup = new CloudwatchLogGroup(this, 'LambdaLogGroup', {
-      name: '/aws/lambda/image-processing-function-${props.environmentSuffix}',
+      name: `/aws/lambda/image-processing-function-${props.environmentSuffix}`,
       retentionInDays: 14,
       tags: commonTags,
     });
 
     // Create IAM role for Lambda function with least privilege
     const lambdaRole = new IamRole(this, 'LambdaExecutionRole', {
-      name: 'image-processing-lambda-role-${props.environmentSuffix}',
+      name: `image-processing-lambda-role-${props.environmentSuffix}`,
       assumeRolePolicy: JSON.stringify({
         Version: '2012-10-17',
         Statement: [
@@ -118,7 +118,7 @@ export class TapStack extends TerraformStack {
 
     // Create Lambda function
     const lambdaFunction = new LambdaFunction(this, 'ImageProcessingFunction', {
-      functionName: 'image-processing-function-${props.environmentSuffix}',
+      functionName: `image-processing-function-${props.environmentSuffix}`,
       role: lambdaRole.arn,
       handler: 'index.lambda_handler',
       runtime: 'python3.8',

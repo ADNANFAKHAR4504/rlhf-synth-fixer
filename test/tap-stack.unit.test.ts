@@ -23,7 +23,7 @@ describe('TapStack Unit Tests', () => {
         awsRegion: 'us-east-1',
         defaultTags: {
           tags: {
-            Environment: 'prod',
+            Environment: 'Production',
             Repository: 'test-repo',
             Author: 'test-author',
           }
@@ -44,7 +44,7 @@ describe('TapStack Unit Tests', () => {
         awsRegion: 'us-east-1',
         defaultTags: {
           tags: {
-            Environment: 'test',
+            Environment: 'Production',
             Repository: 'unit-test',
             Author: 'tester',
           }
@@ -67,7 +67,7 @@ describe('TapStack Unit Tests', () => {
         stateBucketRegion: 'us-east-1',
         awsRegion: 'us-east-1',
         defaultTags: {
-          tags: { Environment: 'test' }
+          tags: { Environment: 'Production' }
         }
       });
       synthesized = Testing.synth(stack);
@@ -85,7 +85,7 @@ describe('TapStack Unit Tests', () => {
         stateBucketRegion: 'us-east-1',
         awsRegion: 'us-east-1',
         defaultTags: {
-          tags: { Environment: 'test' }
+          tags: { Environment: 'Production' }
         }
       });
       synthesized = Testing.synth(stack);
@@ -112,7 +112,7 @@ describe('TapStack Unit Tests', () => {
     });
 
     test('should apply consistent tags to S3 bucket', () => {
-      expect(synthesized).toContain('"Environment": "test"');
+      expect(synthesized).toContain('"Environment": "Production"');
     });
   });
 
@@ -125,7 +125,7 @@ describe('TapStack Unit Tests', () => {
         stateBucketRegion: 'us-east-1',
         awsRegion: 'us-east-1',
         defaultTags: {
-          tags: { Environment: 'test' }
+          tags: { Environment: 'Production' }
         }
       });
       synthesized = Testing.synth(stack);
@@ -149,7 +149,7 @@ describe('TapStack Unit Tests', () => {
     });
 
     test('should apply consistent tags to Lambda function', () => {
-      expect(synthesized).toContain('"Environment": "test"');
+      expect(synthesized).toContain('"Environment": "Production"');
     });
   });
 
@@ -162,7 +162,7 @@ describe('TapStack Unit Tests', () => {
         stateBucketRegion: 'us-east-1',
         awsRegion: 'us-east-1',
         defaultTags: {
-          tags: { Environment: 'test' }
+          tags: { Environment: 'Production' }
         }
       });
       synthesized = Testing.synth(stack);
@@ -207,7 +207,7 @@ describe('TapStack Unit Tests', () => {
         stateBucketRegion: 'us-east-1',
         awsRegion: 'us-east-1',
         defaultTags: {
-          tags: { Environment: 'test' }
+          tags: { Environment: 'Production' }
         }
       });
       synthesized = Testing.synth(stack);
@@ -219,7 +219,7 @@ describe('TapStack Unit Tests', () => {
     });
 
     test('should apply consistent tags to SNS topic', () => {
-      expect(synthesized).toContain('"Environment": "test"');
+      expect(synthesized).toContain('"Environment": "Production"');
     });
   });
 
@@ -232,7 +232,7 @@ describe('TapStack Unit Tests', () => {
         stateBucketRegion: 'us-east-1',
         awsRegion: 'us-east-1',
         defaultTags: {
-          tags: { Environment: 'test' }
+          tags: { Environment: 'Production' }
         }
       });
       synthesized = Testing.synth(stack);
@@ -244,7 +244,7 @@ describe('TapStack Unit Tests', () => {
     });
 
     test('should apply consistent tags to SQS queue', () => {
-      expect(synthesized).toContain('"Environment": "test"');
+      expect(synthesized).toContain('"Environment": "Production"');
     });
   });
 
@@ -257,7 +257,7 @@ describe('TapStack Unit Tests', () => {
         stateBucketRegion: 'us-east-1',
         awsRegion: 'us-east-1',
         defaultTags: {
-          tags: { Environment: 'test' }
+          tags: { Environment: 'Production' }
         }
       });
       synthesized = Testing.synth(stack);
@@ -270,7 +270,26 @@ describe('TapStack Unit Tests', () => {
     });
 
     test('should apply consistent tags to CloudWatch log group', () => {
-      expect(synthesized).toContain('"Environment": "test"');
+      expect(synthesized).toContain('"Environment": "Production"');
+    });
+
+    test('should default Environment to Production if not provided', () => {
+      stack = new TapStack(app, 'TestNoEnvTagStack', {
+        environmentSuffix: 'dev',
+        stateBucket: 'my-state-bucket',
+        stateBucketRegion: 'us-east-1',
+        awsRegion: 'us-east-1',
+        defaultTags: {
+          tags: {
+            Repository: 'unit-test',
+            Author: 'tester',
+            // Environment tag intentionally omitted
+          },
+        },
+      });
+    
+      synthesized = Testing.synth(stack);
+      expect(synthesized).toContain('"Environment": "Production"');
     });
   });
 
@@ -283,7 +302,7 @@ describe('TapStack Unit Tests', () => {
         stateBucketRegion: 'us-east-1',
         awsRegion: 'us-east-1',
         defaultTags: {
-          tags: { Environment: 'test' }
+          tags: { Environment: 'Production' }
         }
       });
       synthesized = Testing.synth(stack);
@@ -307,7 +326,7 @@ describe('TapStack Unit Tests', () => {
         stateBucket: 'test-bucket',
         stateBucketRegion: 'us-east-1',
         awsRegion: 'us-east-1',
-        defaultTags: { tags: { Environment: 'test' } }
+        defaultTags: { tags: { Environment: 'Production' } }
       });
       const synthesized1 = Testing.synth(stack1);
 
@@ -317,7 +336,7 @@ describe('TapStack Unit Tests', () => {
         stateBucket: 'test-bucket',
         stateBucketRegion: 'us-east-1',
         awsRegion: 'us-east-1',
-        defaultTags: { tags: { Environment: 'test' } }
+        defaultTags: { tags: { Environment: 'Production' } }
       });
       const synthesized2 = Testing.synth(stack2);
 
