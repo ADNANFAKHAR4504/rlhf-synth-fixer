@@ -1,5 +1,5 @@
 import { Construct } from 'constructs';
-import { TerraformStack, TerraformAsset, AssetType } from 'cdktf';
+import { TerraformStack, TerraformAsset, AssetType, TerraformOutput } from 'cdktf';
 import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
 import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
 import { S3BucketVersioningA } from '@cdktf/provider-aws/lib/s3-bucket-versioning';
@@ -182,6 +182,37 @@ export class TapStack extends TerraformStack {
         },
       ],
       dependsOn: [lambdaFunction],
+    });
+
+    // Define outputs for integration tests
+    new TerraformOutput(this, 's3_bucket_name', {
+      value: s3Bucket.id,
+      description: 'Name of the S3 bucket for image processing',
+    });
+
+    new TerraformOutput(this, 'lambda_function_name', {
+      value: lambdaFunction.functionName,
+      description: 'Name of the Lambda function for image processing',
+    });
+
+    new TerraformOutput(this, 'lambda_function_arn', {
+      value: lambdaFunction.arn,
+      description: 'ARN of the Lambda function for image processing',
+    });
+
+    new TerraformOutput(this, 'sns_topic_arn', {
+      value: snsTopic.arn,
+      description: 'ARN of the SNS topic for completion notifications',
+    });
+
+    new TerraformOutput(this, 'sqs_dlq_url', {
+      value: dlqQueue.url,
+      description: 'URL of the SQS dead letter queue',
+    });
+
+    new TerraformOutput(this, 'cloudwatch_log_group_name', {
+      value: logGroup.name,
+      description: 'Name of the CloudWatch log group for Lambda function',
     });
 
     // Note: Console output statements removed for production deployment

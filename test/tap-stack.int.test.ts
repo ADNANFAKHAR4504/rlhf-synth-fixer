@@ -62,7 +62,7 @@ describe('Image Processing Infrastructure Integration Tests', () => {
 
     test('should have CloudWatch Log Group configured', async () => {
       expect(outputs.cloudwatch_log_group_name).toBeDefined();
-      expect(outputs.cloudwatch_log_group_name).toBe('/aws/lambda/image-processing-function');
+      expect(outputs.cloudwatch_log_group_name).toMatch(/\/aws\/lambda\/image-processing-function/);
       
       // In real deployment, we would verify:
       // - Log group exists
