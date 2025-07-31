@@ -16,6 +16,11 @@ class TestTapStackDeploymentIntegration:
   def setup_method(self):
     """Setup for each test."""
     self.app = App()
+  
+  def _synth_and_parse(self, stack):
+    """Helper method to synthesize stack and parse JSON."""
+    synthesized_json = Testing.synth(stack)
+    return json.loads(synthesized_json)
 
   def test_full_stack_deployment_synthesis(self):
     """Test full stack deployment synthesis end-to-end."""
@@ -27,7 +32,7 @@ class TestTapStackDeploymentIntegration:
     )
     
     # Synthesize the stack
-    synthesized = Testing.synth(stack)
+    synthesized = self._synth_and_parse(stack)
     
     assert synthesized is not None
     assert 'TestFullDeployment' in synthesized
@@ -54,8 +59,8 @@ class TestTapStackDeploymentIntegration:
         environment_suffix=env
       )
       
-      synthesized = Testing.synth(stack)
-      assert synthesized is not None
+      synthesized_json = Testing.synth(stack)
+      assert synthesized_json is not None
 
   def test_cross_region_deployment_validation(self):
     """Test that stack only deploys to us-east-1 region."""
@@ -66,8 +71,8 @@ class TestTapStackDeploymentIntegration:
       environment_suffix="test"
     )
     
-    synthesized = Testing.synth(stack)
-    assert synthesized is not None
+    synthesized_json = Testing.synth(stack)
+    assert synthesized_json is not None
 
 
 class TestServerlessImageProcessingIntegration:
@@ -76,6 +81,11 @@ class TestServerlessImageProcessingIntegration:
   def setup_method(self):
     """Setup for each test."""
     self.app = App()
+  
+  def _synth_and_parse(self, stack):
+    """Helper method to synthesize stack and parse JSON."""
+    synthesized_json = Testing.synth(stack)
+    return json.loads(synthesized_json)
 
   def test_s3_lambda_integration(self):
     """Test S3 bucket and Lambda function integration."""
@@ -86,7 +96,7 @@ class TestServerlessImageProcessingIntegration:
       environment_suffix="test"
     )
     
-    synthesized = Testing.synth(stack)
+    synthesized = self._synth_and_parse(stack)
     resources = synthesized['TestS3Lambda']['resource']
     
     # Verify S3 bucket notification configuration
@@ -102,7 +112,7 @@ class TestServerlessImageProcessingIntegration:
       environment_suffix="test"
     )
     
-    synthesized = Testing.synth(stack)
+    synthesized = self._synth_and_parse(stack)
     resources = synthesized['TestLambdaConfig']['resource']
     
     # Verify Lambda function configuration
@@ -118,7 +128,7 @@ class TestServerlessImageProcessingIntegration:
       environment_suffix="test"
     )
     
-    synthesized = Testing.synth(stack)
+    synthesized = self._synth_and_parse(stack)
     resources = synthesized['TestIAMIntegration']['resource']
     
     # Verify IAM role configuration
@@ -134,7 +144,7 @@ class TestServerlessImageProcessingIntegration:
       environment_suffix="test"
     )
     
-    synthesized = Testing.synth(stack)
+    synthesized = self._synth_and_parse(stack)
     resources = synthesized['TestCloudWatch']['resource']
     
     # Verify CloudWatch log groups
@@ -148,6 +158,11 @@ class TestSecurityIntegration:
   def setup_method(self):
     """Setup for each test."""
     self.app = App()
+  
+  def _synth_and_parse(self, stack):
+    """Helper method to synthesize stack and parse JSON."""
+    synthesized_json = Testing.synth(stack)
+    return json.loads(synthesized_json)
 
   def test_s3_security_configuration(self):
     """Test S3 bucket security configuration."""
@@ -158,7 +173,7 @@ class TestSecurityIntegration:
       environment_suffix="test"
     )
     
-    synthesized = Testing.synth(stack)
+    synthesized = self._synth_and_parse(stack)
     resources = synthesized['TestS3Security']['resource']
     
     # Verify S3 encryption configuration
@@ -174,7 +189,7 @@ class TestSecurityIntegration:
       environment_suffix="test"
     )
     
-    synthesized = Testing.synth(stack)
+    synthesized = self._synth_and_parse(stack)
     resources = synthesized['TestLambdaSecurity']['resource']
     
     # Verify Lambda execution role
@@ -194,7 +209,7 @@ class TestSecurityIntegration:
       environment_suffix="test"
     )
     
-    synthesized = Testing.synth(stack)
+    synthesized = self._synth_and_parse(stack)
     resources = synthesized['TestLeastPrivilege']['resource']
     
     # Verify IAM policies follow least privilege
@@ -218,6 +233,11 @@ class TestEndToEndScenarios:
   def setup_method(self):
     """Setup for each test."""
     self.app = App()
+  
+  def _synth_and_parse(self, stack):
+    """Helper method to synthesize stack and parse JSON."""
+    synthesized_json = Testing.synth(stack)
+    return json.loads(synthesized_json)
 
   @patch('boto3.client')
   def test_image_processing_workflow(self, mock_boto_client):
@@ -237,18 +257,11 @@ class TestEndToEndScenarios:
       environment_suffix="test"
     )
     
-    synthesized = Testing.synth(stack)
-    assert synthesized is not None
+    synthesized_json = Testing.synth(stack)
+    assert synthesized_json is not None
 
-  @patch('PIL.Image')
-  def test_thumbnail_generation_logic(self, mock_pil):
-    """Test thumbnail generation logic simulation."""
-    # Mock PIL Image processing
-    mock_image = MagicMock()
-    mock_pil.open.return_value = mock_image
-    mock_image.thumbnail.return_value = None
-    mock_image.save.return_value = None
-    
+  def test_thumbnail_generation_logic(self):
+    """Test thumbnail generation logic simulation without PIL."""
     stack = TapStack(
       self.app,
       "TestThumbnail",
@@ -256,7 +269,7 @@ class TestEndToEndScenarios:
       environment_suffix="test"
     )
     
-    synthesized = Testing.synth(stack)
+    synthesized = self._synth_and_parse(stack)
     resources = synthesized['TestThumbnail']['resource']
     
     # Verify Lambda function has correct environment variables for processing
@@ -272,7 +285,7 @@ class TestEndToEndScenarios:
       environment_suffix="test"
     )
     
-    synthesized = Testing.synth(stack)
+    synthesized = self._synth_and_parse(stack)
     resources = synthesized['TestErrorHandling']['resource']
     
     # Verify dead letter queue configuration
@@ -292,7 +305,7 @@ class TestEndToEndScenarios:
       environment_suffix="test"
     )
     
-    synthesized = Testing.synth(stack)
+    synthesized = self._synth_and_parse(stack)
     resources = synthesized['TestScalability']['resource']
     
     # Verify Lambda concurrency settings
@@ -310,6 +323,11 @@ class TestPerformanceAndScalabilityIntegration:
   def setup_method(self):
     """Setup for each test."""
     self.app = App()
+  
+  def _synth_and_parse(self, stack):
+    """Helper method to synthesize stack and parse JSON."""
+    synthesized_json = Testing.synth(stack)
+    return json.loads(synthesized_json)
 
   def test_lambda_performance_configuration(self):
     """Test Lambda function performance configuration."""
@@ -320,7 +338,7 @@ class TestPerformanceAndScalabilityIntegration:
       environment_suffix="test"
     )
     
-    synthesized = Testing.synth(stack)
+    synthesized = self._synth_and_parse(stack)
     resources = synthesized['TestPerformance']['resource']
     
     lambda_functions = resources.get('aws_lambda_function', {})
@@ -341,7 +359,7 @@ class TestPerformanceAndScalabilityIntegration:
       environment_suffix="test"
     )
     
-    synthesized = Testing.synth(stack)
+    synthesized = self._synth_and_parse(stack)
     resources = synthesized['TestLifecycle']['resource']
     
     # Verify lifecycle configuration
@@ -357,7 +375,7 @@ class TestPerformanceAndScalabilityIntegration:
       environment_suffix="test"
     )
     
-    synthesized = Testing.synth(stack)
+    synthesized = self._synth_and_parse(stack)
     resources = synthesized['TestMonitoring']['resource']
     
     # Verify CloudWatch log groups
@@ -371,6 +389,11 @@ class TestDisasterRecoveryIntegration:
   def setup_method(self):
     """Setup for each test."""
     self.app = App()
+  
+  def _synth_and_parse(self, stack):
+    """Helper method to synthesize stack and parse JSON."""
+    synthesized_json = Testing.synth(stack)
+    return json.loads(synthesized_json)
 
   def test_backup_and_versioning_configuration(self):
     """Test backup and versioning configuration."""
@@ -381,7 +404,7 @@ class TestDisasterRecoveryIntegration:
       environment_suffix="test"
     )
     
-    synthesized = Testing.synth(stack)
+    synthesized = self._synth_and_parse(stack)
     resources = synthesized['TestBackup']['resource']
     
     # Verify S3 versioning
@@ -397,7 +420,7 @@ class TestDisasterRecoveryIntegration:
       environment_suffix="test"
     )
     
-    synthesized = Testing.synth(stack)
+    synthesized = self._synth_and_parse(stack)
     resources = synthesized['TestReplication']['resource']
     
     # Verify S3 bucket configuration supports replication
@@ -416,7 +439,7 @@ class TestDisasterRecoveryIntegration:
       environment_suffix="test"
     )
     
-    synthesized = Testing.synth(stack)
+    synthesized = self._synth_and_parse(stack)
     resources = synthesized['TestRetention']['resource']
     
     # Verify lifecycle policies for retention
@@ -430,6 +453,11 @@ class TestStackOutputsIntegration:
   def setup_method(self):
     """Setup for each test."""
     self.app = App()
+  
+  def _synth_and_parse(self, stack):
+    """Helper method to synthesize stack and parse JSON."""
+    synthesized_json = Testing.synth(stack)
+    return json.loads(synthesized_json)
 
   def test_required_outputs_present(self):
     """Test that all required outputs are present."""
@@ -440,7 +468,7 @@ class TestStackOutputsIntegration:
       environment_suffix="test"
     )
     
-    synthesized = Testing.synth(stack)
+    synthesized = self._synth_and_parse(stack)
     
     # Verify outputs are present
     outputs = synthesized['TestOutputs'].get('output', {})
@@ -463,7 +491,7 @@ class TestStackOutputsIntegration:
       environment_suffix="test"
     )
     
-    synthesized = Testing.synth(stack)
+    synthesized = self._synth_and_parse(stack)
     outputs = synthesized['TestOutputFormat'].get('output', {})
     
     for output_name, output_config in outputs.items():
