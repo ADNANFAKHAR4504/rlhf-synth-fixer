@@ -410,7 +410,7 @@ class TapStack(cdk.Stack):
       self,
       "TapRDSInstance",
       engine=rds.DatabaseInstanceEngine.postgres(
-        version=rds.PostgresEngineVersion.VER_14_6
+        version=rds.PostgresEngineVersion.VER_15_12
       ),
       instance_type=ec2.InstanceType.of(
         ec2.InstanceClass.T3,
