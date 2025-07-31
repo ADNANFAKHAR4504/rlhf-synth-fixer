@@ -1,6 +1,5 @@
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
-import { EC2Client, DescribeVpcsCommand } from '@aws-sdk/client-ec2';
 
 import { WebServerStack } from './web-server';
 
