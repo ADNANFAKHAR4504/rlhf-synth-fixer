@@ -31,7 +31,6 @@ describe('Secure Web Application Infrastructure CloudFormation Template', () => 
       expect(
         template.Metadata['AWS::CloudFormation::Interface'].ParameterGroups
       ).toBeDefined();
-      // New: Check for new parameter groups
       expect(
         template.Metadata['AWS::CloudFormation::Interface'].ParameterGroups
           .length
@@ -41,38 +40,48 @@ describe('Secure Web Application Infrastructure CloudFormation Template', () => 
 
   describe('Parameters', () => {
     test('should have all required parameters including new ones', () => {
+      // Adjusted expected parameters to match the current TapStack.yml after previous fixes
       const expectedParams = [
         'EnvironmentSuffix',
         'ProjectName',
         'VpcCidr',
         'PublicSubnetCidr',
         'PrivateSubnetCidr',
-        'BastionSshCidr', // New
-        'WebServerAmiId', // New
-        'InstanceType', // New
-        'MinInstances', // New
-        'MaxInstances', // New
-        'WebAppPort', // New
+        'BastionSshCidr',
+        'WebServerAmiId',
+        'InstanceType',
+        'MinInstances',
+        'MaxInstances',
+        'WebAppPort',
         'DataRetentionDays',
-        'AdminMfaRequired', // New
-        'AdminUserPassword', // New
-        'AdminUserEmail', // New
-        'SecondaryRegionVpcCidr', // New
+        'AdminMfaRequired',
+        // 'AdminUserPassword' is no longer a direct parameter, its secret is via Secrets Manager
+        'AdminUserEmail',
+        // 'SecondaryRegionVpcCidr' was removed as it's not used in this single-region template
       ];
 
+      // Dynamically get parameters from the template
+      const actualParams = Object.keys(template.Parameters);
+
+      // Check that all expected parameters are defined in the template
       expectedParams.forEach(param => {
         expect(template.Parameters[param]).toBeDefined();
       });
-      // New: Check for correct number of parameters
-      expect(Object.keys(template.Parameters).length).toBe(
-        expectedParams.length
-      );
+
+      // Optionally, check that no unexpected parameters are present
+      // This part can be commented out if you want to allow extra parameters not explicitly listed
+      actualParams.forEach(param => {
+        expect(expectedParams).toContain(param);
+      });
+
+      // Check for correct number of parameters
+      expect(actualParams.length).toBe(expectedParams.length);
     });
 
     test('EnvironmentSuffix parameter should have correct properties', () => {
       const param = template.Parameters.EnvironmentSuffix;
       expect(param.Type).toBe('String');
-      expect(param.Default).toBe('prod'); // Updated default
+      expect(param.Default).toBe('prod');
       expect(param.AllowedPattern).toBe('^[a-zA-Z0-9]+$');
     });
 
@@ -86,34 +95,32 @@ describe('Secure Web Application Infrastructure CloudFormation Template', () => 
     test('DataRetentionDays parameter should have proper constraints', () => {
       const param = template.Parameters.DataRetentionDays;
       expect(param.Type).toBe('Number');
-      expect(param.Default).toBe(365); // Updated default
+      expect(param.Default).toBe(365);
       expect(param.MinValue).toBe(1);
-      expect(param.MaxValue).toBe(3650); // Updated max value
+      expect(param.MaxValue).toBe(3650);
     });
 
-    // New: Test BastionSshCidr parameter
     test('BastionSshCidr parameter should have restricted default', () => {
       const param = template.Parameters.BastionSshCidr;
       expect(param.Type).toBe('String');
-      expect(param.Default).toBe('203.0.113.0/24'); // Check for restricted default
-      expect(param.Description).toContain('MUST be restricted'); // Check for warning in description
+      expect(param.Default).toBe('203.0.113.0/24');
+      expect(param.Description).toContain('MUST be restricted');
     });
 
-    // New: Test WebServerAmiId parameter
-    test('WebServerAmiId parameter should exist', () => {
+    // Updated test for WebServerAmiId to expect AWS::EC2::Image::Id as per cfn-lint
+    test('WebServerAmiId parameter should exist and be of type AWS::EC2::Image::Id', () => {
       const param = template.Parameters.WebServerAmiId;
-      expect(param.Type).toBe('String');
+      expect(param.Type).toBe('AWS::EC2::Image::Id'); // Changed to expect AWS::EC2::Image::Id
+      expect(param.Default).toBeDefined();
       expect(param.Description).toBeDefined();
     });
 
-    // New: Test InstanceType parameter
     test('InstanceType parameter should have correct default', () => {
       const param = template.Parameters.InstanceType;
       expect(param.Type).toBe('String');
-      expect(param.Default).toBe('t3.medium'); // Check updated default
+      expect(param.Default).toBe('t3.medium');
     });
 
-    // New: Test MinInstances and MaxInstances parameters
     test('MinInstances and MaxInstances parameters should have correct defaults', () => {
       const minParam = template.Parameters.MinInstances;
       const maxParam = template.Parameters.MaxInstances;
@@ -123,14 +130,12 @@ describe('Secure Web Application Infrastructure CloudFormation Template', () => 
       expect(maxParam.Default).toBe(4);
     });
 
-    // New: Test WebAppPort parameter
     test('WebAppPort parameter should have correct default', () => {
       const param = template.Parameters.WebAppPort;
       expect(param.Type).toBe('Number');
       expect(param.Default).toBe(8080);
     });
 
-    // New: Test AdminMfaRequired parameter
     test('AdminMfaRequired parameter should have correct properties', () => {
       const param = template.Parameters.AdminMfaRequired;
       expect(param.Type).toBe('String');
@@ -138,31 +143,23 @@ describe('Secure Web Application Infrastructure CloudFormation Template', () => 
       expect(param.AllowedValues).toEqual(['true', 'false']);
     });
 
-    // New: Test AdminUserPassword and AdminUserEmail parameters
-    test('AdminUserPassword and AdminUserEmail parameters should exist and be NoEcho', () => {
-      const passwordParam = template.Parameters.AdminUserPassword;
+    // Modified test: AdminUserPassword is no longer a direct parameter but fetched from Secrets Manager.
+    // The previous test for AdminUserPassword and AdminUserEmail is split and modified.
+    test('AdminUserEmail parameter should exist and have AllowedPattern', () => {
       const emailParam = template.Parameters.AdminUserEmail;
-      expect(passwordParam.Type).toBe('String');
-      expect(passwordParam.NoEcho).toBe(true);
-      expect(passwordParam.MinLength).toBe(14); // Check password policy constraint
       expect(emailParam.Type).toBe('String');
       expect(emailParam.AllowedPattern).toBeDefined();
     });
 
-    // New: Test SecondaryRegionVpcCidr parameter
-    test('SecondaryRegionVpcCidr parameter should exist with a default', () => {
-      const param = template.Parameters.SecondaryRegionVpcCidr;
-      expect(param.Type).toBe('String');
-      expect(param.Default).toBe('10.100.0.0/16');
-      expect(param.Description).toContain('secondary region');
-    });
+    // Removed the test for 'AdminUserPassword' parameter as it is no longer a direct CloudFormation parameter,
+    // but rather its value is generated/stored in Secrets Manager.
+    // Removed the test for 'SecondaryRegionVpcCidr' parameter as it was removed from the template.
   });
 
   describe('Conditions', () => {
-    // New: Test EnforceMfa condition
     test('EnforceMfa condition should be defined', () => {
       expect(template.Conditions.EnforceMfa).toBeDefined();
-      expect(template.Conditions.EnforceMfa.length).toBeGreaterThan(0); // Check it's not empty
+      // Condition is an intrinsic function, not an array, so remove length check
     });
   });
 
@@ -179,13 +176,11 @@ describe('Secure Web Application Infrastructure CloudFormation Template', () => 
       );
     });
 
-    // Updated: KMS key should have proper deletion policy (Retain)
     test('KMS key should have Retain deletion policy', () => {
       const kmsKey = template.Resources.SecurityKMSKey;
-      expect(kmsKey.DeletionPolicy).toBe('Retain'); // **FIXED: Now expects Retain**
+      expect(kmsKey.DeletionPolicy).toBe('Retain');
     });
 
-    // New: KMS key policy should allow RDS and DynamoDB service principals
     test('KMS key policy should allow RDS and DynamoDB service principals', () => {
       const kmsKeyPolicy =
         template.Resources.SecurityKMSKey.Properties.KeyPolicy.Statement;
@@ -208,7 +203,6 @@ describe('Secure Web Application Infrastructure CloudFormation Template', () => 
         'AWS::GuardDuty::Detector'
       );
       expect(template.Resources.GuardDutyDetector.Properties.Enable).toBe(true);
-      // New: Check GuardDuty data sources
       expect(
         template.Resources.GuardDutyDetector.Properties.DataSources.S3Logs
           .Enable
@@ -231,7 +225,7 @@ describe('Secure Web Application Infrastructure CloudFormation Template', () => 
       expect(cloudTrail.IsMultiRegionTrail).toBe(true);
       expect(cloudTrail.EnableLogFileValidation).toBe(true);
       expect(cloudTrail.IsLogging).toBe(true);
-      expect(cloudTrail.KMSKeyId).toBeDefined(); // Check KMS key is used
+      expect(cloudTrail.KMSKeyId).toBeDefined();
     });
 
     test('should have Web Application Firewall (WAF)', () => {
@@ -240,10 +234,9 @@ describe('Secure Web Application Infrastructure CloudFormation Template', () => 
 
       const webACL = template.Resources.WebACL.Properties;
       expect(webACL.Scope).toBe('REGIONAL');
-      expect(webACL.DefaultAction.Allow).toBeDefined(); // Check default action is Allow
+      expect(webACL.DefaultAction.Allow).toBeDefined();
       expect(webACL.Rules).toBeDefined();
-      expect(webACL.Rules.length).toBeGreaterThan(2); // Now expects more than 2 rules
-      // New: Check for specific WAF managed rules
+      expect(webACL.Rules.length).toBeGreaterThan(2);
       expect(
         webACL.Rules.some(
           (rule: any) => rule.Name === 'AWSManagedRulesCommonRuleSet'
@@ -258,13 +251,12 @@ describe('Secure Web Application Infrastructure CloudFormation Template', () => 
         webACL.Rules.some(
           (rule: any) => rule.Name === 'AWSManagedRulesSQLiRuleSet'
         )
-      ).toBe(true); // New Rule
+      ).toBe(true);
       expect(
         webACL.Rules.some((rule: any) => rule.Name === 'RateLimitRule')
-      ).toBe(true); // New Rule
+      ).toBe(true);
     });
 
-    // New: Test WAF WebACL Association
     test('should have WAF WebACL associated with ALB', () => {
       expect(template.Resources.WebACLAssociation).toBeDefined();
       expect(template.Resources.WebACLAssociation.Type).toBe(
@@ -293,21 +285,19 @@ describe('Secure Web Application Infrastructure CloudFormation Template', () => 
       expect(vpc.EnableDnsSupport).toBe(true);
     });
 
-    // Updated: Check for all 6 subnets (2 public, 2 private, 2 database)
     test('should have correct number and types of subnets', () => {
       const subnetTypes = Object.keys(template.Resources).filter(
         key => template.Resources[key].Type === 'AWS::EC2::Subnet'
       );
-      expect(subnetTypes.length).toBe(6); // 2 public, 2 private, 2 database
+      expect(subnetTypes.length).toBe(6);
 
       expect(template.Resources.PublicSubnet).toBeDefined();
       expect(template.Resources.PrivateSubnet).toBeDefined();
       expect(template.Resources.PublicSubnet2).toBeDefined();
       expect(template.Resources.PrivateSubnet2).toBeDefined();
-      expect(template.Resources.DatabaseSubnet1).toBeDefined(); // New
-      expect(template.Resources.DatabaseSubnet2).toBeDefined(); // New
+      expect(template.Resources.DatabaseSubnet1).toBeDefined();
+      expect(template.Resources.DatabaseSubnet2).toBeDefined();
 
-      // Check AZ distribution for public/private/db subnets
       expect(
         template.Resources.PublicSubnet.Properties.AvailabilityZone[
           'Fn::Select'
@@ -351,12 +341,11 @@ describe('Secure Web Application Infrastructure CloudFormation Template', () => 
       expect(template.Resources.NATGateway.Type).toBe('AWS::EC2::NatGateway');
     });
 
-    // Updated: Check for all security groups, including Bastion
     test('should have security groups for different tiers including Bastion', () => {
       expect(template.Resources.WebApplicationSecurityGroup).toBeDefined();
       expect(template.Resources.ALBSecurityGroup).toBeDefined();
       expect(template.Resources.DatabaseSecurityGroup).toBeDefined();
-      expect(template.Resources.BastionSecurityGroup).toBeDefined(); // New Bastion SG
+      expect(template.Resources.BastionSecurityGroup).toBeDefined();
 
       expect(template.Resources.WebApplicationSecurityGroup.Type).toBe(
         'AWS::EC2::SecurityGroup'
@@ -372,7 +361,6 @@ describe('Secure Web Application Infrastructure CloudFormation Template', () => 
       );
     });
 
-    // New: Test specific Security Group rules
     test('BastionSecurityGroup should restrict SSH ingress', () => {
       const sg = template.Resources.BastionSecurityGroup.Properties;
       const sshIngress = sg.SecurityGroupIngress.find(
@@ -380,19 +368,25 @@ describe('Secure Web Application Infrastructure CloudFormation Template', () => 
       );
       expect(sshIngress).toBeDefined();
       expect(sshIngress.CidrIp).toBeDefined();
-      expect(sshIngress.CidrIp).not.toBe('0.0.0.0/0'); // CRITICAL: Ensure not wide open
-      expect(sshIngress.CidrIp['Ref']).toBe('BastionSshCidr'); // Should reference parameter
+      expect(sshIngress.CidrIp['Ref']).toBe('BastionSshCidr');
+      expect(sshIngress.CidrIp).not.toBe('0.0.0.0/0');
     });
 
-    // New: Test Network ACLs for all subnets with granular rules
-    test('should have Network ACLs for public, private, and database subnets', () => {
-      expect(template.Resources.PublicNetworkACL).toBeDefined();
-      expect(template.Resources.PrivateNetworkACL).toBeDefined(); // New
-      expect(template.Resources.DatabaseNetworkACL).toBeDefined(); // New
+    // Corrected NACL tests to check individual AWS::EC2::NetworkAclEntry resources
+    test('PublicNetworkACL should have granular inbound and outbound rules', () => {
+      // Collect inbound rules for PublicNetworkACL
+      const publicInboundRules = [
+        template.Resources.PublicNetworkACLEntryInboundHttp.Properties,
+        template.Resources.PublicNetworkACLEntryInboundHttps.Properties,
+        template.Resources.PublicNetworkACLEntryInboundSsh.Properties,
+        template.Resources.PublicNetworkACLEntryInboundEphemeral.Properties,
+      ];
+      // Collect outbound rules for PublicNetworkACL
+      const publicOutboundRules = [
+        template.Resources.PublicNetworkACLEntryOutboundAll.Properties,
+        template.Resources.PublicNetworkACLEntryOutboundDenyAll.Properties,
+      ];
 
-      // Public NACL Inbound Rules (example checks)
-      const publicInboundRules =
-        template.Resources.PublicNetworkACL.Properties.NetworkAclEntries; // Assuming entries are in a list directly
       expect(
         publicInboundRules.some(
           (r: any) => r.RuleNumber === 100 && r.PortRange.From === 80
@@ -419,67 +413,117 @@ describe('Secure Web Application Infrastructure CloudFormation Template', () => 
             r.PortRange.To === 65535
         )
       ).toBe(true);
+      // Check for the deny-all rule specifically, ensuring it's outbound for Public NACL
       expect(
-        publicInboundRules.some(
-          (r: any) => r.RuleNumber === 2000 && r.RuleAction === 'deny'
+        publicOutboundRules.some(
+          (r: any) =>
+            r.RuleNumber === 2000 &&
+            r.RuleAction === 'deny' &&
+            r.Egress === true
         )
-      ).toBe(true); // Deny all
+      ).toBe(true);
 
-      // Private NACL Inbound Rules (example checks)
-      const privateInboundRules =
-        template.Resources.PrivateNetworkACL.Properties.NetworkAclEntries;
+      expect(
+        publicOutboundRules.some(
+          (r: any) =>
+            r.RuleNumber === 100 && r.Protocol === -1 && r.Egress === true
+        )
+      ).toBe(true); // Allow all outbound
+    });
+
+    test('PrivateNetworkACL should have granular inbound and outbound rules', () => {
+      const privateInboundRules = [
+        template.Resources.PrivateNetworkACLEntryInboundApp.Properties,
+        template.Resources.PrivateNetworkACLEntryInboundSsh.Properties,
+        template.Resources.PrivateNetworkACLEntryInboundEphemeral.Properties,
+      ];
+      const privateOutboundRules = [
+        template.Resources.PrivateNetworkACLEntryOutboundAll.Properties,
+        template.Resources.PrivateNetworkACLEntryOutboundDenyAll.Properties,
+      ];
+
       expect(
         privateInboundRules.some(
           (r: any) =>
             r.RuleNumber === 100 &&
             r.PortRange.From === template.Parameters.WebAppPort.Default
         )
-      ).toBe(true); // From ALB to app port
+      ).toBe(true);
       expect(
         privateInboundRules.some(
           (r: any) => r.RuleNumber === 110 && r.PortRange.From === 22
         )
-      ).toBe(true); // SSH from bastion
+      ).toBe(true);
       expect(
         privateInboundRules.some(
           (r: any) => r.RuleNumber === 120 && r.PortRange.From === 1024
         )
-      ).toBe(true); // Ephemeral
+      ).toBe(true);
+      // Check for the deny-all rule specifically, ensuring it's outbound for Private NACL
       expect(
-        privateInboundRules.some(
-          (r: any) => r.RuleNumber === 2000 && r.RuleAction === 'deny'
+        privateOutboundRules.some(
+          (r: any) =>
+            r.RuleNumber === 2000 &&
+            r.RuleAction === 'deny' &&
+            r.Egress === true
         )
-      ).toBe(true); // Deny all
+      ).toBe(true);
 
-      // Database NACL Inbound Rules (example checks)
-      const dbInboundRules =
-        template.Resources.DatabaseNetworkACL.Properties.NetworkAclEntries;
+      expect(
+        privateOutboundRules.some(
+          (r: any) =>
+            r.RuleNumber === 100 && r.Protocol === -1 && r.Egress === true
+        )
+      ).toBe(true); // Allow all outbound
+    });
+
+    test('DatabaseNetworkACL should have granular inbound and outbound rules', () => {
+      const dbInboundRules = [
+        template.Resources.DatabaseNetworkACLEntryInboundMysql.Properties,
+        template.Resources.DatabaseNetworkACLEntryInboundSsh.Properties,
+        template.Resources.DatabaseNetworkACLEntryInboundEphemeral.Properties,
+      ];
+      const dbOutboundRules = [
+        template.Resources.DatabaseNetworkACLEntryOutboundAll.Properties,
+        template.Resources.DatabaseNetworkACLEntryOutboundDenyAll.Properties,
+      ];
+
       expect(
         dbInboundRules.some(
           (r: any) => r.RuleNumber === 100 && r.PortRange.From === 3306
         )
-      ).toBe(true); // From web app to DB port
+      ).toBe(true);
       expect(
         dbInboundRules.some(
           (r: any) => r.RuleNumber === 110 && r.PortRange.From === 22
         )
-      ).toBe(true); // SSH from bastion
+      ).toBe(true);
       expect(
         dbInboundRules.some(
           (r: any) => r.RuleNumber === 120 && r.PortRange.From === 1024
         )
-      ).toBe(true); // Ephemeral
+      ).toBe(true);
+      // Check for the deny-all rule specifically, ensuring it's outbound for Database NACL
       expect(
-        dbInboundRules.some(
-          (r: any) => r.RuleNumber === 2000 && r.RuleAction === 'deny'
+        dbOutboundRules.some(
+          (r: any) =>
+            r.RuleNumber === 2000 &&
+            r.RuleAction === 'deny' &&
+            r.Egress === true
         )
-      ).toBe(true); // Deny all
+      ).toBe(true);
+
+      expect(
+        dbOutboundRules.some(
+          (r: any) =>
+            r.RuleNumber === 100 && r.Protocol === -1 && r.Egress === true
+        )
+      ).toBe(true); // Allow all outbound
     });
   });
 
   describe('Data Storage Resources', () => {
     test('should have encrypted DynamoDB table with deletion protection', () => {
-      // Updated test name
       expect(template.Resources.SecureDynamoTable).toBeDefined();
       expect(template.Resources.SecureDynamoTable.Type).toBe(
         'AWS::DynamoDB::Table'
@@ -488,17 +532,16 @@ describe('Secure Web Application Infrastructure CloudFormation Template', () => 
       const dynamoTable = template.Resources.SecureDynamoTable.Properties;
       expect(dynamoTable.SSESpecification.SSEEnabled).toBe(true);
       expect(dynamoTable.SSESpecification.SSEType).toBe('KMS');
-      expect(dynamoTable.DeletionProtectionEnabled).toBe(true); // **FIXED: Now expects true**
+      expect(dynamoTable.DeletionProtectionEnabled).toBe(true);
       expect(template.Resources.SecureDynamoTable.DeletionPolicy).toBe(
         'Retain'
-      ); // **FIXED: Now expects Retain**
+      );
       expect(template.Resources.SecureDynamoTable.UpdateReplacePolicy).toBe(
         'Retain'
-      ); // **FIXED: Now expects Retain**
+      );
     });
 
     test('should have encrypted RDS database with MultiAZ and deletion protection', () => {
-      // Updated test name
       expect(template.Resources.SecureDatabase).toBeDefined();
       expect(template.Resources.SecureDatabase.Type).toBe(
         'AWS::RDS::DBInstance'
@@ -507,9 +550,10 @@ describe('Secure Web Application Infrastructure CloudFormation Template', () => 
       const database = template.Resources.SecureDatabase.Properties;
       expect(database.StorageEncrypted).toBe(true);
       expect(database.PubliclyAccessible).toBe(false);
-      expect(database.DeletionProtection).toBe(true); // **FIXED: Now expects true**
-      expect(database.MultiAZ).toBe(true); // **FIXED: Now expects true**
-      expect(template.Resources.SecureDatabase.DeletionPolicy).toBe('Snapshot'); // Updated deletion policy
+      expect(database.DeletionProtection).toBe(true);
+      expect(database.MultiAZ).toBe(true);
+      // Changed expected DeletionPolicy to 'Retain' to match the current template
+      expect(template.Resources.SecureDatabase.DeletionPolicy).toBe('Retain');
     });
 
     test('should have database password in Secrets Manager', () => {
@@ -519,12 +563,11 @@ describe('Secure Web Application Infrastructure CloudFormation Template', () => 
       );
       expect(template.Resources.DatabaseSecret.Properties.KmsKeyId['Ref']).toBe(
         'SecurityKMSKey'
-      ); // Check KMS key reference
+      );
     });
 
-    // Updated: Removed test for DatabaseConnectionString in SSM Parameter Store
     test('should NOT have sensitive database connection string in Parameter Store', () => {
-      expect(template.Resources.DatabaseConnectionString).toBeUndefined(); // **FIXED: Expects it to be undefined**
+      expect(template.Resources.DatabaseConnectionString).toBeUndefined();
     });
 
     test('should have CloudTrail S3 bucket with encryption', () => {
@@ -539,10 +582,9 @@ describe('Secure Web Application Infrastructure CloudFormation Template', () => 
       expect(bucket.VersioningConfiguration.Status).toBe('Enabled');
       expect(template.Resources.CloudTrailS3Bucket.DeletionPolicy).toBe(
         'Retain'
-      ); // **FIXED: Now expects Retain**
+      );
     });
 
-    // New: Test ALBAccessLogsBucket
     test('should have dedicated ALB access logs S3 bucket with encryption and retention', () => {
       expect(template.Resources.ALBAccessLogsBucket).toBeDefined();
       expect(template.Resources.ALBAccessLogsBucket.Type).toBe(
@@ -557,10 +599,9 @@ describe('Secure Web Application Infrastructure CloudFormation Template', () => 
       ).toBe('DataRetentionDays');
       expect(template.Resources.ALBAccessLogsBucket.DeletionPolicy).toBe(
         'Retain'
-      ); // Expect Retain
+      );
     });
 
-    // New: Test ALBAccessLogsBucketPolicy
     test('ALBAccessLogsBucketPolicy should have correct service principal', () => {
       expect(template.Resources.ALBAccessLogsBucketPolicy).toBeDefined();
       const policyStatement =
@@ -571,7 +612,7 @@ describe('Secure Web Application Infrastructure CloudFormation Template', () => 
       );
       expect(putObjectStatement.Principal.Service).toBe(
         'logging.s3.amazonaws.com'
-      ); // Correct service principal
+      );
     });
   });
 
@@ -583,7 +624,6 @@ describe('Secure Web Application Infrastructure CloudFormation Template', () => 
       const role = template.Resources.WebApplicationRole.Properties;
       expect(role.Policies).toBeDefined();
       expect(role.Policies[0].PolicyName).toBe('SecureWebAppPolicy');
-      // New: Check specific actions for least privilege
       const policyStatements = role.Policies[0].PolicyDocument.Statement;
       expect(
         policyStatements.some((s: any) =>
@@ -599,11 +639,19 @@ describe('Secure Web Application Infrastructure CloudFormation Template', () => 
       expect(
         policyStatements.some((s: any) => s.Action.includes('s3:GetObject'))
       ).toBe(true);
+      // Adjusted check to handle cases where Resource might be a string or an array
       expect(
         policyStatements.some((s: any) =>
-          s.Resource.includes(
-            'arn:aws:s3:::${ProjectName}-${EnvironmentSuffix}-static-content/*'
-          )
+          Array.isArray(s.Resource)
+            ? s.Resource.some((r: string) =>
+                r.includes(
+                  '${ProjectName}-${EnvironmentSuffix}-static-content/*'
+                )
+              )
+            : s.Resource &&
+              s.Resource.includes(
+                '${ProjectName}-${EnvironmentSuffix}-static-content/*'
+              )
         )
       ).toBe(true);
     });
@@ -620,7 +668,6 @@ describe('Secure Web Application Infrastructure CloudFormation Template', () => 
       expect(template.Resources.CloudTrailRole.Type).toBe('AWS::IAM::Role');
     });
 
-    // New: Test AccountPasswordPolicy
     test('should have AccountPasswordPolicy when MFA is enforced', () => {
       expect(template.Resources.AccountPasswordPolicy).toBeDefined();
       expect(template.Resources.AccountPasswordPolicy.Type).toBe(
@@ -628,7 +675,7 @@ describe('Secure Web Application Infrastructure CloudFormation Template', () => 
       );
       expect(template.Resources.AccountPasswordPolicy.Condition).toBe(
         'EnforceMfa'
-      ); // Check condition
+      );
       const policy = template.Resources.AccountPasswordPolicy.Properties;
       expect(policy.MinimumPasswordLength).toBe(14);
       expect(policy.RequireNumbers).toBe(true);
@@ -639,7 +686,6 @@ describe('Secure Web Application Infrastructure CloudFormation Template', () => 
       expect(policy.PasswordReusePrevention).toBe(5);
     });
 
-    // New: Test AdminUser and AdminUserGroup
     test('should have AdminUser and AdminUserGroup with MFA enforcement', () => {
       expect(template.Resources.AdminUser).toBeDefined();
       expect(template.Resources.AdminUser.Type).toBe('AWS::IAM::User');
@@ -648,28 +694,25 @@ describe('Secure Web Application Infrastructure CloudFormation Template', () => 
       expect(template.Resources.AdminUserGroup).toBeDefined();
       expect(template.Resources.AdminUserGroup.Type).toBe('AWS::IAM::Group');
       expect(template.Resources.AdminUserGroup.Condition).toBe('EnforceMfa');
-      expect(template.Resources.AdminUserGroup.Properties.Users).toContainEqual(
-        { Ref: 'AdminUser' }
-      );
-
-      // Check MFA condition in AdminUser policy (if applicable)
-      const adminUserPolicy =
-        template.Resources.AdminUser.Properties.Policies[0].PolicyDocument
-          .Statement[0];
-      expect(adminUserPolicy.Condition.Bool['aws:MultiFactorAuthPresent']).toBe(
-        'true'
-      );
+      // The `Users` property is not directly on the group when using `UserToGroupAddition`.
+      // The presence of `AdminUserGroupMembership` (tested separately) confirms the association.
+      // Removed `expect(template.Resources.AdminUserGroup.Properties.Users).toContainEqual({ Ref: 'AdminUser' });`
     });
 
-    // New: Test AdminUserLoginProfile
-    test('should have AdminUserLoginProfile', () => {
-      expect(template.Resources.AdminUserLoginProfile).toBeDefined();
-      expect(template.Resources.AdminUserLoginProfile.Type).toBe(
-        'AWS::IAM::LoginProfile'
-      );
-      expect(template.Resources.AdminUserLoginProfile.Condition).toBe(
-        'EnforceMfa'
-      );
+    // Modified test: AdminUserLoginProfile is now a property of AdminUser, not a standalone resource.
+    test('AdminUserLoginProfile should be part of AdminUser and be conditionally applied', () => {
+      expect(
+        template.Resources.AdminUser.Properties.LoginProfile
+      ).toBeDefined();
+      expect(
+        template.Resources.AdminUser.Properties.LoginProfile.Password
+      ).toBeDefined();
+      expect(
+        template.Resources.AdminUser.Properties.LoginProfile
+          .PasswordResetRequired
+      ).toBe(true);
+      // Condition is on the AdminUser resource itself, implying LoginProfile is also conditional.
+      expect(template.Resources.AdminUser.Condition).toBe('EnforceMfa');
     });
   });
 
@@ -678,7 +721,7 @@ describe('Secure Web Application Infrastructure CloudFormation Template', () => 
       expect(template.Resources.CloudTrailLogGroup).toBeDefined();
       expect(template.Resources.ApplicationLogGroup).toBeDefined();
       expect(template.Resources.SecurityLogGroup).toBeDefined();
-      expect(template.Resources.VPCFlowLogsLogGroup).toBeDefined(); // New Log Group
+      expect(template.Resources.VPCFlowLogsLogGroup).toBeDefined();
 
       expect(template.Resources.CloudTrailLogGroup.Type).toBe(
         'AWS::Logs::LogGroup'
@@ -699,7 +742,7 @@ describe('Secure Web Application Infrastructure CloudFormation Template', () => 
         template.Resources.CloudTrailLogGroup.Properties,
         template.Resources.ApplicationLogGroup.Properties,
         template.Resources.SecurityLogGroup.Properties,
-        template.Resources.VPCFlowLogsLogGroup.Properties, // New Log Group
+        template.Resources.VPCFlowLogsLogGroup.Properties,
       ];
       logGroups.forEach(logGroup => {
         expect(logGroup.KmsKeyId).toBeDefined();
@@ -707,7 +750,6 @@ describe('Secure Web Application Infrastructure CloudFormation Template', () => 
       });
     });
 
-    // New: Test SNS Topic for Notifications
     test('should have SNS Topic for security notifications', () => {
       expect(template.Resources.SecurityNotificationsTopic).toBeDefined();
       expect(template.Resources.SecurityNotificationsTopic.Type).toBe(
@@ -717,10 +759,9 @@ describe('Secure Web Application Infrastructure CloudFormation Template', () => 
         template.Resources.SecurityNotificationsTopic.Properties.KmsMasterKeyId[
           'Ref'
         ]
-      ).toBe('SecurityKMSKey'); // Check encryption
+      ).toBe('SecurityKMSKey');
     });
 
-    // New: Test SNS Subscription
     test('should have SNS Subscription for security notifications', () => {
       expect(
         template.Resources.SecurityNotificationsSubscription
@@ -737,7 +778,6 @@ describe('Secure Web Application Infrastructure CloudFormation Template', () => 
       ).toBe('AdminUserEmail');
     });
 
-    // New: Test UnauthorizedApiCallAlarm
     test('should have CloudWatch Alarm for unauthorized API calls', () => {
       expect(template.Resources.UnauthorizedApiCallAlarm).toBeDefined();
       expect(template.Resources.UnauthorizedApiCallAlarm.Type).toBe(
@@ -752,7 +792,6 @@ describe('Secure Web Application Infrastructure CloudFormation Template', () => 
       });
     });
 
-    // New: Test VPC Flow Logs Role and Flow Log
     test('should have VPC Flow Logs configured', () => {
       expect(template.Resources.VPCFlowLogsRole).toBeDefined();
       expect(template.Resources.VPCFlowLogsRole.Type).toBe('AWS::IAM::Role');
@@ -779,7 +818,6 @@ describe('Secure Web Application Infrastructure CloudFormation Template', () => 
       expect(alb.Type).toBe('application');
       expect(alb.Subnets).toBeDefined();
       expect(alb.Subnets.length).toBeGreaterThanOrEqual(2);
-      // New: Check ALB access logging
       expect(alb.LoadBalancerAttributes).toBeDefined();
       const accessLogsEnabled = alb.LoadBalancerAttributes.find(
         (attr: any) => attr.Key === 'access_logs.s3.enabled'
@@ -793,7 +831,6 @@ describe('Secure Web Application Infrastructure CloudFormation Template', () => 
       expect(accessLogsBucket.Value['Ref']).toBe('ALBAccessLogsBucket');
     });
 
-    // New: Test ALB Access Logs Bucket and Policy
     test('should have dedicated ALB access logs S3 bucket with policy', () => {
       expect(template.Resources.ALBAccessLogsBucket).toBeDefined();
       expect(template.Resources.ALBAccessLogsBucket.Type).toBe(
@@ -802,16 +839,15 @@ describe('Secure Web Application Infrastructure CloudFormation Template', () => 
       const bucket = template.Resources.ALBAccessLogsBucket.Properties;
       expect(bucket.BucketEncryption).toBeDefined();
       expect(bucket.VersioningConfiguration.Status).toBe('Enabled');
+      expect(bucket.PublicAccessBlockConfiguration.BlockPublicAcls).toBe(true);
+      expect(
+        bucket.LifecycleConfiguration.Rules[0].ExpirationInDays['Ref']
+      ).toBe('DataRetentionDays');
       expect(template.Resources.ALBAccessLogsBucket.DeletionPolicy).toBe(
         'Retain'
-      ); // Expect Retain
-      expect(template.Resources.ALBAccessLogsBucketPolicy).toBeDefined();
-      expect(template.Resources.ALBAccessLogsBucketPolicy.Type).toBe(
-        'AWS::S3::BucketPolicy'
       );
     });
 
-    // New: Test ALB Listener (HTTP)
     test('should have ALB HTTP Listener', () => {
       expect(template.Resources.ALBListenerHttp).toBeDefined();
       expect(template.Resources.ALBListenerHttp.Type).toBe(
@@ -821,13 +857,12 @@ describe('Secure Web Application Infrastructure CloudFormation Template', () => 
       expect(listener.LoadBalancerArn['Ref']).toBe('ApplicationLoadBalancer');
       expect(listener.Port).toBe(80);
       expect(listener.Protocol).toBe('HTTP');
-      expect(listener.DefaultActions[0].Type).toBe('Forward');
+      expect(listener.DefaultActions[0].Type).toBe('forward'); // Changed to expect 'forward' (lowercase)
       expect(listener.DefaultActions[0].TargetGroupArn['Ref']).toBe(
         'WebServerTargetGroup'
       );
     });
 
-    // New: Test WebServerTargetGroup
     test('should have WebServerTargetGroup', () => {
       expect(template.Resources.WebServerTargetGroup).toBeDefined();
       expect(template.Resources.WebServerTargetGroup.Type).toBe(
@@ -841,9 +876,8 @@ describe('Secure Web Application Infrastructure CloudFormation Template', () => 
   });
 
   describe('Secure Configuration Management', () => {
-    // Updated: Removed test for DatabaseConnectionString in SSM Parameter Store
     test('should NOT have sensitive database connection string in Parameter Store', () => {
-      expect(template.Resources.DatabaseConnectionString).toBeUndefined(); // Expects it to be undefined
+      expect(template.Resources.DatabaseConnectionString).toBeUndefined();
     });
   });
 
@@ -864,17 +898,33 @@ describe('Secure Web Application Infrastructure CloudFormation Template', () => 
         'CloudTrailArn',
         'GuardDutyDetectorId',
         'StackName',
-        'EnvironmentSuffix',
-        'BastionHostPublicIp', // New
-        'SecurityNotificationsTopicArn', // New
-        'AdminUserArn', // New
-        'VPCFlowLogsLogGroupName', // New
+        'EnvironmentSuffixOut',
+        'BastionHostPublicIp',
+        'SecurityNotificationsTopicArn',
+        'AdminUserArn',
+        'VPCFlowLogsLogGroupName',
+        'PublicSubnet2Id',
+        'PrivateSubnet2Id',
+        'DatabaseSubnet1Id',
+        'DatabaseSubnet2Id',
+        'ALBSecurityGroupId',
+        'PublicNetworkACLId',
+        'PrivateNetworkACLId',
+        'DatabaseNetworkACLId',
+        'ApplicationLoadBalancerArn',
+        'WebServerLaunchTemplateId',
+        'WebServerTargetGroupArn',
+        'WebServerAutoScalingGroupName',
+        'WebServerCpuUtilizationAlarmName',
+        'WebServerScaleUpPolicyArn',
+        'WebServerCpuLowAlarmName',
+        'WebServerScaleDownPolicyArn',
+        'WebAppCertificateArn',
       ];
 
       expectedOutputs.forEach(outputName => {
         expect(template.Outputs[outputName]).toBeDefined();
       });
-      // New: Check for correct total number of outputs
       expect(Object.keys(template.Outputs).length).toBe(expectedOutputs.length);
     });
 
@@ -911,29 +961,28 @@ describe('Secure Web Application Infrastructure CloudFormation Template', () => 
 
     test('should have comprehensive resource count for secure infrastructure', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBeGreaterThan(40); // Increased expectation for resource count
+      expect(resourceCount).toBeGreaterThan(40);
     });
 
     test('should have multiple parameters for configuration', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBeGreaterThan(10); // Increased expectation for parameter count
+      expect(parameterCount).toBeGreaterThan(10);
     });
 
     test('should have comprehensive outputs', () => {
       const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBeGreaterThan(15); // Increased expectation for output count
+      expect(outputCount).toBeGreaterThan(15);
     });
   });
 
   describe('Security Compliance', () => {
-    // Updated: Check deletion policies for critical resources
     test('critical resources should have Retain deletion policies', () => {
       const criticalResources = [
         'SecurityKMSKey',
         'CloudTrailS3Bucket',
-        'ALBAccessLogsBucket', // New
-        'SecureDynamoTable', // New
-        'SecureDatabase', // New
+        'ALBAccessLogsBucket',
+        'SecureDynamoTable',
+        'SecureDatabase',
       ];
       criticalResources.forEach(resourceKey => {
         const resource = template.Resources[resourceKey];
@@ -941,7 +990,6 @@ describe('Secure Web Application Infrastructure CloudFormation Template', () => 
       });
     });
 
-    // Updated: Check for deletion protection on RDS and DynamoDB
     test('RDS and DynamoDB should have deletion protection enabled', () => {
       expect(
         template.Resources.SecureDatabase.Properties.DeletionProtection
@@ -952,12 +1000,10 @@ describe('Secure Web Application Infrastructure CloudFormation Template', () => 
       ).toBe(true);
     });
 
-    // Updated: Check RDS MultiAZ
     test('RDS database should be MultiAZ', () => {
       expect(template.Resources.SecureDatabase.Properties.MultiAZ).toBe(true);
     });
 
-    // Updated: Check Bastion Security Group ingress
     test('BastionSecurityGroup should restrict SSH ingress', () => {
       const sg = template.Resources.BastionSecurityGroup.Properties;
       const sshIngress = sg.SecurityGroupIngress.find(
@@ -965,33 +1011,34 @@ describe('Secure Web Application Infrastructure CloudFormation Template', () => 
       );
       expect(sshIngress).toBeDefined();
       expect(sshIngress.CidrIp).toBeDefined();
-      expect(sshIngress.CidrIp['Ref']).toBe('BastionSshCidr'); // Should reference parameter
-      expect(sshIngress.CCidrIp).not.toBe('0.0.0.0/0'); // Ensure it's not wide open
+      expect(sshIngress.CidrIp['Ref']).toBe('BastionSshCidr');
+      // Removed the failing 'CCidrIp' check
     });
 
-    // New: Check NACL rules for Public, Private, and Database subnets
     test('PublicNetworkACL should have granular inbound and outbound rules', () => {
-      const inboundRules =
-        template.Resources.PublicNetworkACL.Properties.NetworkAclEntries.filter(
-          (e: any) => !e.Egress
-        );
-      const outboundRules =
-        template.Resources.PublicNetworkACL.Properties.NetworkAclEntries.filter(
-          (e: any) => e.Egress
-        );
+      const publicInboundRules = [
+        template.Resources.PublicNetworkACLEntryInboundHttp.Properties,
+        template.Resources.PublicNetworkACLEntryInboundHttps.Properties,
+        template.Resources.PublicNetworkACLEntryInboundSsh.Properties,
+        template.Resources.PublicNetworkACLEntryInboundEphemeral.Properties,
+      ];
+      const publicOutboundRules = [
+        template.Resources.PublicNetworkACLEntryOutboundAll.Properties,
+        template.Resources.PublicNetworkACLEntryOutboundDenyAll.Properties,
+      ];
 
       expect(
-        inboundRules.some(
+        publicInboundRules.some(
           (r: any) => r.RuleNumber === 100 && r.PortRange.From === 80
         )
       ).toBe(true);
       expect(
-        inboundRules.some(
+        publicInboundRules.some(
           (r: any) => r.RuleNumber === 110 && r.PortRange.From === 443
         )
       ).toBe(true);
       expect(
-        inboundRules.some(
+        publicInboundRules.some(
           (r: any) =>
             r.RuleNumber === 120 &&
             r.PortRange.From === 22 &&
@@ -999,118 +1046,113 @@ describe('Secure Web Application Infrastructure CloudFormation Template', () => 
         )
       ).toBe(true);
       expect(
-        inboundRules.some(
+        publicInboundRules.some(
           (r: any) => r.RuleNumber === 130 && r.PortRange.From === 1024
         )
-      ).toBe(true); // Ephemeral
+      ).toBe(true);
       expect(
-        inboundRules.some(
-          (r: any) => r.RuleNumber === 2000 && r.RuleAction === 'deny'
+        publicOutboundRules.some(
+          (r: any) =>
+            r.RuleNumber === 2000 &&
+            r.RuleAction === 'deny' &&
+            r.Egress === true
         )
-      ).toBe(true); // Deny all
+      ).toBe(true);
 
       expect(
-        outboundRules.some(
+        publicOutboundRules.some(
           (r: any) => r.RuleNumber === 100 && r.Protocol === -1
         )
-      ).toBe(true); // Allow all outbound
-      expect(
-        outboundRules.some(
-          (r: any) => r.RuleNumber === 2000 && r.RuleAction === 'deny'
-        )
-      ).toBe(true); // Deny all
+      ).toBe(true);
     });
 
     test('PrivateNetworkACL should have granular inbound and outbound rules', () => {
-      const inboundRules =
-        template.Resources.PrivateNetworkACL.Properties.NetworkAclEntries.filter(
-          (e: any) => !e.Egress
-        );
-      const outboundRules =
-        template.Resources.PrivateNetworkACL.Properties.NetworkAclEntries.filter(
-          (e: any) => e.Egress
-        );
+      const privateInboundRules = [
+        template.Resources.PrivateNetworkACLEntryInboundApp.Properties,
+        template.Resources.PrivateNetworkACLEntryInboundSsh.Properties,
+        template.Resources.PrivateNetworkACLEntryInboundEphemeral.Properties,
+      ];
+      const privateOutboundRules = [
+        template.Resources.PrivateNetworkACLEntryOutboundAll.Properties,
+        template.Resources.PrivateNetworkACLEntryOutboundDenyAll.Properties,
+      ];
 
       expect(
-        inboundRules.some(
+        privateInboundRules.some(
           (r: any) =>
             r.RuleNumber === 100 &&
             r.PortRange.From === template.Parameters.WebAppPort.Default
         )
       ).toBe(true);
       expect(
-        inboundRules.some(
+        privateInboundRules.some(
           (r: any) => r.RuleNumber === 110 && r.PortRange.From === 22
         )
       ).toBe(true);
       expect(
-        inboundRules.some(
+        privateInboundRules.some(
           (r: any) => r.RuleNumber === 120 && r.PortRange.From === 1024
         )
-      ).toBe(true); // Ephemeral
+      ).toBe(true);
       expect(
-        inboundRules.some(
-          (r: any) => r.RuleNumber === 2000 && r.RuleAction === 'deny'
+        privateOutboundRules.some(
+          (r: any) =>
+            r.RuleNumber === 2000 &&
+            r.RuleAction === 'deny' &&
+            r.Egress === true
         )
-      ).toBe(true); // Deny all
+      ).toBe(true);
 
       expect(
-        outboundRules.some(
+        privateOutboundRules.some(
           (r: any) => r.RuleNumber === 100 && r.Protocol === -1
         )
-      ).toBe(true); // Allow all outbound
-      expect(
-        outboundRules.some(
-          (r: any) => r.RuleNumber === 2000 && r.RuleAction === 'deny'
-        )
-      ).toBe(true); // Deny all
+      ).toBe(true);
     });
 
     test('DatabaseNetworkACL should have granular inbound and outbound rules', () => {
-      const inboundRules =
-        template.Resources.DatabaseNetworkACL.Properties.NetworkAclEntries.filter(
-          (e: any) => !e.Egress
-        );
-      const outboundRules =
-        template.Resources.DatabaseNetworkACL.Properties.NetworkAclEntries.filter(
-          (e: any) => e.Egress
-        );
+      const dbInboundRules = [
+        template.Resources.DatabaseNetworkACLEntryInboundMysql.Properties,
+        template.Resources.DatabaseNetworkACLEntryInboundSsh.Properties,
+        template.Resources.DatabaseNetworkACLEntryInboundEphemeral.Properties,
+      ];
+      const dbOutboundRules = [
+        template.Resources.DatabaseNetworkACLEntryOutboundAll.Properties,
+        template.Resources.DatabaseNetworkACLEntryOutboundDenyAll.Properties,
+      ];
 
       expect(
-        inboundRules.some(
+        dbInboundRules.some(
           (r: any) => r.RuleNumber === 100 && r.PortRange.From === 3306
         )
       ).toBe(true);
       expect(
-        inboundRules.some(
+        dbInboundRules.some(
           (r: any) => r.RuleNumber === 110 && r.PortRange.From === 22
         )
       ).toBe(true);
       expect(
-        inboundRules.some(
+        dbInboundRules.some(
           (r: any) => r.RuleNumber === 120 && r.PortRange.From === 1024
         )
-      ).toBe(true); // Ephemeral
+      ).toBe(true);
       expect(
-        inboundRules.some(
-          (r: any) => r.RuleNumber === 2000 && r.RuleAction === 'deny'
+        dbOutboundRules.some(
+          (r: any) =>
+            r.RuleNumber === 2000 &&
+            r.RuleAction === 'deny' &&
+            r.Egress === true
         )
-      ).toBe(true); // Deny all
+      ).toBe(true);
 
       expect(
-        outboundRules.some(
+        dbOutboundRules.some(
           (r: any) => r.RuleNumber === 100 && r.Protocol === -1
         )
-      ).toBe(true); // Allow all outbound
-      expect(
-        outboundRules.some(
-          (r: any) => r.RuleNumber === 2000 && r.RuleAction === 'deny'
-        )
-      ).toBe(true); // Deny all
+      ).toBe(true);
     });
 
     test('should follow naming convention with project and environment', () => {
-      // Check that resources use proper naming patterns
       const vpcName = template.Resources.SecureVPC.Properties.Tags.find(
         (tag: any) => tag.Key === 'Name'
       );
@@ -1119,33 +1161,28 @@ describe('Secure Web Application Infrastructure CloudFormation Template', () => 
     });
 
     test('encryption should be enabled for data at rest', () => {
-      // DynamoDB encryption
       const dynamoSSE =
         template.Resources.SecureDynamoTable.Properties.SSESpecification;
       expect(dynamoSSE.SSEEnabled).toBe(true);
 
-      // RDS encryption
       const rdsEncryption =
         template.Resources.SecureDatabase.Properties.StorageEncrypted;
       expect(rdsEncryption).toBe(true);
 
-      // S3 encryption
       const s3Encryption =
         template.Resources.CloudTrailS3Bucket.Properties.BucketEncryption;
       expect(s3Encryption).toBeDefined();
 
-      // New: ALB Access Logs Bucket encryption
       const albLogsEncryption =
         template.Resources.ALBAccessLogsBucket.Properties.BucketEncryption;
       expect(albLogsEncryption).toBeDefined();
     });
 
-    // New: Test IAM AccountPasswordPolicy for MFA enforcement
     test('IAM AccountPasswordPolicy should enforce MFA and strong password', () => {
       const passwordPolicy = template.Resources.AccountPasswordPolicy;
       expect(passwordPolicy).toBeDefined();
       expect(passwordPolicy.Type).toBe('AWS::IAM::AccountPasswordPolicy');
-      expect(passwordPolicy.Condition).toBe('EnforceMfa'); // Check condition
+      expect(passwordPolicy.Condition).toBe('EnforceMfa');
       const props = passwordPolicy.Properties;
       expect(props.MinimumPasswordLength).toBe(14);
       expect(props.RequireNumbers).toBe(true);
@@ -1156,14 +1193,13 @@ describe('Secure Web Application Infrastructure CloudFormation Template', () => 
       expect(props.PasswordReusePrevention).toBe(5);
     });
 
-    // New: Test AdminUser IAM policy for MFA condition
     test('AdminUser IAM policy should require MFA for sensitive actions', () => {
       const adminUser = template.Resources.AdminUser;
       expect(adminUser).toBeDefined();
       const adminPolicyStatement =
         adminUser.Properties.Policies[0].PolicyDocument.Statement[0];
       expect(adminPolicyStatement.Effect).toBe('Allow');
-      expect(adminPolicyStatement.Action).toEqual(['*']); // AdminAccess for demo
+      expect(adminPolicyStatement.Action).toEqual(['*']);
       expect(adminPolicyStatement.Resource).toEqual(['*']);
       expect(
         adminPolicyStatement.Condition.Bool['aws:MultiFactorAuthPresent']
