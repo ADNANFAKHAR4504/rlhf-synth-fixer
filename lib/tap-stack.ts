@@ -166,7 +166,7 @@ export class TapStack extends TerraformStack {
     );
 
     const ec2Role = new IamRole(this, 'EC2LogRole', {
-      name: 'ec2-log-writer-role',
+      name: `ec2-log-writer-role-${name}`,
       assumeRolePolicy: JSON.stringify({
         Version: '2012-10-17',
         Statement: [
@@ -181,7 +181,7 @@ export class TapStack extends TerraformStack {
     });
 
     const ec2Policy = new IamPolicy(this, 'EC2S3LogPolicy', {
-      name: 'ec2-s3-log-policy',
+      name: `ec2-s3-log-policy-${name}`,
       policy: JSON.stringify({
         Version: '2012-10-17',
         Statement: [
