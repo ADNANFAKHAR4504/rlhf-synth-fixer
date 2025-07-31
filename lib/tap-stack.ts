@@ -20,8 +20,8 @@ import { NetworkAclRule } from '@cdktf/provider-aws/lib/network-acl-rule';
 import { NetworkAclAssociation } from '@cdktf/provider-aws/lib/network-acl-association';
 
 interface TapStackProps {
-  region: string;
-  amiId: string;
+  region?: string;
+  amiId?: string;
   environmentSuffix?: string;
   stateBucket?: string;
   stateBucketRegion?: string;
@@ -33,7 +33,9 @@ export class TapStack extends TerraformStack {
   constructor(scope: Construct, name: string, props: TapStackProps) {
     super(scope, name);
 
-    const { region, amiId } = props;
+    // Set defaults if properties are missing
+    const region = props.region || props.awsRegion || 'us-east-1';
+    const amiId = props.amiId || 'ami-12345678';
     const tags = { Environment: 'Production' };
 
     new AwsProvider(this, 'aws', { region });
