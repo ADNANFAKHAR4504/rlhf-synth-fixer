@@ -264,10 +264,6 @@ jobs:
           download-artifacts: 'true'
           download-cdk-artifacts: 'true'
 
-      - name: Install Node.js Dependencies
-        if: needs.synth.outputs.platform == 'pulumi' && needs.synth.outputs.language == 'ts'
-        run: npm ci     
-
       - name: Configure AWS
         uses: ./.github/actions/configure-aws
         with:
@@ -281,7 +277,9 @@ jobs:
           LANGUAGE="${{ needs.synth.outputs.language }}"
 
           if [ "$PLATFORM" = "cdk" ]; then
+            echo "Cleaning up cdk.out folder..."
             echo "✅ CDK project detected, running CDK bootstrap..."
+            rm -rf cdk.out
             npm run cdk:bootstrap
 
           elif [ "$PLATFORM" = "pulumi" ]; then
@@ -320,7 +318,7 @@ jobs:
             echo "✅ Pulumi project detected, running Pulumi deploy..."
             echo "Using environment suffix: $ENVIRONMENT_SUFFIX"
             echo "Selecting or creating Pulumi stack Using ENVIRONMENT_SUFFIX=$ENVIRONMENT_SUFFIX"
-            export PYTHONPATH=.
+            export PYTHONPATH=.:bin
             pipenv run pulumi-create-stack
             echo "Deploying infrastructure ..."
             pipenv run pulumi-deploy

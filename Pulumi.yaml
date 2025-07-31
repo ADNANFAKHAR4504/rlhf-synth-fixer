@@ -1,4 +1,5 @@
-name: iac-test-automations
-runtime: nodejs
-description: A Pulumi project
+name: pulumi-infra
+runtime:
+  name: nodejs
+description: Pulumi infrastructure for TAP
 main: bin/
