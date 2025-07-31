@@ -70,8 +70,8 @@ class TestTapStack(unittest.TestCase):
     except AssertionError as e:
       skip(f"Skipping test: BucketPolicy not found or improperly defined: {e}")
 
-  @mark.it("creates an IAM role for Lambda with least privilege policy")
-  def test_iam_role_with_lambda_assume_and_policy(self):
+  @mark.it("creates an IAM role for EC2 with least privilege policy")
+  def test_iam_role_with_ec2_assume_and_policy(self):
     stack = TapStack(
       self.app,
       "TapStackIAM",
@@ -92,11 +92,12 @@ class TestTapStack(unittest.TestCase):
               })
             ])
           }),
-          "ManagedPolicyArns": Match.any_value()
+          "Policies": Match.any_value()
         })
       )
     except AssertionError as e:
-      skip(f"Skipping test: IAM Role with Lambda assume role not found: {e}")
+      skip(f"Skipping test: IAM Role with EC2 assume role not found: {e}")
+
 
 
   @mark.it("ensures the S3 bucket is KMS encrypted")
