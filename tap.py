@@ -1,10 +1,12 @@
 #!/usr/bin/env python
 
+"""Main application file for TAP infrastructure deployment."""
+
 import os
 from cdktf import App
 
 # Import the custom stack
-from lib.tap_stack import TapStack
+from lib.tap_stack import TapStack, TapStackConfig
 
 # === Environment Configuration ===
 ENVIRONMENT_SUFFIX = os.getenv("ENVIRONMENT_SUFFIX", "dev").lower()
@@ -29,16 +31,20 @@ DEFAULT_TAGS = {
 # === CDKTF Application ===
 app = App()
 
+# Create config object
+config = TapStackConfig(
+    environment_suffix="dev",
+    aws_region="us-east-1",
+    vpc_cidr="10.0.0.0/16",
+    public_subnet_cidrs=("10.0.1.0/24", "10.0.2.0/24"),
+    project_name="tap"
+)
+
 # Instantiate the custom stack
 TapStack(
     app,
     "tap-stack",
-    environment_suffix="dev",
-    state_bucket="your-state-bucket",
-    aws_region="us-east-1",
-    vpc_cidr="10.0.0.0/16",
-    public_subnet_cidrs=["10.0.1.0/24", "10.0.2.0/24"],
-    project_name="tap"
+    config
 )
 
 # Synthesize the Terraform configuration
