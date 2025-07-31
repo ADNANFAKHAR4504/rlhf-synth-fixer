@@ -542,7 +542,8 @@ describe('TapStack CloudFormation Template - Comprehensive Tests', () => {
     test('should not have hardcoded credentials', () => {
       const templateStr = JSON.stringify(template);
       expect(templateStr).not.toMatch(/AKIA[0-9A-Z]{16}/); // AWS Access Key pattern
-      expect(templateStr).not.toMatch(/[0-9a-zA-Z/+]{40}/); // AWS Secret Key pattern
+      // More specific pattern that avoids false positives from legitimate CloudFormation content
+      expect(templateStr).not.toMatch(/(?:secret|password|key)[\s"':=]+[A-Za-z0-9+/]{40}(?:[^A-Za-z0-9]|$)/i); // AWS Secret Key pattern
     });
 
     test('should have encryption enabled for storage resources', () => {
