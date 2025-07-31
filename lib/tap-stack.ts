@@ -24,6 +24,9 @@ interface TapStackProps {
   amiId: string;
   environmentSuffix?: string;
   stateBucket?: string;
+  stateBucketRegion?: string;
+  awsRegion?: string;
+  defaultTags?: { tags: Record<string, string> };
 }
 
 export class TapStack extends TerraformStack {
