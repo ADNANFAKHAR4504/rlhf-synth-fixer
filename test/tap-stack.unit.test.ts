@@ -184,11 +184,11 @@ describe('TapStack', () => {
 
     test('should have correct resource references', () => {
       // Verify that resources are properly instantiated
-      expect(stack.s3Bucket).toBeDefined();
-      expect(stack.dynamoTable).toBeDefined();
-      expect(stack.lambdaFunction).toBeDefined();
-      expect(stack.lambdaRole).toBeDefined();
-      expect(stack.logGroup).toBeDefined();
+      expect(stack.iotDataProcessor.s3Bucket).toBeDefined();
+      expect(stack.iotDataProcessor.dynamoTable).toBeDefined();
+      expect(stack.iotDataProcessor.lambdaFunction).toBeDefined();
+      expect(stack.iotDataProcessor.lambdaRole).toBeDefined();
+      expect(stack.iotDataProcessor.logGroup).toBeDefined();
     });
 
     test('should use custom environment suffix when provided in props', () => {
