@@ -183,10 +183,6 @@ export class TapStack extends TerraformStack {
       dependsOn: [lambdaFunction],
     });
 
-    // Output important resource information
-    console.log(`S3 Bucket Name: ${s3Bucket.bucket}`);
-    console.log(`Lambda Function Name: ${lambdaFunction.functionName}`);
-    console.log(`SNS Topic ARN: ${snsTopic.arn}`);
-    console.log(`SQS DLQ URL: ${dlqQueue.url}`);
+    // Note: Console output statements removed for production deployment
   }
 }
