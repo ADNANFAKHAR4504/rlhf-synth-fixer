@@ -1,93 +1,172 @@
-"""tap_stack.py
-This module defines the TapStack class, which serves as the main CDK stack for 
-the TAP (Test Automation Platform) project.
-It orchestrates the instantiation of other resource-specific stacks and 
-manages environment-specific configurations.
-"""
-
 from typing import Optional
-
 import aws_cdk as cdk
-from aws_cdk import NestedStack
+from aws_cdk import (
+  aws_ec2 as ec2,
+  aws_iam as iam,
+  aws_kms as kms,
+  aws_s3 as s3,
+  NestedStack,
+  CfnOutput,
+  RemovalPolicy,
+  Tags
+)
 from constructs import Construct
-
-# Import your stacks here
-# from .ddb_stack import DynamoDBStack, DynamoDBStackProps
 
 
 class TapStackProps(cdk.StackProps):
-  """
-  TapStackProps defines the properties for the TapStack CDK stack.
-
-  Args:
-    environment_suffix (Optional[str]): An optional suffix to identify the 
-    deployment environment (e.g., 'dev', 'prod').
-    **kwargs: Additional keyword arguments passed to the base cdk.StackProps.
-
-  Attributes:
-    environment_suffix (Optional[str]): Stores the environment suffix for the stack.
-  """
-
   def __init__(self, environment_suffix: Optional[str] = None, **kwargs):
     super().__init__(**kwargs)
     self.environment_suffix = environment_suffix
 
 
-class TapStack(cdk.Stack):
-  """
-  Represents the main CDK stack for the Tap project.
+# ---------- SecureS3Bucket Construct (defined inline) ----------
+class SecureS3Bucket(Construct):
+  def __init__(self, scope: Construct, id: str, bucket_name: str):
+    super().__init__(scope, id)
 
-  This stack is responsible for orchestrating the instantiation of other resource-specific stacks.
-  It determines the environment suffix from the provided properties, 
-    CDK context, or defaults to 'dev'.
-  Note:
-    - Do NOT create AWS resources directly in this stack.
-    - Instead, instantiate separate stacks for each resource type within this stack.
+    # KMS key for encryption
+    self.kms_key = kms.Key(
+      self, "BucketEncryptionKey",
+      alias=f"{bucket_name}-kms-key",
+      enable_key_rotation=True
+    )
 
-  Args:
-    scope (Construct): The parent construct.
-    construct_id (str): The unique identifier for this stack.
-    props (Optional[TapStackProps]): Optional properties for configuring the 
-      stack, including environment suffix.
-    **kwargs: Additional keyword arguments passed to the CDK Stack.
+    # Secure S3 bucket
+    self.bucket = s3.Bucket(
+      self,
+      "SecureS3Bucket",
+      bucket_name=bucket_name,
+      encryption=s3.BucketEncryption.KMS,
+      encryption_key=self.kms_key,
+      enforce_ssl=True,
+      block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
+      versioned=True,
+      removal_policy=RemovalPolicy.DESTROY,  # Change to RETAIN for prod
+      auto_delete_objects=True
+    )
 
-  Attributes:
-    environment_suffix (str): The environment suffix used for resource naming and configuration.
-  """
+    # Bucket policy to deny insecure transport
+    self.bucket.add_to_resource_policy(
+      iam.PolicyStatement(
+        actions=["s3:*"],
+        resources=[
+          self.bucket.bucket_arn,
+          f"{self.bucket.bucket_arn}/*"
+        ],
+        effect=iam.Effect.DENY,
+        principals=[iam.AnyPrincipal()],
+        conditions={"Bool": {"aws:SecureTransport": "false"}}
+      )
+    )
 
-  def __init__(
-          self,
-          scope: Construct,
-          construct_id: str, props: Optional[TapStackProps] = None, **kwargs):
+
+# ---------- VPC Stack ----------
+class VPCStack(NestedStack):
+  def __init__(self, scope: Construct, construct_id: str, environment_suffix: str, **kwargs):
     super().__init__(scope, construct_id, **kwargs)
 
-    # Get environment suffix from props, context, or use 'dev' as default
+    self.vpc = ec2.Vpc(
+      self,
+      f"TapVpc-{environment_suffix}",
+      max_azs=2,
+      cidr="10.0.0.0/16",
+      subnet_configuration=[
+        ec2.SubnetConfiguration(
+          name="PublicSubnet",
+          subnet_type=ec2.SubnetType.PUBLIC,
+          cidr_mask=24,
+        ),
+        ec2.SubnetConfiguration(
+          name="PrivateSubnet",
+          subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS,
+          cidr_mask=24,
+        ),
+      ],
+    )
+
+    Tags.of(self.vpc).add("Environment", environment_suffix)
+    Tags.of(self.vpc).add("Project", "Tap")
+
+    CfnOutput(
+      self,
+      f"VpcIdOutput-{environment_suffix}",
+      value=self.vpc.vpc_id,
+      export_name=f"VpcId-{environment_suffix}",
+    )
+
+
+# ---------- IAM Stack ----------
+class IAMStack(NestedStack):
+  def __init__(self, scope: Construct, construct_id: str, environment_suffix: str, **kwargs):
+    super().__init__(scope, construct_id, **kwargs)
+
+    custom_policy = iam.PolicyDocument(
+      statements=[
+        iam.PolicyStatement(
+          actions=[
+            "ec2:DescribeInstances",
+            "ec2:DescribeTags",
+          ],
+          resources=["*"],
+        )
+      ]
+    )
+
+    self.role = iam.Role(
+      self,
+      f"TapRole-{environment_suffix}",
+      assumed_by=iam.ServicePrincipal("ec2.amazonaws.com"),
+      inline_policies={"CustomEC2ReadOnlyPolicy": custom_policy},
+    )
+
+    Tags.of(self.role).add("Environment", environment_suffix)
+    Tags.of(self.role).add("Project", "Tap")
+
+    CfnOutput(
+      self,
+      f"RoleArnOutput-{environment_suffix}",
+      value=self.role.role_arn,
+      export_name=f"RoleArn-{environment_suffix}",
+    )
+
+
+# ---------- Main Tap Stack ----------
+class TapStack(cdk.Stack):
+  def __init__(
+    self,
+    scope: Construct,
+    construct_id: str,
+    props: Optional[TapStackProps] = None,
+    **kwargs,
+  ):
+    super().__init__(scope, construct_id, **kwargs)
+
     environment_suffix = (
-        props.environment_suffix if props else None
-    ) or self.node.try_get_context('environmentSuffix') or 'dev'
+      props.environment_suffix if props else None
+    ) or self.node.try_get_context("environmentSuffix") or "dev"
 
-    # Create separate stacks for each resource type
-    # Create the DynamoDB stack as a nested stack
+    # VPC stack
+    self.vpc_stack = VPCStack(
+      self,
+      f"VpcStack-{environment_suffix}",
+      environment_suffix=environment_suffix,
+    )
 
-    # ! DO not create resources directly in this stack.
-    # ! Instead, instantiate separate stacks for each resource type.
+    # IAM stack
+    self.iam_stack = IAMStack(
+      self,
+      f"IamStack-{environment_suffix}",
+      environment_suffix=environment_suffix,
+    )
 
-    # class NestedDynamoDBStack(NestedStack):
-    #   def __init__(self, scope, id, props=None, **kwargs):
-    #     super().__init__(scope, id, **kwargs)
-    #     # Use the original DynamoDBStack logic here
-    #     self.ddb_stack = DynamoDBStack(self, "Resource", props=props)
-    #     self.table = self.ddb_stack.table
+    # Secure S3 Bucket stack
+    self.secure_bucket = SecureS3Bucket(
+      self,
+      "SecureBucketConstruct",
+      bucket_name=f"tap-secure-data-{environment_suffix}"
+    )
 
-    # db_props = DynamoDBStackProps(
-    #     environment_suffix=environment_suffix
-    # )
-
-    # dynamodb_stack = NestedDynamoDBStack(
-    #     self,
-    #     f"DynamoDBStack{environment_suffix}",
-    #     props=db_props
-    # )
-
-    # # Make the table available as a property of this stack
-    # self.table = dynamodb_stack.table
+    # Output references
+    self.vpc = self.vpc_stack.vpc
+    self.iam_role = self.iam_stack.role
+    self.s3_bucket = self.secure_bucket.bucket
