@@ -40,7 +40,6 @@ describe('Secure Web Application Infrastructure CloudFormation Template', () => 
 
   describe('Parameters', () => {
     test('should have all required parameters including new ones', () => {
-      // Corrected list of expected parameters to match the template
       const expectedParams = [
         'EnvironmentSuffix',
         'ProjectName',
@@ -1014,7 +1013,10 @@ describe('Secure Web Application Infrastructure CloudFormation Template', () => 
       ).toBe(true);
       expect(
         publicInboundRules.some(
-          (r: any) => r.RuleNumber === 130 && r.PortRange.From === 1024
+          (r: any) =>
+            r.RuleNumber === 130 &&
+            r.PortRange.From === 1024 &&
+            r.PortRange.To === 65535
         )
       ).toBe(true);
       expect(
