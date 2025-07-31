@@ -17,7 +17,6 @@ export class TapStack extends cdk.Stack {
       props?.environmentSuffix ||
       this.node.tryGetContext('environmentSuffix') ||
       'dev';
-    console.log(process.env.CDK_DEFAULT_ACCOUNT)
     new WebServerStack(this, 'WebServerStack', {
       environmentSuffix,
       vpcId: props.vpcId,

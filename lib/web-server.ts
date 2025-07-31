@@ -117,7 +117,7 @@ export class WebServerStack extends cdk.Stack {
     });
 
     // S3 Bucket
-    const bucketID = generateUniqueBucketName()
+    const bucketID = generateUniqueBucketName();
     const s3Bucket = new Bucket(this, 'S3Bucket', {
       bucketName: `webserver-assets-${bucketID}`,
       blockPublicAccess: BlockPublicAccess.BLOCK_ALL,
