@@ -1159,22 +1159,22 @@
     "S3BucketPublicAccessProhibited": {
       "Type": "AWS::Config::ConfigRule",
       "Properties": {
-        "ConfigRuleName": "s3-bucket-public-access-prohibited",
-        "Description": "Checks that your Amazon S3 buckets do not allow public access",
+        "ConfigRuleName": "s3-bucket-public-read-prohibited",
+        "Description": "Checks that your Amazon S3 buckets do not allow public read access",
         "Source": {
           "Owner": "AWS",
-          "SourceIdentifier": "S3_BUCKET_PUBLIC_ACCESS_PROHIBITED"
+          "SourceIdentifier": "S3_BUCKET_PUBLIC_READ_PROHIBITED"
         }
       }
     },
-    "RootAccessKeyCheck": {
+    "S3BucketPublicWriteProhibited": {
       "Type": "AWS::Config::ConfigRule",
       "Properties": {
-        "ConfigRuleName": "root-access-key-check",
-        "Description": "Checks whether the root user access key is available",
+        "ConfigRuleName": "s3-bucket-public-write-prohibited",
+        "Description": "Checks that your Amazon S3 buckets do not allow public write access",
         "Source": {
           "Owner": "AWS",
-          "SourceIdentifier": "ROOT_ACCESS_KEY_CHECK"
+          "SourceIdentifier": "S3_BUCKET_PUBLIC_WRITE_PROHIBITED"
         }
       }
     },

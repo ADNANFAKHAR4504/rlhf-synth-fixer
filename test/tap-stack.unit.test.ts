@@ -280,12 +280,12 @@ describe('Secure Multi-Tier CloudFormation Template', () => {
     });
 
     test('should have Config rules for security compliance', () => {
-      const s3Rule = template.Resources.S3BucketPublicAccessProhibited;
-      const rootKeyRule = template.Resources.RootAccessKeyCheck;
+      const s3ReadRule = template.Resources.S3BucketPublicAccessProhibited;
+      const s3WriteRule = template.Resources.S3BucketPublicWriteProhibited;
       const sgRule = template.Resources.EC2SecurityGroupAttachedToENI;
 
-      expect(s3Rule.Type).toBe('AWS::Config::ConfigRule');
-      expect(rootKeyRule.Type).toBe('AWS::Config::ConfigRule');
+      expect(s3ReadRule.Type).toBe('AWS::Config::ConfigRule');
+      expect(s3WriteRule.Type).toBe('AWS::Config::ConfigRule');
       expect(sgRule.Type).toBe('AWS::Config::ConfigRule');
     });
   });

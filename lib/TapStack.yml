@@ -365,6 +365,43 @@ Resources:
         - Key: EnvironmentSuffix
           Value: !Ref EnvironmentSuffix
 
+  # Config Service Role (needed for Config bucket access)
+  ConfigServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "config-service-role-${EnvironmentSuffix}"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: config.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWS_ConfigRole
+      Policies:
+        - PolicyName: ConfigS3DeliveryPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetBucketAcl
+                  - s3:GetBucketLocation
+                  - s3:ListBucket
+                Resource: !Sub "${ConfigBucket.Arn}"
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:GetBucketAcl
+                Resource: !Sub "${ConfigBucket.Arn}/*"
+                Condition:
+                  StringEquals:
+                    "s3:x-amz-acl": "bucket-owner-full-control"
+      Tags:
+        - Key: EnvironmentSuffix
+          Value: !Ref EnvironmentSuffix
+
   # ========================================
   # S3 BUCKETS
   # ========================================
@@ -724,20 +761,20 @@ Resources:
   S3BucketPublicAccessProhibited:
     Type: AWS::Config::ConfigRule
     Properties:
-      ConfigRuleName: !Sub "s3-bucket-public-access-prohibited-${EnvironmentSuffix}"
-      Description: "Checks that your Amazon S3 buckets do not allow public access"
+      ConfigRuleName: !Sub "s3-bucket-public-read-prohibited-${EnvironmentSuffix}"
+      Description: "Checks that your Amazon S3 buckets do not allow public read access"
       Source:
         Owner: AWS
-        SourceIdentifier: "S3_BUCKET_PUBLIC_ACCESS_PROHIBITED"
+        SourceIdentifier: "S3_BUCKET_PUBLIC_READ_PROHIBITED"
 
-  RootAccessKeyCheck:
+  S3BucketPublicWriteProhibited:
     Type: AWS::Config::ConfigRule
     Properties:
-      ConfigRuleName: !Sub "root-access-key-check-${EnvironmentSuffix}"
-      Description: "Checks whether the root user access key is available"
+      ConfigRuleName: !Sub "s3-bucket-public-write-prohibited-${EnvironmentSuffix}"
+      Description: "Checks that your Amazon S3 buckets do not allow public write access"
       Source:
         Owner: AWS
-        SourceIdentifier: "ROOT_ACCESS_KEY_CHECK"
+        SourceIdentifier: "S3_BUCKET_PUBLIC_WRITE_PROHIBITED"
 
   EC2SecurityGroupAttachedToENI:
     Type: AWS::Config::ConfigRule
