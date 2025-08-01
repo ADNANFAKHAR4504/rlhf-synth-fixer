@@ -2,7 +2,7 @@ import {
   ElasticBeanstalkClient,
   DescribeEnvironmentsCommand,
   DescribeEnvironmentResourcesCommand,
-  DescribeConfigurationSettingsCommand, // ADDED: To check instance settings
+  DescribeConfigurationSettingsCommand,
 } from '@aws-sdk/client-elastic-beanstalk';
 import {
   AutoScalingClient,
@@ -11,7 +11,12 @@ import {
 import {
   ElasticLoadBalancingV2Client,
   DescribeListenersCommand,
+  DescribeLoadBalancersCommand,
 } from '@aws-sdk/client-elastic-load-balancing-v2';
+import {
+  EC2Client,
+  DescribeSubnetsCommand,
+} from '@aws-sdk/client-ec2';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -38,12 +43,15 @@ const credentials = {
 const ebClient = new ElasticBeanstalkClient({ region, credentials });
 const asgClient = new AutoScalingClient({ region, credentials });
 const elbv2Client = new ElasticLoadBalancingV2Client({ region, credentials });
+const ec2Client = new EC2Client({ region, credentials });
 
 // --- Test Suite ---
 describe('Elastic Beanstalk Integration Tests', () => {
   let stackOutputs: any = {};
   let environmentResources: any = {};
-  let targetEnvironment: any = {}; // ADDED: To store environment details
+  let targetEnvironment: any = {};
+  let asgDetails: any = {};
+  let loadBalancerDetails: any = {};
 
   beforeAll(async () => {
     try {
@@ -62,7 +70,6 @@ describe('Elastic Beanstalk Integration Tests', () => {
     });
     const environments = await ebClient.send(describeEnvCommand);
     const cname = new URL(stackOutputs.EnvironmentURL).hostname;
-    // UPDATED: Store the full environment object
     targetEnvironment = environments.Environments?.find((env) => env.EndpointURL?.toLowerCase() === cname.toLowerCase());
 
     if (!targetEnvironment || !targetEnvironment.EnvironmentName) {
@@ -75,8 +82,48 @@ describe('Elastic Beanstalk Integration Tests', () => {
       throw new Error(`Could not describe resources for environment ${targetEnvironment.EnvironmentName}.`);
     }
     environmentResources = resourcesResult.EnvironmentResources;
+
+    // Fetch Auto Scaling Group details
+    const asgName = environmentResources.AutoScalingGroups?.[0]?.Name;
+    if (asgName) {
+      const asgResponse = await asgClient.send(new DescribeAutoScalingGroupsCommand({ AutoScalingGroupNames: [asgName] }));
+      asgDetails = asgResponse.AutoScalingGroups?.[0];
+    }
+
+    // Fetch Load Balancer details
+    const lbArn = environmentResources.LoadBalancers?.[0]?.Name;
+    if (lbArn) {
+      const lbResponse = await elbv2Client.send(new DescribeLoadBalancersCommand({ LoadBalancerArns: [lbArn] }));
+      loadBalancerDetails = lbResponse.LoadBalancers?.[0];
+    }
+
     console.log('Successfully fetched environment resources based on stack outputs.');
   }, 120000);
+
+  // --- Region and Stack Enforcement ---
+  describe('Region and Stack Enforcement', () => {
+    test('Stack naming should be consistent with environment', () => {
+      const environmentName = targetEnvironment.EnvironmentName;
+      expect(environmentName).toBeDefined();
+      expect(environmentName).toMatch(/^[a-zA-Z][a-zA-Z0-9\-]*$/); // Valid CloudFormation naming
+      
+      // Validate stack outputs follow consistent naming patterns
+      expect(stackOutputs.EnvironmentURL).toBeDefined();
+      expect(stackOutputs.EnvironmentURL).toMatch(/^https:\/\//);
+    });
+
+    test('All required outputs should be present in outputs file', () => {
+      const requiredOutputs = ['EnvironmentURL'];
+      const optionalOutputs = ['LoadBalancerArn', 'AutoScalingGroupName', 'ApplicationName'];
+      
+      requiredOutputs.forEach(output => {
+        expect(stackOutputs[output]).toBeDefined();
+      });
+      
+      // Log available outputs for debugging
+      console.log('Available stack outputs:', Object.keys(stackOutputs));
+    });
+  });
 
   // ADDED: New test suite for environment health
   describe('Environment Health and Status', () => {
@@ -96,6 +143,73 @@ describe('Elastic Beanstalk Integration Tests', () => {
       expect(url).toMatch(/^https:/);
       // As noted, a full fetch test fails due to the self-signed certificate,
       // but this confirms the output URL format is correct.
+    });
+  });
+
+  // --- High Availability and Multi-AZ Validation ---
+  describe('High Availability and Scaling', () => {
+    test('Auto Scaling Group should have correct min/max sizes (2-10 instances)', () => {
+      expect(asgDetails).toBeDefined();
+      expect(asgDetails.MinSize).toBe(2);
+      expect(asgDetails.MaxSize).toBe(10);
+      expect(asgDetails.MinSize).toBeLessThanOrEqual(asgDetails.MaxSize);
+    });
+
+    test('Auto Scaling Group should actually span 2-10 instances', () => {
+      expect(asgDetails).toBeDefined();
+      const currentCapacity = asgDetails.DesiredCapacity;
+      expect(currentCapacity).toBeGreaterThanOrEqual(2);
+      expect(currentCapacity).toBeLessThanOrEqual(10);
+      
+      // Validate actual running instances
+      const runningInstances = asgDetails.Instances?.filter((instance: any) => 
+        instance.LifecycleState === 'InService'
+      ).length || 0;
+      
+      expect(runningInstances).toBeGreaterThanOrEqual(2);
+      expect(runningInstances).toBeLessThanOrEqual(10);
+    });
+
+    test('Instances should be distributed across multiple Availability Zones', () => {
+      expect(asgDetails).toBeDefined();
+      expect(asgDetails.AvailabilityZones.length).toBeGreaterThanOrEqual(2);
+      
+      // Validate instances are actually distributed across AZs
+      if (asgDetails.Instances && asgDetails.Instances.length > 0) {
+        const instanceAZs = new Set(asgDetails.Instances.map((instance: any) => instance.AvailabilityZone));
+        expect(instanceAZs.size).toBeGreaterThanOrEqual(2);
+      }
+    });
+  });
+
+  // --- Multi-AZ Resilience Validation ---
+  describe('Multi-AZ Resilience', () => {
+    test('Load balancer should span at least two availability zones', async () => {
+      expect(loadBalancerDetails).toBeDefined();
+      expect(loadBalancerDetails.AvailabilityZones).toBeDefined();
+      expect(loadBalancerDetails.AvailabilityZones.length).toBeGreaterThanOrEqual(2);
+      
+      // Validate subnet distribution
+      if (loadBalancerDetails.Subnets) {
+        expect(loadBalancerDetails.Subnets.length).toBeGreaterThanOrEqual(2);
+        
+        // Get subnet details to verify AZ distribution
+        const subnetResponse = await ec2Client.send(new DescribeSubnetsCommand({
+          SubnetIds: loadBalancerDetails.Subnets
+        }));
+        
+        const subnetAZs = new Set(subnetResponse.Subnets?.map(subnet => subnet.AvailabilityZone));
+        expect(subnetAZs.size).toBeGreaterThanOrEqual(2);
+      }
+    });
+
+    test('Environment should be configured for load-balanced, multi-AZ deployment', () => {
+      expect(targetEnvironment.Tier?.Type).toBe('Standard');
+      expect(targetEnvironment.Tier?.Name).toBe('WebServer');
+      
+      // Verify this is a load-balanced environment, not single instance
+      expect(environmentResources.LoadBalancers).toBeDefined();
+      expect(environmentResources.LoadBalancers.length).toBeGreaterThan(0);
     });
   });
 
