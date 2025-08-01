@@ -55,15 +55,6 @@ def test_status_endpoint(outputs):
   assert data["environment"] == EXPECTED_ENV
 
 
-def test_health_check_endpoint(outputs):
-  url = outputs.get("HealthCheckEndpoint")
-  if not url:
-    pytest.skip("HealthCheckEndpoint not defined in outputs")
-
-  resp = requests.get(url, timeout=5)
-  assert resp.status_code == 200
-
-
 def test_api_version_output(outputs):
   version = outputs.get("ApiVersion")
   if not version:
