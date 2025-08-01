@@ -372,7 +372,7 @@ class TapStack(TerraformStack):
     
     self.launch_template = LaunchTemplate(self, "launch-template",
       name="asg-launch-template",
-      image_id="ami-0c02fb55956c7d316",  # Amazon Linux 2 AMI
+      image_id="ami-03a6eaae9938c858c",  # Amazon Linux 2 AMI
       instance_type=self.instance_type,
       vpc_security_group_ids=[self.instance_security_group.id],
       iam_instance_profile={
