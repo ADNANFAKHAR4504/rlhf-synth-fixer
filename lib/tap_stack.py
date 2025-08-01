@@ -63,7 +63,7 @@ class TapStack(pulumi.ComponentResource):
       args: TapStackArgs,
       opts: Optional[ResourceOptions] = None
   ):
-    super().__init__(f"{PROJECT_NAME}:stack:TapStack", name, None, opts)
+    super().__init__('tap:stack:pulumi-infra', name, None, opts)
 
     self.environment_suffix = args.environment_suffix
     self.aws_region = args.aws_region
