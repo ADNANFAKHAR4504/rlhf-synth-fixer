@@ -7,6 +7,7 @@ from cdktf import TerraformStack, S3Backend
 from constructs import Construct
 from cdktf_cdktf_provider_aws.provider import AwsProvider
 from cdktf_cdktf_provider_aws.s3_bucket import S3Bucket
+from cdktf_cdktf_provider_aws.s3_bucket_server_side_encryption_configuration import S3BucketServerSideEncryptionConfiguration
 from cdktf_cdktf_provider_aws.vpc import Vpc
 from cdktf_cdktf_provider_aws.subnet import Subnet
 from cdktf_cdktf_provider_aws.internet_gateway import InternetGateway
@@ -311,6 +312,7 @@ class VpcConstruct(Construct):
     FlowLog(
       self,
       "vpc-flow-log",
+      vpc_id=self.vpc.id,
       iam_role_arn=flow_logs_role.arn,
       log_destination=log_group.arn,
       log_destination_type="cloud-watch-logs",
@@ -803,19 +805,25 @@ class TapStack(TerraformStack):
     )
 
     # Create S3 bucket for demonstration
-    S3Bucket(
+    s3_bucket = S3Bucket(
       self,
       "tap_bucket",
       bucket=f"tap-bucket-{environment_suffix}-{construct_id}",
       versioning={"enabled": True},
-      server_side_encryption_configuration={
-        "rule": {
-          "apply_server_side_encryption_by_default": {
-            "sse_algorithm": "AES256"
-          }
-        }
-      },
       tags=env_config.tags
+    )
+
+    # Create S3 bucket server-side encryption configuration
+    S3BucketServerSideEncryptionConfiguration(
+      self,
+      "tap_bucket_encryption",
+      bucket=s3_bucket.id,
+      rule=[{
+        "apply_server_side_encryption_by_default": {
+          "sse_algorithm": "AES256"
+        },
+        "bucket_key_enabled": True
+      }]
     )
 
   def _get_environment_config(self, environment: str) -> EnvironmentConfig:
