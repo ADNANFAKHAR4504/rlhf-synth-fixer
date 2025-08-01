@@ -486,8 +486,8 @@ jobs:
           echo "Running linting for platform: $PLATFORM, language: $LANGUAGE"
 
           if [ "$LANGUAGE" = "ts" ]; then
-            echo "✅ TypeScript project detected, running Prettier and ESLint..."
-            npm run format-all
+            echo "✅ TypeScript project detected, running ESLint..."
+            npm run lint
           elif [ "$LANGUAGE" = "py" ]; then
             # --- NEW: Install Python dev dependencies within this step ---
             echo "Installing Python dev dependencies via pipenv..."
