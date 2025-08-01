@@ -3,8 +3,10 @@ import hashlib
 from typing import Optional, Dict, List
 from dataclasses import dataclass, field
 import pulumi
-from pulumi import ResourceOptions, Config, Output
+from pulumi import ResourceOptions, Config
 import pulumi_aws as aws
+
+
 
 @dataclass
 class TapStackArgs:
@@ -13,10 +15,10 @@ class TapStackArgs:
   tags: Dict[str, str] = field(default_factory=dict)
   vpc_cidr: str = '10.0.0.0/16'
   enable_monitoring: bool = True
-  instance_types: List[str] = field(default_factory=lambda: ['t3.micro', 't3.small'])
+  instance_types: List[str] = field(default_factory=lambda: ['t3.micro', 't3.micro'])
   backup_retention_days: int = 7
   enable_multi_az: bool = True
-  project_name: str = 'tap-test-automation-platform'
+  project_name: str = 'CloudEnvironmentSetup'
 
   def __post_init__(self) -> None:
     self._validate_environment_suffix()
@@ -36,9 +38,7 @@ class TapStackArgs:
 
   def _validate_vpc_cidr(self) -> None:
     if not self.vpc_cidr.endswith(('/16', '/17', '/18', '/19', '/20')):
-      raise ValueError(
-        "VPC CIDR should typically be /16 to /20 for proper subnet allocation"
-      )
+      raise ValueError("VPC CIDR should typically be /16 to /20 for proper subnet allocation")
 
   def _validate_region(self) -> None:
     if self.aws_region.count('-') < 2:
@@ -62,184 +62,182 @@ class TapStack(pulumi.ComponentResource):
     args: TapStackArgs,
     opts: Optional[ResourceOptions] = None
   ):
-    stack_name = f"{args.project_name}-{args.environment_suffix}"
-    super().__init__(f"{args.project_name}:stack:TapStack", stack_name, None, opts)
-
-    self.environment_suffix = args.environment_suffix
-    self.aws_region = args.aws_region
-    self.tags = args.tags
+    super().__init__(f"{args.project_name}:stack:TapStack", name, None, opts)
     self.args = args
-    self.project_name = args.project_name
-    self.tap_service_role: Optional[aws.iam.Role] = None
-    self.artifacts_bucket: Optional[aws.s3.Bucket] = None
-    self.app_log_group: Optional[aws.cloudwatch.LogGroup] = None
+    self.tags = args.tags
     self.config = Config()
 
-    self.networking_resources = {}
-    self.compute_resources = {}
-    self.storage_resources = {}
-    self.security_resources = {}
-    self.monitoring_resources = {}
+    self.vpc = None
+    self.subnets = []
+    self.igw = None
+    self.route_table = None
+    self.instances = []
+    self.security_group = None
+    self.iam_role = None
+    self.iam_instance_profile = None
 
-    pulumi.log.info(
-      f"Initializing TapStack with project name: {self.project_name}, "
-      f"stack name: {stack_name}, environment: {self.environment_suffix}"
-    )
-
-    self._create_infrastructure()
-    self._register_outputs()
-
-  def _sanitize_bucket_name(self, name: str) -> str:
-    name = name.lower()
-    name = re.sub(r'[^a-z0-9.-]', '-', name)
-    name = re.sub(r'-+', '-', name).strip('-')
-    name = re.sub(r'\.+', '.', name).strip('.')
-    name = re.sub(r'^[^a-z0-9]+', '', name)
-    name = re.sub(r'[^a-z0-9]+$', '', name)
-    name = name[:63]
-    if re.match(r'^\d{1,3}(\.\d{1,3}){3}$', name):
-      raise ValueError(f"Bucket name '{name}' cannot look like an IP address.")
-    if len(name) < 3:
-      raise ValueError(f"Bucket name '{name}' is too short after sanitization.")
-    return name
-
-  def _create_infrastructure(self) -> None:
-    pulumi.log.info(
-      f"Creating TAP infrastructure for environment: {self.environment_suffix}"
-    )
     self._create_networking()
     self._create_security()
-    self._create_storage()
-    self._create_compute()
+    self._create_ec2_instances()
     self._create_monitoring()
-    pulumi.log.info("TAP infrastructure creation completed")
+    self._register_outputs()
 
   def _unique_suffix(self, base: str) -> str:
-    hash_str = hashlib.sha1(base.encode()).hexdigest()[:6]
-    return f"{base}-{hash_str}"
+    return hashlib.sha1(base.encode()).hexdigest()[:6]
 
   def _create_networking(self) -> None:
-    pulumi.log.info("Creating networking infrastructure...")
-    self.networking_resources['placeholder'] = 'VPC stack will be implemented here'
+    self.vpc = aws.ec2.Vpc(
+            f"{self.args.environment_suffix}-vpc",
+            cidr_block=self.args.vpc_cidr,
+            enable_dns_support=True,
+            enable_dns_hostnames=True,
+            tags=self._merge_tags({"Name": f"{self.args.environment_suffix}-vpc"}),
+            opts=ResourceOptions(parent=self)
+        )
+
+    self.igw = aws.ec2.InternetGateway(
+            f"{self.args.environment_suffix}-igw",
+            vpc_id=self.vpc.id,
+            tags=self._merge_tags({"Name": f"{self.args.environment_suffix}-igw"}),
+            opts=ResourceOptions(parent=self)
+        )
+
+    self.route_table = aws.ec2.RouteTable(
+            f"{self.args.environment_suffix}-rt",
+            vpc_id=self.vpc.id,
+            routes=[{
+                'cidr_block': '0.0.0.0/0',
+                'gateway_id': self.igw.id
+            }],
+            tags=self._merge_tags({"Name": f"{self.args.environment_suffix}-rt"}),
+            opts=ResourceOptions(parent=self)
+        )
+
+        # FIXED: Get availability zones and create subnets properly
+    azs = aws.get_availability_zones(state='available').names
+        # Use a simple approach for creating 2 subnets in first 2 AZs
+    for i in range(2):
+            # Create subnet using index-based AZ selection
+      subnet = aws.ec2.Subnet(
+                f"{self.args.environment_suffix}-subnet-{i}",
+                vpc_id=self.vpc.id,
+                cidr_block=f"10.0.{i}.0/24",
+                map_public_ip_on_launch=True,
+                availability_zone=azs[i],
+                tags=self._merge_tags({
+                    "Name": f"{self.args.environment_suffix}-public-subnet-{i}",
+                    "Type": "public"
+                }),
+                opts=ResourceOptions(parent=self)
+            )
+
+      aws.ec2.RouteTableAssociation(
+                f"{self.args.environment_suffix}-rta-{i}",
+                subnet_id=subnet.id,
+                route_table_id=self.route_table.id,
+                opts=ResourceOptions(parent=self)
+            )
+
+      self.subnets.append(subnet)
+
+
 
   def _create_security(self) -> None:
-    pulumi.log.info("Creating security infrastructure...")
-    role_name = self._unique_suffix(f"TAP-Service-Role-{self.environment_suffix}")
-    self.tap_service_role = aws.iam.Role(
-        f"tap-service-role-{self.environment_suffix}",
-    name=role_name,
+    self.security_group = aws.ec2.SecurityGroup(
+      f"{self.args.environment_suffix}-sg",
+      vpc_id=self.vpc.id,
+      description='Allow SSH',
+      ingress=[{
+        'protocol': 'tcp',
+        'from_port': 22,
+        'to_port': 22,
+        'cidr_blocks': ['0.0.0.0/0']
+      }],
+      egress=[{
+        'protocol': '-1',
+        'from_port': 0,
+        'to_port': 0,
+        'cidr_blocks': ['0.0.0.0/0']
+      }],
+      tags=self._merge_tags({"Name": f"{self.args.environment_suffix}-sg"}),
+      opts=ResourceOptions(parent=self)
+    )
 
-    #   name=f"TAP-Service-Role-{self.environment_suffix}",
-      description=f"IAM role for TAP services in {self.environment_suffix} environment",
+    self.iam_role = aws.iam.Role(
+      f"{self.args.environment_suffix}-ec2-role",
       assume_role_policy=pulumi.Output.json_dumps({
-        "Version": "2012-10-17",
-        "Statement": [{
-          "Effect": "Allow",
-          "Principal": {"Service": "ec2.amazonaws.com"},
-          "Action": "sts:AssumeRole"
+        'Version': '2012-10-17',
+        'Statement': [{
+          'Action': 'sts:AssumeRole',
+          'Principal': {'Service': 'ec2.amazonaws.com'},
+          'Effect': 'Allow',
+          'Sid': ''
         }]
       }),
-      tags=self._merge_tags({"Name": f"TAP-Service-Role-{self.environment_suffix}"}),
+      tags=self._merge_tags({"Name": f"{self.args.environment_suffix}-role"}),
       opts=ResourceOptions(parent=self)
     )
-    self.security_resources['service_role'] = self.tap_service_role
 
-  def _create_storage(self) -> None:
-    pulumi.log.info("Creating storage infrastructure...")
-    raw_name = f"tap-test-artifacts-{self.environment_suffix}-{pulumi.get_stack()}"
-    bucket_name = self._sanitize_bucket_name(self._unique_suffix(raw_name))
-    self.artifacts_bucket = aws.s3.Bucket(
-      f"tap-artifacts-{self.environment_suffix}",
-      bucket=bucket_name,
-      tags=self._merge_tags({
-        "Name": f"TAP-Artifacts-{self.environment_suffix}",
-        "Purpose": "TestArtifacts"
-      }),
+    aws.iam.RolePolicyAttachment(
+      f"{self.args.environment_suffix}-s3-readonly",
+      role=self.iam_role.name,
+      policy_arn="arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess",
       opts=ResourceOptions(parent=self)
     )
-    aws.s3.BucketVersioningV2(
-      f"tap-artifacts-versioning-{self.environment_suffix}",
-      bucket=self.artifacts_bucket.id,
-      versioning_configuration=aws.s3.BucketVersioningV2VersioningConfigurationArgs(
-        status="Enabled"
-      ),
-      opts=ResourceOptions(parent=self)
-    )
-    self.storage_resources['artifacts_bucket'] = self.artifacts_bucket
 
-  def _create_compute(self) -> None:
-    pulumi.log.info("Creating compute infrastructure...")
-    self.compute_resources['placeholder'] = 'EC2 stack will be implemented here'
+    self.iam_instance_profile = aws.iam.InstanceProfile(
+      f"{self.args.environment_suffix}-profile",
+      role=self.iam_role.name,
+      opts=ResourceOptions(parent=self)
+    )
+
+  def _create_ec2_instances(self) -> None:
+    for i, subnet in enumerate(self.subnets):
+      instance = aws.ec2.Instance(
+        f"{self.args.environment_suffix}-ec2-{i}",
+        ami=aws.ec2.get_ami(
+          most_recent=True,
+          owners=["amazon"],
+          filters=[
+            {"name": "name", "values": ["amzn2-ami-hvm-*-x86_64-gp2"]}
+          ]
+        ).id,
+        instance_type=self.args.instance_types[i % len(self.args.instance_types)],
+        subnet_id=subnet.id,
+        associate_public_ip_address=True,
+        vpc_security_group_ids=[self.security_group.id],
+        iam_instance_profile=self.iam_instance_profile.name,
+        tags=self._merge_tags({"Name": f"{self.args.environment_suffix}-ec2-{i}"}),
+        opts=ResourceOptions(parent=self)
+      )
+      self.instances.append(instance)
 
   def _create_monitoring(self) -> None:
     if not self.args.enable_monitoring:
-      pulumi.log.info("Monitoring disabled, skipping monitoring infrastructure")
       return
-    pulumi.log.info("Creating monitoring infrastructure...")
-    log_group_name = (
-        f"/aws/tap/{self.environment_suffix}/application-"
-        f"{self._unique_suffix(pulumi.get_stack())}"
-    )
-    self.app_log_group = aws.cloudwatch.LogGroup(
-        f"tap-logs-{self.environment_suffix}",
-    name=log_group_name,
 
-    #   name=f"/aws/tap/{self.environment_suffix}/application",
+    aws.cloudwatch.LogGroup(
+      f"{self.args.environment_suffix}-log-group",
       retention_in_days=self.args.backup_retention_days,
-      tags=self._merge_tags({
-        "Name": f"TAP-Logs-{self.environment_suffix}",
-        "Purpose": "ApplicationLogs"
-      }),
+      tags=self._merge_tags({"Name": f"{self.args.environment_suffix}-log-group"}),
       opts=ResourceOptions(parent=self)
     )
-    self.monitoring_resources['log_group'] = self.app_log_group
 
-  def _merge_tags(self, additional_tags: Dict[str, str]) -> Dict[str, str]:
-    return {**self.tags, **additional_tags}
+  def _merge_tags(self, extra: Dict[str, str]) -> Dict[str, str]:
+    return {**self.tags, **extra}
 
   def _register_outputs(self) -> None:
-    pulumi.log.info("Registering stack outputs...")
-    outputs = {
-      'environment_suffix': self.environment_suffix,
-      'aws_region': self.aws_region,
-      'deployment_timestamp': pulumi.get_stack(),
-      'artifacts_bucket_name': self.artifacts_bucket.bucket,
-      'artifacts_bucket_arn': self.artifacts_bucket.arn,
-      'service_role_arn': self.tap_service_role.arn,
-      **({
-        'log_group_name': self.app_log_group.name,
-        'log_group_arn': self.app_log_group.arn
-      } if self.args.enable_monitoring else {}),
-      'infrastructure_summary': {
-        'environment': self.environment_suffix,
-        'region': self.aws_region,
-        'multi_az_enabled': self.args.enable_multi_az,
-        'monitoring_enabled': self.args.enable_monitoring,
-        'backup_retention_days': self.args.backup_retention_days
-      }
-    }
-    self.register_outputs(outputs)
-    pulumi.log.info(
-      f"Stack outputs registered for environment: {self.environment_suffix}"
-    )
-
-  @property
-  def vpc_id(self) -> Optional[Output[str]]:
-    return None
-
-  @property
-  def service_role_arn(self) -> Output[str]:
-    return self.tap_service_role.arn
-
-  @property
-  def artifacts_bucket_name(self) -> Output[str]:
-    return self.artifacts_bucket.bucket
+    pulumi.export("vpc_id", self.vpc.id)
+    pulumi.export("subnet_ids", [s.id for s in self.subnets])
+    pulumi.export("security_group_id", self.security_group.id)
+    pulumi.export("iam_role_arn", self.iam_role.arn)
+    pulumi.export("ec2_instance_ids", [inst.id for inst in self.instances])
 
 
 def create_tap_stack(
   stack_name: str = "TapStack/pr346",
   environment: str = "pr346",
-  project_name: str = "TapStack",
+  project_name: str = "CloudEnvironmentSetup",
   **kwargs
 ) -> TapStack:
   args = TapStackArgs(environment_suffix=environment, project_name=project_name, **kwargs)

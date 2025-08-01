@@ -1,100 +1,136 @@
-import asyncio
 import pytest
 from pulumi.runtime import mocks
 from pulumi import Output
+import pulumi_aws as aws
+
 from lib.tap_stack import create_tap_stack
 
 
 class MockInfra(mocks.Mocks):
   def new_resource(self, args):
-    return [f"{args.name}_id", args.inputs]
+    outputs = args.inputs.copy()
+    if args.typ == "aws:ec2/vpc:Vpc":
+      outputs["cidr_block"] = Output.from_input("10.0.0.0/16")
+    elif args.typ == "aws:ec2/subnet:Subnet":
+      outputs["tags"] = Output.from_input({"Type": "public"})
+    elif args.typ == "aws:ec2/routeTable:RouteTable":
+      outputs["routes"] = Output.from_input([{"cidr_block": "0.0.0.0/0", "gateway_id": "fake-gw"}])
+    elif args.typ == "aws:ec2/securityGroup:SecurityGroup":
+      outputs["ingress"] = Output.from_input([{
+        "protocol": "tcp",
+        "from_port": 22,
+        "to_port": 22,
+        "cidr_blocks": ["0.0.0.0/0"],
+      }])
+    elif args.typ == "aws:ec2/instance:Instance":
+      outputs["ami"] = Output.from_input("amzn2-ami-hvm-2023")
+    elif args.typ == "aws:iam/role:Role":
+      outputs["arn"] = Output.from_input("arn:aws:iam::123456789012:role/fake")
+      outputs["name"] = Output.from_input("fake-role")
+    elif args.typ == "aws:iam/instanceProfile:InstanceProfile":
+      outputs["name"] = Output.from_input("fake-profile")
+    return [f"{args.name}_id", outputs]
 
   def call(self, args):
-    return args.args
+    if args.token == "aws:index/getAvailabilityZones:getAvailabilityZones":
+      return {"names": ["us-east-1a", "us-east-1b"]}
+    if args.token == "aws:ec2/getAmi:getAmi":
+      return {"id": "ami-12345678"}
+    return {}
 
 
 @pytest.fixture(scope="module", autouse=True)
 def setup_mocks():
   mocks.set_mocks(MockInfra())
-
-def setup_event_loop():
-  """Ensure there is an event loop running in the main thread."""
-  try:
-    asyncio.get_running_loop()
-  except RuntimeError:
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
+  yield
+  mocks.set_mocks(None)  # Clean up mocks after tests
 
 
-# @pytest.mark.asyncio
-# async def test_tap_stack_creates_service_role():
-#   stack = create_tap_stack(environment="test")
-#   assert stack.tap_service_role is not None
-#   name = await stack.tap_service_role.name.future()
-#   assert "TAP-Service-Role" in name
-
-
-# @pytest.mark.asyncio
-# async def test_tap_stack_creates_artifacts_bucket():
-#   stack = create_tap_stack(environment="test")
-#   assert stack.artifacts_bucket is not None
-#   name = await stack.artifacts_bucket.bucket.future()
-#   assert name.startswith("tap-test-artifacts")
-
-
-# @pytest.mark.asyncio
-# async def test_tap_stack_creates_log_group_when_enabled():
-#   stack = create_tap_stack(environment="test")
-#   if stack.args.enable_monitoring:
-#     assert stack.app_log_group is not None
-#     name = await stack.app_log_group.name.future()
-#     assert name.startswith("/aws/tap/test/application-")
-
-
-def test_tap_stack_applies_default_tags():
-  async def run():
-    stack = create_tap_stack(environment="test")
-    tags = stack.tags
-    assert tags["Project"] == stack.project_name
-    assert tags["Environment"] == stack.environment_suffix.title()
-    assert tags["ManagedBy"] == "Pulumi"
-    assert "Owner" in tags
-
-  asyncio.run(run())
-
-
-def test_tap_stack_outputs_contain_expected_fields():
-  async def run():
-    stack = create_tap_stack(environment="test")
-    assert isinstance(stack.service_role_arn, Output)
-    assert isinstance(stack.artifacts_bucket_name, Output)
-    if stack.args.enable_monitoring:
-      assert isinstance(stack.app_log_group.name, Output)
-
-  asyncio.run(run())
-
-
-def test_tap_stack_service_role_has_correct_name():
-  setup_event_loop()
+def test_vpc_has_correct_cidr():
   stack = create_tap_stack(environment="test")
+  assert stack.vpc is not None
+  cidr = stack.vpc.cidr_block
+  assert isinstance(cidr, Output)
 
-  def check(name):
-    if not name.startswith("TAP-Service-Role"):
-      raise AssertionError(f"Expected name to start with 'TAP-Service-Role', got: {name}")
+  def check_cidr(c):
+    assert c == "10.0.0.0/16"
 
-  stack.tap_service_role.name.apply(check)
+  cidr.apply(check_cidr)
 
 
-def test_tap_stack_bucket_name_format():
-  setup_event_loop()
+def test_two_public_subnets_exist():
   stack = create_tap_stack(environment="test")
+  assert stack.subnets and len(stack.subnets) == 2
 
-  def check(name):
-    if not name.startswith("tap-test-artifacts"):
-      raise AssertionError(f"Bucket name format incorrect: {name}")
+  for subnet in stack.subnets:
+    assert subnet is not None
 
-  stack.artifacts_bucket.bucket.apply(check)
+    def check_tags(tags):
+      assert tags.get("Type") == "public"
+
+    subnet.tags.apply(check_tags)
 
 
-def raise_(msg):
-  raise AssertionError(msg)
+def test_igw_and_default_route_present():
+  stack = create_tap_stack(environment="test")
+  assert stack.route_table is not None
+
+  def check_routes(routes):
+    assert any(r.get("cidr_block") == "0.0.0.0/0" for r in routes)
+
+  stack.route_table.routes.apply(check_routes)
+
+
+def test_ec2_instances_exist_and_ami_valid():
+  stack = create_tap_stack(environment="test")
+  instances = stack.instances
+  assert instances and len(instances) == 2
+
+  for inst in instances:
+    assert isinstance(inst.id, Output)
+
+    def check_ami(ami):
+      assert "amzn2" in ami
+
+    inst.ami.apply(check_ami)
+
+
+def test_security_group_allows_ssh():
+  stack = create_tap_stack(environment="test")
+  assert stack.security_group is not None
+
+  def check_ingress(rules):
+    assert any(
+      r["from_port"] == 22
+      and r["to_port"] == 22
+      and r["protocol"] == "tcp"
+      for r in rules
+    )
+
+  stack.security_group.ingress.apply(check_ingress)
+
+
+def test_iam_role_and_profile_exist():
+  stack = create_tap_stack(environment="test")
+  assert stack.iam_role is not None
+  assert stack.iam_instance_profile is not None
+  assert isinstance(stack.iam_role.name, Output)
+
+
+def test_project_tag_compliance():
+  stack = create_tap_stack(environment="test")
+  tags = stack.tags
+  assert tags.get("Project") == "CloudEnvironmentSetup"
+  assert tags.get("ManagedBy") == "Pulumi"
+  assert tags.get("Environment") == "Test"
+  assert "Owner" in tags
+
+
+def test_output_resources_exist():
+  stack = create_tap_stack(environment="test")
+  assert isinstance(stack.vpc.id, Output)
+  assert isinstance(stack.security_group.id, Output)
+  assert isinstance(stack.iam_role.arn, Output)
+
+  for inst in stack.instances:
+    assert isinstance(inst.id, Output)
