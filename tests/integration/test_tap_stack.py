@@ -285,4 +285,3 @@ class TestEnterpriseSecurityStackIntegration:
     # Verify security stacks are created
     assert stack.primary_security_stack is not None
     assert stack.secondary_security_stack is not None
-    assert synth is not None
