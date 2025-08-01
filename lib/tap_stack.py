@@ -13,6 +13,7 @@ import pulumi_aws as aws
 # from .ec2_stack import Ec2Stack
 # from .security_stack import SecurityStack
 
+PROJECT_NAME = "pulumi-infra"
 
 @dataclass
 class TapStackArgs:
@@ -62,7 +63,7 @@ class TapStack(pulumi.ComponentResource):
       args: TapStackArgs,
       opts: Optional[ResourceOptions] = None
   ):
-    super().__init__('tap:stack:TapStack', name, None, opts)
+    super().__init__(f"{PROJECT_NAME}:stack:TapStack", name, None, opts)
 
     self.environment_suffix = args.environment_suffix
     self.aws_region = args.aws_region
