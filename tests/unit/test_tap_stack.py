@@ -51,4 +51,4 @@ class TestTapStackUnit:
 
   def test_resource_naming_convention(self):
     for subnet in self.stack.public_subnets + self.stack.private_subnets:
-      assert subnet.tags["Name"].startswith("tap-unittest-")
+      assert subnet.tags["Name"].startswith("iac-task-unittest-")
