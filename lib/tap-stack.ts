@@ -63,14 +63,10 @@ export class TapStack extends TerraformStack {
     // Use provided values with fallback to AWS_REGION file, then us-west-2 default
     const fileRegion = readRegionFromFile();
     const region = props.region || props.awsRegion || fileRegion || 'us-west-2';
-    
+
     // Latest Amazon Linux 2 AMI for us-west-2 as of July 29, 2025
     const amiId = props.amiId || 'ami-0e0d5cba8c90ba8c5';
     const tags = { Environment: 'Production' };
-    // Use environmentSuffix for resource names if provided
-    const nameSuffix = props.environmentSuffix
-      ? `${name}-${props.environmentSuffix}`
-      : name;
 
     // Generate unique names for resources that require global uniqueness
     const uniqueLogBucketName = generateUniqueResourceName(

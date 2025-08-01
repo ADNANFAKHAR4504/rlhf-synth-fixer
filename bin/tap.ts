@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 import { App } from 'cdktf';
-import { TapStack } from '../lib/tap-stack';
 import * as fs from 'fs';
 import * as path from 'path';
+import { TapStack } from '../lib/tap-stack';
 
 // Function to read AWS region from file
 function readRegionFromFile(): string | null {
