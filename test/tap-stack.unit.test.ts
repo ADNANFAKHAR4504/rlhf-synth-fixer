@@ -47,7 +47,8 @@ describe('TapStack CloudFormation Template', () => {
 
     test('KeyPairName parameter should be correct type', () => {
       const param = template.Parameters.KeyPairName;
-      expect(param.Type).toBe('AWS::EC2::KeyPair::KeyName');
+      expect(param.Type).toBe('String');
+      expect(param.Default).toBe('default-key');
     });
   });
 

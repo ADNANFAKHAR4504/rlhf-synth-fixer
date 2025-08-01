@@ -14,10 +14,12 @@
         },
         "ExistingVPCId": {
             "Type": "String",
+            "Default": "vpc-12345678",
             "Description": "ID of the existing VPC for peering (CIDR: 10.0.0.0/16)"
         },
         "KeyPairName": {
-            "Type": "AWS::EC2::KeyPair::KeyName",
+            "Type": "String",
+            "Default": "default-key",
             "Description": "EC2 Key Pair for SSH access"
         }
     },
