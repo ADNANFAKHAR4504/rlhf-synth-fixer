@@ -19,8 +19,16 @@ Parameters:
 
   ExistingVPCId:
     Type: String
-    Default: 'vpc-12345678'
-    Description: 'ID of the existing VPC (10.0.0.0/16) to peer with'
+    Default: ''
+    Description: 'ID of the existing VPC (172.31.0.0/16) to peer with (leave empty if no peering needed)'
+
+  EnvironmentSuffix:
+    Type: String
+    Default: 'dev'
+    Description: 'Environment suffix for unique resource naming'
+
+Conditions:
+  VPCIdProvided: !Not [!Equals [!Ref ExistingVPCId, '']]
 
 Resources:
   # EC2 Key Pair
@@ -182,12 +190,13 @@ Resources:
       DestinationCidrBlock: '0.0.0.0/0'
       GatewayId: !Ref InternetGateway
 
-  # Route to peered VPC (10.0.0.0/16)
+  # Route to peered VPC (172.31.0.0/16) - conditional
   PeeredVPCRoute:
     Type: AWS::EC2::Route
+    Condition: VPCIdProvided
     Properties:
       RouteTableId: !Ref PublicRouteTable
-      DestinationCidrBlock: '10.0.0.0/16'
+      DestinationCidrBlock: '172.31.0.0/16'
       VpcPeeringConnectionId: !Ref VPCPeeringConnection
 
   PublicSubnet1RouteTableAssociation:
@@ -223,7 +232,7 @@ Resources:
         - IpProtocol: tcp
           FromPort: 443
           ToPort: 443
-          CidrIp: '10.0.0.0/16'
+          CidrIp: '172.31.0.0/16'
           Description: 'HTTPS from peered VPC'
       SecurityGroupEgress:
         - IpProtocol: -1
@@ -279,9 +288,10 @@ Resources:
         - Key: Owner
           Value: !Ref OwnerName
 
-  # VPC Peering Connection
+  # VPC Peering Connection (conditional)
   VPCPeeringConnection:
     Type: AWS::EC2::VPCPeeringConnection
+    Condition: VPCIdProvided
     Properties:
       VpcId: !Ref WebAppVPC
       PeerVpcId: !Ref ExistingVPCId
@@ -523,7 +533,7 @@ Resources:
   DBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
-      DBSubnetGroupName: !Sub '${EnvironmentName}-db-subnet-group'
+      DBSubnetGroupName: !Sub '${EnvironmentName}-db-subnet-group-${EnvironmentSuffix}'
       DBSubnetGroupDescription: 'Subnet group for RDS database'
       SubnetIds:
         - !Ref PrivateSubnet1
@@ -540,7 +550,7 @@ Resources:
     DeletionPolicy: Snapshot
     UpdateReplacePolicy: Snapshot
     Properties:
-      DBInstanceIdentifier: !Sub '${EnvironmentName}-webapp-db'
+      DBInstanceIdentifier: !Sub '${EnvironmentName}-webapp-db-${EnvironmentSuffix}'
       DBInstanceClass: db.t3.micro
       Engine: mysql
       EngineVersion: '8.0.42'
@@ -567,7 +577,7 @@ Resources:
   DBSecret:
     Type: AWS::SecretsManager::Secret
     Properties:
-      Name: !Sub '${EnvironmentName}-db-credentials'
+      Name: !Sub '${EnvironmentName}-db-credentials-${EnvironmentSuffix}'
       Description: 'Database credentials for web application'
       GenerateSecretString:
         SecretStringTemplate: '{"username": "admin"}'
@@ -671,6 +681,6 @@ Outputs:
 
   VPCPeeringConnectionId:
     Description: 'ID of the VPC Peering Connection'
-    Value: !Ref VPCPeeringConnection
+    Value: !If [VPCIdProvided, !Ref VPCPeeringConnection, 'No VPC peering configured']
     Export:
       Name: !Sub '${EnvironmentName}-VPC-Peering-ID'

@@ -32,6 +32,7 @@ describe('TapStack CloudFormation Template', () => {
         'OwnerName',
         'LatestAmiId',
         'ExistingVPCId',
+        'EnvironmentSuffix',
       ];
       expectedParams.forEach(param => {
         expect(template.Parameters[param]).toBeDefined();
@@ -54,7 +55,13 @@ describe('TapStack CloudFormation Template', () => {
     test('ExistingVPCId parameter should be correct type', () => {
       const param = template.Parameters.ExistingVPCId;
       expect(param.Type).toBe('String');
-      expect(param.Default).toBe('vpc-12345678');
+      expect(param.Default).toBe('');
+    });
+
+    test('EnvironmentSuffix parameter should be correct type', () => {
+      const param = template.Parameters.EnvironmentSuffix;
+      expect(param.Type).toBe('String');
+      expect(param.Default).toBe('dev');
     });
   });
 
@@ -119,9 +126,11 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Resources.EC2KeyPair.Type).toBe('AWS::EC2::KeyPair');
     });
 
-    test('should have VPC peering connection', () => {
+    test('should have VPC peering connection condition', () => {
+      expect(template.Conditions.VPCIdProvided).toBeDefined();
       expect(template.Resources.VPCPeeringConnection).toBeDefined();
       expect(template.Resources.VPCPeeringConnection.Type).toBe('AWS::EC2::VPCPeeringConnection');
+      expect(template.Resources.VPCPeeringConnection.Condition).toBe('VPCIdProvided');
     });
   });
 

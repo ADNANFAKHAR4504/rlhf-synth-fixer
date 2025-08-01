@@ -208,6 +208,53 @@ aws rds modify-db-instance --db-instance-identifier production-webapp-db --no-de
 
 **Impact**: Achieved 100% compliance with infrastructure requirements (up from 91%).
 
+### 18. VPC Peering Connection Deployment Failure
+
+**Issue**: `The vpc ID 'vpc-12345678' does not exist`
+
+**Root Cause**: The VPC peering connection was trying to connect to a placeholder VPC ID (`vpc-12345678`) that doesn't exist in the target AWS account. The template was using a hardcoded placeholder value instead of making the VPC peering optional.
+
+**Resolution**: Made VPC peering connection conditional:
+- Changed `ExistingVPCId` parameter default from `'vpc-12345678'` to `''` (empty string)
+- Added `VPCIdProvided` condition: `!Not [!Equals [!Ref ExistingVPCId, '']]`
+- Made `VPCPeeringConnection` and `PeeredVPCRoute` resources conditional
+- Updated output to handle both cases: `!If [VPCIdProvided, !Ref VPCPeeringConnection, 'No VPC peering configured']`
+- Updated unit tests to validate conditional resources
+
+**Impact**: Template now deploys successfully without requiring a pre-existing VPC, while still supporting VPC peering when needed.
+
+### 19. Resource Naming Conflicts
+
+**Issue**: `Resource of type 'AWS::RDS::DBSubnetGroup' with identifier 'production-db-subnet-group' already exists`
+
+**Root Cause**: Multiple resources in the template had hardcoded names that could conflict when deploying multiple stacks or when resources from previous deployments still exist. The main conflicts were:
+- DB Subnet Group: `${EnvironmentName}-db-subnet-group`
+- RDS Instance: `${EnvironmentName}-webapp-db`
+- Secrets Manager Secret: `${EnvironmentName}-db-credentials`
+
+**Resolution**: Made resource names unique by incorporating the `EnvironmentSuffix` parameter:
+- `DBSubnetGroupName`: `${EnvironmentName}-db-subnet-group-${EnvironmentSuffix}`
+- `DBInstanceIdentifier`: `${EnvironmentName}-webapp-db-${EnvironmentSuffix}`
+- `Name` (Secrets Manager): `${EnvironmentName}-db-credentials-${EnvironmentSuffix}`
+
+**Impact**: Eliminates naming conflicts and allows multiple deployments in the same account.
+
+### 20. Missing EnvironmentSuffix Parameter
+
+**Issue**: `Template format error: Unresolved resource dependencies [EnvironmentSuffix] in the Resources block of the template`
+
+**Root Cause**: The template was using `${EnvironmentSuffix}` in resource names but the `EnvironmentSuffix` parameter was not defined in the Parameters section.
+
+**Resolution**: Added the missing parameter:
+```yaml
+EnvironmentSuffix:
+  Type: String
+  Default: 'dev'
+  Description: 'Environment suffix for unique resource naming'
+```
+
+**Impact**: Template now validates and deploys successfully.
+
 ## Updated Key Learnings
 
 1. **Always run cfn-lint** before deployment to catch template issues early

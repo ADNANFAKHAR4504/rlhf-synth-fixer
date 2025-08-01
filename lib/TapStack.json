@@ -19,8 +19,27 @@
         },
         "ExistingVPCId": {
             "Type": "String",
-            "Default": "vpc-12345678",
-            "Description": "ID of the existing VPC (10.0.0.0/16) to peer with"
+            "Default": "",
+            "Description": "ID of the existing VPC (172.31.0.0/16) to peer with (leave empty if no peering needed)"
+        },
+        "EnvironmentSuffix": {
+            "Type": "String",
+            "Default": "dev",
+            "Description": "Environment suffix for unique resource naming"
+        }
+    },
+    "Conditions": {
+        "VPCIdProvided": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "ExistingVPCId"
+                        },
+                        ""
+                    ]
+                }
+            ]
         }
     },
     "Resources": {
@@ -364,11 +383,12 @@
         },
         "PeeredVPCRoute": {
             "Type": "AWS::EC2::Route",
+            "Condition": "VPCIdProvided",
             "Properties": {
                 "RouteTableId": {
                     "Ref": "PublicRouteTable"
                 },
-                "DestinationCidrBlock": "10.0.0.0/16",
+                "DestinationCidrBlock": "172.31.0.0/16",
                 "VpcPeeringConnectionId": {
                     "Ref": "VPCPeeringConnection"
                 }
@@ -427,7 +447,7 @@
                         "IpProtocol": "tcp",
                         "FromPort": 443,
                         "ToPort": 443,
-                        "CidrIp": "10.0.0.0/16",
+                        "CidrIp": "172.31.0.0/16",
                         "Description": "HTTPS from peered VPC"
                     }
                 ],
@@ -551,6 +571,7 @@
         },
         "VPCPeeringConnection": {
             "Type": "AWS::EC2::VPCPeeringConnection",
+            "Condition": "VPCIdProvided",
             "Properties": {
                 "VpcId": {
                     "Ref": "WebAppVPC"
@@ -1001,7 +1022,7 @@
             "Type": "AWS::RDS::DBSubnetGroup",
             "Properties": {
                 "DBSubnetGroupName": {
-                    "Fn::Sub": "${EnvironmentName}-db-subnet-group"
+                    "Fn::Sub": "${EnvironmentName}-db-subnet-group-${EnvironmentSuffix}"
                 },
                 "DBSubnetGroupDescription": "Subnet group for RDS database",
                 "SubnetIds": [
@@ -1034,7 +1055,7 @@
             "UpdateReplacePolicy": "Snapshot",
             "Properties": {
                 "DBInstanceIdentifier": {
-                    "Fn::Sub": "${EnvironmentName}-webapp-db"
+                    "Fn::Sub": "${EnvironmentName}-webapp-db-${EnvironmentSuffix}"
                 },
                 "DBInstanceClass": "db.t3.micro",
                 "Engine": "mysql",
@@ -1081,7 +1102,7 @@
             "Type": "AWS::SecretsManager::Secret",
             "Properties": {
                 "Name": {
-                    "Fn::Sub": "${EnvironmentName}-db-credentials"
+                    "Fn::Sub": "${EnvironmentName}-db-credentials-${EnvironmentSuffix}"
                 },
                 "Description": "Database credentials for web application",
                 "GenerateSecretString": {
@@ -1261,7 +1282,13 @@
         "VPCPeeringConnectionId": {
             "Description": "ID of the VPC Peering Connection",
             "Value": {
-                "Ref": "VPCPeeringConnection"
+                "Fn::If": [
+                    "VPCIdProvided",
+                    {
+                        "Ref": "VPCPeeringConnection"
+                    },
+                    "No VPC peering configured"
+                ]
             },
             "Export": {
                 "Name": {
