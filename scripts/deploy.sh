@@ -19,11 +19,14 @@ export ENVIRONMENT_SUFFIX=${ENVIRONMENT_SUFFIX:-dev}
 export REPOSITORY=${REPOSITORY:-$(basename "$(pwd)")}
 export COMMIT_AUTHOR=${COMMIT_AUTHOR:-$(git config user.name || echo "unknown")}
 export AWS_REGION=${AWS_REGION:-us-east-1}
+# This combines the project name and environment suffix to create a unique bucket name
+export S3_DEPLOY_BUCKET=${S3_DEPLOY_BUCKET:-cfn-deploy-${REPOSITORY}-${ENVIRONMENT_SUFFIX}}
 
 echo "Environment suffix: $ENVIRONMENT_SUFFIX"
 echo "Repository: $REPOSITORY"
 echo "Commit author: $COMMIT_AUTHOR"
 echo "AWS region: $AWS_REGION"
+echo "S3 deployment bucket: $S3_DEPLOY_BUCKET"
 
 # Bootstrap step
 echo "=== Bootstrap Phase ==="
