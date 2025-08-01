@@ -55,6 +55,17 @@ interface TapStackProps {
   defaultTags?: { [key: string]: string };
 }
 
+// Utility function to generate unique resource names
+function generateUniqueResourceName(
+  baseName: string,
+  environmentSuffix?: string
+): string {
+  const timestamp = Date.now().toString(36);
+  const randomSuffix = Math.random().toString(36).substring(2, 8);
+  const envSuffix = environmentSuffix ? `-${environmentSuffix}` : '';
+  return `${baseName}${envSuffix}-${timestamp}-${randomSuffix}`.toLowerCase();
+}
+
 export class TapStack extends TerraformStack {
   constructor(scope: Construct, id: string, props?: TapStackProps) {
     super(scope, id);
@@ -162,7 +173,7 @@ export class TapStack extends TerraformStack {
 
     // VPC Flow Logs
     const flowLogRole = new IamRole(this, 'flow-log-role', {
-      name: `flow-log-role-${environmentSuffix}`,
+      name: generateUniqueResourceName('flow-log-role', environmentSuffix),
       assumeRolePolicy: JSON.stringify({
         Version: '2012-10-17',
         Statement: [
@@ -177,7 +188,7 @@ export class TapStack extends TerraformStack {
     });
 
     const flowLogPolicy = new IamPolicy(this, 'flow-log-policy', {
-      name: `flow-log-policy-${environmentSuffix}`,
+      name: generateUniqueResourceName('flow-log-policy', environmentSuffix),
       policy: JSON.stringify({
         Version: '2012-10-17',
         Statement: [
@@ -212,7 +223,7 @@ export class TapStack extends TerraformStack {
 
     // S3 Bucket with KMS encryption and versioning
     const appBucket = new S3Bucket(this, 'app-bucket', {
-      bucketPrefix: `nova-app-${environmentSuffix}-`,
+      bucket: generateUniqueResourceName('nova-app', environmentSuffix),
       tags: commonTags,
     });
 
@@ -241,7 +252,7 @@ export class TapStack extends TerraformStack {
 
     // Security Groups
     const webSecurityGroup = new SecurityGroup(this, 'web-security-group', {
-      name: `web-sg-${environmentSuffix}`,
+      name: generateUniqueResourceName('web-sg', environmentSuffix),
       description: 'Security group for web servers',
       vpcId: vpc.id,
       ingress: [
@@ -270,7 +281,7 @@ export class TapStack extends TerraformStack {
     });
 
     const dbSecurityGroup = new SecurityGroup(this, 'db-security-group', {
-      name: `db-sg-${environmentSuffix}`,
+      name: generateUniqueResourceName('db-sg', environmentSuffix),
       description: 'Security group for RDS database',
       vpcId: vpc.id,
       ingress: [
@@ -286,7 +297,7 @@ export class TapStack extends TerraformStack {
 
     // IAM Role for EC2 instances
     const ec2Role = new IamRole(this, 'ec2-role', {
-      name: `ec2-role-${environmentSuffix}`,
+      name: generateUniqueResourceName('ec2-role', environmentSuffix),
       assumeRolePolicy: JSON.stringify({
         Version: '2012-10-17',
         Statement: [
@@ -301,7 +312,7 @@ export class TapStack extends TerraformStack {
     });
 
     const ec2Policy = new IamPolicy(this, 'ec2-policy', {
-      name: `ec2-policy-${environmentSuffix}`,
+      name: generateUniqueResourceName('ec2-policy', environmentSuffix),
       policy: JSON.stringify({
         Version: '2012-10-17',
         Statement: [
@@ -331,15 +342,15 @@ export class TapStack extends TerraformStack {
       this,
       'ec2-instance-profile',
       {
-        name: `ec2-profile-${environmentSuffix}`,
+        name: generateUniqueResourceName('ec2-profile', environmentSuffix),
         role: ec2Role.name,
       }
     );
 
     // Launch Template for Auto Scaling
     const launchTemplate = new LaunchTemplate(this, 'web-launch-template', {
-      name: `web-template-${environmentSuffix}`,
-      imageId: 'ami-0cf2b4e024cdb6960', // Amazon Linux 2 for us-west-2
+      name: generateUniqueResourceName('web-template', environmentSuffix),
+      imageId: 'ami-0e0d5cba8c90ba8c5', // Updated Amazon Linux 2 for us-west-2
       instanceType: 't3.micro',
       vpcSecurityGroupIds: [webSecurityGroup.id],
       iamInstanceProfile: {
@@ -364,7 +375,7 @@ echo "<h1>Nova Model Breaking App</h1>" > /var/www/html/index.html
 
     // Auto Scaling Group
     new AutoscalingGroup(this, 'web-asg', {
-      name: `web-asg-${environmentSuffix}`,
+      name: generateUniqueResourceName('web-asg', environmentSuffix),
       vpcZoneIdentifier: [publicSubnet1.id, publicSubnet2.id],
       launchTemplate: {
         id: launchTemplate.id,
@@ -396,14 +407,14 @@ echo "<h1>Nova Model Breaking App</h1>" > /var/www/html/index.html
 
     // RDS Subnet Group
     const dbSubnetGroup = new DbSubnetGroup(this, 'db-subnet-group', {
-      name: `db-subnet-group-${environmentSuffix}`,
+      name: generateUniqueResourceName('db-subnet-group', environmentSuffix),
       subnetIds: [privateSubnet1.id, privateSubnet2.id],
       tags: commonTags,
     });
 
     // RDS Instance (Multi-AZ)
     new DbInstance(this, 'main-database', {
-      identifier: `nova-db-${environmentSuffix}`,
+      identifier: generateUniqueResourceName('nova-db', environmentSuffix),
       engine: 'mysql',
       engineVersion: '8.0',
       instanceClass: 'db.t3.micro',
@@ -426,7 +437,10 @@ echo "<h1>Nova Model Breaking App</h1>" > /var/www/html/index.html
 
     // Lambda Role for Compliance Checks
     const lambdaRole = new IamRole(this, 'lambda-compliance-role', {
-      name: `lambda-compliance-role-${environmentSuffix}`,
+      name: generateUniqueResourceName(
+        'lambda-compliance-role',
+        environmentSuffix
+      ),
       assumeRolePolicy: JSON.stringify({
         Version: '2012-10-17',
         Statement: [
@@ -448,7 +462,10 @@ echo "<h1>Nova Model Breaking App</h1>" > /var/www/html/index.html
 
     // Lambda Function for Compliance Checks
     const complianceLambda = new LambdaFunction(this, 'compliance-lambda', {
-      functionName: `compliance-checker-${environmentSuffix}`,
+      functionName: generateUniqueResourceName(
+        'compliance-checker',
+        environmentSuffix
+      ),
       runtime: 'python3.9',
       handler: 'index.handler',
       role: lambdaRole.arn,
@@ -461,7 +478,10 @@ echo "<h1>Nova Model Breaking App</h1>" > /var/www/html/index.html
       this,
       'compliance-event-rule',
       {
-        name: `compliance-check-rule-${environmentSuffix}`,
+        name: generateUniqueResourceName(
+          'compliance-check-rule',
+          environmentSuffix
+        ),
         description: 'Trigger compliance checks',
         scheduleExpression: 'rate(24 hours)',
         tags: commonTags,
@@ -483,8 +503,8 @@ echo "<h1>Nova Model Breaking App</h1>" > /var/www/html/index.html
 
     // WAFv2 Web ACL (updated from deprecated WAF Classic)
     new Wafv2WebAcl(this, 'main-waf', {
-      name: `nova-waf-${environmentSuffix}`,
-      scope: 'CLOUDFRONT',
+      name: generateUniqueResourceName('nova-waf', environmentSuffix),
+      scope: 'REGIONAL', // Changed from CLOUDFRONT to REGIONAL for us-west-2
       defaultAction: {
         allow: {},
       },

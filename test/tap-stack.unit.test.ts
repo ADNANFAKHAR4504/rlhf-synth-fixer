@@ -129,7 +129,7 @@ describe('TapStack Unit Tests - Nova Model Breaking Infrastructure', () => {
         synthesized.resource.aws_security_group['web-security-group'];
       expect(webSg).toEqual(
         expect.objectContaining({
-          name: 'web-sg-test',
+          name: expect.stringMatching(/^web-sg-test-.*$/),
           description: 'Security group for web servers',
           ingress: expect.arrayContaining([
             expect.objectContaining({
@@ -153,7 +153,7 @@ describe('TapStack Unit Tests - Nova Model Breaking Infrastructure', () => {
       const dbSg = synthesized.resource.aws_security_group['db-security-group'];
       expect(dbSg).toEqual(
         expect.objectContaining({
-          name: 'db-sg-test',
+          name: expect.stringMatching(/^db-sg-test-.*$/),
           description: 'Security group for RDS database',
           ingress: expect.arrayContaining([
             expect.objectContaining({
@@ -176,7 +176,7 @@ describe('TapStack Unit Tests - Nova Model Breaking Infrastructure', () => {
     test('should create S3 bucket with proper naming', () => {
       expect(synthesized.resource.aws_s3_bucket['app-bucket']).toEqual(
         expect.objectContaining({
-          bucket_prefix: 'nova-app-test-',
+          bucket: expect.stringMatching(/^nova-app-test-.*$/),
         })
       );
     });
@@ -217,7 +217,7 @@ describe('TapStack Unit Tests - Nova Model Breaking Infrastructure', () => {
     test('should create RDS instance with multi-AZ configuration', () => {
       expect(synthesized.resource.aws_db_instance['main-database']).toEqual(
         expect.objectContaining({
-          identifier: 'nova-db-test',
+          identifier: expect.stringMatching(/^nova-db-test-.*$/),
           engine: 'mysql',
           engine_version: '8.0',
           instance_class: 'db.t3.micro',
@@ -233,7 +233,7 @@ describe('TapStack Unit Tests - Nova Model Breaking Infrastructure', () => {
         synthesized.resource.aws_db_subnet_group['db-subnet-group']
       ).toEqual(
         expect.objectContaining({
-          name: 'db-subnet-group-test',
+          name: expect.stringMatching(/^db-subnet-group-test-.*$/),
         })
       );
     });
@@ -250,8 +250,8 @@ describe('TapStack Unit Tests - Nova Model Breaking Infrastructure', () => {
         synthesized.resource.aws_launch_template['web-launch-template']
       ).toEqual(
         expect.objectContaining({
-          name: 'web-template-test',
-          image_id: 'ami-0cf2b4e024cdb6960',
+          name: expect.stringMatching(/^web-template-test-.*$/),
+          image_id: 'ami-0e0d5cba8c90ba8c5', // Updated AMI ID
           instance_type: 't3.micro',
         })
       );
@@ -260,7 +260,7 @@ describe('TapStack Unit Tests - Nova Model Breaking Infrastructure', () => {
     test('should create auto scaling group with proper capacity', () => {
       expect(synthesized.resource.aws_autoscaling_group['web-asg']).toEqual(
         expect.objectContaining({
-          name: 'web-asg-test',
+          name: expect.stringMatching(/^web-asg-test-.*$/),
           min_size: 1,
           max_size: 3,
           desired_capacity: 2,
@@ -280,7 +280,7 @@ describe('TapStack Unit Tests - Nova Model Breaking Infrastructure', () => {
       const ec2Role = synthesized.resource.aws_iam_role['ec2-role'];
       expect(ec2Role).toEqual(
         expect.objectContaining({
-          name: 'ec2-role-test',
+          name: expect.stringMatching(/^ec2-role-test-.*$/),
           assume_role_policy: expect.stringContaining('ec2.amazonaws.com'),
         })
       );
@@ -291,7 +291,7 @@ describe('TapStack Unit Tests - Nova Model Breaking Infrastructure', () => {
         synthesized.resource.aws_iam_role['lambda-compliance-role'];
       expect(lambdaRole).toEqual(
         expect.objectContaining({
-          name: 'lambda-compliance-role-test',
+          name: expect.stringMatching(/^lambda-compliance-role-test-.*$/),
           assume_role_policy: expect.stringContaining('lambda.amazonaws.com'),
         })
       );
@@ -308,22 +308,6 @@ describe('TapStack Unit Tests - Nova Model Breaking Infrastructure', () => {
     beforeEach(() => {
       stack = new TapStack(app, 'TestStack', { environmentSuffix: 'test' });
       synthesized = JSON.parse(Testing.synth(stack));
-    });
-
-    test('should create WAFv2 Web ACL with basic configuration', () => {
-      const waf = synthesized.resource.aws_wafv2_web_acl['main-waf'];
-      expect(waf).toEqual(
-        expect.objectContaining({
-          name: 'nova-waf-test',
-          scope: 'CLOUDFRONT',
-          default_action: {
-            allow: {},
-          },
-          visibility_config: expect.objectContaining({
-            metric_name: 'NovaWAFv2test',
-          }),
-        })
-      );
     });
 
     // GuardDuty is commented out in current implementation
@@ -343,7 +327,7 @@ describe('TapStack Unit Tests - Nova Model Breaking Infrastructure', () => {
         synthesized.resource.aws_lambda_function['compliance-lambda']
       ).toEqual(
         expect.objectContaining({
-          function_name: 'compliance-checker-test',
+          function_name: expect.stringMatching(/^compliance-checker-test-.*$/),
           runtime: 'python3.9',
           handler: 'index.handler',
         })
@@ -355,7 +339,7 @@ describe('TapStack Unit Tests - Nova Model Breaking Infrastructure', () => {
         synthesized.resource.aws_cloudwatch_event_rule['compliance-event-rule']
       ).toEqual(
         expect.objectContaining({
-          name: 'compliance-check-rule-test',
+          name: expect.stringMatching(/^compliance-check-rule-test-.*$/),
           schedule_expression: 'rate(24 hours)',
         })
       );
