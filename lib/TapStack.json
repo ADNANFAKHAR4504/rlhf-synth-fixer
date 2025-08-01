@@ -542,9 +542,6 @@
         "EC2Role": {
             "Type": "AWS::IAM::Role",
             "Properties": {
-                "RoleName": {
-                    "Fn::Sub": "${EnvironmentName}-EC2-Role"
-                },
                 "AssumeRolePolicyDocument": {
                     "Version": "2012-10-17",
                     "Statement": [
@@ -618,9 +615,6 @@
         "EC2InstanceProfile": {
             "Type": "AWS::IAM::InstanceProfile",
             "Properties": {
-                "InstanceProfileName": {
-                    "Fn::Sub": "${EnvironmentName}-EC2-InstanceProfile"
-                },
                 "Roles": [
                     {
                         "Ref": "EC2Role"
