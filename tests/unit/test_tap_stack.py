@@ -2,11 +2,11 @@
 
 import json
 
-from cdktf import App, Testing, TerraformStack
+from cdktf import App, TerraformStack, Testing
 from cdktf_cdktf_provider_aws.provider import AwsProvider
 
-from lib.tap_stack import TapStack
 from lib.enterprise_security_stack import EnterpriseSecurityStack
+from lib.tap_stack import TapStack
 
 
 class TestTapStack:
