@@ -152,13 +152,20 @@ class TestTapStack:
     
     # Check provider configuration
     providers = terraform_config.get("provider", {}).get("aws", {})
-    assert len(providers) >= 2, "Should have primary and secondary AWS providers"
+    
+    # Handle both list and dict formats
+    if isinstance(providers, list):
+      provider_list = providers
+    else:
+      provider_list = list(providers.values()) if providers else []
+    
+    assert len(provider_list) >= 2, "Should have primary and secondary AWS providers"
     
     # Find primary and secondary providers
     primary_provider = None
     secondary_provider = None
     
-    for provider in providers.values():
+    for provider in provider_list:
       if provider.get("alias") == "secondary":
         secondary_provider = provider
       elif "alias" not in provider:
