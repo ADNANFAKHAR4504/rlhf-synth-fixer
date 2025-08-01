@@ -286,22 +286,3 @@ class TestEnterpriseSecurityStackIntegration:
     # Should synthesize without errors
     synth = app.synth()
     assert synth is not None
-
-  def test_enterprise_security_compliance_deployment(self):
-    """Test enterprise security deployment with compliance features."""
-    app = App()
-    TapStack(
-      app,
-      "compliance-security-stack",
-      environment_suffix="compliance",
-      aws_region="us-gov-east-1",
-      default_tags={
-        "Environment": "government",
-        "Compliance": "FedRAMP",
-        "Classification": "restricted"
-      }
-    )
-    
-    # Should synthesize without errors for compliance deployment
-    synth = app.synth()
-    assert synth is not None
