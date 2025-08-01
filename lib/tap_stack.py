@@ -1,17 +1,10 @@
 import re
+import hashlib
 from typing import Optional, Dict, List
 from dataclasses import dataclass, field
-import hashlib
 import pulumi
 from pulumi import ResourceOptions, Config, Output
 import pulumi_aws as aws
-
-
-# Import your nested stacks here (uncomment as you create them)
-# from .vpc_stack import VpcStack
-# from .dynamodb_stack import DynamoDBStack
-# from .ec2_stack import Ec2Stack
-# from .security_stack import SecurityStack
 
 @dataclass
 class TapStackArgs:
@@ -23,21 +16,29 @@ class TapStackArgs:
   instance_types: List[str] = field(default_factory=lambda: ['t3.micro', 't3.small'])
   backup_retention_days: int = 7
   enable_multi_az: bool = True
+  project_name: str = 'tap-test-automation-platform'
 
-  def __post_init__(self):
+  def __post_init__(self) -> None:
     self._validate_environment_suffix()
     self._validate_vpc_cidr()
     self._validate_region()
     self._set_default_tags()
 
   def _validate_environment_suffix(self) -> None:
-    allowed_envs = {'dev', 'staging', 'prod', 'test'}
-    if self.environment_suffix not in allowed_envs:
-      raise ValueError(f"Environment suffix must be one of: {allowed_envs}")
+    if not (
+      self.environment_suffix in {'dev', 'staging', 'prod', 'test'} or
+      re.match(r'^pr\d+$', self.environment_suffix)
+    ):
+      raise ValueError(
+        "Environment suffix must be one of: {'dev', 'staging', 'prod', 'test'} "
+        "or start with 'pr' followed by digits"
+      )
 
   def _validate_vpc_cidr(self) -> None:
     if not self.vpc_cidr.endswith(('/16', '/17', '/18', '/19', '/20')):
-      raise ValueError("VPC CIDR should typically be /16 to /20 for proper subnet allocation")
+      raise ValueError(
+        "VPC CIDR should typically be /16 to /20 for proper subnet allocation"
+      )
 
   def _validate_region(self) -> None:
     if self.aws_region.count('-') < 2:
@@ -47,7 +48,7 @@ class TapStackArgs:
     default_tags = {
       'Environment': self.environment_suffix.title(),
       'ManagedBy': 'Pulumi',
-      'Project': 'TAP-TestAutomationPlatform',
+      'Project': self.project_name,
       'CreatedDate': pulumi.get_stack(),
       'Owner': 'InfrastructureTeam'
     }
@@ -56,22 +57,22 @@ class TapStackArgs:
 
 class TapStack(pulumi.ComponentResource):
   def __init__(
-      self,
-      name: str,
-      args: TapStackArgs,
-      opts: Optional[ResourceOptions] = None
+    self,
+    name: str,
+    args: TapStackArgs,
+    opts: Optional[ResourceOptions] = None
   ):
-    super().__init__('tap:stack:TapStack', name, None, opts)
+    stack_name = f"{args.project_name}-{args.environment_suffix}"
+    super().__init__(f"{args.project_name}:stack:TapStack", stack_name, None, opts)
 
     self.environment_suffix = args.environment_suffix
     self.aws_region = args.aws_region
     self.tags = args.tags
     self.args = args
-
+    self.project_name = args.project_name
     self.tap_service_role: Optional[aws.iam.Role] = None
     self.artifacts_bucket: Optional[aws.s3.Bucket] = None
     self.app_log_group: Optional[aws.cloudwatch.LogGroup] = None
-
     self.config = Config()
 
     self.networking_resources = {}
@@ -80,26 +81,32 @@ class TapStack(pulumi.ComponentResource):
     self.security_resources = {}
     self.monitoring_resources = {}
 
+    pulumi.log.info(
+      f"Initializing TapStack with project name: {self.project_name}, "
+      f"stack name: {stack_name}, environment: {self.environment_suffix}"
+    )
+
     self._create_infrastructure()
     self._register_outputs()
 
   def _sanitize_bucket_name(self, name: str) -> str:
     name = name.lower()
-    name = re.sub(r'[^a-z0-9.-]', '-', name)     # only allow valid S3 characters
-    name = re.sub(r'-+', '-', name).strip('-')   # clean up hyphens
-    name = re.sub(r'\.+', '.', name).strip('.')  # clean up dots
-    name = re.sub(r'^[^a-z0-9]+', '', name)      # ensure starts with alphanumeric
-    name = re.sub(r'[^a-z0-9]+$', '', name)      # ensure ends with alphanumeric
-    name = name[:63]                             # max length for S3
+    name = re.sub(r'[^a-z0-9.-]', '-', name)
+    name = re.sub(r'-+', '-', name).strip('-')
+    name = re.sub(r'\.+', '.', name).strip('.')
+    name = re.sub(r'^[^a-z0-9]+', '', name)
+    name = re.sub(r'[^a-z0-9]+$', '', name)
+    name = name[:63]
     if re.match(r'^\d{1,3}(\.\d{1,3}){3}$', name):
       raise ValueError(f"Bucket name '{name}' cannot look like an IP address.")
     if len(name) < 3:
       raise ValueError(f"Bucket name '{name}' is too short after sanitization.")
     return name
-  
 
   def _create_infrastructure(self) -> None:
-    pulumi.log.info(f"Creating TAP infrastructure for environment: {self.environment_suffix}")
+    pulumi.log.info(
+      f"Creating TAP infrastructure for environment: {self.environment_suffix}"
+    )
     self._create_networking()
     self._create_security()
     self._create_storage()
@@ -110,7 +117,6 @@ class TapStack(pulumi.ComponentResource):
   def _unique_suffix(self, base: str) -> str:
     hash_str = hashlib.sha1(base.encode()).hexdigest()[:6]
     return f"{base}-{hash_str}"
-  
 
   def _create_networking(self) -> None:
     pulumi.log.info("Creating networking infrastructure...")
@@ -118,7 +124,6 @@ class TapStack(pulumi.ComponentResource):
 
   def _create_security(self) -> None:
     pulumi.log.info("Creating security infrastructure...")
-
     self.tap_service_role = aws.iam.Role(
       f"tap-service-role-{self.environment_suffix}",
       name=f"TAP-Service-Role-{self.environment_suffix}",
@@ -134,27 +139,21 @@ class TapStack(pulumi.ComponentResource):
       tags=self._merge_tags({"Name": f"TAP-Service-Role-{self.environment_suffix}"}),
       opts=ResourceOptions(parent=self)
     )
-
     self.security_resources['service_role'] = self.tap_service_role
 
   def _create_storage(self) -> None:
     pulumi.log.info("Creating storage infrastructure...")
     raw_name = f"tap-test-artifacts-{self.environment_suffix}-{pulumi.get_stack()}"
     bucket_name = self._sanitize_bucket_name(self._unique_suffix(raw_name))
-
-
-
     self.artifacts_bucket = aws.s3.Bucket(
-        f"tap-artifacts-{self.environment_suffix}",
-        bucket=bucket_name,
-        tags=self._merge_tags({
-            "Name": f"TAP-Artifacts-{self.environment_suffix}",
-            "Purpose": "TestArtifacts"
-        }),
-        opts=ResourceOptions(parent=self)
+      f"tap-artifacts-{self.environment_suffix}",
+      bucket=bucket_name,
+      tags=self._merge_tags({
+        "Name": f"TAP-Artifacts-{self.environment_suffix}",
+        "Purpose": "TestArtifacts"
+      }),
+      opts=ResourceOptions(parent=self)
     )
-
-
     aws.s3.BucketVersioningV2(
       f"tap-artifacts-versioning-{self.environment_suffix}",
       bucket=self.artifacts_bucket.id,
@@ -163,7 +162,6 @@ class TapStack(pulumi.ComponentResource):
       ),
       opts=ResourceOptions(parent=self)
     )
-
     self.storage_resources['artifacts_bucket'] = self.artifacts_bucket
 
   def _create_compute(self) -> None:
@@ -174,9 +172,7 @@ class TapStack(pulumi.ComponentResource):
     if not self.args.enable_monitoring:
       pulumi.log.info("Monitoring disabled, skipping monitoring infrastructure")
       return
-
     pulumi.log.info("Creating monitoring infrastructure...")
-
     self.app_log_group = aws.cloudwatch.LogGroup(
       f"tap-logs-{self.environment_suffix}",
       name=f"/aws/tap/{self.environment_suffix}/application",
@@ -187,7 +183,6 @@ class TapStack(pulumi.ComponentResource):
       }),
       opts=ResourceOptions(parent=self)
     )
-
     self.monitoring_resources['log_group'] = self.app_log_group
 
   def _merge_tags(self, additional_tags: Dict[str, str]) -> Dict[str, str]:
@@ -195,7 +190,6 @@ class TapStack(pulumi.ComponentResource):
 
   def _register_outputs(self) -> None:
     pulumi.log.info("Registering stack outputs...")
-
     outputs = {
       'environment_suffix': self.environment_suffix,
       'aws_region': self.aws_region,
@@ -215,9 +209,10 @@ class TapStack(pulumi.ComponentResource):
         'backup_retention_days': self.args.backup_retention_days
       }
     }
-
     self.register_outputs(outputs)
-    pulumi.log.info(f"Stack outputs registered for environment: {self.environment_suffix}")
+    pulumi.log.info(
+      f"Stack outputs registered for environment: {self.environment_suffix}"
+    )
 
   @property
   def vpc_id(self) -> Optional[Output[str]]:
@@ -233,9 +228,10 @@ class TapStack(pulumi.ComponentResource):
 
 
 def create_tap_stack(
-    stack_name: str = "tap-stack",
-    environment: str = "dev",
-    **kwargs
+  stack_name: str = "tap-stack",
+  environment: str = "dev",
+  project_name: str = "tap-test-automation-platform",
+  **kwargs
 ) -> TapStack:
-  args = TapStackArgs(environment_suffix=environment, **kwargs)
+  args = TapStackArgs(environment_suffix=environment, project_name=project_name, **kwargs)
   return TapStack(stack_name, args)
