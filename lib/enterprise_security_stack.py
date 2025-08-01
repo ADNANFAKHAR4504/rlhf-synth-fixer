@@ -634,12 +634,3 @@ def handler(event, context):
     # )
     # No-op for now
     return
-    #   )
-    # )
-    # No-op for now
-    return
-    return
-    #   )
-    # )
-    # No-op for now
-    return
