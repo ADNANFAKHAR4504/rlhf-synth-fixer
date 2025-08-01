@@ -7,7 +7,6 @@ Creates VPC, subnets, security groups, NAT gateways, and VPC endpoints
 
 import pulumi
 import pulumi_aws as aws
-from typing import List
 
 class NetworkInfrastructure(pulumi.ComponentResource):
   def __init__(self, name: str, environment: str, tags: dict, opts=None):
