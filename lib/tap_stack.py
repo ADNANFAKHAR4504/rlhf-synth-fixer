@@ -4,10 +4,10 @@ from typing import Optional
 import pulumi
 import pulumi_aws as aws
 from pulumi import ResourceOptions
-from .components.network import NetworkInfrastructure
-from .components.frontend import FrontendInfrastructure
+from .components.networking import NetworkInfrastructure
+from .components.user import FrontendInfrastructure
 from .components.backend import BackendInfrastructure
-from .components.data_processing import DataProcessingInfrastructure
+from .components.data import DataProcessingInfrastructure
 from .components.monitoring import MonitoringInfrastructure
 
 """
