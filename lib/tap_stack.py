@@ -233,7 +233,8 @@ class TapStack(cdk.Stack):
           cloudfront.CfnDistribution.OriginProperty(
             id=origin_id,
             domain_name=self.s3_bucket.bucket_regional_domain_name,
-            s3_origin_config=None,  # ✅ prevent OAI usage
+            # Provide an empty S3OriginConfigProperty when using OAC
+            s3_origin_config=cloudfront.CfnDistribution.S3OriginConfigProperty(),
             origin_access_control_id=self.oac.attr_id
           )
         ],
