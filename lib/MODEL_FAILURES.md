@@ -103,3 +103,109 @@ This document captures the failures and issues encountered during the developmen
 3. Use parameter validation in CloudFormation templates
 4. Implement proper error handling in integration tests
 5. Document required environment variables and setup steps
+
+## Recent Deployment Failures (August 2025)
+
+### 10. IAM Policy ARN Format Issues
+
+**Issue**: `Resource tapstackdev-s3bucket-vkqr1p8uts6m/* must be in ARN format or "*"`
+
+**Root Cause**: S3 bucket resources in IAM policies were referenced without proper ARN format:
+- `Resource: !Sub '${S3Bucket}/*'` instead of `Resource: !Sub 'arn:aws:s3:::${S3Bucket}/*'`
+- `Resource: !Ref S3Bucket` instead of `Resource: !Sub 'arn:aws:s3:::${S3Bucket}'`
+
+**Resolution**: Updated all S3 bucket references in IAM policies to use proper ARN format:
+- `arn:aws:s3:::${S3Bucket}/*` for object-level permissions
+- `arn:aws:s3:::${S3Bucket}` for bucket-level permissions
+
+**Impact**: Stack creation failed during EC2Role creation due to invalid IAM policy syntax.
+
+### 11. Deprecated MySQL Version
+
+**Issue**: `Cannot find version 8.0.35 for mysql`
+
+**Root Cause**: MySQL 8.0.35 was deprecated by AWS RDS as of February 28, 2025. RDS no longer allows creation of new DB instances using MySQL minor versions 8.0.36, 8.0.35, 8.0.34, 8.0.33, and 8.0.32.
+
+**Resolution**: Updated EngineVersion from '8.0.35' to '8.0.42' (latest supported version).
+
+**Impact**: RDS instance creation would fail with version not found error.
+
+### 12. Region-Specific AMI ID
+
+**Issue**: `The image id '[ami-0c02fb55956c7d316]' does not exist`
+
+**Root Cause**: Hardcoded AMI ID `ami-0c02fb55956c7d316` was specific to us-east-1 region, but deployment was attempted in us-west-2 region.
+
+**Resolution**: Replaced hardcoded AMI with dynamic SSM parameter lookup:
+- Added parameter: `LatestAmiId: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>`
+- Default: `/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2`
+- Updated LaunchTemplate to use `!Ref LatestAmiId`
+
+**Impact**: Auto Scaling Group creation failed due to non-existent AMI in target region.
+
+### 13. RDS Deletion Protection Blocking Stack Deletion
+
+**Issue**: `Cannot delete protected DB Instance, please disable deletion protection and try again`
+
+**Root Cause**: RDS instance was created with deletion protection enabled, preventing CloudFormation from deleting the stack during rollback.
+
+**Resolution**: Manually disabled deletion protection using AWS CLI:
+```bash
+aws rds modify-db-instance --db-instance-identifier production-webapp-db --no-deletion-protection --apply-immediately
+```
+
+**Impact**: Stack deletion failed, requiring manual intervention to clean up resources.
+
+### 14. AWS CLI Tag Format Issues
+
+**Issue**: `['Ladumor'] value passed to --tags must be of format Key=Value`
+
+**Root Cause**: Commit author name contained a space, causing AWS CLI to interpret it incorrectly as separate tag values.
+
+**Resolution**: Set environment variable with no spaces: `export COMMIT_AUTHOR="username"`
+
+**Impact**: Deployment script failed due to malformed tag parameters.
+
+### 15. Missing EC2 Key Pair
+
+**Issue**: `The key pair 'default-key' does not exist`
+
+**Root Cause**: CloudFormation template referenced a key pair that doesn't exist in the target AWS account. The template used a parameter `KeyPairName` with default value 'default-key', but this key pair was not created.
+
+**Resolution**: Made the template self-contained by:
+- Adding `EC2KeyPair` resource to create the key pair as part of the stack
+- Removing the `KeyPairName` parameter dependency
+- Updating LaunchTemplate to reference the created key pair: `KeyName: !Ref EC2KeyPair`
+- Adding output for the key pair name for reference
+
+**Impact**: Auto Scaling Group creation failed due to non-existent key pair reference.
+
+## Updated Key Learnings
+
+1. **Always run cfn-lint** before deployment to catch template issues early
+2. **Keep JSON and YAML templates in sync** when making changes
+3. **Use specific versions** for AWS resources rather than generic ones
+4. **Provide default values** for parameters to avoid deployment failures
+5. **Test both template structure and deployed infrastructure** separately
+6. **AWS SDK import names** can be different from service names
+7. **Standard web APIs** have limitations compared to Node.js-specific implementations
+8. **Always use ARN format** for S3 bucket references in IAM policies
+9. **Check AWS service deprecation schedules** before using specific versions
+10. **Use region-agnostic AMI lookups** instead of hardcoded AMI IDs
+11. **Consider deletion protection implications** when designing RDS instances
+12. **Validate environment variables** to prevent CLI parameter format issues
+13. **Make templates self-contained** by creating required resources within the stack
+
+## Updated Prevention Strategies
+
+1. Set up pre-commit hooks to run cfn-lint
+2. Automate JSON template generation from YAML
+3. Use parameter validation in CloudFormation templates
+4. Implement proper error handling in integration tests
+5. Document required environment variables and setup steps
+6. **Add IAM policy validation** to catch ARN format issues
+7. **Implement version checking** against AWS service deprecation schedules
+8. **Use SSM parameter lookups** for region-specific resources like AMIs
+9. **Configure appropriate deletion policies** for production vs development environments
+10. **Sanitize environment variables** before passing to AWS CLI commands
+11. **Create required AWS resources** within CloudFormation templates instead of relying on pre-existing resources

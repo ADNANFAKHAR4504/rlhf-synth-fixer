@@ -30,8 +30,7 @@ describe('TapStack CloudFormation Template', () => {
       const expectedParams = [
         'EnvironmentName',
         'OwnerName',
-        'ExistingVPCId',
-        'KeyPairName',
+        'LatestAmiId',
       ];
       expectedParams.forEach(param => {
         expect(template.Parameters[param]).toBeDefined();
@@ -45,10 +44,10 @@ describe('TapStack CloudFormation Template', () => {
       expect(param.Description).toBe('Environment name for resource tagging');
     });
 
-    test('KeyPairName parameter should be correct type', () => {
-      const param = template.Parameters.KeyPairName;
-      expect(param.Type).toBe('String');
-      expect(param.Default).toBe('default-key');
+    test('LatestAmiId parameter should be correct type', () => {
+      const param = template.Parameters.LatestAmiId;
+      expect(param.Type).toBe('AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>');
+      expect(param.Default).toBe('/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2');
     });
   });
 
@@ -108,11 +107,9 @@ describe('TapStack CloudFormation Template', () => {
       );
     });
 
-    test('should have VPC peering connection', () => {
-      expect(template.Resources.VPCPeeringConnection).toBeDefined();
-      expect(template.Resources.VPCPeeringConnection.Type).toBe(
-        'AWS::EC2::VPCPeeringConnection'
-      );
+    test('should have EC2 key pair', () => {
+      expect(template.Resources.EC2KeyPair).toBeDefined();
+      expect(template.Resources.EC2KeyPair.Type).toBe('AWS::EC2::KeyPair');
     });
   });
 
@@ -173,7 +170,7 @@ describe('TapStack CloudFormation Template', () => {
       expect(rds).toBeDefined();
       expect(rds.Type).toBe('AWS::RDS::DBInstance');
       expect(rds.Properties.Engine).toBe('mysql');
-      expect(rds.Properties.EngineVersion).toBe('8.0.35');
+      expect(rds.Properties.EngineVersion).toBe('8.0.42');
     });
 
     test('RDS should have proper security settings', () => {

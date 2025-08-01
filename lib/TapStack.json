@@ -12,18 +12,35 @@
             "Default": "DevOps-Team",
             "Description": "Owner name for resource tagging"
         },
-        "ExistingVPCId": {
-            "Type": "String",
-            "Default": "vpc-12345678",
-            "Description": "ID of the existing VPC for peering (CIDR: 10.0.0.0/16)"
-        },
-        "KeyPairName": {
-            "Type": "String",
-            "Default": "default-key",
-            "Description": "EC2 Key Pair for SSH access"
+        "LatestAmiId": {
+            "Type": "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>",
+            "Default": "/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2",
+            "Description": "Latest Amazon Linux 2 AMI ID"
         }
     },
     "Resources": {
+        "EC2KeyPair": {
+            "Type": "AWS::EC2::KeyPair",
+            "Properties": {
+                "KeyName": {
+                    "Fn::Sub": "${EnvironmentName}-webapp-key"
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentName"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "OwnerName"
+                        }
+                    }
+                ]
+            }
+        },
         "KMSKey": {
             "Type": "AWS::KMS::Key",
             "Properties": {
@@ -362,37 +379,6 @@
                 }
             }
         },
-        "VPCPeeringConnection": {
-            "Type": "AWS::EC2::VPCPeeringConnection",
-            "Properties": {
-                "VpcId": {
-                    "Ref": "WebAppVPC"
-                },
-                "PeerVpcId": {
-                    "Ref": "ExistingVPCId"
-                },
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${EnvironmentName}-VPC-Peering"
-                        }
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "EnvironmentName"
-                        }
-                    },
-                    {
-                        "Key": "Owner",
-                        "Value": {
-                            "Ref": "OwnerName"
-                        }
-                    }
-                ]
-            }
-        },
         "WebServerSecurityGroup": {
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
@@ -567,7 +553,7 @@
                                         "s3:PutObject"
                                     ],
                                     "Resource": {
-                                        "Fn::Sub": "${S3Bucket}/*"
+                                        "Fn::Sub": "arn:aws:s3:::${S3Bucket}/*"
                                     }
                                 },
                                 {
@@ -576,7 +562,7 @@
                                         "s3:ListBucket"
                                     ],
                                     "Resource": {
-                                        "Ref": "S3Bucket"
+                                        "Fn::Sub": "arn:aws:s3:::${S3Bucket}"
                                     }
                                 },
                                 {
@@ -754,7 +740,7 @@
                             },
                             "Action": "s3:GetObject",
                             "Resource": {
-                                "Fn::Sub": "${S3Bucket}/*"
+                                "Fn::Sub": "arn:aws:s3:::${S3Bucket}/*"
                             },
                             "Condition": {
                                 "StringEquals": {
@@ -845,10 +831,12 @@
                     "Fn::Sub": "${EnvironmentName}-WebApp-LaunchTemplate"
                 },
                 "LaunchTemplateData": {
-                    "ImageId": "ami-0c02fb55956c7d316",
+                    "ImageId": {
+                        "Ref": "LatestAmiId"
+                    },
                     "InstanceType": "t3.micro",
                     "KeyName": {
-                        "Ref": "KeyPairName"
+                        "Ref": "EC2KeyPair"
                     },
                     "SecurityGroupIds": [
                         {
@@ -995,7 +983,7 @@
                 },
                 "DBInstanceClass": "db.t3.micro",
                 "Engine": "mysql",
-                "EngineVersion": "8.0.35",
+                "EngineVersion": "8.0.42",
                 "AllocatedStorage": 20,
                 "StorageType": "gp2",
                 "StorageEncrypted": true,
@@ -1201,6 +1189,17 @@
             "Export": {
                 "Name": {
                     "Fn::Sub": "${EnvironmentName}-DB-Endpoint"
+                }
+            }
+        },
+        "EC2KeyPairName": {
+            "Description": "Name of the EC2 Key Pair for SSH access",
+            "Value": {
+                "Ref": "EC2KeyPair"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-EC2-KeyPair"
                 }
             }
         }
