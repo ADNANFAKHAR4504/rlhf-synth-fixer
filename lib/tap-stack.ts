@@ -42,7 +42,7 @@ export class TapStack extends TerraformStack {
     // Configure AWS Provider for each region with an alias
     // this expects AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY to be set in the environment
     AWS_REGION_OVERRIDE.forEach(region => {
-      const alias = region.replace(/-/g, '_'); // Ensure all dashes are replaced
+      const alias = `region_${region.replace(/-/g, '_')}`; // Prefix with 'region_' and replace dashes
       new ServerlessCms(this, `serverless-cms-${region}`, {
         provider: new AwsProvider(this, `aws_${alias}`, {
           region: region,

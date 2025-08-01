@@ -40,7 +40,7 @@ describe('TapStack', () => {
     ['us-east-1', 'us-west-2', 'eu-central-1'].forEach(region => {
       expect(JSON.stringify(synth)).toContain(`serverless-cms-${region}`);
       expect(JSON.stringify(synth)).toContain(
-        `aws.${region.replace('-', '_')}`
+        `region.${region.replace(/-/g, '_')}`
       );
       expect(JSON.stringify(synth)).toContain(region);
     });
