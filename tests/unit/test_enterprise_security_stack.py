@@ -1,6 +1,7 @@
 """Unit tests for EnterpriseSecurityStack."""
 
 import json
+
 from cdktf import App
 
 from lib.enterprise_security_stack import EnterpriseSecurityStack

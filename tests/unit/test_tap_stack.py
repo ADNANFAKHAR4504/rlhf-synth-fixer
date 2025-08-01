@@ -1,6 +1,7 @@
 """Unit tests for TAP stack."""
 
 import json
+
 from cdktf import App
 
 from lib.tap_stack import TapStack
