@@ -1,8 +1,6 @@
 import json
 import os
-import unittest
 import pytest
-import boto3
 import requests
 from pytest import mark
 
