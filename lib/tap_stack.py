@@ -8,12 +8,12 @@ manages environment-specific configurations.
 from typing import Optional
 
 from aws_cdk import (
-    Stack,
     aws_ec2 as ec2,
     aws_rds as rds,
     aws_s3 as s3,
     aws_iam as iam,
     aws_cloudfront as cloudfront,
+    aws_cloudfront_origins as origins,
     RemovalPolicy,
     Duration
 )
@@ -72,9 +72,12 @@ class TapStack(cdk.Stack):
     super().__init__(scope, construct_id, **kwargs)
 
     # Get environment suffix from props, context, or use 'dev' as default
+    # Note: environment_suffix preserved for compatibility but not used in current implementation
     environment_suffix = (
         props.environment_suffix if props else None
     ) or self.node.try_get_context('environmentSuffix') or 'dev'
+    # Store for potential future use
+    self.environment_suffix = environment_suffix
 
     self.vpc = ec2.Vpc(
       self, "EcommerceVpc",
@@ -94,12 +97,16 @@ class TapStack(cdk.Stack):
       ]
   )
         
-    # Create CloudFront Origin Access Control
-    self.oac = cloudfront.OriginAccessControl(
+    # Create CloudFront Origin Access Control using L1 construct
+    self.oac = cloudfront.CfnOriginAccessControl(
       self, "EcommerceOAC",
-      description="OAC for e-commerce S3 bucket",
-      origin_access_control_origin_type=cloudfront.OriginAccessControlOriginType.S3,
-      signing=cloudfront.Signing.SIGV4_ALWAYS
+      origin_access_control_config=cloudfront.CfnOriginAccessControl.OriginAccessControlConfigProperty(
+        description="OAC for e-commerce S3 bucket",
+        name="EcommerceS3OAC",
+        origin_access_control_origin_type="s3",
+        signing_behavior="always",
+        signing_protocol="sigv4"
+      )
     )
         
     # Create S3 bucket with security configurations
@@ -123,7 +130,7 @@ class TapStack(cdk.Stack):
     bucket = s3.Bucket(
       self, "EcommerceBucket",
       bucket_name=f"ecommerce-assets-{self.account}-{self.region}",
-      versioning=True,
+      versioned=True,
       encryption=s3.BucketEncryption.S3_MANAGED,
       block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
       removal_policy=RemovalPolicy.RETAIN,
@@ -231,7 +238,8 @@ class TapStack(cdk.Stack):
             "rds-db:connect"
           ],
           resources=[
-            f"arn:aws:rds-db:{self.region}:{self.account}:dbuser:{self.rds_instance.instance_resource_id}/ecommerce_app"
+            f"arn:aws:rds-db:{self.region}:{self.account}:dbuser:"
+            f"{self.rds_instance.instance_resource_id}/ecommerce_app"
           ]
         ),
         iam.PolicyStatement(
@@ -298,9 +306,8 @@ class TapStack(cdk.Stack):
     distribution = cloudfront.Distribution(
       self, "EcommerceDistribution",
       default_behavior=cloudfront.BehaviorOptions(
-        origin=cloudfront.S3Origin(
-          bucket=self.s3_bucket,
-          origin_access_control=self.oac
+        origin=origins.S3Origin(
+          bucket=self.s3_bucket
         ),
         viewer_protocol_policy=cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
         cache_policy=cloudfront.CachePolicy.CACHING_OPTIMIZED,
@@ -309,6 +316,13 @@ class TapStack(cdk.Stack):
       ),
       price_class=cloudfront.PriceClass.PRICE_CLASS_100,
       enabled=True
+    )
+    
+    # Configure the distribution to use the OAC
+    cfn_distribution = distribution.node.default_child
+    cfn_distribution.add_property_override(
+      "DistributionConfig.Origins.0.OriginAccessControlId", 
+      self.oac.attr_id
     )
     
     return distribution
@@ -325,7 +339,8 @@ class TapStack(cdk.Stack):
           resources=[f"{self.s3_bucket.bucket_arn}/*"],
           conditions={
             "StringEquals": {
-              "AWS:SourceArn": f"arn:aws:cloudfront::{self.account}:distribution/{self.cloudfront_distribution.distribution_id}"
+              "AWS:SourceArn": f"arn:aws:cloudfront::{self.account}:distribution/"
+                               f"{self.cloudfront_distribution.distribution_id}"
             }
           }
         ),
