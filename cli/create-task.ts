@@ -12,6 +12,7 @@ interface TaskMetadata {
   complexity: string;
   turn_type: string;
   po_id: string;
+  team: string;
   startedAt: string;
 }
 
@@ -153,6 +154,18 @@ async function main(): Promise<void> {
       },
     });
 
+    const team = await select({
+      message: 'Select the team:',
+      choices: [
+        { name: '1', value: '1' },
+        { name: '2', value: '2' },
+        { name: '3', value: '3' },
+        { name: '4', value: '4' },
+        { name: '5', value: '5' },
+        { name: 'synth', value: 'synth' },
+      ],
+    });
+
     // Generate template folder name
     const templateName = `${platform}-${language}`;
 
@@ -174,6 +187,7 @@ async function main(): Promise<void> {
       complexity,
       turn_type: turnType,
       po_id: taskId,
+      team,
       startedAt: new Date().toISOString(),
     };
 
@@ -184,6 +198,7 @@ async function main(): Promise<void> {
     console.log(`Complexity: ${complexity}`);
     console.log(`Turn Type: ${turnType}`);
     console.log(`Task ID: ${taskId}`);
+    console.log(`Team: ${team}`);
     console.log(`Template: ${templateName}`);
 
     const confirmApply = await confirm({

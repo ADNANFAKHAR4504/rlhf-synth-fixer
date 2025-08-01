@@ -3,8 +3,7 @@ set -e
 
 echo "=== Docker Entry Point - Starting CI/CD Pipeline ==="
 
-# Run setup.sh to prepare the environment
-./scripts/setup.sh
+
 
 # Set up AWS credentials if they exist
 if [ -n "$AWS_ACCESS_KEY_ID" ] && [ -n "$AWS_SECRET_ACCESS_KEY" ]; then
@@ -35,20 +34,28 @@ else
 fi
 
 # Set default environment variables
-export ENVIRONMENT_SUFFIX=${ENVIRONMENT_SUFFIX:-dev}
 export CI=${CI:-1}
-export RUN_TESTS=${RUN_TESTS:-0}
+export TASK_PATH=${TASK_PATH:unknown} # cfn-yaml/Pr278 
+# Set ENVIRONMENT_SUFFIX as the last part of the task path lowercased
+if [[ "$TASK_PATH" == */* ]]; then
+    ENVIRONMENT_SUFFIX=$(echo "$TASK_PATH" | awk -F/ '{print $NF}' | tr '[:upper:]' '[:lower:]')
+else
+    ENVIRONMENT_SUFFIX="$TASK_PATH"
+fi
 
 echo "Environment configuration:"
 echo "  ENVIRONMENT_SUFFIX: $ENVIRONMENT_SUFFIX"
 echo "  CI: $CI"
-echo "  RUN_TESTS: $RUN_TESTS"
 
 # If arguments are provided, execute them instead of the pipeline
 if [ $# -gt 0 ]; then
     echo "Executing provided command: $*"
     exec "$@"
 fi
+
+# Extract task from archive
+cp -r archive/"$TASK_PATH"/* ./
+echo "Extracted task from archive: $TASK_PATH"
 
 # Check if metadata.json exists
 if [ ! -f "metadata.json" ]; then

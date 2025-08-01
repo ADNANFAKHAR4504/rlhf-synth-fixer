@@ -17,7 +17,7 @@ permissions:
 
 env:
   NODE_VERSION: '22.17.0'
-  # Use PR number for resource isolation, fallback to 'main' for main branch
+  # Use PR number for resource isolation, fallback to 'dev' for main branch
   # Prefix with 'pr' to ensure AWS resource names start with a letter
   ENVIRONMENT_SUFFIX: ${{ github.event.number && format('pr{0}', github.event.number) || 'dev' }}
   S3_RELEASE_BUCKET_NAME: 'iac-rlhf-aws-release'
@@ -69,7 +69,7 @@ jobs:
           fi
 
           if [ ! -f "lib/MODEL_RESPONSE.md" ]; then
-            echo "❌ lib/PROMPT.md not found, exiting with failure"
+            echo "❌ lib/MODEL_RESPONSE.md not found, exiting with failure"
             exit 1
           fi
 
@@ -102,7 +102,7 @@ jobs:
           pip install pipenv==2025.0.4
 
       - name: Install Pulumi CLI
-        if: needs.synth.outputs.platform == 'pulumi'
+        if: needs.detect-metadata.outputs.platform == 'pulumi'
         uses: pulumi/actions@v5
         with:
           pulumi-version: 3.109.0
@@ -438,7 +438,6 @@ jobs:
             echo "Flat outputs:"
             cat cfn-outputs/flat-outputs.json || echo "No flat outputs"
             rm -f temp-${STACK_NAME}-outputs.json temp-stack.json temp-merged.json temp-flat.json
-
             
           else
             echo "ℹ️ Not a CDK TypeScript or CloudFormation project, creating empty outputs for consistency"
@@ -658,11 +657,62 @@ jobs:
           AWS_DEFAULT_REGION: ${{ env.AWS_DEFAULT_REGION }}
           PULUMI_ORG: ${{ env.PULUMI_ORG }}
 
+  claude-code-action:
+    runs-on: ubuntu-24.04
+    name: 'Claude Review'
+    needs: [integration-tests-live]
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      id-token: write
+      actions: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: refs/pull/${{ github.event.pull_request.number }}/head
+
+      - name: Check for required documentation files
+        id: docs-check
+        run: |
+          if [ ! -f "lib/PROMPT.md" ]; then
+            echo "❌ lib/PROMPT.md not found, exiting with failure"
+            exit 1
+          fi
+
+          if [ ! -f "lib/MODEL_RESPONSE.md" ]; then
+            echo "❌ lib/MODEL_RESPONSE.md not found, exiting with failure"
+            exit 1
+          fi
+
+          if [ ! -f "lib/IDEAL_RESPONSE.md" ]; then
+            echo "❌ lib/IDEAL_RESPONSE.md not found, exiting with failure"
+            exit 1
+          fi
+
+          if [ ! -f "lib/MODEL_FAILURES.md" ]; then
+            echo "❌ lib/MODEL_FAILURES.md not found, exiting with failure"
+            exit 1
+          fi
+
+      - name: Run Claude PR Review Action
+        uses: anthropics/claude-code-action@beta
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          timeout_minutes: '60'
+          allowed_tools: 'Bash,Read,Write,Edit,MultiEdit,Glob,Grep,LS,Task,TodoWrite'
+          trigger_phrase: ''
+          custom_instructions: |
+            Follow instructions in .claude/agents/iac-code-reviewer.md
+
   cleanup:
     name: Cleanup (Destroy Resources)
     runs-on: ubuntu-24.04
-    needs: [detect-metadata, integration-tests-live]
-    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
+    needs: [detect-metadata, integration-tests-live, claude-code-action]
+    if: ${{ always() && github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
     environment: stage
 
     steps:
@@ -741,7 +791,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: coverage-reports
-          path: coverage/
+          path: . # Download to the root
 
       - name: Configure AWS
         uses: ./.github/actions/configure-aws
@@ -836,7 +886,7 @@ jobs:
             # Define list of paths to move to archive
             PATHS_TO_ARCHIVE=(
             "lib"
-            "bin" 
+            "bin"
             "test"
             "tests"
             "cdk.json"
