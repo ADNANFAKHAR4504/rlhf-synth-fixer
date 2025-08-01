@@ -22,7 +22,7 @@ The **complete end-to-end workflow** must be:
 - **Tool**: Pulumi
 - **Language**: Python
 - **Cloud Provider**: AWS
-- **Primary Region**: `us-west-2`
+- **Primary Region**: `us-east-1`
 - **Environments**: Must support `development`, `testing`, and `production` with different resource configurations
 - **Naming Convention**: All resources must follow `inventory-{resource-type}-{environment}` pattern
 - **Security Requirement**: All resources must use encryption at rest and least privilege IAM policies
