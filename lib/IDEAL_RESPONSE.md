@@ -264,6 +264,9 @@
       "Type": "AWS::EC2::SecurityGroup",
       "Properties": {
         "GroupDescription": "Enable SSH access and internal communication",
+        "GroupName": {
+          "Fn::Sub": "${ProjectName}-SG"
+        },
         "VpcId": {
           "Ref": "VPC"
         },
