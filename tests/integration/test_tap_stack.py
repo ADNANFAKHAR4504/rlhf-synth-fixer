@@ -237,3 +237,71 @@ class TestTapStackIntegration:
       assert synth is not None, "Should handle comprehensive configuration"
     except Exception as e:
       assert False, f"Should not raise exception with comprehensive config: {e}"
+
+
+class TestEnterpriseSecurityStackIntegration:
+  """Integration test cases for EnterpriseSecurityStack class."""
+
+  def test_security_stack_full_deployment_simulation(self):
+    """Test complete security stack deployment simulation."""
+    app = App()
+    TapStack(
+      app,
+      "security-integration-stack",
+      environment_suffix="integration",
+      aws_region="us-east-1",
+      secondary_region="us-west-2",
+      default_tags={
+        "Environment": "integration",
+        "Project": "enterprise-security",
+        "Compliance": "required"
+      }
+    )
+    
+    # Should synthesize without errors
+    synth = app.synth()
+    assert synth is not None
+
+  def test_multi_region_security_deployment(self):
+    """Test multi-region security stack deployment."""
+    app = App()
+    
+    # Create multi-region deployment
+    stack = TapStack(
+      app,
+      "multi-region-security",
+      environment_suffix="prod",
+      aws_region="us-east-1",
+      secondary_region="eu-west-1",
+      default_tags={
+        "Environment": "production",
+        "MultiRegion": "true"
+      }
+    )
+    
+    # Verify both security stacks are created
+    assert stack.primary_security_stack is not None
+    assert stack.secondary_security_stack is not None
+    
+    # Should synthesize without errors
+    synth = app.synth()
+    assert synth is not None
+
+  def test_enterprise_security_compliance_deployment(self):
+    """Test enterprise security deployment with compliance features."""
+    app = App()
+    TapStack(
+      app,
+      "compliance-security-stack",
+      environment_suffix="compliance",
+      aws_region="us-gov-east-1",
+      default_tags={
+        "Environment": "government",
+        "Compliance": "FedRAMP",
+        "Classification": "restricted"
+      }
+    )
+    
+    # Should synthesize without errors for compliance deployment
+    synth = app.synth()
+    assert synth is not None
