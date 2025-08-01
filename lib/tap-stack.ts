@@ -19,6 +19,8 @@ import { Subnet } from '@cdktf/provider-aws/lib/subnet';
 import { Vpc } from '@cdktf/provider-aws/lib/vpc';
 import { TerraformOutput, TerraformStack } from 'cdktf';
 import { Construct } from 'constructs';
+import * as fs from 'fs';
+import * as path from 'path';
 
 interface TapStackProps {
   region?: string;
@@ -28,6 +30,19 @@ interface TapStackProps {
   stateBucketRegion?: string;
   awsRegion?: string;
   defaultTags?: { tags: Record<string, string> };
+}
+
+// Function to read AWS region from file
+function readRegionFromFile(): string | null {
+  try {
+    const regionFilePath = path.join(__dirname, 'AWS_REGION');
+    if (fs.existsSync(regionFilePath)) {
+      return fs.readFileSync(regionFilePath, 'utf8').trim();
+    }
+  } catch (error) {
+    console.warn('Could not read AWS_REGION file:', error);
+  }
+  return null;
 }
 
 // Utility function to generate unique resource names
@@ -45,8 +60,10 @@ export class TapStack extends TerraformStack {
   constructor(scope: Construct, name: string, props: TapStackProps) {
     super(scope, name);
 
-    // Use provided values or hardcoded defaults for us-west-2
-    const region = props.region || props.awsRegion || 'us-west-2';
+    // Use provided values with fallback to AWS_REGION file, then us-west-2 default
+    const fileRegion = readRegionFromFile();
+    const region = props.region || props.awsRegion || fileRegion || 'us-west-2';
+    
     // Latest Amazon Linux 2 AMI for us-west-2 as of July 29, 2025
     const amiId = props.amiId || 'ami-0e0d5cba8c90ba8c5';
     const tags = { Environment: 'Production' };
