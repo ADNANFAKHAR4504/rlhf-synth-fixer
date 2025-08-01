@@ -15,10 +15,8 @@ class TestTapStack:
   def test_tap_stack_creation(self):
     """Test that TAP stack can be created without errors."""
     app = App()
-    # Create a TerraformStack to contain the TapStack construct
-    terraform_stack = TerraformStack(app, "test-terraform-stack")
     stack = TapStack(
-      terraform_stack,
+      app,
       "test-stack",
       environment_suffix="test",
       aws_region="us-west-2",
@@ -28,8 +26,8 @@ class TestTapStack:
       }
     )
     
-    # Use Testing.synth for the TerraformStack
-    synth_result = Testing.synth(terraform_stack)
+    # Use Testing.synth for TapStack directly
+    synth_result = Testing.synth(stack)
     assert synth_result is not None
     
     # Verify the stack object has expected attributes
@@ -40,16 +38,15 @@ class TestTapStack:
   def test_stack_s3_bucket_configuration(self):
     """Test that S3 bucket is configured with proper settings."""
     app = App()
-    terraform_stack = TerraformStack(app, "test-terraform-stack")
     stack = TapStack(
-      terraform_stack,
+      app,
       "test-stack",
       environment_suffix="test",
       aws_region="us-west-2"
     )
     
     # Use Testing.synth and parse the result
-    synth_result = Testing.synth(terraform_stack)
+    synth_result = Testing.synth(stack)
     terraform_config = json.loads(synth_result)
     
     # Find S3 bucket resources - look for the main TAP bucket
@@ -68,14 +65,13 @@ class TestTapStack:
   def test_stack_s3_versioning_configuration(self):
     """Test that S3 bucket versioning is properly configured."""
     app = App()
-    terraform_stack = TerraformStack(app, "test-terraform-stack")
     stack = TapStack(
-      terraform_stack,
+      app,
       "test-stack",
       environment_suffix="test"
     )
     
-    synth_result = Testing.synth(terraform_stack)
+    synth_result = Testing.synth(stack)
     terraform_config = json.loads(synth_result)
     
     # Check for versioning configuration
@@ -93,14 +89,13 @@ class TestTapStack:
   def test_stack_s3_encryption_configuration(self):
     """Test that S3 bucket encryption is properly configured."""
     app = App()
-    terraform_stack = TerraformStack(app, "test-terraform-stack")
     stack = TapStack(
-      terraform_stack,
+      app,
       "test-stack",
       environment_suffix="test"
     )
     
-    synth_result = Testing.synth(terraform_stack)
+    synth_result = Testing.synth(stack)
     terraform_config = json.loads(synth_result)
     
     # Check for encryption configuration
@@ -124,16 +119,15 @@ class TestTapStack:
   def test_stack_backend_configuration(self):
     """Test that Terraform backend is properly configured."""
     app = App()
-    terraform_stack = TerraformStack(app, "test-terraform-stack")
     stack = TapStack(
-      terraform_stack,
+      app,
       "test-stack",
       environment_suffix="test",
       state_bucket="custom-state-bucket",
       state_bucket_region="us-east-1"
     )
     
-    synth_result = Testing.synth(terraform_stack)
+    synth_result = Testing.synth(stack)
     terraform_config = json.loads(synth_result)
     
     # Check backend configuration
@@ -146,9 +140,8 @@ class TestTapStack:
   def test_stack_aws_provider_configuration(self):
     """Test that AWS providers are properly configured."""
     app = App()
-    terraform_stack = TerraformStack(app, "test-terraform-stack")
     stack = TapStack(
-      terraform_stack,
+      app,
       "test-stack",
       environment_suffix="test",
       aws_region="us-west-2",
@@ -156,7 +149,7 @@ class TestTapStack:
       default_tags={"Environment": "test"}
     )
     
-    synth_result = Testing.synth(terraform_stack)
+    synth_result = Testing.synth(stack)
     terraform_config = json.loads(synth_result)
     
     # Check provider configuration
@@ -188,9 +181,8 @@ class TestTapStack:
   def test_stack_enterprise_security_stacks(self):
     """Test that enterprise security stacks are instantiated."""
     app = App()
-    terraform_stack = TerraformStack(app, "test-terraform-stack")
     stack = TapStack(
-      terraform_stack,
+      app,
       "test-stack",
       environment_suffix="test",
       aws_region="us-east-1",
@@ -202,13 +194,12 @@ class TestTapStack:
     assert stack.secondary_security_stack is not None
     
     # Synthesize to ensure no errors
-    synth_result = Testing.synth(terraform_stack)
+    synth_result = Testing.synth(stack)
     assert synth_result is not None
 
   def test_stack_with_custom_parameters(self):
     """Test stack creation with custom parameters."""
     app = App()
-    terraform_stack = TerraformStack(app, "test-terraform-stack")
     custom_tags = {
       "Environment": "production",
       "Project": "enterprise",
@@ -216,7 +207,7 @@ class TestTapStack:
     }
     
     stack = TapStack(
-      terraform_stack,
+      app,
       "prod-stack",
       environment_suffix="prod",
       aws_region="eu-central-1",
@@ -227,7 +218,7 @@ class TestTapStack:
     )
     
     # Synthesize and verify configuration
-    synth_result = Testing.synth(terraform_stack)
+    synth_result = Testing.synth(stack)
     terraform_config = json.loads(synth_result)
     
     # Check that custom parameters are applied
@@ -251,14 +242,13 @@ class TestTapStack:
   def test_stack_resource_dependencies(self):
     """Test that resources have proper dependencies."""
     app = App()
-    terraform_stack = TerraformStack(app, "test-terraform-stack")
     stack = TapStack(
-      terraform_stack,
+      app,
       "test-stack",
       environment_suffix="test"
     )
     
-    synth_result = Testing.synth(terraform_stack)
+    synth_result = Testing.synth(stack)
     terraform_config = json.loads(synth_result)
     
     # Check that versioning and encryption reference the TAP bucket
@@ -522,6 +512,16 @@ class TestEnterpriseSecurityStack:
     synth_result = Testing.synth(stack)
     terraform_config = json.loads(synth_result)
     
+    # Verify different roles exist for different purposes
+    iam_roles = terraform_config.get("resource", {}).get("aws_iam_role", {})
+    assert len(iam_roles) > 0, "Should have multiple IAM roles for different services"
+    
+    # Check that roles have specific purposes
+    role_names = [role.get("name", "") for role in iam_roles.values()]
+    expected_roles = ["EnterpriseCloudTrailRole", "EnterpriseVPCFlowLogsRole", "EnterpriseLambdaExecutionRole"]
+    
+    for expected_role in expected_roles:
+      assert any(expected_role in name for name in role_names), f"Should have {expected_role}"
     # Verify different roles exist for different purposes
     iam_roles = terraform_config.get("resource", {}).get("aws_iam_role", {})
     assert len(iam_roles) > 0, "Should have multiple IAM roles for different services"
