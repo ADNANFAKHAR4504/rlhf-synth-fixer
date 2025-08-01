@@ -63,8 +63,9 @@ function generateUniqueResourceName(
 ): string {
   const timestamp = Date.now().toString(36);
   const randomSuffix = Math.random().toString(36).substring(2, 8);
+  const processId = process.pid.toString(36);
   const envSuffix = environmentSuffix ? `-${environmentSuffix}` : '';
-  return `${baseName}${envSuffix}-${timestamp}-${randomSuffix}`.toLowerCase();
+  return `${baseName}${envSuffix}-${timestamp}-${processId}-${randomSuffix}`.toLowerCase();
 }
 
 export class TapStack extends TerraformStack {
@@ -216,7 +217,7 @@ export class TapStack extends TerraformStack {
 
     // CloudWatch Log Group for VPC Flow Logs
     const flowLogGroup = new CloudwatchLogGroup(this, 'vpc-flow-log-group', {
-      name: `/aws/vpc/flowlogs-${environmentSuffix}`,
+      name: `/aws/vpc/${generateUniqueResourceName('flowlogs', environmentSuffix)}`,
       retentionInDays: 14,
       tags: commonTags,
     });
@@ -478,7 +479,7 @@ echo "<h1>Nova Model Breaking App</h1>" > /var/www/html/index.html
       runtime: 'python3.9',
       handler: 'lambda_function.handler',
       role: lambdaRole.arn,
-      filename: './lambda_function.zip',
+      filename: `${__dirname}/lambda_function.zip`,
       tags: commonTags,
     });
 
