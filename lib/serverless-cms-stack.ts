@@ -44,12 +44,13 @@ export class ServerlessCms extends Construct {
       provider: props.provider,
     });
 
+    // Create Archive provider for packaging Lambda code
     new ArchiveProvider(this, 'archive', {
-      alias: currentRegion.name.replace('-', '_'), // Replace '-' with '_' for compatibility
+      alias: currentRegion.region.replace('-', '_'), // Replace '-' with '_' for compatibility
     });
 
     // Generate resource names with region-specific naming convention
-    const resourcePrefix = `cms-${props.environment}-${currentRegion.name}`;
+    const resourcePrefix = `cms-${props.environment}-${currentRegion.region}`;
 
     // Create Lambda function code
     this.createLambdaCode();
@@ -127,7 +128,7 @@ export class ServerlessCms extends Construct {
       tags: {
         Environment: props.environment,
         Service: 'cms',
-        Region: currentRegion.name,
+        Region: currentRegion.region,
       },
     });
 
@@ -222,7 +223,7 @@ export class ServerlessCms extends Construct {
         variables: {
           CONTENT_TABLE: contentTable.name,
           CONTENT_BUCKET: contentBucket.bucket,
-          REGION: currentRegion.name,
+          REGION: currentRegion.region,
         },
       },
       tags: {
@@ -395,7 +396,7 @@ export class ServerlessCms extends Construct {
         },
         {
           domainName:
-            api.id + '.execute-api.' + currentRegion.name + '.amazonaws.com',
+            api.id + '.execute-api.' + currentRegion.region + '.amazonaws.com',
           originId: 'API-Gateway',
           originPath: `/${props.environment}`,
           customOriginConfig: {
@@ -479,7 +480,7 @@ export class ServerlessCms extends Construct {
 
     // Store important values for outputs
     new TerraformOutput(this, 'api_gateway_url', {
-      value: `https://${api.id}.execute-api.${currentRegion.name}.amazonaws.com/${props.environment}`,
+      value: `https://${api.id}.execute-api.${currentRegion.region}.amazonaws.com/${props.environment}`,
       description: 'API Gateway invoke URL',
     });
 
