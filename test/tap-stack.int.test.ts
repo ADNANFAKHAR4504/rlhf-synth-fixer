@@ -108,6 +108,18 @@ describe('Production CloudFormation Integration Tests', () => {
     expect(res.Name).toBe('DBSecret');
   });
 
+  test('Public Route Table should have a route to Internet Gateway', async () => {
+  const res = await ec2.send(new DescribeRouteTablesCommand({ Filters: [
+    { Name: 'vpc-id', Values: [outputs.VPCId] }
+  ]}));
+
+  const routeTable = res.RouteTables?.find(rt =>
+    rt.Routes?.some(route => route.GatewayId?.startsWith('igw-'))
+  );
+
+  expect(routeTable).toBeDefined();
+  });
+
   test('CloudWatch alarms should be present', async () => {
     const res = await cloudwatch.send(new DescribeAlarmsCommand({ AlarmNames: ['Production-CPU-High', 'Production-RDS-CPU-High'] }));
     expect(res.MetricAlarms?.length).toBeGreaterThanOrEqual(2);

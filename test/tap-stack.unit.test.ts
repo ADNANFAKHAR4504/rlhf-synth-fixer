@@ -68,12 +68,35 @@ describe('TAP Stack Template Unit Tests', () => {
     expect(template.Resources?.RDSKMSKeyAlias).toBeDefined();
   });
 
+  test('should define a Secrets Manager secret for DB credentials', () => {
+  const secret = template.Resources?.DBSecret;
+  expect(secret).toBeDefined();
+  expect(secret.Type).toBe('AWS::SecretsManager::Secret');
+  expect(secret.Properties.GenerateSecretString).toBeDefined();
+  expect(secret.Properties.GenerateSecretString.SecretStringTemplate).toContain('"username":"dbadmin"');
+  expect(secret.Properties.GenerateSecretString.GenerateStringKey).toBe('password');
+  expect(secret.Properties.GenerateSecretString.PasswordLength).toBe(16);
+});
+
   test('should have CloudWatch alarms for ASG and RDS metrics', () => {
     expect(template.Resources?.CPUAlarmHigh).toBeDefined();
     expect(template.Resources?.CPUAlarmLow).toBeDefined();
     expect(template.Resources?.DatabaseCPUAlarm).toBeDefined();
     expect(template.Resources?.DatabaseConnectionsAlarm).toBeDefined();
   });
+
+  test('should define a public route table', () => {
+    const routeTable = template.Resources?.PublicRouteTable;
+    expect(routeTable).toBeDefined();
+    expect(routeTable.Type).toBe('AWS::EC2::RouteTable');
+    expect(routeTable.Properties.VpcId).toBeDefined();
+    expect(routeTable.Properties.Tags).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ Key: 'Name', Value: 'Production-Public-Routes' }),
+        expect.objectContaining({ Key: 'environment', Value: 'production' }),
+      ])
+    );
+   });
 
   test('should define secure S3 bucket with encryption and block public access', () => {
     const bucket = template.Resources?.S3Bucket;

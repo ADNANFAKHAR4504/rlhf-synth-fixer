@@ -2,22 +2,6 @@
     "AWSTemplateFormatVersion": "2010-09-09",
     "Description": "Production-grade high-availability infrastructure with VPC, RDS, ALB, Auto Scaling, and monitoring",
     "Parameters": {
-        "DBUsername": {
-            "Type": "String",
-            "Default": "admin",
-            "Description": "Database administrator username",
-            "MinLength": 1,
-            "MaxLength": 16,
-            "AllowedPattern": "[a-zA-Z][a-zA-Z0-9]*"
-        },
-        "DBPassword": {
-            "Type": "String",
-            "NoEcho": true,
-            "Description": "Database administrator password",
-            "MinLength": 8,
-            "MaxLength": 41,
-            "AllowedPattern": "[a-zA-Z0-9]*"
-        },
         "InstanceType": {
             "Type": "String",
             "Default": "t3.medium",
@@ -36,7 +20,10 @@
                 "AMI": "ami-054b7fc3c333ac6d2"
             },
             "us-east-1": {
-                "AMI": "ami-0ad253013fad0a42a"
+                "AMI": "ami-08a6efd148b1f7504"
+            },
+            "ap-south-1": {
+                "AMI": "ami-0d0ad8bb301edb745"
             }
         }
     },
@@ -57,6 +44,19 @@
                         "Value": "production"
                     }
                 ]
+            }
+        },
+        "DBSecret": {
+            "Type": "AWS::SecretsManager::Secret",
+            "Properties": {
+                "Name": "DBSecret",
+                "Description": "credentials for DB Password",
+                "GenerateSecretString": {
+                    "SecretStringTemplate": "{\"username\":\"dbadmin\"}",
+                    "GenerateStringKey": "password",
+                    "PasswordLength": 16,
+                    "ExcludeCharacters": "\"@/\\\\"
+                }
             }
         },
         "InternetGateway": {
@@ -564,10 +564,28 @@
                 "Engine": "postgres",
                 "EngineVersion": "15.7",
                 "MasterUsername": {
-                    "Ref": "DBUsername"
+                    "Fn::Join": [
+                        "",
+                        [
+                            "{{resolve:secretsmanager:",
+                            {
+                                "Ref": "DBSecret"
+                            },
+                            ":SecretString:username}}"
+                        ]
+                    ]
                 },
                 "MasterUserPassword": {
-                    "Ref": "DBPassword"
+                    "Fn::Join": [
+                        "",
+                        [
+                            "{{resolve:secretsmanager:",
+                            {
+                                "Ref": "DBSecret"
+                            },
+                            ":SecretString:password}}"
+                        ]
+                    ]
                 },
                 "AllocatedStorage": 20,
                 "StorageType": "gp2",
@@ -587,7 +605,7 @@
                 "BackupRetentionPeriod": 7,
                 "PreferredBackupWindow": "03:00-04:00",
                 "PreferredMaintenanceWindow": "sun:04:00-sun:05:00",
-                "DeletionProtection": true,
+                "DeletionProtection": false,
                 "Tags": [
                     {
                         "Key": "Name",
@@ -722,9 +740,7 @@
                         }
                     ],
                     "UserData": {
-                        "Fn::Base64": {
-                            "Fn::Sub": "#!/bin/bash\nyum update -y\nyum install -y httpd\nsystemctl start httpd\nsystemctl enable httpd\necho \"<h1>Production Web Server - $(hostname -f)</h1>\" > /var/www/html/index.html\n"
-                        }
+                        "Fn::Base64": "#!/bin/bash\nyum update -y\nyum install -y httpd\nsystemctl start httpd\nsystemctl enable httpd\necho \"<h1>Production Web Server - $(hostname -f)</h1>\" > /var/www/html/index.html\n"
                     },
                     "TagSpecifications": [
                         {
@@ -915,7 +931,7 @@
             "Type": "AWS::S3::Bucket",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "production-app-bucket-${AWS::AccountId}-${AWS::Region}"
+                    "Fn::Sub": "production-bucket-${AWS::AccountId}-${AWS::Region}"
                 },
                 "PublicAccessBlockConfiguration": {
                     "BlockPublicAcls": true,
