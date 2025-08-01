@@ -76,8 +76,18 @@ cov.json
 cfn-outputs/*
 
 # CDK Terraform stuff
+dist/
+imports/*
+!imports/__init__.py
+.terraform
 cdktf.out
 cdktf.log
 *terraform.*.tfstate*
 .gen
-.terraform
+__pycache__/
+.pulumi/
+# CDK build output
+cdk.out/
+
+tasks-status.md
+worktree/
