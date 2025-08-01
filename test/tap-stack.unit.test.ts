@@ -14,12 +14,6 @@ describe('TapStack CloudFormation Template', () => {
     template = JSON.parse(templateContent);
   });
 
-  describe('Write Integration TESTS', () => {
-    test('Dont forget!', async () => {
-      expect(false).toBe(true);
-    });
-  });
-
   describe('Template Structure', () => {
     test('should have valid CloudFormation format version', () => {
       expect(template.AWSTemplateFormatVersion).toBe('2010-09-09');
@@ -28,7 +22,7 @@ describe('TapStack CloudFormation Template', () => {
     test('should have a description', () => {
       expect(template.Description).toBeDefined();
       expect(template.Description).toBe(
-        'TAP Stack - Task Assignment Platform CloudFormation Template'
+        'Complete CI/CD Pipeline for Microservices Deployment with VPC, EC2, CodePipeline, CodeBuild, and CodeDeploy'
       );
     });
 
@@ -39,77 +33,188 @@ describe('TapStack CloudFormation Template', () => {
   });
 
   describe('Parameters', () => {
-    test('should have EnvironmentSuffix parameter', () => {
-      expect(template.Parameters.EnvironmentSuffix).toBeDefined();
+    test('should have ProjectName parameter', () => {
+      expect(template.Parameters.ProjectName).toBeDefined();
     });
 
-    test('EnvironmentSuffix parameter should have correct properties', () => {
-      const envSuffixParam = template.Parameters.EnvironmentSuffix;
-      expect(envSuffixParam.Type).toBe('String');
-      expect(envSuffixParam.Default).toBe('dev');
-      expect(envSuffixParam.Description).toBe(
-        'Environment suffix for resource naming (e.g., dev, staging, prod)'
-      );
-      expect(envSuffixParam.AllowedPattern).toBe('^[a-zA-Z0-9]+$');
-      expect(envSuffixParam.ConstraintDescription).toBe(
-        'Must contain only alphanumeric characters'
-      );
+    test('ProjectName parameter should have correct properties', () => {
+      const projectNameParam = template.Parameters.ProjectName;
+      expect(projectNameParam.Type).toBe('String');
+      expect(projectNameParam.Default).toBe('Corp-MicroservicesPipeline');
+      expect(projectNameParam.Description).toBe('Name of the project for resource naming');
+    });
+
+    test('should have GitHubRepoOwner parameter', () => {
+      expect(template.Parameters.GitHubRepoOwner).toBeDefined();
+    });
+
+    test('should have GitHubRepoName parameter', () => {
+      expect(template.Parameters.GitHubRepoName).toBeDefined();
+    });
+
+    test('should have GitHubBranch parameter', () => {
+      expect(template.Parameters.GitHubBranch).toBeDefined();
+    });
+
+    test('should have GitHubToken parameter', () => {
+      expect(template.Parameters.GitHubToken).toBeDefined();
+      expect(template.Parameters.GitHubToken.NoEcho).toBe(true);
+    });
+
+    test('should have InstanceType parameter', () => {
+      expect(template.Parameters.InstanceType).toBeDefined();
+      expect(template.Parameters.InstanceType.AllowedValues).toContain('t3.medium');
+    });
+
+    test('should have KeyPairName parameter', () => {
+      expect(template.Parameters.KeyPairName).toBeDefined();
+      expect(template.Parameters.KeyPairName.Type).toBe('AWS::EC2::KeyPair::KeyName');
+    });
+
+    test('should have MinInstances parameter', () => {
+      expect(template.Parameters.MinInstances).toBeDefined();
+      expect(template.Parameters.MinInstances.Type).toBe('Number');
+      expect(template.Parameters.MinInstances.Default).toBe(2);
+    });
+
+    test('should have MaxInstances parameter', () => {
+      expect(template.Parameters.MaxInstances).toBeDefined();
+      expect(template.Parameters.MaxInstances.Type).toBe('Number');
+      expect(template.Parameters.MaxInstances.Default).toBe(6);
     });
   });
 
   describe('Resources', () => {
-    test('should have TurnAroundPromptTable resource', () => {
-      expect(template.Resources.TurnAroundPromptTable).toBeDefined();
+    test('should have VPC resource', () => {
+      expect(template.Resources.CorpVPC).toBeDefined();
     });
 
-    test('TurnAroundPromptTable should be a DynamoDB table', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      expect(table.Type).toBe('AWS::DynamoDB::Table');
+    test('CorpVPC should be a VPC', () => {
+      const vpc = template.Resources.CorpVPC;
+      expect(vpc.Type).toBe('AWS::EC2::VPC');
     });
 
-    test('TurnAroundPromptTable should have correct deletion policies', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      expect(table.DeletionPolicy).toBe('Delete');
-      expect(table.UpdateReplacePolicy).toBe('Delete');
+    test('should have Internet Gateway', () => {
+      expect(template.Resources.CorpInternetGateway).toBeDefined();
     });
 
-    test('TurnAroundPromptTable should have correct properties', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const properties = table.Properties;
+    test('should have public subnets', () => {
+      expect(template.Resources.CorpPublicSubnet1).toBeDefined();
+      expect(template.Resources.CorpPublicSubnet2).toBeDefined();
+    });
 
-      expect(properties.TableName).toEqual({
-        'Fn::Sub': 'TurnAroundPromptTable${EnvironmentSuffix}',
+    test('should have private subnets', () => {
+      expect(template.Resources.CorpPrivateSubnet1).toBeDefined();
+      expect(template.Resources.CorpPrivateSubnet2).toBeDefined();
+    });
+
+    test('should have NAT Gateway', () => {
+      expect(template.Resources.CorpNATGateway).toBeDefined();
+    });
+
+    test('should have security groups', () => {
+      expect(template.Resources.CorpWebServerSecurityGroup).toBeDefined();
+      expect(template.Resources.CorpLoadBalancerSecurityGroup).toBeDefined();
+    });
+
+    test('should have IAM roles', () => {
+      expect(template.Resources.CorpCodePipelineServiceRole).toBeDefined();
+      expect(template.Resources.CorpCodeBuildServiceRole).toBeDefined();
+      expect(template.Resources.CorpCodeDeployServiceRole).toBeDefined();
+      expect(template.Resources.CorpEC2InstanceRole).toBeDefined();
+    });
+
+    test('should have S3 artifact store', () => {
+      expect(template.Resources.CorpArtifactStore).toBeDefined();
+      expect(template.Resources.CorpArtifactStore.Type).toBe('AWS::S3::Bucket');
+    });
+
+    test('should have EC2 launch template', () => {
+      expect(template.Resources.CorpLaunchTemplate).toBeDefined();
+      expect(template.Resources.CorpLaunchTemplate.Type).toBe('AWS::EC2::LaunchTemplate');
+    });
+
+    test('should have Auto Scaling Group', () => {
+      expect(template.Resources.CorpAutoScalingGroup).toBeDefined();
+      expect(template.Resources.CorpAutoScalingGroup.Type).toBe('AWS::AutoScaling::AutoScalingGroup');
+    });
+
+    test('should have Application Load Balancer', () => {
+      expect(template.Resources.CorpApplicationLoadBalancer).toBeDefined();
+      expect(template.Resources.CorpApplicationLoadBalancer.Type).toBe('AWS::ElasticLoadBalancingV2::LoadBalancer');
+    });
+
+    test('should have target group', () => {
+      expect(template.Resources.CorpTargetGroup).toBeDefined();
+      expect(template.Resources.CorpTargetGroup.Type).toBe('AWS::ElasticLoadBalancingV2::TargetGroup');
+    });
+
+    test('should have CodeDeploy application', () => {
+      expect(template.Resources.CorpCodeDeployApplication).toBeDefined();
+      expect(template.Resources.CorpCodeDeployApplication.Type).toBe('AWS::CodeDeploy::Application');
+    });
+
+    test('should have CodeDeploy deployment group', () => {
+      expect(template.Resources.CorpCodeDeployDeploymentGroup).toBeDefined();
+      expect(template.Resources.CorpCodeDeployDeploymentGroup.Type).toBe('AWS::CodeDeploy::DeploymentGroup');
+    });
+
+    test('should have CodeBuild project', () => {
+      expect(template.Resources.CorpCodeBuildProject).toBeDefined();
+      expect(template.Resources.CorpCodeBuildProject.Type).toBe('AWS::CodeBuild::Project');
+    });
+
+    test('should have CodePipeline', () => {
+      expect(template.Resources.CorpCodePipeline).toBeDefined();
+      expect(template.Resources.CorpCodePipeline.Type).toBe('AWS::CodePipeline::Pipeline');
+    });
+  });
+
+  describe('Resource Naming Convention', () => {
+    test('all resources should follow Corp- naming convention', () => {
+      const resourceNames = Object.keys(template.Resources);
+      const corpResources = resourceNames.filter(name => name.startsWith('Corp'));
+      expect(corpResources.length).toBeGreaterThan(0);
+      
+      // Check that all main resources follow the naming convention
+      const expectedCorpResources = [
+        'CorpVPC',
+        'CorpInternetGateway',
+        'CorpPublicSubnet1',
+        'CorpPublicSubnet2',
+        'CorpPrivateSubnet1',
+        'CorpPrivateSubnet2',
+        'CorpNATGateway',
+        'CorpWebServerSecurityGroup',
+        'CorpLoadBalancerSecurityGroup',
+        'CorpCodePipelineServiceRole',
+        'CorpCodeBuildServiceRole',
+        'CorpCodeDeployServiceRole',
+        'CorpEC2InstanceRole',
+        'CorpArtifactStore',
+        'CorpLaunchTemplate',
+        'CorpAutoScalingGroup',
+        'CorpApplicationLoadBalancer',
+        'CorpTargetGroup',
+        'CorpCodeDeployApplication',
+        'CorpCodeDeployDeploymentGroup',
+        'CorpCodeBuildProject',
+        'CorpCodePipeline'
+      ];
+
+      expectedCorpResources.forEach(resourceName => {
+        expect(template.Resources[resourceName]).toBeDefined();
       });
-      expect(properties.BillingMode).toBe('PAY_PER_REQUEST');
-      expect(properties.DeletionProtectionEnabled).toBe(false);
-    });
-
-    test('TurnAroundPromptTable should have correct attribute definitions', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const attributeDefinitions = table.Properties.AttributeDefinitions;
-
-      expect(attributeDefinitions).toHaveLength(1);
-      expect(attributeDefinitions[0].AttributeName).toBe('id');
-      expect(attributeDefinitions[0].AttributeType).toBe('S');
-    });
-
-    test('TurnAroundPromptTable should have correct key schema', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const keySchema = table.Properties.KeySchema;
-
-      expect(keySchema).toHaveLength(1);
-      expect(keySchema[0].AttributeName).toBe('id');
-      expect(keySchema[0].KeyType).toBe('HASH');
     });
   });
 
   describe('Outputs', () => {
     test('should have all required outputs', () => {
       const expectedOutputs = [
-        'TurnAroundPromptTableName',
-        'TurnAroundPromptTableArn',
-        'StackName',
-        'EnvironmentSuffix',
+        'VPCId',
+        'LoadBalancerDNS',
+        'CodePipelineName',
+        'ArtifactStoreBucket'
       ];
 
       expectedOutputs.forEach(outputName => {
@@ -117,43 +222,41 @@ describe('TapStack CloudFormation Template', () => {
       });
     });
 
-    test('TurnAroundPromptTableName output should be correct', () => {
-      const output = template.Outputs.TurnAroundPromptTableName;
-      expect(output.Description).toBe('Name of the DynamoDB table');
-      expect(output.Value).toEqual({ Ref: 'TurnAroundPromptTable' });
+    test('VPCId output should be correct', () => {
+      const output = template.Outputs.VPCId;
+      expect(output.Description).toBe('VPC ID');
+      expect(output.Value).toEqual({ Ref: 'CorpVPC' });
       expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-TurnAroundPromptTableName',
+        'Fn::Sub': '${AWS::StackName}-VPC-ID',
       });
     });
 
-    test('TurnAroundPromptTableArn output should be correct', () => {
-      const output = template.Outputs.TurnAroundPromptTableArn;
-      expect(output.Description).toBe('ARN of the DynamoDB table');
+    test('LoadBalancerDNS output should be correct', () => {
+      const output = template.Outputs.LoadBalancerDNS;
+      expect(output.Description).toBe('Application Load Balancer DNS Name');
       expect(output.Value).toEqual({
-        'Fn::GetAtt': ['TurnAroundPromptTable', 'Arn'],
+        'Fn::GetAtt': ['CorpApplicationLoadBalancer', 'DNSName'],
       });
       expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-TurnAroundPromptTableArn',
-      });
-    });
-
-    test('StackName output should be correct', () => {
-      const output = template.Outputs.StackName;
-      expect(output.Description).toBe('Name of this CloudFormation stack');
-      expect(output.Value).toEqual({ Ref: 'AWS::StackName' });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-StackName',
+        'Fn::Sub': '${AWS::StackName}-ALB-DNS',
       });
     });
 
-    test('EnvironmentSuffix output should be correct', () => {
-      const output = template.Outputs.EnvironmentSuffix;
-      expect(output.Description).toBe(
-        'Environment suffix used for this deployment'
-      );
-      expect(output.Value).toEqual({ Ref: 'EnvironmentSuffix' });
+    test('CodePipelineName output should be correct', () => {
+      const output = template.Outputs.CodePipelineName;
+      expect(output.Description).toBe('CodePipeline Name');
+      expect(output.Value).toEqual({ Ref: 'CorpCodePipeline' });
       expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-EnvironmentSuffix',
+        'Fn::Sub': '${AWS::StackName}-Pipeline-Name',
+      });
+    });
+
+    test('ArtifactStoreBucket output should be correct', () => {
+      const output = template.Outputs.ArtifactStoreBucket;
+      expect(output.Description).toBe('S3 Bucket for Pipeline Artifacts');
+      expect(output.Value).toEqual({ Ref: 'CorpArtifactStore' });
+      expect(output.Export.Name).toEqual({
+        'Fn::Sub': '${AWS::StackName}-Artifact-Store-Bucket',
       });
     });
   });
@@ -172,14 +275,14 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Outputs).not.toBeNull();
     });
 
-    test('should have exactly one resource', () => {
+    test('should have multiple resources for complete CI/CD pipeline', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(1);
+      expect(resourceCount).toBeGreaterThan(20); // Should have many resources for complete pipeline
     });
 
-    test('should have exactly one parameter', () => {
+    test('should have multiple parameters for configuration', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(1);
+      expect(parameterCount).toBeGreaterThan(5); // Should have multiple parameters
     });
 
     test('should have exactly four outputs', () => {
@@ -188,23 +291,39 @@ describe('TapStack CloudFormation Template', () => {
     });
   });
 
-  describe('Resource Naming Convention', () => {
-    test('table name should follow naming convention with environment suffix', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const tableName = table.Properties.TableName;
-
-      expect(tableName).toEqual({
-        'Fn::Sub': 'TurnAroundPromptTable${EnvironmentSuffix}',
-      });
+  describe('CI/CD Pipeline Configuration', () => {
+    test('CodePipeline should have correct stages', () => {
+      const pipeline = template.Resources.CorpCodePipeline;
+      const stages = pipeline.Properties.Stages;
+      
+      expect(stages).toHaveLength(3);
+      expect(stages[0].Name).toBe('Source');
+      expect(stages[1].Name).toBe('Build');
+      expect(stages[2].Name).toBe('Deploy');
     });
 
-    test('export names should follow naming convention', () => {
-      Object.keys(template.Outputs).forEach(outputKey => {
-        const output = template.Outputs[outputKey];
-        expect(output.Export.Name).toEqual({
-          'Fn::Sub': `\${AWS::StackName}-${outputKey}`,
-        });
-      });
+    test('CodePipeline should use S3 artifact store', () => {
+      const pipeline = template.Resources.CorpCodePipeline;
+      const artifactStore = pipeline.Properties.ArtifactStore;
+      
+      expect(artifactStore.Type).toBe('S3');
+      expect(artifactStore.Location).toEqual({ Ref: 'CorpArtifactStore' });
+    });
+
+    test('CodeBuild should have correct environment', () => {
+      const codebuild = template.Resources.CorpCodeBuildProject;
+      const environment = codebuild.Properties.Environment;
+      
+      expect(environment.Type).toBe('LINUX_CONTAINER');
+      expect(environment.ComputeType).toBe('BUILD_GENERAL1_MEDIUM');
+      expect(environment.Image).toBe('aws/codebuild/amazonlinux2-x86_64-standard:3.0');
+    });
+
+    test('CodeDeploy should have correct deployment configuration', () => {
+      const codedeploy = template.Resources.CorpCodeDeployDeploymentGroup;
+      
+      expect(codedeploy.Properties.DeploymentConfigName).toBe('CodeDeployDefault.AllInstancesOneAtATime');
+      expect(codedeploy.Properties.AutoRollbackConfiguration.Enabled).toBe(true);
     });
   });
 });

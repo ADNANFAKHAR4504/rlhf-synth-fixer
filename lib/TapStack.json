@@ -1,6 +1,42 @@
 {
   "AWSTemplateFormatVersion": "2010-09-09",
   "Description": "Complete CI/CD Pipeline for Microservices Deployment with VPC, EC2, CodePipeline, CodeBuild, and CodeDeploy",
+  "Metadata": {
+    "AWS::CloudFormation::Interface": {
+      "ParameterGroups": [
+        {
+          "Label": {
+            "default": "Project Configuration"
+          },
+          "Parameters": [
+            "ProjectName",
+            "GitHubRepoOwner",
+            "GitHubRepoName",
+            "GitHubBranch"
+          ]
+        },
+        {
+          "Label": {
+            "default": "Infrastructure Configuration"
+          },
+          "Parameters": [
+            "InstanceType",
+            "KeyPairName",
+            "MinInstances",
+            "MaxInstances"
+          ]
+        },
+        {
+          "Label": {
+            "default": "GitHub Integration"
+          },
+          "Parameters": [
+            "GitHubToken"
+          ]
+        }
+      ]
+    }
+  },
   "Parameters": {
     "ProjectName": {
       "Type": "String",
