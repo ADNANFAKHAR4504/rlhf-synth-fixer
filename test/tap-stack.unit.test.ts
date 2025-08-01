@@ -63,7 +63,7 @@ describe('TapStack Unit Tests', () => {
         S3FileProcessorFunction: { 
           Type: 'AWS::Lambda::Function',
           Properties: {
-            Runtime: 'nodejs18.x',
+            Runtime: 'nodejs22.x',
             Handler: 'index.handler',
             Timeout: 30,
             MemorySize: 128,
@@ -219,7 +219,7 @@ describe('TapStack Unit Tests', () => {
       const lambda = template.Resources.S3FileProcessorFunction;
       const props = lambda.Properties;
       
-      expect(props.Runtime).toBe('nodejs18.x');
+      expect(props.Runtime).toBe('nodejs22.x');
       expect(props.Handler).toBe('index.handler');
     });
 
