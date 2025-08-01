@@ -4,7 +4,7 @@ Here's a **comprehensive high-level user prompt** that clearly defines the goals
 
 **High-Level User Prompt:**
 
-> I need an AWS CloudFormation template written in **YAML** that sets up a **secure and scalable network infrastructure** in the **us-east-1** region. The template should automate the following requirements:
+> I need an AWS CloudFormation template written in **YAML** that sets up a **secure and scalable network infrastructure** in the **us-west-2** region. The template should automate the following requirements:
 >
 > 1. **VPC Configuration**:
 >
