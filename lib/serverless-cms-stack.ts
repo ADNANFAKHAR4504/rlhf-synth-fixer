@@ -27,7 +27,8 @@ import * as path from 'path';
 
 export interface ServerlessCmsProps {
   environment: string;
-  provider: AwsProvider;
+  providerAws: AwsProvider;
+  providerArchive: ArchiveProvider;
 }
 
 export class ServerlessCms extends Construct {
@@ -41,13 +42,7 @@ export class ServerlessCms extends Construct {
 
     // Get current region
     const currentRegion = new DataAwsRegion(this, 'current', {
-      provider: props.provider,
-    });
-
-    // Create Archive provider for packaging Lambda code
-    const alias = `region_${currentRegion.region.replace(/-/g, '_')}`;
-    new ArchiveProvider(this, 'archive', {
-      alias: alias,
+      provider: props.providerAws,
     });
 
     // Generate resource names with region-specific naming convention
@@ -58,13 +53,13 @@ export class ServerlessCms extends Construct {
 
     // S3 Bucket for content storage
     const contentBucket = new S3Bucket(this, 'content_bucket', {
-      provider: props.provider,
+      provider: props.providerAws,
       bucket: `${resourcePrefix}-content`,
     });
 
     // Enable versioning on S3 bucket
     new S3BucketVersioningA(this, 'content_bucket_versioning', {
-      provider: props.provider,
+      provider: props.providerAws,
       bucket: contentBucket.id,
       versioningConfiguration: {
         status: 'Enabled',
@@ -73,7 +68,7 @@ export class ServerlessCms extends Construct {
 
     // Block public access to S3 bucket
     new S3BucketPublicAccessBlock(this, 'content_bucket_pab', {
-      provider: props.provider,
+      provider: props.providerAws,
       bucket: contentBucket.id,
       blockPublicAcls: true,
       blockPublicPolicy: true,
@@ -86,7 +81,7 @@ export class ServerlessCms extends Construct {
       this,
       'content_bucket_encryption',
       {
-        provider: props.provider,
+        provider: props.providerAws,
         bucket: contentBucket.id,
         rule: [
           {
@@ -100,7 +95,7 @@ export class ServerlessCms extends Construct {
 
     // DynamoDB table for content metadata
     const contentTable = new DynamodbTable(this, 'content_table', {
-      provider: props.provider,
+      provider: props.providerAws,
       name: `${resourcePrefix}-content-metadata`,
       billingMode: 'PAY_PER_REQUEST',
       hashKey: 'contentId',
@@ -135,7 +130,7 @@ export class ServerlessCms extends Construct {
 
     // IAM Role for Lambda functions
     const lambdaRole = new IamRole(this, 'lambda_role', {
-      provider: props.provider,
+      provider: props.providerAws,
       name: `${resourcePrefix}-lambda-role`,
       assumeRolePolicy: JSON.stringify({
         Version: '2012-10-17',
@@ -157,7 +152,7 @@ export class ServerlessCms extends Construct {
 
     // Attach basic Lambda execution role
     new IamRolePolicyAttachment(this, 'lambda_basic_execution', {
-      provider: props.provider,
+      provider: props.providerArchive,
       role: lambdaRole.name,
       policyArn:
         'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole',
@@ -165,7 +160,7 @@ export class ServerlessCms extends Construct {
 
     // Custom IAM policy for Lambda to access DynamoDB and S3
     const lambdaPolicy = new IamPolicy(this, 'lambda_policy', {
-      provider: props.provider,
+      provider: props.providerAws,
       name: `${resourcePrefix}-lambda-policy`,
       description: 'IAM policy for CMS Lambda functions',
       policy: JSON.stringify({
@@ -198,7 +193,7 @@ export class ServerlessCms extends Construct {
     });
 
     new IamRolePolicyAttachment(this, 'lambda_policy_attachment', {
-      provider: props.provider,
+      provider: props.providerAws,
       role: lambdaRole.name,
       policyArn: lambdaPolicy.arn,
     });
@@ -212,7 +207,7 @@ export class ServerlessCms extends Construct {
 
     // Lambda function for content management
     const contentLambda = new LambdaFunction(this, 'content_lambda', {
-      provider: props.provider,
+      provider: props.providerAws,
       functionName: `${resourcePrefix}-content-handler`,
       role: lambdaRole.arn,
       handler: 'handler.lambda_handler',
@@ -235,7 +230,7 @@ export class ServerlessCms extends Construct {
 
     // API Gateway REST API
     const api = new ApiGatewayRestApi(this, 'cms_api', {
-      provider: props.provider,
+      provider: props.providerAws,
       name: `${resourcePrefix}-api`,
       description: 'CMS API Gateway',
       endpointConfiguration: {
@@ -249,7 +244,7 @@ export class ServerlessCms extends Construct {
 
     // API Gateway resources and methods
     const contentResource = new ApiGatewayResource(this, 'content_resource', {
-      provider: props.provider,
+      provider: props.providerAws,
       restApiId: api.id,
       parentId: api.rootResourceId,
       pathPart: 'content',
@@ -259,7 +254,7 @@ export class ServerlessCms extends Construct {
       this,
       'content_id_resource',
       {
-        provider: props.provider,
+        provider: props.providerAws,
         restApiId: api.id,
         parentId: contentResource.id,
         pathPart: '{contentId}',
@@ -268,7 +263,7 @@ export class ServerlessCms extends Construct {
 
     // GET method for retrieving content with Lambda integration
     const getMethod = new ApiGatewayMethod(this, 'get_content_method', {
-      provider: props.provider,
+      provider: props.providerAws,
       restApiId: api.id,
       resourceId: contentIdResource.id,
       httpMethod: 'GET',
@@ -276,7 +271,7 @@ export class ServerlessCms extends Construct {
     });
 
     new ApiGatewayIntegration(this, 'get_integration', {
-      provider: props.provider,
+      provider: props.providerAws,
       restApiId: api.id,
       resourceId: contentIdResource.id,
       httpMethod: getMethod.httpMethod,
@@ -287,7 +282,7 @@ export class ServerlessCms extends Construct {
 
     // POST method for creating content with Lambda integration
     const postMethod = new ApiGatewayMethod(this, 'post_content_method', {
-      provider: props.provider,
+      provider: props.providerAws,
       restApiId: api.id,
       resourceId: contentResource.id,
       httpMethod: 'POST',
@@ -295,7 +290,7 @@ export class ServerlessCms extends Construct {
     });
 
     new ApiGatewayIntegration(this, 'post_integration', {
-      provider: props.provider,
+      provider: props.providerAws,
       restApiId: api.id,
       resourceId: contentResource.id,
       httpMethod: postMethod.httpMethod,
@@ -306,7 +301,7 @@ export class ServerlessCms extends Construct {
 
     // PUT method for updating content with Lambda integration
     const putMethod = new ApiGatewayMethod(this, 'put_content_method', {
-      provider: props.provider,
+      provider: props.providerAws,
       restApiId: api.id,
       resourceId: contentIdResource.id,
       httpMethod: 'PUT',
@@ -314,7 +309,7 @@ export class ServerlessCms extends Construct {
     });
 
     new ApiGatewayIntegration(this, 'put_integration', {
-      provider: props.provider,
+      provider: props.providerAws,
       restApiId: api.id,
       resourceId: contentIdResource.id,
       httpMethod: putMethod.httpMethod,
@@ -325,7 +320,7 @@ export class ServerlessCms extends Construct {
 
     // DELETE method for deleting content with Lambda integration
     const deleteMethod = new ApiGatewayMethod(this, 'delete_content_method', {
-      provider: props.provider,
+      provider: props.providerAws,
       restApiId: api.id,
       resourceId: contentIdResource.id,
       httpMethod: 'DELETE',
@@ -333,7 +328,7 @@ export class ServerlessCms extends Construct {
     });
 
     new ApiGatewayIntegration(this, 'delete_integration', {
-      provider: props.provider,
+      provider: props.providerAws,
       restApiId: api.id,
       resourceId: contentIdResource.id,
       httpMethod: deleteMethod.httpMethod,
@@ -344,7 +339,7 @@ export class ServerlessCms extends Construct {
 
     // Lambda permissions for API Gateway
     new LambdaPermission(this, 'api_gateway_lambda_permission', {
-      provider: props.provider,
+      provider: props.providerAws,
       statementId: 'AllowExecutionFromAPIGateway',
       action: 'lambda:InvokeFunction',
       functionName: contentLambda.functionName,
@@ -354,14 +349,14 @@ export class ServerlessCms extends Construct {
 
     // API Gateway deployment
     const deployment = new ApiGatewayDeployment(this, 'api_deployment', {
-      provider: props.provider,
+      provider: props.providerAws,
       restApiId: api.id,
       dependsOn: [getMethod, postMethod, putMethod, deleteMethod],
     });
 
     // API Gateway stage
     new ApiGatewayStage(this, 'api_stage', {
-      provider: props.provider,
+      provider: props.providerAws,
       deploymentId: deployment.id,
       restApiId: api.id,
       stageName: props.environment,
@@ -373,7 +368,7 @@ export class ServerlessCms extends Construct {
 
     // CloudFront Origin Access Control
     const oac = new CloudfrontOriginAccessControl(this, 's3_oac', {
-      provider: props.provider,
+      provider: props.providerAws,
       name: `${resourcePrefix}-s3-oac`,
       description: 'OAC for S3 content bucket',
       originAccessControlOriginType: 's3',
@@ -383,7 +378,7 @@ export class ServerlessCms extends Construct {
 
     // CloudFront Distribution
     const distribution = new CloudfrontDistribution(this, 'cdn', {
-      provider: props.provider,
+      provider: props.providerAws,
       comment: `${resourcePrefix} CMS CloudFront Distribution`,
       enabled: true,
       isIpv6Enabled: true,

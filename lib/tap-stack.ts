@@ -1,3 +1,4 @@
+import { ArchiveProvider } from '@cdktf/provider-archive/lib/provider';
 import {
   AwsProvider,
   AwsProviderDefaultTags,
@@ -43,12 +44,17 @@ export class TapStack extends TerraformStack {
     // this expects AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY to be set in the environment
     AWS_REGION_OVERRIDE.forEach(region => {
       const alias = `region_${region.replace(/-/g, '_')}`; // Prefix with 'region_' and replace dashes
+      const awsProvider = new AwsProvider(this, `aws_${alias}`, {
+        region: region,
+        defaultTags: defaultTags,
+        alias: alias,
+      });
+      const archiveProvider = new ArchiveProvider(this, `archive_${alias}`, {
+        alias: alias,
+      });
       new ServerlessCms(this, `serverless-cms-${region}`, {
-        provider: new AwsProvider(this, `aws_${alias}`, {
-          region: region,
-          defaultTags: defaultTags,
-          alias: alias,
-        }),
+        providerAws: awsProvider,
+        providerArchive: archiveProvider,
         environment: environmentSuffix,
       });
     });
