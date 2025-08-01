@@ -13,8 +13,6 @@ import pulumi_aws as aws
 # from .ec2_stack import Ec2Stack
 # from .security_stack import SecurityStack
 
-PROJECT_NAME = "pulumi-infra"
-
 @dataclass
 class TapStackArgs:
   environment_suffix: str = 'dev'
@@ -34,11 +32,8 @@ class TapStackArgs:
 
   def _validate_environment_suffix(self) -> None:
     allowed_envs = {'dev', 'staging', 'prod', 'test'}
-    # Allow PR environments (pr followed by numbers)
-    if (self.environment_suffix not in allowed_envs and 
-        not (self.environment_suffix.startswith('pr') and 
-             self.environment_suffix[2:].isdigit())):
-      raise ValueError(f"Environment suffix must be one of: {allowed_envs} or match pattern 'pr<number>'")
+    if self.environment_suffix not in allowed_envs:
+      raise ValueError(f"Environment suffix must be one of: {allowed_envs}")
 
   def _validate_vpc_cidr(self) -> None:
     if not self.vpc_cidr.endswith(('/16', '/17', '/18', '/19', '/20')):
@@ -66,8 +61,7 @@ class TapStack(pulumi.ComponentResource):
       args: TapStackArgs,
       opts: Optional[ResourceOptions] = None
   ):
-    # Fixed: Use the project name from Pulumi.yaml consistently
-    super().__init__('pulumi-infra:stack:TapStack', name, None, opts)
+    super().__init__('tap:stack:TapStack', name, None, opts)
 
     self.environment_suffix = args.environment_suffix
     self.aws_region = args.aws_region
@@ -148,6 +142,8 @@ class TapStack(pulumi.ComponentResource):
     raw_name = f"tap-test-artifacts-{self.environment_suffix}-{pulumi.get_stack()}"
     bucket_name = self._sanitize_bucket_name(self._unique_suffix(raw_name))
 
+
+
     self.artifacts_bucket = aws.s3.Bucket(
         f"tap-artifacts-{self.environment_suffix}",
         bucket=bucket_name,
@@ -157,6 +153,7 @@ class TapStack(pulumi.ComponentResource):
         }),
         opts=ResourceOptions(parent=self)
     )
+
 
     aws.s3.BucketVersioningV2(
       f"tap-artifacts-versioning-{self.environment_suffix}",
