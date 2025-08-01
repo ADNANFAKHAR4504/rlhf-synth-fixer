@@ -14,8 +14,7 @@ from aws_cdk import aws_s3 as s3
 from aws_cdk import aws_codebuild as codebuild
 from aws_cdk import aws_codepipeline as codepipeline
 from aws_cdk import aws_codepipeline_actions as codepipeline_actions
-from aws_cdk import aws_logs as logs
-from aws_cdk import aws_cloudtrail as cloudtrail
+
 from constructs import Construct
 
 
@@ -96,11 +95,11 @@ class IAMStack(Construct):
     environment_suffix = environment_suffix or 'dev'
     random_suffix = generate_random_suffix()
     
-    # CodePipeline service role - Using CDK default naming for uniqueness
+    # CodePipeline service role - Using explicit naming for integration tests
     self.codepipeline_role = iam.Role(
       self,
       f"CodePipelineRole{random_suffix}",
-      # Removed role_name to use CDK's automatic unique naming
+      role_name=f"ciapp-{environment_suffix}-codepipeline-role",
       assumed_by=iam.ServicePrincipal("codepipeline.amazonaws.com"),
       # Using least privilege instead of full access policies
       managed_policies=[],
@@ -164,11 +163,11 @@ class IAMStack(Construct):
       }
     )
     
-    # CodeBuild service role - Using CDK default naming for uniqueness
+    # CodeBuild service role - Using explicit naming for integration tests
     self.codebuild_role = iam.Role(
       self,
       f"CodeBuildRole{random_suffix}", 
-      # Removed role_name to use CDK's automatic unique naming
+      role_name=f"ciapp-{environment_suffix}-codebuild-role",
       assumed_by=iam.ServicePrincipal("codebuild.amazonaws.com"),
       managed_policies=[
         iam.ManagedPolicy.from_aws_managed_policy_name("CloudWatchLogsFullAccess"),
@@ -194,11 +193,11 @@ class IAMStack(Construct):
       }
     )
     
-    # CloudFormation execution role for deployments - Using CDK default naming for uniqueness
+    # CloudFormation execution role for deployments - Using explicit naming for integration tests
     self.cloudformation_role = iam.Role(
       self,
       f"CloudFormationRole{random_suffix}",
-      # Removed role_name to use CDK's automatic unique naming
+      role_name=f"ciapp-{environment_suffix}-cloudformation-role",
       assumed_by=iam.ServicePrincipal("cloudformation.amazonaws.com"),
       managed_policies=[
         iam.ManagedPolicy.from_aws_managed_policy_name("PowerUserAccess")
@@ -263,11 +262,11 @@ class S3Stack(Construct):
     # Apply consistent tagging for governance and cost tracking
     apply_common_tags(self, environment_suffix)
     
-    # S3 bucket for pipeline artifacts - Using CDK automatic naming for uniqueness
+    # S3 bucket for pipeline artifacts - Using explicit naming for integration tests
     self.artifacts_bucket = s3.Bucket(
       self,
       "ArtifactsBucket",
-      # Removed bucket_name to use CDK's automatic unique naming
+      bucket_name=f"ciapp-{environment_suffix}-artifacts-{cdk.Aws.ACCOUNT_ID}",
       versioned=True,
       encryption=s3.BucketEncryption.KMS_MANAGED,
       block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
@@ -371,7 +370,7 @@ class CodeBuildStack(Construct):
       codebuild_role = iam.Role(
         self,
         f"CodeBuildRole{random_suffix}", 
-        # Removed role_name to use CDK's automatic unique naming
+        role_name=f"ciapp-{environment_suffix}-codebuild-role-fallback",
         assumed_by=iam.ServicePrincipal("codebuild.amazonaws.com"),
         managed_policies=[
           iam.ManagedPolicy.from_aws_managed_policy_name("CloudWatchLogsFullAccess"),
@@ -626,7 +625,7 @@ class CodePipelineStack(Construct):
       codepipeline_role = iam.Role(
         self,
         f"CodePipelineRole{random_suffix}",
-        # Removed role_name to use CDK's automatic unique naming
+        role_name=f"ciapp-{environment_suffix}-codepipeline-role-fallback",
         assumed_by=iam.ServicePrincipal("codepipeline.amazonaws.com"),
         managed_policies=[
           iam.ManagedPolicy.from_aws_managed_policy_name("AmazonS3FullAccess"),
@@ -653,11 +652,11 @@ class CodePipelineStack(Construct):
         }
       )
     
-    # Create S3 bucket for source code artifacts - Using CDK automatic naming for uniqueness
+    # Create S3 bucket for source code artifacts - Using explicit naming for integration tests
     self.source_bucket = s3.Bucket(
       self,
       "SourceBucket",
-      # Removed bucket_name to use CDK's automatic unique naming
+      bucket_name=f"ciapp-{environment_suffix}-source-{cdk.Aws.ACCOUNT_ID}",
       versioned=True,
       encryption=s3.BucketEncryption.KMS_MANAGED,
       block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
@@ -853,7 +852,7 @@ class TapStack(cdk.Stack):
       self,
       f"CodeBuildStack{environment_suffix}",
       environment_suffix=environment_suffix,
-      codebuild_role=None,  # Let CodeBuild create its own service role
+      codebuild_role=self.iam_stack.codebuild_role,  # Use role from IAMStack
       artifacts_bucket=self.s3_stack.artifacts_bucket
     )
     
@@ -862,7 +861,7 @@ class TapStack(cdk.Stack):
       self,
       f"CodePipelineStack{environment_suffix}",
       environment_suffix=environment_suffix,
-      codepipeline_role=None,  # Let CodePipeline create its own service role
+      codepipeline_role=self.iam_stack.codepipeline_role,  # Use role from IAMStack
       artifacts_bucket=self.s3_stack.artifacts_bucket,
       build_project=self.codebuild_stack.build_project,
       deploy_staging_project=self.codebuild_stack.deploy_staging_project,
@@ -876,28 +875,3 @@ class TapStack(cdk.Stack):
     
     # Apply consistent tagging for governance and cost tracking
     apply_common_tags(self, environment_suffix)
-    
-    # Add CloudTrail for API auditing and compliance
-    self.cloudtrail = cloudtrail.Trail(
-      self,
-      "CloudTrail",
-      send_to_cloud_watch_logs=True,
-      include_global_service_events=True,
-      is_multi_region_trail=True,
-      enable_file_validation=True,
-      cloud_watch_log_group=logs.LogGroup(
-        self,
-        "CloudTrailLogGroup",
-        retention=logs.RetentionDays.ONE_MONTH,
-        removal_policy=cdk.RemovalPolicy.DESTROY
-      )
-    )
-    
-    # Add CloudWatch Log Group for CodePipeline execution logs
-    self.pipeline_log_group = logs.LogGroup(
-      self,
-      "PipelineLogGroup",
-      log_group_name=f"/aws/codepipeline/{environment_suffix}",
-      retention=logs.RetentionDays.TWO_WEEKS,
-      removal_policy=cdk.RemovalPolicy.DESTROY
-    )

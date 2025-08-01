@@ -52,7 +52,7 @@ class TestTapStack(unittest.TestCase):
 
     # ASSERT - Check that IAM roles are created (multiple roles due to constructs)
     # CodePipeline creates its own action roles, plus our custom roles
-    template.resource_count_is("AWS::IAM::Role", 12)  # Multiple roles from pipeline actions
+    template.resource_count_is("AWS::IAM::Role", 10)  # Multiple roles from pipeline actions
 
   @mark.it("creates CodeBuild projects for build and deployment")
   def test_creates_codebuild_projects(self):
