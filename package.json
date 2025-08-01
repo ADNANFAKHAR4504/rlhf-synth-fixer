@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "license": "MIT",
   "engines": {
-    "node": ">=22.17.0",
+    "node": "22.17.0",
     "npm": ">=10.0.0"
   },
   "bin": {
@@ -36,8 +36,8 @@
     "cdktf:synth": "cdktf synth",
     "cdktf:deploy": "cdktf deploy --auto-approve",
     "cdktf:destroy": "cdktf destroy --auto-approve",
-    "cfn:deploy-yaml": "aws cloudformation deploy --template-file lib/TapStack.yml --stack-name TapStack${ENVIRONMENT_SUFFIX:-dev} --capabilities CAPABILITY_IAM --parameter-overrides EnvironmentSuffix=${ENVIRONMENT_SUFFIX:-dev} --tags Repository=${REPOSITORY:-unknown} CommitAuthor=${COMMIT_AUTHOR:-unknown}",
-    "cfn:deploy-json": "aws cloudformation deploy --template-file lib/TapStack.json --stack-name TapStack${ENVIRONMENT_SUFFIX:-dev} --capabilities CAPABILITY_IAM --parameter-overrides EnvironmentSuffix=${ENVIRONMENT_SUFFIX:-dev} --tags Repository=${REPOSITORY:-unknown} CommitAuthor=${COMMIT_AUTHOR:-unknown}",
+    "cfn:deploy-yaml": "aws cloudformation deploy --template-file lib/TapStack.yml --stack-name TapStack${ENVIRONMENT_SUFFIX:-dev} --capabilities CAPABILITY_IAM --parameter-overrides EnvironmentSuffix=${ENVIRONMENT_SUFFIX:-dev} --tags Repository=${REPOSITORY:-unknown} CommitAuthor=${COMMIT_AUTHOR:-unknown} --s3-bucket=iac-rlhf-cfn-states --s3-prefix=${ENVIRONMENT_SUFFIX:-dev}",
+    "cfn:deploy-json": "aws cloudformation deploy --template-file lib/TapStack.json --stack-name TapStack${ENVIRONMENT_SUFFIX:-dev} --capabilities CAPABILITY_IAM --parameter-overrides EnvironmentSuffix=${ENVIRONMENT_SUFFIX:-dev} --tags Repository=${REPOSITORY:-unknown} CommitAuthor=${COMMIT_AUTHOR:-unknown} --s3-bucket=iac-rlhf-cfn-states --s3-prefix=${ENVIRONMENT_SUFFIX:-dev}",
     "cfn:destroy": "aws cloudformation delete-stack --stack-name TapStack${ENVIRONMENT_SUFFIX:-dev}",
     "release": "semantic-release"
   },
@@ -68,7 +68,7 @@
     "@aws-sdk/client-ssm": "^3.848.0",
     "@aws-sdk/client-wafv2": "^3.848.0",
     "@aws-sdk/credential-provider-node": "^3.846.0",
-    "@inquirer/prompts": "^7.7.1",
+    "@inquirer/prompts": "^7.8.0",
     "@opensearch-project/opensearch": "^3.5.1",
     "@semantic-release/changelog": "6.0.3",
     "@semantic-release/commit-analyzer": "13.0.0",
@@ -111,8 +111,8 @@
   "dependencies": {
     "@aws-sdk/client-acm": "^3.856.0",
     "@aws-sdk/client-elastic-load-balancing-v2": "^3.848.0",
-    "@aws-sdk/client-ssm": "^3.848.0",
     "@aws-sdk/client-sqs": "^3.855.0",
+    "@aws-sdk/client-ssm": "^3.848.0",
     "@aws-sdk/client-wafv2": "^3.848.0",
     "@cdktf/provider-aws": "21.3.0",
     "aws-cdk-lib": "2.204.0",

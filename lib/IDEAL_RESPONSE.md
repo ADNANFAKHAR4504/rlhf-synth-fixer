@@ -1,4 +1,3 @@
-```
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Secure, scalable, and cost-effective web application environment'
 
@@ -13,17 +12,35 @@ Parameters:
     Default: 'DevOps-Team'
     Description: 'Owner name for resource tagging'
 
+  LatestAmiId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: '/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2'
+    Description: 'Latest Amazon Linux 2 AMI ID'
+
   ExistingVPCId:
     Type: String
-    Default: 'vpc-12345678'
-    Description: 'ID of the existing VPC for peering (CIDR: 10.0.0.0/16)'
+    Default: ''
+    Description: 'ID of the existing VPC (172.31.0.0/16) to peer with (leave empty if no peering needed)'
 
-  KeyPairName:
+  EnvironmentSuffix:
     Type: String
-    Default: 'default-key'
-    Description: 'EC2 Key Pair for SSH access'
+    Default: 'dev'
+    Description: 'Environment suffix for unique resource naming'
+
+Conditions:
+  VPCIdProvided: !Not [!Equals [!Ref ExistingVPCId, '']]
 
 Resources:
+  # EC2 Key Pair
+  EC2KeyPair:
+    Type: AWS::EC2::KeyPair
+    Properties:
+      KeyName: !Sub '${EnvironmentName}-webapp-key'
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Owner
+          Value: !Ref OwnerName
   # KMS Key for encryption
   KMSKey:
     Type: AWS::KMS::Key
@@ -173,6 +190,15 @@ Resources:
       DestinationCidrBlock: '0.0.0.0/0'
       GatewayId: !Ref InternetGateway
 
+  # Route to peered VPC (172.31.0.0/16) - conditional
+  PeeredVPCRoute:
+    Type: AWS::EC2::Route
+    Condition: VPCIdProvided
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: '172.31.0.0/16'
+      VpcPeeringConnectionId: !Ref VPCPeeringConnection
+
   PublicSubnet1RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
@@ -184,20 +210,6 @@ Resources:
     Properties:
       RouteTableId: !Ref PublicRouteTable
       SubnetId: !Ref PublicSubnet2
-
-  # VPC Peering
-  VPCPeeringConnection:
-    Type: AWS::EC2::VPCPeeringConnection
-    Properties:
-      VpcId: !Ref WebAppVPC
-      PeerVpcId: !Ref ExistingVPCId
-      Tags:
-        - Key: Name
-          Value: !Sub '${EnvironmentName}-VPC-Peering'
-        - Key: Environment
-          Value: !Ref EnvironmentName
-        - Key: Owner
-          Value: !Ref OwnerName
 
   # Security Groups
   WebServerSecurityGroup:
@@ -217,6 +229,11 @@ Resources:
           ToPort: 443
           SourceSecurityGroupId: !Ref LoadBalancerSecurityGroup
           Description: 'HTTPS from Load Balancer'
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: '172.31.0.0/16'
+          Description: 'HTTPS from peered VPC'
       SecurityGroupEgress:
         - IpProtocol: -1
           CidrIp: '0.0.0.0/0'
@@ -271,11 +288,25 @@ Resources:
         - Key: Owner
           Value: !Ref OwnerName
 
+  # VPC Peering Connection (conditional)
+  VPCPeeringConnection:
+    Type: AWS::EC2::VPCPeeringConnection
+    Condition: VPCIdProvided
+    Properties:
+      VpcId: !Ref WebAppVPC
+      PeerVpcId: !Ref ExistingVPCId
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-VPC-Peering'
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Owner
+          Value: !Ref OwnerName
+
   # IAM Roles and Policies
   EC2Role:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${EnvironmentName}-EC2-Role'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -292,11 +323,11 @@ Resources:
                 Action:
                   - s3:GetObject
                   - s3:PutObject
-                Resource: !Sub '${S3Bucket}/*'
+                Resource: !Sub 'arn:aws:s3:::${S3Bucket}/*'
               - Effect: Allow
                 Action:
                   - s3:ListBucket
-                Resource: !Ref S3Bucket
+                Resource: !Sub 'arn:aws:s3:::${S3Bucket}'
               - Effect: Allow
                 Action:
                   - kms:Decrypt
@@ -311,7 +342,6 @@ Resources:
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
-      InstanceProfileName: !Sub '${EnvironmentName}-EC2-InstanceProfile'
       Roles:
         - !Ref EC2Role
 
@@ -395,7 +425,7 @@ Resources:
             Principal:
               Service: cloudfront.amazonaws.com
             Action: s3:GetObject
-            Resource: !Sub '${S3Bucket}/*'
+            Resource: !Sub 'arn:aws:s3:::${S3Bucket}/*'
             Condition:
               StringEquals:
                 'AWS:SourceArn': !Sub 'arn:aws:cloudfront::${AWS::AccountId}:distribution/${CloudFrontDistribution}'
@@ -444,9 +474,9 @@ Resources:
     Properties:
       LaunchTemplateName: !Sub '${EnvironmentName}-WebApp-LaunchTemplate'
       LaunchTemplateData:
-        ImageId: ami-0c02fb55956c7d316 # Amazon Linux 2 AMI
+        ImageId: !Ref LatestAmiId
         InstanceType: t3.micro
-        KeyName: !Ref KeyPairName
+        KeyName: !Ref EC2KeyPair
         SecurityGroupIds:
           - !Ref WebServerSecurityGroup
         IamInstanceProfile:
@@ -503,7 +533,7 @@ Resources:
   DBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
-      DBSubnetGroupName: !Sub '${EnvironmentName}-db-subnet-group'
+      DBSubnetGroupName: !Sub '${EnvironmentName}-db-subnet-group-${EnvironmentSuffix}'
       DBSubnetGroupDescription: 'Subnet group for RDS database'
       SubnetIds:
         - !Ref PrivateSubnet1
@@ -520,10 +550,10 @@ Resources:
     DeletionPolicy: Snapshot
     UpdateReplacePolicy: Snapshot
     Properties:
-      DBInstanceIdentifier: !Sub '${EnvironmentName}-webapp-db'
+      DBInstanceIdentifier: !Sub '${EnvironmentName}-webapp-db-${EnvironmentSuffix}'
       DBInstanceClass: db.t3.micro
       Engine: mysql
-      EngineVersion: '8.0.35'
+      EngineVersion: '8.0.42'
       AllocatedStorage: 20
       StorageType: gp2
       StorageEncrypted: true
@@ -547,7 +577,7 @@ Resources:
   DBSecret:
     Type: AWS::SecretsManager::Secret
     Properties:
-      Name: !Sub '${EnvironmentName}-db-credentials'
+      Name: !Sub '${EnvironmentName}-db-credentials-${EnvironmentSuffix}'
       Description: 'Database credentials for web application'
       GenerateSecretString:
         SecretStringTemplate: '{"username": "admin"}'
@@ -642,4 +672,15 @@ Outputs:
     Value: !GetAtt RDSInstance.Endpoint.Address
     Export:
       Name: !Sub '${EnvironmentName}-DB-Endpoint'
-```
+
+  EC2KeyPairName:
+    Description: 'Name of the EC2 Key Pair for SSH access'
+    Value: !Ref EC2KeyPair
+    Export:
+      Name: !Sub '${EnvironmentName}-EC2-KeyPair'
+
+  VPCPeeringConnectionId:
+    Description: 'ID of the VPC Peering Connection'
+    Value: !If [VPCIdProvided, !Ref VPCPeeringConnection, 'No VPC peering configured']
+    Export:
+      Name: !Sub '${EnvironmentName}-VPC-Peering-ID'
