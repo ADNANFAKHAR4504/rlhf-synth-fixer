@@ -40,7 +40,7 @@
   "Parameters": {
     "ProjectName": {
       "Type": "String",
-      "Default": "Corp-MicroservicesPipeline",
+      "Default": "corp-microservices-pipeline",
       "Description": "Name of the project for resource naming"
     },
     "GitHubRepoOwner": {
@@ -100,7 +100,6 @@
     }
   },
   "Resources": {
-    "_Comment_VPC_Section": "VPC and Networking Resources",
     "CorpVPC": {
       "Type": "AWS::EC2::VPC",
       "Properties": {
@@ -111,7 +110,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "${ProjectName}-VPC"
+              "Fn::Sub": "${ProjectName}-vpc"
             }
           }
         ]
@@ -124,7 +123,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "${ProjectName}-IGW"
+              "Fn::Sub": "${ProjectName}-igw"
             }
           }
         ]
@@ -148,13 +147,22 @@
           "Ref": "CorpVPC"
         },
         "CidrBlock": "10.0.1.0/24",
-        "AvailabilityZone": "us-west-2a",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            "0",
+            {
+              "Fn::GetAZs": {
+                "Ref": "AWS::Region"
+              }
+            }
+          ]
+        },
         "MapPublicIpOnLaunch": true,
         "Tags": [
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "${ProjectName}-Public-Subnet-1"
+              "Fn::Sub": "${ProjectName}-public-subnet-1"
             }
           }
         ]
@@ -167,13 +175,22 @@
           "Ref": "CorpVPC"
         },
         "CidrBlock": "10.0.2.0/24",
-        "AvailabilityZone": "us-west-2b",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            "1",
+            {
+              "Fn::GetAZs": {
+                "Ref": "AWS::Region"
+              }
+            }
+          ]
+        },
         "MapPublicIpOnLaunch": true,
         "Tags": [
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "${ProjectName}-Public-Subnet-2"
+              "Fn::Sub": "${ProjectName}-public-subnet-2"
             }
           }
         ]
@@ -186,12 +203,21 @@
           "Ref": "CorpVPC"
         },
         "CidrBlock": "10.0.3.0/24",
-        "AvailabilityZone": "us-west-2a",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            "0",
+            {
+              "Fn::GetAZs": {
+                "Ref": "AWS::Region"
+              }
+            }
+          ]
+        },
         "Tags": [
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "${ProjectName}-Private-Subnet-1"
+              "Fn::Sub": "${ProjectName}-private-subnet-1"
             }
           }
         ]
@@ -204,12 +230,21 @@
           "Ref": "CorpVPC"
         },
         "CidrBlock": "10.0.4.0/24",
-        "AvailabilityZone": "us-west-2b",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            "1",
+            {
+              "Fn::GetAZs": {
+                "Ref": "AWS::Region"
+              }
+            }
+          ]
+        },
         "Tags": [
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "${ProjectName}-Private-Subnet-2"
+              "Fn::Sub": "${ProjectName}-private-subnet-2"
             }
           }
         ]
@@ -224,7 +259,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "${ProjectName}-NAT-EIP"
+              "Fn::Sub": "${ProjectName}-nat-eip"
             }
           }
         ]
@@ -246,7 +281,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "${ProjectName}-NAT-Gateway"
+              "Fn::Sub": "${ProjectName}-nat-gateway"
             }
           }
         ]
@@ -262,7 +297,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "${ProjectName}-Public-RT"
+              "Fn::Sub": "${ProjectName}-public-rt"
             }
           }
         ]
@@ -278,7 +313,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "${ProjectName}-Private-RT"
+              "Fn::Sub": "${ProjectName}-private-rt"
             }
           }
         ]
@@ -353,7 +388,6 @@
         }
       }
     },
-    "_Comment_Security_Groups": "Security Groups for EC2 instances and Load Balancer",
     "CorpWebServerSecurityGroup": {
       "Type": "AWS::EC2::SecurityGroup",
       "Properties": {
@@ -389,7 +423,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "${ProjectName}-WebServer-SG"
+              "Fn::Sub": "${ProjectName}-webserver-sg"
             }
           }
         ]
@@ -420,18 +454,17 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "${ProjectName}-ALB-SG"
+              "Fn::Sub": "${ProjectName}-alb-sg"
             }
           }
         ]
       }
     },
-    "_Comment_IAM_Roles": "IAM Roles and Policies for CI/CD Pipeline",
     "CorpCodePipelineServiceRole": {
       "Type": "AWS::IAM::Role",
       "Properties": {
         "RoleName": {
-          "Fn::Sub": "${ProjectName}-CodePipeline-ServiceRole"
+          "Fn::Sub": "${ProjectName}-codepipeline-role"
         },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
@@ -506,7 +539,7 @@
       "Type": "AWS::IAM::Role",
       "Properties": {
         "RoleName": {
-          "Fn::Sub": "${ProjectName}-CodeBuild-ServiceRole"
+          "Fn::Sub": "${ProjectName}-codebuild-role"
         },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
@@ -558,7 +591,7 @@
       "Type": "AWS::IAM::Role",
       "Properties": {
         "RoleName": {
-          "Fn::Sub": "${ProjectName}-CodeDeploy-ServiceRole"
+          "Fn::Sub": "${ProjectName}-codedeploy-role"
         },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
@@ -581,7 +614,7 @@
       "Type": "AWS::IAM::Role",
       "Properties": {
         "RoleName": {
-          "Fn::Sub": "${ProjectName}-EC2-InstanceRole"
+          "Fn::Sub": "${ProjectName}-ec2-role"
         },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
@@ -618,6 +651,21 @@
                       ]
                     }
                   ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "codedeploy:*"
+                  ],
+                  "Resource": "*"
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "ec2messages:*",
+                    "ssm:*"
+                  ],
+                  "Resource": "*"
                 }
               ]
             }
@@ -629,7 +677,7 @@
       "Type": "AWS::IAM::InstanceProfile",
       "Properties": {
         "InstanceProfileName": {
-          "Fn::Sub": "${ProjectName}-EC2-InstanceProfile"
+          "Fn::Sub": "${ProjectName}-ec2-profile"
         },
         "Roles": [
           {
@@ -638,12 +686,11 @@
         ]
       }
     },
-    "_Comment_S3_Artifacts": "S3 Bucket for Pipeline Artifacts",
     "CorpArtifactStore": {
       "Type": "AWS::S3::Bucket",
       "Properties": {
         "BucketName": {
-          "Fn::Sub": "${ProjectName}-artifacts-${AWS::AccountId}-${AWS::Region}"
+          "Fn::Sub": "${ProjectName}-artifacts-${AWS::AccountId}"
         },
         "VersioningConfiguration": {
           "Status": "Enabled"
@@ -665,12 +712,11 @@
         }
       }
     },
-    "_Comment_EC2_Resources": "EC2 Launch Template and Auto Scaling Group",
     "CorpLaunchTemplate": {
       "Type": "AWS::EC2::LaunchTemplate",
       "Properties": {
         "LaunchTemplateName": {
-          "Fn::Sub": "${ProjectName}-LaunchTemplate"
+          "Fn::Sub": "${ProjectName}-launch-template"
         },
         "LaunchTemplateData": {
           "ImageId": {
@@ -713,7 +759,7 @@
                 {
                   "Key": "Name",
                   "Value": {
-                    "Fn::Sub": "${ProjectName}-Instance"
+                    "Fn::Sub": "${ProjectName}-instance"
                   }
                 },
                 {
@@ -730,7 +776,7 @@
       "Type": "AWS::AutoScaling::AutoScalingGroup",
       "Properties": {
         "AutoScalingGroupName": {
-          "Fn::Sub": "${ProjectName}-ASG"
+          "Fn::Sub": "${ProjectName}-asg"
         },
         "LaunchTemplate": {
           "LaunchTemplateId": {
@@ -771,19 +817,18 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "${ProjectName}-ASG"
+              "Fn::Sub": "${ProjectName}-asg"
             },
             "PropagateAtLaunch": false
           }
         ]
       }
     },
-    "_Comment_Load_Balancer": "Application Load Balancer and Target Group",
     "CorpApplicationLoadBalancer": {
       "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
       "Properties": {
         "Name": {
-          "Fn::Sub": "${ProjectName}-ALB"
+          "Fn::Sub": "${ProjectName}-alb"
         },
         "Scheme": "internet-facing",
         "Type": "application",
@@ -804,7 +849,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "${ProjectName}-ALB"
+              "Fn::Sub": "${ProjectName}-alb"
             }
           }
         ]
@@ -814,7 +859,7 @@
       "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
       "Properties": {
         "Name": {
-          "Fn::Sub": "${ProjectName}-TG"
+          "Fn::Sub": "${ProjectName}-tg"
         },
         "Port": 80,
         "Protocol": "HTTP",
@@ -831,7 +876,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "${ProjectName}-TG"
+              "Fn::Sub": "${ProjectName}-tg"
             }
           }
         ]
@@ -855,24 +900,27 @@
         "Protocol": "HTTP"
       }
     },
-    "_Comment_CodeDeploy": "CodeDeploy Application and Deployment Group",
     "CorpCodeDeployApplication": {
       "Type": "AWS::CodeDeploy::Application",
       "Properties": {
         "ApplicationName": {
-          "Fn::Sub": "${ProjectName}-Application"
+          "Fn::Sub": "${ProjectName}-application"
         },
         "ComputePlatform": "Server"
       }
     },
     "CorpCodeDeployDeploymentGroup": {
       "Type": "AWS::CodeDeploy::DeploymentGroup",
+      "DependsOn": [
+        "CorpAutoScalingGroup",
+        "CorpTargetGroup"
+      ],
       "Properties": {
         "ApplicationName": {
           "Ref": "CorpCodeDeployApplication"
         },
         "DeploymentGroupName": {
-          "Fn::Sub": "${ProjectName}-DeploymentGroup"
+          "Fn::Sub": "${ProjectName}-deployment-group"
         },
         "ServiceRoleArn": {
           "Fn::GetAtt": [
@@ -907,12 +955,11 @@
         }
       }
     },
-    "_Comment_CodeBuild": "CodeBuild Project for Building Applications",
     "CorpCodeBuildProject": {
       "Type": "AWS::CodeBuild::Project",
       "Properties": {
         "Name": {
-          "Fn::Sub": "${ProjectName}-Build"
+          "Fn::Sub": "${ProjectName}-build"
         },
         "ServiceRole": {
           "Fn::GetAtt": [
@@ -938,12 +985,15 @@
         "TimeoutInMinutes": 60
       }
     },
-    "_Comment_CodePipeline": "CodePipeline for CI/CD Orchestration",
     "CorpCodePipeline": {
       "Type": "AWS::CodePipeline::Pipeline",
+      "DependsOn": [
+        "CorpCodeBuildProject",
+        "CorpCodeDeployDeploymentGroup"
+      ],
       "Properties": {
         "Name": {
-          "Fn::Sub": "${ProjectName}-Pipeline"
+          "Fn::Sub": "${ProjectName}-pipeline"
         },
         "RoleArn": {
           "Fn::GetAtt": [
@@ -1037,7 +1087,7 @@
                     "Ref": "CorpCodeDeployApplication"
                   },
                   "DeploymentGroupName": {
-                    "Ref": "CorpCodeDeployDeploymentGroup"
+                    "Fn::Sub": "${ProjectName}-deployment-group"
                   }
                 },
                 "InputArtifacts": [
@@ -1060,7 +1110,7 @@
       },
       "Export": {
         "Name": {
-          "Fn::Sub": "${AWS::StackName}-VPC-ID"
+          "Fn::Sub": "${AWS::StackName}-vpc-id"
         }
       }
     },
@@ -1074,7 +1124,7 @@
       },
       "Export": {
         "Name": {
-          "Fn::Sub": "${AWS::StackName}-ALB-DNS"
+          "Fn::Sub": "${AWS::StackName}-alb-dns"
         }
       }
     },
@@ -1085,7 +1135,7 @@
       },
       "Export": {
         "Name": {
-          "Fn::Sub": "${AWS::StackName}-Pipeline-Name"
+          "Fn::Sub": "${AWS::StackName}-pipeline-name"
         }
       }
     },
@@ -1096,7 +1146,7 @@
       },
       "Export": {
         "Name": {
-          "Fn::Sub": "${AWS::StackName}-Artifact-Store-Bucket"
+          "Fn::Sub": "${AWS::StackName}-artifact-store-bucket"
         }
       }
     }

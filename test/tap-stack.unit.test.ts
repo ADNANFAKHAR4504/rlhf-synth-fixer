@@ -40,7 +40,7 @@ describe('TapStack CloudFormation Template', () => {
     test('ProjectName parameter should have correct properties', () => {
       const projectNameParam = template.Parameters.ProjectName;
       expect(projectNameParam.Type).toBe('String');
-      expect(projectNameParam.Default).toBe('Corp-MicroservicesPipeline');
+      expect(projectNameParam.Default).toBe('corp-microservices-pipeline');
       expect(projectNameParam.Description).toBe('Name of the project for resource naming');
     });
 
@@ -206,6 +206,24 @@ describe('TapStack CloudFormation Template', () => {
         expect(template.Resources[resourceName]).toBeDefined();
       });
     });
+
+    test('resource names should use lowercase naming convention', () => {
+      // Check that resource names use lowercase with hyphens
+      const vpc = template.Resources.CorpVPC;
+      expect(vpc.Properties.Tags[0].Value).toEqual({
+        'Fn::Sub': '${ProjectName}-vpc'
+      });
+
+      const alb = template.Resources.CorpApplicationLoadBalancer;
+      expect(alb.Properties.Name).toEqual({
+        'Fn::Sub': '${ProjectName}-alb'
+      });
+
+      const pipeline = template.Resources.CorpCodePipeline;
+      expect(pipeline.Properties.Name).toEqual({
+        'Fn::Sub': '${ProjectName}-pipeline'
+      });
+    });
   });
 
   describe('Outputs', () => {
@@ -227,7 +245,7 @@ describe('TapStack CloudFormation Template', () => {
       expect(output.Description).toBe('VPC ID');
       expect(output.Value).toEqual({ Ref: 'CorpVPC' });
       expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-VPC-ID',
+        'Fn::Sub': '${AWS::StackName}-vpc-id',
       });
     });
 
@@ -238,7 +256,7 @@ describe('TapStack CloudFormation Template', () => {
         'Fn::GetAtt': ['CorpApplicationLoadBalancer', 'DNSName'],
       });
       expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-ALB-DNS',
+        'Fn::Sub': '${AWS::StackName}-alb-dns',
       });
     });
 
@@ -247,7 +265,7 @@ describe('TapStack CloudFormation Template', () => {
       expect(output.Description).toBe('CodePipeline Name');
       expect(output.Value).toEqual({ Ref: 'CorpCodePipeline' });
       expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-Pipeline-Name',
+        'Fn::Sub': '${AWS::StackName}-pipeline-name',
       });
     });
 
@@ -256,7 +274,7 @@ describe('TapStack CloudFormation Template', () => {
       expect(output.Description).toBe('S3 Bucket for Pipeline Artifacts');
       expect(output.Value).toEqual({ Ref: 'CorpArtifactStore' });
       expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-Artifact-Store-Bucket',
+        'Fn::Sub': '${AWS::StackName}-artifact-store-bucket',
       });
     });
   });
@@ -324,6 +342,18 @@ describe('TapStack CloudFormation Template', () => {
       
       expect(codedeploy.Properties.DeploymentConfigName).toBe('CodeDeployDefault.AllInstancesOneAtATime');
       expect(codedeploy.Properties.AutoRollbackConfiguration.Enabled).toBe(true);
+    });
+  });
+
+  describe('S3 Bucket Naming Compliance', () => {
+    test('S3 bucket name should follow proper naming convention', () => {
+      const s3Bucket = template.Resources.CorpArtifactStore;
+      const bucketName = s3Bucket.Properties.BucketName;
+      
+      // Should use lowercase naming convention
+      expect(bucketName).toEqual({
+        'Fn::Sub': '${ProjectName}-artifacts-${AWS::AccountId}'
+      });
     });
   });
 });
