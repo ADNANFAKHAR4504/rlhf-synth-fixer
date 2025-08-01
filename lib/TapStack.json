@@ -1,0 +1,268 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "TAP Stack - Task Assignment Platform CloudFormation Template - Serverless Application",
+  "Parameters": {
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Default": "dev",
+      "Description": "Environment suffix for resource naming"
+    }
+  },
+  "Resources": {
+    "LambdaExecutionRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "TapStackLambdaRole-${EnvironmentSuffix}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": [
+                  "lambda.amazonaws.com"
+                ]
+              },
+              "Action": [
+                "sts:AssumeRole"
+              ]
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "CloudWatchLogsPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogGroup",
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/*"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "LambdaAssetsBucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketName": {
+          "Fn::Sub": "tap-lambda-assets-${EnvironmentSuffix}-${AWS::AccountId}"
+        },
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256"
+              }
+            }
+          ]
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true
+        },
+        "VersioningConfiguration": {
+          "Status": "Enabled"
+        }
+      }
+    },
+    "LambdaFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "TapFunction-${EnvironmentSuffix}"
+        },
+        "Runtime": "python3.8",
+        "Handler": "index.lambda_handler",
+        "Role": {
+          "Fn::GetAtt": [
+            "LambdaExecutionRole",
+            "Arn"
+          ]
+        },
+        "Timeout": 30,
+        "MemorySize": 128,
+        "Environment": {
+          "Variables": {
+            "ENVIRONMENT": {
+              "Ref": "EnvironmentSuffix"
+            },
+            "BUCKET_NAME": {
+              "Ref": "LambdaAssetsBucket"
+            }
+          }
+        },
+        "Code": {
+          "ZipFile": "import json\nimport os\nimport logging\n\n# Configure logging\nlogger = logging.getLogger()\nlogger.setLevel(logging.INFO)\n\ndef lambda_handler(event, context):\n    \"\"\"\n    AWS Lambda handler function for the TAP serverless application.\n    Handles HTTP requests from API Gateway.\n    \"\"\"\n    \n    # Log the incoming event\n    logger.info(f\"Received event: {json.dumps(event)}\")\n    \n    # Extract HTTP method and path\n    http_method = event.get('httpMethod', 'UNKNOWN')\n    path = event.get('path', '/')\n    \n    # Get environment variables\n    environment = os.environ.get('ENVIRONMENT', 'dev')\n    bucket_name = os.environ.get('BUCKET_NAME', 'unknown')\n    \n    # Basic routing based on HTTP method and path\n    if http_method == 'GET':\n        if path == '/health' or path == '/':\n            response_body = {\n                'message': 'TAP Serverless Application is running!',\n                'environment': environment,\n                'bucket': bucket_name,\n                'path': path,\n                'method': http_method,\n                'timestamp': context.aws_request_id\n            }\n            status_code = 200\n        else:\n            response_body = {\n                'message': f'GET endpoint {path} not found',\n                'available_endpoints': ['/health', '/']\n            }\n            status_code = 404\n            \n    elif http_method == 'POST':\n        # Handle POST requests\n        try:\n            request_body = json.loads(event.get('body', '{}'))\n            response_body = {\n                'message': 'POST request processed successfully',\n                'received_data': request_body,\n                'environment': environment,\n                'request_id': context.aws_request_id\n            }\n            status_code = 200\n        except json.JSONDecodeError:\n            response_body = {\n                'error': 'Invalid JSON in request body'\n            }\n            status_code = 400\n            \n    else:\n        # Handle other HTTP methods\n        response_body = {\n            'message': f'HTTP method {http_method} is supported',\n            'path': path,\n            'supported_methods': ['GET', 'POST', 'PUT', 'DELETE']\n        }\n        status_code = 200\n    \n    # Prepare the response\n    response = {\n        'statusCode': status_code,\n        'headers': {\n            'Content-Type': 'application/json',\n            'Access-Control-Allow-Origin': '*',\n            'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token',\n            'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS'\n        },\n        'body': json.dumps(response_body)\n    }\n    \n    logger.info(f\"Returning response: {json.dumps(response)}\")\n    return response\n"
+        }
+      }
+    },
+    "ApiGateway": {
+      "Type": "AWS::ApiGateway::RestApi",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "TapApi-${EnvironmentSuffix}"
+        },
+        "Description": "TAP Stack API Gateway",
+        "EndpointConfiguration": {
+          "Types": [
+            "REGIONAL"
+          ]
+        }
+      }
+    },
+    "ApiGatewayResource": {
+      "Type": "AWS::ApiGateway::Resource",
+      "Properties": {
+        "RestApiId": {
+          "Ref": "ApiGateway"
+        },
+        "ParentId": {
+          "Fn::GetAtt": [
+            "ApiGateway",
+            "RootResourceId"
+          ]
+        },
+        "PathPart": "{proxy+}"
+      }
+    },
+    "ApiGatewayMethodRoot": {
+      "Type": "AWS::ApiGateway::Method",
+      "Properties": {
+        "RestApiId": {
+          "Ref": "ApiGateway"
+        },
+        "ResourceId": {
+          "Fn::GetAtt": [
+            "ApiGateway",
+            "RootResourceId"
+          ]
+        },
+        "HttpMethod": "ANY",
+        "AuthorizationType": "NONE",
+        "Integration": {
+          "Type": "AWS_PROXY",
+          "IntegrationHttpMethod": "POST",
+          "Uri": {
+            "Fn::Sub": "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaFunction.Arn}/invocations"
+          }
+        }
+      }
+    },
+    "ApiGatewayMethodProxy": {
+      "Type": "AWS::ApiGateway::Method",
+      "Properties": {
+        "RestApiId": {
+          "Ref": "ApiGateway"
+        },
+        "ResourceId": {
+          "Ref": "ApiGatewayResource"
+        },
+        "HttpMethod": "ANY",
+        "AuthorizationType": "NONE",
+        "Integration": {
+          "Type": "AWS_PROXY",
+          "IntegrationHttpMethod": "POST",
+          "Uri": {
+            "Fn::Sub": "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaFunction.Arn}/invocations"
+          }
+        }
+      }
+    },
+    "ApiGatewayDeployment": {
+      "Type": "AWS::ApiGateway::Deployment",
+      "DependsOn": [
+        "ApiGatewayMethodRoot",
+        "ApiGatewayMethodProxy"
+      ],
+      "Properties": {
+        "RestApiId": {
+          "Ref": "ApiGateway"
+        },
+        "StageName": "prod"
+      }
+    },
+    "LambdaPermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "LambdaFunction"
+        },
+        "Action": "lambda:InvokeFunction",
+        "Principal": "apigateway.amazonaws.com",
+        "SourceArn": {
+          "Fn::Sub": "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/*"
+        }
+      }
+    }
+  },
+  "Outputs": {
+    "ApiGatewayUrl": {
+      "Description": "API Gateway endpoint URL",
+      "Value": {
+        "Fn::Sub": "https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/prod"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "TapStack-${EnvironmentSuffix}-ApiUrl"
+        }
+      }
+    },
+    "LambdaFunctionArn": {
+      "Description": "Lambda Function ARN",
+      "Value": {
+        "Fn::GetAtt": [
+          "LambdaFunction",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "TapStack-${EnvironmentSuffix}-LambdaArn"
+        }
+      }
+    },
+    "S3BucketName": {
+      "Description": "S3 Bucket for Lambda assets",
+      "Value": {
+        "Ref": "LambdaAssetsBucket"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "TapStack-${EnvironmentSuffix}-S3Bucket"
+        }
+      }
+    },
+    "LambdaExecutionRoleArn": {
+      "Description": "Lambda Execution Role ARN",
+      "Value": {
+        "Fn::GetAtt": [
+          "LambdaExecutionRole",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "TapStack-${EnvironmentSuffix}-RoleArn"
+        }
+      }
+    }
+  }
+}
