@@ -20,7 +20,7 @@ describe('TapStack Unit Tests', () => {
   it('creates a VPC with correct CIDR and tags', () => {
     expect(synthObj.resource.aws_vpc.SecureVpc).toEqual(
       expect.objectContaining({
-        cidr_block: '172.16.0.0/16',
+        cidr_block: '10.0.0.0/16',
         enable_dns_support: true,
         enable_dns_hostnames: true,
         tags: expect.objectContaining({
@@ -151,7 +151,7 @@ describe('TapStack Unit Tests - Branch Coverage', () => {
     }
     expect(synthObj.resource.aws_vpc.SecureVpc).toEqual(
       expect.objectContaining({
-        cidr_block: '172.16.0.0/16',
+        cidr_block: '10.0.0.0/16',
         enable_dns_support: true,
         enable_dns_hostnames: true,
         tags: expect.objectContaining({
@@ -184,7 +184,7 @@ describe('TapStack Unit Tests - Branch Coverage', () => {
     }
     expect(synthObj.resource.aws_vpc.SecureVpc).toEqual(
       expect.objectContaining({
-        cidr_block: '172.16.0.0/16',
+        cidr_block: '10.0.0.0/16',
         enable_dns_support: true,
         enable_dns_hostnames: true,
         tags: expect.objectContaining({
