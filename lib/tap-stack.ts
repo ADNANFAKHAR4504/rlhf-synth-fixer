@@ -13,6 +13,7 @@ import { Route } from '@cdktf/provider-aws/lib/route';
 import { RouteTable } from '@cdktf/provider-aws/lib/route-table';
 import { RouteTableAssociation } from '@cdktf/provider-aws/lib/route-table-association';
 import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
+import { S3BucketPublicAccessBlock } from '@cdktf/provider-aws/lib/s3-bucket-public-access-block';
 import { S3BucketServerSideEncryptionConfigurationA } from '@cdktf/provider-aws/lib/s3-bucket-server-side-encryption-configuration';
 import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
 import { Subnet } from '@cdktf/provider-aws/lib/subnet';
@@ -117,7 +118,7 @@ export class TapStack extends TerraformStack {
     new AwsProvider(this, 'aws', { region });
 
     const vpc = new Vpc(this, 'SecureVpc', {
-      cidrBlock: '172.16.0.0/16',
+      cidrBlock: '10.0.0.0/16',
       enableDnsSupport: true,
       enableDnsHostnames: true,
       tags: { ...tags, Name: uniqueVpcName },
@@ -125,7 +126,7 @@ export class TapStack extends TerraformStack {
 
     const subnet = new Subnet(this, 'PublicSubnet', {
       vpcId: vpc.id,
-      cidrBlock: '172.16.1.0/24',
+      cidrBlock: '10.0.1.0/24',
       availabilityZone: 'us-west-2a',
       mapPublicIpOnLaunch: true,
       tags: { ...tags, Name: uniqueSubnetName },
@@ -240,6 +241,15 @@ export class TapStack extends TerraformStack {
       }
     );
 
+    // Block public access to the S3 bucket for security
+    new S3BucketPublicAccessBlock(this, 'LogBucketPublicAccessBlock', {
+      bucket: logBucket.bucket,
+      blockPublicAcls: true,
+      blockPublicPolicy: true,
+      ignorePublicAcls: true,
+      restrictPublicBuckets: true,
+    });
+
     const ec2Role: IamRole = new IamRole(this, 'EC2LogRole', {
       name: uniqueRoleName,
       assumeRolePolicy: JSON.stringify({
@@ -285,7 +295,7 @@ export class TapStack extends TerraformStack {
       policyArn: ec2Policy.arn,
     });
 
-    new Instance(this, 'WebInstance', {
+    const webInstance = new Instance(this, 'WebInstance', {
       ami: amiId,
       instanceType: 't3.micro',
       subnetId: subnet.id,
@@ -295,10 +305,45 @@ export class TapStack extends TerraformStack {
       tags: { ...tags, Name: uniqueInstanceName },
     });
 
-    // Example: Output the VPC ID
+    // Required Infrastructure Outputs
     new TerraformOutput(this, 'VpcIdOutput', {
       value: vpc.id,
       description: 'The ID of the created VPC',
+    });
+
+    new TerraformOutput(this, 'PublicSubnetIdOutput', {
+      value: subnet.id,
+      description: 'The ID of the public subnet',
+    });
+
+    new TerraformOutput(this, 'WebServerPublicIpOutput', {
+      value: webInstance.publicIp,
+      description: 'The public IP address of the web server',
+    });
+
+    new TerraformOutput(this, 'WebServerPublicDnsOutput', {
+      value: webInstance.publicDns,
+      description: 'The public DNS name of the web server',
+    });
+
+    new TerraformOutput(this, 'LogsBucketNameOutput', {
+      value: logBucket.bucket,
+      description: 'The name of the S3 logs bucket',
+    });
+
+    new TerraformOutput(this, 'SecurityGroupIdOutput', {
+      value: sg.id,
+      description: 'The ID of the web security group',
+    });
+
+    new TerraformOutput(this, 'IamRoleArnOutput', {
+      value: ec2Role.arn,
+      description: 'The ARN of the EC2 IAM role',
+    });
+
+    new TerraformOutput(this, 'WebApplicationUrlOutput', {
+      value: `http://${webInstance.publicDns}`,
+      description: 'The URL of the web application',
     });
   }
 }

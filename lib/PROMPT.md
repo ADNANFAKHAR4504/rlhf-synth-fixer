@@ -8,7 +8,7 @@ You are tasked with setting up a **secure AWS environment using Terraform CDK (T
 
 ### 🛡️ VPC
 
-- Create a **VPC named `secure-network`** in the `us-east-1` region.
+- Create a **VPC named `secure-network`** in the `us-west-2` region.
 - Include:
   - Public Subnets
   - Internet Gateway
