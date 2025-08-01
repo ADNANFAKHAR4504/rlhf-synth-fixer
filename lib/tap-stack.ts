@@ -61,8 +61,6 @@ export class TapStack extends TerraformStack {
 
     const environmentSuffix = props?.environmentSuffix || 'dev';
     const awsRegion = 'us-west-2'; // Changed to us-west-2 for deployment
-    const stateBucketRegion = props?.stateBucketRegion || 'us-west-2';
-    const stateBucket = props?.stateBucket || 'iac-rlhf-tf-states';
 
     // Common tags for all resources
     const commonTags = {
