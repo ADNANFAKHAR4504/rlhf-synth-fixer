@@ -51,7 +51,7 @@ export class TapStack extends TerraformStack {
         provider: new AwsProvider(this, `aws_${region}`, {
           region: region,
           defaultTags: defaultTags,
-          alias: region,
+          alias: region.replace('-', '_'), // Replace '-' with '_' for compatibility
         }),
         environment: environmentSuffix,
       });

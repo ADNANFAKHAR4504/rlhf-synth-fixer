@@ -45,7 +45,7 @@ export class ServerlessCms extends Construct {
     });
 
     new ArchiveProvider(this, 'archive', {
-      alias: currentRegion.name,
+      alias: currentRegion.name.replace('-', '_'), // Replace '-' with '_' for compatibility
     });
 
     // Generate resource names with region-specific naming convention
@@ -58,11 +58,6 @@ export class ServerlessCms extends Construct {
     const contentBucket = new S3Bucket(this, 'content_bucket', {
       provider: props.provider,
       bucket: `${resourcePrefix}-content`,
-      tags: {
-        Environment: props.environment,
-        Service: 'cms',
-        Region: currentRegion.name,
-      },
     });
 
     // Enable versioning on S3 bucket
