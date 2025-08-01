@@ -40,3 +40,48 @@ class TestTapStackIntegration:
     
     # Check for Security Group
     assert Testing.to_have_resource(synthesized, "aws_security_group")
+
+  def test_vpc_configuration(self, stack):
+    """Test VPC resource configuration."""
+    synthesized = Testing.synth(stack)
+    assert Testing.to_have_resource_with_properties(synthesized, "aws_vpc", {
+      "enable_dns_hostnames": True,
+      "enable_dns_support": True
+    })
+
+  def test_subnet_configurations(self, stack):
+    """Test subnet resource configurations."""
+    synthesized = Testing.synth(stack)
+    # Check first subnet
+    assert Testing.to_have_resource_with_properties(synthesized, "aws_subnet", {
+      "map_public_ip_on_launch": True
+    })
+    # Check second subnet
+    assert Testing.to_have_resource_with_properties(synthesized, "aws_subnet", {
+      "map_public_ip_on_launch": True
+    })
+
+  def test_security_group_rules(self, stack):
+    """Test security group rules configuration."""
+    synthesized = Testing.synth(stack)
+    # Check SSH rule
+    assert Testing.to_have_resource_with_properties(synthesized, "aws_security_group_rule", {
+      "type": "ingress",
+      "from_port": 22,
+      "to_port": 22,
+      "protocol": "tcp"
+    })
+    # Check HTTP rule
+    assert Testing.to_have_resource_with_properties(synthesized, "aws_security_group_rule", {
+      "type": "ingress",
+      "from_port": 80,
+      "to_port": 80,
+      "protocol": "tcp"
+    })
+    # Check egress rule
+    assert Testing.to_have_resource_with_properties(synthesized, "aws_security_group_rule", {
+      "type": "egress",
+      "from_port": 0,
+      "to_port": 0,
+      "protocol": "-1"
+    })
