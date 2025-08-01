@@ -1,6 +1,6 @@
 # Ideal CloudFormation Solution: Secure and Scalable Network Infrastructure
 
-This CloudFormation template provides a production-ready, secure, and scalable network infrastructure in AWS us-east-1 region that fully meets all specified requirements.
+This CloudFormation template provides a production-ready, secure, and scalable network infrastructure in AWS ap-south-1 region that fully meets all specified requirements.
 
 ## Solution Overview
 
@@ -22,7 +22,7 @@ The template creates a comprehensive VPC infrastructure with proper security iso
 AWSTemplateFormatVersion: "2010-09-09"
 Description: >
   This CloudFormation template sets up a secure and scalable network infrastructure
-  in the us-east-1 region, including a VPC, subnets, internet gateway, NAT gateway,
+  in the ap-south-1 region, including a VPC, subnets, internet gateway, NAT gateway,
   and security groups.
 
 Resources:
@@ -255,17 +255,17 @@ aws cloudformation deploy \
   --template-file lib/TapStack.yml \
   --stack-name TapStackdev \
   --capabilities CAPABILITY_IAM \
-  --region us-east-1
+  --region ap-south-1
 
 # Verify deployment
 aws cloudformation describe-stacks \
   --stack-name TapStackdev \
-  --region us-east-1
+  --region ap-south-1
 
 # Clean up resources
 aws cloudformation delete-stack \
   --stack-name TapStackdev \
-  --region us-east-1
+  --region ap-south-1
 ```
 
 ## Testing Strategy
