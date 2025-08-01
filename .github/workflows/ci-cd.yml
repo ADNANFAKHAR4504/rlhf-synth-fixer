@@ -26,7 +26,7 @@ env:
   S3_PRODUCTION_BUCKET_NAME: 'iac-rlhf-production'
   PULUMI_STATE_BUCKET: 'iac-rlhf-pulumi-states'
   PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
-  AAWS_DEFAULT_REGION: ${{ vars.AWS_REGION }}
+  AWS_DEFAULT_REGION: ${{ vars.AWS_REGION }}
   PULUMI_ORG: 'organization'
 
 jobs:
@@ -1062,7 +1062,7 @@ jobs:
           TERRAFORM_STATE_BUCKET: ${{ env.TERRAFORM_STATE_BUCKET }}
           TERRAFORM_STATE_BUCKET_REGION: ${{ env.TERRAFORM_STATE_BUCKET_REGION }}
           PULUMI_BACKEND_URL: s3://${{ env.PULUMI_STATE_BUCKET }}
-          AWS_DEFAULT_REGION: ${{ env.AWS_DEFAULT_REGION }}
+          # AWS_DEFAULT_REGION: ${{ env.AWS_DEFAULT_REGION }}
           PULUMI_ORG: ${{ env.PULUMI_ORG }}
 
   # TODO: For future use
