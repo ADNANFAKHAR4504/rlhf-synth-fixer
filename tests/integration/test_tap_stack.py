@@ -17,8 +17,10 @@ if os.path.exists(flat_outputs_path):
 else:
   flat_outputs = '{}'
 
-outputs = json.loads(flat_outputs)
 
+
+outputs = json.loads(flat_outputs)
+print("flat outputs found: flat_outputs:", flat_outputs, outputs)
 EXPECTED_ENV = "Production"
 
 
