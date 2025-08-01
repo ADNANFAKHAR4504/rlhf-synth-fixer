@@ -34,10 +34,10 @@ export class TapStack extends TerraformStack {
   constructor(scope: Construct, name: string, props: TapStackProps) {
     super(scope, name);
 
-    // Use provided values or hardcoded defaults for us-east-1
-    const region = props.region || props.awsRegion || 'us-east-1';
-    // Official Amazon Linux 2 AMI for us-east-1 as of July 2025
-    const amiId = props.amiId || 'ami-009698a58cf38bf4e';
+    // Use provided values or hardcoded defaults for us-west-2
+    const region = props.region || props.awsRegion || 'us-west-2';
+    // Official Amazon Linux 2 AMI for us-west-2 as of July 2025
+    const amiId = props.amiId || 'ami-0cf2b4e024cdb6960';
     const tags = { Environment: 'Production' };
     // Use environmentSuffix for resource names if provided
     const nameSuffix = props.environmentSuffix
@@ -47,7 +47,7 @@ export class TapStack extends TerraformStack {
     new AwsProvider(this, 'aws', { region });
 
     const vpc = new Vpc(this, 'SecureVpc', {
-      cidrBlock: '10.0.0.0/16',
+      cidrBlock: '172.16.0.0/16',
       enableDnsSupport: true,
       enableDnsHostnames: true,
       tags: { ...tags, Name: 'secure-network' },
@@ -55,8 +55,8 @@ export class TapStack extends TerraformStack {
 
     const subnet = new Subnet(this, 'PublicSubnet', {
       vpcId: vpc.id,
-      cidrBlock: '10.0.1.0/24',
-      availabilityZone: `${region}a`,
+      cidrBlock: '172.16.1.0/24',
+      availabilityZone: 'us-west-2a',
       mapPublicIpOnLaunch: true,
       tags,
     });

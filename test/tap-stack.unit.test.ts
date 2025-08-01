@@ -3,8 +3,8 @@ import { TapStack } from '../lib/tap-stack';
 
 describe('TapStack Unit Tests', () => {
   const stack = new TapStack(undefined as any, 'unit-test-stack', {
-    region: 'us-east-1',
-    amiId: 'ami-12345678',
+    region: 'us-west-2',
+    amiId: 'ami-0cf2b4e024cdb6960',
   });
   const synthesized = Testing.synth(stack);
   // If synthesized is a string, parse it to an object
@@ -20,7 +20,7 @@ describe('TapStack Unit Tests', () => {
   it('creates a VPC with correct CIDR and tags', () => {
     expect(synthObj.resource.aws_vpc.SecureVpc).toEqual(
       expect.objectContaining({
-        cidr_block: '10.0.0.0/16',
+        cidr_block: '172.16.0.0/16',
         tags: expect.objectContaining({
           Environment: 'Production',
           Name: 'secure-network',
@@ -163,10 +163,10 @@ describe('TapStack Unit Tests - Branch Coverage', () => {
     );
   });
 
-  it('uses region us-east-1 when both region and awsRegion are provided', () => {
+  it('uses region us-west-2 when both region and awsRegion are provided', () => {
     const stack = new TapStack(undefined as any, 'unit-test-stack-alt', {
-      region: 'us-east-1',
-      awsRegion: 'us-west-2',
+      region: 'us-west-2',
+      awsRegion: 'us-east-1',
       amiId: 'ami-87654321',
     });
     const synthesized = Testing.synth(stack);
@@ -191,10 +191,10 @@ describe('TapStack Unit Tests - Branch Coverage', () => {
         instance_type: 't3.micro',
       })
     );
-    // Check that subnet AZ uses us-east-1a
+    // Check that subnet AZ uses us-west-2a
     expect(synthObj.resource.aws_subnet.PublicSubnet).toEqual(
       expect.objectContaining({
-        availability_zone: 'us-east-1a',
+        availability_zone: 'us-west-2a',
       })
     );
   });
@@ -216,7 +216,7 @@ describe('TapStack Unit Tests - Branch Coverage', () => {
     expect(synthObj.resource.aws_vpc.SecureVpc).toBeDefined();
     expect(synthObj.resource.aws_instance.WebInstance).toEqual(
       expect.objectContaining({
-        ami: 'ami-009698a58cf38bf4e',
+        ami: 'ami-0cf2b4e024cdb6960',
         instance_type: 't3.micro',
       })
     );

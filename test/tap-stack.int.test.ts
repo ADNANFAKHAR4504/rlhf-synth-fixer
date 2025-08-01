@@ -3,8 +3,8 @@ import { TapStack } from '../lib/tap-stack';
 
 describe('TapStack Integration Tests', () => {
   const stack = new TapStack(undefined as any, 'integration-test-stack', {
-    region: 'us-east-1',
-    amiId: 'ami-0453898e98046c639',
+    region: 'us-west-2',
+    amiId: 'ami-0cf2b4e024cdb6960',
   });
   const synthesized = Testing.synth(stack);
   let synthObj;
@@ -18,7 +18,7 @@ describe('TapStack Integration Tests', () => {
   it('has a public subnet', () => {
     expect(synthObj.resource.aws_subnet.PublicSubnet).toEqual(
       expect.objectContaining({
-        cidr_block: '10.0.1.0/24',
+        cidr_block: '172.16.1.0/24',
         map_public_ip_on_launch: true,
       })
     );
