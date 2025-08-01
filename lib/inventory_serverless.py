@@ -34,6 +34,10 @@ class InventoryServerlessStackArgs:
   def __init__(self, environment_suffix: Optional[str] = None, tags: Optional[dict] = None, notification_email: str = "admin@example.com"):
     self.environment_suffix = environment_suffix or 'dev'
     self.tags = tags or {}
+    
+    # Configuration validation
+    if not notification_email or '@' not in notification_email:
+      raise ValueError("Valid notification_email is required")
     self.notification_email = notification_email
 
 
@@ -194,7 +198,10 @@ class InventoryServerlessStack(pulumi.ComponentResource):
                         "logs:CreateLogStream",
                         "logs:PutLogEvents"
                     ],
-                    "Resource": "arn:aws:logs:*:*:*"
+                    "Resource": [
+                        f"arn:aws:logs:us-east-1:*:log-group:/aws/lambda/{get_resource_name('api-lambda')}",
+                        f"arn:aws:logs:us-east-1:*:log-group:/aws/lambda/{get_resource_name('api-lambda')}:*"
+                    ]
                 },
                 {
                     "Effect": "Allow",
@@ -471,7 +478,7 @@ def update_item(item_id, event_body):
             'body': json.dumps(updated_item, cls=DecimalEncoder)
         }}
     except Exception as e:
-        logger.error("Error updating item " + item_id + ": " + str(e))
+        logger.error(f"Error updating item {{item_id}}: {{str(e)}}")
         return {{
             'statusCode': 500,
             'body': json.dumps({{'error': 'Internal server error'}})
@@ -533,7 +540,7 @@ def delete_item(item_id):
             }})
         }}
     except Exception as e:
-        logger.error("Error deleting item " + item_id + ": " + str(e))
+        logger.error(f"Error deleting item {{item_id}}: {{str(e)}}")
         return {{
             'statusCode': 500,
             'body': json.dumps({{'error': 'Internal server error'}})
@@ -590,7 +597,7 @@ def patch_item_status(item_id, event_body):
             'body': json.dumps(updated_item, cls=DecimalEncoder)
         }}
     except Exception as e:
-        logger.error("Error updating item status " + item_id + ": " + str(e))
+        logger.error(f"Error updating item status {{item_id}}: {{str(e)}}")
         return {{
             'statusCode': 500,
             'body': json.dumps({{'error': 'Internal server error'}})
@@ -667,7 +674,7 @@ def lambda_handler(event, context):
     self.inventory_api_lambda = aws.lambda_.Function(
         get_resource_name("api-lambda"),
         name=get_resource_name("api-lambda"),
-        runtime="python3.9",
+        runtime="python3.11",
         code=pulumi.Output.all(
             self.inventory_items_table.name,
             self.inventory_audit_table.name,

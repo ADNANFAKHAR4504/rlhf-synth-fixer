@@ -166,7 +166,7 @@ class TestTapStackIntegration(unittest.TestCase):
     config = response['Configuration']
 
     # Verify runtime
-    self.assertEqual(config['Runtime'], 'python3.9')
+    self.assertEqual(config['Runtime'], 'python3.11')
 
     # Verify handler
     self.assertEqual(config['Handler'], 'lambda_function.lambda_handler')
