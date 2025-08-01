@@ -4,7 +4,7 @@ import { TapStack } from '../lib/tap-stack';
 describe('TapStack Unit Tests', () => {
   const stack = new TapStack(undefined as any, 'unit-test-stack', {
     region: 'us-west-2',
-    amiId: 'ami-0cf2b4e024cdb6960',
+    amiId: 'ami-0e0d5cba8c90ba8c5',
   });
   const synthesized = Testing.synth(stack);
   // If synthesized is a string, parse it to an object
@@ -224,7 +224,7 @@ describe('TapStack Unit Tests - Branch Coverage', () => {
     expect(synthObj.resource.aws_vpc.SecureVpc).toBeDefined();
     expect(synthObj.resource.aws_instance.WebInstance).toEqual(
       expect.objectContaining({
-        ami: 'ami-0cf2b4e024cdb6960',
+        ami: 'ami-0e0d5cba8c90ba8c5',
         instance_type: 't3.micro',
       })
     );

@@ -31,7 +31,10 @@ interface TapStackProps {
 }
 
 // Utility function to generate unique resource names
-function generateUniqueResourceName(baseName: string, environmentSuffix?: string): string {
+function generateUniqueResourceName(
+  baseName: string,
+  environmentSuffix?: string
+): string {
   const timestamp = Date.now().toString(36);
   const randomSuffix = Math.random().toString(36).substring(2, 8);
   const envSuffix = environmentSuffix ? `-${environmentSuffix}` : '';
@@ -44,8 +47,8 @@ export class TapStack extends TerraformStack {
 
     // Use provided values or hardcoded defaults for us-west-2
     const region = props.region || props.awsRegion || 'us-west-2';
-    // Official Amazon Linux 2 AMI for us-west-2 as of July 2025
-    const amiId = props.amiId || 'ami-0cf2b4e024cdb6960';
+    // Latest Amazon Linux 2 AMI for us-west-2 as of July 29, 2025
+    const amiId = props.amiId || 'ami-0e0d5cba8c90ba8c5';
     const tags = { Environment: 'Production' };
     // Use environmentSuffix for resource names if provided
     const nameSuffix = props.environmentSuffix
@@ -53,17 +56,50 @@ export class TapStack extends TerraformStack {
       : name;
 
     // Generate unique names for resources that require global uniqueness
-    const uniqueLogBucketName = generateUniqueResourceName('secure-app-logs', props.environmentSuffix);
-    const uniqueRoleName = generateUniqueResourceName('ec2-s3-access-role', props.environmentSuffix);
-    const uniqueInstanceProfileName = generateUniqueResourceName('ec2-s3-instance-profile', props.environmentSuffix);
-    const uniquePolicyName = generateUniqueResourceName('ec2-s3-log-policy', props.environmentSuffix);
-    const uniqueSecurityGroupName = generateUniqueResourceName('web-secure-sg', props.environmentSuffix);
-    const uniqueVpcName = generateUniqueResourceName('secure-network', props.environmentSuffix);
-    const uniqueSubnetName = generateUniqueResourceName('public-subnet', props.environmentSuffix);
-    const uniqueIgwName = generateUniqueResourceName('internet-gateway', props.environmentSuffix);
-    const uniqueRouteTableName = generateUniqueResourceName('route-table', props.environmentSuffix);
-    const uniqueNaclName = generateUniqueResourceName('public-subnet-nacl', props.environmentSuffix);
-    const uniqueInstanceName = generateUniqueResourceName('web-instance', props.environmentSuffix);
+    const uniqueLogBucketName = generateUniqueResourceName(
+      'secure-app-logs',
+      props.environmentSuffix
+    );
+    const uniqueRoleName = generateUniqueResourceName(
+      'ec2-s3-access-role',
+      props.environmentSuffix
+    );
+    const uniqueInstanceProfileName = generateUniqueResourceName(
+      'ec2-s3-instance-profile',
+      props.environmentSuffix
+    );
+    const uniquePolicyName = generateUniqueResourceName(
+      'ec2-s3-log-policy',
+      props.environmentSuffix
+    );
+    const uniqueSecurityGroupName = generateUniqueResourceName(
+      'web-secure-sg',
+      props.environmentSuffix
+    );
+    const uniqueVpcName = generateUniqueResourceName(
+      'secure-network',
+      props.environmentSuffix
+    );
+    const uniqueSubnetName = generateUniqueResourceName(
+      'public-subnet',
+      props.environmentSuffix
+    );
+    const uniqueIgwName = generateUniqueResourceName(
+      'internet-gateway',
+      props.environmentSuffix
+    );
+    const uniqueRouteTableName = generateUniqueResourceName(
+      'route-table',
+      props.environmentSuffix
+    );
+    const uniqueNaclName = generateUniqueResourceName(
+      'public-subnet-nacl',
+      props.environmentSuffix
+    );
+    const uniqueInstanceName = generateUniqueResourceName(
+      'web-instance',
+      props.environmentSuffix
+    );
 
     new AwsProvider(this, 'aws', { region });
 
