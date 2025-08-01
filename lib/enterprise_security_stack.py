@@ -45,6 +45,7 @@ class EnterpriseSecurityStack(Construct):  # pylint: disable=too-many-instance-a
 
     self.region = region or "us-east-1"
     self.provider_alias = provider_alias
+    self.is_primary_region = provider_alias is None
 
     # Data sources for account and region information
     # Note: For multi-region setup, we'll use the default provider for now
@@ -70,7 +71,7 @@ class EnterpriseSecurityStack(Construct):  # pylint: disable=too-many-instance-a
     # KMS key for general encryption
     self.kms_key = KmsKey(
       self, "enterprise_kms_key",
-      description="Enterprise KMS key for multi-service encryption",
+      description=f"Enterprise KMS key for multi-service encryption in {self.region}",
       policy=json.dumps({
         "Version": "2012-10-17",
         "Statement": [
@@ -102,7 +103,7 @@ class EnterpriseSecurityStack(Construct):  # pylint: disable=too-many-instance-a
 
     KmsAlias(
       self, "enterprise_kms_alias",
-      name="alias/enterprise-security-key",
+      name=f"alias/enterprise-security-key-{self.region}",
       target_key_id=self.kms_key.key_id
     )
 
@@ -114,7 +115,7 @@ class EnterpriseSecurityStack(Construct):  # pylint: disable=too-many-instance-a
       self, "cloudtrail_logs_bucket",
       bucket=(
         f"enterprise-cloudtrail-logs-{self.current_account.account_id}-"
-        f"{self.region}"
+        f"{self.region}-{self.provider_alias or 'primary'}"
       ),
       force_destroy=True
     )
@@ -185,7 +186,7 @@ class EnterpriseSecurityStack(Construct):  # pylint: disable=too-many-instance-a
       self, "vpc_flow_logs_bucket",
       bucket=(
         f"enterprise-vpc-flow-logs-{self.current_account.account_id}-"
-        f"{self.region}"
+        f"{self.region}-{self.provider_alias or 'primary'}"
       ),
       force_destroy=True
     )
@@ -219,158 +220,162 @@ class EnterpriseSecurityStack(Construct):  # pylint: disable=too-many-instance-a
   def _create_iam_security_policies(self) -> None:
     """Create IAM roles and policies following principle of least privilege."""
 
-    # CloudTrail service role
-    self.cloudtrail_role = IamRole(
-      self, "cloudtrail_role",
-      name="EnterpriseCloudTrailRole",
-      assume_role_policy=json.dumps({
-        "Version": "2012-10-17",
-        "Statement": [
-          {
-            "Action": "sts:AssumeRole",
-            "Effect": "Allow",
-            "Principal": {
-              "Service": "cloudtrail.amazonaws.com"
+    # Only create global IAM resources in primary region to avoid conflicts
+    if self.is_primary_region:
+      # CloudTrail service role
+      self.cloudtrail_role = IamRole(
+        self, "cloudtrail_role",
+        name="EnterpriseCloudTrailRole",
+        assume_role_policy=json.dumps({
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Action": "sts:AssumeRole",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "cloudtrail.amazonaws.com"
+              }
             }
-          }
-        ]
-      })
-    )
+          ]
+        })
+      )
 
-    # VPC Flow Logs role
-    self.vpc_flow_logs_role = IamRole(
-      self, "vpc_flow_logs_role",
-      name="EnterpriseVPCFlowLogsRole",
-      assume_role_policy=json.dumps({
-        "Version": "2012-10-17",
-        "Statement": [
-          {
-            "Action": "sts:AssumeRole",
-            "Effect": "Allow",
-            "Principal": {
-              "Service": "vpc-flow-logs.amazonaws.com"
+      # VPC Flow Logs role
+      self.vpc_flow_logs_role = IamRole(
+        self, "vpc_flow_logs_role",
+        name="EnterpriseVPCFlowLogsRole",
+        assume_role_policy=json.dumps({
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Action": "sts:AssumeRole",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "vpc-flow-logs.amazonaws.com"
+              }
             }
-          }
-        ]
-      })
-    )
+          ]
+        })
+      )
 
-    # VPC Flow Logs policy with least privilege
-    self.vpc_flow_logs_policy = IamPolicy(
-      self, "vpc_flow_logs_policy",
-      name="EnterpriseVPCFlowLogsPolicy",
-      policy=json.dumps({
-        "Version": "2012-10-17",
-        "Statement": [
-          {
-            "Effect": "Allow",
-            "Action": [
-              "logs:CreateLogGroup",
-              "logs:CreateLogStream",
-              "logs:PutLogEvents",
-              "logs:DescribeLogGroups",
-              "logs:DescribeLogStreams"
-            ],
-            "Resource": "*"
-          },
-          {
-            "Effect": "Allow",
-            "Action": [
-              "s3:PutObject",
-              "s3:GetBucketAcl"
-            ],
-            "Resource": [
-              self.vpc_flow_logs_bucket.arn,
-              f"{self.vpc_flow_logs_bucket.arn}/*"
-            ]
-          }
-        ]
-      })
-    )
-
-    IamRolePolicyAttachment(
-      self, "vpc_flow_logs_policy_attachment",
-      role=self.vpc_flow_logs_role.name,
-      policy_arn=self.vpc_flow_logs_policy.arn
-    )
-
-    # Lambda execution role with restricted permissions
-    self.lambda_execution_role = IamRole(
-      self, "lambda_execution_role",
-      name="EnterpriseLambdaExecutionRole",
-      assume_role_policy=json.dumps({
-        "Version": "2012-10-17",
-        "Statement": [
-          {
-            "Action": "sts:AssumeRole",
-            "Effect": "Allow",
-            "Principal": {
-              "Service": "lambda.amazonaws.com"
+      # VPC Flow Logs policy with least privilege
+      self.vpc_flow_logs_policy = IamPolicy(
+        self, "vpc_flow_logs_policy",
+        name="EnterpriseVPCFlowLogsPolicy",
+        policy=json.dumps({
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Action": [
+                "logs:CreateLogGroup",
+                "logs:CreateLogStream",
+                "logs:PutLogEvents",
+                "logs:DescribeLogGroups",
+                "logs:DescribeLogStreams"
+              ],
+              "Resource": "*"
+            },
+            {
+              "Effect": "Allow",
+              "Action": [
+                "s3:PutObject",
+                "s3:GetBucketAcl"
+              ],
+              "Resource": [
+                self.vpc_flow_logs_bucket.arn,
+                f"{self.vpc_flow_logs_bucket.arn}/*"
+              ]
             }
-          }
-        ]
-      })
-    )
+          ]
+        })
+      )
 
-    # Lambda policy with minimal required permissions
-    self.lambda_policy = IamPolicy(
-      self, "lambda_policy",
-      name="EnterpriseLambdaPolicy",
-      policy=json.dumps({
-        "Version": "2012-10-17",
-        "Statement": [
-          {
-            "Effect": "Allow",
-            "Action": [
-              "logs:CreateLogGroup",
-              "logs:CreateLogStream",
-              "logs:PutLogEvents"
-            ],
-            "Resource": (
-              f"arn:aws:logs:{self.current_region.id}:"
-              f"{self.current_account.account_id}:*"
-            )
-          }
-        ]
-      })
-    )
+      IamRolePolicyAttachment(
+        self, "vpc_flow_logs_policy_attachment",
+        role=self.vpc_flow_logs_role.name,
+        policy_arn=self.vpc_flow_logs_policy.arn
+      )
 
-    IamRolePolicyAttachment(
-      self, "lambda_policy_attachment",
-      role=self.lambda_execution_role.name,
-      policy_arn=self.lambda_policy.arn
-    )
+      # Lambda execution role with restricted permissions
+      self.lambda_execution_role = IamRole(
+        self, "lambda_execution_role",
+        name="EnterpriseLambdaExecutionRole",
+        assume_role_policy=json.dumps({
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Action": "sts:AssumeRole",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              }
+            }
+          ]
+        })
+      )
+
+      # Lambda policy with minimal required permissions
+      self.lambda_policy = IamPolicy(
+        self, "lambda_policy",
+        name="EnterpriseLambdaPolicy",
+        policy=json.dumps({
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Action": [
+                "logs:CreateLogGroup",
+                "logs:CreateLogStream",
+                "logs:PutLogEvents"
+              ],
+              "Resource": (
+                f"arn:aws:logs:{self.current_region.id}:"
+                f"{self.current_account.account_id}:*"
+              )
+            }
+          ]
+        })
+      )
+
+      IamRolePolicyAttachment(
+        self, "lambda_policy_attachment",
+        role=self.lambda_execution_role.name,
+        policy_arn=self.lambda_policy.arn
+      )
 
   def _create_cloudtrail_logging(self) -> None:
     """Set up CloudTrail to record all API actions across all regions."""
 
-    self.cloudtrail = Cloudtrail(
-      self, "enterprise_cloudtrail",
-      name="EnterpriseCloudTrail",
-      s3_bucket_name=self.cloudtrail_bucket.bucket,
-      s3_key_prefix="cloudtrail-logs",
-      include_global_service_events=True,
-      is_multi_region_trail=True,
-      enable_logging=True,
-      enable_log_file_validation=True,
-      kms_key_id=self.kms_key.arn,
-      event_selector=[
-        {
-          "read_write_type": "All",
-          "include_management_events": True,
-          "data_resource": [
-            {
-              "type": "AWS::S3::Object",
-              "values": ["arn:aws:s3:::*/*"]
-            },
-            {
-              "type": "AWS::Lambda::Function",
-              "values": ["arn:aws:lambda:*"]
-            }
-          ]
-        }
-      ]
-    )
+    # Only create CloudTrail in primary region as it's global
+    if self.is_primary_region:
+      self.cloudtrail = Cloudtrail(
+        self, "enterprise_cloudtrail",
+        name="EnterpriseCloudTrail",
+        s3_bucket_name=self.cloudtrail_bucket.bucket,
+        s3_key_prefix="cloudtrail-logs",
+        include_global_service_events=True,
+        is_multi_region_trail=True,
+        enable_logging=True,
+        enable_log_file_validation=True,
+        kms_key_id=self.kms_key.arn,
+        event_selector=[
+          {
+            "read_write_type": "All",
+            "include_management_events": True,
+            "data_resource": [
+              {
+                "type": "AWS::S3::Object",
+                "values": ["arn:aws:s3:::*/*"]
+              },
+              {
+                "type": "AWS::Lambda::Function",
+                "values": ["arn:aws:lambda:*"]
+              }
+            ]
+          }
+        ]
+      )
 
   def _create_vpc_security_configuration(self) -> None:
     """Create VPC with flow logs enabled for network monitoring."""
@@ -476,10 +481,10 @@ class EnterpriseSecurityStack(Construct):  # pylint: disable=too-many-instance-a
 
     self.secure_launch_template = LaunchTemplate(
       self, "secure_launch_template",
-      name_prefix="enterprise-secure-",
+      name_prefix=f"enterprise-secure-{self.region}-",
       image_id=ubuntu_ami.id,
       instance_type="t3.micro",
-      vpc_security_group_ids=[],  # Security groups would be defined separately
+      vpc_security_group_ids=[],
       network_interfaces=[
         {
           "associate_public_ip_address": False,  # No public IP by default
@@ -499,9 +504,10 @@ class EnterpriseSecurityStack(Construct):  # pylint: disable=too-many-instance-a
         {
           "resource_type": "instance",
           "tags": {
-            "Name": "EnterpriseSecureInstance",
+            "Name": f"EnterpriseSecureInstance-{self.region}",
             "Environment": "Production",
-            "SecurityCompliant": "true"
+            "SecurityCompliant": "true",
+            "Region": self.region
           }
         }
       ]
@@ -514,7 +520,7 @@ class EnterpriseSecurityStack(Construct):  # pylint: disable=too-many-instance-a
     # In production, you would configure subnets, security groups, etc.
     self.secure_rds = DbInstance(
       self, "secure_rds_instance",
-      identifier="enterprise-secure-db",
+      identifier=f"enterprise-secure-db-{self.region}-{self.provider_alias or 'primary'}",
       engine="mysql",
       engine_version="8.0",
       instance_class="db.t3.micro",
@@ -533,20 +539,23 @@ class EnterpriseSecurityStack(Construct):  # pylint: disable=too-many-instance-a
       deletion_protection=True,
       skip_final_snapshot=False,
       final_snapshot_identifier=(
-        "enterprise-secure-db-final-snapshot"
+        f"enterprise-secure-db-final-snapshot-{self.region}"
       ),
       tags={
-        "Name": "EnterpriseSecureRDS",
+        "Name": f"EnterpriseSecureRDS-{self.region}",
         "Environment": "Production",
-        "Encrypted": "true"
+        "Encrypted": "true",
+        "Region": self.region
       }
     )
 
   def _create_lambda_security_configuration(self) -> None:
     """Configure Lambda functions with restricted IAM permissions."""
 
-    # Lambda function code inline
-    lambda_code = '''"""
+    # Only create Lambda in primary region if IAM resources were created there
+    if self.is_primary_region and hasattr(self, 'lambda_execution_role'):
+      # Lambda function code inline
+      lambda_code = '''"""
 Simple Lambda function for enterprise security stack.
 """
 
@@ -572,40 +581,42 @@ def handler(event, context):
     }
 '''
     
-    # Create lambda function zip file
-    import os
-    import zipfile
+      # Create lambda function zip file
+      import os
+      import zipfile
     
-    zip_path = os.path.join(os.path.dirname(__file__), 'lambda_function.zip')
-    with zipfile.ZipFile(zip_path, 'w') as zip_file:
-      zip_file.writestr('index.py', lambda_code)
+      zip_path = os.path.join(os.path.dirname(__file__), 'lambda_function.zip')
+      with zipfile.ZipFile(zip_path, 'w') as zip_file:
+        zip_file.writestr('index.py', lambda_code)
 
-    # Example Lambda function with restricted permissions
-    self.secure_lambda = LambdaFunction(
-      self, "secure_lambda_function",
-      function_name="enterprise-secure-function",
-      role=self.lambda_execution_role.arn,
-      handler="index.handler",
-      runtime="python3.9",
-      filename=zip_path,
-      timeout=30,
-      memory_size=128,
-      environment={
-        "variables": {
-          "ENVIRONMENT": "production",
-          "LOG_LEVEL": "INFO"
+      # Example Lambda function with restricted permissions
+      self.secure_lambda = LambdaFunction(
+        self, "secure_lambda_function",
+        function_name=f"enterprise-secure-function-{self.region}",
+        role=self.lambda_execution_role.arn,
+        handler="index.handler",
+        runtime="python3.9",
+        filename=zip_path,
+        timeout=30,
+        memory_size=128,
+        environment={
+          "variables": {
+            "ENVIRONMENT": "production",
+            "LOG_LEVEL": "INFO",
+            "REGION": self.region
+          }
+        },
+        kms_key_arn=self.kms_key.arn,
+        tracing_config={
+          "mode": "Active"
+        },
+        tags={
+          "Name": f"EnterpriseSecureLambda-{self.region}",
+          "Environment": "Production",
+          "SecurityCompliant": "true",
+          "Region": self.region
         }
-      },
-      kms_key_arn=self.kms_key.arn,
-      tracing_config={
-        "mode": "Active"
-      },
-      tags={
-        "Name": "EnterpriseSecureLambda",
-        "Environment": "Production",
-        "SecurityCompliant": "true"
-      }
-    )
+      )
 
   def _create_shield_protection(self) -> None:
     """Implement AWS Shield protection for publicly accessible endpoints."""
