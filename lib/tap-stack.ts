@@ -476,9 +476,9 @@ echo "<h1>Nova Model Breaking App</h1>" > /var/www/html/index.html
         environmentSuffix
       ),
       runtime: 'python3.9',
-      handler: 'index.handler',
+      handler: 'lambda_function.handler',
       role: lambdaRole.arn,
-      filename: 'lambda_function.zip',
+      filename: './lambda_function.zip',
       tags: commonTags,
     });
 
