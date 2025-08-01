@@ -76,7 +76,7 @@ class TapStack(cdk.Stack):
   def _create_s3_bucket(self) -> s3.Bucket:
     bucket = s3.Bucket(
       self, "EcommerceBucket",
-      bucket_name=f"ecommerce-assets-{self.account}-{self.region}",
+      bucket_name=f"ecommerce-assets-testing-buc-{self.account}-{self.region}",
       versioned=True,
       encryption=s3.BucketEncryption.S3_MANAGED,
       block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
