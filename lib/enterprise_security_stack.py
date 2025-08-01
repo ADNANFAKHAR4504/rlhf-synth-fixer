@@ -36,6 +36,10 @@ except ImportError:
   # Fallback if VpcFlowLog is not available in this version
   VpcFlowLog = None
 from constructs import Construct
+from cdktf_cdktf_provider_aws.secretsmanager_secret import SecretsmanagerSecret
+from cdktf_cdktf_provider_aws.secretsmanager_secret_version import SecretsmanagerSecretVersion
+import secrets
+import string
 
 
 class EnterpriseSecurityStack(Construct):  # pylint: disable=too-many-instance-attributes
@@ -539,6 +543,47 @@ class EnterpriseSecurityStack(Construct):  # pylint: disable=too-many-instance-a
   def _create_rds_security_configuration(self) -> None:
     """Configure RDS instances with KMS encryption enabled."""
 
+    # Create Secrets Manager secret for RDS password
+    self.rds_secret = SecretsmanagerSecret(
+      self, "rds_password_secret",
+      name=f"enterprise-rds-password-{self.region}-{self.provider_alias or 'primary'}",
+      description="RDS master password for enterprise secure database",
+      kms_key_id=self.kms_key.arn,  # Encrypt secret with our KMS key
+      tags={
+        "Name": f"EnterpriseRDSSecret-{self.region}",
+        "Environment": "Production",
+        "Service": "RDS"
+      }
+    )
+
+    # Generate a secure random password
+    def generate_secure_password(length: int = 16) -> str:
+      """Generate a secure random password."""
+      alphabet = string.ascii_letters + string.digits + "!@#$%^&*"
+      # Ensure password has at least one of each required character type
+      password = [
+        secrets.choice(string.ascii_lowercase),
+        secrets.choice(string.ascii_uppercase),
+        secrets.choice(string.digits),
+        secrets.choice("!@#$%^&*")
+      ]
+      # Fill the rest with random characters
+      for _ in range(length - 4):
+        password.append(secrets.choice(alphabet))
+      # Shuffle the password
+      secrets.SystemRandom().shuffle(password)
+      return ''.join(password)
+
+    # Store the generated password in Secrets Manager
+    SecretsmanagerSecretVersion(
+      self, "rds_password_secret_version",
+      secret_id=self.rds_secret.id,
+      secret_string=json.dumps({
+        "username": "admin",
+        "password": generate_secure_password(20)
+      })
+    )
+
     # Note: This creates a minimal RDS configuration for demonstration
     # In production, you would configure subnets, security groups, etc.
     self.secure_rds = DbInstance(
@@ -549,7 +594,8 @@ class EnterpriseSecurityStack(Construct):  # pylint: disable=too-many-instance-a
       instance_class="db.t3.micro",
       allocated_storage=20,
       username="admin",  # Required field
-      password="tempPassword123!",  # In production, use AWS Secrets Manager
+      manage_master_user_password=True,  # Let AWS manage the password
+      master_user_secret_kms_key_id=self.kms_key.arn,  # Encrypt with our KMS key
       storage_encrypted=True,  # Mandatory encryption
       kms_key_id=self.kms_key.arn,  # Use enterprise KMS key
       backup_retention_period=7,
