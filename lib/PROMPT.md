@@ -42,8 +42,8 @@ Provision an AWS serverless architecture using Terraform CDK with the following 
 ## Expected Output
 
 - A complete and self-contained **CDKTF Construct written in TypeScript** which creates all the required resources
-- Includes all necessary constructs and dependencies to deploy the serverless CMS
-- The props must include a parameter called "providerAlias," which should be used to set the provider parameter for every resource being created in the Construct.
+- Includes all necessary constructs and dependencies to deploy the serverless CMS including any required lambda functions
+- The props must include a parameter called "provider", which should be used to set the provider parameter for every resource being created in the Construct.
 - The Construct itself should initialize an AWS Provider or Backend. It should only focus on the creation of the resources
 - Should be deployable using `cdktf deploy` 
 - Provide inline comments explaining the logic and choices

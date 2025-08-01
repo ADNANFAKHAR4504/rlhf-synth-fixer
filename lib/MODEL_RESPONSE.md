@@ -1,63 +1,145 @@
 ```typescript
 import { Construct } from "constructs";
+import { TerraformStack, TerraformOutput } from "cdktf";
 import { AwsProvider } from "@cdktf/provider-aws/lib/provider";
+import { S3Bucket } from "@cdktf/provider-aws/lib/s3-bucket";
+import { S3BucketVersioning } from "@cdktf/provider-aws/lib/s3-bucket-versioning";
+import { S3BucketPublicAccessBlock } from "@cdktf/provider-aws/lib/s3-bucket-public-access-block";
+import { S3BucketServerSideEncryptionConfiguration } from "@cdktf/provider-aws/lib/s3-bucket-server-side-encryption-configuration";
+import { DynamodbTable } from "@cdktf/provider-aws/lib/dynamodb-table";
+import { LambdaFunction } from "@cdktf/provider-aws/lib/lambda-function";
+import { LambdaPermission } from "@cdktf/provider-aws/lib/lambda-permission";
+import { IamRole } from "@cdktf/provider-aws/lib/iam-role";
+import { IamRolePolicyAttachment } from "@cdktf/provider-aws/lib/iam-role-policy-attachment";
+import { IamPolicy } from "@cdktf/provider-aws/lib/iam-policy";
 import { ApiGatewayRestApi } from "@cdktf/provider-aws/lib/api-gateway-rest-api";
 import { ApiGatewayResource } from "@cdktf/provider-aws/lib/api-gateway-resource";
 import { ApiGatewayMethod } from "@cdktf/provider-aws/lib/api-gateway-method";
 import { ApiGatewayIntegration } from "@cdktf/provider-aws/lib/api-gateway-integration";
 import { ApiGatewayDeployment } from "@cdktf/provider-aws/lib/api-gateway-deployment";
 import { ApiGatewayStage } from "@cdktf/provider-aws/lib/api-gateway-stage";
-import { LambdaFunction } from "@cdktf/provider-aws/lib/lambda-function";
-import { LambdaPermission } from "@cdktf/provider-aws/lib/lambda-permission";
-import { IamRole } from "@cdktf/provider-aws/lib/iam-role";
-import { IamRolePolicyAttachment } from "@cdktf/provider-aws/lib/iam-role-policy-attachment";
-import { IamPolicy } from "@cdktf/provider-aws/lib/iam-policy";
-import { DynamodbTable } from "@cdktf/provider-aws/lib/dynamodb-table";
-import { AppautoscalingTarget } from "@cdktf/provider-aws/lib/appautoscaling-target";
-import { AppautoscalingPolicy } from "@cdktf/provider-aws/lib/appautoscaling-policy";
-import { S3Bucket } from "@cdktf/provider-aws/lib/s3-bucket";
-import { S3BucketVersioning } from "@cdktf/provider-aws/lib/s3-bucket-versioning";
-import { S3BucketPublicAccessBlock } from "@cdktf/provider-aws/lib/s3-bucket-public-access-block";
-import { S3BucketServerSideEncryptionConfiguration } from "@cdktf/provider-aws/lib/s3-bucket-server-side-encryption-configuration";
 import { CloudfrontDistribution } from "@cdktf/provider-aws/lib/cloudfront-distribution";
 import { CloudfrontOriginAccessControl } from "@cdktf/provider-aws/lib/cloudfront-origin-access-control";
-import { S3BucketPolicy } from "@cdktf/provider-aws/lib/s3-bucket-policy";
-import { DataAwsCallerIdentity } from "@cdktf/provider-aws/lib/data-aws-caller-identity";
 import { DataAwsRegion } from "@cdktf/provider-aws/lib/data-aws-region";
-import { TerraformAsset, AssetType } from "cdktf";
+import { DataAwsCallerIdentity } from "@cdktf/provider-aws/lib/data-aws-caller-identity";
+import { ArchiveFile } from "@cdktf/provider-archive/lib/archive-file";
+import { ArchiveProvider } from "@cdktf/provider-archive/lib/provider";
+import * as fs from "fs";
 import * as path from "path";
 
 export interface ServerlessCmsProps {
-  readonly environment: string;
-  readonly region: string;
-  readonly providerAlias: string;
+  environment: string;
+  provider: AwsProvider;
 }
 
-export class ServerlessCms extends Construct {
+export class ServerlessCmsConstruct extends Construct {
+  public readonly apiGatewayUrl: string;
+  public readonly cloudfrontDomainName: string;
+  public readonly contentBucketName: string;
+  public readonly contentTableName: string;
+
   constructor(scope: Construct, id: string, props: ServerlessCmsProps) {
     super(scope, id);
 
-    // Get current AWS account ID and region
-    const callerIdentity = new DataAwsCallerIdentity(this, "current", {
-      provider: props.providerAlias,
+    // Archive provider for Lambda function packaging
+    new ArchiveProvider(this, "archive", {});
+
+    // Get current region and account ID
+    const currentRegion = new DataAwsRegion(this, "current", {
+      provider: props.provider,
     });
 
-    const currentRegion = new DataAwsRegion(this, "current-region", {
-      provider: props.providerAlias,
+    const currentAccount = new DataAwsCallerIdentity(this, "current_account", {
+      provider: props.provider,
     });
 
-    // Naming convention: cms-<env>-<region>
-    const resourcePrefix = `cms-${props.environment}-${props.region}`;
+    // Generate resource names with region-specific naming convention
+    const resourcePrefix = `cms-${props.environment}-${currentRegion.name}`;
 
-    // Create Lambda function assets
-    const lambdaAsset = new TerraformAsset(this, "lambda-asset", {
-      path: path.resolve(__dirname, "lambda"),
-      type: AssetType.ARCHIVE,
+    // Create Lambda function code
+    this.createLambdaCode();
+
+    // S3 Bucket for content storage
+    const contentBucket = new S3Bucket(this, "content_bucket", {
+      provider: props.provider,
+      bucket: `${resourcePrefix}-content`,
+      tags: {
+        Environment: props.environment,
+        Service: "cms",
+        Region: currentRegion.name,
+      },
+    });
+
+    // Enable versioning on S3 bucket
+    new S3BucketVersioning(this, "content_bucket_versioning", {
+      provider: props.provider,
+      bucket: contentBucket.id,
+      versioningConfiguration: {
+        status: "Enabled",
+      },
+    });
+
+    // Block public access to S3 bucket
+    new S3BucketPublicAccessBlock(this, "content_bucket_pab", {
+      provider: props.provider,
+      bucket: contentBucket.id,
+      blockPublicAcls: true,
+      blockPublicPolicy: true,
+      ignorePublicAcls: true,
+      restrictPublicBuckets: true,
+    });
+
+    // Enable server-side encryption
+    new S3BucketServerSideEncryptionConfiguration(this, "content_bucket_encryption", {
+      provider: props.provider,
+      bucket: contentBucket.id,
+      rule: [
+        {
+          applyServerSideEncryptionByDefault: {
+            sseAlgorithm: "AES256",
+          },
+        },
+      ],
+    });
+
+    // DynamoDB table for content metadata
+    const contentTable = new DynamodbTable(this, "content_table", {
+      provider: props.provider,
+      name: `${resourcePrefix}-content-metadata`,
+      billingMode: "PAY_PER_REQUEST",
+      hashKey: "contentId",
+      attribute: [
+        {
+          name: "contentId",
+          type: "S",
+        },
+        {
+          name: "contentType",
+          type: "S",
+        },
+        {
+          name: "createdAt",
+          type: "S",
+        },
+      ],
+      globalSecondaryIndex: [
+        {
+          name: "ContentTypeIndex",
+          hashKey: "contentType",
+          rangeKey: "createdAt",
+          projectionType: "ALL",
+        },
+      ],
+      tags: {
+        Environment: props.environment,
+        Service: "cms",
+        Region: currentRegion.name,
+      },
     });
 
     // IAM Role for Lambda functions
-    const lambdaRole = new IamRole(this, "lambda-role", {
-      provider: props.providerAlias,
+    const lambdaRole = new IamRole(this, "lambda_role", {
+      provider: props.provider,
       name: `${resourcePrefix}-lambda-role`,
       assumeRolePolicy: JSON.stringify({
         Version: "2012-10-17",
@@ -73,158 +155,22 @@ export class ServerlessCms extends Construct {
       }),
       tags: {
         Environment: props.environment,
-        Region: props.region,
+        Service: "cms",
       },
     });
 
     // Attach basic Lambda execution role
-    new IamRolePolicyAttachment(this, "lambda-basic-execution", {
-      provider: props.providerAlias,
+    new IamRolePolicyAttachment(this, "lambda_basic_execution", {
+      provider: props.provider,
       role: lambdaRole.name,
       policyArn: "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
     });
 
-    // DynamoDB table for content metadata
-    const contentTable = new DynamodbTable(this, "content-table", {
-      provider: props.providerAlias,
-      name: `${resourcePrefix}-content`,
-      billingMode: "PAY_PER_REQUEST",
-      hashKey: "contentId",
-      rangeKey: "version",
-      attribute: [
-        {
-          name: "contentId",
-          type: "S",
-        },
-        {
-          name: "version",
-          type: "S",
-        },
-        {
-          name: "status",
-          type: "S",
-        },
-        {
-          name: "createdAt",
-          type: "S",
-        },
-      ],
-      globalSecondaryIndex: [
-        {
-          name: "status-created-index",
-          hashKey: "status",
-          rangeKey: "createdAt",
-          projectionType: "ALL",
-        },
-      ],
-      pointInTimeRecovery: {
-        enabled: true,
-      },
-      serverSideEncryption: {
-        enabled: true,
-      },
-      tags: {
-        Environment: props.environment,
-        Region: props.region,
-      },
-    });
-
-    // Auto-scaling for DynamoDB read capacity
-    const readTarget = new AppautoscalingTarget(this, "content-table-read-target", {
-      provider: props.providerAlias,
-      maxCapacity: 100,
-      minCapacity: 5,
-      resourceId: `table/${contentTable.name}`,
-      scalableDimension: "dynamodb:table:ReadCapacityUnits",
-      serviceNamespace: "dynamodb",
-    });
-
-    new AppautoscalingPolicy(this, "content-table-read-policy", {
-      provider: props.providerAlias,
-      name: `${resourcePrefix}-content-read-scaling`,
-      policyType: "TargetTrackingScaling",
-      resourceId: readTarget.resourceId,
-      scalableDimension: readTarget.scalableDimension,
-      serviceNamespace: readTarget.serviceNamespace,
-      targetTrackingScalingPolicyConfiguration: {
-        targetValue: 70.0,
-        predefinedMetricSpecification: {
-          predefinedMetricType: "DynamoDBReadCapacityUtilization",
-        },
-      },
-    });
-
-    // Auto-scaling for DynamoDB write capacity
-    const writeTarget = new AppautoscalingTarget(this, "content-table-write-target", {
-      provider: props.providerAlias,
-      maxCapacity: 100,
-      minCapacity: 5,
-      resourceId: `table/${contentTable.name}`,
-      scalableDimension: "dynamodb:table:WriteCapacityUnits",
-      serviceNamespace: "dynamodb",
-    });
-
-    new AppautoscalingPolicy(this, "content-table-write-policy", {
-      provider: props.providerAlias,
-      name: `${resourcePrefix}-content-write-scaling`,
-      policyType: "TargetTrackingScaling",
-      resourceId: writeTarget.resourceId,
-      scalableDimension: writeTarget.scalableDimension,
-      serviceNamespace: writeTarget.serviceNamespace,
-      targetTrackingScalingPolicyConfiguration: {
-        targetValue: 70.0,
-        predefinedMetricSpecification: {
-          predefinedMetricType: "DynamoDBWriteCapacityUtilization",
-        },
-      },
-    });
-
-    // S3 bucket for content files
-    const contentBucket = new S3Bucket(this, "content-bucket", {
-      provider: props.providerAlias,
-      bucket: `${resourcePrefix}-content-files`,
-      tags: {
-        Environment: props.environment,
-        Region: props.region,
-      },
-    });
-
-    // Enable versioning on S3 bucket
-    new S3BucketVersioning(this, "content-bucket-versioning", {
-      provider: props.providerAlias,
-      bucket: contentBucket.id,
-      versioningConfiguration: {
-        status: "Enabled",
-      },
-    });
-
-    // Block public access to S3 bucket
-    new S3BucketPublicAccessBlock(this, "content-bucket-pab", {
-      provider: props.providerAlias,
-      bucket: contentBucket.id,
-      blockPublicAcls: true,
-      blockPublicPolicy: true,
-      ignorePublicAcls: true,
-      restrictPublicBuckets: true,
-    });
-
-    // Enable server-side encryption
-    new S3BucketServerSideEncryptionConfiguration(this, "content-bucket-encryption", {
-      provider: props.providerAlias,
-      bucket: contentBucket.id,
-      rule: [
-        {
-          applyServerSideEncryptionByDefault: {
-            sseAlgorithm: "AES256",
-          },
-        },
-      ],
-    });
-
-    // IAM policy for Lambda to access DynamoDB and S3
-    const lambdaPolicy = new IamPolicy(this, "lambda-policy", {
-      provider: props.providerAlias,
+    // Custom IAM policy for Lambda to access DynamoDB and S3
+    const lambdaPolicy = new IamPolicy(this, "lambda_policy", {
+      provider: props.provider,
       name: `${resourcePrefix}-lambda-policy`,
+      description: "IAM policy for CMS Lambda functions",
       policy: JSON.stringify({
         Version: "2012-10-17",
         Statement: [
@@ -260,88 +206,151 @@ export class ServerlessCms extends Construct {
       }),
     });
 
-    new IamRolePolicyAttachment(this, "lambda-policy-attachment", {
-      provider: props.providerAlias,
+    new IamRolePolicyAttachment(this, "lambda_policy_attachment", {
+      provider: props.provider,
       role: lambdaRole.name,
       policyArn: lambdaPolicy.arn,
     });
 
+    // Package Lambda function code
+    const lambdaZip = new ArchiveFile(this, "lambda_zip", {
+      type: "zip",
+      sourceDir: path.join(__dirname, "lambda"),
+      outputPath: path.join(__dirname, "lambda.zip"),
+    });
+
     // Lambda function for content management
-    const contentLambda = new LambdaFunction(this, "content-lambda", {
-      provider: props.providerAlias,
+    const contentLambda = new LambdaFunction(this, "content_lambda", {
+      provider: props.provider,
       functionName: `${resourcePrefix}-content-handler`,
-      filename: lambdaAsset.path,
-      handler: "content_handler.lambda_handler",
-      runtime: "python3.9",
       role: lambdaRole.arn,
+      handler: "handler.lambda_handler",
+      runtime: "python3.9",
+      filename: lambdaZip.outputPath,
+      sourceCodeHash: lambdaZip.outputBase64Sha256,
       timeout: 30,
       environment: {
         variables: {
           CONTENT_TABLE: contentTable.name,
           CONTENT_BUCKET: contentBucket.bucket,
-          REGION: props.region,
+          REGION: currentRegion.name,
         },
       },
       tags: {
         Environment: props.environment,
-        Region: props.region,
+        Service: "cms",
       },
     });
 
     // API Gateway REST API
-    const api = new ApiGatewayRestApi(this, "cms-api", {
-      provider: props.providerAlias,
+    const api = new ApiGatewayRestApi(this, "cms_api", {
+      provider: props.provider,
       name: `${resourcePrefix}-api`,
-      description: "CMS API for content management",
+      description: "CMS API Gateway",
       endpointConfiguration: {
         types: ["REGIONAL"],
       },
       tags: {
         Environment: props.environment,
-        Region: props.region,
+        Service: "cms",
       },
     });
 
-    // API Gateway resource for content endpoints
-    const contentResource = new ApiGatewayResource(this, "content-resource", {
-      provider: props.providerAlias,
+    // API Gateway resources and methods
+    const contentResource = new ApiGatewayResource(this, "content_resource", {
+      provider: props.provider,
       restApiId: api.id,
       parentId: api.rootResourceId,
       pathPart: "content",
     });
 
-    const contentIdResource = new ApiGatewayResource(this, "content-id-resource", {
-      provider: props.providerAlias,
+    const contentIdResource = new ApiGatewayResource(this, "content_id_resource", {
+      provider: props.provider,
       restApiId: api.id,
       parentId: contentResource.id,
       pathPart: "{contentId}",
     });
 
-    // API Gateway methods
-    const getMethods = ["GET", "POST", "PUT", "DELETE"];
-    getMethods.forEach((method) => {
-      const apiMethod = new ApiGatewayMethod(this, `content-${method.toLowerCase()}-method`, {
-        provider: props.providerAlias,
-        restApiId: api.id,
-        resourceId: method === "POST" ? contentResource.id : contentIdResource.id,
-        httpMethod: method,
-        authorization: "NONE",
-      });
-
-      new ApiGatewayIntegration(this, `content-${method.toLowerCase()}-integration`, {
-        provider: props.providerAlias,
-        restApiId: api.id,
-        resourceId: apiMethod.resourceId,
-        httpMethod: apiMethod.httpMethod,
-        integrationHttpMethod: "POST",
-        type: "AWS_PROXY",
-        uri: contentLambda.invokeArn,
-      });
+    // GET method for retrieving content
+    const getMethod = new ApiGatewayMethod(this, "get_content_method", {
+      provider: props.provider,
+      restApiId: api.id,
+      resourceId: contentIdResource.id,
+      httpMethod: "GET",
+      authorization: "NONE",
     });
 
-    // Lambda permission for API Gateway
-    new LambdaPermission(this, "lambda-api-permission", {
-      provider: props.providerAlias,
+    // POST method for creating content
+    const postMethod = new ApiGatewayMethod(this, "post_content_method", {
+      provider: props.provider,
+      restApiId: api.id,
+      resourceId: contentResource.id,
+      httpMethod: "POST",
+      authorization: "NONE",
+    });
+
+    // PUT method for updating content
+    const putMethod = new ApiGatewayMethod(this, "put_content_method", {
+      provider: props.provider,
+      restApiId: api.id,
+      resourceId: contentIdResource.id,
+      httpMethod: "PUT",
+      authorization: "NONE",
+    });
+
+    // DELETE method for deleting content
+    const deleteMethod = new ApiGatewayMethod(this, "delete_content_method", {
+      provider: props.provider,
+      restApiId: api.id,
+      resourceId: contentIdResource.id,
+      httpMethod: "DELETE",
+      authorization: "NONE",
+    });
+
+    // Lambda integrations
+    new ApiGatewayIntegration(this, "get_integration", {
+      provider: props.provider,
+      restApiId: api.id,
+      resourceId: contentIdResource.id,
+      httpMethod: getMethod.httpMethod,
+      integrationHttpMethod: "POST",
+      type: "AWS_PROXY",
+      uri: contentLambda.invokeArn,
+    });
+
+    new ApiGatewayIntegration(this, "post_integration", {
+      provider: props.provider,
+      restApiId: api.id,
+      resourceId: contentResource.id,
+      httpMethod: postMethod.httpMethod,
+      integrationHttpMethod: "POST",
+      type: "AWS_PROXY",
+      uri: contentLambda.invokeArn,
+    });
+
+    new ApiGatewayIntegration(this, "put_integration", {
+      provider: props.provider,
+      restApiId: api.id,
+      resourceId: contentIdResource.id,
+      httpMethod: putMethod.httpMethod,
+      integrationHttpMethod: "POST",
+      type: "AWS_PROXY",
+      uri: contentLambda.invokeArn,
+    });
+
+    new ApiGatewayIntegration(this, "delete_integration", {
+      provider: props.provider,
+      restApiId: api.id,
+      resourceId: contentIdResource.id,
+      httpMethod: deleteMethod.httpMethod,
+      integrationHttpMethod: "POST",
+      type: "AWS_PROXY",
+      uri: contentLambda.invokeArn,
+    });
+
+    // Lambda permissions for API Gateway
+    new LambdaPermission(this, "api_gateway_lambda_permission", {
+      provider: props.provider,
       statementId: "AllowExecutionFromAPIGateway",
       action: "lambda:InvokeFunction",
       functionName: contentLambda.functionName,
@@ -350,47 +359,41 @@ export class ServerlessCms extends Construct {
     });
 
     // API Gateway deployment
-    const deployment = new ApiGatewayDeployment(this, "api-deployment", {
-      provider: props.providerAlias,
+    const deployment = new ApiGatewayDeployment(this, "api_deployment", {
+      provider: props.provider,
       restApiId: api.id,
-      dependsOn: [
-        `content-get-method`,
-        `content-post-method`,
-        `content-put-method`,
-        `content-delete-method`,
-      ],
+      dependsOn: [getMethod, postMethod, putMethod, deleteMethod],
     });
 
     // API Gateway stage
-    new ApiGatewayStage(this, "api-stage", {
-      provider: props.providerAlias,
+    const stage = new ApiGatewayStage(this, "api_stage", {
+      provider: props.provider,
       deploymentId: deployment.id,
       restApiId: api.id,
       stageName: props.environment,
       tags: {
         Environment: props.environment,
-        Region: props.region,
+        Service: "cms",
       },
     });
 
     // CloudFront Origin Access Control
-    const oac = new CloudfrontOriginAccessControl(this, "content-oac", {
-      provider: props.providerAlias,
-      name: `${resourcePrefix}-oac`,
-      description: "OAC for CMS content bucket",
+    const oac = new CloudfrontOriginAccessControl(this, "s3_oac", {
+      provider: props.provider,
+      name: `${resourcePrefix}-s3-oac`,
+      description: "OAC for S3 content bucket",
       originAccessControlOriginType: "s3",
       signingBehavior: "always",
       signingProtocol: "sigv4",
     });
 
-    // CloudFront distribution
-    const distribution = new CloudfrontDistribution(this, "content-distribution", {
-      provider: props.providerAlias,
-      comment: `${resourcePrefix} CloudFront distribution`,
-      defaultRootObject: "index.html",
+    // CloudFront Distribution
+    const distribution = new CloudfrontDistribution(this, "cdn", {
+      provider: props.provider,
+      comment: `${resourcePrefix} CMS CloudFront Distribution`,
       enabled: true,
       isIpv6Enabled: true,
-      priceClass: "PriceClass_All",
+      defaultRootObject: "index.html",
       
       origin: [
         {
@@ -399,7 +402,7 @@ export class ServerlessCms extends Construct {
           originAccessControlId: oac.id,
         },
         {
-          domainName: `${api.id}.execute-api.${currentRegion.name}.amazonaws.com`,
+          domainName: api.restApiId + ".execute-api." + currentRegion.name + ".amazonaws.com",
           originId: "API-Gateway",
           originPath: `/${props.environment}`,
           customOriginConfig: {
@@ -461,33 +464,297 @@ export class ServerlessCms extends Construct {
 
       tags: {
         Environment: props.environment,
-        Region: props.region,
+        Service: "cms",
       },
     });
 
-    // S3 bucket policy to allow CloudFront access
-    new S3BucketPolicy(this, "content-bucket-policy", {
-      provider: props.providerAlias,
-      bucket: contentBucket.id,
-      policy: JSON.stringify({
-        Version: "2012-10-17",
-        Statement: [
-          {
-            Sid: "AllowCloudFrontServicePrincipal",
-            Effect: "Allow",
-            Principal: {
-              Service: "cloudfront.amazonaws.com",
-            },
-            Action: "s3:GetObject",
-            Resource: `${contentBucket.arn}/*`,
-            Condition: {
-              StringEquals: {
-                "AWS:SourceArn": distribution.arn,
-              },
-            },
-          },
-        ],
-      }),
+    // Store important values for outputs
+    this.apiGatewayUrl = `https://${api.id}.execute-api.${currentRegion.name}.amazonaws.com/${props.environment}`;
+    this.cloudfrontDomainName = distribution.domainName;
+    this.contentBucketName = contentBucket.bucket;
+    this.contentTableName = contentTable.name;
+  }
+
+  private createLambdaCode(): void {
+    // Create lambda directory if it doesn't exist
+    const lambdaDir = path.join(__dirname, "lambda");
+    if (!fs.existsSync(lambdaDir)) {
+      fs.mkdirSync(lambdaDir, { recursive: true });
+    }
+
+    // Create Lambda function handler
+    const handlerCode = `
+import json
+import boto3
+import os
+import uuid
+from datetime import datetime
+from botocore.exceptions import ClientError
+
+# Initialize AWS clients
+dynamodb = boto3.resource('dynamodb', region_name=os.environ['REGION'])
+s3 = boto3.client('s3', region_name=os.environ['REGION'])
+
+# Get environment variables
+CONTENT_TABLE = os.environ['CONTENT_TABLE']
+CONTENT_BUCKET = os.environ['CONTENT_BUCKET']
+
+def lambda_handler(event, context):
+    """
+    Main Lambda handler for CMS content management operations
+    Supports GET, POST, PUT, DELETE operations for content
+    """
+    try:
+        http_method = event['httpMethod']
+        path_parameters = event.get('pathParameters', {})
+        query_parameters = event.get('queryStringParameters', {}) or {}
+        body = event.get('body')
+        
+        # Parse request body if present
+        if body:
+            try:
+                body = json.loads(body)
+            except json.JSONDecodeError:
+                return create_response(400, {'error': 'Invalid JSON in request body'})
+        
+        # Route based on HTTP method
+        if http_method == 'GET':
+            return handle_get_content(path_parameters, query_parameters)
+        elif http_method == 'POST':
+            return handle_create_content(body)
+        elif http_method == 'PUT':
+            return handle_update_content(path_parameters, body)
+        elif http_method == 'DELETE':
+            return handle_delete_content(path_parameters)
+        else:
+            return create_response(405, {'error': 'Method not allowed'})
+            
+    except Exception as e:
+        print(f"Error processing request: {str(e)}")
+        return create_response(500, {'error': 'Internal server error'})
+
+def handle_get_content(path_parameters, query_parameters):
+    """Handle GET requests for content retrieval"""
+    table = dynamodb.Table(CONTENT_TABLE)
+    
+    # If contentId is provided, get specific content
+    if path_parameters and 'contentId' in path_parameters:
+        content_id = path_parameters['contentId']
+        try:
+            response = table.get_item(Key={'contentId': content_id})
+            if 'Item' in response:
+                return create_response(200, response['Item'])
+            else:
+                return create_response(404, {'error': 'Content not found'})
+        except ClientError as e:
+            print(f"Error getting content: {str(e)}")
+            return create_response(500, {'error': 'Failed to retrieve content'})
+    
+    # Otherwise, list content with optional filtering
+    try:
+        content_type = query_parameters.get('contentType')
+        if content_type:
+            # Query by content type using GSI
+            response = table.query(
+                IndexName='ContentTypeIndex',
+                KeyConditionExpression='contentType = :ct',
+                ExpressionAttributeValues={':ct': content_type},
+                ScanIndexForward=False  # Sort by createdAt descending
+            )
+        else:
+            # Scan all content
+            response = table.scan()
+        
+        return create_response(200, {
+            'items': response.get('Items', []),
+            'count': response.get('Count', 0)
+        })
+    except ClientError as e:
+        print(f"Error listing content: {str(e)}")
+        return create_response(500, {'error': 'Failed to list content'})
+
+def handle_create_content(body):
+    """Handle POST requests for content creation"""
+    if not body:
+        return create_response(400, {'error': 'Request body is required'})
+    
+    # Validate required fields
+    required_fields = ['title', 'contentType', 'content']
+    for field in required_fields:
+        if field not in body:
+            return create_response(400, {'error': f'Missing required field: {field}'})
+    
+    table = dynamodb.Table(CONTENT_TABLE)
+    content_id = str(uuid.uuid4())
+    timestamp = datetime.utcnow().isoformat()
+    
+    # Prepare content item
+    content_item = {
+        'contentId': content_id,
+        'title': body['title'],
+        'contentType': body['contentType'],
+        'content': body['content'],
+        'createdAt': timestamp,
+        'updatedAt': timestamp,
+        'status': body.get('status', 'draft'),
+        'author': body.get('author', 'anonymous'),
+        'tags': body.get('tags', [])
+    }
+    
+    try:
+        # Store metadata in DynamoDB
+        table.put_item(Item=content_item)
+        
+        # If there are file attachments, store them in S3
+        if 'files' in body:
+            for file_info in body['files']:
+                s3_key = f"content/{content_id}/{file_info['filename']}"
+                # In a real implementation, you'd handle file upload differently
+                # This is a simplified example
+                content_item['files'] = content_item.get('files', [])
+                content_item['files'].append({
+                    'filename': file_info['filename'],
+                    's3Key': s3_key,
+                    'contentType': file_info.get('contentType', 'application/octet-stream')
+                })
+        
+        return create_response(201, content_item)
+    except ClientError as e:
+        print(f"Error creating content: {str(e)}")
+        return create_response(500, {'error': 'Failed to create content'})
+
+def handle_update_content(path_parameters, body):
+    """Handle PUT requests for content updates"""
+    if not path_parameters or 'contentId' not in path_parameters:
+        return create_response(400, {'error': 'contentId is required'})
+    
+    if not body:
+        return create_response(400, {'error': 'Request body is required'})
+    
+    content_id = path_parameters['contentId']
+    table = dynamodb.Table(CONTENT_TABLE)
+    
+    try:
+        # Check if content exists
+        response = table.get_item(Key={'contentId': content_id})
+        if 'Item' not in response:
+            return create_response(404, {'error': 'Content not found'})
+        
+        existing_item = response['Item']
+        timestamp = datetime.utcnow().isoformat()
+        
+        # Update fields
+        update_expression = "SET updatedAt = :timestamp"
+        expression_values = {':timestamp': timestamp}
+        
+        updatable_fields = ['title', 'content', 'status', 'author', 'tags']
+        for field in updatable_fields:
+            if field in body:
+                update_expression += f", {field} = :{field}"
+                expression_values[f":{field}"] = body[field]
+        
+        # Perform update
+        table.update_item(
+            Key={'contentId': content_id},
+            UpdateExpression=update_expression,
+            ExpressionAttributeValues=expression_values
+        )
+        
+        # Get updated item
+        response = table.get_item(Key={'contentId': content_id})
+        return create_response(200, response['Item'])
+        
+    except ClientError as e:
+        print(f"Error updating content: {str(e)}")
+        return create_response(500, {'error': 'Failed to update content'})
+
+def handle_delete_content(path_parameters):
+    """Handle DELETE requests for content removal"""
+    if not path_parameters or 'contentId' not in path_parameters:
+        return create_response(400, {'error': 'contentId is required'})
+    
+    content_id = path_parameters['contentId']
+    table = dynamodb.Table(CONTENT_TABLE)
+    
+    try:
+        # Check if content exists and get associated files
+        response = table.get_item(Key={'contentId': content_id})
+        if 'Item' not in response:
+            return create_response(404, {'error': 'Content not found'})
+        
+        content_item = response['Item']
+        
+        # Delete associated files from S3
+        if 'files' in content_item:
+            for file_info in content_item['files']:
+                try:
+                    s3.delete_object(Bucket=CONTENT_BUCKET, Key=file_info['s3Key'])
+                except ClientError as s3_error:
+                    print(f"Error deleting S3 object: {str(s3_error)}")
+        
+        # Delete content metadata from DynamoDB
+        table.delete_item(Key={'contentId': content_id})
+        
+        return create_response(200, {'message': 'Content deleted successfully'})
+        
+    except ClientError as e:
+        print(f"Error deleting content: {str(e)}")
+        return create_response(500, {'error': 'Failed to delete content'})
+
+def create_response(status_code, body):
+    """Create standardized HTTP response"""
+    return {
+        'statusCode': status_code,
+        'headers': {
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+            'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+        },
+        'body': json.dumps(body, default=str)
+    }
+`;
+
+    // Write the handler code to file
+    fs.writeFileSync(path.join(lambdaDir, "handler.py"), handlerCode.trim());
+  }
+}
+
+// Example usage in a stack
+export class ServerlessCmsStack extends TerraformStack {
+  constructor(scope: Construct, id: string, region: string, environment: string = "prod") {
+    super(scope, id);
+
+    // Initialize AWS provider for the specified region
+    const provider = new AwsProvider(this, "aws", {
+      region: region,
+    });
+
+    // Create the CMS infrastructure
+    const cms = new ServerlessCmsConstruct(this, "cms", {
+      environment: environment,
+      provider: provider,
+    });
+
+    // Outputs
+    new TerraformOutput(this, "api_gateway_url", {
+      value: cms.apiGatewayUrl,
+      description: "API Gateway URL for CMS endpoints",
+    });
+
+    new TerraformOutput(this, "cloudfront_domain", {
+      value: cms.cloudfrontDomainName,
+      description: "CloudFront distribution domain name",
+    });
+
+    new TerraformOutput(this, "content_bucket", {
+      value: cms.contentBucketName,
+      description: "S3 bucket name for content storage",
+    });
+
+    new TerraformOutput(this, "content_table", {
+      value: cms.contentTableName,
+      description: "DynamoDB table name for content metadata",
     });
   }
 }
