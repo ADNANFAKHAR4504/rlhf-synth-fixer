@@ -34,6 +34,7 @@ import { CloudfrontDistribution } from '@cdktf/provider-aws/lib/cloudfront-distr
 // Lambda and CloudWatch
 import { CloudwatchEventRule } from '@cdktf/provider-aws/lib/cloudwatch-event-rule';
 import { CloudwatchEventTarget } from '@cdktf/provider-aws/lib/cloudwatch-event-target';
+import { CloudwatchLogGroup } from '@cdktf/provider-aws/lib/cloudwatch-log-group';
 import { LambdaFunction } from '@cdktf/provider-aws/lib/lambda-function';
 import { LambdaPermission } from '@cdktf/provider-aws/lib/lambda-permission';
 
@@ -213,9 +214,17 @@ export class TapStack extends TerraformStack {
       policyArn: flowLogPolicy.arn,
     });
 
+    // CloudWatch Log Group for VPC Flow Logs
+    const flowLogGroup = new CloudwatchLogGroup(this, 'vpc-flow-log-group', {
+      name: `/aws/vpc/flowlogs-${environmentSuffix}`,
+      retentionInDays: 14,
+      tags: commonTags,
+    });
+
     new FlowLog(this, 'vpc-flow-log', {
       iamRoleArn: flowLogRole.arn,
       logDestinationType: 'cloud-watch-logs',
+      logDestination: flowLogGroup.arn,
       vpcId: vpc.id,
       trafficType: 'ALL',
       tags: commonTags,
