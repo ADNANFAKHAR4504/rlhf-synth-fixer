@@ -1,4 +1,4 @@
-{
+﻿{
     "AWSTemplateFormatVersion": "2010-09-09",
     "Description": "Production-ready AWS environment for TAP Stack.",
     "Parameters": {
@@ -24,7 +24,14 @@
             "ConstraintDescription": "Must contain only alphanumeric characters."
         }
     },
-    "Mappings": null,
+    "Mappings": {
+        "RegionMap": {
+            "us-east-1": {
+                "AZ1": "us-east-1a",
+                "AZ2": "us-east-1b"
+            }
+        }
+    },
     "Conditions": {
         "UseACM": {
             "Fn::And": [
@@ -50,11 +57,33 @@
                 }
             ]
         },
-        "RegionMap": {
-            "us-east-1": {
-                "AZ1": "us-east-1a",
-                "AZ2": "us-east-1b"
-            }
+        "NotUseACM": {
+            "Fn::Not": [
+                {
+                    "Fn::And": [
+                        {
+                            "Fn::Equals": [
+                                {
+                                    "Ref": "ACMEnabled"
+                                },
+                                "true"
+                            ]
+                        },
+                        {
+                            "Fn::Not": [
+                                {
+                                    "Fn::Equals": [
+                                        {
+                                            "Ref": "ACMDomainName"
+                                        },
+                                        ""
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
         }
     },
     "Resources": {
@@ -211,11 +240,7 @@
             }
         },
         "ProdALBListenerHTTP": {
-            "Condition": {
-                "Fn::Not": [
-                    "UseACM"
-                ]
-            },
+            "Condition": "NotUseACM",
             "Type": "AWS::ElasticLoadBalancingV2::Listener",
             "Properties": {
                 "DefaultActions": [

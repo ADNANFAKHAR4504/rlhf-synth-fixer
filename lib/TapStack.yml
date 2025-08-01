@@ -25,16 +25,22 @@ Parameters:
     ConstraintDescription: 'Must contain only alphanumeric characters.'
 
 Mappings:
+  RegionMap:
+    us-east-1:
+      AZ1: 'us-east-1a'
+      AZ2: 'us-east-1b'
 
 Conditions:
   UseACM: !And [
     !Equals [ !Ref ACMEnabled, "true" ],
     !Not [ !Equals [ !Ref ACMDomainName, "" ] ]
   ]
-  RegionMap:
-    us-east-1:
-      AZ1: 'us-east-1a'
-      AZ2: 'us-east-1b'
+  NotUseACM: !Not [
+    !And [
+      !Equals [ !Ref ACMEnabled, "true" ],
+      !Not [ !Equals [ !Ref ACMDomainName, "" ] ]
+    ]
+  ]
 
 Resources:
   ProdEC2Role:
@@ -127,7 +133,7 @@ Resources:
         - CertificateArn: !Ref ProdALBListenerCertificate
 
   ProdALBListenerHTTP:
-    Condition: !Not [UseACM]
+    Condition: NotUseACM
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
       DefaultActions:
