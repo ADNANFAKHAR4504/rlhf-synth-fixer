@@ -5,13 +5,14 @@ Parameters:
   S3BucketName:
     Type: String
     Description: 'Name of the existing S3 bucket'
+    Default: 'iac-291198'
     AllowedPattern: '^[a-z0-9][a-z0-9.-]*[a-z0-9]$'
     ConstraintDescription: 'S3 bucket name must be valid'
   
   CloudWatchLogGroupName:
     Type: String
     Description: 'Name of the existing CloudWatch Log Group'
-    Default: '/aws/lambda/s3-file-processor'
+    Default: 'iac-291198'
     AllowedPattern: '^[a-zA-Z0-9_/.-]+$'
     ConstraintDescription: 'CloudWatch Log Group name must be valid'
 

@@ -12,16 +12,17 @@ describe('TapStack Unit Tests', () => {
       AWSTemplateFormatVersion: '2010-09-09',
       Description: 'Serverless infrastructure with Lambda function triggered by S3 events',
       Parameters: {
-        S3BucketName: { 
-          Type: 'String',
-          Description: 'Name of the existing S3 bucket',
-          AllowedPattern: '^[a-z0-9][a-z0-9.-]*[a-z0-9]$',
-          ConstraintDescription: 'S3 bucket name must be valid'
-        },
+                    S3BucketName: {
+              Type: 'String',
+              Description: 'Name of the existing S3 bucket',
+              Default: 'iac-291198',
+              AllowedPattern: '^[a-z0-9][a-z0-9.-]*[a-z0-9]$',
+              ConstraintDescription: 'S3 bucket name must be valid'
+            },
         CloudWatchLogGroupName: { 
           Type: 'String',
           Description: 'Name of the existing CloudWatch Log Group',
-          Default: '/aws/lambda/s3-file-processor',
+          Default: 'iac-291198',
           AllowedPattern: '^[a-zA-Z0-9_/.-]+$',
           ConstraintDescription: 'CloudWatch Log Group name must be valid'
         }
@@ -62,7 +63,7 @@ describe('TapStack Unit Tests', () => {
         S3FileProcessorFunction: { 
           Type: 'AWS::Lambda::Function',
           Properties: {
-            Runtime: 'nodejs22.x',
+            Runtime: 'nodejs18.x',
             Handler: 'index.handler',
             Timeout: 30,
             MemorySize: 128,
@@ -218,7 +219,7 @@ describe('TapStack Unit Tests', () => {
       const lambda = template.Resources.S3FileProcessorFunction;
       const props = lambda.Properties;
       
-      expect(props.Runtime).toBe('nodejs22.x');
+      expect(props.Runtime).toBe('nodejs18.x');
       expect(props.Handler).toBe('index.handler');
     });
 

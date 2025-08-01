@@ -18,6 +18,8 @@ jest.mock('@aws-sdk/client-s3', () => {
           LastModified: new Date('2023-01-01')
         });
       }
+      // Default return for other commands
+      return Promise.resolve({});
     })
   };
 
