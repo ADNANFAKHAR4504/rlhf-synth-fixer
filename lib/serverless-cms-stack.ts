@@ -276,7 +276,7 @@ export class ServerlessCms extends Construct {
       restApiId: api.id,
       resourceId: contentIdResource.id,
       httpMethod: getMethod.httpMethod,
-      integrationHttpMethod: 'POST',
+      integrationHttpMethod: 'GET',
       type: 'AWS_PROXY',
       uri: contentLambda.invokeArn,
     });
@@ -314,7 +314,7 @@ export class ServerlessCms extends Construct {
       restApiId: api.id,
       resourceId: contentIdResource.id,
       httpMethod: putMethod.httpMethod,
-      integrationHttpMethod: 'POST',
+      integrationHttpMethod: 'PUT',
       type: 'AWS_PROXY',
       uri: contentLambda.invokeArn,
     });
@@ -333,7 +333,7 @@ export class ServerlessCms extends Construct {
       restApiId: api.id,
       resourceId: contentIdResource.id,
       httpMethod: deleteMethod.httpMethod,
-      integrationHttpMethod: 'POST',
+      integrationHttpMethod: 'DELETE',
       type: 'AWS_PROXY',
       uri: contentLambda.invokeArn,
     });
