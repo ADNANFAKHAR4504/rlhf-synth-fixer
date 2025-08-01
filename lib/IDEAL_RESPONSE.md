@@ -1,4 +1,5 @@
 ```python
+# enterprise_security_stack.py
 import json
 import os
 import zipfile
@@ -59,8 +60,6 @@ class EnterpriseSecurityStack(Construct):  # pylint: disable=too-many-instance-a
     self.is_primary_region = provider_alias is None
 
     # Data sources for account and region information
-    # Note: For multi-region setup, we'll use the default provider for now
-    # Provider references need to be handled differently in CDKTF
     self.current_account = DataAwsCallerIdentity(self, "current")
     self.current_region = DataAwsRegion(self, "current_region")
 
@@ -76,6 +75,29 @@ class EnterpriseSecurityStack(Construct):  # pylint: disable=too-many-instance-a
     self._create_lambda_security_configuration()
     self._create_shield_protection()
 
+  def _get_account_arn_reference(self) -> str:
+    """Get account ARN reference that works in both synthesis and runtime."""
+    try:
+      # Try to get the actual account ID (works in unit tests)
+      return f"arn:aws:iam::{self.current_account.account_id}:root"
+    except Exception:
+      # Fallback to interpolation syntax (works in synthesis)
+      return "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+
+  def _get_account_id_reference(self) -> str:
+    """Get account ID reference that works in both synthesis and runtime."""
+    try:
+      return self.current_account.account_id
+    except Exception:
+      return "${data.aws_caller_identity.current.account_id}"
+
+  def _get_region_reference(self) -> str:
+    """Get region reference that works in both synthesis and runtime."""
+    try:
+      return self.current_region.id
+    except Exception:
+      return "${data.aws_region.current_region.id}"
+
   def _create_kms_keys(self) -> None:
     """Create KMS keys for encryption across services."""
 
@@ -90,7 +112,7 @@ class EnterpriseSecurityStack(Construct):  # pylint: disable=too-many-instance-a
             "Sid": "Enable IAM User Permissions",
             "Effect": "Allow",
             "Principal": {
-              "AWS": f"arn:aws:iam::{self.current_account.account_id}:root"
+              "AWS": self._get_account_arn_reference()
             },
             "Action": "kms:*",
             "Resource": "*"
@@ -125,7 +147,7 @@ class EnterpriseSecurityStack(Construct):  # pylint: disable=too-many-instance-a
     self.cloudtrail_bucket = S3Bucket(
       self, "cloudtrail_logs_bucket",
       bucket=(
-        f"enterprise-cloudtrail-logs-{self.current_account.account_id}-"
+        f"enterprise-cloudtrail-logs-{self._get_account_id_reference()}-"
         f"{self.region}-{self.provider_alias or 'primary'}"
       ),
       force_destroy=True
@@ -195,7 +217,7 @@ class EnterpriseSecurityStack(Construct):  # pylint: disable=too-many-instance-a
     self.vpc_flow_logs_bucket = S3Bucket(
       self, "vpc_flow_logs_bucket",
       bucket=(
-        f"enterprise-vpc-flow-logs-{self.current_account.account_id}-"
+        f"enterprise-vpc-flow-logs-{self._get_account_id_reference()}-"
         f"{self.region}-{self.provider_alias or 'primary'}"
       ),
       force_destroy=True
@@ -340,8 +362,8 @@ class EnterpriseSecurityStack(Construct):  # pylint: disable=too-many-instance-a
                 "logs:PutLogEvents"
               ],
               "Resource": (
-                f"arn:aws:logs:{self.current_region.id}:"
-                f"{self.current_account.account_id}:*"
+                f"arn:aws:logs:{self._get_region_reference()}:"
+                f"{self._get_account_id_reference()}:*"
               )
             }
           ]
@@ -635,4 +657,31 @@ def handler(event, context):
     # )
     # No-op for now
     return
+
+# =========================================
+# lambda_function.py
+"""
+Simple Lambda function for enterprise security stack.
+"""
+
+
+def handler(event, context):  # pylint: disable=unused-argument
+  """
+  Lambda handler function.
+
+  Args:
+    event: The event data passed to the function
+    context: Runtime information about the Lambda function
+
+  Returns:
+    dict: Response with status code and body
+  """
+  return {
+    'statusCode': 200,
+    'body': {
+      'message': 'Hello from secure Lambda!',
+      'environment': 'production',
+      'timestamp': context.aws_request_id if context else 'unknown'
+    }
+  }
 ```
