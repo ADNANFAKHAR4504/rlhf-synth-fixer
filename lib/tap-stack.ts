@@ -29,11 +29,7 @@ import { AutoscalingGroup } from '@cdktf/provider-aws/lib/autoscaling-group';
 import { LaunchTemplate } from '@cdktf/provider-aws/lib/launch-template';
 
 // CloudFront and Route53
-import { AcmCertificate } from '@cdktf/provider-aws/lib/acm-certificate';
 import { CloudfrontDistribution } from '@cdktf/provider-aws/lib/cloudfront-distribution';
-import { Route53HealthCheck } from '@cdktf/provider-aws/lib/route53-health-check';
-import { Route53Record } from '@cdktf/provider-aws/lib/route53-record';
-import { Route53Zone } from '@cdktf/provider-aws/lib/route53-zone';
 
 // Lambda and CloudWatch
 import { CloudwatchEventRule } from '@cdktf/provider-aws/lib/cloudwatch-event-rule';
@@ -42,7 +38,6 @@ import { LambdaFunction } from '@cdktf/provider-aws/lib/lambda-function';
 import { LambdaPermission } from '@cdktf/provider-aws/lib/lambda-permission';
 
 // Security Services
-import { GuarddutyDetector } from '@cdktf/provider-aws/lib/guardduty-detector';
 import { Wafv2WebAcl } from '@cdktf/provider-aws/lib/wafv2-web-acl';
 
 // IAM
@@ -68,7 +63,6 @@ export class TapStack extends TerraformStack {
     const awsRegion = 'us-east-1'; // Fixed to us-east-1 as per requirements
     const stateBucketRegion = props?.stateBucketRegion || 'us-east-1';
     const stateBucket = props?.stateBucket || 'iac-rlhf-tf-states';
-    const domainName = props?.domainName || 'nova-model-breaking.com';
 
     // Common tags for all resources
     const commonTags = {
@@ -457,18 +451,7 @@ echo "<h1>Nova Model Breaking App</h1>" > /var/www/html/index.html
       runtime: 'python3.9',
       handler: 'index.handler',
       role: lambdaRole.arn,
-      sourceCodeHash: Buffer.from(`
-import json
-import boto3
-
-def handler(event, context):
-    # Compliance check logic here
-    print("Running compliance checks...")
-    return {
-        'statusCode': 200,
-        'body': json.dumps('Compliance check completed')
-    }
-`).toString('base64'),
+      filename: 'lambda_function.zip',
       tags: commonTags,
     });
 
