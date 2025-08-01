@@ -1,3 +1,19 @@
+from typing import Optional
+from aws_cdk import (
+    Stack,
+    NestedStack,
+    NestedStackProps,
+    Duration,
+    CfnOutput,
+    Tags
+)
+from aws_cdk import aws_lambda as _lambda
+from aws_cdk import aws_apigateway as apigateway
+from aws_cdk import aws_logs as logs
+from aws_cdk import aws_iam as iam
+from constructs import Construct
+
+
 class ServerlessApiStack(NestedStack):
   def __init__(
       self,
@@ -74,11 +90,6 @@ class ServerlessApiStack(NestedStack):
         )
     )
 
-    # Define GET /health endpoint
-    health_resource = api.root.add_resource("health")
-    health_resource.add_method(
-        "GET", apigateway.LambdaIntegration(lambda_function))
-
     # Apply tags to all known resources
     for construct in [self, lambda_function, api]:
       for key, value in tags.items():
@@ -89,13 +100,16 @@ class ServerlessApiStack(NestedStack):
               value=lambda_function.function_name,
               description="Lambda function name")
 
-    CfnOutput(self, "LambdaLogGroup",
-              value=f"/aws/lambda/{lambda_function.function_name}",
-              description="Lambda log group name")
-
     CfnOutput(self, "ApiEndpoint",
               value=api.url,
               description="API Gateway base URL")
+
+    CfnOutput(self, "Environment",
+              value=tags["Environment"])
+
+    CfnOutput(self, "LambdaLogGroup",
+              value=f"/aws/lambda/{lambda_function.function_name}",
+              description="Lambda log group name")
 
     CfnOutput(self, "HealthCheckEndpoint",
               value=api.url + "health",
@@ -105,6 +119,34 @@ class ServerlessApiStack(NestedStack):
               value="v1",  # You could make this dynamic if needed
               description="API version")
 
-    CfnOutput(self, "Environment",
-              value=tags["Environment"],
-              description="Deployment environment")
+
+class TapStackProps(Stack):
+  def __init__(self, environment_suffix: Optional[str] = None, **kwargs):
+    super().__init__(**kwargs)
+    self.environment_suffix = environment_suffix
+
+
+class TapStack(Stack):
+  def __init__(
+      self,
+      scope: Construct,
+      construct_id: str,
+      props: Optional[TapStackProps] = None,
+      **kwargs
+  ):
+    super().__init__(scope, construct_id, **kwargs)
+
+    environment_suffix = (
+        props.environment_suffix if props else None
+    ) or self.node.try_get_context('environmentSuffix') or 'dev'
+
+    # Global tags for the parent stack
+    Tags.of(self).add("Environment", "Production")
+    Tags.of(self).add("Project", "Tap")
+
+    # Instantiate nested stack
+    self.api_stack = ServerlessApiStack(
+        self,
+        f"ServerlessApiStack-{environment_suffix}",
+        environment_suffix=environment_suffix
+    )
