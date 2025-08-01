@@ -675,9 +675,3 @@ Outputs:
     Value: !Ref HostedZone
     Export:
       Name: !Sub '${AWS::StackName}-HostedZoneId'
-
-  ALBDNSName:
-    Description: DNS name of the Application Load Balancer
-    Value: !GetAtt ApplicationLoadBalancer.DNSName
-    Export:
-      Name: !Sub '${AWS::StackName}-ALB-DNS-Name'
