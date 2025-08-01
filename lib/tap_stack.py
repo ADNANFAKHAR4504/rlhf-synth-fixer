@@ -124,8 +124,11 @@ class TapStack(pulumi.ComponentResource):
 
   def _create_security(self) -> None:
     pulumi.log.info("Creating security infrastructure...")
+    role_name = self._unique_suffix(f"TAP-Service-Role-{self.environment_suffix}")
     self.tap_service_role = aws.iam.Role(
-      f"tap-service-role-{self.environment_suffix}",
+        f"tap-service-role-{self.environment_suffix}",
+    name=role_name,
+
     #   name=f"TAP-Service-Role-{self.environment_suffix}",
       description=f"IAM role for TAP services in {self.environment_suffix} environment",
       assume_role_policy=pulumi.Output.json_dumps({
@@ -173,8 +176,14 @@ class TapStack(pulumi.ComponentResource):
       pulumi.log.info("Monitoring disabled, skipping monitoring infrastructure")
       return
     pulumi.log.info("Creating monitoring infrastructure...")
+    log_group_name = (
+        f"/aws/tap/{self.environment_suffix}/application-"
+        f"{self._unique_suffix(pulumi.get_stack())}"
+    )
     self.app_log_group = aws.cloudwatch.LogGroup(
-      f"tap-logs-{self.environment_suffix}",
+        f"tap-logs-{self.environment_suffix}",
+    name=log_group_name,
+
     #   name=f"/aws/tap/{self.environment_suffix}/application",
       retention_in_days=self.args.backup_retention_days,
       tags=self._merge_tags({
