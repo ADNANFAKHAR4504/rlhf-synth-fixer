@@ -96,25 +96,25 @@ class TestTapStackIntegration(unittest.TestCase):
   def test_security_group_rules_integration(self):
     """Test security groups are properly configured with correct rules"""
 
-    # Look for DB SG with specific description (more flexible match)
+    # ✅ Match DB Security Group
     self.template.has_resource_properties("AWS::EC2::SecurityGroup", {
       "GroupDescription": "Security group for e-commerce database",
-      # ✅ Instead of absent(), accept restricted egress (could also use Match.any_value())
       "SecurityGroupEgress": Match.array_with([
         Match.object_like({
-          "CidrIp": "0.0.0.0/0",
-          "IpProtocol": "-1"
+          "IpProtocol": "icmp",  # your CDK adds an ICMP block rule
+          "CidrIp": "255.255.255.255/32",  # Disallow all traffic
+          "Description": "Disallow all traffic"
         })
       ])
     })
 
-    # Validate Ingress from App SG to DB SG
+    # ✅ Match ingress rule allowing PostgreSQL from App SG
     self.template.has_resource_properties("AWS::EC2::SecurityGroupIngress", {
-        "IpProtocol": "tcp",
-        "FromPort": 5432,
-        "ToPort": 5432,
-        "Description": "Allow PostgreSQL access from application services",
-        "SourceSecurityGroupId": Match.any_value()
+      "IpProtocol": "tcp",
+      "FromPort": 5432,
+      "ToPort": 5432,
+      "Description": "Allow PostgreSQL access from application services",
+      "SourceSecurityGroupId": Match.any_value()
     })
 
   @mark.it("validates CloudFront distribution configuration")
