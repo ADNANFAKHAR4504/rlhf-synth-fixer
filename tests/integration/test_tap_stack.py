@@ -21,18 +21,19 @@ class TestTapStackLiveIntegration(unittest.TestCase):
     cls.logs_client = boto3.client("logs", region_name=cls.aws_region)
 
     try:
-      cls.stack = auto.select_stack(
+      cls.stack = auto.create_or_select_stack(
         stack_name=cls.stack_name,
         project_name=cls.project_name,
         program=lambda: None,
         opts=auto.LocalWorkspaceOptions(
-          work_dir=cls.pulumi_program_path,
-          env_vars={
+            work_dir=cls.pulumi_program_path,
+            env_vars={
             "AWS_REGION": cls.aws_region,
             "PULUMI_BACKEND_URL": cls.backend_url,
-          }
+            }
         )
       )
+
       cls.stack.refresh(on_output=print)
       cls.outputs = cls.stack.outputs()
     except NoCredentialsError as e:
