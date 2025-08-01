@@ -220,27 +220,32 @@ class TapStack(cdk.Stack):
     role.attach_inline_policy(s3_policy)
     return role
 
-  def _create_cloudfront_distribution(self) -> cloudfront.Distribution:
-    distribution = cloudfront.Distribution(
-      self, "EcommerceDistribution",
-      default_behavior=cloudfront.BehaviorOptions(
-        origin=origins.S3Origin(
-          bucket=self.s3_bucket,
-          origin_access_identity=None  # FIX: Disable OAI to use OAC only
-        ),
-        viewer_protocol_policy=cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
-        cache_policy=cloudfront.CachePolicy.CACHING_OPTIMIZED,
-        allowed_methods=cloudfront.AllowedMethods.ALLOW_GET_HEAD_OPTIONS,
-        compress=True
-      ),
-      price_class=cloudfront.PriceClass.PRICE_CLASS_100,
-      enabled=True
-    )
+  def _create_cloudfront_distribution(self) -> cloudfront.CfnDistribution:
+    origin_id = "S3Origin"
 
-    cfn_distribution = distribution.node.default_child
-    cfn_distribution.add_property_override(
-      "DistributionConfig.Origins.0.OriginAccessControlId",
-      self.oac.attr_id
+    distribution = cloudfront.CfnDistribution(
+      self, "EcommerceDistribution",
+      distribution_config=cloudfront.CfnDistribution.DistributionConfigProperty(
+        enabled=True,
+        default_root_object="index.html",
+        price_class="PriceClass_100",
+        origins=[
+          cloudfront.CfnDistribution.OriginProperty(
+            id=origin_id,
+            domain_name=self.s3_bucket.bucket_regional_domain_name,
+            s3_origin_config=None,  # ✅ prevent OAI usage
+            origin_access_control_id=self.oac.attr_id
+          )
+        ],
+        default_cache_behavior=cloudfront.CfnDistribution.DefaultCacheBehaviorProperty(
+          target_origin_id=origin_id,
+          viewer_protocol_policy="redirect-to-https",
+          allowed_methods=["GET", "HEAD", "OPTIONS"],
+          cached_methods=["GET", "HEAD", "OPTIONS"],
+          compress=True,
+          cache_policy_id=cloudfront.CachePolicy.CACHING_OPTIMIZED.cache_policy_id
+        )
+      )
     )
 
     return distribution
@@ -256,7 +261,7 @@ class TapStack(cdk.Stack):
           resources=[f"{self.s3_bucket.bucket_arn}/*"],
           conditions={
             "StringEquals": {
-              "AWS:SourceArn": f"arn:aws:cloudfront::{self.account}:distribution/{self.cloudfront_distribution.distribution_id}"
+              "AWS:SourceArn": f"arn:aws:cloudfront::{self.account}:distribution/{self.cloudfront_distribution.attr_id}"
             }
           }
         ),
