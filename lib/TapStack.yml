@@ -15,14 +15,9 @@ Metadata:
           - VpcCidr
           - AllowedSSHCidr
       - Label:
-          default: "Compute Configuration"
-        Parameters:
-          - InstanceType
-      - Label:
           default: "Security Configuration"
         Parameters:
           - ExistingGuardDutyDetectorId
-          - ExistingCloudTrailName
 
 Parameters:
   EnvironmentSuffix:
@@ -51,35 +46,10 @@ Parameters:
     AllowedPattern: '^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/([0-9]|[1-2][0-9]|3[0-2]))$'
     Description: "CIDR block allowed for SSH access (replace with your IP range)"
 
-  InstanceType:
-    Type: String
-    Default: "t3.micro"
-    AllowedValues: ["t3.micro", "t3.small", "t3.medium", "t3.large"]
-    Description: "EC2 instance type"
-
   ExistingGuardDutyDetectorId:
     Type: String
     Default: "d56d7ed660944653bca5fce5f3570782"
     Description: "ID of the existing GuardDuty detector to use instead of creating a new one"
-
-  ExistingCloudTrailName:
-    Type: String
-    Default: ""
-    Description: "Name of an existing CloudTrail to use instead of creating a new one (leave empty to create new trail)"
-
-Mappings:
-  RegionMap:
-    us-east-1:
-      AMI: "ami-0abcdef1234567890" # Amazon Linux 2023 AMI
-    us-west-2:
-      AMI: "ami-0abcdef1234567890" # Amazon Linux 2023 AMI
-    eu-west-1:
-      AMI: "ami-0abcdef1234567890" # Amazon Linux 2023 AMI
-
-Conditions:
-  IsProduction: !Equals [!Ref EnvironmentSuffix, "prod"]
-  EnableMultiAZ: !Equals [!Ref EnvironmentSuffix, "prod"]
-  CreateNewCloudTrail: !Equals [!Ref ExistingCloudTrailName, ""]
 
 Resources:
   # =============================================================================

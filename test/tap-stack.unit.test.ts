@@ -226,9 +226,9 @@ describe('TapStack CloudFormation Template', () => {
       expect(resourceCount).toBeGreaterThanOrEqual(1); // Should have at least the DynamoDB table
     });
 
-    test('should have exactly one parameter', () => {
+    test('should have expected number of parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBeGreaterThanOrEqual(1); // Should have at least EnvironmentSuffix
+      expect(parameterCount).toBe(5); // Should have 5 parameters after cleanup
     });
 
     test('should have exactly four outputs', () => {
