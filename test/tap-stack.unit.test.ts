@@ -5,7 +5,7 @@ import * as path from 'path';
 let template: any;
 
 beforeAll(() => {
-  const filePath = path.join(__dirname, '../lib/TapStack.json'); // Adjust as needed
+  const filePath = path.join(__dirname, '../lib/TapStack.json'); 
   const fileContent = fs.readFileSync(filePath, 'utf8');
   template = JSON.parse(fileContent);
 });
