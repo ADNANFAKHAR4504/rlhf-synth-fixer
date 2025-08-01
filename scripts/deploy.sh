@@ -20,7 +20,8 @@ export REPOSITORY=${REPOSITORY:-$(basename "$(pwd)")}
 export COMMIT_AUTHOR=${COMMIT_AUTHOR:-$(git config user.name || echo "unknown")}
 export AWS_REGION=${AWS_REGION:-us-east-1}
 # This is the line that was missing or incorrect
-export S3_DEPLOY_BUCKET=${S3_DEPLOY_BUCKET:-cfn-deploy-${REPOSITORY}-${ENVIRONMENT_SUFFIX}}
+#export S3_DEPLOY_BUCKET=${S3_DEPLOY_BUCKET:-cfn-deploy-${REPOSITORY}-${ENVIRONMENT_SUFFIX}}
+export S3_DEPLOY_BUCKET=iac-rlhf-cfn-states
 
 echo "Environment suffix: $ENVIRONMENT_SUFFIX"
 echo "Repository: $REPOSITORY"
