@@ -1142,6 +1142,17 @@
                     "Fn::Sub": "${AWS::StackName}-Private-Subnets"
                 }
             }
+        },
+        "HostedZoneId": {
+            "Description": "ID of the Route 53 Hosted Zone",
+            "Value": {
+                "Ref": "HostedZone"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-HostedZoneId"
+                }
+            }
         }
     }
 }

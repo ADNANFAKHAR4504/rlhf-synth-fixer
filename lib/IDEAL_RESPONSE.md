@@ -1,25 +1,8 @@
 ```yml
-
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Production-grade high-availability infrastructure with VPC, RDS, ALB, Auto Scaling, and monitoring'
 
 Parameters:
-  DBUsername:
-    Type: String
-    Default: admin
-    Description: Database administrator username
-    MinLength: 1
-    MaxLength: 16
-    AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
-
-  DBPassword:
-    Type: String
-    NoEcho: true
-    Description: Database administrator password
-    MinLength: 8
-    MaxLength: 41
-    AllowedPattern: '[a-zA-Z0-9]*'
-
   InstanceType:
     Type: String
     Default: t3.medium
@@ -35,12 +18,9 @@ Mappings:
     us-west-2:
       AMI: ami-054b7fc3c333ac6d2 # Amazon Linux 2023 AMI (us-west-2)
     us-east-1: # <--- ADD THIS ENTRY
-      AMI: ami-0ad253013fad0a42a # Example: Amazon Linux 2023 AMI (us-east-1) - **YOU MUST VERIFY THIS AMI ID**
-    # Add other regions as needed, e.g.:
-    # eu-west-1:
-    #   AMI: ami-xxxxxxxxxxxxxxxxx # AMI for Ireland
-    # ap-south-1:
-    #   AMI: ami-yyyyyyyyyyyyyyyyy # AMI for Mumbai
+      AMI: ami-08a6efd148b1f7504 # Example: Amazon Linux 2023 AMI (us-east-1) - **YOU MUST VERIFY THIS AMI ID**
+    ap-south-1:
+      AMI: ami-0d0ad8bb301edb745
 
 Resources:
   # VPC Configuration
@@ -55,6 +35,17 @@ Resources:
           Value: Production-VPC
         - Key: environment
           Value: production
+  
+  DBSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: DBSecret
+      Description:  credentials for DB Password
+      GenerateSecretString:
+        SecretStringTemplate: '{"username":"dbadmin"}'
+        GenerateStringKey: "password"
+        PasswordLength: 16
+        ExcludeCharacters: '"@/\\'
 
   # Internet Gateway
   InternetGateway:
@@ -356,8 +347,8 @@ Resources:
       DBInstanceClass: db.t3.micro
       Engine: postgres
       EngineVersion: '15.7'
-      MasterUsername: !Ref DBUsername
-      MasterUserPassword: !Ref DBPassword
+      MasterUsername: !Join [ '', [ '{{resolve:secretsmanager:', !Ref DBSecret, ':SecretString:username}}' ] ]
+      MasterUserPassword: !Join [ '', [ '{{resolve:secretsmanager:', !Ref DBSecret, ':SecretString:password}}' ] ]
       AllocatedStorage: 20
       StorageType: gp2
       StorageEncrypted: true
@@ -425,6 +416,23 @@ Resources:
       Port: 80
       Protocol: HTTP
 
+  HostedZone:
+    Type: AWS::Route53::HostedZone
+    Properties:
+      Name: devexample.com
+      HostedZoneConfig:
+        Comment: Public hosted zone for the production environment
+
+  ALBRecordSet:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref HostedZone
+      Name: 'app.devexample.com'  
+      Type: A
+      AliasTarget:
+        DNSName: !GetAtt ApplicationLoadBalancer.DNSName
+        HostedZoneId: !GetAtt ApplicationLoadBalancer.CanonicalHostedZoneID
+
   # EC2 KeyPair for SSH access
   MyEC2KeyPair:
     Type: AWS::EC2::KeyPair
@@ -448,7 +456,7 @@ Resources:
         SecurityGroupIds:
           - !Ref WebServerSecurityGroup
         UserData:
-          Fn::Base64: !Sub |
+          Fn::Base64: |
             #!/bin/bash
             yum update -y
             yum install -y httpd
@@ -580,7 +588,7 @@ Resources:
   S3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 'production-app-bucket-${AWS::AccountId}-${AWS::Region}'
+      BucketName: !Sub 'production-bucket-${AWS::AccountId}-${AWS::Region}'
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -662,4 +670,16 @@ Outputs:
     Value: !Join [',', [!Ref PrivateSubnet1, !Ref PrivateSubnet2]]
     Export:
       Name: !Sub '${AWS::StackName}-Private-Subnets'
+  
+  HostedZoneId:
+    Description: ID of the Route 53 Hosted Zone
+    Value: !Ref HostedZone
+    Export:
+      Name: !Sub '${AWS::StackName}-HostedZoneId'
+
+  ALBDNSName:
+    Description: DNS name of the Application Load Balancer
+    Value: !GetAtt ApplicationLoadBalancer.DNSName
+    Export:
+      Name: !Sub '${AWS::StackName}-ALB-DNS-Name'
 ```
