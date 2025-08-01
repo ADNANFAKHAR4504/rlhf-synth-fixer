@@ -173,7 +173,7 @@ To clean up after testing:
             Name: 'tag:Name',
             Values: [
               `*${process.env.ENVIRONMENT_SUFFIX || 'dev'}-public-subnet-*`,
-            ], // Match the actual naming pattern
+            ],
           },
         ],
       });
