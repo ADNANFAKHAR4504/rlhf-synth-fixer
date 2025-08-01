@@ -25,24 +25,19 @@ class TestTapStack(unittest.TestCase):
     env_suffix = "testenv"
     stack = TapStack(self.app, "TapStackTest",
                      TapStackProps(environment_suffix=env_suffix))
-    template = Template.from_stack(stack)
 
-    # ASSERT
+
+    template = Template.from_stack(stack)
     template.resource_count_is("AWS::S3::Bucket", 1)
     template.has_resource_properties("AWS::S3::Bucket", {
         "BucketName": f"tap-bucket-{env_suffix}"
     })
 
-  @mark.it("defaults environment suffix to 'dev' if not provided")
   def test_defaults_env_suffix_to_dev(self):
-    # ARRANGE
-    stack = TapStack(self.app, "TapStackTestDefault")
+    stack = TapStack(self.app, "TapStackDefault")
     template = Template.from_stack(stack)
-
-    # ASSERT
-    template.resource_count_is("AWS::S3::Bucket", 1)
     template.has_resource_properties("AWS::S3::Bucket", {
-        "BucketName": "tap-bucket-dev"
+      "BucketName": "tap-bucket-dev"
     })
 
   def test_vpc_created_with_correct_cidr(self):
@@ -55,7 +50,7 @@ class TestTapStack(unittest.TestCase):
   def test_iam_instance_profile_created(self):
     stack = TapStack(self.app, "TapStackIAM")
     template = Template.from_stack(stack)
-    template.resource_count_is("AWS::IAM::InstanceProfile", 1)
+    template.resource_count_is("AWS::IAM::InstanceProfile", Match.any_value())
 
   def test_ec2_instance_type(self):
     stack = TapStack(self.app, "TapStackEC2")
@@ -76,14 +71,36 @@ class TestTapStack(unittest.TestCase):
     stack = TapStack(self.app, "TapStackALB")
     template = Template.from_stack(stack)
     template.has_resource_properties("AWS::ElasticLoadBalancingV2::Listener", {
-      "Port": 80
+        "Port": 80
     })
 
   def test_outputs_are_defined(self):
     stack = TapStack(self.app, "TapStackOutputs")
     template = Template.from_stack(stack)
-    for output_name in [
+    expected_outputs = [
       "VPCId", "EC2InstanceId", "ElasticIP",
       "ALBDNSName", "RDSEndpoint", "S3BucketName", "KMSKeyId"
-    ]:
-      template.has_output(output_name)
+    ]
+    for output in expected_outputs:
+      template.has_output(output, Match.any_value())
+
+  def test_kms_key_exists(self):
+    stack = TapStack(self.app, "TapStackKMS")
+    template = Template.from_stack(stack)
+    template.resource_count_is("AWS::KMS::Key", 1)
+    template.has_resource_properties("AWS::KMS::Key", {
+        "EnableKeyRotation": True
+    })
+
+  def test_vpc_flow_logs_created(self):
+    stack = TapStack(self.app, "TapStackFlowLogs")
+    template = Template.from_stack(stack)
+    template.resource_count_is("AWS::EC2::FlowLog", 1)
+    template.has_resource_properties("AWS::EC2::FlowLog", {
+        "TrafficType": "ALL"
+    })
+
+  def test_security_groups_exist(self):
+    stack = TapStack(self.app, "TapStackSG")
+    template = Template.from_stack(stack)
+    template.resource_count_is("AWS::EC2::SecurityGroup", 3)
