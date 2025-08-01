@@ -15,8 +15,10 @@ class TestTapStack:
   def test_tap_stack_creation(self):
     """Test that TAP stack can be created without errors."""
     app = App()
+    # Create a TerraformStack to contain the TapStack construct
+    terraform_stack = TerraformStack(app, "test-terraform-stack")
     stack = TapStack(
-      app,
+      terraform_stack,
       "test-stack",
       environment_suffix="test",
       aws_region="us-west-2",
@@ -26,8 +28,8 @@ class TestTapStack:
       }
     )
     
-    # Use Testing.synth for TapStack
-    synth_result = Testing.synth(stack)
+    # Use Testing.synth for the TerraformStack
+    synth_result = Testing.synth(terraform_stack)
     assert synth_result is not None
     
     # Verify the stack object has expected attributes
@@ -38,15 +40,16 @@ class TestTapStack:
   def test_stack_s3_bucket_configuration(self):
     """Test that S3 bucket is configured with proper settings."""
     app = App()
+    terraform_stack = TerraformStack(app, "test-terraform-stack")
     stack = TapStack(
-      app,
+      terraform_stack,
       "test-stack",
       environment_suffix="test",
       aws_region="us-west-2"
     )
     
     # Use Testing.synth and parse the result
-    synth_result = Testing.synth(stack)
+    synth_result = Testing.synth(terraform_stack)
     terraform_config = json.loads(synth_result)
     
     # Find S3 bucket resources - look for the main TAP bucket
@@ -65,13 +68,14 @@ class TestTapStack:
   def test_stack_s3_versioning_configuration(self):
     """Test that S3 bucket versioning is properly configured."""
     app = App()
+    terraform_stack = TerraformStack(app, "test-terraform-stack")
     stack = TapStack(
-      app,
+      terraform_stack,
       "test-stack",
       environment_suffix="test"
     )
     
-    synth_result = Testing.synth(stack)
+    synth_result = Testing.synth(terraform_stack)
     terraform_config = json.loads(synth_result)
     
     # Check for versioning configuration
@@ -89,13 +93,14 @@ class TestTapStack:
   def test_stack_s3_encryption_configuration(self):
     """Test that S3 bucket encryption is properly configured."""
     app = App()
+    terraform_stack = TerraformStack(app, "test-terraform-stack")
     stack = TapStack(
-      app,
+      terraform_stack,
       "test-stack",
       environment_suffix="test"
     )
     
-    synth_result = Testing.synth(stack)
+    synth_result = Testing.synth(terraform_stack)
     terraform_config = json.loads(synth_result)
     
     # Check for encryption configuration
@@ -112,20 +117,23 @@ class TestTapStack:
     assert tap_encryption is not None, "Should have S3 bucket encryption configured"
     encryption_rule = tap_encryption["rule"][0]
     encryption_default = encryption_rule["apply_server_side_encryption_by_default"]
-    assert encryption_default["sse_algorithm"] == "AES256"
+    # Updated to expect KMS encryption instead of AES256
+    assert encryption_default["sse_algorithm"] == "aws:kms"
+    assert "kms_master_key_id" in encryption_default
 
   def test_stack_backend_configuration(self):
     """Test that Terraform backend is properly configured."""
     app = App()
+    terraform_stack = TerraformStack(app, "test-terraform-stack")
     stack = TapStack(
-      app,
+      terraform_stack,
       "test-stack",
       environment_suffix="test",
       state_bucket="custom-state-bucket",
       state_bucket_region="us-east-1"
     )
     
-    synth_result = Testing.synth(stack)
+    synth_result = Testing.synth(terraform_stack)
     terraform_config = json.loads(synth_result)
     
     # Check backend configuration
@@ -138,8 +146,9 @@ class TestTapStack:
   def test_stack_aws_provider_configuration(self):
     """Test that AWS providers are properly configured."""
     app = App()
+    terraform_stack = TerraformStack(app, "test-terraform-stack")
     stack = TapStack(
-      app,
+      terraform_stack,
       "test-stack",
       environment_suffix="test",
       aws_region="us-west-2",
@@ -147,7 +156,7 @@ class TestTapStack:
       default_tags={"Environment": "test"}
     )
     
-    synth_result = Testing.synth(stack)
+    synth_result = Testing.synth(terraform_stack)
     terraform_config = json.loads(synth_result)
     
     # Check provider configuration
@@ -179,8 +188,9 @@ class TestTapStack:
   def test_stack_enterprise_security_stacks(self):
     """Test that enterprise security stacks are instantiated."""
     app = App()
+    terraform_stack = TerraformStack(app, "test-terraform-stack")
     stack = TapStack(
-      app,
+      terraform_stack,
       "test-stack",
       environment_suffix="test",
       aws_region="us-east-1",
@@ -192,12 +202,13 @@ class TestTapStack:
     assert stack.secondary_security_stack is not None
     
     # Synthesize to ensure no errors
-    synth_result = Testing.synth(stack)
+    synth_result = Testing.synth(terraform_stack)
     assert synth_result is not None
 
   def test_stack_with_custom_parameters(self):
     """Test stack creation with custom parameters."""
     app = App()
+    terraform_stack = TerraformStack(app, "test-terraform-stack")
     custom_tags = {
       "Environment": "production",
       "Project": "enterprise",
@@ -205,7 +216,7 @@ class TestTapStack:
     }
     
     stack = TapStack(
-      app,
+      terraform_stack,
       "prod-stack",
       environment_suffix="prod",
       aws_region="eu-central-1",
@@ -216,7 +227,7 @@ class TestTapStack:
     )
     
     # Synthesize and verify configuration
-    synth_result = Testing.synth(stack)
+    synth_result = Testing.synth(terraform_stack)
     terraform_config = json.loads(synth_result)
     
     # Check that custom parameters are applied
@@ -240,13 +251,14 @@ class TestTapStack:
   def test_stack_resource_dependencies(self):
     """Test that resources have proper dependencies."""
     app = App()
+    terraform_stack = TerraformStack(app, "test-terraform-stack")
     stack = TapStack(
-      app,
+      terraform_stack,
       "test-stack",
       environment_suffix="test"
     )
     
-    synth_result = Testing.synth(stack)
+    synth_result = Testing.synth(terraform_stack)
     terraform_config = json.loads(synth_result)
     
     # Check that versioning and encryption reference the TAP bucket

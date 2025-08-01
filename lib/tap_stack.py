@@ -13,7 +13,7 @@ from constructs import Construct
 from .enterprise_security_stack import EnterpriseSecurityStack
 
 
-class TapStack(TerraformStack):
+class TapStack(Construct):
   """CDKTF Python stack for TAP infrastructure."""
 
   def __init__(
@@ -62,6 +62,21 @@ class TapStack(TerraformStack):
     # Add S3 state locking using escape hatch
     self.add_override("terraform.backend.s3.use_lockfile", True)
 
+    # Instantiate the enterprise security stack for primary region first
+    self.primary_security_stack = EnterpriseSecurityStack(
+      self, 
+      "EnterpriseSecurity-Primary",
+      region=aws_region
+    )
+
+    # Instantiate the enterprise security stack for secondary region
+    self.secondary_security_stack = EnterpriseSecurityStack(
+      self, 
+      "EnterpriseSecurity-Secondary", 
+      region=secondary_region,
+      provider_alias="secondary"
+    )
+
     # Create S3 bucket for demonstration with valid name
     self.tap_bucket = S3Bucket(
       self,
@@ -80,7 +95,7 @@ class TapStack(TerraformStack):
       }
     )
 
-    # Use separate resource for server-side encryption
+    # Use separate resource for server-side encryption with KMS
     S3BucketServerSideEncryptionConfigurationA(
       self,
       "tap_bucket_encryption",
@@ -89,28 +104,14 @@ class TapStack(TerraformStack):
         S3BucketServerSideEncryptionConfigurationRuleA(
           apply_server_side_encryption_by_default=
             S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultA(
-              sse_algorithm="AES256"
-            )
+              sse_algorithm="aws:kms",
+              kms_master_key_id=self.primary_security_stack.kms_key.arn
+            ),
+          bucket_key_enabled=True
         )
       ]
     )
 
-    # Instantiate the enterprise security stack for primary region
-    self.primary_security_stack = EnterpriseSecurityStack(
-      self, 
-      "EnterpriseSecurity-Primary",
-      region=aws_region
-    )
-
-    # Instantiate the enterprise security stack for secondary region
-    self.secondary_security_stack = EnterpriseSecurityStack(
-      self, 
-      "EnterpriseSecurity-Secondary", 
-      region=secondary_region,
-      provider_alias="secondary"
-    )
-
     # ? Add your stack instantiations here
     # ! Do NOT create resources directly in this stack.
-    # ! Instead, create separate stacks for each resource type.
     # ! Instead, create separate stacks for each resource type.
