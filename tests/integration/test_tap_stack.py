@@ -281,8 +281,8 @@ class TestEnterpriseSecurityStackIntegration:
     assert "aws_kms_key" in resources, "Should have KMS encryption"
     assert "aws_cloudtrail" in resources, "Should have audit logging"
     assert "aws_vpc" in resources, "Should have network isolation"
-    assert stack.secondary_security_stack is not None
     
-    # Should synthesize without errors
-    synth = app.synth()
+    # Verify security stacks are created
+    assert stack.primary_security_stack is not None
+    assert stack.secondary_security_stack is not None
     assert synth is not None
