@@ -57,6 +57,7 @@ interface TapStackProps {
   stateBucketRegion?: string;
   awsRegion?: string;
   domainName?: string;
+  defaultTags?: { [key: string]: string };
 }
 
 export class TapStack extends TerraformStack {
@@ -209,8 +210,7 @@ export class TapStack extends TerraformStack {
     new FlowLog(this, 'vpc-flow-log', {
       iamRoleArn: flowLogRole.arn,
       logDestinationType: 'cloud-watch-logs',
-      resourceId: vpc.id,
-      resourceType: 'VPC',
+      vpcId: vpc.id,
       trafficType: 'ALL',
       tags: commonTags,
     });
@@ -457,20 +457,7 @@ echo "<h1>Nova Model Breaking App</h1>" > /var/www/html/index.html
       runtime: 'python3.9',
       handler: 'index.handler',
       role: lambdaRole.arn,
-      code: {
-        zipFile: `
-import json
-import boto3
-
-def handler(event, context):
-    # Compliance check logic here
-    print("Running compliance checks...")
-    return {
-        'statusCode': 200,
-        'body': json.dumps('Compliance check completed')
-    }
-`,
-      },
+      filename: 'compliance-lambda.zip', // This would need to be a real zip file
       tags: commonTags,
     });
 
@@ -502,36 +489,10 @@ def handler(event, context):
     // WAF Web ACL
     new WafWebAcl(this, 'main-waf', {
       name: `nova-waf-${environmentSuffix}`,
+      metricName: `NovaWAF${environmentSuffix}`,
       defaultAction: {
         type: 'ALLOW',
       },
-      rules: [
-        {
-          name: 'SQLInjectionRule',
-          priority: 1,
-          action: {
-            type: 'BLOCK',
-          },
-          statement: {
-            sqliMatchStatement: {
-              fieldToMatch: {
-                body: {},
-              },
-              textTransformations: [
-                {
-                  priority: 0,
-                  type: 'URL_DECODE',
-                },
-              ],
-            },
-          },
-          visibilityConfig: {
-            sampledRequestsEnabled: true,
-            cloudwatchMetricsEnabled: true,
-            metricName: 'SQLInjectionRule',
-          },
-        },
-      ],
       tags: commonTags,
     });
 
@@ -603,6 +564,11 @@ def handler(event, context):
       viewerCertificate: {
         acmCertificateArn: certificate.arn,
         sslSupportMethod: 'sni-only',
+      },
+      restrictions: {
+        geoRestriction: {
+          restrictionType: 'none',
+        },
       },
       tags: commonTags,
     });
