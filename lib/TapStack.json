@@ -1,4 +1,4 @@
-{
+﻿{
     "AWSTemplateFormatVersion": "2010-09-09",
     "Description": "Production-ready AWS environment for TAP Stack.",
     "Parameters": {
@@ -626,7 +626,7 @@
                 "Engine": "mysql",
                 "MasterUsername": "admin",
                 "MasterUserPassword": {
-                    "Ref": "RDSMasterPassword"
+                    "Fn::Sub": "{{resolve:secretsmanager:${RDSMasterPassword}:SecretString:password}}"
                 },
                 "VPCSecurityGroups": [],
                 "DBSubnetGroupName": {
@@ -658,8 +658,8 @@
                 "GenerateSecretString": {
                     "SecretStringTemplate": "{\"username\": \"admin\"}",
                     "GenerateStringKey": "password",
-                    "PasswordLength": 16,
-                    "ExcludeCharacters": "\"@/\\\\"
+                    "PasswordLength": 32,
+                    "ExcludeCharacters": "\"@/\\"
                 }
             }
         },
