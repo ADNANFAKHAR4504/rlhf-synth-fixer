@@ -329,7 +329,7 @@ describe('TapStack Unit Tests - Nova Model Breaking Infrastructure', () => {
         expect.objectContaining({
           function_name: expect.stringMatching(/^compliance-checker-test-.*$/),
           runtime: 'python3.9',
-          handler: 'index.handler',
+          handler: 'lambda_function.handler',
         })
       );
     });
