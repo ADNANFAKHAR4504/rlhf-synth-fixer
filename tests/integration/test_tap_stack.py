@@ -21,25 +21,35 @@ class TestTapStackLiveIntegration(unittest.TestCase):
     cls.logs_client = boto3.client("logs", region_name=cls.aws_region)
 
     try:
-      cls.stack = auto.create_or_select_stack(
-        stack_name=cls.stack_name,
-        project_name=cls.project_name,
-        program=lambda: None,
-        opts=auto.LocalWorkspaceOptions(
-            work_dir=cls.pulumi_program_path,
-            env_vars={
-            "AWS_REGION": cls.aws_region,
-            "PULUMI_BACKEND_URL": cls.backend_url,
-            }
-        )
-      )
+      try:
+        cls.stack = auto.select_stack(
+                stack_name=cls.stack_name,
+                project_name=cls.project_name,
+                program=lambda: None,
+                opts=auto.LocalWorkspaceOptions(
+                    work_dir=cls.pulumi_program_path,
+                    env_vars={
+                        "AWS_REGION": cls.aws_region,
+                        "PULUMI_BACKEND_URL": cls.backend_url,
+                    }
+                )
+            )
+      except auto.StackNotFoundError as exc:
+        raise RuntimeError(
+            f"Pulumi stack '{cls.stack_name}' not found in backend '{cls.backend_url}'.\n"
+            f"Please ensure the stack exists before running tests."
+        ) from exc
 
+
+        # This line must be inside the outer try block
       cls.stack.refresh(on_output=print)
       cls.outputs = cls.stack.outputs()
+
     except NoCredentialsError as e:
       raise RuntimeError("AWS credentials not found. Make sure they're configured.") from e
     except ClientError as e:
       raise RuntimeError(f"Failed to initialize Pulumi stack: {e}") from e
+
 
   def retry_api_call(self, func, *args, max_attempts=5, delay=3, **kwargs):
     """Utility to retry API calls to avoid transient failures."""
