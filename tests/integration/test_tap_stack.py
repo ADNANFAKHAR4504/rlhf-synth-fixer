@@ -25,4 +25,3 @@ class TestTapStackIntegration:
     # This should not raise any exceptions
     synth = app.synth()
     assert synth is not None
-

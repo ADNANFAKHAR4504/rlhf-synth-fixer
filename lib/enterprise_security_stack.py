@@ -1,9 +1,12 @@
 import json
+import os
+import zipfile
 
 from cdktf_cdktf_provider_aws.cloudtrail import Cloudtrail
 from cdktf_cdktf_provider_aws.cloudwatch_log_group import CloudwatchLogGroup
 from cdktf_cdktf_provider_aws.cloudwatch_metric_alarm import \
     CloudwatchMetricAlarm
+from cdktf_cdktf_provider_aws.data_aws_ami import DataAwsAmi
 from cdktf_cdktf_provider_aws.data_aws_caller_identity import \
     DataAwsCallerIdentity
 from cdktf_cdktf_provider_aws.data_aws_region import DataAwsRegion
@@ -17,6 +20,7 @@ from cdktf_cdktf_provider_aws.kms_key import KmsKey
 from cdktf_cdktf_provider_aws.lambda_function import LambdaFunction
 from cdktf_cdktf_provider_aws.launch_template import LaunchTemplate
 from cdktf_cdktf_provider_aws.s3_bucket import S3Bucket
+from cdktf_cdktf_provider_aws.s3_bucket_policy import S3BucketPolicy
 from cdktf_cdktf_provider_aws.s3_bucket_public_access_block import \
     S3BucketPublicAccessBlock
 from cdktf_cdktf_provider_aws.s3_bucket_server_side_encryption_configuration import (
@@ -40,7 +44,13 @@ class EnterpriseSecurityStack(Construct):  # pylint: disable=too-many-instance-a
   Implements all required security controls across multi-region deployment.
   """
 
-  def __init__(self, scope: Construct, construct_id: str, region: str = None, provider_alias: str = None) -> None:
+  def __init__(
+    self,
+    scope: Construct,
+    construct_id: str,
+    region: str = None,
+    provider_alias: str = None
+  ) -> None:
     super().__init__(scope, construct_id)
 
     self.region = region or "us-east-1"
@@ -121,7 +131,6 @@ class EnterpriseSecurityStack(Construct):  # pylint: disable=too-many-instance-a
     )
 
     # CloudTrail bucket policy to allow CloudTrail access
-    from cdktf_cdktf_provider_aws.s3_bucket_policy import S3BucketPolicy
     S3BucketPolicy(
       self, "cloudtrail_bucket_policy",
       bucket=self.cloudtrail_bucket.id,
@@ -461,8 +470,6 @@ class EnterpriseSecurityStack(Construct):  # pylint: disable=too-many-instance-a
     """Configure EC2 instances without public IP addresses by default."""
 
     # Use a valid AMI ID data source
-    from cdktf_cdktf_provider_aws.data_aws_ami import DataAwsAmi
-    
     ubuntu_ami = DataAwsAmi(
       self, "ubuntu_ami",
       most_recent=True,
@@ -582,9 +589,6 @@ def handler(event, context):
 '''
     
       # Create lambda function zip file
-      import os
-      import zipfile
-    
       zip_path = os.path.join(os.path.dirname(__file__), 'lambda_function.zip')
       with zipfile.ZipFile(zip_path, 'w') as zip_file:
         zip_file.writestr('index.py', lambda_code)
@@ -632,15 +636,6 @@ def handler(event, context):
     #   )
     # )
     # No-op for now
-    # AWS Shield Advanced requires subscription and can be enabled for specific resources
-    # This is a placeholder for Shield Advanced protection on specific resources
-    # ShieldProtection(
-    #   self, "shield_protection_example",
-    #   name="enterprise-shield-protection",
-    #   resource_arn=(
-    #     "arn:aws:elasticloadbalancing:region:account:"
-    #     "loadbalancer/app/example/1234567890"
-    #   )
     # )
     # No-op for now
     return
