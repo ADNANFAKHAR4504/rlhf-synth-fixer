@@ -15,7 +15,8 @@ from aws_cdk import (
     aws_cloudfront as cloudfront,
     aws_cloudfront_origins as origins,
     RemovalPolicy,
-    Duration
+    Duration,
+    CfnOutput
 )
 from constructs import Construct
 import aws_cdk as cdk
@@ -72,6 +73,7 @@ class TapStack(cdk.Stack):
     self.s3_access_role = self._create_s3_access_role()
     self.cloudfront_distribution = self._create_cloudfront_distribution()
     self._update_s3_bucket_policy()
+    self._create_stack_outputs()
 
   def _create_s3_bucket(self) -> s3.Bucket:
     bucket = s3.Bucket(
@@ -288,4 +290,28 @@ class TapStack(cdk.Stack):
       self, "EcommerceBucketPolicy",
       bucket=self.s3_bucket.bucket_name,
       policy_document=bucket_policy.to_json()
+    )
+  
+  def _create_stack_outputs(self):
+    """Creates CloudFormation outputs for key resources."""
+    CfnOutput(
+      self, "S3BucketNameOutput",
+      value=self.s3_bucket.bucket_name,
+      description="Name of the e-commerce S3 assets bucket"
+    )
+    CfnOutput(
+      self, "CloudFrontDomainOutput",
+      # Use .attr_domain_name for CfnDistribution
+      value=self.cloudfront_distribution.attr_domain_name,
+      description="Domain name of the CloudFront distribution"
+    )
+    CfnOutput(
+      self, "RdsEndpointOutput",
+      value=self.rds_instance.db_instance_endpoint_address,
+      description="Endpoint address of the RDS database instance"
+    )
+    CfnOutput(
+      self, "RdsSecretArnOutput",
+      value=self.rds_instance.secret.secret_arn,
+      description="ARN of the Secrets Manager secret for RDS credentials"
     )

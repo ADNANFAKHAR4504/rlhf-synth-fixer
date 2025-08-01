@@ -110,7 +110,7 @@ class TestTapStackUnit(unittest.TestCase):
       "StorageEncrypted": True,
       "BackupRetentionPeriod": 7,
       "Engine": "postgres",
-      "EngineVersion": "15.4"
+      "EngineVersion": "15.12"
     })
       
     # Test database name
