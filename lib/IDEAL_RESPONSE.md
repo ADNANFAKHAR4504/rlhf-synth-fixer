@@ -56,9 +56,9 @@ export class TapStack extends TerraformStack {
   constructor(scope: Construct, name: string, props: TapStackProps) {
     super(scope, name);
 
-    // Use provided values or hardcoded defaults for us-east-1
-    const region = props.region || props.awsRegion || 'us-east-1';
-    // Official Amazon Linux 2 AMI for us-east-1 as of July 2025
+    // Use provided values or hardcoded defaults for us-west-2
+    const region = props.region || props.awsRegion || 'us-west-2';
+    // Official Amazon Linux 2 AMI for us-west-2 as of July 2025
     const amiId = props.amiId || 'ami-009698a58cf38bf4e';
     const tags = { Environment: 'Production' };
     // Use environmentSuffix for resource names if provided
