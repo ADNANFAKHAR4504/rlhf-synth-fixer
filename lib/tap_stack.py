@@ -597,3 +597,25 @@ class TapStack(cdk.Stack):
       value=self.ec2_role.role_name,
       description="Role Name"
       )
+    
+    CfnOutput(
+      self,
+      "EC2SecurityGroupId",
+      value=self.ec2_security_group.security_group_id,
+      description="EC2 Security Group ID"
+    )
+
+    CfnOutput(
+      self,
+      "RDSSecurityGroupId",
+      value=self.rds_security_group.security_group_id,
+      description="RDS Security Group ID"
+    )
+
+    CfnOutput(
+      self,
+      "ALBSecurityGroupId",
+      value=self.alb_security_group.security_group_id,
+      description="ALB Security Group ID"
+    )
+

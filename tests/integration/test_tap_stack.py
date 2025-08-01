@@ -118,3 +118,23 @@ class TestTapStackIntegration(unittest.TestCase):
         found = True
         break
     self.assertTrue(found, f"❌ RDS endpoint {self.rds_endpoint} not found")
+  
+  @mark.it("✅ EC2 SG allows HTTP from ALB SG on port 80")
+  def test_ec2_sg_allows_http_from_alb_sg(self):
+    ec2_sg_id = flat_outputs.get("EC2SecurityGroupId")
+    alb_sg_id = flat_outputs.get("ALBSecurityGroupId")
+
+    if not ec2_sg_id or not alb_sg_id:
+      self.fail("❌ 'EC2SecurityGroupId' or 'ALBSecurityGroupId' not found in flat-outputs.json")
+
+    resp = self.ec2.describe_security_groups(GroupIds=[ec2_sg_id])
+    permissions = resp["SecurityGroups"][0].get("IpPermissions", [])
+
+    found = any(
+      perm.get("FromPort") == 80 and
+      perm.get("ToPort") == 80 and
+      any(pair.get("GroupId") == alb_sg_id for pair in perm.get("UserIdGroupPairs", []))
+      for perm in permissions
+    )
+
+    self.assertTrue(found, "❌ EC2 SG does not allow HTTP (port 80) from ALB SG")
