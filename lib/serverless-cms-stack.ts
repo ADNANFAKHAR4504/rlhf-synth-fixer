@@ -152,7 +152,7 @@ export class ServerlessCms extends Construct {
 
     // Attach basic Lambda execution role
     new IamRolePolicyAttachment(this, 'lambda_basic_execution', {
-      provider: props.providerArchive,
+      provider: props.providerAws,
       role: lambdaRole.name,
       policyArn:
         'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole',
@@ -200,6 +200,7 @@ export class ServerlessCms extends Construct {
 
     // Package Lambda function code
     const lambdaZip = new File(this, 'lambda_zip', {
+      provider: props.providerArchive,
       type: 'zip',
       sourceDir: path.join(__dirname, 'lambda'),
       outputPath: path.join(__dirname, 'lambda.zip'),
