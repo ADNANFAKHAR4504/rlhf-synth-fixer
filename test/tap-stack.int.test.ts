@@ -1,9 +1,9 @@
-import EC2 from 'aws-sdk/clients/ec2';
-import S3 from 'aws-sdk/clients/s3';
-import RDS from 'aws-sdk/clients/rds';
-import ELBv2 from 'aws-sdk/clients/elbv2';
-import CloudWatch from 'aws-sdk/clients/cloudwatch';
-import AutoScaling from 'aws-sdk/clients/autoscaling';
+import { EC2Client, DescribeVpcsCommand, DescribeSecurityGroupsCommand, DescribeTagsCommand } from '@aws-sdk/client-ec2';
+import { S3Client, GetBucketLoggingCommand, GetBucketPolicyCommand } from '@aws-sdk/client-s3';
+import { RDSClient, DescribeDBInstancesCommand, DescribeDBSubnetGroupsCommand } from '@aws-sdk/client-rds';
+import { ElasticLoadBalancingV2Client, DescribeLoadBalancersCommand } from '@aws-sdk/client-elastic-load-balancing-v2';
+import { CloudWatchClient, DescribeAlarmsCommand } from '@aws-sdk/client-cloudwatch';
+import { AutoScalingClient, DescribeAutoScalingGroupsCommand } from '@aws-sdk/client-auto-scaling';
 import fs from 'fs';
 import path from 'path';
 
@@ -16,51 +16,57 @@ const outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf8'));
 
 describe('TapStack Live Infrastructure Integration', () => {
   test('VPC exists in AWS', async () => {
-    const ec2 = new EC2();
+    const ec2 = new EC2Client({ region });
     const vpcId = outputs.VPCId;
-    const vpcs = await ec2.describeVpcs({ VpcIds: [vpcId] }).promise();
+    const command = new DescribeVpcsCommand({ VpcIds: [vpcId] });
+    const vpcs = await ec2.send(command);
     expect(vpcs.Vpcs && vpcs.Vpcs.length).toBe(1);
     expect(vpcs.Vpcs && vpcs.Vpcs[0].VpcId).toBe(vpcId);
   });
 
   test('S3 bucket exists and has access logging enabled', async () => {
-    const s3 = new S3();
+    const s3 = new S3Client({ region });
     const bucketName = outputs.S3BucketName;
-    const bucketLogging = await s3.getBucketLogging({ Bucket: bucketName }).promise();
+    const command = new GetBucketLoggingCommand({ Bucket: bucketName });
+    const bucketLogging = await s3.send(command);
     expect(bucketLogging.LoggingEnabled).toBeDefined();
     expect(bucketLogging.LoggingEnabled && bucketLogging.LoggingEnabled.TargetBucket).toMatch(/prod-s3-access-logs/);
   });
 
   test('RDS instance exists and is available', async () => {
-    const rds = new RDS();
+    const rds = new RDSClient({ region });
     const dbInstanceId = outputs.RDSInstanceId;
-    const dbs = await rds.describeDBInstances({ DBInstanceIdentifier: dbInstanceId }).promise();
+    const command = new DescribeDBInstancesCommand({ DBInstanceIdentifier: dbInstanceId });
+    const dbs = await rds.send(command);
     expect(dbs.DBInstances && dbs.DBInstances.length).toBe(1);
     expect(dbs.DBInstances && dbs.DBInstances[0].DBInstanceStatus).toBe('available');
     expect(dbs.DBInstances && dbs.DBInstances[0].DBInstanceClass).toBe('db.t3.micro');
   });
 
   test('ALB exists and is active', async () => {
-    const elbv2 = new ELBv2();
+    const elbv2 = new ElasticLoadBalancingV2Client({ region });
     const albArn = outputs.ALBArn;
-    const albs = await elbv2.describeLoadBalancers({ LoadBalancerArns: [albArn] }).promise();
+    const command = new DescribeLoadBalancersCommand({ LoadBalancerArns: [albArn] });
+    const albs = await elbv2.send(command);
     expect(albs.LoadBalancers && albs.LoadBalancers.length).toBe(1);
     expect(albs.LoadBalancers && albs.LoadBalancers[0].State && albs.LoadBalancers[0].State.Code).toBe('active');
   });
 
   test('CloudWatch alarm for 5xx errors exists', async () => {
-    const cloudwatch = new CloudWatch();
+    const cloudwatch = new CloudWatchClient({ region });
     const alarmName = outputs.CloudWatchAlarmName;
-    const alarms = await cloudwatch.describeAlarms({ AlarmNames: [alarmName] }).promise();
+    const command = new DescribeAlarmsCommand({ AlarmNames: [alarmName] });
+    const alarms = await cloudwatch.send(command);
     expect(alarms.MetricAlarms && alarms.MetricAlarms.length).toBe(1);
     expect(alarms.MetricAlarms && alarms.MetricAlarms[0].MetricName).toBe('HTTPCode_ELB_5XX_Count');
   });
 
   test('AutoScaling group exists and is healthy', async () => {
-    const autoscaling = new AutoScaling();
+    const autoscaling = new AutoScalingClient({ region });
     // Find ASG by tag
-    const asgs = await autoscaling.describeAutoScalingGroups({}).promise();
-    const prodAsg = asgs.AutoScalingGroups.find(asg =>
+    const command = new DescribeAutoScalingGroupsCommand({});
+    const asgs = await autoscaling.send(command);
+    const prodAsg = asgs.AutoScalingGroups?.find(asg =>
       asg.Tags && asg.Tags.some(tag => tag.Key === 'Name' && tag.Value === 'prod-asg')
     );
     expect(prodAsg && prodAsg.Instances && prodAsg.Instances.length).toBeGreaterThanOrEqual(2);
@@ -68,10 +74,11 @@ describe('TapStack Live Infrastructure Integration', () => {
   });
 
   test('EC2 security group has correct inbound/outbound rules', async () => {
-    const ec2 = new EC2({ region });
+    const ec2 = new EC2Client({ region });
     const sgId = outputs.EC2SecurityGroupId || null;
     if (!sgId) return;
-    const sgs = await ec2.describeSecurityGroups({ GroupIds: [sgId] }).promise();
+    const command = new DescribeSecurityGroupsCommand({ GroupIds: [sgId] });
+    const sgs = await ec2.send(command);
     expect(sgs.SecurityGroups && sgs.SecurityGroups.length).toBe(1);
     const sg = sgs.SecurityGroups?.[0];
     expect(sg?.IpPermissions?.some((p: any) => p.FromPort === 80 && p.ToPort === 80)).toBe(true);
@@ -79,10 +86,11 @@ describe('TapStack Live Infrastructure Integration', () => {
   });
 
   test('ALB security group has correct inbound/outbound rules', async () => {
-    const ec2 = new EC2({ region });
+    const ec2 = new EC2Client({ region });
     const sgId = outputs.ALBSecurityGroupId || null;
     if (!sgId) return;
-    const sgs = await ec2.describeSecurityGroups({ GroupIds: [sgId] }).promise();
+    const command = new DescribeSecurityGroupsCommand({ GroupIds: [sgId] });
+    const sgs = await ec2.send(command);
     expect(sgs.SecurityGroups && sgs.SecurityGroups.length).toBe(1);
     const sg = sgs.SecurityGroups?.[0];
     expect(sg?.IpPermissions?.some((p: any) => p.FromPort === 443 && p.ToPort === 443)).toBe(true);
@@ -90,10 +98,11 @@ describe('TapStack Live Infrastructure Integration', () => {
   });
 
   test('RDS subnet group contains both private subnets', async () => {
-    const rds = new RDS({ region });
+    const rds = new RDSClient({ region });
     const groupName = outputs.RDSSubnetGroupName || null;
     if (!groupName) return;
-    const groups = await rds.describeDBSubnetGroups({ DBSubnetGroupName: groupName }).promise();
+    const command = new DescribeDBSubnetGroupsCommand({ DBSubnetGroupName: groupName });
+    const groups = await rds.send(command);
     expect(groups.DBSubnetGroups && groups.DBSubnetGroups.length).toBe(1);
     const subnetIds = groups.DBSubnetGroups?.[0]?.Subnets?.map((s: any) => s.SubnetIdentifier) || [];
     expect(subnetIds).toContain(outputs.PrivateSubnet1Id);
@@ -101,7 +110,7 @@ describe('TapStack Live Infrastructure Integration', () => {
   });
 
   test('All major resources have Name and Environment tags', async () => {
-    const ec2 = new EC2({ region });
+    const ec2 = new EC2Client({ region });
     const resources = [
       outputs.VPCId,
       outputs.PublicSubnet1Id,
@@ -110,7 +119,8 @@ describe('TapStack Live Infrastructure Integration', () => {
       outputs.PrivateSubnet2Id
     ];
     for (const id of resources) {
-      const tags = await ec2.describeTags({ Filters: [ { Name: 'resource-id', Values: [id] } ] }).promise();
+      const command = new DescribeTagsCommand({ Filters: [ { Name: 'resource-id', Values: [id] } ] });
+      const tags = await ec2.send(command);
       const keys = tags.Tags?.map((t: any) => t.Key) || [];
       expect(keys).toContain('Name');
       expect(keys).toContain('Environment');
@@ -118,10 +128,11 @@ describe('TapStack Live Infrastructure Integration', () => {
   });
 
   test('S3 access logs bucket policy allows logging', async () => {
-    const s3 = new S3({ region });
+    const s3 = new S3Client({ region });
     const bucketName = outputs.S3AccessLogsBucketName || null;
     if (!bucketName) return;
-    const policy = await s3.getBucketPolicy({ Bucket: bucketName }).promise();
+    const command = new GetBucketPolicyCommand({ Bucket: bucketName });
+    const policy = await s3.send(command);
     expect(policy.Policy).toMatch(/logging.s3.amazonaws.com/);
   });
 });
