@@ -359,7 +359,7 @@ Resources:
       BackupRetentionPeriod: 7
       PreferredBackupWindow: '03:00-04:00'
       PreferredMaintenanceWindow: 'sun:04:00-sun:05:00'
-      DeletionProtection: true
+      DeletionProtection: false
       Tags:
         - Key: Name
           Value: Production-PostgreSQL-DB
