@@ -4,10 +4,9 @@ from cdktf import S3Backend
 from cdktf_cdktf_provider_aws.provider import AwsProvider
 from cdktf_cdktf_provider_aws.s3_bucket import S3Bucket
 from cdktf_cdktf_provider_aws.s3_bucket_server_side_encryption_configuration import (
-  S3BucketServerSideEncryptionConfigurationA,
-  S3BucketServerSideEncryptionConfigurationRuleA,
-  S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultA
-)
+    S3BucketServerSideEncryptionConfigurationA,
+    S3BucketServerSideEncryptionConfigurationRuleA,
+    S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultA)
 from cdktf_cdktf_provider_aws.s3_bucket_versioning import S3BucketVersioningA
 from constructs import Construct
 
