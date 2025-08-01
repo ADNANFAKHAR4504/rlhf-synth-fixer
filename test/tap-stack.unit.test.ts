@@ -30,6 +30,8 @@ describe('TapStack CloudFormation Template', () => {
       expect(Parameters.ProjectName).toBeDefined();
       expect(Parameters.SshCidrBlock).toBeDefined();
       expect(Parameters.InstanceType).toBeDefined();
+      // MODIFIED: Added check for the new AMI parameter
+      expect(Parameters.LatestAmiId).toBeDefined();
     });
 
     test('ProjectName parameter should be correctly configured', () => {
@@ -51,6 +53,20 @@ describe('TapStack CloudFormation Template', () => {
       expect(param.Type).toBe('String');
       expect(param.Default).toBe('t3.micro');
       expect(param.Description).toBe('EC2 instance type.');
+    });
+
+    // ADDED: New test for the LatestAmiId parameter
+    test('LatestAmiId parameter should be correctly configured', () => {
+      const param = Parameters.LatestAmiId;
+      expect(param.Type).toBe(
+        'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
+      );
+      expect(param.Default).toBe(
+        '/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2'
+      );
+      expect(param.Description).toBe(
+        'AMI ID for the EC2 instances. Fetches the latest Amazon Linux 2 AMI by default.'
+      );
     });
   });
 
@@ -190,15 +206,8 @@ describe('TapStack CloudFormation Template', () => {
       instances.forEach(inst => expect(inst).toBeDefined());
     });
 
-    test('AMI should be dynamically retrieved from SSM Parameter Store', () => {
-      const amiParam = Resources.LatestAmiId;
-      expect(amiParam.Type).toBe(
-        'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
-      );
-      expect(amiParam.Properties.Name).toBe(
-        '/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2'
-      );
-    });
+    // REMOVED: This test is no longer valid as LatestAmiId is not a resource.
+    // test('AMI should be dynamically retrieved from SSM Parameter Store', () => { ... });
 
     test('All EC2 Instances should use the correct AMI, InstanceType, and Security Group', () => {
       instances.forEach(instance => {
@@ -207,8 +216,9 @@ describe('TapStack CloudFormation Template', () => {
           Ref: 'InstanceType',
         });
         expect(instance.Properties.ImageId).toEqual({ Ref: 'LatestAmiId' });
+        // MODIFIED: Updated to check for the simpler { "Ref": "..." }
         expect(instance.Properties.SecurityGroupIds).toEqual([
-          { 'Fn::GetAtt': ['EC2SecurityGroup', 'GroupId'] },
+          { Ref: 'EC2SecurityGroup' },
         ]);
       });
     });
@@ -236,7 +246,8 @@ describe('TapStack CloudFormation Template', () => {
       test('Security Group should be correctly defined', () => {
         expect(sg.Type).toBe('AWS::EC2::SecurityGroup');
         expect(sg.Properties.VpcId).toEqual({ Ref: 'VPC' });
-        expect(sg.Properties.SecurityGroupIngress).toHaveLength(2);
+        // MODIFIED: The self-referencing rule was moved, so only 1 rule remains.
+        expect(sg.Properties.SecurityGroupIngress).toHaveLength(1);
       });
 
       test('should allow SSH from the specified CIDR block', () => {
@@ -247,11 +258,22 @@ describe('TapStack CloudFormation Template', () => {
         expect(sshRule.CidrIp).toEqual({ Ref: 'SshCidrBlock' });
       });
 
-      test('should allow all internal traffic from within the same security group', () => {
-        const internalRule = sg.Properties.SecurityGroupIngress[1];
-        expect(internalRule.IpProtocol).toBe('-1'); // -1 means all protocols
-        expect(internalRule.SourceSecurityGroupId).toEqual({
-          'Fn::GetAtt': ['EC2SecurityGroup', 'GroupId'],
+      // REMOVED: This test is replaced by a new one for the separate ingress resource.
+      // test('should allow all internal traffic from within the same security group', () => { ... });
+    });
+
+    // ADDED: New test suite for the separate ingress rule resource
+    describe('EC2 Security Group Ingress Rule', () => {
+      const ingressRule = Resources.EC2SecurityGroupSelfIngress;
+
+      test('should allow all traffic from within the same security group', () => {
+        expect(ingressRule.Type).toBe('AWS::EC2::SecurityGroupIngress');
+        expect(ingressRule.Properties.GroupId).toEqual({
+          Ref: 'EC2SecurityGroup',
+        });
+        expect(ingressRule.Properties.IpProtocol).toBe('-1');
+        expect(ingressRule.Properties.SourceSecurityGroupId).toEqual({
+          Ref: 'EC2SecurityGroup',
         });
       });
     });

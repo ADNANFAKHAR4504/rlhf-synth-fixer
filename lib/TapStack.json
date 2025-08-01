@@ -16,6 +16,11 @@
       "Type": "String",
       "Default": "t3.micro",
       "Description": "EC2 instance type."
+    },
+    "LatestAmiId": {
+      "Type": "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>",
+      "Default": "/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2",
+      "Description": "AMI ID for the EC2 instances. Fetches the latest Amazon Linux 2 AMI by default."
     }
   },
   "Resources": {
@@ -266,12 +271,6 @@
             "CidrIp": {
               "Ref": "SshCidrBlock"
             }
-          },
-          {
-            "IpProtocol": "-1",
-            "SourceSecurityGroupId": {
-              "Fn::GetAtt": ["EC2SecurityGroup", "GroupId"]
-            }
           }
         ],
         "Tags": [
@@ -284,10 +283,16 @@
         ]
       }
     },
-    "LatestAmiId": {
-      "Type": "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>",
+    "EC2SecurityGroupSelfIngress": {
+      "Type": "AWS::EC2::SecurityGroupIngress",
       "Properties": {
-        "Name": "/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2"
+        "GroupId": {
+          "Ref": "EC2SecurityGroup"
+        },
+        "IpProtocol": "-1",
+        "SourceSecurityGroupId": {
+          "Ref": "EC2SecurityGroup"
+        }
       }
     },
     "PublicEC2Instance": {
@@ -304,7 +309,7 @@
         },
         "SecurityGroupIds": [
           {
-            "Fn::GetAtt": ["EC2SecurityGroup", "GroupId"]
+            "Ref": "EC2SecurityGroup"
           }
         ],
         "Tags": [
@@ -331,7 +336,7 @@
         },
         "SecurityGroupIds": [
           {
-            "Fn::GetAtt": ["EC2SecurityGroup", "GroupId"]
+            "Ref": "EC2SecurityGroup"
           }
         ],
         "Tags": [
@@ -358,7 +363,7 @@
         },
         "SecurityGroupIds": [
           {
-            "Fn::GetAtt": ["EC2SecurityGroup", "GroupId"]
+            "Ref": "EC2SecurityGroup"
           }
         ],
         "Tags": [
