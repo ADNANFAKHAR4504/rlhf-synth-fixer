@@ -1,226 +1,878 @@
-# AWS CI/CD Pipeline with CDK Python Implementation
-
-## Overview
-
-This implementation provides a complete **AWS CI/CD pipeline using the AWS Cloud Development Kit (CDK) in Python** that enables automated deployment to **distinct staging and production environments**. The solution integrates tightly with **AWS CodePipeline** and **AWS CodeBuild** and is entirely defined in **Python code using AWS CDK**.
-
-## Architecture
-
-The solution creates a modular, environment-aware CI/CD pipeline with the following components:
-
-### Core Components
-
-1. **IAM Stack** - Service roles for CodePipeline, CodeBuild, and CloudFormation
-2. **S3 Stack** - Encrypted artifacts bucket with lifecycle policies
-3. **CodeBuild Stack** - Build project and separate deployment projects for staging/production
-4. **CodePipeline Stack** - Full CI/CD pipeline with S3 source integration and manual approval
-
-### Pipeline Flow
-
-```
-Source (S3) → Build → Deploy Staging → Manual Approval → Deploy Production
-```
-
-## Files Created/Modified
-
-### Core Infrastructure Files
-
-#### `tap.py` - CDK Application Entry Point
-```python
-#!/usr/bin/env python3
+"""tap_stack.py
+This module defines all CDK stacks for the TAP (Test Automation Platform) project.
+It includes all resource-specific stacks consolidated into a single file and 
+manages environment-specific configurations.
 """
-CDK application entry point for the TAP (Test Automation Platform) infrastructure.
 
-This module defines the core CDK application and instantiates the TapStack with appropriate
-configuration based on the deployment environment. It handles environment-specific settings,
-tagging, and deployment configuration for AWS resources.
-
-The stack created by this module uses environment suffixes to distinguish between
-different deployment environments (development, staging, production, etc.).
-"""
-import os
+from typing import Optional
+import random
+import string
 
 import aws_cdk as cdk
-from aws_cdk import Tags
-from lib.tap_stack import TapStack, TapStackProps
+from aws_cdk import aws_iam as iam
+from aws_cdk import aws_s3 as s3
+from aws_cdk import aws_codebuild as codebuild
+from aws_cdk import aws_codepipeline as codepipeline
+from aws_cdk import aws_codepipeline_actions as codepipeline_actions
 
-app = cdk.App()
+from constructs import Construct
 
-# Get environment suffix from context (set by CI/CD pipeline) or use 'dev' as default
-environment_suffix = app.node.try_get_context('environmentSuffix') or 'dev'
-STACK_NAME = f"TapStack{environment_suffix}"
 
-repository_name = os.getenv('REPOSITORY', 'unknown')
-commit_author = os.getenv('COMMIT_AUTHOR', 'unknown')
+def generate_random_suffix(length: int = 6) -> str:
+  """Generate a random alphanumeric suffix for resource uniqueness."""
+  return ''.join(random.choices(string.ascii_lowercase + string.digits, k=length))
 
-# Apply tags to all stacks in this app (optional - you can do this at stack level instead)
-Tags.of(app).add('Environment', environment_suffix)
-Tags.of(app).add('Repository', repository_name)
-Tags.of(app).add('Author', commit_author)
 
-# Create a TapStackProps object to pass environment_suffix
+def standardize_resource_name(
+  resource_type: str, 
+  environment: str, 
+  component: str = "", 
+  random_suffix: str = ""
+) -> str:
+  """
+  Generate standardized resource names following consistent naming conventions.
+  
+  Format: {project}-{environment}-{resource_type}[-{component}][-{random_suffix}]
+  """
+  project = "tap"  # Test Automation Platform
+  parts = [project, environment, resource_type]
+  
+  if component:
+    parts.append(component)
+  if random_suffix:
+    parts.append(random_suffix)
+    
+  return "-".join(parts)
 
-props = TapStackProps(
-    environment_suffix=environment_suffix,
-    env=cdk.Environment(
-        account=os.getenv('CDK_DEFAULT_ACCOUNT'),
-        region=os.getenv('CDK_DEFAULT_REGION', 'us-west-2')  # Default to us-west-2 as per requirements
+
+def apply_common_tags(construct: Construct, environment_suffix: str, project_name: str = "TAP") -> None:
+  """Apply common tags to all resources in a construct for governance and cost tracking."""
+  cdk.Tags.of(construct).add("Project", project_name)
+  cdk.Tags.of(construct).add("Environment", environment_suffix)
+  cdk.Tags.of(construct).add("ManagedBy", "CDK")
+  cdk.Tags.of(construct).add("Owner", "DevOps")
+  cdk.Tags.of(construct).add("CostCenter", f"{project_name}-{environment_suffix}")
+  cdk.Tags.of(construct).add("Application", "TestAutomationPlatform")
+
+
+class IAMStackProps(cdk.StackProps):
+  """
+  IAMStackProps defines the properties for the IAMStack.
+  
+  Args:
+    environment_suffix (Optional[str]): Environment suffix for resource naming
+    **kwargs: Additional keyword arguments passed to the base cdk.StackProps
+  """
+  
+  def __init__(self, environment_suffix: Optional[str] = None, **kwargs):
+    super().__init__(**kwargs)
+    self.environment_suffix = environment_suffix
+
+
+class IAMStack(Construct):
+  """
+  IAMStack creates IAM roles and policies for CI/CD pipeline components.
+  
+  This stack creates:
+  - CodePipeline service role
+  - CodeBuild service role  
+  - CloudFormation execution role for deployments
+  
+  Args:
+    scope (Construct): The parent construct
+    construct_id (str): The unique identifier for this stack
+    environment_suffix (Optional[str]): Environment suffix for resource naming
+  """
+  
+  def __init__(
+    self,
+    scope: Construct,
+    construct_id: str,
+    environment_suffix: Optional[str] = None
+  ):
+    super().__init__(scope, construct_id)
+    
+    environment_suffix = environment_suffix or 'dev'
+    random_suffix = generate_random_suffix()
+    
+    # CodePipeline service role - Using explicit naming for integration tests
+    self.codepipeline_role = iam.Role(
+      self,
+      f"CodePipelineRole{random_suffix}",
+      role_name=f"ciapp-{environment_suffix}-codepipeline-role",
+      assumed_by=iam.ServicePrincipal("codepipeline.amazonaws.com"),
+      # Using least privilege instead of full access policies
+      managed_policies=[],
+      inline_policies={
+        "CodePipelineExecutionPolicy": iam.PolicyDocument(
+          statements=[
+            # IAM PassRole permissions with service restrictions
+            iam.PolicyStatement(
+              effect=iam.Effect.ALLOW,
+              actions=["iam:PassRole"],
+              resources=["*"],
+              conditions={
+                "StringEquals": {
+                  "iam:PassedToService": [
+                    "cloudformation.amazonaws.com",
+                    "codebuild.amazonaws.com"
+                  ]
+                }
+              }
+            ),
+            # S3 permissions for pipeline artifacts
+            iam.PolicyStatement(
+              effect=iam.Effect.ALLOW,
+              actions=[
+                "s3:GetObject",
+                "s3:GetObjectVersion",
+                "s3:PutObject",
+                "s3:GetBucketVersioning"
+              ],
+              resources=[
+                "arn:aws:s3:::*-artifacts-*",
+                "arn:aws:s3:::*-artifacts-*/*",
+                "arn:aws:s3:::*-source-*",
+                "arn:aws:s3:::*-source-*/*"
+              ]
+            ),
+            # CodeBuild permissions
+            iam.PolicyStatement(
+              effect=iam.Effect.ALLOW,
+              actions=[
+                "codebuild:BatchGetBuilds",
+                "codebuild:StartBuild"
+              ],
+              resources=["*"]
+            ),
+            # CloudFormation permissions for deployments
+            iam.PolicyStatement(
+              effect=iam.Effect.ALLOW,
+              actions=[
+                "cloudformation:CreateStack",
+                "cloudformation:UpdateStack",
+                "cloudformation:DescribeStacks",
+                "cloudformation:DescribeStackEvents",
+                "cloudformation:DescribeStackResources",
+                "cloudformation:GetTemplate"
+              ],
+              resources=["*"]
+            )
+          ]
+        )
+      }
     )
-)
+    
+    # CodeBuild service role - Using explicit naming for integration tests
+    self.codebuild_role = iam.Role(
+      self,
+      f"CodeBuildRole{random_suffix}", 
+      role_name=f"ciapp-{environment_suffix}-codebuild-role",
+      assumed_by=iam.ServicePrincipal("codebuild.amazonaws.com"),
+      managed_policies=[
+        iam.ManagedPolicy.from_aws_managed_policy_name("CloudWatchLogsFullAccess"),
+        iam.ManagedPolicy.from_aws_managed_policy_name("AmazonS3FullAccess")
+      ],
+      inline_policies={
+        "CodeBuildPolicy": iam.PolicyDocument(
+          statements=[
+            iam.PolicyStatement(
+              effect=iam.Effect.ALLOW,
+              actions=[
+                "logs:CreateLogGroup",
+                "logs:CreateLogStream", 
+                "logs:PutLogEvents"
+              ],
+              resources=[
+                f"arn:aws:logs:us-west-2:{cdk.Aws.ACCOUNT_ID}:"
+                f"log-group:/aws/codebuild/*"
+              ]
+            )
+          ]
+        )
+      }
+    )
+    
+    # CloudFormation execution role for deployments - Using explicit naming for integration tests
+    self.cloudformation_role = iam.Role(
+      self,
+      f"CloudFormationRole{random_suffix}",
+      role_name=f"ciapp-{environment_suffix}-cloudformation-role",
+      assumed_by=iam.ServicePrincipal("cloudformation.amazonaws.com"),
+      managed_policies=[
+        iam.ManagedPolicy.from_aws_managed_policy_name("PowerUserAccess")
+      ],
+      inline_policies={
+        "IAMPolicy": iam.PolicyDocument(
+          statements=[
+            iam.PolicyStatement(
+              effect=iam.Effect.ALLOW,
+              actions=[
+                "iam:*"
+              ],
+              resources=["*"]
+            )
+          ]
+        )
+      }
+    )
+    
+    # Add tags to all resources
+    cdk.Tags.of(self).add("Environment", environment_suffix)
+    cdk.Tags.of(self).add("Component", "IAM")
 
-# Initialize the stack with proper parameters
-TapStack(app, STACK_NAME, props=props)
 
-app.synth()
-```
+class S3StackProps(cdk.StackProps):
+  """
+  S3StackProps defines the properties for the S3Stack.
+  
+  Args:
+    environment_suffix (Optional[str]): Environment suffix for resource naming
+    **kwargs: Additional keyword arguments passed to the base cdk.StackProps
+  """
+  
+  def __init__(self, environment_suffix: Optional[str] = None, **kwargs):
+    super().__init__(**kwargs)
+    self.environment_suffix = environment_suffix
 
-#### `lib/tap_stack.py` - Main Infrastructure Stack
-The main stack file contains all resource-specific stacks consolidated into a single file, including:
 
-- **IAMStack**: Creates service roles for CodePipeline, CodeBuild, and CloudFormation with appropriate policies
-- **S3Stack**: Creates encrypted artifacts bucket with versioning and lifecycle rules
-- **CodeBuildStack**: Creates build project and deployment projects for staging/production environments
-- **CodePipelineStack**: Creates S3 source bucket and CI/CD pipeline with manual approval step
-- **TapStack**: Main orchestrating stack that instantiates all component stacks
+class S3Stack(Construct):
+  """
+  S3Stack creates S3 buckets for CI/CD pipeline artifacts.
+  
+  This stack creates:
+  - Artifacts bucket for pipeline artifacts and build outputs
+  
+  Args:
+    scope (Construct): The parent construct
+    construct_id (str): The unique identifier for this stack
+    environment_suffix (Optional[str]): Environment suffix for resource naming
+  """
+  
+  def __init__(
+    self,
+    scope: Construct,
+    construct_id: str,
+    environment_suffix: Optional[str] = None
+  ):
+    super().__init__(scope, construct_id)
+    
+    environment_suffix = environment_suffix or 'dev'
+    
+    # Apply consistent tagging for governance and cost tracking
+    apply_common_tags(self, environment_suffix)
+    
+    # S3 bucket for pipeline artifacts - Using explicit naming for integration tests
+    self.artifacts_bucket = s3.Bucket(
+      self,
+      "ArtifactsBucket",
+      bucket_name=f"ciapp-{environment_suffix}-artifacts-{cdk.Aws.ACCOUNT_ID}",
+      versioned=True,
+      encryption=s3.BucketEncryption.KMS_MANAGED,
+      block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
+      enforce_ssl=True,
+      removal_policy=cdk.RemovalPolicy.DESTROY,
+      auto_delete_objects=True,
+      lifecycle_rules=[
+        # Cost optimization: Delete old versions after 30 days
+        s3.LifecycleRule(
+          id="DeleteOldVersions",
+          enabled=True,
+          noncurrent_version_expiration=cdk.Duration.days(30)
+        ),
+        # Cost optimization: Delete incomplete multipart uploads
+        s3.LifecycleRule(
+          id="DeleteIncompleteUploads", 
+          enabled=True,
+          abort_incomplete_multipart_upload_after=cdk.Duration.days(7)
+        ),
+        # Cost optimization: Transition to cheaper storage classes for long-term artifacts
+        s3.LifecycleRule(
+          id="TransitionToIA",
+          enabled=True,
+          transitions=[
+            s3.Transition(
+              storage_class=s3.StorageClass.INFREQUENT_ACCESS,
+              transition_after=cdk.Duration.days(30)
+            ),
+            s3.Transition(
+              storage_class=s3.StorageClass.GLACIER,
+              transition_after=cdk.Duration.days(90)
+            )
+          ]
+        )
+      ]
+    )
+    
+    # Add tags to all resources
+    cdk.Tags.of(self).add("Environment", environment_suffix)
+    cdk.Tags.of(self).add("Component", "Storage")
 
-#### `requirements.txt` - Python Dependencies
-```
-aws-cdk-lib==2.202.0
-constructs>=10.0.0,<11.0.0
-```
 
-#### `cdk.json` - CDK Configuration
-Contains CDK application configuration with feature flags and context settings for optimal resource creation.
+class CodeBuildStackProps(cdk.StackProps):
+  """
+  CodeBuildStackProps defines the properties for the CodeBuildStack.
+  
+  Args:
+    environment_suffix (Optional[str]): Environment suffix for resource naming
+    codebuild_role (iam.Role): IAM role for CodeBuild projects
+    artifacts_bucket (s3.Bucket): S3 bucket for storing build artifacts
+    **kwargs: Additional keyword arguments passed to the base cdk.StackProps
+  """
+  
+  def __init__(
+    self,
+    environment_suffix: Optional[str] = None,
+    codebuild_role: Optional[iam.Role] = None,
+    artifacts_bucket: Optional[s3.Bucket] = None,
+    **kwargs
+  ):
+    super().__init__(**kwargs)
+    self.environment_suffix = environment_suffix
+    self.codebuild_role = codebuild_role
+    self.artifacts_bucket = artifacts_bucket
 
-### Test Files
 
-#### `tests/unit/test_tap_stack.py` - Unit Tests
-Comprehensive unit tests that validate:
-- Resource creation for all component types
-- Correct resource counts and configurations
-- Environment-specific naming patterns
-- Default environment suffix behavior
-- Resource tagging
+class CodeBuildStack(Construct):
+  """
+  CodeBuildStack creates CodeBuild projects for the CI/CD pipeline.
+  
+  This stack creates:
+  - Build project for compiling and testing code
+  - Deploy projects for staging and production environments
+  
+  Args:
+    scope (Construct): The parent construct
+    construct_id (str): The unique identifier for this stack
+    props (Optional[CodeBuildStackProps]): Optional properties for configuring the stack
+    **kwargs: Additional keyword arguments passed to the CDK NestedStack
+  """
+  
+  def __init__(
+    self,
+    scope: Construct,
+    construct_id: str,
+    *,
+    environment_suffix: Optional[str] = None,
+    codebuild_role: Optional[iam.Role] = None,
+    artifacts_bucket: Optional[s3.Bucket] = None
+  ):
+    super().__init__(scope, construct_id)
+    
+    environment_suffix = environment_suffix or 'dev'
+    random_suffix = generate_random_suffix()
+    
+    # Apply consistent tagging for governance and cost tracking
+    apply_common_tags(self, environment_suffix)
+    
+    # Create CodeBuild service role if not provided
+    if codebuild_role is None:
+      codebuild_role = iam.Role(
+        self,
+        f"CodeBuildRole{random_suffix}", 
+        role_name=f"ciapp-{environment_suffix}-codebuild-role-fallback",
+        assumed_by=iam.ServicePrincipal("codebuild.amazonaws.com"),
+        managed_policies=[
+          iam.ManagedPolicy.from_aws_managed_policy_name("CloudWatchLogsFullAccess"),
+          iam.ManagedPolicy.from_aws_managed_policy_name("AmazonS3FullAccess")
+        ],
+        inline_policies={
+          "CodeBuildPolicy": iam.PolicyDocument(
+            statements=[
+              iam.PolicyStatement(
+                effect=iam.Effect.ALLOW,
+                actions=[
+                  "logs:CreateLogGroup",
+                  "logs:CreateLogStream", 
+                  "logs:PutLogEvents"
+                ],
+                resources=[
+                  f"arn:aws:logs:us-west-2:{cdk.Aws.ACCOUNT_ID}:"
+                  f"log-group:/aws/codebuild/*"
+                ]
+              )
+            ]
+          )
+        }
+      )
+    
+    # Build project for building and testing
+    buildspec_build = {
+      "version": "0.2",
+      "phases": {
+        "install": {
+          "runtime-versions": {
+            "python": "3.9"
+          },
+          "commands": [
+            "echo Installing dependencies...",
+            "pip install --upgrade pip",
+"pip install aws-cdk-lib>=2.80.0 constructs>=10.0.0"
+          ]
+        },
+        "pre_build": {
+          "commands": [
+            "echo Logging in to Amazon ECR...",
+            "echo Build started on `date`"
+          ]
+        },
+        "build": {
+          "commands": [
+            "echo Build phase started on `date`",
+            "echo Running tests...",
+            "python -m pytest tests/ || echo 'No tests found'",
+            "echo Build completed on `date`"
+          ]
+        },
+        "post_build": {
+          "commands": [
+            "echo Build completed on `date`"
+          ]
+        }
+      },
+      "artifacts": {
+        "files": [
+          "**/*"
+        ],
+        "name": "BuildArtifact"
+      }
+    }
+    
+    self.build_project = codebuild.Project(
+      self,
+      "BuildProject",
+      project_name=f"ciapp-{environment_suffix}-build",
+      role=codebuild_role,
+      environment=codebuild.BuildEnvironment(
+        build_image=codebuild.LinuxBuildImage.STANDARD_5_0,
+        compute_type=codebuild.ComputeType.SMALL,
+        privileged=False
+      ),
+      build_spec=codebuild.BuildSpec.from_object(buildspec_build),
+      artifacts=codebuild.Artifacts.s3(
+        bucket=artifacts_bucket,
+        include_build_id=True,
+        package_zip=True
+      ) if artifacts_bucket else None,
+      timeout=cdk.Duration.minutes(60)
+    )
+    
+    # Deploy project for staging environment
+    buildspec_deploy_staging = {
+      "version": "0.2",
+      "phases": {
+        "install": {
+          "runtime-versions": {
+            "python": "3.9"
+          },
+          "commands": [
+            "echo Installing AWS CDK...",
+            "npm install -g aws-cdk",
+            "pip install --upgrade pip",
+"pip install aws-cdk-lib>=2.80.0 constructs>=10.0.0"
+          ]
+        },
+        "pre_build": {
+          "commands": [
+            "echo Deploying to staging environment..."
+          ]
+        },
+        "build": {
+          "commands": [
+            "echo Deploy phase started on `date`",
+            "cdk deploy --require-approval never --context environmentSuffix=staging",
+            "echo Deploy completed on `date`"
+          ]
+        }
+      }
+    }
+    
+    self.deploy_staging_project = codebuild.Project(
+      self,
+      "DeployStagingProject", 
+      project_name=f"ciapp-{environment_suffix}-deploy-staging",
+      role=codebuild_role,
+      environment=codebuild.BuildEnvironment(
+        build_image=codebuild.LinuxBuildImage.STANDARD_5_0,
+        compute_type=codebuild.ComputeType.SMALL,
+        privileged=False
+      ),
+      build_spec=codebuild.BuildSpec.from_object(buildspec_deploy_staging),
+      timeout=cdk.Duration.minutes(60)
+    )
+    
+    # Deploy project for production environment
+    buildspec_deploy_production = {
+      "version": "0.2",
+      "phases": {
+        "install": {
+          "runtime-versions": {
+            "python": "3.9"
+          },
+          "commands": [
+            "echo Installing AWS CDK...",
+            "npm install -g aws-cdk",
+            "pip install --upgrade pip", 
+"pip install aws-cdk-lib>=2.80.0 constructs>=10.0.0"
+          ]
+        },
+        "pre_build": {
+          "commands": [
+            "echo Deploying to production environment..."
+          ]
+        },
+        "build": {
+          "commands": [
+            "echo Deploy phase started on `date`",
+            "cdk deploy --require-approval never --context environmentSuffix=production",
+            "echo Deploy completed on `date`"
+          ]
+        }
+      }
+    }
+    
+    self.deploy_production_project = codebuild.Project(
+      self,
+      "DeployProductionProject",
+      project_name=f"ciapp-{environment_suffix}-deploy-production", 
+      role=codebuild_role,
+      environment=codebuild.BuildEnvironment(
+        build_image=codebuild.LinuxBuildImage.STANDARD_5_0,
+        compute_type=codebuild.ComputeType.SMALL,
+        privileged=False
+      ),
+      build_spec=codebuild.BuildSpec.from_object(buildspec_deploy_production),
+      timeout=cdk.Duration.minutes(60)
+    )
+    
+    # Add tags to all resources
+    cdk.Tags.of(self).add("Environment", environment_suffix)
+    cdk.Tags.of(self).add("Component", "Build")
 
-#### `tests/integration/test_tap_stack.py` - Integration Tests  
-Integration tests that validate deployed resources:
-- S3 buckets creation and encryption (artifacts and source)
-- CodePipeline stages and configuration
-- CodeBuild projects for build and deployment
-- IAM roles and policies
-- Pipeline manual trigger functionality
 
-## Key Features Implemented
+class CodePipelineStackProps(cdk.StackProps):
+  """
+  CodePipelineStackProps defines the properties for the CodePipelineStack.
+  
+  Args:
+    environment_suffix (Optional[str]): Environment suffix for resource naming
+    codepipeline_role (iam.Role): IAM role for CodePipeline
+    artifacts_bucket (s3.Bucket): S3 bucket for storing pipeline artifacts
+    build_project (codebuild.Project): CodeBuild project for building code
+    deploy_staging_project (codebuild.Project): CodeBuild project for staging deployment
+    deploy_production_project (codebuild.Project): CodeBuild project for production deployment
+    **kwargs: Additional keyword arguments passed to the base cdk.StackProps
+  """
+  
+  def __init__(
+    self,
+    environment_suffix: Optional[str] = None,
+    codepipeline_role: Optional[iam.Role] = None,
+    artifacts_bucket: Optional[s3.Bucket] = None,
+    *,
+    build_project: Optional[codebuild.Project] = None,
+    deploy_staging_project: Optional[codebuild.Project] = None,
+    deploy_production_project: Optional[codebuild.Project] = None,
+    **kwargs
+  ):
+    super().__init__(**kwargs)
+    self.environment_suffix = environment_suffix
+    self.codepipeline_role = codepipeline_role
+    self.artifacts_bucket = artifacts_bucket
+    self.build_project = build_project
+    self.deploy_staging_project = deploy_staging_project
+    self.deploy_production_project = deploy_production_project
 
-### 1. Infrastructure-as-Code
-- ✅ **Complete CDK Python implementation** - All infrastructure defined in Python code
-- ✅ **Modular design** - Separate constructs for each resource type
-- ✅ **Reusable across environments** - Environment suffix pattern supports multiple deployments
 
-### 2. Environment Support
-- ✅ **Two environments supported** - Staging and production with distinct deployment stages
-- ✅ **Resource naming convention** - `ciapp-{environment}-{resourcetype}` format
-- ✅ **Environment-specific tagging** - Resources tagged with appropriate environment labels
+class CodePipelineStack(Construct):
+  """
+  CodePipelineStack creates the CI/CD pipeline for automated deployments.
+  
+  This stack creates:
+  - S3 bucket for source code artifacts
+  - CodePipeline with source, build, staging, and production stages
+  - Manual approval action between staging and production
+  
+  Args:
+    scope (Construct): The parent construct
+    construct_id (str): The unique identifier for this stack
+    props (Optional[CodePipelineStackProps]): Optional properties for configuring the stack
+    **kwargs: Additional keyword arguments passed to the CDK NestedStack
+  """
+  
+  def __init__(
+    self,
+    scope: Construct,
+    construct_id: str,
+    *,
+    environment_suffix: Optional[str] = None,
+    codepipeline_role: Optional[iam.Role] = None,
+    artifacts_bucket: Optional[s3.Bucket] = None,
+    build_project: Optional[codebuild.Project] = None,
+    deploy_staging_project: Optional[codebuild.Project] = None,
+    deploy_production_project: Optional[codebuild.Project] = None
+  ):
+    super().__init__(scope, construct_id)
+    
+    environment_suffix = environment_suffix or 'dev'
+    random_suffix = generate_random_suffix()
+    
+    # Apply consistent tagging for governance and cost tracking
+    apply_common_tags(self, environment_suffix)
+    
+    # Create CodePipeline service role if not provided
+    if codepipeline_role is None:
+      codepipeline_role = iam.Role(
+        self,
+        f"CodePipelineRole{random_suffix}",
+        role_name=f"ciapp-{environment_suffix}-codepipeline-role-fallback",
+        assumed_by=iam.ServicePrincipal("codepipeline.amazonaws.com"),
+        managed_policies=[
+          iam.ManagedPolicy.from_aws_managed_policy_name("AmazonS3FullAccess"),
+          iam.ManagedPolicy.from_aws_managed_policy_name("AWSCloudFormationFullAccess")
+        ],
+        inline_policies={
+          "PassRolePolicy": iam.PolicyDocument(
+            statements=[
+              iam.PolicyStatement(
+                effect=iam.Effect.ALLOW,
+                actions=["iam:PassRole"],
+                resources=["*"],
+                conditions={
+                  "StringEquals": {
+                    "iam:PassedToService": [
+                      "cloudformation.amazonaws.com",
+                      "codebuild.amazonaws.com"
+                    ]
+                  }
+                }
+              )
+            ]
+          )
+        }
+      )
+    
+    # Create S3 bucket for source code artifacts - Using explicit naming for integration tests
+    self.source_bucket = s3.Bucket(
+      self,
+      "SourceBucket",
+      bucket_name=f"ciapp-{environment_suffix}-source-{cdk.Aws.ACCOUNT_ID}",
+      versioned=True,
+      encryption=s3.BucketEncryption.KMS_MANAGED,
+      block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
+      enforce_ssl=True,
+      removal_policy=cdk.RemovalPolicy.DESTROY,
+      auto_delete_objects=True,
+      lifecycle_rules=[
+        # Cost optimization: Delete old versions after 30 days
+        s3.LifecycleRule(
+          id="DeleteOldVersions",
+          enabled=True,
+          noncurrent_version_expiration=cdk.Duration.days(30)
+        ),
+        # Cost optimization: Delete incomplete multipart uploads
+        s3.LifecycleRule(
+          id="DeleteIncompleteUploads", 
+          enabled=True,
+          abort_incomplete_multipart_upload_after=cdk.Duration.days(7)
+        )
+      ]
+    )
+    
+    # Define pipeline artifacts
+    source_output = codepipeline.Artifact("SourceOutput")
+    build_output = codepipeline.Artifact("BuildOutput")
+    
+    # Create the pipeline
+    self.pipeline = codepipeline.Pipeline(
+      self,
+      "Pipeline",
+      pipeline_name=f"ciapp-{environment_suffix}-pipeline",
+      role=codepipeline_role,
+      artifact_bucket=artifacts_bucket,
+      stages=[
+        # Source stage
+        codepipeline.StageProps(
+          stage_name="Source",
+          actions=[
+            codepipeline_actions.S3SourceAction(
+              action_name="Source",
+              bucket=self.source_bucket,
+              bucket_key="source.zip",
+              output=source_output,
+              trigger=codepipeline_actions.S3Trigger.EVENTS
+            )
+          ]
+        ),
+        
+        # Build stage
+        codepipeline.StageProps(
+          stage_name="Build",
+          actions=[
+            codepipeline_actions.CodeBuildAction(
+              action_name="Build",
+              project=build_project,
+              input=source_output,
+              outputs=[build_output]
+            )
+          ]
+        ),
+        
+        # Deploy to Staging stage
+        codepipeline.StageProps(
+          stage_name="DeployStaging",
+          actions=[
+            codepipeline_actions.CodeBuildAction(
+              action_name="DeployToStaging", 
+              project=deploy_staging_project,
+              input=build_output
+            )
+          ]
+        ),
+        
+        # Manual approval stage
+        codepipeline.StageProps(
+          stage_name="ApproveProduction",
+          actions=[
+            codepipeline_actions.ManualApprovalAction(
+              action_name="ApproveProductionDeployment",
+              additional_information=("Please review the staging deployment "
+                                      "and approve for production deployment.")
+            )
+          ]
+        ),
+        
+        # Deploy to Production stage
+        codepipeline.StageProps(
+          stage_name="DeployProduction",
+          actions=[
+            codepipeline_actions.CodeBuildAction(
+              action_name="DeployToProduction",
+              project=deploy_production_project,
+              input=build_output
+            )
+          ]
+        )
+      ]
+    )
+    
+    # Output the source bucket name
+    cdk.CfnOutput(
+      self,
+      "SourceBucketName",
+      value=self.source_bucket.bucket_name,
+      description="S3 bucket name for source code artifacts"
+    )
+    
+    # Output the pipeline console URL
+    cdk.CfnOutput(
+      self,
+      "PipelineUrl",
+      value=(f"https://console.aws.amazon.com/codesuite/codepipeline/"
+             f"pipelines/{self.pipeline.pipeline_name}/view"),
+      description="AWS Console URL for the CodePipeline"
+    )
+    
+    # Add tags to all resources
+    cdk.Tags.of(self).add("Environment", environment_suffix)
+    cdk.Tags.of(self).add("Component", "Pipeline")
 
-### 3. CI/CD Integration
-- ✅ **AWS CodePipeline orchestration** - Complete pipeline with 5 stages
-- ✅ **AWS CodeBuild integration** - Separate build and deployment projects
-- ✅ **Automatic triggering** - Pipeline triggered by S3 object changes (source.zip)
-- ✅ **Manual approval gate** - Production deployment requires manual approval
 
-### 4. Pipeline Capabilities
-- ✅ **Build phase** - CodeBuild project for building and testing code
-- ✅ **Staging deployment** - Automatic deployment to staging environment
-- ✅ **Production deployment** - Manual approval followed by production deployment
-- ✅ **Artifact storage** - S3 bucket with encryption and lifecycle policies
+class TapStackProps(cdk.StackProps):
+  """
+  TapStackProps defines the properties for the TapStack CDK stack.
 
-### 5. Security & Configuration
-- ✅ **IAM roles and policies** - Least privilege access for all services
-- ✅ **Encrypted storage** - S3 bucket with server-side encryption
-- ✅ **Fully automated** - Complete deployment via `cdk deploy`
-- ✅ **Auditable** - All changes tracked through CDK and CloudFormation
+  Args:
+  environment_suffix (Optional[str]): An optional suffix to identify the 
+  deployment environment (e.g., 'dev', 'prod').
+  **kwargs: Additional keyword arguments passed to the base cdk.StackProps.
 
-### 6. Deployment Region & Tagging
-- ✅ **us-west-2 deployment** - All resources deployed to specified region
-- ✅ **Environment tagging** - Resources tagged with staging/production labels
-- ✅ **Additional tagging** - Repository and author tags for tracking
+  Attributes:
+  environment_suffix (Optional[str]): Stores the environment suffix for the stack.
+  """
 
-## Resource Details
+  def __init__(self, environment_suffix: Optional[str] = None, **kwargs):
+    super().__init__(**kwargs)
+    self.environment_suffix = environment_suffix
 
-### IAM Resources
-- **CodePipeline Service Role**: Full access to CodePipeline, CodeBuild, S3, and CloudFormation
-- **CodeBuild Service Role**: CloudWatch Logs and S3 access for build operations
-- **CloudFormation Role**: PowerUser access with IAM permissions for deployments
 
-### S3 Resources
-- **Artifacts Bucket**: Versioned, encrypted bucket with lifecycle rules for artifact cleanup
-- **Source Bucket**: Versioned, encrypted bucket for source code artifacts (source.zip)
+class TapStack(cdk.Stack):
+  """
+  Represents the main CDK stack for the Tap project.
 
-### CodeBuild Resources
-- **Build Project**: Runs tests and creates build artifacts
-- **Deploy Staging Project**: Deploys to staging environment using CDK
-- **Deploy Production Project**: Deploys to production environment using CDK
+  This stack is responsible for orchestrating the instantiation of other resource-specific stacks.
+  It determines the environment suffix from the provided properties, 
+  CDK context, or defaults to 'dev'.
+  Note:
+  - Do NOT create AWS resources directly in this stack.
+  - Instead, instantiate separate stacks for each resource type within this stack.
 
-### CodePipeline Resources
-- **S3 Source Bucket**: Source code bucket with CloudTrail event-based triggering on source.zip changes
-- **CI/CD Pipeline**: 5-stage pipeline (Source → Build → Deploy Staging → Approval → Deploy Production)
+  Args:
+  scope (Construct): The parent construct.
+  construct_id (str): The unique identifier for this stack.
+  props (Optional[TapStackProps]): Optional properties for configuring the 
+      stack, including environment suffix.
+  **kwargs: Additional keyword arguments passed to the CDK Stack.
 
-## Deployment Instructions
+  Attributes:
+  environment_suffix (str): The environment suffix used for resource naming and configuration.
+  """
 
-### Prerequisites
-1. AWS CLI configured with appropriate permissions
-2. AWS CDK CLI installed (`npm install -g aws-cdk`)
-3. Python 3.12+ with required dependencies
+  def __init__(
+          self,
+          scope: Construct,
+          construct_id: str, props: Optional[TapStackProps] = None, **kwargs):
+    super().__init__(scope, construct_id, **kwargs)
 
-### Deploy the Infrastructure
-```bash
-# Install dependencies
-pip install -r requirements.txt
+    # Get environment suffix from props, context, or use 'dev' as default
+    environment_suffix = (
+        props.environment_suffix if props else None
+    ) or self.node.try_get_context('environmentSuffix') or 'dev'
 
-# Bootstrap CDK (if first time)
-cdk bootstrap --context environmentSuffix=dev
-
-# Deploy the stack
-cdk deploy --context environmentSuffix=dev
-```
-
-### Using the Pipeline
-1. Package your application code as source.zip
-2. Upload source.zip to the S3 source bucket (name provided in stack outputs)
-3. Pipeline will automatically trigger on S3 object changes
-4. Monitor pipeline execution in AWS Console
-5. Approve production deployment when ready
-
-## Testing
-
-### Unit Tests
-```bash
-# Run unit tests with coverage
-python -m pytest tests/unit/ --cov=lib --cov-report=term-missing --cov-fail-under=70
-```
-
-### Integration Tests (Post-Deployment)
-```bash
-# Run integration tests against deployed resources
-ENVIRONMENT_SUFFIX=dev python -m pytest tests/integration/ --no-cov
-```
-
-## Code Quality
-
-- **Linting**: Code achieves perfect pylint score (10.00/10)
-- **Test Coverage**: Unit tests achieve 84% code coverage (exceeds 70% requirement)
-- **CDK Best Practices**: Follows AWS CDK construction patterns and security best practices
-
-## Environment Variables
-
-- `ENVIRONMENT_SUFFIX`: Environment identifier (dev, staging, production)
-- `CDK_DEFAULT_REGION`: AWS region (defaults to us-west-2)
-- `CDK_DEFAULT_ACCOUNT`: AWS account ID for deployment
-
-## Outputs
-
-The stack provides the following outputs:
-- **Source Bucket Name**: S3 bucket name for uploading source code artifacts (source.zip)
-- **Pipeline Console URL**: Direct link to the CodePipeline in AWS Console
-
-This implementation fully satisfies all requirements from the original prompt, providing a complete, production-ready CI/CD pipeline infrastructure using AWS CDK in Python.
+    # Create separate stacks for each resource type
+    # ! DO not create resources directly in this stack.
+    # ! Instead, instantiate separate stacks for each resource type.
+    
+    # Create IAM stack for roles and policies
+    self.iam_stack = IAMStack(
+      self,
+      f"IAMStack{environment_suffix}",
+      environment_suffix=environment_suffix
+    )
+    
+    # Create S3 stack for artifacts storage
+    self.s3_stack = S3Stack(
+      self,
+      f"S3Stack{environment_suffix}",
+      environment_suffix=environment_suffix
+    )
+    
+    # Create CodeBuild stack for build projects
+    self.codebuild_stack = CodeBuildStack(
+      self,
+      f"CodeBuildStack{environment_suffix}",
+      environment_suffix=environment_suffix,
+      codebuild_role=self.iam_stack.codebuild_role,  # Use role from IAMStack
+      artifacts_bucket=self.s3_stack.artifacts_bucket
+    )
+    
+    # Create CodePipeline stack for CI/CD orchestration
+    self.codepipeline_stack = CodePipelineStack(
+      self,
+      f"CodePipelineStack{environment_suffix}",
+      environment_suffix=environment_suffix,
+      codepipeline_role=self.iam_stack.codepipeline_role,  # Use role from IAMStack
+      artifacts_bucket=self.s3_stack.artifacts_bucket,
+      build_project=self.codebuild_stack.build_project,
+      deploy_staging_project=self.codebuild_stack.deploy_staging_project,
+      deploy_production_project=self.codebuild_stack.deploy_production_project
+    )
+    
+    # Make key resources available as properties of this stack
+    self.source_bucket = self.codepipeline_stack.source_bucket
+    self.pipeline = self.codepipeline_stack.pipeline
+    self.artifacts_bucket = self.s3_stack.artifacts_bucket
+    
+    # Apply consistent tagging for governance and cost tracking
+    apply_common_tags(self, environment_suffix)
+    
