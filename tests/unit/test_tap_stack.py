@@ -2,11 +2,11 @@
 
 import json
 
-from cdktf import App, TerraformStack, Testing
+from cdktf import App, Testing, TerraformStack
 from cdktf_cdktf_provider_aws.provider import AwsProvider
 
-from lib.enterprise_security_stack import EnterpriseSecurityStack
 from lib.tap_stack import TapStack
+from lib.enterprise_security_stack import EnterpriseSecurityStack
 
 
 class TestTapStack:
@@ -26,10 +26,9 @@ class TestTapStack:
       }
     )
     
-    # Synthesize the stack to ensure no errors
-    synth = app.synth()
-    stack_artifact = synth.get_stack_by_name("test-stack")
-    assert stack_artifact is not None
+    # Use Testing.synth for TapStack
+    synth_result = Testing.synth(stack)
+    assert synth_result is not None
     
     # Verify the stack object has expected attributes
     assert hasattr(stack, 'tap_bucket')
@@ -46,70 +45,79 @@ class TestTapStack:
       aws_region="us-west-2"
     )
     
-    # Synthesize and get the configuration
-    synth = app.synth()
-    stack_artifact = synth.get_stack_by_name("test-stack")
-    terraform_config = json.loads(stack_artifact.content)
+    # Use Testing.synth and parse the result
+    synth_result = Testing.synth(stack)
+    terraform_config = json.loads(synth_result)
     
-    # Find S3 bucket resources
-    s3_buckets = [
-      res for res in terraform_config.get("resource", {}).get("aws_s3_bucket", {}).values()
-    ]
-    assert len(s3_buckets) > 0, "Should have at least one S3 bucket"
+    # Find S3 bucket resources - look for the main TAP bucket
+    s3_buckets = terraform_config.get("resource", {}).get("aws_s3_bucket", {})
+    tap_bucket = None
     
-    # Verify bucket naming convention
-    bucket = s3_buckets[0]
-    assert "tap-bucket-test" in bucket["bucket"]
-    assert bucket["force_destroy"] is True
+    for bucket_id, bucket_config in s3_buckets.items():
+      if "tap_bucket" in bucket_id:
+        tap_bucket = bucket_config
+        break
+    
+    assert tap_bucket is not None, "Should have TAP S3 bucket"
+    assert "tap-bucket-test" in tap_bucket["bucket"]
+    assert tap_bucket["force_destroy"] is True
 
   def test_stack_s3_versioning_configuration(self):
     """Test that S3 bucket versioning is properly configured."""
     app = App()
-    TapStack(
+    stack = TapStack(
       app,
       "test-stack",
       environment_suffix="test"
     )
     
-    synth = app.synth()
-    stack_artifact = synth.get_stack_by_name("test-stack")
-    terraform_config = json.loads(stack_artifact.content)
+    synth_result = Testing.synth(stack)
+    terraform_config = json.loads(synth_result)
     
     # Check for versioning configuration
     versioning_configs = terraform_config.get("resource", {}).get("aws_s3_bucket_versioning", {})
-    assert len(versioning_configs) > 0, "Should have S3 bucket versioning configured"
+    tap_versioning = None
     
-    versioning_config = list(versioning_configs.values())[0]
-    assert versioning_config["versioning_configuration"]["status"] == "Enabled"
+    for version_id, version_config in versioning_configs.items():
+      if "tap_bucket_versioning" in version_id:
+        tap_versioning = version_config
+        break
+    
+    assert tap_versioning is not None, "Should have S3 bucket versioning configured"
+    assert tap_versioning["versioning_configuration"]["status"] == "Enabled"
 
   def test_stack_s3_encryption_configuration(self):
     """Test that S3 bucket encryption is properly configured."""
     app = App()
-    TapStack(
+    stack = TapStack(
       app,
       "test-stack",
       environment_suffix="test"
     )
     
-    synth = app.synth()
-    stack_artifact = synth.get_stack_by_name("test-stack")
-    terraform_config = json.loads(stack_artifact.content)
+    synth_result = Testing.synth(stack)
+    terraform_config = json.loads(synth_result)
     
     # Check for encryption configuration
     encryption_configs = terraform_config.get("resource", {}).get(
       "aws_s3_bucket_server_side_encryption_configuration", {}
     )
-    assert len(encryption_configs) > 0, "Should have S3 bucket encryption configured"
+    tap_encryption = None
     
-    encryption_config = list(encryption_configs.values())[0]
-    encryption_rule = encryption_config["rule"][0]
+    for encrypt_id, encrypt_config in encryption_configs.items():
+      if "tap_bucket_encryption" in encrypt_id:
+        tap_encryption = encrypt_config
+        break
+    
+    assert tap_encryption is not None, "Should have S3 bucket encryption configured"
+    encryption_rule = tap_encryption["rule"][0]
     encryption_default = encryption_rule["apply_server_side_encryption_by_default"]
     assert encryption_default["sse_algorithm"] == "AES256"
 
   def test_stack_backend_configuration(self):
     """Test that Terraform backend is properly configured."""
     app = App()
-    TapStack(
+    stack = TapStack(
       app,
       "test-stack",
       environment_suffix="test",
@@ -117,9 +125,8 @@ class TestTapStack:
       state_bucket_region="us-east-1"
     )
     
-    synth = app.synth()
-    stack_artifact = synth.get_stack_by_name("test-stack")
-    terraform_config = json.loads(stack_artifact.content)
+    synth_result = Testing.synth(stack)
+    terraform_config = json.loads(synth_result)
     
     # Check backend configuration
     backend = terraform_config.get("terraform", {}).get("backend", {}).get("s3", {})
@@ -131,7 +138,7 @@ class TestTapStack:
   def test_stack_aws_provider_configuration(self):
     """Test that AWS providers are properly configured."""
     app = App()
-    TapStack(
+    stack = TapStack(
       app,
       "test-stack",
       environment_suffix="test",
@@ -140,9 +147,8 @@ class TestTapStack:
       default_tags={"Environment": "test"}
     )
     
-    synth = app.synth()
-    stack_artifact = synth.get_stack_by_name("test-stack")
-    terraform_config = json.loads(stack_artifact.content)
+    synth_result = Testing.synth(stack)
+    terraform_config = json.loads(synth_result)
     
     # Check provider configuration
     providers = terraform_config.get("provider", {}).get("aws", {})
@@ -179,9 +185,8 @@ class TestTapStack:
     assert stack.secondary_security_stack is not None
     
     # Synthesize to ensure no errors
-    synth = app.synth()
-    stack_artifact = synth.get_stack_by_name("test-stack")
-    assert stack_artifact is not None
+    synth_result = Testing.synth(stack)
+    assert synth_result is not None
 
   def test_stack_with_custom_parameters(self):
     """Test stack creation with custom parameters."""
@@ -204,9 +209,8 @@ class TestTapStack:
     )
     
     # Synthesize and verify configuration
-    synth = app.synth()
-    stack_artifact = synth.get_stack_by_name("prod-stack")
-    terraform_config = json.loads(stack_artifact.content)
+    synth_result = Testing.synth(stack)
+    terraform_config = json.loads(synth_result)
     
     # Check that custom parameters are applied
     backend = terraform_config.get("terraform", {}).get("backend", {}).get("s3", {})
@@ -215,11 +219,16 @@ class TestTapStack:
     assert backend["region"] == "eu-central-1"
     
     # Verify bucket naming uses environment suffix
-    s3_buckets = [
-      res for res in terraform_config.get("resource", {}).get("aws_s3_bucket", {}).values()
-    ]
-    bucket = s3_buckets[0]
-    assert "tap-bucket-prod" in bucket["bucket"]
+    s3_buckets = terraform_config.get("resource", {}).get("aws_s3_bucket", {})
+    tap_bucket = None
+    
+    for bucket_id, bucket_config in s3_buckets.items():
+      if "tap_bucket" in bucket_id:
+        tap_bucket = bucket_config
+        break
+    
+    assert tap_bucket is not None, "Should have TAP bucket"
+    assert "tap-bucket-prod" in tap_bucket["bucket"]
 
   def test_stack_resource_dependencies(self):
     """Test that resources have proper dependencies."""
@@ -233,19 +242,31 @@ class TestTapStack:
     synth_result = Testing.synth(stack)
     terraform_config = json.loads(synth_result)
     
-    # Check that versioning and encryption reference the bucket
+    # Check that versioning and encryption reference the TAP bucket
     versioning_configs = terraform_config.get("resource", {}).get("aws_s3_bucket_versioning", {})
     encryption_configs = terraform_config.get("resource", {}).get(
       "aws_s3_bucket_server_side_encryption_configuration", {}
     )
     
-    versioning_config = list(versioning_configs.values())[0]
-    encryption_config = list(encryption_configs.values())[0]
+    # Find TAP bucket versioning and encryption
+    tap_versioning = None
+    tap_encryption = None
     
-    # Both should reference the bucket ID
-    assert "aws_s3_bucket.tap_bucket.id" in str(versioning_config["bucket"])
-    assert "aws_s3_bucket.tap_bucket.id" in str(encryption_config["bucket"])
-
+    for version_id, version_config in versioning_configs.items():
+      if "tap_bucket_versioning" in version_id:
+        tap_versioning = version_config
+        break
+    
+    for encrypt_id, encrypt_config in encryption_configs.items():
+      if "tap_bucket_encryption" in encrypt_id:
+        tap_encryption = encrypt_config
+        break
+    
+    # Both should reference the TAP bucket ID
+    assert tap_versioning is not None, "Should have TAP bucket versioning"
+    assert tap_encryption is not None, "Should have TAP bucket encryption"
+    assert "tap_bucket" in str(tap_versioning["bucket"])
+    assert "tap_bucket" in str(tap_encryption["bucket"])
 
 class TestEnterpriseSecurityStack:
   """Test cases for EnterpriseSecurityStack class."""
