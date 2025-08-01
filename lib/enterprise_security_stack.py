@@ -494,30 +494,25 @@ class EnterpriseSecurityStack(Construct):  # pylint: disable=too-many-instance-a
       vpc_security_group_ids=[],
       network_interfaces=[
         {
-          "associate_public_ip_address": False,  # No public IP by default
+          "associate_public_ip_address": False,
           "delete_on_termination": True,
           "device_index": 0
         }
       ],
       metadata_options={
         "http_endpoint": "enabled",
-        "http_tokens": "required",  # Enforce IMDSv2
+        "http_tokens": "required",
         "http_put_response_hop_limit": 1
       },
       monitoring={
         "enabled": True
       },
-      tag_specifications=[
-        {
-          "resource_type": "instance",
-          "tags": {
-            "Name": f"EnterpriseSecureInstance-{self.region}",
-            "Environment": "Production",
-            "SecurityCompliant": "true",
-            "Region": self.region
-          }
-        }
-      ]
+      tags={
+        "Name": f"EnterpriseSecureTemplate-{self.region}",
+        "Environment": "Production",
+        "SecurityCompliant": "true",
+        "Region": self.region
+      }
     )
 
   def _create_rds_security_configuration(self) -> None:
@@ -638,6 +633,11 @@ def handler(event, context):
     # No-op for now
     # )
     # No-op for now
+    return
+    #   )
+    # )
+    # No-op for now
+    return
     return
     #   )
     # )
