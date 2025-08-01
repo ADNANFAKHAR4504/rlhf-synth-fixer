@@ -126,7 +126,7 @@ class TapStack(pulumi.ComponentResource):
     pulumi.log.info("Creating security infrastructure...")
     self.tap_service_role = aws.iam.Role(
       f"tap-service-role-{self.environment_suffix}",
-      name=f"TAP-Service-Role-{self.environment_suffix}",
+    #   name=f"TAP-Service-Role-{self.environment_suffix}",
       description=f"IAM role for TAP services in {self.environment_suffix} environment",
       assume_role_policy=pulumi.Output.json_dumps({
         "Version": "2012-10-17",
@@ -175,7 +175,7 @@ class TapStack(pulumi.ComponentResource):
     pulumi.log.info("Creating monitoring infrastructure...")
     self.app_log_group = aws.cloudwatch.LogGroup(
       f"tap-logs-{self.environment_suffix}",
-      name=f"/aws/tap/{self.environment_suffix}/application",
+    #   name=f"/aws/tap/{self.environment_suffix}/application",
       retention_in_days=self.args.backup_retention_days,
       tags=self._merge_tags({
         "Name": f"TAP-Logs-{self.environment_suffix}",
