@@ -19,6 +19,7 @@ import { KmsKey } from '@cdktf/provider-aws/lib/kms-key';
 import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
 import { S3BucketServerSideEncryptionConfigurationA } from '@cdktf/provider-aws/lib/s3-bucket-server-side-encryption-configuration';
 import { S3BucketVersioningA } from '@cdktf/provider-aws/lib/s3-bucket-versioning';
+import { S3BucketPolicy } from '@cdktf/provider-aws/lib/s3-bucket-policy';
 
 // RDS
 import { DbInstance } from '@cdktf/provider-aws/lib/db-instance';
@@ -40,6 +41,28 @@ import { LambdaPermission } from '@cdktf/provider-aws/lib/lambda-permission';
 
 // Security Services
 import { Wafv2WebAcl } from '@cdktf/provider-aws/lib/wafv2-web-acl';
+
+// Secrets Manager
+import { SecretsmanagerSecret } from '@cdktf/provider-aws/lib/secretsmanager-secret';
+import { SecretsmanagerSecretVersion } from '@cdktf/provider-aws/lib/secretsmanager-secret-version';
+
+// GuardDuty
+import { GuarddutyDetector } from '@cdktf/provider-aws/lib/guardduty-detector';
+
+// CloudFront Origin Access Control
+import { CloudfrontOriginAccessControl } from '@cdktf/provider-aws/lib/cloudfront-origin-access-control';
+
+// NAT Gateway
+import { Eip } from '@cdktf/provider-aws/lib/eip';
+import { NatGateway } from '@cdktf/provider-aws/lib/nat-gateway';
+
+// Route53
+import { Route53Zone } from '@cdktf/provider-aws/lib/route53-zone';
+import { Route53Record } from '@cdktf/provider-aws/lib/route53-record';
+import { Route53HealthCheck } from '@cdktf/provider-aws/lib/route53-health-check';
+
+// ACM
+import { AcmCertificate } from '@cdktf/provider-aws/lib/acm-certificate';
 
 // IAM
 import { IamInstanceProfile } from '@cdktf/provider-aws/lib/iam-instance-profile';
@@ -173,6 +196,39 @@ export class TapStack extends TerraformStack {
       routeTableId: publicRouteTable.id,
     });
 
+    // NAT Gateway for private subnets
+    const natEip = new Eip(this, 'nat-eip', {
+      domain: 'vpc',
+      tags: { ...commonTags, Name: 'nat-eip' },
+    });
+
+    const natGateway = new NatGateway(this, 'nat-gateway', {
+      allocationId: natEip.id,
+      subnetId: publicSubnet1.id,
+      tags: { ...commonTags, Name: 'nat-gateway' },
+    });
+
+    const privateRouteTable = new RouteTable(this, 'private-route-table', {
+      vpcId: vpc.id,
+      tags: { ...commonTags, Name: 'private-route-table' },
+    });
+
+    new Route(this, 'private-route', {
+      routeTableId: privateRouteTable.id,
+      destinationCidrBlock: '0.0.0.0/0',
+      natGatewayId: natGateway.id,
+    });
+
+    new RouteTableAssociation(this, 'private-rt-assoc-1', {
+      subnetId: privateSubnet1.id,
+      routeTableId: privateRouteTable.id,
+    });
+
+    new RouteTableAssociation(this, 'private-rt-assoc-2', {
+      subnetId: privateSubnet2.id,
+      routeTableId: privateRouteTable.id,
+    });
+
     // VPC Flow Logs
     const flowLogRole = new IamRole(this, 'flow-log-role', {
       name: generateUniqueResourceName('flow-log-role', environmentSuffix),
@@ -203,7 +259,10 @@ export class TapStack extends TerraformStack {
               'logs:DescribeLogGroups',
               'logs:DescribeLogStreams',
             ],
-            Resource: '*',
+            Resource: [
+              `arn:aws:logs:${awsRegion}:*:log-group:/aws/vpc/*`,
+              `arn:aws:logs:${awsRegion}:*:log-group:/aws/vpc/*:*`,
+            ],
           },
         ],
       }),
@@ -259,6 +318,22 @@ export class TapStack extends TerraformStack {
         ],
       }
     );
+
+    // Database Secrets Manager
+    const dbSecret = new SecretsmanagerSecret(this, 'db-secret', {
+      name: generateUniqueResourceName('nova-db-secret', environmentSuffix),
+      description: 'RDS database master password',
+      kmsKeyId: kmsKey.keyId,
+      tags: commonTags,
+    });
+
+    new SecretsmanagerSecretVersion(this, 'db-secret-version', {
+      secretId: dbSecret.id,
+      secretString: JSON.stringify({
+        username: 'admin',
+        password: 'TempPassword123!ChangeMe', // Initial password - should be rotated
+      }),
+    });
 
     // Security Groups
     const webSecurityGroup = new SecurityGroup(this, 'web-security-group', {
@@ -331,12 +406,27 @@ export class TapStack extends TerraformStack {
             Action: [
               's3:GetObject',
               's3:PutObject',
+            ],
+            Resource: [
+              `${appBucket.arn}/*`,
+              appBucket.arn,
+            ],
+          },
+          {
+            Effect: 'Allow',
+            Action: [
               'cloudwatch:PutMetricData',
+            ],
+            Resource: `arn:aws:cloudwatch:${awsRegion}:*:metric/AWS/EC2/*`,
+          },
+          {
+            Effect: 'Allow',
+            Action: [
               'logs:CreateLogGroup',
               'logs:CreateLogStream',
               'logs:PutLogEvents',
             ],
-            Resource: '*',
+            Resource: `arn:aws:logs:${awsRegion}:*:log-group:/aws/ec2/*`,
           },
         ],
       }),
@@ -422,7 +512,7 @@ echo "<h1>Nova Model Breaking App</h1>" > /var/www/html/index.html
       tags: commonTags,
     });
 
-    // RDS Instance (Multi-AZ)
+    // RDS Instance (Multi-AZ) with Secrets Manager
     new DbInstance(this, 'main-database', {
       identifier: generateUniqueResourceName('nova-db', environmentSuffix),
       engine: 'mysql',
@@ -434,7 +524,8 @@ echo "<h1>Nova Model Breaking App</h1>" > /var/www/html/index.html
       kmsKeyId: kmsKey.arn,
       dbName: 'novaapp',
       username: 'admin',
-      password: 'changeme123!', // In production, use AWS Secrets Manager
+      manageMasterUserPassword: true,
+      masterUserSecretKmsKeyId: kmsKey.keyId,
       vpcSecurityGroupIds: [dbSecurityGroup.id],
       dbSubnetGroupName: dbSubnetGroup.name,
       multiAz: true,
@@ -442,6 +533,7 @@ echo "<h1>Nova Model Breaking App</h1>" > /var/www/html/index.html
       backupWindow: '03:00-04:00',
       maintenanceWindow: 'sun:04:00-sun:05:00',
       skipFinalSnapshot: true,
+      deletionProtection: false, // Set to true in production
       tags: commonTags,
     });
 
@@ -512,12 +604,50 @@ echo "<h1>Nova Model Breaking App</h1>" > /var/www/html/index.html
     });
 
     // WAFv2 Web ACL (updated from deprecated WAF Classic)
-    new Wafv2WebAcl(this, 'main-waf', {
+    const webAcl = new Wafv2WebAcl(this, 'main-waf', {
       name: generateUniqueResourceName('nova-waf', environmentSuffix),
-      scope: 'REGIONAL', // Changed from CLOUDFRONT to REGIONAL for us-west-2
+      scope: 'CLOUDFRONT', // Changed to CLOUDFRONT for CloudFront association
       defaultAction: {
         allow: {},
       },
+      rule: [
+        {
+          name: 'AWSManagedRulesCommonRuleSet',
+          priority: 1,
+          overrideAction: {
+            none: {},
+          },
+          statement: {
+            managedRuleGroupStatement: {
+              name: 'AWSManagedRulesCommonRuleSet',
+              vendorName: 'AWS',
+            },
+          },
+          visibilityConfig: {
+            sampledRequestsEnabled: true,
+            cloudwatchMetricsEnabled: true,
+            metricName: 'CommonRuleSetMetric',
+          },
+        },
+        {
+          name: 'AWSManagedRulesKnownBadInputsRuleSet',
+          priority: 2,
+          overrideAction: {
+            none: {},
+          },
+          statement: {
+            managedRuleGroupStatement: {
+              name: 'AWSManagedRulesKnownBadInputsRuleSet',
+              vendorName: 'AWS',
+            },
+          },
+          visibilityConfig: {
+            sampledRequestsEnabled: true,
+            cloudwatchMetricsEnabled: true,
+            metricName: 'KnownBadInputsRuleSetMetric',
+          },
+        },
+      ],
       visibilityConfig: {
         sampledRequestsEnabled: true,
         cloudwatchMetricsEnabled: true,
@@ -526,57 +656,63 @@ echo "<h1>Nova Model Breaking App</h1>" > /var/www/html/index.html
       tags: commonTags,
     });
 
-    // GuardDuty Detector (commented out to avoid conflicts)
-    // Note: GuardDuty allows only one detector per account per region
-    // Uncomment if no detector exists in the account
-    /*
+    // GuardDuty Detector for threat detection
     new GuarddutyDetector(this, 'main-guardduty', {
       enable: true,
       findingPublishingFrequency: 'FIFTEEN_MINUTES',
+      datasources: {
+        s3Logs: {
+          enable: true,
+        },
+        kubernetes: {
+          auditLogs: {
+            enable: true,
+          },
+        },
+        malwareProtection: {
+          scanEc2InstanceWithFindings: {
+            ebsVolumes: {
+              enable: true,
+            },
+          },
+        },
+      },
       tags: commonTags,
     });
-    */
 
-    // ACM Certificate and Route53 (commented out for deployment stability)
-    // Uncomment when domain validation is properly configured
-    /*
+    // ACM Certificate for SSL/TLS
     const certificate = new AcmCertificate(this, 'main-certificate', {
-      domainName: domainName,
-      subjectAlternativeNames: [`*.${domainName}`],
+      domainName: props?.domainName || `nova-${environmentSuffix}.example.com`,
+      subjectAlternativeNames: [`*.${props?.domainName || `nova-${environmentSuffix}.example.com`}`],
       validationMethod: 'DNS',
+      lifecycle: {
+        createBeforeDestroy: true,
+      },
       tags: commonTags,
     });
 
-    // Route53 Hosted Zone
-    const hostedZone = new Route53Zone(this, 'main-zone', {
-      name: domainName,
-      tags: commonTags,
+    // CloudFront Distribution with proper security
+    const originAccessControl = new CloudfrontOriginAccessControl(this, 'oac', {
+      name: generateUniqueResourceName('s3-oac', environmentSuffix),
+      description: 'Origin Access Control for S3',
+      originAccessControlOriginType: 's3',
+      signingBehavior: 'always',
+      signingProtocol: 'sigv4',
     });
 
-    // Route53 Health Check
-    const healthCheck = new Route53HealthCheck(this, 'main-health-check', {
-      fqdn: domainName,
-      port: 443,
-      type: 'HTTPS',
-      resourcePath: '/',
-      failureThreshold: 3,
-      requestInterval: 30,
-      tags: commonTags,
-    });
-    */
-
-    // CloudFront Distribution (with fallback certificate)
     const distribution = new CloudfrontDistribution(this, 'main-cloudfront', {
       origin: [
         {
           domainName: appBucket.bucketDomainName,
           originId: 'S3-nova-app',
+          originAccessControlId: originAccessControl.id,
           s3OriginConfig: {
-            originAccessIdentity: '',
+            originAccessIdentity: '', // Using OAC instead
           },
         },
       ],
       enabled: true,
+      webAclId: webAcl.arn, // Associate WAF with CloudFront
       defaultCacheBehavior: {
         allowedMethods: [
           'DELETE',
@@ -598,7 +734,7 @@ echo "<h1>Nova Model Breaking App</h1>" > /var/www/html/index.html
           },
         },
       },
-      // Use CloudFront default certificate instead of custom ACM
+      // Use CloudFront default certificate for now
       viewerCertificate: {
         cloudfrontDefaultCertificate: true,
       },
@@ -610,12 +746,51 @@ echo "<h1>Nova Model Breaking App</h1>" > /var/www/html/index.html
       tags: commonTags,
     });
 
-    // Route53 Records (commented out due to certificate issues)
-    // Uncomment when ACM certificate is properly validated
-    /*
+    // S3 Bucket Policy for CloudFront Origin Access Control
+    new S3BucketPolicy(this, 'app-bucket-policy', {
+      bucket: appBucket.id,
+      policy: JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Sid: 'AllowCloudFrontServicePrincipalReadOnly',
+            Effect: 'Allow',
+            Principal: {
+              Service: 'cloudfront.amazonaws.com',
+            },
+            Action: 's3:GetObject',
+            Resource: `${appBucket.arn}/*`,
+            Condition: {
+              StringEquals: {
+                'AWS:SourceArn': distribution.arn,
+              },
+            },
+          },
+        ],
+      }),
+    });
+
+    // Route53 Health Check and Failover Configuration
+    const hostedZone = new Route53Zone(this, 'main-zone', {
+      name: props?.domainName || `nova-${environmentSuffix}.example.com`,
+      tags: commonTags,
+    });
+
+    const healthCheck = new Route53HealthCheck(this, 'main-health-check', {
+      fqdn: distribution.domainName,
+      port: 443,
+      type: 'HTTPS_STR_MATCH',
+      resourcePath: '/',
+      failureThreshold: 3,
+      requestInterval: 30,
+      searchString: 'Nova', // Looking for content in the page
+      tags: commonTags,
+    });
+
+    // Primary Route53 Record with health check
     new Route53Record(this, 'primary-record', {
       zoneId: hostedZone.zoneId,
-      name: domainName,
+      name: props?.domainName || `nova-${environmentSuffix}.example.com`,
       type: 'A',
       setIdentifier: 'primary',
       failoverRoutingPolicy: {
@@ -628,7 +803,22 @@ echo "<h1>Nova Model Breaking App</h1>" > /var/www/html/index.html
         evaluateTargetHealth: true,
       },
     });
-    */
+
+    // Secondary/Failover Route53 Record
+    new Route53Record(this, 'secondary-record', {
+      zoneId: hostedZone.zoneId,
+      name: props?.domainName || `nova-${environmentSuffix}.example.com`,
+      type: 'A',
+      setIdentifier: 'secondary',
+      failoverRoutingPolicy: {
+        type: 'SECONDARY',
+      },
+      alias: {
+        name: distribution.domainName,
+        zoneId: distribution.hostedZoneId,
+        evaluateTargetHealth: false,
+      },
+    });
 
     // Outputs
     new TerraformOutput(this, 'vpc-id', {
@@ -649,6 +839,21 @@ echo "<h1>Nova Model Breaking App</h1>" > /var/www/html/index.html
     new TerraformOutput(this, 'kms-key-id', {
       value: kmsKey.keyId,
       description: 'KMS Key ID',
+    });
+
+    new TerraformOutput(this, 'route53-zone-id', {
+      value: hostedZone.zoneId,
+      description: 'Route53 Hosted Zone ID',
+    });
+
+    new TerraformOutput(this, 'waf-web-acl-arn', {
+      value: webAcl.arn,
+      description: 'WAF WebACL ARN',
+    });
+
+    new TerraformOutput(this, 'certificate-arn', {
+      value: certificate.arn,
+      description: 'ACM Certificate ARN',
     });
   }
 }

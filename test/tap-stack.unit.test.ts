@@ -310,9 +310,43 @@ describe('TapStack Unit Tests - Nova Model Breaking Infrastructure', () => {
       synthesized = JSON.parse(Testing.synth(stack));
     });
 
-    // GuardDuty is commented out in current implementation
-    test('should not create GuardDuty detector (commented out)', () => {
-      expect(synthesized.resource.aws_guardduty_detector).toBeUndefined();
+    // GuardDuty is now enabled as part of security improvements
+    test('should create GuardDuty detector for threat detection', () => {
+      expect(synthesized.resource.aws_guardduty_detector).toBeDefined();
+      expect(synthesized.resource.aws_guardduty_detector['main-guardduty']).toMatchObject({
+        enable: true,
+        finding_publishing_frequency: 'FIFTEEN_MINUTES',
+      });
+    });
+
+    test('should create WAF WebACL with managed rules', () => {
+      expect(synthesized.resource.aws_wafv2_web_acl).toBeDefined();
+      expect(synthesized.resource.aws_wafv2_web_acl['main-waf']).toMatchObject({
+        scope: 'CLOUDFRONT',
+      });
+    });
+
+    test('should create AWS Secrets Manager for database credentials', () => {
+      expect(synthesized.resource.aws_secretsmanager_secret).toBeDefined();
+      expect(synthesized.resource.aws_secretsmanager_secret['db-secret']).toBeDefined();
+    });
+
+    test('should create Origin Access Control for CloudFront', () => {
+      expect(synthesized.resource.aws_cloudfront_origin_access_control).toBeDefined();
+      expect(synthesized.resource.aws_cloudfront_origin_access_control['oac']).toMatchObject({
+        origin_access_control_origin_type: 's3',
+        signing_behavior: 'always',
+      });
+    });
+
+    test('should create S3 bucket policy for CloudFront access', () => {
+      expect(synthesized.resource.aws_s3_bucket_policy).toBeDefined();
+      expect(synthesized.resource.aws_s3_bucket_policy['app-bucket-policy']).toBeDefined();
+    });
+
+    test('should create NAT Gateway for private subnet internet access', () => {
+      expect(synthesized.resource.aws_nat_gateway).toBeDefined();
+      expect(synthesized.resource.aws_eip).toBeDefined();
     });
   });
 
@@ -355,14 +389,21 @@ describe('TapStack Unit Tests - Nova Model Breaking Infrastructure', () => {
       synthesized = JSON.parse(Testing.synth(stack));
     });
 
-    // ACM Certificate is commented out in current implementation
-    test('should not create ACM certificate (commented out)', () => {
-      expect(synthesized.resource.aws_acm_certificate).toBeUndefined();
+    // ACM Certificate is now enabled for SSL/TLS
+    test('should create ACM certificate for SSL/TLS', () => {
+      expect(synthesized.resource.aws_acm_certificate).toBeDefined();
+      expect(synthesized.resource.aws_acm_certificate['main-certificate']).toMatchObject({
+        domain_name: 'test.example.com',
+        validation_method: 'DNS',
+      });
     });
 
-    // Route53 hosted zone is commented out in current implementation
-    test('should not create Route53 hosted zone (commented out)', () => {
-      expect(synthesized.resource.aws_route53_zone).toBeUndefined();
+    // Route53 hosted zone is now enabled
+    test('should create Route53 hosted zone', () => {
+      expect(synthesized.resource.aws_route53_zone).toBeDefined();
+      expect(synthesized.resource.aws_route53_zone['main-zone']).toMatchObject({
+        name: 'test.example.com',
+      });
     });
 
     test('should create CloudFront distribution with default SSL', () => {
@@ -379,9 +420,21 @@ describe('TapStack Unit Tests - Nova Model Breaking Infrastructure', () => {
       expect(distribution.aliases).toBeUndefined(); // No custom domain
     });
 
-    // Route53 health check is commented out in current implementation
-    test('should not create Route53 health check (commented out)', () => {
-      expect(synthesized.resource.aws_route53_health_check).toBeUndefined();
+    // Route53 health check is now enabled for failover
+    test('should create Route53 health check for failover', () => {
+      expect(synthesized.resource.aws_route53_health_check).toBeDefined();
+      expect(synthesized.resource.aws_route53_health_check['main-health-check']).toMatchObject({
+        type: 'HTTPS_STR_MATCH',
+        failure_threshold: 3,
+        search_string: 'Nova',
+      });
+    });
+
+    test('should create Route53 failover records', () => {
+      expect(synthesized.resource.aws_route53_record).toBeDefined();
+      const records = synthesized.resource.aws_route53_record;
+      expect(records['primary-record']).toBeDefined();
+      expect(records['secondary-record']).toBeDefined();
     });
   });
 
