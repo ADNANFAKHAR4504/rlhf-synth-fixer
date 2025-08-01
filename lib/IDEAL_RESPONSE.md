@@ -6,7 +6,7 @@ The ideal response for the TAP Stack infrastructure as code solution should incl
 - A single YAML file (`TapStack.yml`) that defines all required AWS resources for a production-ready environment.
 - All resources tagged with `Name` and `Environment`.
 - No Retain policies; all resources set to Delete.
-- Region hardcoded to `us-east-1`.
+- Region hardcoded to `eu-west-1`.
 
 ### Key Resources
 - **VPC** with public and private subnets, IGW, route tables, and associations.
@@ -55,6 +55,7 @@ This response demonstrates a complete, robust, and compliant solution for the TA
 ```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 
+
 Description: 'Production-ready AWS environment for TAP Stack.'
 
 Parameters:
@@ -79,22 +80,28 @@ Parameters:
     ConstraintDescription: 'Must contain only alphanumeric characters.'
 
 Mappings:
+  RegionMap:
+    eu-west-1:
+      AZ1: 'eu-west-1a'
+      AZ2: 'eu-west-1b'
+      AMI: 'ami-0d64bb532e0502c46'  # Amazon Linux 2 AMI (eu-west-1)
 
 Conditions:
   UseACM: !And [
     !Equals [ !Ref ACMEnabled, "true" ],
     !Not [ !Equals [ !Ref ACMDomainName, "" ] ]
   ]
-  RegionMap:
-    us-east-1:
-      AZ1: 'us-east-1a'
-      AZ2: 'us-east-1b'
+  NotUseACM: !Not [
+    !And [
+      !Equals [ !Ref ACMEnabled, "true" ],
+      !Not [ !Equals [ !Ref ACMDomainName, "" ] ]
+    ]
+  ]
 
 Resources:
   ProdEC2Role:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: prod-ec2-role
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -121,18 +128,21 @@ Resources:
                   - logs:PutLogEvents
                   - logs:CreateLogGroup
                 Resource: '*'
+      Tags:
+        - Key: Name
+          Value: prod-ec2-role
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
 
   ProdEC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
-      InstanceProfileName: prod-ec2-instance-profile
       Roles:
         - !Ref ProdEC2Role
 
   ProdRDSRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: prod-rds-role
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -152,6 +162,11 @@ Resources:
                   - logs:PutLogEvents
                   - logs:CreateLogGroup
                 Resource: '*'
+      Tags:
+        - Key: Name
+          Value: prod-rds-role
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
   ProdALBListenerCertificate:
     Condition: UseACM
     Type: AWS::CertificateManager::Certificate
@@ -181,7 +196,7 @@ Resources:
         - CertificateArn: !Ref ProdALBListenerCertificate
 
   ProdALBListenerHTTP:
-    Condition: !Not [UseACM]
+    Condition: NotUseACM
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
       DefaultActions:
@@ -210,7 +225,7 @@ Resources:
     Properties:
       VpcId: !Ref ProdVPC
       CidrBlock: 10.0.1.0/24
-      AvailabilityZone: !FindInMap [RegionMap, us-east-1, AZ1]
+      AvailabilityZone: !FindInMap [RegionMap, !Ref 'AWS::Region', AZ1]
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -223,7 +238,7 @@ Resources:
     Properties:
       VpcId: !Ref ProdVPC
       CidrBlock: 10.0.2.0/24
-      AvailabilityZone: !FindInMap [RegionMap, us-east-1, AZ2]
+      AvailabilityZone: !FindInMap [RegionMap, !Ref 'AWS::Region', AZ2]
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -236,7 +251,7 @@ Resources:
     Properties:
       VpcId: !Ref ProdVPC
       CidrBlock: 10.0.3.0/24
-      AvailabilityZone: !FindInMap [RegionMap, us-east-1, AZ1]
+      AvailabilityZone: !FindInMap [RegionMap, !Ref 'AWS::Region', AZ1]
       Tags:
         - Key: Name
           Value: prod-private-subnet-1
@@ -248,7 +263,7 @@ Resources:
     Properties:
       VpcId: !Ref ProdVPC
       CidrBlock: 10.0.4.0/24
-      AvailabilityZone: !FindInMap [RegionMap, us-east-1, AZ2]
+      AvailabilityZone: !FindInMap [RegionMap, !Ref 'AWS::Region', AZ2]
       Tags:
         - Key: Name
           Value: prod-private-subnet-2
@@ -298,6 +313,56 @@ Resources:
     Properties:
       SubnetId: !Ref ProdPublicSubnet2
       RouteTableId: !Ref ProdPublicRouteTable
+
+  ProdNATGatewayEIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: prod-nat-gateway-eip
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  ProdNATGateway:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt ProdNATGatewayEIP.AllocationId
+      SubnetId: !Ref ProdPublicSubnet1
+      Tags:
+        - Key: Name
+          Value: prod-nat-gateway
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  ProdPrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref ProdVPC
+      Tags:
+        - Key: Name
+          Value: prod-private-rt
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  ProdPrivateRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref ProdPrivateRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref ProdNATGateway
+
+  ProdPrivateSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref ProdPrivateSubnet1
+      RouteTableId: !Ref ProdPrivateRouteTable
+
+  ProdPrivateSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref ProdPrivateSubnet2
+      RouteTableId: !Ref ProdPrivateRouteTable
 
   ProdS3AccessLogs:
     Type: AWS::S3::Bucket
@@ -364,8 +429,9 @@ Resources:
       DBInstanceClass: db.t3.micro
       Engine: mysql
       MasterUsername: admin
-      MasterUserPassword: !Ref RDSMasterPassword
-      VPCSecurityGroups: []
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${RDSMasterPassword}:SecretString:password}}'
+      VPCSecurityGroups:
+        - !Ref ProdRDSSecurityGroup
       DBSubnetGroupName: !Ref ProdRDSSubnetGroup
       PubliclyAccessible: false
       MultiAZ: false
@@ -383,8 +449,8 @@ Resources:
       GenerateSecretString:
         SecretStringTemplate: '{"username": "admin"}'
         GenerateStringKey: "password"
-        PasswordLength: 16
-        ExcludeCharacters: '"@/\\'
+        PasswordLength: 32
+        ExcludeCharacters: '"@/\'
 
   ProdALBSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -395,6 +461,10 @@ Resources:
         - IpProtocol: tcp
           FromPort: 443
           ToPort: 443
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
           CidrIp: 0.0.0.0/0
       SecurityGroupEgress:
         - IpProtocol: -1
@@ -424,6 +494,25 @@ Resources:
         - Key: Environment
           Value: !Ref EnvironmentSuffix
 
+  ProdRDSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: 'prod-rds-sg'
+      VpcId: !Ref ProdVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          SourceSecurityGroupId: !Ref ProdEC2SecurityGroup
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: prod-rds-sg
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
   ProdALB:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
@@ -446,7 +535,7 @@ Resources:
     Properties:
       LaunchTemplateName: prod-ec2-launch-template
       LaunchTemplateData:
-        ImageId: ami-0c94855ba95c71c99 # Amazon Linux 2 AMI (us-east-1)
+        ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
         InstanceType: t3.micro
         SecurityGroupIds:
           - !Ref ProdEC2SecurityGroup
@@ -492,6 +581,16 @@ Resources:
           PredefinedMetricType: ASGAverageCPUUtilization
         TargetValue: 60.0
 
+  ProdAlarmSNSTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: prod-alarm-topic
+      Tags:
+        - Key: Name
+          Value: prod-alarm-topic
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
   ProdCloudWatchAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
@@ -506,7 +605,8 @@ Resources:
       Dimensions:
         - Name: LoadBalancer
           Value: !Ref ProdALB
-      AlarmActions: []
+      AlarmActions:
+        - !Ref ProdAlarmSNSTopic
       Tags:
         - Key: Name
           Value: prod-cloudwatch-alarm
@@ -532,13 +632,34 @@ Outputs:
   S3BucketName:
     Description: 'S3 Bucket Name'
     Value: !Ref ProdS3Bucket
+  S3AccessLogsBucketName:
+    Description: 'S3 Access Logs Bucket Name'
+    Value: !Ref ProdS3AccessLogs
   RDSInstanceId:
     Description: 'RDS Instance ID'
     Value: !Ref ProdRDSInstance
+  RDSSubnetGroupName:
+    Description: 'RDS Subnet Group Name'
+    Value: !Ref ProdRDSSubnetGroup
   ALBArn:
     Description: 'ALB ARN'
     Value: !Ref ProdALB
+  ALBSecurityGroupId:
+    Description: 'ALB Security Group ID'
+    Value: !Ref ProdALBSecurityGroup
+  EC2SecurityGroupId:
+    Description: 'EC2 Security Group ID'
+    Value: !Ref ProdEC2SecurityGroup
   CloudWatchAlarmName:
     Description: 'CloudWatch Alarm Name'
     Value: !Ref ProdCloudWatchAlarm
+  RDSSecurityGroupId:
+    Description: 'RDS Security Group ID'
+    Value: !Ref ProdRDSSecurityGroup
+  AlarmSNSTopicArn:
+    Description: 'Alarm SNS Topic ARN'
+    Value: !Ref ProdAlarmSNSTopic
+  NATGatewayId:
+    Description: 'NAT Gateway ID'
+    Value: !Ref ProdNATGateway
 ```

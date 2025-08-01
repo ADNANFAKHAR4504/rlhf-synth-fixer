@@ -42,6 +42,11 @@ describe('TapStack CloudFormation Template', () => {
       });
       expect(template.Resources.RDSMasterPassword).toBeDefined();
     });
+    test('RDS instance should use dedicated security group', () => {
+      expect(template.Resources.ProdRDSInstance.Properties.VPCSecurityGroups).toContainEqual({ Ref: 'ProdRDSSecurityGroup' });
+      expect(template.Resources.ProdRDSSecurityGroup).toBeDefined();
+      expect(template.Resources.ProdRDSSecurityGroup.Properties.SecurityGroupIngress.some((i: any) => i.FromPort === 3306 && i.ToPort === 3306)).toBe(true);
+    });
   });
 
   describe('ALB and ACM', () => {
@@ -69,10 +74,29 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Resources.ProdScalingPolicy).toBeDefined();
       expect(template.Resources.ProdScalingPolicy.Properties.TargetTrackingConfiguration.PredefinedMetricSpecification.PredefinedMetricType).toBe('ASGAverageCPUUtilization');
     });
-    test('CloudWatch alarm should detect 5xx errors from ALB', () => {
+    test('CloudWatch alarm should detect 5xx errors from ALB and have SNS notifications', () => {
       expect(template.Resources.ProdCloudWatchAlarm).toBeDefined();
       expect(template.Resources.ProdCloudWatchAlarm.Properties.MetricName).toBe('HTTPCode_ELB_5XX_Count');
       expect(template.Resources.ProdCloudWatchAlarm.Properties.Namespace).toBe('AWS/ApplicationELB');
+      expect(template.Resources.ProdCloudWatchAlarm.Properties.AlarmActions).toContainEqual({ Ref: 'ProdAlarmSNSTopic' });
+      expect(template.Resources.ProdAlarmSNSTopic).toBeDefined();
+    });
+  });
+
+  describe('NAT Gateway and Private Connectivity', () => {
+    test('NAT Gateway should be present with EIP and proper routing', () => {
+      expect(template.Resources.ProdNATGateway).toBeDefined();
+      expect(template.Resources.ProdNATGatewayEIP).toBeDefined();
+      expect(template.Resources.ProdNATGateway.Properties.AllocationId).toEqual({ 'Fn::GetAtt': ['ProdNATGatewayEIP', 'AllocationId'] });
+      expect(template.Resources.ProdNATGateway.Properties.SubnetId).toEqual({ Ref: 'ProdPublicSubnet1' });
+    });
+    test('Private subnets should have route table with NAT Gateway route', () => {
+      expect(template.Resources.ProdPrivateRouteTable).toBeDefined();
+      expect(template.Resources.ProdPrivateRoute).toBeDefined();
+      expect(template.Resources.ProdPrivateRoute.Properties.NatGatewayId).toEqual({ Ref: 'ProdNATGateway' });
+      expect(template.Resources.ProdPrivateRoute.Properties.DestinationCidrBlock).toBe('0.0.0.0/0');
+      expect(template.Resources.ProdPrivateSubnet1RouteTableAssociation).toBeDefined();
+      expect(template.Resources.ProdPrivateSubnet2RouteTableAssociation).toBeDefined();
     });
   });
 
@@ -105,7 +129,8 @@ describe('TapStack CloudFormation Template', () => {
       const expectedOutputs = [
         'VPCId', 'PublicSubnet1Id', 'PublicSubnet2Id', 'PrivateSubnet1Id', 'PrivateSubnet2Id',
         'S3BucketName', 'S3AccessLogsBucketName', 'RDSInstanceId', 'RDSSubnetGroupName',
-        'ALBArn', 'ALBSecurityGroupId', 'EC2SecurityGroupId', 'CloudWatchAlarmName'
+        'ALBArn', 'ALBSecurityGroupId', 'EC2SecurityGroupId', 'CloudWatchAlarmName',
+        'RDSSecurityGroupId', 'AlarmSNSTopicArn', 'NATGatewayId'
       ];
       expectedOutputs.forEach(outputName => {
         expect(template.Outputs[outputName]).toBeDefined();
@@ -160,6 +185,12 @@ describe('TapStack CloudFormation Template', () => {
       expect(sg.Properties.SecurityGroupIngress.some((i: any) => i.FromPort === 80 && i.ToPort === 80)).toBe(true);
       expect(sg.Properties.SecurityGroupEgress.some((e: any) => e.IpProtocol === -1)).toBe(true);
     });
+    test('RDS security group should allow inbound 3306 from EC2 and all outbound', () => {
+      const sg = template.Resources.ProdRDSSecurityGroup;
+      expect(sg).toBeDefined();
+      expect(sg.Properties.SecurityGroupIngress.some((i: any) => i.FromPort === 3306 && i.ToPort === 3306)).toBe(true);
+      expect(sg.Properties.SecurityGroupEgress.some((e: any) => e.IpProtocol === -1)).toBe(true);
+    });
   });
 
   describe('S3 Bucket Policy', () => {
@@ -185,7 +216,8 @@ describe('TapStack CloudFormation Template', () => {
       const resourcesToCheck = [
         'ProdVPC', 'ProdPublicSubnet1', 'ProdPublicSubnet2', 'ProdPrivateSubnet1', 'ProdPrivateSubnet2',
         'ProdS3AccessLogs', 'ProdS3Bucket', 'ProdRDSSubnetGroup', 'ProdRDSInstance', 'ProdALBSecurityGroup',
-        'ProdEC2SecurityGroup', 'ProdALB', 'ProdAutoScalingGroup', 'ProdCloudWatchAlarm'
+        'ProdEC2SecurityGroup', 'ProdRDSSecurityGroup', 'ProdALB', 'ProdAutoScalingGroup', 'ProdCloudWatchAlarm',
+        'ProdAlarmSNSTopic', 'ProdNATGateway', 'ProdNATGatewayEIP'
       ];
       resourcesToCheck.forEach(key => {
         const res = template.Resources[key];

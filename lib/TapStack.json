@@ -506,6 +506,104 @@
                 }
             }
         },
+        "ProdNATGatewayEIP": {
+            "Type": "AWS::EC2::EIP",
+            "Properties": {
+                "Domain": "vpc",
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "prod-nat-gateway-eip"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "ProdNATGateway": {
+            "Type": "AWS::EC2::NatGateway",
+            "Properties": {
+                "AllocationId": {
+                    "Fn::GetAtt": [
+                        "ProdNATGatewayEIP",
+                        "AllocationId"
+                    ]
+                },
+                "SubnetId": {
+                    "Ref": "ProdPublicSubnet1"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "prod-nat-gateway"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "ProdPrivateRouteTable": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "ProdVPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "prod-private-rt"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "ProdPrivateRoute": {
+            "Type": "AWS::EC2::Route",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "ProdPrivateRouteTable"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "NatGatewayId": {
+                    "Ref": "ProdNATGateway"
+                }
+            }
+        },
+        "ProdPrivateSubnet1RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "ProdPrivateSubnet1"
+                },
+                "RouteTableId": {
+                    "Ref": "ProdPrivateRouteTable"
+                }
+            }
+        },
+        "ProdPrivateSubnet2RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "ProdPrivateSubnet2"
+                },
+                "RouteTableId": {
+                    "Ref": "ProdPrivateRouteTable"
+                }
+            }
+        },
         "ProdS3AccessLogs": {
             "Type": "AWS::S3::Bucket",
             "DeletionPolicy": "Delete",
@@ -628,7 +726,11 @@
                 "MasterUserPassword": {
                     "Fn::Sub": "{{resolve:secretsmanager:${RDSMasterPassword}:SecretString:password}}"
                 },
-                "VPCSecurityGroups": [],
+                "VPCSecurityGroups": [
+                    {
+                        "Ref": "ProdRDSSecurityGroup"
+                    }
+                ],
                 "DBSubnetGroupName": {
                     "Ref": "ProdRDSSubnetGroup"
                 },
@@ -731,6 +833,43 @@
                     {
                         "Key": "Name",
                         "Value": "prod-ec2-sg"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "ProdRDSSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "prod-rds-sg",
+                "VpcId": {
+                    "Ref": "ProdVPC"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 3306,
+                        "ToPort": 3306,
+                        "SourceSecurityGroupId": {
+                            "Ref": "ProdEC2SecurityGroup"
+                        }
+                    }
+                ],
+                "SecurityGroupEgress": [
+                    {
+                        "IpProtocol": -1,
+                        "CidrIp": "0.0.0.0/0"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "prod-rds-sg"
                     },
                     {
                         "Key": "Environment",
@@ -882,6 +1021,24 @@
                 }
             }
         },
+        "ProdAlarmSNSTopic": {
+            "Type": "AWS::SNS::Topic",
+            "Properties": {
+                "TopicName": "prod-alarm-topic",
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "prod-alarm-topic"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
         "ProdCloudWatchAlarm": {
             "Type": "AWS::CloudWatch::Alarm",
             "Properties": {
@@ -901,7 +1058,11 @@
                         }
                     }
                 ],
-                "AlarmActions": [],
+                "AlarmActions": [
+                    {
+                        "Ref": "ProdAlarmSNSTopic"
+                    }
+                ],
                 "Tags": [
                     {
                         "Key": "Name",
@@ -994,6 +1155,24 @@
             "Description": "CloudWatch Alarm Name",
             "Value": {
                 "Ref": "ProdCloudWatchAlarm"
+            }
+        },
+        "RDSSecurityGroupId": {
+            "Description": "RDS Security Group ID",
+            "Value": {
+                "Ref": "ProdRDSSecurityGroup"
+            }
+        },
+        "AlarmSNSTopicArn": {
+            "Description": "Alarm SNS Topic ARN",
+            "Value": {
+                "Ref": "ProdAlarmSNSTopic"
+            }
+        },
+        "NATGatewayId": {
+            "Description": "NAT Gateway ID",
+            "Value": {
+                "Ref": "ProdNATGateway"
             }
         }
     }
