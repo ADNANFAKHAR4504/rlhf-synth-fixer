@@ -8,7 +8,7 @@ import fs from 'fs';
 import path from 'path';
 
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'prod';
-const region = 'us-east-1';
+const region = process.env.AWS_REGION || 'us-east-1';
 
 // Load outputs from CloudFormation deployment
 const outputsPath = path.join(__dirname, '../cfn-outputs/flat-outputs.json');

@@ -26,9 +26,10 @@ Parameters:
 
 Mappings:
   RegionMap:
-    us-east-1:
-      AZ1: 'us-east-1a'
-      AZ2: 'us-east-1b'
+    eu-west-1:
+      AZ1: 'eu-west-1a'
+      AZ2: 'eu-west-1b'
+      AMI: 'ami-0d64bb532e0502c46'  # Amazon Linux 2 AMI (eu-west-1)
 
 Conditions:
   UseACM: !And [
@@ -46,7 +47,6 @@ Resources:
   ProdEC2Role:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: prod-ec2-role
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -73,18 +73,21 @@ Resources:
                   - logs:PutLogEvents
                   - logs:CreateLogGroup
                 Resource: '*'
+      Tags:
+        - Key: Name
+          Value: prod-ec2-role
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
 
   ProdEC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
-      InstanceProfileName: prod-ec2-instance-profile
       Roles:
         - !Ref ProdEC2Role
 
   ProdRDSRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: prod-rds-role
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -104,6 +107,11 @@ Resources:
                   - logs:PutLogEvents
                   - logs:CreateLogGroup
                 Resource: '*'
+      Tags:
+        - Key: Name
+          Value: prod-rds-role
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
   ProdALBListenerCertificate:
     Condition: UseACM
     Type: AWS::CertificateManager::Certificate
@@ -162,7 +170,7 @@ Resources:
     Properties:
       VpcId: !Ref ProdVPC
       CidrBlock: 10.0.1.0/24
-      AvailabilityZone: !FindInMap [RegionMap, us-east-1, AZ1]
+      AvailabilityZone: !FindInMap [RegionMap, !Ref 'AWS::Region', AZ1]
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -175,7 +183,7 @@ Resources:
     Properties:
       VpcId: !Ref ProdVPC
       CidrBlock: 10.0.2.0/24
-      AvailabilityZone: !FindInMap [RegionMap, us-east-1, AZ2]
+      AvailabilityZone: !FindInMap [RegionMap, !Ref 'AWS::Region', AZ2]
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -188,7 +196,7 @@ Resources:
     Properties:
       VpcId: !Ref ProdVPC
       CidrBlock: 10.0.3.0/24
-      AvailabilityZone: !FindInMap [RegionMap, us-east-1, AZ1]
+      AvailabilityZone: !FindInMap [RegionMap, !Ref 'AWS::Region', AZ1]
       Tags:
         - Key: Name
           Value: prod-private-subnet-1
@@ -200,7 +208,7 @@ Resources:
     Properties:
       VpcId: !Ref ProdVPC
       CidrBlock: 10.0.4.0/24
-      AvailabilityZone: !FindInMap [RegionMap, us-east-1, AZ2]
+      AvailabilityZone: !FindInMap [RegionMap, !Ref 'AWS::Region', AZ2]
       Tags:
         - Key: Name
           Value: prod-private-subnet-2
@@ -316,7 +324,7 @@ Resources:
       DBInstanceClass: db.t3.micro
       Engine: mysql
       MasterUsername: admin
-      MasterUserPassword: !Ref RDSMasterPassword
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${RDSMasterPassword}:SecretString:password}}'
       VPCSecurityGroups: []
       DBSubnetGroupName: !Ref ProdRDSSubnetGroup
       PubliclyAccessible: false
@@ -335,8 +343,8 @@ Resources:
       GenerateSecretString:
         SecretStringTemplate: '{"username": "admin"}'
         GenerateStringKey: "password"
-        PasswordLength: 16
-        ExcludeCharacters: '"@/\\'
+        PasswordLength: 32
+        ExcludeCharacters: '"@/\'
 
   ProdALBSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -347,6 +355,10 @@ Resources:
         - IpProtocol: tcp
           FromPort: 443
           ToPort: 443
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
           CidrIp: 0.0.0.0/0
       SecurityGroupEgress:
         - IpProtocol: -1
@@ -398,7 +410,7 @@ Resources:
     Properties:
       LaunchTemplateName: prod-ec2-launch-template
       LaunchTemplateData:
-        ImageId: ami-0c94855ba95c71c99 # Amazon Linux 2 AMI (us-east-1)
+        ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
         InstanceType: t3.micro
         SecurityGroupIds:
           - !Ref ProdEC2SecurityGroup
@@ -484,12 +496,24 @@ Outputs:
   S3BucketName:
     Description: 'S3 Bucket Name'
     Value: !Ref ProdS3Bucket
+  S3AccessLogsBucketName:
+    Description: 'S3 Access Logs Bucket Name'
+    Value: !Ref ProdS3AccessLogs
   RDSInstanceId:
     Description: 'RDS Instance ID'
     Value: !Ref ProdRDSInstance
+  RDSSubnetGroupName:
+    Description: 'RDS Subnet Group Name'
+    Value: !Ref ProdRDSSubnetGroup
   ALBArn:
     Description: 'ALB ARN'
     Value: !Ref ProdALB
+  ALBSecurityGroupId:
+    Description: 'ALB Security Group ID'
+    Value: !Ref ProdALBSecurityGroup
+  EC2SecurityGroupId:
+    Description: 'EC2 Security Group ID'
+    Value: !Ref ProdEC2SecurityGroup
   CloudWatchAlarmName:
     Description: 'CloudWatch Alarm Name'
     Value: !Ref ProdCloudWatchAlarm

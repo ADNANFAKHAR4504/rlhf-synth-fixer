@@ -74,11 +74,36 @@ describe('TapStack CloudFormation Template', () => {
     });
   });
 
+  describe('Region Mapping', () => {
+    test('template should use AWS::Region pseudo parameter for region-specific logic', () => {
+      // Check that subnets use regional AZ mapping
+      const subnet1 = template.Resources.ProdPublicSubnet1;
+      const subnet2 = template.Resources.ProdPublicSubnet2;
+      expect(subnet1.Properties.AvailabilityZone['Fn::FindInMap']).toBeDefined();
+      expect(subnet1.Properties.AvailabilityZone['Fn::FindInMap'][1]).toEqual({ Ref: 'AWS::Region' });
+      expect(subnet2.Properties.AvailabilityZone['Fn::FindInMap']).toBeDefined();
+      expect(subnet2.Properties.AvailabilityZone['Fn::FindInMap'][1]).toEqual({ Ref: 'AWS::Region' });
+    });
+    test('launch template should use regional AMI mapping', () => {
+      const launchTemplate = template.Resources.ProdLaunchTemplate;
+      expect(launchTemplate.Properties.LaunchTemplateData.ImageId['Fn::FindInMap']).toBeDefined();
+      expect(launchTemplate.Properties.LaunchTemplateData.ImageId['Fn::FindInMap'][1]).toEqual({ Ref: 'AWS::Region' });
+    });
+    test('should have region mappings defined', () => {
+      expect(template.Mappings.RegionMap).toBeDefined();
+      expect(template.Mappings.RegionMap['eu-west-1']).toBeDefined();
+      expect(template.Mappings.RegionMap['eu-west-1'].AZ1).toBe('eu-west-1a');
+      expect(template.Mappings.RegionMap['eu-west-1'].AZ2).toBe('eu-west-1b');
+      expect(template.Mappings.RegionMap['eu-west-1'].AMI).toBeDefined();
+    });
+  });
+
   describe('Outputs', () => {
     test('should have all required outputs', () => {
       const expectedOutputs = [
         'VPCId', 'PublicSubnet1Id', 'PublicSubnet2Id', 'PrivateSubnet1Id', 'PrivateSubnet2Id',
-        'S3BucketName', 'RDSInstanceId', 'ALBArn', 'CloudWatchAlarmName'
+        'S3BucketName', 'S3AccessLogsBucketName', 'RDSInstanceId', 'RDSSubnetGroupName',
+        'ALBArn', 'ALBSecurityGroupId', 'EC2SecurityGroupId', 'CloudWatchAlarmName'
       ];
       expectedOutputs.forEach(outputName => {
         expect(template.Outputs[outputName]).toBeDefined();

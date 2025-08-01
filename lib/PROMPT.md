@@ -4,7 +4,7 @@ You are an infrastructure engineer tasked with setting up a **production-ready A
 
 ### Requirements:
 
-1. **Region:** All resources must be deployed in **`us-east-1`**.
+1. **Region:** All resources must be deployed in **`eu-west-1`**.
 2. **Naming Convention:** Use `prod-` as a prefix for all resource names, followed by the respective service name.
 3. **IAM Roles:** Follow the **least privilege principle** — only assign permissions necessary for each resource to function.
 4. **Networking:**
@@ -23,7 +23,7 @@ You are an infrastructure engineer tasked with setting up a **production-ready A
 
 ### Constraints:
 
-- All resources must be created in `us-east-1`.
+- All resources must be created in `eu-west-1`.
 - All names must follow the `prod-<service>` format.
 - IAM policies must be minimal and tightly scoped.
 - Subnets must span multiple AZs for high availability.
