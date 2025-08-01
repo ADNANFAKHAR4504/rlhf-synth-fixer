@@ -26,10 +26,10 @@ class TestTapStackIntegration(unittest.TestCase):
 
   def setUp(self):
     """Set up AWS clients for integration testing"""
-    self.s3_client = boto3.client('s3', region_name='us-west-2')
-    self.codepipeline_client = boto3.client('codepipeline', region_name='us-west-2') 
-    self.codebuild_client = boto3.client('codebuild', region_name='us-west-2')
-    self.iam_client = boto3.client('iam', region_name='us-west-2')
+    self.s3_client = boto3.client('s3', region_name='us-east-1')
+    self.codepipeline_client = boto3.client('codepipeline', region_name='us-east-1') 
+    self.codebuild_client = boto3.client('codebuild', region_name='us-east-1')
+    self.iam_client = boto3.client('iam', region_name='us-east-1')
 
   @mark.it("validates S3 artifacts bucket exists and is configured correctly")
   def test_s3_artifacts_bucket_exists(self):
