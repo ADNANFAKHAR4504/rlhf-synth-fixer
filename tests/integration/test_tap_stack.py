@@ -94,14 +94,13 @@ class TestTapStackIntegration(unittest.TestCase):
 
   # --- ALB ---
 
-  @mark.it("✅ ALB DNS resolves and listener is available")
+  @mark.it("✅ ALB ARN is valid and listener is available")
   def test_alb_listener_exists(self):
-    if not self.alb_dns:
-      self.fail("❌ 'ALBDNSName' not found in flat-outputs.json")
-    resp = self.elb.describe_load_balancers(Names=[self.alb_dns.split('.')[0]])
-    lb_arn = resp["LoadBalancers"][0]["LoadBalancerArn"]
-    listener_resp = self.elb.describe_listeners(LoadBalancerArn=lb_arn)
-    ports = [l["Port"] for l in listener_resp["Listeners"]]
+    alb_arn = flat_outputs.get("ALBArn")
+    if not alb_arn:
+      self.fail("❌ 'ALBArn' not found in flat-outputs.json")
+    resp = self.elb.describe_listeners(LoadBalancerArn=alb_arn)
+    ports = [l["Port"] for l in resp["Listeners"]]
     self.assertIn(80, ports)
 
   # --- RDS ---

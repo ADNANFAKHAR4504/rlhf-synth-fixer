@@ -564,6 +564,12 @@ class TapStack(cdk.Stack):
       value=self.alb.load_balancer_dns_name,
       description="Application Load Balancer DNS Name"
     )
+    CfnOutput(
+      self, 
+      "ALBArn", 
+      value=self.alb.load_balancer_arn,
+      description="Application Load Balancer Arn"
+      )
     
     CfnOutput(
       self,
@@ -585,3 +591,9 @@ class TapStack(cdk.Stack):
       value=self.kms_key.key_id,
       description="KMS Key ID"
     )
+    CfnOutput(
+      self, 
+      "IamRoleName", 
+      value=self.ec2_role.role_name,
+      description="Role Name"
+      )
