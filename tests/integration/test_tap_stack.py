@@ -13,7 +13,8 @@ class TestTapStackLiveIntegration(unittest.TestCase):
     cls.stack_name = "qa"
     cls.project_name = "tap-infra"
     cls.aws_region = "us-east-1"
-    cls.backend_url = os.getenv("PULUMI_BACKEND_URL", "s3://iac-rlhf-pulumi-states")
+    cls.backend_url = os.getenv("PULUMI_BACKEND_URL",
+                                "s3://iac-rlhf-pulumi-states")
     cls.pulumi_program_path = os.getcwd()
 
     cls.s3_client = boto3.client("s3", region_name=cls.aws_region)
@@ -36,24 +37,22 @@ class TestTapStackLiveIntegration(unittest.TestCase):
         )
       except auto.StackNotFoundError as exc:
         raise RuntimeError(
-          f"Pulumi stack '{cls.stack_name}' not found in backend '{cls.backend_url}'.\n"
-          "Please ensure the stack exists before running tests."
+          f"Pulumi stack '{cls.stack_name}' not found in backend "
+          f"'{cls.backend_url}'.\nPlease ensure the stack exists before "
+          "running tests."
         ) from exc
 
       cls.stack.refresh(on_output=print)
       cls.outputs = cls.stack.outputs()
-      # Reminder: Verify these outputs exist in your Pulumi stack and
-      # the stack is deployed (e.g., via `pulumi up`) before running tests
       print("Pulumi stack outputs:", cls.outputs)
 
     except NoCredentialsError as e:
-      raise RuntimeError("AWS credentials not found. Make sure they're configured.") from e
+      raise RuntimeError("AWS credentials not found. Make sure they're "
+                         "configured.") from e
     except ClientError as e:
       raise RuntimeError(f"Failed to initialize Pulumi stack: {e}") from e
 
-
   def retry_api_call(self, func, *args, max_attempts=5, delay=3, **kwargs):
-    """Utility to retry API calls to avoid transient failures."""
     for attempt in range(max_attempts):
       try:
         return func(*args, **kwargs)
@@ -63,32 +62,33 @@ class TestTapStackLiveIntegration(unittest.TestCase):
         time.sleep(delay)
     raise RuntimeError("Exceeded max retry attempts without success.")
 
-
   def test_stack_outputs_exist(self):
     required_outputs = ["artifacts_bucket_name", "service_role_arn"]
     missing = [key for key in required_outputs if key not in self.outputs]
     self.assertFalse(missing, f"Missing expected Pulumi outputs: {missing}")
 
   def test_artifacts_bucket_exists(self):
-    bucket_name = self.outputs["artifacts_bucket_name"]  # Removed .value
+    bucket_name = self.outputs["artifacts_bucket_name"]
     try:
       response = self.retry_api_call(self.s3_client.head_bucket, Bucket=bucket_name)
       self.assertEqual(response["ResponseMetadata"]["HTTPStatusCode"], 200)
     except ClientError as e:
-      self.fail(f"S3 bucket '{bucket_name}' does not exist or is not accessible: {e}")
+      self.fail(f"S3 bucket '{bucket_name}' does not exist or is not "
+                f"accessible: {e}")
 
   def test_service_role_exists(self):
-    role_arn = self.outputs["service_role_arn"]  # Removed .value
+    role_arn = self.outputs["service_role_arn"]
     role_name = role_arn.split("/")[-1]
     try:
       response = self.retry_api_call(self.iam_client.get_role, RoleName=role_name)
       self.assertEqual(response["Role"]["Arn"], role_arn)
     except ClientError as e:
-      self.fail(f"IAM Role '{role_name}' does not exist or is not accessible: {e}")
+      self.fail(f"IAM Role '{role_name}' does not exist or is not "
+                f"accessible: {e}")
 
   def test_log_group_exists_if_monitoring_enabled(self):
     if "log_group_name" in self.outputs:
-      log_group_name = self.outputs["log_group_name"]  # Removed .value
+      log_group_name = self.outputs["log_group_name"]
       try:
         response = self.retry_api_call(
           self.logs_client.describe_log_groups, logGroupNamePrefix=log_group_name
@@ -97,7 +97,8 @@ class TestTapStackLiveIntegration(unittest.TestCase):
         found = any(g["logGroupName"] == log_group_name for g in groups)
         self.assertTrue(found, f"Log group '{log_group_name}' not found.")
       except ClientError as e:
-        self.fail(f"Log group '{log_group_name}' does not exist or is not accessible: {e}")
+        self.fail(f"Log group '{log_group_name}' does not exist or is not "
+                  f"accessible: {e}")
     else:
       self.skipTest("Monitoring disabled; skipping log group check.")
 
