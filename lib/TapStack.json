@@ -1,6 +1,6 @@
 {
   "AWSTemplateFormatVersion": "2010-09-09",
-  "Description": "This CloudFormation template sets up a secure and scalable network infrastructure in the us-west-2 region, including a VPC, subnets, internet gateway, NAT gateway, and security groups.",
+  "Description": "This CloudFormation template sets up a secure and scalable network infrastructure in the ap-south-1 region, including a VPC, subnets, internet gateway, NAT gateway, and security groups.",
   "Resources": {
     "VPC": {
       "Type": "AWS::EC2::VPC",
