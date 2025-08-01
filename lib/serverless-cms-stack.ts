@@ -39,11 +39,13 @@ export class ServerlessCms extends Construct {
   constructor(scope: Construct, id: string, props: ServerlessCmsProps) {
     super(scope, id);
 
-    new ArchiveProvider(this, 'archive');
-
     // Get current region
     const currentRegion = new DataAwsRegion(this, 'current', {
       provider: props.provider,
+    });
+
+    new ArchiveProvider(this, 'archive', {
+      alias: currentRegion.name,
     });
 
     // Generate resource names with region-specific naming convention
