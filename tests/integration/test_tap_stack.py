@@ -10,7 +10,7 @@ class TestTapStackLiveIntegration(unittest.TestCase):
 
   @classmethod
   def setUpClass(cls):
-    cls.stack_name = "dev"
+    cls.stack_name = "qa"
     cls.project_name = "tap-infra"
     cls.aws_region = "us-east-1"
     cls.backend_url = os.getenv("PULUMI_BACKEND_URL", "s3://iac-rlhf-pulumi-states")
@@ -23,27 +23,28 @@ class TestTapStackLiveIntegration(unittest.TestCase):
     try:
       try:
         cls.stack = auto.select_stack(
-                stack_name=cls.stack_name,
-                project_name=cls.project_name,
-                program=lambda: None,
-                opts=auto.LocalWorkspaceOptions(
-                    work_dir=cls.pulumi_program_path,
-                    env_vars={
-                        "AWS_REGION": cls.aws_region,
-                        "PULUMI_BACKEND_URL": cls.backend_url,
-                    }
-                )
-            )
+          stack_name=cls.stack_name,
+          project_name=cls.project_name,
+          program=lambda: None,
+          opts=auto.LocalWorkspaceOptions(
+            work_dir=cls.pulumi_program_path,
+            env_vars={
+              "AWS_REGION": cls.aws_region,
+              "PULUMI_BACKEND_URL": cls.backend_url,
+            },
+          ),
+        )
       except auto.StackNotFoundError as exc:
         raise RuntimeError(
-            f"Pulumi stack '{cls.stack_name}' not found in backend '{cls.backend_url}'.\n"
-            f"Please ensure the stack exists before running tests."
+          f"Pulumi stack '{cls.stack_name}' not found in backend '{cls.backend_url}'.\n"
+          "Please ensure the stack exists before running tests."
         ) from exc
 
-
-        # This line must be inside the outer try block
       cls.stack.refresh(on_output=print)
       cls.outputs = cls.stack.outputs()
+      # Reminder: Verify these outputs exist in your Pulumi stack and
+      # the stack is deployed (e.g., via `pulumi up`) before running tests
+      print("Pulumi stack outputs:", cls.outputs)
 
     except NoCredentialsError as e:
       raise RuntimeError("AWS credentials not found. Make sure they're configured.") from e
@@ -60,9 +61,7 @@ class TestTapStackLiveIntegration(unittest.TestCase):
         if attempt == max_attempts - 1:
           raise
         time.sleep(delay)
-    # This line is unreachable but added to satisfy linters
     raise RuntimeError("Exceeded max retry attempts without success.")
-
 
 
   def test_stack_outputs_exist(self):
@@ -71,7 +70,7 @@ class TestTapStackLiveIntegration(unittest.TestCase):
     self.assertFalse(missing, f"Missing expected Pulumi outputs: {missing}")
 
   def test_artifacts_bucket_exists(self):
-    bucket_name = self.outputs["artifacts_bucket_name"].value
+    bucket_name = self.outputs["artifacts_bucket_name"]  # Removed .value
     try:
       response = self.retry_api_call(self.s3_client.head_bucket, Bucket=bucket_name)
       self.assertEqual(response["ResponseMetadata"]["HTTPStatusCode"], 200)
@@ -79,7 +78,7 @@ class TestTapStackLiveIntegration(unittest.TestCase):
       self.fail(f"S3 bucket '{bucket_name}' does not exist or is not accessible: {e}")
 
   def test_service_role_exists(self):
-    role_arn = self.outputs["service_role_arn"].value
+    role_arn = self.outputs["service_role_arn"]  # Removed .value
     role_name = role_arn.split("/")[-1]
     try:
       response = self.retry_api_call(self.iam_client.get_role, RoleName=role_name)
@@ -89,7 +88,7 @@ class TestTapStackLiveIntegration(unittest.TestCase):
 
   def test_log_group_exists_if_monitoring_enabled(self):
     if "log_group_name" in self.outputs:
-      log_group_name = self.outputs["log_group_name"].value
+      log_group_name = self.outputs["log_group_name"]  # Removed .value
       try:
         response = self.retry_api_call(
           self.logs_client.describe_log_groups, logGroupNamePrefix=log_group_name
@@ -107,7 +106,9 @@ class TestTapStackLiveIntegration(unittest.TestCase):
       preview_result = self.stack.preview()
       changes = preview_result.change_summary
       self.assertTrue(
-        changes.create == 0 and changes.update == 0 and changes.delete == 0,
+        changes.get("create", 0) == 0 and
+        changes.get("update", 0) == 0 and
+        changes.get("delete", 0) == 0,
         f"Stack has pending changes: {changes}",
       )
     except ClientError as e:
