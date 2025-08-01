@@ -605,7 +605,7 @@
                 "BackupRetentionPeriod": 7,
                 "PreferredBackupWindow": "03:00-04:00",
                 "PreferredMaintenanceWindow": "sun:04:00-sun:05:00",
-                "DeletionProtection": false,
+                "DeletionProtection": true,
                 "Tags": [
                     {
                         "Key": "Name",
@@ -692,6 +692,39 @@
                 },
                 "Port": 80,
                 "Protocol": "HTTP"
+            }
+        },
+        "HostedZone": {
+            "Type": "AWS::Route53::HostedZone",
+            "Properties": {
+                "Name": "devexample.com",
+                "HostedZoneConfig": {
+                    "Comment": "Public hosted zone for the production environment"
+                }
+            }
+        },
+        "ALBRecordSet": {
+            "Type": "AWS::Route53::RecordSet",
+            "Properties": {
+                "HostedZoneId": {
+                    "Ref": "HostedZone"
+                },
+                "Name": "app.devexample.com",
+                "Type": "A",
+                "AliasTarget": {
+                    "DNSName": {
+                        "Fn::GetAtt": [
+                            "ApplicationLoadBalancer",
+                            "DNSName"
+                        ]
+                    },
+                    "HostedZoneId": {
+                        "Fn::GetAtt": [
+                            "ApplicationLoadBalancer",
+                            "CanonicalHostedZoneID"
+                        ]
+                    }
+                }
             }
         },
         "MyEC2KeyPair": {

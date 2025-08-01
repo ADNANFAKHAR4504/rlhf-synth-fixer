@@ -120,4 +120,33 @@ describe('TAP Stack Template Unit Tests', () => {
     expect(template.Outputs?.ALBDNSName).toBeDefined();
     expect(template.Outputs?.RDSEndpoint).toBeDefined();
   });
+  test('should define a public route table', () => {
+    const routeTable = template.Resources?.PublicRouteTable;
+    expect(routeTable).toBeDefined();
+    expect(routeTable.Type).toBe('AWS::EC2::RouteTable');
+    expect(routeTable.Properties.VpcId).toBeDefined();
+    expect(routeTable.Properties.Tags).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ Key: 'Name', Value: 'Production-Public-Routes' }),
+        expect.objectContaining({ Key: 'environment', Value: 'production' }),
+      ])
+    );
+  });
+  test('Route53 HostedZone for devexample.com should exist', () => {
+    const hostedZone = template.Resources?.HostedZone;
+    expect(hostedZone).toBeDefined();
+    expect(hostedZone.Type).toBe('AWS::Route53::HostedZone');
+    expect(hostedZone.Properties.Name).toBe('devexample.com');
+  });
+
+  test('Route53 RecordSet should alias devexample.com to ALB DNS', () => {
+    const recordSet = template.Resources?.ALBRecordSet;
+    expect(recordSet).toBeDefined();
+    expect(recordSet.Type).toBe('AWS::Route53::RecordSet');
+    expect(recordSet.Properties.Name).toBe('app.devexample.com');
+    expect(recordSet.Properties.Type).toBe('A');
+    expect(recordSet.Properties.AliasTarget).toBeDefined();
+    expect(recordSet.Properties.AliasTarget.DNSName).toBeDefined();
+    expect(recordSet.Properties.AliasTarget.HostedZoneId).toBeDefined();
+  });
 });

@@ -8,6 +8,10 @@ import {
   DescribeNatGatewaysCommand,
 } from '@aws-sdk/client-ec2';
 import {
+  Route53Client,
+  ListResourceRecordSetsCommand,
+} from "@aws-sdk/client-route-53";
+import {
   RDSClient,
   DescribeDBInstancesCommand,
 } from '@aws-sdk/client-rds';
@@ -41,6 +45,7 @@ import {
 import fs from 'fs';
 
 const region = process.env.AWS_REGION || 'ap-south-1';
+const route53 = new Route53Client({ region: "ap-south-1" })
 const outputs = JSON.parse(fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8'));
 
 const ec2 = new EC2Client({ region });
@@ -56,6 +61,24 @@ describe('Production CloudFormation Integration Tests', () => {
   test('VPC should exist', async () => {
     const res = await ec2.send(new DescribeVpcsCommand({ VpcIds: [outputs.VPCId] }));
     expect(res.Vpcs?.[0].CidrBlock).toBe('10.0.0.0/16');
+  });
+
+  test("Alias record app.devexample.com exists in hosted zone", async () => {
+    const recordSetRes = await route53.send(
+      new ListResourceRecordSetsCommand({
+        HostedZoneId: outputs.HostedZoneId,
+      })
+    );
+
+    const record = recordSetRes.ResourceRecordSets?.find(
+      (r) =>
+        r.Name === "app.devexample.com." &&
+        r.Type === "A" &&
+        r.AliasTarget?.DNSName?.includes(outputs.ALBDNSName)
+    );
+
+    expect(record).toBeDefined();
+    expect(record?.AliasTarget?.DNSName).toContain(outputs.ALBDNSName);
   });
 
   test('Public and private subnets should exist', async () => {
@@ -124,4 +147,5 @@ describe('Production CloudFormation Integration Tests', () => {
     const res = await cloudwatch.send(new DescribeAlarmsCommand({ AlarmNames: ['Production-CPU-High', 'Production-RDS-CPU-High'] }));
     expect(res.MetricAlarms?.length).toBeGreaterThanOrEqual(2);
   });
+
 });
