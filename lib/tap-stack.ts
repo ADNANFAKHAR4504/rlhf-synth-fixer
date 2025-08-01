@@ -171,7 +171,7 @@ export class TapStack extends TerraformStack {
     );
 
     const ec2Role: IamRole = new IamRole(this, 'EC2LogRole', {
-      name: `my-new-role-${nameSuffix}`,
+      name: `ec2-s3-access-role-${nameSuffix}`,
       assumeRolePolicy: JSON.stringify({
         Version: '2012-10-17',
         Statement: [
@@ -190,13 +190,13 @@ export class TapStack extends TerraformStack {
       this,
       'EC2InstanceProfile',
       {
-        name: `my-new-profile-${nameSuffix}`,
+        name: `ec2-s3-instance-profile-${nameSuffix}`,
         role: ec2Role.name,
       }
     );
 
     const ec2Policy = new IamPolicy(this, 'EC2S3LogPolicy', {
-      name: `my-new-policy-${nameSuffix}`,
+      name: `ec2-s3-log-policy-${nameSuffix}`,
       policy: JSON.stringify({
         Version: '2012-10-17',
         Statement: [
