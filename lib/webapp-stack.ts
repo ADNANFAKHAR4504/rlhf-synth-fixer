@@ -1,4 +1,5 @@
 import * as cdk from 'aws-cdk-lib';
+import { Construct } from 'constructs';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
 import * as autoscaling from 'aws-cdk-lib/aws-autoscaling';
@@ -7,17 +8,25 @@ import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as kms from 'aws-cdk-lib/aws-kms';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
-import { Construct } from 'constructs';
+import * as acm from 'aws-cdk-lib/aws-certificatemanager';
 
 export interface WebAppStackProps extends cdk.StackProps {
-  environmentSuffix?: string;
-  port: number
+  environmentSuffix: string;
+  port: number;
 }
+
+function generateUniqueBucketName(): string {
+  const timestamp = Date.now().toString(36); // base36 for compactness
+  const random = Math.random().toString(36).substring(2, 8); // 6-char random string
+  return `webserver-assets-${timestamp}-${random}`;
+}
+
 export class WebAppStack extends cdk.Stack {
-  constructor(scope: Construct, id: string, props?: WebAppStackProps) {
+  constructor(scope: Construct, id: string, props: WebAppStackProps) {
     super(scope, id, props);
 
-    // Create a VPC with public and private subnets across multiple AZs
+    const { environmentSuffix, port } = props;
+
     const vpc = new ec2.Vpc(this, 'WebAppVpc', {
       maxAzs: 3,
       subnetConfiguration: [
@@ -29,30 +38,29 @@ export class WebAppStack extends cdk.Stack {
         {
           cidrMask: 24,
           name: 'private-subnet',
-          subnetType: ec2.SubnetType.PRIVATE_WITH_NAT,
+          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS, // updated
         },
       ],
     });
 
-    // Create an S3 bucket with KMS encryption
     const encryptionKey = new kms.Key(this, 'S3EncryptionKey', {
       enableKeyRotation: true,
     });
-
+    const bucketID = generateUniqueBucketName();
     const bucket = new s3.Bucket(this, 'WebAppBucket', {
+      bucketName: `webserver-assets-${bucketID}`,
       encryption: s3.BucketEncryption.KMS,
       encryptionKey,
       versioned: true,
-      removalPolicy: cdk.RemovalPolicy.DESTROY, // NOT recommended for production code
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      autoDeleteObjects: true,
     });
 
-    // Store configuration data in SSM Parameter Store
-    const configParam = new ssm.StringParameter(this, 'ConfigParam', {
-      parameterName: '/webapp/config',
-      stringValue: JSON.stringify({ environment: 'production' }),
+    new ssm.StringParameter(this, 'ConfigParam', {
+      parameterName: `/webapp/${environmentSuffix}/config`,
+      stringValue: JSON.stringify({ environment: environmentSuffix }),
     });
 
-    // Create an IAM role for EC2 instances
     const ec2Role = new iam.Role(this, 'Ec2InstanceRole', {
       assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
       managedPolicies: [
@@ -61,24 +69,14 @@ export class WebAppStack extends cdk.Stack {
       ],
     });
 
-    // Create a security group for the EC2 instances
     const securityGroup = new ec2.SecurityGroup(this, 'InstanceSecurityGroup', {
       vpc,
       allowAllOutbound: true,
     });
 
-    securityGroup.addIngressRule(
-      ec2.Peer.anyIpv4(),
-      ec2.Port.tcp(80),
-      'Allow HTTP traffic from anywhere'
-    );
-    securityGroup.addIngressRule(
-      ec2.Peer.anyIpv4(),
-      ec2.Port.tcp(443),
-      'Allow HTTPS traffic from anywhere'
-    );
+    securityGroup.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(80), 'Allow HTTP');
+    securityGroup.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(443), 'Allow HTTPS');
 
-    // Create an Auto Scaling Group with at least two instances
     const asg = new autoscaling.AutoScalingGroup(this, 'WebAppASG', {
       vpc,
       instanceType: ec2.InstanceType.of(
@@ -89,28 +87,26 @@ export class WebAppStack extends cdk.Stack {
       role: ec2Role,
       minCapacity: 2,
       maxCapacity: 5,
-      vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_NAT },
+      vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
       securityGroup,
     });
 
-    // Create an Application Load Balancer
     const alb = new elbv2.ApplicationLoadBalancer(this, 'WebAppALB', {
       vpc,
       internetFacing: true,
-      loadBalancerName: 'WebAppALB'
     });
 
-    const listener = alb.addListener('WebAppListener', {
+    const httpListener = alb.addListener('HttpListener', {
       port: 80,
       open: true,
     });
 
-    listener.addTargets('WebAppFleet', {
-      port: 80,
+    httpListener.addTargets('HttpTargets', {
+      port,
       targets: [asg],
       healthCheck: {
         path: '/',
-        port: `${props?.port}`,
+        port: `${port}`,
         protocol: elbv2.Protocol.HTTP,
         healthyHttpCodes: '200-299',
         interval: cdk.Duration.seconds(30),
@@ -119,33 +115,28 @@ export class WebAppStack extends cdk.Stack {
         unhealthyThresholdCount: 2,
       },
     });
-
-    listener.connections.allowDefaultPortFromAnyIpv4('Open to the world');
-
-    // Redirect HTTP to HTTPS
-    listener.addAction('Default', {
-      action: alb.listeners
-    })
-    // listener.addRedirectResponse('HttpsRedirect', {
-    //   statusCode: 'HTTP_301',
-    //   protocol: 'HTTPS',
-    //   port: '443',
-    // });
-
-    // Add HTTPS listener
+    const certArn = ssm.StringParameter.valueForStringParameter(
+      this,
+      '/app/certArn'
+    );
+    const certificate = acm.Certificate.fromCertificateArn(
+      this,
+      `${environmentSuffix}`,
+      certArn
+    );
+    // Add HTTPS listener (disabled unless certs are provided)
     const httpsListener = alb.addListener('HttpsListener', {
       port: 443,
-      certificates: [
-        /* Add your certificate ARNs here */
-      ],
-      defaultAction: elbv2.ListenerAction.fixedResponse(404, {
+      // Provide actual certs before enabling
+      certificates: [certificate],
+      defaultAction: elbv2.ListenerAction.fixedResponse(200, {
         contentType: 'text/plain',
-        messageBody: 'Not Found',
+        messageBody: 'Hello World!',
       }),
     });
 
     httpsListener.addTargets('HttpsTargets', {
-      port: 80,
+      port,
       targets: [asg],
       healthCheck: {
         path: '/',
@@ -153,27 +144,36 @@ export class WebAppStack extends cdk.Stack {
       },
     });
 
-    // Enable detailed monitoring and logging
     asg.scaleOnCpuUtilization('KeepSpareCPU', {
       targetUtilizationPercent: 50,
     });
 
     new cloudwatch.Alarm(this, 'HighCPUAlarm', {
-      metric: asg.metricCpuUtilization(),
+      metric: new cloudwatch.Metric({
+        namespace: 'AWS/EC2',
+        metricName: 'CPUUtilization',
+        dimensionsMap: {
+          AutoScalingGroupName: asg.autoScalingGroupName,
+        },
+        statistic: 'Average',
+        period: cdk.Duration.minutes(5),
+      }),
       threshold: 80,
       evaluationPeriods: 2,
+      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
     });
 
-    // Output the DNS name of the load balancer
     new cdk.CfnOutput(this, 'LoadBalancerDNS', {
       value: alb.loadBalancerDnsName,
+      description: 'Load Balancer DNS'
+    });
+    new cdk.CfnOutput(this, 'VPCID', {
+      value: vpc.vpcId,
+      description: 'VPC ID'
+    });
+    new cdk.CfnOutput(this, 'S3Bucket', {
+      value: bucket.bucketName,
+      description: 'S3 Bucket ID'
     });
   }
 }
-
-// const app = new cdk.App();
-// new WebAppStack(app, 'WebAppStack', {
-//   env: {
-//     region: 'us-east-1',
-//   },
-// });
