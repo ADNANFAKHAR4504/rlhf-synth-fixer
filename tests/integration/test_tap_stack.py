@@ -13,6 +13,7 @@ EXPECTED_ENV = "Production"
 @pytest.fixture(scope="session")
 def outputs():
   base_dir = os.path.dirname(os.path.abspath(__file__))
+
   flat_outputs_path = os.path.join(
       base_dir, '..', '..', 'cfn-outputs', 'flat-outputs.json'
   )
@@ -21,20 +22,12 @@ def outputs():
     pytest.fail(f"Missing outputs file at {flat_outputs_path}")
 
   with open(flat_outputs_path, 'r', encoding='utf-8') as f:
-    flat_outputs = f.read()
-else:
-  flat_outputs = '{}'
-
-
-
-outputs = json.loads(flat_outputs)
-print("flat outputs found: flat_outputs:", flat_outputs, outputs)
-EXPECTED_ENV = "Production"
+    return json.load(f)
 
 
 @pytest.fixture(scope="session")
 def logs():
-  return boto3.client('logs')
+  return boto3.client('logs', region_name='us-east-1')
 
 
 def test_environment_tag(outputs):
