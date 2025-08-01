@@ -1,12 +1,13 @@
 """TAP Stack module for CDKTF Python infrastructure."""
 
-from cdktf import S3Backend, TerraformStack
+from cdktf import S3Backend
 from cdktf_cdktf_provider_aws.provider import AwsProvider
 from cdktf_cdktf_provider_aws.s3_bucket import S3Bucket
 from cdktf_cdktf_provider_aws.s3_bucket_server_side_encryption_configuration import (
-    S3BucketServerSideEncryptionConfigurationA,
-    S3BucketServerSideEncryptionConfigurationRuleA,
-    S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultA)
+  S3BucketServerSideEncryptionConfigurationA,
+  S3BucketServerSideEncryptionConfigurationRuleA,
+  S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultA
+)
 from cdktf_cdktf_provider_aws.s3_bucket_versioning import S3BucketVersioningA
 from constructs import Construct
 
@@ -59,8 +60,8 @@ class TapStack(Construct):
       encrypt=True,
     )
 
-    # Add S3 state locking using escape hatch
-    self.add_override("terraform.backend.s3.use_lockfile", True)
+    # Note: S3 backend locking is handled by the backend configuration
+    # The add_override method is only available on TerraformStack, not Construct
 
     # Instantiate the enterprise security stack for primary region first
     self.primary_security_stack = EnterpriseSecurityStack(
