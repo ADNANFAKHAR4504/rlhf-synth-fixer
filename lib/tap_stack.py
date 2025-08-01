@@ -31,6 +31,7 @@ from cdktf_cdktf_provider_aws.s3_bucket_public_access_block import S3BucketPubli
 from cdktf_cdktf_provider_aws.dynamodb_table import DynamodbTable
 from cdktf_cdktf_provider_aws.data_aws_availability_zones import DataAwsAvailabilityZones
 from cdktf_cdktf_provider_aws.data_aws_caller_identity import DataAwsCallerIdentity
+from cdktf_cdktf_provider_aws.data_aws_ami import DataAwsAmi
 
 
 class TapStack(TerraformStack):
@@ -369,10 +370,22 @@ class TapStack(TerraformStack):
     """
 
     user_data = base64.b64encode(raw_user_data.encode("utf-8")).decode("utf-8")
+
+    self.amazon_linux_ami = DataAwsAmi(self, "amazon-linux-2",
+      most_recent=True,
+      owners=["amazon"],
+      filter=[{
+        "name": "name",
+        "values": ["amzn2-ami-hvm-*-x86_64-gp2"]
+      }, {
+        "name": "virtualization-type",
+        "values": ["hvm"]
+      }]
+    )
     
     self.launch_template = LaunchTemplate(self, "launch-template",
       name="asg-launch-template",
-      image_id="ami-03a6eaae9938c858c",  # Amazon Linux 2 AMI
+      image_id=self.amazon_linux_ami.id,  # Amazon Linux 2 AMI
       instance_type=self.instance_type,
       vpc_security_group_ids=[self.instance_security_group.id],
       iam_instance_profile={
