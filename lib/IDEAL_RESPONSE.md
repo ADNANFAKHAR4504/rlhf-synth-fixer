@@ -1,6 +1,4 @@
-```yaml
-"""
-inventory_serverless.py
+# Serverless E-Commerce Inventory Management System
 
 This module defines the InventoryServerlessStack class for creating a complete
 serverless e-commerce inventory management system using Pulumi and AWS.
@@ -12,7 +10,8 @@ The stack includes:
 - SNS topic for inventory alerts
 - IAM roles and policies with least privilege
 - CloudWatch logging for monitoring
-"""
+
+``````python
 
 import json
 from typing import Optional

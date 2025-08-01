@@ -1,4 +1,4 @@
-```yaml
+``````python
 import pulumi
 import pulumi_aws as aws
 import json
