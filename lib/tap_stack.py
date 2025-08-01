@@ -42,13 +42,13 @@ class TapStack(TerraformStack):
       enable_dns_support=True,
       enable_dns_hostnames=True,
       tags={
-        "Name": f"tap-{environment_suffix}-vpc"
+        "Name": f"iac-task-{environment_suffix}-vpc"
       }
     )
 
     igw = InternetGateway(self, "tap_igw",
       vpc_id=vpc.id,
-      tags={"Name": f"tap-{environment_suffix}-igw"}
+      tags={"Name": f"iac-task-{environment_suffix}-igw"}
     )
 
     azs = [f"{aws_region}a", f"{aws_region}b"]
@@ -64,7 +64,7 @@ class TapStack(TerraformStack):
         cidr_block=public_subnet_cidrs[i],
         availability_zone=azs[i],
         map_public_ip_on_launch=True,
-        tags={"Name": f"tap-{environment_suffix}-public-{i+1}"}
+        tags={"Name": f"iac-task-{environment_suffix}-public-{i+1}"}
       )
       self.public_subnets.append(pub)
 
@@ -72,13 +72,13 @@ class TapStack(TerraformStack):
         vpc_id=vpc.id,
         cidr_block=private_subnet_cidrs[i],
         availability_zone=azs[i],
-        tags={"Name": f"tap-{environment_suffix}-private-{i+1}"}
+        tags={"Name": f"iac-task-{environment_suffix}-private-{i+1}"}
       )
       self.private_subnets.append(priv)
 
     rt = RouteTable(self, "tap_public_rt",
       vpc_id=vpc.id,
-      tags={"Name": f"tap-{environment_suffix}-public-rt"}
+      tags={"Name": f"iac-task-{environment_suffix}-public-rt"}
     )
 
     Route(self, "tap_default_route",
