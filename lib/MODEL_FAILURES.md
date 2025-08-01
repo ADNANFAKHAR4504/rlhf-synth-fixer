@@ -12,12 +12,10 @@ The most critical failure is a **circular reference** within the `EC2SecurityGro
 <!-- end list -->
 
 ```json
-// FAULTY CODE (Initial Response)
 "EC2SecurityGroup": {
   "Type": "AWS::EC2::SecurityGroup",
   "Properties": {
     "SecurityGroupIngress": [
-      // ... other rules
       {
         "IpProtocol": "-1",
         "SourceSecurityGroupId": { "Fn::GetAtt": [ "EC2SecurityGroup", "GroupId" ] }
@@ -55,7 +53,6 @@ The tagging in the initial template is incomplete, making resource identificatio
 <!-- end list -->
 
 ```json
-// MODERN METHOD (Ideal Response)
 "ImageId": {
   "Fn::Sub": "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}"
 }
