@@ -37,7 +37,9 @@ describe('TapStack CloudFormation Template', () => {
     test('RDS instance should use db.t3.micro and reference SecretsManager for password', () => {
       expect(template.Resources.ProdRDSInstance).toBeDefined();
       expect(template.Resources.ProdRDSInstance.Properties.DBInstanceClass).toBe('db.t3.micro');
-      expect(template.Resources.ProdRDSInstance.Properties.MasterUserPassword).toMatchObject({ Ref: 'RDSMasterPassword' });
+      expect(template.Resources.ProdRDSInstance.Properties.MasterUserPassword).toMatchObject({ 
+        'Fn::Sub': '{{resolve:secretsmanager:${RDSMasterPassword}:SecretString:password}}' 
+      });
       expect(template.Resources.RDSMasterPassword).toBeDefined();
     });
   });
