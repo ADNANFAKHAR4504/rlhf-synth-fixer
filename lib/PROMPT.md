@@ -11,13 +11,13 @@
 >    * Use **AWS CodeDeploy** to deploy to **EC2 instances**.
 > 2. The deployment environment should:
 >
->    * Be hosted inside a **VPC spanning two Availability Zones** in **`us-west-2`**.
+>    * Be hosted inside a **VPC spanning two Availability Zones** in **`us-east-1`**.
 >    * Include subnets, routing tables, NAT gateway, and Internet gateway as required for CI/CD connectivity.
 >    * Deploy EC2 instances as **CodeDeploy targets**, ideally across both AZs.
 > 3. All resources must:
 >
 >    * Use the **prefix `Corp-`** in their names to follow company naming conventions.
->    * Be provisioned in **`us-west-2`**.
+>    * Be provisioned in **`us-east-1`**.
 > 4. Template format:
 >
 >    * Use **JSON**, not YAML.

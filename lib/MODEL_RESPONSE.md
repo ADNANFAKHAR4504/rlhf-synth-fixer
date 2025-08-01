@@ -57,7 +57,7 @@
 
   "Mappings": {
     "RegionMap": {
-      "us-west-2": {
+              "us-east-1": {
         "AMI": "ami-0c02fb55956c7d316"
       }
     }
@@ -106,7 +106,7 @@
       "Properties": {
         "VpcId": {"Ref": "CorpVPC"},
         "CidrBlock": "10.0.1.0/24",
-        "AvailabilityZone": "us-west-2a",
+        "AvailabilityZone": "us-east-1a",
         "MapPublicIpOnLaunch": true,
         "Tags": [
           {
@@ -122,7 +122,7 @@
       "Properties": {
         "VpcId": {"Ref": "CorpVPC"},
         "CidrBlock": "10.0.2.0/24",
-        "AvailabilityZone": "us-west-2b",
+        "AvailabilityZone": "us-east-1b",
         "MapPublicIpOnLaunch": true,
         "Tags": [
           {
@@ -138,7 +138,7 @@
       "Properties": {
         "VpcId": {"Ref": "CorpVPC"},
         "CidrBlock": "10.0.3.0/24",
-        "AvailabilityZone": "us-west-2a",
+        "AvailabilityZone": "us-east-1a",
         "Tags": [
           {
             "Key": "Name",
@@ -153,7 +153,7 @@
       "Properties": {
         "VpcId": {"Ref": "CorpVPC"},
         "CidrBlock": "10.0.4.0/24",
-        "AvailabilityZone": "us-west-2b",
+        "AvailabilityZone": "us-east-1b",
         "Tags": [
           {
             "Key": "Name",
@@ -425,7 +425,7 @@
                     "logs:CreateLogStream",
                     "logs:PutLogEvents"
                   ],
-                  "Resource": {"Fn::Sub": "arn:aws:logs:us-west-2:${AWS::AccountId}:log-group:/aws/codebuild/${ProjectName}*"}
+                  "Resource": {"Fn::Sub": "arn:aws:logs:us-east-1:${AWS::AccountId}:log-group:/aws/codebuild/${ProjectName}*"}
                 },
                 {
                   "Effect": "Allow",

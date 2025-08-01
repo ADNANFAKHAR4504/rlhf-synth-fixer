@@ -162,14 +162,14 @@ This document outlines the failures and issues encountered during the developmen
 
 **Resolution:**
 - **Removed comment resources**: Eliminated all `_Comment_*` resources that violated naming conventions
-- **Fixed availability zones**: Replaced hardcoded AZs (`us-west-2a`, `us-west-2b`) with dynamic selection using `Fn::Select` and `Fn::GetAZs`
+- **Fixed availability zones**: Replaced hardcoded AZs (`us-east-1a`, `us-east-1b`) with dynamic selection using `Fn::Select` and `Fn::GetAZs`
 - **Fixed S3 bucket naming**: Simplified bucket name to remove region suffix that caused pattern mismatch
 - **Template structure**: Cleaned up template structure to eliminate cfn-lint processing errors
 
 **Technical Details:**
 ```json
 // Before (causing errors):
-"AvailabilityZone": "us-west-2a"
+"AvailabilityZone": "us-east-1a"
 
 // After (fixed):
 "AvailabilityZone": {
@@ -309,6 +309,8 @@ This document outlines the failures and issues encountered during the developmen
 | S3 Bucket Naming Pattern Violation | ✅ RESOLVED | Updated to lowercase naming convention |
 | Integration Test Improvements | ✅ RESOLVED | Enhanced CloudFormation-specific tests |
 | **Deploy Stage Configuration Issues** | ✅ **RESOLVED** | **Fixed CodePipeline deploy stage configuration** |
+| **IAM Policy ARN Format Error** | ✅ **RESOLVED** | **Fixed IAM policy resources to use proper ARN format** |
+| **CodeDeploy Deployment Configuration Error** | ✅ **RESOLVED** | **Fixed deployment configuration for us-east-1 region** |
 
 ## **Lessons Learned**
 
@@ -325,6 +327,72 @@ This document outlines the failures and issues encountered during the developmen
 11. **Deploy Stage Validation**: **Always verify CodePipeline deploy stage configuration, especially resource references and permissions**
 12. **Resource Dependencies**: **Use DependsOn attributes to ensure proper resource creation order**
 13. **EC2 Permissions**: **Ensure EC2 instances have all necessary permissions for CodeDeploy and SSM operations**
+
+## **Issue 13: IAM Policy ARN Format Error**
+
+**Severity: HIGH**
+
+**Problem:** CloudFormation deployment failed with IAM policy resource format errors during stack creation.
+
+**Symptoms:**
+- Stack creation failed with `UPDATE_ROLLBACK_COMPLETE` status
+- IAM role creation failed with error: `Resource corp-microservices-pipeline-artifacts-dev-718240086340/* must be in ARN format or "*"`
+- Affected resources: `CorpEC2InstanceRole`, `CorpCodeBuildServiceRole`, `CorpCodePipelineServiceRole`
+
+**Root Cause:** 
+The IAM policies were using `Fn::Sub` with bucket names like `${CorpArtifactStore}/*`, which resolved to bucket names instead of proper ARN format. AWS IAM requires resources to be in ARN format or "*".
+
+**Resolution:**
+- Updated all IAM policy resources to use proper ARN format: `arn:aws:s3:::${CorpArtifactStore}/*`
+- Fixed in three IAM roles:
+  - `CorpEC2InstanceRole` - S3 access policy
+  - `CorpCodeBuildServiceRole` - S3 access policy  
+  - `CorpCodePipelineServiceRole` - S3 access policy
+
+**Code Changes:**
+```json
+// Before (causing error):
+"Resource": {
+  "Fn::Sub": "${CorpArtifactStore}/*"
+}
+
+// After (fixed):
+"Resource": {
+  "Fn::Sub": "arn:aws:s3:::${CorpArtifactStore}/*"
+}
+```
+
+14. **IAM Policy ARN Format**: **Always use proper ARN format in IAM policy resources, not just bucket names**
+
+## **Issue 14: CodeDeploy Deployment Configuration Error**
+
+**Severity: HIGH**
+
+**Problem:** CloudFormation deployment failed with CodeDeploy deployment configuration error when switching from us-west-2 to us-east-1 region.
+
+**Symptoms:**
+- Stack creation failed with error: `No deployment configuration found for name: CodeDeployDefault.AllInstancesOneAtATime`
+- Error Code: `DeploymentConfigDoesNotExistException`
+- Affected resource: `CorpCodeDeployDeploymentGroup`
+
+**Root Cause:** 
+The deployment configuration `CodeDeployDefault.AllInstancesOneAtATime` is not available in the `us-east-1` region. Different AWS regions may have different available deployment configurations.
+
+**Resolution:**
+- Updated deployment configuration from `CodeDeployDefault.AllInstancesOneAtATime` to `CodeDeployDefault.OneAtATime`
+- Updated corresponding unit test to match the new configuration
+- Verified that `CodeDeployDefault.OneAtATime` is available in `us-east-1`
+
+**Code Changes:**
+```json
+// Before (causing error in us-east-1):
+"DeploymentConfigName": "CodeDeployDefault.AllInstancesOneAtATime"
+
+// After (fixed):
+"DeploymentConfigName": "CodeDeployDefault.OneAtATime"
+```
+
+15. **Region-Specific Deployment Configurations**: **Always verify deployment configurations are available in the target region**
 
 ## **Final Status - ALL ISSUES RESOLVED**
 

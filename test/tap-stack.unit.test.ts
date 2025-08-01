@@ -340,7 +340,7 @@ describe('TapStack CloudFormation Template', () => {
     test('CodeDeploy should have correct deployment configuration', () => {
       const codedeploy = template.Resources.CorpCodeDeployDeploymentGroup;
       
-      expect(codedeploy.Properties.DeploymentConfigName).toBe('CodeDeployDefault.AllInstancesOneAtATime');
+      expect(codedeploy.Properties.DeploymentConfigName).toBe('CodeDeployDefault.OneAtATime');
       expect(codedeploy.Properties.AutoRollbackConfiguration.Enabled).toBe(true);
     });
   });

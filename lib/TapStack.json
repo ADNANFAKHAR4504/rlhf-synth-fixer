@@ -61,7 +61,7 @@
     "GitHubToken": {
       "Type": "String",
       "NoEcho": true,
-      "Default": "{{resolve:secretsmanager:arn:aws:secretsmanager:us-west-2:718240086340:secret:turing/github_token-291160-m77BuW}}",
+      "Default": "{{resolve:secretsmanager:arn:aws:secretsmanager:us-east-1:718240086340:secret:turing/github-token-291160-VLtRP9}}",
       "Description": "GitHub personal access token for CodePipeline integration"
     },
     "InstanceType": {
@@ -101,7 +101,7 @@
   },
   "Mappings": {
     "RegionMap": {
-      "us-west-2": {
+      "us-east-1": {
         "AMI": "ami-0c02fb55956c7d316"
       }
     }
@@ -470,9 +470,6 @@
     "CorpCodePipelineServiceRole": {
       "Type": "AWS::IAM::Role",
       "Properties": {
-        "RoleName": {
-          "Fn::Sub": "${ProjectName}-codepipeline-role"
-        },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
           "Statement": [
@@ -501,7 +498,7 @@
                   ],
                   "Resource": [
                     {
-                      "Fn::Sub": "${CorpArtifactStore}/*"
+                      "Fn::Sub": "arn:aws:s3:::${CorpArtifactStore}/*"
                     },
                     {
                       "Fn::GetAtt": [
@@ -545,9 +542,6 @@
     "CorpCodeBuildServiceRole": {
       "Type": "AWS::IAM::Role",
       "Properties": {
-        "RoleName": {
-          "Fn::Sub": "${ProjectName}-codebuild-role"
-        },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
           "Statement": [
@@ -574,7 +568,7 @@
                     "logs:PutLogEvents"
                   ],
                   "Resource": {
-                    "Fn::Sub": "arn:aws:logs:us-west-2:${AWS::AccountId}:log-group:/aws/codebuild/${ProjectName}*"
+                    "Fn::Sub": "arn:aws:logs:us-east-1:${AWS::AccountId}:log-group:/aws/codebuild/${ProjectName}*"
                   }
                 },
                 {
@@ -585,7 +579,7 @@
                     "s3:PutObject"
                   ],
                   "Resource": {
-                    "Fn::Sub": "${CorpArtifactStore}/*"
+                    "Fn::Sub": "arn:aws:s3:::${CorpArtifactStore}/*"
                   }
                 }
               ]
@@ -597,9 +591,6 @@
     "CorpCodeDeployServiceRole": {
       "Type": "AWS::IAM::Role",
       "Properties": {
-        "RoleName": {
-          "Fn::Sub": "${ProjectName}-codedeploy-role"
-        },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
           "Statement": [
@@ -620,9 +611,6 @@
     "CorpEC2InstanceRole": {
       "Type": "AWS::IAM::Role",
       "Properties": {
-        "RoleName": {
-          "Fn::Sub": "${ProjectName}-ec2-role"
-        },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
           "Statement": [
@@ -649,7 +637,7 @@
                   ],
                   "Resource": [
                     {
-                      "Fn::Sub": "${CorpArtifactStore}/*"
+                      "Fn::Sub": "arn:aws:s3:::${CorpArtifactStore}/*"
                     },
                     {
                       "Fn::GetAtt": [
@@ -683,9 +671,6 @@
     "CorpEC2InstanceProfile": {
       "Type": "AWS::IAM::InstanceProfile",
       "Properties": {
-        "InstanceProfileName": {
-          "Fn::Sub": "${ProjectName}-ec2-profile"
-        },
         "Roles": [
           {
             "Ref": "CorpEC2InstanceRole"
@@ -931,7 +916,7 @@
             "Arn"
           ]
         },
-        "DeploymentConfigName": "CodeDeployDefault.AllInstancesOneAtATime",
+        "DeploymentConfigName": "CodeDeployDefault.OneAtATime",
         "AutoScalingGroups": [
           {
             "Ref": "CorpAutoScalingGroup"

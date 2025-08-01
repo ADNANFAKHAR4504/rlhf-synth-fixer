@@ -9,7 +9,7 @@ The solution implements a comprehensive CI/CD pipeline with the following compon
 ### Infrastructure Components
 
 1. **VPC and Networking**
-   - VPC spanning two Availability Zones in us-west-2
+   - VPC spanning two Availability Zones in us-east-1
    - Public and private subnets in each AZ
    - Internet Gateway and NAT Gateway for connectivity
    - Route tables and security groups
@@ -68,7 +68,7 @@ The pipeline supports both manual and automated triggers:
 
 1. **Prepare Prerequisites:**
    - Create GitHub personal access token with repo permissions
-   - Create EC2 Key Pair in us-west-2 region
+   - Create EC2 Key Pair in us-east-1 region
    - Ensure CodeDeploy agent is installed on target instances
 
 2. **Deploy Template:**
