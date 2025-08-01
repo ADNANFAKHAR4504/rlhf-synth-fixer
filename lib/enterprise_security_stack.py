@@ -35,11 +35,13 @@ try:
 except ImportError:
   # Fallback if VpcFlowLog is not available in this version
   VpcFlowLog = None
-from constructs import Construct
-from cdktf_cdktf_provider_aws.secretsmanager_secret import SecretsmanagerSecret
-from cdktf_cdktf_provider_aws.secretsmanager_secret_version import SecretsmanagerSecretVersion
 import secrets
 import string
+
+from cdktf_cdktf_provider_aws.secretsmanager_secret import SecretsmanagerSecret
+from cdktf_cdktf_provider_aws.secretsmanager_secret_version import \
+    SecretsmanagerSecretVersion
+from constructs import Construct
 
 
 class EnterpriseSecurityStack(Construct):  # pylint: disable=too-many-instance-attributes
