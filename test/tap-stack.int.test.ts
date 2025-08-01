@@ -18,7 +18,7 @@ describe('TapStack Integration Tests', () => {
   it('has a public subnet', () => {
     expect(synthObj.resource.aws_subnet.PublicSubnet).toEqual(
       expect.objectContaining({
-        cidr_block: '172.16.1.0/24',
+        cidr_block: '10.0.1.0/24',
         map_public_ip_on_launch: true,
       })
     );
