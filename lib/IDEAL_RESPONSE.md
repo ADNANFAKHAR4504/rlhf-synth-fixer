@@ -1,45 +1,36 @@
 ```json
 {
   "AWSTemplateFormatVersion": "2010-09-09",
-  "Description": "Production-grade multi-AZ networking and compute environment with VPC, subnets, EC2 instances, security groups, and VPC Flow Logs",
-
+  "Description": "AWS CloudFormation template to create a foundational, multi-AZ networking and compute environment in us-east-1.",
   "Parameters": {
     "ProjectName": {
       "Type": "String",
       "Default": "MyWebApp",
-      "Description": "Project name used as prefix for resource naming and tagging",
-      "MinLength": 2,
-      "MaxLength": 32,
-      "AllowedPattern": "^[a-zA-Z][a-zA-Z0-9-]*$",
-      "ConstraintDescription": "Must begin with a letter and contain only alphanumeric characters and hyphens"
+      "Description": "Prefix for resource naming."
     },
     "SshCidrBlock": {
       "Type": "String",
       "Default": "203.0.113.0/24",
-      "Description": "CIDR block from which SSH access is permitted",
-      "AllowedPattern": "^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\\/([0-9]|[1-2][0-9]|3[0-2]))$",
-      "ConstraintDescription": "Must be a valid CIDR block (e.g., 10.0.0.0/8)"
+      "Description": "CIDR block for SSH access."
     },
     "InstanceType": {
       "Type": "String",
       "Default": "t3.micro",
-      "Description": "EC2 instance type for all instances",
-      "AllowedValues": [
-        "t3.micro", "t3.small", "t3.medium", "t3.large",
-        "t2.micro", "t2.small", "t2.medium", "t2.large",
-        "m5.large", "m5.xlarge", "m5.2xlarge"
-      ],
-      "ConstraintDescription": "Must be a valid EC2 instance type"
+      "Description": "EC2 instance type."
+    },
+    "LatestAmiId": {
+      "Type": "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>",
+      "Default": "/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2",
+      "Description": "AMI ID for the EC2 instances. Fetches the latest Amazon Linux 2 AMI by default."
     }
   },
-
   "Resources": {
     "VPC": {
       "Type": "AWS::EC2::VPC",
       "Properties": {
         "CidrBlock": "10.0.0.0/16",
-        "EnableDnsHostnames": true,
         "EnableDnsSupport": true,
+        "EnableDnsHostnames": true,
         "Tags": [
           {
             "Key": "Name",
@@ -50,7 +41,82 @@
         ]
       }
     },
-
+    "PublicSubnet": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "CidrBlock": "10.0.1.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "MapPublicIpOnLaunch": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${ProjectName}-Public-Subnet-1a"
+            }
+          }
+        ]
+      }
+    },
+    "PrivateSubnetA": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "CidrBlock": "10.0.2.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            1,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${ProjectName}-Private-Subnet-A"
+            }
+          }
+        ]
+      }
+    },
+    "PrivateSubnetB": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "CidrBlock": "10.0.3.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            2,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${ProjectName}-Private-Subnet-B"
+            }
+          }
+        ]
+      }
+    },
     "InternetGateway": {
       "Type": "AWS::EC2::InternetGateway",
       "Properties": {
@@ -64,186 +130,30 @@
         ]
       }
     },
-
-    "InternetGatewayAttachment": {
+    "VPCGatewayAttachment": {
       "Type": "AWS::EC2::VPCGatewayAttachment",
       "Properties": {
-        "InternetGatewayId": {
-          "Ref": "InternetGateway"
-        },
         "VpcId": {
           "Ref": "VPC"
+        },
+        "InternetGatewayId": {
+          "Ref": "InternetGateway"
         }
       }
     },
-
-    "PublicSubnet": {
-      "Type": "AWS::EC2::Subnet",
-      "Properties": {
-        "VpcId": {
-          "Ref": "VPC"
-        },
-        "AvailabilityZone": {
-          "Fn::Select": [
-            0,
-            {
-              "Fn::GetAZs": ""
-            }
-          ]
-        },
-        "CidrBlock": "10.0.1.0/24",
-        "MapPublicIpOnLaunch": true,
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": [
-                "${ProjectName}-Public-Subnet-${AZ}",
-                {
-                  "AZ": {
-                    "Fn::Select": [
-                      2,
-                      {
-                        "Fn::Split": [
-                          "",
-                          {
-                            "Fn::Select": [
-                              0,
-                              {
-                                "Fn::GetAZs": ""
-                              }
-                            ]
-                          }
-                        ]
-                      }
-                    ]
-                  }
-                }
-              ]
-            }
-          }
-        ]
-      }
-    },
-
-    "PrivateSubnetA": {
-      "Type": "AWS::EC2::Subnet",
-      "Properties": {
-        "VpcId": {
-          "Ref": "VPC"
-        },
-        "AvailabilityZone": {
-          "Fn::Select": [
-            1,
-            {
-              "Fn::GetAZs": ""
-            }
-          ]
-        },
-        "CidrBlock": "10.0.2.0/24",
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": [
-                "${ProjectName}-Private-Subnet-A-${AZ}",
-                {
-                  "AZ": {
-                    "Fn::Select": [
-                      2,
-                      {
-                        "Fn::Split": [
-                          "",
-                          {
-                            "Fn::Select": [
-                              1,
-                              {
-                                "Fn::GetAZs": ""
-                              }
-                            ]
-                          }
-                        ]
-                      }
-                    ]
-                  }
-                }
-              ]
-            }
-          }
-        ]
-      }
-    },
-
-    "PrivateSubnetB": {
-      "Type": "AWS::EC2::Subnet",
-      "Properties": {
-        "VpcId": {
-          "Ref": "VPC"
-        },
-        "AvailabilityZone": {
-          "Fn::Select": [
-            2,
-            {
-              "Fn::GetAZs": ""
-            }
-          ]
-        },
-        "CidrBlock": "10.0.3.0/24",
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": [
-                "${ProjectName}-Private-Subnet-B-${AZ}",
-                {
-                  "AZ": {
-                    "Fn::Select": [
-                      2,
-                      {
-                        "Fn::Split": [
-                          "",
-                          {
-                            "Fn::Select": [
-                              2,
-                              {
-                                "Fn::GetAZs": ""
-                              }
-                            ]
-                          }
-                        ]
-                      }
-                    ]
-                  }
-                }
-              ]
-            }
-          }
-        ]
-      }
-    },
-
-    "NATGatewayEIP": {
+    "ElasticIP": {
       "Type": "AWS::EC2::EIP",
-      "DependsOn": "InternetGatewayAttachment",
+      "DependsOn": "InternetGateway",
       "Properties": {
-        "Domain": "vpc",
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "${ProjectName}-NAT-EIP"
-            }
-          }
-        ]
+        "Domain": "vpc"
       }
     },
-
     "NATGateway": {
       "Type": "AWS::EC2::NatGateway",
       "Properties": {
         "AllocationId": {
           "Fn::GetAtt": [
-            "NATGatewayEIP",
+            "ElasticIP",
             "AllocationId"
           ]
         },
@@ -254,13 +164,12 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "${ProjectName}-NAT-Gateway"
+              "Fn::Sub": "${ProjectName}-NATGateway"
             }
           }
         ]
       }
     },
-
     "PublicRouteTable": {
       "Type": "AWS::EC2::RouteTable",
       "Properties": {
@@ -277,33 +186,6 @@
         ]
       }
     },
-
-    "DefaultPublicRoute": {
-      "Type": "AWS::EC2::Route",
-      "DependsOn": "InternetGatewayAttachment",
-      "Properties": {
-        "RouteTableId": {
-          "Ref": "PublicRouteTable"
-        },
-        "DestinationCidrBlock": "0.0.0.0/0",
-        "GatewayId": {
-          "Ref": "InternetGateway"
-        }
-      }
-    },
-
-    "PublicSubnetRouteTableAssociation": {
-      "Type": "AWS::EC2::SubnetRouteTableAssociation",
-      "Properties": {
-        "RouteTableId": {
-          "Ref": "PublicRouteTable"
-        },
-        "SubnetId": {
-          "Ref": "PublicSubnet"
-        }
-      }
-    },
-
     "PrivateRouteTable": {
       "Type": "AWS::EC2::RouteTable",
       "Properties": {
@@ -320,8 +202,20 @@
         ]
       }
     },
-
-    "DefaultPrivateRoute": {
+    "PublicRoute": {
+      "Type": "AWS::EC2::Route",
+      "DependsOn": "VPCGatewayAttachment",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        },
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "GatewayId": {
+          "Ref": "InternetGateway"
+        }
+      }
+    },
+    "PrivateRoute": {
       "Type": "AWS::EC2::Route",
       "Properties": {
         "RouteTableId": {
@@ -333,38 +227,43 @@
         }
       }
     },
-
+    "PublicRouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "PublicSubnet"
+        },
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        }
+      }
+    },
     "PrivateSubnetARouteTableAssociation": {
       "Type": "AWS::EC2::SubnetRouteTableAssociation",
       "Properties": {
-        "RouteTableId": {
-          "Ref": "PrivateRouteTable"
-        },
         "SubnetId": {
           "Ref": "PrivateSubnetA"
+        },
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable"
         }
       }
     },
-
     "PrivateSubnetBRouteTableAssociation": {
       "Type": "AWS::EC2::SubnetRouteTableAssociation",
       "Properties": {
-        "RouteTableId": {
-          "Ref": "PrivateRouteTable"
-        },
         "SubnetId": {
           "Ref": "PrivateSubnetB"
+        },
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable"
         }
       }
     },
-
     "EC2SecurityGroup": {
       "Type": "AWS::EC2::SecurityGroup",
       "Properties": {
-        "GroupName": {
-          "Fn::Sub": "${ProjectName}-EC2-Security-Group"
-        },
-        "GroupDescription": "Security group for EC2 instances allowing SSH and intra-group communication",
+        "GroupDescription": "Enable SSH access and internal communication",
         "VpcId": {
           "Ref": "VPC"
         },
@@ -375,35 +274,20 @@
             "ToPort": 22,
             "CidrIp": {
               "Ref": "SshCidrBlock"
-            },
-            "Description": "SSH access from specified CIDR block"
-          },
-          {
-            "IpProtocol": "-1",
-            "SourceSecurityGroupId": {
-              "Ref": "AWS::NoValue"
             }
-          }
-        ],
-        "SecurityGroupEgress": [
-          {
-            "IpProtocol": "-1",
-            "CidrIp": "0.0.0.0/0",
-            "Description": "All outbound traffic"
           }
         ],
         "Tags": [
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "${ProjectName}-EC2-Security-Group"
+              "Fn::Sub": "${ProjectName}-SG"
             }
           }
         ]
       }
     },
-
-    "EC2SecurityGroupSelfReferenceRule": {
+    "EC2SecurityGroupSelfIngress": {
       "Type": "AWS::EC2::SecurityGroupIngress",
       "Properties": {
         "GroupId": {
@@ -412,19 +296,17 @@
         "IpProtocol": "-1",
         "SourceSecurityGroupId": {
           "Ref": "EC2SecurityGroup"
-        },
-        "Description": "Allow all traffic from instances in the same security group"
+        }
       }
     },
-
     "PublicEC2Instance": {
       "Type": "AWS::EC2::Instance",
       "Properties": {
-        "ImageId": {
-          "Fn::Sub": "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}"
-        },
         "InstanceType": {
           "Ref": "InstanceType"
+        },
+        "ImageId": {
+          "Ref": "LatestAmiId"
         },
         "SubnetId": {
           "Ref": "PublicSubnet"
@@ -444,15 +326,14 @@
         ]
       }
     },
-
     "PrivateEC2InstanceA": {
       "Type": "AWS::EC2::Instance",
       "Properties": {
-        "ImageId": {
-          "Fn::Sub": "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}"
-        },
         "InstanceType": {
           "Ref": "InstanceType"
+        },
+        "ImageId": {
+          "Ref": "LatestAmiId"
         },
         "SubnetId": {
           "Ref": "PrivateSubnetA"
@@ -472,15 +353,14 @@
         ]
       }
     },
-
     "PrivateEC2InstanceB": {
       "Type": "AWS::EC2::Instance",
       "Properties": {
-        "ImageId": {
-          "Fn::Sub": "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}"
-        },
         "InstanceType": {
           "Ref": "InstanceType"
+        },
+        "ImageId": {
+          "Ref": "LatestAmiId"
         },
         "SubnetId": {
           "Ref": "PrivateSubnetB"
@@ -500,8 +380,35 @@
         ]
       }
     },
-
-    "VPCFlowLogsRole": {
+    "VPCFlowLogsCloudWatchLogsLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": {
+          "Fn::Sub": "/aws/vpcflowlogs/${VPC}/FlowLogs"
+        },
+        "RetentionInDays": 7
+      }
+    },
+    "VPCFlowLogs": {
+      "Type": "AWS::EC2::FlowLog",
+      "Properties": {
+        "ResourceId": {
+          "Ref": "VPC"
+        },
+        "ResourceType": "VPC",
+        "TrafficType": "ALL",
+        "LogGroupName": {
+          "Ref": "VPCFlowLogsCloudWatchLogsLogGroup"
+        },
+        "DeliverLogsPermissionArn": {
+          "Fn::GetAtt": [
+            "VPCFlowLogsCloudWatchLogsRole",
+            "Arn"
+          ]
+        }
+      }
+    },
+    "VPCFlowLogsCloudWatchLogsRole": {
       "Type": "AWS::IAM::Role",
       "Properties": {
         "AssumeRolePolicyDocument": {
@@ -510,15 +417,19 @@
             {
               "Effect": "Allow",
               "Principal": {
-                "Service": "vpc-flow-logs.amazonaws.com"
+                "Service": [
+                  "vpc-flow-logs.amazonaws.com"
+                ]
               },
-              "Action": "sts:AssumeRole"
+              "Action": [
+                "sts:AssumeRole"
+              ]
             }
           ]
         },
         "Policies": [
           {
-            "PolicyName": "flowlogsDeliveryRolePolicy",
+            "PolicyName": "VPCFlowLogsPolicy",
             "PolicyDocument": {
               "Version": "2012-10-17",
               "Statement": [
@@ -531,75 +442,17 @@
                     "logs:DescribeLogGroups",
                     "logs:DescribeLogStreams"
                   ],
-                  "Resource": "*"
+                  "Resource": [
+                    "*"
+                  ]
                 }
               ]
-            }
-          }
-        ],
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "${ProjectName}-VPC-FlowLogs-Role"
-            }
-          }
-        ]
-      }
-    },
-
-    "VPCFlowLogsGroup": {
-      "Type": "AWS::Logs::LogGroup",
-      "Properties": {
-        "LogGroupName": {
-          "Fn::Sub": "/aws/vpc/flowlogs/${ProjectName}"
-        },
-        "RetentionInDays": 14,
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "${ProjectName}-VPC-FlowLogs-Group"
-            }
-          }
-        ]
-      }
-    },
-
-    "VPCFlowLog": {
-      "Type": "AWS::EC2::FlowLog",
-      "Properties": {
-        "DeliverLogsPermissionArn": {
-          "Fn::GetAtt": [
-            "VPCFlowLogsRole",
-            "Arn"
-          ]
-        },
-        "LogDestination": {
-          "Fn::GetAtt": [
-            "VPCFlowLogsGroup",
-            "Arn"
-          ]
-        },
-        "LogDestinationType": "cloud-watch-logs",
-        "LogFormat": "${version} ${account-id} ${interface-id} ${srcaddr} ${dstaddr} ${srcport} ${dstport} ${protocol} ${packets} ${bytes} ${windowstart} ${windowend} ${action} ${flowlogstatus}",
-        "ResourceId": {
-          "Ref": "VPC"
-        },
-        "ResourceType": "VPC",
-        "TrafficType": "ALL",
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "${ProjectName}-VPC-FlowLog"
             }
           }
         ]
       }
     }
   },
-
   "Outputs": {
     "VPCId": {
       "Description": "ID of the VPC",
@@ -608,7 +461,7 @@
       },
       "Export": {
         "Name": {
-          "Fn::Sub": "${AWS::StackName}-VPC-ID"
+          "Fn::Sub": "${ProjectName}-VPCId"
         }
       }
     },
@@ -619,62 +472,18 @@
       },
       "Export": {
         "Name": {
-          "Fn::Sub": "${AWS::StackName}-Public-Instance-ID"
+          "Fn::Sub": "${ProjectName}-PublicInstanceId"
         }
       }
     },
     "NATGatewayEIP": {
-      "Description": "Elastic IP address of the NAT Gateway",
+      "Description": "Elastic IP of the NAT Gateway",
       "Value": {
-        "Ref": "NATGatewayEIP"
+        "Ref": "ElasticIP"
       },
       "Export": {
         "Name": {
-          "Fn::Sub": "${AWS::StackName}-NAT-Gateway-EIP"
-        }
-      }
-    },
-    "PrivateInstanceAId": {
-      "Description": "Instance ID of the private EC2 instance in subnet A",
-      "Value": {
-        "Ref": "PrivateEC2InstanceA"
-      },
-      "Export": {
-        "Name": {
-          "Fn::Sub": "${AWS::StackName}-Private-Instance-A-ID"
-        }
-      }
-    },
-    "PrivateInstanceBId": {
-      "Description": "Instance ID of the private EC2 instance in subnet B",
-      "Value": {
-        "Ref": "PrivateEC2InstanceB"
-      },
-      "Export": {
-        "Name": {
-          "Fn::Sub": "${AWS::StackName}-Private-Instance-B-ID"
-        }
-      }
-    },
-    "SecurityGroupId": {
-      "Description": "ID of the EC2 security group",
-      "Value": {
-        "Ref": "EC2SecurityGroup"
-      },
-      "Export": {
-        "Name": {
-          "Fn::Sub": "${AWS::StackName}-Security-Group-ID"
-        }
-      }
-    },
-    "VPCFlowLogsGroup": {
-      "Description": "CloudWatch Logs Group for VPC Flow Logs",
-      "Value": {
-        "Ref": "VPCFlowLogsGroup"
-      },
-      "Export": {
-        "Name": {
-          "Fn::Sub": "${AWS::StackName}-FlowLogs-Group"
+          "Fn::Sub": "${ProjectName}-NATGatewayEIP"
         }
       }
     }

@@ -1,4 +1,3 @@
-// Configuration - These are coming from cfn-outputs after cdk deploy
 import fs from 'fs';
 import {
   EC2Client,
@@ -20,19 +19,20 @@ const outputs = JSON.parse(
   fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
 );
 
-// Get environment suffix from environment variable (set by CI/CD pipeline)
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-
 // AWS Clients
 const ec2Client = new EC2Client({ region: 'us-east-1' });
 const logsClient = new CloudWatchLogsClient({ region: 'us-east-1' });
 const ssmClient = new SSMClient({ region: 'us-east-1' });
 
 describe('CloudFormation Infrastructure Integration Tests', () => {
+  // FIXED: Simplified the lookup to use the logical output ID from the template.
+  const vpcId = outputs['VPCId'];
+  const publicInstanceId = outputs['PublicInstanceId'];
+  const natGatewayEIP = outputs['NATGatewayEIP'];
+
   test('VPC should be created with correct CIDR block 10.0.0.0/16', async () => {
-    const vpcId =
-      outputs[`MyWebApp-VPCId-${environmentSuffix}`] ||
-      outputs['MyWebApp-VPCId'];
+    // Ensure vpcId is defined before using it.
+    expect(vpcId).toBeDefined();
 
     const command = new DescribeVpcsCommand({
       VpcIds: [vpcId],
@@ -50,10 +50,6 @@ describe('CloudFormation Infrastructure Integration Tests', () => {
   });
 
   test('Three subnets should be created in different availability zones with correct CIDR blocks', async () => {
-    const vpcId =
-      outputs[`MyWebApp-VPCId-${environmentSuffix}`] ||
-      outputs['MyWebApp-VPCId'];
-
     const command = new DescribeSubnetsCommand({
       Filters: [
         {
@@ -84,10 +80,6 @@ describe('CloudFormation Infrastructure Integration Tests', () => {
   });
 
   test('Internet Gateway should be created and attached to VPC', async () => {
-    const vpcId =
-      outputs[`MyWebApp-VPCId-${environmentSuffix}`] ||
-      outputs['MyWebApp-VPCId'];
-
     const command = new DescribeInternetGatewaysCommand({
       Filters: [
         {
@@ -108,10 +100,6 @@ describe('CloudFormation Infrastructure Integration Tests', () => {
   });
 
   test('NAT Gateway should be created in public subnet with Elastic IP', async () => {
-    const vpcId =
-      outputs[`MyWebApp-VPCId-${environmentSuffix}`] ||
-      outputs['MyWebApp-VPCId'];
-
     const command = new DescribeNatGatewaysCommand({
       Filter: [
         {
@@ -131,18 +119,10 @@ describe('CloudFormation Infrastructure Integration Tests', () => {
       natGateways[0].Tags?.find(tag => tag.Key === 'Name')?.Value
     ).toContain('MyWebApp-NATGateway');
 
-    // Verify NAT Gateway EIP output
-    const natGatewayEIP =
-      outputs[`MyWebApp-NATGatewayEIP-${environmentSuffix}`] ||
-      outputs['MyWebApp-NATGatewayEIP'];
     expect(natGatewayEIP).toBeDefined();
   });
 
   test('Route tables should be configured correctly for public and private subnets', async () => {
-    const vpcId =
-      outputs[`MyWebApp-VPCId-${environmentSuffix}`] ||
-      outputs['MyWebApp-VPCId'];
-
     const command = new DescribeRouteTablesCommand({
       Filters: [
         {
@@ -155,7 +135,6 @@ describe('CloudFormation Infrastructure Integration Tests', () => {
     const response = await ec2Client.send(command);
     const routeTables = response.RouteTables || [];
 
-    // Should have 2 custom route tables + 1 main route table
     expect(routeTables.length).toBeGreaterThanOrEqual(2);
 
     const publicRouteTable = routeTables.find(rt =>
@@ -168,7 +147,6 @@ describe('CloudFormation Infrastructure Integration Tests', () => {
     expect(publicRouteTable).toBeDefined();
     expect(privateRouteTable).toBeDefined();
 
-    // Check public route has internet gateway route
     const publicInternetRoute = publicRouteTable?.Routes?.find(
       route =>
         route.DestinationCidrBlock === '0.0.0.0/0' &&
@@ -176,7 +154,6 @@ describe('CloudFormation Infrastructure Integration Tests', () => {
     );
     expect(publicInternetRoute).toBeDefined();
 
-    // Check private route has NAT gateway route
     const privateNatRoute = privateRouteTable?.Routes?.find(
       route =>
         route.DestinationCidrBlock === '0.0.0.0/0' &&
@@ -186,10 +163,6 @@ describe('CloudFormation Infrastructure Integration Tests', () => {
   });
 
   test('Three EC2 instances should be deployed with latest Amazon Linux 2 AMI', async () => {
-    const vpcId =
-      outputs[`MyWebApp-VPCId-${environmentSuffix}`] ||
-      outputs['MyWebApp-VPCId'];
-
     const command = new DescribeInstancesCommand({
       Filters: [
         {
@@ -209,7 +182,6 @@ describe('CloudFormation Infrastructure Integration Tests', () => {
 
     expect(instances).toHaveLength(3);
 
-    // Verify AMI is Amazon Linux 2
     const ssmCommand = new GetParameterCommand({
       Name: '/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2',
     });
@@ -221,7 +193,6 @@ describe('CloudFormation Infrastructure Integration Tests', () => {
       expect(instance.InstanceType).toBe('t3.micro');
     });
 
-    // Verify naming tags
     const instanceNames = instances
       .map(instance => instance.Tags?.find(tag => tag.Key === 'Name')?.Value)
       .sort();
@@ -234,10 +205,6 @@ describe('CloudFormation Infrastructure Integration Tests', () => {
   });
 
   test('Security Group should allow SSH from specified CIDR and internal communication', async () => {
-    const vpcId =
-      outputs[`MyWebApp-VPCId-${environmentSuffix}`] ||
-      outputs['MyWebApp-VPCId'];
-
     const command = new DescribeSecurityGroupsCommand({
       Filters: [
         {
@@ -265,7 +232,6 @@ describe('CloudFormation Infrastructure Integration Tests', () => {
 
     const ingressRules = appSecurityGroup?.IpPermissions || [];
 
-    // Check SSH rule
     const sshRule = ingressRules.find(
       rule =>
         rule.FromPort === 22 && rule.ToPort === 22 && rule.IpProtocol === 'tcp'
@@ -273,7 +239,6 @@ describe('CloudFormation Infrastructure Integration Tests', () => {
     expect(sshRule).toBeDefined();
     expect(sshRule?.IpRanges?.[0].CidrIp).toBe('203.0.113.0/24');
 
-    // Check self-referencing rule for internal communication
     const selfRule = ingressRules.find(
       rule => rule.UserIdGroupPairs?.[0].GroupId === appSecurityGroup?.GroupId
     );
@@ -282,11 +247,6 @@ describe('CloudFormation Infrastructure Integration Tests', () => {
   });
 
   test('VPC Flow Logs should be enabled and configured correctly', async () => {
-    const vpcId =
-      outputs[`MyWebApp-VPCId-${environmentSuffix}`] ||
-      outputs['MyWebApp-VPCId'];
-
-    // Check CloudWatch Log Group exists
     const logGroupName = `/aws/vpcflowlogs/${vpcId}/FlowLogs`;
 
     const command = new DescribeLogGroupsCommand({
@@ -302,11 +262,6 @@ describe('CloudFormation Infrastructure Integration Tests', () => {
   });
 
   test('All resources should have proper naming tags with ProjectName prefix', async () => {
-    const vpcId =
-      outputs[`MyWebApp-VPCId-${environmentSuffix}`] ||
-      outputs['MyWebApp-VPCId'];
-
-    // Test VPC tags
     const vpcCommand = new DescribeVpcsCommand({ VpcIds: [vpcId] });
     const vpcResponse = await ec2Client.send(vpcCommand);
     const vpcNameTag = vpcResponse.Vpcs?.[0].Tags?.find(
@@ -314,7 +269,6 @@ describe('CloudFormation Infrastructure Integration Tests', () => {
     );
     expect(vpcNameTag?.Value).toBe('MyWebApp-VPC');
 
-    // Test Subnet tags
     const subnetCommand = new DescribeSubnetsCommand({
       Filters: [{ Name: 'vpc-id', Values: [vpcId] }],
     });
@@ -326,7 +280,6 @@ describe('CloudFormation Infrastructure Integration Tests', () => {
       expect(nameTag?.Value).toMatch(/^MyWebApp-/);
     });
 
-    // Test Instance tags
     const instanceCommand = new DescribeInstancesCommand({
       Filters: [{ Name: 'vpc-id', Values: [vpcId] }],
     });
@@ -341,28 +294,15 @@ describe('CloudFormation Infrastructure Integration Tests', () => {
   });
 
   test('Stack outputs should export correct resource identifiers', async () => {
-    // Test VPC ID output
-    const vpcId =
-      outputs[`MyWebApp-VPCId-${environmentSuffix}`] ||
-      outputs['MyWebApp-VPCId'];
     expect(vpcId).toBeDefined();
     expect(vpcId).toMatch(/^vpc-/);
 
-    // Test Public Instance ID output
-    const publicInstanceId =
-      outputs[`MyWebApp-PublicInstanceId-${environmentSuffix}`] ||
-      outputs['MyWebApp-PublicInstanceId'];
     expect(publicInstanceId).toBeDefined();
     expect(publicInstanceId).toMatch(/^i-/);
 
-    // Test NAT Gateway EIP output
-    const natGatewayEIP =
-      outputs[`MyWebApp-NATGatewayEIP-${environmentSuffix}`] ||
-      outputs['MyWebApp-NATGatewayEIP'];
     expect(natGatewayEIP).toBeDefined();
     expect(natGatewayEIP).toMatch(/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/);
 
-    // Verify the public instance is actually in the public subnet
     const instanceCommand = new DescribeInstancesCommand({
       InstanceIds: [publicInstanceId],
     });
