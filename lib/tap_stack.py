@@ -228,9 +228,9 @@ class TapStack(pulumi.ComponentResource):
 
 
 def create_tap_stack(
-  stack_name: str = "tap-stack",
-  environment: str = "dev",
-  project_name: str = "tap-test-automation-platform",
+  stack_name: str = "TapStack/pr346",
+  environment: str = "pr346",
+  project_name: str = "TapStack",
   **kwargs
 ) -> TapStack:
   args = TapStackArgs(environment_suffix=environment, project_name=project_name, **kwargs)
