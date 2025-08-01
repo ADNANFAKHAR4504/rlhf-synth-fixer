@@ -10,6 +10,7 @@ Implements: VPC + Multi-AZ + ASG + ELB + NAT Gateway + State Management
 """
 
 import json
+import base64
 from constructs import Construct
 from cdktf import TerraformStack, TerraformOutput, S3Backend, App, Fn
 from cdktf_cdktf_provider_aws.provider import AwsProvider
@@ -366,13 +367,15 @@ class TapStack(TerraformStack):
     """Create launch template for Auto Scaling Group"""
 
     # User data script for simple web server
-    user_data = """#!/bin/bash
+    raw_user_data = """#!/bin/bash
 yum update -y
 yum install -y httpd
 systemctl start httpd
 systemctl enable httpd
 echo "<h1>Hello from $(hostname -f)</h1>" > /var/www/html/index.html
 """
+
+    user_data = base64.b64encode(raw_user_data.encode("utf-8")).decode("utf-8")
 
     self.launch_template = LaunchTemplate(self, "launch-template",
       name="asg-launch-template",

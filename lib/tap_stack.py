@@ -145,11 +145,11 @@ class TapStack(TerraformStack):
     """Create VPC with multi-AZ subnets, Internet Gateway, and NAT Gateway"""
     
     # Create VPC
-    self.vpc = Vpc(self, "prod-vpc",
+    self.vpc = Vpc(self, "prod-vpc-1",
       cidr_block=self.vpc_cidr,
       enable_dns_hostnames=True,
       enable_dns_support=True,
-      tags={**self.common_tags, "Name": "prod-vpc"}
+      tags={**self.common_tags, "Name": "prod-vpc-1"}
     )
     
     # Create public subnets in multiple AZs
