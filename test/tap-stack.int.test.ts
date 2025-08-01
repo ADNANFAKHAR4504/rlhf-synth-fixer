@@ -1,52 +1,48 @@
-import { DescribeSubnetsCommand, DescribeTagsCommand, DescribeVpcsCommand, EC2Client } from '@aws-sdk/client-ec2';
-import { App } from 'cdktf';
-import { TapStack } from '../lib/tap-stack';
+import { DescribeRouteTablesCommand, DescribeSubnetsCommand, DescribeVpcsCommand, EC2Client } from '@aws-sdk/client-ec2';
 
-// Use region from env or default
-const REGION = process.env.AWS_REGION || 'us-east-1';
-const client = new EC2Client({ region: REGION });
+const region = 'us-east-1'; // Adjust as needed
+const client = new EC2Client({ region });
+
+let vpcId: string | undefined;
 
 describe('🧪 Real AWS Integration: TapStack VPC Deployment', () => {
-
-  let vpcId: string | undefined;
-
   beforeAll(async () => {
-    const app = new App();
-    new TapStack(app, 'IntegrationTestStack');
-    await app.synth();
-
-    const response = await client.send(new DescribeVpcsCommand({}));
-
-    const matchingVpc = response.Vpcs?.find(vpc =>
-      vpc.Tags?.some(tag => tag.Key === 'Name' && tag.Value?.includes('TapVpc'))
+    const vpcs = await client.send(new DescribeVpcsCommand({}));
+    const matchingVpc = vpcs.Vpcs?.find(vpc =>
+      vpc.Tags?.some(tag => tag.Key === 'Name' && tag.Value === 'main-vpc')
     );
-
     vpcId = matchingVpc?.VpcId;
-    expect(vpcId).toBeDefined();
   });
 
   test('✅ VPC should exist with correct CIDR block', async () => {
-    const vpc = await client.send(new DescribeVpcsCommand({ VpcIds: [vpcId!] }));
-    expect(vpc.Vpcs?.[0].CidrBlock).toBe('10.0.0.0/16');
-  });
-
-  test('✅ Subnets should be created within the VPC', async () => {
-    const subnets = await client.send(new DescribeSubnetsCommand({
-      Filters: [{ Name: 'vpc-id', Values: [vpcId!] }]
-    }));
-    expect(subnets.Subnets?.length).toBeGreaterThan(0);
+    expect(vpcId).toBeDefined();
+    const result = await client.send(new DescribeVpcsCommand({ VpcIds: [vpcId!] }));
+    const cidrBlock = result.Vpcs?.[0].CidrBlock;
+    expect(cidrBlock).toBe('10.0.0.0/16'); // Replace with your expected CIDR
   });
 
   test('✅ VPC should have Environment tag set to Production', async () => {
-    const tags = (await client.send(new DescribeTagsCommand({
-      Filters: [
-        { Name: 'resource-id', Values: [vpcId!] },
-        { Name: 'key', Values: ['Environment'] }
-      ]
-    }))).Tags;
-
+    const result = await client.send(new DescribeVpcsCommand({ VpcIds: [vpcId!] }));
+    const tags = result.Vpcs?.[0].Tags;
     const envTag = tags?.find(tag => tag.Key === 'Environment');
     expect(envTag?.Value).toBe('Production');
   });
 
+  test('✅ Subnets should be created within the VPC', async () => {
+    const subnets = await client.send(new DescribeSubnetsCommand({}));
+    const privateSubnets = subnets.Subnets?.filter(
+      subnet => subnet.VpcId === vpcId && subnet.Tags?.some(t => t.Key === 'Type' && t.Value === 'Private')
+    );
+    expect(privateSubnets?.length).toBeGreaterThanOrEqual(2); // Expect at least 2 private subnets
+  });
+
+  test('✅ Route Tables should be associated with subnets', async () => {
+    const rt = await client.send(new DescribeRouteTablesCommand({}));
+    const rtInVpc = rt.RouteTables?.filter(r => r.VpcId === vpcId);
+    expect(rtInVpc?.length).toBeGreaterThanOrEqual(1);
+    const associated = rtInVpc?.some(r =>
+      r.Associations?.some(assoc => assoc.SubnetId && assoc.RouteTableId)
+    );
+    expect(associated).toBe(true);
+  });
 });
