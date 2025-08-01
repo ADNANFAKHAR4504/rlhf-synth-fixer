@@ -51,7 +51,7 @@ describe('TapStack Integration Tests', () => {
   it('creates IAM role for EC2', () => {
     expect(synthObj.resource.aws_iam_role.EC2LogRole).toEqual(
       expect.objectContaining({
-        name: expect.stringContaining('my-new-role'),
+        name: expect.stringContaining('ec2-s3-access-role'),
       })
     );
   });

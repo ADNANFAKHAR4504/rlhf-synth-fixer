@@ -80,7 +80,7 @@ describe('TapStack Unit Tests', () => {
       synthObj.resource.aws_iam_instance_profile.EC2InstanceProfile
     ).toEqual(
       expect.objectContaining({
-        name: expect.stringContaining('my-new-profile-'),
+        name: expect.stringContaining('ec2-s3-instance-profile-'),
         role: expect.stringMatching(/^\$\{aws_iam_role\.EC2LogRole\.name\}$/),
       })
     );
@@ -89,7 +89,7 @@ describe('TapStack Unit Tests', () => {
   it('creates an IAM role for EC2', () => {
     expect(synthObj.resource.aws_iam_role.EC2LogRole).toEqual(
       expect.objectContaining({
-        name: expect.stringContaining('my-new-role-'),
+        name: expect.stringContaining('ec2-s3-access-role-'),
         assume_role_policy: expect.stringContaining('ec2.amazonaws.com'),
         tags: expect.objectContaining({
           Environment: 'Production',
