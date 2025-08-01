@@ -30,6 +30,14 @@ interface TapStackProps {
   defaultTags?: { tags: Record<string, string> };
 }
 
+// Utility function to generate unique resource names
+function generateUniqueResourceName(baseName: string, environmentSuffix?: string): string {
+  const timestamp = Date.now().toString(36);
+  const randomSuffix = Math.random().toString(36).substring(2, 8);
+  const envSuffix = environmentSuffix ? `-${environmentSuffix}` : '';
+  return `${baseName}${envSuffix}-${timestamp}-${randomSuffix}`.toLowerCase();
+}
+
 export class TapStack extends TerraformStack {
   constructor(scope: Construct, name: string, props: TapStackProps) {
     super(scope, name);
@@ -44,13 +52,26 @@ export class TapStack extends TerraformStack {
       ? `${name}-${props.environmentSuffix}`
       : name;
 
+    // Generate unique names for resources that require global uniqueness
+    const uniqueLogBucketName = generateUniqueResourceName('secure-app-logs', props.environmentSuffix);
+    const uniqueRoleName = generateUniqueResourceName('ec2-s3-access-role', props.environmentSuffix);
+    const uniqueInstanceProfileName = generateUniqueResourceName('ec2-s3-instance-profile', props.environmentSuffix);
+    const uniquePolicyName = generateUniqueResourceName('ec2-s3-log-policy', props.environmentSuffix);
+    const uniqueSecurityGroupName = generateUniqueResourceName('web-secure-sg', props.environmentSuffix);
+    const uniqueVpcName = generateUniqueResourceName('secure-network', props.environmentSuffix);
+    const uniqueSubnetName = generateUniqueResourceName('public-subnet', props.environmentSuffix);
+    const uniqueIgwName = generateUniqueResourceName('internet-gateway', props.environmentSuffix);
+    const uniqueRouteTableName = generateUniqueResourceName('route-table', props.environmentSuffix);
+    const uniqueNaclName = generateUniqueResourceName('public-subnet-nacl', props.environmentSuffix);
+    const uniqueInstanceName = generateUniqueResourceName('web-instance', props.environmentSuffix);
+
     new AwsProvider(this, 'aws', { region });
 
     const vpc = new Vpc(this, 'SecureVpc', {
       cidrBlock: '172.16.0.0/16',
       enableDnsSupport: true,
       enableDnsHostnames: true,
-      tags: { ...tags, Name: 'secure-network' },
+      tags: { ...tags, Name: uniqueVpcName },
     });
 
     const subnet = new Subnet(this, 'PublicSubnet', {
@@ -58,17 +79,17 @@ export class TapStack extends TerraformStack {
       cidrBlock: '172.16.1.0/24',
       availabilityZone: 'us-west-2a',
       mapPublicIpOnLaunch: true,
-      tags,
+      tags: { ...tags, Name: uniqueSubnetName },
     });
 
     const igw = new InternetGateway(this, 'Igw', {
       vpcId: vpc.id,
-      tags,
+      tags: { ...tags, Name: uniqueIgwName },
     });
 
     const routeTable = new RouteTable(this, 'RouteTable', {
       vpcId: vpc.id,
-      tags,
+      tags: { ...tags, Name: uniqueRouteTableName },
     });
 
     new Route(this, 'DefaultRoute', {
@@ -84,7 +105,7 @@ export class TapStack extends TerraformStack {
 
     const nacl = new NetworkAcl(this, 'PublicSubnetNACL', {
       vpcId: vpc.id,
-      tags,
+      tags: { ...tags, Name: uniqueNaclName },
     });
 
     new NetworkAclRule(this, 'InboundHTTP', {
@@ -126,7 +147,7 @@ export class TapStack extends TerraformStack {
     });
 
     const sg = new SecurityGroup(this, 'WebSg', {
-      name: 'web-secure-sg',
+      name: uniqueSecurityGroupName,
       description: 'Allow HTTP and HTTPS',
       vpcId: vpc.id,
       ingress: [
@@ -150,7 +171,7 @@ export class TapStack extends TerraformStack {
     });
 
     const logBucket = new S3Bucket(this, 'LogBucket', {
-      bucketPrefix: 'secure-app-logs-',
+      bucket: uniqueLogBucketName,
       forceDestroy: true,
       tags,
     });
@@ -171,7 +192,7 @@ export class TapStack extends TerraformStack {
     );
 
     const ec2Role: IamRole = new IamRole(this, 'EC2LogRole', {
-      name: `ec2-s3-access-role-${nameSuffix}`,
+      name: uniqueRoleName,
       assumeRolePolicy: JSON.stringify({
         Version: '2012-10-17',
         Statement: [
@@ -190,13 +211,13 @@ export class TapStack extends TerraformStack {
       this,
       'EC2InstanceProfile',
       {
-        name: `ec2-s3-instance-profile-${nameSuffix}`,
+        name: uniqueInstanceProfileName,
         role: ec2Role.name,
       }
     );
 
     const ec2Policy = new IamPolicy(this, 'EC2S3LogPolicy', {
-      name: `ec2-s3-log-policy-${nameSuffix}`,
+      name: uniquePolicyName,
       policy: JSON.stringify({
         Version: '2012-10-17',
         Statement: [
@@ -222,7 +243,7 @@ export class TapStack extends TerraformStack {
       vpcSecurityGroupIds: [sg.id],
       associatePublicIpAddress: true,
       iamInstanceProfile: ec2InstanceProfile.name,
-      tags,
+      tags: { ...tags, Name: uniqueInstanceName },
     });
 
     // Example: Output the VPC ID

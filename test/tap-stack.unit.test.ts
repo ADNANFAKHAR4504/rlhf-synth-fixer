@@ -21,9 +21,11 @@ describe('TapStack Unit Tests', () => {
     expect(synthObj.resource.aws_vpc.SecureVpc).toEqual(
       expect.objectContaining({
         cidr_block: '172.16.0.0/16',
+        enable_dns_support: true,
+        enable_dns_hostnames: true,
         tags: expect.objectContaining({
           Environment: 'Production',
-          Name: 'secure-network',
+          Name: expect.stringMatching(/^secure-network.*$/),
         }),
       })
     );
@@ -114,7 +116,7 @@ describe('TapStack Unit Tests', () => {
   it('creates an S3 bucket with correct prefix and tags', () => {
     expect(synthObj.resource.aws_s3_bucket.LogBucket).toEqual(
       expect.objectContaining({
-        bucket_prefix: 'secure-app-logs-',
+        bucket: expect.stringMatching(/^secure-app-logs.*$/),
         force_destroy: true,
         tags: expect.objectContaining({
           Environment: 'Production',
@@ -149,9 +151,12 @@ describe('TapStack Unit Tests - Branch Coverage', () => {
     }
     expect(synthObj.resource.aws_vpc.SecureVpc).toEqual(
       expect.objectContaining({
+        cidr_block: '172.16.0.0/16',
+        enable_dns_support: true,
+        enable_dns_hostnames: true,
         tags: expect.objectContaining({
           Environment: 'Production',
-          Name: 'secure-network',
+          Name: expect.stringMatching(/^secure-network.*$/),
         }),
       })
     );
@@ -179,9 +184,12 @@ describe('TapStack Unit Tests - Branch Coverage', () => {
     }
     expect(synthObj.resource.aws_vpc.SecureVpc).toEqual(
       expect.objectContaining({
+        cidr_block: '172.16.0.0/16',
+        enable_dns_support: true,
+        enable_dns_hostnames: true,
         tags: expect.objectContaining({
           Environment: 'Production',
-          Name: 'secure-network',
+          Name: expect.stringMatching(/^secure-network.*$/),
         }),
       })
     );
