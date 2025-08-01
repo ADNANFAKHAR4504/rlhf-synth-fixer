@@ -31,6 +31,7 @@ describe('TapStack CloudFormation Template', () => {
         'EnvironmentName',
         'OwnerName',
         'LatestAmiId',
+        'ExistingVPCId',
       ];
       expectedParams.forEach(param => {
         expect(template.Parameters[param]).toBeDefined();
@@ -48,6 +49,12 @@ describe('TapStack CloudFormation Template', () => {
       const param = template.Parameters.LatestAmiId;
       expect(param.Type).toBe('AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>');
       expect(param.Default).toBe('/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2');
+    });
+
+    test('ExistingVPCId parameter should be correct type', () => {
+      const param = template.Parameters.ExistingVPCId;
+      expect(param.Type).toBe('String');
+      expect(param.Default).toBe('vpc-12345678');
     });
   });
 
@@ -110,6 +117,11 @@ describe('TapStack CloudFormation Template', () => {
     test('should have EC2 key pair', () => {
       expect(template.Resources.EC2KeyPair).toBeDefined();
       expect(template.Resources.EC2KeyPair.Type).toBe('AWS::EC2::KeyPair');
+    });
+
+    test('should have VPC peering connection', () => {
+      expect(template.Resources.VPCPeeringConnection).toBeDefined();
+      expect(template.Resources.VPCPeeringConnection.Type).toBe('AWS::EC2::VPCPeeringConnection');
     });
   });
 

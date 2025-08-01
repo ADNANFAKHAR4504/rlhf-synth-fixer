@@ -17,6 +17,11 @@ Parameters:
     Default: '/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2'
     Description: 'Latest Amazon Linux 2 AMI ID'
 
+  ExistingVPCId:
+    Type: String
+    Default: 'vpc-12345678'
+    Description: 'ID of the existing VPC (10.0.0.0/16) to peer with'
+
 Resources:
   # EC2 Key Pair
   EC2KeyPair:
@@ -177,6 +182,14 @@ Resources:
       DestinationCidrBlock: '0.0.0.0/0'
       GatewayId: !Ref InternetGateway
 
+  # Route to peered VPC (10.0.0.0/16)
+  PeeredVPCRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: '10.0.0.0/16'
+      VpcPeeringConnectionId: !Ref VPCPeeringConnection
+
   PublicSubnet1RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
@@ -207,6 +220,11 @@ Resources:
           ToPort: 443
           SourceSecurityGroupId: !Ref LoadBalancerSecurityGroup
           Description: 'HTTPS from Load Balancer'
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: '10.0.0.0/16'
+          Description: 'HTTPS from peered VPC'
       SecurityGroupEgress:
         - IpProtocol: -1
           CidrIp: '0.0.0.0/0'
@@ -256,6 +274,20 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub '${EnvironmentName}-Database-SG'
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Owner
+          Value: !Ref OwnerName
+
+  # VPC Peering Connection
+  VPCPeeringConnection:
+    Type: AWS::EC2::VPCPeeringConnection
+    Properties:
+      VpcId: !Ref WebAppVPC
+      PeerVpcId: !Ref ExistingVPCId
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-VPC-Peering'
         - Key: Environment
           Value: !Ref EnvironmentName
         - Key: Owner
@@ -636,3 +668,9 @@ Outputs:
     Value: !Ref EC2KeyPair
     Export:
       Name: !Sub '${EnvironmentName}-EC2-KeyPair'
+
+  VPCPeeringConnectionId:
+    Description: 'ID of the VPC Peering Connection'
+    Value: !Ref VPCPeeringConnection
+    Export:
+      Name: !Sub '${EnvironmentName}-VPC-Peering-ID'
