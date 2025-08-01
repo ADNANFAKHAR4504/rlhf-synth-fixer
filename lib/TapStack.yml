@@ -117,6 +117,7 @@ Parameters:
   AdminUserEmail:
     Type: String
     Description: 'Email address for security notifications and MFA setup'
+    Default: '<your-email-address>' # Added a default value to make the parameter optional
     AllowedPattern: '^[^\s@]+@[^\s@]+\.[^\s@]+$'
 
 Conditions:
