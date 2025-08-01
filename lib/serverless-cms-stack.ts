@@ -46,7 +46,7 @@ export class ServerlessCms extends Construct {
 
     // Create Archive provider for packaging Lambda code
     new ArchiveProvider(this, 'archive', {
-      alias: currentRegion.region.replace('-', '_'), // Replace '-' with '_' for compatibility
+      alias: currentRegion.region.replace(/-/g, '_'), // Replace '-' with '_' for compatibility
     });
 
     // Generate resource names with region-specific naming convention
