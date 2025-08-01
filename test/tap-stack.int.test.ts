@@ -9,7 +9,7 @@ import {
 } from '@aws-sdk/client-ec2';
 import {
   DescribeLoadBalancersCommand,
-  ELBv2Client,
+  ElasticLoadBalancingV2Client,
 } from '@aws-sdk/client-elastic-load-balancing-v2';
 import { DescribeDBInstancesCommand, RDSClient } from '@aws-sdk/client-rds';
 import {
@@ -40,7 +40,7 @@ const cfnClient = new CloudFormationClient({});
 const ec2Client = new EC2Client({});
 const rdsClient = new RDSClient({});
 const s3Client = new S3Client({});
-const elbClient = new ELBv2Client({});
+const elbClient = new ElasticLoadBalancingV2Client({});
 
 describe('TapStack Infrastructure Integration Tests', () => {
   let stackOutputs: Record<string, string> = {};
@@ -139,7 +139,6 @@ describe('TapStack Infrastructure Integration Tests', () => {
       try {
         const response = await fetch(url, {
           method: 'HEAD',
-          timeout: 10000,
         });
         // We expect either a successful response or a specific error (like 503 if no healthy targets)
         expect([200, 503, 502].includes(response.status)).toBe(true);
@@ -232,7 +231,6 @@ describe('TapStack Infrastructure Integration Tests', () => {
       try {
         const response = await fetch(`https://${cloudfrontDomain}`, {
           method: 'HEAD',
-          timeout: 10000,
         });
         // CloudFront should respond (even if with 403 for empty bucket)
         expect([200, 403, 404].includes(response.status)).toBe(true);
