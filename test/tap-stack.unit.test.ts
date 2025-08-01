@@ -221,7 +221,7 @@ describe('TapStack CloudFormation Template', () => {
 
       const pipeline = template.Resources.CorpCodePipeline;
       expect(pipeline.Properties.Name).toEqual({
-        'Fn::Sub': '${ProjectName}-pipeline'
+        'Fn::Sub': '${ProjectName}-pipeline-${EnvironmentSuffix}'
       });
     });
   });
@@ -352,7 +352,7 @@ describe('TapStack CloudFormation Template', () => {
       
       // Should use lowercase naming convention
       expect(bucketName).toEqual({
-        'Fn::Sub': '${ProjectName}-artifacts-${AWS::AccountId}'
+        'Fn::Sub': '${ProjectName}-artifacts-${EnvironmentSuffix}-${AWS::AccountId}'
       });
     });
   });

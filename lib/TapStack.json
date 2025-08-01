@@ -46,21 +46,22 @@
     "GitHubRepoOwner": {
       "Type": "String",
       "Description": "GitHub repository owner/organization name",
-      "Default": "your-github-org"
+      "Default": "TuringGpt"
     },
     "GitHubRepoName": {
       "Type": "String",
       "Description": "GitHub repository name",
-      "Default": "microservices-app"
+      "Default": "iac-test-automations"
     },
     "GitHubBranch": {
       "Type": "String",
       "Description": "GitHub branch to track",
-      "Default": "main"
+      "Default": "IAC-284667"
     },
     "GitHubToken": {
       "Type": "String",
       "NoEcho": true,
+      "Default": "{{resolve:secretsmanager:arn:aws:secretsmanager:us-west-2:718240086340:secret:turing/github_token-291160-m77BuW}}",
       "Description": "GitHub personal access token for CodePipeline integration"
     },
     "InstanceType": {
@@ -75,6 +76,7 @@
     },
     "KeyPairName": {
       "Type": "AWS::EC2::KeyPair::KeyName",
+      "Default": "iac-291160-keypair",
       "Description": "EC2 Key Pair for SSH access to instances"
     },
     "MinInstances": {
@@ -90,6 +92,11 @@
       "MinValue": 1,
       "MaxValue": 20,
       "Description": "Maximum number of EC2 instances in Auto Scaling Group"
+    },
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Default": "dev",
+      "Description": "Environment suffix for resource naming"
     }
   },
   "Mappings": {
@@ -690,7 +697,7 @@
       "Type": "AWS::S3::Bucket",
       "Properties": {
         "BucketName": {
-          "Fn::Sub": "${ProjectName}-artifacts-${AWS::AccountId}"
+          "Fn::Sub": "${ProjectName}-artifacts-${EnvironmentSuffix}-${AWS::AccountId}"
         },
         "VersioningConfiguration": {
           "Status": "Enabled"
@@ -904,23 +911,19 @@
       "Type": "AWS::CodeDeploy::Application",
       "Properties": {
         "ApplicationName": {
-          "Fn::Sub": "${ProjectName}-application"
+          "Fn::Sub": "${ProjectName}-application-${EnvironmentSuffix}"
         },
         "ComputePlatform": "Server"
       }
     },
     "CorpCodeDeployDeploymentGroup": {
       "Type": "AWS::CodeDeploy::DeploymentGroup",
-      "DependsOn": [
-        "CorpAutoScalingGroup",
-        "CorpTargetGroup"
-      ],
       "Properties": {
         "ApplicationName": {
           "Ref": "CorpCodeDeployApplication"
         },
         "DeploymentGroupName": {
-          "Fn::Sub": "${ProjectName}-deployment-group"
+          "Fn::Sub": "${ProjectName}-deployment-group-${EnvironmentSuffix}"
         },
         "ServiceRoleArn": {
           "Fn::GetAtt": [
@@ -959,7 +962,7 @@
       "Type": "AWS::CodeBuild::Project",
       "Properties": {
         "Name": {
-          "Fn::Sub": "${ProjectName}-build"
+          "Fn::Sub": "${ProjectName}-build-${EnvironmentSuffix}"
         },
         "ServiceRole": {
           "Fn::GetAtt": [
@@ -987,13 +990,9 @@
     },
     "CorpCodePipeline": {
       "Type": "AWS::CodePipeline::Pipeline",
-      "DependsOn": [
-        "CorpCodeBuildProject",
-        "CorpCodeDeployDeploymentGroup"
-      ],
       "Properties": {
         "Name": {
-          "Fn::Sub": "${ProjectName}-pipeline"
+          "Fn::Sub": "${ProjectName}-pipeline-${EnvironmentSuffix}"
         },
         "RoleArn": {
           "Fn::GetAtt": [
@@ -1087,7 +1086,7 @@
                     "Ref": "CorpCodeDeployApplication"
                   },
                   "DeploymentGroupName": {
-                    "Fn::Sub": "${ProjectName}-deployment-group"
+                    "Fn::Sub": "${ProjectName}-deployment-group-${EnvironmentSuffix}"
                   }
                 },
                 "InputArtifacts": [
