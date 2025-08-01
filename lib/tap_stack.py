@@ -7,7 +7,7 @@ from cdktf import TerraformStack, S3Backend
 from constructs import Construct
 from cdktf_cdktf_provider_aws.provider import AwsProvider
 from cdktf_cdktf_provider_aws.s3_bucket import S3Bucket
-from cdktf_cdktf_provider_aws.s3_bucket_server_side_encryption_configuration import S3BucketServerSideEncryptionConfiguration
+from cdktf_cdktf_provider_aws.s3_bucket_server_side_encryption_configuration import S3BucketServerSideEncryptionConfigurationA
 from cdktf_cdktf_provider_aws.vpc import Vpc
 from cdktf_cdktf_provider_aws.subnet import Subnet
 from cdktf_cdktf_provider_aws.internet_gateway import InternetGateway
@@ -814,7 +814,7 @@ class TapStack(TerraformStack):
     )
 
     # Create S3 bucket server-side encryption configuration
-    S3BucketServerSideEncryptionConfiguration(
+    S3BucketServerSideEncryptionConfigurationA(
       self,
       "tap_bucket_encryption",
       bucket=s3_bucket.id,
