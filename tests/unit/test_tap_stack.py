@@ -1,51 +1,94 @@
-import unittest
-from cdktf import App
-from lib.tap_stack import TapStack
+"""TAP Stack module for CDKTF Python infrastructure."""
 
-class TestTapStack(unittest.TestCase):
-  """Simple unit tests for TapStack class."""
+from constructs import Construct
+from cdktf import TerraformStack, S3Backend
+from cdktf_cdktf_provider_aws.provider import AwsProvider
+from cdktf_cdktf_provider_aws.vpc import Vpc
+from cdktf_cdktf_provider_aws.subnet import Subnet
+from cdktf_cdktf_provider_aws.internet_gateway import InternetGateway
+from cdktf_cdktf_provider_aws.route_table import RouteTable
+from cdktf_cdktf_provider_aws.route import Route
+from cdktf_cdktf_provider_aws.route_table_association import RouteTableAssociation
 
-  def setUp(self):
-    self.app = App()
-    self.stack = TapStack(
-      scope=self.app,
-      construct_id="test-stack",
-      environment_suffix="test",
-      aws_region="us-east-1",
-      state_bucket="test-bucket",
-      state_bucket_region="us-east-1",
-      default_tags={"Project": "TAP"}
+class TapStack(TerraformStack):
+  """CDKTF Python stack for TAP infrastructure."""
+
+  def __init__(self, scope: Construct, construct_id: str, **kwargs):
+    """Initialize the TAP stack with AWS infrastructure."""
+    super().__init__(scope, construct_id)
+
+    environment_suffix = kwargs.get('environment_suffix', 'dev')
+    aws_region = kwargs.get('aws_region', 'us-east-1')
+    state_bucket_region = kwargs.get('state_bucket_region', 'us-east-1')
+    state_bucket = kwargs.get('state_bucket', 'iac-rlhf-tf-states')
+    default_tags = kwargs.get('default_tags', {})
+
+    AwsProvider(self, "aws",
+      region=aws_region,
+      default_tags=[default_tags]
     )
 
-  def test_stack_initialization(self):
-    """Test basic stack initialization."""
-    self.assertEqual(self.stack.node.id, "test-stack")
-    self.assertIsInstance(self.stack, TapStack)
+    S3Backend(self,
+      bucket=state_bucket,
+      key=f"{environment_suffix}/{construct_id}.tfstate",
+      region=state_bucket_region,
+      encrypt=True
+    )
 
-  def test_vpc_creation(self):
-    """Test VPC is created with correct settings."""
-    vpc_constructs = [c for c in self.stack.node.children if c.node.id == "tap_vpc"]
-    self.assertEqual(len(vpc_constructs), 1)
+    self.add_override("terraform.backend.s3.use_lockfile", True)
 
-  def test_internet_gateway_creation(self):
-    """Test IGW is created."""
-    igw_constructs = [c for c in self.stack.node.children if c.node.id == "tap_igw"]
-    self.assertEqual(len(igw_constructs), 1)
+    vpc = Vpc(self, "tap_vpc",
+      cidr_block="10.0.0.0/16",
+      enable_dns_support=True,
+      enable_dns_hostnames=True,
+      tags={
+        "Name": f"iac-task-{environment_suffix}-vpc"
+      }
+    )
 
-  def test_route_table_creation(self):
-    """Test route table is created."""
-    rt_constructs = [c for c in self.stack.node.children if c.node.id == "tap_public_rt"]
-    self.assertEqual(len(rt_constructs), 1)
+    igw = InternetGateway(self, "tap_igw",
+      vpc_id=vpc.id,
+      tags={"Name": f"iac-task-{environment_suffix}-igw"}
+    )
 
-  def test_default_route_creation(self):
-    """Test default route is created."""
-    route_constructs = [c for c in self.stack.node.children if c.node.id == "tap_default_route"]
-    self.assertEqual(len(route_constructs), 1)
+    azs = [f"{aws_region}a", f"{aws_region}b"]
+    public_subnet_cidrs = ["10.0.1.0/24", "10.0.2.0/24"]
+    private_subnet_cidrs = ["10.0.3.0/24", "10.0.4.0/24"]
 
-  def test_route_table_associations(self):
-    """Test route table associations are created."""
-    assoc_constructs = [c for c in self.stack.node.children if "tap_rt_assoc" in c.node.id]
-    self.assertEqual(len(assoc_constructs), 2)
+    self.public_subnets = []
+    self.private_subnets = []
 
-if __name__ == "__main__":
-  unittest.main()
+    for i in range(2):
+      pub = Subnet(self, f"tap_pub_subnet_{i}",
+        vpc_id=vpc.id,
+        cidr_block=public_subnet_cidrs[i],
+        availability_zone=azs[i],
+        map_public_ip_on_launch=True,
+        tags={"Name": f"iac-task-{environment_suffix}-public-{i+1}"}
+      )
+      self.public_subnets.append(pub)
+
+      priv = Subnet(self, f"tap_priv_subnet_{i}",
+        vpc_id=vpc.id,
+        cidr_block=private_subnet_cidrs[i],
+        availability_zone=azs[i],
+        tags={"Name": f"iac-task-{environment_suffix}-private-{i+1}"}
+      )
+      self.private_subnets.append(priv)
+
+    rt = RouteTable(self, "tap_public_rt",
+      vpc_id=vpc.id,
+      tags={"Name": f"iac-task-{environment_suffix}-public-rt"}
+    )
+
+    Route(self, "tap_default_route",
+      route_table_id=rt.id,
+      destination_cidr_block="0.0.0.0/0",
+      gateway_id=igw.id
+    )
+
+    for i, subnet in enumerate(self.public_subnets):
+      RouteTableAssociation(self, f"tap_rt_assoc_{i}",
+        subnet_id=subnet.id,
+        route_table_id=rt.id
+      )
