@@ -1,18 +1,18 @@
 import {
-  CloudFormationClient,
-  DescribeStacksCommand,
+    CloudFormationClient,
+    DescribeStacksCommand,
 } from '@aws-sdk/client-cloudformation';
 import {
-  DescribeSubnetsCommand,
-  DescribeVpcsCommand,
-  EC2Client,
+    DescribeSubnetsCommand,
+    DescribeVpcsCommand,
+    EC2Client,
 } from '@aws-sdk/client-ec2';
 import { ElasticLoadBalancingV2Client } from '@aws-sdk/client-elastic-load-balancing-v2';
 import { DescribeDBInstancesCommand, RDSClient } from '@aws-sdk/client-rds';
 import {
-  GetBucketEncryptionCommand,
-  HeadBucketCommand,
-  S3Client,
+    GetBucketEncryptionCommand,
+    HeadBucketCommand,
+    S3Client,
 } from '@aws-sdk/client-s3';
 import fs from 'fs';
 
@@ -152,7 +152,7 @@ describe('TapStack Infrastructure Integration Tests', () => {
 
       // Just verify the DNS format is correct since we can't easily get ALB by DNS
       expect(albDns).toMatch(
-        /^[a-zA-Z0-9-]+\.elb\.[a-z0-9-]+\.amazonaws\.com$/
+        /^[a-zA-Z0-9-]+\.[a-zA-Z0-9-]+\.elb\.amazonaws\.com$/
       );
     });
 

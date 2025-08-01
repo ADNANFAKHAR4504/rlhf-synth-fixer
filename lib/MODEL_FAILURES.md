@@ -180,6 +180,18 @@ aws rds modify-db-instance --db-instance-identifier production-webapp-db --no-de
 
 **Impact**: Auto Scaling Group creation failed due to non-existent key pair reference.
 
+### 16. ALB DNS Regex Pattern Mismatch
+
+**Issue**: Integration test failing with `Expected pattern: /^[a-zA-Z0-9-]+\.elb\.[a-zA-Z0-9-]+\.amazonaws\.com$/`
+
+**Root Cause**: The regex pattern expected ALB DNS names in format `name.elb.region.amazonaws.com`, but actual AWS ALB DNS names follow the format `name.region.elb.amazonaws.com`.
+
+**Resolution**: Updated regex pattern to match actual AWS ALB DNS format:
+- Changed from: `/^[a-zA-Z0-9-]+\.elb\.[a-zA-Z0-9-]+\.amazonaws\.com$/`
+- Changed to: `/^[a-zA-Z0-9-]+\.[a-zA-Z0-9-]+\.elb\.amazonaws\.com$/`
+
+**Impact**: Integration tests were failing due to incorrect DNS name validation.
+
 ## Updated Key Learnings
 
 1. **Always run cfn-lint** before deployment to catch template issues early
