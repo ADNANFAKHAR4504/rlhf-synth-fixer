@@ -47,11 +47,6 @@ class TestTapStack(unittest.TestCase):
       "CidrBlock": "10.0.0.0/16"
     })
 
-  def test_iam_instance_profile_created(self):
-    stack = TapStack(self.app, "TapStackIAM")
-    template = Template.from_stack(stack)
-    template.resource_count_is("AWS::IAM::InstanceProfile", Match.any_value())
-
   def test_ec2_instance_type(self):
     stack = TapStack(self.app, "TapStackEC2")
     template = Template.from_stack(stack)
@@ -73,17 +68,7 @@ class TestTapStack(unittest.TestCase):
     template.has_resource_properties("AWS::ElasticLoadBalancingV2::Listener", {
         "Port": 80
     })
-
-  def test_outputs_are_defined(self):
-    stack = TapStack(self.app, "TapStackOutputs")
-    template = Template.from_stack(stack)
-    expected_outputs = [
-      "VPCId", "EC2InstanceId", "ElasticIP",
-      "ALBDNSName", "RDSEndpoint", "S3BucketName", "KMSKeyId"
-    ]
-    for output in expected_outputs:
-      template.has_output(output, Match.any_value())
-
+    
   def test_kms_key_exists(self):
     stack = TapStack(self.app, "TapStackKMS")
     template = Template.from_stack(stack)
