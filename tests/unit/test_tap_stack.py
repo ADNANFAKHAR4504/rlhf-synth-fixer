@@ -280,7 +280,8 @@ class TestTapStack:
 class TestEnterpriseSecurityStack:
   """Test cases for EnterpriseSecurityStack class."""
 
-  def _create_test_stack(self, stack_id: str, region: str = "us-east-1", provider_alias: str = None):
+  def _create_test_stack(self, stack_id: str, region: str = "us-east-1", 
+                        provider_alias: str = None):
     """Helper method to create a test stack with proper structure."""
     app = App()
     stack = TerraformStack(app, stack_id)
@@ -314,7 +315,7 @@ class TestEnterpriseSecurityStack:
 
   def test_kms_key_configuration(self):
     """Test that KMS key is properly configured."""
-    stack, security_stack = self._create_test_stack("kms-test-stack", region="us-west-2")
+    stack, _ = self._create_test_stack("kms-test-stack", region="us-west-2")
     
     synth_result = Testing.synth(stack)
     terraform_config = json.loads(synth_result)
@@ -329,7 +330,7 @@ class TestEnterpriseSecurityStack:
 
   def test_cloudtrail_configuration(self):
     """Test that CloudTrail is properly configured in primary region."""
-    stack, security_stack = self._create_test_stack("cloudtrail-test-stack")
+    stack, _ = self._create_test_stack("cloudtrail-test-stack")
     
     synth_result = Testing.synth(stack)
     terraform_config = json.loads(synth_result)
@@ -347,7 +348,7 @@ class TestEnterpriseSecurityStack:
 
   def test_vpc_and_flow_logs_configuration(self):
     """Test that VPC and flow logs are properly configured."""
-    stack, security_stack = self._create_test_stack("vpc-test-stack", region="us-west-2")
+    stack, _ = self._create_test_stack("vpc-test-stack", region="us-west-2")
     
     synth_result = Testing.synth(stack)
     terraform_config = json.loads(synth_result)
@@ -363,7 +364,7 @@ class TestEnterpriseSecurityStack:
 
   def test_iam_roles_and_policies(self):
     """Test that IAM roles and policies are properly configured."""
-    stack, security_stack = self._create_test_stack("iam-test-stack")
+    stack, _ = self._create_test_stack("iam-test-stack")
     
     synth_result = Testing.synth(stack)
     terraform_config = json.loads(synth_result)
@@ -378,7 +379,7 @@ class TestEnterpriseSecurityStack:
 
   def test_security_monitoring_configuration(self):
     """Test that security monitoring is properly configured."""
-    stack, security_stack = self._create_test_stack("monitoring-test-stack")
+    stack, _ = self._create_test_stack("monitoring-test-stack")
     
     synth_result = Testing.synth(stack)
     terraform_config = json.loads(synth_result)
@@ -393,7 +394,7 @@ class TestEnterpriseSecurityStack:
 
   def test_lambda_function_configuration(self):
     """Test that Lambda function is properly configured in primary region."""
-    stack, security_stack = self._create_test_stack("lambda-test-stack")
+    stack, _ = self._create_test_stack("lambda-test-stack")
     
     synth_result = Testing.synth(stack)
     terraform_config = json.loads(synth_result)
@@ -406,7 +407,7 @@ class TestEnterpriseSecurityStack:
 
   def test_rds_configuration(self):
     """Test that RDS instance is properly configured."""
-    stack, security_stack = self._create_test_stack("rds-test-stack")
+    stack, _ = self._create_test_stack("rds-test-stack")
     
     synth_result = Testing.synth(stack)
     terraform_config = json.loads(synth_result)
@@ -421,7 +422,7 @@ class TestEnterpriseSecurityStack:
 
   def test_ec2_launch_template_configuration(self):
     """Test that EC2 launch template is properly configured."""
-    stack, security_stack = self._create_test_stack("ec2-test-stack", region="us-west-2")
+    stack, _ = self._create_test_stack("ec2-test-stack", region="us-west-2")
     
     synth_result = Testing.synth(stack)
     terraform_config = json.loads(synth_result)
@@ -435,7 +436,9 @@ class TestEnterpriseSecurityStack:
 
   def test_security_stack_with_provider_alias(self):
     """Test security stack creation with provider alias."""
-    stack, security_stack = self._create_test_stack("alias-test-stack", region="eu-west-1", provider_alias="europe")
+    stack, security_stack = self._create_test_stack("alias-test-stack", 
+                                                    region="eu-west-1", 
+                                                    provider_alias="europe")
     
     # Should create successfully with provider alias
     assert security_stack is not None
@@ -448,8 +451,8 @@ class TestEnterpriseSecurityStack:
 
   def test_regional_resource_naming(self):
     """Test that resources are named with regional identifiers."""
-    us_stack, us_security_stack = self._create_test_stack("us-security-stack", region="us-east-1")
-    eu_stack, eu_security_stack = self._create_test_stack("eu-security-stack", region="eu-west-1")
+    _, us_security_stack = self._create_test_stack("us-security-stack", region="us-east-1")
+    _, eu_security_stack = self._create_test_stack("eu-security-stack", region="eu-west-1")
     
     # Both should be created successfully
     assert us_security_stack is not None
@@ -461,7 +464,7 @@ class TestEnterpriseSecurityStack:
 
   def test_security_stack_comprehensive_resources(self):
     """Test that all required security resources are present."""
-    stack, security_stack = self._create_test_stack("comprehensive-security-stack")
+    stack, _ = self._create_test_stack("comprehensive-security-stack")
     
     synth_result = Testing.synth(stack)
     terraform_config = json.loads(synth_result)
@@ -480,7 +483,7 @@ class TestEnterpriseSecurityStack:
 
   def test_security_compliance_features(self):
     """Test that security compliance features are implemented."""
-    stack, security_stack = self._create_test_stack("compliance-test-stack", region="us-west-2")
+    stack, _ = self._create_test_stack("compliance-test-stack", region="us-west-2")
     
     synth_result = Testing.synth(stack)
     terraform_config = json.loads(synth_result)
@@ -507,7 +510,7 @@ class TestEnterpriseSecurityStack:
 
   def test_least_privilege_iam_configuration(self):
     """Test that IAM roles follow least privilege principles."""
-    stack, security_stack = self._create_test_stack("iam-privilege-test-stack")
+    stack, _ = self._create_test_stack("iam-privilege-test-stack")
     
     synth_result = Testing.synth(stack)
     terraform_config = json.loads(synth_result)
@@ -518,17 +521,8 @@ class TestEnterpriseSecurityStack:
     
     # Check that roles have specific purposes
     role_names = [role.get("name", "") for role in iam_roles.values()]
-    expected_roles = ["EnterpriseCloudTrailRole", "EnterpriseVPCFlowLogsRole", "EnterpriseLambdaExecutionRole"]
-    
-    for expected_role in expected_roles:
-      assert any(expected_role in name for name in role_names), f"Should have {expected_role}"
-    # Verify different roles exist for different purposes
-    iam_roles = terraform_config.get("resource", {}).get("aws_iam_role", {})
-    assert len(iam_roles) > 0, "Should have multiple IAM roles for different services"
-    
-    # Check that roles have specific purposes
-    role_names = [role.get("name", "") for role in iam_roles.values()]
-    expected_roles = ["EnterpriseCloudTrailRole", "EnterpriseVPCFlowLogsRole", "EnterpriseLambdaExecutionRole"]
+    expected_roles = ["EnterpriseCloudTrailRole", "EnterpriseVPCFlowLogsRole", 
+                     "EnterpriseLambdaExecutionRole"]
     
     for expected_role in expected_roles:
       assert any(expected_role in name for name in role_names), f"Should have {expected_role}"

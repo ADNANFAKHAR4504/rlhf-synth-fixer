@@ -4,7 +4,6 @@ import json
 
 from cdktf import App, Testing
 
-from lib.enterprise_security_stack import EnterpriseSecurityStack
 from lib.tap_stack import TapStack
 
 
@@ -155,7 +154,8 @@ class TestTapStackIntegration:
       bucket_name = bucket_config.get("bucket", "")
       # Should include environment suffix
       if "tap_bucket" in bucket_id:
-        assert "naming-test" in bucket_name, f"TAP bucket should include environment suffix: {bucket_name}"
+        assert "naming-test" in bucket_name, (
+          f"TAP bucket should include environment suffix: {bucket_name}")
 
   def test_dependency_resolution(self):
     """Test that resource dependencies are properly resolved."""
