@@ -421,17 +421,12 @@ Resources:
       Name: devexample.com
       HostedZoneConfig:
         Comment: Public hosted zone for the production environment
-      Tags:
-        - Key: Name
-          Value: Production-HostedZone
-        - Key: environment
-          Value: production
 
   ALBRecordSet:
     Type: AWS::Route53::RecordSet
     Properties:
       HostedZoneId: !Ref HostedZone
-      Name: !Sub 'devexample.com'  
+      Name: 'app.devexample.com'  
       Type: A
       AliasTarget:
         DNSName: !GetAtt ApplicationLoadBalancer.DNSName
