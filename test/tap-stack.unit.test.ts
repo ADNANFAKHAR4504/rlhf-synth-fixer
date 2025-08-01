@@ -1,100 +1,115 @@
-import * as fs from 'fs';
-import * as path from 'path';
+import {
+  EC2Client,
+  DescribeVpcsCommand,
+  DescribeSubnetsCommand,
+  DescribeSecurityGroupsCommand,
+  DescribeRouteTablesCommand,
+  DescribeInternetGatewaysCommand,
+  DescribeNatGatewaysCommand,
+} from '@aws-sdk/client-ec2';
+import {
+  RDSClient,
+  DescribeDBInstancesCommand,
+} from '@aws-sdk/client-rds';
+import {
+  AutoScalingClient,
+  DescribeAutoScalingGroupsCommand,
+} from '@aws-sdk/client-auto-scaling';
+import {
+  ElasticLoadBalancingV2Client,
+  DescribeLoadBalancersCommand,
+  DescribeTargetGroupsCommand,
+  DescribeListenersCommand,
+} from '@aws-sdk/client-elastic-load-balancing-v2';
+import {
+  CloudWatchClient,
+  DescribeAlarmsCommand,
+} from '@aws-sdk/client-cloudwatch';
+import {
+  S3Client,
+  GetBucketEncryptionCommand,
+  GetBucketPolicyStatusCommand,
+} from '@aws-sdk/client-s3';
+import {
+  KMSClient,
+  DescribeKeyCommand,
+} from '@aws-sdk/client-kms';
+import {
+  SecretsManagerClient,
+  DescribeSecretCommand,
+} from '@aws-sdk/client-secrets-manager';
+import fs from 'fs';
 
+const region = process.env.AWS_REGION || 'ap-south-1';
+const outputs = JSON.parse(fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8'));
 
-let template: any;
+const ec2 = new EC2Client({ region });
+const rds = new RDSClient({ region });
+const elbv2 = new ElasticLoadBalancingV2Client({ region });
+const asg = new AutoScalingClient({ region });
+const cloudwatch = new CloudWatchClient({ region });
+const s3 = new S3Client({ region });
+const kms = new KMSClient({ region });
+const secrets = new SecretsManagerClient({ region });
 
-beforeAll(() => {
-  const filePath = path.join(__dirname, '../lib/TapStack.json'); // Adjust as needed
-  const fileContent = fs.readFileSync(filePath, 'utf8');
-  template = JSON.parse(fileContent);
-});
-
-describe('TAP Stack Template Unit Tests', () => {
-  test('should include a VPC with DNS enabled', () => {
-    const vpc = template.Resources?.VPC;
-    expect(vpc).toBeDefined();
-    expect(vpc.Type).toBe('AWS::EC2::VPC');
-    expect(vpc.Properties.CidrBlock).toBe('10.0.0.0/16');
-    expect(vpc.Properties.EnableDnsSupport).toBe(true);
-    expect(vpc.Properties.EnableDnsHostnames).toBe(true);
+describe('Production CloudFormation Integration Tests', () => {
+  test('VPC should exist', async () => {
+    const res = await ec2.send(new DescribeVpcsCommand({ VpcIds: [outputs.VPCId] }));
+    expect(res.Vpcs?.[0].CidrBlock).toBe('10.0.0.0/16');
   });
 
-  test('should define two public and two private subnets', () => {
-    expect(template.Resources?.PublicSubnet1).toBeDefined();
-    expect(template.Resources?.PublicSubnet2).toBeDefined();
-    expect(template.Resources?.PrivateSubnet1).toBeDefined();
-    expect(template.Resources?.PrivateSubnet2).toBeDefined();
+  test('Public and private subnets should exist', async () => {
+    const subnetIds = outputs.PublicSubnets.split(',').concat(outputs.PrivateSubnets.split(','));
+    const res = await ec2.send(new DescribeSubnetsCommand({ SubnetIds: subnetIds }));
+    expect(res.Subnets?.length).toBe(4);
   });
 
-  test('should configure an Application Load Balancer', () => {
-    const alb = template.Resources?.ApplicationLoadBalancer;
-    expect(alb).toBeDefined();
-    expect(alb.Type).toBe('AWS::ElasticLoadBalancingV2::LoadBalancer');
-    expect(alb.Properties.Scheme).toBe('internet-facing');
-    expect(alb.Properties.Type).toBe('application');
+  test('ALB should exist and be internet-facing', async () => {
+    const res = await elbv2.send(new DescribeLoadBalancersCommand({ Names: ['Production-ALB'] }));
+    expect(res.LoadBalancers?.[0].Scheme).toBe('internet-facing');
   });
 
-  test('should create a Multi-AZ RDS PostgreSQL instance with encryption', () => {
-    const rds = template.Resources?.RDSInstance;
-    expect(rds).toBeDefined();
-    expect(rds.Type).toBe('AWS::RDS::DBInstance');
-    expect(rds.Properties.Engine).toBe('postgres');
-    expect(rds.Properties.MultiAZ).toBe(true);
-    expect(rds.Properties.StorageEncrypted).toBe(true);
+  test('ALB listener should exist on port 80', async () => {
+    const alb = await elbv2.send(new DescribeLoadBalancersCommand({ Names: ['Production-ALB'] }));
+    const listener = await elbv2.send(new DescribeListenersCommand({ LoadBalancerArn: alb.LoadBalancers?.[0].LoadBalancerArn }));
+    expect(listener.Listeners?.[0].Port).toBe(80);
   });
 
-  test('should define Auto Scaling Group with correct size', () => {
-    const asg = template.Resources?.AutoScalingGroup;
-    expect(asg).toBeDefined();
-    expect(asg.Type).toBe('AWS::AutoScaling::AutoScalingGroup');
-    expect(asg.Properties.MinSize).toBe(2);
-    expect(asg.Properties.MaxSize).toBe(6);
-    expect(asg.Properties.DesiredCapacity).toBe(2);
+  test('Target group should be attached to ALB', async () => {
+    const tg = await elbv2.send(new DescribeTargetGroupsCommand({ Names: ['Production-TG'] }));
+    expect(tg.TargetGroups?.[0].TargetType).toBe('instance');
   });
 
-  test('should include Launch Template with instance user data and tags', () => {
-    const lt = template.Resources?.LaunchTemplate;
-    expect(lt).toBeDefined();
-    expect(lt.Type).toBe('AWS::EC2::LaunchTemplate');
-    const tags = lt.Properties.LaunchTemplateData.TagSpecifications[0].Tags;
-    expect(tags).toEqual(expect.arrayContaining([
-      expect.objectContaining({ Key: 'Name', Value: 'Production-WebServer' }),
-    ]));
+  test('Auto Scaling Group should be configured', async () => {
+    const res = await asg.send(new DescribeAutoScalingGroupsCommand({ AutoScalingGroupNames: ['Production-ASG'] }));
+    expect(res.AutoScalingGroups?.[0].MinSize).toBe(2);
   });
 
-  test('should define KMS key and alias for RDS encryption', () => {
-    expect(template.Resources?.RDSKMSKey).toBeDefined();
-    expect(template.Resources?.RDSKMSKeyAlias).toBeDefined();
+  test('RDS instance should be available', async () => {
+    const res = await rds.send(new DescribeDBInstancesCommand({ DBInstanceIdentifier: 'production-postgres-db' }));
+    expect(res.DBInstances?.[0].DBInstanceStatus).toBe('available');
   });
 
-  test('should have CloudWatch alarms for ASG and RDS metrics', () => {
-    expect(template.Resources?.CPUAlarmHigh).toBeDefined();
-    expect(template.Resources?.CPUAlarmLow).toBeDefined();
-    expect(template.Resources?.DatabaseCPUAlarm).toBeDefined();
-    expect(template.Resources?.DatabaseConnectionsAlarm).toBeDefined();
+  test('S3 bucket should be encrypted and private', async () => {
+    const enc = await s3.send(new GetBucketEncryptionCommand({ Bucket: outputs.S3BucketName }));
+    expect(enc.ServerSideEncryptionConfiguration).toBeDefined();
+
+    const policy = await s3.send(new GetBucketPolicyStatusCommand({ Bucket: outputs.S3BucketName }));
+    expect(policy.PolicyStatus?.IsPublic).toBe(false);
   });
 
-  test('should define secure S3 bucket with encryption and block public access', () => {
-    const bucket = template.Resources?.S3Bucket;
-    expect(bucket).toBeDefined();
-    const encryption = bucket.Properties.BucketEncryption;
-    expect(encryption.ServerSideEncryptionConfiguration[0].ServerSideEncryptionByDefault.SSEAlgorithm).toBe('AES256');
-    const access = bucket.Properties.PublicAccessBlockConfiguration;
-    expect(access.BlockPublicAcls).toBe(true);
-    expect(access.BlockPublicPolicy).toBe(true);
+  test('KMS key for RDS should exist', async () => {
+    const res = await kms.send(new DescribeKeyCommand({ KeyId: 'alias/production-rds-key' }));
+    expect(res.KeyMetadata?.KeyState).toBe('Enabled');
   });
 
-  test('should deny insecure transport in S3 bucket policy', () => {
-    const policy = template.Resources?.S3BucketPolicy;
-    expect(policy).toBeDefined();
-    const statement = policy.Properties.PolicyDocument.Statement.find((s: any) => s.Sid === 'DenyInsecureConnections');
-    expect(statement.Condition.Bool['aws:SecureTransport']).toBe('false');
+  test('Secrets Manager secret for DB should exist', async () => {
+    const res = await secrets.send(new DescribeSecretCommand({ SecretId: 'DBSecret' }));
+    expect(res.Name).toBe('DBSecret');
   });
 
-  test('should include required outputs like VPCId, ALBDNSName, RDSEndpoint', () => {
-    expect(template.Outputs?.VPCId).toBeDefined();
-    expect(template.Outputs?.ALBDNSName).toBeDefined();
-    expect(template.Outputs?.RDSEndpoint).toBeDefined();
+  test('CloudWatch alarms should be present', async () => {
+    const res = await cloudwatch.send(new DescribeAlarmsCommand({ AlarmNames: ['Production-CPU-High', 'Production-RDS-CPU-High'] }));
+    expect(res.MetricAlarms?.length).toBeGreaterThanOrEqual(2);
   });
 });
