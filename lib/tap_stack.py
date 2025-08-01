@@ -14,12 +14,46 @@ from aws_cdk import aws_s3 as s3
 from aws_cdk import aws_codebuild as codebuild
 from aws_cdk import aws_codepipeline as codepipeline
 from aws_cdk import aws_codepipeline_actions as codepipeline_actions
+from aws_cdk import aws_logs as logs
+from aws_cdk import aws_cloudtrail as cloudtrail
 from constructs import Construct
 
 
 def generate_random_suffix(length: int = 6) -> str:
   """Generate a random alphanumeric suffix for resource uniqueness."""
   return ''.join(random.choices(string.ascii_lowercase + string.digits, k=length))
+
+
+def standardize_resource_name(
+  resource_type: str, 
+  environment: str, 
+  component: str = "", 
+  random_suffix: str = ""
+) -> str:
+  """
+  Generate standardized resource names following consistent naming conventions.
+  
+  Format: {project}-{environment}-{resource_type}[-{component}][-{random_suffix}]
+  """
+  project = "tap"  # Test Automation Platform
+  parts = [project, environment, resource_type]
+  
+  if component:
+    parts.append(component)
+  if random_suffix:
+    parts.append(random_suffix)
+    
+  return "-".join(parts)
+
+
+def apply_common_tags(construct: Construct, environment_suffix: str, project_name: str = "TAP") -> None:
+  """Apply common tags to all resources in a construct for governance and cost tracking."""
+  cdk.Tags.of(construct).add("Project", project_name)
+  cdk.Tags.of(construct).add("Environment", environment_suffix)
+  cdk.Tags.of(construct).add("ManagedBy", "CDK")
+  cdk.Tags.of(construct).add("Owner", "DevOps")
+  cdk.Tags.of(construct).add("CostCenter", f"{project_name}-{environment_suffix}")
+  cdk.Tags.of(construct).add("Application", "TestAutomationPlatform")
 
 
 class IAMStackProps(cdk.StackProps):
@@ -68,15 +102,12 @@ class IAMStack(Construct):
       f"CodePipelineRole{random_suffix}",
       # Removed role_name to use CDK's automatic unique naming
       assumed_by=iam.ServicePrincipal("codepipeline.amazonaws.com"),
-      managed_policies=[
-        iam.ManagedPolicy.from_aws_managed_policy_name("AWSCodePipelineServiceRole"),
-        iam.ManagedPolicy.from_aws_managed_policy_name("AWSCodeBuildAdminAccess"),
-        iam.ManagedPolicy.from_aws_managed_policy_name("AmazonS3FullAccess"),
-        iam.ManagedPolicy.from_aws_managed_policy_name("AWSCloudFormationFullAccess")
-      ],
+      # Using least privilege instead of full access policies
+      managed_policies=[],
       inline_policies={
-        "PassRolePolicy": iam.PolicyDocument(
+        "CodePipelineExecutionPolicy": iam.PolicyDocument(
           statements=[
+            # IAM PassRole permissions with service restrictions
             iam.PolicyStatement(
               effect=iam.Effect.ALLOW,
               actions=["iam:PassRole"],
@@ -89,6 +120,44 @@ class IAMStack(Construct):
                   ]
                 }
               }
+            ),
+            # S3 permissions for pipeline artifacts
+            iam.PolicyStatement(
+              effect=iam.Effect.ALLOW,
+              actions=[
+                "s3:GetObject",
+                "s3:GetObjectVersion",
+                "s3:PutObject",
+                "s3:GetBucketVersioning"
+              ],
+              resources=[
+                "arn:aws:s3:::*-artifacts-*",
+                "arn:aws:s3:::*-artifacts-*/*",
+                "arn:aws:s3:::*-source-*",
+                "arn:aws:s3:::*-source-*/*"
+              ]
+            ),
+            # CodeBuild permissions
+            iam.PolicyStatement(
+              effect=iam.Effect.ALLOW,
+              actions=[
+                "codebuild:BatchGetBuilds",
+                "codebuild:StartBuild"
+              ],
+              resources=["*"]
+            ),
+            # CloudFormation permissions for deployments
+            iam.PolicyStatement(
+              effect=iam.Effect.ALLOW,
+              actions=[
+                "cloudformation:CreateStack",
+                "cloudformation:UpdateStack",
+                "cloudformation:DescribeStacks",
+                "cloudformation:DescribeStackEvents",
+                "cloudformation:DescribeStackResources",
+                "cloudformation:GetTemplate"
+              ],
+              resources=["*"]
             )
           ]
         )
@@ -191,26 +260,47 @@ class S3Stack(Construct):
     
     environment_suffix = environment_suffix or 'dev'
     
+    # Apply consistent tagging for governance and cost tracking
+    apply_common_tags(self, environment_suffix)
+    
     # S3 bucket for pipeline artifacts - Using CDK automatic naming for uniqueness
     self.artifacts_bucket = s3.Bucket(
       self,
       "ArtifactsBucket",
       # Removed bucket_name to use CDK's automatic unique naming
       versioned=True,
-      encryption=s3.BucketEncryption.S3_MANAGED,
+      encryption=s3.BucketEncryption.KMS_MANAGED,
       block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
+      enforce_ssl=True,
       removal_policy=cdk.RemovalPolicy.DESTROY,
       auto_delete_objects=True,
       lifecycle_rules=[
+        # Cost optimization: Delete old versions after 30 days
         s3.LifecycleRule(
           id="DeleteOldVersions",
           enabled=True,
           noncurrent_version_expiration=cdk.Duration.days(30)
         ),
+        # Cost optimization: Delete incomplete multipart uploads
         s3.LifecycleRule(
           id="DeleteIncompleteUploads", 
           enabled=True,
           abort_incomplete_multipart_upload_after=cdk.Duration.days(7)
+        ),
+        # Cost optimization: Transition to cheaper storage classes for long-term artifacts
+        s3.LifecycleRule(
+          id="TransitionToIA",
+          enabled=True,
+          transitions=[
+            s3.Transition(
+              storage_class=s3.StorageClass.INFREQUENT_ACCESS,
+              transition_after=cdk.Duration.days(30)
+            ),
+            s3.Transition(
+              storage_class=s3.StorageClass.GLACIER,
+              transition_after=cdk.Duration.days(90)
+            )
+          ]
         )
       ]
     )
@@ -272,6 +362,9 @@ class CodeBuildStack(Construct):
     
     environment_suffix = environment_suffix or 'dev'
     random_suffix = generate_random_suffix()
+    
+    # Apply consistent tagging for governance and cost tracking
+    apply_common_tags(self, environment_suffix)
     
     # Create CodeBuild service role if not provided
     if codebuild_role is None:
@@ -525,6 +618,9 @@ class CodePipelineStack(Construct):
     environment_suffix = environment_suffix or 'dev'
     random_suffix = generate_random_suffix()
     
+    # Apply consistent tagging for governance and cost tracking
+    apply_common_tags(self, environment_suffix)
+    
     # Create CodePipeline service role if not provided
     if codepipeline_role is None:
       codepipeline_role = iam.Role(
@@ -533,8 +629,6 @@ class CodePipelineStack(Construct):
         # Removed role_name to use CDK's automatic unique naming
         assumed_by=iam.ServicePrincipal("codepipeline.amazonaws.com"),
         managed_policies=[
-                  iam.ManagedPolicy.from_aws_managed_policy_name("AWSCodePipelineServiceRole"),
-        iam.ManagedPolicy.from_aws_managed_policy_name("AWSCodeBuildAdminAccess"),
           iam.ManagedPolicy.from_aws_managed_policy_name("AmazonS3FullAccess"),
           iam.ManagedPolicy.from_aws_managed_policy_name("AWSCloudFormationFullAccess")
         ],
@@ -565,10 +659,25 @@ class CodePipelineStack(Construct):
       "SourceBucket",
       # Removed bucket_name to use CDK's automatic unique naming
       versioned=True,
-      encryption=s3.BucketEncryption.S3_MANAGED,
+      encryption=s3.BucketEncryption.KMS_MANAGED,
       block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
+      enforce_ssl=True,
       removal_policy=cdk.RemovalPolicy.DESTROY,
-      auto_delete_objects=True
+      auto_delete_objects=True,
+      lifecycle_rules=[
+        # Cost optimization: Delete old versions after 30 days
+        s3.LifecycleRule(
+          id="DeleteOldVersions",
+          enabled=True,
+          noncurrent_version_expiration=cdk.Duration.days(30)
+        ),
+        # Cost optimization: Delete incomplete multipart uploads
+        s3.LifecycleRule(
+          id="DeleteIncompleteUploads", 
+          enabled=True,
+          abort_incomplete_multipart_upload_after=cdk.Duration.days(7)
+        )
+      ]
     )
     
     # Define pipeline artifacts
@@ -764,3 +873,31 @@ class TapStack(cdk.Stack):
     self.source_bucket = self.codepipeline_stack.source_bucket
     self.pipeline = self.codepipeline_stack.pipeline
     self.artifacts_bucket = self.s3_stack.artifacts_bucket
+    
+    # Apply consistent tagging for governance and cost tracking
+    apply_common_tags(self, environment_suffix)
+    
+    # Add CloudTrail for API auditing and compliance
+    self.cloudtrail = cloudtrail.Trail(
+      self,
+      "CloudTrail",
+      send_to_cloud_watch_logs=True,
+      include_global_service_events=True,
+      is_multi_region_trail=True,
+      enable_file_validation=True,
+      cloud_watch_log_group=logs.LogGroup(
+        self,
+        "CloudTrailLogGroup",
+        retention=logs.RetentionDays.ONE_MONTH,
+        removal_policy=cdk.RemovalPolicy.DESTROY
+      )
+    )
+    
+    # Add CloudWatch Log Group for CodePipeline execution logs
+    self.pipeline_log_group = logs.LogGroup(
+      self,
+      "PipelineLogGroup",
+      log_group_name=f"/aws/codepipeline/{environment_suffix}",
+      retention=logs.RetentionDays.TWO_WEEKS,
+      removal_policy=cdk.RemovalPolicy.DESTROY
+    )
