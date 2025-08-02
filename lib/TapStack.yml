@@ -57,7 +57,7 @@ Parameters:
   DomainName:
     Type: String
     Default: failoverdemo.com
-    Description: Domain name for the failover setup (e.g., app.example.com)
+    Description: Domain name for the failover setup (e.g., failover.example.com)
     AllowedPattern: ^[a-zA-Z0-9][a-zA-Z0-9-]{1,61}[a-zA-Z0-9]\.[a-zA-Z]{2,}$
     ConstraintDescription: Must be a valid domain name
 
@@ -437,48 +437,9 @@ Resources:
         - Key: Role
           Value: Standby
 
-  # Route 53 Health Check for Primary Instance
-  PrimaryHealthCheck:
-    Type: AWS::Route53::HealthCheck
-    Properties:
-      HealthCheckConfig:
-        Type: HTTP
-        ResourcePath: /health
-        FullyQualifiedDomainName: !GetAtt PrimaryEC2Instance.PublicIp
-        Port: 80
-        RequestInterval: 30
-        FailureThreshold: 3
-      HealthCheckTags:
-        - Key: Name
-          Value: !Sub '${AWS::StackName}-Primary-HealthCheck'
-        - Key: Project
-          Value: Route53FailoverDemo
 
-  # Route 53 DNS Records with Failover Routing
-  PrimaryDNSRecord:
-    Type: AWS::Route53::RecordSet
-    Properties:
-      HostedZoneId: !Ref HostedZoneId
-      Name: !Ref DomainName
-      Type: A
-      SetIdentifier: Primary
-      Failover: PRIMARY
-      TTL: 60
-      ResourceRecords:
-        - !GetAtt PrimaryEC2Instance.PublicIp
-      HealthCheckId: !Ref PrimaryHealthCheck
 
-  StandbyDNSRecord:
-    Type: AWS::Route53::RecordSet
-    Properties:
-      HostedZoneId: !Ref HostedZoneId
-      Name: !Ref DomainName
-      Type: A
-      SetIdentifier: Standby
-      Failover: SECONDARY
-      TTL: 60
-      ResourceRecords:
-        - !GetAtt StandbyEC2Instance.PublicIp
+
 
   # CloudWatch Alarms for monitoring
   PrimaryInstanceStatusAlarm:
@@ -514,6 +475,49 @@ Resources:
         - Name: InstanceId
           Value: !Ref StandbyEC2Instance
       TreatMissingData: breaching
+
+  # Route53 Health Check for Primary Instance
+  PrimaryHealthCheck:
+    Type: AWS::Route53::HealthCheck
+    Properties:
+      HealthCheckConfig:
+        Type: HTTP
+        ResourcePath: /health
+        FullyQualifiedDomainName: !GetAtt PrimaryEC2Instance.PublicDnsName
+        Port: 80
+        RequestInterval: 30
+        FailureThreshold: 3
+      HealthCheckTags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-Primary-HealthCheck'
+        - Key: Project
+          Value: Route53FailoverDemo
+
+  # Route53 DNS Records for Failover
+  PrimaryDNSRecord:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Ref DomainName
+      Type: A
+      SetIdentifier: Primary
+      Failover: PRIMARY
+      TTL: 60
+      ResourceRecords:
+        - !GetAtt PrimaryEC2Instance.PublicIp
+      HealthCheckId: !Ref PrimaryHealthCheck
+
+  StandbyDNSRecord:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Ref DomainName
+      Type: A
+      SetIdentifier: Standby
+      Failover: SECONDARY
+      TTL: 60
+      ResourceRecords:
+        - !GetAtt StandbyEC2Instance.PublicIp
 
 Outputs:
   PrimaryInstanceId:
@@ -552,18 +556,6 @@ Outputs:
     Export:
       Name: !Sub '${AWS::StackName}-Standby-PublicDNS'
 
-  HealthCheckId:
-    Description: Route 53 Health Check ID for the primary instance
-    Value: !Ref PrimaryHealthCheck
-    Export:
-      Name: !Sub '${AWS::StackName}-HealthCheck-Id'
-
-  DomainName:
-    Description: Domain name configured for failover
-    Value: !Ref DomainName
-    Export:
-      Name: !Sub '${AWS::StackName}-DomainName'
-
   VPCId:
     Description: VPC ID created for the infrastructure
     Value: !Ref VPC
@@ -587,3 +579,15 @@ Outputs:
     Value: !GetAtt StandbyEC2Instance.AvailabilityZone
     Export:
       Name: !Sub '${AWS::StackName}-Standby-AZ'
+
+  PrimaryHealthCheckId:
+    Description: Route53 Health Check ID for the primary instance
+    Value: !Ref PrimaryHealthCheck
+    Export:
+      Name: !Sub '${AWS::StackName}-Primary-HealthCheck-Id'
+
+  DomainName:
+    Description: Domain name used for the failover setup
+    Value: !Ref DomainName
+    Export:
+      Name: !Sub '${AWS::StackName}-Domain-Name'

@@ -78,7 +78,7 @@
         "DomainName": {
             "Type": "String",
             "Default": "failoverdemo.com",
-            "Description": "Domain name for the failover setup (e.g., app.example.com)",
+            "Description": "Domain name for the failover setup (e.g., failover.example.com)",
             "AllowedPattern": "^[a-zA-Z0-9][a-zA-Z0-9-]{1,61}[a-zA-Z0-9]\\.[a-zA-Z]{2,}$",
             "ConstraintDescription": "Must be a valid domain name"
         },
@@ -514,6 +514,56 @@
                 ]
             }
         },
+        "PrimaryInstanceStatusAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "${AWS::StackName}-Primary-Instance-Status"
+                },
+                "AlarmDescription": "Monitor primary instance status",
+                "MetricName": "StatusCheckFailed",
+                "Namespace": "AWS/EC2",
+                "Statistic": "Maximum",
+                "Period": 300,
+                "EvaluationPeriods": 2,
+                "Threshold": 1,
+                "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "InstanceId",
+                        "Value": {
+                            "Ref": "PrimaryEC2Instance"
+                        }
+                    }
+                ],
+                "TreatMissingData": "breaching"
+            }
+        },
+        "StandbyInstanceStatusAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "${AWS::StackName}-Standby-Instance-Status"
+                },
+                "AlarmDescription": "Monitor standby instance status",
+                "MetricName": "StatusCheckFailed",
+                "Namespace": "AWS/EC2",
+                "Statistic": "Maximum",
+                "Period": 300,
+                "EvaluationPeriods": 2,
+                "Threshold": 1,
+                "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "InstanceId",
+                        "Value": {
+                            "Ref": "StandbyEC2Instance"
+                        }
+                    }
+                ],
+                "TreatMissingData": "breaching"
+            }
+        },
         "PrimaryHealthCheck": {
             "Type": "AWS::Route53::HealthCheck",
             "Properties": {
@@ -523,7 +573,7 @@
                     "FullyQualifiedDomainName": {
                         "Fn::GetAtt": [
                             "PrimaryEC2Instance",
-                            "PublicIp"
+                            "PublicDnsName"
                         ]
                     },
                     "Port": 80,
@@ -591,56 +641,6 @@
                         ]
                     }
                 ]
-            }
-        },
-        "PrimaryInstanceStatusAlarm": {
-            "Type": "AWS::CloudWatch::Alarm",
-            "Properties": {
-                "AlarmName": {
-                    "Fn::Sub": "${AWS::StackName}-Primary-Instance-Status"
-                },
-                "AlarmDescription": "Monitor primary instance status",
-                "MetricName": "StatusCheckFailed",
-                "Namespace": "AWS/EC2",
-                "Statistic": "Maximum",
-                "Period": 300,
-                "EvaluationPeriods": 2,
-                "Threshold": 1,
-                "ComparisonOperator": "GreaterThanOrEqualToThreshold",
-                "Dimensions": [
-                    {
-                        "Name": "InstanceId",
-                        "Value": {
-                            "Ref": "PrimaryEC2Instance"
-                        }
-                    }
-                ],
-                "TreatMissingData": "breaching"
-            }
-        },
-        "StandbyInstanceStatusAlarm": {
-            "Type": "AWS::CloudWatch::Alarm",
-            "Properties": {
-                "AlarmName": {
-                    "Fn::Sub": "${AWS::StackName}-Standby-Instance-Status"
-                },
-                "AlarmDescription": "Monitor standby instance status",
-                "MetricName": "StatusCheckFailed",
-                "Namespace": "AWS/EC2",
-                "Statistic": "Maximum",
-                "Period": 300,
-                "EvaluationPeriods": 2,
-                "Threshold": 1,
-                "ComparisonOperator": "GreaterThanOrEqualToThreshold",
-                "Dimensions": [
-                    {
-                        "Name": "InstanceId",
-                        "Value": {
-                            "Ref": "StandbyEC2Instance"
-                        }
-                    }
-                ],
-                "TreatMissingData": "breaching"
             }
         }
     },
@@ -723,28 +723,6 @@
                 }
             }
         },
-        "HealthCheckId": {
-            "Description": "Route 53 Health Check ID for the primary instance",
-            "Value": {
-                "Ref": "PrimaryHealthCheck"
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${AWS::StackName}-HealthCheck-Id"
-                }
-            }
-        },
-        "DomainName": {
-            "Description": "Domain name configured for failover",
-            "Value": {
-                "Ref": "DomainName"
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${AWS::StackName}-DomainName"
-                }
-            }
-        },
         "VPCId": {
             "Description": "VPC ID created for the infrastructure",
             "Value": {
@@ -792,6 +770,28 @@
             "Export": {
                 "Name": {
                     "Fn::Sub": "${AWS::StackName}-Standby-AZ"
+                }
+            }
+        },
+        "PrimaryHealthCheckId": {
+            "Description": "Route53 Health Check ID for the primary instance",
+            "Value": {
+                "Ref": "PrimaryHealthCheck"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-Primary-HealthCheck-Id"
+                }
+            }
+        },
+        "DomainName": {
+            "Description": "Domain name used for the failover setup",
+            "Value": {
+                "Ref": "DomainName"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-Domain-Name"
                 }
             }
         }

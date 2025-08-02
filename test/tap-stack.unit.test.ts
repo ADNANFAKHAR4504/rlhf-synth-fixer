@@ -251,7 +251,7 @@ describe('Route53 Failover CloudFormation Template', () => {
         'StandbyPublicIP',
         'PrimaryPublicDNS',
         'StandbyPublicDNS',
-        'HealthCheckId',
+        'PrimaryHealthCheckId',
         'DomainName',
         'VPCId',
         'WebServerSecurityGroupId',
@@ -285,8 +285,8 @@ describe('Route53 Failover CloudFormation Template', () => {
     });
 
     test('should have health check output', () => {
-      const healthCheckOutput = template.Outputs.HealthCheckId;
-      expect(healthCheckOutput.Description).toBe('Route 53 Health Check ID for the primary instance');
+      const healthCheckOutput = template.Outputs.PrimaryHealthCheckId;
+      expect(healthCheckOutput.Description).toBe('Route53 Health Check ID for the primary instance');
       expect(healthCheckOutput.Value).toEqual({ Ref: 'PrimaryHealthCheck' });
     });
   });
