@@ -4,7 +4,7 @@ from typing import Dict, List, Any
 from dataclasses import dataclass
 import json
 import time
-from cdktf import TerraformStack, S3Backend
+from cdktf import TerraformStack, S3Backend, TerraformOutput
 from constructs import Construct
 from cdktf_cdktf_provider_aws.provider import AwsProvider
 from cdktf_cdktf_provider_aws.s3_bucket import S3Bucket
@@ -914,6 +914,9 @@ class TapStack(TerraformStack):
       }]
     )
 
+    # Create stack outputs for testing
+    self._create_outputs(env_config, s3_bucket)
+
   def _get_environment_config(self, environment: str) -> EnvironmentConfig:
     """Get configuration for the specified environment."""
     configs = {
@@ -983,3 +986,140 @@ class TapStack(TerraformStack):
     }
 
     return configs.get(environment, configs["dev"])
+
+  def _create_outputs(self, env_config: EnvironmentConfig, s3_bucket) -> None:
+    """Create Terraform outputs for testing and reference."""
+    
+    # VPC Outputs
+    TerraformOutput(
+      self,
+      "vpc_id",
+      value=self.vpc_construct.vpc.id,
+      description="ID of the created VPC"
+    )
+
+    TerraformOutput(
+      self,
+      "vpc_cidr",
+      value=self.vpc_construct.vpc.cidr_block,
+      description="CIDR block of the created VPC"
+    )
+
+    # Subnet Outputs
+    TerraformOutput(
+      self,
+      "public_subnet_ids",
+      value=[subnet.id for subnet in self.vpc_construct.public_subnets],
+      description="IDs of the public subnets"
+    )
+
+    TerraformOutput(
+      self,
+      "private_subnet_ids", 
+      value=[subnet.id for subnet in self.vpc_construct.private_subnets],
+      description="IDs of the private subnets"
+    )
+
+    # Internet Gateway Output
+    TerraformOutput(
+      self,
+      "internet_gateway_id",
+      value=self.vpc_construct.igw.id,
+      description="ID of the Internet Gateway"
+    )
+
+    # NAT Gateway Outputs
+    TerraformOutput(
+      self,
+      "nat_gateway_ids",
+      value=[nat.id for nat in self.vpc_construct.nat_gateways],
+      description="IDs of the NAT Gateways"
+    )
+
+    # Security Group Outputs
+    TerraformOutput(
+      self,
+      "web_security_group_id",
+      value=self.security_construct.web_sg.id,
+      description="ID of the web security group"
+    )
+
+    TerraformOutput(
+      self,
+      "app_security_group_id",
+      value=self.security_construct.app_sg.id,
+      description="ID of the app security group"
+    )
+
+    TerraformOutput(
+      self,
+      "db_security_group_id", 
+      value=self.security_construct.db_sg.id,
+      description="ID of the database security group"
+    )
+
+    TerraformOutput(
+      self,
+      "bastion_security_group_id",
+      value=self.security_construct.bastion_sg.id,
+      description="ID of the bastion security group"
+    )
+
+    # S3 Bucket Outputs
+    TerraformOutput(
+      self,
+      "s3_bucket_id",
+      value=s3_bucket.id,
+      description="ID of the S3 bucket"
+    )
+
+    TerraformOutput(
+      self,
+      "s3_bucket_arn",
+      value=s3_bucket.arn,
+      description="ARN of the S3 bucket"
+    )
+
+    TerraformOutput(
+      self,
+      "s3_bucket_domain_name",
+      value=s3_bucket.bucket_domain_name,
+      description="Domain name of the S3 bucket"
+    )
+
+    # Monitoring Outputs
+    TerraformOutput(
+      self,
+      "sns_topic_arn",
+      value=self.monitoring_construct.alert_topic.arn,
+      description="ARN of the SNS topic for alerts"
+    )
+
+    TerraformOutput(
+      self,
+      "cloudwatch_dashboard_url",
+      value=f"https://{env_config.aws_region if hasattr(env_config, 'aws_region') else 'us-east-1'}.console.aws.amazon.com/cloudwatch/home?region={env_config.aws_region if hasattr(env_config, 'aws_region') else 'us-east-1'}#dashboards:name={self.monitoring_construct.dashboard.dashboard_name}",
+      description="URL to the CloudWatch dashboard"
+    )
+
+    # Environment Info Outputs
+    TerraformOutput(
+      self,
+      "environment",
+      value=env_config.environment,
+      description="Environment name"
+    )
+
+    TerraformOutput(
+      self,
+      "aws_region",
+      value=env_config.aws_region if hasattr(env_config, 'aws_region') else 'us-east-1',
+      description="AWS region"
+    )
+
+    TerraformOutput(
+      self,
+      "availability_zones",
+      value=env_config.availability_zones,
+      description="Availability zones used"
+    )
