@@ -11,12 +11,12 @@ different deployment environments (development, staging, production, etc.).
 """
 import os
 import pulumi
+import pulumi_aws as aws
 from pulumi import Config, ResourceOptions
 from lib.tap_stack import TapStack, TapStackArgs
 
 # Initialize Pulumi configuration
 config = Config()
-config.set('aws:region', 'us-west-2')  # Set AWS region to us-west-2
 
 # Get environment suffix from config or fallback to 'dev'
 environment_suffix = config.get('env') or 'dev'
@@ -24,6 +24,9 @@ STACK_NAME = f"TapStack{environment_suffix}"
 
 repository_name = os.getenv('REPOSITORY', 'unknown')
 commit_author = os.getenv('COMMIT_AUTHOR', 'unknown')
+
+# Create explicit AWS provider for us-west-2
+aws_provider = aws.Provider("aws-provider", region="us-west-2")
 
 # Create a resource options object with default tags
 default_tags = {
