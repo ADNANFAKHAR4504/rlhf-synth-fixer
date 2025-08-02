@@ -9,6 +9,7 @@ import * as kms from 'aws-cdk-lib/aws-kms';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as acm from 'aws-cdk-lib/aws-certificatemanager';
+import * as logs from 'aws-cdk-lib/aws-logs';
 
 export interface WebAppStackProps extends cdk.StackProps {
   environmentSuffix: string;
@@ -42,6 +43,18 @@ export class WebAppStack extends cdk.Stack {
         },
       ],
     });
+
+    const flowLogRole = new iam.Role(this, 'FlowLogRole', {
+      assumedBy: new iam.ServicePrincipal('vpc-flow-logs.amazonaws.com'),
+      managedPolicies: [
+        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AmazonAPIGatewayPushToCloudWatchLogs'),
+      ],
+    });
+
+    vpc.addFlowLog('FlowLogs', {
+      destination: ec2.FlowLogDestination.toCloudWatchLogs(new logs.LogGroup(this, 'FlowLogsGroup'), flowLogRole),
+    });
+
 
     const encryptionKey = new kms.Key(this, 'S3EncryptionKey', {
       enableKeyRotation: true,
