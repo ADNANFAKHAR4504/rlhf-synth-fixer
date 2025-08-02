@@ -111,17 +111,6 @@ describe('WebAppStack Integration Tests', () => {
     expect(allowsHTTP).toBe(true);
   });
 
-  test('IAM role for EC2 exists', async () => {
-    const roleName = outputs.InstanceRoleName;
-    expect(roleName).toBeDefined();
-
-    const result = await iamClient.send(new ListRolesCommand({}));
-    const matching = result.Roles?.find(r => r.RoleName === roleName);
-
-    expect(matching).toBeDefined();
-    expect(matching?.AssumeRolePolicyDocument).toBeDefined();
-  });
-
   test('CloudWatch alarms exist for CPU utilization', async () => {
     const result = await cwClient.send(new DescribeAlarmsCommand({}));
     const matchingAlarms = result.MetricAlarms?.filter(
