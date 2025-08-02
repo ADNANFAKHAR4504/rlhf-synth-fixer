@@ -3,10 +3,11 @@ import json
 import os
 import sys
 
+# Add project root to path before other imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from cdktf import App, Testing
-from lib.tap_stack import TapStack
+from cdktf import App, Testing  # pylint: disable=wrong-import-position
+from lib.tap_stack import TapStack  # pylint: disable=wrong-import-position
 
 
 class TestSecureS3Infrastructure:
@@ -14,9 +15,9 @@ class TestSecureS3Infrastructure:
 
   def setup_method(self):
     """Reset state before each test."""
-    self.app = App()
-    self.stack = TapStack(self.app, "SecurityTestStack")
-    self.synth_output = json.loads(Testing.synth(self.stack))
+    self.app = App()  # pylint: disable=attribute-defined-outside-init
+    self.stack = TapStack(self.app, "SecurityTestStack")  # pylint: disable=attribute-defined-outside-init
+    self.synth_output = json.loads(Testing.synth(self.stack))  # pylint: disable=attribute-defined-outside-init
 
   def test_s3_buckets_have_aes256_encryption(self):
     """Test that all S3 buckets have AES-256 server-side encryption enabled."""
@@ -92,7 +93,7 @@ class TestSecureS3Infrastructure:
     
     bucket_policies = resources.get("aws_s3_bucket_policy", {})
     
-    for policy_name, policy_config in bucket_policies.items():
+    for _, policy_config in bucket_policies.items():
       policy_doc = json.loads(policy_config.get("policy"))
       statements = policy_doc.get("Statement", [])
       
@@ -103,7 +104,8 @@ class TestSecureS3Infrastructure:
         "s3:x-amz-server-side-encryption" in str(stmt.get("Condition", {}))
       ]
       
-      assert len(encryption_statements) >= 1, f"Policy {policy_name} should deny unencrypted uploads"
+      assert len(encryption_statements) >= 1, \
+        "Policy should deny unencrypted uploads"
 
 
 class TestIAMLeastPrivilege:
@@ -111,9 +113,9 @@ class TestIAMLeastPrivilege:
 
   def setup_method(self):
     """Reset state before each test."""
-    self.app = App()
-    self.stack = TapStack(self.app, "IAMTestStack")
-    self.synth_output = json.loads(Testing.synth(self.stack))
+    self.app = App()  # pylint: disable=attribute-defined-outside-init
+    self.stack = TapStack(self.app, "IAMTestStack")  # pylint: disable=attribute-defined-outside-init
+    self.synth_output = json.loads(Testing.synth(self.stack))  # pylint: disable=attribute-defined-outside-init
 
   def test_iam_roles_created_with_least_privilege(self):
     """Test that IAM roles are created with least privilege principles."""
@@ -131,7 +133,8 @@ class TestIAMLeastPrivilege:
       if any(pattern in role for pattern in expected_patterns)
     ]
     
-    assert len(matching_roles) >= 2, f"Expected roles with patterns {expected_patterns}, got {role_names}"
+    assert len(matching_roles) >= 2, \
+      f"Expected roles with patterns {expected_patterns}, got {role_names}"
 
   def test_iam_policies_have_explicit_resource_scoping(self):
     """Test that IAM policies explicitly scope resources (no wildcards)."""
@@ -140,7 +143,7 @@ class TestIAMLeastPrivilege:
     iam_policies = resources.get("aws_iam_policy", {})
     assert len(iam_policies) >= 2, "IAM policies should be created"
     
-    for policy_name, policy_config in iam_policies.items():
+    for _, policy_config in iam_policies.items():
       policy_doc = json.loads(policy_config.get("policy"))
       statements = policy_doc.get("Statement", [])
       
@@ -152,11 +155,12 @@ class TestIAMLeastPrivilege:
         for resource in resources_list:
           # Allow wildcards only at the end of specific paths (like /prefix/*)
           if resource == "*":
-            assert False, f"Policy {policy_name} should not have wildcard '*' resource"
+            assert False, "Policy should not have wildcard '*' resource"
           
           # Ensure bucket ARN format for S3 resources
           if "s3" in resource:
-            assert resource.startswith("arn:aws:s3:::"), f"S3 resource should be proper ARN: {resource}"
+            assert resource.startswith("arn:aws:s3:::"), \
+              f"S3 resource should be proper ARN: {resource}"
 
   def test_iam_policies_enforce_https_transport(self):
     """Test that IAM policies enforce HTTPS transport."""
@@ -206,7 +210,8 @@ class TestIAMLeastPrivilege:
           write_verb in action.lower() for write_verb in ["put", "delete", "create"]
         )]
         
-        assert len(write_actions) == 0, f"Analytics reader should not have write permissions: {write_actions}"
+        assert len(write_actions) == 0, \
+          f"Analytics reader should not have write permissions: {write_actions}"
 
   def test_uploader_role_permissions(self):
     """Test that uploader role has write-only access to uploads prefix."""
@@ -247,9 +252,9 @@ class TestResourceTagging:
 
   def setup_method(self):
     """Reset state before each test."""
-    self.app = App()
-    self.stack = TapStack(self.app, "TaggingTestStack")
-    self.synth_output = json.loads(Testing.synth(self.stack))
+    self.app = App()  # pylint: disable=attribute-defined-outside-init
+    self.stack = TapStack(self.app, "TaggingTestStack")  # pylint: disable=attribute-defined-outside-init
+    self.synth_output = json.loads(Testing.synth(self.stack))  # pylint: disable=attribute-defined-outside-init
 
   def test_all_resources_have_security_tags(self):
     """Test that all resources have appropriate security and audit tags."""
@@ -257,12 +262,13 @@ class TestResourceTagging:
     
     required_tag_keys = ["Environment", "Owner", "SecurityLevel"]
     
-    for resource_type, resource_instances in resources.items():
-      for resource_name, resource_config in resource_instances.items():
+    for _, resource_instances in resources.items():
+      for _, resource_config in resource_instances.items():
         tags = resource_config.get("tags", {})
         
         for required_tag in required_tag_keys:
-          assert required_tag in tags, f"Resource {resource_type}.{resource_name} missing tag: {required_tag}"
+          assert required_tag in tags, \
+            f"Resource missing required tag: {required_tag}"
 
   def test_security_level_tags_are_appropriate(self):
     """Test that SecurityLevel tags reflect high security requirements."""
@@ -274,7 +280,8 @@ class TestResourceTagging:
         security_level = tags.get("SecurityLevel")
         
         if security_level:
-          assert security_level in ["high", "critical"], f"SecurityLevel should be high/critical, got {security_level}"
+          assert security_level in ["high", "critical"], \
+            f"SecurityLevel should be high/critical, got {security_level}"
 
 
 class TestOutputsForValidation:
@@ -282,9 +289,9 @@ class TestOutputsForValidation:
 
   def setup_method(self):
     """Reset state before each test."""
-    self.app = App()
-    self.stack = TapStack(self.app, "OutputsTestStack")
-    self.synth_output = json.loads(Testing.synth(self.stack))
+    self.app = App()  # pylint: disable=attribute-defined-outside-init
+    self.stack = TapStack(self.app, "OutputsTestStack")  # pylint: disable=attribute-defined-outside-init
+    self.synth_output = json.loads(Testing.synth(self.stack))  # pylint: disable=attribute-defined-outside-init
 
   def test_bucket_arns_are_exposed(self):
     """Test that bucket ARNs are exposed for downstream validation."""

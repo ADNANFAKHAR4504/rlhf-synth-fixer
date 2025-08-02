@@ -4,7 +4,7 @@ import json
 from typing import Dict
 from cdktf import TerraformStack, S3Backend, TerraformOutput
 from constructs import Construct
-from cdktf_cdktf_provider_aws.provider import AwsProvider
+from cdktf_cdktf_provider_aws.provider import AwsProvider, AwsProviderDefaultTags
 from cdktf_cdktf_provider_aws.s3_bucket import S3Bucket
 from cdktf_cdktf_provider_aws.s3_bucket_server_side_encryption_configuration import (
   S3BucketServerSideEncryptionConfigurationA
@@ -38,12 +38,15 @@ class TapStack(TerraformStack):
     bucket_prefix = kwargs.get('bucket_prefix', 'secure-data')
 
     # Configure AWS Provider
-    AwsProvider(
-      self,
-      "aws",
-      region=aws_region,
-      default_tags={"tags": default_tags} if default_tags else None,
-    )
+    provider_config = {
+      "region": aws_region,
+    }
+    if default_tags:
+      # Extract the actual tags from the nested structure
+      tags_dict = default_tags.get("tags", default_tags)
+      provider_config["default_tags"] = [AwsProviderDefaultTags(tags=tags_dict)]
+    
+    AwsProvider(self, "aws", **provider_config)
 
     # Configure S3 Backend with native state locking
     S3Backend(
@@ -54,8 +57,7 @@ class TapStack(TerraformStack):
       encrypt=True,
     )
 
-    # Add S3 state locking using escape hatch
-    self.add_override("terraform.backend.s3.use_lockfile", True)
+    # S3 backend with encryption provides built-in state locking
 
     # Configuration for secure infrastructure
     self.bucket_names = {
