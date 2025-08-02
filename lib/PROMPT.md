@@ -34,16 +34,18 @@ Your CDKTF configuration must include and comply with the following:
 ✅ All IAM policies follow strict least privilege (Resource-specific ARNs only).
 
 ✅ All S3 buckets implement:
-   - KMS encryption with customer-managed keys
-   - Versioning enabled
-   - Origin Access Control for CloudFront integration
-   - Bucket policies restricting access to CloudFront only
+
+- KMS encryption with customer-managed keys
+- Versioning enabled
+- Origin Access Control for CloudFront integration
+- Bucket policies restricting access to CloudFront only
 
 ✅ All EC2 instances implement:
-   - Auto Scaling groups with multi-AZ deployment
-   - Security groups allowing only HTTP/HTTPS
-   - IAM instance profiles with minimal permissions
-   - User data for application deployment
+
+- Auto Scaling groups with multi-AZ deployment
+- Security groups allowing only HTTP/HTTPS
+- IAM instance profiles with minimal permissions
+- User data for application deployment
 
 ✅ All subnets have VPC Flow Logs enabled with CloudWatch integration.
 
@@ -52,26 +54,30 @@ Your CDKTF configuration must include and comply with the following:
 ✅ AWS WAF deployed with rate limiting rules (2000 requests/IP) for DDoS protection.
 
 ✅ CloudFront deployed with:
-   - Origin Access Control for secure S3 integration
-   - HTTPS-only access with secure headers
-   - Global CDN distribution
+
+- Origin Access Control for secure S3 integration
+- HTTPS-only access with secure headers
+- Global CDN distribution
 
 ✅ RDS configured with:
-   - Multi-AZ deployment for high availability
-   - AWS Secrets Manager for password management
-   - Automated backups with 7-day retention
-   - KMS encryption at rest
+
+- Multi-AZ deployment for high availability
+- AWS Secrets Manager for password management
+- Automated backups with 7-day retention
+- KMS encryption at rest
 
 ✅ Lambda function deployed for compliance monitoring:
-   - CloudWatch Events trigger (24-hour schedule)
-   - Proper IAM permissions for security scanning
-   - Python 3.9 runtime environment
+
+- CloudWatch Events trigger (24-hour schedule)
+- Proper IAM permissions for security scanning
+- Python 3.9 runtime environment
 
 ✅ Network Architecture:
-   - VPC with 172.16.0.0/16 CIDR (conflict avoidance)
-   - Public/Private subnets across multiple AZs
-   - NAT Gateway for private subnet internet access
-   - Internet Gateway for public subnet routing
+
+- VPC with 172.16.0.0/16 CIDR (conflict avoidance)
+- Public/Private subnets across multiple AZs
+- NAT Gateway for private subnet internet access
+- Internet Gateway for public subnet routing
 
 📦 Best Practices Implemented:
 ✅ Comprehensive resource tagging (Environment, Owner, Project).

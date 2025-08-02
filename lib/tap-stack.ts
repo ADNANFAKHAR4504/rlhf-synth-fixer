@@ -609,7 +609,7 @@ echo "<h1>Nova Model Breaking App</h1>" > /var/www/html/index.html
             block: {},
           },
           statement: {
-            rateBasedStatement: {
+            rateBased: {
               limit: 2000,
               aggregateKeyType: 'IP',
             },
@@ -638,8 +638,8 @@ echo "<h1>Nova Model Breaking App</h1>" > /var/www/html/index.html
 
     // ACM Certificate removed to avoid DNS validation timeout issues
     // In production, configure proper domain and DNS validation
-    
-    // Route53 configuration removed to avoid reserved domain issues  
+
+    // Route53 configuration removed to avoid reserved domain issues
     // In production, use your own registered domain
 
     // CloudFront Distribution with proper security (no custom certificate for now)
@@ -724,7 +724,7 @@ echo "<h1>Nova Model Breaking App</h1>" > /var/www/html/index.html
 
     // Route53 and health check configuration removed to avoid reserved domain issues
     // In production, configure with your own registered domain
-    
+
     // Health check would be configured here for production failover
 
     // Outputs
