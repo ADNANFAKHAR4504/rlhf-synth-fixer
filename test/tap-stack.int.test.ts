@@ -111,6 +111,33 @@ describe('WebAppStack Integration Tests', () => {
     expect(allowsHTTP).toBe(true);
   });
 
+  test('IAM role for EC2 instance exists and has trust policy for EC2', async () => {
+    const roleName = outputs.InstanceRoleName;
+    expect(roleName).toBeDefined();
+
+    const result = await iamClient.send(new ListRolesCommand({}));
+    console.log("result.Roles =>", result.Roles)
+    const matching = result.Roles?.find(r => r.RoleName === roleName);
+    console.log("matching =>", matching)
+    expect(matching).toBeDefined();
+
+    const trustPolicy = matching?.AssumeRolePolicyDocument;
+    console.log("trustPolicy =>", trustPolicy)
+    // Some SDK versions return the trust policy as a string — parse if needed
+    const parsedTrustPolicy =
+      typeof trustPolicy === 'string' ? JSON.parse(decodeURIComponent(trustPolicy)) : trustPolicy;
+    console.log('parsedTrustPolicy =>', parsedTrustPolicy)
+    const ec2Trusted = parsedTrustPolicy?.Statement?.some(
+      (stmt: any) =>
+        stmt.Effect === 'Allow' &&
+        stmt.Principal?.Service === 'ec2.amazonaws.com' &&
+        stmt.Action?.includes('sts:AssumeRole')
+    );
+
+    expect(ec2Trusted).toBe(true);
+  });
+
+
   test('CloudWatch alarms exist for CPU utilization', async () => {
     const result = await cwClient.send(new DescribeAlarmsCommand({}));
     const matchingAlarms = result.MetricAlarms?.filter(
