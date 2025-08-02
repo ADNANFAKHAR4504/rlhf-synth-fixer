@@ -7,7 +7,7 @@ from pulumi import ResourceOptions
 from .components.networking import NetworkInfrastructure
 from .components.user import FrontendInfrastructure
 from .components.backend import BackendInfrastructure
-from .components.data_processing import DataProcessingInfrastructure
+from .components.data import DataProcessingInfrastructure
 from .components.monitoring import MonitoringInfrastructure
 
 """
