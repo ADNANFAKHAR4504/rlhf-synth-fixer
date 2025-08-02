@@ -4,7 +4,7 @@ from typing import Dict, List, Any
 from dataclasses import dataclass
 import json
 import time
-from cdktf import TerraformStack, S3Backend, TerraformOutput
+from cdktf import TerraformStack, TerraformOutput
 from constructs import Construct
 from cdktf_cdktf_provider_aws.provider import AwsProvider
 from cdktf_cdktf_provider_aws.s3_bucket import S3Bucket
@@ -839,16 +839,6 @@ class TapStack(TerraformStack):
       "aws",
       region=aws_region,
       default_tags=[{**default_tags, **env_config.tags}],
-    )
-
-    # Configure S3 Backend with DynamoDB state locking
-    S3Backend(
-      self,
-      bucket=state_bucket,
-      key=f"{environment_suffix}/{construct_id}.tfstate",
-      region=state_bucket_region,
-      encrypt=True,
-      dynamodb_table="terraform-state-locks"
     )
 
     # Create VPC infrastructure
