@@ -40,7 +40,6 @@ import { LambdaFunction } from '@cdktf/provider-aws/lib/lambda-function';
 import { LambdaPermission } from '@cdktf/provider-aws/lib/lambda-permission';
 
 // Security Services
-import { Wafv2WebAcl } from '@cdktf/provider-aws/lib/wafv2-web-acl';
 
 // Secrets Manager
 import { SecretsmanagerSecret } from '@cdktf/provider-aws/lib/secretsmanager-secret';
