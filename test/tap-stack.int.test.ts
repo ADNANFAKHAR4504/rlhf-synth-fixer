@@ -33,7 +33,6 @@ try {
     VPCID: `vpc-webapp-${environmentSuffix}`,
   };
 }
-console.log('Outputs =>', outputs);
 
 const s3Client = new S3Client({ region });
 const ec2Client = new EC2Client({ region });
