@@ -68,6 +68,11 @@ class TapStack(cdk.Stack):
           construct_id: str, props: Optional[TapStackProps] = None, **kwargs):
     super().__init__(scope, construct_id, **kwargs)
 
+    cdk.Tags.of(self).add("CostCenter", "ProjectX")
+    cdk.Tags.of(self).add("Environment", "preprod")
+    cdk.Tags.of(self).add("Author", "soumya.misra")
+    cdk.Tags.of(self).add("Repository", "tap-infra")
+
     # Get environment suffix from props, context, or use 'dev' as default
     _environment_suffix = (
         props.environment_suffix if props else None
