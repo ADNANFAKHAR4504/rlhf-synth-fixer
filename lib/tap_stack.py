@@ -841,13 +841,14 @@ class TapStack(TerraformStack):
       default_tags=[{**default_tags, **env_config.tags}],
     )
 
-    # Configure S3 Backend without state locking for now
+    # Configure S3 Backend with DynamoDB state locking
     S3Backend(
       self,
       bucket=state_bucket,
       key=f"{environment_suffix}/{construct_id}.tfstate",
       region=state_bucket_region,
-      encrypt=True
+      encrypt=True,
+      dynamodb_table="terraform-state-locks"
     )
 
     # Create VPC infrastructure
