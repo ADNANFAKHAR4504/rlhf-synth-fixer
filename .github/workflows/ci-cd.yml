@@ -181,7 +181,7 @@ jobs:
       - name: Initialize Terraform
         run: npm run tf:init \ 
           -backend-config="bucket=${{ env.TERRAFORM_STATE_BUCKET }}" \
-          -backend-config="key=${{ env.TERRAFORM_STATE_BUCKET_KEY }}" \
+          -backend-config="key=${{ env.ENVIRONMENT_SUFFIX }}" \
           -backend-config="region=${{ env.TERRAFORM_STATE_BUCKET_REGION }}"
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
@@ -307,7 +307,7 @@ jobs:
             echo "✅ Terraform project detected, setting up environment..."
             npm run tf:plan -out=tfplan \
               -backend-config="bucket=${{ env.TERRAFORM_STATE_BUCKET }}" \
-              -backend-config="key=${{ env.TERRAFORM_STATE_BUCKET_KEY }}" \
+              -backend-config="key=${{ env.ENVIRONMENT_SUFFIX }}" \
               -backend-config="region=${{ env.TERRAFORM_STATE_BUCKET_REGION }}"
             echo "✅ Terraform Plan completed"
 
@@ -337,7 +337,7 @@ jobs:
             echo "✅ Terraform HCL project detected, running Terraform deploy..."
             npm run tf:deploy \
               -backend-config="bucket=${{ env.TERRAFORM_STATE_BUCKET }}" \
-              -backend-config="key=${{ env.TERRAFORM_STATE_BUCKET_KEY }}" \
+              -backend-config="key=${{ env.ENVIRONMENT_SUFFIX }}" \
               -backend-config="region=${{ env.TERRAFORM_STATE_BUCKET_REGION }}"
           elif [ "$PLATFORM" = "cfn" ] && [ "$LANGUAGE" = "yaml" ]; then
             echo "✅ CloudFormation YAML project detected, deploying with AWS CLI..."
@@ -363,7 +363,7 @@ jobs:
           COMMIT_AUTHOR: ${{ github.event.head_commit.author.name || github.actor }}
           TERRAFORM_STATE_BUCKET: ${{ env.TERRAFORM_STATE_BUCKET }}
           TERRAFORM_STATE_BUCKET_REGION: ${{ env.TERRAFORM_STATE_BUCKET_REGION }}
-          TERRAFORM_STATE_BUCKET_KEY: ${{ env.TERRAFORM_STATE_BUCKET_KEY }}
+          TERRAFORM_STATE_BUCKET_KEY: ${{ env.ENVIRONMENT_SUFFIX }}
           PULUMI_BACKEND_URL: s3://${{ env.PULUMI_STATE_BUCKET }}
           PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
           AWS_DEFAULT_REGION: ${{ env.AWS_DEFAULT_REGION }}
@@ -817,7 +817,7 @@ jobs:
           ENVIRONMENT_SUFFIX: ${{ env.ENVIRONMENT_SUFFIX }}
           TERRAFORM_STATE_BUCKET: ${{ env.TERRAFORM_STATE_BUCKET }}
           TERRAFORM_STATE_BUCKET_REGION: ${{ env.TERRAFORM_STATE_BUCKET_REGION }}
-          TERRAFORM_STATE_BUCKET_KEY: ${{ env.TERRAFORM_STATE_BUCKET_KEY }}
+          TERRAFORM_STATE_BUCKET_KEY: ${{ env.ENVIRONMENT_SUFFIX }}
           PULUMI_BACKEND_URL: s3://${{ env.PULUMI_STATE_BUCKET }}
           AWS_DEFAULT_REGION: ${{ env.AWS_DEFAULT_REGION }}
           PULUMI_ORG: ${{ env.PULUMI_ORG }}
