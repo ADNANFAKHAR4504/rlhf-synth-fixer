@@ -16,12 +16,15 @@ terraform {
  * - Restrict access to the bucket using IAM policies.
  * - Consider using a DynamoDB table for state locking and consistency (especially in team environments).
  */
-  backend "s3" {
-    bucket       = "demo-f2c2601"          # e.g iac-rlhf-tf-states varaibles are not allowed in in the backend block var.state_bucket
-    key          = "dev/tap-stack.tfstate" #"${var.environment_suffix}/${var.stack_name}.tfstate"
-    region       = "us-east-2"             #var.state_bucket_region
-    use_lockfile = true
-  }
+  # e.g iac-rlhf-tf-states varaibles are not allowed in in the backend block var.state_bucket
+  #"${var.environment_suffix}/${var.stack_name}.tfstate"
+  #var.state_bucket_region
+
+  /**
+  npm run tf:init -backend-config=backend.conf
+  */
+  
+  backend "s3" { use_lockfile = true }
 
   required_providers {
     aws = {

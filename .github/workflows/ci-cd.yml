@@ -23,6 +23,7 @@ env:
   S3_RELEASE_BUCKET_NAME: 'iac-rlhf-aws-release'
   TERRAFORM_STATE_BUCKET: 'iac-rlhf-tf-states'
   TERRAFORM_STATE_BUCKET_REGION: 'us-east-1'
+  TERRAFORM_STATE_BUCKET_KEY: ${{ github.event.pull_request.number }}
   S3_PRODUCTION_BUCKET_NAME: 'iac-rlhf-production'
   PULUMI_STATE_BUCKET: 'iac-rlhf-pulumi-states'
   PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
@@ -177,17 +178,10 @@ jobs:
 
 
       - name: Initialize Terraform
-        run: terraform init
-        working-directory: bin
-
-      - name: Plan Terraform deployment
-        run: terraform plan -out=tfplan
-        working-directory: bin
-
-      - name: Apply Terraform deployment
-        run: terraform apply -auto-approve tfplan
-        working-directory: bin
-
+        run: npm run tf:init \ 
+          -backend-config="bucket=${{ env.TERRAFORM_STATE_BUCKET }}" \
+          -backend-config="key=${{ env.TERRAFORM_STATE_BUCKET_KEY }}" \
+          -backend-config="region=${{ env.TERRAFORM_STATE_BUCKET_REGION }}"
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -305,6 +299,15 @@ jobs:
             # Login to Pulumi S3 backend
             pipenv run pulumi-login
             echo "✅ Pulumi bootstrap completed"
+
+          elif [ "$PLATFORM" = "tf" ]; then
+            echo "✅ Terraform project detected, setting up environment..."
+            npm run tf:plan -out=tfplan \
+              -backend-config="bucket=${{ env.TERRAFORM_STATE_BUCKET }}" \
+              -backend-config="key=${{ env.TERRAFORM_STATE_BUCKET_KEY }}" \
+              -backend-config="region=${{ env.TERRAFORM_STATE_BUCKET_REGION }}"
+            echo "✅ Terraform Plan completed"
+
           else
             echo "ℹ️ Unknown or unsupported platform: $PLATFORM. Skipping bootstrap."
           fi
@@ -326,6 +329,12 @@ jobs:
           elif [ "$PLATFORM" = "cdktf" ]; then
             echo "✅ CDKTF project detected, running CDKTF deploy..."
             npm run cdktf:deploy
+          elif [ "$PLATFORM" = "tf" ]; then
+            echo "✅ Terraform HCL project detected, running Terraform deploy..."
+            npm run tf:deploy \
+              -backend-config="bucket=${{ env.TERRAFORM_STATE_BUCKET }}" \
+              -backend-config="key=${{ env.TERRAFORM_STATE_BUCKET_KEY }}" \
+              -backend-config="region=${{ env.TERRAFORM_STATE_BUCKET_REGION }}"
           elif [ "$PLATFORM" = "cfn" ] && [ "$LANGUAGE" = "yaml" ]; then
             echo "✅ CloudFormation YAML project detected, deploying with AWS CLI..."
             npm run cfn:deploy-yaml
@@ -351,6 +360,7 @@ jobs:
           AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
           TERRAFORM_STATE_BUCKET: ${{ env.TERRAFORM_STATE_BUCKET }}
           TERRAFORM_STATE_BUCKET_REGION: ${{ env.TERRAFORM_STATE_BUCKET_REGION }}
+          TERRAFORM_STATE_BUCKET_KEY: ${{ env.TERRAFORM_STATE_BUCKET_KEY }}
           PULUMI_BACKEND_URL: s3://${{ env.PULUMI_STATE_BUCKET }}
           PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
           AWS_DEFAULT_REGION: ${{ env.AWS_DEFAULT_REGION }}
@@ -453,7 +463,25 @@ jobs:
             cat cfn-outputs/flat-outputs.json || echo "No flat outputs"
             rm -f temp-${STACK_NAME}-outputs.json temp-stack.json temp-merged.json temp-flat.json
 
-            
+          elif [ "$PLATFORM" = "tf" ]; then
+            echo "✅ Terraform project detected, writing outputs to tf-outputs..."
+            mkdir -p tf-outputs/
+            touch tf-outputs/flat-outputs.json
+            # Get structured outputs (JSON)
+            terraform output -json > tf-outputs/all-outputs.json
+            # Create flat key=value version
+            echo "{}" > tf-outputs/flat-outputs.json
+            jq -r 'to_entries[] | "\(.key)=\(.value.value)"' tf-outputs/all-outputs.json | while IFS='=' read -r key value; do
+              jq --arg key "$key" --arg value "$value" '. + {($key): $value}' tf-outputs/flat-outputs.json > temp-flat.json
+              mv temp-flat.json ../tf-outputs/flat-outputs.json
+            done
+
+            echo "✅ Consolidated Terraform outputs:"
+            cat tf-outputs/all-outputs.json || echo "No structured outputs"
+
+            echo "✅ Flat outputs:"
+            cat tf-outputs/flat-outputs.json || echo "No flat outputs"    
+
           else
             echo "ℹ️ Not a CDK TypeScript or CloudFormation project, creating empty outputs for consistency"
             mkdir -p cfn-outputs
@@ -469,6 +497,7 @@ jobs:
           path: |
             cfn-outputs/
             cdk-stacks.json
+            tf-outputs/
   lint:
     name: Lint
     runs-on: ubuntu-24.04
@@ -708,6 +737,10 @@ jobs:
             echo "✅ CDKTF project detected, running CDKTF destroy..."
             # Try to destroy any leftover resources from PRs, but don't fail if they don't exist
             npm run cdktf:destroy || echo "No resources to destroy or destruction failed"
+          elif [ "$PLATFORM" = "tf" ]; then
+            echo "✅ Terraform HCL project detected, running Terraform destroy..."
+            # Try to destroy any leftover resources from PRs, but don't fail if they don't exist
+            npm run tf:destroy || echo "No resources to destroy or destruction failed"
           elif [ "$PLATFORM" = "cfn" ]; then
             echo "✅ CloudFormation project detected, running CloudFormation destroy..."
             # Try to destroy any leftover resources from PRs, but don't fail if they don't exist
@@ -728,6 +761,7 @@ jobs:
           ENVIRONMENT_SUFFIX: ${{ env.ENVIRONMENT_SUFFIX }}
           TERRAFORM_STATE_BUCKET: ${{ env.TERRAFORM_STATE_BUCKET }}
           TERRAFORM_STATE_BUCKET_REGION: ${{ env.TERRAFORM_STATE_BUCKET_REGION }}
+          TERRAFORM_STATE_BUCKET_KEY: ${{ env.TERRAFORM_STATE_BUCKET_KEY }}
           PULUMI_BACKEND_URL: s3://${{ env.PULUMI_STATE_BUCKET }}
           AWS_DEFAULT_REGION: ${{ env.AWS_DEFAULT_REGION }}
 
