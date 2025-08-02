@@ -14,10 +14,6 @@ export class TapStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: TapStackProps) {
     super(scope, id, props);
 
-    // The project template suggests creating separate stacks for resources.
-    // For a self-contained application of this size, defining the resources
-    // directly within this stack is clearer and more maintainable.
-
     // 1. VPC Configuration (Best Practice: Multi-AZ with Public and Private Subnets)
     const vpc = new ec2.Vpc(this, 'WebAppVpc', {
       maxAzs: 2, // Spans across 2 Availability Zones for high availability
@@ -39,14 +35,14 @@ export class TapStack extends cdk.Stack {
     // 2. IAM Role for EC2 Instances (Least Privilege)
     const ec2Role = new iam.Role(this, 'EC2InstanceRole', {
       assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
-      // The prompt requires an IAM role with "only required permissions." Since no
-      // specific permissions for accessing other AWS services were mentioned,
-      // we create a role with no policies attached. This adheres to the
-      // principle of least privilege.
+    });
+
+    // Requirement 6: Define an IAM Role and Instance Profile for EC2 instances.
+    new iam.InstanceProfile(this, 'EC2InstanceProfile', {
+      role: ec2Role,
     });
 
     // 3. Security Groups
-    // Security Group for the Load Balancer
     const albSecurityGroup = new ec2.SecurityGroup(this, 'ALBSecurityGroup', {
       vpc,
       description: 'Allow HTTP traffic to ALB',
@@ -58,19 +54,17 @@ export class TapStack extends cdk.Stack {
       'Allow HTTP from anywhere'
     );
 
-    // Security Group for the EC2 Instances
     const ec2SecurityGroup = new ec2.SecurityGroup(this, 'EC2SecurityGroup', {
       vpc,
       description: 'Allow HTTP from ALB and SSH',
       allowAllOutbound: true,
     });
-    // Allow traffic only from the ALB's security group on port 80
     ec2SecurityGroup.addIngressRule(
       albSecurityGroup,
       ec2.Port.tcp(80),
       'Allow HTTP traffic from ALB'
     );
-    // Per the prompt, allow SSH. For production, this should be restricted to a bastion host or specific IP.
+    // Per the prompt, allow SSH. For production, this should be restricted.
     ec2SecurityGroup.addIngressRule(
       ec2.Peer.anyIpv4(),
       ec2.Port.tcp(22),
@@ -81,14 +75,13 @@ export class TapStack extends cdk.Stack {
     const asg = new autoscaling.AutoScalingGroup(this, 'WebAppASG', {
       vpc,
       instanceType: new ec2.InstanceType('t2.micro'),
-      // Using latest Amazon Linux 2 AMI is a best practice. It automatically finds the
-      // correct AMI for the deployment region, unlike a static placeholder.
-      machineImage: ec2.MachineImage.latestAmazonLinux2(),
+      machineImage: ec2.MachineImage.genericLinux({
+        'us-west-2': 'ami-054b7fc3c333ac6d2',
+      }),
       role: ec2Role,
       securityGroup: ec2SecurityGroup,
       minCapacity: 2,
       maxCapacity: 5,
-      // Place instances in private subnets for security
       vpcSubnets: {
         subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
       },
@@ -99,7 +92,6 @@ export class TapStack extends cdk.Stack {
       vpc,
       internetFacing: true,
       securityGroup: albSecurityGroup,
-      // Place ALB in public subnets to be accessible from the internet
       vpcSubnets: {
         subnetType: ec2.SubnetType.PUBLIC,
       },
@@ -125,7 +117,7 @@ export class TapStack extends cdk.Stack {
       description: 'Public DNS of the Application Load Balancer',
     });
 
-    // 7. Tagging - Applied to all resources in the stack
+    // 7. Tagging
     Tags.of(this).add('Application', 'WebApp');
     Tags.of(this).add('Environment', 'Production');
   }
