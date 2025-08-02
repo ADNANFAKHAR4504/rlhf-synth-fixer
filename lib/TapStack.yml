@@ -225,7 +225,6 @@ Resources:
   EC2Role:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${AWS::StackName}-EC2-Role'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -253,7 +252,6 @@ Resources:
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
-      InstanceProfileName: !Sub '${AWS::StackName}-EC2-InstanceProfile'
       Roles:
         - !Ref EC2Role
 
