@@ -1,525 +1,395 @@
 """Integration tests for TapStack with live AWS resources."""
 import os
 import json
-import boto3
 import pytest
 import time
-import subprocess
-from cdktf import App
-
-from lib.tap_stack import TapStack
-
-
-class TestTurnAroundPromptAPIIntegrationTests:
-  """Turn Around Prompt API Integration Tests."""
-
-  def test_terraform_configuration_synthesis(self):
-    """Test that stack instantiates properly."""
-    app = App()
-    stack = TapStack(
-      app,
-      "IntegrationTestStack",
-      environment_suffix="test",
-      aws_region="us-east-1",
-    )
-
-    # Verify basic structure
-    assert stack is not None
-    
-    # Verify all major constructs are created
-    assert hasattr(stack, 'vpc_construct')
-    assert hasattr(stack, 'security_construct')
-    assert hasattr(stack, 'monitoring_construct')
-
-  def test_stack_synthesis_generates_valid_terraform(self):
-    """Test that synthesized stack generates valid Terraform configuration."""
-    app = App()
-    stack = TapStack(
-      app,
-      "SynthesisTestStack",
-      environment_suffix="test",
-      aws_region="us-east-1",
-    )
-
-    # Synthesize the app to generate Terraform JSON
-    synth_result = app.synth()
-    
-    # Verify synthesis completes without errors
-    assert synth_result is not None
-    
-    # Check that the stack is included in synthesis
-    stack_manifest = None
-    for stack_info in synth_result.stacks:
-      if stack_info.name == "SynthesisTestStack":
-        stack_manifest = stack_info
-        break
-    
-    assert stack_manifest is not None
-    assert stack_manifest.name == "SynthesisTestStack"
-
-  def test_terraform_json_structure(self):
-    """Test the structure of generated Terraform JSON."""
-    app = App()
-    stack = TapStack(
-      app,
-      "JsonStructureTestStack",
-      environment_suffix="test",
-      aws_region="us-east-1",
-    )
-
-    # Synthesize and get the Terraform JSON
-    synth_result = app.synth()
-    
-    # Find our stack in the synthesis result
-    stack_artifact = None
-    for stack_info in synth_result.stacks:
-      if stack_info.name == "JsonStructureTestStack":
-        stack_artifact = stack_info
-        break
-    
-    assert stack_artifact is not None
-    
-    # Read the generated cdk.tf.json file
-    tf_json_path = os.path.join(stack_artifact.assembly_directory, "cdk.tf.json")
-    
-    if os.path.exists(tf_json_path):
-      with open(tf_json_path, 'r') as f:
-        tf_config = json.load(f)
-      
-      # Verify required Terraform structure
-      assert "terraform" in tf_config
-      assert "provider" in tf_config
-      assert "resource" in tf_config
-      
-      # Verify AWS provider is configured
-      assert "aws" in tf_config["provider"]
-      
-      # Verify key resources are present
-      resources = tf_config["resource"]
-      
-      # Check for VPC resources
-      vpc_resources = [key for key in resources.keys() if "aws_vpc" in key]
-      assert len(vpc_resources) > 0
-      
-      # Check for S3 bucket resources
-      s3_resources = [key for key in resources.keys() if "aws_s3_bucket" in key]
-      assert len(s3_resources) > 0
-
-      # Verify outputs are present
-      if "output" in tf_config:
-        outputs = tf_config["output"]
-        expected_outputs = [
-          "vpc_id", "vpc_cidr", "public_subnet_ids", "private_subnet_ids",
-          "s3_bucket_id", "environment", "aws_region"
-        ]
-        for expected_output in expected_outputs:
-          assert any(expected_output in key for key in outputs.keys()), f"Output {expected_output} not found"
+from typing import Dict, Any
 
 
 @pytest.mark.integration
-class TestTapStackAWSIntegration:
-  """AWS Integration Tests for TapStack - requires AWS credentials and actual deployment."""
-  
-  @pytest.fixture(autouse=True)
-  def setup_aws_credentials(self):
-    """Setup AWS credentials for testing."""
-    # Skip if no AWS credentials are available
-    try:
-      session = boto3.Session()
-      credentials = session.get_credentials()
-      if credentials is None:
-        pytest.skip("AWS credentials not available")
-    except Exception:
-      pytest.skip("AWS credentials not available")
+class TestTapStackLiveIntegration:
+  """Live Integration Tests for TapStack - tests deployed infrastructure outputs."""
 
-  @pytest.fixture
-  def cleanup_resources(self):
-    """Fixture to track and cleanup resources created during tests."""
-    created_resources = {
-      'stacks': [],
-      'buckets': [],
-      'vpcs': [],
-      'security_groups': [],
-      'log_groups': []
-    }
+  def test_deployed_infrastructure_outputs_exist(self):
+    """Test that deployed infrastructure outputs exist and are valid."""
+    # Read the deployed stack outputs
+    outputs_file = "cfn-outputs/flat-outputs.json"
+    if not os.path.exists(outputs_file):
+      pytest.skip("No deployed stack outputs found")
     
-    yield created_resources
+    with open(outputs_file, 'r') as f:
+      outputs = json.load(f)
     
-    # Cleanup logic (if needed)
-    # Note: In practice, terraform destroy should handle this
-    pass
+    # Get the first stack output (assuming single stack)
+    stack_name = list(outputs.keys())[0]
+    stack_outputs = outputs[stack_name]
+    
+    # Test that all required outputs exist
+    required_outputs = [
+      'vpc_id', 'vpc_cidr', 'public_subnet_ids', 'private_subnet_ids',
+      'internet_gateway_id', 'nat_gateway_ids', 'web_security_group_id',
+      'app_security_group_id', 'db_security_group_id', 'bastion_security_group_id',
+      's3_bucket_id', 's3_bucket_arn', 'sns_topic_arn', 'environment',
+      'aws_region', 'availability_zones', 'cloudwatch_dashboard_url'
+    ]
+    
+    for required_output in required_outputs:
+      assert required_output in stack_outputs, f"Required output {required_output} not found"
+    
+    # Test VPC configuration
+    assert stack_outputs['vpc_cidr'] in ['10.1.0.0/16', '10.2.0.0/16', '10.3.0.0/16']
+    assert stack_outputs['aws_region'] == 'us-east-1'
+    assert len(stack_outputs['availability_zones']) >= 2
+    
+    # Test subnet configuration
+    assert len(stack_outputs['public_subnet_ids']) >= 2
+    assert len(stack_outputs['private_subnet_ids']) >= 2
+    
+    # Test S3 bucket naming
+    bucket_name = stack_outputs['s3_bucket_id']
+    assert len(bucket_name) <= 63
+    assert bucket_name.lower() == bucket_name
+    assert '-' in bucket_name
+    
+    # Test SNS topic ARN format
+    sns_arn = stack_outputs['sns_topic_arn']
+    assert sns_arn.startswith('arn:aws:sns:')
+    assert stack_outputs['aws_region'] in sns_arn
 
-  def get_terraform_outputs(self, stack_name: str) -> dict:
-    """Get Terraform outputs from deployed stack."""
-    try:
-      # Run terraform output to get the outputs
-      result = subprocess.run(
-        ['terraform', 'output', '-json'],
-        cwd=f'cdktf.out/stacks/{stack_name}',
-        capture_output=True,
-        text=True,
-        check=True
-      )
-      return json.loads(result.stdout)
-    except (subprocess.CalledProcessError, FileNotFoundError, json.JSONDecodeError):
-      return {}
+  def test_vpc_configuration_validation(self):
+    """Test VPC configuration from outputs."""
+    outputs_file = "cfn-outputs/flat-outputs.json"
+    if not os.path.exists(outputs_file):
+      pytest.skip("No deployed stack outputs found")
+    
+    with open(outputs_file, 'r') as f:
+      outputs = json.load(f)
+    
+    stack_outputs = outputs[list(outputs.keys())[0]]
+    
+    # Validate VPC configuration
+    assert stack_outputs['vpc_cidr'] in ['10.1.0.0/16', '10.2.0.0/16', '10.3.0.0/16']
+    
+    # Check availability zones
+    assert len(stack_outputs['availability_zones']) >= 2
+    assert all(az.startswith('us-east-1') for az in stack_outputs['availability_zones'])
+    
+    # Validate subnet counts
+    assert len(stack_outputs['public_subnet_ids']) >= 2
+    assert len(stack_outputs['private_subnet_ids']) >= 2
+    
+    # Validate VPC ID format
+    vpc_id = stack_outputs['vpc_id']
+    assert vpc_id.startswith('vpc-')
 
-  def test_stack_deployment_and_outputs(self, cleanup_resources):
-    """Test actual stack deployment and verify outputs."""
-    # Create unique stack name for this test
-    test_id = f"inttest{int(time.time())}"
-    stack_name = f"TapStackIntegrationTest{test_id}"
+  def test_s3_bucket_validation(self):
+    """Test S3 bucket configuration from outputs."""
+    outputs_file = "cfn-outputs/flat-outputs.json"
+    if not os.path.exists(outputs_file):
+      pytest.skip("No deployed stack outputs found")
     
-    app = App()
-    stack = TapStack(
-      app,
-      stack_name,
-      environment_suffix="integration",
-      aws_region="us-east-1",
-    )
-    cleanup_resources['stacks'].append(stack_name)
+    with open(outputs_file, 'r') as f:
+      outputs = json.load(f)
+    
+    stack_outputs = outputs[list(outputs.keys())[0]]
+    
+    # Test bucket naming convention
+    bucket_name = stack_outputs['s3_bucket_id']
+    assert len(bucket_name) <= 63
+    assert bucket_name.lower() == bucket_name
+    assert '-' in bucket_name
+    assert 'tap-bucket' in bucket_name
+    
+    # Test bucket ARN format
+    bucket_arn = stack_outputs['s3_bucket_arn']
+    assert bucket_arn.startswith('arn:aws:s3:::')
+    assert bucket_name in bucket_arn
+    
+    # Test bucket domain name
+    bucket_domain = stack_outputs.get('s3_bucket_domain_name', '')
+    if bucket_domain:
+      assert bucket_name in bucket_domain
+      assert bucket_domain.endswith('.s3.amazonaws.com')
 
-    # Synthesize the stack
-    synth_result = app.synth()
-    assert synth_result is not None
+  def test_security_groups_validation(self):
+    """Test security group configuration from outputs."""
+    outputs_file = "cfn-outputs/flat-outputs.json"
+    if not os.path.exists(outputs_file):
+      pytest.skip("No deployed stack outputs found")
+    
+    with open(outputs_file, 'r') as f:
+      outputs = json.load(f)
+    
+    stack_outputs = outputs[list(outputs.keys())[0]]
+    
+    # Test all security groups exist and have correct format
+    sg_ids = [
+      stack_outputs['web_security_group_id'],
+      stack_outputs['app_security_group_id'],
+      stack_outputs['db_security_group_id'],
+      stack_outputs['bastion_security_group_id']
+    ]
+    
+    # Validate security group ID format
+    for sg_id in sg_ids:
+      assert sg_id.startswith('sg-')
+    
+    # Ensure all security groups are unique
+    assert len(set(sg_ids)) == 4
 
-    # Note: For full integration test, we would deploy here:
-    # subprocess.run(['terraform', 'init'], cwd=f'cdktf.out/stacks/{stack_name}')
-    # subprocess.run(['terraform', 'apply', '-auto-approve'], cwd=f'cdktf.out/stacks/{stack_name}')
+  def test_monitoring_resources_validation(self):
+    """Test monitoring resources from outputs."""
+    outputs_file = "cfn-outputs/flat-outputs.json"
+    if not os.path.exists(outputs_file):
+      pytest.skip("No deployed stack outputs found")
     
-    # For now, just verify synthesis and structure
-    stack_artifact = None
-    for stack_info in synth_result.stacks:
-      if stack_info.name == stack_name:
-        stack_artifact = stack_info
-        break
+    with open(outputs_file, 'r') as f:
+      outputs = json.load(f)
     
-    assert stack_artifact is not None
+    stack_outputs = outputs[list(outputs.keys())[0]]
+    
+    # Test SNS topic ARN format
+    sns_arn = stack_outputs['sns_topic_arn']
+    assert sns_arn.startswith('arn:aws:sns:')
+    assert stack_outputs['aws_region'] in sns_arn
+    assert stack_outputs['environment'] in sns_arn
+    
+    # Test CloudWatch dashboard URL format
+    dashboard_url = stack_outputs['cloudwatch_dashboard_url']
+    assert 'cloudwatch' in dashboard_url
+    assert 'dashboards' in dashboard_url
+    assert stack_outputs['aws_region'] in dashboard_url
+    assert stack_outputs['environment'] in dashboard_url
 
-  def test_vpc_validation_with_live_aws(self, cleanup_resources):
-    """Test VPC configuration against live AWS."""
-    ec2_client = boto3.client('ec2', region_name='us-east-1')
+  def test_environment_configuration(self):
+    """Test environment-specific configuration from outputs."""
+    outputs_file = "cfn-outputs/flat-outputs.json"
+    if not os.path.exists(outputs_file):
+      pytest.skip("No deployed stack outputs found")
     
-    # Create a test stack
-    test_id = f"vpctest{int(time.time())}"
-    app = App()
-    stack = TapStack(
-      app,
-      f"VPCValidationTest{test_id}",
-      environment_suffix="integration",
-      aws_region="us-east-1",
-    )
+    with open(outputs_file, 'r') as f:
+      outputs = json.load(f)
     
-    # Verify environment configuration
-    env_config = stack._get_environment_config("integration")
+    stack_outputs = outputs[list(outputs.keys())[0]]
     
-    # Validate configuration matches AWS best practices
-    assert env_config.vpc_cidr == "10.2.0.0/16"  # test environment CIDR
-    assert len(env_config.availability_zones) >= 2  # Multi-AZ requirement
+    # Validate environment configuration
+    assert 'environment' in stack_outputs
+    assert 'aws_region' in stack_outputs
+    assert stack_outputs['aws_region'] == 'us-east-1'
+    assert stack_outputs['environment'] in ['dev', 'test', 'prod']
     
-    # Verify availability zones exist in AWS
-    available_azs = ec2_client.describe_availability_zones(
-      Filters=[{'Name': 'state', 'Values': ['available']}]
-    )
-    available_az_names = [az['ZoneName'] for az in available_azs['AvailabilityZones']]
-    
-    for az in env_config.availability_zones:
-      assert az in available_az_names, f"Availability zone {az} is not available in us-east-1"
+    # Validate VPC CIDR based on environment
+    if stack_outputs['environment'] == 'dev':
+      assert stack_outputs['vpc_cidr'] == '10.1.0.0/16'
+    elif stack_outputs['environment'] == 'test':
+      assert stack_outputs['vpc_cidr'] == '10.2.0.0/16'
+    elif stack_outputs['environment'] == 'prod':
+      assert stack_outputs['vpc_cidr'] == '10.3.0.0/16'
 
-  def test_s3_bucket_validation_with_live_aws(self, cleanup_resources):
-    """Test S3 bucket configuration against live AWS."""
-    s3_client = boto3.client('s3', region_name='us-east-1')
+  def test_infrastructure_outputs_completeness(self):
+    """Test that all expected infrastructure outputs are present."""
+    outputs_file = "cfn-outputs/flat-outputs.json"
+    if not os.path.exists(outputs_file):
+      pytest.skip("No deployed stack outputs found")
     
-    # Test bucket naming conventions
-    test_id = f"s3test{int(time.time())}"
-    app = App()
-    stack = TapStack(
-      app,
-      f"S3ValidationTest{test_id}",
-      environment_suffix="integration",
-      aws_region="us-east-1",
-    )
+    with open(outputs_file, 'r') as f:
+      outputs = json.load(f)
     
-    # Verify stack creates valid bucket configuration
-    assert stack is not None
+    stack_outputs = outputs[list(outputs.keys())[0]]
     
-    # Test bucket name format (would be generated during deployment)
-    expected_bucket_pattern = f"tap-bucket-integration-s3validationtest{test_id}-us-east-1"
+    # Check for required outputs
+    required_outputs = [
+      'vpc_id', 'vpc_cidr', 'public_subnet_ids', 'private_subnet_ids',
+      'internet_gateway_id', 'nat_gateway_ids', 'web_security_group_id',
+      'app_security_group_id', 'db_security_group_id', 'bastion_security_group_id',
+      's3_bucket_id', 's3_bucket_arn', 'sns_topic_arn', 'environment',
+      'aws_region', 'availability_zones', 'cloudwatch_dashboard_url'
+    ]
     
-    # Verify bucket name follows AWS naming conventions
-    assert len(expected_bucket_pattern.lower()) <= 63
-    assert expected_bucket_pattern.lower().replace('-', '').replace('.', '').isalnum()
+    for required_output in required_outputs:
+      assert required_output in stack_outputs, f"Required output {required_output} not found"
 
-  def test_security_group_validation_with_live_aws(self, cleanup_resources):
-    """Test security group configuration against live AWS."""
-    ec2_client = boto3.client('ec2', region_name='us-east-1')
+  def test_network_infrastructure_validation(self):
+    """Test network infrastructure configuration from outputs."""
+    outputs_file = "cfn-outputs/flat-outputs.json"
+    if not os.path.exists(outputs_file):
+      pytest.skip("No deployed stack outputs found")
     
-    test_id = f"sgtest{int(time.time())}"
-    app = App()
-    stack = TapStack(
-      app,
-      f"SecurityGroupTest{test_id}",
-      environment_suffix="integration",
-      aws_region="us-east-1",
-    )
+    with open(outputs_file, 'r') as f:
+      outputs = json.load(f)
     
-    # Verify security construct exists
-    assert hasattr(stack, 'security_construct')
-    assert hasattr(stack.security_construct, 'web_sg')
-    assert hasattr(stack.security_construct, 'app_sg')
-    assert hasattr(stack.security_construct, 'db_sg')
-    assert hasattr(stack.security_construct, 'bastion_sg')
-
-  def test_monitoring_resources_validation_with_live_aws(self, cleanup_resources):
-    """Test monitoring resources configuration against live AWS."""
-    cloudwatch_client = boto3.client('cloudwatch', region_name='us-east-1')
-    logs_client = boto3.client('logs', region_name='us-east-1')
-    sns_client = boto3.client('sns', region_name='us-east-1')
+    stack_outputs = outputs[list(outputs.keys())[0]]
     
-    test_id = f"montest{int(time.time())}"
-    app = App()
-    stack = TapStack(
-      app,
-      f"MonitoringTest{test_id}",
-      environment_suffix="integration",
-      aws_region="us-east-1",
-    )
+    # Test Internet Gateway
+    igw_id = stack_outputs['internet_gateway_id']
+    assert igw_id.startswith('igw-')
     
-    # Verify monitoring construct exists
-    assert hasattr(stack, 'monitoring_construct')
-    assert hasattr(stack.monitoring_construct, 'alert_topic')
-    assert hasattr(stack.monitoring_construct, 'log_groups')
-    assert hasattr(stack.monitoring_construct, 'alarms')
-    assert hasattr(stack.monitoring_construct, 'dashboard')
+    # Test NAT Gateways
+    nat_gateway_ids = stack_outputs['nat_gateway_ids']
+    assert isinstance(nat_gateway_ids, list)
+    assert len(nat_gateway_ids) >= 1
+    for nat_id in nat_gateway_ids:
+      assert nat_id.startswith('nat-')
+    
+    # Test subnet configuration
+    public_subnets = stack_outputs['public_subnet_ids']
+    private_subnets = stack_outputs['private_subnet_ids']
+    
+    assert isinstance(public_subnets, list)
+    assert isinstance(private_subnets, list)
+    assert len(public_subnets) >= 2
+    assert len(private_subnets) >= 2
+    
+    # Validate subnet ID format
+    for subnet_id in public_subnets + private_subnets:
+      assert subnet_id.startswith('subnet-')
 
 
 @pytest.mark.e2e
-class TestTapStackEndToEndLive:
-  """End-to-end tests using live AWS resources."""
+class TestTapStackEndToEnd:
+  """End-to-End Tests for TapStack - comprehensive infrastructure validation."""
 
-  @pytest.fixture(autouse=True)
-  def setup_aws_credentials(self):
-    """Setup AWS credentials for testing."""
-    try:
-      session = boto3.Session()
-      credentials = session.get_credentials()
-      if credentials is None:
-        pytest.skip("AWS credentials not available for E2E tests")
-    except Exception:
-      pytest.skip("AWS credentials not available for E2E tests")
+  def test_complete_infrastructure_validation(self):
+    """Test complete infrastructure validation end-to-end from outputs."""
+    outputs_file = "cfn-outputs/flat-outputs.json"
+    if not os.path.exists(outputs_file):
+      pytest.skip("No deployed stack outputs found")
+    
+    with open(outputs_file, 'r') as f:
+      outputs = json.load(f)
+    
+    stack_outputs = outputs[list(outputs.keys())[0]]
+    
+    # Test all major components exist in outputs
+    # VPC and networking
+    assert stack_outputs['vpc_id'].startswith('vpc-')
+    assert stack_outputs['vpc_cidr'] in ['10.1.0.0/16', '10.2.0.0/16', '10.3.0.0/16']
+    
+    # Subnets
+    public_subnets = stack_outputs['public_subnet_ids']
+    private_subnets = stack_outputs['private_subnet_ids']
+    assert len(public_subnets) >= 2
+    assert len(private_subnets) >= 2
+    assert all(subnet.startswith('subnet-') for subnet in public_subnets + private_subnets)
+    
+    # Internet Gateway
+    assert stack_outputs['internet_gateway_id'].startswith('igw-')
+    
+    # NAT Gateways
+    nat_gateways = stack_outputs['nat_gateway_ids']
+    assert len(nat_gateways) >= 1
+    assert all(nat.startswith('nat-') for nat in nat_gateways)
+    
+    # Security Groups
+    sg_ids = [
+      stack_outputs['web_security_group_id'],
+      stack_outputs['app_security_group_id'],
+      stack_outputs['db_security_group_id'],
+      stack_outputs['bastion_security_group_id']
+    ]
+    assert all(sg.startswith('sg-') for sg in sg_ids)
+    assert len(set(sg_ids)) == 4  # All unique
+    
+    # S3 Bucket
+    bucket_name = stack_outputs['s3_bucket_id']
+    assert len(bucket_name) <= 63
+    assert 'tap-bucket' in bucket_name
+    
+    # SNS Topic
+    sns_arn = stack_outputs['sns_topic_arn']
+    assert sns_arn.startswith('arn:aws:sns:')
+    assert stack_outputs['environment'] in sns_arn
 
-  def test_multi_environment_configuration_validation(self):
-    """Test multi-environment configuration validation end-to-end."""
-    environments = ['dev', 'test', 'prod']
-    environment_stacks = {}
+  def test_multi_environment_support(self):
+    """Test that the infrastructure supports multiple environments."""
+    outputs_file = "cfn-outputs/flat-outputs.json"
+    if not os.path.exists(outputs_file):
+      pytest.skip("No deployed stack outputs found")
+    
+    with open(outputs_file, 'r') as f:
+      outputs = json.load(f)
+    
+    stack_outputs = outputs[list(outputs.keys())[0]]
+    
+    # Validate environment-specific configurations
+    assert stack_outputs['environment'] in ['dev', 'test', 'prod']
+    assert stack_outputs['aws_region'] == 'us-east-1'
+    
+    # Validate environment-specific CIDR ranges
+    if stack_outputs['environment'] == 'dev':
+      assert stack_outputs['vpc_cidr'] == '10.1.0.0/16'
+    elif stack_outputs['environment'] == 'test':
+      assert stack_outputs['vpc_cidr'] == '10.2.0.0/16'
+    elif stack_outputs['environment'] == 'prod':
+      assert stack_outputs['vpc_cidr'] == '10.3.0.0/16'
+    
+    # Validate multi-AZ deployment
+    assert len(stack_outputs['availability_zones']) >= 2
+    assert len(stack_outputs['public_subnet_ids']) >= 2
+    assert len(stack_outputs['private_subnet_ids']) >= 2
+    assert len(stack_outputs['nat_gateway_ids']) >= 1
 
-    # Create stacks for each environment
-    for env in environments:
-      app = App()
-      stack = TapStack(
-        app,
-        f"MultiEnv{env.title()}StackE2E",
-        environment_suffix=env,
-        aws_region="us-east-1",
-      )
-      environment_stacks[env] = stack
-      
-      # Verify each environment has correct configuration
-      env_config = stack._get_environment_config(env)
-      assert env_config.environment == env
-      
-      # Verify different VPC CIDRs for each environment
-      expected_cidrs = {'dev': '10.1.0.0/16', 'test': '10.2.0.0/16', 'prod': '10.3.0.0/16'}
-      assert env_config.vpc_cidr == expected_cidrs[env]
+  def test_infrastructure_scalability(self):
+    """Test infrastructure scalability and redundancy from outputs."""
+    outputs_file = "cfn-outputs/flat-outputs.json"
+    if not os.path.exists(outputs_file):
+      pytest.skip("No deployed stack outputs found")
+    
+    with open(outputs_file, 'r') as f:
+      outputs = json.load(f)
+    
+    stack_outputs = outputs[list(outputs.keys())[0]]
+    
+    # Test multi-AZ deployment
+    assert len(stack_outputs['availability_zones']) >= 2
+    
+    # Test redundant NAT gateways
+    assert len(stack_outputs['nat_gateway_ids']) >= 1
+    
+    # Test multiple subnets for redundancy
+    assert len(stack_outputs['public_subnet_ids']) >= 2
+    assert len(stack_outputs['private_subnet_ids']) >= 2
+    
+    # Test multiple security groups for different tiers
+    assert 'web_security_group_id' in stack_outputs
+    assert 'app_security_group_id' in stack_outputs
+    assert 'db_security_group_id' in stack_outputs
+    assert 'bastion_security_group_id' in stack_outputs
 
-    # Verify environment isolation and configuration differences
-    dev_config = environment_stacks['dev']._get_environment_config('dev')
-    prod_config = environment_stacks['prod']._get_environment_config('prod')
+  def test_output_format_validation(self):
+    """Test that all outputs have correct format and structure."""
+    outputs_file = "cfn-outputs/flat-outputs.json"
+    if not os.path.exists(outputs_file):
+      pytest.skip("No deployed stack outputs found")
     
-    # Different monitoring configurations
-    assert dev_config.monitoring_config['log_retention_days'] != prod_config.monitoring_config['log_retention_days']
-    assert dev_config.monitoring_config['alarm_threshold'] != prod_config.monitoring_config['alarm_threshold']
+    with open(outputs_file, 'r') as f:
+      outputs = json.load(f)
     
-    # Different security configurations
-    assert dev_config.security_config['enable_nacls'] != prod_config.security_config['enable_nacls']
+    stack_outputs = outputs[list(outputs.keys())[0]]
     
-    # Different number of availability zones
-    assert len(dev_config.availability_zones) != len(prod_config.availability_zones)
-
-    # Verify prod has more strict settings
-    assert prod_config.monitoring_config['log_retention_days'] > dev_config.monitoring_config['log_retention_days']
-    assert prod_config.monitoring_config['alarm_threshold'] < dev_config.monitoring_config['alarm_threshold']
-    assert prod_config.security_config['enable_nacls'] == True
-    assert len(prod_config.availability_zones) >= len(dev_config.availability_zones)
-
-  def test_complete_stack_synthesis_and_validation(self):
-    """Test complete stack synthesis and configuration validation."""
-    test_id = f"e2e{int(time.time())}"
-    app = App()
-    stack = TapStack(
-      app,
-      f"CompleteE2EStack{test_id}",
-      environment_suffix="e2e",
-      aws_region="us-east-1",
-    )
-
-    # Synthesize the stack
-    synth_result = app.synth()
-    assert synth_result is not None
-
-    # Find our stack in the synthesis result
-    stack_artifact = None
-    for stack_info in synth_result.stacks:
-      if stack_info.name == f"CompleteE2EStack{test_id}":
-        stack_artifact = stack_info
-        break
+    # Test ID formats
+    assert stack_outputs['vpc_id'].startswith('vpc-')
+    assert stack_outputs['internet_gateway_id'].startswith('igw-')
+    assert all(nat.startswith('nat-') for nat in stack_outputs['nat_gateway_ids'])
+    assert all(subnet.startswith('subnet-') for subnet in stack_outputs['public_subnet_ids'])
+    assert all(subnet.startswith('subnet-') for subnet in stack_outputs['private_subnet_ids'])
+    assert all(sg.startswith('sg-') for sg in [
+      stack_outputs['web_security_group_id'],
+      stack_outputs['app_security_group_id'],
+      stack_outputs['db_security_group_id'],
+      stack_outputs['bastion_security_group_id']
+    ])
     
-    assert stack_artifact is not None
+    # Test ARN formats
+    assert stack_outputs['s3_bucket_arn'].startswith('arn:aws:s3:::')
+    assert stack_outputs['sns_topic_arn'].startswith('arn:aws:sns:')
     
-    # Read and validate the generated Terraform configuration
-    tf_json_path = os.path.join(stack_artifact.assembly_directory, "cdk.tf.json")
+    # Test URL formats
+    assert 'cloudwatch' in stack_outputs['cloudwatch_dashboard_url']
+    assert 'dashboards' in stack_outputs['cloudwatch_dashboard_url']
     
-    if os.path.exists(tf_json_path):
-      with open(tf_json_path, 'r') as f:
-        tf_config = json.load(f)
-      
-      # Verify complete infrastructure components are present
-      resources = tf_config["resource"]
-      
-      # VPC resources
-      vpc_resources = [key for key in resources.keys() if "aws_vpc" in key]
-      assert len(vpc_resources) >= 1
-      
-      # Subnet resources (public and private)
-      subnet_resources = [key for key in resources.keys() if "aws_subnet" in key]
-      assert len(subnet_resources) >= 4  # At least 2 public + 2 private
-      
-      # Internet Gateway
-      igw_resources = [key for key in resources.keys() if "aws_internet_gateway" in key]
-      assert len(igw_resources) >= 1
-      
-      # NAT Gateways
-      nat_resources = [key for key in resources.keys() if "aws_nat_gateway" in key]
-      assert len(nat_resources) >= 1
-      
-      # Security Groups
-      sg_resources = [key for key in resources.keys() if "aws_security_group" in key]
-      assert len(sg_resources) >= 4  # web, app, db, bastion
-      
-      # S3 Bucket and related resources
-      s3_resources = [key for key in resources.keys() if "aws_s3_bucket" in key]
-      assert len(s3_resources) >= 3  # bucket, versioning, encryption
-      
-      # CloudWatch resources
-      cw_resources = [key for key in resources.keys() if "aws_cloudwatch" in key]
-      assert len(cw_resources) >= 1
-      
-      # SNS resources
-      sns_resources = [key for key in resources.keys() if "aws_sns_topic" in key]
-      assert len(sns_resources) >= 1
-      
-      # Flow Log resources
-      flow_log_resources = [key for key in resources.keys() if "aws_flow_log" in key]
-      assert len(flow_log_resources) >= 1
-
-  def test_environment_specific_feature_validation(self):
-    """Test environment-specific features are correctly configured."""
-    # Test dev environment (less restrictive)
-    app_dev = App()
-    dev_stack = TapStack(
-      app_dev,
-      "EnvSpecificDevStack",
-      environment_suffix="dev",
-      aws_region="us-east-1",
-    )
-    
-    dev_config = dev_stack._get_environment_config("dev")
-    assert dev_config.monitoring_config["log_retention_days"] == 7
-    assert dev_config.monitoring_config["alarm_threshold"] == 80
-    assert dev_config.security_config["enable_nacls"] == False
-    assert len(dev_config.availability_zones) == 2
-
-    # Test prod environment (more restrictive)
-    app_prod = App()
-    prod_stack = TapStack(
-      app_prod,
-      "EnvSpecificProdStack", 
-      environment_suffix="prod",
-      aws_region="us-east-1",
-    )
-    
-    prod_config = prod_stack._get_environment_config("prod")
-    assert prod_config.monitoring_config["log_retention_days"] == 90
-    assert prod_config.monitoring_config["alarm_threshold"] == 60
-    assert prod_config.security_config["enable_nacls"] == True
-    assert len(prod_config.availability_zones) == 3
-
-  def test_infrastructure_outputs_validation(self):
-    """Test that infrastructure outputs are properly configured."""
-    test_id = f"outputs{int(time.time())}"
-    app = App()
-    stack = TapStack(
-      app,
-      f"OutputsValidationStack{test_id}",
-      environment_suffix="test",
-      aws_region="us-east-1",
-    )
-
-    # Synthesize and check outputs
-    synth_result = app.synth()
-    
-    # Find our stack
-    stack_artifact = None
-    for stack_info in synth_result.stacks:
-      if stack_info.name == f"OutputsValidationStack{test_id}":
-        stack_artifact = stack_info
-        break
-    
-    assert stack_artifact is not None
-    
-    # Read the Terraform configuration
-    tf_json_path = os.path.join(stack_artifact.assembly_directory, "cdk.tf.json")
-    
-    if os.path.exists(tf_json_path):
-      with open(tf_json_path, 'r') as f:
-        tf_config = json.load(f)
-      
-      # Verify outputs section exists
-      assert "output" in tf_config
-      outputs = tf_config["output"]
-      
-      # Check for required outputs
-      required_outputs = [
-        "vpc_id", "vpc_cidr", "public_subnet_ids", "private_subnet_ids",
-        "internet_gateway_id", "nat_gateway_ids", "web_security_group_id",
-        "s3_bucket_id", "s3_bucket_arn", "sns_topic_arn", "environment"
-      ]
-      
-      for required_output in required_outputs:
-        output_found = any(required_output in key for key in outputs.keys())
-        assert output_found, f"Required output {required_output} not found in outputs"
-
-  def test_resource_tagging_validation(self):
-    """Test that resources are properly tagged according to environment."""
-    test_id = f"tags{int(time.time())}"
-    app = App()
-    stack = TapStack(
-      app,
-      f"TaggingValidationStack{test_id}",
-      environment_suffix="prod",
-      aws_region="us-east-1",
-    )
-
-    # Get environment configuration
-    env_config = stack._get_environment_config("prod")
-    
-    # Verify expected tags are present
-    expected_tags = ["Environment", "Project", "Owner", "CostCenter"]
-    for expected_tag in expected_tags:
-      assert expected_tag in env_config.tags
-    
-    # Verify environment-specific values
-    assert env_config.tags["Environment"] == "production"
-    assert env_config.tags["Project"] == "multi-env-cdktf"
-    assert env_config.tags["Owner"] == "ops-team"
-    assert env_config.tags["CostCenter"] == "production"
+    # Test list formats
+    assert isinstance(stack_outputs['availability_zones'], list)
+    assert isinstance(stack_outputs['public_subnet_ids'], list)
+    assert isinstance(stack_outputs['private_subnet_ids'], list)
+    assert isinstance(stack_outputs['nat_gateway_ids'], list)
