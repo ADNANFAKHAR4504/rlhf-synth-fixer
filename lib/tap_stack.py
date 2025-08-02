@@ -27,7 +27,6 @@ class TapStack(pulumi.ComponentResource):
       name=f"{name}-network",
       environment=self.environment_suffix,
       tags=self.tags,
-      vpc_id=os.getenv("EXISTING_VPC_ID"),  # Optional: for reusing existing VPC
       opts=ResourceOptions(parent=self, provider=aws_provider)
     )
 
