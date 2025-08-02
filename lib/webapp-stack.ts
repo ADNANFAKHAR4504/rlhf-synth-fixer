@@ -183,5 +183,13 @@ export class WebAppStack extends cdk.Stack {
       value: bucket.bucketName,
       description: 'S3 Bucket ID',
     });
+    new cdk.CfnOutput(this, 'InstanceRoleName', {
+      value: ec2Role.roleName,
+      description: 'Instance role name',
+    });
+    new cdk.CfnOutput(this, 'SecurityGroupId', {
+      value: securityGroup.securityGroupId,
+      description: 'Security group ID',
+    });
   }
 }

@@ -1,10 +1,19 @@
 import fs from 'fs';
-import { EC2Client, DescribeVpcsCommand } from '@aws-sdk/client-ec2';
+import {
+  EC2Client,
+  DescribeVpcsCommand,
+  DescribeSecurityGroupsCommand,
+} from '@aws-sdk/client-ec2';
 import { S3Client, GetBucketVersioningCommand } from '@aws-sdk/client-s3';
 import {
   AutoScalingClient,
   DescribeAutoScalingGroupsCommand,
 } from '@aws-sdk/client-auto-scaling';
+import { IAMClient, ListRolesCommand } from '@aws-sdk/client-iam';
+import {
+  CloudWatchClient,
+  DescribeAlarmsCommand,
+} from '@aws-sdk/client-cloudwatch';
 import axios from 'axios';
 
 const region = process.env.AWS_REGION || 'us-east-1';
@@ -28,6 +37,8 @@ try {
 const s3Client = new S3Client({ region });
 const ec2Client = new EC2Client({ region });
 const asgClient = new AutoScalingClient({ region });
+const iamClient = new IAMClient({ region });
+const cwClient = new CloudWatchClient({ region });
 
 describe('WebAppStack Integration Tests', () => {
   test('S3 bucket is versioned', async () => {
@@ -68,5 +79,60 @@ describe('WebAppStack Integration Tests', () => {
     const response = await axios.get(url, { validateStatus: () => true });
 
     expect([200, 302]).toContain(response.status); // 302 redirect is also acceptable
+  });
+
+  test('AutoScaling Group exists and has min capacity of 2', async () => {
+    const asgs = await asgClient.send(new DescribeAutoScalingGroupsCommand({}));
+    const matchingASG = asgs.AutoScalingGroups?.find(asg =>
+      asg.AutoScalingGroupName?.includes('WebAppASG')
+    );
+
+    expect(matchingASG).toBeDefined();
+    expect(matchingASG?.MinSize).toBeGreaterThanOrEqual(2);
+  });
+
+  test('Security Group allows HTTP access', async () => {
+    const sgId = outputs.SecurityGroupId;
+    expect(sgId).toBeDefined();
+
+    const result = await ec2Client.send(
+      new DescribeSecurityGroupsCommand({ GroupIds: [sgId] })
+    );
+
+    const group = result.SecurityGroups?.[0];
+    expect(group).toBeDefined();
+
+    const allowsHTTP = group?.IpPermissions?.some(
+      rule =>
+        rule.FromPort === 80 && rule.ToPort === 80 && rule.IpProtocol === 'tcp'
+    );
+
+    expect(allowsHTTP).toBe(true);
+  });
+
+  test('IAM role for EC2 exists', async () => {
+    const roleName = outputs.InstanceRoleName;
+    expect(roleName).toBeDefined();
+
+    const result = await iamClient.send(new ListRolesCommand({}));
+    const matching = result.Roles?.find(r => r.RoleName === roleName);
+
+    expect(matching).toBeDefined();
+    expect(matching?.AssumeRolePolicyDocument).toBeDefined();
+  });
+
+  test('CloudWatch alarms exist for CPU utilization', async () => {
+    const result = await cwClient.send(new DescribeAlarmsCommand({}));
+    const matchingAlarms = result.MetricAlarms?.filter(
+      alarm => alarm.MetricName === 'CPUUtilization'
+    );
+
+    expect(matchingAlarms?.length).toBeGreaterThan(0);
+
+    const hasThreshold = matchingAlarms?.some(
+      alarm => typeof alarm.Threshold === 'number'
+    );
+
+    expect(hasThreshold).toBe(true);
   });
 });

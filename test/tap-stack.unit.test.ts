@@ -129,14 +129,41 @@ describe('WebAppStack', () => {
       // Match raw exposed secrets, not property names or logical IDs
       const sensitiveValuePattern =
         /(["']?)(password|secret|api[-_]?key|token)(["']?)\s*[:=]\s*["'][^"']{4,}["']/i;
-
-      // Optional: log if matched
       const match = json.match(sensitiveValuePattern);
       if (match) {
         console.warn('⚠️ Potential sensitive data leak:', match[0]);
       }
 
       expect(json).not.toMatch(sensitiveValuePattern);
+    });
+  });
+
+  describe('Security Groups', () => {
+    test('creates security group with expected properties', () => {
+      template.hasResourceProperties('AWS::EC2::SecurityGroup', {
+        GroupDescription: Match.stringLikeRegexp('.*'),
+        VpcId: Match.anyValue(), // optional if VPC is implicit
+      });
+    });
+
+    test('allows inbound HTTP traffic', () => {
+      template.hasResourceProperties('AWS::EC2::SecurityGroupIngress', {
+        IpProtocol: 'tcp',
+        FromPort: 80,
+        ToPort: 80,
+        SourceSecurityGroupId: Match.anyValue(),
+      });
+    });
+  });
+  describe('CloudWatch Alarms', () => {
+    test('creates CPU utilization alarm', () => {
+      template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+        MetricName: 'CPUUtilization',
+        ComparisonOperator: 'GreaterThanThreshold',
+        Namespace: 'AWS/EC2',
+        Threshold: 80,
+        EvaluationPeriods: 2,
+      });
     });
   });
 });
