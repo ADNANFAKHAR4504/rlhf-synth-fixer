@@ -86,18 +86,34 @@ export class WebAppStack extends cdk.Stack {
       ],
     });
 
-    const securityGroup = new ec2.SecurityGroup(this, 'InstanceSecurityGroup', {
+    // Create ALB security group
+    const albSG = new ec2.SecurityGroup(this, 'ALBSecurityGroup', {
       vpc,
+      description: 'ALB security group',
       allowAllOutbound: true,
     });
 
-    securityGroup.addIngressRule(
+    const securityGroup = new ec2.SecurityGroup(this, 'InstanceSecurityGroup', {
+      vpc,
+      allowAllOutbound: true,
+      description: 'Allow HTTP from ALB',
+    });
+
+    albSG.addIngressRule(
       ec2.Peer.anyIpv4(),
       ec2.Port.tcp(80),
-      'Allow HTTP'
+      'Allow HTTP from internet'
     );
+
     securityGroup.addIngressRule(
-      ec2.Peer.anyIpv4(),
+      ec2.Peer.securityGroupId(albSG.securityGroupId),
+      ec2.Port.tcp(80),
+      'Allow HTTP from ALB'
+    );
+
+    securityGroup.addIngressRule(
+      // ec2.Peer.anyIpv4(),
+      ec2.Peer.securityGroupId(albSG.securityGroupId),
       ec2.Port.tcp(443),
       'Allow HTTPS'
     );
@@ -206,7 +222,7 @@ export class WebAppStack extends cdk.Stack {
     });
     new cdk.CfnOutput(this, 'SecurityGroupId', {
       value: securityGroup.securityGroupId,
-      description: 'Security group ID',
+      description: 'EC2 Security Group ID',
     });
   }
 }

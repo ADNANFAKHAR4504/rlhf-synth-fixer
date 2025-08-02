@@ -116,9 +116,7 @@ describe('WebAppStack Integration Tests', () => {
     expect(roleName).toBeDefined();
 
     const result = await iamClient.send(new ListRolesCommand({}));
-    console.log('result.Roles =>', result.Roles);
     const matching = result.Roles?.find(r => r.RoleName !== undefined);
-    console.log('matching =>', matching);
     expect(matching).toBeDefined();
   });
 
