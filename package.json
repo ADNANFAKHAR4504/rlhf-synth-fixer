@@ -37,7 +37,7 @@
     "cdktf:deploy": "cdktf deploy --auto-approve",
     "cdktf:destroy": "cdktf destroy --auto-approve",
     "tf": "terraform",
-    "tf:init": "terraform -chdir=bin init ",
+    "tf:init": "terraform -chdir=bin init $TF_INIT_OPTS",
     "tf:plan": "cd bin && terraform plan",
     "tf:deploy": "cd bin && terraform apply -auto-approve",
     "tf:destroy": "cd bin && terraform destroy -auto-approve",
