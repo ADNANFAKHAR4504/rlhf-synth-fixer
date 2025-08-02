@@ -1,0 +1,348 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "TAP Stack - Task Assignment Platform CloudFormation Template",
+  "Metadata": {
+    "AWS::CloudFormation::Interface": {
+      "ParameterGroups": [
+        {
+          "Label": {
+            "default": "Environment Configuration"
+          },
+          "Parameters": [
+            "EnvironmentSuffix"
+          ]
+        }
+      ]
+    }
+  },
+  "Parameters": {
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Default": "dev",
+      "Description": "Environment suffix for resource naming (e.g., dev, staging, prod)",
+      "AllowedPattern": "^[a-zA-Z0-9]+$",
+      "ConstraintDescription": "Must contain only alphanumeric characters"
+    }
+  },
+  "Resources": {
+    "TestS3Bucket": {
+      "Type": "AWS::S3::Bucket",
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete",
+      "Properties": {
+        "BucketName": {
+          "Fn::Sub": "test-security-bucket-${EnvironmentSuffix}-${AWS::AccountId}"
+        },
+        "VersioningConfiguration": {
+          "Status": "Enabled"
+        },
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256"
+              }
+            }
+          ]
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true
+        }
+      }
+    },
+    "EC2InstanceRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "EC2-S3ReadOnlyRole-${EnvironmentSuffix}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "ec2.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess"
+        ],
+        "Policies": [
+          {
+            "PolicyName": {
+              "Fn::Sub": "ExplicitS3WriteDeny-${EnvironmentSuffix}"
+            },
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Deny",
+                  "Action": [
+                    "s3:PutObject",
+                    "s3:PutObjectAcl",
+                    "s3:DeleteObject",
+                    "s3:DeleteObjectVersion",
+                    "s3:PutBucketPolicy",
+                    "s3:DeleteBucket",
+                    "s3:PutBucketAcl"
+                  ],
+                  "Resource": "*"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "EC2InstanceProfile": {
+      "Type": "AWS::IAM::InstanceProfile",
+      "Properties": {
+        "InstanceProfileName": {
+          "Fn::Sub": "EC2-S3ReadOnlyProfile-${EnvironmentSuffix}"
+        },
+        "Roles": [
+          {
+            "Ref": "EC2InstanceRole"
+          }
+        ]
+      }
+    },
+    "TestIAMUser": {
+      "Type": "AWS::IAM::User",
+      "Properties": {
+        "UserName": {
+          "Fn::Sub": "test-s3-user-${EnvironmentSuffix}"
+        }
+      }
+    },
+    "S3SpecificBucketReadOnlyPolicy": {
+      "Type": "AWS::IAM::Policy",
+      "Properties": {
+        "PolicyName": {
+          "Fn::Sub": "S3SpecificBucketReadOnly-${EnvironmentSuffix}"
+        },
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Action": [
+                "s3:GetObject",
+                "s3:GetObjectVersion",
+                "s3:ListBucket",
+                "s3:GetBucketLocation"
+              ],
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "TestS3Bucket",
+                    "Arn"
+                  ]
+                },
+                {
+                  "Fn::Sub": "${TestS3Bucket.Arn}/*"
+                }
+              ]
+            }
+          ]
+        },
+        "Users": [
+          {
+            "Ref": "TestIAMUser"
+          }
+        ]
+      }
+    },
+    "TurnAroundPromptTable": {
+      "Type": "AWS::DynamoDB::Table",
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete",
+      "Properties": {
+        "TableName": {
+          "Fn::Sub": "TurnAroundPromptTable${EnvironmentSuffix}"
+        },
+        "BillingMode": "PAY_PER_REQUEST",
+        "DeletionProtectionEnabled": false,
+        "AttributeDefinitions": [
+          {
+            "AttributeName": "id",
+            "AttributeType": "S"
+          }
+        ],
+        "KeySchema": [
+          {
+            "AttributeName": "id",
+            "KeyType": "HASH"
+          }
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "TestS3BucketName": {
+      "Description": "Name of the test S3 bucket",
+      "Value": {
+        "Ref": "TestS3Bucket"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-TestS3BucketName"
+        }
+      }
+    },
+    "TestS3BucketArn": {
+      "Description": "ARN of the test S3 bucket",
+      "Value": {
+        "Fn::GetAtt": [
+          "TestS3Bucket",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-TestS3BucketArn"
+        }
+      }
+    },
+    "EC2InstanceRoleName": {
+      "Description": "Name of the EC2 instance role",
+      "Value": {
+        "Ref": "EC2InstanceRole"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-EC2InstanceRoleName"
+        }
+      }
+    },
+    "EC2InstanceRoleArn": {
+      "Description": "ARN of the EC2 instance role",
+      "Value": {
+        "Fn::GetAtt": [
+          "EC2InstanceRole",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-EC2InstanceRoleArn"
+        }
+      }
+    },
+    "EC2InstanceProfileName": {
+      "Description": "Name of the EC2 instance profile",
+      "Value": {
+        "Ref": "EC2InstanceProfile"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-EC2InstanceProfileName"
+        }
+      }
+    },
+    "EC2InstanceProfileArn": {
+      "Description": "ARN of the EC2 instance profile",
+      "Value": {
+        "Fn::GetAtt": [
+          "EC2InstanceProfile",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-EC2InstanceProfileArn"
+        }
+      }
+    },
+    "TestIAMUserName": {
+      "Description": "Name of the test IAM user",
+      "Value": {
+        "Ref": "TestIAMUser"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-TestIAMUserName"
+        }
+      }
+    },
+    "TestIAMUserArn": {
+      "Description": "ARN of the test IAM user",
+      "Value": {
+        "Fn::GetAtt": [
+          "TestIAMUser",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-TestIAMUserArn"
+        }
+      }
+    },
+    "S3SpecificBucketReadOnlyPolicyName": {
+      "Description": "Name of the S3 specific bucket read-only policy",
+      "Value": {
+        "Ref": "S3SpecificBucketReadOnlyPolicy"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-S3SpecificBucketReadOnlyPolicyName"
+        }
+      }
+    },
+    "TurnAroundPromptTableName": {
+      "Description": "Name of the DynamoDB table",
+      "Value": {
+        "Ref": "TurnAroundPromptTable"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-TurnAroundPromptTableName"
+        }
+      }
+    },
+    "TurnAroundPromptTableArn": {
+      "Description": "ARN of the DynamoDB table",
+      "Value": {
+        "Fn::GetAtt": [
+          "TurnAroundPromptTable",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-TurnAroundPromptTableArn"
+        }
+      }
+    },
+    "StackName": {
+      "Description": "Name of this CloudFormation stack",
+      "Value": {
+        "Ref": "AWS::StackName"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-StackName"
+        }
+      }
+    },
+    "EnvironmentSuffix": {
+      "Description": "Environment suffix used for this deployment",
+      "Value": {
+        "Ref": "EnvironmentSuffix"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-EnvironmentSuffix"
+        }
+      }
+    }
+  }
+}
