@@ -26,21 +26,21 @@ class TestSecureS3Infrastructure:
     
     assert len(s3_buckets) >= 1, "At least one S3 bucket should be created"
     
-    for bucket_name, bucket_config in s3_buckets.items():
-      encryption_config = bucket_config.get("server_side_encryption_configuration")
-      assert encryption_config is not None, \
-        f"Bucket {bucket_name} missing encryption configuration"
+    # In CDKTF, encryption is configured via separate resources
+    encryption_configs = resources.get("aws_s3_bucket_server_side_encryption_configuration", {})
+    assert len(encryption_configs) >= len(s3_buckets), \
+      "Each S3 bucket should have corresponding encryption configuration"
+    
+    for enc_name, enc_config in encryption_configs.items():
+      rule = enc_config.get("rule", [])
+      assert len(rule) > 0, f"Encryption {enc_name} should have at least one rule"
       
-      rule = encryption_config.get("rule")
-      assert rule is not None, f"Bucket {bucket_name} missing encryption rule"
-      
-      default_encryption = rule.get("apply_server_side_encryption_by_default")
-      assert default_encryption is not None, \
-        f"Bucket {bucket_name} missing default encryption"
-      
+      # Check the first rule for AES256
+      first_rule = rule[0] if rule else {}
+      default_encryption = first_rule.get("apply_server_side_encryption_by_default", {})
       algorithm = default_encryption.get("sse_algorithm")
       assert algorithm == "AES256", \
-        f"Bucket {bucket_name} should use AES256 encryption, got {algorithm}"
+        f"Encryption {enc_name} should use AES256, got {algorithm}"
 
   def test_s3_buckets_have_versioning_enabled(self):
     """Test that S3 buckets have versioning enabled for data recovery."""
@@ -262,13 +262,26 @@ class TestResourceTagging:
     
     required_tag_keys = ["Environment", "Owner", "SecurityLevel"]
     
-    for _, resource_instances in resources.items():
+    # Resources that don't support tagging in AWS
+    non_taggable_resources = {
+      "aws_iam_role_policy_attachment",
+      "aws_s3_bucket_server_side_encryption_configuration", 
+      "aws_s3_bucket_versioning",
+      "aws_s3_bucket_policy",
+      "aws_s3_bucket_public_access_block"
+    }
+    
+    for resource_type, resource_instances in resources.items():
+      # Skip resources that don't support tagging
+      if resource_type in non_taggable_resources:
+        continue
+        
       for _, resource_config in resource_instances.items():
         tags = resource_config.get("tags", {})
         
         for required_tag in required_tag_keys:
           assert required_tag in tags, \
-            f"Resource missing required tag: {required_tag}"
+            f"Resource {resource_type} missing required tag: {required_tag}"
 
   def test_security_level_tags_are_appropriate(self):
     """Test that SecurityLevel tags reflect high security requirements."""
