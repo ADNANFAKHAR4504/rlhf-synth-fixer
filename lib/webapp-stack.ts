@@ -47,14 +47,18 @@ export class WebAppStack extends cdk.Stack {
     const flowLogRole = new iam.Role(this, 'FlowLogRole', {
       assumedBy: new iam.ServicePrincipal('vpc-flow-logs.amazonaws.com'),
       managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AmazonAPIGatewayPushToCloudWatchLogs'),
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'service-role/AmazonAPIGatewayPushToCloudWatchLogs'
+        ),
       ],
     });
 
     vpc.addFlowLog('FlowLogs', {
-      destination: ec2.FlowLogDestination.toCloudWatchLogs(new logs.LogGroup(this, 'FlowLogsGroup'), flowLogRole),
+      destination: ec2.FlowLogDestination.toCloudWatchLogs(
+        new logs.LogGroup(this, 'FlowLogsGroup'),
+        flowLogRole
+      ),
     });
-
 
     const encryptionKey = new kms.Key(this, 'S3EncryptionKey', {
       enableKeyRotation: true,
