@@ -36,7 +36,8 @@ describe('Route53 Failover CloudFormation Template', () => {
     test('should have KeyPairName parameter', () => {
       expect(template.Parameters.KeyPairName).toBeDefined();
       const param = template.Parameters.KeyPairName;
-      expect(param.Type).toBe('AWS::EC2::KeyPair::KeyName');
+      expect(param.Type).toBe('String');
+      expect(param.Default).toBe('failover-demo-key');
       expect(param.Description).toBe('Name of an existing EC2 KeyPair to enable SSH access to the instances');
     });
 
@@ -51,13 +52,15 @@ describe('Route53 Failover CloudFormation Template', () => {
     test('should have HostedZoneId parameter', () => {
       expect(template.Parameters.HostedZoneId).toBeDefined();
       const param = template.Parameters.HostedZoneId;
-      expect(param.Type).toBe('AWS::Route53::HostedZone::Id');
+      expect(param.Type).toBe('String');
+      expect(param.Default).toBe('Z0909377OVFW706BZN9J');
     });
 
     test('should have DomainName parameter', () => {
       expect(template.Parameters.DomainName).toBeDefined();
       const param = template.Parameters.DomainName;
       expect(param.Type).toBe('String');
+      expect(param.Default).toBe('failoverdemo.com');
       expect(param.AllowedPattern).toBeDefined();
     });
 

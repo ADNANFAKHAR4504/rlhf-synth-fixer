@@ -52,7 +52,8 @@
     },
     "Parameters": {
         "KeyPairName": {
-            "Type": "AWS::EC2::KeyPair::KeyName",
+            "Type": "String",
+            "Default": "failover-demo-key",
             "Description": "Name of an existing EC2 KeyPair to enable SSH access to the instances",
             "ConstraintDescription": "Must be the name of an existing EC2 KeyPair"
         },
@@ -69,12 +70,14 @@
             "ConstraintDescription": "Must be a valid EC2 instance type"
         },
         "HostedZoneId": {
-            "Type": "AWS::Route53::HostedZone::Id",
+            "Type": "String",
+            "Default": "Z0909377OVFW706BZN9J",
             "Description": "Route 53 Hosted Zone ID where DNS records will be created",
             "ConstraintDescription": "Must be a valid Route 53 Hosted Zone ID"
         },
         "DomainName": {
             "Type": "String",
+            "Default": "failoverdemo.com",
             "Description": "Domain name for the failover setup (e.g., app.example.com)",
             "AllowedPattern": "^[a-zA-Z0-9][a-zA-Z0-9-]{1,61}[a-zA-Z0-9]\\.[a-zA-Z]{2,}$",
             "ConstraintDescription": "Must be a valid domain name"
