@@ -179,7 +179,7 @@ jobs:
 
 
       - name: Initialize Terraform
-        run: npm run tf:init \ 
+        run: ls -la && npm run tf:init \ 
           -backend-config="bucket=${{ env.TERRAFORM_STATE_BUCKET }}" \
           -backend-config="key=${{ env.ENVIRONMENT_SUFFIX }}" \
           -backend-config="region=${{ env.TERRAFORM_STATE_BUCKET_REGION }}"
