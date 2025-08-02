@@ -213,7 +213,7 @@ class TestTapStackIntegration(unittest.TestCase):
     with patch('boto3.client') as mock_boto3:
       mock_iam = MagicMock()
       mock_boto3.return_value = mock_iam
-      
+
       # Mock role response
       mock_iam.get_role.return_value = {
         'Role': {
@@ -228,66 +228,96 @@ class TestTapStackIntegration(unittest.TestCase):
             ]
           }
         }
-    }
-      
-    # Mock attached policies
-    mock_iam.list_attached_role_policies.return_value = {
-      'AttachedPolicies': [
-        {
-          'PolicyName': 'AWSLambdaBasicExecutionRole',
-          'PolicyArn': 'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
-        }
-      ]
-    }
-      
-      # Mock inline policies
-    mock_iam.list_role_policies.return_value = {
-      'PolicyNames': ['TapLambdaRoleDefaultPolicy']
-    }
-      
-    mock_iam.get_role_policy.return_value = {
-      'PolicyDocument': {
-        'Statement': [
+      }
+
+      # Mock attached managed policies
+      mock_iam.list_attached_role_policies.return_value = {
+        'AttachedPolicies': [
           {
-            'Effect': 'Allow',
-            'Action': [
-              's3:GetObject',
-              's3:PutObject',
-              's3:DeleteObject',
-              's3:ListBucket'
-            ],
-            'Resource': ['arn:aws:s3:::bucket/*']
-          },
-          {
-            'Effect': 'Allow',
-            'Action': [
-              'dynamodb:GetItem',
-              'dynamodb:PutItem',
-              'dynamodb:UpdateItem',
-              'dynamodb:DeleteItem',
-              'dynamodb:Query',
-              'dynamodb:Scan'
-            ],
-            'Resource': ['arn:aws:dynamodb:us-east-2:123456789012:table/table']
+            'PolicyName': 'AWSLambdaBasicExecutionRole',
+            'PolicyArn': 'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
           }
         ]
       }
-    }
-      
-      # Test role exists
-    iam_client = boto3.client('iam', region_name=self.region)
-    role = iam_client.get_role(RoleName=self.role_name)
-    
-    self.assertEqual(role['Role']['RoleName'], self.role_name)
-    
-    # Test attached policies
-    policies = iam_client.list_attached_role_policies(RoleName=self.role_name)
-    policy_names = [p['PolicyName'] for p in policies['AttachedPolicies']]
-    self.assertIn('AWSLambdaBasicExecutionRole', policy_names)
-    
-    # Test inline policies
-    inline_policies = iam_client.list_role_policies(RoleName=self.role_name)
-    self.assertIn('TapLambdaRoleDefaultPolicy', inline_policies['PolicyNames'])
+
+      # Mock inline policies
+      mock_iam.list_role_policies.return_value = {
+        'PolicyNames': ['AutoGenPolicy1', 'AutoGenPolicy2']
+      }
+
+      # Mock inline policy documents
+      mock_iam.get_role_policy.side_effect = lambda RoleName, PolicyName: {
+        'PolicyDocument': {
+          'Statement': [
+            {
+              'Effect': 'Allow',
+              'Action': [
+                's3:GetObject',
+                's3:PutObject',
+                's3:DeleteObject',
+                's3:ListBucket'
+              ],
+              'Resource': ['arn:aws:s3:::bucket', 'arn:aws:s3:::bucket/*']
+            },
+            {
+              'Effect': 'Allow',
+              'Action': [
+                'dynamodb:GetItem',
+                'dynamodb:PutItem',
+                'dynamodb:UpdateItem',
+                'dynamodb:DeleteItem',
+                'dynamodb:Query',
+                'dynamodb:Scan'
+              ],
+              'Resource': ['arn:aws:dynamodb:us-east-2:123456789012:table/table']
+            }
+          ]
+        }
+      }
+
+      # Run test assertions
+      iam_client = boto3.client('iam', region_name=self.region)
+
+      role = iam_client.get_role(RoleName=self.role_name)
+      self.assertEqual(role['Role']['RoleName'], self.role_name)
+
+      # Check managed policies
+      policies = iam_client.list_attached_role_policies(RoleName=self.role_name)
+      policy_names = [p['PolicyName'] for p in policies['AttachedPolicies']]
+      self.assertIn('AWSLambdaBasicExecutionRole', policy_names)
+
+      # Check inline policies for required permissions
+      inline_policies = iam_client.list_role_policies(RoleName=self.role_name)
+      self.assertGreaterEqual(len(inline_policies['PolicyNames']), 1)
+
+      s3_actions = {
+        "s3:GetObject", "s3:PutObject", "s3:DeleteObject", "s3:ListBucket"
+      }
+      ddb_actions = {
+        "dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem",
+        "dynamodb:DeleteItem", "dynamodb:Query", "dynamodb:Scan"
+      }
+      s3_found = False
+      ddb_found = False
+
+      for policy_name in inline_policies['PolicyNames']:
+        policy_doc = iam_client.get_role_policy(
+          RoleName=self.role_name,
+          PolicyName=policy_name
+        )['PolicyDocument']
+        statements = policy_doc.get('Statement', [])
+        if not isinstance(statements, list):
+          statements = [statements]
+
+        for stmt in statements:
+          actions = set(stmt.get('Action', []))
+          if s3_actions.issubset(actions):
+            s3_found = True
+          if ddb_actions.issubset(actions):
+            ddb_found = True
+
+      self.assertTrue(s3_found, "S3 permissions not found in inline policies")
+      self.assertTrue(ddb_found, "DynamoDB permissions not found in inline policies")
 
   @mark.it("verifies end-to-end integration between Lambda, S3, and DynamoDB")
   def test_lambda_s3_dynamodb_integration(self):
