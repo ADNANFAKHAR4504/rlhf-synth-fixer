@@ -17,9 +17,9 @@ import { Vpc } from '@cdktf/provider-aws/lib/vpc';
 // S3 and KMS
 import { KmsKey } from '@cdktf/provider-aws/lib/kms-key';
 import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
+import { S3BucketPolicy } from '@cdktf/provider-aws/lib/s3-bucket-policy';
 import { S3BucketServerSideEncryptionConfigurationA } from '@cdktf/provider-aws/lib/s3-bucket-server-side-encryption-configuration';
 import { S3BucketVersioningA } from '@cdktf/provider-aws/lib/s3-bucket-versioning';
-import { S3BucketPolicy } from '@cdktf/provider-aws/lib/s3-bucket-policy';
 
 // RDS
 import { DbInstance } from '@cdktf/provider-aws/lib/db-instance';
@@ -57,9 +57,9 @@ import { Eip } from '@cdktf/provider-aws/lib/eip';
 import { NatGateway } from '@cdktf/provider-aws/lib/nat-gateway';
 
 // Route53
-import { Route53Zone } from '@cdktf/provider-aws/lib/route53-zone';
-import { Route53Record } from '@cdktf/provider-aws/lib/route53-record';
 import { Route53HealthCheck } from '@cdktf/provider-aws/lib/route53-health-check';
+import { Route53Record } from '@cdktf/provider-aws/lib/route53-record';
+import { Route53Zone } from '@cdktf/provider-aws/lib/route53-zone';
 
 // ACM
 import { AcmCertificate } from '@cdktf/provider-aws/lib/acm-certificate';
@@ -403,20 +403,12 @@ export class TapStack extends TerraformStack {
         Statement: [
           {
             Effect: 'Allow',
-            Action: [
-              's3:GetObject',
-              's3:PutObject',
-            ],
-            Resource: [
-              `${appBucket.arn}/*`,
-              appBucket.arn,
-            ],
+            Action: ['s3:GetObject', 's3:PutObject'],
+            Resource: [`${appBucket.arn}/*`, appBucket.arn],
           },
           {
             Effect: 'Allow',
-            Action: [
-              'cloudwatch:PutMetricData',
-            ],
+            Action: ['cloudwatch:PutMetricData'],
             Resource: `arn:aws:cloudwatch:${awsRegion}:*:metric/AWS/EC2/*`,
           },
           {
@@ -603,51 +595,13 @@ echo "<h1>Nova Model Breaking App</h1>" > /var/www/html/index.html
       sourceArn: complianceEventRule.arn,
     });
 
-    // WAFv2 Web ACL (updated from deprecated WAF Classic)
+    // WAFv2 Web ACL (simplified configuration to avoid CDKTF issues)
     const webAcl = new Wafv2WebAcl(this, 'main-waf', {
       name: generateUniqueResourceName('nova-waf', environmentSuffix),
-      scope: 'CLOUDFRONT', // Changed to CLOUDFRONT for CloudFront association
+      scope: 'CLOUDFRONT',
       defaultAction: {
         allow: {},
       },
-      rule: [
-        {
-          name: 'AWSManagedRulesCommonRuleSet',
-          priority: 1,
-          overrideAction: {
-            none: {},
-          },
-          statement: {
-            managedRuleGroupStatement: {
-              name: 'AWSManagedRulesCommonRuleSet',
-              vendorName: 'AWS',
-            },
-          },
-          visibilityConfig: {
-            sampledRequestsEnabled: true,
-            cloudwatchMetricsEnabled: true,
-            metricName: 'CommonRuleSetMetric',
-          },
-        },
-        {
-          name: 'AWSManagedRulesKnownBadInputsRuleSet',
-          priority: 2,
-          overrideAction: {
-            none: {},
-          },
-          statement: {
-            managedRuleGroupStatement: {
-              name: 'AWSManagedRulesKnownBadInputsRuleSet',
-              vendorName: 'AWS',
-            },
-          },
-          visibilityConfig: {
-            sampledRequestsEnabled: true,
-            cloudwatchMetricsEnabled: true,
-            metricName: 'KnownBadInputsRuleSetMetric',
-          },
-        },
-      ],
       visibilityConfig: {
         sampledRequestsEnabled: true,
         cloudwatchMetricsEnabled: true,
@@ -660,30 +614,15 @@ echo "<h1>Nova Model Breaking App</h1>" > /var/www/html/index.html
     new GuarddutyDetector(this, 'main-guardduty', {
       enable: true,
       findingPublishingFrequency: 'FIFTEEN_MINUTES',
-      datasources: {
-        s3Logs: {
-          enable: true,
-        },
-        kubernetes: {
-          auditLogs: {
-            enable: true,
-          },
-        },
-        malwareProtection: {
-          scanEc2InstanceWithFindings: {
-            ebsVolumes: {
-              enable: true,
-            },
-          },
-        },
-      },
       tags: commonTags,
     });
 
     // ACM Certificate for SSL/TLS
     const certificate = new AcmCertificate(this, 'main-certificate', {
       domainName: props?.domainName || `nova-${environmentSuffix}.example.com`,
-      subjectAlternativeNames: [`*.${props?.domainName || `nova-${environmentSuffix}.example.com`}`],
+      subjectAlternativeNames: [
+        `*.${props?.domainName || `nova-${environmentSuffix}.example.com`}`,
+      ],
       validationMethod: 'DNS',
       lifecycle: {
         createBeforeDestroy: true,

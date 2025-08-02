@@ -313,7 +313,9 @@ describe('TapStack Unit Tests - Nova Model Breaking Infrastructure', () => {
     // GuardDuty is now enabled as part of security improvements
     test('should create GuardDuty detector for threat detection', () => {
       expect(synthesized.resource.aws_guardduty_detector).toBeDefined();
-      expect(synthesized.resource.aws_guardduty_detector['main-guardduty']).toMatchObject({
+      expect(
+        synthesized.resource.aws_guardduty_detector['main-guardduty']
+      ).toMatchObject({
         enable: true,
         finding_publishing_frequency: 'FIFTEEN_MINUTES',
       });
@@ -328,12 +330,18 @@ describe('TapStack Unit Tests - Nova Model Breaking Infrastructure', () => {
 
     test('should create AWS Secrets Manager for database credentials', () => {
       expect(synthesized.resource.aws_secretsmanager_secret).toBeDefined();
-      expect(synthesized.resource.aws_secretsmanager_secret['db-secret']).toBeDefined();
+      expect(
+        synthesized.resource.aws_secretsmanager_secret['db-secret']
+      ).toBeDefined();
     });
 
     test('should create Origin Access Control for CloudFront', () => {
-      expect(synthesized.resource.aws_cloudfront_origin_access_control).toBeDefined();
-      expect(synthesized.resource.aws_cloudfront_origin_access_control['oac']).toMatchObject({
+      expect(
+        synthesized.resource.aws_cloudfront_origin_access_control
+      ).toBeDefined();
+      expect(
+        synthesized.resource.aws_cloudfront_origin_access_control['oac']
+      ).toMatchObject({
         origin_access_control_origin_type: 's3',
         signing_behavior: 'always',
       });
@@ -341,7 +349,9 @@ describe('TapStack Unit Tests - Nova Model Breaking Infrastructure', () => {
 
     test('should create S3 bucket policy for CloudFront access', () => {
       expect(synthesized.resource.aws_s3_bucket_policy).toBeDefined();
-      expect(synthesized.resource.aws_s3_bucket_policy['app-bucket-policy']).toBeDefined();
+      expect(
+        synthesized.resource.aws_s3_bucket_policy['app-bucket-policy']
+      ).toBeDefined();
     });
 
     test('should create NAT Gateway for private subnet internet access', () => {
@@ -392,7 +402,9 @@ describe('TapStack Unit Tests - Nova Model Breaking Infrastructure', () => {
     // ACM Certificate is now enabled for SSL/TLS
     test('should create ACM certificate for SSL/TLS', () => {
       expect(synthesized.resource.aws_acm_certificate).toBeDefined();
-      expect(synthesized.resource.aws_acm_certificate['main-certificate']).toMatchObject({
+      expect(
+        synthesized.resource.aws_acm_certificate['main-certificate']
+      ).toMatchObject({
         domain_name: 'test.example.com',
         validation_method: 'DNS',
       });
@@ -423,7 +435,9 @@ describe('TapStack Unit Tests - Nova Model Breaking Infrastructure', () => {
     // Route53 health check is now enabled for failover
     test('should create Route53 health check for failover', () => {
       expect(synthesized.resource.aws_route53_health_check).toBeDefined();
-      expect(synthesized.resource.aws_route53_health_check['main-health-check']).toMatchObject({
+      expect(
+        synthesized.resource.aws_route53_health_check['main-health-check']
+      ).toMatchObject({
         type: 'HTTPS_STR_MATCH',
         failure_threshold: 3,
         search_string: 'Nova',
