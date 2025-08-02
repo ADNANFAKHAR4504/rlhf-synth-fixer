@@ -8,7 +8,6 @@ manages environment-specific configurations.
 from typing import Optional
 import textwrap
 from aws_cdk import (
-    Stack,
     aws_s3 as s3,
     aws_dynamodb as dynamodb,
     aws_lambda as lambda_,
@@ -70,7 +69,7 @@ class TapStack(cdk.Stack):
     super().__init__(scope, construct_id, **kwargs)
 
     # Get environment suffix from props, context, or use 'dev' as default
-    environment_suffix = (
+    _environment_suffix = (
         props.environment_suffix if props else None
     ) or self.node.try_get_context('environmentSuffix') or 'dev'
 
@@ -141,7 +140,7 @@ class TapStack(cdk.Stack):
           type=dynamodb.AttributeType.STRING
       ),
       # On-demand billing for cost efficiency
-      billing_mode=dynamodb.BillingMode.ON_DEMAND,
+      billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
       # Enable point-in-time recovery
       point_in_time_recovery=True,
       # Server-side encryption
@@ -309,4 +308,3 @@ class TapStack(cdk.Stack):
   def function_name(self) -> str:
     """Get Lambda function name"""
     return self.lambda_function.function_name
-  
