@@ -93,7 +93,7 @@ class TapStack(cdk.Stack):
     Create S3 bucket for static files and backups
     Follows naming convention: project-env-resource
     """
-    bucket_name = f"{self.project_name}-{self.env_name}-storage-bucket-1213"
+    bucket_name = f"{self.project_name}-{self.env_name}-storage"
     
     bucket = s3.Bucket(
       self,
