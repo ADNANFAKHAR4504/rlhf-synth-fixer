@@ -16,7 +16,7 @@ class TestEnvironmentConfig:
     config = EnvironmentConfig(
       environment="test",
       vpc_cidr="10.1.0.0/16",
-      availability_zones=["us-west-2a", "us-west-2b"],
+      availability_zones=["us-east-1a", "us-east-1b"],
       tags={"Environment": "test"},
       monitoring_config={"log_retention_days": 14},
       security_config={"enable_flow_logs": True}
@@ -24,7 +24,7 @@ class TestEnvironmentConfig:
 
     assert config.environment == "test"
     assert config.vpc_cidr == "10.1.0.0/16"
-    assert config.availability_zones == ["us-west-2a", "us-west-2b"]
+    assert config.availability_zones == ["us-east-1a", "us-east-1b"]
     assert config.tags == {"Environment": "test"}
     assert config.monitoring_config == {"log_retention_days": 14}
     assert config.security_config == {"enable_flow_logs": True}
@@ -41,8 +41,8 @@ class TestTapStack:
       "TestTapStackWithProps",
       environment_suffix="prod",
       state_bucket="custom-state-bucket",
-      state_bucket_region="us-west-2",
-      aws_region="us-west-2",
+      state_bucket_region="us-east-1",
+      aws_region="us-east-1",
     )
 
     # Verify that TapStack instantiates without errors via props

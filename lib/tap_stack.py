@@ -3,11 +3,13 @@
 from typing import Dict, List, Any
 from dataclasses import dataclass
 import json
+import time
 from cdktf import TerraformStack, S3Backend
 from constructs import Construct
 from cdktf_cdktf_provider_aws.provider import AwsProvider
 from cdktf_cdktf_provider_aws.s3_bucket import S3Bucket
 from cdktf_cdktf_provider_aws.s3_bucket_server_side_encryption_configuration import S3BucketServerSideEncryptionConfigurationA
+from cdktf_cdktf_provider_aws.s3_bucket_versioning import S3BucketVersioningA
 from cdktf_cdktf_provider_aws.vpc import Vpc
 from cdktf_cdktf_provider_aws.subnet import Subnet
 from cdktf_cdktf_provider_aws.internet_gateway import InternetGateway
@@ -255,11 +257,12 @@ class VpcConstruct(Construct):
 
   def _create_flow_logs(self) -> None:
     """Create VPC Flow Logs."""
-    # Create CloudWatch Log Group
+    # Create CloudWatch Log Group with unique name
+    unique_suffix = str(int(time.time() * 1000))[-8:]  # Last 8 digits of timestamp
     log_group = CloudwatchLogGroup(
       self,
       "vpc-flow-logs",
-      name=f"/aws/vpc/flowlogs/{self.environment}",
+      name=f"/aws/vpc/flowlogs/{self.environment}-{unique_suffix}",
       retention_in_days=14,
       tags=self.tags
     )
@@ -808,9 +811,19 @@ class TapStack(TerraformStack):
     s3_bucket = S3Bucket(
       self,
       "tap_bucket",
-      bucket=f"tap-bucket-{environment_suffix}-{construct_id}",
-      versioning={"enabled": True},
+      bucket=f"tap-bucket-{environment_suffix}-{construct_id}-{aws_region}".lower().replace("_", "-"),
+      force_destroy=True,
       tags=env_config.tags
+    )
+
+    # Create S3 bucket versioning configuration
+    S3BucketVersioningA(
+      self,
+      "tap_bucket_versioning",
+      bucket=s3_bucket.id,
+      versioning_configuration={
+        "status": "Enabled"
+      }
     )
 
     # Create S3 bucket server-side encryption configuration
@@ -832,7 +845,7 @@ class TapStack(TerraformStack):
       "dev": EnvironmentConfig(
         environment="dev",
         vpc_cidr="10.1.0.0/16",
-        availability_zones=["us-west-2a", "us-west-2b"],
+        availability_zones=["us-east-1a", "us-east-1b"],
         tags={
           "Environment": "development",
           "Project": "multi-env-cdktf",
@@ -853,7 +866,7 @@ class TapStack(TerraformStack):
       "test": EnvironmentConfig(
         environment="test",
         vpc_cidr="10.2.0.0/16",
-        availability_zones=["us-west-2a", "us-west-2b"],
+        availability_zones=["us-east-1a", "us-east-1b"],
         tags={
           "Environment": "testing",
           "Project": "multi-env-cdktf",
@@ -874,7 +887,7 @@ class TapStack(TerraformStack):
       "prod": EnvironmentConfig(
         environment="prod",
         vpc_cidr="10.3.0.0/16",
-        availability_zones=["us-west-2a", "us-west-2b", "us-west-2c"],
+        availability_zones=["us-east-1a", "us-east-1b", "us-east-1c"],
         tags={
           "Environment": "production",
           "Project": "multi-env-cdktf",
