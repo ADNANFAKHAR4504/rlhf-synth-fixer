@@ -25,7 +25,7 @@ class TestTapStack(unittest.TestCase):
   def test_s3_bucket_naming_convention(self):
     """Test S3 bucket follows naming convention"""
     self.template.has_resource_properties("AWS::S3::Bucket", {
-      "BucketName": "tap-preprod-storage"
+      "BucketName": "tap-preprod-storage-bucket-1213"
     })
 
   @mark.it("enables S3 bucket versioning")

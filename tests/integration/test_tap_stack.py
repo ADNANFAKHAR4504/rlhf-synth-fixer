@@ -20,7 +20,7 @@ if os.path.exists(flat_outputs_path):
 else:
   # If no deployment outputs, use mock values for testing
   flat_outputs = {
-    'TapS3BucketName': 'tap-preprod-storage',
+    'TapS3BucketName': 'tap-preprod-storage-bucket-1213',
     'TapDynamoTableName': 'tap-preprod-table',
     'TapLambdaFunctionName': 'tap-preprod-handler',
     'TapLambdaRoleName': 'tap-preprod-lambda-role'
@@ -35,7 +35,7 @@ class TestTapStackIntegration(unittest.TestCase):
     """Set up test environment"""
     self.region = 'us-east-2'
     # Resource names from outputs or expected values
-    self.bucket_name = flat_outputs.get('TapS3BucketName', 'tap-preprod-storage')
+    self.bucket_name = flat_outputs.get('TapS3BucketName', 'tap-preprod-storage-bucket-1213')
     self.table_name = flat_outputs.get('TapDynamoTableName', 'tap-preprod-table')
     self.function_name = flat_outputs.get('TapLambdaFunctionName', 'tap-preprod-handler')
     self.role_name = flat_outputs.get('TapLambdaRoleName', 'tap-preprod-lambda-role')
