@@ -20,11 +20,9 @@ from constructs import Construct
 from cdktf_cdktf_provider_aws.provider import AwsProvider
 from cdktf_cdktf_provider_aws.s3_bucket import S3Bucket
 from cdktf_cdktf_provider_aws.s3_bucket_server_side_encryption_configuration import (
-    S3BucketServerSideEncryptionConfiguration,
-    S3BucketServerSideEncryptionConfigurationRule,
-    S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefault
+    S3BucketServerSideEncryptionConfigurationA
 )
-from cdktf_cdktf_provider_aws.s3_bucket_versioning import S3BucketVersioning
+from cdktf_cdktf_provider_aws.s3_bucket_versioning import S3BucketVersioningA
 from cdktf_cdktf_provider_aws.s3_bucket_policy import S3BucketPolicy
 from cdktf_cdktf_provider_aws.s3_bucket_public_access_block import S3BucketPublicAccessBlock
 from cdktf_cdktf_provider_aws.iam_role import IamRole
@@ -108,29 +106,29 @@ class TapStack(TerraformStack):
                 bucket=bucket_name,
                 tags={**self.common_tags, "BucketType": bucket_type}
             )
-
-            # Configure server-side encryption with AES-256 - FIXED: removed bucket_key_enabled
-            S3BucketServerSideEncryptionConfiguration(
+            
+            # Configure server-side encryption with AES-256 - FIXED: simplified to dictionary pattern
+            S3BucketServerSideEncryptionConfigurationA(
                 self, f"bucket-encryption-{bucket_type}",
-                bucket=bucket.bucket,  # FIXED: use bucket.bucket for bucket name
-                rule=[S3BucketServerSideEncryptionConfigurationRule(
-                    apply_server_side_encryption_by_default=S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefault(
-                        sse_algorithm="AES256"
-                    )
-                )]
+                bucket=bucket.id,
+                rule=[{
+                    "apply_server_side_encryption_by_default": {
+                        "sse_algorithm": "AES256"
+                    }
+                }]
             )
-
+            
             # Enable versioning for data recovery and compliance
-            S3BucketVersioning(
+            S3BucketVersioningA(
                 self, f"bucket-versioning-{bucket_type}",
-                bucket=bucket.bucket,  # FIXED: use bucket.bucket for bucket name
+                bucket=bucket.id,
                 versioning_configuration={"status": "Enabled"}
             )
-
+            
             # Block all public access - defense in depth
             S3BucketPublicAccessBlock(
                 self, f"bucket-public-access-block-{bucket_type}",
-                bucket=bucket.bucket,  # FIXED: use bucket.bucket for bucket name
+                bucket=bucket.id,
                 block_public_acls=True,
                 block_public_policy=True,
                 ignore_public_acls=True,
@@ -167,7 +165,7 @@ class TapStack(TerraformStack):
 
             S3BucketPolicy(
                 self, f"bucket-policy-{bucket_type}",
-                bucket=bucket.bucket,  # FIXED: use bucket.bucket for bucket name
+                bucket=bucket.id,
                 policy=json.dumps(policy)
             )
 
