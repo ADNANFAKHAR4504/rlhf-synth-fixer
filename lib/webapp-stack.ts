@@ -74,21 +74,42 @@ export class WebAppStack extends cdk.Stack {
       allowAllOutbound: true,
     });
 
-    securityGroup.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(80), 'Allow HTTP');
-    securityGroup.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(443), 'Allow HTTPS');
-
+    securityGroup.addIngressRule(
+      ec2.Peer.anyIpv4(),
+      ec2.Port.tcp(80),
+      'Allow HTTP'
+    );
+    securityGroup.addIngressRule(
+      ec2.Peer.anyIpv4(),
+      ec2.Port.tcp(443),
+      'Allow HTTPS'
+    );
+    const userData = ec2.UserData.forLinux();
+    userData.addCommands(
+      'sudo apt update -y',
+      'sudo apt install -y nginx',
+      'sudo systemctl enable nginx',
+      'sudo systemctl start nginx'
+      // 'sudo dnf install -y nginx',
+      // 'sudo systemctl enable nginx',
+      // 'sudo systemctl start nginx',
+      // 'echo "<h1>Hello from NGINX</h1>" | sudo tee /usr/share/nginx/html/index.html'
+    );
     const asg = new autoscaling.AutoScalingGroup(this, 'WebAppASG', {
       vpc,
       instanceType: ec2.InstanceType.of(
         ec2.InstanceClass.BURSTABLE2,
         ec2.InstanceSize.MICRO
       ),
-      machineImage: new ec2.AmazonLinuxImage(),
+      machineImage: ec2.MachineImage.genericLinux({
+        'us-east-1': 'ami-0fc5d935ebf8bc3bc', // Ubuntu 22.04 LTS x86_64
+      }),
       role: ec2Role,
       minCapacity: 2,
       maxCapacity: 5,
       vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
       securityGroup,
+      userData,
     });
 
     const alb = new elbv2.ApplicationLoadBalancer(this, 'WebAppALB', {
@@ -106,7 +127,7 @@ export class WebAppStack extends cdk.Stack {
       targets: [asg],
       healthCheck: {
         path: '/',
-        port: `${port}`,
+        port: 'traffic-port',
         protocol: elbv2.Protocol.HTTP,
         healthyHttpCodes: '200-299',
         interval: cdk.Duration.seconds(30),
@@ -125,7 +146,7 @@ export class WebAppStack extends cdk.Stack {
       certArn
     );
     // Add HTTPS listener (disabled unless certs are provided)
-    const httpsListener = alb.addListener('HttpsListener', {
+    alb.addListener('HttpsListener', {
       port: 443,
       // Provide actual certs before enabling
       certificates: [certificate],
@@ -133,15 +154,6 @@ export class WebAppStack extends cdk.Stack {
         contentType: 'text/plain',
         messageBody: 'Hello World!',
       }),
-    });
-
-    httpsListener.addTargets('HttpsTargets', {
-      port,
-      targets: [asg],
-      healthCheck: {
-        path: '/',
-        protocol: elbv2.Protocol.HTTPS,
-      },
     });
 
     asg.scaleOnCpuUtilization('KeepSpareCPU', {
@@ -165,15 +177,15 @@ export class WebAppStack extends cdk.Stack {
 
     new cdk.CfnOutput(this, 'LoadBalancerDNS', {
       value: alb.loadBalancerDnsName,
-      description: 'Load Balancer DNS'
+      description: 'Load Balancer DNS',
     });
     new cdk.CfnOutput(this, 'VPCID', {
       value: vpc.vpcId,
-      description: 'VPC ID'
+      description: 'VPC ID',
     });
     new cdk.CfnOutput(this, 'S3Bucket', {
       value: bucket.bucketName,
-      description: 'S3 Bucket ID'
+      description: 'S3 Bucket ID',
     });
   }
 }

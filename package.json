@@ -59,7 +59,6 @@
     "@aws-sdk/client-s3": "^3.848.0",
     "@aws-sdk/client-sfn": "^3.848.0",
     "@aws-sdk/client-sns": "^3.846.0",
-    "@aws-sdk/client-ssm": "^3.848.0",
     "@aws-sdk/client-wafv2": "^3.848.0",
     "@aws-sdk/credential-provider-node": "^3.846.0",
     "@inquirer/prompts": "^7.6.0",
@@ -97,6 +96,8 @@
     "typescript": "^5.8.3"
   },
   "dependencies": {
+    "@aws-sdk/client-ssm": "^3.848.0",
+    "@aws-sdk/client-acm": "^3.859.0",
     "@aws-sdk/client-elastic-load-balancing-v2": "^3.848.0",
     "@aws-sdk/client-wafv2": "^3.848.0",
     "@cdktf/provider-aws": "21.3.0",

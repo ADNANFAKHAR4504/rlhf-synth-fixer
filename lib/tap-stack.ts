@@ -107,7 +107,7 @@ export class TapStack extends cdk.Stack {
       props?.environmentSuffix ||
       this.node.tryGetContext('environmentSuffix') ||
       'dev';
-    const port = Number(process.env.PORT) || 80
+    const port = Number(process.env.PORT) || 80;
 
     // ? Add your stack instantiations here
     // ! Do NOT create resources directly in this stack.
