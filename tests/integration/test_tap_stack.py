@@ -20,7 +20,6 @@ class TestTapStackLiveIntegration:
     
     # Initialize AWS clients
     try:
-      self.cloudformation = boto3.client('cloudformation', region_name=self.region)
       self.ec2 = boto3.client('ec2', region_name=self.region)
       self.s3 = boto3.client('s3', region_name=self.region)
       self.sns = boto3.client('sns', region_name=self.region)
@@ -32,20 +31,24 @@ class TestTapStackLiveIntegration:
       pytest.fail(f"Failed to initialize AWS clients: {str(e)}")
 
   def get_stack_outputs(self) -> Dict[str, Any]:
-    """Get stack outputs from CloudFormation."""
+    """Get stack outputs from CDKTF output file."""
+    outputs_file = "cfn-outputs/flat-outputs.json"
+    if not os.path.exists(outputs_file):
+      pytest.fail(f"CDKTF outputs file {outputs_file} not found. Please deploy the stack first.")
+    
     try:
-      response = self.cloudformation.describe_stacks(StackName=self.stack_name)
-      outputs = {}
-      for output in response['Stacks'][0]['Outputs']:
-        outputs[output['OutputKey']] = output['OutputValue']
-      return outputs
-    except ClientError as e:
-      if e.response['Error']['Code'] == 'ValidationError':
-        pytest.fail(f"Stack {self.stack_name} not found. Please deploy the stack first.")
-      else:
-        pytest.fail(f"Failed to get stack outputs: {str(e)}")
+      with open(outputs_file, 'r') as f:
+        outputs_data = json.load(f)
+      
+      # Get outputs for the specific stack
+      if self.stack_name not in outputs_data:
+        pytest.fail(f"Stack {self.stack_name} not found in outputs file. Available stacks: {list(outputs_data.keys())}")
+      
+      return outputs_data[self.stack_name]
+    except json.JSONDecodeError as e:
+      pytest.fail(f"Invalid JSON in outputs file: {str(e)}")
     except Exception as e:
-      pytest.fail(f"Unexpected error getting stack outputs: {str(e)}")
+      pytest.fail(f"Failed to read outputs file: {str(e)}")
 
   def test_deployed_infrastructure_outputs_exist(self):
     """Test that deployed infrastructure outputs exist and are valid."""
@@ -302,7 +305,6 @@ class TestTapStackEndToEnd:
     
     # Initialize AWS clients
     try:
-      self.cloudformation = boto3.client('cloudformation', region_name=self.region)
       self.ec2 = boto3.client('ec2', region_name=self.region)
       self.s3 = boto3.client('s3', region_name=self.region)
       self.sns = boto3.client('sns', region_name=self.region)
@@ -314,20 +316,24 @@ class TestTapStackEndToEnd:
       pytest.fail(f"Failed to initialize AWS clients: {str(e)}")
 
   def get_stack_outputs(self) -> Dict[str, Any]:
-    """Get stack outputs from CloudFormation."""
+    """Get stack outputs from CDKTF output file."""
+    outputs_file = "cfn-outputs/flat-outputs.json"
+    if not os.path.exists(outputs_file):
+      pytest.fail(f"CDKTF outputs file {outputs_file} not found. Please deploy the stack first.")
+    
     try:
-      response = self.cloudformation.describe_stacks(StackName=self.stack_name)
-      outputs = {}
-      for output in response['Stacks'][0]['Outputs']:
-        outputs[output['OutputKey']] = output['OutputValue']
-      return outputs
-    except ClientError as e:
-      if e.response['Error']['Code'] == 'ValidationError':
-        pytest.fail(f"Stack {self.stack_name} not found. Please deploy the stack first.")
-      else:
-        pytest.fail(f"Failed to get stack outputs: {str(e)}")
+      with open(outputs_file, 'r') as f:
+        outputs_data = json.load(f)
+      
+      # Get outputs for the specific stack
+      if self.stack_name not in outputs_data:
+        pytest.fail(f"Stack {self.stack_name} not found in outputs file. Available stacks: {list(outputs_data.keys())}")
+      
+      return outputs_data[self.stack_name]
+    except json.JSONDecodeError as e:
+      pytest.fail(f"Invalid JSON in outputs file: {str(e)}")
     except Exception as e:
-      pytest.fail(f"Unexpected error getting stack outputs: {str(e)}")
+      pytest.fail(f"Failed to read outputs file: {str(e)}")
 
   def test_complete_infrastructure_validation(self):
     """Test complete infrastructure validation end-to-end from live AWS resources."""
