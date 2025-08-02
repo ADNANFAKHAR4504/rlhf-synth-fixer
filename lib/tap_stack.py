@@ -38,15 +38,15 @@ class TapStack(TerraformStack):
     bucket_prefix = kwargs.get('bucket_prefix', 'secure-data')
 
     # Configure AWS Provider
-    provider_kwargs = {
+    provider_config = {
       "region": aws_region,
     }
     if default_tags:
       # Extract the actual tags from the nested structure
       tags_dict = default_tags.get("tags", default_tags)
-      provider_kwargs["default_tags"] = AwsProviderDefaultTags(tags=tags_dict)
+      provider_config["default_tags"] = [AwsProviderDefaultTags(tags=tags_dict)]
     
-    AwsProvider(self, "aws", **provider_kwargs)
+    AwsProvider(self, "aws", **provider_config)
 
     # Configure S3 Backend with native state locking
     S3Backend(
