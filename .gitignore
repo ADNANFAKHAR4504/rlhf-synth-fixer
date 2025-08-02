@@ -86,10 +86,15 @@ cdktf.log
 .gen
 bin/.terraform.lock.hcl
 
-task-status.md
+.genpackage-lock.json
+
+
 __pycache__/
 .pulumi/
 # CDK build output
 cdk.out/
 # Terraform output
 tf-outputs/*
+
+tasks-status.md
+worktree/

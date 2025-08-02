@@ -1,3 +1,16 @@
+# IMPORTANT
+# Get ready. 
+# Since now Claude Code is available and ready for attempting to complete TAP tasks.
+# Medium: solution in 30 mins
+# Hard: 2h
+# expert: 4h
+# ! Team Secret: Call me... 
+
+
+
+
+
+
 # TAP - Task Assignment Platform
 
 A TypeScript CDK project for creating and managing RLHF (Reinforcement Learning from Human Feedback) tasks.
