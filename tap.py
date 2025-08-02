@@ -16,6 +16,7 @@ from lib.tap_stack import TapStack, TapStackArgs
 
 # Initialize Pulumi configuration
 config = Config()
+config.set('aws:region', 'us-west-2')  # Set AWS region to us-west-2
 
 # Get environment suffix from config or fallback to 'dev'
 environment_suffix = config.get('env') or 'dev'

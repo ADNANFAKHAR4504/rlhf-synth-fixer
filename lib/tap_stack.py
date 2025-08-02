@@ -1,3 +1,5 @@
+# lib/tap_stack.py
+
 from typing import Optional
 import pulumi
 import pulumi_aws as aws
@@ -5,12 +7,16 @@ from pulumi import ResourceOptions
 from .components.networking import NetworkInfrastructure
 from .components.user import FrontendInfrastructure
 from .components.backend import BackendInfrastructure
-from .components.data import DataProcessingInfrastructure
+from .components.data_processing import DataProcessingInfrastructure
 from .components.monitoring import MonitoringInfrastructure
-import os
 
-# Configure explicit AWS provider for us-west-2
-aws_provider = aws.Provider("aws-provider", region="us-west-2")
+"""
+This module defines the TapStack class, the main Pulumi ComponentResource for
+the Multi-Tiered Web Application project.
+
+It orchestrates the instantiation of other resource-specific components
+and manages environment-specific configurations.
+"""
 
 class TapStackArgs:
   def __init__(self, environment_suffix: Optional[str] = None, tags: Optional[dict] = None):
@@ -27,13 +33,13 @@ class TapStack(pulumi.ComponentResource):
       name=f"{name}-network",
       environment=self.environment_suffix,
       tags=self.tags,
-      opts=ResourceOptions(parent=self, provider=aws_provider)
+      opts=ResourceOptions(parent=self)
     )
 
     self.monitoring = MonitoringInfrastructure(
       name=f"{name}-monitoring",
       tags=self.tags,
-      opts=ResourceOptions(parent=self, provider=aws_provider)
+      opts=ResourceOptions(parent=self)
     )
 
     self.backend = BackendInfrastructure(
@@ -43,7 +49,7 @@ class TapStack(pulumi.ComponentResource):
       vpc_endpoint_sg_id=self.network.vpc_endpoint_security_group.id,
       sns_topic_arn=self.monitoring.sns_topic.arn,
       tags=self.tags,
-      opts=ResourceOptions(parent=self, depends_on=[self.network, self.monitoring], provider=aws_provider)
+      opts=ResourceOptions(parent=self, depends_on=[self.network, self.monitoring])
     )
 
     self.data_processing = DataProcessingInfrastructure(
@@ -53,13 +59,13 @@ class TapStack(pulumi.ComponentResource):
       vpc_endpoint_sg_id=self.network.vpc_endpoint_security_group.id,
       sns_topic_arn=self.monitoring.sns_topic.arn,
       tags=self.tags,
-      opts=ResourceOptions(parent=self, depends_on=[self.network, self.monitoring], provider=aws_provider)
+      opts=ResourceOptions(parent=self, depends_on=[self.network, self.monitoring])
     )
 
     self.frontend = FrontendInfrastructure(
       name=f"{name}-frontend",
       tags=self.tags,
-      opts=ResourceOptions(parent=self, depends_on=[self.backend], provider=aws_provider)
+      opts=ResourceOptions(parent=self, depends_on=[self.backend])
     )
 
     self.monitoring.setup_alarms(
@@ -69,7 +75,7 @@ class TapStack(pulumi.ComponentResource):
       ],
       kinesis_stream_name=self.data_processing.kinesis_stream.name,
       cloudfront_distribution_id=self.frontend.cloudfront_distribution.id,
-      opts=ResourceOptions(parent=self, provider=aws_provider)
+      opts=ResourceOptions(parent=self)
     )
 
     self.register_outputs({
