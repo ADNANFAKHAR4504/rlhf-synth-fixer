@@ -29,6 +29,7 @@ from cdktf_cdktf_provider_aws.network_acl_rule import NetworkAclRule
 from cdktf_cdktf_provider_aws.cloudwatch_metric_alarm import CloudwatchMetricAlarm
 from cdktf_cdktf_provider_aws.sns_topic import SnsTopic
 from cdktf_cdktf_provider_aws.cloudwatch_dashboard import CloudwatchDashboard
+from cdktf_cdktf_provider_aws.dynamodb_table import DynamodbTable
 
 
 @dataclass
@@ -355,11 +356,11 @@ class SecurityConstruct(Construct):
     self.tags = tags
     self.ssh_access_cidrs = ssh_access_cidrs
 
-    # Create security groups
+    # Create security groups in order to avoid circular dependencies
     self.web_sg = self._create_web_security_group()
+    self.bastion_sg = self._create_bastion_security_group()
     self.app_sg = self._create_app_security_group()
     self.db_sg = self._create_db_security_group()
-    self.bastion_sg = self._create_bastion_security_group()
 
     # Create NACLs if enabled
     if enable_nacls:
@@ -421,7 +422,7 @@ class SecurityConstruct(Construct):
 
   def _create_app_security_group(self) -> SecurityGroup:
     """Create security group for application tier."""
-    return SecurityGroup(
+    sg = SecurityGroup(
       self,
       "app-sg",
       name=f"{self.environment}-app-sg",
@@ -434,9 +435,47 @@ class SecurityConstruct(Construct):
       }
     )
 
+    # Application port inbound from web tier
+    SecurityGroupRule(
+      self,
+      "app-port-inbound",
+      type="ingress",
+      from_port=8080,
+      to_port=8080,
+      protocol="tcp",
+      source_security_group_id=self.web_sg.id,
+      security_group_id=sg.id
+    )
+
+    # SSH inbound from bastion
+    SecurityGroupRule(
+      self,
+      "app-ssh-inbound",
+      type="ingress",
+      from_port=22,
+      to_port=22,
+      protocol="tcp",
+      source_security_group_id=self.bastion_sg.id,
+      security_group_id=sg.id
+    )
+
+    # All outbound
+    SecurityGroupRule(
+      self,
+      "app-all-outbound",
+      type="egress",
+      from_port=0,
+      to_port=65535,
+      protocol="tcp",
+      cidr_blocks=["0.0.0.0/0"],
+      security_group_id=sg.id
+    )
+
+    return sg
+
   def _create_db_security_group(self) -> SecurityGroup:
     """Create security group for database tier."""
-    return SecurityGroup(
+    sg = SecurityGroup(
       self,
       "db-sg",
       name=f"{self.environment}-db-sg",
@@ -448,6 +487,44 @@ class SecurityConstruct(Construct):
         "Tier": "database"
       }
     )
+
+    # MySQL/Aurora port inbound from application tier
+    SecurityGroupRule(
+      self,
+      "db-mysql-inbound",
+      type="ingress",
+      from_port=3306,
+      to_port=3306,
+      protocol="tcp",
+      source_security_group_id=self.app_sg.id,
+      security_group_id=sg.id
+    )
+
+    # PostgreSQL port inbound from application tier
+    SecurityGroupRule(
+      self,
+      "db-postgres-inbound",
+      type="ingress",
+      from_port=5432,
+      to_port=5432,
+      protocol="tcp",
+      source_security_group_id=self.app_sg.id,
+      security_group_id=sg.id
+    )
+
+    # SSH inbound from bastion for maintenance
+    SecurityGroupRule(
+      self,
+      "db-ssh-inbound",
+      type="ingress",
+      from_port=22,
+      to_port=22,
+      protocol="tcp",
+      source_security_group_id=self.bastion_sg.id,
+      security_group_id=sg.id
+    )
+
+    return sg
 
   def _create_bastion_security_group(self) -> SecurityGroup:
     """Create security group for bastion host."""
@@ -764,17 +841,15 @@ class TapStack(TerraformStack):
       default_tags=[{**default_tags, **env_config.tags}],
     )
 
-    # Configure S3 Backend with native state locking
+    # Configure S3 Backend with DynamoDB state locking
     S3Backend(
       self,
       bucket=state_bucket,
       key=f"{environment_suffix}/{construct_id}.tfstate",
       region=state_bucket_region,
       encrypt=True,
+      dynamodb_table="terraform-state-locks"
     )
-
-    # Add S3 state locking using escape hatch
-    self.add_override("terraform.backend.s3.use_lockfile", True)
 
     # Create VPC infrastructure
     self.vpc_construct = VpcConstruct(
