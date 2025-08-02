@@ -90,10 +90,6 @@ export class WebAppStack extends cdk.Stack {
       'sudo apt install -y nginx',
       'sudo systemctl enable nginx',
       'sudo systemctl start nginx'
-      // 'sudo dnf install -y nginx',
-      // 'sudo systemctl enable nginx',
-      // 'sudo systemctl start nginx',
-      // 'echo "<h1>Hello from NGINX</h1>" | sudo tee /usr/share/nginx/html/index.html'
     );
     const asg = new autoscaling.AutoScalingGroup(this, 'WebAppASG', {
       vpc,
