@@ -81,7 +81,7 @@ describe('TapStack Integration Tests', () => {
   it('should include WAF v2 configuration', () => {
     const synthesized = Testing.synth(stack);
     expect(synthesized).toContain('"aws_wafv2_web_acl"');
-    expect(synthesized).toContain('"CLOUDFRONT"'); // Changed from REGIONAL to CLOUDFRONT for better security
+    expect(synthesized).toContain('"REGIONAL"'); // Changed from CLOUDFRONT to REGIONAL to fix deployment errors
   });
 
   it('should include S3 bucket with encryption', () => {
