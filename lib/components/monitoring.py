@@ -217,7 +217,7 @@ class SecurityMonitoringInfrastructure(pulumi.ComponentResource):
       f"{self.region.replace('-', '')}-secure-projectx-sns-policy",
       arn=self.sns_topic.arn,
       policy=sns_policy,
-      opts=ResourceOptions(parent=self, depends_on=[self.sns_topic])
+      opts=ResourceOptions(parent=self)
     )
 
     self.critical_sns_topic = aws.sns.Topic(
@@ -269,7 +269,7 @@ class SecurityMonitoringInfrastructure(pulumi.ComponentResource):
       f"{self.region.replace('-', '')}-secure-projectx-critical-sns-policy",
       arn=self.critical_sns_topic.arn,
       policy=critical_sns_policy,
-      opts=ResourceOptions(parent=self, depends_on=[self.critical_sns_topic])
+      opts=ResourceOptions(parent=self)
     )
 
   def _create_guardduty(self):
@@ -321,7 +321,7 @@ class SecurityMonitoringInfrastructure(pulumi.ComponentResource):
         }
       }),
       tags=self.tags,
-      opts=ResourceOptions(parent=self, depends_on=[self.guardduty_detector])
+      opts=ResourceOptions(parent=self)
     )
 
     self.guardduty_event_target = aws.cloudwatch.EventTarget(
@@ -329,7 +329,7 @@ class SecurityMonitoringInfrastructure(pulumi.ComponentResource):
       rule=self.guardduty_event_rule.name,
       target_id="GuardDutyToSNS",
       arn=self.sns_topic.arn,
-      opts=ResourceOptions(parent=self, depends_on=[self.guardduty_event_rule, self.sns_topic])
+      opts=ResourceOptions(parent=self)
     )
 
   def _create_cloudtrail(self):
@@ -356,7 +356,7 @@ class SecurityMonitoringInfrastructure(pulumi.ComponentResource):
             )
           )
         ],
-        opts=ResourceOptions(parent=self, depends_on=[self.cloudtrail_bucket])
+        opts=ResourceOptions(parent=self)
     )
 
     cloudtrail_bucket_policy = pulumi.Output.all(
@@ -395,7 +395,7 @@ class SecurityMonitoringInfrastructure(pulumi.ComponentResource):
       f"{self.region.replace('-', '')}-secure-projectx-cloudtrail-bucket-policy",
       bucket=self.cloudtrail_bucket.id,
       policy=cloudtrail_bucket_policy,
-      opts=ResourceOptions(parent=self, depends_on=[self.cloudtrail_bucket])
+      opts=ResourceOptions(parent=self)
     )
 
     self.cloudtrail = aws.cloudtrail.Trail(
@@ -423,7 +423,7 @@ class SecurityMonitoringInfrastructure(pulumi.ComponentResource):
         "Name": f"secure-projectx-cloudtrail-{self.region}",
         "Purpose": "AuditTrail"
       },
-      opts=ResourceOptions(parent=self, depends_on=[self.cloudtrail_bucket_policy, self.security_log_group])
+      opts=ResourceOptions(parent=self)
     )
 
   def _create_cloudtrail_logs_role(self):
@@ -482,7 +482,7 @@ class SecurityMonitoringInfrastructure(pulumi.ComponentResource):
       f"{self.region.replace('-', '')}-secure-projectx-cloudtrail-logs-policy-attachment",
       role=cloudtrail_logs_role.name,
       policy_arn=cloudtrail_logs_policy.arn,
-      opts=ResourceOptions(parent=self, depends_on=[cloudtrail_logs_role, cloudtrail_logs_policy])
+      opts=ResourceOptions(parent=self)
     )
 
     return cloudtrail_logs_role
@@ -512,7 +512,7 @@ class SecurityMonitoringInfrastructure(pulumi.ComponentResource):
           )
         
       ],
-      opts=ResourceOptions(parent=self, depends_on=[self.config_bucket])
+      opts=ResourceOptions(parent=self)
     )
 
     config_bucket_policy = pulumi.Output.all(
@@ -551,7 +551,7 @@ class SecurityMonitoringInfrastructure(pulumi.ComponentResource):
       f"{self.region.replace('-', '')}-secure-projectx-config-bucket-policy",
       bucket=self.config_bucket.id,
       policy=config_bucket_policy,
-      opts=ResourceOptions(parent=self, depends_on=[self.config_bucket])
+      opts=ResourceOptions(parent=self)
     )
 
     config_assume_role_policy = {
@@ -583,7 +583,7 @@ class SecurityMonitoringInfrastructure(pulumi.ComponentResource):
       f"{self.region.replace('-', '')}-secure-projectx-config-policy-attachment",
       role=self.config_role.name,
       policy_arn="arn:aws:iam::aws:policy/service-role/AWSConfigRole",
-      opts=ResourceOptions(parent=self, depends_on=[self.config_role])
+      opts=ResourceOptions(parent=self)
     )
 
     self.config_recorder = aws.cfg.Recorder(
@@ -594,7 +594,7 @@ class SecurityMonitoringInfrastructure(pulumi.ComponentResource):
         all_supported=True,
         include_global_resource_types=False
       ),
-      opts=ResourceOptions(parent=self, depends_on=[self.config_role])
+      opts=ResourceOptions(parent=self)
     )
 
     self.config_delivery_channel = aws.cfg.DeliveryChannel(
@@ -603,14 +603,14 @@ class SecurityMonitoringInfrastructure(pulumi.ComponentResource):
       s3_bucket_name=self.config_bucket.bucket,
       s3_key_prefix="config-logs/",
       sns_topic_arn=self.sns_topic.arn,
-      opts=ResourceOptions(parent=self, depends_on=[self.config_bucket_policy, self.sns_topic])
+      opts=ResourceOptions(parent=self)
     )
 
     self.config_recorder_status = aws.cfg.RecorderStatus(
       f"{self.region.replace('-', '')}-secure-projectx-config-recorder-status",
       name=self.config_recorder.name,
       is_enabled=True,
-      opts=ResourceOptions(parent=self, depends_on=[self.config_recorder])
+      opts=ResourceOptions(parent=self)
     )
 
   def setup_vpc_flow_logs(self, vpc_id: pulumi.Input[str], opts: Optional[ResourceOptions] = None):
@@ -627,7 +627,7 @@ class SecurityMonitoringInfrastructure(pulumi.ComponentResource):
         "Name": f"secure-projectx-vpc-flow-logs-{self.region}",
         "Purpose": "NetworkMonitoring"
       },
-      opts=ResourceOptions(parent=self, depends_on=[self.vpc_flow_log_group, self.flow_logs_role], **(opts or {}))
+      opts=ResourceOptions(parent=self)
     )
 
   def setup_security_alarms(self,
@@ -653,7 +653,7 @@ class SecurityMonitoringInfrastructure(pulumi.ComponentResource):
       },
       tags=self.tags,
       opts=(opts or ResourceOptions()).merge(
-        ResourceOptions(parent=self, depends_on=[self.sns_topic])
+        ResourceOptions(parent=self)
       )
     )
 
@@ -673,7 +673,7 @@ class SecurityMonitoringInfrastructure(pulumi.ComponentResource):
         "DetectorId": self.guardduty_detector.id
       },
       tags=self.tags,
-      opts=ResourceOptions(parent=self, depends_on=[self.guardduty_detector, self.critical_sns_topic], **(opts or {}))
+      opts=ResourceOptions(parent=self)
     )
 
     self.failed_login_alarm = aws.cloudwatch.MetricAlarm(
@@ -689,7 +689,7 @@ class SecurityMonitoringInfrastructure(pulumi.ComponentResource):
       alarm_description="Multiple console login failures detected",
       alarm_actions=[self.sns_topic.arn],
       tags=self.tags,
-      opts=ResourceOptions(parent=self, depends_on=[self.sns_topic], **(opts or {}))
+      opts=ResourceOptions(parent=self)
     )
 
     for bucket_name in s3_bucket_names:
@@ -709,7 +709,7 @@ class SecurityMonitoringInfrastructure(pulumi.ComponentResource):
           "BucketName": bucket_name
         },
         tags=self.tags,
-        opts=ResourceOptions(parent=self, depends_on=[self.critical_sns_topic], **(opts or {}))
+        opts=ResourceOptions(parent=self)
       )
 
     for rds_identifier in rds_instance_identifiers:
@@ -729,5 +729,5 @@ class SecurityMonitoringInfrastructure(pulumi.ComponentResource):
           "DBInstanceIdentifier": rds_identifier
         },
         tags=self.tags,
-        opts=ResourceOptions(parent=self, depends_on=[self.sns_topic], **(opts or {}))
+        opts=ResourceOptions(parent=self)
       )
