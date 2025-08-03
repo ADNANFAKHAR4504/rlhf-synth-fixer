@@ -1,4 +1,4 @@
-# tapstack.py
+# tap_stack.py
 
 from typing import Optional
 import pulumi
@@ -8,14 +8,6 @@ from lib.components.networking import NetworkSecurityInfrastructure
 from lib.components.identity import IdentityAccessInfrastructure
 from lib.components.data_protection import DataProtectionInfrastructure
 from lib.components.monitoring import SecurityMonitoringInfrastructure
-
-"""
-This module defines the ProjectXSecurityStack class, the main Pulumi ComponentResource for
-the Security Configuration as Code project.
-
-It orchestrates the instantiation of security-focused components across multiple regions
-and manages environment-specific configurations with proper security controls.
-"""
 
 class TapStackArgs:
   def __init__(self,
@@ -38,50 +30,48 @@ class TapStack(pulumi.ComponentResource):
     self.regions = args.regions
     self.tags = args.tags
 
-    # Store regional resources
     self.regional_networks = {}
     self.regional_monitoring = {}
     self.regional_data_protection = {}
+    self.providers = {}
 
-    # Global Identity and Access Management (single region)
     self.identity_access = IdentityAccessInfrastructure(
       name=f"secure-projectx-identity-{self.environment_suffix}",
       tags=self.tags,
       opts=ResourceOptions(parent=self)
     )
 
-    # Deploy security infrastructure in each region
     for region in self.regions:
       region_suffix = region.replace('-', '')
 
-      # Network Security Infrastructure per region
+      self.providers[region] = aws.Provider(
+        f"aws-provider-{region}-{self.environment_suffix}",
+        region=region
+      )
+
+      provider_opts = lambda deps: ResourceOptions(
+        parent=self,
+        depends_on=deps,
+        provider=self.providers[region]
+      )
+
       self.regional_networks[region] = NetworkSecurityInfrastructure(
         name=f"secure-projectx-network-{region_suffix}-{self.environment_suffix}",
         region=region,
         environment=self.environment_suffix,
         kms_key_arn=self.identity_access.kms_key.arn,
         tags=self.tags,
-        opts=ResourceOptions(
-          parent=self,
-          depends_on=[self.identity_access],
-          provider=aws.Provider(f"aws-{region}", region=region)
-        )
+        opts=provider_opts([self.identity_access])
       )
 
-      # Security Monitoring Infrastructure per region
       self.regional_monitoring[region] = SecurityMonitoringInfrastructure(
         name=f"secure-projectx-monitoring-{region_suffix}-{self.environment_suffix}",
         region=region,
         kms_key_arn=self.identity_access.kms_key.arn,
         tags=self.tags,
-        opts=ResourceOptions(
-          parent=self,
-          depends_on=[self.identity_access],
-          provider=aws.Provider(f"aws-{region}", region=region)
-        )
+        opts=provider_opts([self.identity_access])
       )
 
-      # Data Protection Infrastructure per region
       self.regional_data_protection[region] = DataProtectionInfrastructure(
         name=f"secure-projectx-data-{region_suffix}-{self.environment_suffix}",
         region=region,
@@ -92,36 +82,33 @@ class TapStack(pulumi.ComponentResource):
         sns_topic_arn=self.regional_monitoring[region].sns_topic.arn,
         rds_monitoring_role_arn=self.identity_access.rds_monitoring_role.arn,
         tags=self.tags,
-        opts=ResourceOptions(
-          parent=self,
-          depends_on=[self.regional_networks[region], self.regional_monitoring[region], self.identity_access],
-          provider=aws.Provider(f"aws-{region}", region=region)
-        )
+        opts=provider_opts([
+          self.regional_networks[region],
+          self.regional_monitoring[region],
+          self.identity_access
+        ])
       )
 
-      # Setup monitoring alarms for each region
       self.regional_monitoring[region].setup_security_alarms(
         vpc_id=self.regional_networks[region].vpc_id,
         s3_bucket_names=[self.regional_data_protection[region].secure_s3_bucket.bucket],
-        rds_instance_identifiers=[self.regional_data_protection[region].rds_instance.identifier] if hasattr(self.regional_data_protection[region], 'rds_instance') else [],  # Check for RDS instance
-        opts=ResourceOptions(
-          parent=self,
-          depends_on=[self.regional_networks[region], self.regional_data_protection[region]],
-          provider=aws.Provider(f"aws-{region}", region=region)
-        )
+        rds_instance_identifiers=[
+          self.regional_data_protection[region].rds_instance.identifier
+        ] if hasattr(self.regional_data_protection[region], 'rds_instance') else [],
+        opts=provider_opts([
+          self.regional_networks[region],
+          self.regional_data_protection[region]
+        ])
       )
 
-      # Setup VPC Flow Logs for each region
       self.regional_monitoring[region].setup_vpc_flow_logs(
         vpc_id=self.regional_networks[region].vpc_id,
-        opts=ResourceOptions(
-          parent=self,
-          depends_on=[self.regional_networks[region], self.regional_monitoring[region]],
-          provider=aws.Provider(f"aws-{region}", region=region)
-        )
+        opts=provider_opts([
+          self.regional_networks[region],
+          self.regional_monitoring[region]
+        ])
       )
 
-    # Register outputs for primary region (us-west-2)
     primary_region = 'us-west-2'
     self.register_outputs({
       "primary_vpc_id": self.regional_networks[primary_region].vpc_id,
@@ -157,7 +144,6 @@ class TapStack(pulumi.ComponentResource):
       }
     })
 
-    # Export outputs at stack level
     pulumi.export("primary_vpc_id", self.regional_networks[primary_region].vpc_id)
     pulumi.export("kms_key_arn", self.identity_access.kms_key.arn)
     pulumi.export("guardduty_detector_ids", {
