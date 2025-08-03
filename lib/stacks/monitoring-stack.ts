@@ -39,7 +39,7 @@ export class MonitoringStack extends Construct {
     const processedDataTable = dynamodb.Table.fromTableName(
       this,
       'ImportedProcessedDataTable',
-      `serverless-processed-data-${environment}-${region}`
+      `serverless-processed-data-${environment}`
     );
 
     // Create SNS topic for alarms
@@ -160,7 +160,7 @@ export class MonitoringStack extends Construct {
         namespace: 'AWS/SQS',
         metricName: 'ApproximateNumberOfVisibleMessages',
         dimensionsMap: {
-          QueueName: `serverless-dlq-${environment}`,
+          QueueName: `serverless-dlq-${environment}-${region}`,
         },
         period: cdk.Duration.minutes(5),
         statistic: 'Average',
