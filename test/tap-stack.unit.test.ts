@@ -73,14 +73,9 @@ describe('TapStack CloudFormation Template', () => {
       expect(amiParam.Default).toBe('/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2');
     });
 
-    test('should have DBPassword parameter with security settings', () => {
+    test('should not have DBPassword parameter (replaced with Secrets Manager)', () => {
       const dbParam = template.Parameters.DBPassword;
-      expect(dbParam).toBeDefined();
-      expect(dbParam.Type).toBe('String');
-      expect(dbParam.NoEcho).toBe(true);
-      expect(dbParam.MinLength).toBe(8);
-      expect(dbParam.MaxLength).toBe(41);
-      expect(dbParam.AllowedPattern).toBe('[a-zA-Z0-9!@#$%^&*()_+=-]{8,41}');
+      expect(dbParam).toBeUndefined();
     });
   });
 
@@ -401,7 +396,7 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have correct number of parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(6); // Environment, ProjectName, Owner, CostCenter, LatestAmiId, DBPassword
+      expect(parameterCount).toBe(5); // Environment, ProjectName, Owner, CostCenter, LatestAmiId (DBPassword removed)
     });
 
     test('should have correct number of outputs', () => {
@@ -433,9 +428,11 @@ describe('TapStack CloudFormation Template', () => {
   });
 
   describe('Security Best Practices', () => {
-    test('RDS password should be marked as NoEcho', () => {
-      const dbPasswordParam = template.Parameters.DBPassword;
-      expect(dbPasswordParam.NoEcho).toBe(true);
+    test('RDS should use Secrets Manager for password', () => {
+      const database = template.Resources.Database;
+      const masterUserPassword = database.Properties.MasterUserPassword;
+      expect(masterUserPassword['Fn::Sub']).toBeDefined();
+      expect(masterUserPassword['Fn::Sub']).toContain('{{resolve:secretsmanager:');
     });
 
     test('Database should be in private subnets', () => {
