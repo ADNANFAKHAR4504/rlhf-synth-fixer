@@ -473,6 +473,24 @@ jobs:
           path: |
             cfn-outputs/
             cdk-stacks.json
+
+      - name: Print all recent CloudFormation events for debugging
+        if: failure()
+        run: |
+          echo "⚠️ Deployment failed. Fetching full CloudFormation event history..."
+          STACK_NAME="TapStack${ENVIRONMENT_SUFFIX:-dev}"
+          echo "Stack name: $STACK_NAME"
+          aws cloudformation describe-stack-events \
+            --stack-name "$STACK_NAME" \
+            --output table | tee stack-events.log
+
+      - name: Upload full CloudFormation event log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stack-events
+          path: stack-events.log
+
   lint:
     name: Lint
     runs-on: ubuntu-24.04
