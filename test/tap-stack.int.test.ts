@@ -1,21 +1,33 @@
-// Import required AWS SDK clients and libraries
+// Import required AWS SDK v3 clients and commands
 import fs from 'fs';
-import { EC2, S3, RDS } from 'aws-sdk';
-import axios from 'axios';
-import {
-  EC2ServiceException,
-  S3ServiceException,
-  RDSServiceException,
+import { 
+  EC2Client, 
+  DescribeInstancesCommand, 
+  DescribeSecurityGroupsCommand,
+  Instance as Ec2Instance, // Renaming to avoid conflict with other 'Instance' types
+  IpPermission,
 } from '@aws-sdk/client-ec2';
+import { 
+  S3Client, 
+  GetBucketVersioningCommand, 
+  GetPublicAccessBlockCommand, 
+  HeadBucketCommand 
+} from '@aws-sdk/client-s3';
+import { 
+  RDSClient, 
+  DescribeDBInstancesCommand,
+  DBInstance
+} from '@aws-sdk/client-rds';
+import axios from 'axios';
 
 // --- Configuration ---
 // Load the deployed stack's outputs
 const outputs = JSON.parse(fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8'));
 
-// AWS Service clients
-const ec2 = new EC2();
-const s3 = new S3();
-const rds = new RDS();
+// AWS SDK v3 Service clients
+const ec2Client = new EC2Client({});
+const s3Client = new S3Client({});
+const rdsClient = new RDSClient({});
 
 // --- Test Suites ---
 
@@ -45,19 +57,16 @@ describe('🚀 Infrastructure Validation', () => {
   });
 });
 
----
-
 describe('🖥️ EC2 Web Server Tests', () => {
-  let instance: EC2.Instance;
+  let instance: Ec2Instance;
 
   // Fetch instance details once before the tests in this block run.
   beforeAll(async () => {
-    const instanceDetails = await ec2
-      .describeInstances({
-        InstanceIds: [outputs.WebAppServerId],
-      })
-      .promise();
-    instance = instanceDetails.Reservations![0].Instances![0];
+    const command = new DescribeInstancesCommand({
+      InstanceIds: [outputs.WebAppServerId],
+    });
+    const response = await ec2Client.send(command);
+    instance = response.Reservations![0].Instances![0];
   });
 
   test('EC2 instance should exist and be in a "running" state', () => {
@@ -67,44 +76,42 @@ describe('🖥️ EC2 Web Server Tests', () => {
 
   test('EC2 instance should be associated with the correct security group allowing HTTP/SSH', async () => {
     const securityGroupId = instance.SecurityGroups![0].GroupId!;
-    const sgDetails = await ec2
-      .describeSecurityGroups({
-        GroupIds: [securityGroupId],
-      })
-      .promise();
+    const command = new DescribeSecurityGroupsCommand({
+      GroupIds: [securityGroupId],
+    });
+    const response = await ec2Client.send(command);
 
-    const permissions = sgDetails.SecurityGroups![0].IpPermissions!;
+    const permissions = response.SecurityGroups![0].IpPermissions!;
 
     // Check for HTTP access from anywhere
-    const httpRule = permissions.find(p => p.FromPort === 80);
+    const httpRule = permissions.find((p: IpPermission) => p.FromPort === 80);
     expect(httpRule?.IpRanges?.[0].CidrIp).toBe('0.0.0.0/0');
 
     // Check for SSH access
-    const sshRule = permissions.find(p => p.FromPort === 22);
+    const sshRule = permissions.find((p: IpPermission) => p.FromPort === 22);
     expect(sshRule).toBeDefined();
   });
 });
-
----
 
 describe('🗃️ S3 Assets Bucket Tests', () => {
   const bucketName = outputs.WebAppAssetsBucketName;
 
   test('S3 bucket should exist', async () => {
-    // headBucket returns an error if the bucket doesn't exist or you don't have permission.
-    await expect(s3.headBucket({ Bucket: bucketName }).promise()).resolves.toBeDefined();
+    const command = new HeadBucketCommand({ Bucket: bucketName });
+    // This command will throw an error if the bucket doesn't exist, which Jest will catch.
+    await expect(s3Client.send(command)).resolves.toBeDefined();
   });
 
   test('S3 bucket should have versioning enabled', async () => {
-    const versioning = await s3.getBucketVersioning({ Bucket: bucketName }).promise();
-    expect(versioning.Status).toBe('Enabled');
+    const command = new GetBucketVersioningCommand({ Bucket: bucketName });
+    const response = await s3Client.send(command);
+    expect(response.Status).toBe('Enabled');
   });
 
   test('S3 bucket should have public access blocked', async () => {
-    const publicAccessBlock = await s3
-      .getPublicAccessBlock({ Bucket: bucketName })
-      .promise();
-    const config = publicAccessBlock.PublicAccessBlockConfiguration;
+    const command = new GetPublicAccessBlockCommand({ Bucket: bucketName });
+    const response = await s3Client.send(command);
+    const config = response.PublicAccessBlockConfiguration;
     expect(config?.BlockPublicAcls).toBe(true);
     expect(config?.BlockPublicPolicy).toBe(true);
     expect(config?.IgnorePublicAcls).toBe(true);
@@ -112,18 +119,18 @@ describe('🗃️ S3 Assets Bucket Tests', () => {
   });
 });
 
----
-
 describe('🗄️ RDS Database Tests', () => {
-  let dbInstance: RDS.DBInstance;
+  let dbInstance: DBInstance;
 
-  // Fetch DB instance details once. We find it by looking for the one with the matching endpoint.
-  // NOTE: Adding 'WebAppDatabaseIdentifier' to your CloudFormation outputs would make this lookup more direct.
+  // Fetch DB instance details once.
   beforeAll(async () => {
-    const allDbInstances = await rds.describeDBInstances().promise();
-    const foundInstance = allDbInstances.DBInstances?.find(
-      db => db.Endpoint?.Address === outputs.WebAppDatabaseEndpoint
+    const command = new DescribeDBInstancesCommand({});
+    const response = await rdsClient.send(command);
+    
+    const foundInstance = response.DBInstances?.find(
+      (db: DBInstance) => db.Endpoint?.Address === outputs.WebAppDatabaseEndpoint
     );
+
     if (!foundInstance) {
       throw new Error(`Could not find RDS instance with endpoint: ${outputs.WebAppDatabaseEndpoint}`);
     }
