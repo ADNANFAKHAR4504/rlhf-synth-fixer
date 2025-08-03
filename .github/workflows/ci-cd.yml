@@ -209,14 +209,24 @@ jobs:
     name: Synth
     runs-on: ubuntu-24.04
     needs: [detect-metadata, build]
-    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
+    if: >
+      ${{
+        github.event_name == 'pull_request' &&
+        github.event.action != 'closed' &&
+        !contains(github.event.head_commit.message, '[skip-jobs]') &&
+        !(
+          needs.detect-metadata.outputs.platform == 'tf' &&
+          needs.detect-metadata.outputs.language == 'hcl'
+        )
+      }}
+    # if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
     environment: dev
     permissions:
       contents: read
     outputs:
       platform: ${{ needs.detect-metadata.outputs.platform }}
       language: ${{ needs.detect-metadata.outputs.language }}
-
+    
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
