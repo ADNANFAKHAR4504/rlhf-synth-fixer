@@ -1,8 +1,7 @@
 # tests/unit/test_tap_stack.py
-
+from unittest.mock import Mock, patch, MagicMock
 import pytest
 import pulumi
-from unittest.mock import Mock, patch, MagicMock
 from lib.tap_stack import TapStack, TapStackArgs
 
 class MockComponentResource(pulumi.ComponentResource):
