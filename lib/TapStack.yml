@@ -29,8 +29,8 @@ Metadata:
         Parameters:
           - DataRetentionDays
           - AdminMfaRequired
-          # Removed AdminUserPassword from Parameter Group
           - AdminUserEmail
+          - EnableSecurityResources
 
 Parameters:
   EnvironmentSuffix:
@@ -74,12 +74,6 @@ Parameters:
     Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
     Description: Latest Amazon Linux 2 AMI (HVM, EBS-backed)
 
-  # WebServerAmiId:
-  #  Type: AWS::EC2::Image::Id
-  #  Description: 'AMI ID for web servers (e.g., ami-0abcdef1234567890 for Amazon Linux 2)'
-  #  #Default: 'ami-0abcdef1234567890'
-  #  Default: ami-04505e74c0741db8d # ✅ Valid AMI ID for Amazon Linux 2 in us-east-1
-
   InstanceType:
     Type: String
     Description: 'EC2 instance type for web servers'
@@ -107,33 +101,17 @@ Parameters:
     MaxValue: 3650
     Description: 'Data retention period in days for logs and backups (e.g., for GDPR)'
 
-  AdminMfaRequired:
-    Type: String
-    Default: 'true'
-    AllowedValues: ['true', 'false']
-    Description: 'Set to true to enforce MFA for admin users (IAM Account Password Policy)'
-
-  # EnvironmentSuffix:
-  #   Type: String
-  #   Default: 'dev'
-
-  # AdminUserEmail:
-  #   Type: String
-  #   Default: ''
-  #   Description: 'Optional email for admin notifications'
-
   EnableSecurityResources:
     Type: String
     Default: 'false'
     AllowedValues: ['true', 'false']
     Description: 'Whether to enable GuardDuty, WebACL, Certificate, and KMS Key'
 
-  # AdminUserPassword parameter removed as it will be managed by Secrets Manager
-  # AdminUserPassword:
-  #   Type: String
-  #   Description: 'Initial password for the Admin IAM User'
-  #   NoEcho: true
-  #   MinLength: 14
+  AdminMfaRequired:
+    Type: String
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+    Description: 'Set to true to enforce MFA for admin users (IAM Account Password Policy)'
 
   AdminUserEmail:
     Type: String
@@ -143,6 +121,7 @@ Parameters:
 
 Conditions:
   EnableOptionalSecurity: !Equals [!Ref EnableSecurityResources, 'true']
+  EnforceMfa: !Equals [!Ref AdminMfaRequired, 'true']
 
 Resources:
   # ============================================================================
@@ -152,74 +131,63 @@ Resources:
   SecurityKMSKey:
     Condition: EnableOptionalSecurity
     Type: AWS::KMS::Key
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
-      Description: Key used for encrypting application data
+      Description: !Sub '${ProjectName}-${EnvironmentSuffix} KMS key for encryption at rest'
       KeyPolicy:
         Version: '2012-10-17'
         Statement:
-          - Effect: Allow
+          - Sid: Enable IAM User Permissions
+            Effect: Allow
             Principal:
               AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
-            Action: kms:*
+            Action: 'kms:*'
             Resource: '*'
-    # Type: AWS::KMS::Key
-    # DeletionPolicy: Retain
-    # UpdateReplacePolicy: Retain
-    # Properties:
-    #   Description: !Sub '${ProjectName}-${EnvironmentSuffix} KMS key for encryption at rest'
-    #   KeyPolicy:
-    #     Version: '2012-10-17'
-    #     Statement:
-    #       - Sid: Enable IAM User Permissions
-    #         Effect: Allow
-    #         Principal:
-    #           AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
-    #         Action: 'kms:*'
-    #         Resource: '*'
-    #       - Sid: Allow use of the key for CloudWatch Logs
-    #         Effect: Allow
-    #         Principal:
-    #           Service: !Sub 'logs.${AWS::Region}.amazonaws.com'
-    #         Action:
-    #           - 'kms:Encrypt'
-    #           - 'kms:Decrypt'
-    #           - 'kms:ReEncrypt*'
-    #           - 'kms:GenerateDataKey*'
-    #           - 'kms:DescribeKey'
-    #         Resource: '*'
-    #         Condition:
-    #           ArnEquals:
-    #             kms:EncryptionContext:aws:logs:arn: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*'
-    #       - Sid: Allow RDS to use the key
-    #         Effect: Allow
-    #         Principal:
-    #           Service: rds.amazonaws.com
-    #         Action:
-    #           - kms:CreateGrant
-    #           - kms:ListGrants
-    #           - kms:RevokeGrant
-    #           - kms:Decrypt
-    #         Resource: '*'
-    #       - Sid: Allow DynamoDB to use the key
-    #         Effect: Allow
-    #         Principal:
-    #           Service: dynamodb.amazonaws.com
-    #         Action:
-    #           - 'kms:Encrypt' # Corrected version
-    #           - 'kms:Decrypt'
-    #           - 'kms:ReEncrypt*'
-    #           - 'kms:GenerateDataKey*'
-    #           - 'kms:DescribeKey'
-    #         Resource: '*'
-    #   Tags:
-    #     - Key: Name
-    #       Value: !Sub '${ProjectName}-${EnvironmentSuffix}-kms-key'
-    #     - Key: Environment
-    #       Value: !Ref EnvironmentSuffix
-    #     - Key: Project
-    #       Value: !Ref ProjectName
+          - Sid: Allow use of the key for CloudWatch Logs
+            Effect: Allow
+            Principal:
+              Service: !Sub 'logs.${AWS::Region}.amazonaws.com'
+            Action:
+              - 'kms:Encrypt'
+              - 'kms:Decrypt'
+              - 'kms:ReEncrypt*'
+              - 'kms:GenerateDataKey*'
+              - 'kms:DescribeKey'
+            Resource: '*'
+            Condition:
+              ArnEquals:
+                kms:EncryptionContext:aws:logs:arn: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*'
+          - Sid: Allow RDS to use the key
+            Effect: Allow
+            Principal:
+              Service: rds.amazonaws.com
+            Action:
+              - kms:CreateGrant
+              - kms:ListGrants
+              - kms:RevokeGrant
+              - kms:Decrypt
+            Resource: '*'
+          - Sid: Allow DynamoDB to use the key
+            Effect: Allow
+            Principal:
+              Service: dynamodb.amazonaws.com
+            Action:
+              - 'kms:Encrypt'
+              - 'kms:Decrypt'
+              - 'kms:ReEncrypt*'
+              - 'kms:GenerateDataKey*'
+            Resource: '*'
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-kms-key'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: !Ref ProjectName
 
   SecurityKMSKeyAlias:
+    Condition: EnableOptionalSecurity
     Type: AWS::KMS::Alias
     Properties:
       AliasName: !Sub 'alias/${ProjectName}-${EnvironmentSuffix}-security-key'
@@ -915,11 +883,14 @@ Resources:
                   - 'logs:PutLogEvents'
                   - 'logs:DescribeLogStreams'
                 Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/ec2/*'
-              - Effect: Allow
-                Action:
-                  - 'kms:Decrypt'
-                  - 'kms:DescribeKey'
-                Resource: !GetAtt SecurityKMSKey.Arn
+              - !If
+                - EnableOptionalSecurity
+                - Effect: Allow
+                  Action:
+                    - 'kms:Decrypt'
+                    - 'kms:DescribeKey'
+                  Resource: !GetAtt SecurityKMSKey.Arn
+                - !Ref 'AWS::NoValue'
               - Effect: Allow
                 Action:
                   - 'ssm:GetParameter'
@@ -980,7 +951,8 @@ Resources:
         # For programmatic access, ensure IAM role has secretsmanager:GetSecretValue permission.
         PasswordLength: 32
         ExcludeCharacters: "\"@/\\'" # Exclude characters that might cause issues in various contexts
-      KmsKeyId: !Ref SecurityKMSKey # Encrypt with the common security KMS key
+      KmsKeyId:
+        !If [EnableOptionalSecurity, !Ref SecurityKMSKey, !Ref 'AWS::NoValue']
       Tags:
         - Key: Name
           Value: !Sub '${ProjectName}-${EnvironmentSuffix}-admin-user-secret'
@@ -1044,7 +1016,12 @@ Resources:
     Properties:
       LogGroupName: !Sub '/aws/cloudtrail/${ProjectName}-${EnvironmentSuffix}'
       RetentionInDays: !Ref DataRetentionDays
-      KmsKeyId: !GetAtt SecurityKMSKey.Arn
+      KmsKeyId:
+        !If [
+          EnableOptionalSecurity,
+          !GetAtt SecurityKMSKey.Arn,
+          !Ref 'AWS::NoValue',
+        ]
 
   CloudTrailRole:
     Type: AWS::IAM::Role
@@ -1079,7 +1056,12 @@ Resources:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
               SSEAlgorithm: aws:kms
-              KMSMasterKeyID: !Ref SecurityKMSKey
+              KMSMasterKeyID:
+                !If [
+                  EnableOptionalSecurity,
+                  !Ref SecurityKMSKey,
+                  !Ref 'AWS::NoValue',
+                ]
             BucketKeyEnabled: true
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
@@ -1129,313 +1111,20 @@ Resources:
       IsLogging: true
       CloudWatchLogsLogGroupArn: !GetAtt CloudTrailLogGroup.Arn
       CloudWatchLogsRoleArn: !GetAtt CloudTrailRole.Arn
-      KMSKeyId: !Ref SecurityKMSKey
+      KMSKeyId:
+        !If [EnableOptionalSecurity, !Ref SecurityKMSKey, !Ref 'AWS::NoValue']
 
   # ============================================================================
   # GUARDDUTY
   # ============================================================================
+
   GuardDutyDetector:
-    Condition: EnableOptionalSecurity
     Type: AWS::GuardDuty::Detector
+    Condition: EnableOptionalSecurity
     Properties:
       Enable: true
-  #      FindingPublishingFrequency: FIFTEEN_MINUTES
-  #      DataSources:
-  #        S3Logs:
-  #          Enable: true
-  #        Kubernetes:
-  #          AuditLogs:
-  #            Enable: true
-  #        MalwareProtection:
-  #          ScanEc2InstanceWithFindings:
-  #            EbsVolumes: true
 
-  # ============================================================================
-  # ALB + TARGET GROUP + LISTENERS + WAF
-  # ============================================================================
-  ALBAccessLogsBucket:
-    Type: AWS::S3::Bucket
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Retain
-    Properties:
-      BucketName: !Sub '${ProjectName}-${EnvironmentSuffix}-alb-logs-${AWS::AccountId}'
-      BucketEncryption:
-        ServerSideEncryptionConfiguration:
-          - ServerSideEncryptionByDefault:
-              SSEAlgorithm: aws:kms
-              KMSMasterKeyID: !Ref SecurityKMSKey
-            BucketKeyEnabled: true
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-      VersioningConfiguration:
-        Status: Enabled
-      LifecycleConfiguration:
-        Rules:
-          - Id: ExpireOldLogs
-            Status: Enabled
-            ExpirationInDays: !Ref DataRetentionDays
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-alb-logs'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Purpose
-          Value: 'ALB Access Logs'
-
-  ALBAccessLogsBucketPolicy:
-    Type: AWS::S3::BucketPolicy
-    Properties:
-      Bucket: !Ref ALBAccessLogsBucket
-      PolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Sid: AllowALBWrite
-            Effect: Allow
-            Principal:
-              Service: logging.s3.amazonaws.com
-            Action: s3:PutObject
-            Resource: !Sub '${ALBAccessLogsBucket.Arn}/AWSLogs/${AWS::AccountId}/*'
-            Condition:
-              StringEquals:
-                's3:x-amz-acl': bucket-owner-full-control
-          - Sid: AllowALBAclCheck
-            Effect: Allow
-            Principal:
-              Service: logging.s3.amazonaws.com
-            Action: s3:GetBucketAcl
-            Resource: !GetAtt ALBAccessLogsBucket.Arn
-
-  ApplicationLoadBalancer:
-    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
-    Properties:
-      Name: !Sub '${ProjectName}-${EnvironmentSuffix}-alb'
-      Scheme: internet-facing
-      Type: application
-      Subnets:
-        - !Ref PublicSubnet
-        - !Ref PublicSubnet2
-      SecurityGroups:
-        - !Ref ALBSecurityGroup
-      LoadBalancerAttributes:
-        - Key: access_logs.s3.enabled
-          Value: 'true'
-        - Key: access_logs.s3.bucket
-          Value: !Ref ALBAccessLogsBucket
-        - Key: access_logs.s3.prefix
-          Value: !Sub 'alb/${ProjectName}-${EnvironmentSuffix}'
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-alb'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Project
-          Value: !Ref ProjectName
-
-  WebServerTargetGroup:
-    Type: AWS::ElasticLoadBalancingV2::TargetGroup
-    Properties:
-      Name: !Sub '${ProjectName}-${EnvironmentSuffix}-web-tg'
-      Port: !Ref WebAppPort
-      Protocol: HTTP
-      VpcId: !Ref SecureVPC
-      HealthCheckPath: /
-      HealthCheckIntervalSeconds: 30
-      HealthCheckTimeoutSeconds: 5
-      HealthyThresholdCount: 2
-      UnhealthyThresholdCount: 2
-      TargetType: instance
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-web-tg'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Project
-          Value: !Ref ProjectName
-
-  ALBListenerHttp:
-    Type: AWS::ElasticLoadBalancingV2::Listener
-    Properties:
-      LoadBalancerArn: !Ref ApplicationLoadBalancer
-      Port: 80
-      Protocol: HTTP
-      DefaultActions:
-        - Type: forward
-          TargetGroupArn: !Ref WebServerTargetGroup
-
-  WebAppCertificate:
-    Condition: EnableOptionalSecurity
-    Type: AWS::CertificateManager::Certificate
-    Properties:
-      DomainName: !Sub 'app.${ProjectName}.${EnvironmentSuffix}.com'
-      ValidationMethod: DNS
-
-  # WebAppCertificate:
-  #   Type: AWS::CertificateManager::Certificate
-  #   Condition: EnableOptionalSecurity
-  #   Properties:
-  #     DomainName: !Sub 'app.${ProjectName}.${EnvironmentSuffix}.com'
-  #     ValidationMethod: DNS
-  #     Tags:
-  #       - Key: Name
-  #         Value: !Sub '${ProjectName}-${EnvironmentSuffix}-app-cert'
-  #       - Key: Environment
-  #         Value: !Ref EnvironmentSuffix
-  #       - Key: Project
-  #         Value: !Ref ProjectName
-
-  ALBListenerHttps:
-    Type: AWS::ElasticLoadBalancingV2::Listener
-    Properties:
-      LoadBalancerArn: !Ref ApplicationLoadBalancer
-      Port: 443
-      Protocol: HTTPS
-      Certificates:
-        - CertificateArn: !Ref WebAppCertificate
-      DefaultActions:
-        - Type: forward
-          TargetGroupArn: !Ref WebServerTargetGroup
-
-  WebACL:
-    Condition: EnableOptionalSecurity
-    Type: AWS::WAFv2::WebACL
-    Properties:
-      Name: !Sub 'WebACL-${EnvironmentSuffix}'
-      Scope: CLOUDFRONT
-      DefaultAction:
-        Allow: {}
-      VisibilityConfig:
-        SampledRequestsEnabled: true
-        CloudWatchMetricsEnabled: true
-        MetricName: !Sub 'WebACL-${EnvironmentSuffix}'
-      Rules: []
-  # WebACL:
-  #   Type: AWS::WAFv2::WebACL
-  #   Condition: EnableOptionalSecurity
-  #   Properties:
-  #     Name: !Sub '${ProjectName}-${EnvironmentSuffix}-web-acl'
-  #     Scope: REGIONAL
-  #     DefaultAction:
-  #       Allow: {}
-  #     Rules:
-  #       - Name: AWSManagedRulesCommonRuleSet
-  #         Priority: 1
-  #         OverrideAction:
-  #           None: {}
-  #         Statement:
-  #           ManagedRuleGroupStatement:
-  #             VendorName: AWS
-  #             Name: AWSManagedRulesCommonRuleSet
-  #         VisibilityConfig:
-  #           SampledRequestsEnabled: true
-  #           CloudWatchMetricsEnabled: true
-  #           MetricName: CommonRuleSetMetric
-  #       - Name: AWSManagedRulesKnownBadInputsRuleSet
-  #         Priority: 2
-  #         OverrideAction:
-  #           None: {}
-  #         Statement:
-  #           ManagedRuleGroupStatement:
-  #             VendorName: AWS
-  #             Name: AWSManagedRulesKnownBadInputsRuleSet
-  #         VisibilityConfig:
-  #           SampledRequestsEnabled: true
-  #           CloudWatchMetricsEnabled: true
-  #           MetricName: KnownBadInputsRuleSetMetric
-  #       - Name: AWSManagedRulesSQLiRuleSet
-  #         Priority: 3
-  #         OverrideAction:
-  #           None: {}
-  #         Statement:
-  #           ManagedRuleGroupStatement:
-  #             VendorName: AWS
-  #             Name: AWSManagedRulesSQLiRuleSet
-  #         VisibilityConfig:
-  #           SampledRequestsEnabled: true
-  #           CloudWatchMetricsEnabled: true
-  #           MetricName: SQLiRuleSetMetric
-  #       - Name: RateLimitRule
-  #         Priority: 10
-  #         Action:
-  #           Block: {}
-  #         Statement:
-  #           RateBasedStatement:
-  #             Limit: 1000
-  #             AggregateKeyType: IP
-  #         VisibilityConfig:
-  #           SampledRequestsEnabled: true
-  #           CloudWatchMetricsEnabled: true
-  #           MetricName: RateLimitMetric
-  #       - Name: GeoBlockingRule
-  #         Priority: 11
-  #         Action:
-  #           Block: {}
-  #         Statement:
-  #           GeoMatchStatement:
-  #             CountryCodes: [CN, RU, KP, IR]
-  #         VisibilityConfig:
-  #           SampledRequestsEnabled: true
-  #           CloudWatchMetricsEnabled: true
-  #           MetricName: GeoBlockingMetric
-  #       - Name: IPReputationRule
-  #         Priority: 12
-  #         OverrideAction:
-  #           None: {}
-  #         Statement:
-  #           ManagedRuleGroupStatement:
-  #             VendorName: AWS
-  #             Name: AWSManagedRulesAmazonIpReputationList
-  #         VisibilityConfig:
-  #           SampledRequestsEnabled: true
-  #           CloudWatchMetricsEnabled: true
-  #           MetricName: IPReputationMetric
-  #       - Name: AnonymousIPRule
-  #         Priority: 13
-  #         OverrideAction:
-  #           None: {}
-  #         Statement:
-  #           ManagedRuleGroupStatement:
-  #             VendorName: AWS
-  #             Name: AWSManagedRulesAnonymousIpList
-  #         VisibilityConfig:
-  #           SampledRequestsEnabled: true
-  #           CloudWatchMetricsEnabled: true
-  #           MetricName: AnonymousIPMetric
-  #       - Name: LinuxRuleSet
-  #         Priority: 14
-  #         OverrideAction:
-  #           None: {}
-  #         Statement:
-  #           ManagedRuleGroupStatement:
-  #             VendorName: AWS
-  #             Name: AWSManagedRulesLinuxRuleSet
-  #         VisibilityConfig:
-  #           SampledRequestsEnabled: true
-  #           CloudWatchMetricsEnabled: true
-  #           MetricName: LinuxRuleSetMetric
-  #     VisibilityConfig:
-  #       SampledRequestsEnabled: true
-  #       CloudWatchMetricsEnabled: true
-  #       MetricName: !Sub '${ProjectName}${EnvironmentSuffix}WebACL'
-  #     Tags:
-  #       - Key: Name
-  #         Value: !Sub '${ProjectName}-${EnvironmentSuffix}-web-acl'
-  #       - Key: Environment
-  #         Value: !Ref EnvironmentSuffix
-  #       - Key: Project
-  #         Value: !Ref ProjectName
-
-  WebACLAssociation:
-    Type: AWS::WAFv2::WebACLAssociation
-    Properties:
-      ResourceArn: !GetAtt ApplicationLoadBalancer.LoadBalancerArn
-      WebACLArn: !GetAtt WebACL.Arn
-
-  # ============================================================================
+  #=========================================================================
   # EC2 BASTION
   # ============================================================================
   BastionHost:
@@ -1472,7 +1161,12 @@ Resources:
     Properties:
       LogGroupName: !Sub '/aws/ec2/${ProjectName}-${EnvironmentSuffix}/application'
       RetentionInDays: !Ref DataRetentionDays
-      KmsKeyId: !GetAtt SecurityKMSKey.Arn
+      KmsKeyId:
+        !If [
+          EnableOptionalSecurity,
+          !GetAtt SecurityKMSKey.Arn,
+          !Ref 'AWS::NoValue',
+        ]
 
   SecurityLogGroup:
     Type: AWS::Logs::LogGroup
@@ -1481,7 +1175,12 @@ Resources:
     Properties:
       LogGroupName: !Sub '/aws/security/${ProjectName}-${EnvironmentSuffix}/events'
       RetentionInDays: !Ref DataRetentionDays
-      KmsKeyId: !GetAtt SecurityKMSKey.Arn
+      KmsKeyId:
+        !If [
+          EnableOptionalSecurity,
+          !GetAtt SecurityKMSKey.Arn,
+          !Ref 'AWS::NoValue',
+        ]
 
   VPCFlowLogsLogGroup:
     Type: AWS::Logs::LogGroup
@@ -1490,7 +1189,12 @@ Resources:
     Properties:
       LogGroupName: !Sub '/aws/vpcflowlogs/${ProjectName}-${EnvironmentSuffix}'
       RetentionInDays: !Ref DataRetentionDays
-      KmsKeyId: !GetAtt SecurityKMSKey.Arn
+      KmsKeyId:
+        !If [
+          EnableOptionalSecurity,
+          !GetAtt SecurityKMSKey.Arn,
+          !Ref 'AWS::NoValue',
+        ]
 
   VPCFlowLogsRole:
     Type: AWS::IAM::Role
@@ -1512,8 +1216,6 @@ Resources:
                   - 'logs:CreateLogGroup'
                   - 'logs:CreateLogStream'
                   - 'logs:PutLogEvents'
-                  - 'logs:DescribeLogGroups'
-                  - 'logs:DescribeLogStreams'
                 Resource: !GetAtt VPCFlowLogsLogGroup.Arn
 
   VPCFlowLog:
@@ -1530,7 +1232,8 @@ Resources:
     Properties:
       DisplayName: !Sub '${ProjectName}-${EnvironmentSuffix}-security-notifications'
       TopicName: !Sub '${ProjectName}-${EnvironmentSuffix}-security-notifications'
-      KmsMasterKeyId: !Ref SecurityKMSKey
+      KmsMasterKeyId:
+        !If [EnableOptionalSecurity, !Ref SecurityKMSKey, !Ref 'AWS::NoValue']
 
   SecurityNotificationsSubscription:
     Type: AWS::SNS::Subscription
@@ -1583,7 +1286,12 @@ Resources:
             Ebs:
               VolumeSize: 30
               Encrypted: true
-              KmsKeyId: !Ref SecurityKMSKey
+              KmsKeyId:
+                !If [
+                  EnableOptionalSecurity,
+                  !Ref SecurityKMSKey,
+                  !Ref 'AWS::NoValue',
+                ]
         TagSpecifications:
           - ResourceType: instance
             Tags:
@@ -1708,7 +1416,8 @@ Resources:
         GenerateStringKey: 'password'
         PasswordLength: 32
         ExcludeCharacters: "\"@/\\'"
-      KmsKeyId: !Ref SecurityKMSKey
+      KmsKeyId:
+        !If [EnableOptionalSecurity, !Ref SecurityKMSKey, !Ref 'AWS::NoValue']
       Tags:
         - Key: Name
           Value: !Sub '${ProjectName}-${EnvironmentSuffix}-db-secret'
@@ -1730,7 +1439,8 @@ Resources:
       MasterUserPassword: !Sub '{{resolve:secretsmanager:${DatabaseSecret}:SecretString:password}}'
       AllocatedStorage: 20
       StorageEncrypted: true
-      KmsKeyId: !Ref SecurityKMSKey
+      KmsKeyId:
+        !If [EnableOptionalSecurity, !Ref SecurityKMSKey, !Ref 'AWS::NoValue']
       VPCSecurityGroups:
         - !Ref DatabaseSecurityGroup
       DBSubnetGroupName: !Ref DatabaseSubnetGroup
@@ -1766,7 +1476,8 @@ Resources:
       SSESpecification:
         SSEEnabled: true
         SSEType: KMS
-        KMSMasterKeyId: !Ref SecurityKMSKey
+        KMSMasterKeyId:
+          !If [EnableOptionalSecurity, !Ref SecurityKMSKey, !Ref 'AWS::NoValue']
       DeletionProtectionEnabled: true
       Tags:
         - Key: Name
@@ -1786,7 +1497,70 @@ Resources:
     Properties:
       LogGroupName: !Sub '/aws/gdpr/${ProjectName}-${EnvironmentSuffix}/audit'
       RetentionInDays: 2557
-      KmsKeyId: !GetAtt SecurityKMSKey.Arn
+      KmsKeyId:
+        !If [
+          EnableOptionalSecurity,
+          !GetAtt SecurityKMSKey.Arn,
+          !Ref 'AWS::NoValue',
+        ]
+
+  WebServerTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub '${ProjectName}-${EnvironmentSuffix}-tg'
+      Port: 80
+      Protocol: HTTP
+      VpcId: !Ref SecureVPC
+      TargetType: instance
+
+  ApplicationLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Sub '${ProjectName}-${EnvironmentSuffix}-alb'
+      Subnets:
+        - !Ref PublicSubnet
+        - !Ref PublicSubnet2
+      SecurityGroups:
+        - !Ref ALBSecurityGroup
+      Scheme: internet-facing
+      Type: application
+
+  WebACL:
+    Type: AWS::WAFv2::WebACL
+    Condition: EnableOptionalSecurity
+    Properties:
+      DefaultAction:
+        Allow: {}
+      Scope: REGIONAL
+      VisibilityConfig:
+        SampledRequestsEnabled: true
+        CloudWatchMetricsEnabled: true
+        MetricName: webACL
+      Rules: []
+
+  WebAppCertificate:
+    Type: AWS::CertificateManager::Certificate
+    Condition: EnableOptionalSecurity
+    Properties:
+      DomainName: !Sub 'webapp.${ProjectName}.com'
+      ValidationMethod: DNS
+
+  WebACLAssociation:
+    Type: AWS::WAFv2::WebACLAssociation
+    Condition: EnableOptionalSecurity
+    Properties:
+      ResourceArn: !GetAtt ApplicationLoadBalancer.LoadBalancerArn
+      WebACLArn: !GetAtt WebACL.Arn
+
+  ALBListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref ApplicationLoadBalancer
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref WebServerTargetGroup
 
 Outputs:
   VPCId:
@@ -1797,12 +1571,6 @@ Outputs:
 
   PublicSubnetId:
     Description: 'ID of the public subnet'
-    Value: !Ref PublicSubnet
-    Export:
-      Name: !Sub '${AWS::StackName}-PublicSubnetId'
-
-  PrivateSubnetId:
-    Description: 'ID of the private subnet'
     Value: !Ref PrivateSubnet
     Export:
       Name: !Sub '${AWS::StackName}-PrivateSubnetId'
@@ -1881,7 +1649,7 @@ Outputs:
 
   WebACLArn:
     Description: 'ARN of the Web Application Firewall'
-    Value: !GetAtt WebACL.Arn
+    Value: !If [EnableOptionalSecurity, !GetAtt WebACL.Arn, !Ref 'AWS::NoValue']
     Export:
       Name: !Sub '${AWS::StackName}-WebACLArn'
 
@@ -1905,7 +1673,8 @@ Outputs:
 
   KMSKeyId:
     Description: 'ID of the KMS key used for encryption'
-    Value: !Ref SecurityKMSKey
+    Value:
+      !If [EnableOptionalSecurity, !Ref SecurityKMSKey, !Ref 'AWS::NoValue']
     Export:
       Name: !Sub '${AWS::StackName}-KMSKeyId'
 
@@ -1916,8 +1685,9 @@ Outputs:
       Name: !Sub '${AWS::StackName}-CloudTrailArn'
 
   GuardDutyDetectorId:
-    Description: 'ID of the GuardDuty detector'
+    Condition: EnableOptionalSecurity
     Value: !Ref GuardDutyDetector
+    Description: 'ID of the GuardDuty detector'
     Export:
       Name: !Sub '${AWS::StackName}-GuardDutyDetectorId'
 
@@ -1957,17 +1727,17 @@ Outputs:
     Export:
       Name: !Sub '${AWS::StackName}-WebServerAutoScalingGroupName'
 
-  WebServerCpuUtilizationAlarmName:
-    Description: 'Name of the Web Server CPU Utilization Alarm'
-    Value: !Ref WebServerCpuUtilizationAlarm
-    Export:
-      Name: !Sub '${AWS::StackName}-WebServerCpuUtilizationAlarmName'
-
   WebServerScaleUpPolicyArn:
     Description: 'ARN of the Web Server Scale Up Policy'
     Value: !GetAtt WebServerScaleUpPolicy.Arn
     Export:
       Name: !Sub '${AWS::StackName}-WebServerScaleUpPolicyArn'
+
+  WebServerCpuUtilizationAlarmName:
+    Description: 'Name of the Web Server CPU Utilization Alarm'
+    Value: !Ref WebServerCpuUtilizationAlarm
+    Export:
+      Name: !Sub '${AWS::StackName}-WebServerCpuUtilizationAlarmName'
 
   WebServerCpuLowAlarmName:
     Description: 'Name of the Web Server CPU Low Alarm'
@@ -1983,7 +1753,8 @@ Outputs:
 
   WebAppCertificateArn:
     Description: 'ARN of the Web Application Certificate'
-    Value: !Ref WebAppCertificate
+    Value:
+      !If [EnableOptionalSecurity, !Ref WebAppCertificate, !Ref 'AWS::NoValue']
     Export:
       Name: !Sub '${AWS::StackName}-WebAppCertificateArn'
 
