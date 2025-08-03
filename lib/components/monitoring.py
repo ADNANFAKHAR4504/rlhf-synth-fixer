@@ -638,7 +638,7 @@ class SecurityMonitoringInfrastructure(pulumi.ComponentResource):
     """Setup CloudWatch alarms for security monitoring"""
     self.vpc_flow_logs_alarm = aws.cloudwatch.MetricAlarm(
       f"{self.region.replace('-', '')}-secure-projectx-vpc-flow-logs-alarm",
-      alarm_name=f"secure-projectx-vpc-flow-logs-delivery-failures-{self.region}",
+      name=f"secure-projectx-vpc-flow-logs-delivery-failures-{self.region}",
       comparison_operator="GreaterThanThreshold",
       evaluation_periods=2,
       metric_name="DeliveryErrors",
@@ -659,7 +659,7 @@ class SecurityMonitoringInfrastructure(pulumi.ComponentResource):
 
     self.guardduty_findings_alarm = aws.cloudwatch.MetricAlarm(
       f"{self.region.replace('-', '')}-secure-projectx-guardduty-findings-alarm",
-      alarm_name=f"secure-projectx-guardduty-high-severity-findings-{self.region}",
+      name=f"secure-projectx-guardduty-high-severity-findings-{self.region}",
       comparison_operator="GreaterThanThreshold",
       evaluation_periods=1,
       metric_name="FindingCount",
@@ -678,7 +678,7 @@ class SecurityMonitoringInfrastructure(pulumi.ComponentResource):
 
     self.failed_login_alarm = aws.cloudwatch.MetricAlarm(
       f"{self.region.replace('-', '')}-secure-projectx-failed-login-alarm",
-      alarm_name=f"secure-projectx-console-login-failures-{self.region}",
+      name=f"secure-projectx-console-login-failures-{self.region}",
       comparison_operator="GreaterThanThreshold",
       evaluation_periods=2,
       metric_name="ConsoleLoginFailures",
@@ -695,7 +695,7 @@ class SecurityMonitoringInfrastructure(pulumi.ComponentResource):
     for bucket_name in s3_bucket_names:
       self.s3_access_alarm = aws.cloudwatch.MetricAlarm(
         f"{self.region.replace('-', '')}-secure-projectx-s3-access-alarm-{bucket_name}",
-        alarm_name=f"secure-projectx-s3-unauthorized-access-{bucket_name}-{self.region}",
+        name=f"secure-projectx-s3-unauthorized-access-{bucket_name}-{self.region}",
         comparison_operator="GreaterThanThreshold",
         evaluation_periods=1,
         metric_name="UnauthorizedAccessAttempts",
@@ -715,7 +715,7 @@ class SecurityMonitoringInfrastructure(pulumi.ComponentResource):
     for rds_identifier in rds_instance_identifiers:
       self.rds_cpu_alarm = aws.cloudwatch.MetricAlarm(
         f"{self.region.replace('-', '')}-secure-projectx-rds-cpu-alarm-{rds_identifier}",
-        alarm_name=f"secure-projectx-rds-high-cpu-{rds_identifier}-{self.region}",
+        name=f"secure-projectx-rds-high-cpu-{rds_identifier}-{self.region}",
         comparison_operator="GreaterThanThreshold",
         evaluation_periods=2,
         metric_name="CPUUtilization",
