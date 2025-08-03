@@ -306,6 +306,7 @@ class TapStack(cdk.Stack):
       subnet_group_name=f"{self.resource_prefix}-db-subnet-group"
     )
 
+    enable_pi = self.env_suffix == "prod"
     # RDS Instance
     self.database = rds.DatabaseInstance(
       self, f"{self.resource_prefix}-database",
@@ -332,7 +333,7 @@ class TapStack(cdk.Stack):
       deletion_protection=False,
       removal_policy=RemovalPolicy.DESTROY,
       monitoring_interval=Duration.seconds(60),
-      enable_performance_insights=True,
+      enable_performance_insights=enable_pi,
       cloudwatch_logs_exports=["error", "general", "slow-query"]
     )
 
