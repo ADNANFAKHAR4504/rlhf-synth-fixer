@@ -31,6 +31,7 @@ class SecurityMonitoringInfrastructure(pulumi.ComponentResource):
     self.region = region
     self.kms_key_arn = kms_key_arn
     self.tags = tags or {}
+    self.opts = opts  # ✅ Add this line
 
     # Validate inputs
     if not isinstance(self.tags, dict):
