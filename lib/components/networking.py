@@ -532,7 +532,7 @@ class NetworkSecurityInfrastructure(pulumi.ComponentResource):
         "Name": f"secure-projectx-s3-endpoint-{self.region}-{self.environment}",
         "Type": "VPC-Endpoint"
       },
-      opts=ResourceOptions(parent=self, depends_on=[self.vpc, self.private_route_tables])
+      opts=ResourceOptions(parent=self, depends_on=[self.vpc, *self.private_route_tables])
     )
 
     self.dynamodb_endpoint = aws.ec2.VpcEndpoint(
@@ -546,5 +546,5 @@ class NetworkSecurityInfrastructure(pulumi.ComponentResource):
         "Name": f"secure-projectx-dynamodb-endpoint-{self.region}-{self.environment}",
         "Type": "VPC-Endpoint"
       },
-      opts=ResourceOptions(parent=self, depends_on=[self.vpc, self.private_route_tables])
+      opts=ResourceOptions(parent=self, depends_on=[self.vpc, *self.private_route_tables])
     )
