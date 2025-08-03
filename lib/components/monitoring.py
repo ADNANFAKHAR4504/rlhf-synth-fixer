@@ -345,7 +345,7 @@ class SecurityMonitoringInfrastructure(pulumi.ComponentResource):
     )
 
     self.cloudtrail_bucket_encryption = aws.s3.BucketServerSideEncryptionConfigurationV2(
-      f"{self.name}-cloudtrail-bucket-encryption",
+      f"{self._name}-cloudtrail-bucket-encryption",
       bucket=self.cloudtrail_bucket.id,
         rules=[{
           "apply_server_side_encryption_by_default": {
