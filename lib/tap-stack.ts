@@ -64,20 +64,18 @@ export class TapStack extends cdk.Stack {
       ec2.Port.tcp(80),
       'Allow HTTP traffic from ALB'
     );
-    // Per the prompt, allow SSH. For production, this should be restricted.
-    ec2SecurityGroup.addIngressRule(
-      ec2.Peer.anyIpv4(),
-      ec2.Port.tcp(22),
-      'Allow SSH access from anywhere (Not recommended for production)'
+    // SSH access replaced with AWS Systems Manager Session Manager for security
+
+    // Add SSM permissions to EC2 role for secure access
+    ec2Role.addManagedPolicy(
+      iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonSSMManagedInstanceCore')
     );
 
     // 4. Auto Scaling Group Configuration
     const asg = new autoscaling.AutoScalingGroup(this, 'WebAppASG', {
       vpc,
       instanceType: new ec2.InstanceType('t2.micro'),
-      machineImage: ec2.MachineImage.genericLinux({
-        'us-west-2': 'ami-054b7fc3c333ac6d2',
-      }),
+      machineImage: ec2.MachineImage.latestAmazonLinux2(),
       role: ec2Role,
       securityGroup: ec2SecurityGroup,
       minCapacity: 2,

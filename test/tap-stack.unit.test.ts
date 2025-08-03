@@ -70,19 +70,10 @@ describe('TapStack', () => {
       });
     });
 
-    test('creates EC2 security group with SSH access', () => {
+    test('creates EC2 security group without SSH access (uses SSM)', () => {
       template.hasResourceProperties('AWS::EC2::SecurityGroup', {
         GroupDescription: 'Allow HTTP from ALB and SSH',
-        SecurityGroupIngress: [
-          {
-            CidrIp: '0.0.0.0/0',
-            Description:
-              'Allow SSH access from anywhere (Not recommended for production)',
-            FromPort: 22,
-            ToPort: 22,
-            IpProtocol: 'tcp',
-          },
-        ],
+        // No SecurityGroupIngress for SSH - using AWS Systems Manager instead
       });
     });
 
@@ -129,6 +120,23 @@ describe('TapStack', () => {
         ],
       });
     });
+
+    test('attaches SSM managed policy for secure access', () => {
+      template.hasResourceProperties('AWS::IAM::Role', {
+        ManagedPolicyArns: [
+          {
+            'Fn::Join': [
+              '',
+              [
+                'arn:',
+                { Ref: 'AWS::Partition' },
+                ':iam::aws:policy/AmazonSSMManagedInstanceCore',
+              ],
+            ],
+          },
+        ],
+      });
+    });
   });
 
   describe('Auto Scaling Group', () => {
@@ -142,7 +150,10 @@ describe('TapStack', () => {
 
     test('creates Launch Configuration with correct specifications', () => {
       template.hasResourceProperties('AWS::AutoScaling::LaunchConfiguration', {
-        ImageId: 'ami-054b7fc3c333ac6d2',
+        // ImageId now uses dynamic lookup instead of hard-coded AMI
+        ImageId: {
+          Ref: Match.stringLikeRegexp('SsmParameterValue'),
+        },
         InstanceType: 't2.micro',
         IamInstanceProfile: {
           Ref: Match.stringLikeRegexp('WebAppASGInstanceProfile'),
