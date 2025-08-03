@@ -152,7 +152,6 @@ class SecurityMonitoringInfrastructure(pulumi.ComponentResource):
       f"{self.region.replace('-', '')}-secure-projectx-flow-logs-policy",
       name=f"secure-projectx-flow-logs-policy-{self.region}",
       policy=flow_logs_policy_document,
-      tags=self.tags,
       opts=ResourceOptions(parent=self)
     )
 
