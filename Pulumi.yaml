@@ -1,15 +1,10 @@
-name: pulumi-infra
-runtime:
-  name: python
-description: Pulumi infrastructure for TAP
-main: tap.py
-
 name: serverless-s3-lambda
 runtime:
   name: python
   options:
     virtualenv: venv
 description: Production-ready serverless S3 to Lambda trigger architecture
+main: tap.py
 template:
   config:
     aws:region:
