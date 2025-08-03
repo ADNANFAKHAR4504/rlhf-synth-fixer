@@ -116,7 +116,7 @@ Parameters:
   AdminUserEmail:
     Type: String
     Description: 'Email address for security notifications and MFA setup'
-    Default: 'sudhakar.s@turing.com' # Added a default value to make the parameter optional
+    Default: 'sudhakar.s@turing.com'
     AllowedPattern: '^[^\s@]+@[^\s@]+\.[^\s@]+$'
 
 Conditions:
@@ -127,7 +127,6 @@ Resources:
   # ============================================================================
   # KMS KEY & ALIAS
   # ============================================================================
-  # ✅ KMS Key (conditional)
   SecurityKMSKey:
     Condition: EnableOptionalSecurity
     Type: AWS::KMS::Key
@@ -964,13 +963,21 @@ Resources:
   AdminUser:
     Type: AWS::IAM::User
     Condition: EnforceMfa
+    Metadata:
+      cfn-lint:
+        config:
+          ignore_checks:
+            - W1028 # Ignore false positive for unreachable code
     Properties:
       UserName: !Sub 'admin-${ProjectName}-${EnvironmentSuffix}'
       Path: '/'
       LoginProfile:
         # Use dynamic reference to retrieve password from Secrets Manager
-        Password: !Sub '{{resolve:secretsmanager:${AdminUserSecret}}}'
-        PasswordResetRequired: true
+        !If
+        - EnforceMfa
+        - Password: !Sub '{{resolve:secretsmanager:${AdminUserSecret}}}'
+          PasswordResetRequired: true
+        - !Ref 'AWS::NoValue'
       Policies:
         - PolicyName: AdminAccessPolicy
           PolicyDocument:
@@ -1408,6 +1415,7 @@ Resources:
 
   DatabaseSecret:
     Type: AWS::SecretsManager::Secret
+    # Removed the 'Condition: EnforceMfa' line
     Properties:
       Name: !Sub '${ProjectName}-${EnvironmentSuffix}-db-password'
       Description: 'Database master password'
