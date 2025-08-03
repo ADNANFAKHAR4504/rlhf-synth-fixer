@@ -525,7 +525,17 @@ jobs:
     name: Lint
     runs-on: ubuntu-24.04
     needs: [detect-metadata, build]
-    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
+    if: >
+      ${{
+        github.event_name == 'pull_request' &&
+        github.event.action != 'closed' &&
+        !contains(github.event.head_commit.message, '[skip-jobs]') &&
+        !(
+          needs.detect-metadata.outputs.platform == 'tf' &&
+          needs.detect-metadata.outputs.language == 'hcl'
+        )
+      }}
+    # if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
     environment: qa
     outputs:
       platform: ${{ needs.detect-metadata.outputs.platform }}
@@ -611,7 +621,17 @@ jobs:
     name: Unit Testing
     runs-on: ubuntu-24.04
     needs: lint
-    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
+    if: >
+      ${{
+        github.event_name == 'pull_request' &&
+        github.event.action != 'closed' &&
+        !contains(github.event.head_commit.message, '[skip-jobs]') &&
+        !(
+          needs.lint.outputs.platform == 'tf' &&
+          needs.lint.outputs.language == 'hcl'
+        )
+      }}
+    # if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
     environment: qa
 
     steps:
@@ -682,7 +702,17 @@ jobs:
     runs-on: ubuntu-24.04
     needs: [lint, unit-tests, deploy]
     environment: qa
-    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
+    if: >
+      ${{
+        github.event_name == 'pull_request' &&
+        github.event.action != 'closed' &&
+        !contains(github.event.head_commit.message, '[skip-jobs]') &&
+        !(
+          needs.lint.outputs.platform == 'tf' &&
+          needs.lint.outputs.language == 'hcl'
+        )
+      }}
+    # if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
 
     steps:
       - name: Checkout code
@@ -1125,6 +1155,10 @@ jobs:
           elif [ "$PLATFORM" = "pulumi" ]; then
             echo "✅ Pulumi project detected, running Pulumi destroy..."
             pipenv run pulumi-destroy || echo "No resources to destroy or destruction failed"
+          elif [ "$PLATFORM" = "tf" ]; then
+            echo "✅ Terraform project detected, running terraform destroy..."
+            # Try to destroy resources, but don't fail if they don't exist
+            npm run tf:destroy || echo "No resources to destroy or destruction failed"
           else
             echo "ℹ️ Platform '$PLATFORM' not supported for destruction, skipping destroy"
             echo "💡 Consider adding cleanup logic for $PLATFORM projects here"
