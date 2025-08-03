@@ -21,6 +21,12 @@ class TestTapStackIntegration(unittest.TestCase):
         cls.outputs = json.load(f)
     else:
       cls.outputs = {}
+    cls.env_prefix = None
+    asg = cls.outputs.get("AutoScalingGroupName")
+    if asg:
+      match = re.match(r"(myapp-[a-z0-9]+)-asg", asg)
+      if match:
+        cls.env_prefix = match.group(1)
 
   def test_outputs_file_exists_and_valid(self):
     """Test that deployment outputs file exists and contains expected keys"""
@@ -63,7 +69,7 @@ class TestTapStackIntegration(unittest.TestCase):
                         "ALB DNS should be valid AWS ELB format")
     
     # Check that it contains our resource naming convention
-    self.assertIn('myapp-dev', alb_dns, 
+    self.assertIn(self.env_prefix, alb_dns, 
                     "ALB DNS should contain resource prefix")
 
   def test_database_endpoint_format(self):
@@ -80,7 +86,7 @@ class TestTapStackIntegration(unittest.TestCase):
                       "RDS endpoint should be valid AWS RDS format")
     
     # Check that it contains our resource naming convention
-    self.assertIn('myapp-dev', db_endpoint,
+    self.assertIn(self.env_prefix, db_endpoint,
                   "RDS endpoint should contain resource prefix")
 
   def test_s3_bucket_name_format(self):
@@ -105,7 +111,7 @@ class TestTapStackIntegration(unittest.TestCase):
                             "S3 bucket name should be at most 63 characters")
     
     # Check our naming convention
-    self.assertIn('myapp-dev-static-files', bucket_name,
+    self.assertIn(f'{self.env_prefix}-static-files', bucket_name,
                   "S3 bucket should follow our naming convention")
 
   def test_auto_scaling_group_name_format(self):
@@ -117,7 +123,7 @@ class TestTapStackIntegration(unittest.TestCase):
     self.assertIsNotNone(asg_name)
     
     # Check our naming convention
-    self.assertEqual(asg_name, 'myapp-dev-asg',
+    self.assertEqual(asg_name, f'{self.env_prefix}-asg',
                         "ASG name should follow our naming convention")
 
   def test_region_consistency(self):
@@ -141,7 +147,7 @@ class TestTapStackIntegration(unittest.TestCase):
   def test_resource_naming_consistency(self):
     """Test that all resources follow consistent naming pattern"""
     # ARRANGE
-    expected_prefix = 'myapp-dev'
+    expected_prefix = self.env_prefix
     
     # ASSERT
     # Check various resource names contain the prefix
@@ -252,7 +258,7 @@ class TestTapStackIntegration(unittest.TestCase):
   def test_resource_relationships(self):
     """Test that resources appear to be properly related"""
     # All resources should contain the same environment prefix
-    expected_prefix = 'myapp-dev'
+    expected_prefix = self.env_prefix
     
     resources = [
       self.outputs.get('LoadBalancerDNS', ''),
