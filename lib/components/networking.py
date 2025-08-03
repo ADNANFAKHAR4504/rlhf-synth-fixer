@@ -51,6 +51,7 @@ class NetworkSecurityInfrastructure(pulumi.ComponentResource):
     self._create_nat_gateways()
     self._create_route_tables()
     self._create_security_groups()
+    self.database_security_group_id = self.database_security_group.id
     self._create_network_acls()
     self._create_vpc_endpoints()
 
