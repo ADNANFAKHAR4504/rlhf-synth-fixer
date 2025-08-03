@@ -286,7 +286,7 @@ class NetworkSecurityInfrastructure(pulumi.ComponentResource):
           from_port=8080,
           to_port=8080,
           protocol="tcp",
-          source_security_group_id=self.web_security_group.id
+          security_groups=[self.web_security_group.id]
         )
       ],
       egress=[
