@@ -117,8 +117,8 @@ class TapStack(pulumi.ComponentResource):
 
     return lambda_policy
 
-  def _create_s3_bucket(self) -> aws.s3.BucketV2:
-    bucket = aws.s3.BucketV2(
+  def _create_s3_bucket(self) -> aws.s3.Bucket:
+    bucket = aws.s3.Bucket(
       "serverless-trigger-bucket",
       tags={
         "Environment": "production",
@@ -129,21 +129,21 @@ class TapStack(pulumi.ComponentResource):
       opts=pulumi.ResourceOptions(parent=self)
     )
 
-    aws.s3.BucketVersioningV2(
+    aws.s3.BucketVersioning(
       "bucket-versioning",
       bucket=bucket.id,
-      versioning_configuration=aws.s3.BucketVersioningV2VersioningConfigurationArgs(
+      versioning_configuration=aws.s3.BucketVersioningVersioningConfigurationArgs(
         status="Enabled"
       ),
       opts=pulumi.ResourceOptions(parent=self)
     )
 
-    aws.s3.BucketServerSideEncryptionConfigurationV2(
+    aws.s3.BucketServerSideEncryptionConfiguration(
       "bucket-encryption",
       bucket=bucket.id,
       rules=[
-        aws.s3.BucketServerSideEncryptionConfigurationV2RuleArgs(
-          apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationV2RuleApplyServerSideEncryptionByDefaultArgs(
+        aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
+          apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
             sse_algorithm="AES256"
           )
         )
@@ -168,7 +168,7 @@ class TapStack(pulumi.ComponentResource):
       "s3-processor-lambda",
       runtime="python3.11",
       code=pulumi.AssetArchive({
-        ".": pulumi.FileArchive("./lambda_code")
+        ".": pulumi.FileArchive("./lib/lambda_code")
       }),
       handler="main.lambda_handler",
       role=role_arn,
@@ -191,13 +191,13 @@ class TapStack(pulumi.ComponentResource):
 
     return lambda_function
 
-  def _setup_s3_lambda_trigger(self, bucket: aws.s3.BucketV2, lambda_function: aws.lambda_.Function) -> None:
+  def _setup_s3_lambda_trigger(self, bucket: aws.s3.Bucket, lambda_function: aws.lambda_.Function) -> None:
     aws.lambda_.Permission(
       "s3-invoke-lambda-permission",
       action="lambda:InvokeFunction",
       function=lambda_function.name,
       principal="s3.amazonaws.com",
-      source_arn=bucket.arn.apply(lambda arn: f"{arn}/*"),
+      source_arn=bucket.arn,
       opts=pulumi.ResourceOptions(parent=self)
     )
 
