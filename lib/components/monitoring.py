@@ -130,7 +130,8 @@ class SecurityMonitoringInfrastructure(pulumi.ComponentResource):
       opts=ResourceOptions(parent=self)
     )
 
-    flow_logs_policy_document = {
+    flow_logs_policy_document = pulumi.Output.all(self.security_log_group.arn).apply(
+      lambda args: json.dumps({
       "Version": "2012-10-17",
       "Statement": [
         {
@@ -142,10 +143,10 @@ class SecurityMonitoringInfrastructure(pulumi.ComponentResource):
             "logs:DescribeLogGroups",
             "logs:DescribeLogStreams"
           ],
-          "Resource": self.vpc_flow_log_group.arn
+          "Resource": f"{args[0]}:*"
         }
       ]
-    }
+    }))
 
     self.flow_logs_policy = aws.iam.Policy(
       f"{self.region.replace('-', '')}-secure-projectx-flow-logs-policy",
