@@ -348,14 +348,15 @@ class SecurityMonitoringInfrastructure(pulumi.ComponentResource):
     self.cloudtrail_bucket_encryption = aws.s3.BucketServerSideEncryptionConfigurationV2(
       f"{self._name}-cloudtrail-bucket-encryption",
       bucket=self.cloudtrail_bucket.id,
-        rules=[{
-          "apply_server_side_encryption_by_default": {
-            "sse_algorithm": "aws:kms",
-            "kms_master_key_id": self.kms_key_arn,
-          },
-          "bucket_key_enabled": True,
-       }],
-      opts=self.opts
+        rules=[
+          aws.s3.BucketServerSideEncryptionConfigurationV2RuleArgs(
+            apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationV2RuleApplyServerSideEncryptionByDefaultArgs(
+                sse_algorithm="aws:kms",
+                kms_master_key_id=self.kms_key_arn
+            )
+          )
+        ],
+        opts=ResourceOptions(parent=self, depends_on=[self.cloudtrail_bucket])
     )
 
     cloudtrail_bucket_policy = pulumi.Output.all(
