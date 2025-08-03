@@ -1,0 +1,13 @@
+{
+  "name": "image-processor-lambda",
+  "version": "1.0.0",
+  "description": "Lambda function for processing images",
+  "main": "imageProcessor.js",
+  "dependencies": {
+    "@aws-sdk/client-sns": "^3.848.0"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.0",
+    "typescript": "^5.8.3"
+  }
+}
