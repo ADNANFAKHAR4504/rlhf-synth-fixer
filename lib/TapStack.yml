@@ -113,6 +113,21 @@ Parameters:
     AllowedValues: ['true', 'false']
     Description: 'Set to true to enforce MFA for admin users (IAM Account Password Policy)'
 
+  EnvironmentSuffix:
+    Type: String
+    Default: 'dev'
+
+  AdminUserEmail:
+    Type: String
+    Default: ''
+    Description: 'Optional email for admin notifications'
+
+  EnableSecurityResources:
+    Type: String
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+    Description: 'Whether to enable GuardDuty, WebACL, Certificate, and KMS Key'
+
   # AdminUserPassword parameter removed as it will be managed by Secrets Manager
   # AdminUserPassword:
   #   Type: String
@@ -125,71 +140,85 @@ Parameters:
     Description: 'Email address for security notifications and MFA setup'
     Default: 'sudhakar.s@turing.com' # Added a default value to make the parameter optional
     AllowedPattern: '^[^\s@]+@[^\s@]+\.[^\s@]+$'
+    
 
 Conditions:
-  EnforceMfa: !Equals [!Ref AdminMfaRequired, 'true']
+  EnableOptionalSecurity: !Equals [!Ref EnableSecurityResources, 'true']
 
 Resources:
   # ============================================================================
   # KMS KEY & ALIAS
   # ============================================================================
+  # ✅ KMS Key (conditional)
   SecurityKMSKey:
+    Condition: EnableOptionalSecurity
     Type: AWS::KMS::Key
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Retain
     Properties:
-      Description: !Sub '${ProjectName}-${EnvironmentSuffix} KMS key for encryption at rest'
+      Description: Key used for encrypting application data
       KeyPolicy:
-        Version: '2012-10-17'
+        Version: "2012-10-17"
         Statement:
-          - Sid: Enable IAM User Permissions
-            Effect: Allow
+          - Effect: Allow
             Principal:
-              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
-            Action: 'kms:*'
-            Resource: '*'
-          - Sid: Allow use of the key for CloudWatch Logs
-            Effect: Allow
-            Principal:
-              Service: !Sub 'logs.${AWS::Region}.amazonaws.com'
-            Action:
-              - 'kms:Encrypt'
-              - 'kms:Decrypt'
-              - 'kms:ReEncrypt*'
-              - 'kms:GenerateDataKey*'
-              - 'kms:DescribeKey'
-            Resource: '*'
-            Condition:
-              ArnEquals:
-                kms:EncryptionContext:aws:logs:arn: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*'
-          - Sid: Allow RDS to use the key
-            Effect: Allow
-            Principal:
-              Service: rds.amazonaws.com
-            Action:
-              - kms:CreateGrant
-              - kms:ListGrants
-              - kms:RevokeGrant
-              - kms:Decrypt
-            Resource: '*'
-          - Sid: Allow DynamoDB to use the key
-            Effect: Allow
-            Principal:
-              Service: dynamodb.amazonaws.com
-            Action:
-              - 'kms:Encrypt' # Corrected version
-              - 'kms:Decrypt'
-              - 'kms:ReEncrypt*'
-              - 'kms:GenerateDataKey*'
-              - 'kms:DescribeKey'
-            Resource: '*'
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-kms-key'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Project
-          Value: !Ref ProjectName
+              AWS: !Sub "arn:aws:iam::${AWS::AccountId}:root"
+            Action: kms:*
+            Resource: "*"
+    # Type: AWS::KMS::Key
+    # DeletionPolicy: Retain
+    # UpdateReplacePolicy: Retain
+    # Properties:
+    #   Description: !Sub '${ProjectName}-${EnvironmentSuffix} KMS key for encryption at rest'
+    #   KeyPolicy:
+    #     Version: '2012-10-17'
+    #     Statement:
+    #       - Sid: Enable IAM User Permissions
+    #         Effect: Allow
+    #         Principal:
+    #           AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+    #         Action: 'kms:*'
+    #         Resource: '*'
+    #       - Sid: Allow use of the key for CloudWatch Logs
+    #         Effect: Allow
+    #         Principal:
+    #           Service: !Sub 'logs.${AWS::Region}.amazonaws.com'
+    #         Action:
+    #           - 'kms:Encrypt'
+    #           - 'kms:Decrypt'
+    #           - 'kms:ReEncrypt*'
+    #           - 'kms:GenerateDataKey*'
+    #           - 'kms:DescribeKey'
+    #         Resource: '*'
+    #         Condition:
+    #           ArnEquals:
+    #             kms:EncryptionContext:aws:logs:arn: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*'
+    #       - Sid: Allow RDS to use the key
+    #         Effect: Allow
+    #         Principal:
+    #           Service: rds.amazonaws.com
+    #         Action:
+    #           - kms:CreateGrant
+    #           - kms:ListGrants
+    #           - kms:RevokeGrant
+    #           - kms:Decrypt
+    #         Resource: '*'
+    #       - Sid: Allow DynamoDB to use the key
+    #         Effect: Allow
+    #         Principal:
+    #           Service: dynamodb.amazonaws.com
+    #         Action:
+    #           - 'kms:Encrypt' # Corrected version
+    #           - 'kms:Decrypt'
+    #           - 'kms:ReEncrypt*'
+    #           - 'kms:GenerateDataKey*'
+    #           - 'kms:DescribeKey'
+    #         Resource: '*'
+    #   Tags:
+    #     - Key: Name
+    #       Value: !Sub '${ProjectName}-${EnvironmentSuffix}-kms-key'
+    #     - Key: Environment
+    #       Value: !Ref EnvironmentSuffix
+    #     - Key: Project
+    #       Value: !Ref ProjectName
 
   SecurityKMSKeyAlias:
     Type: AWS::KMS::Alias
@@ -1107,19 +1136,20 @@ Resources:
   # GUARDDUTY
   # ============================================================================
   GuardDutyDetector:
+    Condition: EnableOptionalSecurity
     Type: AWS::GuardDuty::Detector
     Properties:
       Enable: true
-      FindingPublishingFrequency: FIFTEEN_MINUTES
-      DataSources:
-        S3Logs:
-          Enable: true
-        Kubernetes:
-          AuditLogs:
-            Enable: true
-        MalwareProtection:
-          ScanEc2InstanceWithFindings:
-            EbsVolumes: true
+#      FindingPublishingFrequency: FIFTEEN_MINUTES
+#      DataSources:
+#        S3Logs:
+#          Enable: true
+#        Kubernetes:
+#          AuditLogs:
+#            Enable: true
+#        MalwareProtection:
+#          ScanEc2InstanceWithFindings:
+#            EbsVolumes: true
 
   # ============================================================================
   # ALB + TARGET GROUP + LISTENERS + WAF
@@ -1239,17 +1269,25 @@ Resources:
           TargetGroupArn: !Ref WebServerTargetGroup
 
   WebAppCertificate:
+    Condition: EnableOptionalSecurity
     Type: AWS::CertificateManager::Certificate
     Properties:
       DomainName: !Sub 'app.${ProjectName}.${EnvironmentSuffix}.com'
       ValidationMethod: DNS
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-app-cert'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Project
-          Value: !Ref ProjectName
+
+  # WebAppCertificate:
+  #   Type: AWS::CertificateManager::Certificate
+  #   Condition: EnableOptionalSecurity
+  #   Properties:
+  #     DomainName: !Sub 'app.${ProjectName}.${EnvironmentSuffix}.com'
+  #     ValidationMethod: DNS
+  #     Tags:
+  #       - Key: Name
+  #         Value: !Sub '${ProjectName}-${EnvironmentSuffix}-app-cert'
+  #       - Key: Environment
+  #         Value: !Ref EnvironmentSuffix
+  #       - Key: Project
+  #         Value: !Ref ProjectName
 
   ALBListenerHttps:
     Type: AWS::ElasticLoadBalancingV2::Listener
@@ -1264,119 +1302,133 @@ Resources:
           TargetGroupArn: !Ref WebServerTargetGroup
 
   WebACL:
+    Condition: EnableOptionalSecurity
     Type: AWS::WAFv2::WebACL
     Properties:
-      Name: !Sub '${ProjectName}-${EnvironmentSuffix}-web-acl'
-      Scope: REGIONAL
+      Name: !Sub "WebACL-${EnvironmentSuffix}"
+      Scope: CLOUDFRONT
       DefaultAction:
         Allow: {}
-      Rules:
-        - Name: AWSManagedRulesCommonRuleSet
-          Priority: 1
-          OverrideAction:
-            None: {}
-          Statement:
-            ManagedRuleGroupStatement:
-              VendorName: AWS
-              Name: AWSManagedRulesCommonRuleSet
-          VisibilityConfig:
-            SampledRequestsEnabled: true
-            CloudWatchMetricsEnabled: true
-            MetricName: CommonRuleSetMetric
-        - Name: AWSManagedRulesKnownBadInputsRuleSet
-          Priority: 2
-          OverrideAction:
-            None: {}
-          Statement:
-            ManagedRuleGroupStatement:
-              VendorName: AWS
-              Name: AWSManagedRulesKnownBadInputsRuleSet
-          VisibilityConfig:
-            SampledRequestsEnabled: true
-            CloudWatchMetricsEnabled: true
-            MetricName: KnownBadInputsRuleSetMetric
-        - Name: AWSManagedRulesSQLiRuleSet
-          Priority: 3
-          OverrideAction:
-            None: {}
-          Statement:
-            ManagedRuleGroupStatement:
-              VendorName: AWS
-              Name: AWSManagedRulesSQLiRuleSet
-          VisibilityConfig:
-            SampledRequestsEnabled: true
-            CloudWatchMetricsEnabled: true
-            MetricName: SQLiRuleSetMetric
-        - Name: RateLimitRule
-          Priority: 10
-          Action:
-            Block: {}
-          Statement:
-            RateBasedStatement:
-              Limit: 1000
-              AggregateKeyType: IP
-          VisibilityConfig:
-            SampledRequestsEnabled: true
-            CloudWatchMetricsEnabled: true
-            MetricName: RateLimitMetric
-        - Name: GeoBlockingRule
-          Priority: 11
-          Action:
-            Block: {}
-          Statement:
-            GeoMatchStatement:
-              CountryCodes: [CN, RU, KP, IR]
-          VisibilityConfig:
-            SampledRequestsEnabled: true
-            CloudWatchMetricsEnabled: true
-            MetricName: GeoBlockingMetric
-        - Name: IPReputationRule
-          Priority: 12
-          OverrideAction:
-            None: {}
-          Statement:
-            ManagedRuleGroupStatement:
-              VendorName: AWS
-              Name: AWSManagedRulesAmazonIpReputationList
-          VisibilityConfig:
-            SampledRequestsEnabled: true
-            CloudWatchMetricsEnabled: true
-            MetricName: IPReputationMetric
-        - Name: AnonymousIPRule
-          Priority: 13
-          OverrideAction:
-            None: {}
-          Statement:
-            ManagedRuleGroupStatement:
-              VendorName: AWS
-              Name: AWSManagedRulesAnonymousIpList
-          VisibilityConfig:
-            SampledRequestsEnabled: true
-            CloudWatchMetricsEnabled: true
-            MetricName: AnonymousIPMetric
-        - Name: LinuxRuleSet
-          Priority: 14
-          OverrideAction:
-            None: {}
-          Statement:
-            ManagedRuleGroupStatement:
-              VendorName: AWS
-              Name: AWSManagedRulesLinuxRuleSet
-          VisibilityConfig:
-            SampledRequestsEnabled: true
-            CloudWatchMetricsEnabled: true
-            MetricName: LinuxRuleSetMetric
       VisibilityConfig:
         SampledRequestsEnabled: true
         CloudWatchMetricsEnabled: true
-        MetricName: !Sub '${ProjectName}${EnvironmentSuffix}WebACL'
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-web-acl'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Project
-          Value: !Ref ProjectName
+        MetricName: !Sub "WebACL-${EnvironmentSuffix}"
+      Rules: []
+  # WebACL:
+  #   Type: AWS::WAFv2::WebACL
+  #   Condition: EnableOptionalSecurity
+  #   Properties:
+  #     Name: !Sub '${ProjectName}-${EnvironmentSuffix}-web-acl'
+  #     Scope: REGIONAL
+  #     DefaultAction:
+  #       Allow: {}
+  #     Rules:
+  #       - Name: AWSManagedRulesCommonRuleSet
+  #         Priority: 1
+  #         OverrideAction:
+  #           None: {}
+  #         Statement:
+  #           ManagedRuleGroupStatement:
+  #             VendorName: AWS
+  #             Name: AWSManagedRulesCommonRuleSet
+  #         VisibilityConfig:
+  #           SampledRequestsEnabled: true
+  #           CloudWatchMetricsEnabled: true
+  #           MetricName: CommonRuleSetMetric
+  #       - Name: AWSManagedRulesKnownBadInputsRuleSet
+  #         Priority: 2
+  #         OverrideAction:
+  #           None: {}
+  #         Statement:
+  #           ManagedRuleGroupStatement:
+  #             VendorName: AWS
+  #             Name: AWSManagedRulesKnownBadInputsRuleSet
+  #         VisibilityConfig:
+  #           SampledRequestsEnabled: true
+  #           CloudWatchMetricsEnabled: true
+  #           MetricName: KnownBadInputsRuleSetMetric
+  #       - Name: AWSManagedRulesSQLiRuleSet
+  #         Priority: 3
+  #         OverrideAction:
+  #           None: {}
+  #         Statement:
+  #           ManagedRuleGroupStatement:
+  #             VendorName: AWS
+  #             Name: AWSManagedRulesSQLiRuleSet
+  #         VisibilityConfig:
+  #           SampledRequestsEnabled: true
+  #           CloudWatchMetricsEnabled: true
+  #           MetricName: SQLiRuleSetMetric
+  #       - Name: RateLimitRule
+  #         Priority: 10
+  #         Action:
+  #           Block: {}
+  #         Statement:
+  #           RateBasedStatement:
+  #             Limit: 1000
+  #             AggregateKeyType: IP
+  #         VisibilityConfig:
+  #           SampledRequestsEnabled: true
+  #           CloudWatchMetricsEnabled: true
+  #           MetricName: RateLimitMetric
+  #       - Name: GeoBlockingRule
+  #         Priority: 11
+  #         Action:
+  #           Block: {}
+  #         Statement:
+  #           GeoMatchStatement:
+  #             CountryCodes: [CN, RU, KP, IR]
+  #         VisibilityConfig:
+  #           SampledRequestsEnabled: true
+  #           CloudWatchMetricsEnabled: true
+  #           MetricName: GeoBlockingMetric
+  #       - Name: IPReputationRule
+  #         Priority: 12
+  #         OverrideAction:
+  #           None: {}
+  #         Statement:
+  #           ManagedRuleGroupStatement:
+  #             VendorName: AWS
+  #             Name: AWSManagedRulesAmazonIpReputationList
+  #         VisibilityConfig:
+  #           SampledRequestsEnabled: true
+  #           CloudWatchMetricsEnabled: true
+  #           MetricName: IPReputationMetric
+  #       - Name: AnonymousIPRule
+  #         Priority: 13
+  #         OverrideAction:
+  #           None: {}
+  #         Statement:
+  #           ManagedRuleGroupStatement:
+  #             VendorName: AWS
+  #             Name: AWSManagedRulesAnonymousIpList
+  #         VisibilityConfig:
+  #           SampledRequestsEnabled: true
+  #           CloudWatchMetricsEnabled: true
+  #           MetricName: AnonymousIPMetric
+  #       - Name: LinuxRuleSet
+  #         Priority: 14
+  #         OverrideAction:
+  #           None: {}
+  #         Statement:
+  #           ManagedRuleGroupStatement:
+  #             VendorName: AWS
+  #             Name: AWSManagedRulesLinuxRuleSet
+  #         VisibilityConfig:
+  #           SampledRequestsEnabled: true
+  #           CloudWatchMetricsEnabled: true
+  #           MetricName: LinuxRuleSetMetric
+  #     VisibilityConfig:
+  #       SampledRequestsEnabled: true
+  #       CloudWatchMetricsEnabled: true
+  #       MetricName: !Sub '${ProjectName}${EnvironmentSuffix}WebACL'
+  #     Tags:
+  #       - Key: Name
+  #         Value: !Sub '${ProjectName}-${EnvironmentSuffix}-web-acl'
+  #       - Key: Environment
+  #         Value: !Ref EnvironmentSuffix
+  #       - Key: Project
+  #         Value: !Ref ProjectName
 
   WebACLAssociation:
     Type: AWS::WAFv2::WebACLAssociation
