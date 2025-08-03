@@ -113,14 +113,14 @@ Parameters:
     AllowedValues: ['true', 'false']
     Description: 'Set to true to enforce MFA for admin users (IAM Account Password Policy)'
 
-  EnvironmentSuffix:
-    Type: String
-    Default: 'dev'
+  # EnvironmentSuffix:
+  #   Type: String
+  #   Default: 'dev'
 
-  AdminUserEmail:
-    Type: String
-    Default: ''
-    Description: 'Optional email for admin notifications'
+  # AdminUserEmail:
+  #   Type: String
+  #   Default: ''
+  #   Description: 'Optional email for admin notifications'
 
   EnableSecurityResources:
     Type: String
@@ -140,7 +140,6 @@ Parameters:
     Description: 'Email address for security notifications and MFA setup'
     Default: 'sudhakar.s@turing.com' # Added a default value to make the parameter optional
     AllowedPattern: '^[^\s@]+@[^\s@]+\.[^\s@]+$'
-    
 
 Conditions:
   EnableOptionalSecurity: !Equals [!Ref EnableSecurityResources, 'true']
@@ -156,13 +155,13 @@ Resources:
     Properties:
       Description: Key used for encrypting application data
       KeyPolicy:
-        Version: "2012-10-17"
+        Version: '2012-10-17'
         Statement:
           - Effect: Allow
             Principal:
-              AWS: !Sub "arn:aws:iam::${AWS::AccountId}:root"
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
             Action: kms:*
-            Resource: "*"
+            Resource: '*'
     # Type: AWS::KMS::Key
     # DeletionPolicy: Retain
     # UpdateReplacePolicy: Retain
@@ -1140,16 +1139,16 @@ Resources:
     Type: AWS::GuardDuty::Detector
     Properties:
       Enable: true
-#      FindingPublishingFrequency: FIFTEEN_MINUTES
-#      DataSources:
-#        S3Logs:
-#          Enable: true
-#        Kubernetes:
-#          AuditLogs:
-#            Enable: true
-#        MalwareProtection:
-#          ScanEc2InstanceWithFindings:
-#            EbsVolumes: true
+  #      FindingPublishingFrequency: FIFTEEN_MINUTES
+  #      DataSources:
+  #        S3Logs:
+  #          Enable: true
+  #        Kubernetes:
+  #          AuditLogs:
+  #            Enable: true
+  #        MalwareProtection:
+  #          ScanEc2InstanceWithFindings:
+  #            EbsVolumes: true
 
   # ============================================================================
   # ALB + TARGET GROUP + LISTENERS + WAF
@@ -1305,14 +1304,14 @@ Resources:
     Condition: EnableOptionalSecurity
     Type: AWS::WAFv2::WebACL
     Properties:
-      Name: !Sub "WebACL-${EnvironmentSuffix}"
+      Name: !Sub 'WebACL-${EnvironmentSuffix}'
       Scope: CLOUDFRONT
       DefaultAction:
         Allow: {}
       VisibilityConfig:
         SampledRequestsEnabled: true
         CloudWatchMetricsEnabled: true
-        MetricName: !Sub "WebACL-${EnvironmentSuffix}"
+        MetricName: !Sub 'WebACL-${EnvironmentSuffix}'
       Rules: []
   # WebACL:
   #   Type: AWS::WAFv2::WebACL
