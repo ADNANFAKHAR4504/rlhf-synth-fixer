@@ -180,11 +180,22 @@ class TapStack(cdk.Stack):
 
     # Add VPC Flow Logs for security monitoring
     self.vpc_flow_log_role = iam.Role(
-        self, f"{self.resource_prefix}-vpc-flow-log-role",
-        assumed_by=iam.ServicePrincipal("vpc-flow-logs.amazonaws.com"),
-        managed_policies=[
-            iam.ManagedPolicy.from_aws_managed_policy_name("service-role/VPCFlowLogsDeliveryRolePolicy")
-        ]
+      self, f"{self.resource_prefix}-vpc-flow-log-role",
+      assumed_by=iam.ServicePrincipal("vpc-flow-logs.amazonaws.com"),
+      inline_policies={
+        "VpcFlowLogsPolicy": iam.PolicyDocument(statements=[
+          iam.PolicyStatement(
+            actions=[
+              "logs:CreateLogGroup",
+              "logs:CreateLogStream",
+              "logs:PutLogEvents",
+              "logs:DescribeLogGroups",
+              "logs:DescribeLogStreams"
+            ],
+            resources=["*"]
+          )
+        ])
+      }
     )
 
     self.vpc_flow_log = ec2.FlowLog(
