@@ -95,18 +95,16 @@ class DataProtectionInfrastructure(pulumi.ComponentResource):
     self.s3_encryption = aws.s3.BucketServerSideEncryptionConfigurationV2(
       f"{self.region.replace('-', '')}-secure-projectx-encryption",
       bucket=self.secure_s3_bucket.id,
-      server_side_encryption_configuration=aws.s3.BucketServerSideEncryptionConfigurationV2ServerSideEncryptionConfigurationArgs(
         rules=[
-          aws.s3.BucketServerSideEncryptionConfigurationV2ServerSideEncryptionConfigurationRuleArgs(
-            apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationV2ServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
+          aws.s3.BucketServerSideEncryptionConfigurationV2RuleArgs(
+            apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationV2RuleApplyServerSideEncryptionByDefaultArgs(
               sse_algorithm="aws:kms",
               kms_master_key_id=self.kms_key_arn
             ),
             bucket_key_enabled=True
           )
-        ]
-      ),
-      opts=ResourceOptions(parent=self, depends_on=[self.secure_s3_bucket])
+        ],
+        opts=ResourceOptions(parent=self, depends_on=[self.secure_s3_bucket])
     )
 
     self.s3_public_access_block = aws.s3.BucketPublicAccessBlock(
