@@ -652,7 +652,9 @@ class SecurityMonitoringInfrastructure(pulumi.ComponentResource):
         "VPC": vpc_id
       },
       tags=self.tags,
-      opts=ResourceOptions(parent=self, depends_on=[self.sns_topic], **(opts or {}))
+      opts=(opts or ResourceOptions()).merge(
+        ResourceOptions(parent=self, depends_on=[self.sns_topic])
+      )
     )
 
     self.guardduty_findings_alarm = aws.cloudwatch.MetricAlarm(
