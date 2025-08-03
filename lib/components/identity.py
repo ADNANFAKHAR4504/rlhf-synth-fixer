@@ -224,7 +224,7 @@ class IdentityAccessInfrastructure(pulumi.ComponentResource):
       opts=ResourceOptions(parent=self)
     )
 
-    lambda_policy_document = {
+    lambda_policy_document = self.kms_key.arn.apply(lambda kms_arn: json.dumps({
       "Version": "2012-10-17",
       "Statement": [
         {
@@ -253,16 +253,16 @@ class IdentityAccessInfrastructure(pulumi.ComponentResource):
             "kms:Encrypt",
             "kms:GenerateDataKey"
           ],
-          "Resource": self.kms_key.arn
+          "Resource": kms_arn
         }
       ]
-    }
+    }))
 
     self.lambda_policy = aws.iam.Policy(
       f"secure-projectx-lambda-policy",
       name="secure-projectx-lambda-policy",
       description="Least privilege policy for ProjectX Lambda functions",
-      policy=json.dumps(lambda_policy_document),
+      policy=lambda_policy_document,
       tags=self.tags,
       opts=ResourceOptions(parent=self)
     )
@@ -338,7 +338,7 @@ class IdentityAccessInfrastructure(pulumi.ComponentResource):
       opts=ResourceOptions(parent=self)
     )
 
-    s3_policy_document = {
+    s3_policy_document = self.kms_key.arn.apply(lambda kms_arn: json.dumps({
       "Version": "2012-10-17",
       "Statement": [
         {
@@ -372,16 +372,16 @@ class IdentityAccessInfrastructure(pulumi.ComponentResource):
             "kms:GenerateDataKey",
             "kms:ReEncrypt*"
           ],
-          "Resource": self.kms_key.arn
+          "Resource": kms_arn
         }
       ]
-    }
+    }))
 
     self.s3_access_policy = aws.iam.Policy(
       f"secure-projectx-s3-access-policy",
       name="secure-projectx-s3-access-policy",
       description="Policy for secure S3 access with KMS encryption",
-      policy=json.dumps(s3_policy_document),
+      policy=s3_policy_document,
       tags=self.tags,
       opts=ResourceOptions(parent=self)
     )
