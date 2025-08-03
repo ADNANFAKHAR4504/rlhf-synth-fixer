@@ -460,7 +460,8 @@ class SecurityMonitoringInfrastructure(pulumi.ComponentResource):
       opts=ResourceOptions(parent=self)
     )
 
-    cloudtrail_logs_policy_document = {
+    cloudtrail_logs_policy_document = pulumi.Output.all(self.security_log_group.arn).apply(
+  lambda args: json.dumps({
       "Version": "2012-10-17",
       "Statement": [
         {
@@ -470,12 +471,11 @@ class SecurityMonitoringInfrastructure(pulumi.ComponentResource):
             "logs:CreateLogGroup",
             "logs:CreateLogStream"
           ],
-          "Resource": pulumi.Output.concat(
-            self.security_log_group.arn, ":*"
-          )
+          "Resource": f"{args[0]}:*"
         }
       ]
-    }
+    }))
+
 
     cloudtrail_logs_policy = aws.iam.Policy(
       f"{self.region.replace('-', '')}-secure-projectx-cloudtrail-logs-policy",
