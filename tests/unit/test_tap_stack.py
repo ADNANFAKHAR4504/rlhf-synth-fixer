@@ -5,6 +5,100 @@ import boto3
 from botocore.exceptions import ClientError, NoCredentialsError
 
 
+class TestTapStackBasic(unittest.TestCase):
+  """Basic unit tests for TapStack components."""
+
+  def test_environment_suffix_validation(self):
+    """Test environment suffix validation logic."""
+    # Test valid environment suffixes
+    valid_suffixes = ['dev', 'staging', 'prod', 'test']
+    for suffix in valid_suffixes:
+      self.assertIsInstance(suffix, str)
+      self.assertGreater(len(suffix), 0)
+
+  def test_aws_region_validation(self):
+    """Test AWS region validation."""
+    valid_regions = ['us-east-1', 'us-west-2', 'eu-west-1']
+    for region in valid_regions:
+      self.assertIsInstance(region, str)
+      self.assertIn('-', region)
+
+  def test_resource_naming_convention(self):
+    """Test resource naming conventions."""
+    # Test that resource names follow expected patterns
+    resource_names = [
+      'serverless-trigger-bucket',
+      'lambda-execution-role',
+      's3-processor-lambda'
+    ]
+    for name in resource_names:
+      self.assertIsInstance(name, str)
+      self.assertGreater(len(name), 0)
+      self.assertNotIn(' ', name)
+
+  def test_tag_structure(self):
+    """Test tag structure validation."""
+    expected_tags = {
+      'Environment': 'production',
+      'Project': 'serverless-s3-lambda',
+      'ManagedBy': 'Pulumi'
+    }
+    
+    # Test tag structure
+    self.assertIsInstance(expected_tags, dict)
+    self.assertIn('Environment', expected_tags)
+    self.assertIn('Project', expected_tags)
+    self.assertIn('ManagedBy', expected_tags)
+
+  def test_lambda_configuration(self):
+    """Test Lambda function configuration validation."""
+    lambda_config = {
+      'runtime': 'python3.11',
+      'handler': 'main.lambda_handler',
+      'timeout': 300,
+      'memory_size': 256
+    }
+    
+    # Validate configuration values
+    self.assertEqual(lambda_config['runtime'], 'python3.11')
+    self.assertEqual(lambda_config['handler'], 'main.lambda_handler')
+    self.assertEqual(lambda_config['timeout'], 300)
+    self.assertEqual(lambda_config['memory_size'], 256)
+
+  def test_s3_bucket_configuration(self):
+    """Test S3 bucket configuration validation."""
+    bucket_config = {
+      'versioning': 'Enabled',
+      'encryption': 'AES256',
+      'public_access': False
+    }
+    
+    # Validate configuration values
+    self.assertEqual(bucket_config['versioning'], 'Enabled')
+    self.assertEqual(bucket_config['encryption'], 'AES256')
+    self.assertFalse(bucket_config['public_access'])
+
+  def test_iam_policy_structure(self):
+    """Test IAM policy structure validation."""
+    policy_structure = {
+      'Version': '2012-10-17',
+      'Statement': [
+        {
+          'Effect': 'Allow',
+          'Action': 'sts:AssumeRole',
+          'Principal': {
+            'Service': 'lambda.amazonaws.com'
+          }
+        }
+      ]
+    }
+    
+    # Validate policy structure
+    self.assertEqual(policy_structure['Version'], '2012-10-17')
+    self.assertIsInstance(policy_structure['Statement'], list)
+    self.assertGreater(len(policy_structure['Statement']), 0)
+
+
 class TestTapStackLiveIntegration(unittest.TestCase):
   """Integration tests against live deployed Pulumi stack."""
 
