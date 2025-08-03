@@ -89,7 +89,7 @@ class DataProtectionInfrastructure(pulumi.ComponentResource):
       versioning_configuration=aws.s3.BucketVersioningV2VersioningConfigurationArgs(
         status="Enabled"
       ),
-      opts=ResourceOptions(parent=self, depends_on=[self.secure_s3_bucket])
+      opts=ResourceOptions(parent=self)
     )
 
     self.s3_encryption = aws.s3.BucketServerSideEncryptionConfigurationV2(
@@ -104,7 +104,7 @@ class DataProtectionInfrastructure(pulumi.ComponentResource):
             bucket_key_enabled=True
           )
         ],
-        opts=ResourceOptions(parent=self, depends_on=[self.secure_s3_bucket])
+        opts=ResourceOptions(parent=self)
     )
 
     self.s3_public_access_block = aws.s3.BucketPublicAccessBlock(
@@ -114,7 +114,7 @@ class DataProtectionInfrastructure(pulumi.ComponentResource):
       block_public_policy=True,
       ignore_public_acls=True,
       restrict_public_buckets=True,
-      opts=ResourceOptions(parent=self, depends_on=[self.secure_s3_bucket])
+      opts=ResourceOptions(parent=self)
     )
 
     bucket_policy = pulumi.Output.all(
@@ -157,7 +157,7 @@ class DataProtectionInfrastructure(pulumi.ComponentResource):
       f"{self.region.replace('-', '')}-secure-projectx-bucket-policy",
       bucket=self.secure_s3_bucket.id,
       policy=bucket_policy,
-      opts=ResourceOptions(parent=self, depends_on=[self.s3_public_access_block])
+      opts=ResourceOptions(parent=self)
     )
 
     self.s3_lifecycle = aws.s3.BucketLifecycleConfigurationV2(
@@ -196,7 +196,7 @@ class DataProtectionInfrastructure(pulumi.ComponentResource):
           )
         )
       ],
-      opts=ResourceOptions(parent=self, depends_on=[self.secure_s3_bucket])
+      opts=ResourceOptions(parent=self)
     )
 
     self.s3_notification = aws.s3.BucketNotification(
@@ -209,7 +209,7 @@ class DataProtectionInfrastructure(pulumi.ComponentResource):
           filter_prefix="critical/"
         )
       ],
-      opts=ResourceOptions(parent=self, depends_on=[self.secure_s3_bucket])
+      opts=ResourceOptions(parent=self)
     )
 
   def _create_rds_resources(self):
@@ -320,7 +320,7 @@ class DataProtectionInfrastructure(pulumi.ComponentResource):
         "Backup": "Required",
         "Encryption": "KMS"
       },
-      opts=ResourceOptions(parent=self, depends_on=[self.rds_subnet_group, self.rds_parameter_group, self.rds_option_group, self.rds_password_version])
+      opts=ResourceOptions(parent=self)
     )
 
   def _create_backup_policies(self):
@@ -372,7 +372,7 @@ class DataProtectionInfrastructure(pulumi.ComponentResource):
         )
       ],
       tags=self.tags,
-      opts=ResourceOptions(parent=self, depends_on=[self.backup_vault])
+      opts=ResourceOptions(parent=self)
     )
 
     backup_assume_role_policy = {
@@ -404,14 +404,14 @@ class DataProtectionInfrastructure(pulumi.ComponentResource):
       f"{self.region.replace('-', '')}-secure-projectx-backup-policy-backup",
       role=self.backup_role.name,
       policy_arn="arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForBackup",
-      opts=ResourceOptions(parent=self, depends_on=[self.backup_role])
+      opts=ResourceOptions(parent=self)
     )
 
     aws.iam.RolePolicyAttachment(
       f"{self.region.replace('-', '')}-secure-projectx-backup-policy-restore",
       role=self.backup_role.name,
       policy_arn="arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForRestores",
-      opts=ResourceOptions(parent=self, depends_on=[self.backup_role])
+      opts=ResourceOptions(parent=self)
     )
 
     self.backup_selection = aws.backup.Selection(
@@ -430,5 +430,5 @@ class DataProtectionInfrastructure(pulumi.ComponentResource):
           value="Required"
         )
       ],
-      opts=ResourceOptions(parent=self, depends_on=[self.backup_plan, self.backup_role, self.rds_instance, self.secure_s3_bucket])
+      opts=ResourceOptions(parent=self)
     )
