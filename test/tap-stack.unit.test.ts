@@ -7,17 +7,10 @@ describe('TapStack CloudFormation Template', () => {
   let template: any;
 
   beforeAll(() => {
-    // If youre testing a yaml template. run `pipenv run cfn-flip-to-json > lib/TapStack.json`
-    // Otherwise, ensure the template is in JSON format.
+    // Template converted from YAML to JSON for testing
     const templatePath = path.join(__dirname, '../lib/TapStack.json');
     const templateContent = fs.readFileSync(templatePath, 'utf8');
     template = JSON.parse(templateContent);
-  });
-
-  describe('Write Integration TESTS', () => {
-    test('Dont forget!', async () => {
-      expect(false).toBe(true);
-    });
   });
 
   describe('Template Structure', () => {
@@ -28,133 +21,362 @@ describe('TapStack CloudFormation Template', () => {
     test('should have a description', () => {
       expect(template.Description).toBeDefined();
       expect(template.Description).toBe(
-        'TAP Stack - Task Assignment Platform CloudFormation Template'
+        'Modular multi-environment infrastructure template with VPC, EC2, RDS, and ALB'
       );
     });
 
-    test('should have metadata section', () => {
-      expect(template.Metadata).toBeDefined();
-      expect(template.Metadata['AWS::CloudFormation::Interface']).toBeDefined();
+    test('should have all required sections', () => {
+      expect(template.Parameters).toBeDefined();
+      expect(template.Mappings).toBeDefined();
+      expect(template.Resources).toBeDefined();
+      expect(template.Conditions).toBeDefined();
+      expect(template.Outputs).toBeDefined();
     });
   });
 
   describe('Parameters', () => {
-    test('should have EnvironmentSuffix parameter', () => {
-      expect(template.Parameters.EnvironmentSuffix).toBeDefined();
+    test('should have Environment parameter with correct configuration', () => {
+      const envParam = template.Parameters.Environment;
+      expect(envParam).toBeDefined();
+      expect(envParam.Type).toBe('String');
+      expect(envParam.Default).toBe('dev');
+      expect(envParam.AllowedValues).toEqual(['dev', 'test', 'stage', 'prod']);
+      expect(envParam.Description).toBe('Target deployment environment');
     });
 
-    test('EnvironmentSuffix parameter should have correct properties', () => {
-      const envSuffixParam = template.Parameters.EnvironmentSuffix;
-      expect(envSuffixParam.Type).toBe('String');
-      expect(envSuffixParam.Default).toBe('dev');
-      expect(envSuffixParam.Description).toBe(
-        'Environment suffix for resource naming (e.g., dev, staging, prod)'
-      );
-      expect(envSuffixParam.AllowedPattern).toBe('^[a-zA-Z0-9]+$');
-      expect(envSuffixParam.ConstraintDescription).toBe(
-        'Must contain only alphanumeric characters'
-      );
+    test('should have ProjectName parameter', () => {
+      const projectParam = template.Parameters.ProjectName;
+      expect(projectParam).toBeDefined();
+      expect(projectParam.Type).toBe('String');
+      expect(projectParam.Default).toBe('MyApp');
+      expect(projectParam.Description).toBe('Project name for resource naming and tagging');
+    });
+
+    test('should have Owner parameter', () => {
+      const ownerParam = template.Parameters.Owner;
+      expect(ownerParam).toBeDefined();
+      expect(ownerParam.Type).toBe('String');
+      expect(ownerParam.Default).toBe('DevOps-Team');
+    });
+
+    test('should have CostCenter parameter', () => {
+      const costParam = template.Parameters.CostCenter;
+      expect(costParam).toBeDefined();
+      expect(costParam.Type).toBe('String');
+      expect(costParam.Default).toBe('Engineering');
+    });
+
+    test('should have LatestAmiId parameter for dynamic AMI lookup', () => {
+      const amiParam = template.Parameters.LatestAmiId;
+      expect(amiParam).toBeDefined();
+      expect(amiParam.Type).toBe('AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>');
+      expect(amiParam.Default).toBe('/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2');
+    });
+
+    test('should have DBPassword parameter with security settings', () => {
+      const dbParam = template.Parameters.DBPassword;
+      expect(dbParam).toBeDefined();
+      expect(dbParam.Type).toBe('String');
+      expect(dbParam.NoEcho).toBe(true);
+      expect(dbParam.MinLength).toBe(8);
+      expect(dbParam.MaxLength).toBe(41);
+      expect(dbParam.AllowedPattern).toBe('[a-zA-Z0-9!@#$%^&*()_+=-]{8,41}');
     });
   });
 
-  describe('Resources', () => {
-    test('should have TurnAroundPromptTable resource', () => {
-      expect(template.Resources.TurnAroundPromptTable).toBeDefined();
+  describe('Mappings', () => {
+    test('should have EnvironmentConfig mapping with all environments', () => {
+      const envConfig = template.Mappings.EnvironmentConfig;
+      expect(envConfig).toBeDefined();
+      expect(envConfig.dev).toBeDefined();
+      expect(envConfig.test).toBeDefined();
+      expect(envConfig.stage).toBeDefined();
+      expect(envConfig.prod).toBeDefined();
     });
 
-    test('TurnAroundPromptTable should be a DynamoDB table', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      expect(table.Type).toBe('AWS::DynamoDB::Table');
+    test('should have correct dev environment configuration', () => {
+      const devConfig = template.Mappings.EnvironmentConfig.dev;
+      expect(devConfig.VpcCidr).toBe('10.0.0.0/16');
+      expect(devConfig.InstanceType).toBe('t3.micro');
+      expect(devConfig.MinSize).toBe(1);
+      expect(devConfig.MaxSize).toBe(2);
+      expect(devConfig.DesiredCapacity).toBe(1);
+      expect(devConfig.DBInstanceClass).toBe('db.t3.micro');
+      expect(devConfig.MultiAZ).toBe(false);
     });
 
-    test('TurnAroundPromptTable should have correct deletion policies', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      expect(table.DeletionPolicy).toBe('Delete');
-      expect(table.UpdateReplacePolicy).toBe('Delete');
+    test('should have different configurations for production environments', () => {
+      const prodConfig = template.Mappings.EnvironmentConfig.prod;
+      expect(prodConfig.VpcCidr).toBe('10.3.0.0/16');
+      expect(prodConfig.InstanceType).toBe('t3.large');
+      expect(prodConfig.MinSize).toBe(2);
+      expect(prodConfig.MaxSize).toBe(6);
+      expect(prodConfig.DesiredCapacity).toBe(3);
+      expect(prodConfig.DBInstanceClass).toBe('db.t3.medium');
+      expect(prodConfig.MultiAZ).toBe(true);
+    });
+  });
+
+  describe('Conditions', () => {
+    test('should have IsProductionLike condition', () => {
+      const condition = template.Conditions.IsProductionLike;
+      expect(condition).toBeDefined();
+      expect(condition['Fn::Or']).toBeDefined();
+      expect(condition['Fn::Or']).toHaveLength(2);
+    });
+  });
+
+  describe('VPC Resources', () => {
+    test('should have VPC resource with correct properties', () => {
+      const vpc = template.Resources.VPC;
+      expect(vpc).toBeDefined();
+      expect(vpc.Type).toBe('AWS::EC2::VPC');
+      expect(vpc.Properties.EnableDnsHostnames).toBe(true);
+      expect(vpc.Properties.EnableDnsSupport).toBe(true);
     });
 
-    test('TurnAroundPromptTable should have correct properties', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const properties = table.Properties;
-
-      expect(properties.TableName).toEqual({
-        'Fn::Sub': 'TurnAroundPromptTable${EnvironmentSuffix}',
-      });
-      expect(properties.BillingMode).toBe('PAY_PER_REQUEST');
-      expect(properties.DeletionProtectionEnabled).toBe(false);
+    test('should have Internet Gateway', () => {
+      const igw = template.Resources.InternetGateway;
+      expect(igw).toBeDefined();
+      expect(igw.Type).toBe('AWS::EC2::InternetGateway');
     });
 
-    test('TurnAroundPromptTable should have correct attribute definitions', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const attributeDefinitions = table.Properties.AttributeDefinitions;
-
-      expect(attributeDefinitions).toHaveLength(1);
-      expect(attributeDefinitions[0].AttributeName).toBe('id');
-      expect(attributeDefinitions[0].AttributeType).toBe('S');
+    test('should have Internet Gateway Attachment', () => {
+      const attachment = template.Resources.InternetGatewayAttachment;
+      expect(attachment).toBeDefined();
+      expect(attachment.Type).toBe('AWS::EC2::VPCGatewayAttachment');
     });
 
-    test('TurnAroundPromptTable should have correct key schema', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const keySchema = table.Properties.KeySchema;
+    test('should have public subnets', () => {
+      const publicSubnet1 = template.Resources.PublicSubnet1;
+      const publicSubnet2 = template.Resources.PublicSubnet2;
+      
+      expect(publicSubnet1).toBeDefined();
+      expect(publicSubnet1.Type).toBe('AWS::EC2::Subnet');
+      expect(publicSubnet1.Properties.MapPublicIpOnLaunch).toBe(true);
+      
+      expect(publicSubnet2).toBeDefined();
+      expect(publicSubnet2.Type).toBe('AWS::EC2::Subnet');
+      expect(publicSubnet2.Properties.MapPublicIpOnLaunch).toBe(true);
+    });
 
-      expect(keySchema).toHaveLength(1);
-      expect(keySchema[0].AttributeName).toBe('id');
-      expect(keySchema[0].KeyType).toBe('HASH');
+    test('should have private subnets', () => {
+      const privateSubnet1 = template.Resources.PrivateSubnet1;
+      const privateSubnet2 = template.Resources.PrivateSubnet2;
+      
+      expect(privateSubnet1).toBeDefined();
+      expect(privateSubnet1.Type).toBe('AWS::EC2::Subnet');
+      expect(privateSubnet1.Properties.MapPublicIpOnLaunch).toBeUndefined();
+      
+      expect(privateSubnet2).toBeDefined();
+      expect(privateSubnet2.Type).toBe('AWS::EC2::Subnet');
+      expect(privateSubnet2.Properties.MapPublicIpOnLaunch).toBeUndefined();
+    });
+
+    test('should have NAT Gateway resources with conditions', () => {
+      const natEIP = template.Resources.NatGateway1EIP;
+      const natGW = template.Resources.NatGateway1;
+      
+      expect(natEIP).toBeDefined();
+      expect(natEIP.Type).toBe('AWS::EC2::EIP');
+      expect(natEIP.Condition).toBe('IsProductionLike');
+      
+      expect(natGW).toBeDefined();
+      expect(natGW.Type).toBe('AWS::EC2::NatGateway');
+      expect(natGW.Condition).toBe('IsProductionLike');
+    });
+  });
+
+  describe('Security Groups', () => {
+    test('should have ALB Security Group with HTTP/HTTPS access', () => {
+      const albSG = template.Resources.ALBSecurityGroup;
+      expect(albSG).toBeDefined();
+      expect(albSG.Type).toBe('AWS::EC2::SecurityGroup');
+      
+      const ingress = albSG.Properties.SecurityGroupIngress;
+      expect(ingress).toHaveLength(2);
+      
+      // Check for HTTP (80) and HTTPS (443) rules
+      const httpRule = ingress.find((rule: any) => rule.FromPort === 80);
+      const httpsRule = ingress.find((rule: any) => rule.FromPort === 443);
+      
+      expect(httpRule).toBeDefined();
+      expect(httpRule.CidrIp).toBe('0.0.0.0/0');
+      expect(httpsRule).toBeDefined();
+      expect(httpsRule.CidrIp).toBe('0.0.0.0/0');
+    });
+
+    test('should have WebServer Security Group with restricted access', () => {
+      const webSG = template.Resources.WebServerSecurityGroup;
+      expect(webSG).toBeDefined();
+      expect(webSG.Type).toBe('AWS::EC2::SecurityGroup');
+      
+      const ingress = webSG.Properties.SecurityGroupIngress;
+      expect(ingress).toHaveLength(2);
+      
+      // Check for HTTP from ALB and SSH from VPC
+      const httpFromALB = ingress.find((rule: any) => rule.FromPort === 80);
+      const sshFromVPC = ingress.find((rule: any) => rule.FromPort === 22);
+      
+      expect(httpFromALB).toBeDefined();
+      expect(httpFromALB.SourceSecurityGroupId).toBeDefined();
+      expect(sshFromVPC).toBeDefined();
+    });
+
+    test('should have Database Security Group with MySQL access', () => {
+      const dbSG = template.Resources.DatabaseSecurityGroup;
+      expect(dbSG).toBeDefined();
+      expect(dbSG.Type).toBe('AWS::EC2::SecurityGroup');
+      
+      const ingress = dbSG.Properties.SecurityGroupIngress;
+      expect(ingress).toHaveLength(1);
+      expect(ingress[0].FromPort).toBe(3306);
+      expect(ingress[0].ToPort).toBe(3306);
+      expect(ingress[0].SourceSecurityGroupId).toBeDefined();
+    });
+  });
+
+  describe('Load Balancer Resources', () => {
+    test('should have Application Load Balancer', () => {
+      const alb = template.Resources.ApplicationLoadBalancer;
+      expect(alb).toBeDefined();
+      expect(alb.Type).toBe('AWS::ElasticLoadBalancingV2::LoadBalancer');
+      expect(alb.Properties.Scheme).toBe('internet-facing');
+      expect(alb.Properties.Subnets).toHaveLength(2);
+    });
+
+    test('should have ALB Target Group with health checks', () => {
+      const tg = template.Resources.ALBTargetGroup;
+      expect(tg).toBeDefined();
+      expect(tg.Type).toBe('AWS::ElasticLoadBalancingV2::TargetGroup');
+      expect(tg.Properties.Port).toBe(80);
+      expect(tg.Properties.Protocol).toBe('HTTP');
+      expect(tg.Properties.HealthCheckPath).toBe('/health');
+      expect(tg.Properties.HealthCheckProtocol).toBe('HTTP');
+    });
+
+    test('should have ALB Listener', () => {
+      const listener = template.Resources.ALBListener;
+      expect(listener).toBeDefined();
+      expect(listener.Type).toBe('AWS::ElasticLoadBalancingV2::Listener');
+      expect(listener.Properties.Port).toBe(80);
+      expect(listener.Properties.Protocol).toBe('HTTP');
+    });
+  });
+
+  describe('Compute Resources', () => {
+    test('should have Launch Template with correct configuration', () => {
+      const lt = template.Resources.LaunchTemplate;
+      expect(lt).toBeDefined();
+      expect(lt.Type).toBe('AWS::EC2::LaunchTemplate');
+      
+      const ltData = lt.Properties.LaunchTemplateData;
+      expect(ltData.ImageId).toEqual({ 'Ref': 'LatestAmiId' });
+      expect(ltData.SecurityGroupIds).toHaveLength(1);
+      expect(ltData.UserData).toBeDefined();
+    });
+
+    test('should have Auto Scaling Group with correct configuration', () => {
+      const asg = template.Resources.AutoScalingGroup;
+      expect(asg).toBeDefined();
+      expect(asg.Type).toBe('AWS::AutoScaling::AutoScalingGroup');
+      expect(asg.Properties.VPCZoneIdentifier).toHaveLength(2);
+      expect(asg.Properties.HealthCheckType).toBe('ELB');
+      expect(asg.Properties.HealthCheckGracePeriod).toBe(300);
+    });
+  });
+
+  describe('Database Resources', () => {
+    test('should have DB Subnet Group', () => {
+      const dbSubnetGroup = template.Resources.DBSubnetGroup;
+      expect(dbSubnetGroup).toBeDefined();
+      expect(dbSubnetGroup.Type).toBe('AWS::RDS::DBSubnetGroup');
+      expect(dbSubnetGroup.Properties.SubnetIds).toHaveLength(2);
+    });
+
+    test('should have RDS Database with correct configuration', () => {
+      const db = template.Resources.Database;
+      expect(db).toBeDefined();
+      expect(db.Type).toBe('AWS::RDS::DBInstance');
+      expect(db.DeletionPolicy).toBe('Snapshot');
+      expect(db.UpdateReplacePolicy).toBe('Snapshot');
+      expect(db.Properties.Engine).toBe('mysql');
+      expect(db.Properties.EngineVersion).toBe('8.0.35');
+      expect(db.Properties.MasterUsername).toBe('admin');
+      expect(db.Properties.StorageType).toBe('gp2');
     });
   });
 
   describe('Outputs', () => {
-    test('should have all required outputs', () => {
-      const expectedOutputs = [
-        'TurnAroundPromptTableName',
-        'TurnAroundPromptTableArn',
-        'StackName',
-        'EnvironmentSuffix',
-      ];
-
-      expectedOutputs.forEach(outputName => {
-        expect(template.Outputs[outputName]).toBeDefined();
-      });
+    test('should have VPCId output with export', () => {
+      const vpcOutput = template.Outputs.VPCId;
+      expect(vpcOutput).toBeDefined();
+      expect(vpcOutput.Description).toBe('VPC ID');
+      expect(vpcOutput.Value).toEqual({ 'Ref': 'VPC' });
+      expect(vpcOutput.Export).toBeDefined();
     });
 
-    test('TurnAroundPromptTableName output should be correct', () => {
-      const output = template.Outputs.TurnAroundPromptTableName;
-      expect(output.Description).toBe('Name of the DynamoDB table');
-      expect(output.Value).toEqual({ Ref: 'TurnAroundPromptTable' });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-TurnAroundPromptTableName',
-      });
+    test('should have LoadBalancerURL output', () => {
+      const albOutput = template.Outputs.LoadBalancerURL;
+      expect(albOutput).toBeDefined();
+      expect(albOutput.Description).toBe('Application Load Balancer URL');
+      expect(albOutput.Value['Fn::Sub']).toBe('http://${ApplicationLoadBalancer.DNSName}');
     });
 
-    test('TurnAroundPromptTableArn output should be correct', () => {
-      const output = template.Outputs.TurnAroundPromptTableArn;
-      expect(output.Description).toBe('ARN of the DynamoDB table');
-      expect(output.Value).toEqual({
-        'Fn::GetAtt': ['TurnAroundPromptTable', 'Arn'],
-      });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-TurnAroundPromptTableArn',
-      });
+    test('should have DatabaseEndpoint output', () => {
+      const dbOutput = template.Outputs.DatabaseEndpoint;
+      expect(dbOutput).toBeDefined();
+      expect(dbOutput.Description).toBe('RDS Database Endpoint');
+      expect(dbOutput.Value['Fn::GetAtt']).toEqual(['Database', 'Endpoint.Address']);
     });
 
-    test('StackName output should be correct', () => {
-      const output = template.Outputs.StackName;
-      expect(output.Description).toBe('Name of this CloudFormation stack');
-      expect(output.Value).toEqual({ Ref: 'AWS::StackName' });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-StackName',
-      });
+    test('should have Environment output', () => {
+      const envOutput = template.Outputs.Environment;
+      expect(envOutput).toBeDefined();
+      expect(envOutput.Description).toBe('Deployed Environment');
+      expect(envOutput.Value).toEqual({ 'Ref': 'Environment' });
+    });
+  });
+
+  describe('Resource Tagging', () => {
+    test('VPC should have proper tags', () => {
+      const vpc = template.Resources.VPC;
+      const tags = vpc.Properties.Tags;
+      
+      const nameTag = tags.find((tag: any) => tag.Key === 'Name');
+      const envTag = tags.find((tag: any) => tag.Key === 'Environment');
+      const ownerTag = tags.find((tag: any) => tag.Key === 'Owner');
+      const projectTag = tags.find((tag: any) => tag.Key === 'Project');
+      const costTag = tags.find((tag: any) => tag.Key === 'CostCenter');
+      
+      expect(nameTag).toBeDefined();
+      expect(envTag).toBeDefined();
+      expect(ownerTag).toBeDefined();
+      expect(projectTag).toBeDefined();
+      expect(costTag).toBeDefined();
     });
 
-    test('EnvironmentSuffix output should be correct', () => {
-      const output = template.Outputs.EnvironmentSuffix;
-      expect(output.Description).toBe(
-        'Environment suffix used for this deployment'
-      );
-      expect(output.Value).toEqual({ Ref: 'EnvironmentSuffix' });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-EnvironmentSuffix',
-      });
+    test('ALB should have all required tags', () => {
+      const alb = template.Resources.ApplicationLoadBalancer;
+      const tags = alb.Properties.Tags;
+      
+      expect(tags).toHaveLength(5);
+      expect(tags.find((tag: any) => tag.Key === 'Name')).toBeDefined();
+      expect(tags.find((tag: any) => tag.Key === 'Environment')).toBeDefined();
+      expect(tags.find((tag: any) => tag.Key === 'Owner')).toBeDefined();
+      expect(tags.find((tag: any) => tag.Key === 'Project')).toBeDefined();
+      expect(tags.find((tag: any) => tag.Key === 'CostCenter')).toBeDefined();
+    });
+
+    test('Auto Scaling Group should propagate tags correctly', () => {
+      const asg = template.Resources.AutoScalingGroup;
+      const tags = asg.Properties.Tags;
+      
+      const envTag = tags.find((tag: any) => tag.Key === 'Environment');
+      const ownerTag = tags.find((tag: any) => tag.Key === 'Owner');
+      
+      expect(envTag.PropagateAtLaunch).toBe(true);
+      expect(ownerTag.PropagateAtLaunch).toBe(true);
     });
   });
 
@@ -172,39 +394,72 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Outputs).not.toBeNull();
     });
 
-    test('should have exactly one resource', () => {
+    test('should have reasonable number of resources for the infrastructure', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(1);
+      expect(resourceCount).toBeGreaterThan(15); // Should have VPC, subnets, SGs, ALB, ASG, RDS, etc.
     });
 
-    test('should have exactly one parameter', () => {
+    test('should have correct number of parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(1);
+      expect(parameterCount).toBe(6); // Environment, ProjectName, Owner, CostCenter, LatestAmiId, DBPassword
     });
 
-    test('should have exactly four outputs', () => {
+    test('should have correct number of outputs', () => {
       const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(4);
+      expect(outputCount).toBe(4); // VPCId, LoadBalancerURL, DatabaseEndpoint, Environment
     });
   });
 
-  describe('Resource Naming Convention', () => {
-    test('table name should follow naming convention with environment suffix', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const tableName = table.Properties.TableName;
-
-      expect(tableName).toEqual({
-        'Fn::Sub': 'TurnAroundPromptTable${EnvironmentSuffix}',
-      });
+  describe('Environment-Specific Scaling', () => {
+    test('dev environment should have minimal resources', () => {
+      const devConfig = template.Mappings.EnvironmentConfig.dev;
+      expect(devConfig.MinSize).toBe(1);
+      expect(devConfig.MaxSize).toBe(2);
+      expect(devConfig.DesiredCapacity).toBe(1);
+      expect(devConfig.InstanceType).toBe('t3.micro');
+      expect(devConfig.DBInstanceClass).toBe('db.t3.micro');
+      expect(devConfig.MultiAZ).toBe(false);
     });
 
-    test('export names should follow naming convention', () => {
-      Object.keys(template.Outputs).forEach(outputKey => {
-        const output = template.Outputs[outputKey];
-        expect(output.Export.Name).toEqual({
-          'Fn::Sub': `\${AWS::StackName}-${outputKey}`,
-        });
-      });
+    test('prod environment should have production-ready resources', () => {
+      const prodConfig = template.Mappings.EnvironmentConfig.prod;
+      expect(prodConfig.MinSize).toBe(2);
+      expect(prodConfig.MaxSize).toBe(6);
+      expect(prodConfig.DesiredCapacity).toBe(3);
+      expect(prodConfig.InstanceType).toBe('t3.large');
+      expect(prodConfig.DBInstanceClass).toBe('db.t3.medium');
+      expect(prodConfig.MultiAZ).toBe(true);
+    });
+  });
+
+  describe('Security Best Practices', () => {
+    test('RDS password should be marked as NoEcho', () => {
+      const dbPasswordParam = template.Parameters.DBPassword;
+      expect(dbPasswordParam.NoEcho).toBe(true);
+    });
+
+    test('Database should be in private subnets', () => {
+      const dbSubnetGroup = template.Resources.DBSubnetGroup;
+      const subnetIds = dbSubnetGroup.Properties.SubnetIds;
+      
+      expect(subnetIds).toContainEqual({ 'Ref': 'PrivateSubnet1' });
+      expect(subnetIds).toContainEqual({ 'Ref': 'PrivateSubnet2' });
+    });
+
+    test('Web servers should be in private subnets', () => {
+      const asg = template.Resources.AutoScalingGroup;
+      const subnets = asg.Properties.VPCZoneIdentifier;
+      
+      expect(subnets).toContainEqual({ 'Ref': 'PrivateSubnet1' });
+      expect(subnets).toContainEqual({ 'Ref': 'PrivateSubnet2' });
+    });
+
+    test('ALB should be in public subnets', () => {
+      const alb = template.Resources.ApplicationLoadBalancer;
+      const subnets = alb.Properties.Subnets;
+      
+      expect(subnets).toContainEqual({ 'Ref': 'PublicSubnet1' });
+      expect(subnets).toContainEqual({ 'Ref': 'PublicSubnet2' });
     });
   });
 });

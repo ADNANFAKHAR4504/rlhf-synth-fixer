@@ -25,6 +25,21 @@ Parameters:
     Type: String
     Default: 'Engineering'
     Description: 'Cost center for billing allocation'
+  
+  LatestAmiId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
+    Description: Latest Amazon Linux 2 AMI ID
+  
+  DBPassword:
+    Type: String
+    NoEcho: true
+    Description: Password for the RDS database
+    MinLength: 8
+    MaxLength: 41
+    AllowedPattern: '[a-zA-Z0-9!@#$%^&*()_+=-]{8,41}'
+    ConstraintDescription: Must be 8-41 characters and contain only alphanumeric characters and special characters
+    Default: 'TempPassword123!'
 
 # ============================================================================
 # MAPPINGS - Environment-specific configurations
@@ -84,14 +99,6 @@ Mappings:
       DBAllocatedStorage: 100
       MultiAZ: true
 
-  # AMI mappings by region (Amazon Linux 2)
-  RegionMap:
-    us-east-1:
-      AMI: 'ami-0abcdef1234567890'
-    us-west-2:
-      AMI: 'ami-0fedcba0987654321'
-    eu-west-1:
-      AMI: 'ami-0123456789abcdef0'
 
 # ============================================================================
 # RESOURCES - Infrastructure components
@@ -381,7 +388,7 @@ Resources:
     Properties:
       LaunchTemplateName: !Sub '${ProjectName}-LaunchTemplate-${Environment}'
       LaunchTemplateData:
-        ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
+        ImageId: !Ref LatestAmiId
         InstanceType: !FindInMap [EnvironmentConfig, !Ref Environment, InstanceType]
         SecurityGroupIds:
           - !Ref WebServerSecurityGroup
@@ -462,16 +469,17 @@ Resources:
   Database:
     Type: AWS::RDS::DBInstance
     DeletionPolicy: Snapshot
+    UpdateReplacePolicy: Snapshot
     Properties:
       DBInstanceIdentifier: !Sub '${ProjectName}-db-${Environment}'
       DBInstanceClass: !FindInMap [EnvironmentConfig, !Ref Environment, DBInstanceClass]
       Engine: mysql
-      EngineVersion: '8.0'
+      EngineVersion: '8.0.35'
       AllocatedStorage: !FindInMap [EnvironmentConfig, !Ref Environment, DBAllocatedStorage]
       StorageType: gp2
       DBName: !Sub '${ProjectName}${Environment}'
       MasterUsername: admin
-      MasterUserPassword: '{{resolve:secretsmanager:rds-password::password}}'
+      MasterUserPassword: !Ref DBPassword
       VPCSecurityGroups:
         - !Ref DatabaseSecurityGroup
       DBSubnetGroupName: !Ref DBSubnetGroup
