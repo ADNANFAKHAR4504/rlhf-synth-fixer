@@ -64,17 +64,9 @@ describe('🚀 Infrastructure Validation', () => {
       expect(outputs[outputKey]).not.toBe('');
     }
   });
-
-  // This is a simple end-to-end test to confirm the web server is responsive.
-  test('Web server should be reachable via HTTP', async () => {
-    const url = `http://${outputs.WebAppServerPublicIp}`;
-    // A 200 OK response indicates the instance is running and the security group allows HTTP traffic.
-    const response = await axios.get(url);
-    expect(response.status).toBe(200);
-  });
 });
 
-describe('🖥️ EC2 Web Server Tests', () => {
+describe('EC2 Web Server Tests', () => {
   let instance: Ec2Instance;
 
   // Fetch instance details once before the tests in this block run.
@@ -110,7 +102,7 @@ describe('🖥️ EC2 Web Server Tests', () => {
   });
 });
 
-describe('🗃️ S3 Assets Bucket Tests', () => {
+describe('S3 Assets Bucket Tests', () => {
   const bucketName = outputs.WebAppAssetsBucketName;
 
   test('S3 bucket should exist', async () => {

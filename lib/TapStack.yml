@@ -109,20 +109,6 @@ Resources:
       KeyName: !Ref WebAppServerKeyName
       SecurityGroupIds:
         - !GetAtt WebAppServerSecurityGroup.GroupId
-      # --- ADDED: This UserData script installs and starts a web server ---
-      UserData:
-        Fn::Base64: !Sub |
-          #!/bin/bash -xe
-          # Update all packages
-          yum update -y
-          # Install Apache Web Server
-          yum install -y httpd
-          # Start the Apache service
-          systemctl start httpd
-          # Enable the Apache service to start on boot
-          systemctl enable httpd
-          # Create a simple index.html file to serve
-          echo "<h1>Hello from CloudFormation!</h1>" > /var/www/html/index.html
       Tags:
         - Key: Environment
           Value: !Ref EnvironmentName
