@@ -334,7 +334,7 @@ class TapStack(cdk.Stack):
       removal_policy=RemovalPolicy.DESTROY,
       monitoring_interval=Duration.seconds(60),
       enable_performance_insights=enable_pi,
-      cloudwatch_logs_exports=["error", "general", "slow-query"]
+      cloudwatch_logs_exports=["error", "general"]
     )
 
   def _create_s3_bucket(self):
