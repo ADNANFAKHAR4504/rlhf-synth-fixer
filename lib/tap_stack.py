@@ -166,7 +166,7 @@ class TapStack(pulumi.ComponentResource):
   def _create_lambda_function(self, role_arn: Output[str]) -> aws.lambda_.Function:
     lambda_function = aws.lambda_.Function(
       "s3-processor-lambda",
-      runtime="python3.9",
+      runtime="python3.11",
       code=pulumi.AssetArchive({
         ".": pulumi.FileArchive("./lambda_code")
       }),

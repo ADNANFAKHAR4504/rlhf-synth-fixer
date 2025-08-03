@@ -1,4 +1,4 @@
-name: serverless-s3-lambda
+name: TapStack
 runtime:
   name: python
   options:
