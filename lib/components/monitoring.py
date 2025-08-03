@@ -148,19 +148,12 @@ class SecurityMonitoringInfrastructure(pulumi.ComponentResource):
       ]
     }))
 
-    self.flow_logs_policy = aws.iam.Policy(
+    self.flow_logs_policy = aws.iam.RolePolicy(
       f"{self.region.replace('-', '')}-secure-projectx-flow-logs-policy",
       name=f"secure-projectx-flow-logs-policy-{self.region}",
-      policy=json.dumps(flow_logs_policy_document),
+      policy=flow_logs_policy_document,
       tags=self.tags,
       opts=ResourceOptions(parent=self)
-    )
-
-    aws.iam.RolePolicyAttachment(
-      f"{self.region.replace('-', '')}-secure-projectx-flow-logs-policy-attachment",
-      role=self.flow_logs_role.name,
-      policy_arn=self.flow_logs_policy.arn,
-      opts=ResourceOptions(parent=self, depends_on=[self.flow_logs_role, self.flow_logs_policy])
     )
 
   def _create_sns_resources(self):
