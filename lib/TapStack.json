@@ -32,16 +32,6 @@
             "Type": "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>",
             "Default": "/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2",
             "Description": "Latest Amazon Linux 2 AMI ID"
-        },
-        "DBPassword": {
-            "Type": "String",
-            "NoEcho": true,
-            "Description": "Password for the RDS database",
-            "MinLength": 8,
-            "MaxLength": 41,
-            "AllowedPattern": "[a-zA-Z0-9!@#$%^&*()_+=-]{8,41}",
-            "ConstraintDescription": "Must be 8-41 characters and contain only alphanumeric characters and special characters",
-            "Default": "TempPassword123!"
         }
     },
     "Mappings": {
@@ -917,6 +907,55 @@
                 ]
             }
         },
+        "DatabaseSecret": {
+            "Type": "AWS::SecretsManager::Secret",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}/database/${Environment}"
+                },
+                "Description": {
+                    "Fn::Sub": "Database credentials for ${ProjectName} ${Environment} environment"
+                },
+                "GenerateSecretString": {
+                    "SecretStringTemplate": "{\"username\": \"admin\"}",
+                    "GenerateStringKey": "password",
+                    "PasswordLength": 32,
+                    "ExcludeCharacters": "\"@/\\"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-Database-Secret-${Environment}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": {
+                            "Ref": "CostCenter"
+                        }
+                    }
+                ]
+            }
+        },
         "Database": {
             "Type": "AWS::RDS::DBInstance",
             "DeletionPolicy": "Snapshot",
@@ -951,7 +990,7 @@
                 },
                 "MasterUsername": "admin",
                 "MasterUserPassword": {
-                    "Ref": "DBPassword"
+                    "Fn::Sub": "{{resolve:secretsmanager:${ProjectName}/database/${Environment}:SecretString:password}}"
                 },
                 "VPCSecurityGroups": [
                     {

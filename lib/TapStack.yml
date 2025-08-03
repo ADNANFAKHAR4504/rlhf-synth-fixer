@@ -31,15 +31,7 @@ Parameters:
     Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
     Description: Latest Amazon Linux 2 AMI ID
   
-  DBPassword:
-    Type: String
-    NoEcho: true
-    Description: Password for the RDS database
-    MinLength: 8
-    MaxLength: 41
-    AllowedPattern: '[a-zA-Z0-9!@#$%^&*()_+=-]{8,41}'
-    ConstraintDescription: Must be 8-41 characters and contain only alphanumeric characters and special characters
-    Default: 'TempPassword123!'
+  # Removed DBPassword parameter - will use Secrets Manager instead
 
 # ============================================================================
 # MAPPINGS - Environment-specific configurations
@@ -465,6 +457,29 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
+  # Database Secret in Secrets Manager
+  DatabaseSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub '${ProjectName}/database/${Environment}'
+      Description: !Sub 'Database credentials for ${ProjectName} ${Environment} environment'
+      GenerateSecretString:
+        SecretStringTemplate: '{"username": "admin"}'
+        GenerateStringKey: "password"
+        PasswordLength: 32
+        ExcludeCharacters: '"@/\'
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-Database-Secret-${Environment}'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
   # RDS Database
   Database:
     Type: AWS::RDS::DBInstance
@@ -479,7 +494,7 @@ Resources:
       StorageType: gp2
       DBName: !Sub '${ProjectName}${Environment}'
       MasterUsername: admin
-      MasterUserPassword: !Ref DBPassword
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${ProjectName}/database/${Environment}:SecretString:password}}'
       VPCSecurityGroups:
         - !Ref DatabaseSecurityGroup
       DBSubnetGroupName: !Ref DBSubnetGroup
