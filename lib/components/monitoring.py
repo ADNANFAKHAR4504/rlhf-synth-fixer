@@ -347,10 +347,10 @@ class SecurityMonitoringInfrastructure(pulumi.ComponentResource):
     self.cloudtrail_bucket_encryption = aws.s3.BucketServerSideEncryptionConfigurationV2(
       f"{self.region.replace('-', '')}-secure-projectx-cloudtrail-encryption",
       bucket=self.cloudtrail_bucket.id,
-      server_side_encryption_configuration=aws.s3.BucketServerSideEncryptionConfigurationV2ServerSideEncryptionConfigurationArgs(
+      server_side_encryption_configuration=aws.s3.BucketServerSideEncryptionConfigurationV2Args(
         rules=[
-          aws.s3.BucketServerSideEncryptionConfigurationV2ServerSideEncryptionConfigurationRuleArgs(
-            apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationV2ServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
+          aws.s3.BucketServerSideEncryptionConfigurationV2RuleArgs(
+            apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationV2RuleApplyServerSideEncryptionByDefaultArgs(
               sse_algorithm="aws:kms",
               kms_master_key_id=self.kms_key_arn
             )
