@@ -45,6 +45,7 @@ class NetworkSecurityInfrastructure(pulumi.ComponentResource):
 
     # VPC Configuration
     self._create_vpc()
+    self.vpc_id = self.vpc.id
     self._create_subnets()
     self._create_internet_gateway()
     self._create_nat_gateways()
