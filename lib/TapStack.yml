@@ -72,7 +72,8 @@ Parameters:
   WebServerAmiId:
     Type: AWS::EC2::Image::Id
     Description: 'AMI ID for web servers (e.g., ami-0abcdef1234567890 for Amazon Linux 2)'
-    Default: 'ami-0abcdef1234567890'
+    #Default: 'ami-0abcdef1234567890'
+    Default: ami-04505e74c0741db8d # ✅ Valid AMI ID for Amazon Linux 2 in us-east-1
 
   InstanceType:
     Type: String
@@ -119,10 +120,6 @@ Parameters:
     Description: 'Email address for security notifications and MFA setup'
     Default: 'sudhakar.s@turing.com' # Added a default value to make the parameter optional
     AllowedPattern: '^[^\s@]+@[^\s@]+\.[^\s@]+$'
-
-  WebServerAmiId:
-    Type: String
-    Default: ami-04505e74c0741db8d  # ✅ Valid AMI ID for Amazon Linux 2 in us-east-1
 
 Conditions:
   EnforceMfa: !Equals [!Ref AdminMfaRequired, 'true']
