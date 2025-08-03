@@ -17,14 +17,16 @@ from lib.tap_stack import TapStack, TapStackProps
 
 app = cdk.App()
 
-# Get environment suffix from context (set by CI/CD pipeline) or use 'dev' as default
+# Get environment suffix from context (set by CI/CD pipeline) or use 'dev'
+# as default
 environment_suffix = app.node.try_get_context('environmentSuffix') or 'dev'
 STACK_NAME = f"TapStack{environment_suffix}"
 
 repository_name = os.getenv('REPOSITORY', 'unknown')
 commit_author = os.getenv('COMMIT_AUTHOR', 'unknown')
 
-# Apply tags to all stacks in this app (optional - you can do this at stack level instead)
+# Apply tags to all stacks in this app (optional - you can do this at
+# stack level instead)
 Tags.of(app).add('Environment', environment_suffix)
 Tags.of(app).add('Repository', repository_name)
 Tags.of(app).add('Author', commit_author)
