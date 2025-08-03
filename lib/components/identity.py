@@ -144,7 +144,7 @@ class IdentityAccessInfrastructure(pulumi.ComponentResource):
       opts=ResourceOptions(parent=self)
     )
 
-    ec2_policy_document = {
+    ec2_policy_document = self.kms_key.arn.apply(lambda kms_arn: json.dumps({
       "Version": "2012-10-17",
       "Statement": [
         {
@@ -167,26 +167,27 @@ class IdentityAccessInfrastructure(pulumi.ComponentResource):
             "kms:Encrypt",
             "kms:GenerateDataKey"
           ],
-          "Resource": self.kms_key.arn
+          "Resource": kms_arn
         }
       ]
-    }
+    }))
 
-    self.ec2_policy = aws.iam.Policy(
+
+
+    self.ec2_policy = aws.iam.RolePolicy(
       f"secure-projectx-ec2-policy",
-      name="secure-projectx-ec2-policy",
-      description="Least privilege policy for ProjectX EC2 instances",
-      policy=json.dumps(ec2_policy_document),
-      tags=self.tags,
+      role=self.ec2_instance_role.name,
+      policy=ec2_policy_document,
+    #   tags=self.tags,
       opts=ResourceOptions(parent=self)
     )
 
-    aws.iam.RolePolicyAttachment(
-      f"secure-projectx-ec2-policy-attachment",
-      role=self.ec2_instance_role.name,
-      policy_arn=self.ec2_policy.arn,
-      opts=ResourceOptions(parent=self)
-    )
+    # aws.iam.RolePolicyAttachment(
+    #   f"secure-projectx-ec2-policy-attachment",
+    #   role=self.ec2_instance_role.name,
+    #   policy_arn=self.ec2_policy.arn,
+    #   opts=ResourceOptions(parent=self)
+    # )
 
     self.ec2_instance_profile = aws.iam.InstanceProfile(
       f"secure-projectx-ec2-instance-profile",
