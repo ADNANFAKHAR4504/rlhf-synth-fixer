@@ -307,7 +307,7 @@ describe('SecureApp Infrastructure Integration Tests', () => {
 
           // Should have encrypted EBS volumes
           instance.BlockDeviceMappings?.forEach(bdm => {
-            expect(bdm.Ebs?.Encrypted).toBe(true);
+            expect((bdm.Ebs as any)?.Encrypted).toBe(true);
           });
         });
       });
@@ -370,7 +370,7 @@ describe('SecureApp Infrastructure Integration Tests', () => {
       const response = await kmsClient.send(new ListAliasesCommand({}));
 
       const alias = response.Aliases?.find(
-        a => a.AliasName === 'alias/secureapp-key'
+        (a: any) => a.AliasName === 'alias/secureapp-key'
       );
       expect(alias).toBeDefined();
       expect(alias?.TargetKeyId).toBe(stackOutputs.KMSKeyId);
@@ -447,7 +447,7 @@ describe('SecureApp Infrastructure Integration Tests', () => {
       expect(trail?.S3BucketName).toBe(stackOutputs.LoggingBucketName);
       expect(trail?.IncludeGlobalServiceEvents).toBe(true);
       expect(trail?.LogFileValidationEnabled).toBe(true);
-      expect(trail?.KMSKeyId).toBe(stackOutputs.KMSKeyArn);
+      expect(trail?.KmsKeyId).toBe(stackOutputs.KMSKeyArn);
     });
 
     test('CloudTrail should be actively logging', async () => {
