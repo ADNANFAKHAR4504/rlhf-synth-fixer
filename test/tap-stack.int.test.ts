@@ -467,6 +467,33 @@ describe('TapStack Live AWS Integration Tests', () => {
       expect(asg?.VPCZoneIdentifier).toContain(','); // Multiple subnets
     });
 
+    test('Auto Scaling Group should have environment-specific sizing', async () => {
+      const asgResponse = await autoScalingClient.send(
+        new DescribeAutoScalingGroupsCommand({
+          AutoScalingGroupNames: [`${environmentSuffix}-asg`]
+        })
+      );
+
+      const asg = asgResponse.AutoScalingGroups?.[0];
+      expect(asg).toBeDefined();
+
+      // Verify environment-specific sizing based on conditional logic
+      if (environmentSuffix === 'production') {
+        expect(asg?.MinSize).toBe(2);
+        expect(asg?.MaxSize).toBe(6);
+        expect(asg?.DesiredCapacity).toBe(2);
+      } else if (environmentSuffix === 'staging') {
+        expect(asg?.MinSize).toBe(1);
+        expect(asg?.MaxSize).toBe(3);
+        expect(asg?.DesiredCapacity).toBe(1);
+      } else {
+        // PR environments (any other suffix)
+        expect(asg?.MinSize).toBe(1);
+        expect(asg?.MaxSize).toBe(2);
+        expect(asg?.DesiredCapacity).toBe(1);
+      }
+    });
+
     test('Auto Scaling Group should have instances running', async () => {
       const asgResponse = await autoScalingClient.send(
         new DescribeAutoScalingGroupsCommand({
@@ -529,6 +556,29 @@ describe('TapStack Live AWS Integration Tests', () => {
       const dbAlarm = alarms.find(a => a.AlarmName?.includes('database-cpu'));
       expect(dbAlarm).toBeDefined();
       expect(dbAlarm?.MetricName).toBe('CPUUtilization');
+    });
+
+    test('CPU alarm thresholds should be environment-specific', async () => {
+      const alarmsResponse = await cloudWatchClient.send(
+        new DescribeAlarmsCommand({
+          AlarmNamePrefix: environmentSuffix
+        })
+      );
+
+      const alarms = alarmsResponse.MetricAlarms || [];
+      const cpuHighAlarm = alarms.find(a => a.AlarmName?.includes('cpu-utilization-high'));
+      
+      expect(cpuHighAlarm).toBeDefined();
+      
+      // Verify environment-specific CPU thresholds based on conditional logic
+      if (environmentSuffix === 'production') {
+        expect(cpuHighAlarm?.Threshold).toBe(70);
+      } else if (environmentSuffix === 'staging') {
+        expect(cpuHighAlarm?.Threshold).toBe(80);
+      } else {
+        // PR environments (any other suffix)
+        expect(cpuHighAlarm?.Threshold).toBe(80);
+      }
     });
 
     test('SNS topic should be configured', async () => {
@@ -684,26 +734,17 @@ describe('TapStack Live AWS Integration Tests', () => {
 
       const asg = asgResponse.AutoScalingGroups?.[0];
       
-      // For production, expect higher capacity
+      // Verify environment-specific sizing based on conditional logic
       if (environmentSuffix === 'production') {
         expect(asg?.MinSize).toBe(2);
         expect(asg?.MaxSize).toBe(6);
         expect(asg?.DesiredCapacity).toBe(2);
-      }
-      // For staging, expect lower capacity
-      else if (environmentSuffix === 'staging') {
+      } else if (environmentSuffix === 'staging') {
         expect(asg?.MinSize).toBe(1);
         expect(asg?.MaxSize).toBe(3);
         expect(asg?.DesiredCapacity).toBe(1);
-      }
-      // For PR environments (unknown environments), expect default/conservative settings
-      else if (environmentSuffix.startsWith('pr')) {
-        expect(asg?.MinSize).toBe(1);
-        expect(asg?.MaxSize).toBe(2);
-        expect(asg?.DesiredCapacity).toBe(1);
-      }
-      // For any other unknown environment, expect default settings
-      else {
+      } else {
+        // PR environments and any other unknown environment default to conservative settings
         expect(asg?.MinSize).toBe(1);
         expect(asg?.MaxSize).toBe(2);
         expect(asg?.DesiredCapacity).toBe(1);
@@ -720,16 +761,13 @@ describe('TapStack Live AWS Integration Tests', () => {
       const cpuAlarm = alarmsResponse.MetricAlarms?.[0];
       expect(cpuAlarm).toBeDefined();
 
-      // For production, expect lower threshold (more sensitive)
+      // Verify environment-specific CPU thresholds based on conditional logic
       if (environmentSuffix === 'production') {
         expect(cpuAlarm?.Threshold).toBe(70);
-      }
-      // For staging and PR environments, expect higher threshold (less sensitive)
-      else if (environmentSuffix === 'staging' || environmentSuffix.startsWith('pr')) {
+      } else if (environmentSuffix === 'staging') {
         expect(cpuAlarm?.Threshold).toBe(80);
-      }
-      // For any other unknown environment, expect default threshold
-      else {
+      } else {
+        // PR environments and any other unknown environment default to conservative threshold
         expect(cpuAlarm?.Threshold).toBe(80);
       }
     });

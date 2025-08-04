@@ -81,37 +81,8 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
   });
 
   describe('Mappings - Environment Configuration', () => {
-    test('should have EnvironmentMap with production, staging and default configs', () => {
-      const envMap = template.Mappings.EnvironmentMap;
-      expect(envMap).toBeDefined();
-      
-      expect(envMap.production).toBeDefined();
-      expect(envMap.production.MinSize).toBe(2);
-      expect(envMap.production.MaxSize).toBe(6);
-      expect(envMap.production.DesiredCapacity).toBe(2);
-      expect(envMap.production.CPUThreshold).toBe(70);
-
-      expect(envMap.staging).toBeDefined();
-      expect(envMap.staging.MinSize).toBe(1);
-      expect(envMap.staging.MaxSize).toBe(3);
-      expect(envMap.staging.DesiredCapacity).toBe(1);
-      expect(envMap.staging.CPUThreshold).toBe(80);
-
-      expect(envMap.default).toBeDefined();
-      expect(envMap.default.MinSize).toBe(1);
-      expect(envMap.default.MaxSize).toBe(2);
-      expect(envMap.default.DesiredCapacity).toBe(1);
-      expect(envMap.default.CPUThreshold).toBe(80);
-    });
-
-    test('should have default configuration suitable for PR environments', () => {
-      const defaultConfig = template.Mappings.EnvironmentMap.default;
-      
-      // PR environments should have conservative settings
-      expect(defaultConfig.MinSize).toBe(1);
-      expect(defaultConfig.MaxSize).toBeLessThanOrEqual(2);
-      expect(defaultConfig.DesiredCapacity).toBe(1);
-      expect(defaultConfig.CPUThreshold).toBeGreaterThanOrEqual(80);
+    test('should have empty Mappings section as environment logic moved to conditions', () => {
+      expect(template.Mappings).toEqual({});
     });
   });
 
@@ -120,8 +91,9 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
       expect(template.Conditions.IsProduction).toBeDefined();
     });
 
-    test('should have known environment condition for production and staging', () => {
-      expect(template.Conditions.IsKnownEnvironment).toBeDefined();
+    test('should have production and staging environment conditions', () => {
+      expect(template.Conditions.IsProductionEnv).toBeDefined();
+      expect(template.Conditions.IsStagingEnv).toBeDefined();
     });
 
     test('should have HTTPS enabling conditions', () => {
@@ -353,10 +325,15 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
       expect(asg.Properties.MaxSize).toHaveProperty('Fn::If');
       expect(asg.Properties.DesiredCapacity).toHaveProperty('Fn::If');
       
-      // Verify it references the IsKnownEnvironment condition
-      expect(asg.Properties.MinSize['Fn::If'][0]).toBe('IsKnownEnvironment');
-      expect(asg.Properties.MaxSize['Fn::If'][0]).toBe('IsKnownEnvironment');
-      expect(asg.Properties.DesiredCapacity['Fn::If'][0]).toBe('IsKnownEnvironment');
+      // Verify it references the IsProductionEnv condition for the first level
+      expect(asg.Properties.MinSize['Fn::If'][0]).toBe('IsProductionEnv');
+      expect(asg.Properties.MaxSize['Fn::If'][0]).toBe('IsProductionEnv');
+      expect(asg.Properties.DesiredCapacity['Fn::If'][0]).toBe('IsProductionEnv');
+      
+      // Verify nested conditional structure for staging vs PR environments
+      const minSizeNestedIf = asg.Properties.MinSize['Fn::If'][2];
+      expect(minSizeNestedIf).toHaveProperty('Fn::If');
+      expect(minSizeNestedIf['Fn::If'][0]).toBe('IsStagingEnv');
     });
 
     test('should create scaling policies', () => {
@@ -418,7 +395,12 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
       
       // Check that conditional logic is used for CPU threshold
       expect(highAlarm.Properties.Threshold).toHaveProperty('Fn::If');
-      expect(highAlarm.Properties.Threshold['Fn::If'][0]).toBe('IsKnownEnvironment');
+      expect(highAlarm.Properties.Threshold['Fn::If'][0]).toBe('IsProductionEnv');
+      
+      // Verify nested conditional structure for staging vs PR environments
+      const nestedIf = highAlarm.Properties.Threshold['Fn::If'][2];
+      expect(nestedIf).toHaveProperty('Fn::If');
+      expect(nestedIf['Fn::If'][0]).toBe('IsStagingEnv');
     });
 
     test('should create ALB response time alarm', () => {
@@ -497,41 +479,60 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
   });
 
   describe('PR Environment Support', () => {
-    test('should support dynamic PR environment suffixes through default mapping', () => {
-      // Verify IsKnownEnvironment condition exists to handle unknown environments
-      expect(template.Conditions.IsKnownEnvironment).toBeDefined();
+    test('should support dynamic PR environment suffixes through conditional logic', () => {
+      // Verify IsProductionEnv and IsStagingEnv conditions exist to handle specific environments
+      expect(template.Conditions.IsProductionEnv).toBeDefined();
+      expect(template.Conditions.IsStagingEnv).toBeDefined();
       
       // Should check for production and staging specifically
-      const condition = template.Conditions.IsKnownEnvironment;
-      expect(condition).toHaveProperty('Fn::Or');
+      expect(template.Conditions.IsProductionEnv).toHaveProperty('Fn::Equals');
+      expect(template.Conditions.IsStagingEnv).toHaveProperty('Fn::Equals');
     });
 
-    test('should fallback to default configuration for unknown environments', () => {
-      // Auto Scaling Group should use conditional logic
+    test('should fallback to PR environment defaults for unknown environments', () => {
+      // Auto Scaling Group should use nested conditional logic with hardcoded values
       const asg = template.Resources.AutoScalingGroup;
+      
+      // Production: MinSize=2, staging: MinSize=1, PR: MinSize=1
       expect(asg.Properties.MinSize['Fn::If']).toEqual([
-        'IsKnownEnvironment',
-        { 'Fn::FindInMap': ['EnvironmentMap', { 'Ref': 'EnvironmentSuffix' }, 'MinSize'] },
-        { 'Fn::FindInMap': ['EnvironmentMap', 'default', 'MinSize'] }
+        'IsProductionEnv',
+        2,
+        { 'Fn::If': ['IsStagingEnv', 1, 1] }
       ]);
       
-      // CPU Alarm should use conditional logic
+      // Production: MaxSize=6, staging: MaxSize=3, PR: MaxSize=2
+      expect(asg.Properties.MaxSize['Fn::If']).toEqual([
+        'IsProductionEnv',
+        6,
+        { 'Fn::If': ['IsStagingEnv', 3, 2] }
+      ]);
+      
+      // CPU Alarm should use nested conditional logic with hardcoded values
       const cpuAlarm = template.Resources.CPUAlarmHigh;
+      
+      // Production: 70, staging: 80, PR: 80
       expect(cpuAlarm.Properties.Threshold['Fn::If']).toEqual([
-        'IsKnownEnvironment',
-        { 'Fn::FindInMap': ['EnvironmentMap', { 'Ref': 'EnvironmentSuffix' }, 'CPUThreshold'] },
-        { 'Fn::FindInMap': ['EnvironmentMap', 'default', 'CPUThreshold'] }
+        'IsProductionEnv',
+        70,
+        { 'Fn::If': ['IsStagingEnv', 80, 80] }
       ]);
     });
 
     test('should provide cost-effective defaults for PR environments', () => {
-      const defaultConfig = template.Mappings.EnvironmentMap.default;
+      // Verify the hardcoded defaults for unknown environments (PR environments)
+      const asg = template.Resources.AutoScalingGroup;
+      const cpuAlarm = template.Resources.CPUAlarmHigh;
       
-      // Should be cost-effective for temporary PR environments
-      expect(defaultConfig.MinSize).toBe(1);
-      expect(defaultConfig.MaxSize).toBe(2);
-      expect(defaultConfig.DesiredCapacity).toBe(1);
-      expect(defaultConfig.CPUThreshold).toBe(80); // Higher threshold = less frequent scaling
+      // PR environment values should be cost-effective
+      const prMinSize = asg.Properties.MinSize['Fn::If'][2]['Fn::If'][2];
+      const prMaxSize = asg.Properties.MaxSize['Fn::If'][2]['Fn::If'][2];
+      const prDesiredCapacity = asg.Properties.DesiredCapacity['Fn::If'][2]['Fn::If'][2];
+      const prCpuThreshold = cpuAlarm.Properties.Threshold['Fn::If'][2]['Fn::If'][2];
+      
+      expect(prMinSize).toBe(1);
+      expect(prMaxSize).toBe(2);
+      expect(prDesiredCapacity).toBe(1);
+      expect(prCpuThreshold).toBe(80); // Higher threshold = less frequent scaling
     });
   });
 
@@ -570,10 +571,8 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
 
     test('should support environment separation', () => {
       expect(template.Parameters.EnvironmentSuffix).toBeDefined();
-      expect(template.Mappings.EnvironmentMap).toBeDefined();
-      expect(template.Mappings.EnvironmentMap.production).toBeDefined();
-      expect(template.Mappings.EnvironmentMap.staging).toBeDefined();
-      expect(template.Mappings.EnvironmentMap.default).toBeDefined();
+      expect(template.Conditions.IsProductionEnv).toBeDefined();
+      expect(template.Conditions.IsStagingEnv).toBeDefined();
     });
 
     test('should be fully parameterized', () => {

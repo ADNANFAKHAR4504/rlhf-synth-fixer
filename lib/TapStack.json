@@ -93,28 +93,7 @@
             ]
         }
     },
-    "Mappings": {
-        "EnvironmentMap": {
-            "production": {
-                "MinSize": 2,
-                "MaxSize": 6,
-                "DesiredCapacity": 2,
-                "CPUThreshold": 70
-            },
-            "staging": {
-                "MinSize": 1,
-                "MaxSize": 3,
-                "DesiredCapacity": 1,
-                "CPUThreshold": 80
-            },
-            "default": {
-                "MinSize": 1,
-                "MaxSize": 2,
-                "DesiredCapacity": 1,
-                "CPUThreshold": 80
-            }
-        }
-    },
+    "Mappings": {},
     "Conditions": {
         "IsProduction": {
             "Fn::Equals": [
@@ -124,24 +103,20 @@
                 "Production"
             ]
         },
-        "IsKnownEnvironment": {
-            "Fn::Or": [
+        "IsProductionEnv": {
+            "Fn::Equals": [
                 {
-                    "Fn::Equals": [
-                        {
-                            "Ref": "EnvironmentSuffix"
-                        },
-                        "production"
-                    ]
+                    "Ref": "EnvironmentSuffix"
                 },
+                "production"
+            ]
+        },
+        "IsStagingEnv": {
+            "Fn::Equals": [
                 {
-                    "Fn::Equals": [
-                        {
-                            "Ref": "EnvironmentSuffix"
-                        },
-                        "staging"
-                    ]
-                }
+                    "Ref": "EnvironmentSuffix"
+                },
+                "staging"
             ]
         },
         "HasSSLCertificate": {
@@ -1041,63 +1016,39 @@
                 },
                 "MinSize": {
                     "Fn::If": [
-                        "IsKnownEnvironment",
+                        "IsProductionEnv",
+                        2,
                         {
-                            "Fn::FindInMap": [
-                                "EnvironmentMap",
-                                {
-                                    "Ref": "EnvironmentSuffix"
-                                },
-                                "MinSize"
-                            ]
-                        },
-                        {
-                            "Fn::FindInMap": [
-                                "EnvironmentMap",
-                                "default",
-                                "MinSize"
+                            "Fn::If": [
+                                "IsStagingEnv",
+                                1,
+                                1
                             ]
                         }
                     ]
                 },
                 "MaxSize": {
                     "Fn::If": [
-                        "IsKnownEnvironment",
+                        "IsProductionEnv",
+                        6,
                         {
-                            "Fn::FindInMap": [
-                                "EnvironmentMap",
-                                {
-                                    "Ref": "EnvironmentSuffix"
-                                },
-                                "MaxSize"
-                            ]
-                        },
-                        {
-                            "Fn::FindInMap": [
-                                "EnvironmentMap",
-                                "default",
-                                "MaxSize"
+                            "Fn::If": [
+                                "IsStagingEnv",
+                                3,
+                                2
                             ]
                         }
                     ]
                 },
                 "DesiredCapacity": {
                     "Fn::If": [
-                        "IsKnownEnvironment",
+                        "IsProductionEnv",
+                        2,
                         {
-                            "Fn::FindInMap": [
-                                "EnvironmentMap",
-                                {
-                                    "Ref": "EnvironmentSuffix"
-                                },
-                                "DesiredCapacity"
-                            ]
-                        },
-                        {
-                            "Fn::FindInMap": [
-                                "EnvironmentMap",
-                                "default",
-                                "DesiredCapacity"
+                            "Fn::If": [
+                                "IsStagingEnv",
+                                1,
+                                1
                             ]
                         }
                     ]
@@ -1289,21 +1240,13 @@
                 "EvaluationPeriods": 2,
                 "Threshold": {
                     "Fn::If": [
-                        "IsKnownEnvironment",
+                        "IsProductionEnv",
+                        70,
                         {
-                            "Fn::FindInMap": [
-                                "EnvironmentMap",
-                                {
-                                    "Ref": "EnvironmentSuffix"
-                                },
-                                "CPUThreshold"
-                            ]
-                        },
-                        {
-                            "Fn::FindInMap": [
-                                "EnvironmentMap",
-                                "default",
-                                "CPUThreshold"
+                            "Fn::If": [
+                                "IsStagingEnv",
+                                80,
+                                80
                             ]
                         }
                     ]

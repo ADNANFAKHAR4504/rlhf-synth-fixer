@@ -88,29 +88,12 @@ Parameters:
       - "true"
       - "false"
 
-Mappings:
-  EnvironmentMap:
-    production:
-      MinSize: 2
-      MaxSize: 6
-      DesiredCapacity: 2
-      CPUThreshold: 70
-    staging:
-      MinSize: 1
-      MaxSize: 3
-      DesiredCapacity: 1
-      CPUThreshold: 80
-    default:
-      MinSize: 1
-      MaxSize: 2
-      DesiredCapacity: 1
-      CPUThreshold: 80
+Mappings: {}
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentSuffix, Production]
-  IsKnownEnvironment: !Or
-    - !Equals [!Ref EnvironmentSuffix, production]
-    - !Equals [!Ref EnvironmentSuffix, staging]
+  IsProductionEnv: !Equals [!Ref EnvironmentSuffix, production]
+  IsStagingEnv: !Equals [!Ref EnvironmentSuffix, staging]
   HasSSLCertificate: !Not [!Equals [!Ref SSLCertificateArn, ""]]
   EnableHTTPS: !And 
     - !Equals [!Ref UseHTTPS, "true"]
@@ -606,17 +589,26 @@ Resources:
         LaunchTemplateId: !Ref LaunchTemplate
         Version: !GetAtt LaunchTemplate.LatestVersionNumber
       MinSize: !If 
-        - IsKnownEnvironment
-        - !FindInMap [EnvironmentMap, !Ref EnvironmentSuffix, MinSize]
-        - !FindInMap [EnvironmentMap, default, MinSize]
+        - IsProductionEnv
+        - 2
+        - !If 
+          - IsStagingEnv
+          - 1
+          - 1
       MaxSize: !If 
-        - IsKnownEnvironment
-        - !FindInMap [EnvironmentMap, !Ref EnvironmentSuffix, MaxSize]
-        - !FindInMap [EnvironmentMap, default, MaxSize]
+        - IsProductionEnv
+        - 6
+        - !If 
+          - IsStagingEnv
+          - 3
+          - 2
       DesiredCapacity: !If 
-        - IsKnownEnvironment
-        - !FindInMap [EnvironmentMap, !Ref EnvironmentSuffix, DesiredCapacity]
-        - !FindInMap [EnvironmentMap, default, DesiredCapacity]
+        - IsProductionEnv
+        - 2
+        - !If 
+          - IsStagingEnv
+          - 1
+          - 1
       TargetGroupARNs:
         - !Ref ALBTargetGroup
       HealthCheckType: ELB
@@ -726,9 +718,12 @@ Resources:
       Period: 300
       EvaluationPeriods: 2
       Threshold: !If 
-        - IsKnownEnvironment
-        - !FindInMap [EnvironmentMap, !Ref EnvironmentSuffix, CPUThreshold]
-        - !FindInMap [EnvironmentMap, default, CPUThreshold]
+        - IsProductionEnv
+        - 70
+        - !If 
+          - IsStagingEnv
+          - 80
+          - 80
       ComparisonOperator: GreaterThanThreshold
       Dimensions:
         - Name: AutoScalingGroupName
