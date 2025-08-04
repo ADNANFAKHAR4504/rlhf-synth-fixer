@@ -83,7 +83,9 @@ imports/*
 cdktf.out
 cdktf.log
 *terraform.*.tfstate*
-.gen
+.genpackage-lock.json
+
+
 __pycache__/
 .pulumi/
 # CDK build output
