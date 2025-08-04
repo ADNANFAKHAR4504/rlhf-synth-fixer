@@ -14,6 +14,9 @@ from typing import List, Dict, Any
 import pulumi
 import pulumi_aws as aws
 
+# Explicitly configure the AWS provider to use us-east-1
+aws.Provider("aws-provider", region="us-east-1")
+
 # Configuration
 config = pulumi.Config()
 domain_name = config.require("domain_name")
