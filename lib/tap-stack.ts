@@ -16,6 +16,8 @@ import {
 } from './modules';
 import { FlowLog } from '@cdktf/provider-aws/lib/flow-log';
 import { CloudwatchLogGroup } from '@cdktf/provider-aws/lib/cloudwatch-log-group';
+import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
+import { IamRolePolicy } from '@cdktf/provider-aws/lib/iam-role-policy';
 // import { MyStack } from './my-stack';
 
 interface TapStackProps {
@@ -124,19 +126,56 @@ export class TapStack extends TerraformStack {
       tags: commonTags,
     });
 
-    // --- BEGIN: Add VPC Flow Logs as recommended in the security review ---
+    // --- BEGIN: Add VPC Flow Logs with corrected code ---
 
     // 1. Create a CloudWatch Log Group for VPC Flow Logs.
     const vpcFlowLogsGroup = new CloudwatchLogGroup(this, 'vpc-flow-logs', {
       name: `vpc-flow-logs-${environmentSuffix}`,
     });
 
-    // 2. Create the VPC Flow Log resource and associate it with the VPC.
-    // FIX: The variable assignment is removed, as the resource is created and
-    // registered with the 'new' keyword alone, and the variable was unused.
+    // 2. Create an IAM Role for the VPC Flow Log service.
+    const flowLogIamRole = new IamRole(this, 'flow-log-iam-role', {
+      name: `vpc-flow-log-role-${environmentSuffix}`,
+      assumeRolePolicy: JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Action: 'sts:AssumeRole',
+            Principal: {
+              Service: 'vpc-flow-logs.amazonaws.com',
+            },
+            Effect: 'Allow',
+          },
+        ],
+      }),
+    });
+
+    // 3. Create an IAM Policy that allows the role to write to the CloudWatch Log Group.
+    new IamRolePolicy(this, 'flow-log-iam-policy', {
+      name: `vpc-flow-log-policy-${environmentSuffix}`,
+      role: flowLogIamRole.id,
+      policy: JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Action: [
+              'logs:CreateLogStream',
+              'logs:PutLogEvents',
+              'logs:DescribeLogStreams',
+            ],
+            Effect: 'Allow',
+            Resource: vpcFlowLogsGroup.arn,
+          },
+        ],
+      }),
+    });
+
+    // 4. Create the VPC Flow Log resource, now with the required IAM role ARN.
     new FlowLog(this, 'flow-log', {
       logDestinationType: 'cloud-watch-logs',
       logDestination: vpcFlowLogsGroup.arn,
+      // FIX: Add the IAM role ARN as required by the AWS API.
+      iamRoleArn: flowLogIamRole.arn,
       trafficType: 'ALL',
       vpcId: ipv6VpcModule.vpc.id,
     });

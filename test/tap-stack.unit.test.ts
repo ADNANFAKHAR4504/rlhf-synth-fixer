@@ -111,16 +111,23 @@ describe('IPv6-Only IoT Infrastructure Unit Tests (Default Props)', () => {
     expect(sg.tags.Environment).toBe('dev');
   });
 
-  test('should create an EC2 IAM role and instance profile', () => {
+  test('should create the correct IAM roles and an instance profile', () => {
     const roles = getResourcesByType(synthesized, 'aws_iam_role');
     const profiles = getResourcesByType(synthesized, 'aws_iam_instance_profile');
     
-    expect(roles.length).toBe(1);
+    // FIX: Expect 2 roles now, one for EC2 and one for VPC Flow Logs.
+    expect(roles.length).toBe(2);
     expect(profiles.length).toBe(1);
-    
-    expect(roles[0].tags.Environment).toBe('dev');
-    expect(profiles[0].role).toBeDefined();
-    expect(profiles[0].tags.Environment).toBe('dev');
+
+    // Assert on the EC2 IAM role
+    const ec2Role = roles.find(r => r.name.includes('ec2-role'));
+    expect(ec2Role).toBeDefined();
+    expect(ec2Role.tags.Environment).toBe('dev');
+
+    // Assert on the Flow Log IAM role
+    const flowLogRole = roles.find(r => r.name.includes('vpc-flow-log-role'));
+    expect(flowLogRole).toBeDefined();
+    expect(flowLogRole.assume_role_policy).toContain('vpc-flow-logs.amazonaws.com');
   });
 
   test('should create a t3.micro EC2 instance with an IPv6 address', () => {
