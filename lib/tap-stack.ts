@@ -14,12 +14,9 @@ import { RouteTableAssociation } from '@cdktf/provider-aws/lib/route-table-assoc
 import { NetworkAcl } from '@cdktf/provider-aws/lib/network-acl';
 import { NetworkAclRule } from '@cdktf/provider-aws/lib/network-acl-rule';
 import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
-import { SecurityGroupRule } from '@cdktf/provider-aws/lib/security-group-rule';
 import { Instance } from '@cdktf/provider-aws/lib/instance';
 import { Eip } from '@cdktf/provider-aws/lib/eip';
 import { DataAwsAmi } from '@cdktf/provider-aws/lib/data-aws-ami';
-
-
 interface TapStackProps {
   environmentSuffix?: string;
   stateBucket?: string;
@@ -29,7 +26,7 @@ interface TapStackProps {
   keyName?: string; // added to allow EC2 key pair injection
 }
 
-const AWS_REGION_OVERRIDE = '';
+const AWS_REGION_OVERRIDE = 'us-west-2';
 
 export class TapStack extends TerraformStack {
   constructor(scope: Construct, id: string, props: TapStackProps) {
@@ -165,9 +162,24 @@ export class TapStack extends TerraformStack {
     const securityGroup = new SecurityGroup(this, 'dev-sg', {
       vpcId: vpc.id,
       ingress: [
-        { fromPort: 22, toPort: 22, protocol: 'tcp', cidrBlocks: ['0.0.0.0/0'] },
-        { fromPort: 80, toPort: 80, protocol: 'tcp', cidrBlocks: ['0.0.0.0/0'] },
-        { fromPort: 443, toPort: 443, protocol: 'tcp', cidrBlocks: ['0.0.0.0/0'] },
+        {
+          fromPort: 22,
+          toPort: 22,
+          protocol: 'tcp',
+          cidrBlocks: ['0.0.0.0/0'],
+        },
+        {
+          fromPort: 80,
+          toPort: 80,
+          protocol: 'tcp',
+          cidrBlocks: ['0.0.0.0/0'],
+        },
+        {
+          fromPort: 443,
+          toPort: 443,
+          protocol: 'tcp',
+          cidrBlocks: ['0.0.0.0/0'],
+        },
       ],
       egress: [
         { fromPort: 0, toPort: 0, protocol: '-1', cidrBlocks: ['0.0.0.0/0'] },
