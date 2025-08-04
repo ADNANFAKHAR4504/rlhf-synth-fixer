@@ -140,7 +140,7 @@ export class TapStack extends TerraformStack {
     });
 
     new TerraformOutput(this, 'ec2-ipv6-address', {
-      value: ec2InstanceModule.instance.ipv6Addresses[0],
+      value: Fn.element(ec2InstanceModule.instance.ipv6Addresses, 0),
       description: 'The public IPv6 address of the EC2 instance',
     });
     // ! Do NOT create resources directly in this stack.
