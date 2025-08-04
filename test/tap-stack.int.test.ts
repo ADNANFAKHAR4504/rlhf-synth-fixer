@@ -53,7 +53,7 @@ describe('TapStack Integration Tests', () => {
 
     test('VPC ID should be valid format', () => {
       const vpcId = outputs.VpcId;
-      expect(vpcId).toMatch(/^vpc-[a-f0-9]+$/
+      expect(vpcId).toMatch(/^vpc-[a-f0-9]+$/);
     });
 
     test('EC2 Instance ID should be valid format', () => {
