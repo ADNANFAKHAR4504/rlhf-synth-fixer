@@ -1,13 +1,11 @@
-This AWS CloudFormation template is riddled with critical errors, missing components, and significant deviations from best practices. It will fail CloudFormation validation before any resources are even created, and it does not deliver the core functionality required by the prompt, such as load balancing, auto-scaling, or DNS integration. It is fundamentally incomplete and non-functional.
-
------
+This AWS CloudFormation template is riddled with critical errors, missing components, and significant deviations from best practices. It will fail CloudFormation validation before any resources are even created, and it does not deliver the core functionality required by the prompt, such as load balancing, auto scaling, or DNS integration. It is fundamentally incomplete and non-functional.
 
 ### 1\. Fatal Deployment Failure due to Unresolved Resources 🛑
 
 The most severe issue is that the template references multiple logical IDs that are never defined. This causes an immediate and fatal `Template validation error`, preventing the stack from ever deploying.
 
   * **Failure:** The `IaCNovaAutoScalingGroup` resource includes the properties `TargetGroupARNs` and `NotificationConfigurations`, which reference `!Ref IaCNovaTargetGroup` and `!Ref IaCNovaSNSTopic` respectively. However, neither `IaCNovaTargetGroup` nor `IaCNovaSNSTopic` are defined anywhere in the template's `Resources` section.
-  * **Correction:** A valid template must declare all resources it intends to use. The ideal template correctly defines `AWS::ElasticLoadBalancingV2::TargetGroup` (as `ALBTargetGroup`) and `AWS::SNS::Topic` (as `SNSTopic`) before referencing them in the Auto Scaling Group.
+  * **Correction:** A valid template must declare all resources it intends to use. The ideal template correctly defines an `AWS::ElasticLoadBalancingV2::TargetGroup` (as `ALBTargetGroup`) and an `AWS::SNS::Topic` (as `SNSTopic`) before referencing them in the Auto Scaling Group.
 
 <!-- end list -->
 
@@ -30,7 +28,7 @@ IaCNovaAutoScalingGroup:
 The template completely omits the resources required to create a functional web application architecture as specified in the prompt.
 
   * **Failure:** The template fails to define several critical components:
-      * **Application Load Balancer:** There is no `AWS::ElasticLoadBalancingV2::LoadBalancer` or `Listener` resources. This means there is no load balancing, no HTTP-to-HTTPS redirect, and the `CertificateArn` parameter is never used.
+      * **Application Load Balancer:** There are no `AWS::ElasticLoadBalancingV2::LoadBalancer` or `Listener` resources. This means there is no load balancing, no HTTP-to-HTTPS redirect, and the `CertificateArn` parameter is never used.
       * **Auto Scaling Policies:** There are no `AWS::AutoScaling::ScalingPolicy` or `AWS::CloudWatch::Alarm` resources. The infrastructure cannot scale based on CPU utilization.
       * **Route 53 DNS Record:** There is no `AWS::Route53::RecordSet` resource. The application will not be accessible via the specified domain name.
   * **Correction:** The ideal template correctly provisions all these resources. It defines an `ApplicationLoadBalancer` with two `Listeners` (one for HTTPS and one for the HTTP redirect), creates `ScalingPolicy` resources, and links them to `CloudWatch::Alarm` resources (`CPUAlarmHigh`, `CPUAlarmLow`) to provide dynamic scaling. Finally, it creates a `DNSRecord` to point the domain to the ALB.
@@ -42,7 +40,7 @@ The template completely omits the resources required to create a functional web 
 The template hardcodes the Availability Zones (AZs) for a single region, making it non-portable and liable to fail if deployed elsewhere.
 
   * **Failure:** The template uses a `Mappings` section that explicitly lists the AZ names for `us-west-2` (`us-west-2a`, `us-west-2b`, etc.). This approach is rigid. If deployed in a different region (e.g., `us-east-1`) or in an account where one of these specific AZs is unavailable, the stack deployment will **fail**. This violates the requirement to be easily deployable with StackSets.
-  * **Correction:** A robust, portable template should not hardcode AZ names. The ideal template correctly uses a map for subnet CIDRs but dynamically retrieves the available AZs for the target region using the `!Select` and `!FindInMap` functions on a list of AZs. An even more dynamic approach is to use the `Fn::GetAZs` intrinsic function, which automatically provides a list of available AZs in the deployment region.
+  * **Correction:** A robust, portable template should not hardcode AZ names. The ideal template correctly uses a map for subnet CIDRs but dynamically retrieves the available AZs for the target region. An even more dynamic and recommended approach is to use the `Fn::GetAZs` intrinsic function, which automatically provides a list of available AZs in the deployment region.
 
 <!-- end list -->
 
@@ -69,8 +67,8 @@ IaCNovaPublicSubnet1:
 
 The IAM policy for the EC2 instances violates the principle of least privilege and a specific constraint in the prompt.
 
-  * **Failure:** The `IaCNovaEC2Role` policy grants several CloudWatch actions (`cloudwatch:PutMetricData`, `GetMetricStatistics`, etc.) to `Resource: '*'`. The prompt explicitly states that the policy "must not contain wildcard actions." This broad permission allows instances to publish/read metrics for *any* resource in the AWS account, which is a security risk.
-  * **Correction:** A secure template must scope permissions as narrowly as possible. While some AWS actions legitimately require a wildcard resource, it should be a deliberate exception. In this case, the permissions should be restricted if a more specific ARN is applicable, or the use of a wildcard should be documented and justified. The ideal template also uses a wildcard here, but the key issue is that the first template violates an explicit negative constraint given in the prompt.
+  * **Failure:** The `IaCNovaEC2Role` policy grants several CloudWatch actions (`cloudwatch:PutMetricData`, `GetMetricStatistics`, etc.) to `Resource: '*'`. The prompt explicitly states that the policy "must not contain wildcard actions." This broad permission allows instances to publish or read metrics for *any* resource in the AWS account, which is a security risk.
+  * **Correction:** A secure template must scope permissions as narrowly as possible. While some AWS actions legitimately require a wildcard resource, it should be a deliberate exception. The key issue here is that the template violates an explicit negative constraint given in the prompt.
 
 <!-- end list -->
 

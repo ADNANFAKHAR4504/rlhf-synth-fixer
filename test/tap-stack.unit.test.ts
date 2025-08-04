@@ -145,8 +145,9 @@ describe('IaC-AWS-Nova-Model CloudFormation Template Unit Tests', () => {
       expect(albSg).toBeDefined();
       const ingressRules = albSg.Properties.SecurityGroupIngress;
 
-      const httpRule = ingressRules.find(r => r.FromPort === 80);
-      const httpsRule = ingressRules.find(r => r.FromPort === 443);
+      // FIX: Explicitly typed 'r' as 'any' to resolve TS7006
+      const httpRule = ingressRules.find((r: any) => r.FromPort === 80);
+      const httpsRule = ingressRules.find((r: any) => r.FromPort === 443);
 
       expect(httpRule.CidrIp).toBe('0.0.0.0/0');
       expect(httpsRule.CidrIp).toBe('0.0.0.0/0');
@@ -179,7 +180,8 @@ describe('IaC-AWS-Nova-Model CloudFormation Template Unit Tests', () => {
 
       // Check inline policy for specific, non-wildcard actions
       const inlinePolicy = role.Properties.Policies[0].PolicyDocument.Statement;
-      const s3Policy = inlinePolicy.find(p =>
+      // FIX: Explicitly typed 'p' as 'any' to resolve TS7006
+      const s3Policy = inlinePolicy.find((p: any) =>
         p.Action.includes('s3:GetObject')
       );
       expect(s3Policy).toBeDefined();

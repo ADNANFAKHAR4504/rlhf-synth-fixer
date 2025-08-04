@@ -1,4 +1,3 @@
-// Import AWS SDK v3 clients
 import {
   EC2Client,
   DescribeVpcsCommand,
@@ -83,14 +82,21 @@ describe('IaC-AWS-Nova-Model Infrastructure Integration Tests', () => {
           SubnetIds: [outputs.PublicSubnet1],
         })
       );
-      const vpcId = subnetResponse.Subnets[0].VpcId;
+      // FIX: Check if Subnets array exists and has elements before accessing it.
+      const vpcId = subnetResponse.Subnets?.[0]?.VpcId;
       expect(vpcId).toBeDefined();
+
+      // FIX: Ensure vpcId is not undefined before making the next call.
+      if (!vpcId) {
+        throw new Error('VPC ID not found from subnet.');
+      }
 
       const vpcResponse = await ec2Client.send(
         new DescribeVpcsCommand({ VpcIds: [vpcId] })
       );
-      expect(vpcResponse.Vpcs.length).toBe(1);
-      expect(vpcResponse.Vpcs[0].State).toBe('available');
+      // FIX: Use optional chaining to safely access properties.
+      expect(vpcResponse.Vpcs?.length).toBe(1);
+      expect(vpcResponse.Vpcs?.[0]?.State).toBe('available');
     });
 
     test('Should have 3 public and 3 private subnets', async () => {
@@ -105,32 +111,33 @@ describe('IaC-AWS-Nova-Model Infrastructure Integration Tests', () => {
         outputs.PrivateSubnet3,
       ];
 
-      const allSubnets = await ec2Client.send(
+      const allSubnetsResponse = await ec2Client.send(
         new DescribeSubnetsCommand({
           SubnetIds: [...publicSubnetIds, ...privateSubnetIds],
         })
       );
 
-      const publicSubnets = allSubnets.Subnets.filter(
-        s => s.MapPublicIpOnLaunch
-      );
-      const privateSubnets = allSubnets.Subnets.filter(
-        s => !s.MapPublicIpOnLaunch
-      );
+      // FIX: Provide a default empty array to prevent filter on undefined.
+      const allSubnets = allSubnetsResponse.Subnets ?? [];
+
+      const publicSubnets = allSubnets.filter(s => s.MapPublicIpOnLaunch);
+      const privateSubnets = allSubnets.filter(s => !s.MapPublicIpOnLaunch);
 
       expect(publicSubnets.length).toBe(3);
       expect(privateSubnets.length).toBe(3);
     });
 
     test('Public subnets should have a route to the Internet Gateway', async () => {
-      const routeTables = await ec2Client.send(
+      const routeTablesResponse = await ec2Client.send(
         new DescribeRouteTablesCommand({
           Filters: [
             { Name: 'association.subnet-id', Values: [outputs.PublicSubnet1] },
           ],
         })
       );
-      const hasIgwRoute = routeTables.RouteTables[0].Routes.some(
+      // FIX: Safely access nested properties.
+      const routes = routeTablesResponse.RouteTables?.[0]?.Routes ?? [];
+      const hasIgwRoute = routes.some(
         r => r.GatewayId && r.GatewayId.startsWith('igw-')
       );
       expect(hasIgwRoute).toBe(true);
@@ -143,9 +150,10 @@ describe('IaC-AWS-Nova-Model Infrastructure Integration Tests', () => {
       const response = await elbv2Client.send(
         new DescribeLoadBalancersCommand({ LoadBalancerArns: [outputs.ALBArn] })
       );
-      expect(response.LoadBalancers.length).toBe(1);
-      expect(response.LoadBalancers[0].State.Code).toBe('active');
-      expect(response.LoadBalancers[0].Scheme).toBe('internet-facing');
+      // FIX: Use optional chaining for safe access.
+      expect(response.LoadBalancers?.length).toBe(1);
+      expect(response.LoadBalancers?.[0]?.State?.Code).toBe('active');
+      expect(response.LoadBalancers?.[0]?.Scheme).toBe('internet-facing');
     });
 
     test('ALB should have HTTP->HTTPS redirect and HTTPS forward listeners', async () => {
@@ -153,18 +161,21 @@ describe('IaC-AWS-Nova-Model Infrastructure Integration Tests', () => {
         new DescribeListenersCommand({ LoadBalancerArn: outputs.ALBArn })
       );
 
-      const httpListener = Listeners.find(l => l.Port === 80);
-      const httpsListener = Listeners.find(l => l.Port === 443);
+      // FIX: Use a default empty array to prevent find on undefined.
+      const listeners = Listeners ?? [];
+      const httpListener = listeners.find(l => l.Port === 80);
+      const httpsListener = listeners.find(l => l.Port === 443);
 
       expect(httpListener).toBeDefined();
-      expect(httpListener.DefaultActions[0].Type).toBe('redirect');
-      expect(httpListener.DefaultActions[0].RedirectConfig.Protocol).toBe(
+      // FIX: Optional chaining for safety.
+      expect(httpListener?.DefaultActions?.[0]?.Type).toBe('redirect');
+      expect(httpListener?.DefaultActions?.[0]?.RedirectConfig?.Protocol).toBe(
         'HTTPS'
       );
 
       expect(httpsListener).toBeDefined();
-      expect(httpsListener.DefaultActions[0].Type).toBe('forward');
-      expect(httpsListener.Certificates.length).toBeGreaterThan(0);
+      expect(httpsListener?.DefaultActions?.[0]?.Type).toBe('forward');
+      expect(httpsListener?.Certificates?.length ?? 0).toBeGreaterThan(0);
     });
 
     test('Target Group should exist and targets should be healthy', async () => {
@@ -173,7 +184,7 @@ describe('IaC-AWS-Nova-Model Infrastructure Integration Tests', () => {
           TargetGroupArns: [outputs.ALBTargetGroupArn],
         })
       );
-      expect(TargetGroups.length).toBe(1);
+      expect(TargetGroups?.length).toBe(1);
 
       const { TargetHealthDescriptions } = await elbv2Client.send(
         new DescribeTargetHealthCommand({
@@ -181,11 +192,12 @@ describe('IaC-AWS-Nova-Model Infrastructure Integration Tests', () => {
         })
       );
       // This check is critical to ensure the ASG has provisioned instances.
-      expect(TargetHealthDescriptions.length).toBeGreaterThan(0);
+      expect(TargetHealthDescriptions?.length ?? 0).toBeGreaterThan(0);
 
       // This validates that the EC2 instances, security groups, and UserData script are all working.
-      TargetHealthDescriptions.forEach(target => {
-        expect(target.TargetHealth.State).toBe('healthy');
+      // FIX: Use a default empty array to prevent forEach on undefined.
+      (TargetHealthDescriptions ?? []).forEach(target => {
+        expect(target.TargetHealth?.State).toBe('healthy');
       });
     });
   });
@@ -198,11 +210,11 @@ describe('IaC-AWS-Nova-Model Infrastructure Integration Tests', () => {
           AutoScalingGroupNames: [outputs.ASGName],
         })
       );
-      const asg = AutoScalingGroups[0];
+      const asg = AutoScalingGroups?.[0];
       expect(asg).toBeDefined();
-      expect(asg.MinSize).toBe(2);
-      expect(asg.MaxSize).toBe(6);
-      expect(asg.DesiredCapacity).toBe(2);
+      expect(asg?.MinSize).toBe(2);
+      expect(asg?.MaxSize).toBe(6);
+      expect(asg?.DesiredCapacity).toBe(2);
     });
 
     // CORRECTED: This test is now more robust.
@@ -210,7 +222,8 @@ describe('IaC-AWS-Nova-Model Infrastructure Integration Tests', () => {
       const url = `https://${outputs.ALBDNSName}`;
 
       // Return the promise to Jest to handle async operation correctly.
-      return new Promise((resolve, reject) => {
+      // FIX: Specify the Promise type as <void> to match the resolve() call.
+      return new Promise<void>((resolve, reject) => {
         const req = https.get(url, { rejectUnauthorized: false }, res => {
           // Explicitly reject on non-200 status codes for clearer test failures.
           if (res.statusCode !== 200) {
@@ -259,11 +272,12 @@ describe('IaC-AWS-Nova-Model Infrastructure Integration Tests', () => {
       const accessBlock = await s3Client.send(
         new GetPublicAccessBlockCommand({ Bucket: bucketName })
       );
-      expect(accessBlock.PublicAccessBlockConfiguration.BlockPublicAcls).toBe(
+      // FIX: Use optional chaining to safely access nested configuration.
+      expect(accessBlock.PublicAccessBlockConfiguration?.BlockPublicAcls).toBe(
         true
       );
       expect(
-        accessBlock.PublicAccessBlockConfiguration.RestrictPublicBuckets
+        accessBlock.PublicAccessBlockConfiguration?.RestrictPublicBuckets
       ).toBe(true);
     });
   });
@@ -278,18 +292,24 @@ describe('IaC-AWS-Nova-Model Infrastructure Integration Tests', () => {
         })
       );
 
+      // FIX: Use a default empty array.
+      const recordSets = ResourceRecordSets ?? [];
+
       // Route 53 FQDNs end with a period.
-      const appRecord = ResourceRecordSets.find(
+      const appRecord = recordSets.find(
         r => r.Name === `${outputs.DomainName}.`
       );
 
       expect(appRecord).toBeDefined();
-      expect(appRecord.Type).toBe('A');
-      expect(appRecord.AliasTarget).toBeDefined();
+      expect(appRecord?.Type).toBe('A');
+      expect(appRecord?.AliasTarget).toBeDefined();
 
       // The AliasTarget DNS name from the API may have a "dualstack." prefix and ends with a ".".
       // We normalize both strings for a robust comparison.
-      const aliasTargetDns = appRecord.AliasTarget.DNSName.toLowerCase();
+      // FIX: Safely access DNSName and provide a default empty string.
+      const aliasTargetDns = (
+        appRecord?.AliasTarget?.DNSName ?? ''
+      ).toLowerCase();
       const albDns = outputs.ALBDNSName.toLowerCase();
 
       // Check that the core ALB DNS name is present in the alias target.
@@ -304,7 +324,7 @@ describe('IaC-AWS-Nova-Model Infrastructure Integration Tests', () => {
         new GetTopicAttributesCommand({ TopicArn: outputs.SNSTopicArn })
       );
       expect(Attributes).toBeDefined();
-      expect(Attributes.TopicArn).toBe(outputs.SNSTopicArn);
+      expect(Attributes?.TopicArn).toBe(outputs.SNSTopicArn);
     });
   });
 });
