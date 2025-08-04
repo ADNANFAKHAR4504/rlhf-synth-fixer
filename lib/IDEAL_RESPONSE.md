@@ -7,11 +7,9 @@ Parameters:
     Type: String
     Default: dev
     Description: Environment suffix for resource naming
-    AllowedPattern: '^[a-zA-Z0-9]+$'
-    ConstraintDescription: 'Must contain only alphanumeric characters.'
 
 Resources:
-  # 1. IAM Role for Lambda Execution (no dependencies)
+  # Lambda Execution Role with CloudWatch Logs permissions
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
@@ -38,28 +36,8 @@ Resources:
                   - logs:CreateLogStream
                   - logs:PutLogEvents
                 Resource: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/*"
-        - PolicyName: S3AccessPolicy
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              - Effect: Allow
-                Action:
-                  - s3:GetObject
-                  - s3:PutObject
-                  - s3:DeleteObject
-                  - s3:ListBucket
-                Resource:
-                  - !Sub "${LambdaAssetsBucket}/*"
-                  - !Ref LambdaAssetsBucket
-      Tags:
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Project
-          Value: TAP-Stack
-        - Key: ManagedBy
-          Value: CloudFormation
 
-  # 2. S3 Bucket for Lambda Assets (no dependencies)
+  # S3 Bucket for Lambda function assets with encryption
   LambdaAssetsBucket:
     Type: AWS::S3::Bucket
     Properties:
@@ -68,7 +46,6 @@ Resources:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
               SSEAlgorithm: AES256
-            BucketKeyEnabled: true
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -76,38 +53,13 @@ Resources:
         RestrictPublicBuckets: true
       VersioningConfiguration:
         Status: Enabled
-      Tags:
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Project
-          Value: TAP-Stack
-        - Key: ManagedBy
-          Value: CloudFormation
 
-  # 3. S3 Bucket Policy for Enhanced Security (depends on bucket)
-  LambdaAssetsBucketPolicy:
-    Type: AWS::S3::BucketPolicy
-    Properties:
-      Bucket: !Ref LambdaAssetsBucket
-      PolicyDocument:
-        Statement:
-          - Sid: DenyInsecureConnections
-            Effect: Deny
-            Principal: '*'
-            Action: 's3:*'
-            Resource:
-              - !Sub "${LambdaAssetsBucket}/*"
-              - !Ref LambdaAssetsBucket
-            Condition:
-              Bool:
-                'aws:SecureTransport': 'false'
-
-  # 4. Lambda Function (depends on IAM role and S3 bucket)
+  # Lambda Function and using python 3.13 as runtime since python3.8 was deprecated
   LambdaFunction:
     Type: AWS::Lambda::Function
     Properties:
       FunctionName: !Sub "TapFunction-${EnvironmentSuffix}"
-      Runtime: python3.9
+      Runtime: python3.13
       Handler: index.lambda_handler
       Role: !GetAtt LambdaExecutionRole.Arn
       Timeout: 30
@@ -121,11 +73,36 @@ Resources:
           import json
           import os
           import logging
-          from datetime import datetime
+          import re
 
           # Configure logging
           logger = logging.getLogger()
           logger.setLevel(logging.INFO)
+
+          def validate_email(email):
+              """Basic email validation"""
+              pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+              return re.match(pattern, str(email)) is not None
+
+          def validate_required_fields(data, required_fields):
+              """Validate that required fields are present in the data"""
+              missing_fields = []
+              for field in required_fields:
+                  if field not in data or not str(data[field]).strip():
+                      missing_fields.append(field)
+              return missing_fields
+
+          def sanitize_input(data):
+              """Basic input sanitization"""
+              if isinstance(data, dict):
+                  return {k: sanitize_input(v) for k, v in data.items()}
+              elif isinstance(data, list):
+                  return [sanitize_input(item) for item in data]
+              elif isinstance(data, str):
+                  # Basic HTML/script tag removal
+                  data = re.sub(r'<[^>]*>', '', data)
+                  return data.strip()
+              return data
 
           def lambda_handler(event, context):
               """
@@ -143,140 +120,205 @@ Resources:
               # Get environment variables
               environment = os.environ.get('ENVIRONMENT', 'dev')
               bucket_name = os.environ.get('BUCKET_NAME', 'unknown')
-              
-              try:
-                  # Basic routing based on HTTP method and path
-                  if http_method == 'GET':
-                      if path == '/health' or path == '/':
+
+              # Basic routing based on HTTP method and path
+              if http_method == 'GET':
+                  # Handle GET requests - typically for reading/retrieving resources
+                  if path == '/health' or path == '/':
+                      response_body = {
+                          'message': 'TAP Serverless Application is running!',
+                          'status': 'healthy',
+                          'environment': environment,
+                          'bucket': bucket_name,
+                          'path': path,
+                          'method': http_method,
+                          'timestamp': context.aws_request_id,
+                          'version': '1.0.0'
+                      }
+                      status_code = 200
+                  elif path.startswith('/api/'):
+                      # Handle API endpoints
+                      query_params = event.get('queryStringParameters') or {}
+                      path_params = event.get('pathParameters') or {}
+                      
+                      response_body = {
+                          'message': f'GET API endpoint {path}',
+                          'query_parameters': query_params,
+                          'path_parameters': path_params,
+                          'environment': environment,
+                          'request_id': context.aws_request_id
+                      }
+                      status_code = 200
+                  else:
+                      response_body = {
+                          'error': f'GET endpoint {path} not found',
+                          'available_endpoints': {
+                              'health_check': '/health or /',
+                              'api_endpoints': '/api/*'
+                          },
+                          'message': 'Please use one of the available endpoints'
+                      }
+                      status_code = 404
+              elif http_method == 'POST':
+                  # Handle POST requests - typically for creating resources
+                  try:
+                      request_body = json.loads(event.get('body', '{}'))
+                      
+                      # Basic validation for POST requests
+                      if not request_body:
                           response_body = {
-                              'message': 'TAP Serverless Application is running!',
-                              'environment': environment,
-                              'bucket': bucket_name,
+                              'error': 'POST request requires a request body',
+                              'message': 'Please provide data to create a resource'
+                          }
+                          status_code = 400
+                      else:
+                          # Sanitize input data
+                          sanitized_data = sanitize_input(request_body)
+                          
+                          # Example validation - you can customize this based on your needs
+                          if 'email' in sanitized_data and not validate_email(sanitized_data['email']):
+                              response_body = {
+                                  'error': 'Invalid email format',
+                                  'message': 'Please provide a valid email address'
+                              }
+                              status_code = 400
+                          else:
+                              response_body = {
+                                  'message': 'POST request processed successfully',
+                                  'action': 'resource_created',
+                                  'received_data': sanitized_data,
+                                  'environment': environment,
+                                  'request_id': context.aws_request_id
+                              }
+                              status_code = 201  # Created
+                          
+                  except json.JSONDecodeError:
+                      response_body = {
+                          'error': 'Invalid JSON in request body',
+                          'message': 'POST request body must be valid JSON'
+                      }
+                      status_code = 400
+              elif http_method == 'PUT':
+                  # Handle PUT requests - typically for updating resources
+                  try:
+                      request_body = json.loads(event.get('body', '{}'))
+                      
+                      # Basic validation for PUT requests
+                      if not request_body:
+                          response_body = {
+                              'error': 'PUT request requires a request body',
+                              'message': 'Please provide data to update'
+                          }
+                          status_code = 400
+                      else:
+                          # Sanitize input data
+                          sanitized_data = sanitize_input(request_body)
+                          
+                          # Validate required fields for update operations
+                          missing_fields = validate_required_fields(sanitized_data, ['id'])
+                          if missing_fields:
+                              response_body = {
+                                  'error': f'Missing required fields: {", ".join(missing_fields)}',
+                                  'message': 'PUT requests must include an id field to identify the resource to update',
+                                  'required_fields': ['id']
+                              }
+                              status_code = 400
+                          else:
+                              # Additional email validation if present
+                              if 'email' in sanitized_data and not validate_email(sanitized_data['email']):
+                                  response_body = {
+                                      'error': 'Invalid email format',
+                                      'message': 'Please provide a valid email address'
+                                  }
+                                  status_code = 400
+                              else:
+                                  response_body = {
+                                      'message': 'PUT request processed successfully',
+                                      'action': 'resource_updated',
+                                      'resource_id': sanitized_data.get('id'),
+                                      'updated_data': sanitized_data,
+                                      'environment': environment,
+                                      'request_id': context.aws_request_id
+                                  }
+                                  status_code = 200
+                              
+                  except json.JSONDecodeError:
+                      response_body = {
+                          'error': 'Invalid JSON in request body',
+                          'message': 'PUT request body must be valid JSON'
+                      }
+                      status_code = 400
+              elif http_method == 'DELETE':
+                  # Handle DELETE requests - typically for removing resources
+                  query_params = event.get('queryStringParameters') or {}
+                  path_params = event.get('pathParameters') or {}
+                  
+                  # Extract resource identifier from path or query parameters
+                  resource_id = path_params.get('id') or query_params.get('id')
+                  
+                  if not resource_id:
+                      response_body = {
+                          'error': 'Missing resource identifier',
+                          'message': 'DELETE requests require an id parameter in the path or query string',
+                          'examples': [
+                              f'{path}?id=123',
+                              'Use path parameter: /resource/123'
+                          ]
+                      }
+                      status_code = 400
+                  else:
+                      # Validate resource ID format
+                      if not str(resource_id).strip():
+                          response_body = {
+                              'error': 'Invalid resource identifier',
+                              'message': 'Resource ID cannot be empty'
+                          }
+                          status_code = 400
+                      else:
+                          response_body = {
+                              'message': 'DELETE request processed successfully',
+                              'action': 'resource_deleted',
+                              'resource_id': resource_id,
                               'path': path,
-                              'method': http_method,
-                              'timestamp': datetime.utcnow().isoformat(),
+                              'environment': environment,
                               'request_id': context.aws_request_id
                           }
                           status_code = 200
-                      else:
-                          response_body = {
-                              'message': f'GET endpoint {path} not found',
-                              'available_endpoints': ['/health', '/'],
-                              'timestamp': datetime.utcnow().isoformat()
-                          }
-                          status_code = 404
-                          
-                  elif http_method == 'POST':
-                      # Handle POST requests
-                      try:
-                          request_body = json.loads(event.get('body', '{}'))
-                          response_body = {
-                              'message': 'POST request processed successfully',
-                              'received_data': request_body,
-                              'environment': environment,
-                              'request_id': context.aws_request_id,
-                              'timestamp': datetime.utcnow().isoformat()
-                          }
-                          status_code = 200
-                      except json.JSONDecodeError:
-                          response_body = {
-                              'error': 'Invalid JSON in request body',
-                              'timestamp': datetime.utcnow().isoformat()
-                          }
-                          status_code = 400
-                          
-                  elif http_method == 'PUT':
-                      # Handle PUT requests
-                      try:
-                          request_body = json.loads(event.get('body', '{}'))
-                          response_body = {
-                              'message': 'PUT request processed successfully',
-                              'updated_data': request_body,
-                              'environment': environment,
-                              'request_id': context.aws_request_id,
-                              'timestamp': datetime.utcnow().isoformat()
-                          }
-                          status_code = 200
-                      except json.JSONDecodeError:
-                          response_body = {
-                              'error': 'Invalid JSON in request body',
-                              'timestamp': datetime.utcnow().isoformat()
-                          }
-                          status_code = 400
-                          
-                  elif http_method == 'DELETE':
-                      # Handle DELETE requests
-                      response_body = {
-                          'message': 'DELETE request processed successfully',
-                          'path': path,
-                          'environment': environment,
-                          'request_id': context.aws_request_id,
-                          'timestamp': datetime.utcnow().isoformat()
-                      }
-                      status_code = 200
-                      
-                  else:
-                      # Handle other HTTP methods
-                      response_body = {
-                          'message': f'HTTP method {http_method} is supported',
-                          'path': path,
-                          'supported_methods': ['GET', 'POST', 'PUT', 'DELETE'],
-                          'timestamp': datetime.utcnow().isoformat()
-                      }
-                      status_code = 200
-                  
-                  # Prepare the response
-                  response = {
-                      'statusCode': status_code,
-                      'headers': {
-                          'Content-Type': 'application/json',
-                          'Access-Control-Allow-Origin': '*',
-                          'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token',
-                          'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS'
-                      },
-                      'body': json.dumps(response_body)
+              elif http_method == 'OPTIONS':
+                  # Handle OPTIONS requests - for CORS preflight
+                  response_body = {
+                      'message': 'CORS preflight response',
+                      'allowed_methods': ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+                      'allowed_headers': ['Content-Type', 'X-Amz-Date', 'Authorization', 'X-Api-Key', 'X-Amz-Security-Token'],
+                      'environment': environment
                   }
-                  
-                  logger.info(f"Returning response: {json.dumps(response)}")
-                  return response
-                  
-              except Exception as e:
-                  logger.error(f"Unexpected error: {str(e)}")
-                  return {
-                      'statusCode': 500,
-                      'headers': {
-                          'Content-Type': 'application/json',
-                          'Access-Control-Allow-Origin': '*'
-                      },
-                      'body': json.dumps({
-                          'error': 'Internal server error',
-                          'message': str(e),
-                          'timestamp': datetime.utcnow().isoformat()
-                      })
+                  status_code = 200
+              else:
+                  # Handle unsupported HTTP methods
+                  response_body = {
+                      'error': f'HTTP method {http_method} is not supported',
+                      'path': path,
+                      'supported_methods': ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+                      'message': 'Please use one of the supported HTTP methods'
                   }
-      Tags:
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Project
-          Value: TAP-Stack
-        - Key: ManagedBy
-          Value: CloudFormation
+                  status_code = 405
+              
+              # Prepare the response
+              response = {
+                  'statusCode': status_code,
+                  'headers': {
+                      'Content-Type': 'application/json',
+                      'Access-Control-Allow-Origin': '*',
+                      'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token',
+                      'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS'
+                  },
+                  'body': json.dumps(response_body)
+              }
+              
+              logger.info(f"Returning response: {json.dumps(response)}")
+              return response
 
-  # 5. CloudWatch Log Group for Lambda (depends on Lambda function)
-  LambdaLogGroup:
-    Type: AWS::Logs::LogGroup
-    Properties:
-      LogGroupName: !Sub "/aws/lambda/${LambdaFunction}"
-      RetentionInDays: 14
-      Tags:
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Project
-          Value: TAP-Stack
-        - Key: ManagedBy
-          Value: CloudFormation
-
-  # 6. API Gateway REST API (no dependencies)
+  # API Gateway REST API
   ApiGateway:
     Type: AWS::ApiGateway::RestApi
     Properties:
@@ -285,15 +327,8 @@ Resources:
       EndpointConfiguration:
         Types:
           - REGIONAL
-      Tags:
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Project
-          Value: TAP-Stack
-        - Key: ManagedBy
-          Value: CloudFormation
 
-  # 7. API Gateway Resource for proxy integration (depends on API Gateway)
+  # API Gateway Resource (for proxy integration)
   ApiGatewayResource:
     Type: AWS::ApiGateway::Resource
     Properties:
@@ -301,7 +336,7 @@ Resources:
       ParentId: !GetAtt ApiGateway.RootResourceId
       PathPart: "{proxy+}"
 
-  # 8. API Gateway Method for root resource (depends on API Gateway and Lambda)
+  # API Gateway Method for root resource
   ApiGatewayMethodRoot:
     Type: AWS::ApiGateway::Method
     Properties:
@@ -313,14 +348,8 @@ Resources:
         Type: AWS_PROXY
         IntegrationHttpMethod: POST
         Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaFunction.Arn}/invocations"
-      MethodResponses:
-        - StatusCode: 200
-          ResponseParameters:
-            method.response.header.Access-Control-Allow-Origin: true
-            method.response.header.Access-Control-Allow-Headers: true
-            method.response.header.Access-Control-Allow-Methods: true
 
-  # 9. API Gateway Method for proxy resource (depends on API Gateway Resource and Lambda)
+  # API Gateway Method for proxy resource
   ApiGatewayMethodProxy:
     Type: AWS::ApiGateway::Method
     Properties:
@@ -332,53 +361,18 @@ Resources:
         Type: AWS_PROXY
         IntegrationHttpMethod: POST
         Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaFunction.Arn}/invocations"
-      MethodResponses:
-        - StatusCode: 200
-          ResponseParameters:
-            method.response.header.Access-Control-Allow-Origin: true
-            method.response.header.Access-Control-Allow-Headers: true
-            method.response.header.Access-Control-Allow-Methods: true
 
-  # 10. API Gateway OPTIONS Method for CORS (depends on API Gateway Resource)
-  ApiGatewayMethodOptions:
-    Type: AWS::ApiGateway::Method
-    Properties:
-      RestApiId: !Ref ApiGateway
-      ResourceId: !Ref ApiGatewayResource
-      HttpMethod: OPTIONS
-      AuthorizationType: NONE
-      Integration:
-        Type: MOCK
-        IntegrationResponses:
-          - StatusCode: 200
-            ResponseParameters:
-              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
-              method.response.header.Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
-              method.response.header.Access-Control-Allow-Origin: "'*'"
-            ResponseTemplates:
-              application/json: ''
-        PassthroughBehavior: WHEN_NO_MATCH
-        RequestTemplates:
-          application/json: '{"statusCode": 200}'
-      MethodResponses:
-        - StatusCode: 200
-          ResponseParameters:
-            method.response.header.Access-Control-Allow-Headers: true
-            method.response.header.Access-Control-Allow-Methods: true
-            method.response.header.Access-Control-Allow-Origin: true
-
-  # 11. API Gateway Deployment (depends on all methods)
+  # API Gateway Deployment
   ApiGatewayDeployment:
     Type: AWS::ApiGateway::Deployment
     DependsOn:
       - ApiGatewayMethodRoot
       - ApiGatewayMethodProxy
-      - ApiGatewayMethodOptions
     Properties:
       RestApiId: !Ref ApiGateway
       StageName: prod
 
-  # 12. Lambda Permission for API Gateway (depends on Lambda function and API Gateway)
+  # Lambda Permission for API Gateway
   LambdaPermission:
     Type: AWS::Lambda::Permission
     Properties:
@@ -393,12 +387,6 @@ Outputs:
     Value: !Sub "https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/prod"
     Export:
       Name: !Sub "TapStack-${EnvironmentSuffix}-ApiUrl"
-
-  LambdaFunctionName:
-    Description: "Lambda Function Name"
-    Value: !Ref LambdaFunction
-    Export:
-      Name: !Sub "TapStack-${EnvironmentSuffix}-LambdaName"
 
   LambdaFunctionArn:
     Description: "Lambda Function ARN"
@@ -417,22 +405,4 @@ Outputs:
     Value: !GetAtt LambdaExecutionRole.Arn
     Export:
       Name: !Sub "TapStack-${EnvironmentSuffix}-RoleArn"
-
-  ApiGatewayId:
-    Description: "API Gateway ID"
-    Value: !Ref ApiGateway
-    Export:
-      Name: !Sub "TapStack-${EnvironmentSuffix}-ApiId"
-
-  Region:
-    Description: "AWS Region where resources are deployed"
-    Value: !Ref "AWS::Region"
-    Export:
-      Name: !Sub "TapStack-${EnvironmentSuffix}-Region"
-
-  Environment:
-    Description: "Environment suffix used for resource naming"
-    Value: !Ref EnvironmentSuffix
-    Export:
-      Name: !Sub "TapStack-${EnvironmentSuffix}-Environment"
 ```
