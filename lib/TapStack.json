@@ -851,7 +851,9 @@
         "VPCFlowLogsGroup": {
             "Type": "AWS::Logs::LogGroup",
             "Properties": {
-                "LogGroupName": "/aws/vpc/flowlogs",
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/vpc/flowlogs-secureapp-${AWS::StackName}"
+                },
                 "RetentionInDays": 365,
                 "KmsKeyId": {
                     "Fn::GetAtt": [

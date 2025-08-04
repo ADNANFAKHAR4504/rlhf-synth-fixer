@@ -345,7 +345,9 @@ describe('SecureApp CloudFormation Template', () => {
       expect(logGroup).toBeDefined();
       expect(flowLogs.Type).toBe('AWS::EC2::FlowLog');
       expect(logGroup.Type).toBe('AWS::Logs::LogGroup');
-      expect(logGroup.Properties.LogGroupName).toBe('/aws/vpc/flowlogs');
+      expect(logGroup.Properties.LogGroupName).toEqual({
+        'Fn::Sub': '/aws/vpc/flowlogs-secureapp-${AWS::StackName}'
+      });
       expect(logGroup.Properties.RetentionInDays).toBe(365);
     });
   });

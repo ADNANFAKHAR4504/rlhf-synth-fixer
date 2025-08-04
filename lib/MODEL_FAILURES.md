@@ -376,6 +376,34 @@ An error occurred (InsufficientCapabilitiesException) when calling the CreateCha
 - Modified `EC2InstanceRole` test to remove RoleName expectation
 - All 49 unit tests now pass
 
+### 10. **CloudWatch Log Group Already Exists Issue**
+
+**Issue**: CloudFormation deployment failed because a CloudWatch Log Group with the hardcoded name `/aws/vpc/flowlogs` already existed in the AWS account.
+
+**Error Message**:
+```
+"ResourceStatus": "CREATE_FAILED",
+"ResourceStatusReason": "Resource handler returned message: \"Resource of type 'AWS::Logs::LogGroup' with identifier '{\"properties/LogGroupName\":\"/aws/vpc/flowlogs\"}' already exists.\""
+```
+
+**Root Cause**: 
+- `VPCFlowLogsGroup` resource used hardcoded `LogGroupName: /aws/vpc/flowlogs`
+- This is a common AWS resource name that may already exist from previous deployments or other stacks
+- CloudFormation cannot create resources with names that already exist
+
+**Impact**: Stack creation failure - VPC Flow Logs could not be configured
+**Resolution**:
+- Changed log group name to use dynamic naming: `!Sub '/aws/vpc/flowlogs-secureapp-${AWS::StackName}'`
+- This ensures unique log group names per stack deployment
+- Updated unit test to expect the new `Fn::Sub` function structure
+- Maintains functionality while avoiding naming conflicts
+
+**Severity**: **MEDIUM** - Prevents deployment but has straightforward resolution
+
+**Unit Test Impact**: 
+- Modified VPC Flow Logs test to expect `Fn::Sub` structure instead of hardcoded string
+- Test now validates the dynamic naming pattern
+
 ## Final Deployment Outcome
 
 **Result**: ✅ **SUCCESSFUL DEPLOYMENT** (after extensive fixes, now supports automated deployment)

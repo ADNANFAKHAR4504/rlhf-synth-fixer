@@ -519,7 +519,7 @@ Resources:
   VPCFlowLogsGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: /aws/vpc/flowlogs
+      LogGroupName: !Sub '/aws/vpc/flowlogs-secureapp-${AWS::StackName}'
       RetentionInDays: 365
       KmsKeyId: !GetAtt SecureAppKMSKey.Arn
 
