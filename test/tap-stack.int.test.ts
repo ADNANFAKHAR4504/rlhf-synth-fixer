@@ -121,15 +121,21 @@ describe('TapStack Integration Tests', () => {
         const resources = await apigateway.send(
           new GetResourcesCommand({ restApiId: api!.id! })
         );
+
         const contentResource = resources.items?.find(
           res => res.path === '/content'
         );
         expect(contentResource).toBeDefined();
 
+        const contentIdResource = resources.items?.find(
+          res => res.path === '/content/{contentId}'
+        );
+        expect(contentIdResource).toBeDefined();
+
         const methods = await apigateway.send(
           new GetMethodCommand({
             restApiId: api!.id!,
-            resourceId: contentResource!.id!,
+            resourceId: contentIdResource!.id!,
             httpMethod: 'GET',
           })
         );
@@ -141,7 +147,9 @@ describe('TapStack Integration Tests', () => {
           new ListDistributionsCommand({})
         );
         const distribution = distributions.DistributionList?.Items?.find(dist =>
-          dist.Comment?.includes(`${resourcePrefix} CMS Distribution`)
+          dist.Comment?.includes(
+            `${resourcePrefix} CMS CloudFront Distribution`
+          )
         );
         expect(distribution).toBeDefined();
         expect(distribution?.DefaultCacheBehavior?.ViewerProtocolPolicy).toBe(
