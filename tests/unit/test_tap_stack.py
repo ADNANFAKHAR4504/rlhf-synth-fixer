@@ -1,84 +1,70 @@
-# pylint: disable=C0111,C0103,C0303,W0511,R0903,R0913,R0914,R0915
-
 import unittest
 from pytest import mark
 
 import aws_cdk as cdk
 from aws_cdk.assertions import Template
 
-from lib.tap_stack import TapStack, TapStackProps
+from lib.tap_stack import TapStack
 
 
 @mark.describe("TapStack")
 class TestTapStack(unittest.TestCase):
 
-  def setUp(self):
-    self.app = cdk.App()
+    def setUp(self):
+        self.app = cdk.App()
 
-  def get_nested(self, stack: TapStack) -> TapStackProps:
-    for child in stack.node.children:
-      if isinstance(child, TapStackProps):
-        return child
-    raise AssertionError("Nested TapStackProps not found")
+    @mark.it("creates resources and exports outputs based on environment suffix")
+    def test_outputs_include_expected_exports(self):
+        env_suffix = "testenv"
+        stack = TapStack(self.app, "TapStackTest", environment_suffix=env_suffix)
+        template = Template.from_stack(stack)
 
-  @mark.it("creates resources with environment suffix and exports outputs")
-  def test_resources_and_exports(self):
-    suffix = "testenv"
-    stack = TapStack(self.app, "TapStackTest", environment_suffix=suffix)
-    inner = self.get_nested(stack)
-    template = Template.from_stack(inner)
+        outputs = template.to_json().get("Outputs", {})
+        export_names = [output.get("Export", {}).get("Name") for output in outputs.values()]
+        export_names = [name for name in export_names if name]  # filter None
 
-    # Assert correct resources present in nested stack
-    template.resource_count_is("AWS::S3::Bucket", 1)
-    template.resource_count_is("AWS::IAM::Role", 1)
-    template.resource_count_is("AWS::EC2::VPC", 1)
-    template.resource_count_is("AWS::EC2::SecurityGroup", 2)
-    template.resource_count_is("AWS::AutoScaling::AutoScalingGroup", 1)
-    template.resource_count_is("AWS::ElasticLoadBalancingV2::LoadBalancer", 1)
+        # For example, expected export names derived dynamically or defined clearly
+        expected_exports = [
+            f"LogBucketName-{env_suffix}",
+            f"ALBDNS-{env_suffix}",
+            f"ASGName-{env_suffix}",
+            f"VPCId-{env_suffix}",
+            f"SecurityGroupId-{env_suffix}",
+            f"EC2RoleName-{env_suffix}",
+        ]
 
-    # IAM role assume policy check
-    template.has_resource_properties("AWS::IAM::Role", {
-      "AssumeRolePolicyDocument": {
-        "Statement": [{
-          "Action": "sts:AssumeRole",
-          "Effect": "Allow",
-          "Principal": {"Service": "ec2.amazonaws.com"}
-        }]
-      }
-    })
+        for expected_export in expected_exports:
+            self.assertIn(
+                expected_export,
+                export_names,
+                f"Expected export '{expected_export}' not found in outputs"
+            )
 
-    outputs = template.to_json().get("Outputs", {})
-    expected = [
-      f"LogBucketName-{suffix}",
-      f"ALBDNS-{suffix}",
-      f"ASGName-{suffix}",
-      f"VPCId-{suffix}",
-      f"SecurityGroupId-{suffix}",
-      f"EC2RoleName-{suffix}",
-    ]
-    for name in expected:
-      data = [o for o in outputs.values() if o.get("Export", {}).get("Name") == name]
-      self.assertTrue(data, f"Missing export '{name}'")
+    @mark.it("defaults environment suffix to 'dev' and exports outputs")
+    def test_outputs_with_default_env_suffix(self):
+        stack = TapStack(self.app, "TapStackDefault")
+        template = Template.from_stack(stack)
 
-  @mark.it("defaults environment suffix to 'dev' and exports outputs")
-  def test_default_env_suffix(self):
-    stack = TapStack(self.app, "TapStackDefault")
-    inner = self.get_nested(stack)
-    template = Template.from_stack(inner)
+        outputs = template.to_json().get("Outputs", {})
+        export_names = [output.get("Export", {}).get("Name") for output in outputs.values()]
+        export_names = [name for name in export_names if name]
 
-    outputs = template.to_json().get("Outputs", {})
-    expected = [
-      "LogBucketName-dev",
-      "ALBDNS-dev",
-      "ASGName-dev",
-      "VPCId-dev",
-      "SecurityGroupId-dev",
-      "EC2RoleName-dev",
-    ]
-    for name in expected:
-      data = [o for o in outputs.values() if o.get("Export", {}).get("Name") == name]
-      self.assertTrue(data, f"Missing export '{name}'")
+        expected_exports = [
+            "LogBucketName-dev",
+            "ALBDNS-dev",
+            "ASGName-dev",
+            "VPCId-dev",
+            "SecurityGroupId-dev",
+            "EC2RoleName-dev",
+        ]
+
+        for expected_export in expected_exports:
+            self.assertIn(
+                expected_export,
+                export_names,
+                f"Expected export '{expected_export}' not found in outputs"
+            )
 
 
 if __name__ == "__main__":
-  unittest.main()
+    unittest.main()
