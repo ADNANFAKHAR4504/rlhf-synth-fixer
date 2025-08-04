@@ -353,25 +353,29 @@ lib/TapStack.yml:575:7
 **Issue**: CloudFormation deployment failed with "InsufficientCapabilitiesException: Requires capabilities : [CAPABILITY_NAMED_IAM]" because the template contained named IAM resources.
 
 **Error Message**:
+
 ```
 An error occurred (InsufficientCapabilitiesException) when calling the CreateChangeSet operation: Requires capabilities : [CAPABILITY_NAMED_IAM]
 ```
 
 **Root Causes Identified**:
+
 1. **Named IAM Role**: `EC2InstanceRole` had `RoleName: SecureApp-EC2-Role` property
 2. **Named IAM User**: `AccessKeyRotationUser` had `UserName: SecureApp-AccessKey-User` property
 3. **Deployment Constraint**: Package.json deployment scripts could not be modified and only provided `CAPABILITY_IAM`
 
 **Impact**: Complete deployment failure - stack creation was blocked
 **Resolution**:
+
 - Removed `RoleName` property from `EC2InstanceRole` in both YAML and JSON templates
-- Removed `UserName` property from `AccessKeyRotationUser` in both templates  
+- Removed `UserName` property from `AccessKeyRotationUser` in both templates
 - Updated unit tests to validate resource existence and properties instead of specific names
 - AWS will auto-generate unique names for these resources
 
 **Severity**: **HIGH** - Prevented deployment until resolved
 
-**Unit Test Impact**: 
+**Unit Test Impact**:
+
 - Modified `AccessKeyRotationUser` test to check Tags instead of UserName
 - Modified `EC2InstanceRole` test to remove RoleName expectation
 - All 49 unit tests now pass
@@ -381,18 +385,21 @@ An error occurred (InsufficientCapabilitiesException) when calling the CreateCha
 **Issue**: CloudFormation deployment failed because a CloudWatch Log Group with the hardcoded name `/aws/vpc/flowlogs` already existed in the AWS account.
 
 **Error Message**:
+
 ```
 "ResourceStatus": "CREATE_FAILED",
 "ResourceStatusReason": "Resource handler returned message: \"Resource of type 'AWS::Logs::LogGroup' with identifier '{\"properties/LogGroupName\":\"/aws/vpc/flowlogs\"}' already exists.\""
 ```
 
-**Root Cause**: 
+**Root Cause**:
+
 - `VPCFlowLogsGroup` resource used hardcoded `LogGroupName: /aws/vpc/flowlogs`
 - This is a common AWS resource name that may already exist from previous deployments or other stacks
 - CloudFormation cannot create resources with names that already exist
 
 **Impact**: Stack creation failure - VPC Flow Logs could not be configured
 **Resolution**:
+
 - Changed log group name to use dynamic naming: `!Sub '/aws/vpc/flowlogs-secureapp-${AWS::StackName}'`
 - This ensures unique log group names per stack deployment
 - Updated unit test to expect the new `Fn::Sub` function structure
@@ -400,9 +407,37 @@ An error occurred (InsufficientCapabilitiesException) when calling the CreateCha
 
 **Severity**: **MEDIUM** - Prevents deployment but has straightforward resolution
 
-**Unit Test Impact**: 
+**Unit Test Impact**:
+
 - Modified VPC Flow Logs test to expect `Fn::Sub` structure instead of hardcoded string
 - Test now validates the dynamic naming pattern
+
+### 11. **Missing AMI Mapping for us-east-2 Region**
+
+**Issue**: CloudFormation deployment failed when deploying to us-east-2 region because the template only contained AMI mapping for us-east-1.
+
+**Error Message**:
+
+```
+An error occurred (ValidationError) when calling the CreateChangeSet operation: Template error: Unable to get mapping for RegionMap::us-east-2::AMI
+```
+
+**Root Cause**:
+
+- `RegionMap` mapping only included `us-east-1` with AMI ID `ami-0c02fb55956c7d316`
+- Template used `!FindInMap [RegionMap, !Ref 'AWS::Region', AMI]` for EC2 instances
+- When deploying to us-east-2, CloudFormation couldn't find the mapping
+
+**Impact**: Complete deployment failure in us-east-2 region
+**Resolution**:
+
+- Added us-east-2 mapping with AMI ID `ami-0e03102b0efc3c675` (Amazon Linux 2)
+- Template now supports deployment in both us-east-1 and us-east-2 regions
+- Used current Amazon Linux 2 AMI for us-east-2 region (amzn2-ami-hvm-2.0.20250728.1-x86_64-gp2)
+
+**Severity**: **HIGH** - Prevents deployment in target region
+
+**Best Practice**: Always include AMI mappings for all target deployment regions
 
 ## Final Deployment Outcome
 
