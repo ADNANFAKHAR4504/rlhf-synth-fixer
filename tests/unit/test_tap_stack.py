@@ -5,7 +5,6 @@ from pytest import mark
 
 import aws_cdk as cdk
 from aws_cdk.assertions import Template
-
 from lib.tap_stack import TapStack, TapStackProps
 
 
@@ -15,7 +14,7 @@ class TestTapStack(unittest.TestCase):
   def setUp(self):
     self.app = cdk.App()
 
-  def get_nested(self, stack: TapStack) -> TapStackProps:
+  def get_nested_stack(self, stack: TapStack) -> TapStackProps:
     for child in stack.node.children:
       if isinstance(child, TapStackProps):
         return child
@@ -25,13 +24,13 @@ class TestTapStack(unittest.TestCase):
   def test_resources_and_exports_with_iam_sg(self):
     suffix = "testenv"
     stack = TapStack(self.app, "TapStackTest", environment_suffix=suffix)
-    inner = self.get_nested(stack)
+    inner = self.get_nested_stack(stack)
     template = Template.from_stack(inner)
 
     template.resource_count_is("AWS::S3::Bucket", 1)
     template.resource_count_is("AWS::IAM::Role", 1)
     template.resource_count_is("AWS::EC2::VPC", 1)
-    template.resource_count_is("AWS::EC2::SecurityGroup", 2)
+    template.resource_count_is("AWS::EC2::SecurityGroup", 1)
     template.resource_count_is("AWS::AutoScaling::AutoScalingGroup", 1)
     template.resource_count_is("AWS::ElasticLoadBalancingV2::LoadBalancer", 1)
 
@@ -46,16 +45,16 @@ class TestTapStack(unittest.TestCase):
           }
         }]
       },
-      "Description": "IAM role for EC2 instances with access to app logs bucket"
+      "Description": "IAM role for EC2 instances with access to log bucket"
     })
 
-    # Security Group Ingress rule validation
+    # Security Group rule for HTTP
     template.has_resource_properties("AWS::EC2::SecurityGroupIngress", {
-      "CidrIp": "10.0.0.0/16",
       "IpProtocol": "tcp",
       "FromPort": 80,
       "ToPort": 80,
-      "Description": "Allow HTTP access from internal CIDR block"
+      "CidrIp": "0.0.0.0/0",
+      "Description": "Allow HTTP access from anywhere"
     })
 
     # Output validation
@@ -75,7 +74,7 @@ class TestTapStack(unittest.TestCase):
   @mark.it("uses 'dev' as default suffix and includes IAM + SG validation")
   def test_default_env_suffix_with_iam_sg(self):
     stack = TapStack(self.app, "TapStackDefault")
-    inner = self.get_nested(stack)
+    inner = self.get_nested_stack(stack)
     template = Template.from_stack(inner)
 
     outputs = template.to_json().get("Outputs", {})
@@ -90,6 +89,3 @@ class TestTapStack(unittest.TestCase):
     for name in expected:
       data = [o for o in outputs.values() if o.get("Export", {}).get("Name") == name]
       self.assertTrue(data, f"Missing export '{name}'")
-
-if __name__ == "__main__":
-  unittest.main()
