@@ -43,11 +43,11 @@ class SecurityMonitoringInfrastructure(pulumi.ComponentResource):
 
     self._create_cloudwatch_resources()
     self._create_sns_resources()
-    self._create_guardduty()
+    # self._create_guardduty()
 
     self.register_outputs({
       "sns_topic_arn": self.sns_topic.arn,
-      "guardduty_detector_id": self.guardduty_detector.id,
+      # "guardduty_detector_id": self.guardduty_detector.id,
       "security_log_group_name": self.security_log_group.name
     })
 
@@ -95,24 +95,24 @@ class SecurityMonitoringInfrastructure(pulumi.ComponentResource):
       opts=ResourceOptions(parent=self, depends_on=[self.sns_topic])
     )
 
-  def _create_guardduty(self):
-    try:
-      # Try to get an existing detector for this account in the current region
-      existing = get_detector()
-      self.guardduty_detector = aws.guardduty.Detector.get(
-        f"{self.region.replace('-', '')}-guardduty-existing",
-        id=existing.id,
-        opts=ResourceOptions(parent=self)
-      )
-    except Exception:
-      # If none exists, create a new one
-      self.guardduty_detector = aws.guardduty.Detector(
-        f"{self.region.replace('-', '')}-guardduty",
-        enable=True,
-        finding_publishing_frequency="FIFTEEN_MINUTES",
-        datasources=aws.guardduty.DetectorDatasourcesArgs(
-          s3_logs=aws.guardduty.DetectorDatasourcesS3LogsArgs(enable=True)
-        ),
-        tags=self.tags,
-        opts=ResourceOptions(parent=self, depends_on=[self.sns_topic])
-      )
+  # def _create_guardduty(self):
+  #   try:
+  #     # Try to get an existing detector for this account in the current region
+  #     existing = get_detector()
+  #     self.guardduty_detector = aws.guardduty.Detector.get(
+  #       f"{self.region.replace('-', '')}-guardduty-existing",
+  #       id=existing.id,
+  #       opts=ResourceOptions(parent=self)
+  #     )
+  #   except Exception:
+  #     # If none exists, create a new one
+  #     self.guardduty_detector = aws.guardduty.Detector(
+  #       f"{self.region.replace('-', '')}-guardduty",
+  #       enable=True,
+  #       finding_publishing_frequency="FIFTEEN_MINUTES",
+  #       datasources=aws.guardduty.DetectorDatasourcesArgs(
+  #         s3_logs=aws.guardduty.DetectorDatasourcesS3LogsArgs(enable=True)
+  #       ),
+  #       tags=self.tags,
+  #       opts=ResourceOptions(parent=self, depends_on=[self.sns_topic])
+  #     )
