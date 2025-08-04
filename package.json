@@ -54,6 +54,7 @@
     "@aws-sdk/client-dynamodb": "^3.855.0",
     "@aws-sdk/client-ec2": "^3.848.0",
     "@aws-sdk/client-ecs": "^3.856.0",
+    "@aws-sdk/client-elastic-beanstalk": "^3.848.0",
     "@aws-sdk/client-elasticache": "^3.846.0",
     "@aws-sdk/client-iam": "^3.848.0",
     "@aws-sdk/client-kms": "^3.859.0",
