@@ -343,7 +343,7 @@ def test_tapstack_component_dependencies(mock_provider, mock_identity, mock_netw
   assert 'vpc_id' in data_protection_call_args.kwargs
   assert 'kms_key_arn' in data_protection_call_args.kwargs
   assert 'sns_topic_arn' in data_protection_call_args.kwargs
-  assert 'rds_monitoring_role_arn' in data_protection_call_args.kwargs
+  # assert 'rds_monitoring_role_arn' in data_protection_call_args.kwargs
 
 @patch('lib.tap_stack.DataProtectionInfrastructure')
 @patch('lib.tap_stack.SecurityMonitoringInfrastructure')

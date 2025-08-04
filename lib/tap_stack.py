@@ -86,8 +86,7 @@ class TapStack(pulumi.ComponentResource):
       private_subnet_ids=self.regional_networks[region].private_subnet_ids,
       database_security_group_id=self.regional_networks[region].database_security_group_id,
       kms_key_arn=self.identity_access.kms_key.arn,
-      sns_topic_arn=self.regional_monitoring[region].sns_topic.arn.apply(lambda arn: arn),
-      rds_monitoring_role_arn=self.identity_access.rds_monitoring_role.arn,
+      sns_topic_arn=self.regional_monitoring[region].sns_topic.arn,
       tags=self.tags,
       opts=provider_opts([
         self.regional_networks[region],
@@ -100,9 +99,7 @@ class TapStack(pulumi.ComponentResource):
     self.regional_monitoring[region].setup_security_alarms(
       vpc_id=self.regional_networks[region].vpc_id,
       s3_bucket_names=[self.regional_data_protection[region].secure_s3_bucket.bucket],
-      rds_instance_identifiers=[
-        self.regional_data_protection[region].rds_instance.identifier
-      ] if hasattr(self.regional_data_protection[region], 'rds_instance') else [],
+      rds_instance_identifiers=[],
       opts=provider_opts([
         self.regional_data_protection[region],
         self.regional_monitoring[region]
@@ -127,5 +124,3 @@ class TapStack(pulumi.ComponentResource):
     pulumi.export("public_subnet_ids", self.regional_networks[region].public_subnet_ids)
     pulumi.export("private_subnet_ids", self.regional_networks[region].private_subnet_ids)
     pulumi.export("database_security_group_id", self.regional_networks[region].database_security_group_id)
-    if hasattr(self.regional_data_protection[region], 'rds_instance_endpoint'):
-      pulumi.export("rds_instance_endpoint", self.regional_data_protection[region].rds_instance_endpoint)
