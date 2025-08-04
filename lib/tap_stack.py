@@ -228,7 +228,7 @@ class LambdaInfrastructure:
       self.functions[fn] = aws.lambda_.Function(
           self.config.get_resource_name(f"{fn}-lambda"),
           runtime="python3.9",
-          code=pulumi.AssetArchive({".": pulumi.FileArchive(f"./lib/{fn}")}),
+          code=pulumi.AssetArchive({".": pulumi.FileArchive(f"./lib/lambda/")}),
           handler="lib.lambda.handler.lambda_handler",
           role=self.iam_role.arn,
           environment={"variables": {**env_vars, "FUNCTION_NAME": fn}},

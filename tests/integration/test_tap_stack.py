@@ -17,7 +17,7 @@ class TestTapStackIntegration(unittest.TestCase):
     self.assertEqual(outputs["Region"], "us-west-2")
 
   def test_vpc_resources_created(self):
-    cfg = TapStack("test-stack", environment="dev").config
+    cfg = TapStack("test-stack", args={}).config
     vpc = VPCInfrastructure(cfg)
     vpc.create_vpc()
     self.assertIsNotNone(vpc.vpc)
@@ -25,13 +25,13 @@ class TestTapStackIntegration(unittest.TestCase):
     self.assertTrue(len(vpc.private_subnets) > 0)
 
   def test_iam_role_created(self):
-    cfg = TapStack("test-stack", environment="dev").config
+    cfg = TapStack("test-stack", args={}).config
     iam = IAMInfrastructure(cfg)
     role = iam.create_lambda_role()
     self.assertIsNotNone(role)
 
   def test_dynamodb_tables_created(self):
-    cfg = TapStack("test-stack", environment="dev").config
+    cfg = TapStack("test-stack", args={}).config
     dynamo = DynamoDBInfrastructure(cfg)
     tables = dynamo.create_tables()
     self.assertIn("products", tables)
@@ -39,7 +39,7 @@ class TestTapStackIntegration(unittest.TestCase):
     self.assertIn("users", tables)
 
   def test_lambda_functions_created(self):
-    cfg = TapStack("test-stack", environment="dev").config
+    cfg = TapStack("test-stack", args={}).config
     vpc = VPCInfrastructure(cfg)
     vpc.create_vpc()
     iam = IAMInfrastructure(cfg)
@@ -53,7 +53,7 @@ class TestTapStackIntegration(unittest.TestCase):
     self.assertIn("users", functions)
 
   def test_api_gateway_created(self):
-    cfg = TapStack("test-stack", environment="dev").config
+    cfg = TapStack("test-stack", args={}).config
     lambdas = {"products": object(), "orders": object(), "users": object()}
     api = APIGatewayInfrastructure(cfg, lambdas)
     rest_api = api.create_api_gateway()
