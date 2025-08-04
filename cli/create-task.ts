@@ -90,9 +90,7 @@ function getLanguageChoices(platform: string) {
     ];
   }
   if (platform === 'tf') {
-    return [
-      { name: 'Terraform', value: 'hcl' },
-    ];
+    return [{ name: 'Terraform', value: 'hcl' }];
   }
 
   return [
