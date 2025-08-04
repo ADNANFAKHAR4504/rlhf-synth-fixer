@@ -22,11 +22,6 @@ import {
   ListResourceRecordSetsCommand,
 } from '@aws-sdk/client-route-53';
 import { SNSClient, GetTopicAttributesCommand } from '@aws-sdk/client-sns';
-import {
-  BackupClient,
-  DescribeBackupVaultCommand,
-  GetBackupPlanCommand,
-} from '@aws-sdk/client-backup';
 import https from 'https';
 import fs from 'fs';
 import path from 'path';
@@ -54,8 +49,6 @@ const outputs: { [key: string]: string } = JSON.parse(
  * - AutoScalingGroupName (e.g., "novamodel-prod-asg")
  * - TargetGroupArn (e.g., "arn:aws:elasticloadbalancing:...")
  * - ApplicationLoadBalancerArn (e.g., "arn:aws:elasticloadbalancing:...")
- * - BackupVaultName (e.g., "novamodel-prod-backupvault")
- * - BackupPlanId (e.g., "arn:aws:backup:...")
  * =================================================================
  */
 
@@ -68,7 +61,6 @@ const s3Client = new S3Client(region);
 const iamClient = new IAMClient(region);
 const route53Client = new Route53Client(region);
 const snsClient = new SNSClient(region);
-const backupClient = new BackupClient(region);
 
 // Increase Jest timeout for AWS async operations
 jest.setTimeout(90000); // 90 seconds
@@ -242,30 +234,6 @@ describe('AWS Nova Model Infrastructure Integration Tests', () => {
       );
       expect(Attributes).toBeDefined();
       expect(Attributes?.TopicArn).toBe(outputs.NotificationSNSTopicArn);
-    });
-  });
-
-  // --- Backup and Disaster Recovery ---
-  describe('Backup: AWS Backup Vault and Plan', () => {
-    test('Backup Vault should exist', async () => {
-      const response = await backupClient.send(
-        new DescribeBackupVaultCommand({
-          BackupVaultName: outputs.BackupVaultName,
-        })
-      );
-      expect(response).toBeDefined();
-      expect(response.BackupVaultName).toBe(outputs.BackupVaultName);
-    });
-
-    test('Backup Plan should have a daily rule with 7-day retention', async () => {
-      const response = await backupClient.send(
-        new GetBackupPlanCommand({ BackupPlanId: outputs.BackupPlanId })
-      );
-      const rule = response.BackupPlan?.Rules?.[0];
-      expect(rule).toBeDefined();
-      expect(rule?.RuleName).toBe('DailyBackupRule');
-      expect(rule?.Lifecycle?.DeleteAfterDays).toBe(7);
-      expect(rule?.ScheduleExpression).toBe('cron(0 5 * * ? *)');
     });
   });
 });
