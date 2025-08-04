@@ -235,7 +235,7 @@ Resources:
         - IpProtocol: tcp
           FromPort: 80
           ToPort: 80
-          SourceSecurityGroupId: !Ref WebServerSecurityGroup
+          CidrIp: '10.0.0.0/16'
           Description: 'HTTP to web servers'
       Tags:
         - Key: Name
@@ -250,7 +250,7 @@ Resources:
         - IpProtocol: tcp
           FromPort: 80
           ToPort: 80
-          SourceSecurityGroupId: !Ref ALBSecurityGroup
+          CidrIp: '10.0.0.0/16'
           Description: 'HTTP from ALB'
         - IpProtocol: tcp
           FromPort: 22
