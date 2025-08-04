@@ -313,9 +313,24 @@ The model created a comprehensive test suite for a complex CloudFormation templa
 
 **Primary Lesson**: CloudFormation templates require both structural validation (unit tests) AND deployment validation to ensure they actually work. The model demonstrated strong testing skills but insufficient CloudFormation design expertise.
 
+### 10. **Template-Deployment Script Mismatch**
+
+**Issue**: The CloudFormation template requires parameters (`AllowedSSHCIDR`, `DBUsername`, `DBPassword`) that are not provided by the deployment script.
+
+**Error Message**:
+
+```
+Parameters: [DBPassword] must have values
+```
+
+**Root Cause**: Template parameters don't match what the deployment script provides
+**Impact**: Deployment fails in CI/CD pipeline
+**Resolution**: Template needs to be compatible with existing deployment process
+**Severity**: **HIGH** - Prevents automated deployment
+
 ## Final Deployment Outcome
 
-**Result**: ✅ **SUCCESSFUL DEPLOYMENT** (after extensive fixes)
+**Result**: ✅ **SUCCESSFUL DEPLOYMENT** (after extensive fixes, manual deployment only)
 
 - **Deployment Attempts**: 8 failures → 1 success (11% success rate)
 - **Critical Issues Fixed**: 9 major problems resolved

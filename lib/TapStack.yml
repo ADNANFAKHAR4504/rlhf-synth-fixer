@@ -23,7 +23,8 @@ Parameters:
   DBPassword:
     Type: String
     NoEcho: true
-    Description: 'Master password for RDS PostgreSQL database'
+    Default: 'TempPass123!'
+    Description: 'Master password for RDS PostgreSQL database (default is temporary - change after deployment)'
     MinLength: 8
     MaxLength: 128
     AllowedPattern: '^[a-zA-Z0-9!@#$%^&*()_+=-]*$'
@@ -564,6 +565,7 @@ Resources:
   SecureAppDatabase:
     Type: AWS::RDS::DBInstance
     DeletionPolicy: Snapshot
+    UpdateReplacePolicy: Snapshot
     Properties:
       DBInstanceIdentifier: secureapp-database
       DBInstanceClass: db.t3.micro
@@ -611,7 +613,7 @@ Resources:
             KmsKeyId: !GetAtt SecureAppKMSKey.Arn
             DeleteOnTermination: true
       UserData:
-        Fn::Base64: !Sub |
+        Fn::Base64: |
           #!/bin/bash
           yum update -y
           yum install -y amazon-cloudwatch-agent
@@ -662,7 +664,7 @@ Resources:
             KmsKeyId: !GetAtt SecureAppKMSKey.Arn
             DeleteOnTermination: true
       UserData:
-        Fn::Base64: !Sub |
+        Fn::Base64: |
           #!/bin/bash
           yum update -y
           yum install -y amazon-cloudwatch-agent
