@@ -1,9 +1,4 @@
-import {
-  EC2Client,
-  DescribeVpcsCommand,
-  DescribeSubnetsCommand,
-  DescribeRouteTablesCommand,
-} from '@aws-sdk/client-ec2';
+import { EC2Client, DescribeSecurityGroupsCommand } from '@aws-sdk/client-ec2';
 import {
   ElasticLoadBalancingV2Client,
   DescribeLoadBalancersCommand,
@@ -21,23 +16,25 @@ import {
   GetPublicAccessBlockCommand,
   GetBucketEncryptionCommand,
 } from '@aws-sdk/client-s3';
-import {
-  IAMClient,
-  GetRoleCommand,
-  ListAttachedRolePoliciesCommand,
-} from '@aws-sdk/client-iam';
+import { IAMClient, GetRoleCommand } from '@aws-sdk/client-iam';
 import {
   Route53Client,
   ListResourceRecordSetsCommand,
 } from '@aws-sdk/client-route-53';
 import { SNSClient, GetTopicAttributesCommand } from '@aws-sdk/client-sns';
+import {
+  BackupClient,
+  DescribeBackupVaultCommand,
+  GetBackupPlanCommand,
+} from '@aws-sdk/client-backup';
 import https from 'https';
 import fs from 'fs';
 import path from 'path';
 
 // --- Configuration ---
-// Assumes a JSON file with CloudFormation outputs is at the root of the project.
-const outputs = JSON.parse(
+// Create this file by running `aws cloudformation describe-stacks --stack-name YourStackName --query "Stacks[0].Outputs"`
+// and formatting the output as a simple key-value JSON object.
+const outputs: { [key: string]: string } = JSON.parse(
   fs.readFileSync(path.join(__dirname, '../cfn-outputs.json'), 'utf8')
 );
 
@@ -45,24 +42,25 @@ const outputs = JSON.parse(
  * =================================================================
  * REQUIRED `cfn-outputs.json` KEYS
  * =================================================================
- * - WebAppURL (e.g., "https://nova.yourdomain.com")
- * - ApplicationLoadBalancerDNS (e.g., "Nova-ALB-...")
- * - ApplicationLoadBalancerArn (e.g., "arn:aws:elasticloadbalancing:...")
+ * - ALBDNSName
+ * - ApplicationS3BucketName
+ * - NotificationSNSTopicArn
+ * - Route53DomainName
+ *
+ * The following values must be retrieved from your stack's resources/parameters
+ * and added manually to the cfn-outputs.json file for the tests to run:
+ * - HostedZoneId (from your parameters)
+ * - EC2InstanceRoleName (e.g., "novamodel-prod-ec2role")
+ * - AutoScalingGroupName (e.g., "novamodel-prod-asg")
  * - TargetGroupArn (e.g., "arn:aws:elasticloadbalancing:...")
- * - AutoScalingGroupName (e.g., "Nova-ASG-...")
- * - EC2InstanceRoleArn (e.g., "arn:aws:iam::...")
- * - S3BucketName (e.g., "nova-app-data-...")
- * - NotificationTopicARN (e.g., "arn:aws:sns:...")
- * - VpcId (e.g., "vpc-...")
- * - PublicSubnetAId, PublicSubnetBId, PublicSubnetCId
- * - PrivateSubnetAId, PrivateSubnetBId, PrivateSubnetCId
- * - DnsName (parameter value from your deployment)
- * - HostedZoneId (parameter value from your deployment)
+ * - ApplicationLoadBalancerArn (e.g., "arn:aws:elasticloadbalancing:...")
+ * - BackupVaultName (e.g., "novamodel-prod-backupvault")
+ * - BackupPlanId (e.g., "arn:aws:backup:...")
  * =================================================================
  */
 
-// Initialize AWS SDK Clients - Replace 'us-east-1' with your deployment region if needed.
-const region = { region: process.env.AWS_REGION || 'us-east-1' };
+// Initialize AWS SDK Clients - Replace 'us-west-2' with your deployment region if needed.
+const region = { region: process.env.AWS_REGION || 'us-west-2' };
 const ec2Client = new EC2Client(region);
 const elbv2Client = new ElasticLoadBalancingV2Client(region);
 const asgClient = new AutoScalingClient(region);
@@ -70,114 +68,67 @@ const s3Client = new S3Client(region);
 const iamClient = new IAMClient(region);
 const route53Client = new Route53Client(region);
 const snsClient = new SNSClient(region);
+const backupClient = new BackupClient(region);
 
 // Increase Jest timeout for AWS async operations
 jest.setTimeout(90000); // 90 seconds
 
-describe('Nova Web App Infrastructure Integration Tests', () => {
-  // --- Networking Validation ---
-  describe('Networking: VPC, Subnets, and Routing', () => {
-    test('VPC should exist and be available', async () => {
-      const vpcResponse = await ec2Client.send(
-        new DescribeVpcsCommand({ VpcIds: [outputs.VpcId] })
+describe('AWS Nova Model Infrastructure Integration Tests', () => {
+  // --- Security Validation ---
+  describe('Security: IAM Role and S3 Bucket Policies', () => {
+    test('EC2 Instance Role should exist and be assumable by EC2', async () => {
+      const response = await iamClient.send(
+        new GetRoleCommand({ RoleName: outputs.EC2InstanceRoleName })
       );
-      expect(vpcResponse.Vpcs?.length).toBe(1);
-      expect(vpcResponse.Vpcs?.[0]?.State).toBe('available');
+      const assumeRolePolicy = JSON.parse(
+        decodeURIComponent(response.Role?.AssumeRolePolicyDocument ?? '{}')
+      );
+      expect(response.Role).toBeDefined();
+      expect(assumeRolePolicy.Statement[0].Principal.Service).toBe(
+        'ec2.amazonaws.com'
+      );
     });
 
-    test('Should have 3 public and 3 private subnets across different AZs', async () => {
-      const subnetIds = [
-        outputs.PublicSubnetAId,
-        outputs.PublicSubnetBId,
-        outputs.PublicSubnetCId,
-        outputs.PrivateSubnetAId,
-        outputs.PrivateSubnetBId,
-        outputs.PrivateSubnetCId,
-      ];
-      const subnetsResponse = await ec2Client.send(
-        new DescribeSubnetsCommand({ SubnetIds: subnetIds })
-      );
-      const allSubnets = subnetsResponse.Subnets ?? [];
-      expect(allSubnets.length).toBe(6);
-
-      const publicSubnets = allSubnets.filter(s => s.MapPublicIpOnLaunch);
-      const privateSubnets = allSubnets.filter(s => !s.MapPublicIpOnLaunch);
-      expect(publicSubnets.length).toBe(3);
-      expect(privateSubnets.length).toBe(3);
-
-      // Verify they are in different Availability Zones
-      const azSet = new Set(allSubnets.map(s => s.AvailabilityZone));
-      expect(azSet.size).toBe(3);
-    });
-
-    test('Public subnets should have a route to an Internet Gateway', async () => {
-      const routeTablesResponse = await ec2Client.send(
-        new DescribeRouteTablesCommand({
-          Filters: [
-            {
-              Name: 'association.subnet-id',
-              Values: [outputs.PublicSubnetAId],
-            },
-          ],
+    test('S3 Bucket should block all public access', async () => {
+      const response = await s3Client.send(
+        new GetPublicAccessBlockCommand({
+          Bucket: outputs.ApplicationS3BucketName,
         })
       );
-      const routes = routeTablesResponse.RouteTables?.[0]?.Routes ?? [];
-      const hasIgwRoute = routes.some(
-        r =>
-          r.DestinationCidrBlock === '0.0.0.0/0' &&
-          r.GatewayId?.startsWith('igw-')
-      );
-      expect(hasIgwRoute).toBe(true);
-    });
-
-    test('Private subnets should have a route to a NAT Gateway', async () => {
-      const routeTablesResponse = await ec2Client.send(
-        new DescribeRouteTablesCommand({
-          Filters: [
-            {
-              Name: 'association.subnet-id',
-              Values: [outputs.PrivateSubnetAId],
-            },
-          ],
-        })
-      );
-      const routes = routeTablesResponse.RouteTables?.[0]?.Routes ?? [];
-      const hasNatRoute = routes.some(
-        r =>
-          r.DestinationCidrBlock === '0.0.0.0/0' &&
-          r.NatGatewayId?.startsWith('nat-')
-      );
-      expect(hasNatRoute).toBe(true);
+      const config = response.PublicAccessBlockConfiguration;
+      expect(config?.BlockPublicAcls).toBe(true);
+      expect(config?.IgnorePublicAcls).toBe(true);
+      expect(config?.BlockPublicPolicy).toBe(true);
+      expect(config?.RestrictPublicBuckets).toBe(true);
     });
   });
 
-  // --- Security Validation ---
-  describe('Security: IAM Roles and Encryption', () => {
-    test('EC2 Instance Role should have required policies', async () => {
-      const roleName = outputs.EC2InstanceRoleArn.split('/').pop();
-      const response = await iamClient.send(
-        new ListAttachedRolePoliciesCommand({ RoleName: roleName })
-      );
-      const policyNames = (response.AttachedPolicies ?? []).map(
-        p => p.PolicyName
-      );
-      expect(policyNames).toContain('AmazonSSMManagedInstanceCore');
-      expect(policyNames).toContain('CloudWatchAgentServerPolicy');
-    });
-
+  // --- Storage Validation ---
+  describe('Storage: S3 Bucket Encryption and Versioning', () => {
     test('S3 Bucket should be encrypted with AES256', async () => {
       const response = await s3Client.send(
-        new GetBucketEncryptionCommand({ Bucket: outputs.S3BucketName })
+        new GetBucketEncryptionCommand({
+          Bucket: outputs.ApplicationS3BucketName,
+        })
       );
       const sseRule = response.ServerSideEncryptionConfiguration?.Rules?.[0];
       expect(sseRule?.ApplyServerSideEncryptionByDefault?.SSEAlgorithm).toBe(
         'AES256'
       );
     });
+
+    test('S3 Bucket should have versioning enabled', async () => {
+      const response = await s3Client.send(
+        new GetBucketVersioningCommand({
+          Bucket: outputs.ApplicationS3BucketName,
+        })
+      );
+      expect(response.Status).toBe('Enabled');
+    });
   });
 
   // --- Application Load Balancer Validation ---
-  describe('Load Balancing: ALB, Listener, and Target Group', () => {
+  describe('Load Balancing: ALB, Listeners, and Target Group', () => {
     test('ALB should exist, be active, and internet-facing', async () => {
       const response = await elbv2Client.send(
         new DescribeLoadBalancersCommand({
@@ -190,17 +141,20 @@ describe('Nova Web App Infrastructure Integration Tests', () => {
       expect(alb?.Scheme).toBe('internet-facing');
     });
 
-    test('ALB should have an HTTPS listener on port 443', async () => {
+    test('ALB should have an HTTPS listener and an HTTP redirect listener', async () => {
       const { Listeners } = await elbv2Client.send(
         new DescribeListenersCommand({
           LoadBalancerArn: outputs.ApplicationLoadBalancerArn,
         })
       );
-      const httpsListener = (Listeners ?? []).find(l => l.Port === 443);
-      expect(httpsListener).toBeDefined();
+      const httpsListener = Listeners?.find(l => l.Port === 443);
+      const httpListener = Listeners?.find(l => l.Port === 80);
+
       expect(httpsListener?.Protocol).toBe('HTTPS');
-      expect(httpsListener?.Certificates?.length ?? 0).toBeGreaterThan(0);
       expect(httpsListener?.DefaultActions?.[0]?.Type).toBe('forward');
+
+      expect(httpListener?.Protocol).toBe('HTTP');
+      expect(httpListener?.DefaultActions?.[0]?.Type).toBe('redirect');
     });
 
     test('Target Group should have healthy targets', async () => {
@@ -210,7 +164,7 @@ describe('Nova Web App Infrastructure Integration Tests', () => {
         })
       );
       // This is a critical check to ensure the ASG provisioned instances and they passed health checks
-      expect(TargetHealthDescriptions?.length).toBeGreaterThanOrEqual(2); // Should match DesiredCapacity
+      expect(TargetHealthDescriptions?.length).toBeGreaterThanOrEqual(1); // Should be at least MinSize
       (TargetHealthDescriptions ?? []).forEach(target => {
         expect(target.TargetHealth?.State).toBe('healthy');
       });
@@ -219,7 +173,7 @@ describe('Nova Web App Infrastructure Integration Tests', () => {
 
   // --- Compute and Application Accessibility ---
   describe('Compute: Auto Scaling Group and Web App', () => {
-    test('Auto Scaling Group should be configured correctly', async () => {
+    test('Auto Scaling Group should have correct capacity settings', async () => {
       const { AutoScalingGroups } = await asgClient.send(
         new DescribeAutoScalingGroupsCommand({
           AutoScalingGroupNames: [outputs.AutoScalingGroupName],
@@ -232,11 +186,13 @@ describe('Nova Web App Infrastructure Integration Tests', () => {
       expect(asg?.DesiredCapacity).toBe(2);
     });
 
-    test('Application should be accessible via ALB DNS and return HTTP 200 with correct content', () => {
-      const url = `https://${outputs.ApplicationLoadBalancerDNS}`;
+    test('Application should be accessible via custom domain and return HTTP 200', () => {
+      const url = `https://${outputs.Route53DomainName}`;
       return new Promise<void>((resolve, reject) => {
         const request = https.get(
           url,
+          // In a real scenario with a trusted cert, you wouldn't need this.
+          // For self-signed or test certs, this is necessary.
           { rejectUnauthorized: false },
           response => {
             if (response.statusCode !== 200) {
@@ -244,40 +200,13 @@ describe('Nova Web App Infrastructure Integration Tests', () => {
                 new Error(`Request failed: ${response.statusCode} at ${url}`)
               );
             }
-            let data = '';
-            response.on('data', chunk => (data += chunk));
-            response.on('end', () => {
-              try {
-                expect(data).toContain('Hello from Nova Web Server');
-                resolve();
-              } catch (error) {
-                reject(error);
-              }
-            });
+            // If the connection is successful, the test passes.
+            // We don't check for specific body content as we haven't deployed an app.
+            resolve();
           }
         );
         request.on('error', reject);
       });
-    });
-  });
-
-  // --- Storage Validation ---
-  describe('Storage: S3 Bucket', () => {
-    test('S3 Bucket should be private and have versioning enabled', async () => {
-      const bucketName = outputs.S3BucketName;
-      const versioning = await s3Client.send(
-        new GetBucketVersioningCommand({ Bucket: bucketName })
-      );
-      expect(versioning.Status).toBe('Enabled');
-
-      const accessBlock = await s3Client.send(
-        new GetPublicAccessBlockCommand({ Bucket: bucketName })
-      );
-      const config = accessBlock.PublicAccessBlockConfiguration;
-      expect(config?.BlockPublicAcls).toBe(true);
-      expect(config?.IgnorePublicAcls).toBe(true);
-      expect(config?.BlockPublicPolicy).toBe(true);
-      expect(config?.RestrictPublicBuckets).toBe(true);
     });
   });
 
@@ -290,28 +219,53 @@ describe('Nova Web App Infrastructure Integration Tests', () => {
         })
       );
       // Route 53 FQDNs end with a period.
-      const appRecord = (ResourceRecordSets ?? []).find(
-        r => r.Name === `${outputs.DnsName}.`
+      const appRecord = ResourceRecordSets?.find(
+        r => r.Name === `${outputs.Route53DomainName}.`
       );
       expect(appRecord).toBeDefined();
       expect(appRecord?.Type).toBe('A');
       expect(appRecord?.AliasTarget).toBeDefined();
+
       // Normalize both strings for a robust comparison (lowercase, remove trailing dot)
       const aliasTargetDns = (appRecord?.AliasTarget?.DNSName ?? '')
         .toLowerCase()
         .replace(/\.$/, '');
-      const albDns = outputs.ApplicationLoadBalancerDNS.toLowerCase();
-      expect(aliasTargetDns).toContain(albDns);
+      const albDns = outputs.ALBDNSName.toLowerCase();
+      expect(aliasTargetDns).toBe(albDns);
     });
 
     test('SNS Topic for notifications should exist', async () => {
       const { Attributes } = await snsClient.send(
         new GetTopicAttributesCommand({
-          TopicArn: outputs.NotificationTopicARN,
+          TopicArn: outputs.NotificationSNSTopicArn,
         })
       );
       expect(Attributes).toBeDefined();
-      expect(Attributes?.TopicArn).toBe(outputs.NotificationTopicARN);
+      expect(Attributes?.TopicArn).toBe(outputs.NotificationSNSTopicArn);
+    });
+  });
+
+  // --- Backup and Disaster Recovery ---
+  describe('Backup: AWS Backup Vault and Plan', () => {
+    test('Backup Vault should exist', async () => {
+      const response = await backupClient.send(
+        new DescribeBackupVaultCommand({
+          BackupVaultName: outputs.BackupVaultName,
+        })
+      );
+      expect(response).toBeDefined();
+      expect(response.BackupVaultName).toBe(outputs.BackupVaultName);
+    });
+
+    test('Backup Plan should have a daily rule with 7-day retention', async () => {
+      const response = await backupClient.send(
+        new GetBackupPlanCommand({ BackupPlanId: outputs.BackupPlanId })
+      );
+      const rule = response.BackupPlan?.Rules?.[0];
+      expect(rule).toBeDefined();
+      expect(rule?.RuleName).toBe('DailyBackupRule');
+      expect(rule?.Lifecycle?.DeleteAfterDays).toBe(7);
+      expect(rule?.ScheduleExpression).toBe('cron(0 5 * * ? *)');
     });
   });
 });

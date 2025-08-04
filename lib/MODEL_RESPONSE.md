@@ -1,37 +1,24 @@
 ```yaml
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'High-availability web application infrastructure for Nova - Complete IaC template with VPC, ALB, ASG, Route53, and monitoring'
+Description: 'IaC-AWS-Nova-Model: Production-ready, highly available web application infrastructure with multi-AZ deployment, auto-scaling, and comprehensive monitoring'
 
+# ================================
+# PARAMETERS SECTION
+# ================================
 Parameters:
-  HostedZoneId:
+  # Network Configuration
+  VpcCidr:
     Type: String
-    Description: 'Route 53 Hosted Zone ID for DNS record creation'
-    AllowedPattern: '^Z[A-Z0-9]+$'
-    ConstraintDescription: 'Must be a valid Route 53 Hosted Zone ID'
+    Default: '10.0.0.0/16'
+    Description: 'CIDR block for the VPC'
+    AllowedPattern: '^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/(1[6-9]|2[0-8]))$'
+    ConstraintDescription: 'CIDR block parameter must be in the form x.x.x.x/16-28'
 
-  DomainName:
-    Type: String
-    Description: 'Domain name for the application (e.g., nova.yourdomain.com)'
-    Default: 'nova.example.com'
-    AllowedPattern: '^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
-    ConstraintDescription: 'Must be a valid domain name'
-
-  CertificateArn:
-    Type: String
-    Description: 'ARN of the ACM certificate for SSL/TLS termination'
-    AllowedPattern: '^arn:aws:acm:[a-z0-9-]+:[0-9]{12}:certificate/[a-f0-9-]+$'
-    ConstraintDescription: 'Must be a valid ACM certificate ARN'
-
-  NotificationEmail:
-    Type: String
-    Description: 'Email address for CloudWatch alarms and notifications'
-    AllowedPattern: '^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
-    ConstraintDescription: 'Must be a valid email address'
-
+  # Compute Configuration
   InstanceType:
     Type: String
+    Default: 't3.medium'
     Description: 'EC2 instance type for web servers'
-    Default: 't3.micro'
     AllowedValues:
       - t3.micro
       - t3.small
@@ -41,377 +28,454 @@ Parameters:
       - m5.xlarge
     ConstraintDescription: 'Must be a valid EC2 instance type'
 
+  # Auto Scaling Configuration
   MinSize:
     Type: Number
-    Description: 'Minimum number of instances in Auto Scaling Group'
     Default: 2
     MinValue: 1
     MaxValue: 10
+    Description: 'Minimum number of instances in Auto Scaling Group'
 
   MaxSize:
     Type: Number
-    Description: 'Maximum number of instances in Auto Scaling Group'
     Default: 6
-    MinValue: 2
+    MinValue: 1
     MaxValue: 20
+    Description: 'Maximum number of instances in Auto Scaling Group'
 
   DesiredCapacity:
     Type: Number
-    Description: 'Desired number of instances in Auto Scaling Group'
     Default: 3
     MinValue: 1
-    MaxValue: 15
+    MaxValue: 20
+    Description: 'Desired number of instances in Auto Scaling Group'
 
+  # DNS and SSL Configuration
+  DomainName:
+    Type: String
+    Description: 'Domain name for the application (e.g., app.example.com)'
+    AllowedPattern: '^[a-zA-Z0-9][a-zA-Z0-9-]{1,61}[a-zA-Z0-9]\.[a-zA-Z]{2,}$'
+    ConstraintDescription: 'Must be a valid domain name'
+
+  HostedZoneId:
+    Type: String
+    Description: 'Route 53 Hosted Zone ID for the domain'
+    AllowedPattern: '^Z[A-Z0-9]+$'
+    ConstraintDescription: 'Must be a valid Route 53 Hosted Zone ID'
+
+  CertificateArn:
+    Type: String
+    Description: 'ARN of the ACM SSL certificate for HTTPS'
+    AllowedPattern: '^arn:aws:acm:[a-z0-9-]+:[0-9]{12}:certificate\/[a-f0-9-]+$'
+    ConstraintDescription: 'Must be a valid ACM certificate ARN'
+
+  # Notification Configuration
+  NotificationEmail:
+    Type: String
+    Description: 'Email address for SNS notifications'
+    AllowedPattern: '^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    ConstraintDescription: 'Must be a valid email address'
+
+# ================================
+# MAPPINGS SECTION
+# ================================
 Mappings:
-  AZConfig:
-    us-east-1:
-      AZs: ['us-east-1a', 'us-east-1b', 'us-east-1c']
-    us-west-2:
-      AZs: ['us-west-2a', 'us-west-2b', 'us-west-2c']
-    eu-west-1:
-      AZs: ['eu-west-1a', 'eu-west-1b', 'eu-west-1c']
-    ap-southeast-1:
-      AZs: ['ap-southeast-1a', 'ap-southeast-1b', 'ap-southeast-1c']
+  # Subnet CIDR blocks for three AZ deployment
+  SubnetConfig:
+    VPC:
+      CIDR: '10.0.0.0/16'
+    PublicSubnetAZ1:
+      CIDR: '10.0.1.0/24'
+    PublicSubnetAZ2:
+      CIDR: '10.0.2.0/24'
+    PublicSubnetAZ3:
+      CIDR: '10.0.3.0/24'
+    PrivateSubnetAZ1:
+      CIDR: '10.0.11.0/24'
+    PrivateSubnetAZ2:
+      CIDR: '10.0.12.0/24'
+    PrivateSubnetAZ3:
+      CIDR: '10.0.13.0/24'
 
+# ================================
+# RESOURCES SECTION
+# ================================
 Resources:
-  # VPC and Networking
-  NovaVPC:
+  # ================================
+  # NETWORKING RESOURCES
+  # ================================
+
+  # VPC - Virtual Private Cloud
+  IaCNovaModelVPC:
     Type: AWS::EC2::VPC
     Properties:
-      CidrBlock: 10.0.0.0/16
+      CidrBlock: !Ref VpcCidr
       EnableDnsHostnames: true
       EnableDnsSupport: true
       Tags:
         - Key: Name
-          Value: Nova-VPC
-        - Key: Application
-          Value: Nova
+          Value: IaC-AWS-Nova-Model-VPC
+        - Key: Project
+          Value: IaC-AWS-Nova-Model
+        - Key: Environment
+          Value: Production
 
-  NovaInternetGateway:
+  # Internet Gateway
+  IaCNovaModelIGW:
     Type: AWS::EC2::InternetGateway
     Properties:
       Tags:
         - Key: Name
-          Value: Nova-IGW
-        - Key: Application
-          Value: Nova
+          Value: IaC-AWS-Nova-Model-IGW
+        - Key: Project
+          Value: IaC-AWS-Nova-Model
 
-  NovaVPCGatewayAttachment:
+  # Attach Internet Gateway to VPC
+  IaCNovaModelIGWAttachment:
     Type: AWS::EC2::VPCGatewayAttachment
     Properties:
-      VpcId: !Ref NovaVPC
-      InternetGatewayId: !Ref NovaInternetGateway
+      VpcId: !Ref IaCNovaModelVPC
+      InternetGatewayId: !Ref IaCNovaModelIGW
 
-  # Public Subnets
-  NovaPublicSubnet1:
+  # Public Subnets (3 AZs)
+  IaCNovaModelPublicSubnetAZ1:
     Type: AWS::EC2::Subnet
     Properties:
-      VpcId: !Ref NovaVPC
-      CidrBlock: 10.0.1.0/24
-      AvailabilityZone: !Select [0, !FindInMap [AZConfig, !Ref 'AWS::Region', AZs]]
+      VpcId: !Ref IaCNovaModelVPC
+      CidrBlock: !FindInMap [SubnetConfig, PublicSubnetAZ1, CIDR]
+      AvailabilityZone: !Select [0, !GetAZs '']
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: Nova-Public-Subnet-1
-        - Key: Application
-          Value: Nova
+          Value: IaC-AWS-Nova-Model-Public-Subnet-AZ1
+        - Key: Project
+          Value: IaC-AWS-Nova-Model
+        - Key: Type
+          Value: Public
 
-  NovaPublicSubnet2:
+  IaCNovaModelPublicSubnetAZ2:
     Type: AWS::EC2::Subnet
     Properties:
-      VpcId: !Ref NovaVPC
-      CidrBlock: 10.0.2.0/24
-      AvailabilityZone: !Select [1, !FindInMap [AZConfig, !Ref 'AWS::Region', AZs]]
+      VpcId: !Ref IaCNovaModelVPC
+      CidrBlock: !FindInMap [SubnetConfig, PublicSubnetAZ2, CIDR]
+      AvailabilityZone: !Select [1, !GetAZs '']
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: Nova-Public-Subnet-2
-        - Key: Application
-          Value: Nova
+          Value: IaC-AWS-Nova-Model-Public-Subnet-AZ2
+        - Key: Project
+          Value: IaC-AWS-Nova-Model
+        - Key: Type
+          Value: Public
 
-  NovaPublicSubnet3:
+  IaCNovaModelPublicSubnetAZ3:
     Type: AWS::EC2::Subnet
     Properties:
-      VpcId: !Ref NovaVPC
-      CidrBlock: 10.0.3.0/24
-      AvailabilityZone: !Select [2, !FindInMap [AZConfig, !Ref 'AWS::Region', AZs]]
+      VpcId: !Ref IaCNovaModelVPC
+      CidrBlock: !FindInMap [SubnetConfig, PublicSubnetAZ3, CIDR]
+      AvailabilityZone: !Select [2, !GetAZs '']
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: Nova-Public-Subnet-3
-        - Key: Application
-          Value: Nova
+          Value: IaC-AWS-Nova-Model-Public-Subnet-AZ3
+        - Key: Project
+          Value: IaC-AWS-Nova-Model
+        - Key: Type
+          Value: Public
 
-  # Private Subnets
-  NovaPrivateSubnet1:
+  # Private Subnets (3 AZs)
+  IaCNovaModelPrivateSubnetAZ1:
     Type: AWS::EC2::Subnet
     Properties:
-      VpcId: !Ref NovaVPC
-      CidrBlock: 10.0.11.0/24
-      AvailabilityZone: !Select [0, !FindInMap [AZConfig, !Ref 'AWS::Region', AZs]]
+      VpcId: !Ref IaCNovaModelVPC
+      CidrBlock: !FindInMap [SubnetConfig, PrivateSubnetAZ1, CIDR]
+      AvailabilityZone: !Select [0, !GetAZs '']
       Tags:
         - Key: Name
-          Value: Nova-Private-Subnet-1
-        - Key: Application
-          Value: Nova
+          Value: IaC-AWS-Nova-Model-Private-Subnet-AZ1
+        - Key: Project
+          Value: IaC-AWS-Nova-Model
+        - Key: Type
+          Value: Private
+        - Key: BackupTarget
+          Value: 'true'
 
-  NovaPrivateSubnet2:
+  IaCNovaModelPrivateSubnetAZ2:
     Type: AWS::EC2::Subnet
     Properties:
-      VpcId: !Ref NovaVPC
-      CidrBlock: 10.0.12.0/24
-      AvailabilityZone: !Select [1, !FindInMap [AZConfig, !Ref 'AWS::Region', AZs]]
+      VpcId: !Ref IaCNovaModelVPC
+      CidrBlock: !FindInMap [SubnetConfig, PrivateSubnetAZ2, CIDR]
+      AvailabilityZone: !Select [1, !GetAZs '']
       Tags:
         - Key: Name
-          Value: Nova-Private-Subnet-2
-        - Key: Application
-          Value: Nova
+          Value: IaC-AWS-Nova-Model-Private-Subnet-AZ2
+        - Key: Project
+          Value: IaC-AWS-Nova-Model
+        - Key: Type
+          Value: Private
+        - Key: BackupTarget
+          Value: 'true'
 
-  NovaPrivateSubnet3:
+  IaCNovaModelPrivateSubnetAZ3:
     Type: AWS::EC2::Subnet
     Properties:
-      VpcId: !Ref NovaVPC
-      CidrBlock: 10.0.13.0/24
-      AvailabilityZone: !Select [2, !FindInMap [AZConfig, !Ref 'AWS::Region', AZs]]
+      VpcId: !Ref IaCNovaModelVPC
+      CidrBlock: !FindInMap [SubnetConfig, PrivateSubnetAZ3, CIDR]
+      AvailabilityZone: !Select [2, !GetAZs '']
       Tags:
         - Key: Name
-          Value: Nova-Private-Subnet-3
-        - Key: Application
-          Value: Nova
+          Value: IaC-AWS-Nova-Model-Private-Subnet-AZ3
+        - Key: Project
+          Value: IaC-AWS-Nova-Model
+        - Key: Type
+          Value: Private
+        - Key: BackupTarget
+          Value: 'true'
 
-  # NAT Gateways
-  NovaNATGateway1EIP:
+  # NAT Gateways for Private Subnets (3 AZs for high availability)
+  IaCNovaModelNATGatewayEIP1:
     Type: AWS::EC2::EIP
-    DependsOn: NovaVPCGatewayAttachment
+    DependsOn: IaCNovaModelIGWAttachment
     Properties:
       Domain: vpc
       Tags:
         - Key: Name
-          Value: Nova-NAT-EIP-1
-        - Key: Application
-          Value: Nova
+          Value: IaC-AWS-Nova-Model-NAT-EIP-AZ1
+        - Key: Project
+          Value: IaC-AWS-Nova-Model
 
-  NovaNATGateway2EIP:
+  IaCNovaModelNATGatewayEIP2:
     Type: AWS::EC2::EIP
-    DependsOn: NovaVPCGatewayAttachment
+    DependsOn: IaCNovaModelIGWAttachment
     Properties:
       Domain: vpc
       Tags:
         - Key: Name
-          Value: Nova-NAT-EIP-2
-        - Key: Application
-          Value: Nova
+          Value: IaC-AWS-Nova-Model-NAT-EIP-AZ2
+        - Key: Project
+          Value: IaC-AWS-Nova-Model
 
-  NovaNATGateway3EIP:
+  IaCNovaModelNATGatewayEIP3:
     Type: AWS::EC2::EIP
-    DependsOn: NovaVPCGatewayAttachment
+    DependsOn: IaCNovaModelIGWAttachment
     Properties:
       Domain: vpc
       Tags:
         - Key: Name
-          Value: Nova-NAT-EIP-3
-        - Key: Application
-          Value: Nova
+          Value: IaC-AWS-Nova-Model-NAT-EIP-AZ3
+        - Key: Project
+          Value: IaC-AWS-Nova-Model
 
-  NovaNATGateway1:
+  IaCNovaModelNATGatewayAZ1:
     Type: AWS::EC2::NatGateway
     Properties:
-      AllocationId: !GetAtt NovaNATGateway1EIP.AllocationId
-      SubnetId: !Ref NovaPublicSubnet1
+      AllocationId: !GetAtt IaCNovaModelNATGatewayEIP1.AllocationId
+      SubnetId: !Ref IaCNovaModelPublicSubnetAZ1
       Tags:
         - Key: Name
-          Value: Nova-NAT-Gateway-1
-        - Key: Application
-          Value: Nova
+          Value: IaC-AWS-Nova-Model-NAT-Gateway-AZ1
+        - Key: Project
+          Value: IaC-AWS-Nova-Model
 
-  NovaNATGateway2:
+  IaCNovaModelNATGatewayAZ2:
     Type: AWS::EC2::NatGateway
     Properties:
-      AllocationId: !GetAtt NovaNATGateway2EIP.AllocationId
-      SubnetId: !Ref NovaPublicSubnet2
+      AllocationId: !GetAtt IaCNovaModelNATGatewayEIP2.AllocationId
+      SubnetId: !Ref IaCNovaModelPublicSubnetAZ2
       Tags:
         - Key: Name
-          Value: Nova-NAT-Gateway-2
-        - Key: Application
-          Value: Nova
+          Value: IaC-AWS-Nova-Model-NAT-Gateway-AZ2
+        - Key: Project
+          Value: IaC-AWS-Nova-Model
 
-  NovaNATGateway3:
+  IaCNovaModelNATGatewayAZ3:
     Type: AWS::EC2::NatGateway
     Properties:
-      AllocationId: !GetAtt NovaNATGateway3EIP.AllocationId
-      SubnetId: !Ref NovaPublicSubnet3
+      AllocationId: !GetAtt IaCNovaModelNATGatewayEIP3.AllocationId
+      SubnetId: !Ref IaCNovaModelPublicSubnetAZ3
       Tags:
         - Key: Name
-          Value: Nova-NAT-Gateway-3
-        - Key: Application
-          Value: Nova
+          Value: IaC-AWS-Nova-Model-NAT-Gateway-AZ3
+        - Key: Project
+          Value: IaC-AWS-Nova-Model
 
   # Route Tables
-  NovaPublicRouteTable:
+  IaCNovaModelPublicRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
-      VpcId: !Ref NovaVPC
+      VpcId: !Ref IaCNovaModelVPC
       Tags:
         - Key: Name
-          Value: Nova-Public-Route-Table
-        - Key: Application
-          Value: Nova
+          Value: IaC-AWS-Nova-Model-Public-Route-Table
+        - Key: Project
+          Value: IaC-AWS-Nova-Model
 
-  NovaPublicRoute:
-    Type: AWS::EC2::Route
-    DependsOn: NovaVPCGatewayAttachment
-    Properties:
-      RouteTableId: !Ref NovaPublicRouteTable
-      DestinationCidrBlock: 0.0.0.0/0
-      GatewayId: !Ref NovaInternetGateway
-
-  NovaPublicSubnet1RouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      SubnetId: !Ref NovaPublicSubnet1
-      RouteTableId: !Ref NovaPublicRouteTable
-
-  NovaPublicSubnet2RouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      SubnetId: !Ref NovaPublicSubnet2
-      RouteTableId: !Ref NovaPublicRouteTable
-
-  NovaPublicSubnet3RouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      SubnetId: !Ref NovaPublicSubnet3
-      RouteTableId: !Ref NovaPublicRouteTable
-
-  NovaPrivateRouteTable1:
+  IaCNovaModelPrivateRouteTableAZ1:
     Type: AWS::EC2::RouteTable
     Properties:
-      VpcId: !Ref NovaVPC
+      VpcId: !Ref IaCNovaModelVPC
       Tags:
         - Key: Name
-          Value: Nova-Private-Route-Table-1
-        - Key: Application
-          Value: Nova
+          Value: IaC-AWS-Nova-Model-Private-Route-Table-AZ1
+        - Key: Project
+          Value: IaC-AWS-Nova-Model
 
-  NovaPrivateRoute1:
-    Type: AWS::EC2::Route
-    Properties:
-      RouteTableId: !Ref NovaPrivateRouteTable1
-      DestinationCidrBlock: 0.0.0.0/0
-      NatGatewayId: !Ref NovaNATGateway1
-
-  NovaPrivateSubnet1RouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      SubnetId: !Ref NovaPrivateSubnet1
-      RouteTableId: !Ref NovaPrivateRouteTable1
-
-  NovaPrivateRouteTable2:
+  IaCNovaModelPrivateRouteTableAZ2:
     Type: AWS::EC2::RouteTable
     Properties:
-      VpcId: !Ref NovaVPC
+      VpcId: !Ref IaCNovaModelVPC
       Tags:
         - Key: Name
-          Value: Nova-Private-Route-Table-2
-        - Key: Application
-          Value: Nova
+          Value: IaC-AWS-Nova-Model-Private-Route-Table-AZ2
+        - Key: Project
+          Value: IaC-AWS-Nova-Model
 
-  NovaPrivateRoute2:
-    Type: AWS::EC2::Route
-    Properties:
-      RouteTableId: !Ref NovaPrivateRouteTable2
-      DestinationCidrBlock: 0.0.0.0/0
-      NatGatewayId: !Ref NovaNATGateway2
-
-  NovaPrivateSubnet2RouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      SubnetId: !Ref NovaPrivateSubnet2
-      RouteTableId: !Ref NovaPrivateRouteTable2
-
-  NovaPrivateRouteTable3:
+  IaCNovaModelPrivateRouteTableAZ3:
     Type: AWS::EC2::RouteTable
     Properties:
-      VpcId: !Ref NovaVPC
+      VpcId: !Ref IaCNovaModelVPC
       Tags:
         - Key: Name
-          Value: Nova-Private-Route-Table-3
-        - Key: Application
-          Value: Nova
+          Value: IaC-AWS-Nova-Model-Private-Route-Table-AZ3
+        - Key: Project
+          Value: IaC-AWS-Nova-Model
 
-  NovaPrivateRoute3:
+  # Routes
+  IaCNovaModelPublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: IaCNovaModelIGWAttachment
+    Properties:
+      RouteTableId: !Ref IaCNovaModelPublicRouteTable
+      DestinationCidrBlock: '0.0.0.0/0'
+      GatewayId: !Ref IaCNovaModelIGW
+
+  IaCNovaModelPrivateRouteAZ1:
     Type: AWS::EC2::Route
     Properties:
-      RouteTableId: !Ref NovaPrivateRouteTable3
-      DestinationCidrBlock: 0.0.0.0/0
-      NatGatewayId: !Ref NovaNATGateway3
+      RouteTableId: !Ref IaCNovaModelPrivateRouteTableAZ1
+      DestinationCidrBlock: '0.0.0.0/0'
+      NatGatewayId: !Ref IaCNovaModelNATGatewayAZ1
 
-  NovaPrivateSubnet3RouteTableAssociation:
+  IaCNovaModelPrivateRouteAZ2:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref IaCNovaModelPrivateRouteTableAZ2
+      DestinationCidrBlock: '0.0.0.0/0'
+      NatGatewayId: !Ref IaCNovaModelNATGatewayAZ2
+
+  IaCNovaModelPrivateRouteAZ3:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref IaCNovaModelPrivateRouteTableAZ3
+      DestinationCidrBlock: '0.0.0.0/0'
+      NatGatewayId: !Ref IaCNovaModelNATGatewayAZ3
+
+  # Subnet Route Table Associations
+  IaCNovaModelPublicSubnetRouteTableAssociationAZ1:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
-      SubnetId: !Ref NovaPrivateSubnet3
-      RouteTableId: !Ref NovaPrivateRouteTable3
+      SubnetId: !Ref IaCNovaModelPublicSubnetAZ1
+      RouteTableId: !Ref IaCNovaModelPublicRouteTable
 
-  # Security Groups
-  NovaALBSecurityGroup:
+  IaCNovaModelPublicSubnetRouteTableAssociationAZ2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref IaCNovaModelPublicSubnetAZ2
+      RouteTableId: !Ref IaCNovaModelPublicRouteTable
+
+  IaCNovaModelPublicSubnetRouteTableAssociationAZ3:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref IaCNovaModelPublicSubnetAZ3
+      RouteTableId: !Ref IaCNovaModelPublicRouteTable
+
+  IaCNovaModelPrivateSubnetRouteTableAssociationAZ1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref IaCNovaModelPrivateSubnetAZ1
+      RouteTableId: !Ref IaCNovaModelPrivateRouteTableAZ1
+
+  IaCNovaModelPrivateSubnetRouteTableAssociationAZ2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref IaCNovaModelPrivateSubnetAZ2
+      RouteTableId: !Ref IaCNovaModelPrivateRouteTableAZ2
+
+  IaCNovaModelPrivateSubnetRouteTableAssociationAZ3:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref IaCNovaModelPrivateSubnetAZ3
+      RouteTableId: !Ref IaCNovaModelPrivateRouteTableAZ3
+
+  # ================================
+  # SECURITY GROUPS
+  # ================================
+
+  # ALB Security Group - Allows HTTP/HTTPS from internet
+  IaCNovaModelALBSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: Nova-ALB-SecurityGroup
-      GroupDescription: 'Security group for Nova Application Load Balancer - allows HTTPS traffic from internet'
-      VpcId: !Ref NovaVPC
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 443
-          ToPort: 443
-          CidrIp: 0.0.0.0/0
-          Description: 'Allow HTTPS traffic from internet'
-        - IpProtocol: tcp
-          FromPort: 80
-          ToPort: 80
-          CidrIp: 0.0.0.0/0
-          Description: 'Allow HTTP traffic for redirect to HTTPS'
-      SecurityGroupEgress:
-        - IpProtocol: -1
-          CidrIp: 0.0.0.0/0
-          Description: 'Allow all outbound traffic'
-      Tags:
-        - Key: Name
-          Value: Nova-ALB-SecurityGroup
-        - Key: Application
-          Value: Nova
-
-  NovaEC2SecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupName: Nova-EC2-SecurityGroup
-      GroupDescription: 'Security group for Nova EC2 instances - allows traffic from ALB only'
-      VpcId: !Ref NovaVPC
+      GroupName: IaC-AWS-Nova-Model-ALB-SG
+      GroupDescription: 'Security group for Application Load Balancer - allows HTTP/HTTPS from internet'
+      VpcId: !Ref IaCNovaModelVPC
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 80
           ToPort: 80
-          SourceSecurityGroupId: !Ref NovaALBSecurityGroup
-          Description: 'Allow HTTP traffic from ALB'
+          CidrIp: '0.0.0.0/0'
+          Description: 'Allow HTTP from internet'
         - IpProtocol: tcp
           FromPort: 443
           ToPort: 443
-          SourceSecurityGroupId: !Ref NovaALBSecurityGroup
-          Description: 'Allow HTTPS traffic from ALB'
+          CidrIp: '0.0.0.0/0'
+          Description: 'Allow HTTPS from internet'
       SecurityGroupEgress:
         - IpProtocol: -1
-          CidrIp: 0.0.0.0/0
+          CidrIp: '0.0.0.0/0'
           Description: 'Allow all outbound traffic'
       Tags:
         - Key: Name
-          Value: Nova-EC2-SecurityGroup
-        - Key: Application
-          Value: Nova
+          Value: IaC-AWS-Nova-Model-ALB-SG
+        - Key: Project
+          Value: IaC-AWS-Nova-Model
 
-  # IAM Roles and Policies
-  NovaEC2Role:
+  # EC2 Security Group - Allows traffic only from ALB
+  IaCNovaModelEC2SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: IaC-AWS-Nova-Model-EC2-SG
+      GroupDescription: 'Security group for EC2 instances - allows traffic only from ALB'
+      VpcId: !Ref IaCNovaModelVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          SourceSecurityGroupId: !Ref IaCNovaModelALBSecurityGroup
+          Description: 'Allow HTTP from ALB'
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          SourceSecurityGroupId: !Ref IaCNovaModelALBSecurityGroup
+          Description: 'Allow HTTPS from ALB'
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: '0.0.0.0/0'
+          Description: 'Allow all outbound traffic'
+      Tags:
+        - Key: Name
+          Value: IaC-AWS-Nova-Model-EC2-SG
+        - Key: Project
+          Value: IaC-AWS-Nova-Model
+
+  # ================================
+  # IAM ROLES AND POLICIES
+  # ================================
+
+  # IAM Role for EC2 instances
+  IaCNovaModelEC2Role:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub 'Nova-EC2-Role-${AWS::Region}'
+      RoleName: IaC-AWS-Nova-Model-EC2-Role
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -421,51 +485,64 @@ Resources:
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
-        - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
       Policies:
-        - PolicyName: NovaS3Access
+        - PolicyName: IaC-AWS-Nova-Model-EC2-Policy
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
+              # CloudWatch permissions
               - Effect: Allow
                 Action:
-                  - s3:GetObject
-                  - s3:PutObject
-                  - s3:DeleteObject
-                Resource: !Sub '${NovaS3Bucket}/*'
-              - Effect: Allow
-                Action:
-                  - s3:ListBucket
-                Resource: !Ref NovaS3Bucket
-        - PolicyName: NovaCloudWatchLogs
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
+                  - cloudwatch:PutMetricData
+                  - cloudwatch:GetMetricStatistics
+                  - cloudwatch:ListMetrics
+                Resource: '*'
+              # CloudWatch Logs permissions
               - Effect: Allow
                 Action:
                   - logs:CreateLogGroup
                   - logs:CreateLogStream
                   - logs:PutLogEvents
                   - logs:DescribeLogStreams
-                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/nova/*'
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/ec2/IaC-AWS-Nova-Model*'
+              # S3 permissions for application bucket
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:GetObjectVersion
+                Resource: !Sub '${IaCNovaModelS3Bucket}/*'
+              - Effect: Allow
+                Action:
+                  - s3:ListBucket
+                Resource: !Ref IaCNovaModelS3Bucket
       Tags:
         - Key: Name
-          Value: Nova-EC2-Role
-        - Key: Application
-          Value: Nova
+          Value: IaC-AWS-Nova-Model-EC2-Role
+        - Key: Project
+          Value: IaC-AWS-Nova-Model
 
-  NovaEC2InstanceProfile:
+  # Instance Profile for EC2 Role
+  IaCNovaModelEC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
-      InstanceProfileName: !Sub 'Nova-EC2-InstanceProfile-${AWS::Region}'
+      InstanceProfileName: IaC-AWS-Nova-Model-EC2-Instance-Profile
       Roles:
-        - !Ref NovaEC2Role
+        - !Ref IaCNovaModelEC2Role
 
-  # S3 Bucket for persistent storage
-  NovaS3Bucket:
+  # ================================
+  # STORAGE RESOURCES
+  # ================================
+
+  # S3 Bucket for application assets
+  IaCNovaModelS3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 'nova-app-storage-${AWS::AccountId}-${AWS::Region}'
+      BucketName: !Sub 'iac-aws-nova-model-assets-${AWS::AccountId}-${AWS::Region}'
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -474,193 +551,172 @@ Resources:
         Status: Enabled
       LifecycleConfiguration:
         Rules:
-          - Id: NovaLifecycleRule
+          - Id: DeleteIncompleteMultipartUploads
             Status: Enabled
-            Transitions:
-              - TransitionInDays: 30
-                StorageClass: STANDARD_IA
-              - TransitionInDays: 90
-                StorageClass: GLACIER
-            NoncurrentVersionTransitions:
-              - TransitionInDays: 30
-                StorageClass: STANDARD_IA
-              - TransitionInDays: 90
-                StorageClass: GLACIER
-            NoncurrentVersionExpirationInDays: 365
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 7
       Tags:
         - Key: Name
-          Value: Nova-Storage-Bucket
-        - Key: Application
-          Value: Nova
+          Value: IaC-AWS-Nova-Model-S3-Bucket
+        - Key: Project
+          Value: IaC-AWS-Nova-Model
 
-  # Launch Template
-  NovaLaunchTemplate:
-    Type: AWS::EC2::LaunchTemplate
+  # ================================
+  # BACKUP RESOURCES
+  # ================================
+
+  # Backup Vault
+  IaCNovaModelBackupVault:
+    Type: AWS::Backup::BackupVault
     Properties:
-      LaunchTemplateName: Nova-LaunchTemplate
-      LaunchTemplateData:
-        ImageId: !Sub '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}'
-        InstanceType: !Ref InstanceType
-        IamInstanceProfile:
-          Arn: !GetAtt NovaEC2InstanceProfile.Arn
-        SecurityGroupIds:
-          - !Ref NovaEC2SecurityGroup
-        Monitoring:
-          Enabled: true
-        UserData:
-          Fn::Base64: !Sub |
-            #!/bin/bash
-            yum update -y
-            yum install -y httpd
-            systemctl start httpd
-            systemctl enable httpd
+      BackupVaultName: IaC-AWS-Nova-Model-Backup-Vault
+      EncryptionKeyArn: alias/aws/backup
+      BackupVaultTags:
+        Name: IaC-AWS-Nova-Model-Backup-Vault
+        Project: IaC-AWS-Nova-Model
 
-            # Install CloudWatch agent
-            yum install -y amazon-cloudwatch-agent
+  # Backup Service Role
+  IaCNovaModelBackupRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: IaC-AWS-Nova-Model-Backup-Role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: backup.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForBackup
+        - arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForRestores
+      Tags:
+        - Key: Name
+          Value: IaC-AWS-Nova-Model-Backup-Role
+        - Key: Project
+          Value: IaC-AWS-Nova-Model
 
-            # Create a simple web page
-            cat > /var/www/html/index.html << 'EOF'
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <title>Nova Application</title>
-                <style>
-                    body { font-family: Arial, sans-serif; margin: 40px; background-color: #f0f0f0; }
-                    .container { background-color: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-                    h1 { color: #333; }
-                    .info { background-color: #e7f3ff; padding: 15px; border-radius: 5px; margin: 20px 0; }
-                </style>
-            </head>
-            <body>
-                <div class="container">
-                    <h1>🚀 Nova Application</h1>
-                    <div class="info">
-                        <p><strong>Status:</strong> Running</p>
-                        <p><strong>Instance ID:</strong> $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p>
-                        <p><strong>Availability Zone:</strong> $(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)</p>
-                        <p><strong>Instance Type:</strong> $(curl -s http://169.254.169.254/latest/meta-data/instance-type)</p>
-                    </div>
-                    <p>Welcome to the Nova high-availability web application!</p>
-                </div>
-            </body>
-            </html>
-            EOF
+  # Backup Plan
+  IaCNovaModelBackupPlan:
+    Type: AWS::Backup::BackupPlan
+    Properties:
+      BackupPlan:
+        BackupPlanName: IaC-AWS-Nova-Model-Backup-Plan
+        BackupPlanRule:
+          - RuleName: DailyBackupRule
+            TargetBackupVault: !Ref IaCNovaModelBackupVault
+            ScheduleExpression: 'cron(0 2 ? * * *)'  # Daily at 2 AM UTC
+            StartWindowMinutes: 60
+            CompletionWindowMinutes: 120
+            Lifecycle:
+              DeleteAfterDays: 7
+            RecoveryPointTags:
+              Name: IaC-AWS-Nova-Model-Daily-Backup
+              Project: IaC-AWS-Nova-Model
+      BackupPlanTags:
+        Name: IaC-AWS-Nova-Model-Backup-Plan
+        Project: IaC-AWS-Nova-Model
 
-            # Create health check endpoint
-            cat > /var/www/html/health << 'EOF'
-            OK
-            EOF
+  # Backup Selection
+  IaCNovaModelBackupSelection:
+    Type: AWS::Backup::BackupSelection
+    Properties:
+      BackupPlanId: !Ref IaCNovaModelBackupPlan
+      BackupSelection:
+        SelectionName: IaC-AWS-Nova-Model-Backup-Selection
+        IamRoleArn: !GetAtt IaCNovaModelBackupRole.Arn
+        Resources:
+          - '*'
+        Conditions:
+          StringEquals:
+            'aws:ResourceTag/BackupTarget':
+              - 'true'
 
-            # Configure CloudWatch agent
-            cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << 'EOF'
-            {
-                "metrics": {
-                    "namespace": "Nova/Application",
-                    "metrics_collected": {
-                        "cpu": {
-                            "measurement": ["cpu_usage_idle", "cpu_usage_iowait", "cpu_usage_user", "cpu_usage_system"],
-                            "metrics_collection_interval": 60
-                        },
-                        "disk": {
-                            "measurement": ["used_percent"],
-                            "metrics_collection_interval": 60,
-                            "resources": ["*"]
-                        },
-                        "mem": {
-                            "measurement": ["mem_used_percent"],
-                            "metrics_collection_interval": 60
-                        }
-                    }
-                },
-                "logs": {
-                    "logs_collected": {
-                        "files": {
-                            "collect_list": [
-                                {
-                                    "file_path": "/var/log/httpd/access_log",
-                                    "log_group_name": "/nova/httpd/access",
-                                    "log_stream_name": "{instance_id}"
-                                },
-                                {
-                                    "file_path": "/var/log/httpd/error_log",
-                                    "log_group_name": "/nova/httpd/error",
-                                    "log_stream_name": "{instance_id}"
-                                }
-                            ]
-                        }
-                    }
-                }
-            }
-            EOF
+  # ================================
+  # NOTIFICATION RESOURCES
+  # ================================
 
-            /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s
-        TagSpecifications:
-          - ResourceType: instance
-            Tags:
-              - Key: Name
-                Value: Nova-WebServer
-              - Key: Application
-                Value: Nova
+  # SNS Topic for notifications
+  IaCNovaModelSNSTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: IaC-AWS-Nova-Model-Notifications
+      DisplayName: 'IaC AWS Nova Model Notifications'
+      Tags:
+        - Key: Name
+          Value: IaC-AWS-Nova-Model-SNS-Topic
+        - Key: Project
+          Value: IaC-AWS-Nova-Model
+
+  # SNS Subscription
+  IaCNovaModelSNSSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      Protocol: email
+      TopicArn: !Ref IaCNovaModelSNSTopic
+      Endpoint: !Ref NotificationEmail
+
+  # ================================
+  # LOAD BALANCER RESOURCES
+  # ================================
 
   # Application Load Balancer
-  NovaApplicationLoadBalancer:
+  IaCNovaModelALB:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
-      Name: Nova-ALB
-      Scheme: internet-facing
+      Name: IaC-AWS-Nova-Model-ALB
       Type: application
+      Scheme: internet-facing
+      IpAddressType: ipv4
       SecurityGroups:
-        - !Ref NovaALBSecurityGroup
+        - !Ref IaCNovaModelALBSecurityGroup
       Subnets:
-        - !Ref NovaPublicSubnet1
-        - !Ref NovaPublicSubnet2
-        - !Ref NovaPublicSubnet3
+        - !Ref IaCNovaModelPublicSubnetAZ1
+        - !Ref IaCNovaModelPublicSubnetAZ2
+        - !Ref IaCNovaModelPublicSubnetAZ3
       Tags:
         - Key: Name
-          Value: Nova-ALB
-        - Key: Application
-          Value: Nova
+          Value: IaC-AWS-Nova-Model-ALB
+        - Key: Project
+          Value: IaC-AWS-Nova-Model
 
-  NovaTargetGroup:
+  # Target Group for ALB
+  IaCNovaModelTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      Name: Nova-TargetGroup
-      Protocol: HTTP
+      Name: IaC-AWS-Nova-Model-TG
       Port: 80
-      VpcId: !Ref NovaVPC
+      Protocol: HTTP
+      VpcId: !Ref IaCNovaModelVPC
       HealthCheckEnabled: true
-      HealthCheckPath: /health
-      HealthCheckProtocol: HTTP
       HealthCheckIntervalSeconds: 30
+      HealthCheckPath: /
+      HealthCheckProtocol: HTTP
       HealthCheckTimeoutSeconds: 5
       HealthyThresholdCount: 2
       UnhealthyThresholdCount: 3
       TargetType: instance
       Tags:
         - Key: Name
-          Value: Nova-TargetGroup
-        - Key: Application
-          Value: Nova
+          Value: IaC-AWS-Nova-Model-Target-Group
+        - Key: Project
+          Value: IaC-AWS-Nova-Model
 
-  NovaHTTPSListener:
+  # HTTPS Listener for ALB
+  IaCNovaModelALBHTTPSListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
       DefaultActions:
         - Type: forward
-          TargetGroupArn: !Ref NovaTargetGroup
-      LoadBalancerArn: !Ref NovaApplicationLoadBalancer
+          TargetGroupArn: !Ref IaCNovaModelTargetGroup
+      LoadBalancerArn: !Ref IaCNovaModelALB
       Port: 443
       Protocol: HTTPS
       Certificates:
         - CertificateArn: !Ref CertificateArn
-      SslPolicy: ELBSecurityPolicy-TLS-1-2-2017-01
 
-  NovaHTTPListener:
+  # HTTP Listener for ALB (redirects to HTTPS)
+  IaCNovaModelALBHTTPListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
       DefaultActions:
@@ -669,169 +725,40 @@ Resources:
             Protocol: HTTPS
             Port: 443
             StatusCode: HTTP_301
-      LoadBalancerArn: !Ref NovaApplicationLoadBalancer
+      LoadBalancerArn: !Ref IaCNovaModelALB
       Port: 80
       Protocol: HTTP
 
-  # Auto Scaling Group
-  NovaAutoScalingGroup:
-    Type: AWS::AutoScaling::AutoScalingGroup
-    Properties:
-      AutoScalingGroupName: Nova-ASG
-      LaunchTemplate:
-        LaunchTemplateId: !Ref NovaLaunchTemplate
-        Version: !GetAtt NovaLaunchTemplate.LatestVersionNumber
-      MinSize: !Ref MinSize
-      MaxSize: !Ref MaxSize
-      DesiredCapacity: !Ref DesiredCapacity
-      VPCZoneIdentifier:
-        - !Ref NovaPrivateSubnet1
-        - !Ref NovaPrivateSubnet2
-        - !Ref NovaPrivateSubnet3
-      TargetGroupARNs:
-        - !Ref NovaTargetGroup
-      HealthCheckType: ELB
-      HealthCheckGracePeriod: 300
-      DefaultCooldown: 300
-      NotificationConfigurations:
-        - TopicARN: !Ref NovaSNSTopic
-          NotificationTypes:
-            - autoscaling:EC2_INSTANCE_LAUNCH
-            - autoscaling:EC2_INSTANCE_TERMINATE
-            - autoscaling:EC2_INSTANCE_LAUNCH_ERROR
-            - autoscaling:EC2_INSTANCE_TERMINATE_ERROR
-      Tags:
-        - Key: Name
-          Value: Nova-ASG-Instance
-          PropagateAtLaunch: true
-        - Key: Application
-          Value: Nova
-          PropagateAtLaunch: true
+  # ================================
+  # LAUNCH TEMPLATE AND AUTO SCALING
+  # ================================
 
-  # Auto Scaling Policies
-  NovaScaleUpPolicy:
-    Type: AWS::AutoScaling::ScalingPolicy
+  # Launch Template for EC2 instances
+  IaCNovaModelLaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
     Properties:
-      AdjustmentType: ChangeInCapacity
-      AutoScalingGroupName: !Ref NovaAutoScalingGroup
-      Cooldown: 300
-      ScalingAdjustment: 1
-      PolicyType: SimpleScaling
-
-  NovaScaleDownPolicy:
-    Type: AWS::AutoScaling::ScalingPolicy
-    Properties:
-      AdjustmentType: ChangeInCapacity
-      AutoScalingGroupName: !Ref NovaAutoScalingGroup
-      Cooldown: 300
-      ScalingAdjustment: -1
-      PolicyType: SimpleScaling
-
-  # CloudWatch Alarms
-  NovaCPUAlarmHigh:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName: Nova-CPU-High
-      AlarmDescription: 'Alarm when CPU exceeds 70%'
-      MetricName: CPUUtilization
-      Namespace: AWS/EC2
-      Statistic: Average
-      Period: 300
-      EvaluationPeriods: 2
-      Threshold: 70
-      ComparisonOperator: GreaterThanThreshold
-      Dimensions:
-        - Name: AutoScalingGroupName
-          Value: !Ref NovaAutoScalingGroup
-      AlarmActions:
-        - !Ref NovaScaleUpPolicy
-        - !Ref NovaSNSTopic
-
-  NovaCPUAlarmLow:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName: Nova-CPU-Low
-      AlarmDescription: 'Alarm when CPU is below 25%'
-      MetricName: CPUUtilization
-      Namespace: AWS/EC2
-      Statistic: Average
-      Period: 300
-      EvaluationPeriods: 2
-      Threshold: 25
-      ComparisonOperator: LessThanThreshold
-      Dimensions:
-        - Name: AutoScalingGroupName
-          Value: !Ref NovaAutoScalingGroup
-      AlarmActions:
-        - !Ref NovaScaleDownPolicy
-
-  # SNS Topic for notifications
-  NovaSNSTopic:
-    Type: AWS::SNS::Topic
-    Properties:
-      TopicName: Nova-Notifications
-      DisplayName: 'Nova Application Notifications'
-      Tags:
-        - Key: Name
-          Value: Nova-SNS-Topic
-        - Key: Application
-          Value: Nova
-
-  NovaSNSSubscription:
-    Type: AWS::SNS::Subscription
-    Properties:
-      Protocol: email
-      TopicArn: !Ref NovaSNSTopic
-      Endpoint: !Ref NotificationEmail
-
-  # Route 53 Health Check and DNS Record
-  NovaHealthCheck:
-    Type: AWS::Route53::HealthCheck
-    Properties:
-      Type: HTTPS
-      ResourcePath: /health
-      FullyQualifiedDomainName: !GetAtt NovaApplicationLoadBalancer.DNSName
-      Port: 443
-      RequestInterval: 30
-      FailureThreshold: 3
-      Tags:
-        - Key: Name
-          Value: Nova-HealthCheck
-        - Key: Application
-          Value: Nova
-
-  NovaDNSRecord:
-    Type: AWS::Route53::RecordSet
-    Properties:
-      HostedZoneId: !Ref HostedZoneId
-      Name: !Ref DomainName
-      Type: A
-      SetIdentifier: 'Nova-Primary'
-      Failover: PRIMARY
-      HealthCheckId: !Ref NovaHealthCheck
-      AliasTarget:
-        DNSName: !GetAtt NovaApplicationLoadBalancer.DNSName
-        HostedZoneId: !GetAtt NovaApplicationLoadBalancer.CanonicalHostedZoneID
-        EvaluateTargetHealth: true
-
-  # CloudWatch Log Groups
-  NovaHttpdAccessLogGroup:
-    Type: AWS::Logs::LogGroup
-    Properties:
-      LogGroupName: '/nova/httpd/access'
-      RetentionInDays: 30
-      Tags:
-        - Key: Name
-          Value: Nova-Httpd-Access-Logs
-        - Key: Application
-          Value: Nova
-
-  NovaHttpdErrorLogGroup:
-    Type: AWS::Logs::LogGroup
-    Properties:
-      LogGroupName: '/nova/httpd/error'
-      RetentionInDays: 30
-      Tags:
-        - Key: Name
-          Value: Nova-Httpd-Error-Logs
+      LaunchTemplateName: IaC-AWS-Nova-Model-Launch-Template
+      LaunchTemplateData:
+        ImageId: !Sub '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64}}'
+        InstanceType: !Ref InstanceType
+        IamInstanceProfile:
+          Arn: !GetAtt IaCNovaModelEC2InstanceProfile.Arn
+        SecurityGroupIds:
+          - !Ref IaCNovaModelEC2SecurityGroup
+        BlockDeviceMappings:
+          - DeviceName: /dev/xvda
+            Ebs:
+              VolumeType: gp3
+              VolumeSize: 20
+              DeleteOnTermination: true
+              Encrypted: true
+        Monitoring:
+          Enabled: true  # Enable detailed monitoring
+        UserData:
+          Fn::Base64: !Sub |
+            #!/bin/bash
+            yum update -y
+            yum install -y httpd
+            systemctl start httpd
+            systemctl enable httpd
 ```
