@@ -93,7 +93,6 @@ Resources:
     Properties:
       Path: "/"
       Roles: [!Ref ApplicationRole]
-      InstanceProfileName: !Sub "${ApplicationName}-instance-profile"
   # =============================================================================
   # KMS Keys for Encryption (Requirement 2)
   # =============================================================================
