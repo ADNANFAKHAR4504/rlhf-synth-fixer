@@ -107,7 +107,7 @@ class TapStack(pulumi.ComponentResource):
     pulumi.export("primary_vpc_id", self.regional_networks[region].vpc_id)
     pulumi.export("kms_key_arn", self.identity_access.kms_key.arn)
     # pulumi.export("guardduty_detector_id", self.regional_monitoring[region].guardduty_detector.id)
-    pulumi.export("sns_topic_arn", self.regional_monitoring[region].sns_topic.arn)
+    # pulumi.export("sns_topic_arn", self.regional_monitoring[region].sns_topic.arn)
     pulumi.export("secure_s3_bucket", self.regional_data_protection[region].secure_s3_bucket.bucket)
     pulumi.export("public_subnet_ids", self.regional_networks[region].public_subnet_ids)
     pulumi.export("private_subnet_ids", self.regional_networks[region].private_subnet_ids)
