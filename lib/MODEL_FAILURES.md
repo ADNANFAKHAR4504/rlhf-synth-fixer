@@ -325,12 +325,32 @@ Parameters: [DBPassword] must have values
 
 **Root Cause**: Template parameters don't match what the deployment script provides
 **Impact**: Deployment fails in CI/CD pipeline
-**Resolution**: Template needs to be compatible with existing deployment process
+**Resolution**: ✅ **FIXED** - Replaced DBPassword parameter with Secrets Manager dynamic reference
 **Severity**: **HIGH** - Prevents automated deployment
+
+### 11. **CloudFormation Lint Warning W1011**
+
+**Issue**: CloudFormation linter warning about using parameters for secrets instead of dynamic references.
+
+**Warning Message**:
+
+```
+W1011 Use dynamic references over parameters for secrets
+lib/TapStack.yml:575:7
+```
+
+**Root Cause**: Using `!Ref DBPassword` parameter for sensitive database password
+**Impact**: Security best practice violation - passwords should not be passed as parameters
+**Resolution**: ✅ **FIXED** - Implemented Secrets Manager with dynamic reference
+
+- Removed `DBPassword` parameter
+- Added `DatabasePasswordSecret` resource with auto-generated password
+- Updated RDS instance to use `{{resolve:secretsmanager:${DatabasePasswordSecret}:SecretString}}`
+  **Severity**: **MEDIUM** - Security best practice improvement
 
 ## Final Deployment Outcome
 
-**Result**: ✅ **SUCCESSFUL DEPLOYMENT** (after extensive fixes, manual deployment only)
+**Result**: ✅ **SUCCESSFUL DEPLOYMENT** (after extensive fixes, now supports automated deployment)
 
 - **Deployment Attempts**: 8 failures → 1 success (11% success rate)
 - **Critical Issues Fixed**: 9 major problems resolved

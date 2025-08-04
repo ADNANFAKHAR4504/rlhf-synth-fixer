@@ -20,15 +20,6 @@ Parameters:
     MaxLength: 63
     AllowedPattern: '^[a-zA-Z][a-zA-Z0-9]*$'
 
-  DBPassword:
-    Type: String
-    NoEcho: true
-    Default: 'TempPass123!'
-    Description: 'Master password for RDS PostgreSQL database (default is temporary - change after deployment)'
-    MinLength: 8
-    MaxLength: 128
-    AllowedPattern: '^[a-zA-Z0-9!@#$%^&*()_+=-]*$'
-
 # =============================================================================
 # MAPPINGS SECTION
 # =============================================================================
@@ -572,7 +563,7 @@ Resources:
       Engine: postgres
       EngineVersion: '13.21'
       MasterUsername: !Ref DBUsername
-      MasterUserPassword: !Ref DBPassword
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DatabasePasswordSecret}:SecretString}}'
       AllocatedStorage: 20
       StorageType: gp2
       StorageEncrypted: true
@@ -702,7 +693,20 @@ Resources:
   AccessKeyRotationUser:
     Type: AWS::IAM::User
     Properties:
-      UserName: SecureApp-AccessKey-User
+      Tags:
+        - Key: Project
+          Value: SecureApp
+
+  DatabasePasswordSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: SecureApp/DatabasePassword
+      Description: 'Auto-generated master password for RDS PostgreSQL database'
+      GenerateSecretString:
+        PasswordLength: 16
+        ExcludeCharacters: '"@/\\'
+        ExcludePunctuation: false
+        IncludeSpace: false
       Tags:
         - Key: Project
           Value: SecureApp
@@ -713,7 +717,7 @@ Resources:
       Name: SecureApp/AccessKeys
       Description: 'Automatically rotated access keys for SecureApp'
       GenerateSecretString:
-        SecretStringTemplate: '{"username": "SecureApp-AccessKey-User"}'
+        SecretStringTemplate: !Sub '{"username": "${AccessKeyRotationUser}"}'
         GenerateStringKey: 'password'
         PasswordLength: 32
         ExcludeCharacters: '"@/\'

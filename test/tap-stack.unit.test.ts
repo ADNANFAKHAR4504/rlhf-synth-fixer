@@ -52,13 +52,9 @@ describe('SecureApp CloudFormation Template', () => {
       expect(param.AllowedPattern).toBe('^[a-zA-Z][a-zA-Z0-9]*$');
     });
 
-    test('should have DBPassword parameter', () => {
+    test('should not have DBPassword parameter (replaced with Secrets Manager)', () => {
       const param = template.Parameters.DBPassword;
-      expect(param).toBeDefined();
-      expect(param.Type).toBe('String');
-      expect(param.NoEcho).toBe(true);
-      expect(param.MinLength).toBe(8);
-      expect(param.MaxLength).toBe(128);
+      expect(param).toBeUndefined();
     });
   });
 
@@ -421,6 +417,15 @@ describe('SecureApp CloudFormation Template', () => {
       expect(user.Properties.UserName).toBe('SecureApp-AccessKey-User');
     });
 
+    test('should have Database Password Secret', () => {
+      const secret = template.Resources.DatabasePasswordSecret;
+      expect(secret).toBeDefined();
+      expect(secret.Type).toBe('AWS::SecretsManager::Secret');
+      expect(secret.Properties.Name).toBe('SecureApp/DatabasePassword');
+      expect(secret.Properties.GenerateSecretString).toBeDefined();
+      expect(secret.Properties.GenerateSecretString.PasswordLength).toBe(16);
+    });
+
     test('should have Access Key Secret', () => {
       const secret = template.Resources.AccessKeySecret;
       expect(secret).toBeDefined();
@@ -605,7 +610,7 @@ describe('SecureApp CloudFormation Template', () => {
 
     test('should have expected number of parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(3);
+      expect(parameterCount).toBe(2);
     });
 
     test('should have expected number of outputs', () => {
