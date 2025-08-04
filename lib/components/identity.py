@@ -34,7 +34,6 @@ class IdentityAccessInfrastructure(pulumi.ComponentResource):
     self._create_ec2_roles()
     self._create_lambda_roles()
     self._create_s3_access_roles()
-    self._create_monitoring_roles()
     self._create_mfa_policy()
 
     self.register_outputs({
