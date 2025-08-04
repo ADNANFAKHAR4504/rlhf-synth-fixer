@@ -2,7 +2,7 @@ import pulumi
 import pulumi_aws as aws
 from pulumi import ResourceOptions
 
-class NetworkSecurityInfrastructure:
+class NetworkSecurityInfrastructure(pulumi.ComponentResource):
   def __init__(self,
                name: str,
                region: str,
@@ -11,13 +11,15 @@ class NetworkSecurityInfrastructure:
                tags: dict,
                opts: ResourceOptions = None):
 
+    super().__init__('custom:network:NetworkSecurityInfrastructure', name, {}, opts)
+
     self.name = name
     self.region = region
     self.environment = environment
     self.kms_key_arn = kms_key_arn
     self.tags = tags
 
-    resource_opts = ResourceOptions(parent=self) if opts is None else opts.merge(ResourceOptions(parent=self))
+    resource_opts = ResourceOptions(parent=self)
 
     # Create VPC
     self.vpc = aws.ec2.Vpc(
@@ -81,3 +83,10 @@ class NetworkSecurityInfrastructure:
     self.public_subnet_ids = [self.public_subnet_1.id, self.public_subnet_2.id]
     self.private_subnet_ids = [self.private_subnet_1.id, self.private_subnet_2.id]
     self.database_security_group_id = self.database_security_group.id
+
+    self.register_outputs({
+      "vpc_id": self.vpc_id,
+      "public_subnet_ids": self.public_subnet_ids,
+      "private_subnet_ids": self.private_subnet_ids,
+      "database_security_group_id": self.database_security_group_id
+    })
