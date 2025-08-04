@@ -6,7 +6,6 @@ from aws_cdk import (
     aws_elasticloadbalancingv2 as elbv2,
     aws_iam as iam,
     aws_s3 as s3,
-    aws_certificatemanager as acm,
     NestedStack,
     Stack,
     CfnOutput,
@@ -39,12 +38,12 @@ class TapStackProps(NestedStack):
             ],
         )
 
-        # IAM Role for EC2 instances
+        # IAM Role for EC2
         self.ec2_role = iam.Role(
             self,
             f"EC2Role-{environment_suffix}",
             assumed_by=iam.ServicePrincipal("ec2.amazonaws.com"),
-            description="IAM role for EC2 instances with access to app logs bucket",
+            description="IAM role for EC2 instances with access to log bucket",
         )
         self.log_bucket.grant_read_write(self.ec2_role)
 
@@ -63,12 +62,17 @@ class TapStackProps(NestedStack):
             nat_gateways=0,
         )
 
-        # Security Group
-        self.security_group = ec2.SecurityGroup(self, f"InstanceSG-{environment_suffix}", vpc=self.vpc)
+        # Security group
+        self.security_group = ec2.SecurityGroup(
+            self,
+            f"InstanceSG-{environment_suffix}",
+            vpc=self.vpc,
+            description="Allow HTTP",
+        )
         self.security_group.add_ingress_rule(
-            ec2.Peer.ipv4(self.vpc.vpc_cidr_block),
+            ec2.Peer.any_ipv4(),
             ec2.Port.tcp(80),
-            "Allow HTTP access from internal network",
+            "Allow HTTP access from anywhere",
         )
 
         # AMI
@@ -88,14 +92,6 @@ class TapStackProps(NestedStack):
             vpc_subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PUBLIC),
         )
 
-        # Create ACM certificate with EMAIL validation (manual confirmation required)
-        cert = acm.Certificate(
-            self,
-            f"TLSCert-{environment_suffix}",
-            domain_name=f"app.{environment_suffix}.example.com",
-            validation=acm.CertificateValidation.from_email(),
-        )
-
         # Application Load Balancer
         self.alb = elbv2.ApplicationLoadBalancer(
             self,
@@ -104,14 +100,13 @@ class TapStackProps(NestedStack):
             internet_facing=True,
         )
 
-        # HTTPS Listener with ACM certificate
+        # HTTP Listener only (port 80)
         self.listener = self.alb.add_listener(
             f"Listener-{environment_suffix}",
-            port=443,
-            certificates=[cert],
+            port=80,
+            open=True,
         )
 
-        # Target the ASG on port 80
         self.listener.add_targets(
             f"AppTargets-{environment_suffix}",
             port=80,
@@ -123,42 +118,31 @@ class TapStackProps(NestedStack):
             self,
             f"LogBucketName-{environment_suffix}",
             value=self.log_bucket.bucket_name,
-            export_name=f"LogBucketName-{environment_suffix}",
         )
-
         CfnOutput(
             self,
             f"EC2RoleName-{environment_suffix}",
             value=self.ec2_role.role_name,
-            export_name=f"EC2RoleName-{environment_suffix}",
         )
-
         CfnOutput(
             self,
             f"ASGName-{environment_suffix}",
             value=self.asg.auto_scaling_group_name,
-            export_name=f"ASGName-{environment_suffix}",
         )
-
         CfnOutput(
             self,
             f"ALBDNS-{environment_suffix}",
             value=self.alb.load_balancer_dns_name,
-            export_name=f"ALBDNS-{environment_suffix}",
         )
-
         CfnOutput(
             self,
             f"VPCId-{environment_suffix}",
             value=self.vpc.vpc_id,
-            export_name=f"VPCId-{environment_suffix}",
         )
-
         CfnOutput(
             self,
             f"SecurityGroupId-{environment_suffix}",
             value=self.security_group.security_group_id,
-            export_name=f"SecurityGroupId-{environment_suffix}",
         )
 
 
