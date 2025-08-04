@@ -247,40 +247,6 @@ export class ServerlessCms extends Construct {
     });
 
     // API Gateway resources and methods
-    // Create API Gateway API Key and Usage Plan using CDKTF constructs
-    const apiKey = new ApiGatewayApiKey(this, 'cms_api_key', {
-      provider: props.providerAws,
-      name: `${resourcePrefix}-api-key`,
-      description: 'API Key for CMS API Gateway',
-      enabled: true,
-      tags: {
-        Environment: props.environment,
-        Service: 'cms',
-      },
-    });
-
-    const usagePlan = new ApiGatewayUsagePlan(this, 'cms_usage_plan', {
-      provider: props.providerAws,
-      name: `${resourcePrefix}-usage-plan`,
-      description: 'Usage plan for CMS API Gateway',
-      apiStages: [
-        {
-          apiId: api.id,
-          stage: props.environment,
-        },
-      ],
-      tags: {
-        Environment: props.environment,
-        Service: 'cms',
-      },
-    });
-
-    new ApiGatewayUsagePlanKey(this, 'cms_usage_plan_key', {
-      provider: props.providerAws,
-      keyId: apiKey.id,
-      keyType: 'API_KEY',
-      usagePlanId: usagePlan.id,
-    });
 
     const contentResource = new ApiGatewayResource(this, 'content_resource', {
       provider: props.providerAws,
@@ -415,7 +381,7 @@ export class ServerlessCms extends Construct {
     });
 
     // API Gateway stage
-    new ApiGatewayStage(this, 'api_stage', {
+    const apiGatewayStage = new ApiGatewayStage(this, 'api_stage', {
       provider: props.providerAws,
       deploymentId: deployment.id,
       restApiId: api.id,
@@ -424,6 +390,41 @@ export class ServerlessCms extends Construct {
         Environment: props.environment,
         Service: 'cms',
       },
+    });
+
+    // Create API Gateway API Key and Usage Plan using CDKTF constructs
+    const apiKey = new ApiGatewayApiKey(this, 'cms_api_key', {
+      provider: props.providerAws,
+      name: `${resourcePrefix}-api-key`,
+      description: 'API Key for CMS API Gateway',
+      enabled: true,
+      tags: {
+        Environment: props.environment,
+        Service: 'cms',
+      },
+    });
+
+    const usagePlan = new ApiGatewayUsagePlan(this, 'cms_usage_plan', {
+      provider: props.providerAws,
+      name: `${resourcePrefix}-usage-plan`,
+      description: 'Usage plan for CMS API Gateway',
+      apiStages: [
+        {
+          apiId: api.id,
+          stage: apiGatewayStage.id,
+        },
+      ],
+      tags: {
+        Environment: props.environment,
+        Service: 'cms',
+      },
+    });
+
+    new ApiGatewayUsagePlanKey(this, 'cms_usage_plan_key', {
+      provider: props.providerAws,
+      keyId: apiKey.id,
+      keyType: 'API_KEY',
+      usagePlanId: usagePlan.id,
     });
 
     // CloudFront Origin Access Control
