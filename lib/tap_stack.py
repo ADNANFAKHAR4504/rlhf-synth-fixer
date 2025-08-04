@@ -4,7 +4,6 @@ from aws_cdk import (
   aws_ec2 as ec2,
   aws_autoscaling as autoscaling,
   aws_elasticloadbalancingv2 as elbv2,
-  aws_elasticloadbalancingv2_actions as elbv2_actions,
   aws_iam as iam,
   aws_s3 as s3,
   aws_certificatemanager as acm,
@@ -20,7 +19,7 @@ class TapStackProps(NestedStack):
   def __init__(self, scope: Construct, id: str, environment_suffix: str = "dev", **kwargs):
     super().__init__(scope, id, **kwargs)
 
-    # ✅ Secure, versioned, and lifecycle-managed S3 bucket
+    # ✅ Encrypted, versioned S3 bucket with lifecycle policy
     self.log_bucket = s3.Bucket(self, f"AppLogsBucket-{environment_suffix}",
       encryption=s3.BucketEncryption.S3_MANAGED,
       versioned=True,
@@ -38,14 +37,14 @@ class TapStackProps(NestedStack):
       ]
     )
 
-    # ✅ IAM role for EC2 with log bucket access
+    # ✅ IAM role for EC2 with access to bucket
     self.ec2_role = iam.Role(self, f"EC2Role-{environment_suffix}",
       assumed_by=iam.ServicePrincipal("ec2.amazonaws.com"),
       description="IAM role for EC2 instances with access to app logs bucket"
     )
     self.log_bucket.grant_read_write(self.ec2_role)
 
-    # ✅ VPC with public subnet
+    # ✅ VPC with 2 AZs and public subnets
     self.vpc = ec2.Vpc(self, f"AppVPC-{environment_suffix}",
       max_azs=2,
       subnet_configuration=[
@@ -58,7 +57,7 @@ class TapStackProps(NestedStack):
       nat_gateways=0
     )
 
-    # ✅ Restrictive Security Group
+    # ✅ Restrictive security group: allow HTTP only from internal CIDR
     self.security_group = ec2.SecurityGroup(self, f"InstanceSG-{environment_suffix}", vpc=self.vpc)
     self.security_group.add_ingress_rule(
       ec2.Peer.ipv4("10.0.0.0/16"),
@@ -66,7 +65,7 @@ class TapStackProps(NestedStack):
       "Allow HTTP access from internal network"
     )
 
-    # ✅ Auto Scaling Group
+    # ✅ ASG with IAM role and SG
     ami = ec2.MachineImage.latest_amazon_linux2()
     self.asg = autoscaling.AutoScalingGroup(self, f"AppASG-{environment_suffix}",
       vpc=self.vpc,
@@ -79,22 +78,23 @@ class TapStackProps(NestedStack):
       vpc_subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PUBLIC)
     )
 
-    # ✅ ACM TLS Certificate
+    # ✅ TLS Certificate (DNS validated)
     cert = acm.Certificate(self, f"TLSCert-{environment_suffix}",
       domain_name="example.com",
       validation=acm.CertificateValidation.from_dns()
     )
 
-    # ✅ ALB with HTTPS listener using certificate
+    # ✅ Internet-facing ALB
     self.alb = elbv2.ApplicationLoadBalancer(self, f"AppALB-{environment_suffix}",
       vpc=self.vpc,
       internet_facing=True
     )
 
+    # ✅ HTTPS listener using certificate
     self.listener = self.alb.add_listener(f"Listener-{environment_suffix}",
       port=443,
       certificates=[cert],
-      default_action=elbv2_actions.ListenerAction.forward([self.asg])
+      default_action=elbv2.ListenerAction.forward([self.asg])
     )
 
     # ✅ Outputs
