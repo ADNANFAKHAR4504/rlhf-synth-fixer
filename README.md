@@ -1,15 +1,16 @@
 # IMPORTANT
-# Get ready. 
+
+# Get ready.
+
 # Since now Claude Code is available and ready for attempting to complete TAP tasks.
+
 # Medium: solution in 30 mins
+
 # Hard: 2h
+
 # expert: 4h
-# ! Team Secret: Call me... 
 
-
-
-
-
+# ! Team Secret: Call me...
 
 # TAP - Task Assignment Platform
 
@@ -18,6 +19,7 @@ A TypeScript CDK project for creating and managing RLHF (Reinforcement Learning 
 ## Requirements
 
 **Runtime Versions**: This project requires specific versions of the following tools:
+
 - **Node.js**: v22.17.0 exactly
 - **Python**: 3.12.11 exactly
 - **Pipenv**: 2025.0.4 exactly
@@ -34,11 +36,13 @@ Run the setup script to automatically check your runtime versions and install de
 
 **Node.js Setup:**
 If you're using NVM:
+
 ```bash
 nvm use
 ```
 
 If you're using nodenv:
+
 ```bash
 nodenv install 22.17.0
 nodenv local 22.17.0
@@ -46,22 +50,26 @@ nodenv local 22.17.0
 
 **Python Setup:**
 If you're using pyenv:
+
 ```bash
 pyenv install 3.12.11
 pyenv local 3.12.11
 ```
 
 If you're using conda:
+
 ```bash
 conda install python=3.12.11
 ```
 
 **Pipenv Setup:**
+
 ```bash
 pip install pipenv==2025.0.4
 ```
 
 **Verify all versions:**
+
 ```bash
 node --version    # Should output: v22.17.0
 python --version  # Should output: Python 3.12.11
@@ -151,25 +159,25 @@ After running the CLI, you'll have:
 
 ### Build and Test Commands
 
-- `npm ci`          installs dependencies exactly as specified in package-lock.json
-- `npm run build`   compile typescript to js
-- `npm run watch`   watch for changes and compile
-- `npm run test`    perform the jest unit tests
-- `npm run test:unit`    perform only unit tests
-- `npm run test:integration`    perform only integration tests
+- `npm ci` installs dependencies exactly as specified in package-lock.json
+- `npm run build` compile typescript to js
+- `npm run watch` watch for changes and compile
+- `npm run test` perform the jest unit tests
+- `npm run test:unit` perform only unit tests
+- `npm run test:integration` perform only integration tests
 
 ### CDK Commands
 
-- `npm run cdk:synth`   synthesize CloudFormation template from CDK code
-- `npm run cdk:deploy`  deploy CDK stack to your default AWS account/region
+- `npm run cdk:synth` synthesize CloudFormation template from CDK code
+- `npm run cdk:deploy` deploy CDK stack to your default AWS account/region
 - `npm run cdk:destroy` destroy CDK stack and all resources
-- `npx cdk diff`    compare deployed stack with current state
+- `npx cdk diff` compare deployed stack with current state
 - `npx cdk bootstrap` bootstrap CDK in your AWS account/region
 
 ### CloudFormation Commands
 
-- `npm run cfn:deploy-yaml`  deploy CloudFormation YAML stack to AWS
-- `npm run cfn:deploy-json`  deploy CloudFormation JSON stack to AWS
+- `npm run cfn:deploy-yaml` deploy CloudFormation YAML stack to AWS
+- `npm run cfn:deploy-json` deploy CloudFormation JSON stack to AWS
 - `npm run cfn:destroy-yaml` destroy CloudFormation YAML stack and all resources
 - `npm run cfn:destroy-json` destroy CloudFormation JSON stack and all resources
 
@@ -187,6 +195,30 @@ Install terraform cli on your computer: https://developer.hashicorp.com/terrafor
 - For Quick reminder: `npm run tf:help`
 - For Validate Hashicorp syntax: `npm run tf:validate`
 - For Get TF state in json: `npm run tf:output`
+### CloudFormation (cfn-yaml/cfn-json) S3 Bucket Setup
+
+**Important Note**: When deploying CloudFormation templates to a specific AWS region for the first time, you need to create the S3 bucket that stores the CloudFormation state files.
+
+This is a **one-time setup** per region. Run this command before your first deployment in a new region:
+
+```bash
+# Replace 'us-east-2' with your target region
+aws s3 mb s3://iac-rlhf-cfn-states-us-east-2 --region us-east-2
+```
+
+The bucket naming pattern is: `iac-rlhf-cfn-states-${AWS_REGION}`
+
+After creating the bucket, set your region environment variable:
+
+```bash
+export AWS_REGION=us-east-2
+```
+
+Then proceed with your normal CloudFormation deployment:
+
+```bash
+PLATFORM="cfn" npm run cfn:deploy-yaml
+```
 
 ## Templates
 
@@ -208,11 +240,11 @@ Each template contains a complete project structure that gets copied when creati
 
 - The workflow has been created in a way that the trainer does not need to worry about configuring the AWS Provider or the Remote S3 Backend - it comes configured in the `lib/tap-stack.ts` or `lib/tap-stack.py` file.
 - To ensure the above setup executes correctly, please make any stacks you create extend the `Construct` class instead of the `TerraformStack` class, as opposed to the usual practice. The `TerraformStack` requires its own backend to be configured and we do not want a situation of duplicate backends in the same application, across stacks.
-- Please prompt the LLM models you use for the problem accordingly - include something like the following snippet in your prompt - 
+- Please prompt the LLM models you use for the problem accordingly - include something like the following snippet in your prompt -
   ```
   - Complete **CDKTF code in TypeScript**, including all necessary imports and constructs
-    - Create the entire solution as a single stack. 
-    - Make the stack extend the Construct class instead of the TerraformStack class. 
+    - Create the entire solution as a single stack.
+    - Make the stack extend the Construct class instead of the TerraformStack class.
     - Omit code to initialize AWS Providers or backends.
     - Generate only the code for this stack, do not include main entrypoint code.
   ```

@@ -283,6 +283,7 @@ jobs:
   deploy:
     name: Deploy
     runs-on: ubuntu-24.04
+    timeout-minutes: 120 
     needs: synth
     if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
     environment: dev
