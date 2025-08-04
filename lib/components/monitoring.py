@@ -21,6 +21,7 @@ class SecurityMonitoringInfrastructure(pulumi.ComponentResource):
     self,
     name: str,
     region: str,
+    kms_key: aws.kms.Key,
     kms_key_arn: pulumi.Input[str],
     tags: Optional[dict] = None,
     opts: Optional[ResourceOptions] = None
@@ -28,6 +29,7 @@ class SecurityMonitoringInfrastructure(pulumi.ComponentResource):
     super().__init__('projectx:monitoring:SecurityMonitoring', name, None, opts)
 
     self.region = region
+    self.kms_key = kms_key
     self.kms_key_arn = kms_key_arn
     self.tags = tags or {}
 
@@ -55,7 +57,7 @@ class SecurityMonitoringInfrastructure(pulumi.ComponentResource):
       retention_in_days=365,
       kms_key_id=self.kms_key_arn,
       tags=self.tags,
-      opts=ResourceOptions(parent=self)
+      opts=ResourceOptions(parent=self, depends_on=[self.kms_key])
     )
 
   def _create_sns_resources(self):
