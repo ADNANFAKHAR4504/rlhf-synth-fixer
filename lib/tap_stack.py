@@ -108,7 +108,7 @@ class TapStack(pulumi.ComponentResource):
     # Create S3 bucket for file uploads with security best practices
     s3_bucket = aws.s3.Bucket(
       "file-upload-bucket",
-      bucket=f"{project_name}-{stack_name}-uploads-{region}".toLowerCase(),
+      bucket=f"{project_name}-{stack_name}-uploads-{region}".lower(),
       tags=common_tags
     )
 
