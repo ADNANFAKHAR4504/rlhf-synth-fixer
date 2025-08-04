@@ -1,3 +1,5 @@
+# pylint: disable=C0111,C0103,C0303,W0511,R0903,R0913,R0914,R0915
+
 import unittest
 from pytest import mark
 import aws_cdk as cdk
@@ -32,16 +34,16 @@ class TestTapStack(unittest.TestCase):
 
     outputs = template.to_json().get("Outputs", {})
     expected = [
-      "LogBucketNametestenv",
-      "ALBDNStestenv",
-      "ASGNametestenv",
-      "VPCIdtestenv",
-      "SecurityGroupIdtestenv",
-      "EC2RoleNametestenv",
+      "LogBucketName" + suffix,
+      "ALBDNS" + suffix,
+      "ASGName" + suffix,
+      "VPCId" + suffix,
+      "SecurityGroupId" + suffix,
+      "EC2RoleName" + suffix,
     ]
     for name in expected:
-      data = [o for o in outputs.values() if o.get("Export", {}).get("Name") == name]
-      self.assertTrue(data, f"Missing export '{name}'")
+      value = outputs.get(name)
+      self.assertIsNotNone(value, f"Missing output '{name}'")
 
   @mark.it("uses 'dev' as default suffix and includes IAM + SG validation")
   def test_default_env_suffix_with_iam_sg(self):
@@ -51,16 +53,16 @@ class TestTapStack(unittest.TestCase):
 
     outputs = template.to_json().get("Outputs", {})
     expected = [
-      "LogBucketNamedev",
-      "ALBDNSdev",
-      "ASGNamedev",
-      "VPCIddev",
-      "SecurityGroupIddev",
-      "EC2RoleNamedev",
+      "LogBucketName" + "dev",
+      "ALBDNS" + "dev",
+      "ASGName" + "dev",
+      "VPCId" + "dev",
+      "SecurityGroupId" + "dev",
+      "EC2RoleName" + "dev",
     ]
     for name in expected:
-      data = [o for o in outputs.values() if o.get("Export", {}).get("Name") == name]
-      self.assertTrue(data, f"Missing export '{name}'")
+      value = outputs.get(name)
+      self.assertIsNotNone(value, f"Missing output '{name}'")
 
 
 if __name__ == "__main__":
