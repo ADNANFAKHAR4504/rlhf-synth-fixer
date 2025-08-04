@@ -1,4 +1,6 @@
 AWSTemplateFormatVersion: "2010-09-09"
+Conditions:
+  IsUSEast1: !Equals [!Ref "AWS::Region", "us-east-1"]
 Description: "Production-grade secure infrastructure for AWS application deployment with comprehensive security controls"
 
 Metadata:
@@ -52,6 +54,48 @@ Parameters:
     Description: "ID of the existing GuardDuty detector to use instead of creating a new one"
 
 Resources:
+  # =============================================================================
+  # IAM Roles and Instance Profiles (Requirement 2, 5)
+  # =============================================================================
+  ApplicationRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+                - lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Path: "/"
+      Policies:
+        - PolicyName: "AppPolicy"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:*
+                  - s3:*
+                  - dynamodb:*
+                  - rds:*
+                  - kms:*
+                  - cloudtrail:*
+                Resource: "*"
+      Tags:
+        - Key: Name
+          Value: !Sub "${ApplicationName}-role"
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  ApplicationInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Path: "/"
+      Roles: [!Ref ApplicationRole]
+      InstanceProfileName: !Sub "${ApplicationName}-instance-profile"
   # =============================================================================
   # KMS Keys for Encryption (Requirement 2)
   # =============================================================================
@@ -209,6 +253,23 @@ Resources:
           Value: !Sub "${ApplicationName}-nat-eip-1"
 
   NatGateway1:
+  NatGateway2EIP:
+    Type: AWS::EC2::EIP
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub "${ApplicationName}-nat-eip-2"
+
+  NatGateway2:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatGateway2EIP.AllocationId
+      SubnetId: !Ref PublicSubnet2
+      Tags:
+        - Key: Name
+          Value: !Sub "${ApplicationName}-nat-2"
     Type: AWS::EC2::NatGateway
     Properties:
       AllocationId: !GetAtt NatGateway1EIP.AllocationId
@@ -258,6 +319,208 @@ Resources:
           Value: !Ref EnvironmentSuffix
 
   DefaultPrivateRoute1:
+  PrivateRouteTable2:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub "${ApplicationName}-private-routes-2"
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  DefaultPrivateRoute2:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable2
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway2
+
+  PrivateSubnet2RouteTableAssociation2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable2
+      SubnetId: !Ref PrivateSubnet2
+  # =============================================================================
+  # S3 Buckets with Versioning and Access Logging (Requirement 8)
+  # =============================================================================
+  ApplicationBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "${ApplicationName}-${EnvironmentSuffix}-bucket"
+      VersioningConfiguration:
+        Status: Enabled
+      LoggingConfiguration:
+        DestinationBucketName: !Ref ApplicationLogBucket
+        LogFilePrefix: "access-logs/"
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${ApplicationName}-bucket"
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  ApplicationLogBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "${ApplicationName}-${EnvironmentSuffix}-log-bucket"
+      VersioningConfiguration:
+        Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${ApplicationName}-log-bucket"
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+  # =============================================================================
+  # CloudTrail Logging (Requirement 9)
+  # =============================================================================
+  ApplicationTrail:
+    Type: AWS::CloudTrail::Trail
+    Properties:
+      TrailName: !Sub "${ApplicationName}-${EnvironmentSuffix}-trail"
+      S3BucketName: !Ref ApplicationLogBucket
+      IsLogging: true
+      IncludeGlobalServiceEvents: true
+      EnableLogFileValidation: true
+      IsMultiRegionTrail: true
+      KMSKeyId: !Ref ApplicationKMSKey
+      Tags:
+        - Key: Name
+          Value: !Sub "${ApplicationName}-trail"
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+  # =============================================================================
+  # RDS Multi-AZ Database (Requirement 10)
+  # =============================================================================
+  ApplicationDBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: !Sub "${ApplicationName} DB subnet group"
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      Tags:
+        - Key: Name
+          Value: !Sub "${ApplicationName}-dbsubnet"
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  ApplicationDB:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceIdentifier: !Sub "${ApplicationName}-${EnvironmentSuffix}-db"
+      AllocatedStorage: 20
+      DBInstanceClass: db.t3.micro
+      Engine: mysql
+      EngineVersion: "8.0"
+      MasterUsername: admin
+      MasterUserPassword: "ChangeMe123!"
+      MultiAZ: true
+      StorageEncrypted: true
+      KmsKeyId: !Ref ApplicationKMSKey
+      DBSubnetGroupName: !Ref ApplicationDBSubnetGroup
+      VPCSecurityGroups:
+        - !Ref DatabaseSecurityGroup
+      PubliclyAccessible: false
+      DeletionProtection: false
+      Tags:
+        - Key: Name
+          Value: !Sub "${ApplicationName}-db"
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+  # =============================================================================
+  # Lambda Function and Global Accelerator (Requirement 11)
+  # =============================================================================
+  ApplicationLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "${ApplicationName}-${EnvironmentSuffix}-lambda"
+      Handler: index.handler
+      Role: !GetAtt ApplicationRole.Arn
+      Code:
+        ZipFile: |
+          def handler(event, context):
+              return {"statusCode": 200, "body": "Hello from Lambda!"}
+      Runtime: python3.11
+      Timeout: 10
+      VpcConfig:
+        SecurityGroupIds:
+          - !Ref WebServerSecurityGroup
+        SubnetIds:
+          - !Ref PrivateSubnet1
+          - !Ref PrivateSubnet2
+      Environment:
+        Variables:
+          ENV: !Ref EnvironmentSuffix
+      Tags:
+        - Key: Name
+          Value: !Sub "${ApplicationName}-lambda"
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  ApplicationAccelerator:
+    Type: AWS::GlobalAccelerator::Accelerator
+    Properties:
+      Name: !Sub "${ApplicationName}-${EnvironmentSuffix}-accelerator"
+      Enabled: true
+      IpAddressType: IPV4
+      Tags:
+        - Key: Name
+          Value: !Sub "${ApplicationName}-accelerator"
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+  # =============================================================================
+  # ACM Certificate and CloudFront (Requirement 12)
+  # =============================================================================
+  ApplicationCertificate:
+    Type: AWS::CertificateManager::Certificate
+    Properties:
+      DomainName: !Sub "${ApplicationName}-${EnvironmentSuffix}.example.com"
+      ValidationMethod: DNS
+      Tags:
+        - Key: Name
+          Value: !Sub "${ApplicationName}-cert"
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  ApplicationCloudFront:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        DefaultRootObject: index.html
+        Origins:
+          - Id: s3origin
+            DomainName: !GetAtt ApplicationBucket.DomainName
+            S3OriginConfig: {}
+        DefaultCacheBehavior:
+          TargetOriginId: s3origin
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods: [GET, HEAD, OPTIONS]
+          CachedMethods: [GET, HEAD]
+          ForwardedValues:
+            QueryString: false
+            Cookies:
+              Forward: none
+        ViewerCertificate:
+          AcmCertificateArn: !Ref ApplicationCertificate
+          SslSupportMethod: sni-only
+        HttpVersion: http2
+        PriceClass: PriceClass_100
+        Tags:
+          - Key: Name
+            Value: !Sub "${ApplicationName}-cloudfront"
+          - Key: Environment
+            Value: !Ref EnvironmentSuffix
     Type: AWS::EC2::Route
     Properties:
       RouteTableId: !Ref PrivateRouteTable1
@@ -387,6 +650,65 @@ Resources:
           Value: !Ref EnvironmentSuffix
 
 Outputs:
+  ApplicationRoleArn:
+    Description: "ARN of the application IAM role"
+    Value: !GetAtt ApplicationRole.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-ApplicationRoleArn"
+
+  ApplicationInstanceProfile:
+    Description: "Name of the application instance profile"
+    Value: !Ref ApplicationInstanceProfile
+    Export:
+      Name: !Sub "${AWS::StackName}-ApplicationInstanceProfile"
+
+  ApplicationBucketName:
+    Description: "Name of the application S3 bucket"
+    Value: !Ref ApplicationBucket
+    Export:
+      Name: !Sub "${AWS::StackName}-ApplicationBucketName"
+
+  ApplicationLogBucketName:
+    Description: "Name of the application S3 log bucket"
+    Value: !Ref ApplicationLogBucket
+    Export:
+      Name: !Sub "${AWS::StackName}-ApplicationLogBucketName"
+
+  ApplicationTrailName:
+    Description: "Name of the CloudTrail trail"
+    Value: !Ref ApplicationTrail
+    Export:
+      Name: !Sub "${AWS::StackName}-ApplicationTrailName"
+
+  ApplicationDBEndpoint:
+    Description: "Endpoint of the RDS instance"
+    Value: !GetAtt ApplicationDB.Endpoint.Address
+    Export:
+      Name: !Sub "${AWS::StackName}-ApplicationDBEndpoint"
+
+  ApplicationLambdaArn:
+    Description: "ARN of the Lambda function"
+    Value: !GetAtt ApplicationLambda.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-ApplicationLambdaArn"
+
+  ApplicationAcceleratorDns:
+    Description: "DNS name of the Global Accelerator"
+    Value: !GetAtt ApplicationAccelerator.DnsName
+    Export:
+      Name: !Sub "${AWS::StackName}-ApplicationAcceleratorDns"
+
+  ApplicationCertificateArn:
+    Description: "ARN of the ACM certificate"
+    Value: !Ref ApplicationCertificate
+    Export:
+      Name: !Sub "${AWS::StackName}-ApplicationCertificateArn"
+
+  ApplicationCloudFrontDomain:
+    Description: "Domain name of the CloudFront distribution"
+    Value: !GetAtt ApplicationCloudFront.DomainName
+    Export:
+      Name: !Sub "${AWS::StackName}-ApplicationCloudFrontDomain"
   # VPC and Networking Outputs
   VPCId:
     Description: "ID of the VPC"
