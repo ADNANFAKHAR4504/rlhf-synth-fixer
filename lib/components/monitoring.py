@@ -3,6 +3,7 @@
 from typing import Optional, List
 import pulumi
 import pulumi_aws as aws
+from pulumi_aws.guardduty import get_detector
 from pulumi import ResourceOptions
 import json
 from pulumi_aws import get_caller_identity
@@ -95,13 +96,23 @@ class SecurityMonitoringInfrastructure(pulumi.ComponentResource):
     )
 
   def _create_guardduty(self):
-    self.guardduty_detector = aws.guardduty.Detector(
-      f"{self.region.replace('-', '')}-guardduty",
-      enable=True,
-      finding_publishing_frequency="FIFTEEN_MINUTES",
-      datasources=aws.guardduty.DetectorDatasourcesArgs(
-        s3_logs=aws.guardduty.DetectorDatasourcesS3LogsArgs(enable=True)
-      ),
-      tags=self.tags,
-      opts=ResourceOptions(parent=self, depends_on=[self.sns_topic])
-    )
+    try:
+      # Try to get an existing detector for this account in the current region
+      existing = get_detector()
+      self.guardduty_detector = aws.guardduty.Detector.get(
+        f"{self.region.replace('-', '')}-guardduty-existing",
+        id=existing.id,
+        opts=ResourceOptions(parent=self)
+      )
+    except Exception:
+      # If none exists, create a new one
+      self.guardduty_detector = aws.guardduty.Detector(
+        f"{self.region.replace('-', '')}-guardduty",
+        enable=True,
+        finding_publishing_frequency="FIFTEEN_MINUTES",
+        datasources=aws.guardduty.DetectorDatasourcesArgs(
+          s3_logs=aws.guardduty.DetectorDatasourcesS3LogsArgs(enable=True)
+        ),
+        tags=self.tags,
+        opts=ResourceOptions(parent=self, depends_on=[self.sns_topic])
+      )
