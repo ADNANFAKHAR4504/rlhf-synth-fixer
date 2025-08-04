@@ -3,15 +3,15 @@
   "version": "0.1.0",
   "license": "MIT",
   "engines": {
-    "node": "22.17.0",
+    "node": "20.19.4",
     "npm": ">=10.0.0"
   },
   "bin": {
     "tap": "bin/tap.js"
   },
   "scripts": {
-    "check-node": "node -e \"const v=process.version; const req='v22.17.0'; if(v!==req){console.error('❌ Node.js version mismatch! Required:',req,'Current:',v); process.exit(1);} console.log('✅ Node.js version is correct:',v);\"",
-    "check-python": "python -c \"import sys; req='3.12.11'; curr=f'{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}'; print(f'❌ Python version mismatch! Required: {req}, Current: {curr}') or exit(1) if curr != req else print(f'✅ Python version is correct: {curr}');\"",
+    "check-node": "node -e \"const v=process.version; const req='v20.19.4'; if(v!==req){console.error('❌ Node.js version mismatch! Required:',req,'Current:',v); process.exit(1);} console.log('✅ Node.js version is correct:',v);\"",
+    "check-python": "python -c \"import sys; req='3.12.3'; curr=f'{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}'; print(f'❌ Python version mismatch! Required: {req}, Current: {curr}') or exit(1) if curr != req else print(f'✅ Python version is correct: {curr}');\"",
     "check-pipenv": "bash -c \"req='2025.0.4'; curr=$(pipenv --version 2>/dev/null | grep -oE '[0-9]+\\.[0-9]+\\.[0-9]+' || echo 'not installed'); if [ \\\"\\$curr\\\" != \\\"\\$req\\\" ]; then echo \\\"❌ Pipenv version mismatch! Required: \\$req, Current: \\$curr\\\"; exit 1; fi; echo \\\"✅ Pipenv version is correct: \\$curr\\\"\"",
     "check-versions": "npm run check-node && npm run check-python && npm run check-pipenv",
     "preinstall": "npm run check-versions",
@@ -35,8 +35,8 @@
     "cdktf:synth": "cdktf synth",
     "cdktf:deploy": "cdktf deploy --auto-approve",
     "cdktf:destroy": "cdktf destroy --auto-approve",
-    "cfn:deploy-yaml": "aws cloudformation deploy --template-file lib/TapStack.yml --stack-name TapStack${ENVIRONMENT_SUFFIX:-dev} --capabilities CAPABILITY_IAM --parameter-overrides EnvironmentSuffix=${ENVIRONMENT_SUFFIX:-dev} --tags Repository=${REPOSITORY:-unknown} CommitAuthor=${COMMIT_AUTHOR:-unknown} --s3-bucket=iac-rlhf-cfn-states --s3-prefix=${ENVIRONMENT_SUFFIX:-dev}",
-    "cfn:deploy-json": "aws cloudformation deploy --template-file lib/TapStack.json --stack-name TapStack${ENVIRONMENT_SUFFIX:-dev} --capabilities CAPABILITY_IAM --parameter-overrides EnvironmentSuffix=${ENVIRONMENT_SUFFIX:-dev} --tags Repository=${REPOSITORY:-unknown} CommitAuthor=${COMMIT_AUTHOR:-unknown} --s3-bucket=iac-rlhf-cfn-states --s3-prefix=${ENVIRONMENT_SUFFIX:-dev}",
+    "cfn:deploy-yaml": "aws cloudformation deploy --template-file lib/TapStack.yml --stack-name TapStack${ENVIRONMENT_SUFFIX:-dev} --capabilities CAPABILITY_IAM --parameter-overrides EnvironmentSuffix=${ENVIRONMENT_SUFFIX:-dev} --tags Repository=${REPOSITORY:-unknown} CommitAuthor=${COMMIT_AUTHOR:-unknown} --s3-bucket=iac-rlhf-cfn-states-${AWS_REGION:-us-east-1} --s3-prefix=${ENVIRONMENT_SUFFIX:-dev}",
+    "cfn:deploy-json": "aws cloudformation deploy --template-file lib/TapStack.json --stack-name TapStack${ENVIRONMENT_SUFFIX:-dev} --capabilities CAPABILITY_IAM --parameter-overrides EnvironmentSuffix=${ENVIRONMENT_SUFFIX:-dev} --tags Repository=${REPOSITORY:-unknown} CommitAuthor=${COMMIT_AUTHOR:-unknown} --s3-bucket=iac-rlhf-cfn-states-${AWS_REGION:-us-east-1} --s3-prefix=${ENVIRONMENT_SUFFIX:-dev}",
     "cfn:destroy": "aws cloudformation delete-stack --stack-name TapStack${ENVIRONMENT_SUFFIX:-dev}",
     "release": "semantic-release"
   },
@@ -53,15 +53,16 @@
     "@aws-sdk/client-dynamodb": "^3.855.0",
     "@aws-sdk/client-ec2": "^3.848.0",
     "@aws-sdk/client-ecs": "^3.856.0",
+    "@aws-sdk/client-elastic-beanstalk": "^3.848.0",
     "@aws-sdk/client-elasticache": "^3.846.0",
     "@aws-sdk/client-iam": "^3.848.0",
-    "@aws-sdk/client-kms": "^3.858.0",
+    "@aws-sdk/client-kms": "^3.859.0",
     "@aws-sdk/client-lambda": "^3.855.0",
     "@aws-sdk/client-opensearchserverless": "^3.846.0",
     "@aws-sdk/client-rds": "^3.846.0",
     "@aws-sdk/client-route-53": "^3.856.0",
     "@aws-sdk/client-s3": "^3.848.0",
-    "@aws-sdk/client-secrets-manager": "^3.858.0",
+    "@aws-sdk/client-secrets-manager": "^3.859.0",
     "@aws-sdk/client-servicediscovery": "^3.856.0",
     "@aws-sdk/client-sfn": "^3.848.0",
     "@aws-sdk/client-sns": "^3.855.0",
@@ -111,6 +112,7 @@
   },
   "dependencies": {
     "@aws-sdk/client-acm": "^3.856.0",
+    "@aws-sdk/client-cloudtrail": "^3.859.0",
     "@aws-sdk/client-elastic-load-balancing-v2": "^3.848.0",
     "@aws-sdk/client-sqs": "^3.855.0",
     "@aws-sdk/client-ssm": "^3.848.0",
