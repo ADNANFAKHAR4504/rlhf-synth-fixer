@@ -5,120 +5,81 @@ Here is the complete, self-contained CloudFormation template in YAML format.
 ```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: >-
-  Project: IaC-AWS-Nova-Model. This template deploys a highly available, scalable,
-  and fault-tolerant web application infrastructure in us-west-2. It includes a VPC
-  with public/private subnets across 3 AZs, an Application Load Balancer, an Auto
-  Scaling Group for EC2 instances, Route 53 DNS, S3, AWS Backup, and robust security
-  and monitoring configurations.
+  Complete high-availability stack for the Nova web application. This template
+  provisions a VPC with 3 public/private subnets, an Application Load Balancer,
+  an Auto Scaling Group with EC2 instances, Route 53 DNS records, an encrypted S3
+  bucket, and SNS notifications. (v1.0.2)
 
-# ------------------------------------------------------------#
-# Parameters
-# ------------------------------------------------------------#
 Parameters:
-  ProjectName:
-    Description: The name of the project (lowercase, numbers, and hyphens only).
-    Type: String
-    Default: 'iac-aws-nova-model'
-    # CORRECTION for W1032: Added Min/Max length constraints to prevent S3 bucket name from exceeding 63 chars.
-    MinLength: 3
-    MaxLength: 30
-    AllowedPattern: '^[a-z0-9][a-z0-9-]*[a-z0-9]$'
-    ConstraintDescription: Must be 3-30 chars, all lowercase, and can only contain letters, numbers, and hyphens.
-
-  VpcCidr:
-    Description: The CIDR block for the VPC.
-    Type: String
-    Default: '10.0.0.0/16'
-    AllowedPattern: '(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})/(\d{1,2})'
-
-  LatestAmiId:
-    Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
-    Description: The latest Amazon Linux 2023 AMI ID.
-    Default: '/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64'
-
   InstanceType:
     Description: EC2 instance type for the web servers.
     Type: String
-    Default: 't3.micro'
+    Default: t3.micro
     AllowedValues:
+      - t2.micro
       - t3.micro
       - t3.small
-      - t3.medium
-      - t4g.micro
-      - t4g.small
-
-  ASGMinSize:
-    Description: Minimum number of instances in the Auto Scaling Group.
-    Type: Number
-    Default: '2'
-
-  ASGMaxSize:
-    Description: Maximum number of instances in the Auto Scaling Group.
-    Type: Number
-    Default: '6'
-
-  ASGDesiredCapacity:
-    Description: Desired number of instances in the Auto Scaling Group.
-    Type: Number
-    Default: '2'
-
-  DomainName:
-    Description: The fully qualified domain name (e.g., app.example.com) for the application.
-    Type: String
-    AllowedPattern: (?!-)[a-zA-Z0-9-.]{1,63}(?<!-)
+      - m5.large
+      - c5.large
 
   HostedZoneId:
-    Description: The Route 53 Hosted Zone ID for the domain (e.g., Z2FDTNDATAQYW2).
-    Type: 'AWS::Route53::HostedZone::Id'
+    Description: The Route 53 Hosted Zone ID to create the DNS record in (e.g., Z0123456789ABCDEFGHIJ).
+    Type: AWS::Route53::HostedZone::Id
 
-  CertificateArn:
-    Description: The ARN of the ACM SSL/TLS certificate for the domain.
+  DnsName:
+    Description: The fully qualified domain name (FQDN) for the application (e.g., nova.yourdomain.com).
     Type: String
 
-  NotificationEmail:
-    Description: Email address to receive critical alerts and notifications.
+  ACMCertificateArn:
+    Description: ARN of the AWS Certificate Manager (ACM) certificate for the ALB HTTPS listener.
     Type: String
 
-# ------------------------------------------------------------#
-# Mappings
-# ------------------------------------------------------------#
-Mappings:
-  RegionMap:
-    us-west-2:
-      AZs:
-        - 'us-west-2a'
-        - 'us-west-2b'
-        - 'us-west-2c'
-      PublicSubnetCidrs:
-        - '10.0.1.0/24'
-        - '10.0.2.0/24'
-        - '10.0.3.0/24'
-      PrivateSubnetCidrs:
-        - '10.0.101.0/24'
-        - '10.0.102.0/24'
-        - '10.0.103.0/24'
-
-# ------------------------------------------------------------#
-# Resources
-# ------------------------------------------------------------#
 Resources:
-  # --- Networking Resources ---
+  # ------------------------------------------------------------
+  # IAM Roles & Profiles
+  # ------------------------------------------------------------
+  EC2InstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'Nova-EC2-Role-${AWS::StackName}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+        - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
+      Description: IAM Role for Nova EC2 instances to allow access to SSM and CloudWatch.
+
+  EC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      InstanceProfileName: !Sub 'Nova-Instance-Profile-${AWS::StackName}'
+      Roles:
+        - !Ref EC2InstanceRole
+
+  # ------------------------------------------------------------
+  # Networking
+  # ------------------------------------------------------------
   VPC:
     Type: AWS::EC2::VPC
     Properties:
-      CidrBlock: !Ref VpcCidr
+      CidrBlock: 10.0.0.0/16
       EnableDnsSupport: true
       EnableDnsHostnames: true
       Tags:
         - Key: Name
-          Value: !Sub '${ProjectName}-VPC'
+          Value: !Sub 'Nova-VPC-${AWS::StackName}'
 
   InternetGateway:
     Type: AWS::EC2::InternetGateway
     Properties:
       Tags:
         - Key: Name
-          Value: !Sub '${ProjectName}-IGW'
+          Value: !Sub 'Nova-IGW-${AWS::StackName}'
 
   VPCGatewayAttachment:
     Type: AWS::EC2::VPCGatewayAttachment
@@ -126,404 +87,294 @@ Resources:
       VpcId: !Ref VPC
       InternetGatewayId: !Ref InternetGateway
 
-  # Public Subnets (3 AZs)
-  PublicSubnet1:
+  # Subnets - AZ distribution is handled by referencing the index of Fn::GetAZs
+  PublicSubnetA:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      AvailabilityZone:
-        !Select [0, !FindInMap [RegionMap, !Ref 'AWS::Region', AZs]]
-      CidrBlock:
-        !Select [
-          0,
-          !FindInMap [RegionMap, !Ref 'AWS::Region', PublicSubnetCidrs],
-        ]
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: 10.0.1.0/24
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub '${ProjectName}-PublicSubnet-1'
+          Value: !Sub 'Nova-PublicSubnet-A-${AWS::StackName}'
 
-  PublicSubnet2:
+  PublicSubnetB:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      AvailabilityZone:
-        !Select [1, !FindInMap [RegionMap, !Ref 'AWS::Region', AZs]]
-      CidrBlock:
-        !Select [
-          1,
-          !FindInMap [RegionMap, !Ref 'AWS::Region', PublicSubnetCidrs],
-        ]
+      AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: 10.0.2.0/24
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub '${ProjectName}-PublicSubnet-2'
+          Value: !Sub 'Nova-PublicSubnet-B-${AWS::StackName}'
 
-  PublicSubnet3:
+  PublicSubnetC:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      AvailabilityZone:
-        !Select [2, !FindInMap [RegionMap, !Ref 'AWS::Region', AZs]]
-      CidrBlock:
-        !Select [
-          2,
-          !FindInMap [RegionMap, !Ref 'AWS::Region', PublicSubnetCidrs],
-        ]
+      AvailabilityZone: !Select [2, !GetAZs '']
+      CidrBlock: 10.0.3.0/24
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub '${ProjectName}-PublicSubnet-3'
+          Value: !Sub 'Nova-PublicSubnet-C-${AWS::StackName}'
 
-  # Private Subnets (3 AZs)
-  PrivateSubnet1:
+  PrivateSubnetA:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      AvailabilityZone:
-        !Select [0, !FindInMap [RegionMap, !Ref 'AWS::Region', AZs]]
-      CidrBlock:
-        !Select [
-          0,
-          !FindInMap [RegionMap, !Ref 'AWS::Region', PrivateSubnetCidrs],
-        ]
-      MapPublicIpOnLaunch: false
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: 10.0.101.0/24
       Tags:
         - Key: Name
-          Value: !Sub '${ProjectName}-PrivateSubnet-1'
+          Value: !Sub 'Nova-PrivateSubnet-A-${AWS::StackName}'
 
-  PrivateSubnet2:
+  PrivateSubnetB:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      AvailabilityZone:
-        !Select [1, !FindInMap [RegionMap, !Ref 'AWS::Region', AZs]]
-      CidrBlock:
-        !Select [
-          1,
-          !FindInMap [RegionMap, !Ref 'AWS::Region', PrivateSubnetCidrs],
-        ]
-      MapPublicIpOnLaunch: false
+      AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: 10.0.102.0/24
       Tags:
         - Key: Name
-          Value: !Sub '${ProjectName}-PrivateSubnet-2'
+          Value: !Sub 'Nova-PrivateSubnet-B-${AWS::StackName}'
 
-  PrivateSubnet3:
+  PrivateSubnetC:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      AvailabilityZone:
-        !Select [2, !FindInMap [RegionMap, !Ref 'AWS::Region', AZs]]
-      CidrBlock:
-        !Select [
-          2,
-          !FindInMap [RegionMap, !Ref 'AWS::Region', PrivateSubnetCidrs],
-        ]
-      MapPublicIpOnLaunch: false
+      AvailabilityZone: !Select [2, !GetAZs '']
+      CidrBlock: 10.0.103.0/24
       Tags:
         - Key: Name
-          Value: !Sub '${ProjectName}-PrivateSubnet-3'
+          Value: !Sub 'Nova-PrivateSubnet-C-${AWS::StackName}'
 
-  # Routing
+  # NAT Gateways & EIPs for private subnet outbound access
+  EIPA:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+
+  EIPB:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+
+  EIPC:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+
+  NatGatewayA:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt EIPA.AllocationId
+      SubnetId: !Ref PublicSubnetA
+      Tags:
+        - Key: Name
+          Value: !Sub 'Nova-NatGateway-A-${AWS::StackName}'
+
+  NatGatewayB:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt EIPB.AllocationId
+      SubnetId: !Ref PublicSubnetB
+      Tags:
+        - Key: Name
+          Value: !Sub 'Nova-NatGateway-B-${AWS::StackName}'
+
+  NatGatewayC:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt EIPC.AllocationId
+      SubnetId: !Ref PublicSubnetC
+      Tags:
+        - Key: Name
+          Value: !Sub 'Nova-NatGateway-C-${AWS::StackName}'
+
+  # Route Tables
   PublicRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub '${ProjectName}-PublicRouteTable'
+          Value: !Sub 'Nova-Public-RouteTable-${AWS::StackName}'
 
-  DefaultPublicRoute:
+  PublicRoute:
     Type: AWS::EC2::Route
     DependsOn: VPCGatewayAttachment
     Properties:
       RouteTableId: !Ref PublicRouteTable
-      DestinationCidrBlock: '0.0.0.0/0'
+      DestinationCidrBlock: 0.0.0.0/0
       GatewayId: !Ref InternetGateway
 
-  PublicSubnet1RouteTableAssociation:
+  PublicSubnetRouteTableAssociationA:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
-      SubnetId: !Ref PublicSubnet1
+      SubnetId: !Ref PublicSubnetA
       RouteTableId: !Ref PublicRouteTable
-
-  PublicSubnet2RouteTableAssociation:
+  PublicSubnetRouteTableAssociationB:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
-      SubnetId: !Ref PublicSubnet2
+      SubnetId: !Ref PublicSubnetB
       RouteTableId: !Ref PublicRouteTable
-
-  PublicSubnet3RouteTableAssociation:
+  PublicSubnetRouteTableAssociationC:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
-      SubnetId: !Ref PublicSubnet3
+      SubnetId: !Ref PublicSubnetC
       RouteTableId: !Ref PublicRouteTable
 
-  # NAT Gateway for Private Subnet outbound access
-  NatGatewayEIP:
-    Type: AWS::EC2::EIP
-    Properties:
-      Domain: vpc
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-NatEIP'
-
-  NatGateway:
-    Type: AWS::EC2::NatGateway
-    Properties:
-      AllocationId: !GetAtt NatGatewayEIP.AllocationId
-      SubnetId: !Ref PublicSubnet1
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-NatGateway'
-
-  PrivateRouteTable:
+  PrivateRouteTableA:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub '${ProjectName}-PrivateRouteTable'
-
-  DefaultPrivateRoute:
+          Value: !Sub 'Nova-Private-RouteTable-A-${AWS::StackName}'
+  PrivateRouteA:
     Type: AWS::EC2::Route
     Properties:
-      RouteTableId: !Ref PrivateRouteTable
-      DestinationCidrBlock: '0.0.0.0/0'
-      NatGatewayId: !Ref NatGateway
-
-  PrivateSubnet1RouteTableAssociation:
+      RouteTableId: !Ref PrivateRouteTableA
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGatewayA
+  PrivateSubnetRouteTableAssociationA:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
-      SubnetId: !Ref PrivateSubnet1
-      RouteTableId: !Ref PrivateRouteTable
+      SubnetId: !Ref PrivateSubnetA
+      RouteTableId: !Ref PrivateRouteTableA
 
-  PrivateSubnet2RouteTableAssociation:
+  PrivateRouteTableB:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub 'Nova-Private-RouteTable-B-${AWS::StackName}'
+  PrivateRouteB:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTableB
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGatewayB
+  PrivateSubnetRouteTableAssociationB:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
-      SubnetId: !Ref PrivateSubnet2
-      RouteTableId: !Ref PrivateRouteTable
+      SubnetId: !Ref PrivateSubnetB
+      RouteTableId: !Ref PrivateRouteTableB
 
-  PrivateSubnet3RouteTableAssociation:
+  PrivateRouteTableC:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub 'Nova-Private-RouteTable-C-${AWS::StackName}'
+  PrivateRouteC:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTableC
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGatewayC
+  PrivateSubnetRouteTableAssociationC:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
-      SubnetId: !Ref PrivateSubnet3
-      RouteTableId: !Ref PrivateRouteTable
+      SubnetId: !Ref PrivateSubnetC
+      RouteTableId: !Ref PrivateRouteTableC
 
-  # --- Security Groups ---
+  # ------------------------------------------------------------
+  # Security Groups
+  # ------------------------------------------------------------
   ALBSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub '${ProjectName}-ALB-SG'
-      GroupDescription: 'Allow HTTP/HTTPS traffic to the Application Load Balancer'
+      GroupName: !Sub 'Nova-ALB-SG-${AWS::StackName}'
+      GroupDescription: 'Allow HTTPS traffic from the internet to the ALB'
       VpcId: !Ref VPC
       SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 80
-          ToPort: 80
-          CidrIp: 0.0.0.0/0
-        - IpProtocol: tcp
+        - CidrIp: 0.0.0.0/0
+          IpProtocol: tcp
           FromPort: 443
           ToPort: 443
-          CidrIp: 0.0.0.0/0
       Tags:
         - Key: Name
-          Value: !Sub '${ProjectName}-ALB-SG'
+          Value: !Sub 'Nova-ALB-SG-${AWS::StackName}'
 
   EC2SecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub '${ProjectName}-EC2-SG'
-      GroupDescription: 'Allow traffic from the ALB to the EC2 instances'
+      GroupName: !Sub 'Nova-EC2-SG-${AWS::StackName}'
+      GroupDescription: 'Allow HTTP traffic from the ALB'
       VpcId: !Ref VPC
       SecurityGroupIngress:
-        - IpProtocol: tcp
+        - SourceSecurityGroupId: !Ref ALBSecurityGroup
+          IpProtocol: tcp
           FromPort: 80
           ToPort: 80
-          SourceSecurityGroupId: !Ref ALBSecurityGroup
       Tags:
         - Key: Name
-          Value: !Sub '${ProjectName}-EC2-SG'
+          Value: !Sub 'Nova-EC2-SG-${AWS::StackName}'
 
-  # --- IAM Role and Policy for EC2 Instances ---
-  EC2InstanceRole:
-    Type: AWS::IAM::Role
-    Properties:
-      RoleName: !Sub '${ProjectName}-EC2-Role'
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: ec2.amazonaws.com
-            Action: 'sts:AssumeRole'
-      ManagedPolicyArns:
-        - 'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore'
-      Policies:
-        - PolicyName: !Sub '${ProjectName}-EC2-Policy'
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - 'logs:CreateLogGroup'
-                  - 'logs:CreateLogStream'
-                  - 'logs:PutLogEvents'
-                  - 'logs:DescribeLogStreams'
-                Resource: 'arn:aws:logs:*:*:*'
-              - Effect: Allow
-                Action:
-                  - 'cloudwatch:PutMetricData'
-                Resource: '*'
-              - Effect: Allow
-                Action:
-                  - 's3:GetObject'
-                Resource: !Sub 'arn:aws:s3:::${S3AssetBucket}/*'
-
-  EC2InstanceProfile:
-    Type: AWS::IAM::InstanceProfile
-    Properties:
-      InstanceProfileName: !Sub '${ProjectName}-InstanceProfile'
-      Roles:
-        - !Ref EC2InstanceRole
-
-  # --- S3 Bucket for Assets/Backups ---
-  S3AssetBucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      # CORRECTION for W1032: Shortened the bucket name to be under the 63-character limit
-      # by using only the first 8 characters of the stack's unique UUID.
-      BucketName: !Join
-        - '-'
-        - - !Ref ProjectName
-          - 'assets'
-          - !Ref 'AWS::AccountId'
-          - !Select [
-              0,
-              !Split ['-', !Select [2, !Split ['/', !Ref 'AWS::StackId']]],
-            ]
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-      VersioningConfiguration:
-        Status: Enabled
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-AssetBucket'
-
-  # --- AWS Backup Configuration ---
-  AppBackupVault:
-    Type: AWS::Backup::BackupVault
-    Properties:
-      BackupVaultName: !Sub '${ProjectName}-Vault'
-
-  AppBackupPlan:
-    Type: AWS::Backup::BackupPlan
-    Properties:
-      BackupPlan:
-        BackupPlanName: !Sub '${ProjectName}-Daily-Plan'
-        BackupPlanRule:
-          - RuleName: DailyBackups
-            TargetBackupVault: !Ref AppBackupVault
-            ScheduleExpression: 'cron(0 5 ? * * *)'
-            Lifecycle:
-              DeleteAfterDays: 7
-
-  AppBackupSelection:
-    Type: AWS::Backup::BackupSelection
-    Properties:
-      BackupPlanId: !GetAtt AppBackupPlan.BackupPlanId
-      BackupSelection:
-        SelectionName: AppInstances
-        IamRoleArn: !GetAtt BackupRole.Arn
-        ListOfTags:
-          - ConditionType: STRINGEQUALS
-            ConditionKey: 'Backup-Plan'
-            ConditionValue: 'Nova-Model-Daily'
-
-  BackupRole:
-    Type: AWS::IAM::Role
-    Properties:
-      RoleName: !Sub '${ProjectName}-Backup-Service-Role'
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: backup.amazonaws.com
-            Action: 'sts:AssumeRole'
-      ManagedPolicyArns:
-        - 'arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForBackup'
-
-  # --- Application Load Balancer and Target Group ---
-  ALBTargetGroup:
-    Type: AWS::ElasticLoadBalancingV2::TargetGroup
-    Properties:
-      Name: !Sub '${ProjectName}-TG'
-      VpcId: !Ref VPC
-      Port: 80
-      Protocol: HTTP
-      HealthCheckProtocol: HTTP
-      HealthCheckPath: /index.html
-      HealthCheckIntervalSeconds: 30
-      HealthyThresholdCount: 2
-      UnhealthyThresholdCount: 2
-      HealthCheckTimeoutSeconds: 5
-      TargetType: instance
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-TG'
-
+  # ------------------------------------------------------------
+  # Load Balancer, Target Group & Listener
+  # ------------------------------------------------------------
   ApplicationLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
-      Name: !Sub '${ProjectName}-ALB'
+      Name: !Sub 'Nova-ALB-${AWS::StackName}'
       Scheme: internet-facing
+      LoadBalancerAttributes:
+        - Key: deletion_protection.enabled
+          Value: 'false'
+        - Key: idle_timeout.timeout_seconds
+          Value: '60'
+      Subnets:
+        - !Ref PublicSubnetA
+        - !Ref PublicSubnetB
+        - !Ref PublicSubnetC
       SecurityGroups:
         - !Ref ALBSecurityGroup
-      Subnets:
-        - !Ref PublicSubnet1
-        - !Ref PublicSubnet2
-        - !Ref PublicSubnet3
-      Type: application
+
+  ALBTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub 'Nova-TG-${AWS::StackName}'
+      VpcId: !Ref VPC
+      Protocol: HTTP
+      Port: 80
+      HealthCheckProtocol: HTTP
+      HealthCheckPath: /index.html
+      Matcher:
+        HttpCode: '200'
+      TargetType: instance
       Tags:
         - Key: Name
-          Value: !Sub '${ProjectName}-ALB'
+          Value: !Sub 'Nova-TargetGroup-${AWS::StackName}'
 
-  ALBListenerHTTPS:
+  ALBListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
       LoadBalancerArn: !Ref ApplicationLoadBalancer
       Protocol: HTTPS
       Port: 443
+      SslPolicy: ELBSecurityPolicy-2016-08
       Certificates:
-        - CertificateArn: !Ref CertificateArn
+        - CertificateArn: !Ref ACMCertificateArn
       DefaultActions:
         - Type: forward
           TargetGroupArn: !Ref ALBTargetGroup
 
-  ALBListenerHTTP:
-    Type: AWS::ElasticLoadBalancingV2::Listener
-    Properties:
-      LoadBalancerArn: !Ref ApplicationLoadBalancer
-      Protocol: HTTP
-      Port: 80
-      DefaultActions:
-        - Type: redirect
-          RedirectConfig:
-            Protocol: HTTPS
-            Port: '443'
-            StatusCode: HTTP_301
-
-  # --- Launch Template and Auto Scaling Group ---
+  # ------------------------------------------------------------
+  # Compute & Auto Scaling
+  # ------------------------------------------------------------
   EC2LaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
     Properties:
-      LaunchTemplateName: !Sub '${ProjectName}-LaunchTemplate'
+      LaunchTemplateName: !Sub 'Nova-LaunchTemplate-${AWS::StackName}'
       LaunchTemplateData:
-        ImageId: !Ref LatestAmiId
+        ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}'
         InstanceType: !Ref InstanceType
         IamInstanceProfile:
           Arn: !GetAtt EC2InstanceProfile.Arn
@@ -531,162 +382,229 @@ Resources:
           Enabled: true
         SecurityGroupIds:
           - !Ref EC2SecurityGroup
-        BlockDeviceMappings:
-          - DeviceName: /dev/xvda
-            Ebs:
-              VolumeType: gp3
-              VolumeSize: 10
-              DeleteOnTermination: true
-        TagSpecifications:
-          - ResourceType: instance
-            Tags:
-              - Key: Name
-                Value: !Sub '${ProjectName}-Instance'
-              - Key: 'Backup-Plan'
-                Value: 'Nova-Model-Daily'
-        UserData: !Base64 |
-          #!/bin/bash
-          yum update -y
-          yum install -y httpd
-          systemctl start httpd
-          systemctl enable httpd
-          echo "<h1>Welcome to the IaC-AWS-Nova-Model Application!</h1>" > /var/www/html/index.html
-          echo "<p>Deployed via CloudFormation on $(date -u +"%Y-%m-%dT%H:%M:%SZ")</p>" >> /var/www/html/index.html
-          echo "<p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p>" >> /var/www/html/index.html
-          echo "<p>Availability Zone: $(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)</p>" >> /var/www/html/index.html
+        UserData:
+          Fn::Base64: !Sub |
+            #!/bin/bash
+            yum update -y
+            yum install -y httpd
+            systemctl start httpd
+            systemctl enable httpd
+            echo "<h1>Hello from Nova Web Server on $(hostname -f)</h1>" > /var/www/html/index.html
+            echo "<p>This is stack ${AWS::StackName}</p>" >> /var/www/html/index.html
 
   AutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
-      AutoScalingGroupName: !Sub '${ProjectName}-ASG'
-      MinSize: !Ref ASGMinSize
-      MaxSize: !Ref ASGMaxSize
-      DesiredCapacity: !Ref ASGDesiredCapacity
+      AutoScalingGroupName: !Sub 'Nova-ASG-${AWS::StackName}'
       VPCZoneIdentifier:
-        - !Ref PrivateSubnet1
-        - !Ref PrivateSubnet2
-        - !Ref PrivateSubnet3
+        - !Ref PrivateSubnetA
+        - !Ref PrivateSubnetB
+        - !Ref PrivateSubnetC
       LaunchTemplate:
         LaunchTemplateId: !Ref EC2LaunchTemplate
         Version: !GetAtt EC2LaunchTemplate.LatestVersionNumber
+      MinSize: '2'
+      MaxSize: '6'
+      DesiredCapacity: '2'
       TargetGroupARNs:
         - !Ref ALBTargetGroup
       HealthCheckType: ELB
       HealthCheckGracePeriod: 300
-      NotificationConfigurations:
-        - TopicARN: !Ref SNSTopic
-          NotificationTypes:
-            - 'autoscaling:EC2_INSTANCE_LAUNCH'
-            - 'autoscaling:EC2_INSTANCE_TERMINATE'
+      NotificationConfiguration:
+        TopicARN: !Ref NotificationTopic
+        NotificationTypes:
+          - 'autoscaling:EC2_INSTANCE_LAUNCH'
+          - 'autoscaling:EC2_INSTANCE_LAUNCH_ERROR'
+          - 'autoscaling:EC2_INSTANCE_TERMINATE'
+          - 'autoscaling:EC2_INSTANCE_TERMINATE_ERROR'
       Tags:
         - Key: Name
-          Value: !Sub '${ProjectName}-ASG-Instance'
+          Value: !Sub 'Nova-Instance-${AWS::StackName}'
           PropagateAtLaunch: true
+    UpdatePolicy:
+      AutoScalingRollingUpdate:
+        MinInstancesInService: 1
+        MaxBatchSize: 1
+        PauseTime: PT5M
+        WaitOnResourceSignals: false
 
-  # --- Scaling Policies and Alarms ---
+  # ------------------------------------------------------------
+  # Scaling Policies & Alarms
+  # ------------------------------------------------------------
   ScaleUpPolicy:
     Type: AWS::AutoScaling::ScalingPolicy
     Properties:
-      AdjustmentType: ChangeInCapacity
       AutoScalingGroupName: !Ref AutoScalingGroup
-      Cooldown: '300'
-      ScalingAdjustment: '1'
+      PolicyType: TargetTrackingScaling
+      TargetTrackingConfiguration:
+        PredefinedMetricSpecification:
+          PredefinedMetricType: ASGAverageCPUUtilization
+        TargetValue: 70.0
 
-  ScaleDownPolicy:
-    Type: AWS::AutoScaling::ScalingPolicy
+  # ------------------------------------------------------------
+  # DNS & Health Checks
+  # ------------------------------------------------------------
+  Route53HealthCheck:
+    Type: AWS::Route53::HealthCheck
     Properties:
-      AdjustmentType: ChangeInCapacity
-      AutoScalingGroupName: !Ref AutoScalingGroup
-      Cooldown: '300'
-      ScalingAdjustment: '-1'
+      HealthCheckConfig:
+        Type: HTTPS
+        FullyQualifiedDomainName: !GetAtt ApplicationLoadBalancer.DNSName
+        Port: 443
+        ResourcePath: /index.html
+        FailureThreshold: 3
+        RequestInterval: 30
+      HealthCheckTags:
+        - Key: Name
+          Value: !Sub 'Nova-ALB-HealthCheck-${AWS::StackName}'
 
-  CPUAlarmHigh:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName: !Sub '${ProjectName}-CPU-High'
-      AlarmDescription: 'Scale up if CPU utilization > 70%'
-      MetricName: CPUUtilization
-      Namespace: AWS/EC2
-      Statistic: Average
-      Period: 60
-      EvaluationPeriods: 2
-      Threshold: 70
-      ComparisonOperator: GreaterThanThreshold
-      Dimensions:
-        - Name: AutoScalingGroupName
-          Value: !Ref AutoScalingGroup
-      AlarmActions:
-        - !Ref ScaleUpPolicy
-        - !Ref SNSTopic
-
-  CPUAlarmLow:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName: !Sub '${ProjectName}-CPU-Low'
-      AlarmDescription: 'Scale down if CPU utilization < 30%'
-      MetricName: CPUUtilization
-      Namespace: AWS/EC2
-      Statistic: Average
-      Period: 60
-      EvaluationPeriods: 2
-      Threshold: 30
-      ComparisonOperator: LessThanThreshold
-      Dimensions:
-        - Name: AutoScalingGroupName
-          Value: !Ref AutoScalingGroup
-      AlarmActions:
-        - !Ref ScaleDownPolicy
-        - !Ref SNSTopic
-
-  # --- DNS Record ---
   DNSRecord:
     Type: AWS::Route53::RecordSet
     Properties:
       HostedZoneId: !Ref HostedZoneId
-      Name: !Ref DomainName
+      Name: !Ref DnsName
       Type: A
       AliasTarget:
         HostedZoneId: !GetAtt ApplicationLoadBalancer.CanonicalHostedZoneID
         DNSName: !GetAtt ApplicationLoadBalancer.DNSName
-        EvaluateTargetHealth: true
+      HealthCheckId: !Ref Route53HealthCheck
 
-  # --- SNS Notifications ---
-  SNSTopic:
+  # ------------------------------------------------------------
+  # Storage
+  # ------------------------------------------------------------
+  S3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'nova-app-data-${AWS::AccountId}-${AWS::Region}-${AWS::StackName}'
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: NoncurrentVersionTransitionRule
+            Status: Enabled
+            NoncurrentVersionTransitions:
+              - TransitionInDays: 30
+                StorageClass: STANDARD_IA
+          - Id: ExpireNoncurrentVersionsRule
+            Status: Enabled
+            NoncurrentVersionExpirationInDays: 365
+          - Id: AbortIncompleteMultipartUploadRule
+            Status: Enabled
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 7
+
+  # ------------------------------------------------------------
+  # Monitoring & Notifications
+  # ------------------------------------------------------------
+  NotificationTopic:
     Type: AWS::SNS::Topic
     Properties:
-      DisplayName: !Sub '${ProjectName}-Notifications'
-      TopicName: !Sub '${ProjectName}-Notifications-Topic'
+      DisplayName: !Sub 'Nova-Notifications-${AWS::StackName}'
+      TopicName: !Sub 'Nova-Notifications-${AWS::StackName}'
 
-  SNSSubscription:
-    Type: AWS::SNS::Subscription
+  NotificationTopicPolicy:
+    Type: AWS::SNS::TopicPolicy
     Properties:
-      TopicArn: !Ref SNSTopic
-      Endpoint: !Ref NotificationEmail
-      Protocol: email
+      PolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - cloudwatch.amazonaws.com
+                - autoscaling.amazonaws.com
+            Action: sns:Publish
+            Resource: !Ref NotificationTopic
+      Topics:
+        - !Ref NotificationTopic
 
-# ------------------------------------------------------------#
-# Outputs
-# ------------------------------------------------------------#
+  HighCPUAlarmForNotification:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'Nova-High-CPU-Notification-${AWS::StackName}'
+      AlarmDescription: 'Alarm if CPU exceeds 90% for 10 minutes (notification only)'
+      Namespace: AWS/EC2
+      MetricName: CPUUtilization
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref AutoScalingGroup
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 90
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        - !Ref NotificationTopic
+
+# ------------------------------------------------------------
+# Outputs for Integration Testing and Management
+# ------------------------------------------------------------
 Outputs:
-  ApplicationURL:
-    Description: The URL of the web application.
-    Value: !Sub 'https://${DomainName}'
+  WebAppURL:
+    Description: The URL for the Nova web application.
+    Value: !Sub 'https://${DnsName}'
 
-  ALBDNSName:
+  ApplicationLoadBalancerDNS:
     Description: The DNS name of the Application Load Balancer.
     Value: !GetAtt ApplicationLoadBalancer.DNSName
-    Export:
-      Name: !Sub '${AWS::StackName}-ALBDNSName'
 
-  S3AssetBucketName:
-    Description: The name of the S3 bucket for application assets.
-    Value: !Ref S3AssetBucket
-    Export:
-      Name: !Sub '${AWS::StackName}-S3AssetBucketName'
+  ApplicationLoadBalancerArn:
+    Description: The ARN of the Application Load Balancer.
+    Value: !Ref ApplicationLoadBalancer
 
-  SNSTopicArn:
-    Description: The ARN of the SNS topic for notifications.
-    Value: !Ref SNSTopic
-    Export:
-      Name: !Sub '${AWS::StackName}-SNSTopicArn'
+  TargetGroupArn:
+    Description: The ARN of the ALB Target Group.
+    Value: !Ref ALBTargetGroup
+
+  AutoScalingGroupName:
+    Description: The name of the Auto Scaling Group.
+    Value: !Ref AutoScalingGroup
+
+  EC2InstanceRoleArn:
+    Description: The ARN of the IAM Role for EC2 instances.
+    Value: !GetAtt EC2InstanceRole.Arn
+
+  S3BucketName:
+    Description: Name of the private S3 bucket for durable storage.
+    Value: !Ref S3Bucket
+
+  NotificationTopicARN:
+    Description: ARN of the SNS topic for notifications.
+    Value: !Ref NotificationTopic
+
+  VpcId:
+    Description: The ID of the deployed VPC.
+    Value: !Ref VPC
+
+  PublicSubnetAId:
+    Description: ID of Public Subnet in AZ-A.
+    Value: !Ref PublicSubnetA
+
+  PublicSubnetBId:
+    Description: ID of Public Subnet in AZ-B.
+    Value: !Ref PublicSubnetB
+
+  PublicSubnetCId:
+    Description: ID of Public Subnet in AZ-C.
+    Value: !Ref PublicSubnetC
+
+  PrivateSubnetAId:
+    Description: ID of Private Subnet in AZ-A.
+    Value: !Ref PrivateSubnetA
+
+  PrivateSubnetBId:
+    Description: ID of Private Subnet in AZ-B.
+    Value: !Ref PrivateSubnetB
+
+  PrivateSubnetCId:
+    Description: ID of Private Subnet in AZ-C.
+    Value: !Ref PrivateSubnetC
 ```

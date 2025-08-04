@@ -19,6 +19,7 @@ import {
   S3Client,
   GetBucketVersioningCommand,
   GetPublicAccessBlockCommand,
+  GetBucketEncryptionCommand,
 } from '@aws-sdk/client-s3';
 import {
   IAMClient,
@@ -32,35 +33,36 @@ import {
 import { SNSClient, GetTopicAttributesCommand } from '@aws-sdk/client-sns';
 import https from 'https';
 import fs from 'fs';
+import path from 'path';
 
-// Configuration - These are coming from cfn-outputs after cdk deploy
+// --- Configuration ---
+// Assumes a JSON file with CloudFormation outputs is at the root of the project.
 const outputs = JSON.parse(
-  fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
+  fs.readFileSync(path.join(__dirname, '../cfn-outputs.json'), 'utf8')
 );
 
 /*
  * =================================================================
  * REQUIRED `cfn-outputs.json` KEYS
  * =================================================================
- * For this test suite to run successfully, your cfn-outputs.json
- * file MUST contain the following keys from your CloudFormation stack:
- *
- * - ALBDNSName (e.g., "IaC-AWS-Nova-Model-ALB-1234567890.us-west-2.elb.amazonaws.com")
- * - ALBArn (e.g., "arn:aws:elasticloadbalancing:us-west-2:...")
- * - ALBTargetGroupArn (e.g., "arn:aws:elasticloadbalancing:us-west-2:...")
- * - S3AssetBucketName (e.g., "iac-aws-nova-model-assets-123456789012-...")
- * - SNSTopicArn (e.g., "arn:aws:sns:us-west-2:...")
- * - ASGName (e.g., "IaC-AWS-Nova-Model-ASG")
- * - DomainName (e.g., "app.example.com")
- * - HostedZoneId (e.g., "Z2FDTNDATAQYW2")
- * - EC2InstanceRoleArn (e.g., "arn:aws:iam::123456789012:role/...")
- * - PublicSubnet1, PublicSubnet2, PublicSubnet3 (e.g., "subnet-...")
- * - PrivateSubnet1, PrivateSubnet2, PrivateSubnet3 (e.g., "subnet-...")
+ * - WebAppURL (e.g., "https://nova.yourdomain.com")
+ * - ApplicationLoadBalancerDNS (e.g., "Nova-ALB-...")
+ * - ApplicationLoadBalancerArn (e.g., "arn:aws:elasticloadbalancing:...")
+ * - TargetGroupArn (e.g., "arn:aws:elasticloadbalancing:...")
+ * - AutoScalingGroupName (e.g., "Nova-ASG-...")
+ * - EC2InstanceRoleArn (e.g., "arn:aws:iam::...")
+ * - S3BucketName (e.g., "nova-app-data-...")
+ * - NotificationTopicARN (e.g., "arn:aws:sns:...")
+ * - VpcId (e.g., "vpc-...")
+ * - PublicSubnetAId, PublicSubnetBId, PublicSubnetCId
+ * - PrivateSubnetAId, PrivateSubnetBId, PrivateSubnetCId
+ * - DnsName (parameter value from your deployment)
+ * - HostedZoneId (parameter value from your deployment)
  * =================================================================
  */
 
-// Initialize AWS SDK Clients
-const region = { region: 'us-west-2' };
+// Initialize AWS SDK Clients - Replace 'us-east-1' with your deployment region if needed.
+const region = { region: process.env.AWS_REGION || 'us-east-1' };
 const ec2Client = new EC2Client(region);
 const elbv2Client = new ElasticLoadBalancingV2Client(region);
 const asgClient = new AutoScalingClient(region);
@@ -70,132 +72,145 @@ const route53Client = new Route53Client(region);
 const snsClient = new SNSClient(region);
 
 // Increase Jest timeout for AWS async operations
-jest.setTimeout(60000); // 60 seconds
+jest.setTimeout(90000); // 90 seconds
 
-describe('IaC-AWS-Nova-Model Infrastructure Integration Tests', () => {
+describe('Nova Web App Infrastructure Integration Tests', () => {
   // --- Networking Validation ---
   describe('Networking: VPC, Subnets, and Routing', () => {
     test('VPC should exist and be available', async () => {
-      // The VPC ID is inferred from the subnet outputs
-      const subnetResponse = await ec2Client.send(
-        new DescribeSubnetsCommand({
-          SubnetIds: [outputs.PublicSubnet1],
-        })
-      );
-      // FIX: Check if Subnets array exists and has elements before accessing it.
-      const vpcId = subnetResponse.Subnets?.[0]?.VpcId;
-      expect(vpcId).toBeDefined();
-
-      // FIX: Ensure vpcId is not undefined before making the next call.
-      if (!vpcId) {
-        throw new Error('VPC ID not found from subnet.');
-      }
-
       const vpcResponse = await ec2Client.send(
-        new DescribeVpcsCommand({ VpcIds: [vpcId] })
+        new DescribeVpcsCommand({ VpcIds: [outputs.VpcId] })
       );
-      // FIX: Use optional chaining to safely access properties.
       expect(vpcResponse.Vpcs?.length).toBe(1);
       expect(vpcResponse.Vpcs?.[0]?.State).toBe('available');
     });
 
-    test('Should have 3 public and 3 private subnets', async () => {
-      const publicSubnetIds = [
-        outputs.PublicSubnet1,
-        outputs.PublicSubnet2,
-        outputs.PublicSubnet3,
+    test('Should have 3 public and 3 private subnets across different AZs', async () => {
+      const subnetIds = [
+        outputs.PublicSubnetAId,
+        outputs.PublicSubnetBId,
+        outputs.PublicSubnetCId,
+        outputs.PrivateSubnetAId,
+        outputs.PrivateSubnetBId,
+        outputs.PrivateSubnetCId,
       ];
-      const privateSubnetIds = [
-        outputs.PrivateSubnet1,
-        outputs.PrivateSubnet2,
-        outputs.PrivateSubnet3,
-      ];
-
-      const allSubnetsResponse = await ec2Client.send(
-        new DescribeSubnetsCommand({
-          SubnetIds: [...publicSubnetIds, ...privateSubnetIds],
-        })
+      const subnetsResponse = await ec2Client.send(
+        new DescribeSubnetsCommand({ SubnetIds: subnetIds })
       );
-
-      // FIX: Provide a default empty array to prevent filter on undefined.
-      const allSubnets = allSubnetsResponse.Subnets ?? [];
+      const allSubnets = subnetsResponse.Subnets ?? [];
+      expect(allSubnets.length).toBe(6);
 
       const publicSubnets = allSubnets.filter(s => s.MapPublicIpOnLaunch);
       const privateSubnets = allSubnets.filter(s => !s.MapPublicIpOnLaunch);
-
       expect(publicSubnets.length).toBe(3);
       expect(privateSubnets.length).toBe(3);
+
+      // Verify they are in different Availability Zones
+      const azSet = new Set(allSubnets.map(s => s.AvailabilityZone));
+      expect(azSet.size).toBe(3);
     });
 
-    test('Public subnets should have a route to the Internet Gateway', async () => {
+    test('Public subnets should have a route to an Internet Gateway', async () => {
       const routeTablesResponse = await ec2Client.send(
         new DescribeRouteTablesCommand({
           Filters: [
-            { Name: 'association.subnet-id', Values: [outputs.PublicSubnet1] },
+            {
+              Name: 'association.subnet-id',
+              Values: [outputs.PublicSubnetAId],
+            },
           ],
         })
       );
-      // FIX: Safely access nested properties.
       const routes = routeTablesResponse.RouteTables?.[0]?.Routes ?? [];
       const hasIgwRoute = routes.some(
-        r => r.GatewayId && r.GatewayId.startsWith('igw-')
+        r =>
+          r.DestinationCidrBlock === '0.0.0.0/0' &&
+          r.GatewayId?.startsWith('igw-')
       );
       expect(hasIgwRoute).toBe(true);
+    });
+
+    test('Private subnets should have a route to a NAT Gateway', async () => {
+      const routeTablesResponse = await ec2Client.send(
+        new DescribeRouteTablesCommand({
+          Filters: [
+            {
+              Name: 'association.subnet-id',
+              Values: [outputs.PrivateSubnetAId],
+            },
+          ],
+        })
+      );
+      const routes = routeTablesResponse.RouteTables?.[0]?.Routes ?? [];
+      const hasNatRoute = routes.some(
+        r =>
+          r.DestinationCidrBlock === '0.0.0.0/0' &&
+          r.NatGatewayId?.startsWith('nat-')
+      );
+      expect(hasNatRoute).toBe(true);
+    });
+  });
+
+  // --- Security Validation ---
+  describe('Security: IAM Roles and Encryption', () => {
+    test('EC2 Instance Role should have required policies', async () => {
+      const roleName = outputs.EC2InstanceRoleArn.split('/').pop();
+      const response = await iamClient.send(
+        new ListAttachedRolePoliciesCommand({ RoleName: roleName })
+      );
+      const policyNames = (response.AttachedPolicies ?? []).map(
+        p => p.PolicyName
+      );
+      expect(policyNames).toContain('AmazonSSMManagedInstanceCore');
+      expect(policyNames).toContain('CloudWatchAgentServerPolicy');
+    });
+
+    test('S3 Bucket should be encrypted with AES256', async () => {
+      const response = await s3Client.send(
+        new GetBucketEncryptionCommand({ Bucket: outputs.S3BucketName })
+      );
+      const sseRule = response.ServerSideEncryptionConfiguration?.Rules?.[0];
+      expect(sseRule?.ApplyServerSideEncryptionByDefault?.SSEAlgorithm).toBe(
+        'AES256'
+      );
     });
   });
 
   // --- Application Load Balancer Validation ---
-  describe('Load Balancing: ALB, Listeners, and Target Group', () => {
-    test('ALB should exist and be active', async () => {
+  describe('Load Balancing: ALB, Listener, and Target Group', () => {
+    test('ALB should exist, be active, and internet-facing', async () => {
       const response = await elbv2Client.send(
-        new DescribeLoadBalancersCommand({ LoadBalancerArns: [outputs.ALBArn] })
-      );
-      // FIX: Use optional chaining for safe access.
-      expect(response.LoadBalancers?.length).toBe(1);
-      expect(response.LoadBalancers?.[0]?.State?.Code).toBe('active');
-      expect(response.LoadBalancers?.[0]?.Scheme).toBe('internet-facing');
-    });
-
-    test('ALB should have HTTP->HTTPS redirect and HTTPS forward listeners', async () => {
-      const { Listeners } = await elbv2Client.send(
-        new DescribeListenersCommand({ LoadBalancerArn: outputs.ALBArn })
-      );
-
-      // FIX: Use a default empty array to prevent find on undefined.
-      const listeners = Listeners ?? [];
-      const httpListener = listeners.find(l => l.Port === 80);
-      const httpsListener = listeners.find(l => l.Port === 443);
-
-      expect(httpListener).toBeDefined();
-      // FIX: Optional chaining for safety.
-      expect(httpListener?.DefaultActions?.[0]?.Type).toBe('redirect');
-      expect(httpListener?.DefaultActions?.[0]?.RedirectConfig?.Protocol).toBe(
-        'HTTPS'
-      );
-
-      expect(httpsListener).toBeDefined();
-      expect(httpsListener?.DefaultActions?.[0]?.Type).toBe('forward');
-      expect(httpsListener?.Certificates?.length ?? 0).toBeGreaterThan(0);
-    });
-
-    test('Target Group should exist and targets should be healthy', async () => {
-      const { TargetGroups } = await elbv2Client.send(
-        new DescribeTargetGroupsCommand({
-          TargetGroupArns: [outputs.ALBTargetGroupArn],
+        new DescribeLoadBalancersCommand({
+          LoadBalancerArns: [outputs.ApplicationLoadBalancerArn],
         })
       );
-      expect(TargetGroups?.length).toBe(1);
+      const alb = response.LoadBalancers?.[0];
+      expect(alb).toBeDefined();
+      expect(alb?.State?.Code).toBe('active');
+      expect(alb?.Scheme).toBe('internet-facing');
+    });
 
+    test('ALB should have an HTTPS listener on port 443', async () => {
+      const { Listeners } = await elbv2Client.send(
+        new DescribeListenersCommand({
+          LoadBalancerArn: outputs.ApplicationLoadBalancerArn,
+        })
+      );
+      const httpsListener = (Listeners ?? []).find(l => l.Port === 443);
+      expect(httpsListener).toBeDefined();
+      expect(httpsListener?.Protocol).toBe('HTTPS');
+      expect(httpsListener?.Certificates?.length ?? 0).toBeGreaterThan(0);
+      expect(httpsListener?.DefaultActions?.[0]?.Type).toBe('forward');
+    });
+
+    test('Target Group should have healthy targets', async () => {
       const { TargetHealthDescriptions } = await elbv2Client.send(
         new DescribeTargetHealthCommand({
-          TargetGroupArn: outputs.ALBTargetGroupArn,
+          TargetGroupArn: outputs.TargetGroupArn,
         })
       );
-      // This check is critical to ensure the ASG has provisioned instances.
-      expect(TargetHealthDescriptions?.length ?? 0).toBeGreaterThan(0);
-
-      // This validates that the EC2 instances, security groups, and UserData script are all working.
-      // FIX: Use a default empty array to prevent forEach on undefined.
+      // This is a critical check to ensure the ASG provisioned instances and they passed health checks
+      expect(TargetHealthDescriptions?.length).toBeGreaterThanOrEqual(2); // Should match DesiredCapacity
       (TargetHealthDescriptions ?? []).forEach(target => {
         expect(target.TargetHealth?.State).toBe('healthy');
       });
@@ -203,11 +218,11 @@ describe('IaC-AWS-Nova-Model Infrastructure Integration Tests', () => {
   });
 
   // --- Compute and Application Accessibility ---
-  describe('Compute: ASG and Web Application Accessibility', () => {
+  describe('Compute: Auto Scaling Group and Web App', () => {
     test('Auto Scaling Group should be configured correctly', async () => {
       const { AutoScalingGroups } = await asgClient.send(
         new DescribeAutoScalingGroupsCommand({
-          AutoScalingGroupNames: [outputs.ASGName],
+          AutoScalingGroupNames: [outputs.AutoScalingGroupName],
         })
       );
       const asg = AutoScalingGroups?.[0];
@@ -217,53 +232,39 @@ describe('IaC-AWS-Nova-Model Infrastructure Integration Tests', () => {
       expect(asg?.DesiredCapacity).toBe(2);
     });
 
-    // CORRECTED: This test is now more robust.
-    test('Application should be accessible via ALB DNS and return HTTP 200', () => {
-      const url = `https://${outputs.ALBDNSName}`;
-
-      // Return the promise to Jest to handle async operation correctly.
-      // FIX: Specify the Promise type as <void> to match the resolve() call.
+    test('Application should be accessible via ALB DNS and return HTTP 200 with correct content', () => {
+      const url = `https://${outputs.ApplicationLoadBalancerDNS}`;
       return new Promise<void>((resolve, reject) => {
-        const req = https.get(url, { rejectUnauthorized: false }, res => {
-          // Explicitly reject on non-200 status codes for clearer test failures.
-          if (res.statusCode !== 200) {
-            res.resume(); // Consume response data to free up memory.
-            return reject(
-              new Error(
-                `Request failed with status code: ${res.statusCode} at ${url}`
-              )
-            );
-          }
-
-          let data = '';
-          res.on('data', chunk => (data += chunk));
-
-          // When the response ends, check the content.
-          res.on('end', () => {
-            try {
-              expect(data).toContain(
-                'Welcome to the IaC-AWS-Nova-Model Application'
+        const request = https.get(
+          url,
+          { rejectUnauthorized: false },
+          response => {
+            if (response.statusCode !== 200) {
+              return reject(
+                new Error(`Request failed: ${response.statusCode} at ${url}`)
               );
-              resolve(); // Resolve the promise on successful assertion.
-            } catch (error) {
-              reject(error); // Reject if the assertion fails.
             }
-          });
-        });
-
-        // Handle underlying network errors.
-        req.on('error', err => {
-          reject(new Error(`Failed to access application: ${err.message}`));
-        });
+            let data = '';
+            response.on('data', chunk => (data += chunk));
+            response.on('end', () => {
+              try {
+                expect(data).toContain('Hello from Nova Web Server');
+                resolve();
+              } catch (error) {
+                reject(error);
+              }
+            });
+          }
+        );
+        request.on('error', reject);
       });
     });
   });
 
   // --- Storage Validation ---
   describe('Storage: S3 Bucket', () => {
-    test('S3 Bucket should exist, be private, and have versioning enabled', async () => {
-      const bucketName = outputs.S3AssetBucketName;
-
+    test('S3 Bucket should be private and have versioning enabled', async () => {
+      const bucketName = outputs.S3BucketName;
       const versioning = await s3Client.send(
         new GetBucketVersioningCommand({ Bucket: bucketName })
       );
@@ -272,59 +273,45 @@ describe('IaC-AWS-Nova-Model Infrastructure Integration Tests', () => {
       const accessBlock = await s3Client.send(
         new GetPublicAccessBlockCommand({ Bucket: bucketName })
       );
-      // FIX: Use optional chaining to safely access nested configuration.
-      expect(accessBlock.PublicAccessBlockConfiguration?.BlockPublicAcls).toBe(
-        true
-      );
-      expect(
-        accessBlock.PublicAccessBlockConfiguration?.RestrictPublicBuckets
-      ).toBe(true);
+      const config = accessBlock.PublicAccessBlockConfiguration;
+      expect(config?.BlockPublicAcls).toBe(true);
+      expect(config?.IgnorePublicAcls).toBe(true);
+      expect(config?.BlockPublicPolicy).toBe(true);
+      expect(config?.RestrictPublicBuckets).toBe(true);
     });
   });
 
   // --- DNS and Notifications ---
   describe('DNS and Notifications: Route 53 and SNS', () => {
-    // CORRECTED: This test now uses a more robust check for the DNS name.
     test('Route 53 Alias record should point to the ALB', async () => {
       const { ResourceRecordSets } = await route53Client.send(
         new ListResourceRecordSetsCommand({
           HostedZoneId: outputs.HostedZoneId,
         })
       );
-
-      // FIX: Use a default empty array.
-      const recordSets = ResourceRecordSets ?? [];
-
       // Route 53 FQDNs end with a period.
-      const appRecord = recordSets.find(
-        r => r.Name === `${outputs.DomainName}.`
+      const appRecord = (ResourceRecordSets ?? []).find(
+        r => r.Name === `${outputs.DnsName}.`
       );
-
       expect(appRecord).toBeDefined();
       expect(appRecord?.Type).toBe('A');
       expect(appRecord?.AliasTarget).toBeDefined();
-
-      // The AliasTarget DNS name from the API may have a "dualstack." prefix and ends with a ".".
-      // We normalize both strings for a robust comparison.
-      // FIX: Safely access DNSName and provide a default empty string.
-      const aliasTargetDns = (
-        appRecord?.AliasTarget?.DNSName ?? ''
-      ).toLowerCase();
-      const albDns = outputs.ALBDNSName.toLowerCase();
-
-      // Check that the core ALB DNS name is present in the alias target.
-      // This is more reliable than checking for an exact match.
-      expect(aliasTargetDns).toContain(
-        albDns.endsWith('.') ? albDns.slice(0, -1) : albDns
-      );
+      // Normalize both strings for a robust comparison (lowercase, remove trailing dot)
+      const aliasTargetDns = (appRecord?.AliasTarget?.DNSName ?? '')
+        .toLowerCase()
+        .replace(/\.$/, '');
+      const albDns = outputs.ApplicationLoadBalancerDNS.toLowerCase();
+      expect(aliasTargetDns).toContain(albDns);
     });
 
     test('SNS Topic for notifications should exist', async () => {
       const { Attributes } = await snsClient.send(
-        new GetTopicAttributesCommand({ TopicArn: outputs.SNSTopicArn })
+        new GetTopicAttributesCommand({
+          TopicArn: outputs.NotificationTopicARN,
+        })
       );
       expect(Attributes).toBeDefined();
-      expect(Attributes?.TopicArn).toBe(outputs.SNSTopicArn);
+      expect(Attributes?.TopicArn).toBe(outputs.NotificationTopicARN);
     });
   });
 });
