@@ -418,6 +418,8 @@ export class ServerlessCms extends Construct {
         Environment: props.environment,
         Service: 'cms',
       },
+
+      dependsOn: [apiGatewayStage],
     });
 
     new ApiGatewayUsagePlanKey(this, 'cms_usage_plan_key', {
