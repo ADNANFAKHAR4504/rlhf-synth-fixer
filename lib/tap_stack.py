@@ -553,6 +553,7 @@ class TapStack(pulumi.ComponentResource):
     api_deployment = aws.apigateway.Deployment(
         "api-deployment",
         rest_api=api_gateway.id,
+        stage_name=self.environment_suffix
         opts=pulumi.ResourceOptions(depends_on=[
             health_integration,
             process_integration,
@@ -572,7 +573,7 @@ class TapStack(pulumi.ComponentResource):
         "api-stage",
         deployment=api_deployment.id,
         rest_api=api_gateway.id,
-        stage_name="prod",
+        stage_name=self.environment_suffix
         access_log_settings=aws.apigateway.StageAccessLogSettingsArgs(
             destination_arn=api_log_group.arn,
             format=json.dumps({
