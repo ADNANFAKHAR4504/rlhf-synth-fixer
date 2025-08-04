@@ -212,13 +212,6 @@ describe('TapStack CloudFormation Template', () => {
       });
     });
 
-    test('IAM role name should follow naming convention with environment suffix', () => {
-      const role = template.Resources.LambdaExecutionRole;
-      expect(role.Properties.RoleName).toEqual({
-        'Fn::Sub': 'TapStackLambdaRole-${EnvironmentSuffix}',
-      });
-    });
-
     test('export names should follow naming convention', () => {
       Object.keys(template.Outputs).forEach(outputKey => {
         const output = template.Outputs[outputKey];
