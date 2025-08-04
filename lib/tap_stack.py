@@ -322,30 +322,31 @@ class TapStack(pulumi.ComponentResource):
     self.tags = args.tags
     self.config = Config(args.environment_suffix)
 
-# class TapStack(pulumi.ComponentResource):
-#   def __init__(
-#           self,
-#           name: str,
-#           environment: Optional[str] = "dev",
-#           opts: Optional[ResourceOptions] = None):
-#     super().__init__('tap:stack:TapStack', name, None, opts)
-#     self.config = Config(environment)
+    # class TapStack(pulumi.ComponentResource):
+    #   def __init__(
+    #           self,
+    #           name: str,
+    #           environment: Optional[str] = "dev",
+    #           opts: Optional[ResourceOptions] = None):
+    #     super().__init__('tap:stack:TapStack', name, None, opts)
+    #     self.config = Config(environment)
 
-  def setup_infrastructure(self):
-    vpc = VPCInfrastructure(self.config)
-    vpc.create_vpc()
+    def setup_infrastructure(self):
+      vpc = VPCInfrastructure(self.config)
+      vpc.create_vpc()
 
-    iam = IAMInfrastructure(self.config)
-    lambda_role = iam.create_lambda_role()
+      iam = IAMInfrastructure(self.config)
+      lambda_role = iam.create_lambda_role()
 
-    dynamo = DynamoDBInfrastructure(self.config)
-    tables = dynamo.create_tables()
+      dynamo = DynamoDBInfrastructure(self.config)
+      tables = dynamo.create_tables()
 
-    lambdas = LambdaInfrastructure(self.config, lambda_role, vpc, tables)
-    lambda_functions = lambdas.create_lambda_functions()
+      lambdas = LambdaInfrastructure(self.config, lambda_role, vpc, tables)
+      lambda_functions = lambdas.create_lambda_functions()
 
-    api = APIGatewayInfrastructure(self.config, lambda_functions)
-    api.create_api_gateway()
+      api = APIGatewayInfrastructure(self.config, lambda_functions)
+      api.create_api_gateway()
 
-    pulumi.export("Environment", self.config.environment)
-    pulumi.export("Region", self.config.region)
+      pulumi.export("Environment", self.config.environment)
+      pulumi.export("Region", self.config.region)
+    setup_infrastructure(self)
