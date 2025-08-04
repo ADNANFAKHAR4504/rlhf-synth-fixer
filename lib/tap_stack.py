@@ -77,7 +77,7 @@ class TapStack(pulumi.ComponentResource):
       private_subnet_ids=self.regional_networks[region].private_subnet_ids,
       database_security_group_id=self.regional_networks[region].database_security_group_id,
       kms_key_arn=self.identity_access.kms_key.arn,
-      sns_topic_arn=self.regional_monitoring[region].sns_topic.arn,
+      sns_topic_arn=self.regional_monitoring[region].sns_topic.arn.apply(lambda arn: arn),
       rds_monitoring_role_arn=self.identity_access.rds_monitoring_role.arn,
       tags=self.tags,
       opts=provider_opts([
