@@ -6,7 +6,7 @@ and Pulumi's testing utilities.
 """
 
 # Import the classes we're testing
-from lib.tap_stack import TapStack, TapStackArgs
+from lib.tap_stack import TapStackArgs
 
 
 

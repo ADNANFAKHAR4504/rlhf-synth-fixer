@@ -12,10 +12,13 @@ import boto3
 class TestTapStackLiveIntegration:
   """Integration tests against live deployed Pulumi stack."""
 
-  def setup_method(self):
-    """Set up integration test with live stack."""
+  def __init__(self):
+    """Initialize test attributes."""
     self.stack_name = "dev"
     self.project_name = "tap-infra"
     self.s3_client = boto3.client('s3')
     backend_url = 's3://iac-rlhf-pulumi-states'
     self.pulumi_backend_url = os.getenv('PULUMI_BACKEND_URL', backend_url)
+
+  def setup_method(self):
+    """Set up integration test with live stack."""
