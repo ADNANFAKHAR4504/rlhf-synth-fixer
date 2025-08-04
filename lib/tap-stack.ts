@@ -46,7 +46,6 @@ import { SecretsmanagerSecret } from '@cdktf/provider-aws/lib/secretsmanager-sec
 import { SecretsmanagerSecretVersion } from '@cdktf/provider-aws/lib/secretsmanager-secret-version';
 
 // GuardDuty
-import { GuarddutyDetector } from '@cdktf/provider-aws/lib/guardduty-detector';
 
 // CloudFront Origin Access Control
 import { CloudfrontOriginAccessControl } from '@cdktf/provider-aws/lib/cloudfront-origin-access-control';
