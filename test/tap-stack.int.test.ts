@@ -148,6 +148,7 @@ describe('TapStack Integration Tests', () => {
           })
         );
         expect(methods).toBeDefined();
+        expect(methods.apiKeyRequired).toBe(true);
       });
 
       test('CloudFront Distribution exists with correct configuration', async () => {
@@ -165,39 +166,14 @@ describe('TapStack Integration Tests', () => {
         );
       });
 
-      test('API Gateway requires API key for authorization', async () => {
-        const apis = await apigateway.send(new GetRestApisCommand({}));
-        const api = apis.items?.find(
-          api => api.name === `${resourcePrefix}-api`
-        );
-        expect(api).toBeDefined();
-
-        const stages = await apigateway.send(
-          new GetResourcesCommand({ restApiId: api!.id! })
-        );
-        const stage = stages.items?.find(stage => stage.path === '/');
-        expect(stage).toBeDefined();
-
-        // Check if API key is required
-        const methods = await apigateway.send(
-          new GetMethodCommand({
-            restApiId: api!.id!,
-            resourceId: stage!.id!,
-            httpMethod: 'POST',
-          })
-        );
-        expect(methods).toBeDefined();
-        expect(methods.apiKeyRequired).toBe(true);
-      });
-
       test('Lambda, DynamoDB, and API Gateway integration works correctly', async () => {
         const functionName = getResourceName(
-          'content-handler',
+          `${resourcePrefix}-content-handler`,
           environment,
           region
         );
         const tableName = getResourceName(
-          'content-metadata',
+          `${resourcePrefix}-content-metadata`,
           environment,
           region
         );
