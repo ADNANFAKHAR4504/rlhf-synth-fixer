@@ -261,7 +261,7 @@ describe('TapStack Unit Tests - PROMPT.md Compliance Validation', () => {
         synthesized.resource.aws_launch_template['web-launch-template']
       ).toEqual(
         expect.objectContaining({
-          image_id: 'ami-0c02fb55956c7d316',
+          image_id: 'ami-054b7fc3c333ac6d2',
           instance_type: 't3.medium',
         })
       );

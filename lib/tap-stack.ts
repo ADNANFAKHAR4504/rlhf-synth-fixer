@@ -389,7 +389,7 @@ export class TapStack extends TerraformStack {
     // Launch Template for Auto Scaling
     const launchTemplate = new LaunchTemplate(this, 'web-launch-template', {
       name: generateUniqueResourceName('webapp-template', environmentSuffix),
-      imageId: 'ami-0c02fb55956c7d316', // Amazon Linux 2023 AMI for us-west-2
+      imageId: 'ami-054b7fc3c333ac6d2', // Amazon Linux 2023 AMI for us-west-2
       instanceType: 't3.medium',
       vpcSecurityGroupIds: [ec2SecurityGroup.id],
       iamInstanceProfile: {
@@ -724,6 +724,7 @@ echo "<h1>Scalable Web Application - $(hostname)</h1>" > /var/www/html/index.htm
       type: 'String',
       value: 'postgres-endpoint-placeholder',
       description: 'Database host endpoint',
+      overwrite: true,
       tags: commonTags,
     });
 
@@ -732,6 +733,7 @@ echo "<h1>Scalable Web Application - $(hostname)</h1>" > /var/www/html/index.htm
       type: 'String',
       value: 'production',
       description: 'Application environment',
+      overwrite: true,
       tags: commonTags,
     });
 
