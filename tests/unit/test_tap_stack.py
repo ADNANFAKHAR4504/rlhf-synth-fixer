@@ -21,14 +21,13 @@ class TestTapStack(unittest.TestCase):
         return child
     raise AssertionError("Nested TapStackProps not found")
 
-  @mark.it("creates resources with environment suffix and exports outputs")
-  def test_resources_and_exports(self):
+  @mark.it("creates required resources and exports outputs with correct IAM and SG settings")
+  def test_resources_and_exports_with_iam_sg(self):
     suffix = "testenv"
     stack = TapStack(self.app, "TapStackTest", environment_suffix=suffix)
     inner = self.get_nested(stack)
     template = Template.from_stack(inner)
 
-    # Assert correct resources present in nested stack
     template.resource_count_is("AWS::S3::Bucket", 1)
     template.resource_count_is("AWS::IAM::Role", 1)
     template.resource_count_is("AWS::EC2::VPC", 1)
@@ -36,17 +35,30 @@ class TestTapStack(unittest.TestCase):
     template.resource_count_is("AWS::AutoScaling::AutoScalingGroup", 1)
     template.resource_count_is("AWS::ElasticLoadBalancingV2::LoadBalancer", 1)
 
-    # IAM role assume policy check
+    # IAM Role validation
     template.has_resource_properties("AWS::IAM::Role", {
       "AssumeRolePolicyDocument": {
         "Statement": [{
-          "Action": "sts:AssumeRole",
           "Effect": "Allow",
-          "Principal": {"Service": "ec2.amazonaws.com"}
+          "Action": "sts:AssumeRole",
+          "Principal": {
+            "Service": "ec2.amazonaws.com"
+          }
         }]
-      }
+      },
+      "Description": "IAM role for EC2 instances with access to app logs bucket"
     })
 
+    # Security Group Ingress rule validation
+    template.has_resource_properties("AWS::EC2::SecurityGroupIngress", {
+      "CidrIp": "10.0.0.0/16",
+      "IpProtocol": "tcp",
+      "FromPort": 80,
+      "ToPort": 80,
+      "Description": "Allow HTTP access from internal CIDR block"
+    })
+
+    # Output validation
     outputs = template.to_json().get("Outputs", {})
     expected = [
       f"LogBucketName-{suffix}",
@@ -60,8 +72,8 @@ class TestTapStack(unittest.TestCase):
       data = [o for o in outputs.values() if o.get("Export", {}).get("Name") == name]
       self.assertTrue(data, f"Missing export '{name}'")
 
-  @mark.it("defaults environment suffix to 'dev' and exports outputs")
-  def test_default_env_suffix(self):
+  @mark.it("uses 'dev' as default suffix and includes IAM + SG validation")
+  def test_default_env_suffix_with_iam_sg(self):
     stack = TapStack(self.app, "TapStackDefault")
     inner = self.get_nested(stack)
     template = Template.from_stack(inner)
@@ -78,7 +90,6 @@ class TestTapStack(unittest.TestCase):
     for name in expected:
       data = [o for o in outputs.values() if o.get("Export", {}).get("Name") == name]
       self.assertTrue(data, f"Missing export '{name}'")
-
 
 if __name__ == "__main__":
   unittest.main()
