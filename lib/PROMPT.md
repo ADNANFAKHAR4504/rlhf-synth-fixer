@@ -1,4 +1,4 @@
-You are an expert in AWS serverless infrastructure using Pulumi with Python. Please generate a Pulumi Python program (**main**.py) that deploys the following architecture to us-west-2 using best practices for security, idempotency, observability, and scalability.
+You are an expert in AWS serverless infrastructure using Pulumi with Python. Please generate a Pulumi Python program (**main**.py) that deploys the following architecture to us-east-1 using best practices for security, idempotency, observability, and scalability.
 
 Infrastructure Requirements
 Build a secure, scalable serverless infrastructure on AWS with these specifications:
@@ -68,7 +68,7 @@ Use Pulumi with Python.
 
 All infrastructure should be defined in a single Python script (**main**.py).
 
-Target region: us-west-2.
+Target region: us-east-1.
 
 Avoid hardcoding secrets — use Pulumi Config or AWS Secrets Manager.
 
