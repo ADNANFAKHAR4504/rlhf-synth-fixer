@@ -348,6 +348,34 @@ lib/TapStack.yml:575:7
 - Updated RDS instance to use `{{resolve:secretsmanager:${DatabasePasswordSecret}:SecretString}}`
   **Severity**: **MEDIUM** - Security best practice improvement
 
+### 9. **CloudFormation Deployment Capability Issue**
+
+**Issue**: CloudFormation deployment failed with "InsufficientCapabilitiesException: Requires capabilities : [CAPABILITY_NAMED_IAM]" because the template contained named IAM resources.
+
+**Error Message**:
+```
+An error occurred (InsufficientCapabilitiesException) when calling the CreateChangeSet operation: Requires capabilities : [CAPABILITY_NAMED_IAM]
+```
+
+**Root Causes Identified**:
+1. **Named IAM Role**: `EC2InstanceRole` had `RoleName: SecureApp-EC2-Role` property
+2. **Named IAM User**: `AccessKeyRotationUser` had `UserName: SecureApp-AccessKey-User` property
+3. **Deployment Constraint**: Package.json deployment scripts could not be modified and only provided `CAPABILITY_IAM`
+
+**Impact**: Complete deployment failure - stack creation was blocked
+**Resolution**:
+- Removed `RoleName` property from `EC2InstanceRole` in both YAML and JSON templates
+- Removed `UserName` property from `AccessKeyRotationUser` in both templates  
+- Updated unit tests to validate resource existence and properties instead of specific names
+- AWS will auto-generate unique names for these resources
+
+**Severity**: **HIGH** - Prevented deployment until resolved
+
+**Unit Test Impact**: 
+- Modified `AccessKeyRotationUser` test to check Tags instead of UserName
+- Modified `EC2InstanceRole` test to remove RoleName expectation
+- All 49 unit tests now pass
+
 ## Final Deployment Outcome
 
 **Result**: ✅ **SUCCESSFUL DEPLOYMENT** (after extensive fixes, now supports automated deployment)

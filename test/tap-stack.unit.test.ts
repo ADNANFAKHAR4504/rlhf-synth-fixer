@@ -228,7 +228,6 @@ describe('SecureApp CloudFormation Template', () => {
       const role = template.Resources.EC2InstanceRole;
       expect(role).toBeDefined();
       expect(role.Type).toBe('AWS::IAM::Role');
-      expect(role.Properties.RoleName).toBe('SecureApp-EC2-Role');
 
       const assumePolicy = role.Properties.AssumeRolePolicyDocument;
       expect(assumePolicy.Version).toBe('2012-10-17');
@@ -414,7 +413,9 @@ describe('SecureApp CloudFormation Template', () => {
       const user = template.Resources.AccessKeyRotationUser;
       expect(user).toBeDefined();
       expect(user.Type).toBe('AWS::IAM::User');
-      expect(user.Properties.UserName).toBe('SecureApp-AccessKey-User');
+      expect(user.Properties.Tags).toBeDefined();
+      expect(user.Properties.Tags[0].Key).toBe('Project');
+      expect(user.Properties.Tags[0].Value).toBe('SecureApp');
     });
 
     test('should have Database Password Secret', () => {
