@@ -34,16 +34,13 @@ class IdentityAccessInfrastructure(pulumi.ComponentResource):
     self._create_ec2_roles()
     self._create_lambda_roles()
     self._create_s3_access_roles()
-    self._create_mfa_policy()
 
     self.register_outputs({
       "kms_key_arn": self.kms_key.arn,
       "kms_key_id": self.kms_key.id,
       "ec2_instance_role_arn": self.ec2_instance_role.arn,
       "lambda_execution_role_arn": self.lambda_execution_role.arn,
-      "s3_access_policy_arn": self.s3_access_policy.arn,
-      "cloudwatch_events_role_arn": self.cloudwatch_events_role.arn,
-      "mfa_policy_arn": self.mfa_policy.arn
+      "s3_access_policy_arn": self.s3_access_policy.arn
     })
 
   def _create_kms_resources(self):
