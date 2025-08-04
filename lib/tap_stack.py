@@ -192,7 +192,8 @@ class TapStack(pulumi.ComponentResource):
     return lambda_function
 
   def _setup_s3_lambda_trigger(self, bucket: aws.s3.Bucket, lambda_function: aws.lambda_.Function) -> None:
-    aws.lambda_.Permission(
+    # Create Lambda permission first with proper source ARN format
+    lambda_permission = aws.lambda_.Permission(
       "s3-invoke-lambda-permission",
       action="lambda:InvokeFunction",
       function=lambda_function.name,
@@ -201,16 +202,16 @@ class TapStack(pulumi.ComponentResource):
       opts=pulumi.ResourceOptions(parent=self)
     )
 
+    # Create S3 notification with explicit dependency on Lambda permission
+    # and proper configuration for AWS validation
     aws.s3.BucketNotification(
       "s3-lambda-notification",
       bucket=bucket.id,
       lambda_functions=[
         aws.s3.BucketNotificationLambdaFunctionArgs(
           lambda_function_arn=lambda_function.arn,
-          events=["s3:ObjectCreated:*"],
-          filter_prefix="",
-          filter_suffix=""
+          events=["s3:ObjectCreated:*"]
         )
       ],
-      opts=pulumi.ResourceOptions(depends_on=[lambda_function], parent=self)
+      opts=pulumi.ResourceOptions(depends_on=[lambda_permission], parent=self)
     )
