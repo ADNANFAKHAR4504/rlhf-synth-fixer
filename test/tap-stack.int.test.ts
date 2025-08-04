@@ -20,32 +20,35 @@ describe('IPv6-Only IoT Infrastructure Integration Tests', () => {
   let securityGroupId: string;
 
   beforeAll(() => {
-    // Determine the path to the flat.output.json file.
-    // Assuming it's in the root of the project, which is where your pipeline
-    // seems to be placing it.
-    const outputFilePath = path.join(__dirname, '..', 'flat.output.json');
+    // Corrected path based on the artifact name and file name
+    const outputFilePath = path.join(__dirname, '..', 'cfn-outputs', 'flat-outputs.json');
     
     if (!fs.existsSync(outputFilePath)) {
-      throw new Error(`flat.output.json not found at ${outputFilePath}. Please ensure the CI/CD pipeline places the output file correctly.`);
+      throw new Error(`flat-outputs.json not found at ${outputFilePath}. Please ensure the CI/CD pipeline places the output file correctly.`);
     }
 
     // Read and parse the outputs file
     const outputs = JSON.parse(fs.readFileSync(outputFilePath, 'utf-8'));
     
     // Extract the values from the nested structure
-    // The key is the stack name, "TapStackpr435" in your case.
+    // Use the correct key from your output, e.g., "TapStackpr435"
     const stackOutputs = outputs.TapStackpr435;
+
+    if (!stackOutputs) {
+      throw new Error("Stack output 'TapStackpr435' not found in flat-outputs.json.");
+    }
 
     vpcId = stackOutputs['vpc-id'];
     subnetId = stackOutputs['public-subnet-id'];
     instanceId = stackOutputs['ec2-instance-id'];
     
     if (!vpcId || !subnetId || !instanceId) {
-      throw new Error("Required Terraform outputs not found in flat.output.json.");
+      throw new Error("Required Terraform outputs (vpc-id, public-subnet-id, ec2-instance-id) not found in the stack output.");
     }
   });
 
-  // Test 1: Verify the VPC exists with the correct properties
+  // The rest of the tests remain the same as they are correct.
+  // ... (Test 1-7 as previously written)
   test('should find the IPv6-enabled VPC with both IPv4 (dummy) and IPv6 CIDRs', async () => {
     const result = await client.send(new DescribeVpcsCommand({ VpcIds: [vpcId] }));
     const vpc = result.Vpcs?.[0];
@@ -61,7 +64,6 @@ describe('IPv6-Only IoT Infrastructure Integration Tests', () => {
     ]));
   });
 
-  // Test 2: Verify the public subnet exists and is correctly configured
   test('should find the public IPv6-only subnet with no IPv4 public IP mapping', async () => {
     const result = await client.send(new DescribeSubnetsCommand({ SubnetIds: [subnetId] }));
     const subnet = result.Subnets?.[0];
@@ -75,7 +77,6 @@ describe('IPv6-Only IoT Infrastructure Integration Tests', () => {
     ]));
   });
 
-  // Test 3: Verify the Internet Gateway is attached to the VPC
   test('should find the Internet Gateway attached to the VPC', async () => {
     const result = await client.send(new DescribeInternetGatewaysCommand({
       Filters: [{ Name: 'attachment.vpc-id', Values: [vpcId] }]
@@ -87,7 +88,6 @@ describe('IPv6-Only IoT Infrastructure Integration Tests', () => {
     expect(igw?.Attachments?.[0].VpcId).toBe(vpcId);
   });
 
-  // Test 4: Verify the Egress-Only Internet Gateway is attached to the VPC
   test('should find the Egress-Only Internet Gateway attached to the VPC', async () => {
     const result = await client.send(new DescribeEgressOnlyInternetGatewaysCommand({
       Filters: [{ Name: 'attachment.vpc-id', Values: [vpcId] }]
@@ -99,7 +99,6 @@ describe('IPv6-Only IoT Infrastructure Integration Tests', () => {
     expect(eoigw?.Attachments?.[0].VpcId).toBe(vpcId);
   });
 
-  // Test 5: Verify the Route Table has an IPv6 default route
   test('should find a route table with a default IPv6 route to the Internet Gateway', async () => {
     const result = await client.send(new DescribeRouteTablesCommand({
       Filters: [{ Name: 'vpc-id', Values: [vpcId] }]
@@ -113,7 +112,6 @@ describe('IPv6-Only IoT Infrastructure Integration Tests', () => {
     expect(ipv6Route).toBeDefined();
   });
 
-  // Test 6: Verify the Security Group exists with IPv6-only rules
   test('should find the IPv6-only Security Group with the correct rules', async () => {
     const result = await client.send(new DescribeSecurityGroupsCommand({
       Filters: [{ Name: 'vpc-id', Values: [vpcId] }]
@@ -123,7 +121,6 @@ describe('IPv6-Only IoT Infrastructure Integration Tests', () => {
     expect(sg).toBeDefined();
     securityGroupId = sg?.GroupId as string;
 
-    // Verify inbound rules
     expect(sg?.IpPermissions).toEqual(expect.arrayContaining([
       expect.objectContaining({
         IpProtocol: 'tcp',
@@ -135,7 +132,6 @@ describe('IPv6-Only IoT Infrastructure Integration Tests', () => {
       }),
     ]));
 
-    // Verify outbound rules
     expect(sg?.IpPermissionsEgress).toEqual(expect.arrayContaining([
       expect.objectContaining({
         IpProtocol: '-1',
@@ -146,7 +142,6 @@ describe('IPv6-Only IoT Infrastructure Integration Tests', () => {
     ]));
   });
 
-  // Test 7: Verify the EC2 instance is running and has an IPv6 address
   test('should find the EC2 instance with an IPv6 address and correct state', async () => {
     const result = await client.send(new DescribeInstancesCommand({ InstanceIds: [instanceId] }));
     const instance = result.Reservations?.[0].Instances?.[0];
