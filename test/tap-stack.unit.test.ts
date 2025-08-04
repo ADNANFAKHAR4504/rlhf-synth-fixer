@@ -28,7 +28,7 @@ describe('Stack Structure', () => {
 
   test('TapStack uses default values when no props provided', () => {
     app = new App();
-    stack = new TapStack(app, 'TestTapStackDefault');
+    stack = new TapStack(app, 'TestTapStackDefault',{});
     synthesized = Testing.synth(stack);
 
     // Verify that TapStack instantiates without errors when no props are provided
