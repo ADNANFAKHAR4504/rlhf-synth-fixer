@@ -411,7 +411,7 @@ export class ServerlessCms extends Construct {
       apiStages: [
         {
           apiId: api.id,
-          stage: apiGatewayStage.id,
+          stage: apiGatewayStage.stageName,
         },
       ],
       tags: {
