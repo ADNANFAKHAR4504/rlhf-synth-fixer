@@ -436,39 +436,3 @@ export class TapStack extends TerraformStack {
   }
 }
 ```
-
-## 🔧 Key Features Explained
-
-### **IPv6-Only Architecture**
-- **No IPv4 CIDR**: VPC uses only `assignGeneratedIpv6CidrBlock: true`
-- **IPv6 Subnets**: All subnets use IPv6 CIDR blocks with `assignIpv6AddressOnCreation: true`
-- **IPv6 Routes**: Route tables use `::/0` for internet access via IPv6 IGW
-- **IPv6 Security Groups**: All rules use `ipv6CidrBlocks` instead of `cidrBlocks`
-
-### **Modular Design**
-- **`IPv6VpcModule`**: Creates VPC and Internet Gateway
-- **`IPv6SubnetModule`**: Creates subnets with route tables and associations
-- **`IPv6SecurityGroupModule`**: Creates security groups with IPv6 rules
-- **`IamRoleModule`**: Creates IAM roles and instance profiles
-- **`IoTInstanceModule`**: Creates EC2 instances with IoT applications
-
-### **IoT Application**
-- **Flask API**: Simple REST API for IoT device data collection
-- **IPv6 Binding**: Application binds to `::` (all IPv6 interfaces)
-- **Endpoints**:
-  - `/` - Service information
-  - `/devices` - GET/POST IoT device data
-  - `/health` - Health check endpoint
-
-### **Security**
-- **Least Privilege IAM**: Only necessary permissions for EC2 and CloudWatch
-- **IPv6 Security Groups**: Allows HTTP, HTTPS, SSH, and MQTT over IPv6
-- **No IPv4 Access**: Complete isolation from IPv4 networks
-
-### **Production Features**
-- **Systemd Service**: IoT app runs as a system service with auto-restart
-- **CloudWatch Integration**: Monitoring and logging capabilities
-- **SSH Access**: Secure management via IPv6 SSH
-- **Comprehensive Outputs**: All necessary resource IDs and addresses
-
-This infrastructure provides a robust, scalable foundation for IPv6-only IoT applications on AWS, with clear separation of concerns through modular design.
