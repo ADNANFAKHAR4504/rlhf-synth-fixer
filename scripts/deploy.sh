@@ -32,6 +32,23 @@ if [ -d "cdk.out" ]; then
   rm -rf cdk.out
 fi
 
+# Ensure S3 bucket exists for CloudFormation templates
+if [ "$PLATFORM" = "cfn" ]; then
+  S3_BUCKET="iac-rlhf-cfn-states-${AWS_REGION}"
+  echo "Checking if S3 bucket $S3_BUCKET exists in region $AWS_REGION..."
+  if ! aws s3api head-bucket --bucket "$S3_BUCKET" --region "$AWS_REGION" 2>/dev/null; then
+    echo "Creating S3 bucket $S3_BUCKET in region $AWS_REGION..."
+    if [ "$AWS_REGION" = "us-east-1" ]; then
+      aws s3api create-bucket --bucket "$S3_BUCKET" --region "$AWS_REGION"
+    else
+      aws s3api create-bucket --bucket "$S3_BUCKET" --region "$AWS_REGION" --create-bucket-configuration LocationConstraint="$AWS_REGION"
+    fi
+    echo "✅ S3 bucket $S3_BUCKET created successfully"
+  else
+    echo "✅ S3 bucket $S3_BUCKET already exists"
+  fi
+fi
+
 if [ "$PLATFORM" = "cdk" ]; then
   echo "✅ CDK project detected, running CDK bootstrap..."
   npm run cdk:bootstrap
