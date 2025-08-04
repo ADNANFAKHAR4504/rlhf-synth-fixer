@@ -12,26 +12,28 @@ export class NetworkingStack extends Construct {
   public readonly dynamoEndpoint: ec2.GatewayVpcEndpoint;
   public readonly apiGatewayEndpoint: ec2.InterfaceVpcEndpoint;
 
-  constructor(scope: Construct, id: string, _props: NetworkingStackProps) {
+  constructor(scope: Construct, id: string, props: NetworkingStackProps) {
     super(scope, id);
 
-    // VPC Configuration
-    this.vpc = new ec2.Vpc(this, 'ProdDocumentProcessingVpc', {
+    // VPC Configuration with proper default security group handling
+    this.vpc = new ec2.Vpc(this, 'DocumentProcessingVpc', {
       maxAzs: 2,
       natGateways: 0, // No NAT Gateway needed with VPC endpoints
       subnetConfiguration: [
         {
           cidrMask: 24,
-          name: 'Private',
+          name: `${props.environmentSuffix}-private`,
           subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
         },
       ],
+      // Disable default security group restrictions to avoid custom resource issues
+      restrictDefaultSecurityGroup: false,
     });
 
     // Security Group for Lambda functions
     this.lambdaSecurityGroup = new ec2.SecurityGroup(
       this,
-      'ProdLambdaSecurityGroup',
+      'LambdaSecurityGroup',
       {
         vpc: this.vpc,
         description: 'Security group for Lambda functions',
@@ -47,18 +49,18 @@ export class NetworkingStack extends Construct {
     );
 
     // VPC Endpoints
-    this.s3Endpoint = this.vpc.addGatewayEndpoint('ProdS3Endpoint', {
+    this.s3Endpoint = this.vpc.addGatewayEndpoint('S3Endpoint', {
       service: ec2.GatewayVpcEndpointAwsService.S3,
       subnets: [{ subnetType: ec2.SubnetType.PRIVATE_ISOLATED }],
     });
 
-    this.dynamoEndpoint = this.vpc.addGatewayEndpoint('ProdDynamoDbEndpoint', {
+    this.dynamoEndpoint = this.vpc.addGatewayEndpoint('DynamoDbEndpoint', {
       service: ec2.GatewayVpcEndpointAwsService.DYNAMODB,
       subnets: [{ subnetType: ec2.SubnetType.PRIVATE_ISOLATED }],
     });
 
     this.apiGatewayEndpoint = this.vpc.addInterfaceEndpoint(
-      'ProdApiGatewayEndpoint',
+      'ApiGatewayEndpoint',
       {
         service: ec2.InterfaceVpcEndpointAwsService.APIGATEWAY,
         subnets: { subnetType: ec2.SubnetType.PRIVATE_ISOLATED },

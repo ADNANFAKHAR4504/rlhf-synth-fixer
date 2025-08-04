@@ -18,7 +18,8 @@ export class ApiStack extends Construct {
     super(scope, id);
 
     // API Gateway with Lambda Authorizer
-    this.api = new apigateway.RestApi(this, 'ProdDocumentApi', {
+    this.api = new apigateway.RestApi(this, 'DocumentApi', {
+      restApiName: `document-api-${props.environmentSuffix}`,
       description: 'Serverless document processing API with Lambda authorizer',
       endpointConfiguration: {
         types: [apigateway.EndpointType.REGIONAL],
@@ -36,15 +37,11 @@ export class ApiStack extends Construct {
     });
 
     // Lambda Authorizer for API Gateway
-    const authorizer = new apigateway.RequestAuthorizer(
-      this,
-      'ProdApiAuthorizer',
-      {
-        handler: props.authorizerFunction,
-        identitySources: [apigateway.IdentitySource.header('X-Api-Key')],
-        resultsCacheTtl: cdk.Duration.seconds(0),
-      }
-    );
+    const authorizer = new apigateway.RequestAuthorizer(this, 'ApiAuthorizer', {
+      handler: props.authorizerFunction,
+      identitySources: [apigateway.IdentitySource.header('X-Api-Key')],
+      resultsCacheTtl: cdk.Duration.seconds(0),
+    });
 
     // API Gateway Integration
     const apiIntegration = new apigateway.LambdaIntegration(
@@ -55,29 +52,29 @@ export class ApiStack extends Construct {
       }
     );
 
-    // API Routes
+    // API Routes with custom Lambda authorizer
     const documentsResource = this.api.root.addResource('documents');
     documentsResource.addMethod('POST', apiIntegration, {
       authorizer,
-      apiKeyRequired: false,
+      // apiKeyRequired: true, // Removed - handled by custom authorizer
     });
     documentsResource.addMethod('GET', apiIntegration, {
       authorizer,
-      apiKeyRequired: false,
+      // apiKeyRequired: true, // Removed - handled by custom authorizer
     });
 
     const documentResource = documentsResource.addResource('{documentId}');
     documentResource.addMethod('GET', apiIntegration, {
       authorizer,
-      apiKeyRequired: false,
+      // apiKeyRequired: true, // Removed - handled by custom authorizer
     });
 
     // API Key and Usage Plan
-    this.apiKey = this.api.addApiKey('ProdApiKey', {
+    this.apiKey = this.api.addApiKey('ApiKey', {
       description: 'API key for document processing system',
     });
 
-    this.usagePlan = this.api.addUsagePlan('ProdUsagePlan', {
+    this.usagePlan = this.api.addUsagePlan('UsagePlan', {
       description: 'Usage plan for document processing API',
       throttle: {
         rateLimit: 100,
