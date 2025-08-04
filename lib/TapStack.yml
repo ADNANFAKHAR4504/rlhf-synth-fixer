@@ -17,7 +17,7 @@ Parameters:
     Description: The handler for the Lambda function executable.
   S3BucketName:
     Type: String
-    Default: serverlessapp-bucket
+    Default: !Sub serverlessapp-bucket-${AWS::AccountId}-${AWS::Region}
     Description: Unique S3 bucket name for object triggers.
 
 Mappings:
@@ -31,7 +31,7 @@ Resources:
   ServerlessAppBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Ref S3BucketName
+      BucketName: !Sub ${S3BucketName}-${AWS::StackId}
       NotificationConfiguration:
         LambdaConfigurations:
           - Event: s3:ObjectCreated:*
