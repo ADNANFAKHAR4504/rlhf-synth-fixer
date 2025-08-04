@@ -5,7 +5,7 @@ Parameters:
   EnvironmentSuffix:
     Type: String
     Description: Suffix for the environment (e.g., dev, prod)
-    Default: prodd
+    Default: production
     AllowedPattern: '^[a-zA-Z0-9]+$'
     ConstraintDescription: Must contain only alphanumeric characters.
 
@@ -90,7 +90,7 @@ Parameters:
 
 Mappings:
   EnvironmentMap:
-    prodd:
+    production:
       MinSize: 2
       MaxSize: 6
       DesiredCapacity: 2
@@ -100,9 +100,17 @@ Mappings:
       MaxSize: 3
       DesiredCapacity: 1
       CPUThreshold: 80
+    default:
+      MinSize: 1
+      MaxSize: 2
+      DesiredCapacity: 1
+      CPUThreshold: 80
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentSuffix, Production]
+  IsKnownEnvironment: !Or
+    - !Equals [!Ref EnvironmentSuffix, production]
+    - !Equals [!Ref EnvironmentSuffix, staging]
   HasSSLCertificate: !Not [!Equals [!Ref SSLCertificateArn, ""]]
   EnableHTTPS: !And 
     - !Equals [!Ref UseHTTPS, "true"]
@@ -597,9 +605,18 @@ Resources:
       LaunchTemplate:
         LaunchTemplateId: !Ref LaunchTemplate
         Version: !GetAtt LaunchTemplate.LatestVersionNumber
-      MinSize: !FindInMap [EnvironmentMap, !Ref EnvironmentSuffix, MinSize]
-      MaxSize: !FindInMap [EnvironmentMap, !Ref EnvironmentSuffix, MaxSize]
-      DesiredCapacity: !FindInMap [EnvironmentMap, !Ref EnvironmentSuffix, DesiredCapacity]
+      MinSize: !If 
+        - IsKnownEnvironment
+        - !FindInMap [EnvironmentMap, !Ref EnvironmentSuffix, MinSize]
+        - !FindInMap [EnvironmentMap, default, MinSize]
+      MaxSize: !If 
+        - IsKnownEnvironment
+        - !FindInMap [EnvironmentMap, !Ref EnvironmentSuffix, MaxSize]
+        - !FindInMap [EnvironmentMap, default, MaxSize]
+      DesiredCapacity: !If 
+        - IsKnownEnvironment
+        - !FindInMap [EnvironmentMap, !Ref EnvironmentSuffix, DesiredCapacity]
+        - !FindInMap [EnvironmentMap, default, DesiredCapacity]
       TargetGroupARNs:
         - !Ref ALBTargetGroup
       HealthCheckType: ELB
@@ -708,7 +725,10 @@ Resources:
       Statistic: Average
       Period: 300
       EvaluationPeriods: 2
-      Threshold: !FindInMap [EnvironmentMap, !Ref EnvironmentSuffix, CPUThreshold]
+      Threshold: !If 
+        - IsKnownEnvironment
+        - !FindInMap [EnvironmentMap, !Ref EnvironmentSuffix, CPUThreshold]
+        - !FindInMap [EnvironmentMap, default, CPUThreshold]
       ComparisonOperator: GreaterThanThreshold
       Dimensions:
         - Name: AutoScalingGroupName

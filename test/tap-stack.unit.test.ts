@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'prodd';
+const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'production';
 
 describe('TapStack CloudFormation Template Unit Tests', () => {
   let template: any;
@@ -39,7 +39,7 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
       const param = template.Parameters.EnvironmentSuffix;
       expect(param).toBeDefined();
       expect(param.Type).toBe('String');
-      expect(param.Default).toBe('prodd');
+      expect(param.Default).toBe('production');
       expect(param.AllowedPattern).toBe('^[a-zA-Z0-9]+$');
     });
 
@@ -81,27 +81,47 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
   });
 
   describe('Mappings - Environment Configuration', () => {
-    test('should have EnvironmentMap with staging and production configs', () => {
+    test('should have EnvironmentMap with production, staging and default configs', () => {
       const envMap = template.Mappings.EnvironmentMap;
       expect(envMap).toBeDefined();
       
-      expect(envMap.prodd).toBeDefined();
-      expect(envMap.prodd.MinSize).toBe(2);
-      expect(envMap.prodd.MaxSize).toBe(6);
-      expect(envMap.prodd.DesiredCapacity).toBe(2);
-      expect(envMap.prodd.CPUThreshold).toBe(70);
+      expect(envMap.production).toBeDefined();
+      expect(envMap.production.MinSize).toBe(2);
+      expect(envMap.production.MaxSize).toBe(6);
+      expect(envMap.production.DesiredCapacity).toBe(2);
+      expect(envMap.production.CPUThreshold).toBe(70);
 
       expect(envMap.staging).toBeDefined();
       expect(envMap.staging.MinSize).toBe(1);
       expect(envMap.staging.MaxSize).toBe(3);
       expect(envMap.staging.DesiredCapacity).toBe(1);
       expect(envMap.staging.CPUThreshold).toBe(80);
+
+      expect(envMap.default).toBeDefined();
+      expect(envMap.default.MinSize).toBe(1);
+      expect(envMap.default.MaxSize).toBe(2);
+      expect(envMap.default.DesiredCapacity).toBe(1);
+      expect(envMap.default.CPUThreshold).toBe(80);
+    });
+
+    test('should have default configuration suitable for PR environments', () => {
+      const defaultConfig = template.Mappings.EnvironmentMap.default;
+      
+      // PR environments should have conservative settings
+      expect(defaultConfig.MinSize).toBe(1);
+      expect(defaultConfig.MaxSize).toBeLessThanOrEqual(2);
+      expect(defaultConfig.DesiredCapacity).toBe(1);
+      expect(defaultConfig.CPUThreshold).toBeGreaterThanOrEqual(80);
     });
   });
 
   describe('Conditions - Environment Logic', () => {
     test('should have production environment condition', () => {
       expect(template.Conditions.IsProduction).toBeDefined();
+    });
+
+    test('should have known environment condition for production and staging', () => {
+      expect(template.Conditions.IsKnownEnvironment).toBeDefined();
     });
 
     test('should have HTTPS enabling conditions', () => {
@@ -325,6 +345,20 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
       expect(asg.Properties.HealthCheckGracePeriod).toBe(300);
     });
 
+    test('should use conditional logic for auto scaling group sizing', () => {
+      const asg = template.Resources.AutoScalingGroup;
+      
+      // Check that conditional logic is used for MinSize, MaxSize, and DesiredCapacity
+      expect(asg.Properties.MinSize).toHaveProperty('Fn::If');
+      expect(asg.Properties.MaxSize).toHaveProperty('Fn::If');
+      expect(asg.Properties.DesiredCapacity).toHaveProperty('Fn::If');
+      
+      // Verify it references the IsKnownEnvironment condition
+      expect(asg.Properties.MinSize['Fn::If'][0]).toBe('IsKnownEnvironment');
+      expect(asg.Properties.MaxSize['Fn::If'][0]).toBe('IsKnownEnvironment');
+      expect(asg.Properties.DesiredCapacity['Fn::If'][0]).toBe('IsKnownEnvironment');
+    });
+
     test('should create scaling policies', () => {
       const scaleUp = template.Resources.ScaleUpPolicy;
       const scaleDown = template.Resources.ScaleDownPolicy;
@@ -377,6 +411,14 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
       expect(lowAlarm.Type).toBe('AWS::CloudWatch::Alarm');
       expect(lowAlarm.Properties.MetricName).toBe('CPUUtilization');
       expect(lowAlarm.Properties.ComparisonOperator).toBe('LessThanThreshold');
+    });
+
+    test('should use conditional logic for CPU alarm threshold', () => {
+      const highAlarm = template.Resources.CPUAlarmHigh;
+      
+      // Check that conditional logic is used for CPU threshold
+      expect(highAlarm.Properties.Threshold).toHaveProperty('Fn::If');
+      expect(highAlarm.Properties.Threshold['Fn::If'][0]).toBe('IsKnownEnvironment');
     });
 
     test('should create ALB response time alarm', () => {
@@ -454,6 +496,45 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
     });
   });
 
+  describe('PR Environment Support', () => {
+    test('should support dynamic PR environment suffixes through default mapping', () => {
+      // Verify IsKnownEnvironment condition exists to handle unknown environments
+      expect(template.Conditions.IsKnownEnvironment).toBeDefined();
+      
+      // Should check for production and staging specifically
+      const condition = template.Conditions.IsKnownEnvironment;
+      expect(condition).toHaveProperty('Fn::Or');
+    });
+
+    test('should fallback to default configuration for unknown environments', () => {
+      // Auto Scaling Group should use conditional logic
+      const asg = template.Resources.AutoScalingGroup;
+      expect(asg.Properties.MinSize['Fn::If']).toEqual([
+        'IsKnownEnvironment',
+        { 'Fn::FindInMap': ['EnvironmentMap', { 'Ref': 'EnvironmentSuffix' }, 'MinSize'] },
+        { 'Fn::FindInMap': ['EnvironmentMap', 'default', 'MinSize'] }
+      ]);
+      
+      // CPU Alarm should use conditional logic
+      const cpuAlarm = template.Resources.CPUAlarmHigh;
+      expect(cpuAlarm.Properties.Threshold['Fn::If']).toEqual([
+        'IsKnownEnvironment',
+        { 'Fn::FindInMap': ['EnvironmentMap', { 'Ref': 'EnvironmentSuffix' }, 'CPUThreshold'] },
+        { 'Fn::FindInMap': ['EnvironmentMap', 'default', 'CPUThreshold'] }
+      ]);
+    });
+
+    test('should provide cost-effective defaults for PR environments', () => {
+      const defaultConfig = template.Mappings.EnvironmentMap.default;
+      
+      // Should be cost-effective for temporary PR environments
+      expect(defaultConfig.MinSize).toBe(1);
+      expect(defaultConfig.MaxSize).toBe(2);
+      expect(defaultConfig.DesiredCapacity).toBe(1);
+      expect(defaultConfig.CPUThreshold).toBe(80); // Higher threshold = less frequent scaling
+    });
+  });
+
   describe('PROMPT.md Compliance Validation', () => {
     test('should meet all infrastructure requirements', () => {
       // S3 with versioning and KMS encryption
@@ -490,8 +571,9 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
     test('should support environment separation', () => {
       expect(template.Parameters.EnvironmentSuffix).toBeDefined();
       expect(template.Mappings.EnvironmentMap).toBeDefined();
-      expect(template.Mappings.EnvironmentMap.prodd).toBeDefined();
+      expect(template.Mappings.EnvironmentMap.production).toBeDefined();
       expect(template.Mappings.EnvironmentMap.staging).toBeDefined();
+      expect(template.Mappings.EnvironmentMap.default).toBeDefined();
     });
 
     test('should be fully parameterized', () => {
