@@ -9,11 +9,11 @@ and manages environment-specific configurations.
 """
 
 from typing import Optional
+import json
 
 import pulumi
-from pulumi import ResourceOptions
 import pulumi_aws as aws
-from pulumi import Config, Output
+from pulumi import ResourceOptions, Config, Output
 
 # Import your nested stacks here
 # from .dynamodb_stack import DynamoDBStack
@@ -21,14 +21,15 @@ from pulumi import Config, Output
 
 class TapStackArgs:
   """
-  TapStackArgs defines the input arguments for the TapStack Pulumi component.
+  TapStackArgs defines the input arguments for the TapStack component.
 
   Args:
-    environment_suffix (Optional[str]): An optional suffix for identifying the deployment environment (e.g., 'dev', 'prod').
+    environment_suffix (Optional[str]): An optional suffix for deployment.
     tags (Optional[dict]): Optional default tags to apply to resources.
   """
 
-  def __init__(self, environment_suffix: Optional[str] = None, tags: Optional[dict] = None):
+  def __init__(self, environment_suffix: Optional[str] = None,
+               tags: Optional[dict] = None):
     self.environment_suffix = environment_suffix or 'dev'
     self.tags = tags
 
@@ -50,14 +51,9 @@ class TapStack(pulumi.ComponentResource):
         opts (ResourceOptions): Pulumi options.
     """
 
-    def __init__(
-        self,
-        name: str,
-        args: TapStackArgs,
-        opts: Optional[ResourceOptions] = None
-    ):
+    def __init__(self, name: str, args: TapStackArgs,
+                 opts: Optional[ResourceOptions] = None):
         super().__init__('tap:stack:TapStack', name, None, opts)
-
         self.environment_suffix = args.environment_suffix
         self.tags = args.tags
 
@@ -70,15 +66,9 @@ class TapStack(pulumi.ComponentResource):
 
         # self.table = dynamodb_stack.table if you instantiate one
 
-        # Register outputs if needed
         self.register_outputs({})
 
 
-"""
-AWS Serverless Infrastructure with Pulumi Python
-Deploys Lambda functions, API Gateway, S3, IAM roles, Secrets Manager, and CloudWatch monitoring
-Target Region: us-west-2
-"""
 
 
 # Configuration
@@ -143,7 +133,8 @@ s3_encryption = aws.s3.BucketServerSideEncryptionConfigurationV2(
     "bucket-encryption",
     bucket=s3_bucket.id,
     rules=[aws.s3.BucketServerSideEncryptionConfigurationV2RuleArgs(
-        apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationV2RuleApplyServerSideEncryptionByDefaultArgs(
+        apply_server_side_encryption_by_default=\
+            aws.s3.BucketServerSideEncryptionConfigurationV2RuleApplyServerSideEncryptionByDefaultArgs(
             sse_algorithm="AES256"
         ),
         bucket_key_enabled=True
@@ -164,23 +155,25 @@ s3_public_access_block = aws.s3.BucketPublicAccessBlock(
 bucket_policy = aws.s3.BucketPolicy(
     "bucket-policy",
     bucket=s3_bucket.id,
-    policy=s3_bucket.arn.apply(lambda arn: json.dumps({
-        "Version": "2012-10-17",
-        "Statement": [
-            {
-                "Sid": "DenyPublicAccess",
-                "Effect": "Deny",
-                "Principal": "*",
-                "Action": "s3:*",
-                "Resource": [arn, f"{arn}/*"],
-                "Condition": {
-                    "Bool": {
-                        "aws:SecureTransport": "false"
+    policy=s3_bucket.arn.apply(
+        lambda arn: json.dumps({
+            "Version": "2012-10-17",
+            "Statement": [
+                {
+                    "Sid": "DenyPublicAccess",
+                    "Effect": "Deny",
+                    "Principal": "*",
+                    "Action": "s3:*",
+                    "Resource": [arn, f"{arn}/*"],
+                    "Condition": {
+                        "Bool": {
+                            "aws:SecureTransport": "false"
+                        }
                     }
                 }
-            }
-        ]
-    }))
+            ]
+        })
+    )
 )
 
 # =====================================
@@ -697,7 +690,8 @@ pulumi.export("s3_bucket_name", s3_bucket.bucket)
 pulumi.export("s3_bucket_arn", s3_bucket.arn)
 pulumi.export("api_gateway_url", api_deployment.invoke_url)
 pulumi.export("api_gateway_stage_url", Output.concat(
-    "https://", api_gateway.id, ".execute-api.", region, ".amazonaws.com/prod"
+    "https://", api_gateway.id, ".execute-api.", region,
+    ".amazonaws.com/prod"
 ))
 pulumi.export("s3_processor_lambda_arn", s3_processor_lambda.arn)
 pulumi.export("api_handler_lambda_arn", api_handler_lambda.arn)
@@ -707,8 +701,10 @@ pulumi.export("lambda_role_arn", lambda_role.arn)
 
 # Export endpoint URLs for testing
 pulumi.export("health_check_url", Output.concat(
-    "https://", api_gateway.id, ".execute-api.", region, ".amazonaws.com/prod/health"
+    "https://", api_gateway.id, ".execute-api.", region,
+    ".amazonaws.com/prod/health"
 ))
 pulumi.export("process_endpoint_url", Output.concat(
-    "https://", api_gateway.id, ".execute-api.", region, ".amazonaws.com/prod/process"
+    "https://", api_gateway.id, ".execute-api.", region,
+    ".amazonaws.com/prod/process"
 ))
