@@ -293,11 +293,12 @@ describe('TapStack', () => {
       });
     });
 
-    describe('DynamoDB Stream Configuration', () => {
-      test('should create DynamoDB event source mapping', () => {
-        template.hasResourceProperties('AWS::Lambda::EventSourceMapping', {
-          EventSourceArn: Match.anyValue(),
-          FunctionName: Match.anyValue(),
+    describe('S3 Event Configuration', () => {
+      test('should create Lambda permission for S3 event notification', () => {
+        template.hasResourceProperties('AWS::Lambda::Permission', {
+          Action: 'lambda:InvokeFunction',
+          Principal: 's3.amazonaws.com',
+          SourceAccount: Match.anyValue(),
         });
       });
     });

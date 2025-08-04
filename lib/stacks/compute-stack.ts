@@ -5,7 +5,6 @@ import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as kms from 'aws-cdk-lib/aws-kms';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
-import * as events from 'aws-cdk-lib/aws-lambda-event-sources';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as s3n from 'aws-cdk-lib/aws-s3-notifications';
 import * as sqs from 'aws-cdk-lib/aws-sqs';
@@ -95,6 +94,15 @@ export class ComputeStack extends Construct {
               effect: iam.Effect.ALLOW,
               actions: ['dynamodb:PutItem', 'dynamodb:UpdateItem'],
               resources: [props.documentsTable.tableArn],
+            }),
+          ],
+        }),
+        KmsAccess: new iam.PolicyDocument({
+          statements: [
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: ['kms:Decrypt', 'kms:DescribeKey'],
+              resources: [props.documentEncryptionKey.keyArn],
             }),
           ],
         }),
@@ -216,14 +224,6 @@ export class ComputeStack extends Construct {
       s3.EventType.OBJECT_CREATED,
       new s3n.LambdaDestination(this.documentProcessorFunction),
       { prefix: 'documents/' }
-    );
-
-    // DynamoDB Stream Event Source for Real-time Processing
-    this.documentProcessorFunction.addEventSource(
-      new events.DynamoEventSource(props.documentsTable, {
-        startingPosition: lambda.StartingPosition.LATEST,
-        batchSize: 10,
-      })
     );
 
     // CloudWatch Alarms for Monitoring
