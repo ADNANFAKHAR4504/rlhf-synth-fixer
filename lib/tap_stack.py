@@ -544,7 +544,7 @@ class TapStack(pulumi.ComponentResource):
         "api-lambda-permission",
         statement_id="AllowExecutionFromAPIGateway",
         action="lambda:InvokeFunction",
-        function=function=api_handler_lambda.name
+        function=function=api_handler_lambda.name,
         principal="apigateway.amazonaws.com",
         source_arn=api_gateway.execution_arn.apply(lambda arn: f"{arn}/*/*")
     )
