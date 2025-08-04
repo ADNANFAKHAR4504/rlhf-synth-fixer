@@ -189,7 +189,7 @@ jobs:
           export TF_INIT_OPTS="-backend-config=bucket=${{ env.TERRAFORM_STATE_BUCKET }} \
             -backend-config=key=${{ env.ENVIRONMENT_SUFFIX }} \
             -backend-config=region=${{ env.TERRAFORM_STATE_BUCKET_REGION }}"
-          npm run tf:init
+          npm run tf:init -lock=false
         shell: bash
 
       - name: Upload build artifacts
@@ -325,7 +325,7 @@ jobs:
 
           elif [ "$PLATFORM" = "tf" ]; then
             echo "✅ Terraform project detected, setting up environment..."
-            npm run tf:plan -out=tfplan \
+            npm run tf:plan -lock=false -input=false -out=tfplan \
               -backend-config="bucket=${{ env.TERRAFORM_STATE_BUCKET }}" \
               -backend-config="key=${{ env.ENVIRONMENT_SUFFIX }}" \
               -backend-config="region=${{ env.TERRAFORM_STATE_BUCKET_REGION }}"
