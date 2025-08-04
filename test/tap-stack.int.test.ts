@@ -27,7 +27,7 @@ const getResourceName = (
 };
 
 describe('TapStack Integration Tests', () => {
-  const environment = process.env.ENVIRONMENT || 'test';
+  const environment = process.env.ENVIRONMENT_SUFFIX || 'test';
   const regions = ['us-east-1', 'us-west-2', 'eu-central-1'];
 
   regions.forEach(region => {
