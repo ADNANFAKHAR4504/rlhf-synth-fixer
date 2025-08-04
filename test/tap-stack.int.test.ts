@@ -52,8 +52,8 @@ const outputs: { [key: string]: string } = JSON.parse(
  * =================================================================
  */
 
-// Initialize AWS SDK Clients - Replace 'us-west-2' with your deployment region if needed.
-const region = { region: process.env.AWS_REGION || 'us-west-2' };
+// Initialize AWS SDK Clients - Defaults to us-east-1 to match the CFN template.
+const region = { region: process.env.AWS_REGION || 'us-east-1' };
 const ec2Client = new EC2Client(region);
 const elbv2Client = new ElasticLoadBalancingV2Client(region);
 const asgClient = new AutoScalingClient(region);

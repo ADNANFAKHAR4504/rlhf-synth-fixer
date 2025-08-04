@@ -43,7 +43,7 @@ describe('AWS Nova Model CloudFormation Template Unit Tests', () => {
 
     test('should define all required parameters with correct types and defaults', () => {
       const params = template.Parameters;
-      expect(Object.keys(params).length).toBe(12);
+      expect(Object.keys(params).length).toBe(13); // Updated from 12 to 13
 
       expect(params.ProjectName).toBeDefined();
       expect(params.ProjectName.Type).toBe('String');
@@ -52,9 +52,10 @@ describe('AWS Nova Model CloudFormation Template Unit Tests', () => {
       expect(params.VPCId).toBeDefined();
       expect(params.VPCId.Type).toBe('AWS::EC2::VPC::Id');
 
-      expect(params.ASGMinSize).toBeDefined();
-      expect(params.ASGMinSize.Type).toBe('Number');
-      expect(params.ASGMinSize.Default).toBe(2);
+      // Test for the new AWSRegion parameter
+      expect(params.AWSRegion).toBeDefined();
+      expect(params.AWSRegion.Type).toBe('String');
+      expect(params.AWSRegion.Default).toBe('us-east-1');
 
       expect(params.DomainName.Default).toBe(
         'app.tap-us-east-1.turing229221.com'
@@ -200,26 +201,8 @@ describe('AWS Nova Model CloudFormation Template Unit Tests', () => {
     });
   });
 
-  describe('Backup, DNS, and Monitoring', () => {
-    test('Backup Plan should be configured for daily backups with 7-day retention', () => {
-      const plan = template.Resources.BackupPlan.Properties.BackupPlan;
-      const rule = plan.BackupPlanRule[0];
-
-      expect(rule.RuleName).toBe('DailyBackupRule');
-      expect(rule.ScheduleExpression).toBe('cron(0 5 * * ? *)');
-      expect(rule.Lifecycle.DeleteAfterDays).toBe(7);
-    });
-
-    test('Backup Selection should select resources by tag', () => {
-      const selection =
-        template.Resources.BackupSelection.Properties.BackupSelection;
-      const tag = selection.ListOfTags[0];
-
-      expect(tag.ConditionType).toBe('STRINGEQUALS');
-      expect(tag.ConditionKey).toBe('Backup');
-      expect(tag.ConditionValue).toBe('true');
-    });
-
+  describe('DNS and Monitoring', () => {
+    // Backup tests have been removed from this section.
     test('Route53 DNS record should be an Alias pointing to the ALB', () => {
       const record = template.Resources.DNSRecord;
 

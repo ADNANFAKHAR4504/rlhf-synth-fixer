@@ -20,6 +20,20 @@ Description: >
 # Parameters
 # ------------------------------------------------------------
 Parameters:
+  AWSRegion:
+    Type: String
+    Default: 'us-east-1'
+    Description: 'The AWS Region where the resources will be deployed. Default is us-east-1 for testing.'
+    AllowedValues:
+      - us-east-1
+      - us-east-2
+      - us-west-1
+      - us-west-2
+      - eu-west-1
+      - eu-central-1
+      - ap-southeast-1
+      - ap-northeast-1
+
   ProjectName:
     Type: String
     Default: 'novamodel'
@@ -83,7 +97,6 @@ Parameters:
 # Resources
 # ------------------------------------------------------------
 Resources:
-
   # --- Security & IAM ---
 
   ALBSecurityGroup:
@@ -131,7 +144,7 @@ Resources:
             Principal:
               Service: ec2.amazonaws.com
             Action: sts:AssumeRole
-      Path: "/"
+      Path: '/'
       Policies:
         - PolicyName: !Sub '${ProjectName}-${Environment}-ec2policy'
           PolicyDocument:
@@ -157,7 +170,7 @@ Resources:
     Type: AWS::IAM::InstanceProfile
     Properties:
       InstanceProfileName: !Sub '${ProjectName}-${Environment}-ec2instanceprofile'
-      Path: "/"
+      Path: '/'
       Roles:
         - !Ref EC2InstanceRole
 
@@ -166,7 +179,8 @@ Resources:
   ApplicationS3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${AWS::AccountId}-${ProjectName}-${Environment}-data-bucket'
+      # Bucket name now includes the region for better identification and global uniqueness.
+      BucketName: !Sub '${AWS::AccountId}-${ProjectName}-${Environment}-data-bucket-${AWSRegion}'
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -300,13 +314,13 @@ Resources:
             - 'autoscaling:EC2_INSTANCE_LAUNCH_ERROR'
             - 'autoscaling:EC2_INSTANCE_TERMINATE_ERROR'
       MetricsCollection:
-        - Granularity: "1Minute"
+        - Granularity: '1Minute'
       Tags:
         - Key: Name
           Value: !Sub '${ProjectName}-${Environment}-asg'
           PropagateAtLaunch: true
 
-  # --- Scaling Policies and Alarms (CORRECTED SECTION) ---
+  # --- Scaling Policies and Alarms ---
 
   ScaleOutPolicy:
     Type: AWS::AutoScaling::ScalingPolicy
@@ -334,7 +348,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName: !Sub '${ProjectName}-${Environment}-cpu-alarm-high'
-      AlarmDescription: "Alarm to scale out when CPU exceeds 70%"
+      AlarmDescription: 'Alarm to scale out when CPU exceeds 70%'
       MetricName: CPUUtilization
       Namespace: AWS/EC2
       Statistic: Average
@@ -353,7 +367,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName: !Sub '${ProjectName}-${Environment}-cpu-alarm-low'
-      AlarmDescription: "Alarm to scale in when CPU drops below 30%"
+      AlarmDescription: 'Alarm to scale in when CPU drops below 30%'
       MetricName: CPUUtilization
       Namespace: AWS/EC2
       Statistic: Average
@@ -407,7 +421,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName: !Sub '${ProjectName}-${Environment}-highunhealthyhostsalarm'
-      AlarmDescription: "Alarm for a high number of unhealthy hosts in the ALB Target Group"
+      AlarmDescription: 'Alarm for a high number of unhealthy hosts in the ALB Target Group'
       Namespace: AWS/ApplicationELB
       MetricName: UnHealthyHostCount
       Dimensions:
