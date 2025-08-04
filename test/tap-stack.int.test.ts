@@ -110,7 +110,7 @@ describe('TapStack Integration Tests', () => {
           })
         );
 
-        const igw = response.InternetGateways?.[0];
+        const igw:any = response.InternetGateways?.[0];
         expect(igw).toBeDefined();
         expect(igw?.State).toBe('available');
         
