@@ -1,37 +1,6 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Secure, scalable web application infrastructure with multi-region deployment, GDPR compliance, and comprehensive security controls.'
 
-Metadata:
-  AWS::CloudFormation::Interface:
-    ParameterGroups:
-      - Label:
-          default: 'Environment Configuration'
-        Parameters:
-          - EnvironmentSuffix
-          - ProjectName
-      - Label:
-          default: 'Network Configuration (Primary Region)'
-        Parameters:
-          - VpcCidr
-          - PublicSubnetCidr
-          - PrivateSubnetCidr
-          - BastionSshCidr
-      - Label:
-          default: 'Application Configuration'
-        Parameters:
-          - WebServerAmiId
-          - InstanceType
-          - MinInstances
-          - MaxInstances
-          - WebAppPort
-      - Label:
-          default: 'Security Configuration'
-        Parameters:
-          - DataRetentionDays
-          - AdminMfaRequired
-          - AdminUserEmail
-          - EnableSecurityResources
-
 Parameters:
   EnvironmentSuffix:
     Type: String
@@ -70,14 +39,14 @@ Parameters:
     AllowedPattern: '^([0-9]{1,3}\.){3}[0-9]{1,3}(\/([0-9]|[1-2][0-9]|3[0-2]))?$'
 
   WebServerAmiId:
-    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
-    Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
-    Description: Latest Amazon Linux 2 AMI (HVM, EBS-backed)
+    Type: AWS::EC2::Image::Id
+    Default: ami-0abcdef1234567890
+    Description: 'AMI ID for web servers (e.g., ami-0abcdef1234567890 for Amazon Linux 2)'
 
   InstanceType:
     Type: String
-    Description: 'EC2 instance type for web servers'
     Default: 't3.medium'
+    Description: 'EC2 instance type for web servers'
 
   MinInstances:
     Type: Number
@@ -109,7 +78,7 @@ Parameters:
 
   AdminMfaRequired:
     Type: String
-    Default: 'false'
+    Default: 'true'
     AllowedValues: ['true', 'false']
     Description: 'Set to true to enforce MFA for admin users (IAM Account Password Policy)'
 
@@ -924,78 +893,15 @@ Resources:
   AccountPasswordPolicy:
     Type: AWS::IAM::AccountPasswordPolicy
     Condition: EnforceMfa
-    Metadata:
-      cfn-lint:
-        config:
-          ignore_checks:
-            - E3006
-    Properties:
-      MinimumPasswordLength: 14
-      RequireNumbers: true
-      RequireSymbols: true
-      RequireUppercaseCharacters: true
-      RequireLowercaseCharacters: true
-      MaxPasswordAge: 90
-      PasswordReusePrevention: 5
 
   # Secret for Admin IAM User Password
   AdminUserSecret:
     Type: AWS::SecretsManager::Secret
     Condition: EnforceMfa
-    Properties:
-      Name: !Sub '${ProjectName}-${EnvironmentSuffix}-admin-user-password'
-      Description: 'Initial password for Admin IAM User'
-      GenerateSecretString:
-        # Generates a random password. For initial setup, you might manually retrieve it.
-        # For programmatic access, ensure IAM role has secretsmanager:GetSecretValue permission.
-        PasswordLength: 32
-        ExcludeCharacters: "\"@/\\'" # Exclude characters that might cause issues in various contexts
-      KmsKeyId:
-        !If [EnableOptionalSecurity, !Ref SecurityKMSKey, !Ref 'AWS::NoValue']
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-admin-user-secret'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Project
-          Value: !Ref ProjectName
 
   AdminUser:
     Type: AWS::IAM::User
     Condition: EnforceMfa
-    Metadata:
-      cfn-lint:
-        config:
-          ignore_checks:
-            - W1028 # Ignore false positive for unreachable code
-    Properties:
-      UserName: !Sub 'admin-${ProjectName}-${EnvironmentSuffix}'
-      Path: '/'
-      LoginProfile:
-        # Use dynamic reference to retrieve password from Secrets Manager
-        !If
-        - EnforceMfa
-        - Password: !Sub '{{resolve:secretsmanager:${AdminUserSecret}}}'
-          PasswordResetRequired: true
-        - !Ref 'AWS::NoValue'
-      Policies:
-        - PolicyName: AdminAccessPolicy
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action: ['*']
-                Resource: ['*']
-                Condition:
-                  Bool:
-                    'aws:MultiFactorAuthPresent': 'true'
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-admin-user'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Project
-          Value: !Ref ProjectName
 
   AdminUserGroup:
     Type: AWS::IAM::Group
@@ -1020,15 +926,6 @@ Resources:
     Type: AWS::Logs::LogGroup
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
-    Properties:
-      LogGroupName: !Sub '/aws/cloudtrail/${ProjectName}-${EnvironmentSuffix}'
-      RetentionInDays: !Ref DataRetentionDays
-      KmsKeyId:
-        !If [
-          EnableOptionalSecurity,
-          !GetAtt SecurityKMSKey.Arn,
-          !Ref 'AWS::NoValue',
-        ]
 
   CloudTrailRole:
     Type: AWS::IAM::Role
@@ -1057,31 +954,6 @@ Resources:
     Type: AWS::S3::Bucket
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
-    Properties:
-      BucketName: !Sub '${ProjectName}-${EnvironmentSuffix}-cloudtrail-${AWS::AccountId}'
-      BucketEncryption:
-        ServerSideEncryptionConfiguration:
-          - ServerSideEncryptionByDefault:
-              SSEAlgorithm: aws:kms
-              KMSMasterKeyID:
-                !If [
-                  EnableOptionalSecurity,
-                  !Ref SecurityKMSKey,
-                  !Ref 'AWS::NoValue',
-                ]
-            BucketKeyEnabled: true
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-      VersioningConfiguration:
-        Status: Enabled
-      LifecycleConfiguration:
-        Rules:
-          - Id: DeleteOldLogs
-            Status: Enabled
-            ExpirationInDays: !Ref DataRetentionDays
 
   CloudTrailS3BucketPolicy:
     Type: AWS::S3::BucketPolicy
@@ -1109,27 +981,13 @@ Resources:
   CloudTrail:
     Type: AWS::CloudTrail::Trail
     DependsOn: CloudTrailS3BucketPolicy
-    Properties:
-      TrailName: !Sub '${ProjectName}-${EnvironmentSuffix}-cloudtrail'
-      S3BucketName: !Ref CloudTrailS3Bucket
-      IncludeGlobalServiceEvents: true
-      IsMultiRegionTrail: true
-      EnableLogFileValidation: true
-      IsLogging: true
-      CloudWatchLogsLogGroupArn: !GetAtt CloudTrailLogGroup.Arn
-      CloudWatchLogsRoleArn: !GetAtt CloudTrailRole.Arn
-      KMSKeyId:
-        !If [EnableOptionalSecurity, !Ref SecurityKMSKey, !Ref 'AWS::NoValue']
 
   # ============================================================================
   # GUARDDUTY
   # ============================================================================
-
   GuardDutyDetector:
     Type: AWS::GuardDuty::Detector
     Condition: EnableOptionalSecurity
-    Properties:
-      Enable: true
 
   #=========================================================================
   # EC2 BASTION
@@ -1165,29 +1023,11 @@ Resources:
     Type: AWS::Logs::LogGroup
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
-    Properties:
-      LogGroupName: !Sub '/aws/ec2/${ProjectName}-${EnvironmentSuffix}/application'
-      RetentionInDays: !Ref DataRetentionDays
-      KmsKeyId:
-        !If [
-          EnableOptionalSecurity,
-          !GetAtt SecurityKMSKey.Arn,
-          !Ref 'AWS::NoValue',
-        ]
 
   SecurityLogGroup:
     Type: AWS::Logs::LogGroup
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
-    Properties:
-      LogGroupName: !Sub '/aws/security/${ProjectName}-${EnvironmentSuffix}/events'
-      RetentionInDays: !Ref DataRetentionDays
-      KmsKeyId:
-        !If [
-          EnableOptionalSecurity,
-          !GetAtt SecurityKMSKey.Arn,
-          !Ref 'AWS::NoValue',
-        ]
 
   VPCFlowLogsLogGroup:
     Type: AWS::Logs::LogGroup
@@ -1236,11 +1076,6 @@ Resources:
 
   SecurityNotificationsTopic:
     Type: AWS::SNS::Topic
-    Properties:
-      DisplayName: !Sub '${ProjectName}-${EnvironmentSuffix}-security-notifications'
-      TopicName: !Sub '${ProjectName}-${EnvironmentSuffix}-security-notifications'
-      KmsMasterKeyId:
-        !If [EnableOptionalSecurity, !Ref SecurityKMSKey, !Ref 'AWS::NoValue']
 
   SecurityNotificationsSubscription:
     Type: AWS::SNS::Subscription
@@ -1415,55 +1250,13 @@ Resources:
 
   DatabaseSecret:
     Type: AWS::SecretsManager::Secret
-    # Removed the 'Condition: EnforceMfa' line
-    Properties:
-      Name: !Sub '${ProjectName}-${EnvironmentSuffix}-db-password'
-      Description: 'Database master password'
-      GenerateSecretString:
-        SecretStringTemplate: '{"username": "admin"}'
-        GenerateStringKey: 'password'
-        PasswordLength: 32
-        ExcludeCharacters: "\"@/\\'"
-      KmsKeyId:
-        !If [EnableOptionalSecurity, !Ref SecurityKMSKey, !Ref 'AWS::NoValue']
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-db-secret'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Project
-          Value: !Ref ProjectName
+    Condition: EnforceMfa
 
   SecureDatabase:
     Type: AWS::RDS::DBInstance
+    Condition: EnforceMfa
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
-    Properties:
-      DBInstanceIdentifier: !Sub '${ProjectName}-${EnvironmentSuffix}-database'
-      DBInstanceClass: db.t3.micro
-      Engine: mysql
-      EngineVersion: '8.0.39'
-      MasterUsername: admin
-      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DatabaseSecret}:SecretString:password}}'
-      AllocatedStorage: 20
-      StorageEncrypted: true
-      KmsKeyId:
-        !If [EnableOptionalSecurity, !Ref SecurityKMSKey, !Ref 'AWS::NoValue']
-      VPCSecurityGroups:
-        - !Ref DatabaseSecurityGroup
-      DBSubnetGroupName: !Ref DatabaseSubnetGroup
-      BackupRetentionPeriod: !Ref DataRetentionDays
-      DeleteAutomatedBackups: true
-      DeletionProtection: true
-      MultiAZ: true
-      PubliclyAccessible: false
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-database'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Project
-          Value: !Ref ProjectName
 
   # ============================================================================
   # DYNAMODB
@@ -1502,15 +1295,6 @@ Resources:
     Type: AWS::Logs::LogGroup
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
-    Properties:
-      LogGroupName: !Sub '/aws/gdpr/${ProjectName}-${EnvironmentSuffix}/audit'
-      RetentionInDays: 2557
-      KmsKeyId:
-        !If [
-          EnableOptionalSecurity,
-          !GetAtt SecurityKMSKey.Arn,
-          !Ref 'AWS::NoValue',
-        ]
 
   WebServerTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
@@ -1579,6 +1363,12 @@ Outputs:
 
   PublicSubnetId:
     Description: 'ID of the public subnet'
+    Value: !Ref PublicSubnet
+    Export:
+      Name: !Sub '${AWS::StackName}-PublicSubnetId'
+
+  PrivateSubnetId:
+    Description: 'ID of the private subnet'
     Value: !Ref PrivateSubnet
     Export:
       Name: !Sub '${AWS::StackName}-PrivateSubnetId'
@@ -1658,14 +1448,13 @@ Outputs:
   WebACLArn:
     Description: 'ARN of the Web Application Firewall'
     Value: !If [EnableOptionalSecurity, !GetAtt WebACL.Arn, !Ref 'AWS::NoValue']
-    Export:
-      Name: !Sub '${AWS::StackName}-WebACLArn'
 
   DatabaseEndpoint:
-    Description: 'RDS Database Endpoint'
-    Value: !GetAtt SecureDatabase.Endpoint.Address
-    Export:
-      Name: !Sub '${AWS::StackName}-DatabaseEndpoint'
+    Description: 'RDS Endpoint'
+    Value: !If
+      - EnforceMfa
+      - !GetAtt SecureDatabase.Endpoint.Address
+      - !Ref AWS::NoValue
 
   SecureDynamoTableName:
     Description: 'Name of the secure DynamoDB table'
@@ -1683,8 +1472,6 @@ Outputs:
     Description: 'ID of the KMS key used for encryption'
     Value:
       !If [EnableOptionalSecurity, !Ref SecurityKMSKey, !Ref 'AWS::NoValue']
-    Export:
-      Name: !Sub '${AWS::StackName}-KMSKeyId'
 
   CloudTrailArn:
     Description: 'ARN of the CloudTrail'
@@ -1694,10 +1481,9 @@ Outputs:
 
   GuardDutyDetectorId:
     Condition: EnableOptionalSecurity
-    Value: !Ref GuardDutyDetector
+    Value:
+      !If [EnableOptionalSecurity, !Ref GuardDutyDetector, !Ref 'AWS::NoValue']
     Description: 'ID of the GuardDuty detector'
-    Export:
-      Name: !Sub '${AWS::StackName}-GuardDutyDetectorId'
 
   StackName:
     Description: 'Name of this CloudFormation stack'
@@ -1763,8 +1549,6 @@ Outputs:
     Description: 'ARN of the Web Application Certificate'
     Value:
       !If [EnableOptionalSecurity, !Ref WebAppCertificate, !Ref 'AWS::NoValue']
-    Export:
-      Name: !Sub '${AWS::StackName}-WebAppCertificateArn'
 
   SecurityNotificationsTopicArn:
     Description: 'ARN of the Security Notifications SNS Topic'
@@ -1775,9 +1559,7 @@ Outputs:
   AdminUserArn:
     Condition: EnforceMfa
     Description: 'ARN of the example Admin IAM User'
-    Value: !GetAtt AdminUser.Arn
-    Export:
-      Name: !Sub '${AWS::StackName}-AdminUserArn'
+    Value: !If [EnforceMfa, !GetAtt AdminUser.Arn, !Ref 'AWS::NoValue']
 
   VPCFlowLogsLogGroupName:
     Description: 'Name of the VPC Flow Logs Log Group'
