@@ -95,17 +95,6 @@ class TapStack(pulumi.ComponentResource):
       ])
     )
 
-    print("🔔 Setting up CloudWatch Security Alarms...")
-    self.regional_monitoring[region].setup_security_alarms(
-      vpc_id=self.regional_networks[region].vpc_id,
-      s3_bucket_names=[self.regional_data_protection[region].secure_s3_bucket.bucket],
-      rds_instance_identifiers=[],
-      opts=provider_opts([
-        self.regional_data_protection[region],
-        self.regional_monitoring[region]
-      ])
-    )
-
     print("📊 Setting up VPC Flow Logs...")
     self.regional_monitoring[region].setup_vpc_flow_logs(
       vpc_id=self.regional_networks[region].vpc_id,
