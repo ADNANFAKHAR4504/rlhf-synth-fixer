@@ -26,7 +26,7 @@ interface TapStackProps {
   stateBucketRegion?: string;
   awsRegion?: string;
   defaultTags?: AwsProviderDefaultTags;
-  keyName: string; // added to allow EC2 key pair injection
+  keyName?: string; // added to allow EC2 key pair injection
 }
 
 const AWS_REGION_OVERRIDE = '';
