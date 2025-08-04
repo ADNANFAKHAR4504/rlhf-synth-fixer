@@ -23,11 +23,11 @@ pylint = "*"
 pytest = "*"
 
 [requires]
-python_version = "3.12.11"
+python_version = "3.12.3"
 
 [scripts]
 # Validation
-cfn-validate-yaml = "cfn-lint lib/TapStack.yml"
+cfn-validate-yaml = "cfn-lint lib/TapStack.yml --regions us-east-1"
 cfn-validate-json = "cfn-lint lib/TapStack.json"
 cfn-flip-to-json = "cfn-flip  lib/TapStack.yml"
 cfn-flip-to-yaml = "cfn-flip -y lib/TapStack.json"
