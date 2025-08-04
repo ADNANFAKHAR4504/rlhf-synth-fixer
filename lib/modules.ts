@@ -26,6 +26,9 @@ export class Ipv6OnlyVpc extends Construct {
     super(scope, name);
 
     this.vpc = new Vpc(this, 'ipv6-only-vpc', {
+      // Correct Fix: Provide a dummy IPv4 CIDR block to satisfy AWS API validation.
+      // This CIDR block will not be used in the subnets or routing.
+      cidrBlock: '10.0.0.0/16', 
       assignGeneratedIpv6CidrBlock: true,
       tags: { Name: `${props.name}-vpc`, ...props.tags },
     });

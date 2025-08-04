@@ -61,7 +61,7 @@ export class TapStack extends TerraformStack {
 
     // ? Add your stack instantiations here
     const commonTags = {
-      Environment: 'dev',
+      Environment: environmentSuffix, // Use the dynamic environmentSuffix
       Project: 'IPv6-IoT',
       Cloud: 'AWS',
     };
