@@ -10,6 +10,7 @@ import { RouteTable } from '@cdktf/provider-aws/lib/route-table';
 import { RouteTableAssociation } from '@cdktf/provider-aws/lib/route-table-association';
 import { Route } from '@cdktf/provider-aws/lib/route'; // Corrected: Import Route
 import { Instance } from '@cdktf/provider-aws/lib/instance';
+import { Fn } from 'cdktf';
 
 interface VpcProps {
   name: string;
@@ -28,7 +29,7 @@ export class Ipv6OnlyVpc extends Construct {
     this.vpc = new Vpc(this, 'ipv6-only-vpc', {
       // Correct Fix: Provide a dummy IPv4 CIDR block to satisfy AWS API validation.
       // This CIDR block will not be used in the subnets or routing.
-      cidrBlock: '10.0.0.0/16', 
+      cidrBlock: '10.0.0.0/16',
       assignGeneratedIpv6CidrBlock: true,
       tags: { Name: `${props.name}-vpc`, ...props.tags },
     });
@@ -70,11 +71,18 @@ export class Ipv6OnlySubnet extends Construct {
   constructor(scope: Construct, name: string, props: SubnetProps) {
     super(scope, name);
 
+    // FIX: Provide a dummy IPv4 CIDR block for the subnet.
+    // We will derive this from the VPC's dummy IPv4 CIDR.
+    // Assuming the VPC uses '10.0.0.0/16', we can give the subnet '10.0.1.0/24'.
+    const vpcIpv4CidrBlock = '10.0.0.0/16';
+    const subnetIpv4CidrBlock = Fn.cidrsubnet(vpcIpv4CidrBlock, 8, 1);
+
     this.subnet = new Subnet(this, 'ipv6-only-subnet', {
       vpcId: props.vpcId,
       ipv6CidrBlock: props.ipv6CidrBlock,
+      // Pass the dummy IPv4 CIDR block
+      cidrBlock: subnetIpv4CidrBlock,
       assignIpv6AddressOnCreation: true,
-      mapPublicIpOnLaunch: true, // This is an IPv4 property, but `ipv6AddressOnCreation` is the IPv6 equivalent. Keeping it for general best practice, though it's not strictly necessary for IPv6-only.
       tags: { Name: `${props.name}-subnet`, ...props.tags },
     });
 

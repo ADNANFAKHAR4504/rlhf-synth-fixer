@@ -50,8 +50,12 @@ describe('IPv6-Only IoT Infrastructure Unit Tests (Default Props)', () => {
     const subnets = getResourcesByType(synthesized, 'aws_subnet');
     expect(subnets.length).toBe(1);
     const subnet = subnets[0];
+    
     expect(subnet.ipv6_cidr_block).toBeDefined();
-    expect(subnet.cidr_block).toBeUndefined();
+
+    // FIX: Update the regular expression to include the ${...} wrapper.
+    expect(subnet.cidr_block).toMatch(/^\$\{cidrsubnet\("10.0.0.0\/16", 8, 1\)\}$/);
+    
     expect(subnet.assign_ipv6_address_on_creation).toBe(true);
     expect(subnet.tags.Environment).toBe('dev');
   });
