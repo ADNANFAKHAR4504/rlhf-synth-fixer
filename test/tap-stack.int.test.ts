@@ -131,7 +131,8 @@ describe('IPv6-Only IoT Infrastructure Integration Tests', () => {
     const result = await client.send(new DescribeSecurityGroupsCommand({
       Filters: [{ Name: 'vpc-id', Values: [vpcId] }]
     }));
-    const sg = result.SecurityGroups?.find(s => s.GroupName === `tap-ec2-${environmentSuffix}`);
+    // FIX: Revert to the hardcoded Security Group name from your TapStack code
+    const sg = result.SecurityGroups?.find(s => s.GroupName === 'tap-ec2');
     
     expect(sg).toBeDefined();
     securityGroupId = sg?.GroupId as string;
@@ -171,8 +172,8 @@ describe('IPv6-Only IoT Infrastructure Integration Tests', () => {
     expect(instance?.Tags).toEqual(expect.arrayContaining([
       { Key: 'Environment', Value: environmentSuffix },
     ]));
-    // FIX: The IAM Profile Name likely has the environment suffix.
-    expect(instance?.IamInstanceProfile?.Arn).toContain(`tap-ec2-ec2-instance-profile-${environmentSuffix}`);
+    // FIX: Revert to the hardcoded IAM Instance Profile ARN substring from your TapStack code
+    expect(instance?.IamInstanceProfile?.Arn).toContain('tap-ec2-ec2-instance-profile');
     expect(instance?.SecurityGroups).toEqual(expect.arrayContaining([
       expect.objectContaining({ GroupId: securityGroupId })
     ]));
