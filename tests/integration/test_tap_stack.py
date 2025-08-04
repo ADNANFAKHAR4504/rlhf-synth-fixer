@@ -28,7 +28,7 @@ class TestTapStack(unittest.TestCase):
 
     template.resource_count_is("AWS::S3::Bucket", 1)
     template.resource_count_is("AWS::IAM::Role", 1)
-    template.resource_count_is("AWS::EC2::SecurityGroup", 1)
+    template.resource_count_is("AWS::EC2::SecurityGroup", 2)
     template.resource_count_is("AWS::AutoScaling::AutoScalingGroup", 1)
     template.resource_count_is("AWS::ElasticLoadBalancingV2::LoadBalancer", 1)
 
@@ -77,7 +77,7 @@ class TestTapStack(unittest.TestCase):
     template = Template.from_stack(nested_stack)
 
     template.resource_count_is("AWS::IAM::Role", 1)
-    template.resource_count_is("AWS::EC2::SecurityGroup", 1)
+    template.resource_count_is("AWS::EC2::SecurityGroup", 2)
 
     template.has_resource_properties("AWS::IAM::Role", {
       "AssumeRolePolicyDocument": {
