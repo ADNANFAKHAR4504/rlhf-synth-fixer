@@ -49,11 +49,12 @@ class TapStack(pulumi.ComponentResource):
       region=region
     )
 
-    provider_opts = lambda deps: ResourceOptions(
-      parent=self,
-      depends_on=deps,
-      provider=self.providers[region]
-    )
+    def provider_opts(deps=None):
+      return ResourceOptions(
+        parent=self,
+        provider=self.providers[region],
+        depends_on=deps or []
+      )
 
     print("🌐 Creating Networking Infrastructure (no NAT/NACL)...")
     self.regional_networks[region] = NetworkSecurityInfrastructure(
@@ -65,13 +66,16 @@ class TapStack(pulumi.ComponentResource):
       opts=provider_opts([self.identity_access])
     )
 
-    print("📡 Creating Monitoring Infrastructure...")
+    print("📱 Creating Monitoring Infrastructure...")
     self.regional_monitoring[region] = SecurityMonitoringInfrastructure(
       name=f"secure-projectx-monitoring-{region_suffix}-{self.environment_suffix}",
       region=region,
       kms_key_arn=self.identity_access.kms_key.arn,
       tags=self.tags,
-      opts=provider_opts([self.identity_access])
+      opts=provider_opts([
+        self.identity_access,
+        self.regional_networks[region]
+      ])
     )
 
     print("🛡️ Creating Data Protection Infrastructure...")
@@ -100,8 +104,8 @@ class TapStack(pulumi.ComponentResource):
         self.regional_data_protection[region].rds_instance.identifier
       ] if hasattr(self.regional_data_protection[region], 'rds_instance') else [],
       opts=provider_opts([
-        self.regional_networks[region],
-        self.regional_data_protection[region]
+        self.regional_data_protection[region],
+        self.regional_monitoring[region]
       ])
     )
 
@@ -109,8 +113,8 @@ class TapStack(pulumi.ComponentResource):
     self.regional_monitoring[region].setup_vpc_flow_logs(
       vpc_id=self.regional_networks[region].vpc_id,
       opts=provider_opts([
-        self.regional_networks[region],
-        self.regional_monitoring[region]
+        self.regional_monitoring[region],
+        self.regional_networks[region]
       ])
     )
 
