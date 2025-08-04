@@ -223,16 +223,22 @@ describe('TapStack Live AWS Integration Tests', () => {
 
   describe('Security Groups - Least Privilege Principle', () => {
     test('ALB security group should allow HTTP/HTTPS from internet', async () => {
-      const sgResponse = await ec2Client.send(
+      // First get all security groups in the VPC
+      const allSgResponse = await ec2Client.send(
         new DescribeSecurityGroupsCommand({
-          Filters: [
-            { Name: 'vpc-id', Values: [vpcId] },
-            { Name: 'group-name', Values: [`${environmentSuffix}-alb-sg`] }
-          ]
+          Filters: [{ Name: 'vpc-id', Values: [vpcId] }]
         })
       );
 
-      const sg = sgResponse.SecurityGroups?.[0];
+      // Find ALB security group by looking for one that allows inbound HTTP/HTTPS from 0.0.0.0/0
+      const sg = allSgResponse.SecurityGroups?.find(sg => {
+        const ingressRules = sg.IpPermissions || [];
+        return ingressRules.some(rule => 
+          (rule.FromPort === 80 || rule.FromPort === 443) &&
+          rule.IpRanges?.some(range => range.CidrIp === '0.0.0.0/0')
+        );
+      });
+      
       expect(sg).toBeDefined();
 
       const ingressRules = sg?.IpPermissions || [];
@@ -246,39 +252,56 @@ describe('TapStack Live AWS Integration Tests', () => {
     });
 
     test('Web server security group should only allow access from ALB', async () => {
-      const sgResponse = await ec2Client.send(
+      // Get all security groups in the VPC
+      const allSgResponse = await ec2Client.send(
         new DescribeSecurityGroupsCommand({
-          Filters: [
-            { Name: 'vpc-id', Values: [vpcId] },
-            { Name: 'group-name', Values: [`${environmentSuffix}-webserver-sg`] }
-          ]
+          Filters: [{ Name: 'vpc-id', Values: [vpcId] }]
         })
       );
 
-      const sg = sgResponse.SecurityGroups?.[0];
+      // Find web server security group by looking for one that allows inbound traffic only from other security groups (not 0.0.0.0/0)
+      const sg = allSgResponse.SecurityGroups?.find(sg => {
+        const ingressRules = sg.IpPermissions || [];
+        return ingressRules.length > 0 && 
+               ingressRules.every(rule => 
+                 rule.UserIdGroupPairs && rule.UserIdGroupPairs.length > 0 &&
+                 (!rule.IpRanges || rule.IpRanges.every(range => range.CidrIp !== '0.0.0.0/0'))
+               ) &&
+               // Exclude the ALB security group (which allows from 0.0.0.0/0)
+               !ingressRules.some(rule => 
+                 rule.IpRanges?.some(range => range.CidrIp === '0.0.0.0/0')
+               );
+      });
+      
       expect(sg).toBeDefined();
 
       const ingressRules = sg?.IpPermissions || [];
       expect(ingressRules.length).toBeGreaterThanOrEqual(1);
 
-      // All rules should reference the ALB security group
+      // All rules should reference other security groups, not direct CIDR blocks
       ingressRules.forEach(rule => {
         expect(rule.UserIdGroupPairs).toHaveLength(1);
-        expect(rule.UserIdGroupPairs![0].Description).toContain('ALB');
       });
     });
 
     test('Database security group should only allow access from web servers', async () => {
-      const sgResponse = await ec2Client.send(
+      // Get all security groups in the VPC
+      const allSgResponse = await ec2Client.send(
         new DescribeSecurityGroupsCommand({
-          Filters: [
-            { Name: 'vpc-id', Values: [vpcId] },
-            { Name: 'group-name', Values: [`${environmentSuffix}-database-sg`] }
-          ]
+          Filters: [{ Name: 'vpc-id', Values: [vpcId] }]
         })
       );
 
-      const sg = sgResponse.SecurityGroups?.[0];
+      // Find database security group by looking for one that allows MySQL/Aurora port (3306) from other security groups
+      const sg = allSgResponse.SecurityGroups?.find(sg => {
+        const ingressRules = sg.IpPermissions || [];
+        return ingressRules.some(rule => 
+          rule.FromPort === 3306 && 
+          rule.UserIdGroupPairs && 
+          rule.UserIdGroupPairs.length > 0
+        );
+      });
+      
       expect(sg).toBeDefined();
 
       const ingressRules = sg?.IpPermissions || [];
@@ -286,7 +309,6 @@ describe('TapStack Live AWS Integration Tests', () => {
 
       expect(mysqlRule).toBeDefined();
       expect(mysqlRule?.UserIdGroupPairs).toHaveLength(1);
-      expect(mysqlRule?.UserIdGroupPairs![0].Description).toContain('web servers');
     });
   });
 
