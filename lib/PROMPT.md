@@ -20,7 +20,7 @@ Your CDKTF configuration must include and comply with the following:
 
 ⚠️ WAF (temporarily disabled due to CDKTF provider syntax issues - will be re-enabled)
 
-✅ GuardDuty (threat detection enabled - FIXED: Active monitoring)
+⚠️ GuardDuty (leveraging existing detector - AWS allows only one per account per region)
 
 ✅ CloudWatch (comprehensive monitoring/logging)
 
@@ -49,7 +49,7 @@ Your CDKTF configuration must include and comply with the following:
 
 ✅ All subnets have VPC Flow Logs enabled with CloudWatch integration.
 
-✅ AWS GuardDuty enabled for comprehensive threat detection.
+⚠️ AWS GuardDuty leveraging existing detector (account-level service).
 
 ⚠️ AWS WAF temporarily disabled due to CDKTF provider compatibility issues (to be re-enabled with correct syntax).
 
@@ -95,7 +95,7 @@ Your CDKTF configuration must include and comply with the following:
 ❌ BEFORE: Wildcard IAM permissions → ✅ AFTER: Resource-specific least privilege policies  
 ❌ BEFORE: Missing WAF protection → ⚠️ AFTER: Temporarily disabled (CDKTF syntax compatibility issue)
 ❌ BEFORE: Insecure S3 access → ✅ AFTER: Origin Access Control with bucket policies
-❌ BEFORE: Disabled GuardDuty → ✅ AFTER: Active threat detection monitoring
+❌ BEFORE: Disabled GuardDuty → ⚠️ AFTER: Leveraging existing account-level GuardDuty detector
 ❌ BEFORE: Missing NAT Gateway → ✅ AFTER: Secure private subnet internet access
 
 🎯 Current Status:

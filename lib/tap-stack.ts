@@ -609,11 +609,13 @@ echo "<h1>Nova Model Breaking App</h1>" > /var/www/html/index.html
     // });
 
     // GuardDuty Detector for threat detection
-    new GuarddutyDetector(this, 'main-guardduty', {
-      enable: true,
-      findingPublishingFrequency: 'FIFTEEN_MINUTES',
-      tags: commonTags,
-    });
+    // NOTE: GuardDuty detector already exists in account - AWS allows only one per account per region
+    // Uncomment and run 'terraform import' if you need to manage existing detector
+    // new GuarddutyDetector(this, 'main-guardduty', {
+    //   enable: true,
+    //   findingPublishingFrequency: 'FIFTEEN_MINUTES',
+    //   tags: commonTags,
+    // });
 
     // ACM Certificate removed to avoid DNS validation timeout issues
     // In production, configure proper domain and DNS validation
