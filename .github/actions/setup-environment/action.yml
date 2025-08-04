@@ -38,6 +38,11 @@ runs:
       with:
         python-version: "3.12.11"
         check-latest: true
+    
+    - name: Install Pulumi CLI
+      uses: pulumi/actions@v5
+      with:
+        pulumi-version: 3.109.0
 
     - name: Setup Terraform
       uses: hashicorp/setup-terraform@v3
