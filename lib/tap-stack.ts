@@ -47,9 +47,6 @@ import { Route53HealthCheck } from '@cdktf/provider-aws/lib/route53-health-check
 import { Route53Record } from '@cdktf/provider-aws/lib/route53-record';
 import { Route53Zone } from '@cdktf/provider-aws/lib/route53-zone';
 
-// WAF
-import { Wafv2WebAcl } from '@cdktf/provider-aws/lib/wafv2-web-acl';
-
 // CloudWatch and SSM
 import { CloudwatchLogGroup } from '@cdktf/provider-aws/lib/cloudwatch-log-group';
 import { CloudwatchMetricAlarm } from '@cdktf/provider-aws/lib/cloudwatch-metric-alarm';
