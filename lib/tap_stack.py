@@ -5,6 +5,7 @@ from aws_cdk import (
   aws_iam as iam,
   aws_s3 as s3,
   NestedStack,
+  Stack,
   CfnOutput,
 )
 from constructs import Construct
@@ -87,3 +88,11 @@ class TapStackProps(NestedStack):
       value=self.security_group.security_group_id,
       export_name=f"SecurityGroupId-{environment_suffix}"
     )
+
+
+class TapStack(Stack):
+  def __init__(self, scope: Construct, id: str, environment_suffix: str = "dev", **kwargs):
+    super().__init__(scope, id, **kwargs)
+
+    # Instantiate the nested TapStackProps inside this main stack
+    TapStackProps(self, f"{id}Props", environment_suffix=environment_suffix)
