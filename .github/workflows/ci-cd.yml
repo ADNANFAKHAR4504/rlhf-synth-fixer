@@ -328,6 +328,7 @@ jobs:
               -backend-config="bucket=${{ env.TERRAFORM_STATE_BUCKET }}" \
               -backend-config="key=${{ env.ENVIRONMENT_SUFFIX }}" \
               -backend-config="region=${{ env.TERRAFORM_STATE_BUCKET_REGION }}"
+              -backend-config="aws_region=${{ env.TERRAFORM_STATE_BUCKET_REGION }}"
             echo "✅ Terraform Plan completed"
 
           else
@@ -358,6 +359,7 @@ jobs:
               -backend-config="bucket=${{ env.TERRAFORM_STATE_BUCKET }}" \
               -backend-config="key=${{ env.ENVIRONMENT_SUFFIX }}" \
               -backend-config="region=${{ env.TERRAFORM_STATE_BUCKET_REGION }}"
+              -backend-config="aws_region=${{ env.TERRAFORM_STATE_BUCKET_REGION }}"
           elif [ "$PLATFORM" = "cfn" ] && [ "$LANGUAGE" = "yaml" ]; then
             echo "✅ CloudFormation YAML project detected, deploying with AWS CLI..."
             npm run cfn:deploy-yaml

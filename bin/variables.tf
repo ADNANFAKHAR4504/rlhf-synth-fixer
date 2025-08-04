@@ -1,6 +1,6 @@
-variable "secret_key" {}
-variable "access_key" {}
-variable "region" {}
+# variable "secret_key" {}
+# variable "access_key" {}
+# variable "region" {}
 variable "environment_suffix" {
   type        = string
   default     = "dev"
