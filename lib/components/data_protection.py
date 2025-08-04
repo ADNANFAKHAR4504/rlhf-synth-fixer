@@ -1,5 +1,6 @@
 from typing import Optional, List
 import pulumi
+import re
 import pulumi_aws as aws
 import pulumi_random as random
 from pulumi import ResourceOptions
@@ -52,9 +53,11 @@ class DataProtectionInfrastructure(pulumi.ComponentResource):
     })
 
   def _create_s3_buckets(self):
+    safe_stack = re.sub(r'[^a-z0-9\-]', '', pulumi.get_stack().lower())
+    bucket_name = f"secure-projectx-data-{self.region}-{safe_stack}"
     self.secure_s3_bucket = aws.s3.Bucket(
       f"{self.region.replace('-', '')}-secure-projectx-data-bucket",
-      bucket=f"secure-projectx-data-{self.region}-{pulumi.get_stack()}",
+      bucket=bucket_name,
       tags={
         **self.tags,
         "Name": f"secure-projectx-data-{self.region}",
