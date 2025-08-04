@@ -70,8 +70,6 @@ class TapStack(pulumi.ComponentResource):
     self.regional_monitoring[region] = SecurityMonitoringInfrastructure(
       name=f"secure-projectx-monitoring-{region_suffix}-{self.environment_suffix}",
       region=region,
-      kms_key=self.identity_access.kms_key,
-      kms_key_arn=self.identity_access.kms_key.arn,
       tags=self.tags,
       opts=provider_opts([
         self.identity_access,

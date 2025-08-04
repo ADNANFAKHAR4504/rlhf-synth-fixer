@@ -21,24 +21,24 @@ class SecurityMonitoringInfrastructure(pulumi.ComponentResource):
     self,
     name: str,
     region: str,
-    kms_key: aws.kms.Key,
-    kms_key_arn: pulumi.Input[str],
+    # kms_key: aws.kms.Key,
+    # kms_key_arn: pulumi.Input[str],
     tags: Optional[dict] = None,
     opts: Optional[ResourceOptions] = None
   ):
     super().__init__('projectx:monitoring:SecurityMonitoring', name, None, opts)
 
     self.region = region
-    self.kms_key = kms_key
-    self.kms_key_arn = kms_key_arn
+    # self.kms_key = kms_key
+    # self.kms_key_arn = kms_key_arn
     self.tags = tags or {}
 
     if not isinstance(self.tags, dict):
       raise ValueError("tags must be a dictionary")
     if not region:
       raise ValueError("region must be provided")
-    if not kms_key_arn:
-      raise ValueError("kms_key_arn must be provided")
+    # if not kms_key_arn:
+    #   raise ValueError("kms_key_arn must be provided")
 
     self._create_cloudwatch_resources()
     self._create_sns_resources()
@@ -55,9 +55,9 @@ class SecurityMonitoringInfrastructure(pulumi.ComponentResource):
       f"{self.region.replace('-', '')}-security-logs",
       name=f"/aws/projectx/security/{self.region}",
       retention_in_days=365,
-      kms_key_id=self.kms_key.arn.apply(lambda arn: arn),
+      # kms_key_id=self.kms_key.arn.apply(lambda arn: arn),
       tags=self.tags,
-      opts=ResourceOptions(parent=self, depends_on=[self.kms_key])
+      opts=ResourceOptions(parent=self)
     )
 
   def _create_sns_resources(self):
@@ -65,7 +65,7 @@ class SecurityMonitoringInfrastructure(pulumi.ComponentResource):
       f"{self.region.replace('-', '')}-security-alerts",
       name=f"projectx-security-alerts-{self.region}",
       display_name="ProjectX Security Alerts",
-      kms_master_key_id=self.kms_key.arn.apply(lambda arn: arn),
+      # kms_master_key_id=self.kms_key.arn.apply(lambda arn: arn),
       tags=self.tags,
       opts=ResourceOptions(parent=self, depends_on=[self.security_log_group])
     )
