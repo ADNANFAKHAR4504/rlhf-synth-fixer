@@ -1,6 +1,4 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Conditions:
-  IsUSEast1: !Equals [!Ref "AWS::Region", "us-east-1"]
 Description: "Production-grade secure infrastructure for AWS application deployment with comprehensive security controls"
 
 Metadata:
@@ -320,6 +318,12 @@ Resources:
           Value: !Ref EnvironmentSuffix
 
   DefaultPrivateRoute1:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable1
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway1
+
   PrivateRouteTable2:
     Type: AWS::EC2::RouteTable
     Properties:
@@ -337,11 +341,18 @@ Resources:
       DestinationCidrBlock: 0.0.0.0/0
       NatGatewayId: !Ref NatGateway2
 
-  PrivateSubnet2RouteTableAssociation2:
+  PrivateSubnet2RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       RouteTableId: !Ref PrivateRouteTable2
       SubnetId: !Ref PrivateSubnet2
+
+  PrivateSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable1
+      SubnetId: !Ref PrivateSubnet1
+
   # =============================================================================
   # S3 Buckets with Versioning and Access Logging (Requirement 8)
   # =============================================================================
@@ -400,6 +411,26 @@ Resources:
         - Key: Environment
           Value: !Ref EnvironmentSuffix
   # =============================================================================
+  # Secrets Manager for Database Password (Security Best Practice)
+  # =============================================================================
+  DatabaseSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub "${ApplicationName}-${EnvironmentSuffix}-db-password"
+      Description: "Master password for the RDS database instance"
+      GenerateSecretString:
+        SecretStringTemplate: '{"username": "admin"}'
+        GenerateStringKey: "password"
+        PasswordLength: 32
+        ExcludeCharacters: '"@/\'
+      KmsKeyId: !Ref ApplicationKMSKey
+      Tags:
+        - Key: Name
+          Value: !Sub "${ApplicationName}-db-secret"
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # =============================================================================
   # RDS Multi-AZ Database (Requirement 10)
   # =============================================================================
   ApplicationDBSubnetGroup:
@@ -422,9 +453,9 @@ Resources:
       AllocatedStorage: 20
       DBInstanceClass: db.t3.micro
       Engine: mysql
-      EngineVersion: "8.0"
+      EngineVersion: "8.0.35"
       MasterUsername: admin
-      MasterUserPassword: "ChangeMe123!"
+      MasterUserPassword: !Sub "{{resolve:secretsmanager:${DatabaseSecret}:SecretString:password}}"
       MultiAZ: true
       StorageEncrypted: true
       KmsKeyId: !Ref ApplicationKMSKey
@@ -517,23 +548,11 @@ Resources:
           SslSupportMethod: sni-only
         HttpVersion: http2
         PriceClass: PriceClass_100
-        Tags:
-          - Key: Name
-            Value: !Sub "${ApplicationName}-cloudfront"
-          - Key: Environment
-            Value: !Ref EnvironmentSuffix
-
-  PrivateSubnet1RouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      RouteTableId: !Ref PrivateRouteTable1
-      SubnetId: !Ref PrivateSubnet1
-
-  PrivateSubnet2RouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      RouteTableId: !Ref PrivateRouteTable1
-      SubnetId: !Ref PrivateSubnet2
+      Tags:
+        - Key: Name
+          Value: !Sub "${ApplicationName}-cloudfront"
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
 
   # =============================================================================
   # Security Groups with Restricted Access (Requirement 9)
@@ -681,6 +700,12 @@ Outputs:
     Value: !GetAtt ApplicationDB.Endpoint.Address
     Export:
       Name: !Sub "${AWS::StackName}-ApplicationDBEndpoint"
+
+  DatabaseSecretArn:
+    Description: "ARN of the database password secret in Secrets Manager"
+    Value: !Ref DatabaseSecret
+    Export:
+      Name: !Sub "${AWS::StackName}-DatabaseSecretArn"
 
   ApplicationLambdaArn:
     Description: "ARN of the Lambda function"
