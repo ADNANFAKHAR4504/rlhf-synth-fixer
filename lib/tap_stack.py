@@ -43,7 +43,7 @@ class ServerlessApiStack(NestedStack):
         environment={"LOG_LEVEL": "INFO"},
         timeout=Duration.seconds(10),
         memory_size=512,
-        reserved_concurrent_executions=1000,
+        reserved_concurrent_executions=100,
         log_retention=logs.RetentionDays.ONE_WEEK
     )
 
