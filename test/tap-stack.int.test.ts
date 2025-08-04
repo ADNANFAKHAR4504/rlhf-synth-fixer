@@ -8,7 +8,11 @@ import {
   CloudFrontClient,
   ListDistributionsCommand,
 } from '@aws-sdk/client-cloudfront';
-import { DescribeTableCommand, DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import {
+  DescribeTableCommand,
+  DynamoDBClient,
+  GetItemCommand,
+} from '@aws-sdk/client-dynamodb';
 import {
   GetFunctionCommand,
   InvokeCommand,
@@ -229,7 +233,6 @@ describe('TapStack Integration Tests', () => {
         expect(table).toBeDefined();
 
         // Use GetItemCommand to retrieve the item from DynamoDB
-        const { GetItemCommand } = await import('@aws-sdk/client-dynamodb');
         const item = await dynamodb.send(
           new GetItemCommand({
             TableName: tableName,
