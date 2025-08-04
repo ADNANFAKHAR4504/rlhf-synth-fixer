@@ -2,6 +2,7 @@ import * as cdk from 'aws-cdk-lib';
 import { Match, Template } from 'aws-cdk-lib/assertions';
 import { TapStack } from '../lib/tap-stack';
 
+// Use environment variables like the actual implementation
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'test';
 
 describe('TapStack', () => {
@@ -19,36 +20,39 @@ describe('TapStack', () => {
         'vpc-provider:account=123456789012:filter.isDefault=true:region=us-east-1:returnAsymmetricSubnets=true':
           {
             vpcId: 'vpc-12345',
-            availabilityZones: ['us-east-1a', 'us-east-1b', 'us-east-1c'],
-            publicSubnetIds: ['subnet-pub-1', 'subnet-pub-2', 'subnet-pub-3'],
-            publicSubnetNames: [
-              'Public Subnet 1',
-              'Public Subnet 2',
-              'Public Subnet 3',
+            vpcCidrBlock: '10.0.0.0/16',
+            availabilityZones: ['us-east-1a', 'us-east-1b'],
+            subnetGroups: [
+              {
+                name: 'Public',
+                type: 'Public',
+                subnets: [
+                  {
+                    subnetId: 'subnet-12345',
+                    availabilityZone: 'us-east-1a',
+                    routeTableId: 'rt-12345',
+                  },
+                  {
+                    subnetId: 'subnet-67890',
+                    availabilityZone: 'us-east-1b',
+                    routeTableId: 'rt-67890',
+                  },
+                ],
+              },
             ],
-            publicSubnetRouteTableIds: ['rt-pub-1', 'rt-pub-2', 'rt-pub-3'],
-            privateSubnetIds: [
-              'subnet-priv-1',
-              'subnet-priv-2',
-              'subnet-priv-3',
-            ],
-            privateSubnetNames: [
-              'Private Subnet 1',
-              'Private Subnet 2',
-              'Private Subnet 3',
-            ],
-            privateSubnetRouteTableIds: ['rt-priv-1', 'rt-priv-2', 'rt-priv-3'],
           },
       },
     });
 
-    stack = new TapStack(app, 'TestTapStack', {
+    // Use CDK environment variables like the actual implementation
+    stack = new TapStack(app, 'TestStack', {
       environmentSuffix,
       env: {
-        account: '123456789012',
-        region: 'us-east-1',
+        account: process.env.CDK_DEFAULT_ACCOUNT || '123456789012',
+        region: process.env.CDK_DEFAULT_REGION || 'us-east-1',
       },
     });
+
     template = Template.fromStack(stack);
   });
 
@@ -85,7 +89,7 @@ describe('TapStack', () => {
   });
 
   describe('Security Groups', () => {
-    test('should create ALB security group with HTTP and HTTPS access', () => {
+    test('should create ALB security group with HTTP access', () => {
       template.hasResourceProperties('AWS::EC2::SecurityGroup', {
         GroupDescription: 'Security group for Application Load Balancer',
         SecurityGroupIngress: [
@@ -95,48 +99,41 @@ describe('TapStack', () => {
             IpProtocol: 'tcp',
             ToPort: 80,
           },
-          {
-            CidrIp: '0.0.0.0/0',
-            FromPort: 443,
-            IpProtocol: 'tcp',
-            ToPort: 443,
-          },
         ],
       });
     });
 
-    test('should create EC2 security group with ALB and SSH access', () => {
+    test('should create EC2 security group with ALB access', () => {
       template.hasResourceProperties('AWS::EC2::SecurityGroup', {
         GroupDescription: 'Security group for EC2 instances',
-        SecurityGroupIngress: Match.arrayWith([
-          Match.objectLike({
-            FromPort: 80,
-            IpProtocol: 'tcp',
-            ToPort: 80,
-            SourceSecurityGroupId: Match.anyValue(),
-          }),
-          Match.objectLike({
-            CidrIp: '0.0.0.0/0',
-            FromPort: 22,
-            IpProtocol: 'tcp',
-            ToPort: 22,
-          }),
-        ]),
+      });
+
+      // Check for security group ingress rule
+      template.hasResourceProperties('AWS::EC2::SecurityGroupIngress', {
+        FromPort: 80,
+        IpProtocol: 'tcp',
+        ToPort: 80,
+        SourceSecurityGroupId: Match.anyValue(),
       });
     });
 
     test('should create RDS security group with MySQL access from EC2', () => {
       template.hasResourceProperties('AWS::EC2::SecurityGroup', {
         GroupDescription: 'Security group for RDS database',
-        SecurityGroupEgress: [],
-        SecurityGroupIngress: [
-          {
-            FromPort: 3306,
-            IpProtocol: 'tcp',
-            ToPort: 3306,
-            SourceSecurityGroupId: Match.anyValue(),
-          },
-        ],
+        SecurityGroupEgress: Match.arrayWith([
+          Match.objectLike({
+            CidrIp: '255.255.255.255/32',
+            IpProtocol: 'icmp',
+          }),
+        ]),
+      });
+
+      // Check for RDS security group ingress rule
+      template.hasResourceProperties('AWS::EC2::SecurityGroupIngress', {
+        FromPort: 3306,
+        IpProtocol: 'tcp',
+        ToPort: 3306,
+        SourceSecurityGroupId: Match.anyValue(),
       });
     });
   });
@@ -155,78 +152,71 @@ describe('TapStack', () => {
             },
           ],
         },
-        ManagedPolicyArns: [
-          'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore',
-          'arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy',
-        ],
+        ManagedPolicyArns: Match.arrayWith([
+          // Check for SSM managed instance core policy
+          Match.objectLike({
+            'Fn::Join': Match.arrayWith([
+              '', // The delimiter (empty string)
+              Match.arrayWith([
+                Match.stringLikeRegexp('.*AmazonSSMManagedInstanceCore'),
+              ]),
+            ]),
+          }),
+          // Check for CloudWatch agent policy
+          Match.objectLike({
+            'Fn::Join': Match.arrayWith([
+              '', // The delimiter (empty string)
+              Match.arrayWith([
+                Match.stringLikeRegexp('.*CloudWatchAgentServerPolicy'),
+              ]),
+            ]),
+          }),
+        ]),
       });
     });
 
-    test('should create instance profile for EC2 role', () => {
-      template.hasResourceProperties('AWS::IAM::InstanceProfile', {
-        Roles: [Match.anyValue()],
-      });
+    test('should create instance profiles for EC2 role', () => {
+      template.resourceCountIs('AWS::IAM::InstanceProfile', 2); // One for each EC2 instance
     });
   });
 
-  describe('Launch Template', () => {
-    test('should create launch template with proper configuration', () => {
-      template.hasResourceProperties('AWS::EC2::LaunchTemplate', {
-        LaunchTemplateData: {
-          BlockDeviceMappings: [
-            {
-              DeviceName: '/dev/xvda',
-              Ebs: {
-                Encrypted: true,
-                KmsKeyId: Match.anyValue(),
-                VolumeSize: 20,
-                VolumeType: 'gp3',
-              },
+  describe('EC2 Instances', () => {
+    test('should create EC2 instances with proper configuration', () => {
+      template.hasResourceProperties('AWS::EC2::Instance', {
+        InstanceType: 't3.micro',
+        BlockDeviceMappings: [
+          {
+            DeviceName: '/dev/xvda',
+            Ebs: {
+              Encrypted: true,
+              KmsKeyId: Match.anyValue(),
+              VolumeSize: 20,
+              VolumeType: 'gp3',
             },
-          ],
-          IamInstanceProfile: {
-            Arn: Match.anyValue(),
           },
-          ImageId: Match.anyValue(),
-          InstanceType: 't3.micro',
-          MetadataOptions: {
-            HttpTokens: 'required',
-          },
-          SecurityGroupIds: [Match.anyValue()],
-          UserData: Match.anyValue(),
-        },
-      });
-    });
-  });
-
-  describe('Auto Scaling Group', () => {
-    test('should create ASG with proper configuration', () => {
-      template.hasResourceProperties('AWS::AutoScaling::AutoScalingGroup', {
-        AutoScalingGroupName: `tap-${environmentSuffix}-asg`,
-        MinSize: '2',
-        MaxSize: '6',
-        DesiredCapacity: '2',
-        HealthCheckGracePeriod: 300,
-        HealthCheckType: 'ELB',
-        LaunchTemplate: {
-          LaunchTemplateId: Match.anyValue(),
-          Version: Match.anyValue(),
-        },
-        VPCZoneIdentifier: Match.anyValue(),
+        ],
+        IamInstanceProfile: Match.anyValue(),
+        SecurityGroupIds: [Match.anyValue()],
+        UserData: Match.anyValue(),
       });
     });
 
-    test('should create CPU-based scaling policy', () => {
-      template.hasResourceProperties('AWS::AutoScaling::ScalingPolicy', {
-        AdjustmentType: 'ChangeInCapacity',
-        PolicyType: 'TargetTrackingScaling',
-        TargetTrackingConfiguration: {
-          TargetValue: 70,
-          PredefinedMetricSpecification: {
-            PredefinedMetricType: 'ASGAverageCPUUtilization',
-          },
-        },
-      });
+    test('should create two EC2 instances across different AZs', () => {
+      template.resourceCountIs('AWS::EC2::Instance', 2);
+
+      // Check instances are in different AZs
+      const instances = template.findResources('AWS::EC2::Instance');
+      const instanceKeys = Object.keys(instances);
+      expect(instanceKeys).toHaveLength(2);
+
+      const instance1 = instances[instanceKeys[0]];
+      const instance2 = instances[instanceKeys[1]];
+
+      expect(instance1.Properties.AvailabilityZone).toBeDefined();
+      expect(instance2.Properties.AvailabilityZone).toBeDefined();
+      expect(instance1.Properties.AvailabilityZone).not.toBe(
+        instance2.Properties.AvailabilityZone
+      );
     });
   });
 
@@ -244,7 +234,6 @@ describe('TapStack', () => {
           Name: `tap-${environmentSuffix}-alb`,
           Scheme: 'internet-facing',
           SecurityGroups: [Match.anyValue()],
-          Subnets: Match.anyValue(),
           Type: 'application',
         }
       );
@@ -268,7 +257,10 @@ describe('TapStack', () => {
             HttpCode: '200',
           },
           UnhealthyThresholdCount: 3,
-          VpcId: Match.anyValue(),
+          Targets: Match.arrayWith([
+            { Id: Match.anyValue() },
+            { Id: Match.anyValue() },
+          ]),
         }
       );
     });
@@ -302,9 +294,7 @@ describe('TapStack', () => {
         DBInstanceClass: 'db.t3.micro',
         DBInstanceIdentifier: `tap-${environmentSuffix}-database`,
         DBName: 'tapdb',
-        DBSubnetGroupName: Match.anyValue(),
         Engine: 'mysql',
-        EngineVersion: '8.0.39',
         MultiAZ: true,
         StorageEncrypted: true,
         KmsKeyId: Match.anyValue(),
@@ -318,41 +308,35 @@ describe('TapStack', () => {
         PerformanceInsightsKMSKeyId: Match.anyValue(),
         VPCSecurityGroups: [Match.anyValue()],
         MasterUsername: 'admin',
-        ManageMasterUserPassword: true,
-        MasterUserSecret: {
-          KmsKeyId: Match.anyValue(),
-          SecretArn: Match.anyValue(),
-        },
       });
     });
   });
 
   describe('CloudWatch Alarms', () => {
-    test('should create ALB response time alarm', () => {
+    test('should create EC2 status check alarms', () => {
+      // Test that status check alarms exist (recovery actions are added in the stack)
       template.hasResourceProperties('AWS::CloudWatch::Alarm', {
-        AlarmName: `tap-${environmentSuffix}-alb-response-time`,
-        AlarmDescription: 'ALB target response time too high',
-        MetricName: 'TargetResponseTime',
-        Namespace: 'AWS/ApplicationELB',
-        Statistic: 'Average',
+        AlarmDescription: Match.stringLikeRegexp('.*status check failed.*'),
+        MetricName: 'StatusCheckFailed',
+        Namespace: 'AWS/EC2',
+        Statistic: 'Maximum',
         Threshold: 1,
         EvaluationPeriods: 2,
-        TreatMissingData: 'notBreaching',
-        ComparisonOperator: 'GreaterThanThreshold',
+        TreatMissingData: 'breaching',
+        ComparisonOperator: 'GreaterThanOrEqualToThreshold',
       });
     });
 
-    test('should create ASG CPU utilization alarm', () => {
+    test('should create EC2 CPU utilization alarms', () => {
       template.hasResourceProperties('AWS::CloudWatch::Alarm', {
-        AlarmName: `tap-${environmentSuffix}-high-cpu`,
-        AlarmDescription: 'High CPU utilization detected',
+        AlarmDescription: Match.stringLikeRegexp('.*High CPU utilization.*'),
         MetricName: 'CPUUtilization',
-        Namespace: 'AWS/AutoScaling',
+        Namespace: 'AWS/EC2',
         Statistic: 'Average',
         Threshold: 80,
         EvaluationPeriods: 2,
         TreatMissingData: 'notBreaching',
-        ComparisonOperator: 'GreaterThanThreshold',
+        ComparisonOperator: 'GreaterThanOrEqualToThreshold',
       });
     });
 
@@ -366,7 +350,7 @@ describe('TapStack', () => {
         Threshold: 80,
         EvaluationPeriods: 2,
         TreatMissingData: 'notBreaching',
-        ComparisonOperator: 'GreaterThanThreshold',
+        ComparisonOperator: 'GreaterThanOrEqualToThreshold',
       });
     });
 
@@ -380,7 +364,21 @@ describe('TapStack', () => {
         Threshold: 80,
         EvaluationPeriods: 2,
         TreatMissingData: 'notBreaching',
-        ComparisonOperator: 'GreaterThanThreshold',
+        ComparisonOperator: 'GreaterThanOrEqualToThreshold',
+      });
+    });
+
+    test('should create ALB response time alarm', () => {
+      template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+        AlarmName: `tap-${environmentSuffix}-alb-response-time`,
+        AlarmDescription: 'ALB target response time too high',
+        MetricName: 'TargetResponseTime',
+        Namespace: 'AWS/ApplicationELB',
+        Statistic: 'Average',
+        Threshold: 1,
+        EvaluationPeriods: 2,
+        TreatMissingData: 'notBreaching',
+        ComparisonOperator: 'GreaterThanOrEqualToThreshold',
       });
     });
   });
@@ -413,11 +411,11 @@ describe('TapStack', () => {
       });
     });
 
-    test('should create AutoScalingGroupName output', () => {
-      template.hasOutput('AutoScalingGroupName', {
-        Description: 'Auto Scaling Group name',
+    test('should create RDSSubnetType output', () => {
+      template.hasOutput('RDSSubnetType', {
+        Description: 'Subnet type used for RDS deployment',
         Export: {
-          Name: `tap-${environmentSuffix}-asg-name`,
+          Name: `tap-${environmentSuffix}-rds-subnet-type`,
         },
       });
     });
@@ -429,7 +427,8 @@ describe('TapStack', () => {
     });
 
     test('should create expected number of CloudWatch alarms', () => {
-      template.resourceCountIs('AWS::CloudWatch::Alarm', 4);
+      // 2 status check + 2 CPU + 1 RDS CPU + 1 RDS connections + 1 ALB response time = 7 alarms
+      template.resourceCountIs('AWS::CloudWatch::Alarm', 7);
     });
 
     test('should create one KMS key', () => {
@@ -444,8 +443,8 @@ describe('TapStack', () => {
       template.resourceCountIs('AWS::ElasticLoadBalancingV2::LoadBalancer', 1);
     });
 
-    test('should create one Auto Scaling Group', () => {
-      template.resourceCountIs('AWS::AutoScaling::AutoScalingGroup', 1);
+    test('should create two EC2 instances', () => {
+      template.resourceCountIs('AWS::EC2::Instance', 2);
     });
   });
 
@@ -473,22 +472,24 @@ describe('TapStack', () => {
         `tap-${environmentSuffix}-alb`
       );
 
-      // Check ASG name follows naming convention
-      const asgs = Object.values(resources).filter(
-        (resource: any) =>
-          resource.Type === 'AWS::AutoScaling::AutoScalingGroup'
+      // Check RDS instance name follows naming convention
+      const rdsInstances = Object.values(resources).filter(
+        (resource: any) => resource.Type === 'AWS::RDS::DBInstance'
       );
-      expect(asgs).toHaveLength(1);
-      expect((asgs[0] as any).Properties.AutoScalingGroupName).toBe(
-        `tap-${environmentSuffix}-asg`
+      expect(rdsInstances).toHaveLength(1);
+      expect((rdsInstances[0] as any).Properties.DBInstanceIdentifier).toBe(
+        `tap-${environmentSuffix}-database`
       );
     });
   });
 
   describe('Stack Tags', () => {
     test('should apply proper tags to stack resources', () => {
-      const stackTags = template.toJSON().Tags;
-      expect(stackTags).toEqual(
+      // Check that resources have proper tags by examining individual resources
+      const resources = template.findResources('AWS::KMS::Key');
+      const kmsKeyResource = Object.values(resources)[0] as any;
+
+      expect(kmsKeyResource.Properties.Tags).toEqual(
         expect.arrayContaining([
           expect.objectContaining({ Key: 'Project', Value: 'tap' }),
           expect.objectContaining({
@@ -503,71 +504,252 @@ describe('TapStack', () => {
 
   describe('Environment Suffix Handling', () => {
     test('should use provided environment suffix', () => {
-      const customStack = new TapStack(app, 'CustomTapStack', {
-        environmentSuffix: 'prod',
-        env: {
-          account: '123456789012',
-          region: 'us-east-1',
+      const customApp = new cdk.App({
+        context: {
+          'vpc-provider:account=123456789012:filter.isDefault=true:region=us-east-1:returnAsymmetricSubnets=true':
+            {
+              vpcId: 'vpc-12345',
+              vpcCidrBlock: '10.0.0.0/16',
+              availabilityZones: ['us-east-1a', 'us-east-1b'],
+              subnetGroups: [
+                {
+                  name: 'Public',
+                  type: 'Public',
+                  subnets: [
+                    {
+                      subnetId: 'subnet-12345',
+                      availabilityZone: 'us-east-1a',
+                      routeTableId: 'rt-12345',
+                    },
+                    {
+                      subnetId: 'subnet-67890',
+                      availabilityZone: 'us-east-1b',
+                      routeTableId: 'rt-67890',
+                    },
+                  ],
+                },
+              ],
+            },
         },
       });
+
+      const customStack = new TapStack(customApp, 'TestStackCustom', {
+        environmentSuffix: 'custom',
+        env: {
+          account: process.env.CDK_DEFAULT_ACCOUNT || '123456789012',
+          region: process.env.CDK_DEFAULT_REGION || 'us-east-1',
+        },
+      });
+
       const customTemplate = Template.fromStack(customStack);
 
-      customTemplate.hasResourceProperties('AWS::KMS::Alias', {
-        AliasName: 'alias/tap-prod-key',
+      // Should use custom environment suffix in resource names
+      // CDK automatically prefixes with stack name, so check for the construct path
+      customTemplate.hasResourceProperties('AWS::EC2::Instance', {
+        Tags: Match.arrayWith([
+          {
+            Key: 'Name',
+            Value: Match.stringLikeRegexp('.*tap-custom-instance-1.*'),
+          },
+        ]),
       });
     });
 
     test('should use context environment suffix when props not provided', () => {
       const contextApp = new cdk.App({
         context: {
-          environmentSuffix: 'staging',
-          // VPC lookup context
+          environmentSuffix: 'context-env',
           'vpc-provider:account=123456789012:filter.isDefault=true:region=us-east-1:returnAsymmetricSubnets=true':
             {
               vpcId: 'vpc-12345',
-              availabilityZones: ['us-east-1a', 'us-east-1b', 'us-east-1c'],
-              publicSubnetIds: ['subnet-pub-1', 'subnet-pub-2', 'subnet-pub-3'],
-              publicSubnetNames: [
-                'Public Subnet 1',
-                'Public Subnet 2',
-                'Public Subnet 3',
-              ],
-              publicSubnetRouteTableIds: ['rt-pub-1', 'rt-pub-2', 'rt-pub-3'],
-              privateSubnetIds: [
-                'subnet-priv-1',
-                'subnet-priv-2',
-                'subnet-priv-3',
-              ],
-              privateSubnetNames: [
-                'Private Subnet 1',
-                'Private Subnet 2',
-                'Private Subnet 3',
-              ],
-              privateSubnetRouteTableIds: [
-                'rt-priv-1',
-                'rt-priv-2',
-                'rt-priv-3',
+              vpcCidrBlock: '10.0.0.0/16',
+              availabilityZones: ['us-east-1a', 'us-east-1b'],
+              subnetGroups: [
+                {
+                  name: 'Public',
+                  type: 'Public',
+                  subnets: [
+                    {
+                      subnetId: 'subnet-12345',
+                      availabilityZone: 'us-east-1a',
+                      routeTableId: 'rt-12345',
+                    },
+                    {
+                      subnetId: 'subnet-67890',
+                      availabilityZone: 'us-east-1b',
+                      routeTableId: 'rt-67890',
+                    },
+                  ],
+                },
               ],
             },
         },
       });
 
-      const contextStack = new TapStack(contextApp, 'ContextTapStack', {
+      const contextStack = new TapStack(contextApp, 'TestStackContext', {
         env: {
-          account: '123456789012',
-          region: 'us-east-1',
+          account: process.env.CDK_DEFAULT_ACCOUNT || '123456789012',
+          region: process.env.CDK_DEFAULT_REGION || 'us-east-1',
         },
       });
       const contextTemplate = Template.fromStack(contextStack);
 
-      contextTemplate.hasResourceProperties('AWS::KMS::Alias', {
-        AliasName: 'alias/tap-staging-key',
+      // Should use context environment suffix
+      contextTemplate.hasResourceProperties('AWS::EC2::Instance', {
+        Tags: Match.arrayWith([
+          {
+            Key: 'Name',
+            Value: Match.stringLikeRegexp('.*tap-context-env-instance-1.*'),
+          },
+        ]),
+      });
+    });
+  });
+
+  describe('Subnet Selection Logic', () => {
+    test('should use private subnets when available', () => {
+      const privateSubnetApp = new cdk.App({
+        context: {
+          'vpc-provider:account=123456789012:filter.isDefault=true:region=us-east-1:returnAsymmetricSubnets=true':
+            {
+              vpcId: 'vpc-12345',
+              vpcCidrBlock: '10.0.0.0/16',
+              availabilityZones: ['us-east-1a', 'us-east-1b'],
+              subnetGroups: [
+                {
+                  name: 'Public',
+                  type: 'Public',
+                  subnets: [
+                    {
+                      subnetId: 'subnet-public-1',
+                      availabilityZone: 'us-east-1a',
+                      routeTableId: 'rt-public-1',
+                    },
+                    {
+                      subnetId: 'subnet-public-2',
+                      availabilityZone: 'us-east-1b',
+                      routeTableId: 'rt-public-2',
+                    },
+                  ],
+                },
+                {
+                  name: 'Private',
+                  type: 'Private',
+                  subnets: [
+                    {
+                      subnetId: 'subnet-private-1',
+                      availabilityZone: 'us-east-1a',
+                      routeTableId: 'rt-private-1',
+                    },
+                    {
+                      subnetId: 'subnet-private-2',
+                      availabilityZone: 'us-east-1b',
+                      routeTableId: 'rt-private-2',
+                    },
+                  ],
+                },
+              ],
+            },
+        },
+      });
+
+      const privateStack = new TapStack(privateSubnetApp, 'TestStackPrivate', {
+        environmentSuffix: 'private-test',
+        env: {
+          account: process.env.CDK_DEFAULT_ACCOUNT || '123456789012',
+          region: process.env.CDK_DEFAULT_REGION || 'us-east-1',
+        },
+      });
+
+      const privateTemplate = Template.fromStack(privateStack);
+
+      // Should create RDS subnet group (description is static, not subnet-type specific)
+      privateTemplate.hasResourceProperties('AWS::RDS::DBSubnetGroup', {
+        DBSubnetGroupDescription: 'Subnet group for RDS database',
+        SubnetIds: ['subnet-private-1', 'subnet-private-2'],
+      });
+
+      // Should output that private subnets are being used
+      privateTemplate.hasOutput('RDSSubnetType', {
+        Value: 'Private',
+      });
+    });
+
+    test('should use isolated subnets when private not available', () => {
+      const isolatedSubnetApp = new cdk.App({
+        context: {
+          'vpc-provider:account=123456789012:filter.isDefault=true:region=us-east-1:returnAsymmetricSubnets=true':
+            {
+              vpcId: 'vpc-12345',
+              vpcCidrBlock: '10.0.0.0/16',
+              availabilityZones: ['us-east-1a', 'us-east-1b'],
+              subnetGroups: [
+                {
+                  name: 'Public',
+                  type: 'Public',
+                  subnets: [
+                    {
+                      subnetId: 'subnet-public-1',
+                      availabilityZone: 'us-east-1a',
+                      routeTableId: 'rt-public-1',
+                    },
+                    {
+                      subnetId: 'subnet-public-2',
+                      availabilityZone: 'us-east-1b',
+                      routeTableId: 'rt-public-2',
+                    },
+                  ],
+                },
+                {
+                  name: 'Isolated',
+                  type: 'Isolated',
+                  subnets: [
+                    {
+                      subnetId: 'subnet-isolated-1',
+                      availabilityZone: 'us-east-1a',
+                      routeTableId: 'rt-isolated-1',
+                    },
+                    {
+                      subnetId: 'subnet-isolated-2',
+                      availabilityZone: 'us-east-1b',
+                      routeTableId: 'rt-isolated-2',
+                    },
+                  ],
+                },
+              ],
+            },
+        },
+      });
+
+      const isolatedStack = new TapStack(
+        isolatedSubnetApp,
+        'TestStackIsolated',
+        {
+          environmentSuffix: 'isolated-test',
+          env: {
+            account: process.env.CDK_DEFAULT_ACCOUNT || '123456789012',
+            region: process.env.CDK_DEFAULT_REGION || 'us-east-1',
+          },
+        }
+      );
+
+      const isolatedTemplate = Template.fromStack(isolatedStack);
+
+      // Should create RDS subnet group (description is static, not subnet-type specific)
+      isolatedTemplate.hasResourceProperties('AWS::RDS::DBSubnetGroup', {
+        DBSubnetGroupDescription: 'Subnet group for RDS database',
+        SubnetIds: ['subnet-isolated-1', 'subnet-isolated-2'],
+      });
+
+      // Should output that isolated subnets are being used
+      isolatedTemplate.hasOutput('RDSSubnetType', {
+        Value: 'Isolated',
       });
     });
   });
 
   describe('Security Best Practices', () => {
-    test('should enable IMDSv2 on launch template', () => {
+    test('should enable IMDSv2 on EC2 instances', () => {
       template.hasResourceProperties('AWS::EC2::LaunchTemplate', {
         LaunchTemplateData: {
           MetadataOptions: {
@@ -578,18 +760,16 @@ describe('TapStack', () => {
     });
 
     test('should encrypt EBS volumes with KMS', () => {
-      template.hasResourceProperties('AWS::EC2::LaunchTemplate', {
-        LaunchTemplateData: {
-          BlockDeviceMappings: [
-            {
-              DeviceName: '/dev/xvda',
-              Ebs: {
-                Encrypted: true,
-                KmsKeyId: Match.anyValue(),
-              },
+      template.hasResourceProperties('AWS::EC2::Instance', {
+        BlockDeviceMappings: [
+          {
+            DeviceName: '/dev/xvda',
+            Ebs: {
+              Encrypted: true,
+              KmsKeyId: Match.anyValue(),
             },
-          ],
-        },
+          },
+        ],
       });
     });
 

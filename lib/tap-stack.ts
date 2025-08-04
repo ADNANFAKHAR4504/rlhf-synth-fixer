@@ -315,8 +315,9 @@ export class TapStack extends cdk.Stack {
         allocatedStorage: 20,
         storageType: rds.StorageType.GP3,
         autoMinorVersionUpgrade: true,
-        enablePerformanceInsights: true,
-        performanceInsightEncryptionKey: kmsKey,
+        // Remove Performance Insights for t3.micro - not supported
+        // enablePerformanceInsights: true,
+        // performanceInsightEncryptionKey: kmsKey,
         instanceIdentifier: `${projectName}-${environmentSuffix}-database`,
         removalPolicy: cdk.RemovalPolicy.DESTROY,
       }
