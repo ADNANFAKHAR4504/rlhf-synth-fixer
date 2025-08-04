@@ -15,7 +15,6 @@ Tags.of(app).add('Environment', environment_suffix)
 Tags.of(app).add('Repository', repository_name)
 Tags.of(app).add('Author', commit_author)
 
-# Instantiate the stack with required parameters: scope, id, environment_suffix, and env
 stack = TapStack(
     app,
     STACK_NAME,
