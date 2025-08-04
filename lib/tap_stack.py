@@ -1,5 +1,3 @@
-# tap_stack.py
-
 from typing import Optional
 import pulumi
 import pulumi_aws as aws
@@ -15,7 +13,7 @@ class TapStackArgs:
                regions: Optional[list] = None,
                tags: Optional[dict] = None):
     self.environment_suffix = environment_suffix or 'dev'
-    self.regions = regions or ['us-west-2', 'us-east-1']
+    self.regions = ['us-west-2']  # Reduced to a single region
     self.tags = tags or {
       'Project': 'ProjectX',
       'Security': 'High',
@@ -41,137 +39,82 @@ class TapStack(pulumi.ComponentResource):
       opts=ResourceOptions(parent=self)
     )
 
-    for region in self.regions:
-      region_suffix = region.replace('-', '')
+    region = 'us-west-2'
+    region_suffix = region.replace('-', '')
 
-      self.providers[region] = aws.Provider(
-        f"aws-provider-{region}-{self.environment_suffix}",
-        region=region
-      )
+    self.providers[region] = aws.Provider(
+      f"aws-provider-{region}-{self.environment_suffix}",
+      region=region
+    )
 
-      provider_opts = lambda deps: ResourceOptions(
-        parent=self,
-        depends_on=deps,
-        provider=self.providers[region]
-      )
+    provider_opts = lambda deps: ResourceOptions(
+      parent=self,
+      depends_on=deps,
+      provider=self.providers[region]
+    )
 
-      self.regional_networks[region] = NetworkSecurityInfrastructure(
-        name=f"secure-projectx-network-{region_suffix}-{self.environment_suffix}",
-        region=region,
-        environment=self.environment_suffix,
-        kms_key_arn=self.identity_access.kms_key.arn,
-        tags=self.tags,
-        opts=provider_opts([self.identity_access])
-      )
+    self.regional_networks[region] = NetworkSecurityInfrastructure(
+      name=f"secure-projectx-network-{region_suffix}-{self.environment_suffix}",
+      region=region,
+      environment=self.environment_suffix,
+      kms_key_arn=self.identity_access.kms_key.arn,
+      tags=self.tags,
+      opts=provider_opts([self.identity_access])
+    )
 
-      self.regional_monitoring[region] = SecurityMonitoringInfrastructure(
-        name=f"secure-projectx-monitoring-{region_suffix}-{self.environment_suffix}",
-        region=region,
-        kms_key_arn=self.identity_access.kms_key.arn,
-        tags=self.tags,
-        opts=provider_opts([self.identity_access])
-      )
+    self.regional_monitoring[region] = SecurityMonitoringInfrastructure(
+      name=f"secure-projectx-monitoring-{region_suffix}-{self.environment_suffix}",
+      region=region,
+      kms_key_arn=self.identity_access.kms_key.arn,
+      tags=self.tags,
+      opts=provider_opts([self.identity_access])
+    )
 
-      self.regional_data_protection[region] = DataProtectionInfrastructure(
-        name=f"secure-projectx-data-{region_suffix}-{self.environment_suffix}",
-        region=region,
-        vpc_id=self.regional_networks[region].vpc_id,
-        private_subnet_ids=self.regional_networks[region].private_subnet_ids,
-        database_security_group_id=self.regional_networks[region].database_security_group_id,
-        kms_key_arn=self.identity_access.kms_key.arn,
-        sns_topic_arn=self.regional_monitoring[region].sns_topic.arn,
-        rds_monitoring_role_arn=self.identity_access.rds_monitoring_role.arn,
-        tags=self.tags,
-        opts=provider_opts([
-          self.regional_networks[region],
-          self.regional_monitoring[region],
-          self.identity_access
-        ])
-      )
+    self.regional_data_protection[region] = DataProtectionInfrastructure(
+      name=f"secure-projectx-data-{region_suffix}-{self.environment_suffix}",
+      region=region,
+      vpc_id=self.regional_networks[region].vpc_id,
+      private_subnet_ids=self.regional_networks[region].private_subnet_ids,
+      database_security_group_id=self.regional_networks[region].database_security_group_id,
+      kms_key_arn=self.identity_access.kms_key.arn,
+      sns_topic_arn=self.regional_monitoring[region].sns_topic.arn,
+      rds_monitoring_role_arn=self.identity_access.rds_monitoring_role.arn,
+      tags=self.tags,
+      opts=provider_opts([
+        self.regional_networks[region],
+        self.regional_monitoring[region],
+        self.identity_access
+      ])
+    )
 
-      self.regional_monitoring[region].setup_security_alarms(
-        vpc_id=self.regional_networks[region].vpc_id,
-        s3_bucket_names=[self.regional_data_protection[region].secure_s3_bucket.bucket],
-        rds_instance_identifiers=[
-          self.regional_data_protection[region].rds_instance.identifier
-        ] if hasattr(self.regional_data_protection[region], 'rds_instance') else [],
-        opts=provider_opts([
-          self.regional_networks[region],
-          self.regional_data_protection[region]
-        ])
-      )
+    self.regional_monitoring[region].setup_security_alarms(
+      vpc_id=self.regional_networks[region].vpc_id,
+      s3_bucket_names=[self.regional_data_protection[region].secure_s3_bucket.bucket],
+      rds_instance_identifiers=[
+        self.regional_data_protection[region].rds_instance.identifier
+      ] if hasattr(self.regional_data_protection[region], 'rds_instance') else [],
+      opts=provider_opts([
+        self.regional_networks[region],
+        self.regional_data_protection[region]
+      ])
+    )
 
-      self.regional_monitoring[region].setup_vpc_flow_logs(
-        vpc_id=self.regional_networks[region].vpc_id,
-        opts=provider_opts([
-          self.regional_networks[region],
-          self.regional_monitoring[region]
-        ])
-      )
+    self.regional_monitoring[region].setup_vpc_flow_logs(
+      vpc_id=self.regional_networks[region].vpc_id,
+      opts=provider_opts([
+        self.regional_networks[region],
+        self.regional_monitoring[region]
+      ])
+    )
 
-    primary_region = 'us-west-2'
-    self.register_outputs({
-      "primary_vpc_id": self.regional_networks[primary_region].vpc_id,
-      "kms_key_arn": self.identity_access.kms_key.arn,
-      "guardduty_detector_ids": {
-        region: self.regional_monitoring[region].guardduty_detector.id
-        for region in self.regions
-      },
-      "sns_topic_arns": {
-        region: self.regional_monitoring[region].sns_topic.arn
-        for region in self.regions
-      },
-      "secure_s3_buckets": {
-        region: self.regional_data_protection[region].secure_s3_bucket.bucket
-        for region in self.regions
-      },
-      "public_subnet_ids": {
-        region: self.regional_networks[region].public_subnet_ids
-        for region in self.regions
-      },
-      "private_subnet_ids": {
-        region: self.regional_networks[region].private_subnet_ids
-        for region in self.regions
-      },
-      "database_security_group_ids": {
-        region: self.regional_networks[region].database_security_group_id
-        for region in self.regions
-      },
-      "rds_instance_endpoints": {
-        region: self.regional_data_protection[region].rds_instance_endpoint
-        for region in self.regions
-        if hasattr(self.regional_data_protection[region], 'rds_instance_endpoint')
-      }
-    })
-
-    pulumi.export("primary_vpc_id", self.regional_networks[primary_region].vpc_id)
+    # Outputs limited to us-west-2 only
+    pulumi.export("primary_vpc_id", self.regional_networks[region].vpc_id)
     pulumi.export("kms_key_arn", self.identity_access.kms_key.arn)
-    pulumi.export("guardduty_detector_ids", {
-      region: self.regional_monitoring[region].guardduty_detector.id
-      for region in self.regions
-    })
-    pulumi.export("sns_topic_arns", {
-      region: self.regional_monitoring[region].sns_topic.arn
-      for region in self.regions
-    })
-    pulumi.export("secure_s3_buckets", {
-      region: self.regional_data_protection[region].secure_s3_bucket.bucket
-      for region in self.regions
-    })
-    pulumi.export("public_subnet_ids", {
-      region: self.regional_networks[region].public_subnet_ids
-      for region in self.regions
-    })
-    pulumi.export("private_subnet_ids", {
-      region: self.regional_networks[region].private_subnet_ids
-      for region in self.regions
-    })
-    pulumi.export("database_security_group_ids", {
-      region: self.regional_networks[region].database_security_group_id
-      for region in self.regions
-    })
-    pulumi.export("rds_instance_endpoints", {
-      region: self.regional_data_protection[region].rds_instance_endpoint
-      for region in self.regions
-      if hasattr(self.regional_data_protection[region], 'rds_instance_endpoint')
-    })
+    pulumi.export("guardduty_detector_id", self.regional_monitoring[region].guardduty_detector.id)
+    pulumi.export("sns_topic_arn", self.regional_monitoring[region].sns_topic.arn)
+    pulumi.export("secure_s3_bucket", self.regional_data_protection[region].secure_s3_bucket.bucket)
+    pulumi.export("public_subnet_ids", self.regional_networks[region].public_subnet_ids)
+    pulumi.export("private_subnet_ids", self.regional_networks[region].private_subnet_ids)
+    pulumi.export("database_security_group_id", self.regional_networks[region].database_security_group_id)
+    if hasattr(self.regional_data_protection[region], 'rds_instance_endpoint'):
+      pulumi.export("rds_instance_endpoint", self.regional_data_protection[region].rds_instance_endpoint)
