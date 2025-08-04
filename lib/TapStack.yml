@@ -270,7 +270,6 @@ Resources:
     Type: AWS::Backup::BackupVault
     Properties:
       BackupVaultName: 'DynamoDBProductionBackupVault'
-      EncryptionKeyArn: alias/aws/backup
       BackupVaultTags:
         Environment: 'Production'
 
