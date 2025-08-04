@@ -1040,6 +1040,222 @@
                     "Fn::Sub": "${AWS::StackName}-DynamoDB-Table"
                 }
             }
+        },
+        "PublicSubnet1Id": {
+            "Description": "Public Subnet 1 ID",
+            "Value": {
+                "Ref": "PublicSubnet1"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-PublicSubnet1Id"
+                }
+            }
+        },
+        "PublicSubnet2Id": {
+            "Description": "Public Subnet 2 ID",
+            "Value": {
+                "Ref": "PublicSubnet2"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-PublicSubnet2Id"
+                }
+            }
+        },
+        "PrivateSubnet1Id": {
+            "Description": "Private Subnet 1 ID",
+            "Value": {
+                "Ref": "PrivateSubnet1"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-PrivateSubnet1Id"
+                }
+            }
+        },
+        "PrivateSubnet2Id": {
+            "Description": "Private Subnet 2 ID",
+            "Value": {
+                "Ref": "PrivateSubnet2"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-PrivateSubnet2Id"
+                }
+            }
+        },
+        "WebServerSecurityGroupId": {
+            "Description": "Web Server Security Group ID",
+            "Value": {
+                "Ref": "WebServerSecurityGroup"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-WebServerSecurityGroupId"
+                }
+            }
+        },
+        "DatabaseSecurityGroupId": {
+            "Description": "Database Security Group ID",
+            "Value": {
+                "Ref": "DatabaseSecurityGroup"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-DatabaseSecurityGroupId"
+                }
+            }
+        },
+        "EC2InstanceRoleArn": {
+            "Description": "EC2 Instance Role ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "EC2InstanceRole",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-EC2InstanceRoleArn"
+                }
+            }
+        },
+        "LambdaExecutionRoleArn": {
+            "Description": "Lambda Execution Role ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "LambdaExecutionRole",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-LambdaExecutionRoleArn"
+                }
+            }
+        },
+        "BackupServiceRoleArn": {
+            "Description": "Backup Service Role ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "BackupServiceRole",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-BackupServiceRoleArn"
+                }
+            }
+        },
+        "ConfigServiceRoleArn": {
+            "Description": "Config Service Role ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "ConfigServiceRole",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ConfigServiceRoleArn"
+                }
+            }
+        },
+        "ProductionRDSEndpoint": {
+            "Description": "RDS Endpoint",
+            "Value": {
+                "Fn::GetAtt": [
+                    "ProductionRDSInstance",
+                    "Endpoint.Address"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ProductionRDSEndpoint"
+                }
+            }
+        },
+        "CloudTrailName": {
+            "Description": "CloudTrail Name",
+            "Value": {
+                "Ref": "ProductionCloudTrail"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-CloudTrailName"
+                }
+            }
+        },
+        "ProductionLambdaArn": {
+            "Description": "Production Lambda ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "ProductionLambdaFunction",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ProductionLambdaArn"
+                }
+            }
+        },
+        "LambdaDeadLetterQueueUrl": {
+            "Description": "Lambda Dead Letter Queue URL",
+            "Value": {
+                "Ref": "LambdaDeadLetterQueue"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-LambdaDeadLetterQueueUrl"
+                }
+            }
+        },
+        "ConfigS3BucketName": {
+            "Description": "Config S3 Bucket Name",
+            "Value": {
+                "Ref": "ConfigS3Bucket"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ConfigS3BucketName"
+                }
+            }
+        },
+        "CloudTrailS3BucketName": {
+            "Description": "CloudTrail S3 Bucket Name",
+            "Value": {
+                "Ref": "CloudTrailS3Bucket"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-CloudTrailS3BucketName"
+                }
+            }
+        },
+        "DynamoDBBackupVaultName": {
+            "Description": "DynamoDB Backup Vault Name",
+            "Value": {
+                "Ref": "DynamoDBBackupVault"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-DynamoDBBackupVaultName"
+                }
+            }
+        },
+        "ALBTargetGroupArn": {
+            "Description": "ALB Target Group ARN",
+            "Value": {
+                "Ref": "ALBTargetGroup"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ALBTargetGroupArn"
+                }
+            }
         }
     }
 }

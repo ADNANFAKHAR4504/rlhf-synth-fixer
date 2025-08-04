@@ -3,7 +3,7 @@ import fs from 'fs';
 // Default fallback outputs that match the resources defined in TapStack.yml
 const defaultOutputs = {
   // VPC outputs
-  'TapStack-VPC-ID': 'vpc-12345678',
+  'TapStack-VPC-ID': 'vpc-0e6ffb11559a46e2b',
   // S3 Bucket outputs
   'TapStack-S3-Bucket': 'production-bucket-123456789012-us-east-1',
   // ALB outputs
@@ -58,11 +58,41 @@ try {
   outputs = defaultOutputs;
 }
 
+// Map outputs to support both ExportName and OutputKey keys
+const outputKeyMap: { [key: string]: string | undefined } = {
+  'TapStackpr429-VPC-ID':
+    outputs['VPCId'] ||
+    outputs['TapStackpr429-VPC-ID'] ||
+    outputs['TapStack-VPC-ID'],
+  'TapStackpr429-DynamoDB-Table':
+    outputs['DynamoDBTableName'] ||
+    outputs['TapStackpr429-DynamoDB-Table'] ||
+    outputs['TapStack-DynamoDB-Table'],
+  'TapStackpr429-ALB-DNS':
+    outputs['LoadBalancerDNS'] ||
+    outputs['TapStackpr429-ALB-DNS'] ||
+    outputs['TapStack-ALB-DNS'],
+  'TapStackpr429-S3-Bucket':
+    outputs['S3BucketName'] ||
+    outputs['TapStackpr429-S3-Bucket'] ||
+    outputs['TapStack-S3-Bucket'],
+  // ...add more mappings as needed for other resources...
+};
+
+// Use outputKeyMap for tests if keys exist, otherwise fallback to outputs
+const getOutput = (key: string): string => {
+  const val = outputKeyMap[key] || outputs[key];
+  if (typeof val !== 'string' || !val) {
+    throw new Error(`Output for key '${key}' is missing or not a string`);
+  }
+  return val;
+};
+
 describe('TapStack CloudFormation Integration Tests', () => {
   describe('VPC Resource Validation', () => {
     test('VPC should be created with correct ID format', () => {
-      expect(outputs['TapStack-VPC-ID']).toBeDefined();
-      expect(outputs['TapStack-VPC-ID']).toMatch(/^vpc-[a-f0-9]{8,}$/);
+      expect(getOutput('TapStackpr429-VPC-ID')).toBeDefined();
+      expect(getOutput('TapStackpr429-VPC-ID')).toMatch(/^vpc-[a-f0-9]{8,}$/);
     });
   });
 
@@ -70,18 +100,18 @@ describe('TapStack CloudFormation Integration Tests', () => {
     const subnetPattern = /^subnet-[a-f0-9]{8,}$/;
 
     test('Public and Private subnets should exist', () => {
-      expect(outputs.PublicSubnet1Id).toMatch(subnetPattern);
-      expect(outputs.PublicSubnet2Id).toMatch(subnetPattern);
-      expect(outputs.PrivateSubnet1Id).toMatch(subnetPattern);
-      expect(outputs.PrivateSubnet2Id).toMatch(subnetPattern);
+      expect(getOutput('PublicSubnet1Id')).toMatch(subnetPattern);
+      expect(getOutput('PublicSubnet2Id')).toMatch(subnetPattern);
+      expect(getOutput('PrivateSubnet1Id')).toMatch(subnetPattern);
+      expect(getOutput('PrivateSubnet2Id')).toMatch(subnetPattern);
     });
 
     test('Subnets should be uniquely defined', () => {
       const subnets = [
-        outputs.PublicSubnet1Id,
-        outputs.PublicSubnet2Id,
-        outputs.PrivateSubnet1Id,
-        outputs.PrivateSubnet2Id,
+        getOutput('PublicSubnet1Id'),
+        getOutput('PublicSubnet2Id'),
+        getOutput('PrivateSubnet1Id'),
+        getOutput('PrivateSubnet2Id'),
       ];
       const uniqueSubnets = new Set(subnets);
       expect(uniqueSubnets.size).toBe(subnets.length);
@@ -92,40 +122,42 @@ describe('TapStack CloudFormation Integration Tests', () => {
     const sgPattern = /^sg-[a-f0-9]{8,}$/;
 
     test('WebServer Security Group should exist', () => {
-      expect(outputs.WebServerSecurityGroupId).toBeDefined();
-      expect(outputs.WebServerSecurityGroupId).toMatch(sgPattern);
+      expect(getOutput('WebServerSecurityGroupId')).toBeDefined();
+      expect(getOutput('WebServerSecurityGroupId')).toMatch(sgPattern);
     });
 
     test('Database Security Group should exist', () => {
-      expect(outputs.DatabaseSecurityGroupId).toBeDefined();
-      expect(outputs.DatabaseSecurityGroupId).toMatch(sgPattern);
+      expect(getOutput('DatabaseSecurityGroupId')).toBeDefined();
+      expect(getOutput('DatabaseSecurityGroupId')).toMatch(sgPattern);
     });
 
     test('Security groups should be uniquely defined', () => {
-      expect(outputs.WebServerSecurityGroupId).not.toBe(
-        outputs.DatabaseSecurityGroupId
+      expect(getOutput('WebServerSecurityGroupId')).not.toBe(
+        getOutput('DatabaseSecurityGroupId')
       );
     });
   });
 
   describe('S3 Bucket Validation', () => {
     test('Production S3 Bucket should exist', () => {
-      expect(outputs['TapStack-S3-Bucket']).toBeDefined();
+      expect(getOutput('TapStack-S3-Bucket')).toBeDefined();
       const bucketNamePattern = /^production-bucket-\d{12}-[a-z]{2}-[a-z]+-\d$/;
-      expect(outputs['TapStack-S3-Bucket']).toMatch(bucketNamePattern);
+      expect(getOutput('TapStack-S3-Bucket')).toMatch(bucketNamePattern);
     });
 
     test('Config S3 Bucket should exist', () => {
-      expect(outputs.ConfigS3BucketName).toBeDefined();
+      expect(getOutput('ConfigS3BucketName')).toBeDefined();
       const configBucketPattern = /^config-bucket-\d{12}-[a-z]{2}-[a-z]+-\d$/;
-      expect(outputs.ConfigS3BucketName).toMatch(configBucketPattern);
+      expect(getOutput('ConfigS3BucketName')).toMatch(configBucketPattern);
     });
 
     test('CloudTrail S3 Bucket should exist', () => {
-      expect(outputs.CloudTrailS3BucketName).toBeDefined();
+      expect(getOutput('CloudTrailS3BucketName')).toBeDefined();
       const cloudtrailBucketPattern =
         /^cloudtrail-logs-\d{12}-[a-z]{2}-[a-z]+-\d$/;
-      expect(outputs.CloudTrailS3BucketName).toMatch(cloudtrailBucketPattern);
+      expect(getOutput('CloudTrailS3BucketName')).toMatch(
+        cloudtrailBucketPattern
+      );
     });
   });
 
@@ -133,31 +165,31 @@ describe('TapStack CloudFormation Integration Tests', () => {
     const arnPattern = /^arn:aws:iam::\d{12}:role\/.+$/;
 
     test('EC2 Instance Role ARN should be valid', () => {
-      expect(outputs.EC2InstanceRoleArn).toMatch(arnPattern);
+      expect(getOutput('EC2InstanceRoleArn')).toMatch(arnPattern);
     });
 
     test('Lambda Execution Role ARN should be valid', () => {
-      expect(outputs.LambdaExecutionRoleArn).toMatch(arnPattern);
+      expect(getOutput('LambdaExecutionRoleArn')).toMatch(arnPattern);
     });
 
     test('Backup Service Role ARN should be valid', () => {
-      expect(outputs.BackupServiceRoleArn).toMatch(arnPattern);
+      expect(getOutput('BackupServiceRoleArn')).toMatch(arnPattern);
     });
 
     test('Config Service Role ARN should be valid', () => {
-      expect(outputs.ConfigServiceRoleArn).toMatch(arnPattern);
+      expect(getOutput('ConfigServiceRoleArn')).toMatch(arnPattern);
     });
   });
 
   describe('DynamoDB Validation', () => {
     test('DynamoDB Table should exist', () => {
-      expect(outputs['TapStack-DynamoDB-Table']).toBeDefined();
-      expect(outputs['TapStack-DynamoDB-Table']).toBe('ProductionTable');
+      expect(getOutput('TapStack-DynamoDB-Table')).toBeDefined();
+      expect(getOutput('TapStack-DynamoDB-Table')).toBe('ProductionTable');
     });
 
     test('DynamoDB Backup Vault should exist', () => {
-      expect(outputs.DynamoDBBackupVaultName).toBeDefined();
-      expect(outputs.DynamoDBBackupVaultName).toBe(
+      expect(getOutput('DynamoDBBackupVaultName')).toBeDefined();
+      expect(getOutput('DynamoDBBackupVaultName')).toBe(
         'DynamoDBProductionBackupVault'
       );
     });
@@ -165,65 +197,73 @@ describe('TapStack CloudFormation Integration Tests', () => {
 
   describe('RDS Instance Validation', () => {
     test('RDS Instance endpoint should be valid', () => {
-      expect(outputs.ProductionRDSEndpoint).toBeDefined();
+      expect(getOutput('ProductionRDSEndpoint')).toBeDefined();
       const rdsEndpointPattern =
         /^production-database\.[a-z0-9]+\.([a-z]+-)+\d+\.rds\.amazonaws\.com:\d+$/;
-      expect(outputs.ProductionRDSEndpoint).toMatch(rdsEndpointPattern);
+      expect(getOutput('ProductionRDSEndpoint')).toMatch(rdsEndpointPattern);
     });
   });
 
   describe('Load Balancer Validation', () => {
     test('Application Load Balancer DNS should be valid', () => {
-      expect(outputs['TapStack-ALB-DNS']).toBeDefined();
+      expect(getOutput('TapStack-ALB-DNS')).toBeDefined();
       const albDnsPattern = /^.*\.elb\.amazonaws\.com$/;
-      expect(outputs['TapStack-ALB-DNS']).toMatch(albDnsPattern);
+      expect(getOutput('TapStack-ALB-DNS')).toMatch(albDnsPattern);
     });
 
     test('Target Group ARN should be valid', () => {
-      expect(outputs.ALBTargetGroupArn).toBeDefined();
+      expect(getOutput('ALBTargetGroupArn')).toBeDefined();
       const targetGroupArnPattern =
         /^arn:aws:elasticloadbalancing:[a-z0-9-]+:\d{12}:targetgroup\/.+$/;
-      expect(outputs.ALBTargetGroupArn).toMatch(targetGroupArnPattern);
+      expect(getOutput('ALBTargetGroupArn')).toMatch(targetGroupArnPattern);
     });
   });
 
   describe('Lambda Function Validation', () => {
     test('Lambda Function ARN should be valid', () => {
-      expect(outputs.ProductionLambdaArn).toBeDefined();
+      expect(getOutput('ProductionLambdaArn')).toBeDefined();
       const lambdaArnPattern =
         /^arn:aws:lambda:[a-z0-9-]+:\d{12}:function:ProductionLambda$/;
-      expect(outputs.ProductionLambdaArn).toMatch(lambdaArnPattern);
+      expect(getOutput('ProductionLambdaArn')).toMatch(lambdaArnPattern);
     });
 
     test('Lambda Dead Letter Queue URL should be valid', () => {
-      expect(outputs.LambdaDeadLetterQueueUrl).toBeDefined();
+      expect(getOutput('LambdaDeadLetterQueueUrl')).toBeDefined();
       const sqsUrlPattern =
         /^https:\/\/sqs\.[a-z0-9-]+\.amazonaws\.com\/\d{12}\/ProductionLambdaDLQ$/;
-      expect(outputs.LambdaDeadLetterQueueUrl).toMatch(sqsUrlPattern);
+      expect(getOutput('LambdaDeadLetterQueueUrl')).toMatch(sqsUrlPattern);
     });
   });
 
   describe('CloudTrail Validation', () => {
     test('CloudTrail should exist', () => {
-      expect(outputs.CloudTrailName).toBeDefined();
-      expect(outputs.CloudTrailName).toBe('ProductionCloudTrail');
+      expect(getOutput('CloudTrailName')).toBeDefined();
+      expect(getOutput('CloudTrailName')).toBe('ProductionCloudTrail');
     });
   });
 
   describe('AWS Config Validation', () => {
     test('Config S3 Bucket should exist', () => {
-      expect(outputs.ConfigS3BucketName).toBeDefined();
+      expect(getOutput('ConfigS3BucketName')).toBeDefined();
       const configBucketPattern = /^config-bucket-\d{12}-[a-z]{2}-[a-z]+-\d$/;
-      expect(outputs.ConfigS3BucketName).toMatch(configBucketPattern);
+      expect(getOutput('ConfigS3BucketName')).toMatch(configBucketPattern);
     });
   });
 
   describe('Resource Dependency Validation', () => {
     test('Private subnets should not be same as public subnets', () => {
-      expect(outputs.PrivateSubnet1Id).not.toBe(outputs.PublicSubnet1Id);
-      expect(outputs.PrivateSubnet1Id).not.toBe(outputs.PublicSubnet2Id);
-      expect(outputs.PrivateSubnet2Id).not.toBe(outputs.PublicSubnet1Id);
-      expect(outputs.PrivateSubnet2Id).not.toBe(outputs.PublicSubnet2Id);
+      expect(getOutput('PrivateSubnet1Id')).not.toBe(
+        getOutput('PublicSubnet1Id')
+      );
+      expect(getOutput('PrivateSubnet1Id')).not.toBe(
+        getOutput('PublicSubnet2Id')
+      );
+      expect(getOutput('PrivateSubnet2Id')).not.toBe(
+        getOutput('PublicSubnet1Id')
+      );
+      expect(getOutput('PrivateSubnet2Id')).not.toBe(
+        getOutput('PublicSubnet2Id')
+      );
     });
   });
 
@@ -238,11 +278,15 @@ describe('TapStack CloudFormation Integration Tests', () => {
 
   describe('High Availability Validation', () => {
     test('Public subnets should be in different AZs (inferred from being different)', () => {
-      expect(outputs.PublicSubnet1Id).not.toBe(outputs.PublicSubnet2Id);
+      expect(getOutput('PublicSubnet1Id')).not.toBe(
+        getOutput('PublicSubnet2Id')
+      );
     });
 
     test('Private subnets should be in different AZs (inferred from being different)', () => {
-      expect(outputs.PrivateSubnet1Id).not.toBe(outputs.PrivateSubnet2Id);
+      expect(getOutput('PrivateSubnet1Id')).not.toBe(
+        getOutput('PrivateSubnet2Id')
+      );
     });
   });
 });
