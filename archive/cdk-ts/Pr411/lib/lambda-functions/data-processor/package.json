@@ -1,0 +1,32 @@
+{
+  "name": "serverless-data-processor",
+  "version": "1.0.0",
+  "description": "Lambda function for processing data from S3 and storing in DynamoDB",
+  "main": "index.js",
+  "scripts": {
+    "lint": "eslint . --ext .js",
+    "lint:fix": "eslint . --ext .js --fix"
+  },
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.0.0",
+    "@aws-sdk/client-s3": "^3.0.0",
+    "@aws-sdk/client-sqs": "^3.0.0",
+    "@aws-sdk/lib-dynamodb": "^3.0.0"
+  },
+  "devDependencies": {
+    "eslint": "^8.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "aws",
+    "lambda",
+    "s3",
+    "dynamodb",
+    "serverless",
+    "data-processing"
+  ],
+  "author": "AWS Solutions Architect",
+  "license": "MIT"
+}
