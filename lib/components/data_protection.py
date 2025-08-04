@@ -189,16 +189,7 @@ class DataProtectionInfrastructure(pulumi.ComponentResource):
         aws.s3.BucketNotificationTopicArgs(
           topic_arn=self.sns_topic_arn,
           events=["s3:ObjectCreated:*", "s3:ObjectRemoved:*"],
-          filter={
-            "key": {
-              "filterRules": [
-                {
-                  "name": "prefix",
-                  "value": "critical/"
-                }
-              ]
-            }
-          }
+          filter_prefix="critical/"
         )
       ],
       opts=ResourceOptions(parent=self, depends_on=[self.s3_lifecycle])
