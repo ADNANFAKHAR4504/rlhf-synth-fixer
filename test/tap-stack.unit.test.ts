@@ -177,9 +177,18 @@ describe('CloudFormation Template', () => {
     });
     it('should use dynamic references for secrets', () => {
       const rds = template.Resources.ProductionRDSInstance;
-      expect(rds.Properties.MasterUserPassword).toMatch(
-        /{{resolve:secretsmanager:/
-      );
+      // Accept both string and Fn::Sub dynamic reference for secretsmanager
+      if (typeof rds.Properties.MasterUserPassword === 'string') {
+        expect(rds.Properties.MasterUserPassword).toMatch(
+          /\{\{resolve:secretsmanager:/
+        );
+      } else if (rds.Properties.MasterUserPassword['Fn::Sub']) {
+        expect(rds.Properties.MasterUserPassword['Fn::Sub']).toMatch(
+          /\{\{resolve:secretsmanager:/
+        );
+      } else {
+        throw new Error('MasterUserPassword is not using a dynamic reference');
+      }
     });
     it('should not use Fn::Sub unless variables are required', () => {
       const resourceStr = JSON.stringify(template.Resources);

@@ -390,7 +390,7 @@ Resources:
       ConfigRuleName: 'root-access-key-check'
       Source:
         Owner: AWS
-        SourceIdentifier: ROOT_ACCESS_KEY_CHECK
+        SourceIdentifier: IAM_ROOT_ACCESS_KEY_CHECK
 
   # RDS Subnet Group
   RDSSubnetGroup:
@@ -416,7 +416,7 @@ Resources:
       StorageType: gp2
       StorageEncrypted: true
       MasterUsername: !Ref DatabaseUsername
-      MasterUserPassword: '{{resolve:secretsmanager:prod/db/password:SecretString:password}}'
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${RDSMasterUserSecret}:SecretString:password}}'
       VPCSecurityGroups:
         - !Ref DatabaseSecurityGroup
       DBSubnetGroupName: !Ref RDSSubnetGroup
@@ -456,7 +456,7 @@ Resources:
             Principal:
               Service: cloudtrail.amazonaws.com
             Action: s3:PutObject
-            Resource: !Sub '${CloudTrailS3Bucket.Arn}/*'
+            Resource: !Sub 'arn:aws:s3:::${CloudTrailS3Bucket}/*'
             Condition:
               StringEquals:
                 's3:x-amz-acl': bucket-owner-full-control
@@ -464,7 +464,7 @@ Resources:
             Principal:
               Service: cloudtrail.amazonaws.com
             Action: s3:GetBucketAcl
-            Resource: !Ref CloudTrailS3Bucket
+            Resource: !Sub 'arn:aws:s3:::${CloudTrailS3Bucket}'
 
   # CloudTrail
   ProductionCloudTrail:
@@ -579,6 +579,21 @@ Resources:
               }
       DeadLetterConfig:
         TargetArn: !GetAtt LambdaDeadLetterQueue.Arn
+      Tags:
+        - Key: Environment
+          Value: 'Production'
+
+  # Secrets Manager Secret for RDS
+  RDSMasterUserSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: prod/db/password
+      Description: Master password for RDS instance
+      GenerateSecretString:
+        SecretStringTemplate: '{"username": "admin"}'
+        GenerateStringKey: password
+        ExcludeCharacters: '"@/\\'
+        PasswordLength: 16
       Tags:
         - Key: Environment
           Value: 'Production'

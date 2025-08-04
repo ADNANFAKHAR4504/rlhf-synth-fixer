@@ -669,7 +669,7 @@
                 "ConfigRuleName": "root-access-key-check",
                 "Source": {
                     "Owner": "AWS",
-                    "SourceIdentifier": "ROOT_ACCESS_KEY_CHECK"
+                    "SourceIdentifier": "IAM_ROOT_ACCESS_KEY_CHECK"
                 }
             }
         },
@@ -706,7 +706,9 @@
                 "MasterUsername": {
                     "Ref": "DatabaseUsername"
                 },
-                "MasterUserPassword": "{{resolve:secretsmanager:prod/db/password:SecretString:password}}",
+                "MasterUserPassword": {
+                    "Fn::Sub": "{{resolve:secretsmanager:${RDSMasterUserSecret}:SecretString:password}}"
+                },
                 "VPCSecurityGroups": [
                     {
                         "Ref": "DatabaseSecurityGroup"
@@ -771,7 +773,7 @@
                             },
                             "Action": "s3:PutObject",
                             "Resource": {
-                                "Fn::Sub": "${CloudTrailS3Bucket.Arn}/*"
+                                "Fn::Sub": "arn:aws:s3:::${CloudTrailS3Bucket}/*"
                             },
                             "Condition": {
                                 "StringEquals": {
@@ -786,7 +788,7 @@
                             },
                             "Action": "s3:GetBucketAcl",
                             "Resource": {
-                                "Ref": "CloudTrailS3Bucket"
+                                "Fn::Sub": "arn:aws:s3:::${CloudTrailS3Bucket}"
                             }
                         }
                     ]
@@ -962,6 +964,25 @@
                             "Arn"
                         ]
                     }
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    }
+                ]
+            }
+        },
+        "RDSMasterUserSecret": {
+            "Type": "AWS::SecretsManager::Secret",
+            "Properties": {
+                "Name": "prod/db/password",
+                "Description": "Master password for RDS instance",
+                "GenerateSecretString": {
+                    "SecretStringTemplate": "{\"username\": \"admin\"}",
+                    "GenerateStringKey": "password",
+                    "ExcludeCharacters": "\"@/\\\\",
+                    "PasswordLength": 16
                 },
                 "Tags": [
                     {
