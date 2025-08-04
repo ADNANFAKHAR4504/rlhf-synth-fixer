@@ -86,7 +86,7 @@ describe('TapStack Integration Tests', () => {
 
       test('DynamoDB Table exists with correct configuration', async () => {
         const tableName = getResourceName(
-          'content-metadata',
+          `${resourcePrefix}-content-metadata`,
           environment,
           region
         );
@@ -183,7 +183,7 @@ describe('TapStack Integration Tests', () => {
           new GetMethodCommand({
             restApiId: api!.id!,
             resourceId: stage!.id!,
-            httpMethod: 'GET',
+            httpMethod: 'POST',
           })
         );
         expect(methods).toBeDefined();
