@@ -25,8 +25,18 @@ class TapStackProps(NestedStack):
     )
     self.log_bucket.grant_read_write(self.ec2_role)
 
-    # VPC
-    self.vpc = ec2.Vpc(self, f"AppVPC-{environment_suffix}", max_azs=2)
+    # VPC with only public subnets
+    self.vpc = ec2.Vpc(self, f"AppVPC-{environment_suffix}",
+      max_azs=2,
+      subnet_configuration=[
+        ec2.SubnetConfiguration(
+          name="PublicSubnet",
+          subnet_type=ec2.SubnetType.PUBLIC,
+          cidr_mask=24
+        )
+      ],
+      nat_gateways=0  # no private subnets = no NAT needed
+    )
 
     # Security Group
     self.security_group = ec2.SecurityGroup(self, f"InstanceSG-{environment_suffix}", vpc=self.vpc)
@@ -44,6 +54,7 @@ class TapStackProps(NestedStack):
       security_group=self.security_group,
       min_capacity=1,
       max_capacity=3,
+      vpc_subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PUBLIC)
     )
 
     # Application Load Balancer
@@ -94,5 +105,4 @@ class TapStack(Stack):
   def __init__(self, scope: Construct, id: str, environment_suffix: str = "dev", **kwargs):
     super().__init__(scope, id, **kwargs)
 
-    # Instantiate the nested TapStackProps inside this main stack
     TapStackProps(self, f"{id}Props", environment_suffix=environment_suffix)
