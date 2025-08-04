@@ -1,267 +1,352 @@
 """
-IaC – AWS Nova Model Breaking
-Pulumi programme that stands up:
-
-• 1 VPC (10.0.0.0/16) in us-east-1
-• 2 public & 2 private subnets spread over distinct AZs
-• IGW, 1 NAT GW, route-tables
-• S3 bucket (encrypted, versioned, public access blocked)
-• Least-privilege IAM role & inline policy for Lambda
-• Lambda function triggered by S3 “ObjectCreated” events
-• CloudWatch LogGroup with 14-day retention
-• All resources tagged and exported for automated tests
-
-The file is completely self-contained and idempotent.
+TapStack - AWS Infrastructure for Test Automation Platform
 """
 
 import json
-import pathlib
+
 import pulumi
 import pulumi_aws as aws
-from pulumi import Config, ResourceOptions, Output
+from pulumi import ComponentResource, Output, ResourceOptions
 
-# --------------------------------------------------------------------------- #
-# Global configuration                                                         #
-# --------------------------------------------------------------------------- #
-PROJECT_TAG = "IaC-AWS-Nova-Model-Breaking"
-REGION       = "us-east-1"
-STACK        = pulumi.get_stack()          # dev / staging / prod / etc.
-cfg          = Config()
-stage        = cfg.get("stage") or STACK   # override if desired (pulumi config set stage prod)
 
-common_tags = {
-  "Project": PROJECT_TAG,
-  "Stage"  : stage,
-  "Managed": "pulumi",
-}
+class TapStackArgs:
+    def __init__(self, environment_suffix: str, tags: dict = None):
+        self.environment_suffix = environment_suffix
+        self.tags = tags or {}
 
-provider = aws.Provider("provider", region=REGION)
-
-# --------------------------------------------------------------------------- #
-# Networking – VPC, subnets, routing                                          #
-# --------------------------------------------------------------------------- #
-vpc = aws.ec2.Vpc(
-  f"vpc-{STACK}",
-  cidr_block="10.0.0.0/16",
-  enable_dns_hostnames=True,
-  enable_dns_support=True,
-  tags={**common_tags, "Name": f"vpc-{STACK}"},
-  opts=ResourceOptions(provider=provider),
-)
-
-# Two distinct AZs
-azs = aws.get_availability_zones(state="available", opts=ResourceOptions(provider=provider)).names[:2]
-
-public_subnets  = []
-private_subnets = []
-
-for i, az in enumerate(azs):
-  public_subnets.append(
-    aws.ec2.Subnet(
-      f"public-{i}-{STACK}",
-      vpc_id=vpc.id,
-      cidr_block=f"10.0.{i}.0/24",
-      availability_zone=az,
-      map_public_ip_on_launch=True,
-      tags={**common_tags, "Name": f"public-{i}-{STACK}"},
-      opts=ResourceOptions(provider=provider),
-    ).id,
-  )
-
-  private_subnets.append(
-    aws.ec2.Subnet(
-      f"private-{i}-{STACK}",
-      vpc_id=vpc.id,
-      cidr_block=f"10.0.{i+10}.0/24",
-      availability_zone=az,
-      map_public_ip_on_launch=False,
-      tags={**common_tags, "Name": f"private-{i}-{STACK}"},
-      opts=ResourceOptions(provider=provider),
-    ).id,
-  )
-
-# IGW & public route-table
-igw = aws.ec2.InternetGateway(
-  f"igw-{STACK}",
-  vpc_id=vpc.id,
-  tags={**common_tags, "Name": f"igw-{STACK}"},
-  opts=ResourceOptions(provider=provider),
-)
-
-public_rt = aws.ec2.RouteTable(
-  f"public-rt-{STACK}",
-  vpc_id=vpc.id,
-  routes=[aws.ec2.RouteTableRouteArgs(cidr_block="0.0.0.0/0", gateway_id=igw.id)],
-  tags={**common_tags, "Name": f"public-rt-{STACK}"},
-  opts=ResourceOptions(provider=provider),
-)
-
-for subnet_id in public_subnets:
-  aws.ec2.RouteTableAssociation(
-    f"public-rta-{subnet_id}",
-    subnet_id=subnet_id,
-    route_table_id=public_rt.id,
-    opts=ResourceOptions(provider=provider),
-  )
-
-# Single NAT GW (cost-aware) in AZ-0 for both private subnets
-eip = aws.ec2.Eip(
-  f"nat-eip-{STACK}",
-  tags=common_tags,
-  opts=ResourceOptions(provider=provider),
-)
-
-nat_gw = aws.ec2.NatGateway(
-  f"natgw-{STACK}",
-  subnet_id=public_subnets[0],
-  allocation_id=eip.id,
-  tags={**common_tags, "Name": f"natgw-{STACK}"},
-  opts=ResourceOptions(provider=provider, depends_on=[igw]),
-)
-
-private_rt = aws.ec2.RouteTable(
-  f"private-rt-{STACK}",
-  vpc_id=vpc.id,
-  routes=[aws.ec2.RouteTableRouteArgs(cidr_block="0.0.0.0/0", nat_gateway_id=nat_gw.id)],
-  tags={**common_tags, "Name": f"private-rt-{STACK}"},
-  opts=ResourceOptions(provider=provider),
-)
-
-for subnet_id in private_subnets:
-  aws.ec2.RouteTableAssociation(
-    f"private-rta-{subnet_id}",
-    subnet_id=subnet_id,
-    route_table_id=private_rt.id,
-    opts=ResourceOptions(provider=provider),
-  )
-
-# --------------------------------------------------------------------------- #
-# S3 bucket – encrypted, versioned, private                                   #
-# --------------------------------------------------------------------------- #
-bucket = aws.s3.Bucket(
-  f"data-bucket-{STACK}",
-  versioning=aws.s3.BucketVersioningArgs(enabled=True),
-  server_side_encryption_configuration=aws.s3.BucketServerSideEncryptionConfigurationArgs(
-    rules=[
-      aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
-        apply_server_side_encryption_by_default=
-        aws.s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
-          sse_algorithm="AES256"
+class TapStack(ComponentResource):
+    def __init__(self, name: str, args: TapStackArgs, opts: ResourceOptions = None):
+        super().__init__("custom:TapStack", name, None, opts)
+        
+        # Configuration
+        self.environment_suffix = args.environment_suffix
+        self.region = "us-east-1"
+        self.common_tags = {
+            **args.tags,
+            "Project": "TapStack",
+            "Stage": self.environment_suffix,
+            "Managed": "pulumi",
+        }
+        
+        # AWS Provider
+        self.provider = aws.Provider(
+            f"TapStack-provider-{self.environment_suffix}",
+            region=self.region,
+            opts=ResourceOptions(parent=self)
         )
-      )
-    ]
-  ),
-  tags={**common_tags, "Name": f"data-bucket-{STACK}"},
-  opts=ResourceOptions(provider=provider),
-)
+        
+        # Create infrastructure
+        self._create_networking()
+        self._create_storage()
+        self._create_compute()
+        self._create_monitoring()
+        
+        # Register outputs
+        self.register_outputs({
+            "vpcId": self.vpc_id,
+            "publicSubnetIds": self.public_subnet_ids,
+            "privateSubnetIds": self.private_subnet_ids,
+            "bucketName": self.bucket_name,
+            "lambdaName": self.lambda_name,
+        })
+    
+    def _create_networking(self):
+        """Create VPC, subnets, and networking components."""
+        # VPC
+        self.vpc = aws.ec2.Vpc(
+            f"TapStack-vpc-{self.environment_suffix}",
+            cidr_block="10.0.0.0/16",
+            enable_dns_hostnames=True,
+            enable_dns_support=True,
+            tags={**self.common_tags, "Name": f"TapStack-vpc-{self.environment_suffix}"},
+            opts=ResourceOptions(provider=self.provider, parent=self)
+        )
+        
+        # Get availability zones
+        azs = aws.get_availability_zones(
+            state="available",
+            opts=ResourceOptions(provider=self.provider)
+        ).names[:2]
+        
+        # Public subnets
+        self.public_subnets = []
+        for i, az in enumerate(azs):
+            subnet = aws.ec2.Subnet(
+                f"TapStack-public-{i}-{self.environment_suffix}",
+                vpc_id=self.vpc.id,
+                cidr_block=f"10.0.{i}.0/24",
+                availability_zone=az,
+                map_public_ip_on_launch=True,
+                tags={**self.common_tags, "Name": f"TapStack-public-{i}-{self.environment_suffix}"},
+                opts=ResourceOptions(provider=self.provider, parent=self)
+            )
+            self.public_subnets.append(subnet)
+        
+        # Private subnets
+        self.private_subnets = []
+        for i, az in enumerate(azs):
+            subnet = aws.ec2.Subnet(
+                f"TapStack-private-{i}-{self.environment_suffix}",
+                vpc_id=self.vpc.id,
+                cidr_block=f"10.0.{i+10}.0/24",
+                availability_zone=az,
+                map_public_ip_on_launch=False,
+                tags={**self.common_tags, "Name": f"TapStack-private-{i}-{self.environment_suffix}"},
+                opts=ResourceOptions(provider=self.provider, parent=self)
+            )
+            self.private_subnets.append(subnet)
+        
+        # Internet Gateway
+        self.igw = aws.ec2.InternetGateway(
+            f"TapStack-igw-{self.environment_suffix}",
+            vpc_id=self.vpc.id,
+            tags={**self.common_tags, "Name": f"TapStack-igw-{self.environment_suffix}"},
+            opts=ResourceOptions(provider=self.provider, parent=self)
+        )
+        
+        # NAT Gateway
+        self.eip = aws.ec2.Eip(
+            f"TapStack-nat-eip-{self.environment_suffix}",
+            tags=self.common_tags,
+            opts=ResourceOptions(provider=self.provider, parent=self)
+        )
+        
+        self.nat_gw = aws.ec2.NatGateway(
+            f"TapStack-natgw-{self.environment_suffix}",
+            subnet_id=self.public_subnets[0].id,
+            allocation_id=self.eip.id,
+            tags={**self.common_tags, "Name": f"TapStack-natgw-{self.environment_suffix}"},
+            opts=ResourceOptions(provider=self.provider, parent=self, depends_on=[self.igw])
+        )
+        
+        # Route tables
+        self._create_route_tables()
+    
+    def _create_route_tables(self):
+        """Create and configure route tables."""
+        # Public route table
+        self.public_rt = aws.ec2.RouteTable(
+            f"TapStack-public-rt-{self.environment_suffix}",
+            vpc_id=self.vpc.id,
+            routes=[aws.ec2.RouteTableRouteArgs(
+                cidr_block="0.0.0.0/0",
+                gateway_id=self.igw.id
+            )],
+            tags={**self.common_tags, "Name": f"TapStack-public-rt-{self.environment_suffix}"},
+            opts=ResourceOptions(provider=self.provider, parent=self)
+        )
+        
+        # Private route table
+        self.private_rt = aws.ec2.RouteTable(
+            f"TapStack-private-rt-{self.environment_suffix}",
+            vpc_id=self.vpc.id,
+            routes=[aws.ec2.RouteTableRouteArgs(
+                cidr_block="0.0.0.0/0",
+                nat_gateway_id=self.nat_gw.id
+            )],
+            tags={**self.common_tags, "Name": f"TapStack-private-rt-{self.environment_suffix}"},
+            opts=ResourceOptions(provider=self.provider, parent=self)
+        )
+        
+        # Route table associations
+        for i, subnet in enumerate(self.public_subnets):
+            aws.ec2.RouteTableAssociation(
+                f"TapStack-public-rta-{i}-{self.environment_suffix}",
+                subnet_id=subnet.id,
+                route_table_id=self.public_rt.id,
+                opts=ResourceOptions(provider=self.provider, parent=self)
+            )
+        
+        for i, subnet in enumerate(self.private_subnets):
+            aws.ec2.RouteTableAssociation(
+                f"TapStack-private-rta-{i}-{self.environment_suffix}",
+                subnet_id=subnet.id,
+                route_table_id=self.private_rt.id,
+                opts=ResourceOptions(provider=self.provider, parent=self)
+            )
+    
+    def _create_storage(self):
+        """Create S3 bucket with security configurations."""
+        self.bucket = aws.s3.Bucket(
+            f"TapStack-data-bucket-{self.environment_suffix}",
+            versioning=aws.s3.BucketVersioningArgs(enabled=True),
+            server_side_encryption_configuration=aws.s3.BucketServerSideEncryptionConfigurationArgs(
+                rules=[aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
+                    apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
+                        sse_algorithm="AES256"
+                    )
+                )]
+            ),
+            tags={**self.common_tags, "Name": f"TapStack-data-bucket-{self.environment_suffix}"},
+            opts=ResourceOptions(provider=self.provider, parent=self)
+        )
+        
+        # Block public access
+        aws.s3.BucketPublicAccessBlock(
+            f"TapStack-public-block-{self.environment_suffix}",
+            bucket=self.bucket.id,
+            block_public_acls=True,
+            block_public_policy=True,
+            ignore_public_acls=True,
+            restrict_public_buckets=True,
+            opts=ResourceOptions(provider=self.provider, parent=self)
+        )
+    
+    def _create_compute(self):
+        """Create Lambda function and IAM roles."""
+        # IAM Role
+        self.lambda_role = aws.iam.Role(
+            f"TapStack-lambda-role-{self.environment_suffix}",
+            assume_role_policy=json.dumps({
+                "Version": "2012-10-17",
+                "Statement": [{
+                    "Effect": "Allow",
+                    "Principal": {"Service": "lambda.amazonaws.com"},
+                    "Action": "sts:AssumeRole",
+                }],
+            }),
+            tags=self.common_tags,
+            opts=ResourceOptions(provider=self.provider, parent=self)
+        )
+        
+        # Attach basic execution role
+        aws.iam.RolePolicyAttachment(
+            f"TapStack-lambda-basic-{self.environment_suffix}",
+            role=self.lambda_role.name,
+            policy_arn="arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
+            opts=ResourceOptions(provider=self.provider, parent=self)
+        )
+        
+        # S3 access policy
+        aws.iam.RolePolicy(
+            f"TapStack-lambda-s3-policy-{self.environment_suffix}",
+            role=self.lambda_role.id,
+            policy=self.bucket.id.apply(
+                lambda b: json.dumps({
+                    "Version": "2012-10-17",
+                    "Statement": [{
+                        "Effect": "Allow",
+                        "Action": ["s3:GetObject", "s3:GetObjectTagging"],
+                        "Resource": f"arn:aws:s3:::{b}/*",
+                    }]
+                })
+            ),
+            opts=ResourceOptions(provider=self.provider, parent=self)
+        )
+        
+        # Lambda function with embedded code
+        lambda_code = """
+import json
+import boto3
+import os
+import logging
+from urllib.parse import unquote_plus
 
-aws.s3.BucketPublicAccessBlock(
-  f"public-block-{STACK}",
-  bucket=bucket.id,
-  block_public_acls=True,
-  block_public_policy=True,
-  ignore_public_acls=True,
-  restrict_public_buckets=True,
-  opts=ResourceOptions(provider=provider),
-)
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
 
-# --------------------------------------------------------------------------- #
-# IAM – least-privilege role for Lambda                                       #
-# --------------------------------------------------------------------------- #
-lambda_role = aws.iam.Role(
-  f"lambda-role-{STACK}",
-  assume_role_policy=json.dumps({
-    "Version": "2012-10-17",
-    "Statement": [{
-      "Effect": "Allow",
-      "Principal": {"Service": "lambda.amazonaws.com"},
-      "Action": "sts:AssumeRole",
-    }],
-  }),
-  tags=common_tags,
-  opts=ResourceOptions(provider=provider),
-)
-
-# Basic execution + explicit read-only access to this bucket
-aws.iam.RolePolicyAttachment(
-  f"lambda-basic-{STACK}",
-  role=lambda_role.name,
-  policy_arn="arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
-  opts=ResourceOptions(provider=provider),
-)
-
-aws.iam.RolePolicy(
-  f"lambda-s3-policy-{STACK}",
-  role=lambda_role.id,
-  policy=bucket.id.apply(
-    lambda b: json.dumps({
-      "Version": "2012-10-17",
-      "Statement": [{
-        "Effect": "Allow",
-        "Action": ["s3:GetObject", "s3:GetObjectTagging"],
-        "Resource": f"arn:aws:s3:::{b}/*",
-      }]
-    })
-  ),
-  opts=ResourceOptions(provider=provider),
-)
-
-# --------------------------------------------------------------------------- #
-# Lambda function & CloudWatch logging                                        #
-# --------------------------------------------------------------------------- #
-code_path = pathlib.Path(__file__).parent / "lambda"
-zip_asset = pulumi.AssetArchive({".": pulumi.FileArchive(str(code_path))})
-
-lambda_func = aws.lambda_.Function(
-  f"processor-{STACK}",
-  runtime="python3.9",
-  role=lambda_role.arn,
-  handler="index.handler",
-  code=zip_asset,
-  environment=aws.lambda_.FunctionEnvironmentArgs(variables={
-    "STAGE": stage,
-    "BUCKET": bucket.id,
-  }),
-  timeout=30,
-  memory_size=128,
-  opts=ResourceOptions(provider=provider),
-)
-
-log_group = aws.cloudwatch.LogGroup(
-  f"/aws/lambda/{lambda_func.name}",
-  retention_in_days=14,
-  tags=common_tags,
-  opts=ResourceOptions(provider=provider),
-)
-
-# --------------------------------------------------------------------------- #
-# S3 → Lambda event notifications                                             #
-# --------------------------------------------------------------------------- #
-aws.lambda_.Permission(
-  f"allow-s3-{STACK}",
-  action="lambda:InvokeFunction",
-  function=lambda_func.name,
-  principal="s3.amazonaws.com",
-  source_arn=bucket.arn,
-  opts=ResourceOptions(provider=provider),
-)
-
-aws.s3.BucketNotification(
-  f"bucket-notif-{STACK}",
-  bucket=bucket.id,
-  lambda_functions=[aws.s3.BucketNotificationLambdaFunctionArgs(
-    lambda_function_arn=lambda_func.arn,
-    events=["s3:ObjectCreated:*"],
-  )],
-  opts=ResourceOptions(provider=provider, depends_on=[lambda_func]),
-)
-
-# --------------------------------------------------------------------------- #
-# Stack outputs                                                               #
-# --------------------------------------------------------------------------- #
-pulumi.export("vpcId",              vpc.id)
-pulumi.export("publicSubnetIds",    Output.all(*public_subnets))
-pulumi.export("privateSubnetIds",   Output.all(*private_subnets))
-pulumi.export("bucketName",         bucket.bucket)
-pulumi.export("lambdaName",         lambda_func.name)
-pulumi.export("lambdaRoleArn",      lambda_role.arn)
+def handler(event, context):
+    try:
+        stage = os.environ.get('STAGE', 'unknown')
+        bucket_env = os.environ.get('BUCKET', 'unknown')
+        
+        logger.info(f"Processing S3 event in {stage} environment")
+        
+        s3_client = boto3.client('s3')
+        
+        for record in event['Records']:
+            bucket = record['s3']['bucket']['name']
+            key = unquote_plus(record['s3']['object']['key'])
+            
+            logger.info(f"Processing file: {key} from bucket: {bucket}")
+            
+            try:
+                response = s3_client.head_object(Bucket=bucket, Key=key)
+                file_size = response['ContentLength']
+                last_modified = response['LastModified']
+                
+                logger.info(f"File details - Size: {file_size} bytes, Modified: {last_modified}")
+                
+            except Exception as e:
+                logger.error(f"Error processing file {key}: {str(e)}")
+        
+        return {
+            'statusCode': 200,
+            'body': json.dumps('Files processed successfully')
+        }
+        
+    except Exception as e:
+        logger.error(f"Lambda execution error: {str(e)}")
+        return {
+            'statusCode': 500,
+            'body': json.dumps(f'Error: {str(e)}')
+        }
+"""
+        
+        self.lambda_function = aws.lambda_.Function(
+            f"TapStack-processor-{self.environment_suffix}",
+            runtime="python3.9",
+            role=self.lambda_role.arn,
+            handler="index.handler",
+            code=pulumi.AssetArchive({
+                "index.py": pulumi.StringAsset(lambda_code)
+            }),
+            environment=aws.lambda_.FunctionEnvironmentArgs(variables={
+                "STAGE": self.environment_suffix,
+                "BUCKET": self.bucket.bucket,
+            }),
+            timeout=30,
+            memory_size=128,
+            opts=ResourceOptions(provider=self.provider, parent=self)
+        )
+        
+        # S3 Lambda permission
+        aws.lambda_.Permission(
+            f"TapStack-allow-s3-{self.environment_suffix}",
+            action="lambda:InvokeFunction",
+            function=self.lambda_function.name,
+            principal="s3.amazonaws.com",
+            source_arn=self.bucket.arn,
+            opts=ResourceOptions(provider=self.provider, parent=self)
+        )
+        
+        # S3 event notification
+        aws.s3.BucketNotification(
+            f"TapStack-bucket-notif-{self.environment_suffix}",
+            bucket=self.bucket.id,
+            lambda_functions=[aws.s3.BucketNotificationLambdaFunctionArgs(
+                lambda_function_arn=self.lambda_function.arn,
+                events=["s3:ObjectCreated:*"],
+            )],
+            opts=ResourceOptions(provider=self.provider, parent=self, depends_on=[self.lambda_function])
+        )
+    
+    def _create_monitoring(self):
+        """Create CloudWatch log group."""
+        self.log_group = aws.cloudwatch.LogGroup(
+            f"TapStack-lambda-logs-{self.environment_suffix}",
+            name=self.lambda_function.name.apply(lambda name: f"/aws/lambda/{name}"),
+            retention_in_days=14,
+            tags=self.common_tags,
+            opts=ResourceOptions(provider=self.provider, parent=self)
+        )
+    
+    @property
+    def vpc_id(self):
+        return self.vpc.id
+    
+    @property
+    def public_subnet_ids(self):
+        return [subnet.id for subnet in self.public_subnets]
+    
+    @property
+    def private_subnet_ids(self):
+        return [subnet.id for subnet in self.private_subnets]
+    
+    @property
+    def bucket_name(self):
+        return self.bucket.bucket
+    
+    @property
+    def lambda_name(self):
+        return self.lambda_function.name
