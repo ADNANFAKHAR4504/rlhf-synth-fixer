@@ -1,8 +1,9 @@
 """TAP Stack module for CDKTF Python infrastructure."""
 
 import json
+import os
 from typing import Dict
-from cdktf import TerraformStack, S3Backend, TerraformOutput
+from cdktf import TerraformStack, S3Backend, TerraformOutput, App
 from constructs import Construct
 from cdktf_cdktf_provider_aws.provider import AwsProvider, AwsProviderDefaultTags
 from cdktf_cdktf_provider_aws.s3_bucket import S3Bucket
@@ -372,3 +373,39 @@ class TapStack(TerraformStack):
       value=json.dumps(self.common_tags),
       description="Common tags applied to all resources for compliance"
     )
+
+
+environment_suffix = os.getenv("ENVIRONMENT_SUFFIX", "dev")
+state_bucket = os.getenv("TERRAFORM_STATE_BUCKET", "iac-rlhf-tf-states")
+state_bucket_region = os.getenv("TERRAFORM_STATE_BUCKET_REGION", "us-east-1")
+aws_region = os.getenv("AWS_REGION", "us-east-1")
+repository_name = os.getenv("REPOSITORY", "unknown")
+commit_author = os.getenv("COMMIT_AUTHOR", "unknown")
+
+# Calculate the stack name
+stack_name = f"TapStack{environment_suffix}"
+
+# default_tags is structured in adherence to the AwsProvider default_tags interface
+default_tags = {
+    "tags": {
+        "Environment": environment_suffix,
+        "Repository": repository_name,
+        "Author": commit_author,
+    }
+}
+
+app = App()
+
+# Create the TapStack with the calculated properties
+TapStack(
+    app,
+    stack_name,
+    environment_suffix=environment_suffix,
+    state_bucket=state_bucket,
+    state_bucket_region=state_bucket_region,
+    aws_region=aws_region,
+    default_tags=default_tags,
+)
+
+# Synthesize the app to generate the Terraform configuration
+app.synth()
