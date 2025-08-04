@@ -9,7 +9,11 @@ import {
   ListDistributionsCommand,
 } from '@aws-sdk/client-cloudfront';
 import { DescribeTableCommand, DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { GetFunctionCommand, LambdaClient } from '@aws-sdk/client-lambda';
+import {
+  GetFunctionCommand,
+  InvokeCommand,
+  LambdaClient,
+} from '@aws-sdk/client-lambda';
 import {
   GetBucketVersioningCommand,
   GetPublicAccessBlockCommand,
@@ -155,6 +159,88 @@ describe('TapStack Integration Tests', () => {
         expect(distribution?.DefaultCacheBehavior?.ViewerProtocolPolicy).toBe(
           'redirect-to-https'
         );
+      });
+
+      test('API Gateway requires API key for authorization', async () => {
+        const apis = await apigateway.send(new GetRestApisCommand({}));
+        const api = apis.items?.find(
+          api => api.name === `${resourcePrefix}-api`
+        );
+        expect(api).toBeDefined();
+
+        const stages = await apigateway.send(
+          new GetResourcesCommand({ restApiId: api!.id! })
+        );
+        const stage = stages.items?.find(stage => stage.path === '/');
+        expect(stage).toBeDefined();
+
+        // Check if API key is required
+        const methods = await apigateway.send(
+          new GetMethodCommand({
+            restApiId: api!.id!,
+            resourceId: stage!.id!,
+            httpMethod: 'GET',
+          })
+        );
+        expect(methods).toBeDefined();
+        expect(methods.apiKeyRequired).toBe(true);
+      });
+
+      test('Lambda, DynamoDB, and API Gateway integration works correctly', async () => {
+        const functionName = getResourceName(
+          'content-handler',
+          environment,
+          region
+        );
+        const tableName = getResourceName(
+          'content-metadata',
+          environment,
+          region
+        );
+
+        // Simulate an API Gateway event to invoke the Lambda function
+        const event = {
+          httpMethod: 'POST',
+          body: JSON.stringify({
+            contentId: 'test-id',
+            contentType: 'text',
+            contentData: 'Sample content',
+          }),
+        };
+
+        const lambdaFunction = await lambda.send(
+          new GetFunctionCommand({ FunctionName: functionName })
+        );
+        expect(lambdaFunction).toBeDefined();
+
+        // Simulate Lambda invocation
+        const response = await lambda.send(
+          new InvokeCommand({
+            FunctionName: functionName,
+            Payload: Buffer.from(JSON.stringify(event)),
+          })
+        );
+        expect(response.StatusCode).toBe(200);
+
+        // Verify data in DynamoDB
+        const table = await dynamodb.send(
+          new DescribeTableCommand({ TableName: tableName })
+        );
+        expect(table).toBeDefined();
+
+        // Use GetItemCommand to retrieve the item from DynamoDB
+        const { GetItemCommand } = await import('@aws-sdk/client-dynamodb');
+        const item = await dynamodb.send(
+          new GetItemCommand({
+            TableName: tableName,
+            Key: { contentId: { S: 'test-id' } },
+          })
+        );
+        expect(item.Item).toBeDefined();
+        if (item.Item) {
+          expect(item.Item.contentType.S).toBe('text');
+          expect(item.Item.contentData.S).toBe('Sample content');
+        }
       });
     });
   });
