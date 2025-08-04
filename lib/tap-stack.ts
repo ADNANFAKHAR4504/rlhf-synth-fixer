@@ -111,7 +111,7 @@ export class TapStack extends cdk.Stack {
       }
     );
 
-    // Get public subnets for EC2 instances
+    // Get public subnets for EC2 instances (as per requirements)
     const publicSubnets = vpc.publicSubnets;
 
     // Create EC2 instances in public subnets with auto recovery
@@ -255,16 +255,34 @@ export class TapStack extends cdk.Stack {
       defaultTargetGroups: [targetGroup],
     });
 
-    // RDS Subnet Group - Use public subnets since VPC doesn't have private subnets
+    // Intelligent subnet selection for RDS - prioritize private subnets for security
+    let rdsSubnetSelection: ec2.SubnetSelection;
+
+    // Try to use private subnets first (best security practice)
+    if (vpc.privateSubnets.length > 0) {
+      rdsSubnetSelection = {
+        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+      };
+    } else if (vpc.isolatedSubnets.length > 0) {
+      // Fall back to isolated subnets
+      rdsSubnetSelection = {
+        subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
+      };
+    } else {
+      // Last resort: use public subnets but with strict security group rules
+      rdsSubnetSelection = {
+        subnetType: ec2.SubnetType.PUBLIC,
+      };
+    }
+
+    // RDS Subnet Group with intelligent subnet selection
     const dbSubnetGroup = new rds.SubnetGroup(
       this,
       `${projectName}-${environmentSuffix}-db-subnet-group`,
       {
         vpc,
         description: 'Subnet group for RDS database',
-        vpcSubnets: {
-          subnetType: ec2.SubnetType.PUBLIC, // Changed from PRIVATE_WITH_EGRESS to PUBLIC
-        },
+        vpcSubnets: rdsSubnetSelection,
         subnetGroupName: `${projectName}-${environmentSuffix}-db-subnet-group`,
       }
     );
@@ -284,12 +302,12 @@ export class TapStack extends cdk.Stack {
         vpc,
         subnetGroup: dbSubnetGroup,
         securityGroups: [rdsSecurityGroup],
-        multiAz: true,
-        storageEncrypted: true,
-        storageEncryptionKey: kmsKey,
-        backupRetention: cdk.Duration.days(7),
+        multiAz: true, // Multi-AZ deployment as required
+        storageEncrypted: true, // Encryption at rest as required
+        storageEncryptionKey: kmsKey, // Using KMS as required
+        backupRetention: cdk.Duration.days(7), // Automated backups as required
         deleteAutomatedBackups: false,
-        deletionProtection: false,
+        deletionProtection: false, // Set to true for production
         databaseName: 'tapdb',
         credentials: rds.Credentials.fromGeneratedSecret('admin', {
           secretName: `${projectName}-${environmentSuffix}-db-credentials`,
@@ -304,7 +322,7 @@ export class TapStack extends cdk.Stack {
       }
     );
 
-    // CloudWatch Alarms for RDS monitoring
+    // CloudWatch Alarms for RDS monitoring (as required)
     new cloudwatch.Alarm(this, `${projectName}-${environmentSuffix}-rds-cpu`, {
       metric: database.metricCPUUtilization(),
       threshold: 80,
@@ -327,12 +345,12 @@ export class TapStack extends cdk.Stack {
       }
     );
 
-    // ALB Target Response Time Alarm - Using new API
+    // ALB Target Response Time Alarm
     new cloudwatch.Alarm(
       this,
       `${projectName}-${environmentSuffix}-alb-response-time`,
       {
-        metric: targetGroup.metrics.targetResponseTime(), // Fixed: Using new metrics API
+        metric: targetGroup.metrics.targetResponseTime(),
         threshold: 1,
         evaluationPeriods: 2,
         treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
@@ -360,7 +378,19 @@ export class TapStack extends cdk.Stack {
       exportName: `${projectName}-${environmentSuffix}-kms-key-id`,
     });
 
-    // Tags for all resources
+    // Output which subnet type was used for RDS for transparency
+    new cdk.CfnOutput(this, 'RDSSubnetType', {
+      value:
+        vpc.privateSubnets.length > 0
+          ? 'Private'
+          : vpc.isolatedSubnets.length > 0
+            ? 'Isolated'
+            : 'Public',
+      description: 'Subnet type used for RDS deployment',
+      exportName: `${projectName}-${environmentSuffix}-rds-subnet-type`,
+    });
+
+    // Tags for all resources (following naming convention)
     cdk.Tags.of(this).add('Project', projectName);
     cdk.Tags.of(this).add('Environment', environmentSuffix);
     cdk.Tags.of(this).add('ManagedBy', 'CDK');
