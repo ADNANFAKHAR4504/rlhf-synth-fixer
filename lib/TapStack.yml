@@ -43,11 +43,6 @@ Resources:
     Properties:
       Name: !Sub '${AWS::StackName}/database/password'
       Description: 'Database administrator password'
-      SecretString: !Sub |
-        {
-          "username": "dbadmin",
-          "password": "{{resolve:secretsmanager:${AWS::StackName}/database/password:SecretString:password}}"
-        }
       GenerateSecretString:
         SecretStringTemplate: '{"username": "dbadmin"}'
         GenerateStringKey: "password"
@@ -237,9 +232,11 @@ Resources:
           CidrIp: '0.0.0.0/0'
           Description: 'HTTPS access from internet'
       SecurityGroupEgress:
-        - IpProtocol: -1
-          CidrIp: '0.0.0.0/0'
-          Description: 'Allow all outbound traffic'
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          SourceSecurityGroupId: !Ref WebServerSecurityGroup
+          Description: 'HTTP to web servers'
       Tags:
         - Key: Name
           Value: 'ALB Security Group'
@@ -253,7 +250,7 @@ Resources:
         - IpProtocol: tcp
           FromPort: 80
           ToPort: 80
-          CidrIp: '0.0.0.0/0'
+          SourceSecurityGroupId: !Ref ALBSecurityGroup
           Description: 'HTTP from ALB'
         - IpProtocol: tcp
           FromPort: 22

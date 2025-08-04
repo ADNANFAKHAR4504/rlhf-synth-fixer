@@ -59,9 +59,6 @@
                     "Fn::Sub": "${AWS::StackName}/database/password"
                 },
                 "Description": "Database administrator password",
-                "SecretString": {
-                    "Fn::Sub": "{\n  \"username\": \"dbadmin\",\n  \"password\": \"{{resolve:secretsmanager:${AWS::StackName}/database/password:SecretString:password}}\"\n}\n"
-                },
                 "GenerateSecretString": {
                     "SecretStringTemplate": "{\"username\": \"dbadmin\"}",
                     "GenerateStringKey": "password",
@@ -390,9 +387,13 @@
                 ],
                 "SecurityGroupEgress": [
                     {
-                        "IpProtocol": -1,
-                        "CidrIp": "0.0.0.0/0",
-                        "Description": "Allow all outbound traffic"
+                        "IpProtocol": "tcp",
+                        "FromPort": 80,
+                        "ToPort": 80,
+                        "SourceSecurityGroupId": {
+                            "Ref": "WebServerSecurityGroup"
+                        },
+                        "Description": "HTTP to web servers"
                     }
                 ],
                 "Tags": [
@@ -415,7 +416,9 @@
                         "IpProtocol": "tcp",
                         "FromPort": 80,
                         "ToPort": 80,
-                        "CidrIp": "0.0.0.0/0",
+                        "SourceSecurityGroupId": {
+                            "Ref": "ALBSecurityGroup"
+                        },
                         "Description": "HTTP from ALB"
                     },
                     {
