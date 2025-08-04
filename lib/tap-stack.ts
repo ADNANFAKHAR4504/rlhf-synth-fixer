@@ -35,7 +35,6 @@ import { LaunchTemplate } from '@cdktf/provider-aws/lib/launch-template';
 
 // CloudFront and Route53
 import { CloudfrontDistribution } from '@cdktf/provider-aws/lib/cloudfront-distribution';
-import { CloudfrontOriginAccessControl } from '@cdktf/provider-aws/lib/cloudfront-origin-access-control';
 import { Route53HealthCheck } from '@cdktf/provider-aws/lib/route53-health-check';
 import { Route53Record } from '@cdktf/provider-aws/lib/route53-record';
 import { Route53Zone } from '@cdktf/provider-aws/lib/route53-zone';
@@ -66,16 +65,20 @@ interface TapStackProps {
   defaultTags?: { [key: string]: string };
 }
 
-// Utility function to generate unique resource names
+// Utility function to generate unique resource names (AWS compliant)
 function generateUniqueResourceName(
   baseName: string,
   environmentSuffix?: string
 ): string {
-  const timestamp = Date.now().toString(36);
-  const randomSuffix = Math.random().toString(36).substring(2, 8);
-  const processId = process.pid.toString(36);
-  const envSuffix = environmentSuffix ? `-${environmentSuffix}` : '';
-  return `${baseName}${envSuffix}-${timestamp}-${processId}-${randomSuffix}`.toLowerCase();
+  const timestamp = Date.now().toString(36).substring(-4); // Last 4 chars
+  const randomSuffix = Math.random().toString(36).substring(2, 6); // 4 chars
+  const envSuffix = environmentSuffix
+    ? `-${environmentSuffix.substring(0, 4)}`
+    : '';
+  const name =
+    `${baseName}${envSuffix}-${timestamp}-${randomSuffix}`.toLowerCase();
+  // Ensure name doesn't exceed 32 characters for ALB/TG
+  return name.substring(0, 32);
 }
 
 export class TapStack extends TerraformStack {
@@ -567,6 +570,11 @@ echo "<h1>Scalable Web Application - $(hostname)</h1>" > /var/www/html/index.htm
         {
           id: 'log-lifecycle-rule',
           status: 'Enabled',
+          filter: [
+            {
+              prefix: 'logs/',
+            },
+          ],
           transition: [
             {
               days: 30,
@@ -582,60 +590,13 @@ echo "<h1>Scalable Web Application - $(hostname)</h1>" > /var/www/html/index.htm
       ],
     });
 
-    // CloudFront Origin Access Control
-    const originAccessControl = new CloudfrontOriginAccessControl(this, 'oac', {
-      name: generateUniqueResourceName('webapp-oac', environmentSuffix),
-      description: 'Origin Access Control for webapp',
-      originAccessControlOriginType: 'load_balancer',
-      signingBehavior: 'always',
-      signingProtocol: 'sigv4',
-    });
-
-    // WAF Web ACL with OWASP Top 10 rules
+    // WAF Web ACL with basic configuration
     const webAcl = new Wafv2WebAcl(this, 'webapp-waf', {
       name: generateUniqueResourceName('webapp-waf', environmentSuffix),
       scope: 'CLOUDFRONT',
       defaultAction: {
         allow: {},
       },
-      rule: [
-        {
-          name: 'AWSManagedRulesCommonRuleSet',
-          priority: 1,
-          statement: {
-            managedRuleGroupStatement: {
-              name: 'AWSManagedRulesCommonRuleSet',
-              vendorName: 'AWS',
-            },
-          },
-          overrideAction: {
-            none: {},
-          },
-          visibilityConfig: {
-            sampledRequestsEnabled: true,
-            cloudwatchMetricsEnabled: true,
-            metricName: 'CommonRuleSetMetric',
-          },
-        },
-        {
-          name: 'AWSManagedRulesOWASPTop10',
-          priority: 2,
-          statement: {
-            managedRuleGroupStatement: {
-              name: 'AWSManagedRulesCore',
-              vendorName: 'AWS',
-            },
-          },
-          overrideAction: {
-            none: {},
-          },
-          visibilityConfig: {
-            sampledRequestsEnabled: true,
-            cloudwatchMetricsEnabled: true,
-            metricName: 'OWASPTop10Metric',
-          },
-        },
-      ],
       visibilityConfig: {
         sampledRequestsEnabled: true,
         cloudwatchMetricsEnabled: true,
