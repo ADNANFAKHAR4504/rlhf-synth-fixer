@@ -1,107 +1,133 @@
 import pulumi
 import pulumi_aws as aws
+from pulumi import ResourceOptions
 
-# Get config for environment-specific values (e.g., dev/staging/prod)
-config = pulumi.Config()
-env = config.require("environment")  # e.g., dev, staging, prod
+# Set AWS region explicitly to avoid S3 backend region mismatch error
+aws_region = "us-east-1"
+provider = aws.Provider("custom", region=aws_region)
 
-# Create a new VPC
-vpc = aws.ec2.Vpc("mainVpc",
+# Get availability zones
+azs = aws.get_availability_zones(state="available", opts=ResourceOptions(provider=provider))
+
+# Create VPC
+vpc = aws.ec2.Vpc(
+    "main-vpc",
     cidr_block="10.0.0.0/16",
     enable_dns_hostnames=True,
     enable_dns_support=True,
-    tags={"Name": f"{env}-vpc"})
+    tags={"Name": "main-vpc"},
+    opts=ResourceOptions(provider=provider)
+)
 
-# Get available AZs in us-east-1 region
-azs = aws.get_availability_zones(state="available")
-
-# Create two public subnets in different AZs
-public_subnets = []
+# Create public subnets
+public_subnet_ids = []
 for i in range(2):
-    subnet = aws.ec2.Subnet(f"publicSubnet-{i}",
+    subnet = aws.ec2.Subnet(
+        f"public-subnet-{i}",
         vpc_id=vpc.id,
         cidr_block=f"10.0.{i}.0/24",
         availability_zone=azs.names[i],
         map_public_ip_on_launch=True,
-        tags={"Name": f"{env}-public-subnet-{i}"})
-    public_subnets.append(subnet)
+        tags={"Name": f"public-{i}"},
+        opts=ResourceOptions(provider=provider)
+    )
+    public_subnet_ids.append(subnet.id)
 
-# Create two private subnets in different AZs
-private_subnets = []
-for i in range(2, 4):
-    subnet = aws.ec2.Subnet(f"privateSubnet-{i}",
+# Create private subnets
+private_subnet_ids = []
+for i in range(2):
+    subnet = aws.ec2.Subnet(
+        f"private-subnet-{i}",
         vpc_id=vpc.id,
-        cidr_block=f"10.0.{i}.0/24",
-        availability_zone=azs.names[i - 2],
-        tags={"Name": f"{env}-private-subnet-{i}"})
-    private_subnets.append(subnet)
+        cidr_block=f"10.0.{i + 10}.0/24",
+        availability_zone=azs.names[i],
+        map_public_ip_on_launch=False,
+        tags={"Name": f"private-{i}"},
+        opts=ResourceOptions(provider=provider)
+    )
+    private_subnet_ids.append(subnet.id)
 
-# Create an S3 bucket with server-side encryption
-bucket = aws.s3.Bucket("processingBucket",
-    server_side_encryption_configuration={
-        "rule": {
-            "applyServerSideEncryptionByDefault": {"sseAlgorithm": "AES256"},
-        },
-    },
-    tags={"Environment": env})
+# Create an S3 bucket
+bucket = aws.s3.Bucket(
+    "lambda-trigger-bucket",
+    force_destroy=True,
+    server_side_encryption_configuration=aws.s3.BucketServerSideEncryptionConfigurationArgs(
+        rules=[
+            aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
+                apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
+                    sse_algorithm="AES256"
+                )
+            )
+        ]
+    ),
+    opts=ResourceOptions(provider=provider)
+)
 
-# Create an IAM role for the Lambda with least privilege permissions
-lambda_role = aws.iam.Role("lambdaExecutionRole",
-    assume_role_policy=pulumi.Output.all().apply(
-        lambda _: aws.iam.get_policy_document(statements=[{
-            "actions": ["sts:AssumeRole"],
-            "principals": [{"type": "Service", "identifiers": ["lambda.amazonaws.com"]}],
-        }]).json),
-    tags={"Environment": env})
+# IAM Role for Lambda
+lambda_role = aws.iam.Role(
+    "lambda-exec-role",
+    assume_role_policy=pulumi.Output.json_dumps({
+        "Version": "2012-10-17",
+        "Statement": [{
+            "Action": "sts:AssumeRole",
+            "Principal": {"Service": "lambda.amazonaws.com"},
+            "Effect": "Allow",
+            "Sid": ""
+        }]
+    }),
+    opts=ResourceOptions(provider=provider)
+)
 
-# Attach a managed policy allowing basic Lambda execution + S3 read + CloudWatch logs
-aws.iam.RolePolicyAttachment("lambdaBasicExecution",
+# Attach AWSLambdaBasicExecutionRole policy
+aws.iam.RolePolicyAttachment(
+    "lambda-exec-role-policy",
     role=lambda_role.name,
-    policy_arn="arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole")
+    policy_arn="arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
+    opts=ResourceOptions(provider=provider)
+)
 
-aws.iam.RolePolicyAttachment("lambdaS3Access",
-    role=lambda_role.name,
-    policy_arn="arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess")
-
-# Create Lambda function to process S3 object uploads
-lambda_function = aws.lambda_.Function("s3EventProcessor",
-    role=lambda_role.arn,
+# Lambda function
+lambda_function = aws.lambda_.Function(
+    "s3-trigger-lambda",
     runtime="python3.9",
+    role=lambda_role.arn,
     handler="index.handler",
-    timeout=60,
     code=pulumi.AssetArchive({
-        ".": pulumi.FileArchive("./lambda"),  # expects your code in ./lambda/
+        ".": pulumi.FileArchive("./lambda")
     }),
     environment=aws.lambda_.FunctionEnvironmentArgs(
-        variables={"ENV": env},
+        variables={
+            "ENV": "dev"
+        }
     ),
-    tags={"Environment": env})
+    opts=ResourceOptions(provider=provider)
+)
 
-# Give S3 permission to invoke the Lambda on ObjectCreated events
-lambda_permission = aws.lambda_.Permission("allowS3InvokeLambda",
-    action="lambda:InvokeFunction",
-    function=lambda_function.name,
-    principal="s3.amazonaws.com",
-    source_arn=bucket.arn)
-
-# Create S3 bucket notification to trigger Lambda on object creation
-bucket_notification = aws.s3.BucketNotification("bucketNotification",
+# S3 event notification for Lambda
+aws.s3.BucketNotification(
+    "bucket-notification",
     bucket=bucket.id,
     lambda_functions=[aws.s3.BucketNotificationLambdaFunctionArgs(
         lambda_function_arn=lambda_function.arn,
-        events=["s3:ObjectCreated:*"],
+        events=["s3:ObjectCreated:*"]
     )],
-    opts=pulumi.ResourceOptions(depends_on=[lambda_permission]))
+    opts=ResourceOptions(provider=provider),
+    depends_on=[lambda_function]
+)
 
-# Enable CloudWatch log group for the Lambda
-log_group = aws.cloudwatch.LogGroup("lambdaLogGroup",
-    name=f"/aws/lambda/{lambda_function.name}",
-    retention_in_days=14,
-    tags={"Environment": env})
+# Permissions for S3 to invoke Lambda
+aws.lambda_.Permission(
+    "allow-s3-invoke",
+    action="lambda:InvokeFunction",
+    function=lambda_function.name,
+    principal="s3.amazonaws.com",
+    source_arn=bucket.arn,
+    opts=ResourceOptions(provider=provider)
+)
 
-# Export key resources
-pulumi.export("vpcId", vpc.id)
-pulumi.export("publicSubnetIds", [s.id for s in public_subnets])
-pulumi.export("privateSubnetIds", [s.id for s in private_subnets])
-pulumi.export("bucketName", bucket.bucket)
-pulumi.export("lambdaName", lambda_function.name)
+# Export key outputs for testability
+vpcId = vpc.id
+publicSubnetIds = public_subnet_ids
+privateSubnetIds = private_subnet_ids
+bucketName = bucket.id
+lambdaName = lambda_function.name

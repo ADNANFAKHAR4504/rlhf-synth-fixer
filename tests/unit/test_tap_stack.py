@@ -1,33 +1,54 @@
 """
 test_tap_stack.py
 
-Unit tests for the TapStack Pulumi component using moto for AWS mocking
-and Pulumi's testing utilities.
+Unit tests for the TapStack Pulumi component using Pulumi's testing utilities.
 """
 
-import unittest
-from unittest.mock import patch, MagicMock
+import asyncio
+
 import pulumi
-from pulumi import ResourceOptions
+import pulumi.runtime
+import pytest
 
-# Import the classes we're testing
-from lib.tap_stack import TapStack, TapStackArgs
+from lib.tap_stack import \
+    TapStack  # ✅ Adjust based on your actual file structure
 
 
-"""
-Here you define the classes for Unit tests for the TapStack Pulumi component and Pulumi's testing utilities.
+# Pulumi Mocks to simulate resource creation without deploying to AWS
+class TestMocks(pulumi.runtime.Mocks):
+    def new_resource(self, args: pulumi.runtime.MockResourceArgs):
+        return [f"{args.name}_id", args.inputs]
 
-Write your end-to-end unit testing below. Examples is given, do not use this as
+    def call(self, args: pulumi.runtime.MockCallArgs):
+        return {}
 
-it may not fit the stack you're deploying.
-"""
+@pytest.fixture(scope="module", autouse=True)
+def pulumi_mocks():
+    pulumi.runtime.set_mocks(TestMocks())
 
-# class TestTapStackArgs(unittest.TestCase):
-#   """Test cases for TapStackArgs configuration class."""
+@pytest.mark.asyncio
+async def test_vpc_and_subnets_exported():
+    """Test that VPC and subnet outputs are correctly exported from TapStack."""
+    # Import module-level outputs if TapStack is not class-based
+    import lib.tap_stack as stack
 
-#   def test_tap_stack_args_default_values(self):
-#     """Test TapStackArgs with default values."""
-#     args = TapStackArgs()
-    
-#     self.assertEqual(args.environment_suffix, 'dev')
-#     self.assertIsNone(args.tags)
+    vpc_id = await pulumi.Output.from_input(stack.vpcId).future()
+    public_subnet_ids = await pulumi.Output.from_input(stack.publicSubnetIds).future()
+    private_subnet_ids = await pulumi.Output.from_input(stack.privateSubnetIds).future()
+
+    assert isinstance(vpc_id, str)
+    assert len(public_subnet_ids) == 2
+    assert len(private_subnet_ids) == 2
+
+@pytest.mark.asyncio
+async def test_lambda_and_bucket_exports():
+    """Test that Lambda function and S3 bucket are created and exported."""
+    import lib.tap_stack as stack
+
+    lambda_name = await pulumi.Output.from_input(stack.lambdaName).future()
+    bucket_name = await pulumi.Output.from_input(stack.bucketName).future()
+
+    assert isinstance(lambda_name, str)
+    assert isinstance(bucket_name, str)
+    assert lambda_name != ""
+    assert bucket_name != ""
