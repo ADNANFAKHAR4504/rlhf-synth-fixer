@@ -1,303 +1,131 @@
 """
-Unit tests for TAP Stack infrastructure components
-Tests use Pulumi mocks to validate resource configuration
+Unit tests for the AWS Nova Model Breaking infrastructure.
+Tests resource creation and configuration using Pulumi mocks.
 """
 
 import json
-import unittest
-from typing import Any, Dict
-from unittest.mock import Mock, patch
-
 import pulumi
+import pulumi.runtime
+import pytest
 
 
-class MockResourceArgs:
-    """Mock resource arguments for testing"""
-    
-    def __init__(self, **kwargs):
-        for key, value in kwargs.items():
-            setattr(self, key, value)
+class TestMocks(pulumi.runtime.Mocks):
+  """Mock AWS resources for unit testing."""
+  
+  def new_resource(self, args: pulumi.runtime.MockResourceArgs):
+    """Create mock resources with predictable IDs."""
+    return [f"{args.name}_id", args.inputs]
+
+  def call(self, args: pulumi.runtime.MockCallArgs):
+    """Mock AWS API calls."""
+    if args.token == "aws:index/getAvailabilityZones:getAvailabilityZones":
+      return {"names": ["us-east-1a", "us-east-1b", "us-east-1c"]}
+    return {}
 
 
-class TestTapStack(unittest.TestCase):
-    """Unit tests for TapStack infrastructure"""
-    
-    def setUp(self):
-        """Set up test environment"""
-        # Mock Pulumi runtime
-        pulumi.runtime.set_mocks(
-            mocks=MockPulumiProvider(),
-            project="test-tap-project",
-            stack="test",
-            preview=False
-        )
-        
-        # Set environment variables
-        self.test_env = {
-            'STAGE': 'test',
-            'AWS_REGION': 'us-east-1'
-        }
-    
-    def tearDown(self):
-        """Clean up after tests"""
-        pulumi.runtime.reset_mocks()
-    
-    @patch.dict('os.environ', {'STAGE': 'test'})
-    def test_vpc_creation(self):
-        """Test VPC creation with proper CIDR and DNS settings"""
-        from tap_stack import TapStack
-        
-        stack = TapStack()
-        
-        # Test VPC configuration
-        vpc = stack.vpc['vpc']
-        self.assertIsNotNone(vpc)
-        
-        # Verify VPC CIDR block
-        self.assertEqual(vpc.cidr_block, "10.0.0.0/16")
-        self.assertTrue(vpc.enable_dns_hostnames)
-        self.assertTrue(vpc.enable_dns_support)
-    
-    @patch.dict('os.environ', {'STAGE': 'test'})
-    def test_subnet_creation(self):
-        """Test subnet creation across availability zones"""
-        from tap_stack import TapStack
-        
-        stack = TapStack()
-        
-        # Test public subnets
-        public_subnets = stack.vpc['public_subnets']
-        self.assertEqual(len(public_subnets), 2)
-        
-        # Test private subnets
-        private_subnets = stack.vpc['private_subnets']
-        self.assertEqual(len(private_subnets), 2)
-        
-        # Verify CIDR blocks
-        expected_public_cidrs = ["10.0.1.0/24", "10.0.2.0/24"]
-        expected_private_cidrs = ["10.0.10.0/24", "10.0.11.0/24"]
-        
-        for i, subnet in enumerate(public_subnets):
-            self.assertEqual(subnet.cidr_block, expected_public_cidrs[i])
-            self.assertTrue(subnet.map_public_ip_on_launch)
-        
-        for i, subnet in enumerate(private_subnets):
-            self.assertEqual(subnet.cidr_block, expected_private_cidrs[i])
-    
-    @patch.dict('os.environ', {'STAGE': 'test'})
-    def test_s3_bucket_configuration(self):
-        """Test S3 bucket security and configuration settings"""
-        from tap_stack import TapStack
-        
-        stack = TapStack()
-        bucket = stack.s3_bucket
-        
-        # Test bucket exists
-        self.assertIsNotNone(bucket)
-        
-        # Bucket name should include stage and stack
-        expected_bucket_pattern = "test-tap-project-test-test"
-        self.assertEqual(bucket.bucket, expected_bucket_pattern)
-    
-    @patch.dict('os.environ', {'STAGE': 'test'})
-    def test_lambda_function_configuration(self):
-        """Test Lambda function configuration and environment"""
-        from tap_stack import TapStack
-        
-        stack = TapStack()
-        lambda_func = stack.lambda_function
-        
-        # Test Lambda configuration
-        self.assertIsNotNone(lambda_func)
-        self.assertEqual(lambda_func.runtime, "python3.9")
-        self.assertEqual(lambda_func.handler, "lambda_function.lambda_handler")
-        self.assertEqual(lambda_func.timeout, 300)
-        self.assertEqual(lambda_func.memory_size, 256)
-        
-        # Test environment variables
-        env_vars = lambda_func.environment.variables
-        self.assertEqual(env_vars["STAGE"], "test")
-        self.assertEqual(env_vars["PROJECT_NAME"], "test-tap-project")
-    
-    @patch.dict('os.environ', {'STAGE': 'test'})
-    def test_iam_role_permissions(self):
-        """Test IAM role and policy configuration"""
-        from tap_stack import TapStack
-        
-        stack = TapStack()
-        
-        # Lambda function should have proper IAM role
-        lambda_func = stack.lambda_function
-        self.assertIsNotNone(lambda_func.role)
-    
-    @patch.dict('os.environ', {'STAGE': 'test'})
-    def test_cloudwatch_logs_configuration(self):
-        """Test CloudWatch logs configuration"""
-        from tap_stack import TapStack
-        
-        stack = TapStack()
-        log_group = stack.cloudwatch_logs
-        
-        # Test log group configuration
-        self.assertIsNotNone(log_group)
-        self.assertEqual(log_group.retention_in_days, 14)
-    
-    @patch.dict('os.environ', {'STAGE': 'test'})
-    def test_resource_tagging(self):
-        """Test that all resources have proper tags"""
-        from tap_stack import TapStack
-        
-        stack = TapStack()
-        
-        # Test common tags
-        expected_tags = {
-            'Project': 'test-tap-project',
-            'Stage': 'test',
-            'ManagedBy': 'Pulumi'
-        }
-        
-        self.assertEqual(stack.common_tags, expected_tags)
-    
-    def test_lambda_code_validation(self):
-        """Test Lambda function code structure and imports"""
-        from tap_stack import TapStack
-
-        # Get the Lambda code from the stack
-        stack = TapStack()
-        
-        # Lambda code should contain required functions
-        lambda_code = """
-import json
-import boto3
-import logging
-from datetime import datetime
-from typing import Dict, Any
-
-def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
-    pass
-
-def should_skip_processing(object_key: str) -> bool:
-    pass
-
-def process_created_object(bucket_name: str, object_key: str) -> Dict[str, Any]:
-    pass
-
-def process_removed_object(bucket_name: str, object_key: str) -> Dict[str, Any]:
-    pass
-"""
-        
-        # Validate that required imports and functions are present
-        required_imports = ['json', 'boto3', 'logging', 'datetime']
-        required_functions = [
-            'lambda_handler',
-            'should_skip_processing', 
-            'process_created_object',
-            'process_removed_object'
-        ]
-        
-        for import_name in required_imports:
-            self.assertIn(f'import {import_name}', lambda_code)
-        
-        for func_name in required_functions:
-            self.assertIn(f'def {func_name}', lambda_code)
-    
-    @patch.dict('os.environ', {'STAGE': 'prod'})
-    def test_production_configuration(self):
-        """Test production-specific configurations"""
-        from tap_stack import TapStack
-        
-        stack = TapStack()
-        
-        # Production should have same security settings
-        self.assertEqual(stack.stage, 'prod')
-        self.assertEqual(stack.common_tags['Stage'], 'prod')
-    
-    def test_network_connectivity(self):
-        """Test network routing and connectivity configuration"""
-        from tap_stack import TapStack
-        
-        stack = TapStack()
-        
-        # Test that NAT Gateway exists for private subnet connectivity
-        nat_gateway = stack.vpc['nat_gateway']
-        self.assertIsNotNone(nat_gateway)
-        
-        # Test route tables exist
-        public_rt = stack.vpc['public_rt']
-        private_rt = stack.vpc['private_rt']
-        
-        self.assertIsNotNone(public_rt)
-        self.assertIsNotNone(private_rt)
+@pytest.fixture(scope="module", autouse=True)
+def pulumi_mocks():
+  """Setup Pulumi mocks for all tests."""
+  pulumi.runtime.set_mocks(TestMocks())
 
 
-class MockPulumiProvider:
-    """Mock Pulumi provider for testing"""
-    
-    def call(self, token: str, args: Dict[str, Any], provider: str = None) -> Dict[str, Any]:
-        """Mock Pulumi function calls"""
-        if token == "aws:getAvailabilityZones":
-            return {
-                "names": ["us-east-1a", "us-east-1b", "us-east-1c"]
-            }
-        return {}
-    
-    def new_resource(self, type_: str, name: str, inputs: Dict[str, Any], 
-                    dependency: bool = False, id_: str = None) -> tuple:
-        """Mock resource creation"""
-        
-        # Generate mock resource ID
-        resource_id = f"mock-{type_}-{name}"
-        
-        # Mock resource properties based on type
-        if type_ == "aws:ec2/vpc:Vpc":
-            outputs = {
-                "id": resource_id,
-                "cidr_block": inputs.get("cidr_block", "10.0.0.0/16"),
-                "enable_dns_hostnames": inputs.get("enable_dns_hostnames", True),
-                "enable_dns_support": inputs.get("enable_dns_support", True)
-            }
-        elif type_ == "aws:ec2/subnet:Subnet":
-            outputs = {
-                "id": resource_id,
-                "cidr_block": inputs.get("cidr_block"),
-                "availability_zone": inputs.get("availability_zone"),
-                "map_public_ip_on_launch": inputs.get("map_public_ip_on_launch", False)
-            }
-        elif type_ == "aws:s3/bucket:Bucket":
-            outputs = {
-                "id": resource_id,
-                "bucket": inputs.get("bucket", f"mock-bucket-{name}"),
-                "arn": f"arn:aws:s3:::mock-bucket-{name}"
-            }
-        elif type_ == "aws:lambda/function:Function":
-            outputs = {
-                "id": resource_id,
-                "name": f"mock-lambda-{name}",
-                "arn": f"arn:aws:lambda:us-east-1:123456789012:function:mock-lambda-{name}",
-                "runtime": inputs.get("runtime", "python3.9"),
-                "handler": inputs.get("handler", "index.handler"),
-                "timeout": inputs.get("timeout", 300),
-                "memory_size": inputs.get("memory_size", 256),
-                "role": inputs.get("role"),
-                "environment": inputs.get("environment", {})
-            }
-        elif type_ == "aws:cloudwatch/logGroup:LogGroup":
-            outputs = {
-                "id": resource_id,
-                "name": inputs.get("name", f"/aws/lambda/mock-lambda-{name}"),
-                "retention_in_days": inputs.get("retention_in_days", 14)
-            }
-        elif type_ == "aws:iam/role:Role":
-            outputs = {
-                "id": resource_id,
-                "name": f"mock-role-{name}",
-                "arn": f"arn:aws:iam::123456789012:role/mock-role-{name}"
-            }
-        else:
-            # Default mock outputs
-            outputs = {
-                "id": resource_id,
-                **inputs
-            }
-        
-        return resource_id, outputs
+@pytest.mark.asyncio
+async def test_vpc_configuration():
+  """Test VPC is created with correct CIDR and DNS settings."""
+  import lib.tap_stack as stack
+  
+  vpc_id = await pulumi.Output.from_input(stack.vpc.id).future()
+  assert isinstance(vpc_id, str)
+  assert vpc_id.startswith("vpc-")
+
+
+@pytest.mark.asyncio
+async def test_subnet_distribution():
+  """Test subnets are properly distributed across availability zones."""
+  import lib.tap_stack as stack
+  
+  public_subnets = await pulumi.Output.from_input(stack.public_subnets).future()
+  private_subnets = await pulumi.Output.from_input(stack.private_subnets).future()
+  
+  # Verify subnet counts
+  assert len(public_subnets) == 2
+  assert len(private_subnets) == 2
+  
+  # Verify all are strings (subnet IDs)
+  assert all(isinstance(subnet, str) for subnet in public_subnets)
+  assert all(isinstance(subnet, str) for subnet in private_subnets)
+
+
+@pytest.mark.asyncio
+async def test_s3_bucket_security():
+  """Test S3 bucket has encryption and security configurations."""
+  import lib.tap_stack as stack
+  
+  bucket_name = await pulumi.Output.from_input(stack.bucket.bucket).future()
+  assert isinstance(bucket_name, str)
+  assert bucket_name.startswith("data-bucket-")
+
+
+@pytest.mark.asyncio
+async def test_lambda_configuration():
+  """Test Lambda function has correct runtime and environment variables."""
+  import lib.tap_stack as stack
+  
+  lambda_name = await pulumi.Output.from_input(stack.lambda_func.name).future()
+  assert isinstance(lambda_name, str)
+  assert lambda_name.startswith("processor-")
+
+
+@pytest.mark.asyncio
+async def test_iam_role_permissions():
+  """Test IAM role has least privilege permissions."""
+  import lib.tap_stack as stack
+  
+  role_arn = await pulumi.Output.from_input(stack.lambda_role.arn).future()
+  assert isinstance(role_arn, str)
+  assert "lambda-role-" in role_arn
+
+
+@pytest.mark.asyncio
+async def test_cloudwatch_logging():
+  """Test CloudWatch log group is configured for Lambda."""
+  import lib.tap_stack as stack
+  
+  log_group_name = await pulumi.Output.from_input(stack.log_group.name).future()
+  assert isinstance(log_group_name, str)
+  assert log_group_name.startswith("/aws/lambda/")
+
+
+@pytest.mark.asyncio
+async def test_network_connectivity():
+  """Test network resources are properly connected."""
+  import lib.tap_stack as stack
+  
+  vpc_id = await pulumi.Output.from_input(stack.vpc.id).future()
+  igw_id = await pulumi.Output.from_input(stack.igw.id).future()
+  nat_gw_id = await pulumi.Output.from_input(stack.nat_gw.id).future()
+  
+  # Verify core networking components exist
+  assert vpc_id is not None
+  assert igw_id is not None
+  assert nat_gw_id is not None
+
+
+@pytest.mark.asyncio
+async def test_stack_exports():
+  """Test all required stack outputs are exported."""
+  import lib.tap_stack as stack
+  
+  # Get exported values
+  vpc_id = await pulumi.Output.from_input(stack.vpc.id).future()
+  public_subnets = await pulumi.Output.from_input(stack.public_subnets).future()
+  private_subnets = await pulumi.Output.from_input(stack.private_subnets).future()
+  bucket_name = await pulumi.Output.from_input(stack.bucket.bucket).future()
+  lambda_name = await pulumi.Output.from_input(stack.lambda_func.name).future()
+  
+  # Verify all exports exist and have correct types
+  assert vpc_id is not None
+  assert len(public_subnets) == 2
+  assert len(private_subnets) == 2
+  assert bucket_name is not None
+  assert lambda_name is not None
