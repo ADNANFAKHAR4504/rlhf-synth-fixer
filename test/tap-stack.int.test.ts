@@ -22,9 +22,13 @@ import { GetRoleCommand, IAMClient } from '@aws-sdk/client-iam';
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 const stackName = `TapStack${environmentSuffix}`;
 
+// Get the target region from environment or default to us-east-1
+const targetRegion =
+  process.env.AWS_REGION || process.env.CDK_DEFAULT_REGION || 'us-east-1';
+
 // Helper function to get stack outputs directly from CloudFormation
 async function getStackOutputs(): Promise<Record<string, string>> {
-  const cfnClient = new CloudFormationClient({ region: 'us-east-1' });
+  const cfnClient = new CloudFormationClient({ region: targetRegion });
 
   try {
     const command = new DescribeStacksCommand({
@@ -55,9 +59,9 @@ async function getStackOutputs(): Promise<Record<string, string>> {
 }
 
 describe('TAP Stack Infrastructure Integration Tests', () => {
-  const ec2Client = new EC2Client({ region: 'us-east-1' });
-  const logsClient = new CloudWatchLogsClient({ region: 'us-east-1' });
-  const iamClient = new IAMClient({ region: 'us-east-1' });
+  const ec2Client = new EC2Client({ region: targetRegion });
+  const logsClient = new CloudWatchLogsClient({ region: targetRegion });
+  const iamClient = new IAMClient({ region: targetRegion });
 
   let outputs: Record<string, string> = {};
 
