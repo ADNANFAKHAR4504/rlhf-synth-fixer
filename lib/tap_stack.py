@@ -8,10 +8,10 @@ from aws_cdk import (
   aws_iam as iam,
   aws_s3 as s3,
   aws_certificatemanager as acm,
-  Duration,
   NestedStack,
   Stack,
-  CfnOutput
+  CfnOutput,
+  Duration
 )
 from constructs import Construct
 
@@ -20,31 +20,32 @@ class TapStackProps(NestedStack):
   def __init__(self, scope: Construct, id: str, environment_suffix: str = "dev", **kwargs):
     super().__init__(scope, id, **kwargs)
 
-    # S3 bucket with security best practices
+    # ✅ Secure, versioned, and lifecycle-managed S3 bucket
     self.log_bucket = s3.Bucket(self, f"AppLogsBucket-{environment_suffix}",
       encryption=s3.BucketEncryption.S3_MANAGED,
       versioned=True,
       lifecycle_rules=[
         s3.LifecycleRule(
+          enabled=True,
           expiration=Duration.days(90),
           transitions=[
             s3.Transition(
-              transition_after=Duration.days(30),
-              storage_class=s3.StorageClass.INFREQUENT_ACCESS
+              storage_class=s3.StorageClass.INFREQUENT_ACCESS,
+              transition_after=Duration.days(30)
             )
           ]
         )
       ]
     )
 
-    # IAM role
+    # ✅ IAM role for EC2 with log bucket access
     self.ec2_role = iam.Role(self, f"EC2Role-{environment_suffix}",
       assumed_by=iam.ServicePrincipal("ec2.amazonaws.com"),
       description="IAM role for EC2 instances with access to app logs bucket"
     )
     self.log_bucket.grant_read_write(self.ec2_role)
 
-    # VPC
+    # ✅ VPC with public subnet
     self.vpc = ec2.Vpc(self, f"AppVPC-{environment_suffix}",
       max_azs=2,
       subnet_configuration=[
@@ -57,15 +58,15 @@ class TapStackProps(NestedStack):
       nat_gateways=0
     )
 
-    # Restrictive Security Group
+    # ✅ Restrictive Security Group
     self.security_group = ec2.SecurityGroup(self, f"InstanceSG-{environment_suffix}", vpc=self.vpc)
     self.security_group.add_ingress_rule(
       ec2.Peer.ipv4("10.0.0.0/16"),
       ec2.Port.tcp(80),
-      "Allow HTTP access from internal CIDR block"
+      "Allow HTTP access from internal network"
     )
 
-    # Auto Scaling Group
+    # ✅ Auto Scaling Group
     ami = ec2.MachineImage.latest_amazon_linux2()
     self.asg = autoscaling.AutoScalingGroup(self, f"AppASG-{environment_suffix}",
       vpc=self.vpc,
@@ -78,13 +79,13 @@ class TapStackProps(NestedStack):
       vpc_subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PUBLIC)
     )
 
-    # ACM Certificate
-    self.certificate = acm.Certificate(self, f"AppCert-{environment_suffix}",
+    # ✅ ACM TLS Certificate
+    cert = acm.Certificate(self, f"TLSCert-{environment_suffix}",
       domain_name="example.com",
       validation=acm.CertificateValidation.from_dns()
     )
 
-    # ALB with HTTPS listener
+    # ✅ ALB with HTTPS listener using certificate
     self.alb = elbv2.ApplicationLoadBalancer(self, f"AppALB-{environment_suffix}",
       vpc=self.vpc,
       internet_facing=True
@@ -92,11 +93,11 @@ class TapStackProps(NestedStack):
 
     self.listener = self.alb.add_listener(f"Listener-{environment_suffix}",
       port=443,
-      certificates=[self.certificate],
-      default_action=elbv2.ListenerAction.forward([self.asg])
+      certificates=[cert],
+      default_action=elbv2_actions.ListenerAction.forward([self.asg])
     )
 
-    # Outputs
+    # ✅ Outputs
     CfnOutput(self, f"LogBucketName-{environment_suffix}",
       value=self.log_bucket.bucket_name,
       export_name=f"LogBucketName-{environment_suffix}"
