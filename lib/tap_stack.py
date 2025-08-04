@@ -58,11 +58,14 @@ class VPCInfrastructure:
         enable_dns_hostnames=True,
         enable_dns_support=True
     )
+    pulumi.export("VpcId", self.vpc.id)
+    pulumi.export("VpcCidr", self.vpc.cidr_block)
 
     igw = aws.ec2.InternetGateway(
         self.config.get_resource_name("igw"),
         vpc_id=self.vpc.id
     )
+    pulumi.export("InternetGatewayId", igw.id)
 
     availability_zones = aws.get_availability_zones(state="available")
 
@@ -75,6 +78,8 @@ class VPCInfrastructure:
           map_public_ip_on_launch=True
       )
       self.public_subnets.append(subnet)
+      pulumi.export(f"PublicSubnet-{i + 1}Id", subnet.id)
+      pulumi.export(f"PublicSubnet-{i + 1}Az", subnet.availability_zone)
 
     for i, cidr in enumerate(vpc_config["private_subnet_cidrs"]):
       subnet = aws.ec2.Subnet(
@@ -84,11 +89,14 @@ class VPCInfrastructure:
           availability_zone=availability_zones.names[i]
       )
       self.private_subnets.append(subnet)
+      pulumi.export(f"PrivateSubnet-{i + 1}Id", subnet.id)
+      pulumi.export(f"PrivateSubnet-{i + 1}Az", subnet.availability_zone)
 
     public_rt = aws.ec2.RouteTable(
         self.config.get_resource_name("public-rt"),
         vpc_id=self.vpc.id
     )
+    pulumi.export("PublicRouteTableId", public_rt.id)
 
     aws.ec2.Route(
         self.config.get_resource_name("public-route"),
@@ -98,11 +106,12 @@ class VPCInfrastructure:
     )
 
     for i, subnet in enumerate(self.public_subnets):
-      aws.ec2.RouteTableAssociation(
+      assoc = aws.ec2.RouteTableAssociation(
           f"{self.config.get_resource_name('public-rta')}-{i + 1}",
           subnet_id=subnet.id,
           route_table_id=public_rt.id
       )
+      pulumi.export(f"PublicRTA-{i + 1}Id", assoc.id)
 
     self.security_group = aws.ec2.SecurityGroup(
         self.config.get_resource_name("lambda-sg"),
@@ -110,6 +119,7 @@ class VPCInfrastructure:
         vpc_id=self.vpc.id,
         egress=[{"protocol": "-1", "from_port": 0, "to_port": 0, "cidr_blocks": ["0.0.0.0/0"]}]
     )
+    pulumi.export("LambdaSecurityGroupId", self.security_group.id)
 
 
 class IAMInfrastructure:
@@ -131,6 +141,7 @@ class IAMInfrastructure:
         self.config.get_resource_name("lambda-role"),
         assume_role_policy=assume_role_policy
     )
+    pulumi.export("LambdaRoleArn", self.lambda_role.arn)
 
     aws.iam.RolePolicyAttachment(
         self.config.get_resource_name("lambda-basic-execution"),
@@ -156,6 +167,7 @@ class IAMInfrastructure:
             }]
         })
     )
+    pulumi.export("LambdaDynamoDBPolicyArn", dynamodb_policy.arn)
 
     aws.iam.RolePolicyAttachment(
         self.config.get_resource_name("lambda-dynamodb-attachment"),
@@ -180,6 +192,8 @@ class DynamoDBInfrastructure:
         read_capacity=capacity["read"],
         write_capacity=capacity["write"]
     )
+    pulumi.export("ProductsTableName", self.tables['products'].name)
+
     self.tables['orders'] = aws.dynamodb.Table(
         self.config.get_resource_name("orders-table"),
         attributes=[{"name": "order_id", "type": "S"}],
@@ -187,6 +201,8 @@ class DynamoDBInfrastructure:
         read_capacity=capacity["read"],
         write_capacity=capacity["write"]
     )
+    pulumi.export("OrdersTableName", self.tables['orders'].name)
+
     self.tables['users'] = aws.dynamodb.Table(
         self.config.get_resource_name("users-table"),
         attributes=[{"name": "user_id", "type": "S"}],
@@ -194,6 +210,8 @@ class DynamoDBInfrastructure:
         read_capacity=capacity["read"],
         write_capacity=capacity["write"]
     )
+    pulumi.export("UsersTableName", self.tables['users'].name)
+
     return self.tables
 
 
@@ -236,6 +254,9 @@ class LambdaInfrastructure:
           timeout=30,
           memory_size=256
       )
+      pulumi.export(f"{fn.capitalize()}LambdaArn", self.functions[fn].arn)
+      pulumi.export(f"{fn.capitalize()}LambdaName", self.functions[fn].name)
+
     return self.functions
 
 
@@ -249,6 +270,9 @@ class APIGatewayInfrastructure:
         self.config.get_resource_name("api"),
         description=f"E-commerce API for {self.config.environment}"
     )
+    pulumi.export("ApiGatewayId", api.id)
+    pulumi.export("ApiGatewayName", api.name)
+
     for fn in ["products", "orders", "users"]:
       resource = aws.apigateway.Resource(
           self.config.get_resource_name(f"{fn}-resource"),
@@ -256,6 +280,8 @@ class APIGatewayInfrastructure:
           parent_id=api.root_resource_id,
           path_part=fn
       )
+      pulumi.export(f"{fn.capitalize()}ApiResourceId", resource.id)
+
       method = aws.apigateway.Method(
           self.config.get_resource_name(f"{fn}-method"),
           rest_api=api.id,
@@ -263,7 +289,9 @@ class APIGatewayInfrastructure:
           http_method="ANY",
           authorization="NONE"
       )
-      aws.apigateway.Integration(
+      pulumi.export(f"{fn.capitalize()}ApiMethodId", method.id)
+
+      integration = aws.apigateway.Integration(
           self.config.get_resource_name(f"{fn}-integration"),
           rest_api=api.id,
           resource_id=resource.id,
@@ -272,19 +300,12 @@ class APIGatewayInfrastructure:
           type="AWS_PROXY",
           uri=self.lambda_functions[fn].invoke_arn
       )
+      pulumi.export(f"{fn.capitalize()}ApiIntegrationId", integration.id)
+
     return api
 
 
 class TapStackArgs:
-  """
-  TapStackArgs defines the input arguments for the TapStack Pulumi component.
-
-  Args:
-  environment_suffix (Optional[str]): An optional suffix for identifying
-    the deployment environment (e.g., 'dev', 'prod').
-  tags (Optional[dict]): Optional default tags to apply to resources.
-  """
-
   def __init__(self, environment_suffix: Optional[str] = None,
                tags: Optional[dict] = None):
     self.environment_suffix = environment_suffix or 'dev'
@@ -292,24 +313,6 @@ class TapStackArgs:
 
 
 class TapStack(pulumi.ComponentResource):
-  """
-  Represents the main Pulumi component resource for the TAP project.
-
-  This component orchestrates the instantiation of other resource-specific
-  components and manages the environment suffix used for naming and
-  configuration.
-
-  Note:
-  - DO NOT create resources directly here unless they are truly global.
-  - Use other components (e.g., DynamoDBStack) for AWS resource definitions.
-
-  Args:
-  name (str): The logical name of this Pulumi component.
-  args (TapStackArgs): Configuration arguments including environment suffix
-    and tags.
-  opts (ResourceOptions): Pulumi options.
-  """
-
   def __init__(
       self,
       name: str,
@@ -321,15 +324,6 @@ class TapStack(pulumi.ComponentResource):
     self.environment_suffix = args.environment_suffix
     self.tags = args.tags
     self.config = Config(args.environment_suffix)
-
-    # class TapStack(pulumi.ComponentResource):
-    #   def __init__(
-    #           self,
-    #           name: str,
-    #           environment: Optional[str] = "dev",
-    #           opts: Optional[ResourceOptions] = None):
-    #     super().__init__('tap:stack:TapStack', name, None, opts)
-    #     self.config = Config(environment)
 
     def setup_infrastructure(self):
       vpc = VPCInfrastructure(self.config)
@@ -349,4 +343,5 @@ class TapStack(pulumi.ComponentResource):
 
       pulumi.export("Environment", self.config.environment)
       pulumi.export("Region", self.config.region)
+
     setup_infrastructure(self)
