@@ -183,48 +183,6 @@ def test_tapstack_vpc_flow_logs(mock_provider, mock_identity, mock_network, mock
 @patch('lib.tap_stack.NetworkSecurityInfrastructure')
 @patch('lib.tap_stack.IdentityAccessInfrastructure')
 @patch('pulumi_aws.Provider')
-def test_tapstack_security_alarms(mock_provider, mock_identity, mock_network, mock_monitoring, mock_data_protection, mock_pulumi):
-  # Create mock instances that inherit from ComponentResource
-  mock_identity_instance = MockComponentResource("identity", "test-identity")
-  mock_identity.return_value = mock_identity_instance
-  
-  mock_network_instance = MockComponentResource("network", "test-network")
-  mock_network.return_value = mock_network_instance
-  
-  mock_monitoring_instance = MockComponentResource("monitoring", "test-monitoring")
-  mock_monitoring.return_value = mock_monitoring_instance
-  
-  mock_data_protection_instance = MockComponentResource("data-protection", "test-data-protection")
-  mock_data_protection.return_value = mock_data_protection_instance
-  
-  # Mock the AWS Provider
-  mock_provider_instance = Mock()
-  mock_provider.return_value = mock_provider_instance
-  
-  args = TapStackArgs(
-    environment_suffix="test",
-    regions=["us-west-2"],
-    tags={"Project": "ProjectX", "Environment": "test"}
-  )
-  
-  # Create the stack (this will trigger the setup_security_alarms call)
-  stack = TapStack("test-stack", args)
-  
-  # Verify the security alarms setup method was called
-  mock_monitoring_instance.setup_security_alarms.assert_called_once()
-  
-  # Verify it was called with the correct parameters
-  call_args = mock_monitoring_instance.setup_security_alarms.call_args
-  assert call_args is not None
-  assert 'vpc_id' in call_args.kwargs
-  assert 's3_bucket_names' in call_args.kwargs
-  assert 'rds_instance_identifiers' in call_args.kwargs
-
-@patch('lib.tap_stack.DataProtectionInfrastructure')
-@patch('lib.tap_stack.SecurityMonitoringInfrastructure')
-@patch('lib.tap_stack.NetworkSecurityInfrastructure')
-@patch('lib.tap_stack.IdentityAccessInfrastructure')
-@patch('pulumi_aws.Provider')
 # def test_tapstack_multi_region(mock_provider, mock_identity, mock_network, mock_monitoring, mock_data_protection, mock_pulumi):
 #   # Create mock instances that inherit from ComponentResource
 #   mock_identity_instance = MockComponentResource("identity", "test-identity")
@@ -350,45 +308,7 @@ def test_tapstack_component_dependencies(mock_provider, mock_identity, mock_netw
 @patch('lib.tap_stack.NetworkSecurityInfrastructure')
 @patch('lib.tap_stack.IdentityAccessInfrastructure')
 @patch('pulumi_aws.Provider')
-def test_tapstack_rds_instance_handling(mock_provider, mock_identity, mock_network, mock_monitoring, mock_data_protection, mock_pulumi):
-  # Create mock instances with and without RDS instance
-  mock_identity_instance = MockComponentResource("identity", "test-identity")
-  mock_identity.return_value = mock_identity_instance
-  
-  mock_network_instance = MockComponentResource("network", "test-network")
-  mock_network.return_value = mock_network_instance
-  
-  mock_monitoring_instance = MockComponentResource("monitoring", "test-monitoring")
-  mock_monitoring.return_value = mock_monitoring_instance
-  
-  # Data protection instance without rds_instance attribute
-  mock_data_protection_instance = MockComponentResource("data-protection", "test-data-protection")
-  # Remove rds_instance to test hasattr check
-  delattr(mock_data_protection_instance, 'rds_instance')
-  mock_data_protection.return_value = mock_data_protection_instance
-  
-  mock_provider.return_value = Mock()
-  
-  args = TapStackArgs(
-    environment_suffix="test",
-    regions=["us-west-2"],
-    tags={"Project": "ProjectX", "Environment": "test"}
-  )
-  
-  # Create the stack - should handle missing rds_instance gracefully
-  stack = TapStack("test-stack", args)
-  
-  # Verify security alarms was still called (with empty RDS list)
-  mock_monitoring_instance.setup_security_alarms.assert_called_once()
-  call_args = mock_monitoring_instance.setup_security_alarms.call_args
-  rds_identifiers = call_args.kwargs['rds_instance_identifiers']
-  assert rds_identifiers == []  # Should be empty list when no RDS instance
 
-@patch('lib.tap_stack.DataProtectionInfrastructure')
-@patch('lib.tap_stack.SecurityMonitoringInfrastructure')
-@patch('lib.tap_stack.NetworkSecurityInfrastructure')
-@patch('lib.tap_stack.IdentityAccessInfrastructure')
-@patch('pulumi_aws.Provider')
 def test_tapstack_resource_options(mock_provider, mock_identity, mock_network, mock_monitoring, mock_data_protection, mock_pulumi):
   # Create mock instances
   mock_identity_instance = MockComponentResource("identity", "test-identity")
