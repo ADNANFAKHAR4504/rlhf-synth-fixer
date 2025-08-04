@@ -447,9 +447,9 @@ class TapStack(pulumi.ComponentResource):
         "s3-lambda-permission",
         statement_id="AllowExecutionFromS3Bucket",
         action="lambda:InvokeFunction",
-        function=s3_processor_lambda.name.apply(lambda n: f"/aws/lambda/{n}"),
+        function=s3_processor_lambda.name,
         principal="s3.amazonaws.com",
-        source_arn=s3_bucket.arn
+        source_arn=s3_bucket.arn,
     )
 
     # S3 bucket notification to trigger Lambda on ObjectCreated events
@@ -546,7 +546,7 @@ class TapStack(pulumi.ComponentResource):
         action="lambda:InvokeFunction",
         function=api_handler_lambda.name, 
         principal="apigateway.amazonaws.com",
-        source_arn=api_gateway.execution_arn.apply(lambda arn: f"{arn}/*/*")
+        source_arn=api_gateway.execution_arn
     )
 
     # API Gateway deployment
@@ -632,7 +632,7 @@ class TapStack(pulumi.ComponentResource):
         threshold=1,
         alarm_description="S3 Processor Lambda function errors",
         dimensions={
-            "FunctionName": s3_processor_lambda.name.apply(lambda n: f"/aws/lambda/{n}"),
+            "FunctionName": s3_processor_lambda.name,
         },
         alarm_actions=[alarm_topic.arn],
         tags=common_tags
@@ -650,7 +650,7 @@ class TapStack(pulumi.ComponentResource):
         threshold=1,
         alarm_description="API Handler Lambda function errors",
         dimensions={
-            "FunctionName": api_handler_lambda.name.apply(lambda n: f"/aws/lambda/{n}"),
+            "FunctionName": api_handler_lambda.name,
         },
         alarm_actions=[alarm_topic.arn],
         tags=common_tags
