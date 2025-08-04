@@ -8,7 +8,29 @@ Parameters:
     Description: 'CIDR block allowed for SSH access'
     AllowedPattern: '^([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,2}$'
   
+  AWSRegion:
+    Type: String
+    Default: 'ap-south-1'
+    Description: 'AWS region for the infrastructure deployment'
+    AllowedValues:
+      - 'us-east-1'
+      - 'us-west-2'
+      - 'eu-west-1'
+      - 'ap-southeast-1'
+      - 'ap-south-1'
 
+Mappings:
+  RegionMap:
+    us-east-1:
+      AMI: ami-0c02fb55956c7d316  # Amazon Linux 2 AMI for us-east-1
+    us-west-2:
+      AMI: ami-0892d3c7ee96c0bf7  # Amazon Linux 2 AMI for us-west-2
+    eu-west-1:
+      AMI: ami-0a0c8eebcdd6dcbd0  # Amazon Linux 2 AMI for eu-west-1
+    ap-southeast-1:
+      AMI: ami-0df7a207adb9748c7  # Amazon Linux 2 AMI for ap-southeast-1
+    ap-south-1:
+      AMI: ami-05a4fc6eaa38ee23c  # Amazon Linux 2 AMI for ap-south-1
 
 Resources:
   # KMS Key for RDS Encryption
@@ -36,14 +58,14 @@ Resources:
   RDSKMSKeyAlias:
     Type: AWS::KMS::Alias
     Properties:
-      AliasName: alias/rds-encryption-key
+      AliasName: !Sub 'alias/rds-encryption-key-${AWSRegion}'
       TargetKeyId: !Ref RDSKMSKey
 
   # AWS Secrets Manager for Database Credentials
   DatabaseSecret:
     Type: AWS::SecretsManager::Secret
     Properties:
-      Name: !Sub '${AWS::StackName}/database/password'
+      Name: !Sub '${AWS::StackName}/database/password-${AWSRegion}'
       Description: 'Database administrator password'
       GenerateSecretString:
         SecretStringTemplate: '{"username": "dbadmin"}'
@@ -259,7 +281,7 @@ Resources:
   StaticContentBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 'tapstack-static-content-${AWS::AccountId}'
+      BucketName: !Sub 'tapstack-static-content-${AWS::AccountId}-${AWSRegion}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -279,7 +301,7 @@ Resources:
   LoggingBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 'tapstack-access-logs-${AWS::AccountId}'
+      BucketName: !Sub 'tapstack-access-logs-${AWS::AccountId}-${AWSRegion}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -312,7 +334,7 @@ Resources:
               - Effect: Allow
                 Action:
                   - s3:ListBucket
-                Resource: !Ref StaticContentBucket
+                Resource: !Sub 'arn:aws:s3:::${StaticContentBucket}'
 
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
@@ -324,9 +346,9 @@ Resources:
   WebServerLaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
     Properties:
-      LaunchTemplateName: !Sub '${AWS::StackName}-web-server-template'
+      LaunchTemplateName: !Sub '${AWS::StackName}-web-server-template-${AWSRegion}'
       LaunchTemplateData:
-        ImageId: ami-0c02fb55956c7d316  # Amazon Linux 2 AMI (update for your region)
+        ImageId: !FindInMap [RegionMap, !Ref AWSRegion, AMI]
         InstanceType: t3.micro
         IamInstanceProfile:
           Arn: !GetAtt EC2InstanceProfile.Arn
@@ -404,7 +426,7 @@ Resources:
   ApplicationLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
-      Name: !Sub '${AWS::StackName}-alb'
+      Name: !Sub '${AWS::StackName}-alb-${AWSRegion}'
       Scheme: internet-facing
       Type: application
       SecurityGroups:
@@ -419,7 +441,7 @@ Resources:
   ALBTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      Name: !Sub '${AWS::StackName}-tg'
+      Name: !Sub '${AWS::StackName}-tg-${AWSRegion}'
       Port: 80
       Protocol: HTTP
       VpcId: !Ref SecureVPC
@@ -458,10 +480,10 @@ Resources:
     DeletionPolicy: Snapshot
     UpdateReplacePolicy: Snapshot
     Properties:
-      DBInstanceIdentifier: !Sub '${AWS::StackName}-database'
+      DBInstanceIdentifier: !Sub '${AWS::StackName}-database-${AWSRegion}'
       DBInstanceClass: db.t3.micro
       Engine: mysql
-      EngineVersion: '8.0.35'
+      EngineVersion: '8.0.42'
       AllocatedStorage: 20
       StorageType: gp2
       StorageEncrypted: true
@@ -483,7 +505,7 @@ Resources:
   CloudWatchLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub '/aws/ec2/${AWS::StackName}'
+      LogGroupName: !Sub '/aws/ec2/${AWS::StackName}-${AWSRegion}'
       RetentionInDays: 14
 
   # AWS Config Configuration Recorder
@@ -530,7 +552,7 @@ Resources:
   ConfigBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 'tapstack-config-${AWS::AccountId}'
+      BucketName: !Sub 'tapstack-config-${AWS::AccountId}-${AWSRegion}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -544,13 +566,13 @@ Resources:
   ConfigDeliveryChannel:
     Type: AWS::Config::DeliveryChannel
     Properties:
-      Name: !Sub '${AWS::StackName}-delivery-channel'
+      Name: !Sub '${AWS::StackName}-delivery-channel-${AWSRegion}'
       S3BucketName: !Ref ConfigBucket
 
   ConfigurationRecorder:
     Type: AWS::Config::ConfigurationRecorder
     Properties:
-      Name: !Sub '${AWS::StackName}-config-recorder'
+      Name: !Sub '${AWS::StackName}-config-recorder-${AWSRegion}'
       RoleARN: !GetAtt ConfigServiceRole.Arn
       RecordingGroup:
         AllSupported: true
@@ -561,16 +583,16 @@ Resources:
     Type: AWS::Config::ConfigRule
     DependsOn: ConfigurationRecorder
     Properties:
-      ConfigRuleName: s3-bucket-public-access-prohibited
+      ConfigRuleName: !Sub 's3-bucket-public-access-prohibited-${AWSRegion}'
       Source:
         Owner: AWS
-        SourceIdentifier: S3_BUCKET_PUBLIC_ACCESS_PROHIBITED
+        SourceIdentifier: S3_BUCKET_PUBLIC_READ_PROHIBITED
 
   RDSStorageEncryptedRule:
     Type: AWS::Config::ConfigRule
     DependsOn: ConfigurationRecorder
     Properties:
-      ConfigRuleName: rds-storage-encrypted
+      ConfigRuleName: !Sub 'rds-storage-encrypted-${AWSRegion}'
       Source:
         Owner: AWS
         SourceIdentifier: RDS_STORAGE_ENCRYPTED
@@ -599,3 +621,9 @@ Outputs:
     Value: !GetAtt DatabaseInstance.Endpoint.Address
     Export:
       Name: !Sub '${AWS::StackName}-DB-Endpoint'
+  
+  AWSRegion:
+    Description: 'AWS Region where infrastructure is deployed'
+    Value: !Ref AWSRegion
+    Export:
+      Name: !Sub '${AWS::StackName}-AWS-Region'

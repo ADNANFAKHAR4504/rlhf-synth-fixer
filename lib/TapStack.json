@@ -7,6 +7,37 @@
             "Default": "10.0.0.0/8",
             "Description": "CIDR block allowed for SSH access",
             "AllowedPattern": "^([0-9]{1,3}\\.){3}[0-9]{1,3}/[0-9]{1,2}$"
+        },
+        "AWSRegion": {
+            "Type": "String",
+            "Default": "ap-south-1",
+            "Description": "AWS region for the infrastructure deployment",
+            "AllowedValues": [
+                "us-east-1",
+                "us-west-2",
+                "eu-west-1",
+                "ap-southeast-1",
+                "ap-south-1"
+            ]
+        }
+    },
+    "Mappings": {
+        "RegionMap": {
+            "us-east-1": {
+                "AMI": "ami-0c02fb55956c7d316"
+            },
+            "us-west-2": {
+                "AMI": "ami-0892d3c7ee96c0bf7"
+            },
+            "eu-west-1": {
+                "AMI": "ami-0a0c8eebcdd6dcbd0"
+            },
+            "ap-southeast-1": {
+                "AMI": "ami-0df7a207adb9748c7"
+            },
+            "ap-south-1": {
+                "AMI": "ami-05a4fc6eaa38ee23c"
+            }
         }
     },
     "Resources": {
@@ -46,7 +77,9 @@
         "RDSKMSKeyAlias": {
             "Type": "AWS::KMS::Alias",
             "Properties": {
-                "AliasName": "alias/rds-encryption-key",
+                "AliasName": {
+                    "Fn::Sub": "alias/rds-encryption-key-${AWSRegion}"
+                },
                 "TargetKeyId": {
                     "Ref": "RDSKMSKey"
                 }
@@ -56,7 +89,7 @@
             "Type": "AWS::SecretsManager::Secret",
             "Properties": {
                 "Name": {
-                    "Fn::Sub": "${AWS::StackName}/database/password"
+                    "Fn::Sub": "${AWS::StackName}/database/password-${AWSRegion}"
                 },
                 "Description": "Database administrator password",
                 "GenerateSecretString": {
@@ -197,45 +230,24 @@
                 ]
             }
         },
-        "NATGateway1EIP": {
+        "NATGatewayEIP": {
             "Type": "AWS::EC2::EIP",
             "DependsOn": "AttachGateway",
             "Properties": {
                 "Domain": "vpc"
             }
         },
-        "NATGateway2EIP": {
-            "Type": "AWS::EC2::EIP",
-            "DependsOn": "AttachGateway",
-            "Properties": {
-                "Domain": "vpc"
-            }
-        },
-        "NATGateway1": {
+        "NATGateway": {
             "Type": "AWS::EC2::NatGateway",
             "Properties": {
                 "AllocationId": {
                     "Fn::GetAtt": [
-                        "NATGateway1EIP",
+                        "NATGatewayEIP",
                         "AllocationId"
                     ]
                 },
                 "SubnetId": {
                     "Ref": "PublicSubnet1"
-                }
-            }
-        },
-        "NATGateway2": {
-            "Type": "AWS::EC2::NatGateway",
-            "Properties": {
-                "AllocationId": {
-                    "Fn::GetAtt": [
-                        "NATGateway2EIP",
-                        "AllocationId"
-                    ]
-                },
-                "SubnetId": {
-                    "Ref": "PublicSubnet2"
                 }
             }
         },
@@ -288,7 +300,7 @@
                 }
             }
         },
-        "PrivateRouteTable1": {
+        "PrivateRouteTable": {
             "Type": "AWS::EC2::RouteTable",
             "Properties": {
                 "VpcId": {
@@ -297,20 +309,20 @@
                 "Tags": [
                     {
                         "Key": "Name",
-                        "Value": "Private Route Table 1"
+                        "Value": "Private Route Table"
                     }
                 ]
             }
         },
-        "DefaultPrivateRoute1": {
+        "DefaultPrivateRoute": {
             "Type": "AWS::EC2::Route",
             "Properties": {
                 "RouteTableId": {
-                    "Ref": "PrivateRouteTable1"
+                    "Ref": "PrivateRouteTable"
                 },
                 "DestinationCidrBlock": "0.0.0.0/0",
                 "NatGatewayId": {
-                    "Ref": "NATGateway1"
+                    "Ref": "NATGateway"
                 }
             }
         },
@@ -318,36 +330,10 @@
             "Type": "AWS::EC2::SubnetRouteTableAssociation",
             "Properties": {
                 "RouteTableId": {
-                    "Ref": "PrivateRouteTable1"
+                    "Ref": "PrivateRouteTable"
                 },
                 "SubnetId": {
                     "Ref": "PrivateSubnet1"
-                }
-            }
-        },
-        "PrivateRouteTable2": {
-            "Type": "AWS::EC2::RouteTable",
-            "Properties": {
-                "VpcId": {
-                    "Ref": "SecureVPC"
-                },
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": "Private Route Table 2"
-                    }
-                ]
-            }
-        },
-        "DefaultPrivateRoute2": {
-            "Type": "AWS::EC2::Route",
-            "Properties": {
-                "RouteTableId": {
-                    "Ref": "PrivateRouteTable2"
-                },
-                "DestinationCidrBlock": "0.0.0.0/0",
-                "NatGatewayId": {
-                    "Ref": "NATGateway2"
                 }
             }
         },
@@ -355,7 +341,7 @@
             "Type": "AWS::EC2::SubnetRouteTableAssociation",
             "Properties": {
                 "RouteTableId": {
-                    "Ref": "PrivateRouteTable2"
+                    "Ref": "PrivateRouteTable"
                 },
                 "SubnetId": {
                     "Ref": "PrivateSubnet2"
@@ -390,9 +376,7 @@
                         "IpProtocol": "tcp",
                         "FromPort": 80,
                         "ToPort": 80,
-                        "SourceSecurityGroupId": {
-                            "Ref": "WebServerSecurityGroup"
-                        },
+                        "CidrIp": "10.0.0.0/16",
                         "Description": "HTTP to web servers"
                     }
                 ],
@@ -416,9 +400,7 @@
                         "IpProtocol": "tcp",
                         "FromPort": 80,
                         "ToPort": 80,
-                        "SourceSecurityGroupId": {
-                            "Ref": "ALBSecurityGroup"
-                        },
+                        "CidrIp": "10.0.0.0/16",
                         "Description": "HTTP from ALB"
                     },
                     {
@@ -476,7 +458,7 @@
             "Type": "AWS::S3::Bucket",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "${AWS::StackName}-static-content-${AWS::AccountId}"
+                    "Fn::Sub": "tapstack-static-content-${AWS::AccountId}-${AWSRegion}"
                 },
                 "BucketEncryption": {
                     "ServerSideEncryptionConfiguration": [
@@ -509,7 +491,7 @@
             "Type": "AWS::S3::Bucket",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "${AWS::StackName}-access-logs-${AWS::AccountId}"
+                    "Fn::Sub": "tapstack-access-logs-${AWS::AccountId}-${AWSRegion}"
                 },
                 "BucketEncryption": {
                     "ServerSideEncryptionConfiguration": [
@@ -554,7 +536,7 @@
                                         "s3:DeleteObject"
                                     ],
                                     "Resource": {
-                                        "Fn::Sub": "${StaticContentBucket}/*"
+                                        "Fn::Sub": "arn:aws:s3:::${StaticContentBucket}/*"
                                     }
                                 },
                                 {
@@ -563,7 +545,7 @@
                                         "s3:ListBucket"
                                     ],
                                     "Resource": {
-                                        "Ref": "StaticContentBucket"
+                                        "Fn::Sub": "arn:aws:s3:::${StaticContentBucket}"
                                     }
                                 }
                             ]
@@ -586,10 +568,18 @@
             "Type": "AWS::EC2::LaunchTemplate",
             "Properties": {
                 "LaunchTemplateName": {
-                    "Fn::Sub": "${AWS::StackName}-web-server-template"
+                    "Fn::Sub": "${AWS::StackName}-web-server-template-${AWSRegion}"
                 },
                 "LaunchTemplateData": {
-                    "ImageId": "ami-0c02fb55956c7d316",
+                    "ImageId": {
+                        "Fn::FindInMap": [
+                            "RegionMap",
+                            {
+                                "Ref": "AWSRegion"
+                            },
+                            "AMI"
+                        ]
+                    },
                     "InstanceType": "t3.micro",
                     "IamInstanceProfile": {
                         "Arn": {
@@ -668,7 +658,7 @@
             "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
             "Properties": {
                 "Name": {
-                    "Fn::Sub": "${AWS::StackName}-alb"
+                    "Fn::Sub": "${AWS::StackName}-alb-${AWSRegion}"
                 },
                 "Scheme": "internet-facing",
                 "Type": "application",
@@ -697,7 +687,7 @@
             "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
             "Properties": {
                 "Name": {
-                    "Fn::Sub": "${AWS::StackName}-tg"
+                    "Fn::Sub": "${AWS::StackName}-tg-${AWSRegion}"
                 },
                 "Port": 80,
                 "Protocol": "HTTP",
@@ -756,11 +746,11 @@
             "UpdateReplacePolicy": "Snapshot",
             "Properties": {
                 "DBInstanceIdentifier": {
-                    "Fn::Sub": "${AWS::StackName}-database"
+                    "Fn::Sub": "${AWS::StackName}-database-${AWSRegion}"
                 },
                 "DBInstanceClass": "db.t3.micro",
                 "Engine": "mysql",
-                "EngineVersion": "8.0.35",
+                "EngineVersion": "8.0.42",
                 "AllocatedStorage": 20,
                 "StorageType": "gp2",
                 "StorageEncrypted": true,
@@ -797,7 +787,7 @@
             "Type": "AWS::Logs::LogGroup",
             "Properties": {
                 "LogGroupName": {
-                    "Fn::Sub": "/aws/ec2/${AWS::StackName}"
+                    "Fn::Sub": "/aws/ec2/${AWS::StackName}-${AWSRegion}"
                 },
                 "RetentionInDays": 14
             }
@@ -817,9 +807,6 @@
                         }
                     ]
                 },
-                "ManagedPolicyArns": [
-                    "arn:aws:iam::aws:policy/service-role/ConfigRole"
-                ],
                 "Policies": [
                     {
                         "PolicyName": "ConfigDeliveryPermissions",
@@ -848,6 +835,27 @@
                                 }
                             ]
                         }
+                    },
+                    {
+                        "PolicyName": "ConfigServiceInlinePolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "config:Put*",
+                                        "config:Get*",
+                                        "config:Describe*",
+                                        "s3:PutObject",
+                                        "s3:GetBucketAcl",
+                                        "sns:Publish",
+                                        "iam:PassRole"
+                                    ],
+                                    "Resource": "*"
+                                }
+                            ]
+                        }
                     }
                 ]
             }
@@ -856,7 +864,7 @@
             "Type": "AWS::S3::Bucket",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "${AWS::StackName}-config-${AWS::AccountId}"
+                    "Fn::Sub": "tapstack-config-${AWS::AccountId}-${AWSRegion}"
                 },
                 "BucketEncryption": {
                     "ServerSideEncryptionConfiguration": [
@@ -879,7 +887,7 @@
             "Type": "AWS::Config::DeliveryChannel",
             "Properties": {
                 "Name": {
-                    "Fn::Sub": "${AWS::StackName}-delivery-channel"
+                    "Fn::Sub": "${AWS::StackName}-delivery-channel-${AWSRegion}"
                 },
                 "S3BucketName": {
                     "Ref": "ConfigBucket"
@@ -890,7 +898,7 @@
             "Type": "AWS::Config::ConfigurationRecorder",
             "Properties": {
                 "Name": {
-                    "Fn::Sub": "${AWS::StackName}-config-recorder"
+                    "Fn::Sub": "${AWS::StackName}-config-recorder-${AWSRegion}"
                 },
                 "RoleARN": {
                     "Fn::GetAtt": [
@@ -908,10 +916,12 @@
             "Type": "AWS::Config::ConfigRule",
             "DependsOn": "ConfigurationRecorder",
             "Properties": {
-                "ConfigRuleName": "s3-bucket-public-access-prohibited",
+                "ConfigRuleName": {
+                    "Fn::Sub": "s3-bucket-public-access-prohibited-${AWSRegion}"
+                },
                 "Source": {
                     "Owner": "AWS",
-                    "SourceIdentifier": "S3_BUCKET_PUBLIC_ACCESS_PROHIBITED"
+                    "SourceIdentifier": "S3_BUCKET_PUBLIC_READ_PROHIBITED"
                 }
             }
         },
@@ -919,7 +929,9 @@
             "Type": "AWS::Config::ConfigRule",
             "DependsOn": "ConfigurationRecorder",
             "Properties": {
-                "ConfigRuleName": "rds-storage-encrypted",
+                "ConfigRuleName": {
+                    "Fn::Sub": "rds-storage-encrypted-${AWSRegion}"
+                },
                 "Source": {
                     "Owner": "AWS",
                     "SourceIdentifier": "RDS_STORAGE_ENCRYPTED"
@@ -975,6 +987,17 @@
             "Export": {
                 "Name": {
                     "Fn::Sub": "${AWS::StackName}-DB-Endpoint"
+                }
+            }
+        },
+        "AWSRegion": {
+            "Description": "AWS Region where infrastructure is deployed",
+            "Value": {
+                "Ref": "AWSRegion"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-AWS-Region"
                 }
             }
         }

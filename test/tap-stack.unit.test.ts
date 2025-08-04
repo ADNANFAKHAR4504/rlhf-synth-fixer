@@ -28,6 +28,67 @@ describe('TapStack CloudFormation Template - Unit Tests', () => {
       expect(template.Resources).toBeDefined();
       expect(template.Outputs).toBeDefined();
     });
+
+    test('should have Mappings section with RegionMap', () => {
+      expect(template.Mappings).toBeDefined();
+      expect(template.Mappings.RegionMap).toBeDefined();
+    });
+  });
+
+  describe('RegionMap Mappings', () => {
+    test('should have AMI mappings for all supported regions', () => {
+      const regionMap = template.Mappings.RegionMap;
+      const expectedRegions = ['us-east-1', 'us-west-2', 'eu-west-1', 'ap-southeast-1', 'ap-south-1'];
+      
+      expectedRegions.forEach(region => {
+        expect(regionMap[region]).toBeDefined();
+        expect(regionMap[region].AMI).toBeDefined();
+        expect(regionMap[region].AMI).toMatch(/^ami-[a-f0-9]{8,}$/);
+      });
+    });
+
+    test('should have correct AMI for ap-south-1 region', () => {
+      const regionMap = template.Mappings.RegionMap;
+      expect(regionMap['ap-south-1'].AMI).toBe('ami-05a4fc6eaa38ee23c');
+    });
+
+    test('should have correct AMI for us-east-1 region', () => {
+      const regionMap = template.Mappings.RegionMap;
+      expect(regionMap['us-east-1'].AMI).toBe('ami-0c02fb55956c7d316');
+    });
+  });
+
+  describe('Region-Specific Resource Naming', () => {
+    test('S3 buckets should have region-specific naming', () => {
+      const staticBucket = template.Resources.StaticContentBucket;
+      const loggingBucket = template.Resources.LoggingBucket;
+      const configBucket = template.Resources.ConfigBucket;
+      
+      expect(staticBucket.Properties.BucketName['Fn::Sub']).toContain('${AWSRegion}');
+      expect(loggingBucket.Properties.BucketName['Fn::Sub']).toContain('${AWSRegion}');
+      expect(configBucket.Properties.BucketName['Fn::Sub']).toContain('${AWSRegion}');
+    });
+
+    test('Load Balancer components should have region-specific naming', () => {
+      const alb = template.Resources.ApplicationLoadBalancer;
+      const targetGroup = template.Resources.ALBTargetGroup;
+      
+      expect(alb.Properties.Name['Fn::Sub']).toContain('${AWSRegion}');
+      expect(targetGroup.Properties.Name['Fn::Sub']).toContain('${AWSRegion}');
+    });
+
+    test('Launch Template should have region-specific naming', () => {
+      const launchTemplate = template.Resources.WebServerLaunchTemplate;
+      expect(launchTemplate.Properties.LaunchTemplateName['Fn::Sub']).toContain('${AWSRegion}');
+    });
+
+    test('AWS Config resources should have region-specific naming', () => {
+      const deliveryChannel = template.Resources.ConfigDeliveryChannel;
+      const recorder = template.Resources.ConfigurationRecorder;
+      
+      expect(deliveryChannel.Properties.Name['Fn::Sub']).toContain('${AWSRegion}');
+      expect(recorder.Properties.Name['Fn::Sub']).toContain('${AWSRegion}');
+    });
   });
 
   describe('Parameters Validation', () => {
@@ -38,6 +99,19 @@ describe('TapStack CloudFormation Template - Unit Tests', () => {
       expect(param.Default).toBe('10.0.0.0/8');
       expect(param.Description).toContain('CIDR block allowed for SSH access');
       expect(param.AllowedPattern).toBe('^([0-9]{1,3}\\.){3}[0-9]{1,3}/[0-9]{1,2}$');
+    });
+
+    test('should have AWSRegion parameter with all supported regions', () => {
+      expect(template.Parameters.AWSRegion).toBeDefined();
+      const param = template.Parameters.AWSRegion;
+      expect(param.Type).toBe('String');
+      expect(param.Default).toBe('ap-south-1');
+      expect(param.Description).toContain('AWS region for the infrastructure deployment');
+      
+      const expectedRegions = ['us-east-1', 'us-west-2', 'eu-west-1', 'ap-southeast-1', 'ap-south-1'];
+      expectedRegions.forEach(region => {
+        expect(param.AllowedValues).toContain(region);
+      });
     });
   });
 
@@ -52,9 +126,10 @@ describe('TapStack CloudFormation Template - Unit Tests', () => {
       expect(secret.Properties.GenerateSecretString.PasswordLength).toBe(16);
     });
 
-    test('DatabaseSecret should use stack-specific naming', () => {
+    test('DatabaseSecret should use stack-specific and region-specific naming', () => {
       const secret = template.Resources.DatabaseSecret;
       expect(secret.Properties.Name['Fn::Sub']).toContain('${AWS::StackName}');
+      expect(secret.Properties.Name['Fn::Sub']).toContain('${AWSRegion}');
     });
   });
 
@@ -66,11 +141,11 @@ describe('TapStack CloudFormation Template - Unit Tests', () => {
       expect(kmsKey.Properties.Description).toBe('KMS Key for RDS encryption');
     });
 
-    test('should have KMS key alias', () => {
+    test('should have KMS key alias with region-specific naming', () => {
       expect(template.Resources.RDSKMSKeyAlias).toBeDefined();
       const alias = template.Resources.RDSKMSKeyAlias;
       expect(alias.Type).toBe('AWS::KMS::Alias');
-      expect(alias.Properties.AliasName).toBe('alias/rds-encryption-key');
+      expect(alias.Properties.AliasName['Fn::Sub']).toBe('alias/rds-encryption-key-${AWSRegion}');
     });
 
     test('KMS key policy should allow RDS service', () => {
@@ -115,9 +190,13 @@ describe('TapStack CloudFormation Template - Unit Tests', () => {
       });
     });
 
-    test('should have NAT gateways for private subnet internet access', () => {
-      expect(template.Resources.NATGateway1).toBeDefined();
-      expect(template.Resources.NATGateway2).toBeDefined();
+    test('should have NAT gateway for private subnet internet access', () => {
+      expect(template.Resources.NATGateway).toBeDefined();
+      expect(template.Resources.NATGatewayEIP).toBeDefined();
+      
+      const natGw = template.Resources.NATGateway;
+      expect(natGw.Type).toBe('AWS::EC2::NatGateway');
+      expect(natGw.Properties.AllocationId['Fn::GetAtt']).toEqual(['NATGatewayEIP', 'AllocationId']);
     });
   });
 
@@ -205,7 +284,7 @@ describe('TapStack CloudFormation Template - Unit Tests', () => {
       
       // Should only allow access to specific S3 bucket
       const bucketAccess = s3Statements.find((s: any) => s.Action.includes('s3:ListBucket'));
-      expect(bucketAccess.Resource.Ref).toBe('StaticContentBucket');
+      expect(bucketAccess.Resource['Fn::Sub']).toBe('arn:aws:s3:::${StaticContentBucket}');
     });
 
     test('EC2 role should include CloudWatch permissions', () => {
@@ -221,10 +300,11 @@ describe('TapStack CloudFormation Template - Unit Tests', () => {
       expect(db.Properties.KmsKeyId.Ref).toBe('RDSKMSKey');
     });
 
-    test('RDS instance should use Secrets Manager for credentials', () => {
+    test('RDS instance should use Secrets Manager for credentials and have region-specific identifier', () => {
       const db = template.Resources.DatabaseInstance;
       expect(db.Properties.MasterUsername['Fn::Sub']).toContain('resolve:secretsmanager');
       expect(db.Properties.MasterUserPassword['Fn::Sub']).toContain('resolve:secretsmanager');
+      expect(db.Properties.DBInstanceIdentifier['Fn::Sub']).toContain('${AWSRegion}');
     });
 
     test('RDS instance should have proper security settings', () => {
@@ -251,10 +331,11 @@ describe('TapStack CloudFormation Template - Unit Tests', () => {
       expect(asg.Properties.VPCZoneIdentifier).toContainEqual({ Ref: 'PrivateSubnet2' });
     });
 
-    test('Application Load Balancer should be internet-facing', () => {
+    test('Application Load Balancer should be internet-facing with region-specific naming', () => {
       const alb = template.Resources.ApplicationLoadBalancer;
       expect(alb.Properties.Scheme).toBe('internet-facing');
       expect(alb.Properties.Type).toBe('application');
+      expect(alb.Properties.Name['Fn::Sub']).toContain('${AWSRegion}');
     });
 
     test('ALB should be in public subnets', () => {
@@ -265,10 +346,11 @@ describe('TapStack CloudFormation Template - Unit Tests', () => {
   });
 
   describe('CloudWatch and Monitoring', () => {
-    test('should have CloudWatch log group configured', () => {
+    test('should have CloudWatch log group configured with region-specific naming', () => {
       expect(template.Resources.CloudWatchLogGroup).toBeDefined();
       const logGroup = template.Resources.CloudWatchLogGroup;
       expect(logGroup.Properties.RetentionInDays).toBe(14);
+      expect(logGroup.Properties.LogGroupName['Fn::Sub']).toContain('${AWSRegion}');
     });
 
     test('launch template should configure CloudWatch agent', () => {
@@ -280,26 +362,29 @@ describe('TapStack CloudFormation Template - Unit Tests', () => {
   });
 
   describe('AWS Config Compliance', () => {
-    test('should have AWS Config configuration recorder', () => {
+    test('should have AWS Config configuration recorder with region-specific naming', () => {
       expect(template.Resources.ConfigurationRecorder).toBeDefined();
       const recorder = template.Resources.ConfigurationRecorder;
       expect(recorder.Properties.RecordingGroup.AllSupported).toBe(true);
       expect(recorder.Properties.RecordingGroup.IncludeGlobalResourceTypes).toBe(true);
+      expect(recorder.Properties.Name['Fn::Sub']).toContain('${AWSRegion}');
     });
 
     test('should have Config delivery channel', () => {
       expect(template.Resources.ConfigDeliveryChannel).toBeDefined();
     });
 
-    test('should have compliance rules configured', () => {
+    test('should have compliance rules configured with region-specific naming', () => {
       expect(template.Resources.S3BucketPublicAccessProhibitedRule).toBeDefined();
       expect(template.Resources.RDSStorageEncryptedRule).toBeDefined();
+      
+      const s3Rule = template.Resources.S3BucketPublicAccessProhibitedRule;
+      const rdsRule = template.Resources.RDSStorageEncryptedRule;
+      
+      expect(s3Rule.Properties.ConfigRuleName['Fn::Sub']).toContain('${AWSRegion}');
+      expect(rdsRule.Properties.ConfigRuleName['Fn::Sub']).toContain('${AWSRegion}');
     });
 
-    test('Config service role should have proper permissions', () => {
-      const configRole = template.Resources.ConfigServiceRole;
-      expect(configRole.Properties.ManagedPolicyArns).toContain('arn:aws:iam::aws:policy/service-role/ConfigRole');
-    });
   });
 
   describe('Template Outputs', () => {
@@ -326,6 +411,14 @@ describe('TapStack CloudFormation Template - Unit Tests', () => {
       expect(template.Outputs.DatabaseEndpoint).toBeDefined();
       const output = template.Outputs.DatabaseEndpoint;
       expect(output.Value['Fn::GetAtt']).toEqual(['DatabaseInstance', 'Endpoint.Address']);
+    });
+
+    test('should export AWS region', () => {
+      expect(template.Outputs.AWSRegion).toBeDefined();
+      const output = template.Outputs.AWSRegion;
+      expect(output.Value['Ref']).toBe('AWSRegion');
+      expect(output.Description).toContain('AWS Region where infrastructure is deployed');
+      expect(output.Export.Name['Fn::Sub']).toBe('${AWS::StackName}-AWS-Region');
     });
   });
 
@@ -364,10 +457,13 @@ describe('TapStack CloudFormation Template - Unit Tests', () => {
       expect(db.DeletionPolicy).toBe('Snapshot');
     });
 
-    test('launch template should use valid AMI ID format', () => {
+    test('launch template should use region-specific AMI mapping', () => {
       const launchTemplate = template.Resources.WebServerLaunchTemplate;
       const imageId = launchTemplate.Properties.LaunchTemplateData.ImageId;
-      expect(imageId).toMatch(/^ami-[a-f0-9]{8,}$/);
+      expect(imageId['Fn::FindInMap']).toBeDefined();
+      expect(imageId['Fn::FindInMap'][0]).toBe('RegionMap');
+      expect(imageId['Fn::FindInMap'][1]['Ref']).toBe('AWSRegion');
+      expect(imageId['Fn::FindInMap'][2]).toBe('AMI');
     });
   });
 
