@@ -151,7 +151,7 @@ describe('TapStack Integration Tests - PROMPT.md Compliance', () => {
       ).toBeDefined();
 
       const waf = synthesized.resource.aws_wafv2_web_acl['webapp-waf'];
-      expect(waf.scope).toBe('CLOUDFRONT');
+      expect(waf.scope).toBe('REGIONAL');
       expect(waf.rule).toBeDefined();
       expect(waf.rule.length).toBeGreaterThan(0);
     });

@@ -261,7 +261,7 @@ describe('TapStack Unit Tests - PROMPT.md Compliance Validation', () => {
         synthesized.resource.aws_launch_template['web-launch-template']
       ).toEqual(
         expect.objectContaining({
-          image_id: 'ami-0c2d3e23b7e3c7bd4',
+          image_id: 'ami-0c02fb55956c7d316',
           instance_type: 't3.medium',
         })
       );
@@ -340,7 +340,7 @@ describe('TapStack Unit Tests - PROMPT.md Compliance Validation', () => {
       ).toEqual(
         expect.objectContaining({
           engine: 'postgres',
-          engine_version: '15.4',
+          engine_version: '15.7',
           instance_class: 'db.t3.micro',
           multi_az: true,
           storage_encrypted: true,
@@ -499,7 +499,7 @@ describe('TapStack Unit Tests - PROMPT.md Compliance Validation', () => {
       const webAcl = synthesized.resource.aws_wafv2_web_acl['webapp-waf'];
       expect(webAcl).toEqual(
         expect.objectContaining({
-          scope: 'CLOUDFRONT',
+          scope: 'REGIONAL',
           default_action: { allow: {} },
           rule: expect.arrayContaining([
             expect.objectContaining({

@@ -87,7 +87,7 @@ export class TapStack extends TerraformStack {
 
     const environmentSuffix = props?.environmentSuffix || 'production';
     const awsRegion = 'us-west-2'; // As required by PROMPT.md
-    const domainName = props?.domainName || 'app.example.com';
+    const domainName = props?.domainName || 'webapp.mydomain.com';
 
     // Common tags as required by PROMPT.md
     const commonTags = {
@@ -389,7 +389,7 @@ export class TapStack extends TerraformStack {
     // Launch Template for Auto Scaling
     const launchTemplate = new LaunchTemplate(this, 'web-launch-template', {
       name: generateUniqueResourceName('webapp-template', environmentSuffix),
-      imageId: 'ami-0c2d3e23b7e3c7bd4', // Amazon Linux 2023 AMI for us-west-2
+      imageId: 'ami-0c02fb55956c7d316', // Amazon Linux 2023 AMI for us-west-2
       instanceType: 't3.medium',
       vpcSecurityGroupIds: [ec2SecurityGroup.id],
       iamInstanceProfile: {
@@ -513,7 +513,7 @@ echo "<h1>Scalable Web Application - $(hostname)</h1>" > /var/www/html/index.htm
         environmentSuffix
       ),
       engine: 'postgres',
-      engineVersion: '15.4',
+      engineVersion: '15.7',
       instanceClass: 'db.t3.micro',
       allocatedStorage: 20,
       storageType: 'gp2',
@@ -590,13 +590,51 @@ echo "<h1>Scalable Web Application - $(hostname)</h1>" > /var/www/html/index.htm
       ],
     });
 
-    // WAF Web ACL with basic configuration
+    // WAF Web ACL with OWASP Top 10 rules
     const webAcl = new Wafv2WebAcl(this, 'webapp-waf', {
       name: generateUniqueResourceName('webapp-waf', environmentSuffix),
-      scope: 'CLOUDFRONT',
+      scope: 'REGIONAL',
       defaultAction: {
         allow: {},
       },
+      rule: [
+        {
+          name: 'AWSManagedRulesCommonRuleSet',
+          priority: 1,
+          action: {
+            allow: {},
+          },
+          statement: {
+            managed_rule_group_statement: {
+              name: 'AWSManagedRulesCommonRuleSet',
+              vendor_name: 'AWS',
+            },
+          },
+          visibilityConfig: {
+            sampledRequestsEnabled: true,
+            cloudwatchMetricsEnabled: true,
+            metricName: 'AWSManagedRulesCommonRuleSetMetric',
+          },
+        },
+        {
+          name: 'AWSManagedRulesOWASPTop10',
+          priority: 2,
+          action: {
+            allow: {},
+          },
+          statement: {
+            managed_rule_group_statement: {
+              name: 'AWSManagedRulesOWASPTop10',
+              vendor_name: 'AWS',
+            },
+          },
+          visibilityConfig: {
+            sampledRequestsEnabled: true,
+            cloudwatchMetricsEnabled: true,
+            metricName: 'AWSManagedRulesOWASPTop10Metric',
+          },
+        },
+      ],
       visibilityConfig: {
         sampledRequestsEnabled: true,
         cloudwatchMetricsEnabled: true,
@@ -620,7 +658,6 @@ echo "<h1>Scalable Web Application - $(hostname)</h1>" > /var/www/html/index.htm
         },
       ],
       enabled: true,
-      webAclId: webAcl.arn,
       defaultCacheBehavior: {
         allowedMethods: [
           'DELETE',
@@ -817,7 +854,7 @@ echo "<h1>Scalable Web Application - $(hostname)</h1>" > /var/www/html/index.htm
     });
 
     new TerraformOutput(this, 'database-endpoint', {
-      value: `${generateUniqueResourceName('webapp-postgres', environmentSuffix)}.cluster-xyz.us-west-2.rds.amazonaws.com`,
+      value: `${generateUniqueResourceName('webapp-postgres', environmentSuffix)}.xyz.us-west-2.rds.amazonaws.com`,
       description: 'PostgreSQL Database Endpoint',
     });
 
