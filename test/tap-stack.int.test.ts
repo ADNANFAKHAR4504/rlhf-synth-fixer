@@ -37,6 +37,7 @@ describe('TapStack Integration Tests', () => {
       let lambda: LambdaClient;
       let apigateway: APIGatewayClient;
       let cloudfront: CloudFrontClient;
+      const resourcePrefix = `cms-${environment}-${region}`;
 
       beforeAll(() => {
         s3 = new S3Client({ region });
@@ -113,7 +114,7 @@ describe('TapStack Integration Tests', () => {
       test('API Gateway exists with correct configuration', async () => {
         const apis = await apigateway.send(new GetRestApisCommand({}));
         const api = apis.items?.find(
-          api => api.name === `CMS API Gateway (${region})`
+          api => api.name === `${resourcePrefix}-api`
         );
         expect(api).toBeDefined();
 
@@ -140,7 +141,7 @@ describe('TapStack Integration Tests', () => {
           new ListDistributionsCommand({})
         );
         const distribution = distributions.DistributionList?.Items?.find(dist =>
-          dist.Comment?.includes(`CMS Distribution (${region})`)
+          dist.Comment?.includes(`${resourcePrefix} CMS Distribution`)
         );
         expect(distribution).toBeDefined();
         expect(distribution?.DefaultCacheBehavior?.ViewerProtocolPolicy).toBe(
