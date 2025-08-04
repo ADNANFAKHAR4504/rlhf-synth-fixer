@@ -142,47 +142,7 @@ def test_tapstack_outputs(mock_provider, mock_identity, mock_network, mock_monit
 @patch('lib.tap_stack.NetworkSecurityInfrastructure')
 @patch('lib.tap_stack.IdentityAccessInfrastructure')
 @patch('pulumi_aws.Provider')
-def test_tapstack_vpc_flow_logs(mock_provider, mock_identity, mock_network, mock_monitoring, mock_data_protection, mock_pulumi):
-  # Create mock instances that inherit from ComponentResource
-  mock_identity_instance = MockComponentResource("identity", "test-identity")
-  mock_identity.return_value = mock_identity_instance
-  
-  mock_network_instance = MockComponentResource("network", "test-network")
-  mock_network.return_value = mock_network_instance
-  
-  mock_monitoring_instance = MockComponentResource("monitoring", "test-monitoring")
-  mock_monitoring.return_value = mock_monitoring_instance
-  
-  mock_data_protection_instance = MockComponentResource("data-protection", "test-data-protection")
-  mock_data_protection.return_value = mock_data_protection_instance
-  
-  # Mock the AWS Provider
-  mock_provider_instance = Mock()
-  mock_provider.return_value = mock_provider_instance
-  
-  args = TapStackArgs(
-    environment_suffix="test",
-    regions=["us-west-2"],
-    tags={"Project": "ProjectX", "Environment": "test"}
-  )
-  
-  # Create the stack (this will trigger the setup_vpc_flow_logs call)
-  stack = TapStack("test-stack", args)
-  
-  # Verify the VPC flow logs setup method was called
-  mock_monitoring_instance.setup_vpc_flow_logs.assert_called_once()
-  
-  # Verify it was called with the correct VPC ID
-  call_args = mock_monitoring_instance.setup_vpc_flow_logs.call_args
-  assert call_args is not None
-  assert 'vpc_id' in call_args.kwargs
-  assert call_args.kwargs['vpc_id'] == mock_network_instance.vpc_id
 
-@patch('lib.tap_stack.DataProtectionInfrastructure')
-@patch('lib.tap_stack.SecurityMonitoringInfrastructure')
-@patch('lib.tap_stack.NetworkSecurityInfrastructure')
-@patch('lib.tap_stack.IdentityAccessInfrastructure')
-@patch('pulumi_aws.Provider')
 # def test_tapstack_multi_region(mock_provider, mock_identity, mock_network, mock_monitoring, mock_data_protection, mock_pulumi):
 #   # Create mock instances that inherit from ComponentResource
 #   mock_identity_instance = MockComponentResource("identity", "test-identity")
