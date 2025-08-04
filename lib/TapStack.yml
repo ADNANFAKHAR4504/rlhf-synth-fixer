@@ -156,7 +156,6 @@ Resources:
   ServerlessAppLambdaRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: ServerlessAppLambdaRole
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
