@@ -7,7 +7,6 @@ from aws_cdk import (
     aws_iam as iam,
     aws_s3 as s3,
     aws_certificatemanager as acm,
-    aws_route53 as route53,
     NestedStack,
     Stack,
     CfnOutput,
@@ -20,7 +19,7 @@ class TapStackProps(NestedStack):
     def __init__(self, scope: Construct, id: str, environment_suffix: str = "dev", **kwargs):
         super().__init__(scope, id, **kwargs)
 
-        # S3 Bucket for logs
+        # S3 bucket for logs
         self.log_bucket = s3.Bucket(
             self,
             f"AppLogsBucket-{environment_suffix}",
@@ -40,7 +39,7 @@ class TapStackProps(NestedStack):
             ],
         )
 
-        # IAM Role for EC2 instances to access logs bucket
+        # IAM Role for EC2 instances
         self.ec2_role = iam.Role(
             self,
             f"EC2Role-{environment_suffix}",
@@ -72,7 +71,7 @@ class TapStackProps(NestedStack):
             "Allow HTTP access from internal network",
         )
 
-        # Latest Amazon Linux 2 AMI
+        # AMI
         ami = ec2.MachineImage.latest_amazon_linux2()
 
         # Auto Scaling Group
@@ -89,27 +88,35 @@ class TapStackProps(NestedStack):
             vpc_subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PUBLIC),
         )
 
-        # Import Route53 Hosted Zone (make sure the hosted zone exists)
-        hosted_zone = route53.HostedZone.from_lookup(
-            self, "HostedZone", domain_name="example.com"
-        )
-
-        # ACM Certificate with DNS validation via Route53
+        # Create ACM certificate with EMAIL validation (manual confirmation required)
         cert = acm.Certificate(
             self,
             f"TLSCert-{environment_suffix}",
             domain_name=f"app.{environment_suffix}.example.com",
-            validation=acm.CertificateValidation.from_dns(hosted_zone),
+            validation=acm.CertificateValidation.from_email(),
         )
 
         # Application Load Balancer
-        self.alb = elbv2.ApplicationLoadBalancer(self, f"AppALB-{environment_suffix}", vpc=self.vpc, internet_facing=True)
+        self.alb = elbv2.ApplicationLoadBalancer(
+            self,
+            f"AppALB-{environment_suffix}",
+            vpc=self.vpc,
+            internet_facing=True,
+        )
 
-        # HTTPS Listener with ACM cert
-        self.listener = self.alb.add_listener(f"Listener-{environment_suffix}", port=443, certificates=[cert])
+        # HTTPS Listener with ACM certificate
+        self.listener = self.alb.add_listener(
+            f"Listener-{environment_suffix}",
+            port=443,
+            certificates=[cert],
+        )
 
-        # Add targets (ASG) on port 80
-        self.listener.add_targets(f"AppTargets-{environment_suffix}", port=80, targets=[self.asg])
+        # Target the ASG on port 80
+        self.listener.add_targets(
+            f"AppTargets-{environment_suffix}",
+            port=80,
+            targets=[self.asg],
+        )
 
         # Outputs
         CfnOutput(
