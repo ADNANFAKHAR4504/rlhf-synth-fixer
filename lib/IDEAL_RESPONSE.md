@@ -25,7 +25,7 @@ Parameters:
   EnvironmentSuffix:
     Type: String
     Description: Suffix for the environment (e.g., dev, prod)
-    Default: prodd
+    Default: production
     AllowedPattern: '^[a-zA-Z0-9]+$'
     ConstraintDescription: Must contain only alphanumeric characters.
 
@@ -108,21 +108,12 @@ Parameters:
       - "true"
       - "false"
 
-Mappings:
-  EnvironmentMap:
-    prodd:
-      MinSize: 2
-      MaxSize: 6
-      DesiredCapacity: 2
-      CPUThreshold: 70
-    staging:
-      MinSize: 1
-      MaxSize: 3
-      DesiredCapacity: 1
-      CPUThreshold: 80
+Mappings: {}
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentSuffix, Production]
+  IsProductionEnv: !Equals [!Ref EnvironmentSuffix, production]
+  IsStagingEnv: !Equals [!Ref EnvironmentSuffix, staging]
   HasSSLCertificate: !Not [!Equals [!Ref SSLCertificateArn, ""]]
   EnableHTTPS: !And 
     - !Equals [!Ref UseHTTPS, "true"]
@@ -617,9 +608,27 @@ Resources:
       LaunchTemplate:
         LaunchTemplateId: !Ref LaunchTemplate
         Version: !GetAtt LaunchTemplate.LatestVersionNumber
-      MinSize: !FindInMap [EnvironmentMap, !Ref EnvironmentSuffix, MinSize]
-      MaxSize: !FindInMap [EnvironmentMap, !Ref EnvironmentSuffix, MaxSize]
-      DesiredCapacity: !FindInMap [EnvironmentMap, !Ref EnvironmentSuffix, DesiredCapacity]
+      MinSize: !If 
+        - IsProductionEnv
+        - 2
+        - !If 
+          - IsStagingEnv
+          - 1
+          - 1
+      MaxSize: !If 
+        - IsProductionEnv
+        - 6
+        - !If 
+          - IsStagingEnv
+          - 3
+          - 2
+      DesiredCapacity: !If 
+        - IsProductionEnv
+        - 2
+        - !If 
+          - IsStagingEnv
+          - 1
+          - 1
       TargetGroupARNs:
         - !Ref ALBTargetGroup
       HealthCheckType: ELB
@@ -728,7 +737,13 @@ Resources:
       Statistic: Average
       Period: 300
       EvaluationPeriods: 2
-      Threshold: !FindInMap [EnvironmentMap, !Ref EnvironmentSuffix, CPUThreshold]
+      Threshold: !If 
+        - IsProductionEnv
+        - 70
+        - !If 
+          - IsStagingEnv
+          - 80
+          - 80
       ComparisonOperator: GreaterThanThreshold
       Dimensions:
         - Name: AutoScalingGroupName
