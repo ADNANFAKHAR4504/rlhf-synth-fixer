@@ -1,5 +1,6 @@
 // IaC - AWS Nova Model Breaking
 // Expert level Terraform CDK implementation for secure, scalable AWS infrastructure
+// CI/CD Pipeline: Linting issue fixed - unused GuarddutyDetector import removed
 import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
 import { TerraformOutput, TerraformStack } from 'cdktf';
 import { Construct } from 'constructs';
