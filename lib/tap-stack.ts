@@ -14,7 +14,8 @@ import {
   Ec2Iam,
   Ipv6OnlyEc2Instance,
 } from './modules';
-
+import { FlowLog } from '@cdktf/provider-aws/lib/flow-log';
+import { CloudwatchLogGroup } from '@cdktf/provider-aws/lib/cloudwatch-log-group';
 // import { MyStack } from './my-stack';
 
 interface TapStackProps {
@@ -122,6 +123,25 @@ export class TapStack extends TerraformStack {
       userData: userData,
       tags: commonTags,
     });
+
+    // --- BEGIN: Add VPC Flow Logs as recommended in the security review ---
+
+    // 1. Create a CloudWatch Log Group for VPC Flow Logs.
+    const vpcFlowLogsGroup = new CloudwatchLogGroup(this, 'vpc-flow-logs', {
+      name: `vpc-flow-logs-${environmentSuffix}`,
+    });
+
+    // 2. Create the VPC Flow Log resource and associate it with the VPC.
+    // FIX: The variable assignment is removed, as the resource is created and
+    // registered with the 'new' keyword alone, and the variable was unused.
+    new FlowLog(this, 'flow-log', {
+      logDestinationType: 'cloud-watch-logs',
+      logDestination: vpcFlowLogsGroup.arn,
+      trafficType: 'ALL',
+      vpcId: ipv6VpcModule.vpc.id,
+    });
+
+    // --- END: VPC Flow Logs ---
 
     // Define the required stack outputs
     new TerraformOutput(this, 'vpc-id', {

@@ -27,6 +27,7 @@ export class Ipv6OnlyVpc extends Construct {
     super(scope, name);
 
     this.vpc = new Vpc(this, 'ipv6-only-vpc', {
+      // AWS requires a dummy IPv4 CIDR for API validation, even for IPv6-only VPCs.
       // Correct Fix: Provide a dummy IPv4 CIDR block to satisfy AWS API validation.
       // This CIDR block will not be used in the subnets or routing.
       cidrBlock: '10.0.0.0/16',
@@ -48,7 +49,8 @@ export class Ipv6OnlyVpc extends Construct {
       vpcId: this.vpc.id,
       tags: { Name: `${props.name}-public-rt`, ...props.tags },
     });
-
+    // This route sends all IPv6 traffic to the Egress-Only Internet Gateway.
+    // Egress-Only IGWs are required for IPv6 only subnets to allow outgoing traffic to the internet while preventing incoming traffic.
     new Route(this, 'public-ipv6-route', {
       routeTableId: this.publicRouteTable.id,
       destinationIpv6CidrBlock: '::/0',
@@ -119,6 +121,13 @@ export class Ipv6OnlySecurityGroup extends Construct {
           toPort: 80,
           ipv6CidrBlocks: ['::/0'],
           description: 'Allow HTTP IPv6',
+        },
+        {
+          protocol: 'tcp',
+          fromPort: 443, // Add HTTPS support
+          toPort: 443,
+          ipv6CidrBlocks: ['::/0'],
+          description: 'Allow HTTPS IPv6',
         },
       ],
       egress: [
@@ -201,6 +210,9 @@ export class Ipv6OnlyEc2Instance extends Construct {
       ipv6AddressCount: 1, // Corrected: use ipv6AddressCount to request a public IPv6 address
       iamInstanceProfile: props.instanceProfileName,
       userData: props.userData,
+      rootBlockDevice: {
+        encrypted: true,
+      },
       tags: { Name: `${props.name}-ec2-instance`, ...props.tags },
     });
   }
