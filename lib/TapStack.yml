@@ -7,6 +7,8 @@ Parameters:
     Default: '10.0.0.0/8'
     Description: 'CIDR block allowed for SSH access'
     AllowedPattern: '^([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,2}$'
+  
+
 
 Resources:
   # KMS Key for RDS Encryption
@@ -118,30 +120,18 @@ Resources:
         - Key: Name
           Value: 'Private Subnet 2'
 
-  # NAT Gateways
-  NATGateway1EIP:
+  # NAT Gateway (Single for cost optimization)
+  NATGatewayEIP:
     Type: AWS::EC2::EIP
     DependsOn: AttachGateway
     Properties:
       Domain: vpc
 
-  NATGateway2EIP:
-    Type: AWS::EC2::EIP
-    DependsOn: AttachGateway
-    Properties:
-      Domain: vpc
-
-  NATGateway1:
+  NATGateway:
     Type: AWS::EC2::NatGateway
     Properties:
-      AllocationId: !GetAtt NATGateway1EIP.AllocationId
+      AllocationId: !GetAtt NATGatewayEIP.AllocationId
       SubnetId: !Ref PublicSubnet1
-
-  NATGateway2:
-    Type: AWS::EC2::NatGateway
-    Properties:
-      AllocationId: !GetAtt NATGateway2EIP.AllocationId
-      SubnetId: !Ref PublicSubnet2
 
   # Route Tables
   PublicRouteTable:
@@ -172,46 +162,31 @@ Resources:
       RouteTableId: !Ref PublicRouteTable
       SubnetId: !Ref PublicSubnet2
 
-  PrivateRouteTable1:
+  PrivateRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref SecureVPC
       Tags:
         - Key: Name
-          Value: 'Private Route Table 1'
+          Value: 'Private Route Table'
 
-  DefaultPrivateRoute1:
+  DefaultPrivateRoute:
     Type: AWS::EC2::Route
     Properties:
-      RouteTableId: !Ref PrivateRouteTable1
+      RouteTableId: !Ref PrivateRouteTable
       DestinationCidrBlock: '0.0.0.0/0'
-      NatGatewayId: !Ref NATGateway1
+      NatGatewayId: !Ref NATGateway
 
   PrivateSubnet1RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
-      RouteTableId: !Ref PrivateRouteTable1
+      RouteTableId: !Ref PrivateRouteTable
       SubnetId: !Ref PrivateSubnet1
-
-  PrivateRouteTable2:
-    Type: AWS::EC2::RouteTable
-    Properties:
-      VpcId: !Ref SecureVPC
-      Tags:
-        - Key: Name
-          Value: 'Private Route Table 2'
-
-  DefaultPrivateRoute2:
-    Type: AWS::EC2::Route
-    Properties:
-      RouteTableId: !Ref PrivateRouteTable2
-      DestinationCidrBlock: '0.0.0.0/0'
-      NatGatewayId: !Ref NATGateway2
 
   PrivateSubnet2RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
-      RouteTableId: !Ref PrivateRouteTable2
+      RouteTableId: !Ref PrivateRouteTable
       SubnetId: !Ref PrivateSubnet2
 
   # Security Groups
@@ -284,7 +259,7 @@ Resources:
   StaticContentBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${AWS::StackName}-static-content-${AWS::AccountId}'
+      BucketName: !Sub 'tapstack-static-content-${AWS::AccountId}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -304,7 +279,7 @@ Resources:
   LoggingBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${AWS::StackName}-access-logs-${AWS::AccountId}'
+      BucketName: !Sub 'tapstack-access-logs-${AWS::AccountId}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -333,7 +308,7 @@ Resources:
                   - s3:GetObject
                   - s3:PutObject
                   - s3:DeleteObject
-                Resource: !Sub '${StaticContentBucket}/*'
+                Resource: !Sub 'arn:aws:s3:::${StaticContentBucket}/*'
               - Effect: Allow
                 Action:
                   - s3:ListBucket
@@ -522,8 +497,6 @@ Resources:
             Principal:
               Service: config.amazonaws.com
             Action: sts:AssumeRole
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/ConfigRole
       Policies:
         - PolicyName: ConfigDeliveryPermissions
           PolicyDocument:
@@ -539,11 +512,25 @@ Resources:
                   - s3:GetObject
                   - s3:PutObject
                 Resource: !Sub 'arn:aws:s3:::${ConfigBucket}/*'
+        - PolicyName: ConfigServiceInlinePolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - config:Put*
+                  - config:Get*
+                  - config:Describe*
+                  - s3:PutObject
+                  - s3:GetBucketAcl
+                  - sns:Publish
+                  - iam:PassRole
+                Resource: "*"
 
   ConfigBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${AWS::StackName}-config-${AWS::AccountId}'
+      BucketName: !Sub 'tapstack-config-${AWS::AccountId}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
