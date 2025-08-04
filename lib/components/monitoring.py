@@ -55,7 +55,7 @@ class SecurityMonitoringInfrastructure(pulumi.ComponentResource):
       f"{self.region.replace('-', '')}-security-logs",
       name=f"/aws/projectx/security/{self.region}",
       retention_in_days=365,
-      kms_key_id=self.kms_key_arn,
+      kms_key_id=self.kms_key.arn.apply(lambda arn: arn),
       tags=self.tags,
       opts=ResourceOptions(parent=self, depends_on=[self.kms_key])
     )
@@ -65,7 +65,7 @@ class SecurityMonitoringInfrastructure(pulumi.ComponentResource):
       f"{self.region.replace('-', '')}-security-alerts",
       name=f"projectx-security-alerts-{self.region}",
       display_name="ProjectX Security Alerts",
-      kms_master_key_id=self.kms_key_arn,
+      kms_master_key_id=self.kms_key.arn.apply(lambda arn: arn),
       tags=self.tags,
       opts=ResourceOptions(parent=self, depends_on=[self.security_log_group])
     )
