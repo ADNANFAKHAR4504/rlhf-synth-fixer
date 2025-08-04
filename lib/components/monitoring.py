@@ -647,7 +647,7 @@ class SecurityMonitoringInfrastructure(pulumi.ComponentResource):
       statistic="Sum",
       threshold=0,
       alarm_description="VPC Flow Logs delivery failures",
-      alarm_actions=[self.sns_topic.arn],
+      alarm_actions=[self.sns_topic.arn.apply(lambda arn: arn)],
       dimensions={
         "VPC": vpc_id
       },
