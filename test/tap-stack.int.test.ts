@@ -8,6 +8,8 @@ import {
   DescribeRouteTablesCommand,
   DescribeSecurityGroupsCommand,
 } from '@aws-sdk/client-ec2';
+import * as fs from 'fs';
+import * as path from 'path';
 
 const client = new EC2Client({ region: process.env.AWS_REGION || 'us-west-2' });
 
@@ -17,19 +19,29 @@ describe('IPv6-Only IoT Infrastructure Integration Tests', () => {
   let instanceId: string;
   let securityGroupId: string;
 
-  // This test relies on the Terraform outputs to find the deployed resources.
-  // Make sure you have run `cdktf deploy` and that the outputs are available.
   beforeAll(() => {
-    // These values should be retrieved from the Terraform output
-    // A more robust solution would be to read the .tfstate file or use a wrapper.
-    // For this example, we'll assume they're available as environment variables
-    // or are being manually populated.
-    vpcId = process.env.TF_OUTPUT_VPC_ID as string;
-    subnetId = process.env.TF_OUTPUT_PUBLIC_SUBNET_ID as string;
-    instanceId = process.env.TF_OUTPUT_EC2_INSTANCE_ID as string;
+    // Determine the path to the flat.output.json file.
+    // Assuming it's in the root of the project, which is where your pipeline
+    // seems to be placing it.
+    const outputFilePath = path.join(__dirname, '..', 'flat.output.json');
+    
+    if (!fs.existsSync(outputFilePath)) {
+      throw new Error(`flat.output.json not found at ${outputFilePath}. Please ensure the CI/CD pipeline places the output file correctly.`);
+    }
+
+    // Read and parse the outputs file
+    const outputs = JSON.parse(fs.readFileSync(outputFilePath, 'utf-8'));
+    
+    // Extract the values from the nested structure
+    // The key is the stack name, "TapStackpr435" in your case.
+    const stackOutputs = outputs.TapStackpr435;
+
+    vpcId = stackOutputs['vpc-id'];
+    subnetId = stackOutputs['public-subnet-id'];
+    instanceId = stackOutputs['ec2-instance-id'];
     
     if (!vpcId || !subnetId || !instanceId) {
-        throw new Error("Terraform outputs not found. Please deploy the stack and set environment variables TF_OUTPUT_VPC_ID, TF_OUTPUT_PUBLIC_SUBNET_ID, and TF_OUTPUT_EC2_INSTANCE_ID.");
+      throw new Error("Required Terraform outputs not found in flat.output.json.");
     }
   });
 
@@ -56,7 +68,7 @@ describe('IPv6-Only IoT Infrastructure Integration Tests', () => {
 
     expect(subnet).toBeDefined();
     expect(subnet?.VpcId).toBe(vpcId);
-    expect(subnet?.MapPublicIpOnLaunch).toBe(false); // This is key for IPv6-only
+    expect(subnet?.MapPublicIpOnLaunch).toBe(false);
     expect(subnet?.Ipv6CidrBlockAssociationSet).toBeDefined();
     expect(subnet?.Tags).toEqual(expect.arrayContaining([
       { Key: 'Environment', Value: 'dev' },
@@ -141,12 +153,11 @@ describe('IPv6-Only IoT Infrastructure Integration Tests', () => {
 
     expect(instance).toBeDefined();
     expect(instance?.SubnetId).toBe(subnetId);
-    expect(instance?.State?.Name).toBe('running'); // It should be running after deployment
+    expect(instance?.State?.Name).toBe('running');
     expect(instance?.Ipv6Address).toBeDefined();
     expect(instance?.Tags).toEqual(expect.arrayContaining([
       { Key: 'Environment', Value: 'dev' },
     ]));
-    // Add a check for the IAM instance profile
     expect(instance?.IamInstanceProfile?.Arn).toContain('tap-ec2-ec2-instance-profile');
     expect(instance?.SecurityGroups).toEqual(expect.arrayContaining([
       expect.objectContaining({ GroupId: securityGroupId })
