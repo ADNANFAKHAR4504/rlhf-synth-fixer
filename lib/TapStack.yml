@@ -35,9 +35,6 @@ Parameters:
     Description: "Your IP in CIDR notation (e.g., 203.0.113.5/32) for secure SSH access."
     Default: "0.0.0.0/0" # WARNING: Insecure. Allows SSH from anywhere.
 
-Conditions:
-  IsProd: !Equals [!Ref EnvironmentName, "prod"]
-
 Resources:
   WebAppAssets:
     Type: AWS::S3::Bucket

@@ -33,16 +33,6 @@
             "Default": "0.0.0.0/0"
         }
     },
-    "Conditions": {
-        "IsProd": {
-            "Fn::Equals": [
-                {
-                    "Ref": "EnvironmentName"
-                },
-                "prod"
-            ]
-        }
-    },
     "Resources": {
         "WebAppAssets": {
             "Type": "AWS::S3::Bucket",
