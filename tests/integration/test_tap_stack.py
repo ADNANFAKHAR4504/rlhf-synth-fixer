@@ -1,32 +1,59 @@
-"""
-test_tap_stack_integration.py
-
-Integration tests for live deployed TapStack Pulumi infrastructure.
-Tests actual AWS resources created by the Pulumi stack.
-"""
-
 import unittest
-import os
-import boto3
-import pulumi
-from pulumi import automation as auto
+import pulumi.runtime
+from lib.tap_stack import TapStack, VPCInfrastructure, IAMInfrastructure, DynamoDBInfrastructure, LambdaInfrastructure, APIGatewayInfrastructure
 
-"""
-test_tap_stack_integration.py
+class TestTapStackIntegration(unittest.TestCase):
+    def test_stack_outputs_and_resources(self):
+        stack = TapStack("test-stack", environment="dev")
+        stack.setup_infrastructure()
+        outputs = pulumi.runtime.serialize_properties({
+            "Environment": stack.config.environment,
+            "Region": stack.config.region
+        })
+        self.assertIn("Environment", outputs)
+        self.assertIn("Region", outputs)
+        self.assertEqual(outputs["Environment"], "dev")
+        self.assertEqual(outputs["Region"], "us-west-2")
 
-Integration tests for live deployed TapStack Pulumi infrastructure.
-Tests actual AWS resources created by the Pulumi stack.
-"""
+    def test_vpc_resources_created(self):
+        cfg = TapStack("test-stack", environment="dev").config
+        vpc = VPCInfrastructure(cfg)
+        vpc.create_vpc()
+        self.assertIsNotNone(vpc.vpc)
+        self.assertTrue(len(vpc.public_subnets) > 0)
+        self.assertTrue(len(vpc.private_subnets) > 0)
 
+    def test_iam_role_created(self):
+        cfg = TapStack("test-stack", environment="dev").config
+        iam = IAMInfrastructure(cfg)
+        role = iam.create_lambda_role()
+        self.assertIsNotNone(role)
 
-# class TestTapStackLiveIntegration(unittest.TestCase):
-#   """Integration tests against live deployed Pulumi stack."""
+    def test_dynamodb_tables_created(self):
+        cfg = TapStack("test-stack", environment="dev").config
+        dynamo = DynamoDBInfrastructure(cfg)
+        tables = dynamo.create_tables()
+        self.assertIn("products", tables)
+        self.assertIn("orders", tables)
+        self.assertIn("users", tables)
 
-#   def setUp(self):
-#     """Set up integration test with live stack."""
-#     self.stack_name = "dev"  # Your live Pulumi stack name (just the env part)
-#     self.project_name = "tap-infra"  # Your Pulumi project name
-#     self.s3_client = boto3.client('s3')
-    
-#     # Configure Pulumi to use S3 backend (not Pulumi Cloud)
-#     self.pulumi_backend_url = os.getenv('PULUMI_BACKEND_URL', 's3://iac-rlhf-pulumi-states')
+    def test_lambda_functions_created(self):
+        cfg = TapStack("test-stack", environment="dev").config
+        vpc = VPCInfrastructure(cfg)
+        vpc.create_vpc()
+        iam = IAMInfrastructure(cfg)
+        role = iam.create_lambda_role()
+        dynamo = DynamoDBInfrastructure(cfg)
+        tables = dynamo.create_tables()
+        lambdas = LambdaInfrastructure(cfg, role, vpc, tables)
+        functions = lambdas.create_lambda_functions()
+        self.assertIn("products", functions)
+        self.assertIn("orders", functions)
+        self.assertIn("users", functions)
+
+    def test_api_gateway_created(self):
+        cfg = TapStack("test-stack", environment="dev").config
+        lambdas = {"products": object(), "orders": object(), "users": object()}
+        api = APIGatewayInfrastructure(cfg, lambdas)
+        rest_api = api.create_api_gateway()
+        self.assertIsNotNone(rest_api)
