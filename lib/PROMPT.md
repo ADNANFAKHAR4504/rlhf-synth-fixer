@@ -18,13 +18,11 @@ Create a **single CloudFormation YAML template** that provisions the following:
 
 * Define a **REST API** with at least one HTTP method (e.g., `POST` or `GET`).
 * Integrate the REST endpoint with a backend **AWS Lambda function**.
-* Apply naming like `myApiGateway-dev`.
 
 ---
 
 ### **2. Compute (AWS Lambda)**
 
-* Deploy a Lambda function named `myLambdaFunction-dev`.
 * It should:
 
   * Be triggered by the API Gateway.
@@ -35,7 +33,6 @@ Create a **single CloudFormation YAML template** that provisions the following:
 
 ### **3. Database (Amazon DynamoDB)**
 
-* Create a table named `myDynamoDbTable-dev`.
 * Define both:
 
   * **Partition key** (e.g., `userId` - String)
@@ -48,7 +45,6 @@ Create a **single CloudFormation YAML template** that provisions the following:
 
 * Create IAM roles for:
 
-  * The **Lambda function** (`lambdaExecutionRole-dev`)
   * Any additional roles required by API Gateway (if applicable).
 * Roles must have **least privilege access**, scoped only to:
 
@@ -59,7 +55,6 @@ Create a **single CloudFormation YAML template** that provisions the following:
 
 ### **5. Object Storage (Amazon S3)**
 
-* Define a bucket named `myStorageBucket-dev`.
 * Enable **server-side encryption** using `AES256` or `KMS`.
 * The bucket may be used for storing function artifacts or logs.
 
