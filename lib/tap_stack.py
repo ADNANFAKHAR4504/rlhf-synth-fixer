@@ -10,7 +10,7 @@ from aws_cdk import (
 from constructs import Construct
 
 
-class ComputeStack(NestedStack):
+class TapStackProps(NestedStack):
     def __init__(self, scope: Construct, id: str, environment_suffix: str = "dev", **kwargs):
         super().__init__(scope, id, **kwargs)
 

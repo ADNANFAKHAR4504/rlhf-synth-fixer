@@ -13,7 +13,7 @@ different deployment environments (development, staging, production, etc.).
 import os
 import aws_cdk as cdk
 from aws_cdk import Tags
-from lib.tap_stack import TapStack, TapStackProps
+from lib.tap_stack import TapStackProps
 
 app = cdk.App()
 
