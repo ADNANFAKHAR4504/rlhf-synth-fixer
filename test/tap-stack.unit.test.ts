@@ -39,19 +39,19 @@ describe('TapStack CloudFormation Template', () => {
   });
 
   describe('Parameters', () => {
-    test('should have EnvironmentSuffix parameter', () => {
-      expect(template.Parameters.EnvironmentSuffix).toBeDefined();
+    test('should have EnvironmentType parameter', () => {
+      expect(template.Parameters.EnvironmentType).toBeDefined();
     });
 
-    test('EnvironmentSuffix parameter should have correct properties', () => {
-      const envSuffixParam = template.Parameters.EnvironmentSuffix;
-      expect(envSuffixParam.Type).toBe('String');
-      expect(envSuffixParam.Default).toBe('dev');
-      expect(envSuffixParam.Description).toBe(
-        'Environment suffix for resource naming (e.g., dev, staging, prod)'
+    test('EnvironmentType parameter should have correct properties', () => {
+      const envTypeParam = template.Parameters.EnvironmentType;
+      expect(envTypeParam.Type).toBe('String');
+      expect(envTypeParam.Default).toBe('dev');
+      expect(envTypeParam.Description).toBe(
+        'Environment Type for resource naming (e.g., dev, staging, prod)'
       );
-      expect(envSuffixParam.AllowedValues).toEqual(['dev', 'stage', 'prod']);
-      expect(envSuffixParam.ConstraintDescription).toBe(
+      expect(envTypeParam.AllowedValues).toEqual(['dev', 'stage', 'prod']);
+      expect(envTypeParam.ConstraintDescription).toBe(
         'Must be one of: dev, stage, or prod'
       );
     });
@@ -78,7 +78,7 @@ describe('TapStack CloudFormation Template', () => {
       const properties = table.Properties;
 
       expect(properties.TableName).toEqual({
-        'Fn::Sub': 'TurnAroundPromptTable${EnvironmentSuffix}',
+        'Fn::Sub': 'TurnAroundPromptTable${EnvironmentType}',
       });
       expect(properties.BillingMode).toBe('PAY_PER_REQUEST');
       expect(properties.DeletionProtectionEnabled).toBe(false);
@@ -135,7 +135,7 @@ describe('TapStack CloudFormation Template', () => {
         'TurnAroundPromptTableName',
         'TurnAroundPromptTableArn',
         'StackName',
-        'EnvironmentSuffix',
+        'EnvironmentType',
         'VpcId',
         'InstanceId',
         'PublicSubnetId',
@@ -177,14 +177,14 @@ describe('TapStack CloudFormation Template', () => {
       });
     });
 
-    test('EnvironmentSuffix output should be correct', () => {
-      const output = template.Outputs.EnvironmentSuffix;
+    test('EnvironmentType output should be correct', () => {
+      const output = template.Outputs.EnvironmentType;
       expect(output.Description).toBe(
-        'Environment suffix used for this deployment'
+        'Environment Type used for this deployment'
       );
-      expect(output.Value).toEqual({ Ref: 'EnvironmentSuffix' });
+      expect(output.Value).toEqual({ Ref: 'EnvironmentType' });
       expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-EnvironmentSuffix',
+        'Fn::Sub': '${AWS::StackName}-EnvironmentType',
       });
     });
 
@@ -238,12 +238,12 @@ describe('TapStack CloudFormation Template', () => {
   });
 
   describe('Resource Naming Convention', () => {
-    test('table name should follow naming convention with environment suffix', () => {
+    test('table name should follow naming convention with environment type', () => {
       const table = template.Resources.TurnAroundPromptTable;
       const tableName = table.Properties.TableName;
 
       expect(tableName).toEqual({
-        'Fn::Sub': 'TurnAroundPromptTable${EnvironmentSuffix}',
+        'Fn::Sub': 'TurnAroundPromptTable${EnvironmentType}',
       });
     });
 
@@ -260,7 +260,7 @@ describe('TapStack CloudFormation Template', () => {
       const vpc = template.Resources.VPC;
       const vpcNameTag = vpc.Properties.Tags.find((tag: any) => tag.Key === 'Name');
       expect(vpcNameTag.Value).toEqual({
-        'Fn::Sub': '${EnvironmentSuffix}-VPC',
+        'Fn::Sub': '${EnvironmentType}-VPC',
       });
     });
 
@@ -268,7 +268,7 @@ describe('TapStack CloudFormation Template', () => {
       const ec2 = template.Resources.EC2Instance;
       const ec2NameTag = ec2.Properties.Tags.find((tag: any) => tag.Key === 'Name');
       expect(ec2NameTag.Value).toEqual({
-        'Fn::Sub': '${EnvironmentSuffix}-EC2Instance',
+        'Fn::Sub': '${EnvironmentType}-EC2Instance',
       });
     });
   });

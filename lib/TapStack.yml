@@ -7,15 +7,15 @@ Metadata:
       - Label:
           default: "Environment Configuration"
         Parameters:
-          - EnvironmentSuffix
+          - EnvironmentType
     ParameterLabels:
-      EnvironmentSuffix:
-        default: "Environment Suffix"
+      EnvironmentType:
+        default: "Environment Type"
 
 Parameters:
-  EnvironmentSuffix:
+  EnvironmentType:
     Type: String
-    Description: 'Environment suffix for resource naming (e.g., dev, staging, prod)'
+    Description: 'Environment Type for resource naming (e.g., dev, staging, prod)'
     Default: 'dev'
     AllowedValues:
       - dev
@@ -47,7 +47,7 @@ Resources:
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      TableName: !Sub 'TurnAroundPromptTable${EnvironmentSuffix}'
+      TableName: !Sub 'TurnAroundPromptTable${EnvironmentType}'
       BillingMode: PAY_PER_REQUEST
       DeletionProtectionEnabled: false
       AttributeDefinitions:
@@ -58,18 +58,18 @@ Resources:
           KeyType: 'HASH'
 
   # VPC: Virtual Private Cloud provides network isolation for each environment
-  # The CIDR block is dynamically selected based on the EnvironmentSuffix parameter
+  # The CIDR block is dynamically selected based on the EnvironmentType parameter
   VPC:
     Type: AWS::EC2::VPC
     Properties:
-      CidrBlock: !FindInMap [EnvironmentConfig, !Ref EnvironmentSuffix, VpcCidr]
+      CidrBlock: !FindInMap [EnvironmentConfig, !Ref EnvironmentType, VpcCidr]
       EnableDnsHostnames: true
       EnableDnsSupport: true
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentSuffix}-VPC'  # Dynamic naming: dev-VPC, stage-VPC, prod-VPC
+          Value: !Sub '${EnvironmentType}-VPC'  # Dynamic naming: dev-VPC, stage-VPC, prod-VPC
         - Key: Environment
-          Value: !Ref EnvironmentSuffix  # Environment tag for resource identification and billing
+          Value: !Ref EnvironmentType  # Environment tag for resource identification and billing
 
   # Internet Gateway: Enables internet access for resources in public subnets
   InternetGateway:
@@ -77,9 +77,9 @@ Resources:
     Properties:
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentSuffix}-IGW'
+          Value: !Sub '${EnvironmentType}-IGW'
         - Key: Environment
-          Value: !Ref EnvironmentSuffix
+          Value: !Ref EnvironmentType
 
   # Attach Internet Gateway to VPC
   InternetGatewayAttachment:
@@ -95,13 +95,13 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       AvailabilityZone: !Select [0, !GetAZs '']  # Use first AZ in the region
-      CidrBlock: !FindInMap [EnvironmentConfig, !Ref EnvironmentSuffix, SubnetCidr]
+      CidrBlock: !FindInMap [EnvironmentConfig, !Ref EnvironmentType, SubnetCidr]
       MapPublicIpOnLaunch: true  # Auto-assign public IPs to instances
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentSuffix}-PublicSubnet'
+          Value: !Sub '${EnvironmentType}-PublicSubnet'
         - Key: Environment
-          Value: !Ref EnvironmentSuffix
+          Value: !Ref EnvironmentType
 
   # Route Table: Defines routing rules for the public subnet
   PublicRouteTable:
@@ -110,9 +110,9 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentSuffix}-PublicRouteTable'
+          Value: !Sub '${EnvironmentType}-PublicRouteTable'
         - Key: Environment
-          Value: !Ref EnvironmentSuffix
+          Value: !Ref EnvironmentType
 
   # Default Route: Routes internet traffic through the Internet Gateway
   DefaultPublicRoute:
@@ -134,7 +134,7 @@ Resources:
   InstanceSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub '${EnvironmentSuffix}-InstanceSG'
+      GroupName: !Sub '${EnvironmentType}-InstanceSG'
       GroupDescription: 'Security group for EC2 instances'
       VpcId: !Ref VPC
       SecurityGroupIngress:
@@ -154,9 +154,9 @@ Resources:
           Description: 'All outbound traffic'
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentSuffix}-InstanceSG'
+          Value: !Sub '${EnvironmentType}-InstanceSG'
         - Key: Environment
-          Value: !Ref EnvironmentSuffix
+          Value: !Ref EnvironmentType
 
   # EC2 Instance: The main compute resource deployed in each environment
   # Uses t3.micro for consistency across all environments
@@ -175,13 +175,13 @@ Resources:
           yum install -y httpd
           systemctl start httpd
           systemctl enable httpd
-          echo "<h1>Hello from ${EnvironmentSuffix} environment!</h1>" > /var/www/html/index.html
+          echo "<h1>Hello from ${EnvironmentType} environment!</h1>" > /var/www/html/index.html
           echo "<p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p>" >> /var/www/html/index.html
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentSuffix}-EC2Instance'
+          Value: !Sub '${EnvironmentType}-EC2Instance'
         - Key: Environment
-          Value: !Ref EnvironmentSuffix
+          Value: !Ref EnvironmentType
 
 # Outputs section exports important resource identifiers for use by other stacks or external tools
 # The output names include the environment for clarity when managing multiple environments
@@ -205,11 +205,11 @@ Outputs:
     Export:
       Name: !Sub '${AWS::StackName}-StackName'
 
-  EnvironmentSuffix:
-    Description: 'Environment suffix used for this deployment'
-    Value: !Ref EnvironmentSuffix
+  EnvironmentType:
+    Description: 'Environment Type used for this deployment'
+    Value: !Ref EnvironmentType
     Export:
-      Name: !Sub '${AWS::StackName}-EnvironmentSuffix'
+      Name: !Sub '${AWS::StackName}-EnvironmentType'
 
   # VPC ID output with environment-specific logical ID
   VpcId:

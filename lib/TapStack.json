@@ -9,21 +9,21 @@
                         "default": "Environment Configuration"
                     },
                     "Parameters": [
-                        "EnvironmentSuffix"
+                        "EnvironmentType"
                     ]
                 }
             ],
             "ParameterLabels": {
-                "EnvironmentSuffix": {
-                    "default": "Environment Suffix"
+                "EnvironmentType": {
+                    "default": "Environment Type"
                 }
             }
         }
     },
     "Parameters": {
-        "EnvironmentSuffix": {
+        "EnvironmentType": {
             "Type": "String",
-            "Description": "Environment suffix for resource naming (e.g., dev, staging, prod)",
+            "Description": "Environment Type for resource naming (e.g., dev, staging, prod)",
             "Default": "dev",
             "AllowedValues": [
                 "dev",
@@ -56,7 +56,7 @@
             "UpdateReplacePolicy": "Delete",
             "Properties": {
                 "TableName": {
-                    "Fn::Sub": "TurnAroundPromptTable${EnvironmentSuffix}"
+                    "Fn::Sub": "TurnAroundPromptTable${EnvironmentType}"
                 },
                 "BillingMode": "PAY_PER_REQUEST",
                 "DeletionProtectionEnabled": false,
@@ -81,7 +81,7 @@
                     "Fn::FindInMap": [
                         "EnvironmentConfig",
                         {
-                            "Ref": "EnvironmentSuffix"
+                            "Ref": "EnvironmentType"
                         },
                         "VpcCidr"
                     ]
@@ -92,13 +92,13 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${EnvironmentSuffix}-VPC"
+                            "Fn::Sub": "${EnvironmentType}-VPC"
                         }
                     },
                     {
                         "Key": "Environment",
                         "Value": {
-                            "Ref": "EnvironmentSuffix"
+                            "Ref": "EnvironmentType"
                         }
                     }
                 ]
@@ -111,13 +111,13 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${EnvironmentSuffix}-IGW"
+                            "Fn::Sub": "${EnvironmentType}-IGW"
                         }
                     },
                     {
                         "Key": "Environment",
                         "Value": {
-                            "Ref": "EnvironmentSuffix"
+                            "Ref": "EnvironmentType"
                         }
                     }
                 ]
@@ -152,7 +152,7 @@
                     "Fn::FindInMap": [
                         "EnvironmentConfig",
                         {
-                            "Ref": "EnvironmentSuffix"
+                            "Ref": "EnvironmentType"
                         },
                         "SubnetCidr"
                     ]
@@ -162,13 +162,13 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${EnvironmentSuffix}-PublicSubnet"
+                            "Fn::Sub": "${EnvironmentType}-PublicSubnet"
                         }
                     },
                     {
                         "Key": "Environment",
                         "Value": {
-                            "Ref": "EnvironmentSuffix"
+                            "Ref": "EnvironmentType"
                         }
                     }
                 ]
@@ -184,13 +184,13 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${EnvironmentSuffix}-PublicRouteTable"
+                            "Fn::Sub": "${EnvironmentType}-PublicRouteTable"
                         }
                     },
                     {
                         "Key": "Environment",
                         "Value": {
-                            "Ref": "EnvironmentSuffix"
+                            "Ref": "EnvironmentType"
                         }
                     }
                 ]
@@ -224,7 +224,7 @@
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
                 "GroupName": {
-                    "Fn::Sub": "${EnvironmentSuffix}-InstanceSG"
+                    "Fn::Sub": "${EnvironmentType}-InstanceSG"
                 },
                 "GroupDescription": "Security group for EC2 instances",
                 "VpcId": {
@@ -257,13 +257,13 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${EnvironmentSuffix}-InstanceSG"
+                            "Fn::Sub": "${EnvironmentType}-InstanceSG"
                         }
                     },
                     {
                         "Key": "Environment",
                         "Value": {
-                            "Ref": "EnvironmentSuffix"
+                            "Ref": "EnvironmentType"
                         }
                     }
                 ]
@@ -284,20 +284,20 @@
                 ],
                 "UserData": {
                     "Fn::Base64": {
-                        "Fn::Sub": "#!/bin/bash\nyum update -y\nyum install -y httpd\nsystemctl start httpd\nsystemctl enable httpd\necho \"<h1>Hello from ${EnvironmentSuffix} environment!</h1>\" > /var/www/html/index.html\necho \"<p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p>\" >> /var/www/html/index.html\n"
+                        "Fn::Sub": "#!/bin/bash\nyum update -y\nyum install -y httpd\nsystemctl start httpd\nsystemctl enable httpd\necho \"<h1>Hello from ${EnvironmentType} environment!</h1>\" > /var/www/html/index.html\necho \"<p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p>\" >> /var/www/html/index.html\n"
                     }
                 },
                 "Tags": [
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${EnvironmentSuffix}-EC2Instance"
+                            "Fn::Sub": "${EnvironmentType}-EC2Instance"
                         }
                     },
                     {
                         "Key": "Environment",
                         "Value": {
-                            "Ref": "EnvironmentSuffix"
+                            "Ref": "EnvironmentType"
                         }
                     }
                 ]
@@ -341,14 +341,14 @@
                 }
             }
         },
-        "EnvironmentSuffix": {
-            "Description": "Environment suffix used for this deployment",
+        "EnvironmentType": {
+            "Description": "Environment Type used for this deployment",
             "Value": {
-                "Ref": "EnvironmentSuffix"
+                "Ref": "EnvironmentType"
             },
             "Export": {
                 "Name": {
-                    "Fn::Sub": "${AWS::StackName}-EnvironmentSuffix"
+                    "Fn::Sub": "${AWS::StackName}-EnvironmentType"
                 }
             }
         },

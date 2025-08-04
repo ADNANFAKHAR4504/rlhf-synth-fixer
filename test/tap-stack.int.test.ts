@@ -16,7 +16,7 @@ describe('TapStack Integration Tests', () => {
         'TurnAroundPromptTableName',
         'TurnAroundPromptTableArn',
         'StackName',
-        'EnvironmentSuffix',
+        'EnvironmentType',
         'VpcId',
         'InstanceId',
         'PublicSubnetId',
@@ -46,9 +46,9 @@ describe('TapStack Integration Tests', () => {
       expect(outputs.StackName).toContain('TapStack');
     });
 
-    test('Environment suffix should match expected value', () => {
-      expect(outputs.EnvironmentSuffix).toBe(environmentSuffix);
-      expect(['dev', 'stage', 'prod']).toContain(outputs.EnvironmentSuffix);
+    test('Environment type should match expected value', () => {
+      expect(outputs.EnvironmentType).toBe(environmentSuffix);
+      expect(['dev', 'stage', 'prod']).toContain(outputs.EnvironmentType);
     });
 
     test('VPC ID should be valid format', () => {
@@ -155,8 +155,8 @@ describe('TapStack Integration Tests', () => {
 
     test('should have environment-specific resource isolation', () => {
       // This would verify that resources are properly isolated per environment
-      // For now, we'll just validate the environment suffix is used consistently
-      expect(outputs.EnvironmentSuffix).toBe(environmentSuffix);
+      // For now, we'll just validate the environment type is used consistently
+      expect(outputs.EnvironmentType).toBe(environmentSuffix);
     });
   });
 });
