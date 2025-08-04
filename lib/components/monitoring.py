@@ -615,6 +615,7 @@ class SecurityMonitoringInfrastructure(pulumi.ComponentResource):
 
   def setup_vpc_flow_logs(self, vpc_id: pulumi.Input[str], opts: Optional[ResourceOptions] = None):
     """Setup VPC Flow Logs for network monitoring"""
+    opts = opts or ResourceOptions(parent=self)
     self.vpc_flow_logs = aws.ec2.FlowLog(
       f"{self.region.replace('-', '')}-secure-projectx-vpc-flow-logs",
       vpc_id=vpc_id,
@@ -627,7 +628,7 @@ class SecurityMonitoringInfrastructure(pulumi.ComponentResource):
         "Name": f"secure-projectx-vpc-flow-logs-{self.region}",
         "Purpose": "NetworkMonitoring"
       },
-      opts=ResourceOptions(parent=self)
+      opts = opts
     )
 
   def setup_security_alarms(self,
@@ -636,6 +637,7 @@ class SecurityMonitoringInfrastructure(pulumi.ComponentResource):
                            rds_instance_identifiers: List[pulumi.Input[str]],
                            opts: Optional[ResourceOptions] = None):
     """Setup CloudWatch alarms for security monitoring"""
+    opts = opts or ResourceOptions(parent=self)
     self.vpc_flow_logs_alarm = aws.cloudwatch.MetricAlarm(
       f"{self.region.replace('-', '')}-secure-projectx-vpc-flow-logs-alarm",
       name=f"secure-projectx-vpc-flow-logs-delivery-failures-{self.region}",
@@ -652,9 +654,7 @@ class SecurityMonitoringInfrastructure(pulumi.ComponentResource):
         "VPC": vpc_id
       },
       tags=self.tags,
-      opts=(opts or ResourceOptions()).merge(
-        ResourceOptions(parent=self)
-      )
+      opts=opts
     )
 
     self.guardduty_findings_alarm = aws.cloudwatch.MetricAlarm(
