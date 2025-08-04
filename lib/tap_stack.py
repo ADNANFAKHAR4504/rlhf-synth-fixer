@@ -447,7 +447,7 @@ class TapStack(pulumi.ComponentResource):
         "s3-lambda-permission",
         statement_id="AllowExecutionFromS3Bucket",
         action="lambda:InvokeFunction",
-        function=s3_processor_lambda.name,
+        function=s3_processor_lambda.name.apply(lambda n: f"/aws/lambda/{n}"),
         principal="s3.amazonaws.com",
         source_arn=s3_bucket.arn
     )
@@ -544,7 +544,7 @@ class TapStack(pulumi.ComponentResource):
         "api-lambda-permission",
         statement_id="AllowExecutionFromAPIGateway",
         action="lambda:InvokeFunction",
-        function=api_handler_lambda.name,
+        function=api_handler_lambda.name.apply(lambda n: f"/aws/lambda/{n}"),
         principal="apigateway.amazonaws.com",
         source_arn=api_gateway.execution_arn.apply(lambda arn: f"{arn}/*/*")
     )
@@ -600,14 +600,14 @@ class TapStack(pulumi.ComponentResource):
     # CloudWatch Log Groups for Lambda functions
     _ = aws.cloudwatch.LogGroup(
         "s3-processor-logs",
-        name=f"/aws/lambda/{s3_processor_lambda.name}",
+        name=s3_processor_lambda.name.apply(lambda n: f"/aws/lambda/{n}"),
         retention_in_days=14,
         tags=common_tags
     )
 
     _ = aws.cloudwatch.LogGroup(
         "api-handler-logs",
-        name=f"/aws/lambda/{api_handler_lambda.name}",
+        name=api_handler_lambda.name.apply(lambda n: f"/aws/lambda/{n}"),
         retention_in_days=14,
         tags=common_tags
     )
@@ -632,7 +632,7 @@ class TapStack(pulumi.ComponentResource):
         threshold=1,
         alarm_description="S3 Processor Lambda function errors",
         dimensions={
-            "FunctionName": s3_processor_lambda.name
+            "FunctionName": s3_processor_lambda.name.apply(lambda n: f"/aws/lambda/{n}"),
         },
         alarm_actions=[alarm_topic.arn],
         tags=common_tags
@@ -650,7 +650,7 @@ class TapStack(pulumi.ComponentResource):
         threshold=1,
         alarm_description="API Handler Lambda function errors",
         dimensions={
-            "FunctionName": api_handler_lambda.name
+            "FunctionName": api_handler_lambda.name.apply(lambda n: f"/aws/lambda/{n}"),
         },
         alarm_actions=[alarm_topic.arn],
         tags=common_tags
@@ -669,7 +669,7 @@ class TapStack(pulumi.ComponentResource):
         threshold=300,  # 300ms threshold
         alarm_description="S3 Processor Lambda function duration exceeds 300ms",
         dimensions={
-            "FunctionName": s3_processor_lambda.name
+            "FunctionName": s3_processor_lambda.name.apply(lambda n: f"/aws/lambda/{n}"),
         },
         alarm_actions=[alarm_topic.arn],
         tags=common_tags
