@@ -43,18 +43,18 @@ class DataProtectionInfrastructure(pulumi.ComponentResource):
       raise ValueError("region must be provided")
 
     self._create_s3_buckets()
-    self._create_backup_policies()
+    # self._create_backup_policies()
 
     self.register_outputs({
       "secure_s3_bucket_name": self.secure_s3_bucket.bucket,
-      "secure_s3_bucket_arn": self.secure_s3_bucket.arn,
-      "backup_vault_arn": self.backup_vault.arn,
-      "backup_plan_id": self.backup_plan.id
+      "secure_s3_bucket_arn": self.secure_s3_bucket.arn
     })
 
   def _create_s3_buckets(self):
     safe_stack = re.sub(r'[^a-z0-9\-]', '', pulumi.get_stack().lower())
     bucket_name = f"secure-projectx-data-{self.region}-{safe_stack}"
+    assert self.kms_key_arn.apply(lambda arn: f":{self.region}:" in arn), \
+      f"KMS key ARN region mismatch: {self.kms_key_arn}"
     self.secure_s3_bucket = aws.s3.Bucket(
       f"{self.region.replace('-', '')}-secure-projectx-data-bucket",
       bucket=bucket_name,
@@ -196,77 +196,3 @@ class DataProtectionInfrastructure(pulumi.ComponentResource):
       opts=ResourceOptions(parent=self, depends_on=[self.s3_lifecycle])
     )
 
-  def _create_backup_policies(self):
-    self.backup_vault = aws.backup.Vault(
-      f"{self.region.replace('-', '')}-secure-projectx-backup-vault",
-      name=f"secure-projectx-backup-vault-{self.region}",
-      kms_key_arn=self.kms_key_arn,
-      tags={
-        **self.tags,
-        "Name": f"secure-projectx-backup-vault-{self.region}"
-      },
-      opts=ResourceOptions(parent=self)
-    )
-
-    self.backup_plan = aws.backup.Plan(
-      f"{self.region.replace('-', '')}-secure-projectx-backup-plan",
-      name=f"secure-projectx-backup-plan-{self.region}",
-      rules=[
-        aws.backup.PlanRuleArgs(
-          rule_name="DailyBackups",
-          target_vault_name=self.backup_vault.name,
-          schedule="cron(0 2 ? * * *)",
-          start_window=60,
-          completion_window=120,
-          lifecycle=aws.backup.PlanRuleLifecycleArgs(
-            cold_storage_after=30,
-            delete_after=365
-          ),
-          recovery_point_tags={
-            **self.tags,
-            "BackupType": "Daily"
-          }
-        )
-      ],
-      tags=self.tags,
-      opts=ResourceOptions(parent=self, depends_on=[self.backup_vault])
-    )
-
-    backup_assume_role_policy = {
-      "Version": "2012-10-17",
-      "Statement": [
-        {
-          "Effect": "Allow",
-          "Principal": {
-            "Service": "backup.amazonaws.com"
-          },
-          "Action": "sts:AssumeRole"
-        }
-      ]
-    }
-
-    self.backup_role = aws.iam.Role(
-      f"{self.region.replace('-', '')}-secure-projectx-backup-role",
-      name=f"secure-projectx-backup-role-{self.region}",
-      assume_role_policy=json.dumps(backup_assume_role_policy),
-      tags={
-        **self.tags,
-        "Name": f"secure-projectx-backup-role-{self.region}",
-        "Service": "Backup"
-      },
-      opts=ResourceOptions(parent=self)
-    )
-
-    aws.iam.RolePolicyAttachment(
-      f"{self.region.replace('-', '')}-secure-projectx-backup-policy-backup",
-      role=self.backup_role.name,
-      policy_arn="arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForBackup",
-      opts=ResourceOptions(parent=self, depends_on=[self.backup_role])
-    )
-
-    aws.iam.RolePolicyAttachment(
-      f"{self.region.replace('-', '')}-secure-projectx-backup-policy-restore",
-      role=self.backup_role.name,
-      policy_arn="arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForRestores",
-      opts=ResourceOptions(parent=self, depends_on=[self.backup_role])
-    )
