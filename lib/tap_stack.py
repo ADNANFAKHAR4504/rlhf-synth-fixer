@@ -13,7 +13,7 @@ class TapStackArgs:
                regions: Optional[list] = None,
                tags: Optional[dict] = None):
     self.environment_suffix = environment_suffix or 'dev'
-    self.regions = ['us-west-2']  # Reduced to a single region
+    self.regions = ['us-west-2']
     self.tags = tags or {
       'Project': 'ProjectX',
       'Security': 'High',
@@ -33,6 +33,7 @@ class TapStack(pulumi.ComponentResource):
     self.regional_data_protection = {}
     self.providers = {}
 
+    print("🔐 Creating Identity and Access Infrastructure...")
     self.identity_access = IdentityAccessInfrastructure(
       name=f"secure-projectx-identity-{self.environment_suffix}",
       tags=self.tags,
@@ -42,6 +43,7 @@ class TapStack(pulumi.ComponentResource):
     region = 'us-west-2'
     region_suffix = region.replace('-', '')
 
+    print(f"🌍 Setting up AWS provider for region: {region}")
     self.providers[region] = aws.Provider(
       f"aws-provider-{region}-{self.environment_suffix}",
       region=region
@@ -53,6 +55,7 @@ class TapStack(pulumi.ComponentResource):
       provider=self.providers[region]
     )
 
+    print("🌐 Creating Networking Infrastructure (no NAT/NACL)...")
     self.regional_networks[region] = NetworkSecurityInfrastructure(
       name=f"secure-projectx-network-{region_suffix}-{self.environment_suffix}",
       region=region,
@@ -62,6 +65,7 @@ class TapStack(pulumi.ComponentResource):
       opts=provider_opts([self.identity_access])
     )
 
+    print("📡 Creating Monitoring Infrastructure...")
     self.regional_monitoring[region] = SecurityMonitoringInfrastructure(
       name=f"secure-projectx-monitoring-{region_suffix}-{self.environment_suffix}",
       region=region,
@@ -70,6 +74,7 @@ class TapStack(pulumi.ComponentResource):
       opts=provider_opts([self.identity_access])
     )
 
+    print("🛡️ Creating Data Protection Infrastructure...")
     self.regional_data_protection[region] = DataProtectionInfrastructure(
       name=f"secure-projectx-data-{region_suffix}-{self.environment_suffix}",
       region=region,
@@ -87,6 +92,7 @@ class TapStack(pulumi.ComponentResource):
       ])
     )
 
+    print("🔔 Setting up CloudWatch Security Alarms...")
     self.regional_monitoring[region].setup_security_alarms(
       vpc_id=self.regional_networks[region].vpc_id,
       s3_bucket_names=[self.regional_data_protection[region].secure_s3_bucket.bucket],
@@ -99,6 +105,7 @@ class TapStack(pulumi.ComponentResource):
       ])
     )
 
+    print("📊 Setting up VPC Flow Logs...")
     self.regional_monitoring[region].setup_vpc_flow_logs(
       vpc_id=self.regional_networks[region].vpc_id,
       opts=provider_opts([
@@ -107,7 +114,7 @@ class TapStack(pulumi.ComponentResource):
       ])
     )
 
-    # Outputs limited to us-west-2 only
+    print("📤 Exporting Outputs...")
     pulumi.export("primary_vpc_id", self.regional_networks[region].vpc_id)
     pulumi.export("kms_key_arn", self.identity_access.kms_key.arn)
     pulumi.export("guardduty_detector_id", self.regional_monitoring[region].guardduty_detector.id)
