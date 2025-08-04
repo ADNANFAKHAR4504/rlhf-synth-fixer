@@ -26,7 +26,6 @@ interface TapStackProps {
   keyName?: string; // added to allow EC2 key pair injection
 }
 
-
 export class TapStack extends TerraformStack {
   constructor(scope: Construct, id: string, props: TapStackProps) {
     super(scope, id);
