@@ -1,6 +1,5 @@
 import fs from 'fs';
 import path from 'path';
-import * as yaml from 'yaml';
 
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'prodd';
 
@@ -8,11 +7,9 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
   let template: any;
 
   beforeAll(() => {
-    const templatePath = path.join(__dirname, '../lib/TapStack.yml');
+    const templatePath = path.join(__dirname, '../lib/TapStack.json');
     const templateContent = fs.readFileSync(templatePath, 'utf8');
-    template = yaml.parse(templateContent, {
-      logLevel: 'silent'
-    });
+    template = JSON.parse(templateContent);
   });
 
   describe('Template Structure', () => {
@@ -139,11 +136,15 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
 
       expect(subnet1.Type).toBe('AWS::EC2::Subnet');
       expect(subnet1.Properties.MapPublicIpOnLaunch).toBe(true);
-      expect(subnet1.Properties.AvailabilityZone).toEqual([0, '']);
+      expect(subnet1.Properties.AvailabilityZone).toEqual({
+        "Fn::Select": [0, {"Fn::GetAZs": ""}]
+      });
 
       expect(subnet2.Type).toBe('AWS::EC2::Subnet');
       expect(subnet2.Properties.MapPublicIpOnLaunch).toBe(true);
-      expect(subnet2.Properties.AvailabilityZone).toEqual([1, '']);
+      expect(subnet2.Properties.AvailabilityZone).toEqual({
+        "Fn::Select": [1, {"Fn::GetAZs": ""}]
+      });
     });
 
     test('should create two private subnets in different AZs', () => {
@@ -151,10 +152,14 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
       const subnet2 = template.Resources.PrivateSubnet2;
 
       expect(subnet1.Type).toBe('AWS::EC2::Subnet');
-      expect(subnet1.Properties.AvailabilityZone).toEqual([0, '']);
+      expect(subnet1.Properties.AvailabilityZone).toEqual({
+        "Fn::Select": [0, {"Fn::GetAZs": ""}]
+      });
 
       expect(subnet2.Type).toBe('AWS::EC2::Subnet');
-      expect(subnet2.Properties.AvailabilityZone).toEqual([1, '']);
+      expect(subnet2.Properties.AvailabilityZone).toEqual({
+        "Fn::Select": [1, {"Fn::GetAZs": ""}]
+      });
     });
 
     test('should create NAT Gateways with conditional second gateway', () => {
@@ -193,8 +198,8 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
       
       const ingress = sg.Properties.SecurityGroupIngress;
       expect(ingress).toHaveLength(2);
-      expect(ingress[0].SourceSecurityGroupId).toBe('ALBSecurityGroup');
-      expect(ingress[1].SourceSecurityGroupId).toBe('ALBSecurityGroup');
+      expect(ingress[0].SourceSecurityGroupId).toEqual({"Ref": "ALBSecurityGroup"});
+      expect(ingress[1].SourceSecurityGroupId).toEqual({"Ref": "ALBSecurityGroup"});
     });
 
     test('should create database security group with web server-only access', () => {
@@ -204,7 +209,7 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
       const ingress = sg.Properties.SecurityGroupIngress;
       expect(ingress).toHaveLength(1);
       expect(ingress[0].FromPort).toBe(3306);
-      expect(ingress[0].SourceSecurityGroupId).toBe('WebServerSecurityGroup');
+      expect(ingress[0].SourceSecurityGroupId).toEqual({"Ref": "WebServerSecurityGroup"});
     });
   });
 
