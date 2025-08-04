@@ -271,12 +271,12 @@ export class ServerlessCms extends Construct {
       authorization: 'NONE',
     });
 
-    new ApiGatewayIntegration(this, 'get_integration', {
+    const getIntegration = new ApiGatewayIntegration(this, 'get_integration', {
       provider: props.providerAws,
       restApiId: api.id,
       resourceId: contentIdResource.id,
       httpMethod: getMethod.httpMethod,
-      integrationHttpMethod: 'GET',
+      integrationHttpMethod: 'POST',
       type: 'AWS_PROXY',
       uri: contentLambda.invokeArn,
     });
@@ -290,15 +290,19 @@ export class ServerlessCms extends Construct {
       authorization: 'NONE',
     });
 
-    new ApiGatewayIntegration(this, 'post_integration', {
-      provider: props.providerAws,
-      restApiId: api.id,
-      resourceId: contentResource.id,
-      httpMethod: postMethod.httpMethod,
-      integrationHttpMethod: 'POST',
-      type: 'AWS_PROXY',
-      uri: contentLambda.invokeArn,
-    });
+    const postIntegration = new ApiGatewayIntegration(
+      this,
+      'post_integration',
+      {
+        provider: props.providerAws,
+        restApiId: api.id,
+        resourceId: contentResource.id,
+        httpMethod: postMethod.httpMethod,
+        integrationHttpMethod: 'POST',
+        type: 'AWS_PROXY',
+        uri: contentLambda.invokeArn,
+      }
+    );
 
     // PUT method for updating content with Lambda integration
     const putMethod = new ApiGatewayMethod(this, 'put_content_method', {
@@ -309,12 +313,12 @@ export class ServerlessCms extends Construct {
       authorization: 'NONE',
     });
 
-    new ApiGatewayIntegration(this, 'put_integration', {
+    const putIntegration = new ApiGatewayIntegration(this, 'put_integration', {
       provider: props.providerAws,
       restApiId: api.id,
       resourceId: contentIdResource.id,
       httpMethod: putMethod.httpMethod,
-      integrationHttpMethod: 'PUT',
+      integrationHttpMethod: 'POST',
       type: 'AWS_PROXY',
       uri: contentLambda.invokeArn,
     });
@@ -328,15 +332,19 @@ export class ServerlessCms extends Construct {
       authorization: 'NONE',
     });
 
-    new ApiGatewayIntegration(this, 'delete_integration', {
-      provider: props.providerAws,
-      restApiId: api.id,
-      resourceId: contentIdResource.id,
-      httpMethod: deleteMethod.httpMethod,
-      integrationHttpMethod: 'DELETE',
-      type: 'AWS_PROXY',
-      uri: contentLambda.invokeArn,
-    });
+    const deleteIntegration = new ApiGatewayIntegration(
+      this,
+      'delete_integration',
+      {
+        provider: props.providerAws,
+        restApiId: api.id,
+        resourceId: contentIdResource.id,
+        httpMethod: deleteMethod.httpMethod,
+        integrationHttpMethod: 'POST',
+        type: 'AWS_PROXY',
+        uri: contentLambda.invokeArn,
+      }
+    );
 
     // Lambda permissions for API Gateway
     new LambdaPermission(this, 'api_gateway_lambda_permission', {
@@ -349,10 +357,19 @@ export class ServerlessCms extends Construct {
     });
 
     // API Gateway deployment
+    const methods = [getMethod, postMethod, putMethod, deleteMethod];
+
+    const integrations = [
+      getIntegration,
+      postIntegration,
+      putIntegration,
+      deleteIntegration,
+    ];
+
     const deployment = new ApiGatewayDeployment(this, 'api_deployment', {
       provider: props.providerAws,
       restApiId: api.id,
-      dependsOn: [getMethod, postMethod, putMethod, deleteMethod],
+      dependsOn: [...methods, ...integrations],
     });
 
     // API Gateway stage
