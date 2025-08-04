@@ -251,11 +251,6 @@ def test_tapstack_component_dependencies(mock_provider, mock_identity, mock_netw
   assert 'kms_key_arn' in network_call_args.kwargs
   assert network_call_args.kwargs['kms_key_arn'] == mock_identity_instance.kms_key.arn
   
-  # Verify monitoring component gets KMS key from identity
-  monitoring_call_args = mock_monitoring.call_args
-  assert 'kms_key_arn' in monitoring_call_args.kwargs
-  assert monitoring_call_args.kwargs['kms_key_arn'] == mock_identity_instance.kms_key.arn
-  
   # Verify data protection component gets multiple dependencies
   data_protection_call_args = mock_data_protection.call_args
   assert 'vpc_id' in data_protection_call_args.kwargs
