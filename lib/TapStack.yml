@@ -57,6 +57,7 @@ Resources:
       FunctionName: !Ref ServerlessAppLambda
       Principal: s3.amazonaws.com
       SourceArn: !GetAtt ServerlessAppBucket.Arn
+      SourceAccount: !Ref AWS::AccountId
 
   # VPC for Lambda isolation (Multi-AZ)
   ServerlessAppVPC:
