@@ -171,7 +171,7 @@
         "WebAppServer": {
             "Type": "AWS::EC2::Instance",
             "Properties": {
-                "InstanceType": "t3.micro",
+                "InstanceType": "t2.micro",
                 "ImageId": "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}",
                 "KeyName": {
                     "Ref": "WebAppServerKeyName"
@@ -220,13 +220,7 @@
                 "EngineVersion": "8.0.36",
                 "AllocatedStorage": "20",
                 "StorageType": "gp2",
-                "MultiAZ": {
-                    "Fn::If": [
-                        "IsProd",
-                        true,
-                        false
-                    ]
-                },
+                "MultiAZ": true,
                 "DBName": {
                     "Fn::Sub": "${ProjectName}${EnvironmentName}DB"
                 },

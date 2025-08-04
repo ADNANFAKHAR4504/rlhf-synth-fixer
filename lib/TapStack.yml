@@ -104,7 +104,8 @@ Resources:
   WebAppServer:
     Type: AWS::EC2::Instance
     Properties:
-      InstanceType: t3.micro
+      # FIXED: Changed instance type from t3.micro to t2.micro to meet compliance.
+      InstanceType: t2.micro
       ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}'
       KeyName: !Ref WebAppServerKeyName
       SecurityGroupIds:
@@ -128,7 +129,8 @@ Resources:
       EngineVersion: '8.0.36'
       AllocatedStorage: '20'
       StorageType: gp2
-      MultiAZ: !If [IsProd, true, false]
+      # FIXED: Set MultiAZ to true to ensure high availability and meet compliance.
+      MultiAZ: true
       DBName: !Sub '${ProjectName}${EnvironmentName}DB'
       MasterUsername: !Ref DBMasterUsername
       MasterUserPassword: '{{resolve:secretsmanager:MyProdDbCredentials:SecretString:password}}'

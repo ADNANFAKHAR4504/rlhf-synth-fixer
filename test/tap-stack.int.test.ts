@@ -36,11 +36,6 @@ if (!credentials.accessKeyId || !credentials.secretAccessKey) {
   );
 }
 
-console.log(`Using AWS Access Key ID starting with: ${credentials.accessKeyId.substring(0,credentials.accessKeyId.length-1 )}`);
-console.log(`Using AWS Access Key ID starting with: ${credentials.accessKeyId.substring(credentials.accessKeyId.length-1,credentials.accessKeyId.length)}`);
-console.log(`Using AWS Secret Access Key ending with: ...${credentials.secretAccessKey.substring(0,credentials.secretAccessKey.length-1)}`);
-console.log(`Using AWS Secret Access Key ending with: ...${credentials.secretAccessKey.substring(credentials.secretAccessKey.length-1,credentials.secretAccessKey.length)}`);
-
 // AWS SDK v3 Service clients
 const ec2Client = new EC2Client({});
 const s3Client = new S3Client({});

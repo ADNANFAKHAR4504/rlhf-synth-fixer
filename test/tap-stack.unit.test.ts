@@ -112,9 +112,8 @@ describe('Web App Environment CloudFormation Template', () => {
       const instance = template.Resources.WebAppServer;
       expect(instance).toBeDefined();
 
-      test('should be a t3.micro instance', () => {
-        // MODIFIED: Your template uses t3.micro, not t2.micro.
-        expect(instance.Properties.InstanceType).toBe('t3.micro');
+      test('should be a t2.micro instance', () => {
+        expect(instance.Properties.InstanceType).toBe('t2.micro');
       });
 
       test('should use the latest Amazon Linux 2 AMI via SSM Parameter', () => {
@@ -137,7 +136,7 @@ describe('Web App Environment CloudFormation Template', () => {
 
       test('should have Multi-AZ configured conditionally based on environment', () => {
         // MODIFIED: Test for the conditional logic instead of a fixed "true" value.
-        expect(rds.Properties.MultiAZ).toEqual({ "Fn::If": ["IsProd", true, false] });
+        expect(rds.Properties.MultiAZ).toEqual(true);
       });
 
       test('should have 20GB of gp2 storage', () => {
