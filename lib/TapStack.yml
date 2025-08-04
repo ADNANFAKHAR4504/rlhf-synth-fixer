@@ -253,6 +253,14 @@ Resources:
           Value: !Sub "${ApplicationName}-nat-eip-1"
 
   NatGateway1:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatGateway1EIP.AllocationId
+      SubnetId: !Ref PublicSubnet1
+      Tags:
+        - Key: Name
+          Value: !Sub "${ApplicationName}-nat-1"
+
   NatGateway2EIP:
     Type: AWS::EC2::EIP
     DependsOn: InternetGatewayAttachment
@@ -270,13 +278,6 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub "${ApplicationName}-nat-2"
-    Type: AWS::EC2::NatGateway
-    Properties:
-      AllocationId: !GetAtt NatGateway1EIP.AllocationId
-      SubnetId: !Ref PublicSubnet1
-      Tags:
-        - Key: Name
-          Value: !Sub "${ApplicationName}-nat-1"
 
   PublicRouteTable:
     Type: AWS::EC2::RouteTable
@@ -521,11 +522,6 @@ Resources:
             Value: !Sub "${ApplicationName}-cloudfront"
           - Key: Environment
             Value: !Ref EnvironmentSuffix
-    Type: AWS::EC2::Route
-    Properties:
-      RouteTableId: !Ref PrivateRouteTable1
-      DestinationCidrBlock: 0.0.0.0/0
-      NatGatewayId: !Ref NatGateway1
 
   PrivateSubnet1RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
