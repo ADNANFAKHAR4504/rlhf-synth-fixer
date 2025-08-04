@@ -12,7 +12,6 @@ Data Protection Infrastructure Component
 
 This component creates and manages:
 - S3 buckets with encryption at rest and versioning
-- Backup vaults and policies
 - Data retention and backup policies
 """
 
@@ -43,7 +42,6 @@ class DataProtectionInfrastructure(pulumi.ComponentResource):
       raise ValueError("region must be provided")
 
     self._create_s3_buckets()
-    # self._create_backup_policies()
 
     self.register_outputs({
       "secure_s3_bucket_name": self.secure_s3_bucket.bucket,
@@ -55,6 +53,7 @@ class DataProtectionInfrastructure(pulumi.ComponentResource):
     bucket_name = f"secure-projectx-data-{self.region}-{safe_stack}"
     assert self.kms_key_arn.apply(lambda arn: f":{self.region}:" in arn), \
       f"KMS key ARN region mismatch: {self.kms_key_arn}"
+
     self.secure_s3_bucket = aws.s3.Bucket(
       f"{self.region.replace('-', '')}-secure-projectx-data-bucket",
       bucket=bucket_name,
@@ -190,9 +189,47 @@ class DataProtectionInfrastructure(pulumi.ComponentResource):
         aws.s3.BucketNotificationTopicArgs(
           topic_arn=self.sns_topic_arn,
           events=["s3:ObjectCreated:*", "s3:ObjectRemoved:*"],
-          filter_prefix="critical/"
+          filter=aws.s3.BucketNotificationFilterArgs(
+            key=aws.s3.BucketNotificationFilterKeyArgs(
+              filter_rules=[
+                aws.s3.BucketNotificationFilterRuleArgs(
+                  name="prefix",
+                  value="critical/"
+                )
+              ]
+            )
+          )
         )
       ],
       opts=ResourceOptions(parent=self, depends_on=[self.s3_lifecycle])
     )
 
+    topic_policy = pulumi.Output.all(
+      topic_arn=self.sns_topic_arn,
+      bucket_name=self.secure_s3_bucket.bucket
+    ).apply(lambda args: json.dumps({
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+          "Sid": "AllowS3ToPublish",
+          "Effect": "Allow",
+          "Principal": {
+            "Service": "s3.amazonaws.com"
+          },
+          "Action": "sns:Publish",
+          "Resource": args["topic_arn"],
+          "Condition": {
+            "ArnLike": {
+              "aws:SourceArn": f"arn:aws:s3:::{args['bucket_name']}"
+            }
+          }
+        }
+      ]
+    }))
+
+    self.s3_sns_topic_policy = aws.sns.TopicPolicy(
+      f"{self.region.replace('-', '')}-secure-projectx-topic-policy",
+      arn=self.sns_topic_arn,
+      policy=topic_policy,
+      opts=ResourceOptions(parent=self, depends_on=[self.s3_notification])
+    )
