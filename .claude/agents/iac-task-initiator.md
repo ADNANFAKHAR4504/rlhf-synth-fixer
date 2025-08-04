@@ -24,8 +24,9 @@ generating metadata, and setting up the task environment for subsequent processi
 
 ### 2. Environment Preparation
 
+- DO NOT upgrade the versions of node or python. We need to keep the versions fixed as they are in package.json and Pipfile.
 - Install Node.js dependencies: `npm ci`
-- Install Python dependencies: `pipenv install --dev`
+- Install Python dependencies: `pipenv install --dev --ignore-pipfile`
 - Validate environment setup and log any issues
 
 ### 3. Task Metadata Generation
