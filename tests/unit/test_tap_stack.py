@@ -1,10 +1,15 @@
-import unittest
-from unittest.mock import Mock, patch, MagicMock, call
+from lib.components.serverless import ServerlessComponent
+from lib.components.database import DatabaseComponent
+from lib.components.iam import IAMComponent
+from lib.components.vpc import ComputeComponent
+from lib.tap_stack import TapStack, TapStackArgs
 import os
 import sys
+import unittest
+from unittest.mock import Mock
 
 # Set environment variable for Pulumi testing
-os.environ['PULUMI_TEST_MODE'] = 'true'
+os.environ["PULUMI_TEST_MODE"] = "true"
 
 
 class MockComponentResource:
@@ -33,89 +38,100 @@ class MockOutput:
     return Mock()
 
 
+# Mock Pulumi and AWS before any import from lib.*
+pulumi_mock = Mock()
+pulumi_mock.ComponentResource = MockComponentResource
+pulumi_mock.ResourceOptions = Mock
+pulumi_mock.Output = MockOutput
+pulumi_mock.Output.concat = MockOutput.concat
+pulumi_mock.Output.all = MockOutput.all
+pulumi_mock.AssetArchive = Mock()
+pulumi_mock.StringAsset = Mock()
+pulumi_mock.get_stack = Mock(return_value="test")
+
+aws_mock = Mock()
+aws_mock.get_region.return_value = Mock(name="us-east-1")
+aws_mock.get_availability_zones.return_value = Mock(
+    names=["us-east-1a", "us-east-1b"]
+)
+
+sys.modules["pulumi"] = pulumi_mock
+sys.modules["pulumi_aws"] = aws_mock
+
+# Now import lib modules
+
+
 class TestTapStackComponents(unittest.TestCase):
-  @classmethod
-  def setUpClass(cls):
-    cls.mock_pulumi = Mock()
-    cls.mock_pulumi.ComponentResource = MockComponentResource
-    cls.mock_pulumi.ResourceOptions = Mock
-    cls.mock_pulumi.Output = MockOutput
-    cls.mock_pulumi.Output.concat = MockOutput.concat
-    cls.mock_pulumi.Output.all = MockOutput.all
-    cls.mock_pulumi.AssetArchive = Mock()
-    cls.mock_pulumi.StringAsset = Mock()
-    cls.mock_pulumi.get_stack = Mock(return_value="test")
-
-    cls.mock_aws = Mock()
-    cls.mock_aws.get_region.return_value = Mock(name='us-east-1')
-    cls.mock_aws.get_availability_zones.return_value = Mock(
-        names=['us-east-1a', 'us-east-1b']
-    )
-
-    sys.modules['pulumi'] = cls.mock_pulumi
-    sys.modules['pulumi_aws'] = cls.mock_aws
 
   def setUp(self):
-    modules_to_clear = [m for m in sys.modules.keys() if m.startswith('lib.')]
-    for module in modules_to_clear:
-      if module in sys.modules:
-        del sys.modules[module]
-
-    from lib.tap_stack import TapStack, TapStackArgs
-    from lib.components.vpc import ComputeComponent
-    from lib.components.iam import IAMComponent
-    from lib.components.database import DatabaseComponent
-    from lib.components.serverless import ServerlessComponent
-
-    self.TapStack = TapStack
-    self.TapStackArgs = TapStackArgs
-    self.ComputeComponent = ComputeComponent
-    self.IAMComponent = IAMComponent
-    self.DatabaseComponent = DatabaseComponent
-    self.ServerlessComponent = ServerlessComponent
-
     self.test_args = TapStackArgs(
-        environment_suffix='test',
-        tags={'Environment': 'test', 'Project': 'tap-stack'}
+        environment_suffix="test",
+        tags={"Environment": "test", "Project": "tap-stack"}
     )
 
   def test_iam_component_initialization(self):
-    iam = self.IAMComponent(name="test-iam", tags=self.test_args.tags)
+    iam = IAMComponent(name="test-iam", environment="test",
+                       tags=self.test_args.tags)
     self.assertIsNotNone(iam.lambda_role)
 
   def test_compute_component_initialization(self):
-    compute = self.ComputeComponent(
-        name="test-compute", environment="test", tags=self.test_args.tags)
+    compute = ComputeComponent(
+        name="test-compute",
+        cidr_block="10.3.0.0/16",
+        environment="test",
+        instance_profile="profile-name",
+        tags=self.test_args.tags
+    )
     self.assertIsNotNone(compute.vpc)
     self.assertIsInstance(compute.private_subnet_ids, list)
     self.assertIsNotNone(compute.lambda_sg)
 
   def test_database_component_initialization(self):
-    compute = self.ComputeComponent(
-        name="test-compute", environment="test", tags=self.test_args.tags)
-    db = self.DatabaseComponent(
+    compute = ComputeComponent(
+        name="test-compute",
+        cidr_block="10.3.0.0/16",
+        environment="test",
+        instance_profile="profile-name",
+        tags=self.test_args.tags
+    )
+    db = DatabaseComponent(
         name="test-db",
+        environment="test",
         vpc_id=compute.vpc.id,
         private_subnet_ids=compute.private_subnet_ids,
         db_security_group_id=compute.db_sg.id,
+        db_name="tapdb",
+        db_username="admin",
+        db_password="password123",
         tags=self.test_args.tags
     )
     self.assertIsNotNone(db.rds_instance)
 
   def test_serverless_component_initialization(self):
-    compute = self.ComputeComponent(
-        name="test-compute", environment="test", tags=self.test_args.tags)
-    db = self.DatabaseComponent(
+    compute = ComputeComponent(
+        name="test-compute",
+        cidr_block="10.3.0.0/16",
+        environment="test",
+        instance_profile="profile-name",
+        tags=self.test_args.tags
+    )
+    db = DatabaseComponent(
         name="test-db",
+        environment="test",
         vpc_id=compute.vpc.id,
         private_subnet_ids=compute.private_subnet_ids,
         db_security_group_id=compute.db_sg.id,
+        db_name="tapdb",
+        db_username="admin",
+        db_password="password123",
         tags=self.test_args.tags
     )
-    iam = self.IAMComponent(name="test-iam", tags=self.test_args.tags)
+    iam = IAMComponent(name="test-iam", environment="test",
+                       tags=self.test_args.tags)
 
-    serverless = self.ServerlessComponent(
+    serverless = ServerlessComponent(
         name="test-serverless",
+        environment="test",
         lambda_role_arn=iam.lambda_role.arn,
         vpc_id=compute.vpc.id,
         private_subnet_ids=compute.private_subnet_ids,
@@ -125,3 +141,7 @@ class TestTapStackComponents(unittest.TestCase):
     )
     self.assertIsNotNone(serverless.lambda_function)
     self.assertIsNotNone(serverless.api)
+
+
+if __name__ == "__main__":
+  unittest.main(verbosity=2, buffer=True)
