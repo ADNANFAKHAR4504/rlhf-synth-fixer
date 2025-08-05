@@ -1,6 +1,6 @@
 I'll create a comprehensive, modular Terraform configuration that meets all your requirements. Here's the complete structure:
 
-📂 Project Structure
+Project Structure
 terraform-aws-infrastructure/
 ├── main.tf
 ├── variables.tf
@@ -23,7 +23,7 @@ terraform-aws-infrastructure/
         ├── main.tf
         ├── variables.tf
         └── outputs.tf
-🚀 Root Configuration Files
+Root Configuration Files
 terraform.tf
 terraform {
   required_version = ">= 1.0"
@@ -225,7 +225,7 @@ output "test_instance_private_ip" {
   description = "Private IP of the test EC2 instance (if created)"
   value       = var.create_test_instance ? module.compute[0].instance_private_ip : null
 }
-🌐 Networking Module
+Networking Module
 modules/networking/variables.tf
 variable "project_name" {
   description = "Name of the project"
@@ -412,7 +412,7 @@ output "private_route_table_ids" {
   description = "IDs of the private route tables"
   value       = aws_route_table.private[*].id
 }
-🔒 Security Module
+ Security Module
 modules/security/variables.tf
 variable "project_name" {
   description = "Name of the project"
@@ -532,7 +532,7 @@ output "database_security_group_id" {
   description = "ID of the database security group"
   value       = aws_security_group.database.id
 }
-🔐 IAM Module
+ IAM Module
 modules/iam/variables.tf
 variable "project_name" {
   description = "Name of the project"
@@ -674,7 +674,7 @@ output "s3_access_policy_arn" {
   description = "ARN of the S3 access policy"
   value       = aws_iam_policy.s3_access.arn
 }
-💻 Compute Module
+ Compute Module
 modules/compute/variables.tf
 variable "project_name" {
   description = "Name of the project"
@@ -836,7 +836,7 @@ output "instance_availability_zone" {
   description = "Availability zone of the EC2 instance"
   value       = aws_instance.main.availability_zone
 }
-🚀 Usage Instructions
+ Usage Instructions
 1. Initialize Terraform
 terraform init
 2. Plan the deployment
@@ -855,7 +855,7 @@ vpc_cidr     = "10.1.0.0/16"
 allowed_cidr_blocks = ["YOUR_IP/32"]
 create_test_instance = true
 instance_type = "t3.small"
-🔍 Key Features
+ Key Features
 ✅ Security Best Practices
 Encrypted EBS volumes
 Least privilege IAM policies

@@ -2,7 +2,7 @@ You are an expert DevOps/SRE engineer skilled in Terraform and AWS infrastructur
 
 ---
 
-📌 **Objective:**
+**Objective:**
 
 Create a modular Terraform configuration to provision a secure and well-tagged AWS infrastructure in `us-east-1`. The environment must fulfill the following requirements:
 
@@ -35,7 +35,7 @@ Create a modular Terraform configuration to provision a secure and well-tagged A
 
 ---
 
-📂 **Expected Output Structure:**
+**Expected Output Structure:**
 
 - A `main` directory with:
   - `main.tf`, `variables.tf`, `outputs.tf`
@@ -47,7 +47,7 @@ Create a modular Terraform configuration to provision a secure and well-tagged A
 
 ---
 
-📌 **Deliverables:**
+**Deliverables:**
 - Terraform files ready to be used with `terraform init`, `plan`, and `apply`.
 - All variables clearly defined with defaults where appropriate.
 - No hardcoded secrets or credentials.
