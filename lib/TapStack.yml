@@ -171,7 +171,7 @@ Resources:
   S3AccessLogsBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 's3-access-logs-${UniqueId}'
+      BucketName: !Sub 's3-access-logs-${EnvironmentSuffix}-${UniqueId}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -221,7 +221,7 @@ Resources:
   WebsiteContentBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 'website-content-${UniqueId}'
+      BucketName: !Sub 'website-content-${EnvironmentSuffix}-${UniqueId}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -242,7 +242,7 @@ Resources:
   ApplicationLogsBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 'application-logs-${UniqueId}'
+      BucketName: !Sub 'application-logs--${EnvironmentSuffix}-${UniqueId}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -263,7 +263,7 @@ Resources:
   BackupDataBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 'backup-data-${UniqueId}'
+      BucketName: !Sub 'backup-data-${EnvironmentSuffix}-${UniqueId}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
