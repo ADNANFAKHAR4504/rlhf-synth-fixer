@@ -10,8 +10,8 @@ describe('Secure Infrastructure CloudFormation Template', () => {
   let template: any;
 
   beforeAll(() => {
-    // Read the YAML template and parse it
-    const templatePath = path.join(__dirname, '../TapStack.yml');
+    // Corrected: Path now points to lib/TapStack.yml
+    const templatePath = path.join(__dirname, '../lib/TapStack.yml');
     const templateContent = fs.readFileSync(templatePath, 'utf8');
     template = yaml.load(templateContent); // Use yaml.load for YAML files
   });
@@ -206,8 +206,8 @@ describe('Secure Infrastructure CloudFormation Template', () => {
         'S3AccessLogsBucket',
         'KMSKeyId',
         'EC2InstanceRoleArn',
-        'CloudTrailName', // Added CloudTrail outputs
-        'CloudTrailBucketName', // Added CloudTrail outputs
+        'CloudTrailName',
+        'CloudTrailBucketName',
       ];
 
       expectedOutputs.forEach(outputName => {
@@ -340,7 +340,7 @@ describe('Secure Infrastructure CloudFormation Template', () => {
     test('should have the correct number of resources', () => {
       const resourceCount = Object.keys(template.Resources).length;
       // Update this count based on your actual number of resources in TapStack.yml
-      expect(resourceCount).toBe(20); // VPC, IGW, AttachGateway, PublicSubnet, PublicRouteTable, PublicRoute, SubnetRouteTableAssociation, EC2SecurityGroup, EC2InstanceRole, EC2InstanceProfile, S3AccessLogsBucket, WebsiteContentBucket, ApplicationLogsBucket, BackupDataBucket, WebsiteContentBucketPolicy, ApplicationLogsBucketPolicy, BackupDataBucketPolicy, SecureEC2Instance, InfrastructureKMSKey, InfrastructureKMSKeyAlias, CloudTrailBucket, CloudTrail, CloudTrailLogGroup, CloudTrailCloudWatchLogsRole
+      expect(resourceCount).toBe(24); // Updated count
     });
 
     test('should have the correct number of parameters', () => {
