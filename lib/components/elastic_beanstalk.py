@@ -84,9 +84,7 @@ class ElasticBeanstalkInfrastructure(pulumi.ComponentResource):
         aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
           namespace="aws:ec2:vpc",
           name="Subnets",
-          value=Output.all(*self.private_subnet_ids).apply(
-            lambda subnets: ",".join(subnets)
-          )
+          value=self.private_subnet_ids[0]  # Use only one subnet (1 AZ)
         ),
         aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
           namespace="aws:ec2:vpc",
@@ -106,7 +104,7 @@ class ElasticBeanstalkInfrastructure(pulumi.ComponentResource):
         aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
           namespace="aws:autoscaling:asg",
           name="Availability Zones",
-          value="Any 2"
+          value="Any 1"
         ),
         aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
           namespace="aws:autoscaling:trigger",
@@ -188,12 +186,6 @@ class ElasticBeanstalkInfrastructure(pulumi.ComponentResource):
           name="BatchSizeType",
           value="Fixed"
         ),
-        aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
-          namespace="aws:elasticbeanstalk:environment",
-          name="LoadBalancerType",
-          value="none"
-        ),
-
         aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
           namespace="aws:elasticbeanstalk:command",
           name="BatchSize",
