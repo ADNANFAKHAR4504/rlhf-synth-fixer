@@ -57,7 +57,7 @@ class TapStack(Stack):
 
     environment_suffix = (
       props.environment_suffix if props else None
-    ) or self.node.try_get_context('environmentSuffix') or 'pr176'
+    ) or self.node.try_get_context('environmentSuffix') or 'dev'
 
     tags = {"env": environment_suffix}
 
@@ -255,5 +255,9 @@ def lambda_handler(event, context):
     CfnOutput(self, "LambdaFunctionOutput", value=lambda_fn.function_name)
     CfnOutput(self, "ApiGatewayOutput", value=api.url)
     CfnOutput(self, "VpcIdOutput", value=vpc.vpc_id)
-    CfnOutput(self, "PublicSubnetIdsOutput", value=",".join([subnet.subnet_id for subnet in vpc.public_subnets]))
-    CfnOutput(self, "PrivateSubnetIdsOutput", value=",".join([subnet.subnet_id for subnet in vpc.private_subnets]))
+    CfnOutput(self, "PublicSubnetIdsOutput", 
+      value=",".join([subnet.subnet_id for subnet in vpc.public_subnets])
+    )
+    CfnOutput(self, "PrivateSubnetIdsOutput", 
+      value=",".join([subnet.subnet_id for subnet in vpc.private_subnets])
+    )

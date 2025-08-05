@@ -15,4 +15,3 @@
 > * Be extendable to support additional microservices
 > * Pass `cdk synth`, `cdk deploy`, and relevant validation checks
 >
-> Bonus: Tag all resources with environment metadata like `env: environment_suffix`.

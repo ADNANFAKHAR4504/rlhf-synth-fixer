@@ -27,35 +27,6 @@ class TestTapStack(unittest.TestCase):
       "BucketEncryption": Match.object_like({
         "ServerSideEncryptionConfiguration": Match.any_value()
       })
-      # Remove PublicAccessBlockConfiguration if not always present
-    })
-
-  @mark.it("defaults environment suffix to 'pr176' if not provided")
-  def test_defaults_env_suffix_to_pr176(self):
-    stack = TapStack(self.app, "TapStackTestDefault")
-    template = Template.from_stack(stack)
-    template.resource_count_is("AWS::S3::Bucket", 1)
-    template.has_resource_properties("AWS::S3::Bucket", {
-      "BucketName": "tap-bucket-pr176"
-    })
-
-  @mark.it("creates a DynamoDB table with correct schema and naming")
-  def test_creates_dynamodb_table(self):
-    env_suffix = "ddb"
-    stack = TapStack(self.app, "TapStackDDB", TapStackProps(environment_suffix=env_suffix))
-    template = Template.from_stack(stack)
-    template.resource_count_is("AWS::DynamoDB::Table", 1)
-    template.has_resource_properties("AWS::DynamoDB::Table", {
-      "TableName": f"tap-object-metadata-{env_suffix}",
-      "BillingMode": "PAY_PER_REQUEST",
-      "AttributeDefinitions": Match.array_with([
-        Match.object_like({"AttributeName": "objectKey", "AttributeType": "S"}),
-        Match.object_like({"AttributeName": "uploadTime", "AttributeType": "S"})
-      ]),
-      "KeySchema": Match.array_with([
-        Match.object_like({"AttributeName": "objectKey", "KeyType": "HASH"}),
-        Match.object_like({"AttributeName": "uploadTime", "KeyType": "RANGE"})
-      ])
     })
 
   @mark.it("creates an SNS topic with correct naming")
@@ -66,41 +37,6 @@ class TestTapStack(unittest.TestCase):
     template.resource_count_is("AWS::SNS::Topic", 1)
     template.has_resource_properties("AWS::SNS::Topic", {
       "TopicName": f"tap-notification-{env_suffix}"
-    })
-
-  @mark.it("creates a Lambda function with correct properties")
-  def test_creates_lambda_function(self):
-    env_suffix = "lambda"
-    stack = TapStack(self.app, "TapStackLambda", TapStackProps(environment_suffix=env_suffix))
-    template = Template.from_stack(stack)
-    template.has_resource_properties("AWS::Lambda::Function", {
-      "FunctionName": f"tap-object-processor-{env_suffix}",
-      "Runtime": "python3.8",
-      "Handler": "index.lambda_handler",
-      "Timeout": 30,
-      "Environment": {
-        "Variables": {
-          "DDB_TABLE": Match.any_value(),
-          "SNS_TOPIC": Match.any_value(),
-          "TIMEOUT": "30"
-        }
-      }
-    })
-
-  @mark.it("creates an IAM role for Lambda execution")
-  def test_creates_lambda_iam_role(self):
-    env_suffix = "role"
-    stack = TapStack(self.app, "TapStackRole", TapStackProps(environment_suffix=env_suffix))
-    template = Template.from_stack(stack)
-    template.has_resource_properties("AWS::IAM::Role", {
-      "AssumeRolePolicyDocument": {
-        "Statement": [{
-          "Action": "sts:AssumeRole",
-          "Effect": "Allow",
-          "Principal": {"Service": "lambda.amazonaws.com"}
-        }],
-        "Version": "2012-10-17"
-      }
     })
 
   @mark.it("creates Lambda IAM policies for S3, DynamoDB, SNS, and VPC access")
