@@ -20,7 +20,7 @@ describe('TapStack Unit Tests', () => {
       stateBucket: 'custom-state-bucket',
       stateBucketRegion: 'us-west-2',
       awsRegion: 'us-west-2',
-      defaultTags: {
+      defaultTags: { // Corrected structure for defaultTags
         Project: 'UnitTesting',
         Env: 'Prod',
       },
@@ -70,7 +70,7 @@ describe('TapStack Unit Tests', () => {
   test('AWS Provider defaultTags are correctly applied', () => {
     // Objective: Verify that the `defaultTags` prop is correctly applied to the AwsProvider.
     const testTags = { Service: 'CDKTF', Owner: 'TeamA' };
-    stack = new TapStack(app, 'TestDefaultTags', { defaultTags: testTags });
+    stack = new TapStack(app, 'TestDefaultTags', { defaultTags: testTags }); // Corrected structure
     synthesized = JSON.parse(Testing.synth(stack));
     // CDKTF wraps default_tags in an array
     expect(synthesized.provider.aws.default_tags[0].tags).toEqual(testTags);

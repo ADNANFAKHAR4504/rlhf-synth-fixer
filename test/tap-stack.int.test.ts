@@ -36,13 +36,13 @@ describe('TapStack Integration Tests', () => {
   test('AWS provider is configured with specified region and default tags', () => {
     // Objective: Confirm that the AWS provider correctly applies a custom region and default tags
     // when provided via props.
-    const customTags = {
+    const customTags = { // This is the map of tags
       Project: 'CustomProject',
       Owner: 'TestUser',
     };
     const customStack = new TapStack(app, 'TestTapStackCustom', {
       awsRegion: 'us-west-2',
-      defaultTags: customTags,
+      defaultTags: customTags, // Pass the map directly
     });
     const customSynthesized = JSON.parse(Testing.synth(customStack));
 

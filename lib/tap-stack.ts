@@ -2,9 +2,9 @@ import {
   AwsProvider,
   AwsProviderDefaultTags,
 } from '@cdktf/provider-aws/lib/provider';
-import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket'; // S3Bucket import is now needed here
 import { S3Backend, TerraformStack } from 'cdktf';
 import { Construct } from 'constructs';
+import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
 
 /**
  * Props for MyStack.
@@ -45,7 +45,7 @@ class MyStack extends TerraformStack { // Note: Not exported as it's used intern
  * @property {string} [stateBucket='iac-rlhf-tf-states'] - S3 bucket name for Terraform state.
  * @property {string} [stateBucketRegion='us-east-1'] - AWS region for the S3 state bucket.
  * @property {string} [awsRegion='us-east-1'] - AWS region for provisioning resources.
- * @property {AwsProviderDefaultTags} [defaultTags] - Default tags to apply to all AWS resources.
+ * @property {AwsProviderDefaultTags['tags']} [defaultTags] - Default tags to apply to all AWS resources.
  * @property {boolean} [createMyStack=false] - Flag to conditionally instantiate MyStack for testing purposes.
  */
 interface TapStackProps {
@@ -53,7 +53,9 @@ interface TapStackProps {
   stateBucket?: string;
   stateBucketRegion?: string;
   awsRegion?: string;
-  defaultTags?: AwsProviderDefaultTags;
+  // Corrected: defaultTags should be of type AwsProviderDefaultTags['tags'] (i.e., { [key: string]: string })
+  // and then wrapped in { tags: ... } when passed to AwsProvider.
+  defaultTags?: { [key: string]: string };
   createMyStack?: boolean; // Prop to control MyStack instantiation for testing
 }
 
@@ -77,13 +79,17 @@ export class TapStack extends TerraformStack {
       : props?.awsRegion || 'us-east-1';
     const stateBucketRegion = props?.stateBucketRegion || 'us-east-1';
     const stateBucket = props?.stateBucket || 'iac-rlhf-tf-states';
-    // Ensure defaultTags are correctly formatted for the AwsProvider
-    const defaultTags = props?.defaultTags ? [props.defaultTags] : [];
+
+    // Corrected: defaultTags need to be wrapped in an object with a 'tags' key
+    // when passed to the AwsProvider constructor.
+    const awsProviderDefaultTags: AwsProviderDefaultTags[] = props?.defaultTags
+      ? [{ tags: props.defaultTags }]
+      : [];
 
     // Configure AWS Provider
     new AwsProvider(this, 'aws', {
       region: awsRegion,
-      defaultTags: defaultTags, // Apply default tags to all resources created by this provider
+      defaultTags: awsProviderDefaultTags, // Apply default tags to all resources created by this provider
     });
 
     // Configure S3 Backend for Terraform state management
