@@ -14,6 +14,7 @@ import json
 import pulumi
 from pulumi import ResourceOptions
 import pulumi_aws as aws
+import os
 
 
 class TapStackArgs:
@@ -29,7 +30,7 @@ class TapStack(pulumi.ComponentResource):
     config = pulumi.Config()
     env = args.environment_suffix
     tags = args.tags
-    region = aws.config.region
+    region = os.getenv("AWS_REGION", "us-west-1")
 
     allowed_cidrs: List[str] = config.get_object("allowed_cidrs") or ["0.0.0.0/0"]
     trusted_ips: List[str] = config.get_object("trusted_external_ips") or ["8.8.8.8/32", "1.1.1.1/32"]
