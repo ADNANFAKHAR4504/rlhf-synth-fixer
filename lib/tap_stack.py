@@ -66,15 +66,15 @@ class TapStack(pulumi.ComponentResource):
 
     # self.table = dynamodb_stack.table if you instantiate one
     # Configuration
-    self.project_name = pulumi.get_project()
-    self.stack_name = pulumi.get_stack()
+    project_name = pulumi.get_project()
+    stack_name = pulumi.get_stack()
     region = "us-east-1" 
 
     # Tags for all resources
     common_tags = {
       "Project": project_name,
       "Stack": stack_name,
-      "Environment": stack_name,
+      "Environment": self.environment_suffix,
       "ManagedBy": "Pulumi"
     }
 
@@ -553,7 +553,7 @@ class TapStack(pulumi.ComponentResource):
     api_deployment = aws.apigateway.Deployment(
         "api-deployment",
         rest_api=api_gateway.id,
-        stage_name=self.environment_suffix +"-" + self.project_name + "-" + self.stack_name,
+        stage_name=f"{project_name}-{stack_name}-{self.environment_suffix}-api-stage",
         opts=pulumi.ResourceOptions(depends_on=[
             health_integration,
             process_integration,
@@ -573,7 +573,7 @@ class TapStack(pulumi.ComponentResource):
         "api-stage",
         deployment=api_deployment.id,
         rest_api=api_gateway.id,
-        stage_name=self.environment_suffix +"-" + self.project_name + "-" + self.stack_name,
+        stage_name=f"{project_name}-{stack_name}-{self.environment_suffix}-api-stage",
         access_log_settings=aws.apigateway.StageAccessLogSettingsArgs(
             destination_arn=api_log_group.arn,
             format=json.dumps({
