@@ -223,19 +223,35 @@ describe('Secure Infrastructure CloudFormation Template', () => {
       };
     }
 
-    Object.entries(template.Outputs).forEach(([outputKey, output]) => {
-      test(`${outputKey} export name should follow naming convention`, () => {
-        const typedOutput = output as CloudFormationOutput;
+    if (template.Outputs) {
+      Object.entries(template.Outputs).forEach(([outputKey, output]) => {
+        test(`${outputKey} export name should follow naming convention`, () => {
+          const typedOutput = output as {
+            Description?: string;
+            Value: any;
+            Export?: {
+              Name: {
+                'Fn::Sub': string;
+              };
+            };
+          };
 
-        if (typedOutput.Export && typedOutput.Export.Name) {
-          const expectedKey = outputKey.replace(/Id$/, 'ID');
-          const kebabKey = expectedKey.replace(/([a-z])([A-Z])/g, '$1-$2');
-          expect(typedOutput.Export.Name).toEqual({
-            'Fn::Sub': `\${AWS::StackName}-${kebabKey}`,
-          });
-        }
+          if (typedOutput.Export?.Name) {
+            const expectedKey = outputKey.replace(/Id$/, 'ID');
+            const kebabKey = expectedKey.replace(/([a-z])([A-Z])/g, '$1-$2');
+            expect(typedOutput.Export.Name).toEqual({
+              'Fn::Sub': `\${AWS::StackName}-${kebabKey}`,
+            });
+          }
+        });
       });
-    });
+    } else {
+      test('template should have Outputs', () => {
+        throw new Error(
+          'template.Outputs is undefined. Check your template parsing or structure.'
+        );
+      });
+    }
 
     test('EC2InstanceId output should be correct', () => {
       const output = template.Outputs.EC2InstanceId;
