@@ -2,10 +2,10 @@ from typing import Optional
 import pulumi
 from pulumi import ResourceOptions
 import pulumi_aws as aws
-from components.vpc import ComputeComponent
-from components.iam import IAMComponent
-from components.database import DatabaseComponent
-from components.serverless import ServerlessComponent
+from lib.components.vpc import ComputeComponent
+from lib.components.iam import IAMComponent
+from lib.components.database import DatabaseComponent
+from lib.components.serverless import ServerlessComponent
 
 
 class TapStackArgs:
@@ -26,7 +26,7 @@ class TapStack(pulumi.ComponentResource):
     self.environment_suffix = args.environment_suffix
     self.tags = args.tags
 
-    self.register_outputs({})
+    # self.register_outputs({})
 
     # config = pulumi.Config()
     # environment_specific_vars = pulumi.Config("aws-multi-environment-infrastructure")
