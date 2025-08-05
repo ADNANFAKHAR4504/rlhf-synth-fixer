@@ -1,7 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: >
-  ServerlessApp - Highly Available, Secure Serverless Application Template.
-  Deploys Lambda triggered by S3, with secure secrets, HA, monitoring, and least-privilege IAM.
+Description: ServerlessApp - Highly Available, Secure Serverless Application Template.
 
 Parameters:
   LambdaRuntime:
@@ -280,6 +278,9 @@ Resources:
       TreatMissingData: notBreaching
 
 Outputs:
+  S3BucketName:
+    Description: Name of the S3 bucket
+    Value: !Ref S3BucketName
   LambdaFunctionArn:
     Description: ARN of the Lambda function
     Value: !GetAtt ServerlessAppLambda.Arn
