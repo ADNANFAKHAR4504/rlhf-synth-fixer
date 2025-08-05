@@ -9,6 +9,5 @@
     "lines": 100,
     "branches": 100
   },
-  "author": "jpoola-turing",
-  "dockerS3Location": "s3://iac-rlhf-production/docker_images/Pr287/docker-image-229157.tar"
+  "author": "jpoola-turing"
 }
