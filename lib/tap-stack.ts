@@ -101,14 +101,14 @@ export class TapStack extends TerraformStack {
     };
     `;
     //  Create zip files synchronously
-    this.createLambdaZipSync('lambda1.zip', inlineLambda1Code);
-    this.createLambdaZipSync('lambda2.zip', inlineLambda2Code);
+    this.createLambdaZipSync('lib/lambda1.zip', inlineLambda1Code);
+    this.createLambdaZipSync('lib/lambda2.zip', inlineLambda2Code);
     // Lambda Function 1 Configuration
     const lambda1Config: LambdaModuleConfig = {
       functionName: 'serverless-function-1',
       runtime: 'nodejs18.x',
       handler: 'index.handler',
-      filename: 'lambda1.zip', // You need to create this zip file
+      filename: 'lib/lambda1.zip', // You need to create this zip file
       description: 'First serverless microservice function',
       timeout: 30,
       memorySize: 256,
@@ -124,7 +124,7 @@ export class TapStack extends TerraformStack {
       functionName: 'serverless-function-2',
       runtime: 'nodejs18.x',
       handler: 'index.handler',
-      filename: 'lambda2.zip', // You need to create this zip file
+      filename: 'lib/lambda2.zip', // You need to create this zip file
       description: 'Second serverless microservice function',
       timeout: 30,
       memorySize: 256,
