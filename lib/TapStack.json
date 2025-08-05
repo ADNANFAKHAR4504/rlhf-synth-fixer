@@ -22,14 +22,7 @@
       "Description": "Unique S3 bucket name for object triggers."
     }
   },
-  "Mappings": {
-    "RegionMap": {
-      "us-west-2": {
-        "AZ1": "us-west-2a",
-        "AZ2": "us-west-2b"
-      }
-    }
-  },
+
   "Resources": {
     "ServerlessAppBucket": {
       "Type": "AWS::S3::Bucket",
@@ -112,10 +105,13 @@
         },
         "CidrBlock": "10.0.0.0/26",
         "AvailabilityZone": {
-          "Fn::FindInMap": [
-            "RegionMap",
-            "us-west-2",
-            "AZ1"
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": {
+                "Ref": "AWS::Region"
+              }
+            }
           ]
         },
         "Tags": [
@@ -134,10 +130,13 @@
         },
         "CidrBlock": "10.0.0.64/26",
         "AvailabilityZone": {
-          "Fn::FindInMap": [
-            "RegionMap",
-            "us-west-2",
-            "AZ2"
+          "Fn::Select": [
+            1,
+            {
+              "Fn::GetAZs": {
+                "Ref": "AWS::Region"
+              }
+            }
           ]
         },
         "Tags": [
