@@ -144,15 +144,19 @@ class TapStack(pulumi.ComponentResource):
 
     # KMS ALIAS — Check and Import if exists
     alias_name = f"alias/secure-web-key-{env}"
-    try:
-      existing_alias = aws.kms.get_alias(name=alias_name)
-      alias = aws.kms.Alias.get(f"secure-key-alias-{env}", existing_alias.arn)
-    except Exception:
-      alias = aws.kms.Alias(
-        f"secure-key-alias-{env}",
-        name=alias_name,
-        target_key_id=key.key_id
-      )
+
+    def create_or_get_kms_alias():
+      try:
+        existing = aws.kms.get_alias_output(name=alias_name)
+        return aws.kms.Alias.get(f"secure-key-alias-{env}", existing.arn)
+      except Exception:
+        return aws.kms.Alias(
+            f"secure-key-alias-{env}",
+            name=alias_name,
+            target_key_id=key.key_id
+            )
+
+    alias = create_or_get_kms_alias()
 
     def build_key_policy(user_arn: str) -> str:
       identity = aws.get_caller_identity()
