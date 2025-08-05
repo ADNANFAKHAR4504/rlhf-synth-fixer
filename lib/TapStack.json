@@ -1,6 +1,6 @@
 {
   "AWSTemplateFormatVersion": "2010-09-09",
-  "Description": "ServerlessApp - Highly Available, Secure Serverless Application Template. Deploys Lambda triggered by S3, with secure secrets, HA, monitoring, and least-privilege IAM.",
+  "Description": "ServerlessApp - Highly Available, Secure Serverless Application Template. Deploys Lambda triggered by S3, with secure secrets, HA, monitoring, and least-privilege IAM.\n",
   "Parameters": {
     "LambdaRuntime": {
       "Type": "String",
@@ -22,7 +22,6 @@
       "Description": "Unique S3 bucket name for object triggers."
     }
   },
-
   "Resources": {
     "ServerlessAppBucket": {
       "Type": "AWS::S3::Bucket",
@@ -108,9 +107,7 @@
           "Fn::Select": [
             0,
             {
-              "Fn::GetAZs": {
-                "Ref": "AWS::Region"
-              }
+              "Fn::GetAZs": ""
             }
           ]
         },
@@ -133,9 +130,7 @@
           "Fn::Select": [
             1,
             {
-              "Fn::GetAZs": {
-                "Ref": "AWS::Region"
-              }
+              "Fn::GetAZs": ""
             }
           ]
         },

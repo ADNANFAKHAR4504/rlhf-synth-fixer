@@ -51,6 +51,9 @@ def construct_select(loader, node):
 def construct_split(loader, node):
     return {'Fn::Split': loader.construct_sequence(node)}
 
+def construct_getazs(loader, node):
+    return {'Fn::GetAZs': loader.construct_scalar(node)}
+
 CloudFormationLoader.add_constructor('!Ref', construct_ref)
 CloudFormationLoader.add_constructor('!GetAtt', construct_getatt)
 CloudFormationLoader.add_constructor('!Sub', construct_sub)
@@ -65,6 +68,7 @@ CloudFormationLoader.add_constructor('!Base64', construct_base64)
 CloudFormationLoader.add_constructor('!Cidr', construct_cidr)
 CloudFormationLoader.add_constructor('!Select', construct_select)
 CloudFormationLoader.add_constructor('!Split', construct_split)
+CloudFormationLoader.add_constructor('!GetAZs', construct_getazs)
 
 # Read TapStack.yml
 with open('lib/TapStack.yml', 'r') as f:
