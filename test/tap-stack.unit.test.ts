@@ -41,19 +41,25 @@ describe('CloudFormation Template Tests', () => {
     test('should have valid parameter configurations', () => {
       expect(template.Parameters.LambdaRuntime.Type).toBe('String');
       expect(template.Parameters.LambdaRuntime.Default).toBe('python3.12');
-      expect(template.Parameters.LambdaRuntime.AllowedValues).toContain('python3.12');
-      expect(template.Parameters.LambdaRuntime.AllowedValues).toContain('nodejs20.x');
+      expect(template.Parameters.LambdaRuntime.AllowedValues).toContain(
+        'python3.12'
+      );
+      expect(template.Parameters.LambdaRuntime.AllowedValues).toContain(
+        'nodejs20.x'
+      );
     });
   });
 
   describe('Resources - Naming Convention', () => {
     test('should follow ServerlessApp naming convention for all resources', () => {
       const resources = Object.keys(template.Resources);
-      const serverlessAppResources = resources.filter(name => name.startsWith('ServerlessApp'));
-      
+      const serverlessAppResources = resources.filter(name =>
+        name.startsWith('ServerlessApp')
+      );
+
       // All resources should start with ServerlessApp
       expect(serverlessAppResources.length).toBeGreaterThan(0);
-      
+
       // Check specific resources
       expect(resources).toContain('ServerlessAppBucket');
       expect(resources).toContain('ServerlessAppLambda');
@@ -74,26 +80,44 @@ describe('CloudFormation Template Tests', () => {
     test('should have proper security configuration', () => {
       const bucket = template.Resources.ServerlessAppBucket;
       expect(bucket.Properties.BucketEncryption).toBeDefined();
-      expect(bucket.Properties.BucketEncryption.ServerSideEncryptionConfiguration[0].ServerSideEncryptionByDefault.SSEAlgorithm).toBe('AES256');
-      
+      expect(
+        bucket.Properties.BucketEncryption.ServerSideEncryptionConfiguration[0]
+          .ServerSideEncryptionByDefault.SSEAlgorithm
+      ).toBe('AES256');
+
       expect(bucket.Properties.PublicAccessBlockConfiguration).toBeDefined();
-      expect(bucket.Properties.PublicAccessBlockConfiguration.BlockPublicAcls).toBe(true);
-      expect(bucket.Properties.PublicAccessBlockConfiguration.BlockPublicPolicy).toBe(true);
-      expect(bucket.Properties.PublicAccessBlockConfiguration.IgnorePublicAcls).toBe(true);
-      expect(bucket.Properties.PublicAccessBlockConfiguration.RestrictPublicBuckets).toBe(true);
+      expect(
+        bucket.Properties.PublicAccessBlockConfiguration.BlockPublicAcls
+      ).toBe(true);
+      expect(
+        bucket.Properties.PublicAccessBlockConfiguration.BlockPublicPolicy
+      ).toBe(true);
+      expect(
+        bucket.Properties.PublicAccessBlockConfiguration.IgnorePublicAcls
+      ).toBe(true);
+      expect(
+        bucket.Properties.PublicAccessBlockConfiguration.RestrictPublicBuckets
+      ).toBe(true);
     });
 
     test('should have S3 event configuration for Lambda trigger', () => {
       const bucket = template.Resources.ServerlessAppBucket;
       expect(bucket.Properties.NotificationConfiguration).toBeDefined();
-      expect(bucket.Properties.NotificationConfiguration.LambdaConfigurations).toBeDefined();
-      expect(bucket.Properties.NotificationConfiguration.LambdaConfigurations[0].Event).toBe('s3:ObjectCreated:*');
+      expect(
+        bucket.Properties.NotificationConfiguration.LambdaConfigurations
+      ).toBeDefined();
+      expect(
+        bucket.Properties.NotificationConfiguration.LambdaConfigurations[0]
+          .Event
+      ).toBe('s3:ObjectCreated:*');
     });
 
     test('should have proper tags', () => {
       const bucket = template.Resources.ServerlessAppBucket;
       expect(bucket.Properties.Tags).toBeDefined();
-      const nameTag = bucket.Properties.Tags.find((tag: any) => tag.Key === 'Name');
+      const nameTag = bucket.Properties.Tags.find(
+        (tag: any) => tag.Key === 'Name'
+      );
       expect(nameTag.Value).toBe('ServerlessAppBucket');
     });
   });
@@ -123,12 +147,16 @@ describe('CloudFormation Template Tests', () => {
       const lambda = template.Resources.ServerlessAppLambda;
       expect(lambda.Properties.Environment).toBeDefined();
       expect(lambda.Properties.Environment.Variables).toBeDefined();
-      expect(lambda.Properties.Environment.Variables.SERVERLESSAPP_SECRET_ARN).toBeDefined();
+      expect(
+        lambda.Properties.Environment.Variables.SERVERLESSAPP_SECRET_ARN
+      ).toBeDefined();
     });
 
     test('should have proper IAM role reference', () => {
       const lambda = template.Resources.ServerlessAppLambda;
-      expect(lambda.Properties.Role).toEqual({ 'Fn::GetAtt': ['ServerlessAppLambdaRole', 'Arn'] });
+      expect(lambda.Properties.Role).toEqual({
+        'Fn::GetAtt': ['ServerlessAppLambdaRole', 'Arn'],
+      });
     });
 
     test('should have appropriate timeout and memory settings', () => {
@@ -153,8 +181,12 @@ describe('CloudFormation Template Tests', () => {
     test('should have secret generation configuration', () => {
       const secret = template.Resources.ServerlessAppSecret;
       expect(secret.Properties.GenerateSecretString).toBeDefined();
-      expect(secret.Properties.GenerateSecretString.SecretStringTemplate).toBeDefined();
-      expect(secret.Properties.GenerateSecretString.GenerateStringKey).toBe('api_key');
+      expect(
+        secret.Properties.GenerateSecretString.SecretStringTemplate
+      ).toBeDefined();
+      expect(secret.Properties.GenerateSecretString.GenerateStringKey).toBe(
+        'api_key'
+      );
       expect(secret.Properties.GenerateSecretString.PasswordLength).toBe(32);
     });
   });
@@ -169,32 +201,38 @@ describe('CloudFormation Template Tests', () => {
     test('should have proper assume role policy for Lambda', () => {
       const role = template.Resources.ServerlessAppLambdaRole;
       expect(role.Properties.AssumeRolePolicyDocument).toBeDefined();
-      expect(role.Properties.AssumeRolePolicyDocument.Statement[0].Principal.Service).toBe('lambda.amazonaws.com');
-      expect(role.Properties.AssumeRolePolicyDocument.Statement[0].Action).toBe('sts:AssumeRole');
+      expect(
+        role.Properties.AssumeRolePolicyDocument.Statement[0].Principal.Service
+      ).toBe('lambda.amazonaws.com');
+      expect(role.Properties.AssumeRolePolicyDocument.Statement[0].Action).toBe(
+        'sts:AssumeRole'
+      );
     });
 
     test('should have least privilege policies', () => {
       const role = template.Resources.ServerlessAppLambdaRole;
       expect(role.Properties.Policies).toBeDefined();
-      expect(role.Properties.Policies[0].PolicyName).toBe('ServerlessAppLambdaPolicy');
-      
+      expect(role.Properties.Policies[0].PolicyName).toBe(
+        'ServerlessAppLambdaPolicy'
+      );
+
       const statements = role.Properties.Policies[0].PolicyDocument.Statement;
-      
+
       // Check secrets access policy
-      const secretsStatement = statements.find((stmt: any) => 
+      const secretsStatement = statements.find((stmt: any) =>
         stmt.Action.includes('secretsmanager:GetSecretValue')
       );
       expect(secretsStatement).toBeDefined();
       expect(secretsStatement.Resource).toEqual({ Ref: 'ServerlessAppSecret' });
-      
+
       // Check logging policy
-      const logsStatement = statements.find((stmt: any) => 
+      const logsStatement = statements.find((stmt: any) =>
         stmt.Action.includes('logs:CreateLogGroup')
       );
       expect(logsStatement).toBeDefined();
-      
+
       // Check S3 access policy
-      const s3Statement = statements.find((stmt: any) => 
+      const s3Statement = statements.find((stmt: any) =>
         stmt.Action.includes('s3:GetObject')
       );
       expect(s3Statement).toBeDefined();
@@ -212,16 +250,20 @@ describe('CloudFormation Template Tests', () => {
     test('should have multi-AZ subnets', () => {
       const subnet1 = template.Resources.ServerlessAppSubnetAZ1;
       const subnet2 = template.Resources.ServerlessAppSubnetAZ2;
-      
+
       expect(subnet1).toBeDefined();
       expect(subnet2).toBeDefined();
       expect(subnet1.Type).toBe('AWS::EC2::Subnet');
       expect(subnet2.Type).toBe('AWS::EC2::Subnet');
-      
+
       // Different AZs
-      expect(subnet1.Properties.AvailabilityZone).toEqual({ 'Fn::Select': [0, { 'Fn::GetAZs': '' }] });
-      expect(subnet2.Properties.AvailabilityZone).toEqual({ 'Fn::Select': [1, { 'Fn::GetAZs': '' }] });
-      
+      expect(subnet1.Properties.AvailabilityZone).toEqual({
+        'Fn::Select': [0, { 'Fn::GetAZs': '' }],
+      });
+      expect(subnet2.Properties.AvailabilityZone).toEqual({
+        'Fn::Select': [1, { 'Fn::GetAZs': '' }],
+      });
+
       // Different CIDR blocks
       expect(subnet1.Properties.CidrBlock).toBe('10.0.0.0/26');
       expect(subnet2.Properties.CidrBlock).toBe('10.0.0.64/26');
@@ -231,14 +273,14 @@ describe('CloudFormation Template Tests', () => {
       const igw = template.Resources.ServerlessAppInternetGateway;
       const route = template.Resources.ServerlessAppRoute;
       const routeTable = template.Resources.ServerlessAppRouteTable;
-      
+
       expect(igw).toBeDefined();
       expect(igw.Type).toBe('AWS::EC2::InternetGateway');
-      
+
       expect(route).toBeDefined();
       expect(route.Type).toBe('AWS::EC2::Route');
       expect(route.Properties.DestinationCidrBlock).toBe('0.0.0.0/0');
-      
+
       expect(routeTable).toBeDefined();
       expect(routeTable.Type).toBe('AWS::EC2::RouteTable');
     });
@@ -258,19 +300,22 @@ describe('CloudFormation Template Tests', () => {
       const logGroup = template.Resources.ServerlessAppLogGroup;
       expect(logGroup).toBeDefined();
       expect(logGroup.Type).toBe('AWS::Logs::LogGroup');
-      expect(logGroup.Properties.LogGroupName).toBe('/aws/lambda/ServerlessAppLambda');
+      expect(logGroup.Properties.LogGroupName).toBe(
+        '/aws/lambda/ServerlessAppLambda'
+      );
       expect(logGroup.Properties.RetentionInDays).toBe(7);
     });
 
     test('should have CloudWatch alarms for monitoring', () => {
       const errorAlarm = template.Resources.ServerlessAppLambdaErrorAlarm;
-      const invocationAlarm = template.Resources.ServerlessAppLambdaInvocationsAlarm;
-      
+      const invocationAlarm =
+        template.Resources.ServerlessAppLambdaInvocationsAlarm;
+
       expect(errorAlarm).toBeDefined();
       expect(errorAlarm.Type).toBe('AWS::CloudWatch::Alarm');
       expect(errorAlarm.Properties.MetricName).toBe('Errors');
       expect(errorAlarm.Properties.Namespace).toBe('AWS/Lambda');
-      
+
       expect(invocationAlarm).toBeDefined();
       expect(invocationAlarm.Type).toBe('AWS::CloudWatch::Alarm');
       expect(invocationAlarm.Properties.MetricName).toBe('Invocations');
@@ -285,7 +330,9 @@ describe('CloudFormation Template Tests', () => {
       expect(permission.Type).toBe('AWS::Lambda::Permission');
       expect(permission.Properties.Action).toBe('lambda:InvokeFunction');
       expect(permission.Properties.Principal).toBe('s3.amazonaws.com');
-      expect(permission.Properties.SourceArn).toEqual({ 'Fn::GetAtt': ['ServerlessAppBucket', 'Arn'] });
+      expect(permission.Properties.SourceArn).toEqual({
+        'Fn::GetAtt': ['ServerlessAppBucket', 'Arn'],
+      });
     });
   });
 
@@ -299,16 +346,30 @@ describe('CloudFormation Template Tests', () => {
     });
 
     test('should have proper output descriptions', () => {
-      expect(template.Outputs.S3BucketName.Description).toContain('ServerlessApp S3 bucket');
-      expect(template.Outputs.LambdaFunctionName.Description).toContain('ServerlessApp Lambda function');
-      expect(template.Outputs.SecretArn.Description).toContain('ServerlessApp Lambda Secret');
+      expect(template.Outputs.S3BucketName.Description).toContain(
+        'ServerlessApp S3 bucket'
+      );
+      expect(template.Outputs.LambdaFunctionName.Description).toContain(
+        'ServerlessApp Lambda function'
+      );
+      expect(template.Outputs.SecretArn.Description).toContain(
+        'ServerlessApp Lambda Secret'
+      );
     });
 
     test('should reference correct resources in outputs', () => {
-      expect(template.Outputs.S3BucketName.Value).toEqual({ Ref: 'ServerlessAppBucket' });
-      expect(template.Outputs.LambdaFunctionName.Value).toEqual({ Ref: 'ServerlessAppLambda' });
-      expect(template.Outputs.LambdaFunctionArn.Value).toEqual({ 'Fn::GetAtt': ['ServerlessAppLambda', 'Arn'] });
-      expect(template.Outputs.SecretArn.Value).toEqual({ Ref: 'ServerlessAppSecret' });
+      expect(template.Outputs.S3BucketName.Value).toEqual({
+        Ref: 'ServerlessAppBucket',
+      });
+      expect(template.Outputs.LambdaFunctionName.Value).toEqual({
+        Ref: 'ServerlessAppLambda',
+      });
+      expect(template.Outputs.LambdaFunctionArn.Value).toEqual({
+        'Fn::GetAtt': ['ServerlessAppLambda', 'Arn'],
+      });
+      expect(template.Outputs.SecretArn.Value).toEqual({
+        Ref: 'ServerlessAppSecret',
+      });
     });
   });
 
@@ -320,8 +381,10 @@ describe('CloudFormation Template Tests', () => {
 
     test('should cover all required infrastructure components', () => {
       const resources = Object.keys(template.Resources);
-      const resourceTypes = Object.values(template.Resources).map((r: any) => r.Type);
-      
+      const resourceTypes = Object.values(template.Resources).map(
+        (r: any) => r.Type
+      );
+
       // Check for key AWS services
       expect(resourceTypes).toContain('AWS::S3::Bucket');
       expect(resourceTypes).toContain('AWS::Lambda::Function');
@@ -344,15 +407,19 @@ describe('CloudFormation Template Tests', () => {
 
     test('should follow CloudFormation best practices', () => {
       // All resources should have tags
-      Object.entries(template.Resources).forEach(([name, resource]: [string, any]) => {
-        if (resource.Properties && 'Tags' in resource.Properties) {
-          expect(resource.Properties.Tags).toBeDefined();
-          const nameTag = resource.Properties.Tags.find((tag: any) => tag.Key === 'Name');
-          if (nameTag) {
-            expect(nameTag.Value).toBeTruthy();
+      Object.entries(template.Resources).forEach(
+        ([name, resource]: [string, any]) => {
+          if (resource.Properties && 'Tags' in resource.Properties) {
+            expect(resource.Properties.Tags).toBeDefined();
+            const nameTag = resource.Properties.Tags.find(
+              (tag: any) => tag.Key === 'Name'
+            );
+            if (nameTag) {
+              expect(nameTag.Value).toBeTruthy();
+            }
           }
         }
-      });
+      );
     });
   });
 });
