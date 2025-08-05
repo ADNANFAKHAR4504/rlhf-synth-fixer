@@ -220,12 +220,6 @@ Resources:
       PolicyDocument:
         Version: '2012-10-17'
         Statement:
-          - Sid: AllowCloudFormationLogging
-            Effect: Allow
-            Principal:
-              Service: cloudformation.amazonaws.com
-            Action: 's3:PutBucketLogging'
-            Resource: !GetAtt S3AccessLogsBucket.Arn
           - Sid: AllowS3Logging
             Effect: Allow
             Principal:
