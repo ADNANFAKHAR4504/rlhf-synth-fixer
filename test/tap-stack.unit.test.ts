@@ -150,15 +150,15 @@ describe('TapStack CloudFormation Template - Unified DynamoDB Multi-Region', () 
         expect(dynamoTable.Properties.BillingMode).toBe('PROVISIONED');
       });
 
-      test('should have conditional capacity settings', () => {
-        const throughput = dynamoTable.Properties.ProvisionedThroughput;
-        expect(throughput.ReadCapacityUnits).toEqual({
-          'Fn::If': ['IsWest1', 5, 10],
-        });
-        expect(throughput.WriteCapacityUnits).toEqual({
-          'Fn::If': ['IsWest1', 5, 10],
-        });
+          test('should have conditional capacity settings', () => {
+      const throughput = dynamoTable.Properties.ProvisionedThroughput;
+      expect(throughput.ReadCapacityUnits).toEqual({
+        'Fn::If': ['IsWest1', 5, { Ref: 'ReadCapacityUnits' }],
       });
+      expect(throughput.WriteCapacityUnits).toEqual({
+        'Fn::If': ['IsWest1', 5, { Ref: 'WriteCapacityUnits' }],
+      });
+    });
 
       test('should have correct attribute definitions', () => {
         const attrs = dynamoTable.Properties.AttributeDefinitions;
@@ -424,7 +424,7 @@ describe('TapStack CloudFormation Template - Unified DynamoDB Multi-Region', () 
 
     test('should have correct parameter count', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(2);
+      expect(parameterCount).toBe(4); // EnvironmentSuffix, ApplicationName, ReadCapacityUnits, WriteCapacityUnits
     });
 
     test('should have correct condition count', () => {
@@ -445,7 +445,7 @@ describe('TapStack CloudFormation Template - Unified DynamoDB Multi-Region', () 
       const readCapacity =
         dynamoTable.Properties.ProvisionedThroughput.ReadCapacityUnits;
 
-      expect(readCapacity['Fn::If'][2]).toEqual(10);
+      expect(readCapacity['Fn::If'][2]).toEqual({ Ref: 'ReadCapacityUnits' });
     });
 
     test('should use Fn::GetAtt correctly', () => {
@@ -527,7 +527,7 @@ describe('TapStack CloudFormation Template - Unified DynamoDB Multi-Region', () 
       // Capacity should be different for each region
       expect(
         dynamoTable.Properties.ProvisionedThroughput.ReadCapacityUnits['Fn::If']
-      ).toEqual(['IsWest1', 5, 10]);
+      ).toEqual(['IsWest1', 5, { Ref: 'ReadCapacityUnits' }]);
     });
 
     test('should have conditional resources only for us-west-2', () => {

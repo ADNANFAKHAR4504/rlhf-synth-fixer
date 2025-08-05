@@ -11,6 +11,20 @@
             "Type": "String",
             "Default": "multi-region-app",
             "Description": "Application name for resource naming and tagging"
+        },
+        "ReadCapacityUnits": {
+            "Type": "Number",
+            "Default": 10,
+            "MinValue": 1,
+            "MaxValue": 1000,
+            "Description": "Read capacity units for the DynamoDB table (us-west-2 only)"
+        },
+        "WriteCapacityUnits": {
+            "Type": "Number",
+            "Default": 10,
+            "MinValue": 1,
+            "MaxValue": 1000,
+            "Description": "Write capacity units for the DynamoDB table (us-west-2 only)"
         }
     },
     "Conditions": {
@@ -71,14 +85,18 @@
                         "Fn::If": [
                             "IsWest1",
                             5,
-                            10
+                            {
+                                "Ref": "ReadCapacityUnits"
+                            }
                         ]
                     },
                     "WriteCapacityUnits": {
                         "Fn::If": [
                             "IsWest1",
                             5,
-                            10
+                            {
+                                "Ref": "WriteCapacityUnits"
+                            }
                         ]
                     }
                 },
@@ -130,8 +148,12 @@
                                     "ProjectionType": "ALL"
                                 },
                                 "ProvisionedThroughput": {
-                                    "ReadCapacityUnits": 10,
-                                    "WriteCapacityUnits": 10
+                                    "ReadCapacityUnits": {
+                                        "Ref": "ReadCapacityUnits"
+                                    },
+                                    "WriteCapacityUnits": {
+                                        "Ref": "WriteCapacityUnits"
+                                    }
                                 }
                             }
                         ],
@@ -196,7 +218,9 @@
                         "Value": {
                             "Fn::If": [
                                 "IsWest2",
-                                "10-10",
+                                {
+                                    "Fn::Sub": "${ReadCapacityUnits}-${WriteCapacityUnits}"
+                                },
                                 "5-5"
                             ]
                         }
@@ -539,7 +563,9 @@
                 "Fn::If": [
                     "IsWest1",
                     "Read: 5, Write: 5 (Fixed)",
-                    "Read: 10, Write: 10 (Parameterized)"
+                    {
+                        "Fn::Sub": "Read: ${ReadCapacityUnits}, Write: ${WriteCapacityUnits} (Parameterized)"
+                    }
                 ]
             },
             "Export": {
@@ -584,13 +610,32 @@
                         "default": "Application Configuration"
                     },
                     "Parameters": [
-                        "EnvironmentSuffix"
+                        "EnvironmentSuffix",
+                        "ApplicationName"
+                    ]
+                },
+                {
+                    "Label": {
+                        "default": "DynamoDB Capacity Settings (us-west-2 only)"
+                    },
+                    "Parameters": [
+                        "ReadCapacityUnits",
+                        "WriteCapacityUnits"
                     ]
                 }
             ],
             "ParameterLabels": {
                 "EnvironmentSuffix": {
                     "default": "Environment Suffix"
+                },
+                "ApplicationName": {
+                    "default": "Application Name"
+                },
+                "ReadCapacityUnits": {
+                    "default": "Read Capacity Units"
+                },
+                "WriteCapacityUnits": {
+                    "default": "Write Capacity Units"
                 }
             }
         },

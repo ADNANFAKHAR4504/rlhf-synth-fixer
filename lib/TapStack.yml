@@ -12,6 +12,21 @@ Parameters:
     Default: "multi-region-app"
     Description: "Application name for resource naming and tagging"
 
+  # Parameterized capacity settings for us-west-2
+  ReadCapacityUnits:
+    Type: Number
+    Default: 10
+    MinValue: 1
+    MaxValue: 1000
+    Description: "Read capacity units for the DynamoDB table (us-west-2 only)"
+
+  WriteCapacityUnits:
+    Type: Number
+    Default: 10
+    MinValue: 1
+    MaxValue: 1000
+    Description: "Write capacity units for the DynamoDB table (us-west-2 only)"
+
 Conditions:
   IsWest1: !Equals [!Ref "AWS::Region", "us-west-1"]
   IsWest2: !Equals [!Ref "AWS::Region", "us-west-2"]
@@ -29,8 +44,8 @@ Resources:
       BillingMode: PROVISIONED
       ProvisionedThroughput:
         # Fixed capacity for us-west-1, parameterized for us-west-2
-        ReadCapacityUnits: !If [IsWest1, 5, 10]
-        WriteCapacityUnits: !If [IsWest1, 5, 10]
+        ReadCapacityUnits: !If [IsWest1, 5, !Ref ReadCapacityUnits]
+        WriteCapacityUnits: !If [IsWest1, 5, !Ref WriteCapacityUnits]
       AttributeDefinitions:
         - AttributeName: "PrimaryKey"
           AttributeType: "S"
@@ -56,8 +71,8 @@ Resources:
             Projection:
               ProjectionType: "ALL"
             ProvisionedThroughput:
-              ReadCapacityUnits: 10
-              WriteCapacityUnits: 10
+              ReadCapacityUnits: !Ref ReadCapacityUnits
+              WriteCapacityUnits: !Ref WriteCapacityUnits
         - !Ref "AWS::NoValue"
       # Dynamic tagging based on region
       Tags:
@@ -82,7 +97,7 @@ Resources:
         - Key: "CapacityConfig"
           Value: !If
             - IsWest2
-            - "10-10"
+            - !Sub "${ReadCapacityUnits}-${WriteCapacityUnits}"
             - "5-5"
 
       # Enable point-in-time recovery
@@ -282,7 +297,7 @@ Outputs:
     Value: !If
       - IsWest1
       - "Read: 5, Write: 5 (Fixed)"
-      - "Read: 10, Write: 10 (Parameterized)"
+      - !Sub "Read: ${ReadCapacityUnits}, Write: ${WriteCapacityUnits} (Parameterized)"
     Export:
       Name: !Sub "${AWS::StackName}-CapacityConfiguration"
 
@@ -305,9 +320,21 @@ Metadata:
           default: "Application Configuration"
         Parameters:
           - EnvironmentSuffix
+          - ApplicationName
+      - Label:
+          default: "DynamoDB Capacity Settings (us-west-2 only)"
+        Parameters:
+          - ReadCapacityUnits
+          - WriteCapacityUnits
     ParameterLabels:
       EnvironmentSuffix:
         default: "Environment Suffix"
+      ApplicationName:
+        default: "Application Name"
+      ReadCapacityUnits:
+        default: "Read Capacity Units"
+      WriteCapacityUnits:
+        default: "Write Capacity Units"
   cfn-lint:
     config:
       ignore_checks:
