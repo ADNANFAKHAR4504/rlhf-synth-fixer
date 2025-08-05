@@ -66,8 +66,8 @@ class TapStack(pulumi.ComponentResource):
 
     # self.table = dynamodb_stack.table if you instantiate one
     # Configuration
-    project_name = pulumi.get_project()
-    stack_name = pulumi.get_stack()
+    self.project_name = pulumi.get_project()
+    self.stack_name = pulumi.get_stack()
     region = "us-east-1" 
 
     # Tags for all resources
