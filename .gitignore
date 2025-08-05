@@ -95,3 +95,5 @@ cdk.out/
 
 tasks-status.md
 worktree/
+bin/tfplan
+bin/.terraform.lock.hcl
