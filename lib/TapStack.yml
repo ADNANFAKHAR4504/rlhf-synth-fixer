@@ -519,6 +519,20 @@ Resources:
               StringEquals:
                 aws:username: !Ref MFAEnforcementUser
 
+  # IAM Account Password Policy - Enforces MFA for all IAM users
+  IAMAccountPasswordPolicy:
+    Type: AWS::IAM::AccountPasswordPolicy
+    Properties:
+      AllowUsersToChangePassword: true
+      HardExpiry: false
+      MaxPasswordAge: 90
+      MinimumPasswordLength: 14
+      PasswordReusePrevention: 24
+      RequireLowercaseCharacters: true
+      RequireNumbers: true
+      RequireSymbols: true
+      RequireUppercaseCharacters: true
+
   # Launch Template
   WebServerLaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
@@ -856,3 +870,9 @@ Outputs:
     Value: !Ref GlobalMFAEnforcementPolicy
     Export:
       Name: !Sub '${AWS::StackName}-Global-MFA-Policy'
+
+  IAMAccountPasswordPolicy:
+    Description: 'IAM Account Password Policy that enforces MFA'
+    Value: !Ref IAMAccountPasswordPolicy
+    Export:
+      Name: !Sub '${AWS::StackName}-Password-Policy'

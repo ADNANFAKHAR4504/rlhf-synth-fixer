@@ -291,6 +291,22 @@ describe('TapStack CloudFormation Template - Unit Tests', () => {
       const ec2Role = template.Resources.EC2Role;
       expect(ec2Role.Properties.ManagedPolicyArns).toContain('arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy');
     });
+
+    test('IAM Account Password Policy should enforce strong passwords', () => {
+      const passwordPolicy = template.Resources.IAMAccountPasswordPolicy;
+      expect(passwordPolicy).toBeDefined();
+      expect(passwordPolicy.Type).toBe('AWS::IAM::AccountPasswordPolicy');
+      
+      const props = passwordPolicy.Properties;
+      expect(props.MinimumPasswordLength).toBe(14);
+      expect(props.RequireLowercaseCharacters).toBe(true);
+      expect(props.RequireUppercaseCharacters).toBe(true);
+      expect(props.RequireNumbers).toBe(true);
+      expect(props.RequireSymbols).toBe(true);
+      expect(props.PasswordReusePrevention).toBe(24);
+      expect(props.MaxPasswordAge).toBe(90);
+      expect(props.AllowUsersToChangePassword).toBe(true);
+    });
   });
 
   describe('RDS Database Security', () => {

@@ -564,6 +564,20 @@
                 ]
             }
         },
+        "IAMAccountPasswordPolicy": {
+            "Type": "AWS::IAM::AccountPasswordPolicy",
+            "Properties": {
+                "AllowUsersToChangePassword": true,
+                "HardExpiry": false,
+                "MaxPasswordAge": 90,
+                "MinimumPasswordLength": 14,
+                "PasswordReusePrevention": 24,
+                "RequireLowercaseCharacters": true,
+                "RequireNumbers": true,
+                "RequireSymbols": true,
+                "RequireUppercaseCharacters": true
+            }
+        },
         "WebServerLaunchTemplate": {
             "Type": "AWS::EC2::LaunchTemplate",
             "Properties": {
@@ -998,6 +1012,17 @@
             "Export": {
                 "Name": {
                     "Fn::Sub": "${AWS::StackName}-AWS-Region"
+                }
+            }
+        },
+        "IAMAccountPasswordPolicy": {
+            "Description": "IAM Account Password Policy that enforces MFA",
+            "Value": {
+                "Ref": "IAMAccountPasswordPolicy"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-Password-Policy"
                 }
             }
         }
