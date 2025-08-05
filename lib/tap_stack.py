@@ -445,15 +445,15 @@ class TapStack(Stack):
     )
 
     # Create HTTPS listener with TLS termination
-    # Note: Using available certificate from ACM
+    # Note: Using valid certificate from ACM for turing229221.com domain
     self.alb_https_listener = self.alb.add_listener(
       "tap_alb_https_listener",
       port=443,
       protocol=elbv2.ApplicationProtocol.HTTPS,
       default_target_groups=[self.target_group],
       certificates=[elbv2.ListenerCertificate.from_arn(
-        # Using available certificate from ACM
-        certificate_arn="arn:aws:acm:us-east-1:718240086340:certificate/1c3986ff-2aed-4eeb-ac19-79e08aace09c"
+        # Using valid certificate for turing229221.com domain
+        certificate_arn="arn:aws:acm:us-east-1:718240086340:certificate/6f65b67a-bb90-471b-ab0b-8727ad2d7583"
       )]
     )
 
