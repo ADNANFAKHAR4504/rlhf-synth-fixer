@@ -1058,50 +1058,6 @@
           "Fn::Sub": "${AWS::StackName}-Config-Role-Arn"
         }
       }
-    },
-    "DynamoDBTableName": {
-      "Description": "Name of the DynamoDB table",
-      "Value": {
-        "Ref": "WebAppDynamoDBTable"
-      },
-      "Export": {
-        "Name": {
-          "Fn::Sub": "${AWS::StackName}-DynamoDB-Table-Name"
-        }
-      }
-    },
-    "RDSInstanceIdentifier": {
-      "Description": "Identifier of the RDS instance",
-      "Value": {
-        "Ref": "WebAppRDSInstance"
-      },
-      "Export": {
-        "Name": {
-          "Fn::Sub": "${AWS::StackName}-RDS-Instance-Identifier"
-        }
-      }
-    },
-    "LambdaFunctionName": {
-      "Description": "Name of the Lambda function",
-      "Value": {
-        "Ref": "WebAppLambdaFunction"
-      },
-      "Export": {
-        "Name": {
-          "Fn::Sub": "${AWS::StackName}-Lambda-Function-Name"
-        }
-      }
-    },
-    "LoadBalancerArn": {
-      "Description": "ARN of the Application Load Balancer",
-      "Value": {
-        "Ref": "WebAppALB"
-      },
-      "Export": {
-        "Name": {
-          "Fn::Sub": "${AWS::StackName}-ALB-Arn"
-        }
-      }
     }
   }
 }

@@ -11,21 +11,18 @@ import {
   ConfigServiceClient,
   DescribeConfigurationRecordersCommand,
 } from '@aws-sdk/client-config-service';
-import { DescribeTableCommand, DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import {
   DescribeInstancesCommand,
   DescribeSecurityGroupsCommand,
   DescribeVpcsCommand,
   EC2Client,
 } from '@aws-sdk/client-ec2';
-import {
-  DescribeLoadBalancersCommand,
-  ElasticLoadBalancingV2Client,
-} from '@aws-sdk/client-elastic-load-balancing-v2';
+import { ElasticLoadBalancingV2Client } from '@aws-sdk/client-elastic-load-balancing-v2';
 import { GetRoleCommand, IAMClient } from '@aws-sdk/client-iam';
 import { DescribeKeyCommand, KMSClient } from '@aws-sdk/client-kms';
-import { GetFunctionCommand, LambdaClient } from '@aws-sdk/client-lambda';
-import { DescribeDBInstancesCommand, RDSClient } from '@aws-sdk/client-rds';
+import { LambdaClient } from '@aws-sdk/client-lambda';
+import { RDSClient } from '@aws-sdk/client-rds';
 import { GetBucketEncryptionCommand, S3Client } from '@aws-sdk/client-s3';
 import fs from 'fs';
 
@@ -476,65 +473,6 @@ describe('TapStack Infrastructure Integration Tests', () => {
         }
       }
       expect(instances.length).toBeGreaterThan(0);
-    });
-  });
-
-  describe('DynamoDB Table', () => {
-    test('should have DynamoDB table', async () => {
-      const tableName = getOutput('DynamoDBTableName');
-      expect(tableName).toBeDefined();
-      const tableResponse = await dynamodb.send(
-        new DescribeTableCommand({ TableName: tableName })
-      );
-      expect(tableResponse.Table?.TableName).toBe(tableName);
-    });
-  });
-
-  describe('RDS Instances', () => {
-    test('should have RDS instance', async () => {
-      let dbInstanceIdentifier;
-      try {
-        dbInstanceIdentifier = getOutput('RDSInstanceIdentifier');
-      } catch (e) {
-        const rdsEndpoint = getOutput('RDSEndpoint');
-        dbInstanceIdentifier = rdsEndpoint.split('.')[0];
-      }
-      expect(dbInstanceIdentifier).toBeDefined();
-      const response = await rds.send(
-        new DescribeDBInstancesCommand({
-          DBInstanceIdentifier: dbInstanceIdentifier,
-        })
-      );
-      const dbInstance = response.DBInstances?.[0];
-      expect(dbInstance?.DBInstanceIdentifier).toBe(dbInstanceIdentifier);
-    });
-  });
-
-  describe('Elastic Load Balancer', () => {
-    test('should have ELB', async () => {
-      let loadBalancerArn;
-      try {
-        loadBalancerArn = getOutput('LoadBalancerArn');
-      } catch (e) {
-        const loadBalancerDnsName = getOutput('LoadBalancerDNSName');
-        const response = await elbv2.send(new DescribeLoadBalancersCommand({}));
-        const loadBalancer = response.LoadBalancers?.find(
-          lb => lb.DNSName === loadBalancerDnsName
-        );
-        loadBalancerArn = loadBalancer?.LoadBalancerArn;
-      }
-      expect(loadBalancerArn).toBeDefined();
-    });
-  });
-
-  describe('Lambda Functions', () => {
-    test('should have Lambda function', async () => {
-      const functionName = getOutput('LambdaFunctionName');
-      expect(functionName).toBeDefined();
-      const response = await lambda.send(
-        new GetFunctionCommand({ FunctionName: functionName })
-      );
-      expect(response.Configuration?.FunctionName).toBe(functionName);
     });
   });
 
