@@ -190,7 +190,7 @@ class TapStack(pulumi.ComponentResource):
     # Parameter Group
     db_param_group = aws.rds.ParameterGroup(
         f"tap-postgres-params-{env}",
-        family="postgres15",
+        family="postgres17",
         parameters=[
             aws.rds.ParameterGroupParameterArgs(
                 name="shared_preload_libraries",
@@ -211,7 +211,7 @@ class TapStack(pulumi.ComponentResource):
         f"tap-postgres-ha-{env}",
         identifier=f"tap-postgres-ha-{env}",
         engine="postgres",
-        engine_version="15.4",
+        engine_version="17.3",
         instance_class="db.t3.medium",
         allocated_storage=100,
         max_allocated_storage=1000,
