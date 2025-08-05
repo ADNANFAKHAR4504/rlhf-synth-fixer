@@ -98,3 +98,4 @@ tf-outputs/*
 
 tasks-status.md
 worktree/
+bin/tfplan
