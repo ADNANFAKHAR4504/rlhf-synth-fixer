@@ -21,7 +21,7 @@ class TapStackArgs:
                regions: Optional[list] = None,
                tags: Optional[dict] = None):
     self.environment_suffix = environment_suffix or 'prod'
-    self.regions = regions or ['us-gov-west-1', 'us-gov-east-1']
+    self.regions = ['us-east-1', 'us-west-1']
     self.tags = tags or {
       'Project': 'IaC-AWS-Nova-Model-Breaking',
       'Environment': self.environment_suffix,
@@ -99,6 +99,7 @@ class TapStack(pulumi.ComponentResource):
         region=region,
         is_primary=is_primary,
         environment=self.environment_suffix,
+        environment_suffix=f"{region_suffix}-{self.environment_suffix}",
         vpc_id=self.regional_networks[region].vpc_id,
         public_subnet_ids=self.regional_networks[region].public_subnet_ids,
         private_subnet_ids=self.regional_networks[region].private_subnet_ids,
