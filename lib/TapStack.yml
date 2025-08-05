@@ -21,7 +21,7 @@ Parameters:
 
 Mappings:
   RegionMap:
-    us-west-2:
+    us-east-1:
       AZ1: us-west-1a
       AZ2: us-west-1b
 
