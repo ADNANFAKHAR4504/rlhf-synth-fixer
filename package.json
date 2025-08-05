@@ -50,6 +50,7 @@
     "@aws-sdk/client-cloudfront": "^3.846.0",
     "@aws-sdk/client-cloudwatch": "^3.846.0",
     "@aws-sdk/client-cloudwatch-logs": "^3.848.0",
+    "@aws-sdk/client-codedeploy": "^3.859.0",
     "@aws-sdk/client-config-service": "^3.848.0",
     "@aws-sdk/client-dynamodb": "^3.855.0",
     "@aws-sdk/client-ec2": "^3.848.0",
