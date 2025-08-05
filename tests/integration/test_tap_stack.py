@@ -1,11 +1,44 @@
 # tests/integration/test_tap_stack.py
 import pytest
 import pulumi
-import boto3
-import json
-import time
-from moto import mock_ec2, mock_elbv2, mock_autoscaling, mock_iam, mock_s3, mock_secretsmanager
 from unittest.mock import patch, MagicMock
+
+
+class MockPulumiOutput:
+    """Mock Pulumi Output class for testing"""
+    
+    def __init__(self, value):
+        self.value = value
+    
+    def apply(self, func):
+        """Mock apply method"""
+        return MockPulumiOutput(func(self.value))
+
+
+class MockPulumiProvider:
+    """Mock Pulumi provider for testing"""
+    
+    def call(self, args):
+        """Mock Pulumi function calls"""
+        if args.token == "aws:index/getAvailabilityZones:getAvailabilityZones":
+            return {
+                "names": ["us-east-1a", "us-east-1b", "us-east-1c"],
+                "zone_ids": ["use1-az1", "use1-az2", "use1-az3"]
+            }
+        return {}
+    
+    def new_resource(self, args):
+        """Mock resource creation"""
+        props = {
+            "id": f"test-{args.name}",
+            "arn": f"arn:aws:service:us-east-1:123456789012:resource/{args.name}",
+            "name": args.name,
+            "dns_name": f"{args.name}.test.amazonaws.com",
+            "arn_suffix": f"suffix/{args.name}",
+            "bucket": args.name if "bucket" in args.name else None
+        }
+        return [f"test-{args.name}", props]
+
 
 class TestTapStackIntegration:
     """Integration tests for TapStack infrastructure"""
@@ -19,29 +52,20 @@ class TestTapStackIntegration:
             "app_name": "test-app"
         }
     
-    @pytest.fixture
-    def aws_credentials(self):
-        """Mock AWS credentials for testing"""
-        return {
-            "aws_access_key_id": "testing",
-            "aws_secret_access_key": "testing",
-            "aws_security_token": "testing",
-            "aws_session_token": "testing"
-        }
+    def setup_method(self):
+        """Setup method for each test"""
+        pulumi.runtime.set_mocks(
+            mocks=MockPulumiProvider(),
+            preview=False
+        )
     
     def test_stack_creation_with_all_resources(self, stack_config):
         """Test that stack creates all required AWS resources"""
         with patch('pulumi.get_stack', return_value='test'):
-            # Mock Pulumi runtime
-            pulumi.runtime.set_mocks(
-                mocks=MockPulumiProvider(),
-                preview=False
-            )
+            from lib.tap_stack import TapStack, TapStackArgs
             
-            # Import and create stack
-            from lib.tap_stack import TapStack
-            
-            stack = TapStack("test-stack", stack_config)
+            args = TapStackArgs(stack_config)
+            stack = TapStack("test-stack", args)
             
             # Test VPC creation
             assert hasattr(stack, 'vpc')
@@ -77,54 +101,37 @@ class TestTapStackIntegration:
             # Test secrets management
             assert hasattr(stack, 'app_secrets')
     
-    @mock_ec2
-    @mock_elbv2
     def test_load_balancer_configuration(self, stack_config):
         """Test load balancer and target group configuration"""
         with patch('pulumi.get_stack', return_value='test'):
-            pulumi.runtime.set_mocks(
-                mocks=MockPulumiProvider(),
-                preview=False
-            )
+            from lib.tap_stack import TapStack, TapStackArgs
             
-            from lib.tap_stack import TapStack
-            stack = TapStack("test-stack", stack_config)
+            args = TapStackArgs(stack_config)
+            stack = TapStack("test-stack", args)
             
             # Verify target groups are configured for blue-green deployment
             assert stack.blue_target_group is not None
             assert stack.green_target_group is not None
-            
-            # Verify health check configuration
-            # In a real test, you'd check the actual AWS resources
-            assert True  # Placeholder for actual health check validation
     
-    @mock_s3
     def test_artifacts_bucket_encryption(self, stack_config):
         """Test that S3 artifacts bucket has proper encryption"""
         with patch('pulumi.get_stack', return_value='test'):
-            pulumi.runtime.set_mocks(
-                mocks=MockPulumiProvider(),
-                preview=False
-            )
+            from lib.tap_stack import TapStack, TapStackArgs
             
-            from lib.tap_stack import TapStack
-            stack = TapStack("test-stack", stack_config)
+            args = TapStackArgs(stack_config)
+            stack = TapStack("test-stack", args)
             
             # Verify artifacts bucket exists and has encryption
             assert hasattr(stack, 'artifacts_bucket')
             assert stack.artifacts_bucket is not None
     
-    @mock_iam
     def test_iam_roles_and_policies(self, stack_config):
         """Test IAM roles have proper permissions"""
         with patch('pulumi.get_stack', return_value='test'):
-            pulumi.runtime.set_mocks(
-                mocks=MockPulumiProvider(),
-                preview=False
-            )
+            from lib.tap_stack import TapStack, TapStackArgs
             
-            from lib.tap_stack import TapStack
-            stack = TapStack("test-stack", stack_config)
+            args = TapStackArgs(stack_config)
+            stack = TapStack("test-stack", args)
             
             # Verify all required IAM roles exist
             assert hasattr(stack, 'ec2_role')
@@ -133,17 +140,13 @@ class TestTapStackIntegration:
             assert hasattr(stack, 'codepipeline_role')
             assert hasattr(stack, 'lambda_role')
     
-    @mock_secretsmanager
     def test_secrets_management(self, stack_config):
         """Test secrets manager configuration"""
         with patch('pulumi.get_stack', return_value='test'):
-            pulumi.runtime.set_mocks(
-                mocks=MockPulumiProvider(),
-                preview=False
-            )
+            from lib.tap_stack import TapStack, TapStackArgs
             
-            from lib.tap_stack import TapStack
-            stack = TapStack("test-stack", stack_config)
+            args = TapStackArgs(stack_config)
+            stack = TapStack("test-stack", args)
             
             # Verify secrets are created
             assert hasattr(stack, 'app_secrets')
@@ -161,13 +164,10 @@ class TestTapStackIntegration:
             }
             
             with patch('pulumi.get_stack', return_value=env):
-                pulumi.runtime.set_mocks(
-                    mocks=MockPulumiProvider(),
-                    preview=False
-                )
+                from lib.tap_stack import TapStack, TapStackArgs
                 
-                from lib.tap_stack import TapStack
-                stack = TapStack(f"test-stack-{env}", config)
+                args = TapStackArgs(config)
+                stack = TapStack(f"test-stack-{env}", args)
                 
                 # Verify environment-specific configurations
                 assert stack.environment == env
@@ -177,28 +177,21 @@ class TestTapStackIntegration:
     def test_cost_optimization_configurations(self, stack_config):
         """Test cost optimization features"""
         with patch('pulumi.get_stack', return_value='test'):
-            pulumi.runtime.set_mocks(
-                mocks=MockPulumiProvider(),
-                preview=False
-            )
+            from lib.tap_stack import TapStack, TapStackArgs
             
-            from lib.tap_stack import TapStack
-            stack = TapStack("test-stack", stack_config)
+            args = TapStackArgs(stack_config)
+            stack = TapStack("test-stack", args)
             
             # Verify cost optimization measures are in place
-            # This would check instance types, auto-scaling settings, etc.
-            assert stack.environment == "test"  # Non-prod environment uses smaller instances
+            assert stack.environment == "test"
     
     def test_security_configurations(self, stack_config):
         """Test security best practices implementation"""
         with patch('pulumi.get_stack', return_value='test'):
-            pulumi.runtime.set_mocks(
-                mocks=MockPulumiProvider(),
-                preview=False
-            )
+            from lib.tap_stack import TapStack, TapStackArgs
             
-            from lib.tap_stack import TapStack
-            stack = TapStack("test-stack", stack_config)
+            args = TapStackArgs(stack_config)
+            stack = TapStack("test-stack", args)
             
             # Verify security groups have proper rules
             assert hasattr(stack, 'alb_sg')
@@ -213,13 +206,10 @@ class TestTapStackIntegration:
     def test_high_availability_setup(self, stack_config):
         """Test multi-AZ deployment configuration"""
         with patch('pulumi.get_stack', return_value='test'):
-            pulumi.runtime.set_mocks(
-                mocks=MockPulumiProvider(),
-                preview=False
-            )
+            from lib.tap_stack import TapStack, TapStackArgs
             
-            from lib.tap_stack import TapStack
-            stack = TapStack("test-stack", stack_config)
+            args = TapStackArgs(stack_config)
+            stack = TapStack("test-stack", args)
             
             # Verify multi-AZ deployment
             assert len(stack.public_subnets) == 2
@@ -229,13 +219,10 @@ class TestTapStackIntegration:
     def test_monitoring_and_alerting(self, stack_config):
         """Test CloudWatch monitoring setup"""
         with patch('pulumi.get_stack', return_value='test'):
-            pulumi.runtime.set_mocks(
-                mocks=MockPulumiProvider(),
-                preview=False
-            )
+            from lib.tap_stack import TapStack, TapStackArgs
             
-            from lib.tap_stack import TapStack
-            stack = TapStack("test-stack", stack_config)
+            args = TapStackArgs(stack_config)
+            stack = TapStack("test-stack", args)
             
             # Verify monitoring components
             assert hasattr(stack, 'log_group')
@@ -246,35 +233,15 @@ class TestTapStackIntegration:
     def test_lambda_functions_deployment(self, stack_config):
         """Test Lambda functions are properly configured"""
         with patch('pulumi.get_stack', return_value='test'):
-            pulumi.runtime.set_mocks(
-                mocks=MockPulumiProvider(),
-                preview=False
-            )
+            from lib.tap_stack import TapStack, TapStackArgs
             
-            from lib.tap_stack import TapStack
-            stack = TapStack("test-stack", stack_config)
+            args = TapStackArgs(stack_config)
+            stack = TapStack("test-stack", args)
             
             # Verify Lambda functions
             assert hasattr(stack, 'health_check_lambda')
             assert hasattr(stack, 'notification_lambda')
             assert hasattr(stack, 'lambda_role')
-
-
-class MockPulumiProvider:
-    """Mock Pulumi provider for testing"""
-    
-    def call(self, args):
-        """Mock Pulumi function calls"""
-        if args.token == "aws:index/getAvailabilityZones:getAvailabilityZones":
-            return {
-                "names": ["us-east-1a", "us-east-1b", "us-east-1c"],
-                "zone_ids": ["use1-az1", "use1-az2", "use1-az3"]
-            }
-        return {}
-    
-    def new_resource(self, args):
-        """Mock resource creation"""
-        return [f"test-{args.name}", {}]
 
 
 if __name__ == "__main__":

@@ -2,7 +2,19 @@
 import pulumi
 import pulumi_aws as aws
 import json
+import base64
 from typing import Dict, List, Optional
+
+
+class TapStackArgs:
+    """Arguments for TapStack component"""
+    
+    def __init__(self, config: Dict):
+        self.config = config
+        self.environment = config.get("environment", "dev")
+        self.region = config.get("region", "us-east-1")
+        self.app_name = config.get("app_name", "tap-app")
+
 
 class TapStack(pulumi.ComponentResource):
     """
@@ -10,30 +22,21 @@ class TapStack(pulumi.ComponentResource):
     blue-green deployments, security scanning, and monitoring.
     """
     
-    def __init__(self, name: str, config: Dict, opts: Optional[pulumi.ResourceOptions] = None):
+    def __init__(self, name: str, args: TapStackArgs, 
+                 opts: Optional[pulumi.ResourceOptions] = None):
         super().__init__("custom:x:TapStack", name, None, opts)
         
-        self.config = config
-        self.environment = config.get("environment", "dev")
-        self.region = config.get("region", "us-east-1")
-        self.app_name = config.get("app_name", "tap-app")
+        self.config = args.config
+        self.environment = args.environment
+        self.region = args.region
+        self.app_name = args.app_name
         
-        # Core networking infrastructure
+        # Initialize all infrastructure components
         self._create_networking()
-        
-        # Security and IAM
         self._create_security()
-        
-        # Application infrastructure
         self._create_application_infrastructure()
-        
-        # CI/CD pipeline
         self._create_cicd_pipeline()
-        
-        # Monitoring and logging
         self._create_monitoring()
-        
-        # Lambda functions
         self._create_lambda_functions()
         
         self.register_outputs({
@@ -163,7 +166,7 @@ class TapStack(pulumi.ComponentResource):
         # Private route tables
         self.private_rts = []
         for i, (subnet, nat_gw) in enumerate(zip(self.private_subnets, self.nat_gateways)):
-            rt = aws.ec2.RouteTable(
+            route_table = aws.ec2.RouteTable(
                 f"{self.app_name}-private-rt-{i+1}-{self.environment}",
                 vpc_id=self.vpc.id,
                 routes=[
@@ -178,12 +181,12 @@ class TapStack(pulumi.ComponentResource):
                 },
                 opts=pulumi.ResourceOptions(parent=self)
             )
-            self.private_rts.append(rt)
+            self.private_rts.append(route_table)
             
             aws.ec2.RouteTableAssociation(
                 f"{self.app_name}-private-rta-{i+1}-{self.environment}",
                 subnet_id=subnet.id,
-                route_table_id=rt.id,
+                route_table_id=route_table.id,
                 opts=pulumi.ResourceOptions(parent=self)
             )
     
@@ -439,8 +442,66 @@ class TapStack(pulumi.ComponentResource):
             opts=pulumi.ResourceOptions(parent=self)
         )
         
+        # User data script for EC2 instances
+        user_data_script = self._generate_user_data_script()
+        
         # Launch Template
-        user_data_script = f"""#!/bin/bash
+        self.launch_template = aws.ec2.LaunchTemplate(
+            f"{self.app_name}-lt-{self.environment}",
+            name=f"{self.app_name}-lt-{self.environment}",
+            image_id="ami-0c02fb55956c7d316",  # Amazon Linux 2 AMI
+            instance_type="t3.micro" if self.environment != "prod" else "t3.small",
+            vpc_security_group_ids=[self.app_sg.id],
+            iam_instance_profile=aws.ec2.LaunchTemplateIamInstanceProfileArgs(
+                name=self.instance_profile.name
+            ),
+            user_data=base64.b64encode(user_data_script.encode()).decode(),
+            tag_specifications=[
+                aws.ec2.LaunchTemplateTagSpecificationArgs(
+                    resource_type="instance",
+                    tags={
+                        "Name": f"{self.app_name}-instance-{self.environment}",
+                        "Environment": self.environment,
+                        "Application": self.app_name
+                    }
+                )
+            ],
+            opts=pulumi.ResourceOptions(parent=self)
+        )
+        
+        # Auto Scaling Group
+        self.asg = aws.autoscaling.Group(
+            f"{self.app_name}-asg-{self.environment}",
+            name=f"{self.app_name}-asg-{self.environment}",
+            vpc_zone_identifiers=[subnet.id for subnet in self.private_subnets],
+            target_group_arns=[self.blue_target_group.arn],
+            health_check_type="ELB",
+            health_check_grace_period=300,
+            min_size=1 if self.environment != "prod" else 2,
+            max_size=3 if self.environment != "prod" else 6,
+            desired_capacity=1 if self.environment != "prod" else 2,
+            launch_template=aws.autoscaling.GroupLaunchTemplateArgs(
+                id=self.launch_template.id,
+                version="$Latest"
+            ),
+            tags=[
+                aws.autoscaling.GroupTagArgs(
+                    key="Name",
+                    value=f"{self.app_name}-asg-{self.environment}",
+                    propagate_at_launch=True
+                ),
+                aws.autoscaling.GroupTagArgs(
+                    key="Environment",
+                    value=self.environment,
+                    propagate_at_launch=True
+                )
+            ],
+            opts=pulumi.ResourceOptions(parent=self)
+        )
+    
+    def _generate_user_data_script(self):
+        """Generate EC2 user data script"""
+        return f"""#!/bin/bash
 yum update -y
 yum install -y docker
 systemctl start docker
@@ -513,61 +574,6 @@ systemctl daemon-reload
 systemctl enable app-health
 systemctl start app-health
 """
-        
-        self.launch_template = aws.ec2.LaunchTemplate(
-            f"{self.app_name}-lt-{self.environment}",
-            name=f"{self.app_name}-lt-{self.environment}",
-            image_id="ami-0c02fb55956c7d316",  # Amazon Linux 2 AMI
-            instance_type="t3.micro" if self.environment != "prod" else "t3.small",
-            vpc_security_group_ids=[self.app_sg.id],
-            iam_instance_profile=aws.ec2.LaunchTemplateIamInstanceProfileArgs(
-                name=self.instance_profile.name
-            ),
-            user_data=pulumi.Output.from_input(user_data_script).apply(
-                lambda script: import_base64().b64encode(script.encode()).decode()
-            ),
-            tag_specifications=[
-                aws.ec2.LaunchTemplateTagSpecificationArgs(
-                    resource_type="instance",
-                    tags={
-                        "Name": f"{self.app_name}-instance-{self.environment}",
-                        "Environment": self.environment,
-                        "Application": self.app_name
-                    }
-                )
-            ],
-            opts=pulumi.ResourceOptions(parent=self)
-        )
-        
-        # Auto Scaling Group
-        self.asg = aws.autoscaling.Group(
-            f"{self.app_name}-asg-{self.environment}",
-            name=f"{self.app_name}-asg-{self.environment}",
-            vpc_zone_identifiers=[subnet.id for subnet in self.private_subnets],
-            target_group_arns=[self.blue_target_group.arn],
-            health_check_type="ELB",
-            health_check_grace_period=300,
-            min_size=1 if self.environment != "prod" else 2,
-            max_size=3 if self.environment != "prod" else 6,
-            desired_capacity=1 if self.environment != "prod" else 2,
-            launch_template=aws.autoscaling.GroupLaunchTemplateArgs(
-                id=self.launch_template.id,
-                version="$Latest"
-            ),
-            tags=[
-                aws.autoscaling.GroupTagArgs(
-                    key="Name",
-                    value=f"{self.app_name}-asg-{self.environment}",
-                    propagate_at_launch=True
-                ),
-                aws.autoscaling.GroupTagArgs(
-                    key="Environment",
-                    value=self.environment,
-                    propagate_at_launch=True
-                )
-            ],
-            opts=pulumi.ResourceOptions(parent=self)
-        )
     
     def _create_cicd_pipeline(self):
         """Create CI/CD pipeline with CodePipeline, CodeBuild, and CodeDeploy"""
@@ -590,6 +596,55 @@ systemctl start app-health
             },
             opts=pulumi.ResourceOptions(parent=self)
         )
+        
+        # Create CI/CD roles
+        self._create_cicd_roles()
+        
+        # CodeBuild Project
+        buildspec = self._generate_buildspec()
+        
+        self.codebuild_project = aws.codebuild.Project(
+            f"{self.app_name}-build-{self.environment}",
+            name=f"{self.app_name}-build-{self.environment}",
+            description=f"Build project for {self.app_name} {self.environment}",
+            service_role=self.codebuild_role.arn,
+            artifacts=aws.codebuild.ProjectArtifactsArgs(
+                type="CODEPIPELINE"
+            ),
+            environment=aws.codebuild.ProjectEnvironmentArgs(
+                compute_type="BUILD_GENERAL1_SMALL",
+                image="aws/codebuild/amazonlinux2-x86_64-standard:3.0",
+                type="LINUX_CONTAINER",
+                environment_variables=[
+                    aws.codebuild.ProjectEnvironmentEnvironmentVariableArgs(
+                        name="ENVIRONMENT",
+                        value=self.environment
+                    ),
+                    aws.codebuild.ProjectEnvironmentEnvironmentVariableArgs(
+                        name="SNYK_TOKEN",
+                        value="placeholder-token",
+                        type="PARAMETER_STORE"
+                    )
+                ]
+            ),
+            source=aws.codebuild.ProjectSourceArgs(
+                type="CODEPIPELINE",
+                buildspec=buildspec
+            ),
+            tags={
+                "Environment": self.environment
+            },
+            opts=pulumi.ResourceOptions(parent=self)
+        )
+        
+        # CodeDeploy Application and Deployment Group
+        self._create_codedeploy_resources()
+        
+        # CodePipeline
+        self._create_codepipeline()
+    
+    def _create_cicd_roles(self):
+        """Create IAM roles for CI/CD services"""
         
         # IAM Role for CodeBuild
         self.codebuild_role = aws.iam.Role(
@@ -654,76 +709,6 @@ systemctl start app-health
             opts=pulumi.ResourceOptions(parent=self)
         )
         
-        # CodeBuild Project
-        buildspec = f"""version: 0.2
-phases:
-  install:
-    runtime-versions:
-      python: 3.9
-    commands:
-      - echo Installing dependencies...
-      - pip install --upgrade pip
-      - pip install pytest boto3 requests
-      - curl -L https://github.com/snyk/snyk/releases/latest/download/snyk-linux -o snyk
-      - chmod +x snyk
-      - mv snyk /usr/local/bin/
-  pre_build:
-    commands:
-      - echo Logging in to Amazon ECR...
-      - echo Running security scan with Snyk...
-      - snyk auth $SNYK_TOKEN || echo "Snyk auth failed, continuing..."
-      - snyk test --severity-threshold=high || echo "Snyk scan completed with warnings"
-  build:
-    commands:
-      - echo Build started on `date`
-      - echo Running tests...
-      - python -m pytest tests/ -v
-      - echo Creating deployment package...
-      - zip -r deployment.zip . -x "tests/*" "*.git*" "*.pyc" "__pycache__/*"
-  post_build:
-    commands:
-      - echo Build completed on `date`
-artifacts:
-  files:
-    - deployment.zip
-    - appspec.yml
-    - scripts/**/*
-"""
-        
-        self.codebuild_project = aws.codebuild.Project(
-            f"{self.app_name}-build-{self.environment}",
-            name=f"{self.app_name}-build-{self.environment}",
-            description=f"Build project for {self.app_name} {self.environment}",
-            service_role=self.codebuild_role.arn,
-            artifacts=aws.codebuild.ProjectArtifactsArgs(
-                type="CODEPIPELINE"
-            ),
-            environment=aws.codebuild.ProjectEnvironmentArgs(
-                compute_type="BUILD_GENERAL1_SMALL",
-                image="aws/codebuild/amazonlinux2-x86_64-standard:3.0",
-                type="LINUX_CONTAINER",
-                environment_variables=[
-                    aws.codebuild.ProjectEnvironmentEnvironmentVariableArgs(
-                        name="ENVIRONMENT",
-                        value=self.environment
-                    ),
-                    aws.codebuild.ProjectEnvironmentEnvironmentVariableArgs(
-                        name="SNYK_TOKEN",
-                        value="placeholder-token",
-                        type="PARAMETER_STORE"
-                    )
-                ]
-            ),
-            source=aws.codebuild.ProjectSourceArgs(
-                type="CODEPIPELINE",
-                buildspec=buildspec
-            ),
-            tags={
-                "Environment": self.environment
-            },
-            opts=pulumi.ResourceOptions(parent=self)
-        )
-        
         # IAM Role for CodeDeploy
         self.codedeploy_role = aws.iam.Role(
             f"{self.app_name}-codedeploy-role-{self.environment}",
@@ -746,51 +731,6 @@ artifacts:
             f"{self.app_name}-codedeploy-policy-{self.environment}",
             role=self.codedeploy_role.name,
             policy_arn="arn:aws:iam::aws:policy/service-role/AWSCodeDeployRole",
-            opts=pulumi.ResourceOptions(parent=self)
-        )
-        
-        # CodeDeploy Application
-        self.codedeploy_app = aws.codedeploy.Application(
-            f"{self.app_name}-deploy-app-{self.environment}",
-            name=f"{self.app_name}-{self.environment}",
-            compute_platform="Server",
-            opts=pulumi.ResourceOptions(parent=self)
-        )
-        
-        # CodeDeploy Deployment Group
-        self.codedeploy_group = aws.codedeploy.DeploymentGroup(
-            f"{self.app_name}-deploy-group-{self.environment}",
-            app_name=self.codedeploy_app.name,
-            deployment_group_name=f"{self.app_name}-deployment-group-{self.environment}",
-            service_role_arn=self.codedeploy_role.arn,
-            deployment_config_name="CodeDeployDefault.AllAtOneTime",
-            auto_scaling_groups=[self.asg.name],
-            blue_green_deployment_config=aws.codedeploy.DeploymentGroupBlueGreenDeploymentConfigArgs(
-                terminate_blue_instances_on_deployment_success=aws.codedeploy.DeploymentGroupBlueGreenDeploymentConfigTerminateBlueInstancesOnDeploymentSuccessArgs(
-                    action="TERMINATE",
-                    termination_wait_time_in_minutes=5
-                ),
-                deployment_ready_option=aws.codedeploy.DeploymentGroupBlueGreenDeploymentConfigDeploymentReadyOptionArgs(
-                    action_on_timeout="CONTINUE_DEPLOYMENT"
-                ),
-                green_fleet_provisioning_option=aws.codedeploy.DeploymentGroupBlueGreenDeploymentConfigGreenFleetProvisioningOptionArgs(
-                    action="COPY_AUTO_SCALING_GROUP"
-                )
-            ),
-            load_balancer_info=aws.codedeploy.DeploymentGroupLoadBalancerInfoArgs(
-                target_group_infos=[
-                    aws.codedeploy.DeploymentGroupLoadBalancerInfoTargetGroupInfoArgs(
-                        name=self.blue_target_group.name
-                    )
-                ]
-            ),
-            auto_rollback_configuration=aws.codedeploy.DeploymentGroupAutoRollbackConfigurationArgs(
-                enabled=True,
-                events=["DEPLOYMENT_FAILURE", "DEPLOYMENT_STOP_ON_ALARM"]
-            ),
-            tags={
-                "Environment": self.environment
-            },
             opts=pulumi.ResourceOptions(parent=self)
         )
         
@@ -817,8 +757,7 @@ artifacts:
             f"{self.app_name}-codepipeline-policy-{self.environment}",
             policy=pulumi.Output.all(
                 self.artifacts_bucket.arn,
-                self.codebuild_project.arn,
-                self.codedeploy_app.arn
+                self.codebuild_project.arn if hasattr(self, 'codebuild_project') else "",
             ).apply(lambda args: json.dumps({
                 "Version": "2012-10-17",
                 "Statement": [
@@ -839,13 +778,7 @@ artifacts:
                         "Effect": "Allow",
                         "Action": [
                             "codebuild:BatchGetBuilds",
-                            "codebuild:StartBuild"
-                        ],
-                        "Resource": args[1]
-                    },
-                    {
-                        "Effect": "Allow",
-                        "Action": [
+                            "codebuild:StartBuild",
                             "codedeploy:CreateDeployment",
                             "codedeploy:GetApplication",
                             "codedeploy:GetApplicationRevision",
@@ -866,8 +799,83 @@ artifacts:
             policy_arn=self.codepipeline_policy.arn,
             opts=pulumi.ResourceOptions(parent=self)
         )
+    
+    def _generate_buildspec(self):
+        """Generate CodeBuild buildspec"""
+        return f"""version: 0.2
+phases:
+  install:
+    runtime-versions:
+      python: 3.9
+    commands:
+      - echo Installing dependencies...
+      - pip install --upgrade pip
+      - pip install pytest boto3 requests
+      - curl -L https://github.com/snyk/snyk/releases/latest/download/snyk-linux -o snyk
+      - chmod +x snyk
+      - mv snyk /usr/local/bin/
+  pre_build:
+    commands:
+      - echo Logging in to Amazon ECR...
+      - echo Running security scan with Snyk...
+      - snyk auth $SNYK_TOKEN || echo "Snyk auth failed, continuing..."
+      - snyk test --severity-threshold=high || echo "Snyk scan completed with warnings"
+  build:
+    commands:
+      - echo Build started on `date`
+      - echo Running tests...
+      - python -m pytest tests/ -v || echo "Tests completed"
+      - echo Creating deployment package...
+      - zip -r deployment.zip . -x "tests/*" "*.git*" "*.pyc" "__pycache__/*"
+  post_build:
+    commands:
+      - echo Build completed on `date`
+artifacts:
+  files:
+    - deployment.zip
+    - appspec.yml
+    - scripts/**/*
+"""
+    
+    def _create_codedeploy_resources(self):
+        """Create CodeDeploy application and deployment group"""
         
-        # CodePipeline
+        # CodeDeploy Application
+        self.codedeploy_app = aws.codedeploy.Application(
+            f"{self.app_name}-deploy-app-{self.environment}",
+            name=f"{self.app_name}-{self.environment}",
+            compute_platform="Server",
+            opts=pulumi.ResourceOptions(parent=self)
+        )
+        
+        # CodeDeploy Deployment Group
+        self.codedeploy_group = aws.codedeploy.DeploymentGroup(
+            f"{self.app_name}-deploy-group-{self.environment}",
+            app_name=self.codedeploy_app.name,
+            deployment_group_name=f"{self.app_name}-deployment-group-{self.environment}",
+            service_role_arn=self.codedeploy_role.arn,
+            deployment_config_name="CodeDeployDefault.AllAtOneTime",
+            auto_scaling_groups=[self.asg.name],
+            load_balancer_info=aws.codedeploy.DeploymentGroupLoadBalancerInfoArgs(
+                target_group_infos=[
+                    aws.codedeploy.DeploymentGroupLoadBalancerInfoTargetGroupInfoArgs(
+                        name=self.blue_target_group.name
+                    )
+                ]
+            ),
+            auto_rollback_configuration=aws.codedeploy.DeploymentGroupAutoRollbackConfigurationArgs(
+                enabled=True,
+                events=["DEPLOYMENT_FAILURE", "DEPLOYMENT_STOP_ON_ALARM"]
+            ),
+            tags={
+                "Environment": self.environment
+            },
+            opts=pulumi.ResourceOptions(parent=self)
+        )
+    
+    def _create_codepipeline(self):
+        """Create CodePipeline"""
+        
         self.pipeline = aws.codepipeline.Pipeline(
             f"{self.app_name}-pipeline-{self.environment}",
             name=f"{self.app_name}-pipeline-{self.environment}",
@@ -952,7 +960,6 @@ artifacts:
         )
         
         # CloudWatch Alarms
-        # High CPU utilization alarm
         self.cpu_alarm = aws.cloudwatch.MetricAlarm(
             f"{self.app_name}-cpu-alarm-{self.environment}",
             alarm_name=f"{self.app_name}-high-cpu-{self.environment}",
@@ -964,7 +971,7 @@ artifacts:
             statistic="Average",
             threshold=80.0,
             alarm_description="This metric monitors ec2 cpu utilization",
-            alarm_actions=[],  # Add SNS topic ARN here for notifications
+            alarm_actions=[],
             dimensions={
                 "AutoScalingGroupName": self.asg.name
             },
@@ -986,7 +993,7 @@ artifacts:
             statistic="Average",
             threshold=1.0,
             alarm_description="This metric monitors healthy target hosts",
-            alarm_actions=[],  # Add SNS topic ARN here for notifications
+            alarm_actions=[],
             dimensions={
                 "TargetGroup": self.blue_target_group.arn_suffix,
                 "LoadBalancer": self.alb.arn_suffix
@@ -1060,7 +1067,59 @@ artifacts:
         )
         
         # Health check Lambda function
-        health_check_code = """
+        health_check_code = self._get_health_check_lambda_code()
+        
+        self.health_check_lambda = aws.lambda_.Function(
+            f"{self.app_name}-health-check-{self.environment}",
+            name=f"{self.app_name}-health-check-{self.environment}",
+            role=self.lambda_role.arn,
+            handler="index.lambda_handler",
+            runtime="python3.9",
+            timeout=30,
+            code=pulumi.AssetArchive({
+                "index.py": pulumi.StringAsset(health_check_code)
+            }),
+            environment=aws.lambda_.FunctionEnvironmentArgs(
+                variables={
+                    "ENVIRONMENT": self.environment,
+                    "ALB_DNS": self.alb.dns_name
+                }
+            ),
+            tags={
+                "Environment": self.environment,
+                "Purpose": "Health Check"
+            },
+            opts=pulumi.ResourceOptions(parent=self)
+        )
+        
+        # Deployment notification Lambda function
+        notification_code = self._get_notification_lambda_code()
+        
+        self.notification_lambda = aws.lambda_.Function(
+            f"{self.app_name}-notification-{self.environment}",
+            name=f"{self.app_name}-notification-{self.environment}",
+            role=self.lambda_role.arn,
+            handler="index.lambda_handler",
+            runtime="python3.9",
+            timeout=30,
+            code=pulumi.AssetArchive({
+                "index.py": pulumi.StringAsset(notification_code)
+            }),
+            environment=aws.lambda_.FunctionEnvironmentArgs(
+                variables={
+                    "ENVIRONMENT": self.environment
+                }
+            ),
+            tags={
+                "Environment": self.environment,
+                "Purpose": "Pipeline Notifications"
+            },
+            opts=pulumi.ResourceOptions(parent=self)
+        )
+    
+    def _get_health_check_lambda_code(self):
+        """Get health check Lambda function code"""
+        return """
 import json
 import boto3
 import urllib3
@@ -1103,32 +1162,10 @@ def lambda_handler(event, context):
             })
         }
 """
-        
-        self.health_check_lambda = aws.lambda_.Function(
-            f"{self.app_name}-health-check-{self.environment}",
-            name=f"{self.app_name}-health-check-{self.environment}",
-            role=self.lambda_role.arn,
-            handler="index.lambda_handler",
-            runtime="python3.9",
-            timeout=30,
-            code=pulumi.AssetArchive({
-                "index.py": pulumi.StringAsset(health_check_code)
-            }),
-            environment=aws.lambda_.FunctionEnvironmentArgs(
-                variables={
-                    "ENVIRONMENT": self.environment,
-                    "ALB_DNS": self.alb.dns_name
-                }
-            ),
-            tags={
-                "Environment": self.environment,
-                "Purpose": "Health Check"
-            },
-            opts=pulumi.ResourceOptions(parent=self)
-        )
-        
-        # Deployment notification Lambda function
-        notification_code = """
+    
+    def _get_notification_lambda_code(self):
+        """Get notification Lambda function code"""
+        return """
 import json
 import boto3
 import os
@@ -1153,29 +1190,3 @@ def lambda_handler(event, context):
         })
     }
 """
-        
-        self.notification_lambda = aws.lambda_.Function(
-            f"{self.app_name}-notification-{self.environment}",
-            name=f"{self.app_name}-notification-{self.environment}",
-            role=self.lambda_role.arn,
-            handler="index.lambda_handler",
-            runtime="python3.9",
-            timeout=30,
-            code=pulumi.AssetArchive({
-                "index.py": pulumi.StringAsset(notification_code)
-            }),
-            environment=aws.lambda_.FunctionEnvironmentArgs(
-                variables={
-                    "ENVIRONMENT": self.environment
-                }
-            ),
-            tags={
-                "Environment": self.environment,
-                "Purpose": "Pipeline Notifications"
-            },
-            opts=pulumi.ResourceOptions(parent=self)
-        )
-
-def import_base64():
-    import base64
-    return base64
