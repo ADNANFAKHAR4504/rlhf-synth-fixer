@@ -85,6 +85,7 @@ cdktf.log
 *terraform.*.tfstate*
 .genpackage-lock.json
 .gen
+.gen/providers/*
 
 __pycache__/
 .pulumi/
