@@ -8,6 +8,7 @@ import {
   iamRolePolicy,
   iamInstanceProfile,
   dataAwsIamPolicyDocument,
+  dataAwsCallerIdentity,
 } from '@cdktf/provider-aws/lib';
 import { NamingConvention } from '../utils/naming';
 
@@ -134,6 +135,13 @@ export class SecurityConstruct extends Construct {
   }
 
   private createKmsKey(naming: NamingConvention) {
+    // Add the caller identity data source
+    const callerIdentity = new dataAwsCallerIdentity.DataAwsCallerIdentity(
+      this,
+      'current',
+      {}
+    );
+
     const keyPolicy = new dataAwsIamPolicyDocument.DataAwsIamPolicyDocument(
       this,
       'kms-key-policy',
@@ -145,9 +153,7 @@ export class SecurityConstruct extends Construct {
             principals: [
               {
                 type: 'AWS',
-                identifiers: [
-                  'arn:aws:iam::${data.aws_caller_identity.current.account_id}:root',
-                ],
+                identifiers: [`arn:aws:iam::${callerIdentity.accountId}:root`],
               },
             ],
             actions: ['kms:*'],

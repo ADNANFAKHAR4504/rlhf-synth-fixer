@@ -77,14 +77,18 @@ describe('TapStack Unit Tests', () => {
       expect(stack.security).toBeDefined();
     });
 
-    test('should throw error for invalid environment', () => {
+    test('should fallback to dev environment for invalid environment', () => {
       app = new App();
-      
-      expect(() => {
-        new TapStack(app, 'TestTapStackInvalid', {
-          environmentSuffix: 'invalid',
-        });
-      }).toThrow("Environment 'invalid' not found in configuration");
+      stack = new TapStack(app, 'TestTapStackInvalid', {
+        environmentSuffix: 'invalid',
+      });
+
+      expect(stack).toBeDefined();
+      expect(stack.vpc).toBeDefined();
+      expect(stack.security).toBeDefined();
+      expect(stack.naming).toBeDefined();
+      // Naming should still use the original environmentSuffix
+      expect(stack.naming.resource('test', 'resource')).toBe('cdktf-infra-invalid-test-resource');
     });
   });
 
