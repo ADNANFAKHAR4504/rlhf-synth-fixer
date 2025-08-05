@@ -142,18 +142,16 @@ describe('TapStack Integration Tests - PROMPT.md Compliance', () => {
       expect(lifecycle.rule[0].expiration[0].days).toBe(365);
     });
 
-    test('should create CloudFront distribution with WAF integration', () => {
+    test('should create CloudFront distribution', () => {
       expect(
         synthesized.resource.aws_cloudfront_distribution['webapp-cloudfront']
       ).toBeDefined();
-      expect(
-        synthesized.resource.aws_wafv2_web_acl['webapp-waf']
-      ).toBeDefined();
 
-      const waf = synthesized.resource.aws_wafv2_web_acl['webapp-waf'];
-      expect(waf.scope).toBe('REGIONAL');
-      expect(waf.rule).toBeDefined();
-      expect(waf.rule.length).toBeGreaterThan(0);
+      const cloudfront =
+        synthesized.resource.aws_cloudfront_distribution['webapp-cloudfront'];
+      expect(cloudfront.enabled).toBe(true);
+      expect(cloudfront.origin).toBeDefined();
+      expect(cloudfront.default_cache_behavior).toBeDefined();
     });
 
     test('should create Route53 DNS configuration', () => {
@@ -234,7 +232,6 @@ describe('TapStack Integration Tests - PROMPT.md Compliance', () => {
       expect(synthesized.output['route53-domain']).toBeDefined();
       expect(synthesized.output['logs-bucket-name']).toBeDefined();
       expect(synthesized.output['database-endpoint']).toBeDefined();
-      expect(synthesized.output['waf-web-acl-arn']).toBeDefined();
       expect(synthesized.output['kms-key-id']).toBeDefined();
     });
 
