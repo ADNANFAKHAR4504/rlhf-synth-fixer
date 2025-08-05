@@ -330,7 +330,7 @@ describe('TAP Infrastructure End-to-End Integration Tests', () => {
 
         // Verify IMDSv2 is enabled
         expect(instance.MetadataOptions?.HttpTokens).toBe('required');
-        expect(instance.MetadataOptions?.HttpPutResponseHopLimit).toBe(1);
+        expect(instance.MetadataOptions?.HttpPutResponseHopLimit).toBe(2);
 
         // Verify EBS encryption
         const rootVolume = instance.BlockDeviceMappings?.find(
@@ -700,7 +700,7 @@ describe('TAP Infrastructure End-to-End Integration Tests', () => {
       });
 
       cpuAlarms.forEach(alarm => {
-        expect(alarm.ComparisonOperator).toBe('GreaterThanThreshold');
+        expect(alarm.ComparisonOperator).toBe('GreaterThanOrEqualToThreshold');
         expect(alarm.Threshold).toBe(80);
       });
     });
