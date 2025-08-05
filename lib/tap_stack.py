@@ -13,7 +13,7 @@ from cdktf_cdktf_provider_aws.s3_bucket import S3Bucket
 from cdktf_cdktf_provider_aws.s3_bucket_server_side_encryption_configuration import (
     S3BucketServerSideEncryptionConfigurationA,
     S3BucketServerSideEncryptionConfigurationRuleA,
-    S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultA
+    S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultA as S3SSEDefaultA  # pylint: disable=line-too-long
 )
 from cdktf_cdktf_provider_aws.lambda_function import LambdaFunction
 from cdktf_cdktf_provider_aws.iam_role import IamRole
@@ -89,7 +89,7 @@ class TapStack(TerraformStack):
         rule=[
             S3BucketServerSideEncryptionConfigurationRuleA(
                 apply_server_side_encryption_by_default=(
-                    S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultA(  # noqa: E501
+                    S3SSEDefaultA(
                         sse_algorithm="AES256"
                     )
                 )
