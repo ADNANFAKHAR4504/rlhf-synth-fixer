@@ -13,7 +13,7 @@ from cdktf_cdktf_provider_aws.iam_role_policy_attachment import \
     IamRolePolicyAttachment
 from cdktf_cdktf_provider_aws.instance import Instance
 from cdktf_cdktf_provider_aws.s3_bucket import S3Bucket
-from cdktf_cdktf_provider_aws.s3_bucket_versioning import S3BucketVersioning
+from cdktf_cdktf_provider_aws.s3_bucket_versioning import S3BucketVersioningA
 from cdktf_cdktf_provider_aws.sns_topic import SnsTopic
 from constructs import Construct
 
@@ -66,7 +66,7 @@ class Infrastructure(Construct):
     )
 
     # Enable versioning on S3 bucket
-    S3BucketVersioning(
+    S3BucketVersioningA(
       self, "backup_bucket_versioning",
       bucket=backup_bucket.id,
       versioning_configuration={

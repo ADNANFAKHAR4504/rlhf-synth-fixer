@@ -84,7 +84,7 @@ cdktf.out
 cdktf.log
 *terraform.*.tfstate*
 .genpackage-lock.json
-
+.gen
 
 __pycache__/
 .pulumi/
