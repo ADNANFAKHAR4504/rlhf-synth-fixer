@@ -59,6 +59,14 @@
                 },
                 "us-west-2"
             ]
+        },
+        "StandaloneDeployment": {
+            "Fn::Equals": [
+                {
+                    "Ref": "AWS::Region"
+                },
+                "us-west-1"
+            ]
         }
     },
     "Resources": {
@@ -359,14 +367,26 @@
                             ]
                         },
                         "REMOTE_TABLE_NAME": {
-                            "Fn::ImportValue": {
-                                "Fn::Sub": "TapStack${EnvironmentSuffix}-TableName"
-                            }
+                            "Fn::If": [
+                                "HasCrossRegionReference",
+                                {
+                                    "Fn::ImportValue": {
+                                        "Fn::Sub": "TapStack${EnvironmentSuffix}-TableName"
+                                    }
+                                },
+                                "no-remote-table"
+                            ]
                         },
                         "REMOTE_TABLE_ARN": {
-                            "Fn::ImportValue": {
-                                "Fn::Sub": "TapStack${EnvironmentSuffix}-TableArn"
-                            }
+                            "Fn::If": [
+                                "HasCrossRegionReference",
+                                {
+                                    "Fn::ImportValue": {
+                                        "Fn::Sub": "TapStack${EnvironmentSuffix}-TableArn"
+                                    }
+                                },
+                                "no-remote-table-arn"
+                            ]
                         },
                         "TABLE_CONFIG": {
                             "Fn::Join": [
@@ -376,9 +396,15 @@
                                         "Fn::Sub": "local=${DynamoDBTable}"
                                     },
                                     {
-                                        "Fn::ImportValue": {
-                                            "Fn::Sub": "TapStack${EnvironmentSuffix}-TableName"
-                                        }
+                                        "Fn::If": [
+                                            "HasCrossRegionReference",
+                                            {
+                                                "Fn::ImportValue": {
+                                                    "Fn::Sub": "TapStack${EnvironmentSuffix}-TableName"
+                                                }
+                                            },
+                                            "no-remote-table"
+                                        ]
                                     }
                                 ]
                             ]
@@ -450,9 +476,17 @@
                                             "Fn::Sub": "${DynamoDBTable.Arn}/index/*"
                                         },
                                         {
-                                            "Fn::ImportValue": {
-                                                "Fn::Sub": "TapStack${EnvironmentSuffix}-TableArn"
-                                            }
+                                            "Fn::If": [
+                                                "HasCrossRegionReference",
+                                                {
+                                                    "Fn::ImportValue": {
+                                                        "Fn::Sub": "TapStack${EnvironmentSuffix}-TableArn"
+                                                    }
+                                                },
+                                                {
+                                                    "Ref": "AWS::NoValue"
+                                                }
+                                            ]
                                         }
                                     ]
                                 }

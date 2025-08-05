@@ -32,6 +32,8 @@ Conditions:
   IsWest2: !Equals [!Ref "AWS::Region", "us-west-2"]
   EnableStreams: !Equals [!Ref "AWS::Region", "us-west-2"]
   HasCrossRegionReference: !Equals [!Ref "AWS::Region", "us-west-2"]
+  # For standalone deployment, set this to false
+  StandaloneDeployment: !Equals [!Ref "AWS::Region", "us-west-1"]
 
 Resources:
   # DynamoDB Table with conditional capacity settings
@@ -170,17 +172,26 @@ Resources:
           # Local table reference
           LOCAL_TABLE_NAME: !Ref DynamoDBTable
           LOCAL_TABLE_ARN: !GetAtt DynamoDBTable.Arn
-          # Cross-region table reference using Fn::ImportValue
-          REMOTE_TABLE_NAME: !ImportValue
-            Fn::Sub: "TapStack${EnvironmentSuffix}-TableName"
-          REMOTE_TABLE_ARN: !ImportValue
-            Fn::Sub: "TapStack${EnvironmentSuffix}-TableArn"
+          # Cross-region table reference using Fn::ImportValue (conditional)
+          REMOTE_TABLE_NAME: !If
+            - HasCrossRegionReference
+            - !ImportValue
+              Fn::Sub: "TapStack${EnvironmentSuffix}-TableName"
+            - "no-remote-table"
+          REMOTE_TABLE_ARN: !If
+            - HasCrossRegionReference
+            - !ImportValue
+              Fn::Sub: "TapStack${EnvironmentSuffix}-TableArn"
+            - "no-remote-table-arn"
           # Combined configuration using Fn::Join
           TABLE_CONFIG: !Join
             - ","
             - - !Sub "local=${DynamoDBTable}"
-              - !ImportValue
-                Fn::Sub: "TapStack${EnvironmentSuffix}-TableName"
+              - !If
+                - HasCrossRegionReference
+                - !ImportValue
+                  Fn::Sub: "TapStack${EnvironmentSuffix}-TableName"
+                - "no-remote-table"
       Code:
         ZipFile: |
           import json
@@ -233,9 +244,12 @@ Resources:
                 Resource:
                   - !GetAtt DynamoDBTable.Arn
                   - !Sub "${DynamoDBTable.Arn}/index/*"
-                  # Cross-region table access
-                  - !ImportValue
-                    Fn::Sub: "TapStack${EnvironmentSuffix}-TableArn"
+                  # Cross-region table access (conditional)
+                  - !If
+                    - HasCrossRegionReference
+                    - !ImportValue
+                      Fn::Sub: "TapStack${EnvironmentSuffix}-TableArn"
+                    - !Ref "AWS::NoValue"
 
 Outputs:
   # Export table name for cross-stack reference

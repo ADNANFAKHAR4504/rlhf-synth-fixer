@@ -281,11 +281,12 @@ describe('TapStack CloudFormation Template - Unified DynamoDB Multi-Region', () 
         expect(envVars.LOCAL_TABLE_ARN).toEqual({
           'Fn::GetAtt': ['DynamoDBTable', 'Arn'],
         });
-        expect(envVars.REMOTE_TABLE_NAME).toEqual({
-          'Fn::ImportValue': {
-            'Fn::Sub': 'TapStack${EnvironmentSuffix}-TableName',
-          },
+        expect(envVars.REMOTE_TABLE_NAME['Fn::If']).toBeDefined();
+        expect(envVars.REMOTE_TABLE_NAME['Fn::If'][0]).toBe('HasCrossRegionReference');
+        expect(envVars.REMOTE_TABLE_NAME['Fn::If'][1]['Fn::ImportValue']).toEqual({
+          'Fn::Sub': 'TapStack${EnvironmentSuffix}-TableName',
         });
+        expect(envVars.REMOTE_TABLE_NAME['Fn::If'][2]).toBe('no-remote-table');
       });
 
       test('should have inline code', () => {
@@ -429,7 +430,7 @@ describe('TapStack CloudFormation Template - Unified DynamoDB Multi-Region', () 
 
     test('should have correct condition count', () => {
       const conditionCount = Object.keys(template.Conditions).length;
-      expect(conditionCount).toBe(4);
+      expect(conditionCount).toBe(5); // IsWest1, IsWest2, EnableStreams, HasCrossRegionReference, IsWest1
     });
 
     test('should have correct output count', () => {
@@ -469,11 +470,12 @@ describe('TapStack CloudFormation Template - Unified DynamoDB Multi-Region', () 
     });
 
     test('should use Fn::ImportValue correctly', () => {
-      // Check in Lambda environment variables
+      // Check in Lambda environment variables (now conditional)
       const lambdaFunction = template.Resources.CrossRegionLambdaFunction;
       const remoteTableName =
         lambdaFunction.Properties.Environment.Variables.REMOTE_TABLE_NAME;
-      expect(remoteTableName['Fn::ImportValue']).toBeDefined();
+      expect(remoteTableName['Fn::If']).toBeDefined();
+      expect(remoteTableName['Fn::If'][1]['Fn::ImportValue']).toBeDefined();
     });
 
     test('should use Fn::If correctly for conditional resources', () => {
@@ -498,10 +500,12 @@ describe('TapStack CloudFormation Template - Unified DynamoDB Multi-Region', () 
       const lambdaFunction = template.Resources.CrossRegionLambdaFunction;
       const envVars = lambdaFunction.Properties.Environment.Variables;
 
-      expect(envVars.REMOTE_TABLE_NAME['Fn::ImportValue']).toEqual({
+      expect(envVars.REMOTE_TABLE_NAME['Fn::If']).toBeDefined();
+      expect(envVars.REMOTE_TABLE_NAME['Fn::If'][1]['Fn::ImportValue']).toEqual({
         'Fn::Sub': 'TapStack${EnvironmentSuffix}-TableName',
       });
-      expect(envVars.REMOTE_TABLE_ARN['Fn::ImportValue']).toEqual({
+      expect(envVars.REMOTE_TABLE_ARN['Fn::If']).toBeDefined();
+      expect(envVars.REMOTE_TABLE_ARN['Fn::If'][1]['Fn::ImportValue']).toEqual({
         'Fn::Sub': 'TapStack${EnvironmentSuffix}-TableArn',
       });
     });
