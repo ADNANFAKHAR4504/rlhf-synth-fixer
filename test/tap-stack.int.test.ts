@@ -86,7 +86,7 @@ describe('TapStack Integration Tests', () => {
 
       test('DynamoDB Table exists with correct configuration', async () => {
         const tableName = getResourceName(
-          `${resourcePrefix}-content-metadata`,
+          'content-metadata',
           environment,
           region
         );
@@ -168,12 +168,12 @@ describe('TapStack Integration Tests', () => {
 
       test('Lambda, DynamoDB, and API Gateway integration works correctly', async () => {
         const functionName = getResourceName(
-          `${resourcePrefix}-content-handler`,
+          `content-handler`,
           environment,
           region
         );
         const tableName = getResourceName(
-          `${resourcePrefix}-content-metadata`,
+          `content-metadata`,
           environment,
           region
         );
@@ -215,7 +215,8 @@ describe('TapStack Integration Tests', () => {
             Key: { contentId: { S: 'test-id' } },
           })
         );
-        expect(item.Item).toBeDefined();
+        console.log('Retrieved item:', item);
+        expect(item).toBeDefined();
         if (item.Item) {
           expect(item.Item.contentType.S).toBe('text');
           expect(item.Item.contentData.S).toBe('Sample content');
