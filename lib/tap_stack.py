@@ -127,13 +127,23 @@ class TapStack(Stack):
     # Create VPC Flow Logs
     self.vpc_flow_logs_role = iam.Role(
       self, "tap_vpc_flow_logs_role",
-      assumed_by=iam.ServicePrincipal("vpc-flow-logs.amazonaws.com"),
-      managed_policies=[
-        iam.ManagedPolicy.from_aws_managed_policy_name(
-          "service-role/VPCFlowLogsDeliveryRolePolicy"
-        )
-      ]
+      assumed_by=iam.ServicePrincipal("vpc-flow-logs.amazonaws.com")
     )
+
+    # Add custom policy for VPC Flow Logs
+    vpc_flow_logs_policy = iam.PolicyStatement(
+      effect=iam.Effect.ALLOW,
+      actions=[
+        "logs:CreateLogGroup",
+        "logs:CreateLogStream",
+        "logs:PutLogEvents",
+        "logs:DescribeLogGroups",
+        "logs:DescribeLogStreams"
+      ],
+      resources=["*"]
+    )
+    
+    self.vpc_flow_logs_role.add_to_policy(vpc_flow_logs_policy)
 
     self.vpc_flow_logs = ec2.FlowLog(
       self, "tap_vpc_flow_logs",
