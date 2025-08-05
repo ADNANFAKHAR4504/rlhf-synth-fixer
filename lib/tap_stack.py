@@ -12,7 +12,7 @@ from aws_cdk import (
 from constructs import Construct
 from typing import Optional
 
-
+# trying to block the ssh access for outside ip's but this task with stack update is taking foorever, is uspect the ENI is not ebing released in the bacground which is causing the stack to go in a loop
 class TapStackProps(NestedStack):
   """
   Properties for the TapStack, defining the core infrastructure components.
