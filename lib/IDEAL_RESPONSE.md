@@ -8,7 +8,7 @@ This solution provides a production-ready implementation with proper security co
 The solution includes:
 
 - **Lambda Function** with Python 3.12 runtime that dynamically retrieves configuration from Secrets Manager
-- **Secrets Manager** for secure configuration storage with IAM-based access control  
+- **Secrets Manager** for secure configuration storage with IAM-based access control
 - **API Gateway HTTP API** with IAM authorization (sigV4)
 - **IAM roles and policies** following least privilege principles
 - **CloudWatch Logs** for comprehensive request logging and monitoring
@@ -148,10 +148,20 @@ def lambda_handler(event, context):
 """TAP Stack module for CDKTF Python infrastructure."""
 
 import json
+import os
+import tempfile
+import base64
+import zipfile
+import hashlib
 from cdktf import TerraformStack, S3Backend, TerraformOutput
 from constructs import Construct
 from cdktf_cdktf_provider_aws.provider import AwsProvider
 from cdktf_cdktf_provider_aws.s3_bucket import S3Bucket
+from cdktf_cdktf_provider_aws.s3_bucket_server_side_encryption_configuration import (
+    S3BucketServerSideEncryptionConfigurationA,
+    S3BucketServerSideEncryptionConfigurationRuleA,
+    S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultA as S3SSEDefaultA  # pylint: disable=line-too-long
+)
 from cdktf_cdktf_provider_aws.lambda_function import LambdaFunction
 from cdktf_cdktf_provider_aws.iam_role import IamRole
 from cdktf_cdktf_provider_aws.iam_role_policy_attachment import IamRolePolicyAttachment
@@ -166,7 +176,6 @@ from cdktf_cdktf_provider_aws.secretsmanager_secret_version import Secretsmanage
 from cdktf_cdktf_provider_aws.cloudwatch_log_group import CloudwatchLogGroup
 from cdktf_cdktf_provider_aws.data_aws_iam_policy_document import DataAwsIamPolicyDocument
 from cdktf_cdktf_provider_aws.data_aws_caller_identity import DataAwsCallerIdentity
-
 
 class TapStack(TerraformStack):
   """CDKTF Python stack for TAP infrastructure."""
@@ -207,20 +216,37 @@ class TapStack(TerraformStack):
     # Add S3 state locking using escape hatch
     self.add_override("terraform.backend.s3.use_lockfile", True)
 
+    # Create unique bucket name that follows S3 naming conventions
+    bucket_hash = hashlib.md5(f"{environment_suffix}-{construct_id}".encode()).hexdigest()[:8]
+    bucket_name = f"tap-bucket-{environment_suffix}-{bucket_hash}".lower()
+
     # Create S3 bucket for demonstration
-    S3Bucket(
+    tap_bucket = S3Bucket(
         self,
         "tap_bucket",
-        bucket=f"tap-bucket-{environment_suffix}-{construct_id}",
-        versioning={"enabled": True},
-        server_side_encryption_configuration={
-            "rule": {
-                "apply_server_side_encryption_by_default": {
-                    "sse_algorithm": "AES256"
-                }
-            }
-        }
+        bucket=bucket_name,
+        versioning={"enabled": True}
     )
+
+    # Enable server-side encryption for S3 bucket using separate resource
+    S3BucketServerSideEncryptionConfigurationA(
+        self,
+        "tap_bucket_encryption",
+        bucket=tap_bucket.id,
+        rule=[
+            S3BucketServerSideEncryptionConfigurationRuleA(
+                apply_server_side_encryption_by_default=(
+                    S3SSEDefaultA(
+                        sse_algorithm="AES256"
+                    )
+                )
+            )
+        ]
+    )
+
+    # ? Add your stack instantiations here
+    # ! Do NOT create resources directly in this stack.
+    # ! Instead, create separate stacks for each resource type.
 
     # Get current AWS account info
     current = DataAwsCallerIdentity(self, "current")
@@ -324,24 +350,31 @@ class TapStack(TerraformStack):
         policy_arn=secrets_policy.arn
     )
 
-    # Create Lambda function
+    # Create Lambda deployment package
+    lambda_zip_path = os.path.join(tempfile.gettempdir(), "lambda_function.zip")
+
+    with zipfile.ZipFile(lambda_zip_path, "w") as zip_file:
+      zip_file.write("lib/lambda/handler.py", "lambda_function.py")
+
+    # Lambda function
     lambda_function = LambdaFunction(
         self, "serverless_lambda",
         function_name="serverless-api-handler",
-        role=lambda_execution_role.arn,
-        handler="handler.lambda_handler",
         runtime="python3.12",
-        filename="lambda_function.zip",
-        source_code_hash="${filebase64sha256('lambda_function.zip')}",
+        handler="lambda_function.lambda_handler",
+        role=lambda_execution_role.arn,
+        filename=lambda_zip_path,
+        source_code_hash=self._get_lambda_source_hash(lambda_zip_path),
         timeout=30,
         memory_size=256,
+        reserved_concurrent_executions=10,
         environment={
             "variables": {
                 "SECRET_NAME": app_secret.name,
                 "LOG_LEVEL": "INFO"
             }
         },
-        depends_on=[lambda_log_group],
+        depends_on=[lambda_log_group, lambda_execution_role, secrets_policy],
         tags={
             "Environment": "production",
             "Application": "serverless-api"
@@ -486,7 +519,7 @@ class TapStack(TerraformStack):
     # Outputs
     TerraformOutput(
         self, "api_gateway_url",
-        value=f"https://{api_gateway.id}.execute-api.us-east-1.amazonaws.com/prod",
+        value=f"https://{api_gateway.id}.execute-api.{aws_region}.amazonaws.com/prod",
         description="API Gateway endpoint URL"
     )
 
@@ -513,6 +546,24 @@ class TapStack(TerraformStack):
         value=lambda_log_group.name,
         description="CloudWatch log group name for Lambda"
     )
+
+    TerraformOutput(
+        self, "api_gateway_id",
+        value=api_gateway.id,
+        description="API Gateway ID"
+    )
+
+    TerraformOutput(
+        self, "lambda_role_arn",
+        value=lambda_execution_role.arn,
+        description="Lambda execution role ARN"
+    )
+
+
+  def _get_lambda_source_hash(self, lambda_zip_path: str) -> str:
+    """Get the base64 encoded hash of the Lambda deployment package with proper file handling."""
+    with open(lambda_zip_path, "rb") as f:
+      return base64.b64encode(f.read()).decode()
 ```
 
 ### 3. **CDKTF App Entry Point** (`tap.py`)
