@@ -405,44 +405,44 @@ Outputs:
     Description: 'ID of the created VPC'
     Value: !Ref SecureVPC
     Export:
-      Name: !Sub '${AWS::StackName}-VPCId'
+      Name: !Sub '${AWS::StackName}-VPC-ID'
   EC2InstanceId:
     Description: 'ID of the created EC2 instance'
     Value: !Ref SecureEC2Instance
     Export:
-      Name: !Sub '${AWS::StackName}-EC2InstanceId'
+      Name: !Sub '${AWS::StackName}-EC2-Instance-ID'
   EC2PublicIP:
     Description: 'Public IP address of the EC2 instance'
     Value: !GetAtt SecureEC2Instance.PublicIp
     Export:
-      Name: !Sub '${AWS::StackName}-EC2PublicIP'
+      Name: !Sub '${AWS::StackName}-EC2-Public-IP'
   WebsiteContentBucket:
     Description: 'Name of the website content S3 bucket'
     Value: !Ref WebsiteContentBucket
     Export:
-      Name: !Sub '${AWS::StackName}-WebsiteContentBucket'
+      Name: !Sub '${AWS::StackName}-WebsiteContent-Bucket'
   ApplicationLogsBucket:
     Description: 'Name of the application logs S3 bucket'
     Value: !Ref ApplicationLogsBucket
     Export:
-      Name: !Sub '${AWS::StackName}-ApplicationLogsBucket'
+      Name: !Sub '${AWS::StackName}-ApplicationLogs-Bucket'
   BackupDataBucket:
     Description: 'Name of the backup data S3 bucket'
     Value: !Ref BackupDataBucket
     Export:
-      Name: !Sub '${AWS::StackName}-BackupDataBucket'
+      Name: !Sub '${AWS::StackName}-BackupData-Bucket'
   S3AccessLogsBucket:
     Description: 'Name of the S3 access logs bucket'
     Value: !Ref S3AccessLogsBucket
     Export:
-      Name: !Sub '${AWS::StackName}-S3AccessLogsBucket'
+      Name: !Sub '${AWS::StackName}-S3-Access-Logs-Bucket'
   KMSKeyId:
     Description: 'ID of the KMS key used for S3 encryption'
     Value: !Ref InfrastructureKMSKey
     Export:
-      Name: !Sub '${AWS::StackName}-KMSKey'
+      Name: !Sub '${AWS::StackName}-KMS-Key'
   EC2InstanceRoleArn:
     Description: 'ARN of the EC2 instance IAM role'
     Value: !GetAtt EC2InstanceRole.Arn
     Export:
-      Name: !Sub '${AWS::StackName}-EC2InstanceRoleArn'
+      Name: !Sub '${AWS::StackName}-EC2-Instance-Role-ARN'
