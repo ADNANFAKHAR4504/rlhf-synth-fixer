@@ -64,34 +64,26 @@ class ElasticBeanstalkInfrastructure(pulumi.ComponentResource):
     )
 
   def _create_configuration_template(self):
-    elb_subnet = self.public_subnet_ids[0] if self.public_subnet_ids else None
-    app_subnet = self.private_subnet_ids[0] if self.private_subnet_ids else None
+    elb_subnet = self.public_subnet_ids[0]
+    app_subnet = self.private_subnet_ids[0]
 
     subnet_settings = [
       aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
         namespace="aws:ec2:vpc",
         name="VPCId",
         value=self.vpc_id
+      ),
+      aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
+        namespace="aws:ec2:vpc",
+        name="Subnets",
+        value=app_subnet
+      ),
+      aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
+        namespace="aws:ec2:vpc",
+        name="ELBSubnets",
+        value=elb_subnet
       )
     ]
-
-    if app_subnet is not None:
-      subnet_settings.append(
-        aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
-          namespace="aws:ec2:vpc",
-          name="Subnets",
-          value=app_subnet
-        )
-      )
-
-    if elb_subnet is not None:
-      subnet_settings.append(
-        aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
-          namespace="aws:ec2:vpc",
-          name="ELBSubnets",
-          value=elb_subnet
-        )
-      )
 
     other_settings = [
       aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
