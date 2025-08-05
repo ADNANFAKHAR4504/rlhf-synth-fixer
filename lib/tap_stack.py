@@ -52,10 +52,10 @@ def create_vpc_and_networking() -> Dict[str, Any]:
   )
   public_subnets = []
   for idx, az in enumerate(azs.names[:2]):
-     resource_opts = None
-        if idx > 0:
-            resource_opts = pulumi.ResourceOptions(depends_on=[public_subnets[idx-1]])
-    subnet = aws.ec2.Subnet(
+      resource_opts = None
+      if idx > 0:
+          resource_opts = pulumi.ResourceOptions(depends_on=[public_subnets[idx-1]])
+      subnet = aws.ec2.Subnet(
       f"{project_name}-public-subnet-{idx+1}",
       vpc_id=vpc.id,
       availability_zone=az,
