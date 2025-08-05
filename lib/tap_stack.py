@@ -88,10 +88,11 @@ class TapStack(TerraformStack):
         bucket=tap_bucket.id,
         rule=[
             S3BucketServerSideEncryptionConfigurationRuleA(
-                apply_server_side_encryption_by_default=
-                    S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultA(
+                apply_server_side_encryption_by_default=(
+                    S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultA(  # noqa: E501
                         sse_algorithm="AES256"
                     )
+                )
             )
         ]
     )
@@ -206,7 +207,7 @@ class TapStack(TerraformStack):
     lambda_zip_path = os.path.join(tempfile.gettempdir(), "lambda_function.zip")
 
     with zipfile.ZipFile(lambda_zip_path, "w") as zip_file:
-        zip_file.write("lib/lambda/handler.py", "lambda_function.py")
+      zip_file.write("lib/lambda/handler.py", "lambda_function.py")
 
     # Lambda function
     lambda_function = LambdaFunction(
