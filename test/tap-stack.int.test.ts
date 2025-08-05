@@ -23,7 +23,7 @@ const outputs = getOutputs();
 // Get environment configuration
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 const deploymentRegion = process.env.DEPLOYMENT_REGION || 'us-west-1';
-const stackName = process.env.STACK_NAME || `tap-stack-${environmentSuffix}`;
+const stackName = process.env.STACK_NAME || `TapStack${environmentSuffix}`;
 const applicationName = process.env.APPLICATION_NAME || 'multi-region-app';
 const environment = process.env.ENVIRONMENT || 'production';
 
@@ -73,7 +73,7 @@ describe('TapStack Integration Tests - DynamoDB Multi-Region Deployment', () => 
       expect(deploymentRegion).toMatch(/^us-west-[12]$/);
       expect(applicationName).toBe('multi-region-app');
       expect(environment).toBe('production');
-      expect(stackName).toContain('tap-stack');
+      expect(stackName).toContain('TapStack');
     });
 
     test('should calculate correct resource names', () => {

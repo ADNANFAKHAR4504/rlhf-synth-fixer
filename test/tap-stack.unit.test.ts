@@ -45,12 +45,7 @@ describe('TapStack CloudFormation Template - Unified DynamoDB Multi-Region', () 
   describe('Parameters', () => {
     test('should have all required parameters', () => {
       const expectedParams = [
-        'Environment',
-        'ApplicationName',
-        'DeploymentRegion',
-        'ReadCapacityUnits',
-        'WriteCapacityUnits',
-        'West1StackName'
+        'EnvironmentSuffix'
       ];
 
       expectedParams.forEach(paramName => {
@@ -58,46 +53,11 @@ describe('TapStack CloudFormation Template - Unified DynamoDB Multi-Region', () 
       });
     });
 
-    test('Environment parameter should have correct properties', () => {
-      const envParam = template.Parameters.Environment;
+    test('EnvironmentSuffix parameter should have correct properties', () => {
+      const envParam = template.Parameters.EnvironmentSuffix;
       expect(envParam.Type).toBe('String');
-      expect(envParam.Default).toBe('production');
-      expect(envParam.AllowedValues).toEqual(['development', 'staging', 'production']);
-    });
-
-    test('ApplicationName parameter should have correct properties', () => {
-      const appParam = template.Parameters.ApplicationName;
-      expect(appParam.Type).toBe('String');
-      expect(appParam.Default).toBe('multi-region-app');
-    });
-
-    test('DeploymentRegion parameter should have correct properties', () => {
-      const regionParam = template.Parameters.DeploymentRegion;
-      expect(regionParam.Type).toBe('String');
-      expect(regionParam.Default).toBe('us-west-1');
-      expect(regionParam.AllowedValues).toEqual(['us-west-1', 'us-west-2']);
-    });
-
-    test('ReadCapacityUnits parameter should have correct properties', () => {
-      const readParam = template.Parameters.ReadCapacityUnits;
-      expect(readParam.Type).toBe('Number');
-      expect(readParam.Default).toBe(10);
-      expect(readParam.MinValue).toBe(1);
-      expect(readParam.MaxValue).toBe(1000);
-    });
-
-    test('WriteCapacityUnits parameter should have correct properties', () => {
-      const writeParam = template.Parameters.WriteCapacityUnits;
-      expect(writeParam.Type).toBe('Number');
-      expect(writeParam.Default).toBe(10);
-      expect(writeParam.MinValue).toBe(1);
-      expect(writeParam.MaxValue).toBe(1000);
-    });
-
-    test('West1StackName parameter should have correct properties', () => {
-      const stackParam = template.Parameters.West1StackName;
-      expect(stackParam.Type).toBe('String');
-      expect(stackParam.Default).toBe('dynamodb-west1-stack');
+      expect(envParam.Default).toBe('dev');
+      expect(envParam.Description).toBe('Environment suffix for resource naming (e.g., dev, staging, prod)');
     });
   });
 
@@ -118,7 +78,7 @@ describe('TapStack CloudFormation Template - Unified DynamoDB Multi-Region', () 
     test('IsWest1 condition should check for us-west-1', () => {
       const condition = template.Conditions.IsWest1;
       expect(condition['Fn::Equals']).toEqual([
-        { Ref: 'DeploymentRegion' },
+        { Ref: 'AWS::Region' },
         'us-west-1'
       ]);
     });
@@ -126,7 +86,7 @@ describe('TapStack CloudFormation Template - Unified DynamoDB Multi-Region', () 
     test('IsWest2 condition should check for us-west-2', () => {
       const condition = template.Conditions.IsWest2;
       expect(condition['Fn::Equals']).toEqual([
-        { Ref: 'DeploymentRegion' },
+        { Ref: 'AWS::Region' },
         'us-west-2'
       ]);
     });
@@ -134,7 +94,7 @@ describe('TapStack CloudFormation Template - Unified DynamoDB Multi-Region', () 
     test('EnableStreams condition should be same as IsWest2', () => {
       const condition = template.Conditions.EnableStreams;
       expect(condition['Fn::Equals']).toEqual([
-        { Ref: 'DeploymentRegion' },
+        { Ref: 'AWS::Region' },
         'us-west-2'
       ]);
     });
@@ -142,7 +102,7 @@ describe('TapStack CloudFormation Template - Unified DynamoDB Multi-Region', () 
     test('HasCrossRegionReference condition should be same as IsWest2', () => {
       const condition = template.Conditions.HasCrossRegionReference;
       expect(condition['Fn::Equals']).toEqual([
-        { Ref: 'DeploymentRegion' },
+        { Ref: 'AWS::Region' },
         'us-west-2'
       ]);
     });
@@ -176,7 +136,7 @@ describe('TapStack CloudFormation Template - Unified DynamoDB Multi-Region', () 
       test('should have correct table name with conditional suffix', () => {
         expect(dynamoTable.Properties.TableName).toEqual({
           'Fn::Sub': [
-            '${ApplicationName}-${Environment}-${RegionSuffix}-table',
+            'multi-region-app-${EnvironmentSuffix}-${RegionSuffix}-table',
             {
               RegionSuffix: {
                 'Fn::If': ['IsWest1', 'west1', 'west2']
@@ -193,10 +153,10 @@ describe('TapStack CloudFormation Template - Unified DynamoDB Multi-Region', () 
       test('should have conditional capacity settings', () => {
         const throughput = dynamoTable.Properties.ProvisionedThroughput;
         expect(throughput.ReadCapacityUnits).toEqual({
-          'Fn::If': ['IsWest1', 5, { Ref: 'ReadCapacityUnits' }]
+          'Fn::If': ['IsWest1', 5, 10]
         });
         expect(throughput.WriteCapacityUnits).toEqual({
-          'Fn::If': ['IsWest1', 5, { Ref: 'WriteCapacityUnits' }]
+          'Fn::If': ['IsWest1', 5, 10]
         });
       });
 
@@ -244,11 +204,11 @@ describe('TapStack CloudFormation Template - Unified DynamoDB Multi-Region', () 
         const tags = dynamoTable.Properties.Tags;
         expect(tags).toContainEqual({
           Key: 'Environment',
-          Value: { Ref: 'Environment' }
+          Value: { Ref: 'EnvironmentSuffix' }
         });
         expect(tags).toContainEqual({
           Key: 'Application',
-          Value: { Ref: 'ApplicationName' }
+          Value: 'multi-region-app'
         });
         expect(tags).toContainEqual({
           Key: 'ManagedBy',
@@ -318,7 +278,7 @@ describe('TapStack CloudFormation Template - Unified DynamoDB Multi-Region', () 
         });
         expect(envVars.REMOTE_TABLE_NAME).toEqual({
           'Fn::ImportValue': {
-            'Fn::Sub': '${West1StackName}-TableName'
+            'Fn::Sub': 'TapStack${EnvironmentSuffix}-TableName'
           }
         });
       });
@@ -457,7 +417,7 @@ describe('TapStack CloudFormation Template - Unified DynamoDB Multi-Region', () 
 
     test('should have correct parameter count', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(6);
+      expect(parameterCount).toBe(1);
     });
 
     test('should have correct condition count', () => {
@@ -477,7 +437,7 @@ describe('TapStack CloudFormation Template - Unified DynamoDB Multi-Region', () 
       const dynamoTable = template.Resources.DynamoDBTable;
       const readCapacity = dynamoTable.Properties.ProvisionedThroughput.ReadCapacityUnits;
       
-      expect(readCapacity['Fn::If'][2]).toEqual({ Ref: 'ReadCapacityUnits' });
+      expect(readCapacity['Fn::If'][2]).toEqual(10);
     });
 
     test('should use Fn::GetAtt correctly', () => {
@@ -530,10 +490,10 @@ describe('TapStack CloudFormation Template - Unified DynamoDB Multi-Region', () 
       const envVars = lambdaFunction.Properties.Environment.Variables;
       
       expect(envVars.REMOTE_TABLE_NAME['Fn::ImportValue']).toEqual({
-        'Fn::Sub': '${West1StackName}-TableName'
+        'Fn::Sub': 'TapStack${EnvironmentSuffix}-TableName'
       });
       expect(envVars.REMOTE_TABLE_ARN['Fn::ImportValue']).toEqual({
-        'Fn::Sub': '${West1StackName}-TableArn'
+        'Fn::Sub': 'TapStack${EnvironmentSuffix}-TableArn'
       });
     });
 
@@ -557,7 +517,7 @@ describe('TapStack CloudFormation Template - Unified DynamoDB Multi-Region', () 
       
       // Capacity should be different for each region
       expect(dynamoTable.Properties.ProvisionedThroughput.ReadCapacityUnits['Fn::If']).toEqual([
-        'IsWest1', 5, { Ref: 'ReadCapacityUnits' }
+        'IsWest1', 5, 10
       ]);
     });
 

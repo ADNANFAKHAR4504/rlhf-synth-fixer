@@ -2,55 +2,17 @@
     "AWSTemplateFormatVersion": "2010-09-09",
     "Description": "Unified DynamoDB table deployment for multi-region with configurable capacity settings",
     "Parameters": {
-        "Environment": {
+        "EnvironmentSuffix": {
             "Type": "String",
-            "Default": "production",
-            "Description": "Environment name for resource tagging",
-            "AllowedValues": [
-                "development",
-                "staging",
-                "production"
-            ]
-        },
-        "ApplicationName": {
-            "Type": "String",
-            "Default": "multi-region-app",
-            "Description": "Application name for consistent naming"
-        },
-        "DeploymentRegion": {
-            "Type": "String",
-            "Default": "us-west-1",
-            "Description": "Target deployment region (affects capacity configuration)",
-            "AllowedValues": [
-                "us-west-1",
-                "us-west-2"
-            ]
-        },
-        "ReadCapacityUnits": {
-            "Type": "Number",
-            "Default": 10,
-            "MinValue": 1,
-            "MaxValue": 1000,
-            "Description": "Read capacity units for the DynamoDB table (ignored for us-west-1)"
-        },
-        "WriteCapacityUnits": {
-            "Type": "Number",
-            "Default": 10,
-            "MinValue": 1,
-            "MaxValue": 1000,
-            "Description": "Write capacity units for the DynamoDB table (ignored for us-west-1)"
-        },
-        "West1StackName": {
-            "Type": "String",
-            "Default": "dynamodb-west1-stack",
-            "Description": "Name of the us-west-1 CloudFormation stack for cross-region reference (only used in us-west-2)"
+            "Default": "dev",
+            "Description": "Environment suffix for resource naming (e.g., dev, staging, prod)"
         }
     },
     "Conditions": {
         "IsWest1": {
             "Fn::Equals": [
                 {
-                    "Ref": "DeploymentRegion"
+                    "Ref": "AWS::Region"
                 },
                 "us-west-1"
             ]
@@ -58,7 +20,7 @@
         "IsWest2": {
             "Fn::Equals": [
                 {
-                    "Ref": "DeploymentRegion"
+                    "Ref": "AWS::Region"
                 },
                 "us-west-2"
             ]
@@ -66,7 +28,7 @@
         "EnableStreams": {
             "Fn::Equals": [
                 {
-                    "Ref": "DeploymentRegion"
+                    "Ref": "AWS::Region"
                 },
                 "us-west-2"
             ]
@@ -74,7 +36,7 @@
         "HasCrossRegionReference": {
             "Fn::Equals": [
                 {
-                    "Ref": "DeploymentRegion"
+                    "Ref": "AWS::Region"
                 },
                 "us-west-2"
             ]
@@ -86,7 +48,7 @@
             "Properties": {
                 "TableName": {
                     "Fn::Sub": [
-                        "${ApplicationName}-${Environment}-${RegionSuffix}-table",
+                        "multi-region-app-${EnvironmentSuffix}-${RegionSuffix}-table",
                         {
                             "RegionSuffix": {
                                 "Fn::If": [
@@ -104,18 +66,14 @@
                         "Fn::If": [
                             "IsWest1",
                             5,
-                            {
-                                "Ref": "ReadCapacityUnits"
-                            }
+                            10
                         ]
                     },
                     "WriteCapacityUnits": {
                         "Fn::If": [
                             "IsWest1",
                             5,
-                            {
-                                "Ref": "WriteCapacityUnits"
-                            }
+                            10
                         ]
                     }
                 },
@@ -167,12 +125,8 @@
                                     "ProjectionType": "ALL"
                                 },
                                 "ProvisionedThroughput": {
-                                    "ReadCapacityUnits": {
-                                        "Ref": "ReadCapacityUnits"
-                                    },
-                                    "WriteCapacityUnits": {
-                                        "Ref": "WriteCapacityUnits"
-                                    }
+                                    "ReadCapacityUnits": 10,
+                                    "WriteCapacityUnits": 10
                                 }
                             }
                         ],
@@ -185,7 +139,7 @@
                     {
                         "Key": "Environment",
                         "Value": {
-                            "Ref": "Environment"
+                            "Ref": "EnvironmentSuffix"
                         }
                     },
                     {
@@ -196,9 +150,7 @@
                     },
                     {
                         "Key": "Application",
-                        "Value": {
-                            "Ref": "ApplicationName"
-                        }
+                        "Value": "multi-region-app"
                     },
                     {
                         "Key": "ManagedBy",
@@ -213,7 +165,7 @@
                     {
                         "Key": "DeploymentRegion",
                         "Value": {
-                            "Ref": "DeploymentRegion"
+                            "Fn::Sub": "${AWS::Region}"
                         }
                     },
                     {
@@ -223,7 +175,7 @@
                                 "Key": "PrimaryRegionTable",
                                 "Value": {
                                     "Fn::ImportValue": {
-                                        "Fn::Sub": "${West1StackName}-TableName"
+                                        "Fn::Sub": "TapStack${EnvironmentSuffix}-TableName"
                                     }
                                 }
                             },
@@ -237,9 +189,7 @@
                             "IsWest2",
                             {
                                 "Key": "CapacityConfig",
-                                "Value": {
-                                    "Fn::Sub": "Read:${ReadCapacityUnits},Write:${WriteCapacityUnits}"
-                                }
+                                "Value": "Read:10,Write:10"
                             },
                             {
                                 "Key": "CapacityConfig",
@@ -271,7 +221,7 @@
             "Type": "AWS::IAM::Role",
             "Properties": {
                 "RoleName": {
-                    "Fn::Sub": "${ApplicationName}-${Environment}-dynamodb-role-${DeploymentRegion}"
+                    "Fn::Sub": "multi-region-app-${EnvironmentSuffix}-dynamodb-role-${AWS::Region}"
                 },
                 "AssumeRolePolicyDocument": {
                     "Version": "2012-10-17",
@@ -324,7 +274,7 @@
                                                 "HasCrossRegionReference",
                                                 {
                                                     "Fn::ImportValue": {
-                                                        "Fn::Sub": "${West1StackName}-TableArn"
+                                                        "Fn::Sub": "TapStack${EnvironmentSuffix}-TableArn"
                                                     }
                                                 },
                                                 {
@@ -342,7 +292,7 @@
                     {
                         "Key": "Environment",
                         "Value": {
-                            "Ref": "Environment"
+                            "Ref": "EnvironmentSuffix"
                         }
                     },
                     {
@@ -354,7 +304,7 @@
                     {
                         "Key": "DeploymentRegion",
                         "Value": {
-                            "Ref": "DeploymentRegion"
+                            "Fn::Sub": "${AWS::Region}"
                         }
                     }
                 ]
@@ -365,7 +315,7 @@
             "Condition": "IsWest2",
             "Properties": {
                 "FunctionName": {
-                    "Fn::Sub": "${ApplicationName}-${Environment}-cross-region-function"
+                    "Fn::Sub": "multi-region-app-${EnvironmentSuffix}-cross-region-function"
                 },
                 "Runtime": "python3.9",
                 "Handler": "index.lambda_handler",
@@ -388,12 +338,12 @@
                         },
                         "REMOTE_TABLE_NAME": {
                             "Fn::ImportValue": {
-                                "Fn::Sub": "${West1StackName}-TableName"
+                                "Fn::Sub": "TapStack${EnvironmentSuffix}-TableName"
                             }
                         },
                         "REMOTE_TABLE_ARN": {
                             "Fn::ImportValue": {
-                                "Fn::Sub": "${West1StackName}-TableArn"
+                                "Fn::Sub": "TapStack${EnvironmentSuffix}-TableArn"
                             }
                         },
                         "TABLE_CONFIG": {
@@ -405,7 +355,7 @@
                                     },
                                     {
                                         "Fn::ImportValue": {
-                                            "Fn::Sub": "${West1StackName}-TableName"
+                                            "Fn::Sub": "TapStack${EnvironmentSuffix}-TableName"
                                         }
                                     }
                                 ]
@@ -420,14 +370,12 @@
                     {
                         "Key": "Environment",
                         "Value": {
-                            "Ref": "Environment"
+                            "Ref": "EnvironmentSuffix"
                         }
                     },
                     {
                         "Key": "Application",
-                        "Value": {
-                            "Ref": "ApplicationName"
-                        }
+                        "Value": "multi-region-app"
                     }
                 ]
             }
@@ -437,7 +385,7 @@
             "Condition": "IsWest2",
             "Properties": {
                 "RoleName": {
-                    "Fn::Sub": "${ApplicationName}-${Environment}-lambda-role-${DeploymentRegion}"
+                    "Fn::Sub": "multi-region-app-${EnvironmentSuffix}-lambda-role-${AWS::Region}"
                 },
                 "AssumeRolePolicyDocument": {
                     "Version": "2012-10-17",
@@ -482,7 +430,7 @@
                                         },
                                         {
                                             "Fn::ImportValue": {
-                                                "Fn::Sub": "${West1StackName}-TableArn"
+                                                "Fn::Sub": "TapStack${EnvironmentSuffix}-TableArn"
                                             }
                                         }
                                     ]
@@ -569,7 +517,7 @@
                     [
                         {
                             "Fn::ImportValue": {
-                                "Fn::Sub": "${West1StackName}-TableName"
+                                "Fn::Sub": "TapStack${EnvironmentSuffix}-TableName"
                             }
                         },
                         {
@@ -606,9 +554,7 @@
                 "Fn::If": [
                     "IsWest1",
                     "Read: 5, Write: 5 (Fixed)",
-                    {
-                        "Fn::Sub": "Read: ${ReadCapacityUnits}, Write: ${WriteCapacityUnits} (Parameterized)"
-                    }
+                    "Read: 10, Write: 10 (Parameterized)"
                 ]
             },
             "Export": {
@@ -630,10 +576,10 @@
                             "Fn::Sub": "Region: ${AWS::Region}"
                         },
                         {
-                            "Fn::Sub": "Environment: ${Environment}"
+                            "Fn::Sub": "Environment: ${EnvironmentSuffix}"
                         },
                         {
-                            "Fn::Sub": "DeploymentRegion: ${DeploymentRegion}"
+                            "Fn::Sub": "DeploymentRegion: ${AWS::Region}"
                         }
                     ]
                 ]
@@ -653,47 +599,13 @@
                         "default": "Application Configuration"
                     },
                     "Parameters": [
-                        "ApplicationName",
-                        "Environment",
-                        "DeploymentRegion"
-                    ]
-                },
-                {
-                    "Label": {
-                        "default": "DynamoDB Capacity Settings"
-                    },
-                    "Parameters": [
-                        "ReadCapacityUnits",
-                        "WriteCapacityUnits"
-                    ]
-                },
-                {
-                    "Label": {
-                        "default": "Cross-Region Configuration"
-                    },
-                    "Parameters": [
-                        "West1StackName"
+                        "EnvironmentSuffix"
                     ]
                 }
             ],
             "ParameterLabels": {
-                "ApplicationName": {
-                    "default": "Application Name"
-                },
-                "Environment": {
-                    "default": "Environment"
-                },
-                "DeploymentRegion": {
-                    "default": "Target Deployment Region"
-                },
-                "ReadCapacityUnits": {
-                    "default": "Read Capacity Units"
-                },
-                "WriteCapacityUnits": {
-                    "default": "Write Capacity Units"
-                },
-                "West1StackName": {
-                    "default": "US-West-1 Stack Name"
+                "EnvironmentSuffix": {
+                    "default": "Environment Suffix"
                 }
             }
         }

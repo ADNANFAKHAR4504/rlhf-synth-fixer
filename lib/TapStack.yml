@@ -2,54 +2,16 @@ AWSTemplateFormatVersion: "2010-09-09"
 Description: "Unified DynamoDB table deployment for multi-region with configurable capacity settings"
 
 Parameters:
-  Environment:
+  EnvironmentSuffix:
     Type: String
-    Default: "production"
-    Description: "Environment name for resource tagging"
-    AllowedValues:
-      - development
-      - staging
-      - production
-
-  ApplicationName:
-    Type: String
-    Default: "multi-region-app"
-    Description: "Application name for consistent naming"
-
-  DeploymentRegion:
-    Type: String
-    Default: "us-west-1"
-    Description: "Target deployment region (affects capacity configuration)"
-    AllowedValues:
-      - us-west-1
-      - us-west-2
-
-  # Parameterized capacity settings (used when not in us-west-1)
-  ReadCapacityUnits:
-    Type: Number
-    Default: 10
-    MinValue: 1
-    MaxValue: 1000
-    Description: "Read capacity units for the DynamoDB table (ignored for us-west-1)"
-
-  WriteCapacityUnits:
-    Type: Number
-    Default: 10
-    MinValue: 1
-    MaxValue: 1000
-    Description: "Write capacity units for the DynamoDB table (ignored for us-west-1)"
-
-  # Parameter to import values from us-west-1 stack (only used in us-west-2)
-  West1StackName:
-    Type: String
-    Default: "dynamodb-west1-stack"
-    Description: "Name of the us-west-1 CloudFormation stack for cross-region reference (only used in us-west-2)"
+    Default: "dev"
+    Description: "Environment suffix for resource naming (e.g., dev, staging, prod)"
 
 Conditions:
-  IsWest1: !Equals [!Ref DeploymentRegion, "us-west-1"]
-  IsWest2: !Equals [!Ref DeploymentRegion, "us-west-2"]
-  EnableStreams: !Equals [!Ref DeploymentRegion, "us-west-2"]
-  HasCrossRegionReference: !Equals [!Ref DeploymentRegion, "us-west-2"]
+  IsWest1: !Equals [!Ref "AWS::Region", "us-west-1"]
+  IsWest2: !Equals [!Ref "AWS::Region", "us-west-2"]
+  EnableStreams: !Equals [!Ref "AWS::Region", "us-west-2"]
+  HasCrossRegionReference: !Equals [!Ref "AWS::Region", "us-west-2"]
 
 Resources:
   # DynamoDB Table with conditional capacity settings
@@ -57,13 +19,13 @@ Resources:
     Type: AWS::DynamoDB::Table
     Properties:
       TableName: !Sub
-        - "${ApplicationName}-${Environment}-${RegionSuffix}-table"
+        - "multi-region-app-${EnvironmentSuffix}-${RegionSuffix}-table"
         - RegionSuffix: !If [IsWest1, "west1", "west2"]
       BillingMode: PROVISIONED
       ProvisionedThroughput:
         # Fixed capacity for us-west-1, parameterized for us-west-2
-        ReadCapacityUnits: !If [IsWest1, 5, !Ref ReadCapacityUnits]
-        WriteCapacityUnits: !If [IsWest1, 5, !Ref WriteCapacityUnits]
+        ReadCapacityUnits: !If [IsWest1, 5, 10]
+        WriteCapacityUnits: !If [IsWest1, 5, 10]
       AttributeDefinitions:
         - AttributeName: "PrimaryKey"
           AttributeType: "S"
@@ -89,33 +51,33 @@ Resources:
             Projection:
               ProjectionType: "ALL"
             ProvisionedThroughput:
-              ReadCapacityUnits: !Ref ReadCapacityUnits
-              WriteCapacityUnits: !Ref WriteCapacityUnits
+              ReadCapacityUnits: 10
+              WriteCapacityUnits: 10
         - !Ref "AWS::NoValue"
       # Dynamic tagging based on region
       Tags:
         - Key: "Environment"
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: "Region"
           Value: !Sub "${AWS::Region}"
         - Key: "Application"
-          Value: !Ref ApplicationName
+          Value: "multi-region-app"
         - Key: "ManagedBy"
           Value: "CloudFormation"
         - Key: "StackName"
           Value: !Sub "${AWS::StackName}"
         - Key: "DeploymentRegion"
-          Value: !Ref DeploymentRegion
+          Value: !Sub "${AWS::Region}"
         - !If
           - HasCrossRegionReference
           - Key: "PrimaryRegionTable"
             Value: !ImportValue
-              Fn::Sub: "${West1StackName}-TableName"
+              Fn::Sub: "TapStack${EnvironmentSuffix}-TableName"
           - !Ref "AWS::NoValue"
         - !If
           - IsWest2
           - Key: "CapacityConfig"
-            Value: !Sub "Read:${ReadCapacityUnits},Write:${WriteCapacityUnits}"
+            Value: "Read:10,Write:10"
           - Key: "CapacityConfig"
             Value: "Read:5,Write:5"
       # Enable point-in-time recovery
@@ -134,7 +96,7 @@ Resources:
   DynamoDBAccessRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub "${ApplicationName}-${Environment}-dynamodb-role-${DeploymentRegion}"
+      RoleName: !Sub "multi-region-app-${EnvironmentSuffix}-dynamodb-role-${AWS::Region}"
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -164,22 +126,22 @@ Resources:
                   - !If
                     - HasCrossRegionReference
                     - !ImportValue
-                      Fn::Sub: "${West1StackName}-TableArn"
+                      Fn::Sub: "TapStack${EnvironmentSuffix}-TableArn"
                     - !Ref "AWS::NoValue"
       Tags:
         - Key: "Environment"
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: "Region"
           Value: !Sub "${AWS::Region}"
         - Key: "DeploymentRegion"
-          Value: !Ref DeploymentRegion
+          Value: !Sub "${AWS::Region}"
 
   # Lambda function (only for us-west-2)
   CrossRegionLambdaFunction:
     Type: AWS::Lambda::Function
     Condition: IsWest2
     Properties:
-      FunctionName: !Sub "${ApplicationName}-${Environment}-cross-region-function"
+      FunctionName: !Sub "multi-region-app-${EnvironmentSuffix}-cross-region-function"
       Runtime: python3.9
       Handler: index.lambda_handler
       Role: !GetAtt LambdaExecutionRole.Arn
@@ -190,15 +152,15 @@ Resources:
           LOCAL_TABLE_ARN: !GetAtt DynamoDBTable.Arn
           # Cross-region table reference using Fn::ImportValue
           REMOTE_TABLE_NAME: !ImportValue
-            Fn::Sub: "${West1StackName}-TableName"
+            Fn::Sub: "TapStack${EnvironmentSuffix}-TableName"
           REMOTE_TABLE_ARN: !ImportValue
-            Fn::Sub: "${West1StackName}-TableArn"
+            Fn::Sub: "TapStack${EnvironmentSuffix}-TableArn"
           # Combined configuration using Fn::Join
           TABLE_CONFIG: !Join
             - ","
             - - !Sub "local=${DynamoDBTable}"
               - !ImportValue
-                Fn::Sub: "${West1StackName}-TableName"
+                Fn::Sub: "TapStack${EnvironmentSuffix}-TableName"
       Code:
         ZipFile: |
           import json
@@ -216,16 +178,16 @@ Resources:
               }
       Tags:
         - Key: "Environment"
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: "Application"
-          Value: !Ref ApplicationName
+          Value: "multi-region-app"
 
   # IAM Role for Lambda execution (only for us-west-2)
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Condition: IsWest2
     Properties:
-      RoleName: !Sub "${ApplicationName}-${Environment}-lambda-role-${DeploymentRegion}"
+      RoleName: !Sub "multi-region-app-${EnvironmentSuffix}-lambda-role-${AWS::Region}"
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -253,7 +215,7 @@ Resources:
                   - !Sub "${DynamoDBTable.Arn}/index/*"
                   # Cross-region table access
                   - !ImportValue
-                    Fn::Sub: "${West1StackName}-TableArn"
+                    Fn::Sub: "TapStack${EnvironmentSuffix}-TableArn"
 
 Outputs:
   # Export table name for cross-stack reference
@@ -299,7 +261,7 @@ Outputs:
     Value: !Join
       - " -> "
       - - !ImportValue
-          Fn::Sub: "${West1StackName}-TableName"
+          Fn::Sub: "TapStack${EnvironmentSuffix}-TableName"
         - !Ref DynamoDBTable
     Export:
       Name: !Sub "${AWS::StackName}-CrossRegionConfig"
@@ -319,7 +281,7 @@ Outputs:
     Value: !If
       - IsWest1
       - "Read: 5, Write: 5 (Fixed)"
-      - !Sub "Read: ${ReadCapacityUnits}, Write: ${WriteCapacityUnits} (Parameterized)"
+      - "Read: 10, Write: 10 (Parameterized)"
     Export:
       Name: !Sub "${AWS::StackName}-CapacityConfig"
 
@@ -330,8 +292,8 @@ Outputs:
       - " | "
       - - !Sub "Table: ${DynamoDBTable}"
         - !Sub "Region: ${AWS::Region}"
-        - !Sub "Environment: ${Environment}"
-        - !Sub "DeploymentRegion: ${DeploymentRegion}"
+        - !Sub "Environment: ${EnvironmentSuffix}"
+        - !Sub "DeploymentRegion: ${AWS::Region}"
     Export:
       Name: !Sub "${AWS::StackName}-TableDetails"
 
@@ -341,28 +303,7 @@ Metadata:
       - Label:
           default: "Application Configuration"
         Parameters:
-          - ApplicationName
-          - Environment
-          - DeploymentRegion
-      - Label:
-          default: "DynamoDB Capacity Settings"
-        Parameters:
-          - ReadCapacityUnits
-          - WriteCapacityUnits
-      - Label:
-          default: "Cross-Region Configuration"
-        Parameters:
-          - West1StackName
+          - EnvironmentSuffix
     ParameterLabels:
-      ApplicationName:
-        default: "Application Name"
-      Environment:
-        default: "Environment"
-      DeploymentRegion:
-        default: "Target Deployment Region"
-      ReadCapacityUnits:
-        default: "Read Capacity Units"
-      WriteCapacityUnits:
-        default: "Write Capacity Units"
-      West1StackName:
-        default: "US-West-1 Stack Name"
+      EnvironmentSuffix:
+        default: "Environment Suffix"
