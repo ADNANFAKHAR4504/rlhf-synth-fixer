@@ -15,7 +15,8 @@ describe('TapStack Unit Tests', () => {
 
     // --- DEBUGGING AID: Log the synthesized output ---
     // This will show you the exact structure of the generated Terraform JSON
-    console.log('--- Synthesized Output for TestTapStackDefault ---');
+    // Make sure to check the output for the specific test that's failing.
+    console.log('--- Synthesized Output for TestTapStackDefault (from beforeEach) ---');
     console.log(JSON.stringify(synthesized, null, 2));
     console.log('--------------------------------------------------');
     // --- END DEBUGGING AID ---
@@ -148,16 +149,24 @@ describe('TapStack Unit Tests', () => {
     const myStackInstance = new TapStack(app, 'TestMyStackInstantiation', { createMyStack: true, environmentSuffix: 'dev' });
     const myStackSynthesized = JSON.parse(Testing.synth(myStackInstance));
 
-    // Corrected: MyStack resources will appear directly under 'resource' in the parent stack's JSON
-    // The resource type is 'aws_s3_bucket' and its name will be a combination of the nested stack ID and the resource ID
+    // MyStack resources will appear directly under 'resource' in the parent stack's JSON
+    // The resource type is 'aws_s3_bucket' and its name will be a combination of the nested construct ID and the resource ID
     expect(myStackSynthesized).toHaveProperty('resource');
     expect(myStackSynthesized.resource).toHaveProperty('aws_s3_bucket'); // Check for the S3 bucket resource type
-    // The full resource name will be 'nested_stack_id_resource_id' (snake_case)
-    const s3ResourceName = 'my_modular_stack_my_example_bucket';
-    expect(myStackSynthesized.resource.aws_s3_bucket).toHaveProperty(s3ResourceName);
 
-    // Verify properties of the S3 bucket created by MyStack
-    const s3BucketResource = myStackSynthesized.resource.aws_s3_bucket[s3ResourceName];
+    // Dynamically find the resource name, as CDKTF appends a hash
+    const s3BucketResources = myStackSynthesized.resource.aws_s3_bucket;
+    const s3ResourceNames = Object.keys(s3BucketResources);
+
+    // Expecting exactly one S3 bucket resource from MyStack
+    expect(s3ResourceNames.length).toBe(1);
+
+    const s3ResourceName = s3ResourceNames[0]; // Get the actual generated name
+    // Verify that the generated name starts with the expected prefix (case-sensitive)
+    expect(s3ResourceName).toMatch(/^MyModularStack_my_example_bucket_.*$/); // Corrected regex to match 'MyModularStack'
+
+    // Verify properties of the S3 bucket created by MyStack using the dynamically found name
+    const s3BucketResource = s3BucketResources[s3ResourceName];
     expect(s3BucketResource.bucket).toBe('dev-my-example-bucket');
     expect(s3BucketResource.tags.Project).toBe('TestProject');
     expect(s3BucketResource.tags.Environment).toBe('dev');

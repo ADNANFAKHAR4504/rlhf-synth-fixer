@@ -29,8 +29,9 @@ describe('TapStack Integration Tests', () => {
   test('AWS provider is configured with default region and no default tags by default', () => {
     // Objective: Verify that the AWS provider uses 'us-east-1' as the default region
     // and that defaultTags are not present if not explicitly provided.
-    expect(synthesized.provider.aws.region).toBe('us-east-1');
-    expect(synthesized.provider.aws.default_tags).toBeUndefined();
+    // Corrected: Access the first element of the 'aws' array
+    expect(synthesized.provider.aws[0].region).toBe('us-east-1');
+    expect(synthesized.provider.aws[0].default_tags).toEqual([]); // Should be an empty array if no tags
   });
 
   test('AWS provider is configured with specified region and default tags', () => {
@@ -46,9 +47,10 @@ describe('TapStack Integration Tests', () => {
     });
     const customSynthesized = JSON.parse(Testing.synth(customStack));
 
-    expect(customSynthesized.provider.aws.region).toBe('us-west-2');
+    // Corrected: Access the first element of the 'aws' array
+    expect(customSynthesized.provider.aws[0].region).toBe('us-west-2');
     // CDKTF wraps default_tags in an array, so we access the first element
-    expect(customSynthesized.provider.aws.default_tags[0].tags).toEqual(customTags);
+    expect(customSynthesized.provider.aws[0].default_tags[0].tags).toEqual(customTags);
   });
 
   test('S3 backend is configured with default bucket, key, region, and encryption', () => {
@@ -83,13 +85,18 @@ describe('TapStack Integration Tests', () => {
   });
 
   test('MyStack is NOT instantiated by default', () => {
-    // Objective: Verify that the MyStack module is not present in the synthesized output
+    // Objective: Verify that the MyStack construct's resources are not present
     // when `createMyStack` is not explicitly set to true.
-    expect(synthesized.module).toBeUndefined();
+    // Check for absence of the 'aws_s3_bucket' resource type.
+    if (synthesized.resource) {
+      expect(synthesized.resource).not.toHaveProperty('aws_s3_bucket');
+    } else {
+      expect(synthesized.resource).toBeUndefined();
+    }
   });
 
   test('MyStack IS instantiated when createMyStack prop is true', () => {
-    // Objective: Confirm that MyStack is correctly instantiated and its properties are passed
+    // Objective: Confirm that MyStack is correctly instantiated and its resources are present
     // when `createMyStack` is true.
     const stackWithMyStack = new TapStack(app, 'TestTapStackWithMyStack', {
       createMyStack: true,
@@ -97,15 +104,28 @@ describe('TapStack Integration Tests', () => {
     });
     const synthesizedWithMyStack = JSON.parse(Testing.synth(stackWithMyStack));
 
-    // Check if the 'MyModularStack' module is present in the synthesized output
-    expect(synthesizedWithMyStack.module).toHaveProperty('MyModularStack');
+    // MyStack resources will appear directly under 'resource' in the parent stack's JSON
+    // The resource type is 'aws_s3_bucket' and its name will be a combination of the nested construct ID and the resource ID
+    expect(synthesizedWithMyStack).toHaveProperty('resource');
+    expect(synthesizedWithMyStack.resource).toHaveProperty('aws_s3_bucket'); // Check for the S3 bucket resource type
 
-    // Verify properties passed to MyStack's constructor via the module's inputs
-    const myStackModule = synthesizedWithMyStack.module.MyModularStack;
-    expect(myStackModule.bucketName).toBe('test-my-example-bucket');
-    expect(myStackModule.tags.Project).toBe('TestProject');
-    expect(myStackModule.tags.Environment).toBe('test');
-    expect(myStackModule.tags.ManagedBy).toBe('CDKTF'); // Verify additional tag
+    // Dynamically find the resource name, as CDKTF appends a hash
+    const s3BucketResources = synthesizedWithMyStack.resource.aws_s3_bucket;
+    const s3ResourceNames = Object.keys(s3BucketResources);
+
+    // Expecting exactly one S3 bucket resource from MyStack
+    expect(s3ResourceNames.length).toBe(1);
+
+    const s3ResourceName = s3ResourceNames[0]; // Get the actual generated name
+    // Verify that the generated name starts with the expected prefix (case-sensitive)
+    expect(s3ResourceName).toMatch(/^MyModularStack_my_example_bucket_.*$/); // Corrected regex case
+
+    // Verify properties of the S3 bucket created by MyStack using the dynamically found name
+    const s3BucketResource = s3BucketResources[s3ResourceName];
+    expect(s3BucketResource.bucket).toBe('test-my-example-bucket');
+    expect(s3BucketResource.tags.Project).toBe('TestProject');
+    expect(s3BucketResource.tags.Environment).toBe('test');
+    expect(s3BucketResource.tags.ManagedBy).toBe('CDKTF'); // Verify additional tag
   });
 
   test('MyStack S3 bucket resource is created with correct properties when instantiated', () => {
@@ -117,8 +137,13 @@ describe('TapStack Integration Tests', () => {
     });
     const synthesizedWithMyStack = JSON.parse(Testing.synth(stackWithMyStack));
 
-    // Navigate to the S3 bucket resource within the MyModularStack module
-    const s3BucketResource = synthesizedWithMyStack.resource.MyModularStack.my_example_bucket;
+    // Navigate to the S3 bucket resource within the MyModularStack construct
+    const s3BucketResources = synthesizedWithMyStack.resource.aws_s3_bucket;
+    const s3ResourceNames = Object.keys(s3BucketResources);
+    expect(s3ResourceNames.length).toBe(1); // Ensure only one S3 bucket
+    const s3ResourceName = s3ResourceNames[0];
+
+    const s3BucketResource = s3BucketResources[s3ResourceName];
 
     expect(s3BucketResource).toBeDefined();
     expect(s3BucketResource.bucket).toBe('prod-my-example-bucket');
