@@ -396,9 +396,6 @@ pulumi.export("kms_key_id", app_kms_key.key_id)
 pulumi.export("kms_key_arn", app_kms_key.arn)
 pulumi.export("kms_key_alias", app_kms_key_alias.name)
 
-# Encrypted secret (ciphertext is safe to export)
-pulumi.export("encrypted_db_password_blob", encrypted_db_password.ciphertext_blob)
-
 # Security notice for access key management
 pulumi.export("access_key_security_notice", 
     "Access key secret is securely managed and should be retrieved via "

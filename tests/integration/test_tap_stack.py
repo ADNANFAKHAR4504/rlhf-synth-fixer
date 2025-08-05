@@ -43,7 +43,6 @@ class TestTapStackLiveIntegration(unittest.TestCase):
     cls.access_key_id = cls.outputs.get("access_key_id").value
     cls.kms_key_id = cls.outputs.get("kms_key_id").value
     cls.kms_alias = cls.outputs.get("kms_alias").value
-    cls.encrypted_blob = cls.outputs.get("encrypted_db_password_blob").value
 
     cls.ec2 = boto3.client("ec2", region_name=cls.region)
     cls.iam = boto3.client("iam", region_name=cls.region)

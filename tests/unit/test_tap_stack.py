@@ -48,7 +48,6 @@ class TapStackUnitTest(unittest.TestCase):
       "access_key_id",
       "kms_key_id",
       "kms_alias",
-      "encrypted_db_password_blob"
     ]
 
     for attr in expected_attrs:
