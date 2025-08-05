@@ -171,7 +171,14 @@ describe('TapStack Live AWS Integration Tests', () => {
 
       // Check Environment tag
       const environmentTag = vpc?.Tags?.find(tag => tag.Key === 'Environment');
-      expect(environmentTag?.Value).toBe('Production');
+      if (environmentSuffix === 'production') {
+        expect(environmentTag?.Value).toBe('Production');
+      } else if (environmentSuffix === 'staging') {
+        expect(environmentTag?.Value).toBe('Staging');
+      } else {
+        // PR environments
+        expect(environmentTag?.Value).toBe('PR');
+      }
     });
 
     test('Should have 2 public and 2 private subnets across different AZs', async () => {

@@ -93,7 +93,34 @@
             ]
         }
     },
-    "Mappings": {},
+    "Mappings": {
+        "EnvironmentMap": {
+            "production": {
+                "MinSize": 2,
+                "MaxSize": 6,
+                "DesiredCapacity": 2,
+                "CPUThreshold": 70
+            },
+            "staging": {
+                "MinSize": 1,
+                "MaxSize": 3,
+                "DesiredCapacity": 1,
+                "CPUThreshold": 80
+            },
+            "dev": {
+                "MinSize": 1,
+                "MaxSize": 2,
+                "DesiredCapacity": 1,
+                "CPUThreshold": 80
+            },
+            "default": {
+                "MinSize": 1,
+                "MaxSize": 2,
+                "DesiredCapacity": 1,
+                "CPUThreshold": 80
+            }
+        }
+    },
     "Conditions": {
         "IsProduction": {
             "Fn::Equals": [
@@ -117,6 +144,27 @@
                     "Ref": "EnvironmentSuffix"
                 },
                 "staging"
+            ]
+        },
+        "IsDevEnv": {
+            "Fn::Equals": [
+                {
+                    "Ref": "EnvironmentSuffix"
+                },
+                "dev"
+            ]
+        },
+        "IsKnownEnvironment": {
+            "Fn::Or": [
+                {
+                    "Condition": "IsProductionEnv"
+                },
+                {
+                    "Condition": "IsStagingEnv"
+                },
+                {
+                    "Condition": "IsDevEnv"
+                }
             ]
         },
         "HasSSLCertificate": {
@@ -1014,19 +1062,7 @@
                         ]
                     }
                 },
-                "MinSize": {
-                    "Fn::If": [
-                        "IsProductionEnv",
-                        2,
-                        {
-                            "Fn::If": [
-                                "IsStagingEnv",
-                                1,
-                                1
-                            ]
-                        }
-                    ]
-                },
+                "MinSize": 1,
                 "MaxSize": {
                     "Fn::If": [
                         "IsProductionEnv",
@@ -1044,13 +1080,7 @@
                     "Fn::If": [
                         "IsProductionEnv",
                         2,
-                        {
-                            "Fn::If": [
-                                "IsStagingEnv",
-                                1,
-                                1
-                            ]
-                        }
+                        1
                     ]
                 },
                 "TargetGroupARNs": [
@@ -1242,13 +1272,7 @@
                     "Fn::If": [
                         "IsProductionEnv",
                         70,
-                        {
-                            "Fn::If": [
-                                "IsStagingEnv",
-                                80,
-                                80
-                            ]
-                        }
+                        80
                     ]
                 },
                 "ComparisonOperator": "GreaterThanThreshold",
