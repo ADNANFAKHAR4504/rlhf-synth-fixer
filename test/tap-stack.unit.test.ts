@@ -1,12 +1,17 @@
 // Configuration - These are coming from cfn-outputs after cdk deploy
+import {
+  DescribeRouteTablesCommand,
+  DescribeSubnetsCommand,
+  DescribeVpcsCommand,
+  EC2Client,
+} from '@aws-sdk/client-ec2';
 import * as cdk from 'aws-cdk-lib';
-import * as ec2 from 'aws-cdk-lib/aws-ec2';
-import { EC2Client, DescribeVpcsCommand } from '@aws-sdk/client-ec2';
-import { mockClient } from 'aws-sdk-client-mock';
 import { Template } from 'aws-cdk-lib/assertions';
+import * as ec2 from 'aws-cdk-lib/aws-ec2';
+import { mockClient } from 'aws-sdk-client-mock';
 import { TapStack } from '../lib/tap-stack'; // Adjust import path
-import { WebServerStack } from '../lib/web-server';
 import { findVpcByCidr } from '../lib/vpc-utils';
+import { WebServerStack } from '../lib/web-server';
 
 // Create mock
 const ec2Mock = mockClient(EC2Client);
@@ -24,6 +29,91 @@ describe('findVpcByCidr', () => {
       ],
     });
 
+    // Mock subnet data for vpc-12345678
+    ec2Mock.on(DescribeSubnetsCommand).resolves({
+      Subnets: [
+        {
+          SubnetId: 'subnet-private-1',
+          VpcId: 'vpc-12345678',
+          CidrBlock: '10.0.1.0/24',
+          AvailabilityZone: 'us-east-1a',
+          MapPublicIpOnLaunch: false,
+        },
+        {
+          SubnetId: 'subnet-private-2',
+          VpcId: 'vpc-12345678',
+          CidrBlock: '10.0.2.0/24',
+          AvailabilityZone: 'us-east-1b',
+          MapPublicIpOnLaunch: false,
+        },
+        {
+          SubnetId: 'subnet-public-1',
+          VpcId: 'vpc-12345678',
+          CidrBlock: '10.0.3.0/24',
+          AvailabilityZone: 'us-east-1a',
+          MapPublicIpOnLaunch: true,
+        },
+      ],
+    });
+
+    // Mock route table data for subnet-specific queries
+    ec2Mock
+      .on(DescribeRouteTablesCommand, {
+        Filters: [
+          { Name: 'association.subnet-id', Values: ['subnet-private-1'] },
+        ],
+      })
+      .resolves({
+        RouteTables: [
+          {
+            RouteTableId: 'rtb-private-1',
+            VpcId: 'vpc-12345678',
+            Associations: [{ SubnetId: 'subnet-private-1' }],
+            Routes: [
+              { DestinationCidrBlock: '0.0.0.0/0', NatGatewayId: 'nat-123' },
+            ],
+          },
+        ],
+      });
+
+    ec2Mock
+      .on(DescribeRouteTablesCommand, {
+        Filters: [
+          { Name: 'association.subnet-id', Values: ['subnet-private-2'] },
+        ],
+      })
+      .resolves({
+        RouteTables: [
+          {
+            RouteTableId: 'rtb-private-2',
+            VpcId: 'vpc-12345678',
+            Associations: [{ SubnetId: 'subnet-private-2' }],
+            Routes: [
+              { DestinationCidrBlock: '0.0.0.0/0', NatGatewayId: 'nat-456' },
+            ],
+          },
+        ],
+      });
+
+    ec2Mock
+      .on(DescribeRouteTablesCommand, {
+        Filters: [
+          { Name: 'association.subnet-id', Values: ['subnet-public-1'] },
+        ],
+      })
+      .resolves({
+        RouteTables: [
+          {
+            RouteTableId: 'rtb-public-1',
+            VpcId: 'vpc-12345678',
+            Associations: [{ SubnetId: 'subnet-public-1' }],
+            Routes: [
+              { DestinationCidrBlock: '0.0.0.0/0', GatewayId: 'igw-123' },
+            ],
+          },
+        ],
+      });
+
     const vpcId = await findVpcByCidr('10.0.0.0/16');
     expect(vpcId).toBe('vpc-12345678');
   });
@@ -33,12 +123,32 @@ describe('findVpcByCidr', () => {
       Vpcs: [{ VpcId: 'vpc-99999999', CidrBlock: '172.31.0.0/16' }],
     });
 
+    // Mock empty subnet data since no matching VPC will be found
+    ec2Mock.on(DescribeSubnetsCommand).resolves({
+      Subnets: [],
+    });
+
+    // Mock empty route table data
+    ec2Mock.on(DescribeRouteTablesCommand).resolves({
+      RouteTables: [],
+    });
+
     const vpcId = await findVpcByCidr('10.0.0.0/16');
     expect(vpcId).toBeUndefined();
   });
 
   it('should return undefined when Vpcs is undefined', async () => {
     ec2Mock.on(DescribeVpcsCommand).resolves({});
+
+    // Mock empty subnet data since no VPCs will be found
+    ec2Mock.on(DescribeSubnetsCommand).resolves({
+      Subnets: [],
+    });
+
+    // Mock empty route table data
+    ec2Mock.on(DescribeRouteTablesCommand).resolves({
+      RouteTables: [],
+    });
 
     const vpcId = await findVpcByCidr('10.0.0.0/16');
     expect(vpcId).toBeUndefined();
@@ -146,6 +256,24 @@ describe('TapStack', () => {
     expect(webServer).toBeDefined();
     expect(webServer.node.tryGetContext('environmentSuffix') ?? 'staging').toBe(
       'staging'
+    );
+  });
+
+  test('should fallback to default environmentSuffix when neither props nor context is provided', () => {
+    const app = new cdk.App();
+
+    const rootStack = new cdk.Stack(app, 'TestRootStack');
+    const tapStack = new TapStack(rootStack, 'TestTapStack', {
+      vpcId: 'vpc-xyz456',
+      env,
+    });
+
+    const webServer = tapStack.node.tryFindChild(
+      'WebServerStack'
+    ) as WebServerStack;
+    expect(webServer).toBeDefined();
+    expect(webServer.node.tryGetContext('environmentSuffix') ?? 'dev').toBe(
+      'dev'
     );
   });
 

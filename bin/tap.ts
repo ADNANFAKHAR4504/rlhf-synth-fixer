@@ -30,12 +30,14 @@ async function main() {
 
   const cidr = '10.0.0.0/16';
   let vpcId = await findVpcByCidr(cidr); // Try to find VPC by CIDR first
-
+  console.log(`VPC found by CIDR ${cidr}: ${vpcId}`);
   // Check if VPC found by CIDR has the required subnet configuration
   if (vpcId) {
     console.log(`VPC found by CIDR ${cidr}: ${vpcId}`);
     const hasValidSubnets = await validateVpcSubnetConfiguration(vpcId);
-
+    console.log(
+      `VPC ${vpcId} has valid subnet configuration: ${hasValidSubnets}`
+    );
     if (!hasValidSubnets) {
       console.log(
         `VPC ${vpcId} does not have required subnet configuration (2 private + 1 public), trying fallback VPC...`

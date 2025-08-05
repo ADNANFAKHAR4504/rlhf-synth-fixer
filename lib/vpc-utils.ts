@@ -1,5 +1,6 @@
 // lib/vpc-utils.ts
 import {
+  DescribeRouteTablesCommand,
   DescribeSubnetsCommand,
   DescribeVpcsCommand,
   EC2Client,
@@ -9,7 +10,7 @@ export async function findVpcByCidr(cidr: string): Promise<string | undefined> {
   const client = new EC2Client({ region: 'us-east-1' });
   const result = await client.send(new DescribeVpcsCommand({}));
   const vpc = result.Vpcs?.find(v => v.CidrBlock === cidr);
-
+  console.log(`VPC found by CIDR ${cidr}: ${vpc?.VpcId}`);
   if (!vpc?.VpcId) {
     return undefined;
   }
@@ -49,8 +50,8 @@ export async function validateVpcSubnetConfiguration(
   const subnetConfig = await getSubnetConfiguration(vpcId);
 
   const hasValidConfiguration =
-    subnetConfig.privateSubnets.length === 2 &&
-    subnetConfig.publicSubnets.length === 1;
+    subnetConfig.privateSubnets.length >= 2 &&
+    subnetConfig.publicSubnets.length >= 1;
 
   if (!hasValidConfiguration) {
     console.log(
@@ -77,6 +78,10 @@ export interface SubnetInfo {
 
 // Function to get all subnets for a VPC
 export async function getVpcSubnets(vpcId: string): Promise<SubnetInfo[]> {
+  if (!vpcId || !vpcId.startsWith('vpc-')) {
+    throw new Error(`Invalid VPC ID: ${vpcId}`);
+  }
+
   const client = new EC2Client({ region: 'us-east-1' });
 
   const result = await client.send(
@@ -102,16 +107,115 @@ export async function getVpcSubnets(vpcId: string): Promise<SubnetInfo[]> {
   }));
 }
 
-// Function to get private subnets (subnets without public IP mapping)
-export async function getPrivateSubnets(vpcId: string): Promise<SubnetInfo[]> {
-  const allSubnets = await getVpcSubnets(vpcId);
-  return allSubnets.filter(subnet => !subnet.isPublic);
+// Function to check if a subnet has a route to Internet Gateway
+async function hasInternetGatewayRoute(
+  subnetId: string,
+  vpcId: string
+): Promise<boolean> {
+  if (!vpcId || !vpcId.startsWith('vpc-')) {
+    throw new Error(`Invalid VPC ID: ${vpcId}`);
+  }
+  if (!subnetId || !subnetId.startsWith('subnet-')) {
+    throw new Error(`Invalid Subnet ID: ${subnetId}`);
+  }
+
+  const client = new EC2Client({ region: 'us-east-1' });
+
+  try {
+    const result = await client.send(
+      new DescribeRouteTablesCommand({
+        Filters: [
+          {
+            Name: 'association.subnet-id',
+            Values: [subnetId],
+          },
+        ],
+      })
+    );
+
+    // If no explicit route table association, check the main route table
+    if (!result.RouteTables || result.RouteTables.length === 0) {
+      const mainRouteTableResult = await client.send(
+        new DescribeRouteTablesCommand({
+          Filters: [
+            {
+              Name: 'vpc-id',
+              Values: [vpcId],
+            },
+            {
+              Name: 'association.main',
+              Values: ['true'],
+            },
+          ],
+        })
+      );
+
+      if (
+        mainRouteTableResult.RouteTables &&
+        mainRouteTableResult.RouteTables.length > 0
+      ) {
+        const routes = mainRouteTableResult.RouteTables[0].Routes || [];
+        return routes.some(
+          route => route.GatewayId && route.GatewayId.startsWith('igw-')
+        );
+      }
+    }
+
+    // Check explicit route table associations
+    for (const routeTable of result.RouteTables || []) {
+      const routes = routeTable.Routes || [];
+      if (
+        routes.some(
+          route => route.GatewayId && route.GatewayId.startsWith('igw-')
+        )
+      ) {
+        return true;
+      }
+    }
+
+    return false;
+  } catch (error) {
+    console.error(`Error checking IGW route for subnet ${subnetId}:`, error);
+    return false;
+  }
 }
 
-// Function to get public subnets (subnets with public IP mapping)
+// Function to get private subnets (subnets without IGW route)
+export async function getPrivateSubnets(vpcId: string): Promise<SubnetInfo[]> {
+  const allSubnets = await getVpcSubnets(vpcId);
+  const privateSubnets: SubnetInfo[] = [];
+
+  for (const subnet of allSubnets) {
+    const hasIGW = await hasInternetGatewayRoute(subnet.subnetId, vpcId);
+    if (!hasIGW) {
+      privateSubnets.push({
+        ...subnet,
+        isPublic: false,
+      });
+    }
+  }
+
+  console.log(`Private subnets found: ${privateSubnets.length}`);
+  return privateSubnets;
+}
+
+// Function to get public subnets (subnets with IGW route)
 export async function getPublicSubnets(vpcId: string): Promise<SubnetInfo[]> {
   const allSubnets = await getVpcSubnets(vpcId);
-  return allSubnets.filter(subnet => subnet.isPublic);
+  const publicSubnets: SubnetInfo[] = [];
+
+  for (const subnet of allSubnets) {
+    const hasIGW = await hasInternetGatewayRoute(subnet.subnetId, vpcId);
+    if (hasIGW) {
+      publicSubnets.push({
+        ...subnet,
+        isPublic: true,
+      });
+    }
+  }
+
+  console.log(`Public subnets found: ${publicSubnets.length}`);
+  return publicSubnets;
 }
 
 // Function to get subnet configuration (2 private + 1 public)
