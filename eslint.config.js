@@ -113,6 +113,7 @@ module.exports = [
       '**/*.js',
       '**/*.d.ts',
       '**/*.test.ts', // Exclude test files from linting
+      '.gen/**',
     ],
   },
 ];
