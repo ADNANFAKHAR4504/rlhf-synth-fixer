@@ -19,7 +19,7 @@ import ipaddress
 config = pulumi.Config()
 domain_name = config.get("domain_name") or "example.com"
 environment = config.get("environment") or "dev"
-project_name = config.get("project_name") or "dualstack-web-app"
+project_name = config.get("project_name") or "dualstack-web-app-v2"
 aws_region = config.get("aws:region") or "us-east-1"
 
 # Tags for all resources
