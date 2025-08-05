@@ -2,9 +2,9 @@ import {
   AwsProvider,
   AwsProviderDefaultTags,
 } from '@cdktf/provider-aws/lib/provider';
+import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket'; // S3Bucket import is now needed here
 import { S3Backend, TerraformStack } from 'cdktf';
 import { Construct } from 'constructs';
-import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket'; // S3Bucket import is now needed here
 
 /**
  * Props for MyStack.
