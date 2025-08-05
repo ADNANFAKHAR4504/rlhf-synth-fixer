@@ -14,6 +14,12 @@ Parameters:
     Default: 'secureapp'
     AllowedPattern: '^[a-z0-9]+$'
     ConstraintDescription: 'Must be lowercase alphanumeric characters only.'
+  EnvironmentSuffix:
+    Type: String
+    Description: 'Environment suffix for stack naming (e.g., dev, prod, pr479)'
+    Default: 'dev'
+    AllowedPattern: '^[a-z0-9]+$'
+    ConstraintDescription: 'Must be lowercase alphanumeric characters only.'
 
 Resources:
   InfrastructureKMSKey:
@@ -28,6 +34,16 @@ Resources:
             Principal:
               AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
             Action: 'kms:*'
+            Resource: '*'
+          - Sid: AllowCloudFormation
+            Effect: Allow
+            Principal:
+              Service: cloudformation.amazonaws.com
+            Action:
+              - 'kms:Decrypt'
+              - 'kms:Encrypt'
+              - 'kms:GenerateDataKey*'
+              - 'kms:ReEncrypt*'
             Resource: '*'
 
   InfrastructureKMSKeyAlias:
@@ -46,7 +62,7 @@ Resources:
         - Key: Name
           Value: !Sub '${AWS::StackName}-secure-vpc'
         - Key: Environment
-          Value: 'Production'
+          Value: !Ref EnvironmentSuffix
 
   PublicSubnet:
     Type: AWS::EC2::Subnet
@@ -197,6 +213,30 @@ Resources:
         - Key: Purpose
           Value: 'Access Logging'
 
+  S3AccessLogsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref S3AccessLogsBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowCloudFormationLogging
+            Effect: Allow
+            Principal:
+              Service: cloudformation.amazonaws.com
+            Action: 's3:PutBucketLogging'
+            Resource: !GetAtt S3AccessLogsBucket.Arn
+          - Sid: AllowS3Logging
+            Effect: Allow
+            Principal:
+              Service: logging.s3.amazonaws.com
+            Action:
+              - 's3:PutObject'
+            Resource: !Sub 'arn:aws:s3:::s3-access-logs-${UniqueId}/*'
+            Condition:
+              StringEquals:
+                'aws:SourceAccount': !Sub '${AWS::AccountId}'
+
   WebsiteContentBucket:
     Type: AWS::S3::Bucket
     Properties:
@@ -308,6 +348,25 @@ Resources:
             Resource:
               - !Sub 'arn:aws:s3:::backup-data-${UniqueId}/*'
               - !GetAtt BackupDataBucket.Arn
+            Condition:
+              StringNotEquals:
+                'aws:PrincipalServiceName': 'cloudformation.amazonaws.com'
+          - Sid: AllowCloudFormationLogging
+            Effect: Allow
+            Principal:
+              Service: cloudformation.amazonaws.com
+            Action: 's3:PutBucketLogging'
+            Resource: !GetAtt BackupDataBucket.Arn
+          - Sid: AllowS3Logging
+            Effect: Allow
+            Principal:
+              Service: logging.s3.amazonaws.com
+            Action:
+              - 's3:PutObject'
+            Resource: !Sub 'arn:aws:s3:::s3-access-logs-${UniqueId}/*'
+            Condition:
+              StringEquals:
+                'aws:SourceAccount': !Sub '${AWS::AccountId}'
 
   SecureEC2Instance:
     Type: AWS::EC2::Instance
@@ -332,12 +391,12 @@ Resources:
           yum update -y
           yum install -y aws-cli
           echo "Instance started at $(date)" > /tmp/startup.log
-          aws s3 cp /tmp/startup.log s3://${ApplicationLogsBucket}/startup-$(date +%Y%m%d-%H%M%S).log --region ${AWS::Region}
+          aws s3 cp /tmp/startup.log s3://application-logs-${UniqueId}/startup-$(date +%Y%m%d-%H%M%S).log --region ${AWS::Region}
       Tags:
         - Key: Name
           Value: !Sub '${AWS::StackName}-secure-instance'
         - Key: Environment
-          Value: 'Production'
+          Value: !Ref EnvironmentSuffix
         - Key: Purpose
           Value: 'Web Application Server'
 
