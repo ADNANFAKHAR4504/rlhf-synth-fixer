@@ -40,8 +40,10 @@ export class TapStack extends TerraformStack {
 
     // Get environment configuration with fallback to dev for unknown environments
     const validEnvironments = ['dev', 'staging', 'prod'];
-    const actualEnvironment = validEnvironments.includes(environmentSuffix) ? environmentSuffix : 'dev';
-    
+    const actualEnvironment = validEnvironments.includes(environmentSuffix)
+      ? environmentSuffix
+      : 'dev';
+
     if (!environments[actualEnvironment]) {
       throw new Error(
         `Environment '${actualEnvironment}' not found in configuration`
