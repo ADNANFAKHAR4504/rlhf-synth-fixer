@@ -23,6 +23,7 @@ pytest-cov = "*"
 pytest-env = "*"
 pylint = "*"
 pytest = "*"
+requests = "*"
 
 [requires]
 python_version = "3.12.11"
