@@ -12,7 +12,6 @@ const awsRegion = process.env.AWS_REGION || 'us-west-2';
 const repositoryName = process.env.REPOSITORY || 'unknown';
 const commitAuthor = process.env.COMMIT_AUTHOR || 'unknown';
 
-// defautlTags is structured in adherence to the AwsProviderDefaultTags interface
 const defaultTags = {
   tags: {
     Environment: environmentSuffix,
