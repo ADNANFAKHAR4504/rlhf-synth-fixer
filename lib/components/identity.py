@@ -1,6 +1,6 @@
 """
 Identity and Access Management Infrastructure Component
-Handles IAM roles, policies, and instance profiles for GovCloud compliance
+Handles IAM roles, policies, and instance profiles for AWS Elastic Beanstalk
 """
 
 from typing import Optional
@@ -23,7 +23,6 @@ class IdentityInfrastructure(pulumi.ComponentResource):
     self._create_eb_instance_profile()
     self._create_autoscaling_role()
 
-    # Register outputs
     self.register_outputs({
       'eb_service_role_arn': self.eb_service_role.arn,
       'eb_instance_role_arn': self.eb_instance_role.arn,
@@ -32,11 +31,11 @@ class IdentityInfrastructure(pulumi.ComponentResource):
     })
 
   def _create_eb_service_role(self):
-    """Create Elastic Beanstalk service role with GovCloud policy ARNs"""
+    """Create Elastic Beanstalk service role"""
     self.eb_service_role = aws.iam.Role(
       "eb-service-role",
       name="nova-eb-service-role",
-      description="Service role for Elastic Beanstalk in GovCloud",
+      description="Service role for Elastic Beanstalk",
       assume_role_policy=json.dumps({
         "Version": "2012-10-17",
         "Statement": [{
@@ -51,9 +50,9 @@ class IdentityInfrastructure(pulumi.ComponentResource):
         }]
       }),
       managed_policy_arns=[
-        "arn:aws-us-gov:iam::aws:policy/service-role/AWSElasticBeanstalkEnhancedHealth",
-        "arn:aws-us-gov:iam::aws:policy/AWSElasticBeanstalkManagedUpdatesCustomerRolePolicy",
-        "arn:aws-us-gov:iam::aws:policy/service-role/AWSElasticBeanstalkService"
+        "arn:aws:iam::aws:policy/service-role/AWSElasticBeanstalkEnhancedHealth",
+        "arn:aws:iam::aws:policy/AWSElasticBeanstalkManagedUpdatesCustomerRolePolicy",
+        "arn:aws:iam::aws:policy/service-role/AWSElasticBeanstalkService"
       ],
       tags=self.tags,
       opts=ResourceOptions(parent=self)
@@ -64,7 +63,7 @@ class IdentityInfrastructure(pulumi.ComponentResource):
     self.eb_instance_role = aws.iam.Role(
       "eb-instance-role",
       name="nova-eb-instance-role",
-      description="Instance role for Elastic Beanstalk EC2 instances in GovCloud",
+      description="Instance role for Elastic Beanstalk EC2 instances",
       assume_role_policy=json.dumps({
         "Version": "2012-10-17",
         "Statement": [{
@@ -74,15 +73,14 @@ class IdentityInfrastructure(pulumi.ComponentResource):
         }]
       }),
       managed_policy_arns=[
-        "arn:aws-us-gov:iam::aws:policy/AWSElasticBeanstalkWebTier",
-        "arn:aws-us-gov:iam::aws:policy/AWSElasticBeanstalkMulticontainerDocker",
-        "arn:aws-us-gov:iam::aws:policy/AWSElasticBeanstalkWorkerTier"
+        "arn:aws:iam::aws:policy/AWSElasticBeanstalkWebTier",
+        "arn:aws:iam::aws:policy/AWSElasticBeanstalkMulticontainerDocker",
+        "arn:aws:iam::aws:policy/AWSElasticBeanstalkWorkerTier"
       ],
       tags=self.tags,
       opts=ResourceOptions(parent=self)
     )
 
-    # Additional policy for enhanced monitoring and CloudWatch access
     self.eb_instance_policy = aws.iam.RolePolicy(
       "eb-instance-additional-policy",
       role=self.eb_instance_role.id,
@@ -113,14 +111,14 @@ class IdentityInfrastructure(pulumi.ComponentResource):
               "s3:PutObject",
               "s3:DeleteObject"
             ],
-            "Resource": "arn:aws-us-gov:s3:::elasticbeanstalk-*/*"
+            "Resource": "arn:aws:s3:::elasticbeanstalk-*/*"
           },
           {
             "Effect": "Allow",
             "Action": [
               "s3:ListBucket"
             ],
-            "Resource": "arn:aws-us-gov:s3:::elasticbeanstalk-*"
+            "Resource": "arn:aws:s3:::elasticbeanstalk-*"
           }
         ]
       }),
@@ -141,7 +139,7 @@ class IdentityInfrastructure(pulumi.ComponentResource):
     self.autoscaling_role = aws.iam.Role(
       "autoscaling-role",
       name="nova-autoscaling-role",
-      description="Service role for Auto Scaling in GovCloud",
+      description="Service role for Auto Scaling",
       assume_role_policy=json.dumps({
         "Version": "2012-10-17",
         "Statement": [{
@@ -151,13 +149,12 @@ class IdentityInfrastructure(pulumi.ComponentResource):
         }]
       }),
       managed_policy_arns=[
-        "arn:aws-us-gov:iam::aws:policy/service-role/AutoScalingNotificationAccessRole"
+        "arn:aws:iam::aws:policy/service-role/AutoScalingNotificationAccessRole"
       ],
       tags=self.tags,
       opts=ResourceOptions(parent=self)
     )
 
-    # Additional auto scaling policy for enhanced capabilities
     self.autoscaling_policy = aws.iam.RolePolicy(
       "autoscaling-additional-policy",
       role=self.autoscaling_role.id,
