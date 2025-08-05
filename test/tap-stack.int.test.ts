@@ -27,7 +27,6 @@ import fs from 'fs';
 // Get environment suffix from environment variable (set by CI/CD pipeline)
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
-// Try to read outputs file, or create mock data for testing
 let outputs: Record<string, string>;
 
 try {
