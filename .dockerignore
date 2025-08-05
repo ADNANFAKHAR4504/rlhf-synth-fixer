@@ -17,8 +17,8 @@ build
 *.tgz
 *.tar.gz
 .nyc_output
-archive
 templates
+cli
 demo/node_modules
 # Python cache and virtual environments
 __pycache__
@@ -51,4 +51,4 @@ tmp/
 temp/
 
 .github/
-claude*
+.claude/
