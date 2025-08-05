@@ -62,10 +62,10 @@ class TestTapStackIntegration(unittest.TestCase):
         "AWS::S3::Bucket": 2,   # data + logs
         "AWS::EC2::SecurityGroup": 1,
         "AWS::IAM::Role": 3,    # EC2 role + VPC flow log role + CloudTrail log role
-        "AWS::IAM::Policy": 4,  # 3 EC2 policies + 1 VPC flow log policy
+        "AWS::IAM::Policy": 5,  # 3 EC2 policies + 1 VPC flow log policy + 1 CloudTrail policy
         # Main + launch template profile + additional profile
         "AWS::IAM::InstanceProfile": 3,
-        "AWS::Logs::LogGroup": 3,  # app, system, vpc flow logs
+        "AWS::Logs::LogGroup": 4,  # app, system, vpc flow logs, cloudtrail logs
         "AWS::CloudWatch::Dashboard": 1,
         "AWS::EC2::LaunchTemplate": 1,
         "AWS::EC2::Instance": 1,
