@@ -151,29 +151,51 @@ class TapStack(ComponentResource):
             )
 
     def _create_storage(self):
-        self.bucket = aws.s3.Bucket(
-            f"TapStack-data-bucket-{self.environment_suffix}",
-            versioning=aws.s3.BucketVersioningArgs(enabled=True),
+        """
+        Create S3 bucket with security configurations and bucket notification to trigger Lambda.
+        """
+        bucket_name = f"{self.project_name}-{self.stack}-{self.stage}".lower()
+
+        self.s3_bucket = aws.s3.Bucket(
+            f"{self.name_prefix}-bucket",
+            bucket=bucket_name,
+            force_destroy=True,
+            versioning=aws.s3.BucketVersioningArgs(
+                enabled=True
+            ),
             server_side_encryption_configuration=aws.s3.BucketServerSideEncryptionConfigurationArgs(
-                rules=[aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
+                rule=aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
                     apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
                         sse_algorithm="AES256"
                     )
-                )]
+                )
             ),
-            tags={**self.common_tags, "Name": f"TapStack-data-bucket-{self.environment_suffix}"},
-            opts=ResourceOptions(provider=self.provider, parent=self)
+            tags=self.common_tags
         )
 
+        # Block all public access to the bucket
         aws.s3.BucketPublicAccessBlock(
-            f"TapStack-public-block-{self.environment_suffix}",
-            bucket=self.bucket.id,
+            f"{self.name_prefix}-bucket-public-access",
+            bucket=self.s3_bucket.id,
             block_public_acls=True,
             block_public_policy=True,
             ignore_public_acls=True,
-            restrict_public_buckets=True,
-            opts=ResourceOptions(provider=self.provider, parent=self)
+            restrict_public_buckets=True
         )
+
+        # Bucket notification for Lambda trigger
+        aws.s3.BucketNotification(
+            f"{self.name_prefix}-bucket-notification",
+            bucket=self.s3_bucket.id,
+            lambda_functions=[
+                aws.s3.BucketNotificationLambdaFunctionArgs(
+                    lambda_function_arn=self.lambda_function.arn,
+                    events=["s3:ObjectCreated:*"],
+                )
+            ],
+            opts=ResourceOptions(depends_on=[self.lambda_permission])
+        )
+
 
     def _create_compute(self):
         self.lambda_role = aws.iam.Role(
