@@ -810,9 +810,7 @@
                 "Engine": "mysql",
                 "EngineVersion": "8.0.35",
                 "MasterUsername": "admin",
-                "MasterUserPassword": {
-                    "Fn::Sub": "{{resolve:secretsmanager:prod-rds-password:SecretString:password}}"
-                },
+                "MasterUserPassword": "{{resolve:secretsmanager:prod-rds-password:SecretString:password}}",
                 "AllocatedStorage": 20,
                 "StorageType": "gp2",
                 "DBSubnetGroupName": {
@@ -847,7 +845,8 @@
                     }
                 ]
             },
-            "DeletionPolicy": "Snapshot"
+            "DeletionPolicy": "Snapshot",
+            "UpdateReplacePolicy": "Snapshot"
         },
         "ProdRdsMonitoringRole": {
             "Type": "AWS::IAM::Role",

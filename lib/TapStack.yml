@@ -450,7 +450,7 @@ Resources:
       Engine: mysql
       EngineVersion: '8.0.35'
       MasterUsername: admin
-      MasterUserPassword: !Sub '{{resolve:secretsmanager:prod-rds-password:SecretString:password}}'
+      MasterUserPassword: '{{resolve:secretsmanager:prod-rds-password:SecretString:password}}'
       AllocatedStorage: 20
       StorageType: gp2
       DBSubnetGroupName: !Ref ProdRdsSubnetGroup
@@ -468,6 +468,7 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
     DeletionPolicy: Snapshot
+    UpdateReplacePolicy: Snapshot
 
   # RDS Monitoring Role
   ProdRdsMonitoringRole:
