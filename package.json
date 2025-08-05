@@ -112,6 +112,7 @@
     "typescript": "^5.8.3"
   },
   "dependencies": {
+    "@aws-sdk/client-accessanalyzer": "^3.859.0",
     "@aws-sdk/client-acm": "^3.856.0",
     "@aws-sdk/client-cloudtrail": "^3.859.0",
     "@aws-sdk/client-elastic-load-balancing-v2": "^3.848.0",
