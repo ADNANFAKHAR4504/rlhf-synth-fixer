@@ -219,6 +219,5 @@ class TapStack(pulumi.ComponentResource):
       "access_key_id": self.access_key_id,
       "kms_key_id": self.kms_key_id,
       "kms_alias": self.kms_alias,
-      "encrypted_db_password_blob": self.encrypted_db_password_blob,
     })
 
