@@ -6,6 +6,11 @@
             "Type": "String",
             "Default": "dev",
             "Description": "Environment suffix for resource naming (e.g., dev, staging, prod)"
+        },
+        "ApplicationName": {
+            "Type": "String",
+            "Default": "multi-region-app",
+            "Description": "Application name for resource naming and tagging"
         }
     },
     "Conditions": {
@@ -48,7 +53,7 @@
             "Properties": {
                 "TableName": {
                     "Fn::Sub": [
-                        "multi-region-app-${EnvironmentSuffix}-${RegionSuffix}-table",
+                        "${ApplicationName}-${EnvironmentSuffix}-${RegionSuffix}-table",
                         {
                             "RegionSuffix": {
                                 "Fn::If": [
@@ -150,7 +155,9 @@
                     },
                     {
                         "Key": "Application",
-                        "Value": "multi-region-app"
+                        "Value": {
+                            "Ref": "ApplicationName"
+                        }
                     },
                     {
                         "Key": "ManagedBy",
@@ -366,7 +373,9 @@
                     },
                     {
                         "Key": "Application",
-                        "Value": "multi-region-app"
+                        "Value": {
+                            "Ref": "ApplicationName"
+                        }
                     }
                 ]
             }
@@ -535,7 +544,7 @@
             },
             "Export": {
                 "Name": {
-                    "Fn::Sub": "${AWS::StackName}-CapacityConfig"
+                    "Fn::Sub": "${AWS::StackName}-CapacityConfiguration"
                 }
             }
         },

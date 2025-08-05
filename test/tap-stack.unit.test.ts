@@ -136,7 +136,7 @@ describe('TapStack CloudFormation Template - Unified DynamoDB Multi-Region', () 
       test('should have correct table name with conditional suffix', () => {
         expect(dynamoTable.Properties.TableName).toEqual({
           'Fn::Sub': [
-            'multi-region-app-${EnvironmentSuffix}-${RegionSuffix}-table',
+            '${ApplicationName}-${EnvironmentSuffix}-${RegionSuffix}-table',
             {
               RegionSuffix: {
                 'Fn::If': ['IsWest1', 'west1', 'west2'],
@@ -211,7 +211,7 @@ describe('TapStack CloudFormation Template - Unified DynamoDB Multi-Region', () 
         });
         expect(tags).toContainEqual({
           Key: 'Application',
-          Value: 'multi-region-app',
+          Value: { Ref: 'ApplicationName' },
         });
         expect(tags).toContainEqual({
           Key: 'ManagedBy',
@@ -424,7 +424,7 @@ describe('TapStack CloudFormation Template - Unified DynamoDB Multi-Region', () 
 
     test('should have correct parameter count', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(1);
+      expect(parameterCount).toBe(2);
     });
 
     test('should have correct condition count', () => {
