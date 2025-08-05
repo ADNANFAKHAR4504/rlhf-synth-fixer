@@ -28,9 +28,10 @@ class TapStackArgs:
     tags (Optional[dict]): Optional default tags to apply to resources.
   """
 
-  def __init__(self, environment_suffix: Optional[str] = None,
+  def __init__(self, region: Optional[str] = None, environment_suffix: Optional[str] = None,
            tags: Optional[dict] = None):
     self.environment_suffix = environment_suffix or 'dev'
+    self.region = region or 'us-east-1'  # Default region, can be overridden used in or for safety
     self.tags = tags
 
 
@@ -55,6 +56,7 @@ class TapStack(pulumi.ComponentResource):
            opts: Optional[ResourceOptions] = None):
     super().__init__('tap:stack:TapStack', name, None, opts)
     self.environment_suffix = args.environment_suffix
+    self.region = args.region
     self.tags = args.tags
 
     # Example usage of suffix and tags
@@ -68,7 +70,6 @@ class TapStack(pulumi.ComponentResource):
     # Configuration
     project_name = pulumi.get_project()
     stack_name = pulumi.get_stack()
-    region = "us-east-1" 
     stage_name = f"{self.environment_suffix}-{project_name}-{stack_name}-api-stage"
 
     # Tags for all resources
@@ -109,7 +110,7 @@ class TapStack(pulumi.ComponentResource):
     # Create S3 bucket for file uploads with security best practices
     s3_bucket = aws.s3.Bucket(
       "file-upload-bucket",
-      bucket=f"{project_name}-{stack_name}-uploads-{region}".lower(),
+      bucket=f"{project_name}-{stack_name}-uploads-{self.region}".lower(),
       tags=common_tags
     )
 
@@ -684,7 +685,7 @@ class TapStack(pulumi.ComponentResource):
     pulumi.export("s3_bucket_arn", s3_bucket.arn)
     pulumi.export("api_gateway_url", api_deployment.invoke_url)
     pulumi.export("api_gateway_stage_url", Output.concat(
-    "https://", api_gateway.id, f".execute-api.{region}.amazonaws.com/", f"{stage_name}" 
+    "https://", api_gateway.id, f".execute-api.{self.region}.amazonaws.com/", f"{stage_name}" 
     ))
     pulumi.export("s3_processor_lambda_arn", s3_processor_lambda.arn)
     pulumi.export("api_handler_lambda_arn", api_handler_lambda.arn)
@@ -694,11 +695,11 @@ class TapStack(pulumi.ComponentResource):
 
     # Export endpoint URLs for testing
     pulumi.export("health_check_url", Output.concat(
-        "https://", api_gateway.id, ".execute-api.", region,
+        "https://", api_gateway.id, ".execute-api.", self.region,
         ".amazonaws.com/prod/health"
     ))
     pulumi.export("process_endpoint_url", Output.concat(
-        "https://", api_gateway.id, ".execute-api.", region,
+        "https://", api_gateway.id, ".execute-api.", self.region,
         ".amazonaws.com/prod/process"
     ))
     self.register_outputs({})
