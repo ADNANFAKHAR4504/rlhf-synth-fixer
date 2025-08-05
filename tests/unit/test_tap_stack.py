@@ -2,7 +2,7 @@ import aws_cdk as cdk
 import pytest
 from aws_cdk.assertions import Template
 
-from tap_stack.tap_stack import TapStack, TapStackProps  # adjust import as needed
+from lib.tap_stack import TapStack, TapStackProps
 
 
 @pytest.fixture
