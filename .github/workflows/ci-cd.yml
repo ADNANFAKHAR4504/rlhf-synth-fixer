@@ -318,7 +318,7 @@ jobs:
         run: |
           export TF_INIT_OPTS="-backend-config=bucket=${{ env.TERRAFORM_STATE_BUCKET }} \
               -backend-config=key=${{ env.ENVIRONMENT_SUFFIX }}/terraform.tfstate \
-              -backend-config=region=${{ env.TERRAFORM_STATE_BUCKET_REGION }}
+              -backend-config=region=${{ env.TERRAFORM_STATE_BUCKET_REGION }}"
           npm run tf:init -lock=false -upgrade
         shell: bash
 
