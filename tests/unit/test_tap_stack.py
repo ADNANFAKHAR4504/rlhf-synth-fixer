@@ -1,8 +1,3 @@
-from lib.tap_stack import TapStackArgs
-from lib.components.serverless import ServerlessComponent
-from lib.components.database import DatabaseComponent
-from lib.components.iam import IAMComponent
-from lib.components.vpc import ComputeComponent
 import os
 import sys
 import unittest
@@ -10,8 +5,6 @@ from unittest.mock import Mock
 
 # Set environment variable for Pulumi testing
 os.environ["PULUMI_TEST_MODE"] = "true"
-
-# --- Mocks for Pulumi and AWS ---
 
 
 class MockComponentResource:
@@ -21,7 +14,7 @@ class MockComponentResource:
     self.props = props or {}
     self.opts = opts
 
-  def register_outputs(self, outputs):  # pylint: disable=unused-argument
+  def register_outputs(self, outputs):
     self.outputs = True
 
 
@@ -40,38 +33,58 @@ class MockOutput:
     return Mock()
 
 
-# Inject Pulumi and AWS mocks before importing infrastructure
-pulumi_mock = Mock()
-pulumi_mock.ComponentResource = MockComponentResource
-pulumi_mock.ResourceOptions = Mock
-pulumi_mock.Output = MockOutput
-pulumi_mock.Output.concat = MockOutput.concat
-pulumi_mock.Output.all = MockOutput.all
-pulumi_mock.AssetArchive = Mock()
-pulumi_mock.StringAsset = Mock()
-pulumi_mock.get_stack = Mock(return_value="test")
-
-aws_mock = Mock()
-aws_mock.get_region.return_value = Mock(name="us-east-1")
-aws_mock.get_availability_zones.return_value = Mock(
-    names=["us-east-1a", "us-east-1b"]
-)
-
-sys.modules["pulumi"] = pulumi_mock
-sys.modules["pulumi_aws"] = aws_mock
-
-# Now import after mocks are set
-
-
 class TestTapStackComponents(unittest.TestCase):
+  @classmethod
+  def setUpClass(cls):
+    # Pulumi Mocks
+    cls.mock_pulumi = Mock()
+    cls.mock_pulumi.ComponentResource = MockComponentResource
+    cls.mock_pulumi.ResourceOptions = Mock
+    cls.mock_pulumi.Output = MockOutput
+    cls.mock_pulumi.Output.concat = MockOutput.concat
+    cls.mock_pulumi.Output.all = MockOutput.all
+    cls.mock_pulumi.AssetArchive = Mock()
+    cls.mock_pulumi.StringAsset = Mock()
+    cls.mock_pulumi.get_stack = Mock(return_value="test")
+
+    # AWS mocks
+    cls.mock_aws = Mock()
+    cls.mock_aws.get_region.return_value = Mock(name="us-east-1")
+    cls.mock_aws.get_availability_zones.return_value = Mock(
+        names=["us-east-1a", "us-east-1b"]
+    )
+
+    # Inject mocks into sys.modules
+    sys.modules["pulumi"] = cls.mock_pulumi
+    sys.modules["pulumi_aws"] = cls.mock_aws
+
   def setUp(self):
+    # Clear any re-imports
+    modules_to_clear = [m for m in sys.modules.keys() if m.startswith("lib.")]
+    for module in modules_to_clear:
+      if module in sys.modules:
+        del sys.modules[module]
+
+    # Import components after mock injection
+    from lib.tap_stack import TapStackArgs
+    from lib.components.iam import IAMComponent
+    from lib.components.vpc import ComputeComponent
+    from lib.components.database import DatabaseComponent
+    from lib.components.serverless import ServerlessComponent
+
+    self.TapStackArgs = TapStackArgs
+    self.IAMComponent = IAMComponent
+    self.ComputeComponent = ComputeComponent
+    self.DatabaseComponent = DatabaseComponent
+    self.ServerlessComponent = ServerlessComponent
+
     self.test_args = TapStackArgs(
         environment_suffix="test",
         tags={"Environment": "test", "Project": "tap-stack"}
     )
 
   def test_iam_component_initialization(self):
-    iam = IAMComponent(
+    iam = self.IAMComponent(
         name="test-iam",
         environment="test",
         tags=self.test_args.tags
@@ -79,7 +92,7 @@ class TestTapStackComponents(unittest.TestCase):
     self.assertTrue(hasattr(iam, "lambda_role"))
 
   def test_compute_component_initialization(self):
-    compute = ComputeComponent(
+    compute = self.ComputeComponent(
         name="test-compute",
         cidr_block="10.3.0.0/16",
         environment="test",
@@ -91,14 +104,14 @@ class TestTapStackComponents(unittest.TestCase):
     self.assertTrue(hasattr(compute, "lambda_sg"))
 
   def test_database_component_initialization(self):
-    compute = ComputeComponent(
+    compute = self.ComputeComponent(
         name="test-compute",
         cidr_block="10.3.0.0/16",
         environment="test",
         instance_profile="test-profile",
         tags=self.test_args.tags
     )
-    db = DatabaseComponent(
+    db = self.DatabaseComponent(
         name="test-db",
         environment="test",
         vpc_id=compute.vpc.id,
@@ -112,14 +125,14 @@ class TestTapStackComponents(unittest.TestCase):
     self.assertTrue(hasattr(db, "rds_instance"))
 
   def test_serverless_component_initialization(self):
-    compute = ComputeComponent(
+    compute = self.ComputeComponent(
         name="test-compute",
         cidr_block="10.3.0.0/16",
         environment="test",
         instance_profile="test-profile",
         tags=self.test_args.tags
     )
-    db = DatabaseComponent(
+    db = self.DatabaseComponent(
         name="test-db",
         environment="test",
         vpc_id=compute.vpc.id,
@@ -130,13 +143,13 @@ class TestTapStackComponents(unittest.TestCase):
         db_password="passw0rd",
         tags=self.test_args.tags
     )
-    iam = IAMComponent(
+    iam = self.IAMComponent(
         name="test-iam",
         environment="test",
         tags=self.test_args.tags
     )
 
-    serverless = ServerlessComponent(
+    serverless = self.ServerlessComponent(
         name="test-serverless",
         environment="test",
         lambda_role_arn=iam.lambda_role.arn,
