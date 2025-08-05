@@ -64,193 +64,221 @@ class ElasticBeanstalkInfrastructure(pulumi.ComponentResource):
     )
 
   def _create_configuration_template(self):
-    elb_subnet = self.public_subnet_ids[0]
-    app_subnet = self.private_subnet_ids[0]
+    # Use Output.all to resolve all the outputs before creating the configuration
+    def create_config_template(args):
+      vpc_id, public_subnets, private_subnets, service_role_arn, instance_profile_name = args
+      
+      # Validate we have subnets
+      if not public_subnets or not private_subnets:
+        raise Exception(f"Missing subnets for region {self.region}. Public: {len(public_subnets) if public_subnets else 0}, Private: {len(private_subnets) if private_subnets else 0}")
+      
+      # For load balancer: use only the first public subnet to avoid multi-AZ LB issues
+      # For instances: use all private subnets for better distribution
+      elb_subnets = public_subnets[0]  # Single AZ for load balancer
+      app_subnets = ",".join(private_subnets)  # Multi-AZ for instances if available
+      
+      # Set availability zones based on instance subnets, not LB subnets
+      num_azs = len(private_subnets)
+      availability_zones = f"Any {num_azs}" if num_azs > 1 else "Any 1"
 
-    subnet_settings = [
-      aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
-        namespace="aws:ec2:vpc",
-        name="VPCId",
-        value=self.vpc_id
-      ),
-      aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
-        namespace="aws:ec2:vpc",
-        name="Subnets",
-        value=app_subnet
-      ),
-      aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
-        namespace="aws:ec2:vpc",
-        name="ELBSubnets",
-        value=elb_subnet
+      subnet_settings = [
+        aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
+          namespace="aws:ec2:vpc",
+          name="VPCId",
+          value=vpc_id
+        ),
+        aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
+          namespace="aws:ec2:vpc",
+          name="Subnets",
+          value=app_subnets
+        ),
+        aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
+          namespace="aws:ec2:vpc",
+          name="ELBSubnets",
+          value=elb_subnets
+        )
+      ]
+
+      other_settings = [
+        aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
+          namespace="aws:ec2:vpc",
+          name="AssociatePublicIpAddress",
+          value="false"
+        ),
+        aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
+          namespace="aws:elasticbeanstalk:environment",
+          name="LoadBalancerType",
+          value="classic"  # Use Classic LB for single-AZ deployment
+        ),
+        aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
+          namespace="aws:autoscaling:asg",
+          name="MinSize",
+          value="2"
+        ),
+        aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
+          namespace="aws:autoscaling:asg",
+          name="MaxSize",
+          value="10"
+        ),
+        aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
+          namespace="aws:autoscaling:asg",
+          name="Availability Zones",
+          value=availability_zones
+        ),
+        aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
+          namespace="aws:autoscaling:trigger",
+          name="MeasureName",
+          value="CPUUtilization"
+        ),
+        aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
+          namespace="aws:autoscaling:trigger",
+          name="Statistic",
+          value="Average"
+        ),
+        aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
+          namespace="aws:autoscaling:trigger",
+          name="Unit",
+          value="Percent"
+        ),
+        aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
+          namespace="aws:autoscaling:trigger",
+          name="LowerThreshold",
+          value="20"
+        ),
+        aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
+          namespace="aws:autoscaling:trigger",
+          name="UpperThreshold",
+          value="70"
+        ),
+        aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
+          namespace="aws:autoscaling:trigger",
+          name="Period",
+          value="5"
+        ),
+        aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
+          namespace="aws:autoscaling:trigger",
+          name="EvaluationPeriods",
+          value="1"
+        ),
+        aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
+          namespace="aws:autoscaling:launchconfiguration",
+          name="InstanceType",
+          value="t3.medium"
+        ),
+        aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
+          namespace="aws:autoscaling:launchconfiguration",
+          name="IamInstanceProfile",
+          value=instance_profile_name
+        ),
+        aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
+          namespace="aws:autoscaling:launchconfiguration",
+          name="RootVolumeType",
+          value="gp3"
+        ),
+        aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
+          namespace="aws:autoscaling:launchconfiguration",
+          name="RootVolumeSize",
+          value="20"
+        ),
+        aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
+          namespace="aws:elasticbeanstalk:healthreporting:system",
+          name="SystemType",
+          value="enhanced"
+        ),
+        aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
+          namespace="aws:elasticbeanstalk:healthreporting:system",
+          name="HealthCheckSuccessThreshold",
+          value="Ok"
+        ),
+        aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
+          namespace="aws:elasticbeanstalk:command",
+          name="DeploymentPolicy",
+          value="RollingWithAdditionalBatch"
+        ),
+        aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
+          namespace="aws:elasticbeanstalk:command",
+          name="BatchSizeType",
+          value="Fixed"
+        ),
+        aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
+          namespace="aws:elasticbeanstalk:command",
+          name="BatchSize",
+          value="2"
+        ),
+        aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
+          namespace="aws:autoscaling:updatepolicy:rollingupdate",
+          name="RollingUpdateEnabled",
+          value="true"
+        ),
+        aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
+          namespace="aws:autoscaling:updatepolicy:rollingupdate",
+          name="MaxBatchSize",
+          value="2"
+        ),
+        aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
+          namespace="aws:autoscaling:updatepolicy:rollingupdate",
+          name="MinInstancesInService",
+          value="1"
+        ),
+        aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
+          namespace="aws:autoscaling:updatepolicy:rollingupdate",
+          name="RollingUpdateType",
+          value="Health"
+        ),
+        aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
+          namespace="aws:elasticbeanstalk:environment",
+          name="ServiceRole",
+          value=service_role_arn
+        ),
+        aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
+          namespace="aws:elasticbeanstalk:application:environment",
+          name="NODE_ENV",
+          value="production"
+        ),
+        aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
+          namespace="aws:elasticbeanstalk:application:environment",
+          name="ENVIRONMENT",
+          value=self.environment
+        ),
+        aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
+          namespace="aws:elasticbeanstalk:application:environment",
+          name="REGION",
+          value=self.region
+        ),
+        aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
+          namespace="aws:elasticbeanstalk:cloudwatch:logs",
+          name="StreamLogs",
+          value="true"
+        ),
+        aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
+          namespace="aws:elasticbeanstalk:cloudwatch:logs",
+          name="DeleteOnTerminate",
+          value="false"
+        ),
+        aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
+          namespace="aws:elasticbeanstalk:cloudwatch:logs",
+          name="RetentionInDays",
+          value="30"
+        ),
+      ]
+
+      return aws.elasticbeanstalk.ConfigurationTemplate(
+        f"eb-config-template-{self.region_suffix}",
+        name=f"nova-config-{self.region_suffix}",
+        application=self.application.name,
+        solution_stack_name="64bit Amazon Linux 2023 v6.6.2 running Node.js 18",
+        settings=subnet_settings + other_settings,
+        opts=ResourceOptions(parent=self)
       )
-    ]
 
-    other_settings = [
-      aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
-        namespace="aws:ec2:vpc",
-        name="AssociatePublicIpAddress",
-        value="false"
-      ),
-      aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
-        namespace="aws:autoscaling:asg",
-        name="MinSize",
-        value="2"
-      ),
-      aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
-        namespace="aws:autoscaling:asg",
-        name="MaxSize",
-        value="10"
-      ),
-      aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
-        namespace="aws:autoscaling:asg",
-        name="Availability Zones",
-        value="Any 1"
-      ),
-      aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
-        namespace="aws:autoscaling:trigger",
-        name="MeasureName",
-        value="CPUUtilization"
-      ),
-      aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
-        namespace="aws:autoscaling:trigger",
-        name="Statistic",
-        value="Average"
-      ),
-      aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
-        namespace="aws:autoscaling:trigger",
-        name="Unit",
-        value="Percent"
-      ),
-      aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
-        namespace="aws:autoscaling:trigger",
-        name="LowerThreshold",
-        value="20"
-      ),
-      aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
-        namespace="aws:autoscaling:trigger",
-        name="UpperThreshold",
-        value="70"
-      ),
-      aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
-        namespace="aws:autoscaling:trigger",
-        name="Period",
-        value="5"
-      ),
-      aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
-        namespace="aws:autoscaling:trigger",
-        name="EvaluationPeriods",
-        value="1"
-      ),
-      aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
-        namespace="aws:autoscaling:launchconfiguration",
-        name="InstanceType",
-        value="t3.medium"
-      ),
-      aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
-        namespace="aws:autoscaling:launchconfiguration",
-        name="IamInstanceProfile",
-        value=self.eb_instance_profile_name
-      ),
-      aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
-        namespace="aws:autoscaling:launchconfiguration",
-        name="RootVolumeType",
-        value="gp3"
-      ),
-      aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
-        namespace="aws:autoscaling:launchconfiguration",
-        name="RootVolumeSize",
-        value="20"
-      ),
-      aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
-        namespace="aws:elasticbeanstalk:healthreporting:system",
-        name="SystemType",
-        value="enhanced"
-      ),
-      aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
-        namespace="aws:elasticbeanstalk:healthreporting:system",
-        name="HealthCheckSuccessThreshold",
-        value="Ok"
-      ),
-      aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
-        namespace="aws:elasticbeanstalk:command",
-        name="DeploymentPolicy",
-        value="RollingWithAdditionalBatch"
-      ),
-      aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
-        namespace="aws:elasticbeanstalk:command",
-        name="BatchSizeType",
-        value="Fixed"
-      ),
-      aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
-        namespace="aws:elasticbeanstalk:command",
-        name="BatchSize",
-        value="2"
-      ),
-      aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
-        namespace="aws:autoscaling:updatepolicy:rollingupdate",
-        name="RollingUpdateEnabled",
-        value="true"
-      ),
-      aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
-        namespace="aws:autoscaling:updatepolicy:rollingupdate",
-        name="MaxBatchSize",
-        value="2"
-      ),
-      aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
-        namespace="aws:autoscaling:updatepolicy:rollingupdate",
-        name="MinInstancesInService",
-        value="1"
-      ),
-      aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
-        namespace="aws:autoscaling:updatepolicy:rollingupdate",
-        name="RollingUpdateType",
-        value="Health"
-      ),
-      aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
-        namespace="aws:elasticbeanstalk:environment",
-        name="ServiceRole",
-        value=self.eb_service_role_arn
-      ),
-      aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
-        namespace="aws:elasticbeanstalk:application:environment",
-        name="NODE_ENV",
-        value="production"
-      ),
-      aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
-        namespace="aws:elasticbeanstalk:application:environment",
-        name="ENVIRONMENT",
-        value=self.environment
-      ),
-      aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
-        namespace="aws:elasticbeanstalk:application:environment",
-        name="REGION",
-        value=self.region
-      ),
-      aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
-        namespace="aws:elasticbeanstalk:cloudwatch:logs",
-        name="StreamLogs",
-        value="true"
-      ),
-      aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
-        namespace="aws:elasticbeanstalk:cloudwatch:logs",
-        name="DeleteOnTerminate",
-        value="false"
-      ),
-      aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
-        namespace="aws:elasticbeanstalk:cloudwatch:logs",
-        name="RetentionInDays",
-        value="30"
-      ),
-    ]
-
-    self.config_template = aws.elasticbeanstalk.ConfigurationTemplate(
-      f"eb-config-template-{self.region_suffix}",
-      name=f"nova-config-{self.region_suffix}",
-      application=self.application.name,
-      solution_stack_name="64bit Amazon Linux 2023 v6.6.2 running Node.js 18",
-      settings=subnet_settings + other_settings,
-      opts=ResourceOptions(parent=self)
-    )
+    # Resolve all outputs and create the configuration template
+    self.config_template = Output.all(
+      self.vpc_id,
+      self.public_subnet_ids,
+      self.private_subnet_ids,
+      self.eb_service_role_arn,
+      self.eb_instance_profile_name
+    ).apply(create_config_template)
 
   def _create_environment(self):
     self.eb_environment = aws.elasticbeanstalk.Environment(
