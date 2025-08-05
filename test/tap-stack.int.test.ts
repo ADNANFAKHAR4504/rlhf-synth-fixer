@@ -332,6 +332,7 @@ describe('TapStack Serverless Infrastructure Integration Tests', () => {
       console.log(`✅ Lambda function configuration verified: ${functionName}`);
     });
   });
+
   describe('HTTP API Gateway Infrastructure', () => {
     test('should exist and be properly configured', async () => {
       const apiUrl = outputs.HttpApiUrl;
