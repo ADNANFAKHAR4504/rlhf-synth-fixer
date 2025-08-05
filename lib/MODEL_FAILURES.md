@@ -51,7 +51,7 @@
 
 ### ❌ **Issue: Outdated Python Runtime**
 - **Model Response**: Uses `python3.8` runtime
-- **Ideal Response**: Uses `python3.9` runtime
+- **Ideal Response**: Uses `python3.13` runtime
 - **Impact**: Missing performance improvements and security updates
 
 ### ❌ **Issue: Insufficient Memory Allocation**

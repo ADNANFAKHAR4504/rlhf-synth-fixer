@@ -87,7 +87,7 @@
         "FunctionName": {
           "Fn::Sub": "TapFunction-${EnvironmentSuffix}"
         },
-        "Runtime": "python3.8",
+        "Runtime": "python3.13",
         "Handler": "index.lambda_handler",
         "Role": {
           "Fn::GetAtt": [

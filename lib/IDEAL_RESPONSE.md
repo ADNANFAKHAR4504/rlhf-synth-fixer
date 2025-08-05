@@ -20,7 +20,7 @@ Globals:
   Function:
     Timeout: 30
     MemorySize: 128
-    Runtime: python3.9
+    Runtime: python3.13
     Tracing: Active
     Environment:
       Variables:
@@ -169,7 +169,7 @@ Resources:
     DependsOn: LambdaInvokePermissionS3
     Properties:
       FunctionName: !Sub "${ProjectName}-function-${EnvironmentSuffix}"
-      Runtime: python3.9
+      Runtime: python3.13
       Handler: index.lambda_handler
       Role: !GetAtt LambdaExecutionRole.Arn
       Timeout: 30

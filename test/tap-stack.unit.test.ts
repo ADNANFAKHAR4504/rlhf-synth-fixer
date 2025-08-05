@@ -94,7 +94,7 @@ describe('TapStack CloudFormation Template', () => {
       );
     });    test('TapFunction should have correct runtime and handler', () => {
       const lambda = template.Resources.TapFunction;
-      expect(lambda.Properties.Runtime).toBe('python3.8');
+      expect(lambda.Properties.Runtime).toBe('python3.13');
       expect(lambda.Properties.Handler).toBe('index.lambda_handler');
       expect(lambda.Properties.Timeout).toBe(30);
       expect(lambda.Properties.MemorySize).toBe(128);

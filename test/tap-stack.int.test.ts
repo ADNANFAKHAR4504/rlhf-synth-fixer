@@ -226,7 +226,7 @@ describe('TapStack Serverless Infrastructure Integration Tests', () => {
       }));
 
       expect(response.Configuration?.FunctionName).toBe(functionName);
-      expect(response.Configuration?.Runtime).toBe('python3.8');
+      expect(response.Configuration?.Runtime).toBe('python3.13');
       expect(response.Configuration?.Handler).toBe('index.lambda_handler');
       expect(response.Configuration?.State).toBe('Active');
       console.log(`✅ Lambda function verified: ${functionName}`);
@@ -325,7 +325,7 @@ describe('TapStack Serverless Infrastructure Integration Tests', () => {
       }));
 
       expect(response.FunctionName).toBe(functionName);
-      expect(response.Runtime).toBe('python3.8');
+      expect(response.Runtime).toBe('python3.13');
       expect(response.Handler).toBe('index.lambda_handler');
       expect(response.Timeout).toBe(30);
       expect(response.MemorySize).toBe(128);
