@@ -61,7 +61,7 @@ class TestTapStackIntegration(unittest.TestCase):
         "AWS::EC2::NatGateway": 2,
         "AWS::S3::Bucket": 2,   # data + logs
         "AWS::EC2::SecurityGroup": 1,
-        "AWS::IAM::Role": 2,    # EC2 role + VPC flow log role
+        "AWS::IAM::Role": 3,    # EC2 role + VPC flow log role + CloudTrail log role
         "AWS::IAM::Policy": 4,  # 3 EC2 policies + 1 VPC flow log policy
         # Main + launch template profile + additional profile
         "AWS::IAM::InstanceProfile": 3,
