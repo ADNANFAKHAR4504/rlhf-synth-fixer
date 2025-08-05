@@ -367,40 +367,13 @@ jobs:
             # Check for and handle state locks
             echo "Checking for state locks..."
             
-            # First, try to get current state info
-            STATE_INFO=$(terraform show 2>&1 || true)
-            
-            if echo "$STATE_INFO" | grep -q "Lock Info"; then
-              echo "State lock detected, attempting to force unlock..."
-              
-              # Try multiple methods to get the lock ID
-              LOCK_ID=""
-              
-              # Method 1: Try to get lock ID from terraform plan output
-              PLAN_OUTPUT=$(terraform plan 2>&1 || true)
-              LOCK_ID=$(echo "$PLAN_OUTPUT" | grep "ID:" | awk '{print $2}' | head -1)
-              
-              # Method 2: If plan didn't work, try to extract from state info
-              if [ -z "$LOCK_ID" ]; then
-                LOCK_ID=$(echo "$STATE_INFO" | grep "ID:" | awk '{print $2}' | head -1)
-              fi
-              
-              # Method 3: Try to get lock info directly
-              if [ -z "$LOCK_ID" ]; then
-                LOCK_INFO=$(terraform force-unlock -help 2>&1 || true)
-                echo "Lock info: $LOCK_INFO"
-              fi
-              
-              if [ -n "$LOCK_ID" ]; then
-                echo "Found lock ID: $LOCK_ID, attempting to force unlock..."
-                terraform force-unlock -force "$LOCK_ID" || echo "Force unlock failed, continuing..."
-              else
-                echo "Could not extract lock ID, attempting to clear any existing locks..."
-                # Try to force unlock with a common pattern
-                terraform force-unlock -force "terraform-lock" || echo "Force unlock failed, continuing..."
-              fi
+            # Check if there is a state lock
+            if terraform show 2>&1 | grep -q "Lock Info"; then
+              LOCK_ID=$(terraform plan 2>&1 | grep "ID:" | awk '{print $2}')
+              echo "Lock ID is $LOCK_ID"
+              terraform force-unlock -force $LOCK_ID
             else
-              echo "No state lock detected in current state"
+              echo "No remote lock to clear"
             fi
             
             # Additional check: try to run a simple terraform command to see if there are any lock issues
