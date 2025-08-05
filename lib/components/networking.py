@@ -112,7 +112,11 @@ class NetworkingInfrastructure(pulumi.ComponentResource):
         f"nat-eip-{i}-{self.region_suffix}",
         domain="vpc",
         tags={**self.tags, "Name": f"nova-nat-eip-{i}-{self.region_suffix}"},
-        opts=ResourceOptions(parent=self, provider=self.provider)
+        opts=ResourceOptions(
+          parent=self,
+          provider=self.provider,
+          delete_before_replace=True  
+        )
       )
 
       nat_gw = aws.ec2.NatGateway(
@@ -120,7 +124,11 @@ class NetworkingInfrastructure(pulumi.ComponentResource):
         allocation_id=eip.id,
         subnet_id=public_subnet.id,
         tags={**self.tags, "Name": f"nova-nat-gw-{i}-{self.region_suffix}"},
-        opts=ResourceOptions(parent=self, provider=self.provider)
+        opts=ResourceOptions(
+          parent=self,
+          provider=self.provider,
+          delete_before_replace=True
+        )
       )
       self.nat_gateways.append(nat_gw)
 

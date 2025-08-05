@@ -67,7 +67,7 @@ class ElasticBeanstalkInfrastructure(pulumi.ComponentResource):
       f"eb-config-template-{self.region_suffix}",
       name=f"nova-config-{self.region_suffix}",
       application=self.application.name,
-      solution_stack_name="64bit Amazon Linux 2 v5.8.0 running Node.js 18",
+      solution_stack_name="64bit Amazon Linux 2023 v6.6.2 running Node.js 18",
       settings=[
         aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
           namespace="aws:ec2:vpc",
