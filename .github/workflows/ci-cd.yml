@@ -181,16 +181,16 @@ jobs:
         uses: hashicorp/setup-terraform@v3
 
       - name: Clean Terraform directory
-        run: |
-         cd bin && rm -rf .terraform .terraform.lock.hcl tfplan \ 
-         terraform force-unlock 50373a6f-621c-f0fa-57cd-727d6111a1cf
+        run: cd bin && rm -rf .terraform .terraform.lock.hcl tfplan 
+         
 
       - name: Initialize Terraform
         run: |
           export TF_INIT_OPTS="-backend-config=bucket=${{ env.TERRAFORM_STATE_BUCKET }} \
               -backend-config=key=${{ env.ENVIRONMENT_SUFFIX }}/terraform.tfstate \
               -backend-config=region=${{ env.TERRAFORM_STATE_BUCKET_REGION }}"
-          npm run tf:init -lock=false -upgrade
+          npm run tf:init -reconfigure  -lock=false -upgrade \
+          terraform force-unlock 50373a6f-621c-f0fa-57cd-727d6111a1cf
         shell: bash
 
       - name: Upload build artifacts
