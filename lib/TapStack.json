@@ -8,8 +8,23 @@
             "Description": "Environment name for resource tagging"
         },
         "KeyPairName": {
-            "Type": "AWS::EC2::KeyPair::KeyName",
-            "Description": "Name of an existing EC2 KeyPair to enable SSH access to instances"
+            "Type": "String",
+            "Default": "",
+            "Description": "Name of an existing EC2 KeyPair to enable SSH access to instances (leave empty to disable SSH access)"
+        }
+    },
+    "Conditions": {
+        "HasKeyPair": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "KeyPairName"
+                        },
+                        ""
+                    ]
+                }
+            ]
         }
     },
     "Resources": {
@@ -600,7 +615,15 @@
                     "ImageId": "ami-0c02fb55956c7d316",
                     "InstanceType": "t3.micro",
                     "KeyName": {
-                        "Ref": "KeyPairName"
+                        "Fn::If": [
+                            "HasKeyPair",
+                            {
+                                "Ref": "KeyPairName"
+                            },
+                            {
+                                "Ref": "AWS::NoValue"
+                            }
+                        ]
                     },
                     "IamInstanceProfile": {
                         "Arn": {
