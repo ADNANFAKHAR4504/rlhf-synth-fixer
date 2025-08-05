@@ -228,17 +228,6 @@ class TapStack(Stack):
       ]
     )
 
-    # Custom policy for S3 access (least privilege)
-    s3_policy = iam.PolicyStatement(
-      effect=iam.Effect.ALLOW,
-      actions=[
-        "s3:GetObject",
-        "s3:PutObject",
-        "s3:DeleteObject"
-      ],
-      resources=[f"arn:aws:s3:::{self.s3_bucket.bucket_name}/*"]
-    )
-
     # Custom policy for KMS access
     kms_policy = iam.PolicyStatement(
       effect=iam.Effect.ALLOW,
@@ -249,7 +238,6 @@ class TapStack(Stack):
       resources=[self.kms_key.key_arn]
     )
 
-    self.ec2_role.add_to_policy(s3_policy)
     self.ec2_role.add_to_policy(kms_policy)
 
     # Instance Profile
@@ -336,6 +324,18 @@ class TapStack(Stack):
     )
 
     self.s3_bucket.add_to_resource_policy(bucket_policy)
+
+    # Add S3 access policy to EC2 role (after bucket is created)
+    s3_policy = iam.PolicyStatement(
+      effect=iam.Effect.ALLOW,
+      actions=[
+        "s3:GetObject",
+        "s3:PutObject",
+        "s3:DeleteObject"
+      ],
+      resources=[f"{self.s3_bucket.bucket_arn}/*"]
+    )
+    self.ec2_role.add_to_policy(s3_policy)
 
   def _create_ec2_instances(self):
     """Create EC2 instances in private subnets across different AZs"""
