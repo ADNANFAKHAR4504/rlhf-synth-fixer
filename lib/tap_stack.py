@@ -90,16 +90,18 @@ class TapStack(pulumi.ComponentResource):
     # --------------------------------------------------------
     user_name = f"secure-web-app-user-{env}"
 
+
     try:
       existing_user = aws.iam.get_user_output(user_name=user_name)
       user = aws.iam.User.get(f"existing-user-{env}", id=user_name)
-    except Exception:
+    except:
       user = aws.iam.User(
         f"web-app-user-{env}",
         name=user_name,
         path="/applications/",
         tags={**tags, "Application": "secure-web-app"}
       )
+
 
     def rotation_policy(days: int) -> str:
       return json.dumps({
