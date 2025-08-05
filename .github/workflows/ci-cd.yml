@@ -137,9 +137,6 @@ jobs:
           fi
           echo "✅ Pipenv version is correct: $PIPENV_VERSION"
 
-      # - name: Set up Terraform
-      #   uses: hashicorp/setup-terraform@v3
-
   build:
     name: Build
     runs-on: ubuntu-24.04
@@ -180,6 +177,8 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
 
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
 
       - name: Clean Terraform directory
         run: cd bin && rm -rf .terraform .terraform.lock.hcl tfplan
@@ -308,6 +307,9 @@ jobs:
 
       # Debuging Terraform Output - Start
 
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+
       - name: Bootstrap
         run: |
           PLATFORM="${{ needs.synth.outputs.platform }}"
@@ -327,10 +329,11 @@ jobs:
 
           elif [ "$PLATFORM" = "tf" ]; then
             echo "✅ Terraform project detected, setting up environment..."
-            npm run tf:plan \
-              -backend-config=bucket=${{ env.TERRAFORM_STATE_BUCKET }} \
-              -backend-config=key=${{ env.ENVIRONMENT_SUFFIX }}/terraform.tfstate \
-              -backend-config=region=${{ env.TERRAFORM_STATE_BUCKET_REGION }}
+            npm run tf:plan
+            #  \
+            #   -backend-config=bucket=${{ env.TERRAFORM_STATE_BUCKET }} \
+            #   -backend-config=key=${{ env.ENVIRONMENT_SUFFIX }}/terraform.tfstate \
+            #   -backend-config=region=${{ env.TERRAFORM_STATE_BUCKET_REGION }}
             echo "✅ Terraform Plan completed"
 
           else
@@ -357,10 +360,11 @@ jobs:
             npm run cdktf:deploy
           elif [ "$PLATFORM" = "tf" ]; then
             echo "✅ Terraform HCL project detected, running Terraform deploy..."
-            npm run tf:deploy \
-              -backend-config=bucket=${{ env.TERRAFORM_STATE_BUCKET }} \
-              -backend-config=key=${{ env.ENVIRONMENT_SUFFIX }}/terraform.tfstate \
-              -backend-config=region=${{ env.TERRAFORM_STATE_BUCKET_REGION }}
+            npm run tf:deploy 
+              # \
+              # -backend-config=bucket=${{ env.TERRAFORM_STATE_BUCKET }} \
+              # -backend-config=key=${{ env.ENVIRONMENT_SUFFIX }}/terraform.tfstate \
+              # -backend-config=region=${{ env.TERRAFORM_STATE_BUCKET_REGION }}
           elif [ "$PLATFORM" = "cfn" ] && [ "$LANGUAGE" = "yaml" ]; then
             echo "✅ CloudFormation YAML project detected, deploying with AWS CLI..."
             npm run cfn:deploy-yaml
