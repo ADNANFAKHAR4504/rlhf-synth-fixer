@@ -383,3 +383,4 @@ describe('Secure Infrastructure CloudFormation Template', () => {
     });
   });
 });
+// This test suite validates the structure and content of the TapStack CloudFormation template
