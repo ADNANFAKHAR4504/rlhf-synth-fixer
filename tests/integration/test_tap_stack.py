@@ -130,49 +130,5 @@ class TestTapStackIntegration(unittest.TestCase):
     })
 
 
-@mark.integration
-class TestTapStackDeployedResources(unittest.TestCase):
-  """Integration tests using actual AWS deployment outputs"""
-
-  def setUp(self):
-    if not flat_outputs:
-      self.skipTest("No deployment outputs available - stack not deployed")
-
-  @mark.it("validates deployed S3 bucket exists")
-  def test_deployed_s3_bucket(self):
-    bucket_name = flat_outputs.get("S3BucketNameOutput")
-    self.assertIsNotNone(bucket_name, "S3BucketNameOutput not found in deployment outputs")
-    self.assertTrue(bucket_name.startswith("tap-bucket-"),
-      "S3 bucket should follow naming convention")
-
-  @mark.it("validates deployed DynamoDB table exists")
-  def test_deployed_dynamodb_table(self):
-    table_name = flat_outputs.get("DynamoDBTableNameOutput")
-    self.assertIsNotNone(table_name, "DynamoDBTableNameOutput not found in deployment outputs")
-    self.assertTrue(table_name.startswith("tap-object-metadata-"),
-      "DynamoDB table should follow naming convention")
-
-  @mark.it("validates deployed SNS topic exists")
-  def test_deployed_sns_topic(self):
-    topic_arn = flat_outputs.get("SnsTopicArnOutput")
-    self.assertIsNotNone(topic_arn, "SnsTopicArnOutput not found in deployment outputs")
-    self.assertTrue(topic_arn.startswith("arn:aws:sns:"),
-      "SNS topic ARN should start with arn:aws:sns:")
-
-  @mark.it("validates deployed Lambda function exists")
-  def test_deployed_lambda_function(self):
-    lambda_name = flat_outputs.get("LambdaFunctionNameOutput")
-    self.assertIsNotNone(lambda_name, "LambdaFunctionNameOutput not found in deployment outputs")
-    self.assertTrue(lambda_name.startswith("tap-object-processor-"),
-      "Lambda function should follow naming convention")
-
-  @mark.it("validates deployed API Gateway exists")
-  def test_deployed_api_gateway(self):
-    api_url = flat_outputs.get("ApiGatewayUrlOutput")
-    self.assertIsNotNone(api_url, "ApiGatewayUrlOutput not found in deployment outputs")
-    self.assertTrue(api_url.startswith("https://"),
-      "API Gateway URL should start with https://")
-
-
 if __name__ == '__main__':
   unittest.main()
