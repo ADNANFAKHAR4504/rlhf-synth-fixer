@@ -74,12 +74,11 @@ Resources:
             Value: !ImportValue
               Fn::Sub: "TapStack${EnvironmentSuffix}-TableName"
           - !Ref "AWS::NoValue"
-        - !If
-          - IsWest2
-          - Key: "CapacityConfig"
-            Value: "Read:10,Write:10"
-          - Key: "CapacityConfig"
-            Value: "Read:5,Write:5"
+        - Key: "CapacityConfig"
+          Value: !If
+            - IsWest2
+            - "Read:10,Write:10"
+            - "Read:5,Write:5"
       # Enable point-in-time recovery
       PointInTimeRecoverySpecification:
         PointInTimeRecoveryEnabled: true

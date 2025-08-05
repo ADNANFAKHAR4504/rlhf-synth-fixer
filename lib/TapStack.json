@@ -185,17 +185,14 @@
                         ]
                     },
                     {
-                        "Fn::If": [
-                            "IsWest2",
-                            {
-                                "Key": "CapacityConfig",
-                                "Value": "Read:10,Write:10"
-                            },
-                            {
-                                "Key": "CapacityConfig",
-                                "Value": "Read:5,Write:5"
-                            }
-                        ]
+                        "Key": "CapacityConfig",
+                        "Value": {
+                            "Fn::If": [
+                                "IsWest2",
+                                "Read:10,Write:10",
+                                "Read:5,Write:5"
+                            ]
+                        }
                     }
                 ],
                 "PointInTimeRecoverySpecification": {
