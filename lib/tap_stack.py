@@ -18,6 +18,7 @@ from aws_cdk import (
     aws_iam as iam,
     aws_logs as logs,
     aws_cloudwatch as cloudwatch,
+    aws_cloudtrail as cloudtrail,
     Duration,
     RemovalPolicy,
     CfnOutput,
@@ -631,25 +632,29 @@ class TapStack(cdk.Stack):
       removal_policy=RemovalPolicy.DESTROY
     )
 
-    # S3 bucket for CloudTrail logs
-    trail_bucket = s3.Bucket(
-      self, "CloudTrailBucket",
-      bucket_name=f"secureapp-cloudtrail-{self.account}-{self.region}",
-      encryption=s3.BucketEncryption.KMS,
-      encryption_key=self.kms_key,
-      block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
-      versioned=True,
-      server_access_logs_bucket=self.s3_buckets["logs_bucket"],
-      server_access_logs_prefix="cloudtrail-access-logs/",
-      removal_policy=RemovalPolicy.DESTROY
-    )
+    # Use existing S3 bucket created earlier
+    trail_bucket = self.s3_buckets["logs_bucket"]
+
+    # Add bucket policy to allow CloudTrail to write logs (without replacing bucket)
+    trail_bucket.add_to_resource_policy(iam.PolicyStatement(
+      effect=iam.Effect.ALLOW,
+      principals=[iam.ServicePrincipal("cloudtrail.amazonaws.com")],
+      actions=["s3:GetBucketAcl", "s3:PutObject"],
+      resources=[
+          trail_bucket.bucket_arn,
+          f"{trail_bucket.bucket_arn}/AWSLogs/{self.account}/*"
+      ],
+      conditions={"StringEquals": {"s3:x-amz-acl": "bucket-owner-full-control"}}
+    ))
 
     # Create CloudTrail
-    trail = cloudwatch.CfnTrail(
+    trail = cloudtrail.CfnTrail(
       self, "SecureAppTrail",
       trail_name="secureapp-trail",
       s3_bucket_name=trail_bucket.bucket_name,
-      cloud_watch_logs_log_group_arn=trail_log_group.log_group_arn,
+      cloud_watch_logs_log_group_arn=cdk.Fn.sub(
+          "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/secureapp/cloudtrail"
+      ),
       cloud_watch_logs_role_arn=self._create_cloudtrail_log_role().role_arn,
       is_logging=True,
       is_multi_region_trail=True,
@@ -671,6 +676,7 @@ class TapStack(cdk.Stack):
     role.add_to_policy(iam.PolicyStatement(
       effect=iam.Effect.ALLOW,
       actions=[
+        "logs:CreateLogGroup",
         "logs:CreateLogStream",
         "logs:PutLogEvents"
       ],
