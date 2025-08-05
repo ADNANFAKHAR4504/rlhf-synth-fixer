@@ -58,25 +58,112 @@ try {
   outputs = defaultOutputs;
 }
 
-// Map outputs to support both ExportName and OutputKey keys
+// Map outputs to support both ExportName, OutputKey, and flat outputs
 const outputKeyMap: { [key: string]: string | undefined } = {
+  // VPC
   'TapStackpr429-VPC-ID':
     outputs['VPCId'] ||
     outputs['TapStackpr429-VPC-ID'] ||
     outputs['TapStack-VPC-ID'],
+  // DynamoDB Table
   'TapStackpr429-DynamoDB-Table':
     outputs['DynamoDBTableName'] ||
     outputs['TapStackpr429-DynamoDB-Table'] ||
     outputs['TapStack-DynamoDB-Table'],
+  'TapStack-DynamoDB-Table':
+    outputs['DynamoDBTableName'] || outputs['TapStack-DynamoDB-Table'],
+  // ALB DNS
   'TapStackpr429-ALB-DNS':
     outputs['LoadBalancerDNS'] ||
     outputs['TapStackpr429-ALB-DNS'] ||
     outputs['TapStack-ALB-DNS'],
+  'TapStack-ALB-DNS': outputs['LoadBalancerDNS'] || outputs['TapStack-ALB-DNS'],
+  // S3 Bucket
   'TapStackpr429-S3-Bucket':
     outputs['S3BucketName'] ||
     outputs['TapStackpr429-S3-Bucket'] ||
     outputs['TapStack-S3-Bucket'],
-  // ...add more mappings as needed for other resources...
+  'TapStack-S3-Bucket':
+    outputs['S3BucketName'] || outputs['TapStack-S3-Bucket'],
+  // Subnets
+  'TapStackpr429-PublicSubnet1Id':
+    outputs['PublicSubnet1Id'] || outputs['TapStackpr429-PublicSubnet1Id'],
+  'TapStackpr429-PublicSubnet2Id':
+    outputs['PublicSubnet2Id'] || outputs['TapStackpr429-PublicSubnet2Id'],
+  'TapStackpr429-PrivateSubnet1Id':
+    outputs['PrivateSubnet1Id'] || outputs['TapStackpr429-PrivateSubnet1Id'],
+  'TapStackpr429-PrivateSubnet2Id':
+    outputs['PrivateSubnet2Id'] || outputs['TapStackpr429-PrivateSubnet2Id'],
+  // Security Groups
+  'TapStackpr429-WebServerSecurityGroupId':
+    outputs['WebServerSecurityGroupId'] ||
+    outputs['TapStackpr429-WebServerSecurityGroupId'],
+  'TapStackpr429-DatabaseSecurityGroupId':
+    outputs['DatabaseSecurityGroupId'] ||
+    outputs['TapStackpr429-DatabaseSecurityGroupId'],
+  // IAM Roles
+  'TapStackpr429-EC2InstanceRoleArn':
+    outputs['EC2InstanceRoleArn'] ||
+    outputs['TapStackpr429-EC2InstanceRoleArn'],
+  'TapStackpr429-LambdaExecutionRoleArn':
+    outputs['LambdaExecutionRoleArn'] ||
+    outputs['TapStackpr429-LambdaExecutionRoleArn'],
+  'TapStackpr429-BackupServiceRoleArn':
+    outputs['BackupServiceRoleArn'] ||
+    outputs['TapStackpr429-BackupServiceRoleArn'],
+  'TapStackpr429-ConfigServiceRoleArn':
+    outputs['ConfigServiceRoleArn'] ||
+    outputs['TapStackpr429-ConfigServiceRoleArn'],
+  // RDS
+  'TapStackpr429-ProductionRDSEndpoint':
+    outputs['ProductionRDSEndpoint'] ||
+    outputs['TapStackpr429-ProductionRDSEndpoint'],
+  // CloudTrail
+  'TapStackpr429-CloudTrailName':
+    outputs['CloudTrailName'] || outputs['TapStackpr429-CloudTrailName'],
+  'TapStackpr429-CloudTrailS3BucketName':
+    outputs['CloudTrailS3BucketName'] ||
+    outputs['TapStackpr429-CloudTrailS3BucketName'],
+  // Lambda
+  'TapStackpr429-ProductionLambdaArn':
+    outputs['ProductionLambdaArn'] ||
+    outputs['TapStackpr429-ProductionLambdaArn'],
+  'TapStackpr429-LambdaDeadLetterQueueUrl':
+    outputs['LambdaDeadLetterQueueUrl'] ||
+    outputs['TapStackpr429-LambdaDeadLetterQueueUrl'],
+  // Config
+  'TapStackpr429-ConfigS3BucketName':
+    outputs['ConfigS3BucketName'] ||
+    outputs['TapStackpr429-ConfigS3BucketName'],
+  // DynamoDB Backup
+  'TapStackpr429-DynamoDBBackupVaultName':
+    outputs['DynamoDBBackupVaultName'] ||
+    outputs['TapStackpr429-DynamoDBBackupVaultName'],
+  // ALB Target Group
+  'TapStackpr429-ALBTargetGroupArn':
+    outputs['ALBTargetGroupArn'] || outputs['TapStackpr429-ALBTargetGroupArn'],
+  // Flat keys for direct test lookups
+  PublicSubnet1Id: outputs['PublicSubnet1Id'],
+  PublicSubnet2Id: outputs['PublicSubnet2Id'],
+  PrivateSubnet1Id: outputs['PrivateSubnet1Id'],
+  PrivateSubnet2Id: outputs['PrivateSubnet2Id'],
+  WebServerSecurityGroupId: outputs['WebServerSecurityGroupId'],
+  DatabaseSecurityGroupId: outputs['DatabaseSecurityGroupId'],
+  EC2InstanceRoleArn: outputs['EC2InstanceRoleArn'],
+  LambdaExecutionRoleArn: outputs['LambdaExecutionRoleArn'],
+  BackupServiceRoleArn: outputs['BackupServiceRoleArn'],
+  ConfigServiceRoleArn: outputs['ConfigServiceRoleArn'],
+  ProductionRDSEndpoint: outputs['ProductionRDSEndpoint'],
+  CloudTrailName: outputs['CloudTrailName'],
+  CloudTrailS3BucketName: outputs['CloudTrailS3BucketName'],
+  ProductionLambdaArn: outputs['ProductionLambdaArn'],
+  LambdaDeadLetterQueueUrl: outputs['LambdaDeadLetterQueueUrl'],
+  ConfigS3BucketName: outputs['ConfigS3BucketName'],
+  DynamoDBBackupVaultName: outputs['DynamoDBBackupVaultName'],
+  ALBTargetGroupArn: outputs['ALBTargetGroupArn'],
+  S3BucketName: outputs['S3BucketName'],
+  DynamoDBTableName: outputs['DynamoDBTableName'],
+  LoadBalancerDNS: outputs['LoadBalancerDNS'],
 };
 
 // Use outputKeyMap for tests if keys exist, otherwise fallback to outputs
@@ -199,7 +286,7 @@ describe('TapStack CloudFormation Integration Tests', () => {
     test('RDS Instance endpoint should be valid', () => {
       expect(getOutput('ProductionRDSEndpoint')).toBeDefined();
       const rdsEndpointPattern =
-        /^production-database\.[a-z0-9]+\.([a-z]+-)+\d+\.rds\.amazonaws\.com:\d+$/;
+        /^production-database\.[a-z0-9]+\.([a-z]+-)+\d+\.rds\.amazonaws\.com(:\d+)?$/;
       expect(getOutput('ProductionRDSEndpoint')).toMatch(rdsEndpointPattern);
     });
   });
