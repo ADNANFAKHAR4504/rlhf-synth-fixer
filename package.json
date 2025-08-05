@@ -39,7 +39,7 @@
     "tf": "terraform",
     "tf:init": "terraform -chdir=bin init $TF_INIT_OPTS",
     "tf:plan": "cd bin && terraform plan -lock=false -out=tfplan",
-    "tf:deploy": "cd bin && terraform apply -auto-approve -lock=true tfplan",
+    "tf:deploy": "cd bin && terraform apply -auto-approve -lock=true -lock-timeout=300s tfplan",
     "tf:destroy": "cd bin && terraform destroy -auto-approve",
     "tf:refresh": "cd bin && terraform apply -refresh-only",
     "tf:reconfigure": "cd bin && terraform init -reconfigure",

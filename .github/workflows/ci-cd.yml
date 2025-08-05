@@ -181,7 +181,9 @@ jobs:
         uses: hashicorp/setup-terraform@v3
 
       - name: Clean Terraform directory
-        run: cd bin && rm -rf .terraform .terraform.lock.hcl tfplan
+        run: |
+         cd bin && rm -rf .terraform .terraform.lock.hcl tfplan \ 
+         terraform force-unlock 50373a6f-621c-f0fa-57cd-727d6111a1cf
 
       - name: Initialize Terraform
         run: |
