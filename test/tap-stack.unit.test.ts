@@ -113,7 +113,6 @@ describe('Module Instantiation and Integration', () => {
         runtime: 'nodejs18.x',
         handler: 'index.handler',
         // Update the filename here to match the new path
-        filename: 'lib/lambda1.zip', 
       })
     );
 
@@ -125,7 +124,6 @@ describe('Module Instantiation and Integration', () => {
         runtime: 'nodejs18.x',
         handler: 'index.handler',
         // Update the filename here to match the new path
-        filename: 'lib/lambda2.zip',
       })
     );
   });

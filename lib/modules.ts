@@ -27,7 +27,9 @@ export interface LambdaModuleConfig {
   functionName: string;
   runtime: string;
   handler: string;
-  filename: string;
+  filename?: string;
+  s3Bucket?: string;
+  s3Key?: string;
   description?: string;
   timeout?: number;
   memorySize?: number;
@@ -90,20 +92,26 @@ export class LambdaModule extends Construct {
       role: this.executionRole.arn,
       handler: config.handler,
       runtime: config.runtime,
-      filename: config.filename,
-      // Use Fn.filebase64sha256 for sourceCodeHash
-      sourceCodeHash: Fn.filebase64sha256(config.filename),
       description:
         config.description || `Lambda function: ${config.functionName}`,
       timeout: config.timeout || 30,
       memorySize: config.memorySize || 128,
       environment: config.environmentVariables
-        ? {
-            variables: config.environmentVariables,
-          }
+        ? { variables: config.environmentVariables }
         : undefined,
       tags: config.tags,
-      publish: true, // Enable versioning
+      publish: true,
+
+      // Choose based on config
+      ...(config.s3Bucket && config.s3Key
+        ? {
+            s3Bucket: config.s3Bucket,
+            s3Key: config.s3Key,
+          }
+        : {
+            filename: config.filename!,
+            sourceCodeHash: Fn.filebase64sha256(config.filename!),
+          }),
     });
 
     // Create Lambda alias for canary deployments

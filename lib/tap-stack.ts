@@ -16,9 +16,6 @@ import {
   CanaryDeploymentConfig,
   RouteConfig,
 } from './modules';
-import * as fs from 'fs';
-import * as path from 'path';
-import archiver from 'archiver'; // import { MyStack } from './my-stack';
 
 interface TapStackProps {
   environmentSuffix?: string;
@@ -64,51 +61,13 @@ export class TapStack extends TerraformStack {
     const commonTags = createCommonTags(environmentSuffix);
 
     // ? Add your stack instantiations here
-    const inlineLambda1Code = `
-    exports.handler = async (event) => {
-        console.log('Function 1 received event:', JSON.stringify(event, null, 2));
-        
-        return {
-            statusCode: 200,
-            headers: {
-                'Content-Type': 'application/json',
-                'Access-Control-Allow-Origin': '*'
-            },
-            body: JSON.stringify({
-                message: 'Hello from Serverless Function 1!',
-                timestamp: new Date().toISOString(),
-                requestId: event.requestContext?.requestId || 'unknown'
-            })
-        };
-    };
-    `;
-    const inlineLambda2Code = `
-    exports.handler = async (event) => {
-        console.log('Function 2 received event:', JSON.stringify(event, null, 2));
-        
-        return {
-            statusCode: 200,
-            headers: {
-                'Content-Type': 'application/json',
-                'Access-Control-Allow-Origin': '*'
-            },
-            body: JSON.stringify({
-                message: 'Hello from Serverless Function 2!',
-                timestamp: new Date().toISOString(),
-                requestId: event.requestContext?.requestId || 'unknown'
-            })
-        };
-    };
-    `;
-    //  Create zip files synchronously
-    this.createLambdaZipSync('lib/lambda1.zip', inlineLambda1Code);
-    this.createLambdaZipSync('lib/lambda2.zip', inlineLambda2Code);
     // Lambda Function 1 Configuration
     const lambda1Config: LambdaModuleConfig = {
       functionName: 'serverless-function-1',
       runtime: 'nodejs18.x',
       handler: 'index.handler',
-      filename: 'lib/lambda1.zip', // You need to create this zip file
+      s3Bucket: 'bucket-229220',
+      s3Key: 'lambda1.zip',
       description: 'First serverless microservice function',
       timeout: 30,
       memorySize: 256,
@@ -124,7 +83,8 @@ export class TapStack extends TerraformStack {
       functionName: 'serverless-function-2',
       runtime: 'nodejs18.x',
       handler: 'index.handler',
-      filename: 'lib/lambda2.zip', // You need to create this zip file
+      s3Bucket: 'bucket-229220',
+      s3Key: 'lambda2.zip',
       description: 'Second serverless microservice function',
       timeout: 30,
       memorySize: 256,
@@ -253,14 +213,5 @@ export class TapStack extends TerraformStack {
     });
     // ! Do NOT create resources directly in this stack.
     // ! Instead, create separate stacks for each resource type.
-  }
-  private createLambdaZipSync(zipFilePath: string, handlerCode: string): void {
-    const outputPath = path.resolve(zipFilePath);
-    const output = fs.createWriteStream(outputPath);
-    const archive = archiver('zip', { zlib: { level: 9 } });
-
-    archive.pipe(output);
-    archive.append(handlerCode, { name: 'index.js' });
-    archive.finalize();
   }
 }
