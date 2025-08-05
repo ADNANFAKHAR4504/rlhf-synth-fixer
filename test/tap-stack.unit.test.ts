@@ -1,210 +1,121 @@
+/**
+ * test/tap-stack.unit.test.ts
+ *
+ * Jest unit tests for TapStack CloudFormation template
+ * (lib/TapStack.yaml → converted to lib/TapStack.json before running).
+ */
+
 import fs from 'fs';
 import path from 'path';
-
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
 describe('TapStack CloudFormation Template', () => {
   let template: any;
 
+  /* ------------------------------------------------------------------ */
+  /* Load JSON version of the template once for all tests               */
+  /* ------------------------------------------------------------------ */
   beforeAll(() => {
-    // If youre testing a yaml template. run `pipenv run cfn-flip-to-json > lib/TapStack.json`
-    // Otherwise, ensure the template is in JSON format.
     const templatePath = path.join(__dirname, '../lib/TapStack.json');
-    const templateContent = fs.readFileSync(templatePath, 'utf8');
-    template = JSON.parse(templateContent);
+    template = JSON.parse(fs.readFileSync(templatePath, 'utf8'));
   });
 
-  describe('Write Integration TESTS', () => {
-    test('Dont forget!', async () => {
-      expect(false).toBe(true);
+  /* ------------------------------------------------------------------ */
+  /* Basic smoke checks                                                 */
+  /* ------------------------------------------------------------------ */
+  describe('Basic Template Checks', () => {
+    test('description matches template', () => {
+      expect(template.Description).toBe(
+        'Highly available, scalable web application stack'
+      );
+    });
+
+    test('parameters Environment and KeyPairName exist', () => {
+      expect(template.Parameters.Environment).toBeDefined();
+      expect(template.Parameters.KeyPairName).toBeDefined();
     });
   });
 
+  /* ------------------------------------------------------------------ */
+  /* Parameter validation                                               */
+  /* ------------------------------------------------------------------ */
+  describe('Parameters', () => {
+    test('Environment parameter schema', () => {
+      const p = template.Parameters.Environment;
+      expect(p.Type).toBe('String');
+      expect(p.Default).toBe('prod');
+      expect(p.Description).toBe('Environment name');
+    });
+
+    test('KeyPairName parameter schema', () => {
+      const p = template.Parameters.KeyPairName;
+      expect(p.Type).toBe('AWS::EC2::KeyPair::KeyName');
+      expect(p.Description).toBe(
+        'Name of an existing EC2 KeyPair to enable SSH access'
+      );
+    });
+
+    test('template defines exactly two parameters', () => {
+      expect(Object.keys(template.Parameters)).toHaveLength(2);
+    });
+  });
+
+  /* ------------------------------------------------------------------ */
+  /* Presence of critical resources                                     */
+  /* ------------------------------------------------------------------ */
+  describe('Key Resources', () => {
+    [
+      'prod-vpc',
+      'prod-public-subnet-1',
+      'prod-private-subnet-1',
+      'prod-application-load-balancer',
+      'prod-auto-scaling-group',
+      'prod-rds-mysql',
+      'prod-s3-bucket'
+    ].forEach(id =>
+      test(`resource ${id} exists`, () => {
+        expect(template.Resources[id]).toBeDefined();
+      })
+    );
+  });
+
+  /* ------------------------------------------------------------------ */
+  /* Outputs                                                            */
+  /* ------------------------------------------------------------------ */
+  describe('Outputs', () => {
+    const outputKeys = ['LoadBalancerDNS', 'S3BucketName', 'RDSEndpoint'];
+
+    test('template exposes exactly three outputs', () => {
+      expect(Object.keys(template.Outputs)).toHaveLength(3);
+    });
+
+    outputKeys.forEach(key => {
+      test(`output ${key} is defined`, () => {
+        expect(template.Outputs[key]).toBeDefined();
+      });
+
+      test(`export name for ${key} uses literal \${Environment} macro`, () => {
+        const exportName = template.Outputs[key].Export.Name;
+        expect(exportName).toEqual({ 'Fn::Sub': `\${Environment}-${key}` });
+      });
+    });
+  });
+
+  /* ------------------------------------------------------------------ */
+  /* Overall structure                                                  */
+  /* ------------------------------------------------------------------ */
   describe('Template Structure', () => {
-    test('should have valid CloudFormation format version', () => {
+    test('required top-level sections exist', () => {
+      ['AWSTemplateFormatVersion', 'Description', 'Parameters', 'Resources', 'Outputs'].forEach(
+        section => expect(template[section]).toBeDefined()
+      );
+    });
+
+    test('format version is 2010-09-09', () => {
       expect(template.AWSTemplateFormatVersion).toBe('2010-09-09');
     });
 
-    test('should have a description', () => {
-      expect(template.Description).toBeDefined();
-      expect(template.Description).toBe(
-        'TAP Stack - Task Assignment Platform CloudFormation Template'
-      );
-    });
-
-    test('should have metadata section', () => {
-      expect(template.Metadata).toBeDefined();
-      expect(template.Metadata['AWS::CloudFormation::Interface']).toBeDefined();
-    });
-  });
-
-  describe('Parameters', () => {
-    test('should have EnvironmentSuffix parameter', () => {
-      expect(template.Parameters.EnvironmentSuffix).toBeDefined();
-    });
-
-    test('EnvironmentSuffix parameter should have correct properties', () => {
-      const envSuffixParam = template.Parameters.EnvironmentSuffix;
-      expect(envSuffixParam.Type).toBe('String');
-      expect(envSuffixParam.Default).toBe('dev');
-      expect(envSuffixParam.Description).toBe(
-        'Environment suffix for resource naming (e.g., dev, staging, prod)'
-      );
-      expect(envSuffixParam.AllowedPattern).toBe('^[a-zA-Z0-9]+$');
-      expect(envSuffixParam.ConstraintDescription).toBe(
-        'Must contain only alphanumeric characters'
-      );
-    });
-  });
-
-  describe('Resources', () => {
-    test('should have TurnAroundPromptTable resource', () => {
-      expect(template.Resources.TurnAroundPromptTable).toBeDefined();
-    });
-
-    test('TurnAroundPromptTable should be a DynamoDB table', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      expect(table.Type).toBe('AWS::DynamoDB::Table');
-    });
-
-    test('TurnAroundPromptTable should have correct deletion policies', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      expect(table.DeletionPolicy).toBe('Delete');
-      expect(table.UpdateReplacePolicy).toBe('Delete');
-    });
-
-    test('TurnAroundPromptTable should have correct properties', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const properties = table.Properties;
-
-      expect(properties.TableName).toEqual({
-        'Fn::Sub': 'TurnAroundPromptTable${EnvironmentSuffix}',
-      });
-      expect(properties.BillingMode).toBe('PAY_PER_REQUEST');
-      expect(properties.DeletionProtectionEnabled).toBe(false);
-    });
-
-    test('TurnAroundPromptTable should have correct attribute definitions', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const attributeDefinitions = table.Properties.AttributeDefinitions;
-
-      expect(attributeDefinitions).toHaveLength(1);
-      expect(attributeDefinitions[0].AttributeName).toBe('id');
-      expect(attributeDefinitions[0].AttributeType).toBe('S');
-    });
-
-    test('TurnAroundPromptTable should have correct key schema', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const keySchema = table.Properties.KeySchema;
-
-      expect(keySchema).toHaveLength(1);
-      expect(keySchema[0].AttributeName).toBe('id');
-      expect(keySchema[0].KeyType).toBe('HASH');
-    });
-  });
-
-  describe('Outputs', () => {
-    test('should have all required outputs', () => {
-      const expectedOutputs = [
-        'TurnAroundPromptTableName',
-        'TurnAroundPromptTableArn',
-        'StackName',
-        'EnvironmentSuffix',
-      ];
-
-      expectedOutputs.forEach(outputName => {
-        expect(template.Outputs[outputName]).toBeDefined();
-      });
-    });
-
-    test('TurnAroundPromptTableName output should be correct', () => {
-      const output = template.Outputs.TurnAroundPromptTableName;
-      expect(output.Description).toBe('Name of the DynamoDB table');
-      expect(output.Value).toEqual({ Ref: 'TurnAroundPromptTable' });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-TurnAroundPromptTableName',
-      });
-    });
-
-    test('TurnAroundPromptTableArn output should be correct', () => {
-      const output = template.Outputs.TurnAroundPromptTableArn;
-      expect(output.Description).toBe('ARN of the DynamoDB table');
-      expect(output.Value).toEqual({
-        'Fn::GetAtt': ['TurnAroundPromptTable', 'Arn'],
-      });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-TurnAroundPromptTableArn',
-      });
-    });
-
-    test('StackName output should be correct', () => {
-      const output = template.Outputs.StackName;
-      expect(output.Description).toBe('Name of this CloudFormation stack');
-      expect(output.Value).toEqual({ Ref: 'AWS::StackName' });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-StackName',
-      });
-    });
-
-    test('EnvironmentSuffix output should be correct', () => {
-      const output = template.Outputs.EnvironmentSuffix;
-      expect(output.Description).toBe(
-        'Environment suffix used for this deployment'
-      );
-      expect(output.Value).toEqual({ Ref: 'EnvironmentSuffix' });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-EnvironmentSuffix',
-      });
-    });
-  });
-
-  describe('Template Validation', () => {
-    test('should have valid JSON structure', () => {
-      expect(template).toBeDefined();
-      expect(typeof template).toBe('object');
-    });
-
-    test('should not have any undefined or null required sections', () => {
-      expect(template.AWSTemplateFormatVersion).not.toBeNull();
-      expect(template.Description).not.toBeNull();
-      expect(template.Parameters).not.toBeNull();
-      expect(template.Resources).not.toBeNull();
-      expect(template.Outputs).not.toBeNull();
-    });
-
-    test('should have exactly one resource', () => {
-      const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(1);
-    });
-
-    test('should have exactly one parameter', () => {
-      const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(1);
-    });
-
-    test('should have exactly four outputs', () => {
-      const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(4);
-    });
-  });
-
-  describe('Resource Naming Convention', () => {
-    test('table name should follow naming convention with environment suffix', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const tableName = table.Properties.TableName;
-
-      expect(tableName).toEqual({
-        'Fn::Sub': 'TurnAroundPromptTable${EnvironmentSuffix}',
-      });
-    });
-
-    test('export names should follow naming convention', () => {
-      Object.keys(template.Outputs).forEach(outputKey => {
-        const output = template.Outputs[outputKey];
-        expect(output.Export.Name).toEqual({
-          'Fn::Sub': `\${AWS::StackName}-${outputKey}`,
-        });
-      });
+    test('resource count is reasonable (>30)', () => {
+      expect(Object.keys(template.Resources).length).toBeGreaterThan(30);
     });
   });
 });
