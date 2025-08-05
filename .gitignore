@@ -68,7 +68,6 @@ venv/
 ENV/
 env.bak/
 venv.bak/
-requirements.txt
 
 .coverage
 coverage.xml
@@ -91,7 +90,6 @@ __pycache__/
 .pulumi/
 # CDK build output
 cdk.out/
-.gen/
 
 tasks-status.md
 worktree/
