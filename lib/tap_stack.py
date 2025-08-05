@@ -1,14 +1,3 @@
-"""
-tap_stack.py
-
-Secure production-ready Pulumi stack for a web application using:
-- Dynamic default VPC discovery
-- Least-privilege security group
-- IAM user with conditional access key rotation enforcement
-- KMS key with fine-grained key policy
-- Encrypted secret management with Pulumi and KMS
-"""
-
 from typing import Optional, List, Dict, Any
 import json
 import pulumi
@@ -38,9 +27,6 @@ class TapStack(pulumi.ComponentResource):
 
     vpc = aws.ec2.get_vpc_output(default=True)
 
-    # --------------------------------------------------------
-    # Security Group: Least privilege ingress/egress
-    # --------------------------------------------------------
     def ingress_rules(cidrs: List[str]) -> List[Dict[str, Any]]:
       return [
         {
@@ -75,25 +61,35 @@ class TapStack(pulumi.ComponentResource):
       })
       return rules
 
-    sg = aws.ec2.SecurityGroup(
-      f"secure-web-sg-{env}",
-      name=f"secure-web-sg-{env}",
-      description="Security group for secure web app",
-      vpc_id=vpc.id,
-      ingress=ingress_rules(allowed_cidrs),
-      egress=egress_rules(trusted_ips, [80, 443]),
-      tags={**tags, "Name": f"secure-web-sg-{env}"}
-    )
+    # SECURITY GROUP — Check and Import if exists
+    try:
+      existing_sg = aws.ec2.get_security_group_output(
+        name=f"secure-web-sg-{env}",
+        filters=[{"name": "vpc-id", "values": [vpc.id]}],
+      )
+      sg = aws.ec2.SecurityGroup.get(f"secure-web-sg-{env}", existing_sg.id)
+    except Exception:
+      sg = aws.ec2.SecurityGroup(
+        f"secure-web-sg-{env}",
+        name=f"secure-web-sg-{env}",
+        description="Security group for secure web app",
+        vpc_id=vpc.id,
+        ingress=ingress_rules(allowed_cidrs),
+        egress=egress_rules(trusted_ips, [80, 443]),
+        tags={**tags, "Name": f"secure-web-sg-{env}"}
+      )
 
-    # --------------------------------------------------------
-    # IAM User + Conditional Rotation Policy
-    # --------------------------------------------------------
-    user = aws.iam.User(
-      f"web-app-user-{env}",
-      name=f"secure-web-app-user-{env}",
-      path="/applications/",
-      tags={**tags, "Application": "secure-web-app"}
-    )
+    # IAM USER — Check and Import if exists
+    try:
+      existing_user = aws.iam.get_user(user_name=f"secure-web-app-user-{env}")
+      user = aws.iam.User.get(f"secure-web-app-user-{env}", existing_user.user_name)
+    except Exception:
+      user = aws.iam.User(
+        f"web-app-user-{env}",
+        name=f"secure-web-app-user-{env}",
+        path="/applications/",
+        tags={**tags, "Application": "secure-web-app"}
+      )
 
     def rotation_policy(days: int) -> str:
       return json.dumps({
@@ -106,7 +102,7 @@ class TapStack(pulumi.ComponentResource):
             "Resource": "*",
             "Condition": {
               "NumericGreaterThan": {
-                "aws:TokenIssueTime": days * 24 * 60 * 60  # seconds
+                "aws:TokenIssueTime": days * 24 * 60 * 60
               }
             }
           },
@@ -137,9 +133,7 @@ class TapStack(pulumi.ComponentResource):
       opts=ResourceOptions(parent=self, additional_secret_outputs=["secret"])
     )
 
-    # --------------------------------------------------------
-    # KMS Key + IAM Principal Policy
-    # --------------------------------------------------------
+    # KMS KEY
     key = aws.kms.Key(
       f"secure-key-{env}",
       description="KMS key for encrypting secrets",
@@ -148,11 +142,17 @@ class TapStack(pulumi.ComponentResource):
       tags={**tags, "Application": "secure-web-app"}
     )
 
-    alias = aws.kms.Alias(
-      f"secure-key-alias-{env}",
-      name=f"alias/secure-web-key-{env}",
-      target_key_id=key.key_id
-    )
+    # KMS ALIAS — Check and Import if exists
+    alias_name = f"alias/secure-web-key-{env}"
+    try:
+      existing_alias = aws.kms.get_alias(name=alias_name)
+      alias = aws.kms.Alias.get(f"secure-key-alias-{env}", existing_alias.arn)
+    except Exception:
+      alias = aws.kms.Alias(
+        f"secure-key-alias-{env}",
+        name=alias_name,
+        target_key_id=key.key_id
+      )
 
     def build_key_policy(user_arn: str) -> str:
       identity = aws.get_caller_identity()
@@ -192,7 +192,7 @@ class TapStack(pulumi.ComponentResource):
     )
 
     # --------------------------------------------------------
-    # Exports (non-sensitive only)
+    # Exports
     # --------------------------------------------------------
     pulumi.export("vpc_id", vpc.id)
     pulumi.export("security_group_id", sg.id)
@@ -220,4 +220,3 @@ class TapStack(pulumi.ComponentResource):
       "kms_key_id": self.kms_key_id,
       "kms_alias": self.kms_alias,
     })
-
