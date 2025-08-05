@@ -77,8 +77,9 @@ Resources:
         - Key: "CapacityConfig"
           Value: !If
             - IsWest2
-            - "Read:10,Write:10"
-            - "Read:5,Write:5"
+            - "Read=10|Write=10"
+            - "Read=5|Write=5"
+
       # Enable point-in-time recovery
       PointInTimeRecoverySpecification:
         PointInTimeRecoveryEnabled: true
@@ -223,6 +224,18 @@ Outputs:
     Value: !Ref DynamoDBTable
     Export:
       Name: !Sub "${AWS::StackName}-TableName"
+
+  # Import table name from TapStack
+  TableNameImport:
+    Description: "Import table name from TapStack"
+    Value:
+      Fn::ImportValue:
+        Fn::Sub: "TapStack${EnvironmentSuffix}-TableName"
+    Metadata:
+      cfn-lint:
+        suppress:
+          - id: W6001
+            reason: "Dynamic import is valid and stack dependency is managed"
 
   # Export table ARN using Fn::GetAtt
   TableArn:

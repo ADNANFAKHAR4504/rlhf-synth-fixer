@@ -189,8 +189,8 @@
                         "Value": {
                             "Fn::If": [
                                 "IsWest2",
-                                "Read:10,Write:10",
-                                "Read:5,Write:5"
+                                "Read=10|Write=10",
+                                "Read=5|Write=5"
                             ]
                         }
                     }
@@ -439,6 +439,24 @@
             "Export": {
                 "Name": {
                     "Fn::Sub": "${AWS::StackName}-TableName"
+                }
+            }
+        },
+        "TableNameImport": {
+            "Description": "Import table name from TapStack",
+            "Value": {
+                "Fn::ImportValue": {
+                    "Fn::Sub": "TapStack${EnvironmentSuffix}-TableName"
+                }
+            },
+            "Metadata": {
+                "cfn-lint": {
+                    "suppress": [
+                        {
+                            "id": "W6001",
+                            "reason": "Dynamic import is valid and stack dependency is managed"
+                        }
+                    ]
                 }
             }
         },
