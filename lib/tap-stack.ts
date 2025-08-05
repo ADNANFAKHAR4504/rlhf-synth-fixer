@@ -1,7 +1,7 @@
 // main.ts - CDKTF Secure Enterprise Infrastructure
 // IaC – AWS Nova Model Breaking - Single File Implementation
 import { Construct } from "constructs";
-import { App, TerraformStack, S3Backend, TerraformOutput } from "cdktf";
+import { App, TerraformStack, TerraformOutput } from "cdktf";
 import { AwsProvider } from "@cdktf/provider-aws/lib/provider";
 import { Vpc } from "@cdktf/provider-aws/lib/vpc";
 import { Subnet } from "@cdktf/provider-aws/lib/subnet";
@@ -72,14 +72,8 @@ export class TapStack extends TerraformStack {
 
     const current = new DataAwsCallerIdentity(this, "current");
 
-    // S3 Backend Configuration - CORRECTED with dynamic account ID
-    new S3Backend(this, {
-      bucket: "prod-sec-terraform-state-bucket",
-      key: "nova-model/terraform.tfstate",
-      region: "us-east-1",
-      dynamodbTable: "prod-sec-terraform-locks", 
-      encrypt: true
-    });
+    // Note: S3 Backend removed for local development
+    // To use remote state, create the S3 bucket and DynamoDB table first
 
     // KMS Keys for encryption
     const mainKmsKey = new KmsKey(this, "prod-sec-main-kms-key", {
