@@ -75,9 +75,9 @@ describe('TapStack Integration Tests - DynamoDB Multi-Region Deployment', () => 
   beforeAll(async () => {
     // Calculate expected resource names based on environment and region
     const regionSuffix = deploymentRegion === 'us-west-1' ? 'west1' : 'west2';
-    expectedTableName = `multi-region-app-${environmentSuffix}-${regionSuffix}-table`;
-    expectedRoleName = `multi-region-app-${environmentSuffix}-dynamodb-role-${deploymentRegion}`;
-    expectedFunctionName = `multi-region-app-${environmentSuffix}-cross-region-function`;
+    expectedTableName = `${applicationName}-${environmentSuffix}-${regionSuffix}-table`;
+    expectedRoleName = `${applicationName}-${environmentSuffix}-dynamodb-role-${deploymentRegion}`;
+    expectedFunctionName = `${applicationName}-${environmentSuffix}-cross-region-function`;
 
     try {
       // Get stack outputs from CloudFormation
@@ -118,9 +118,9 @@ describe('TapStack Integration Tests - DynamoDB Multi-Region Deployment', () => 
     test('should calculate correct resource names', () => {
       // Dynamic values based on environment and region
       const regionSuffix = deploymentRegion === 'us-west-1' ? 'west1' : 'west2';
-      expect(expectedTableName).toBe(`multi-region-app-${environmentSuffix}-${regionSuffix}-table`);
-      expect(expectedRoleName).toBe(`multi-region-app-${environmentSuffix}-dynamodb-role-${deploymentRegion}`);
-      expect(expectedFunctionName).toBe(`multi-region-app-${environmentSuffix}-cross-region-function`);
+      expect(expectedTableName).toBe(`${applicationName}-${environmentSuffix}-${regionSuffix}-table`);
+      expect(expectedRoleName).toBe(`${applicationName}-${environmentSuffix}-dynamodb-role-${deploymentRegion}`);
+      expect(expectedFunctionName).toBe(`${applicationName}-${environmentSuffix}-cross-region-function`);
     });
   });
 
