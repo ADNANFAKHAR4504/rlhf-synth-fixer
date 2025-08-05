@@ -359,17 +359,17 @@ describe('Secure Infrastructure CloudFormation Template', () => {
 
       const websiteContentBucket = template.Resources.WebsiteContentBucket;
       expect(websiteContentBucket.Properties.BucketName).toEqual({
-        'Fn::Sub': 'website-content-${EnvironmentSuffix}-${UniqueId}',
+        'Fn::Sub': 'website-content-${UniqueId}',
       });
 
       const applicationLogsBucket = template.Resources.ApplicationLogsBucket;
       expect(applicationLogsBucket.Properties.BucketName).toEqual({
-        'Fn::Sub': 'application-logs-${EnvironmentSuffix}-${UniqueId}',
+        'Fn::Sub': 'application-logs-${UniqueId}',
       });
 
       const backupDataBucket = template.Resources.BackupDataBucket;
       expect(backupDataBucket.Properties.BucketName).toEqual({
-        'Fn::Sub': 'backup-data-${EnvironmentSuffix}-${UniqueId}',
+        'Fn::Sub': 'backup-data-${UniqueId}',
       });
     });
 
