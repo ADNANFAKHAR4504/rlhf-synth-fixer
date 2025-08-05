@@ -454,7 +454,7 @@ describe('TapStack Serverless Infrastructure Integration Tests', () => {
       expect(outputs.LambdaFunctionArn).toContain('TapFunction');
       expect(outputs.HttpApiUrl).toMatch(/^https:\/\//);
       console.log(`✅ Resource naming conventions verified`);
-  });
+    });
     
     test('should have environment suffix in resource names', () => {
       expect(outputs.S3BucketName).toContain(environmentSuffix);
