@@ -6,20 +6,28 @@ from cdktf import App, TerraformStack
 from lib.infrastructure import Infrastructure
 
 
+@pytest.fixture
+def app():
+  """Fixture for CDKTF App instance."""
+  return App()
+
+
+@pytest.fixture
+def stack(app):
+  """Fixture for TerraformStack instance."""
+  return TerraformStack(app, "test-stack")
+
+
 class TestInfrastructure:
   """Test class for Infrastructure construct."""
 
-  def test_infrastructure_creation_minimal(self):
+  def test_infrastructure_creation_minimal(self, stack):
     """Test Infrastructure creation with minimal parameters."""
-    app = App()
-    stack = TerraformStack(app, "test-stack")
     infrastructure = Infrastructure(stack, "test-infra")
     assert infrastructure is not None
 
-  def test_infrastructure_creation_with_environment(self):
+  def test_infrastructure_creation_with_environment(self, stack):
     """Test Infrastructure creation with environment suffix."""
-    app = App()
-    stack = TerraformStack(app, "test-stack")
     infrastructure = Infrastructure(
       stack, 
       "test-infra", 
@@ -27,10 +35,8 @@ class TestInfrastructure:
     )
     assert infrastructure is not None
 
-  def test_infrastructure_creation_with_tags(self):
+  def test_infrastructure_creation_with_tags(self, stack):
     """Test Infrastructure creation with custom tags."""
-    app = App()
-    stack = TerraformStack(app, "test-stack")
     custom_tags = {"Project": "Test", "Team": "DevOps"}
     infrastructure = Infrastructure(
       stack,
@@ -40,10 +46,8 @@ class TestInfrastructure:
     )
     assert infrastructure is not None
 
-  def test_tag_sanitization(self):
+  def test_tag_sanitization(self, stack):
     """Test that tag values are properly sanitized."""
-    app = App()
-    stack = TerraformStack(app, "test-stack")
     problematic_tags = {
       "Project": "Test@Project#123",
       "Description": "Test with special chars: <>{}[]",
@@ -56,16 +60,12 @@ class TestInfrastructure:
     )
     assert infrastructure is not None
 
-  def test_different_environment_suffixes(self):
+  @pytest.mark.parametrize("environment", ["dev", "staging", "production", "test"])
+  def test_different_environment_suffixes(self, stack, environment):
     """Test Infrastructure with various environment suffixes."""
-    app = App()
-    stack = TerraformStack(app, "test-stack")
-    environments = ["dev", "staging", "production", "test"]
-    
-    for env in environments:
-      infrastructure = Infrastructure(
-        stack,
-        f"test-infra-{env}",
-        environment_suffix=env
-      )
-      assert infrastructure is not None
+    infrastructure = Infrastructure(
+      stack,
+      f"test-infra-{environment}",
+      environment_suffix=environment
+    )
+    assert infrastructure is not None
