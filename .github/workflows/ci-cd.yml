@@ -309,12 +309,18 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
 
-      - name: Set up Terraform
-        uses: hashicorp/setup-terraform@v3
+      # Debuging Terraform Output - Start
 
-      - name: Fix provider binary permissions
+      - name: Clean Terraform directory
+        run: rm -rf .terraform .terraform.lock.hcl
+
+      - name: Initialize Terraform
         run: |
-          find .terraform -type f -name "terraform-provider-*" -exec chmod +x {} \;
+          export TF_INIT_OPTS="-backend-config=bucket=${{ env.TERRAFORM_STATE_BUCKET }} \
+            -backend-config=key=${{ env.ENVIRONMENT_SUFFIX }} \
+            -backend-config=region=${{ env.TERRAFORM_STATE_BUCKET_REGION }}"
+          npm run tf:init -lock=false -upgrade
+        shell: bash
 
       - name: Bootstrap
         run: |
@@ -401,6 +407,7 @@ jobs:
           AWS_DEFAULT_REGION: ${{ env.AWS_DEFAULT_REGION }}
           PULUMI_ORG: ${{ env.PULUMI_ORG }}
 
+      
       - name: Get Deployment Outputs
         run: |
           PLATFORM="${{ needs.synth.outputs.platform }}"
@@ -525,6 +532,8 @@ jobs:
             echo "{}" > cfn-outputs/flat-outputs.json
             echo "# No CDK outputs for non-CDK projects" > cdk-stacks.json
           fi
+
+      # Debuging Terraform Output - End
 
       - name: Upload Deployment Outputs
         uses: actions/upload-artifact@v4
