@@ -112,7 +112,8 @@ describe('Module Instantiation and Integration', () => {
         functionName: 'serverless-function-1',
         runtime: 'nodejs18.x',
         handler: 'index.handler',
-        filename: 'lambda1.zip',
+        // Update the filename here to match the new path
+        filename: 'lib/lambda1.zip', 
       })
     );
 
@@ -123,7 +124,8 @@ describe('Module Instantiation and Integration', () => {
         functionName: 'serverless-function-2',
         runtime: 'nodejs18.x',
         handler: 'index.handler',
-        filename: 'lambda2.zip',
+        // Update the filename here to match the new path
+        filename: 'lib/lambda2.zip',
       })
     );
   });
