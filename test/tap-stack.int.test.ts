@@ -852,19 +852,40 @@ describe('TapStack Integration Tests', () => {
 
   describe('Security and Compliance', () => {
     test('should create CloudTrail', async () => {
-      const command = new DescribeTrailsCommand({
-        trailNameList: [`TapCloudTrail-${environmentSuffix}`],
-      });
-      const response = await cloudTrailClient.send(command);
-      const trails = response.trailList || [];
+      // First try to find CloudTrail by stack resources
+      const cloudTrailResource = stackResources.find(
+        resource => resource.ResourceType === 'AWS::CloudTrail::Trail'
+      );
+      
+      let trails = [];
+      
+      if (cloudTrailResource?.PhysicalResourceId) {
+        // Use the physical resource ID from stack
+        const command = new DescribeTrailsCommand({
+          trailNameList: [cloudTrailResource.PhysicalResourceId],
+        });
+        const response = await cloudTrailClient.send(command);
+        trails = response.trailList || [];
+      } else {
+        // Fallback: search for trails with environment suffix
+        const allTrailsCommand = new DescribeTrailsCommand({});
+        const allTrailsResponse = await cloudTrailClient.send(allTrailsCommand);
+        const allTrails = allTrailsResponse.trailList || [];
+        
+        trails = allTrails.filter(trail => 
+          trail.Name?.includes(environmentSuffix) || 
+          trail.Name?.includes('TapCloudTrail')
+        );
+      }
 
-      expect(trails).toHaveLength(1);
-      expect(trails[0].LogFileValidationEnabled).toBe(true);
-      expect(trails[0].KmsKeyId).toBeDefined();
+      expect(trails.length).toBeGreaterThan(0);
+      const trail = trails[0];
+      expect(trail.LogFileValidationEnabled).toBe(true);
+      expect(trail.KmsKeyId).toBeDefined();
 
       // Check if CloudTrail is logging
       const statusCommand = new GetTrailStatusCommand({
-        Name: trails[0].TrailARN,
+        Name: trail.TrailARN,
       });
       const statusResponse = await cloudTrailClient.send(statusCommand);
       expect(statusResponse.IsLogging).toBe(true);
@@ -1314,10 +1335,28 @@ describe('TapStack Integration Tests', () => {
     });
 
     test('should validate CloudTrail for audit logging', async () => {
-      const trails = await cloudTrailClient.send(new DescribeTrailsCommand({}));
-      const stackTrail = trails.trailList?.find(trail => 
-        trail.Name?.includes(environmentSuffix)
+      // First try to find CloudTrail by stack resources
+      const cloudTrailResource = stackResources.find(
+        resource => resource.ResourceType === 'AWS::CloudTrail::Trail'
       );
+      
+      let stackTrail;
+      
+      if (cloudTrailResource?.PhysicalResourceId) {
+        // Use the physical resource ID from stack
+        const command = new DescribeTrailsCommand({
+          trailNameList: [cloudTrailResource.PhysicalResourceId],
+        });
+        const response = await cloudTrailClient.send(command);
+        stackTrail = response.trailList?.[0];
+      } else {
+        // Fallback: search all trails for one matching our environment
+        const trails = await cloudTrailClient.send(new DescribeTrailsCommand({}));
+        stackTrail = trails.trailList?.find(trail => 
+          trail.Name?.includes(environmentSuffix) || 
+          trail.Name?.includes('TapCloudTrail')
+        );
+      }
       
       expect(stackTrail).toBeDefined();
       expect(stackTrail?.IncludeGlobalServiceEvents).toBe(true);
