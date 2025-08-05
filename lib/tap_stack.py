@@ -5,6 +5,7 @@ This module defines the TapStack class and supporting configurations for
 creating secure, scalable AWS infrastructure including VPC, EC2, RDS,
 S3, and monitoring components..
 """
+import time
 from typing import Optional
 from dataclasses import dataclass
 
@@ -276,7 +277,7 @@ class TapStack(Stack):
       storage_encryption_key=self.kms_key,
       backup_retention=Duration.days(7),
       delete_automated_backups=True,
-      deletion_protection=False,  # SECURITY: Disabled for testing - MUST set to True for production
+      deletion_protection=True,  # SECURITY: Enabled for production to prevent accidental deletion
       database_name="tapdb",
       credentials=rds.Credentials.from_generated_secret(
         "tapdbadmin",
@@ -294,9 +295,9 @@ class TapStack(Stack):
     """Create S3 bucket with versioning and encryption"""
     self.s3_bucket = s3.Bucket(
       self, "tap_secure_bucket",
-      # SECURITY: Using random suffix instead of account ID to prevent information leakage
-      # Shortened to ensure bucket name is under 63 characters
-      bucket_name=f"tap-bucket-{self.environment_suffix}-{self.node.addr[:8]}",
+      # SECURITY: Using environment-based naming with timestamp for uniqueness
+      # This approach is more predictable and secure than using node address
+      bucket_name=f"tap-{self.environment_suffix}-bucket-{int(time.time())}",
       versioned=True,
       encryption=s3.BucketEncryption.KMS,
       encryption_key=self.kms_key,
@@ -445,15 +446,17 @@ class TapStack(Stack):
     )
 
     # Create HTTPS listener with TLS termination
-    # Note: Using valid certificate from ACM for turing229221.com domain
+    # Note: Dynamically fetching certificate from ACM
+    # Get the first available certificate from ACM
+    certificate_arn = self._get_acm_certificate_arn()
+    
     self.alb_https_listener = self.alb.add_listener(
       "tap_alb_https_listener",
       port=443,
       protocol=elbv2.ApplicationProtocol.HTTPS,
       default_target_groups=[self.target_group],
       certificates=[elbv2.ListenerCertificate.from_arn(
-        # Using valid certificate for turing229221.com domain
-        certificate_arn="arn:aws:acm:us-east-1:718240086340:certificate/6f65b67a-bb90-471b-ab0b-8727ad2d7583"
+        certificate_arn=certificate_arn
       )]
     )
 
@@ -543,6 +546,40 @@ class TapStack(Stack):
         cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD
       )
     )
+
+  def _get_acm_certificate_arn(self):
+    """Dynamically fetch ACM certificate ARN using CDK AWS SDK integration"""
+    import boto3
+    from aws_cdk import CfnOutput
+    
+    try:
+      # Use boto3 to list certificates and get the first valid one
+      acm_client = boto3.client('acm')
+      response = acm_client.list_certificates(
+        CertificateStatuses=['ISSUED']
+      )
+      
+      if response['CertificateSummaryList']:
+        # Return the first available certificate ARN
+        certificate_arn = response['CertificateSummaryList'][0]['CertificateArn']
+        
+        # Add output to show which certificate is being used
+        CfnOutput(
+          self, "acm_certificate_arn",
+          value=certificate_arn,
+          description="ACM Certificate ARN being used for HTTPS listener"
+        )
+        
+        return certificate_arn
+      else:
+        # If no certificates found, use a placeholder that will fail deployment
+        # This ensures the CDK can synthesize but deployment will fail if no cert exists
+        return "arn:aws:acm:us-east-1:123456789012:certificate/placeholder"
+        
+    except Exception as e:
+      # If we can't fetch certificates (e.g., no AWS credentials), use placeholder
+      # This allows CDK to synthesize but will fail deployment if no cert exists
+      return "arn:aws:acm:us-east-1:123456789012:certificate/placeholder"
 
   def _create_outputs(self):
     """Create CloudFormation outputs"""
