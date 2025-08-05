@@ -83,10 +83,11 @@ class TestTapStackIntegration(unittest.TestCase):
         self.skipTest(f"VPC {vpc_id} not found")
       vpc = vpcs[0]
       self.assertEqual(vpc["CidrBlock"], "10.0.0.0/16")
-    except self.ec2.exceptions.InvalidVpcIDNotFound:
-      self.skipTest(f"VPC {vpc_id} not found (likely deleted)")
     except ClientError as e:
-      self.fail(f"VPC describe_vpcs failed: {e}")
+      if e.response["Error"]["Code"] == "InvalidVpcID.NotFound":
+        self.skipTest(f"VPC {vpc_id} not found (likely deleted)")
+      else:
+        self.fail(f"VPC describe_vpcs failed: {e}")
 
   def test_s3_buckets_exist_and_encrypted(self):
     for key in ["AppDataBucketOutput", "LogsBucketOutput"]:
@@ -118,11 +119,11 @@ class TestTapStackIntegration(unittest.TestCase):
       instance = reservations[0]["Instances"][0]
       self.assertEqual(instance["State"]["Name"], "running")
       self.assertEqual(instance["InstanceType"], "t3.micro")
-    except self.ec2.exceptions.InvalidInstanceIDNotFound:
-      self.skipTest(
-          f"EC2 instance {instance_id} not found (likely terminated)")
     except ClientError as e:
-      self.fail(f"EC2 describe_instances failed: {e}")
+      if e.response["Error"]["Code"] == "InvalidInstanceID.NotFound":
+        self.skipTest(f"EC2 instance {instance_id} not found (likely terminated)")
+      else:
+        self.fail(f"EC2 describe_instances failed: {e}")
 
   def test_iam_roles_exist(self):
     try:
