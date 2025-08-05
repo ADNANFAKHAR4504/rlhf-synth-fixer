@@ -13,6 +13,7 @@ from aws_cdk import (
     Stack,
     aws_ec2 as ec2,
     aws_s3 as s3,
+    aws_s3_notifications as s3_notifications,
     aws_kms as kms,
     aws_iam as iam,
     aws_logs as logs,
@@ -91,7 +92,7 @@ class TapStack(cdk.Stack):
     # Create outputs
     self._create_outputs()
 
-    def _create_kms_key(self) -> kms.Key:
+  def _create_kms_key(self) -> kms.Key:
       """Create KMS key with rotation enabled for encryption"""
 
       # KMS Key Policy for secure access
@@ -140,14 +141,14 @@ class TapStack(cdk.Stack):
           description="KMS key for SecureApp encryption with automatic rotation",
           enable_key_rotation=True,
           policy=key_policy,
-          removal_policy=RemovalPolicy.RETAIN)
+          removal_policy=RemovalPolicy.DESTROY)
 
       Tags.of(kms_key).add("Name", "secureapp-kms-key")
       Tags.of(kms_key).add("Purpose", "Encryption")
 
       return kms_key
 
-    def _create_vpc(self) -> ec2.Vpc:
+  def _create_vpc(self) -> ec2.Vpc:
       """Create VPC with public and private subnets"""
 
       vpc = ec2.Vpc(
@@ -203,7 +204,7 @@ class TapStack(cdk.Stack):
 
       return vpc
 
-    def _create_security_groups(self) -> dict:
+  def _create_security_groups(self) -> dict:
       """Create security groups with least privilege access"""
 
       # Security group for EC2 instances
@@ -247,7 +248,7 @@ class TapStack(cdk.Stack):
 
       return {"ec2_sg": ec2_sg}
 
-    def _create_s3_buckets(self) -> dict:
+  def _create_s3_buckets(self) -> dict:
       """Create S3 buckets with encryption and lifecycle policies"""
 
       # Application data bucket
@@ -274,7 +275,7 @@ class TapStack(cdk.Stack):
                   ]
               )
           ],
-          removal_policy=RemovalPolicy.RETAIN
+          removal_policy=RemovalPolicy.DESTROY
       )
 
       # Logging bucket
@@ -306,14 +307,11 @@ class TapStack(cdk.Stack):
                   ]
               )
           ],
-          removal_policy=RemovalPolicy.RETAIN
+          removal_policy=RemovalPolicy.DESTROY
       )
 
-      # Enable access logging for app data bucket
-      app_data_bucket.add_event_notification(
-          s3.EventType.OBJECT_CREATED,
-          s3_notifications.S3KeyFilter(prefix="access-logs/")
-      )
+      # Note: Event notifications would typically go to SNS/SQS/Lambda
+      # For now, we'll skip the event notification as it requires a destination
 
       Tags.of(app_data_bucket).add("Name", "secureapp-data-bucket")
       Tags.of(logs_bucket).add("Name", "secureapp-logs-bucket")
@@ -323,7 +321,7 @@ class TapStack(cdk.Stack):
           "logs_bucket": logs_bucket
       }
 
-    def _create_iam_roles(self) -> dict:
+  def _create_iam_roles(self) -> dict:
       """Create IAM roles with least privilege principles"""
 
       # EC2 Instance Role
@@ -441,7 +439,7 @@ class TapStack(cdk.Stack):
           "instance_profile": instance_profile
       }
 
-    def _create_cloudwatch_resources(self) -> dict:
+  def _create_cloudwatch_resources(self) -> dict:
       """Create CloudWatch logging and monitoring resources"""
 
       # Log group for application logs
@@ -486,7 +484,7 @@ class TapStack(cdk.Stack):
           "dashboard": dashboard
       }
 
-    def _create_ec2_instances(self) -> dict:
+  def _create_ec2_instances(self) -> dict:
       """Create EC2 instances in private subnets with security configurations"""
 
       # User data script for CloudWatch agent installation
@@ -576,11 +574,24 @@ class TapStack(cdk.Stack):
       instance = ec2.Instance(
           self,
           "SecureAppInstance",
-          instance_name="secureapp-instance-01",
-          launch_template=launch_template,
+          instance_type=ec2.InstanceType.of(
+              ec2.InstanceClass.T3,
+              ec2.InstanceSize.MICRO),
+          machine_image=ec2.MachineImage.latest_amazon_linux2(),
           vpc=self.vpc,
           vpc_subnets=ec2.SubnetSelection(
-              subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS))
+              subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS),
+          security_group=self.security_groups["ec2_sg"],
+          role=self.iam_roles["ec2_role"],
+          user_data=user_data,
+          block_devices=[
+              ec2.BlockDevice(
+                  device_name="/dev/xvda",
+                  volume=ec2.BlockDeviceVolume.ebs(
+                      volume_size=20,
+                      encrypted=True,
+                      kms_key=self.kms_key,
+                      volume_type=ec2.EbsDeviceVolumeType.GP3))])
 
       Tags.of(instance).add("Name", "secureapp-instance-01")
       Tags.of(instance).add("Backup", "Required")
@@ -590,7 +601,7 @@ class TapStack(cdk.Stack):
           "instance": instance
       }
 
-    def _create_outputs(self) -> None:
+  def _create_outputs(self) -> None:
       """Create CloudFormation outputs"""
 
       CfnOutput(
@@ -606,13 +617,13 @@ class TapStack(cdk.Stack):
       )
 
       CfnOutput(
-          self, "AppDataBucket",
+          self, "AppDataBucketOutput",
           value=self.s3_buckets["app_data_bucket"].bucket_name,
           description="S3 bucket for application data"
       )
 
       CfnOutput(
-          self, "LogsBucket",
+          self, "LogsBucketOutput",
           value=self.s3_buckets["logs_bucket"].bucket_name,
           description="S3 bucket for logs"
       )
