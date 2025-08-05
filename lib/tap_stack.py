@@ -13,6 +13,7 @@ import json
 from typing import List, Dict, Any
 import pulumi
 import pulumi_aws as aws
+import ipaddress
 
 # Configuration
 config = pulumi.Config()
@@ -57,7 +58,7 @@ def create_vpc_and_networking() -> Dict[str, Any]:
       availability_zone=az,
       cidr_block=f"10.0.{idx+1}.0/24",
       ipv6_cidr_block=vpc.ipv6_cidr_block.apply(
-                lambda cidr: pulumi.cidrsubnet(cidr, new_bits=8, net_num=idx)),
+                lambda cidr: str(list(ipaddress.IPv6Network(cidr).subnets(new_prefix=64))[idx])),
       map_public_ip_on_launch=True,
       assign_ipv6_address_on_creation=True,
       tags={
