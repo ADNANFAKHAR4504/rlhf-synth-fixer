@@ -23,8 +23,8 @@ class NetworkingInfrastructure(pulumi.ComponentResource):
     self.environment = environment
     self.tags = tags
     self.region_suffix = region.replace('-', '').replace('gov', '')
-    self.provider = opts.provider if opts else None
 
+    self.provider = opts.provider if opts else None
     self.vpc_cidr = "10.0.0.0/16" if is_primary else "10.1.0.0/16"
 
     self._create_vpc()
@@ -44,17 +44,23 @@ class NetworkingInfrastructure(pulumi.ComponentResource):
     })
 
   def _create_vpc(self):
+    """Create VPC with DNS support"""
     self.vpc = aws.ec2.Vpc(
       f"vpc-{self.region_suffix}",
       cidr_block=self.vpc_cidr,
       enable_dns_hostnames=True,
       enable_dns_support=True,
       tags={**self.tags, "Name": f"nova-vpc-{self.region_suffix}"},
-      opts=ResourceOptions(parent=self, provider=self.provider)
+      opts=ResourceOptions(parent=self)
     )
 
   def _create_subnets(self):
-    self.azs = aws.get_availability_zones(state="available")
+    """Create public and private subnets across multiple AZs"""
+    self.azs = aws.get_availability_zones(
+      state="available",
+      opts=ResourceOptions(provider=self.provider)
+    )
+
     self.public_subnets = []
     self.private_subnets = []
 
@@ -64,7 +70,7 @@ class NetworkingInfrastructure(pulumi.ComponentResource):
       public_subnet = aws.ec2.Subnet(
         f"public-subnet-{i}-{self.region_suffix}",
         vpc_id=self.vpc.id,
-        cidr_block=f"10.{'0' if self.is_primary else '1'}.{i+1}.0/24",
+        cidr_block=f"10.{"0" if self.is_primary else "1"}.{i+1}.0/24",
         availability_zone=az_output,
         map_public_ip_on_launch=True,
         tags={**self.tags, "Name": f"nova-public-{i}-{self.region_suffix}"},
@@ -75,7 +81,7 @@ class NetworkingInfrastructure(pulumi.ComponentResource):
       private_subnet = aws.ec2.Subnet(
         f"private-subnet-{i}-{self.region_suffix}",
         vpc_id=self.vpc.id,
-        cidr_block=f"10.{'0' if self.is_primary else '1'}.{i+20}.0/24",
+        cidr_block=f"10.{"0" if self.is_primary else "1"}.{i+20}.0/24",
         availability_zone=az_output,
         tags={**self.tags, "Name": f"nova-private-{i}-{self.region_suffix}"},
         opts=ResourceOptions(parent=self, provider=self.provider)
@@ -83,6 +89,7 @@ class NetworkingInfrastructure(pulumi.ComponentResource):
       self.private_subnets.append(private_subnet)
 
   def _create_internet_gateway(self):
+    """Create Internet Gateway for public internet access"""
     self.igw = aws.ec2.InternetGateway(
       f"igw-{self.region_suffix}",
       vpc_id=self.vpc.id,
@@ -91,6 +98,7 @@ class NetworkingInfrastructure(pulumi.ComponentResource):
     )
 
   def _create_nat_gateways(self):
+    """Create NAT Gateways for private subnet internet access"""
     self.nat_gateways = []
 
     for i, public_subnet in enumerate(self.public_subnets):
@@ -111,6 +119,7 @@ class NetworkingInfrastructure(pulumi.ComponentResource):
       self.nat_gateways.append(nat_gw)
 
   def _create_route_tables(self):
+    """Create and configure route tables"""
     self.public_rt = aws.ec2.RouteTable(
       f"public-rt-{self.region_suffix}",
       vpc_id=self.vpc.id,
@@ -144,7 +153,7 @@ class NetworkingInfrastructure(pulumi.ComponentResource):
           )
         ],
         tags={**self.tags, "Name": f"nova-private-rt-{i}-{self.region_suffix}"},
-        opts=ResourceOptions(parent=self, provider=self.provider)
+        opts=ResourceOptions(parent=self)
       )
       self.private_rts.append(private_rt)
 
@@ -152,10 +161,11 @@ class NetworkingInfrastructure(pulumi.ComponentResource):
         f"private-rt-assoc-{i}-{self.region_suffix}",
         subnet_id=subnet.id,
         route_table_id=private_rt.id,
-        opts=ResourceOptions(parent=self, provider=self.provider)
+        opts=ResourceOptions(parent=self)
       )
 
   def _create_security_groups(self):
+    """Create security groups for ALB and Elastic Beanstalk"""
     self.alb_security_group = aws.ec2.SecurityGroup(
       f"alb-sg-{self.region_suffix}",
       description="Security group for Application Load Balancer",
@@ -186,7 +196,7 @@ class NetworkingInfrastructure(pulumi.ComponentResource):
         )
       ],
       tags={**self.tags, "Name": f"nova-alb-sg-{self.region_suffix}"},
-      opts=ResourceOptions(parent=self, provider=self.provider)
+      opts=ResourceOptions(parent=self)
     )
 
     self.eb_security_group = aws.ec2.SecurityGroup(
@@ -219,7 +229,7 @@ class NetworkingInfrastructure(pulumi.ComponentResource):
         )
       ],
       tags={**self.tags, "Name": f"nova-eb-sg-{self.region_suffix}"},
-      opts=ResourceOptions(parent=self, provider=self.provider)
+      opts=ResourceOptions(parent=self)
     )
 
   @property
