@@ -274,7 +274,7 @@ class TapStack(Stack):
     self.database = rds.DatabaseInstance(
       self, "tap_database",
       engine=rds.DatabaseInstanceEngine.postgres(
-        version=rds.PostgresEngineVersion.VER_15_3
+        version=rds.PostgresEngineVersion.VER_15_12
       ),
       instance_type=ec2.InstanceType.of(
         ec2.InstanceClass.BURSTABLE3,
