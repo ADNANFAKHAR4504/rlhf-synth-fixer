@@ -135,16 +135,6 @@ class ElasticBeanstalkInfrastructure(pulumi.ComponentResource):
         ),
         aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
           namespace="aws:autoscaling:trigger",
-          name="ScaleUpIncrement",
-          value="2"
-        ),
-        aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
-          namespace="aws:autoscaling:trigger",
-          name="ScaleDownIncrement",
-          value="-1"
-        ),
-        aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
-          namespace="aws:autoscaling:trigger",
           name="Period",
           value="5"
         ),
