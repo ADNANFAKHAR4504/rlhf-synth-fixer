@@ -868,7 +868,7 @@ describe('TapStack Integration Tests', () => {
       );
       console.log('All CloudTrail-related resources in stack:', cloudTrailResources);
       
-      let trails = [];
+      let trails: any[] = [];
       
       if (cloudTrailResource?.PhysicalResourceId) {
         // Use the physical resource ID from stack
