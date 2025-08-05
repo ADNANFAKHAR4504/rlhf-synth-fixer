@@ -64,6 +64,16 @@ class ElasticBeanstalkInfrastructure(pulumi.ComponentResource):
     )
 
   def _create_configuration_template(self):
+    # Pick only the first subnet from public and private subnets lists to avoid ELB attaching to multiple subnets in the same AZ
+    elb_subnet = None
+    app_subnet = None
+
+    if self.public_subnet_ids and len(self.public_subnet_ids) > 0:
+      elb_subnet = self.public_subnet_ids[0]
+
+    if self.private_subnet_ids and len(self.private_subnet_ids) > 0:
+      app_subnet = self.private_subnet_ids[0]
+
     subnet_settings = [
       aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
         namespace="aws:ec2:vpc",
@@ -72,21 +82,21 @@ class ElasticBeanstalkInfrastructure(pulumi.ComponentResource):
       )
     ]
 
-    if self.private_subnet_ids:
+    if app_subnet:
       subnet_settings.append(
         aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
           namespace="aws:ec2:vpc",
           name="Subnets",
-          value=Output.all(*self.private_subnet_ids).apply(lambda ids: ",".join(ids))
+          value=app_subnet
         )
       )
 
-    if self.public_subnet_ids:
+    if elb_subnet:
       subnet_settings.append(
         aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
           namespace="aws:ec2:vpc",
           name="ELBSubnets",
-          value=Output.all(*self.public_subnet_ids).apply(lambda ids: ",".join(ids))
+          value=elb_subnet
         )
       )
 
