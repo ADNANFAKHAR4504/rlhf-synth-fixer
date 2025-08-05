@@ -225,8 +225,7 @@ class SecureVPC:
         iam_role_arn=self.flow_logs_role.arn,
         log_destination=log_group.arn,
         log_destination_type="cloud-watch-logs",
-        resource_id=self.vpc.id,
-        resource_type="VPC",
+        vpc_id=self.vpc.id,
         traffic_type="ALL",
         tags={
             **self.tags,
