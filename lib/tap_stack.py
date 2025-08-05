@@ -2,6 +2,8 @@
 
 import json
 import os
+import tempfile
+import base64
 import zipfile
 from cdktf import TerraformStack, S3Backend, TerraformOutput
 from constructs import Construct
@@ -26,62 +28,6 @@ from cdktf_cdktf_provider_aws.secretsmanager_secret_version import Secretsmanage
 from cdktf_cdktf_provider_aws.cloudwatch_log_group import CloudwatchLogGroup
 from cdktf_cdktf_provider_aws.data_aws_iam_policy_document import DataAwsIamPolicyDocument
 from cdktf_cdktf_provider_aws.data_aws_caller_identity import DataAwsCallerIdentity
-
-
-def create_lambda_zip():
-    """Create Lambda function zip file using code from lib/lambda/handler.py."""
-    zip_path = "lambda_function.zip"
-    
-    # Read Lambda function code from lib/lambda/handler.py
-    lambda_file_path = "lib/lambda/handler.py"
-    
-    try:
-        with open(lambda_file_path, 'r') as f:
-            lambda_code = f.read()
-    except FileNotFoundError:
-        # Fallback code if file doesn't exist
-        lambda_code = '''
-import json
-import boto3
-
-def lambda_handler(event, context):
-    # Compliance check logic here
-    print("Running compliance checks...")
-    return {
-        'statusCode': 200,
-        'body': json.dumps('Compliance check completed')
-    }
-'''
-    
-    # Create zip file
-    with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
-        zipf.writestr('handler.py', lambda_code)
-    
-    return zip_path
-
-
-def get_lambda_code():
-    """Read Lambda function code from lib/lambda/handler.py."""
-    lambda_file_path = "lib/lambda/handler.py"
-    
-    try:
-        with open(lambda_file_path, 'r') as f:
-            return f.read()
-    except FileNotFoundError:
-        # Fallback code if file doesn't exist
-        return '''
-import json
-import boto3
-
-def lambda_handler(event, context):
-    # Compliance check logic here
-    print("Running compliance checks...")
-    return {
-        'statusCode': 200,
-        'body': json.dumps('Compliance check completed')
-    }
-'''
-
 
 class TapStack(TerraformStack):
   """CDKTF Python stack for TAP infrastructure."""
@@ -250,27 +196,32 @@ class TapStack(TerraformStack):
         role=lambda_execution_role.name,
         policy_arn=secrets_policy.arn
     )
+ 
+    # Create Lambda deployment package
+    lambda_zip_path = os.path.join(tempfile.gettempdir(), "lambda_function.zip")
 
-    # Create Lambda function zip file
-    lambda_zip_path = create_lambda_zip()
+    with zipfile.ZipFile(lambda_zip_path, "w") as zip_file:
+        zip_file.write("lib/lambda/handler.py", "lambda_function.py")
 
-    # Create Lambda function
+    # Lambda function
     lambda_function = LambdaFunction(
         self, "serverless_lambda",
         function_name="serverless-api-handler",
-        role=lambda_execution_role.arn,
-        handler="handler.lambda_handler",
         runtime="python3.12",
+        handler="lambda_function.lambda_handler",
+        role=lambda_execution_role.arn,
         filename=lambda_zip_path,
+        source_code_hash=self._get_lambda_source_hash(lambda_zip_path),
         timeout=30,
         memory_size=256,
+        reserved_concurrent_executions=10,
         environment={
             "variables": {
                 "SECRET_NAME": app_secret.name,
                 "LOG_LEVEL": "INFO"
             }
         },
-        depends_on=[lambda_log_group],
+        depends_on=[lambda_log_group, lambda_execution_role, secrets_policy],
         tags={
             "Environment": "production",
             "Application": "serverless-api"
@@ -442,3 +393,9 @@ class TapStack(TerraformStack):
         value=lambda_log_group.name,
         description="CloudWatch log group name for Lambda"
     )
+
+
+  def _get_lambda_source_hash(self, lambda_zip_path: str) -> str:
+    """Get the base64 encoded hash of the Lambda deployment package with proper file handling."""
+    with open(lambda_zip_path, "rb") as f:
+      return base64.b64encode(f.read()).decode()
