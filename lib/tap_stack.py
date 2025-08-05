@@ -34,7 +34,6 @@ class TapStack(pulumi.ComponentResource):
 
     allowed_cidrs: List[str] = config.get_object("allowed_cidrs") or ["0.0.0.0/0"]
     trusted_ips: List[str] = config.get_object("trusted_external_ips") or ["8.8.8.8/32", "1.1.1.1/32"]
-    db_password = config.require_secret("db_password")
     max_key_age_days = 90
 
     vpc = aws.ec2.get_vpc_output(default=True)
@@ -193,16 +192,6 @@ class TapStack(pulumi.ComponentResource):
     )
 
     # --------------------------------------------------------
-    # Secret Management (KMS Ciphertext)
-    # --------------------------------------------------------
-    encrypted_secret = aws.kms.Ciphertext(
-      f"encrypted-db-secret-{env}",
-      key_id=key.key_id,
-      plaintext=db_password,
-      opts=ResourceOptions(additional_secret_outputs=["plaintext"])
-    )
-
-    # --------------------------------------------------------
     # Exports (non-sensitive only)
     # --------------------------------------------------------
     pulumi.export("vpc_id", vpc.id)
@@ -211,7 +200,6 @@ class TapStack(pulumi.ComponentResource):
     pulumi.export("access_key_id", access_key.id)
     pulumi.export("kms_key_id", key.key_id)
     pulumi.export("kms_alias", alias.name)
-    pulumi.export("encrypted_db_password_blob", encrypted_secret.ciphertext_blob)
     pulumi.export("security_notice", (
       "Secrets are encrypted via KMS. Access keys are rotated every 90 days and plaintext values "
       "are not exposed in state or outputs."
@@ -223,7 +211,6 @@ class TapStack(pulumi.ComponentResource):
     self.access_key_id = access_key.id
     self.kms_key_id = key.key_id
     self.kms_alias = alias.name
-    self.encrypted_db_password_blob = encrypted_secret.ciphertext_blob
 
     self.register_outputs({
       "vpc_id": self.vpc_id,
