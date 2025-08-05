@@ -282,7 +282,7 @@ Resources:
 Outputs:
   S3BucketName:
     Description: Name of the S3 bucket
-    Value: !Ref ServerlessAppBucket
+    Value: !Ref S3BucketName
   LambdaFunctionArn:
     Description: ARN of the Lambda function
     Value: !GetAtt ServerlessAppLambda.Arn
