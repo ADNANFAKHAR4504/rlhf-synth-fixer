@@ -5,7 +5,7 @@ Parameters:
   EnvironmentSuffix:
     Type: String
     Description: Suffix for the environment (e.g., dev, prod)
-    Default: staging
+    Default: production
     AllowedPattern: '^[a-zA-Z0-9]+$'
     ConstraintDescription: Must contain only alphanumeric characters.
 
@@ -117,10 +117,6 @@ Conditions:
   IsProductionEnv: !Equals [!Ref EnvironmentSuffix, production]
   IsStagingEnv: !Equals [!Ref EnvironmentSuffix, staging]
   IsDevEnv: !Equals [!Ref EnvironmentSuffix, dev]
-  IsKnownEnvironment: !Or
-    - !Condition IsProductionEnv
-    - !Condition IsStagingEnv
-    - !Condition IsDevEnv
   HasSSLCertificate: !Not [!Equals [!Ref SSLCertificateArn, ""]]
   EnableHTTPS: !And 
     - !Equals [!Ref UseHTTPS, "true"]
@@ -615,18 +611,36 @@ Resources:
       LaunchTemplate:
         LaunchTemplateId: !Ref LaunchTemplate
         Version: !GetAtt LaunchTemplate.LatestVersionNumber
-      MinSize: !If 
-        - IsKnownEnvironment
-        - !FindInMap [EnvironmentMap, !Ref EnvironmentSuffix, MinSize]
-        - !FindInMap [EnvironmentMap, default, MinSize]
-      MaxSize: !If 
-        - IsKnownEnvironment
-        - !FindInMap [EnvironmentMap, !Ref EnvironmentSuffix, MaxSize]
-        - !FindInMap [EnvironmentMap, default, MaxSize]
-      DesiredCapacity: !If 
-        - IsKnownEnvironment
-        - !FindInMap [EnvironmentMap, !Ref EnvironmentSuffix, DesiredCapacity]
-        - !FindInMap [EnvironmentMap, default, DesiredCapacity]
+      MinSize: !If
+        - IsProductionEnv
+        - !FindInMap [EnvironmentMap, production, MinSize]
+        - !If
+            - IsStagingEnv
+            - !FindInMap [EnvironmentMap, staging, MinSize]
+            - !If
+                - IsDevEnv
+                - !FindInMap [EnvironmentMap, dev, MinSize]
+                - !FindInMap [EnvironmentMap, default, MinSize]
+      MaxSize: !If
+        - IsProductionEnv
+        - !FindInMap [EnvironmentMap, production, MaxSize]
+        - !If
+            - IsStagingEnv
+            - !FindInMap [EnvironmentMap, staging, MaxSize]
+            - !If
+                - IsDevEnv
+                - !FindInMap [EnvironmentMap, dev, MaxSize]
+                - !FindInMap [EnvironmentMap, default, MaxSize]
+      DesiredCapacity: !If
+        - IsProductionEnv
+        - !FindInMap [EnvironmentMap, production, DesiredCapacity]
+        - !If
+            - IsStagingEnv
+            - !FindInMap [EnvironmentMap, staging, DesiredCapacity]
+            - !If
+                - IsDevEnv
+                - !FindInMap [EnvironmentMap, dev, DesiredCapacity]
+                - !FindInMap [EnvironmentMap, default, DesiredCapacity]
       TargetGroupARNs:
         - !Ref ALBTargetGroup
       HealthCheckType: ELB
@@ -735,10 +749,16 @@ Resources:
       Statistic: Average
       Period: 300
       EvaluationPeriods: 2
-      Threshold: !If 
-        - IsKnownEnvironment
-        - !FindInMap [EnvironmentMap, !Ref EnvironmentSuffix, CPUThreshold]
-        - !FindInMap [EnvironmentMap, default, CPUThreshold]
+      Threshold: !If
+        - IsProductionEnv
+        - !FindInMap [EnvironmentMap, production, CPUThreshold]
+        - !If
+            - IsStagingEnv
+            - !FindInMap [EnvironmentMap, staging, CPUThreshold]
+            - !If
+                - IsDevEnv
+                - !FindInMap [EnvironmentMap, dev, CPUThreshold]
+                - !FindInMap [EnvironmentMap, default, CPUThreshold]
       ComparisonOperator: GreaterThanThreshold
       Dimensions:
         - Name: AutoScalingGroupName

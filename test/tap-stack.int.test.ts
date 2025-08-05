@@ -169,14 +169,20 @@ describe('TapStack Live AWS Integration Tests', () => {
       expect(vpc?.CidrBlock).toBe('10.0.0.0/16');
       expect(vpc?.State).toBe('available');
 
-      // Check Environment tag
+      // Check Environment tag - it uses conditional logic in the template
       const environmentTag = vpc?.Tags?.find(tag => tag.Key === 'Environment');
+      expect(environmentTag).toBeDefined();
+      
+      // The Environment tag value is determined by CloudFormation conditional logic:
+      // - production -> 'Production'
+      // - staging -> 'Staging' 
+      // - anything else (including PR envs) -> 'PR'
       if (environmentSuffix === 'production') {
         expect(environmentTag?.Value).toBe('Production');
       } else if (environmentSuffix === 'staging') {
         expect(environmentTag?.Value).toBe('Staging');
       } else {
-        // PR environments
+        // PR environments and unknown suffixes get 'PR' tag
         expect(environmentTag?.Value).toBe('PR');
       }
     });
