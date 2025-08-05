@@ -151,7 +151,7 @@ class TapStack(Stack):
       destination=ec2.FlowLogDestination.to_cloud_watch_logs(
         logs.LogGroup(
           self, "tap_vpc_flow_logs_group",
-          log_group_name="/aws/vpc/flowlogs",
+          log_group_name=f"/aws/vpc/flowlogs-{self.environment_suffix}",
           retention=logs.RetentionDays.ONE_WEEK,
           removal_policy=RemovalPolicy.DESTROY
         ),
@@ -276,7 +276,7 @@ class TapStack(Stack):
       storage_encryption_key=self.kms_key,
       backup_retention=Duration.days(7),
       delete_automated_backups=True,
-      deletion_protection=False,  # Disabled for testing - set to True for production
+      deletion_protection=False,  # SECURITY: Disabled for testing - MUST set to True for production
       database_name="tapdb",
       credentials=rds.Credentials.from_generated_secret(
         "tapdbadmin",
@@ -294,7 +294,7 @@ class TapStack(Stack):
     """Create S3 bucket with versioning and encryption"""
     self.s3_bucket = s3.Bucket(
       self, "tap_secure_bucket",
-      # Using random suffix instead of account ID to prevent information leakage
+      # SECURITY: Using random suffix instead of account ID to prevent information leakage
       # Shortened to ensure bucket name is under 63 characters
       bucket_name=f"tap-bucket-{self.environment_suffix}-{self.node.addr[:8]}",
       versioned=True,
@@ -432,26 +432,33 @@ class TapStack(Stack):
         InstanceTarget(instance, 80)
       )
 
-    # Create HTTP listener (forwards to target group)
+    # Create HTTP listener (redirects to HTTPS for security)
     self.alb_http_listener = self.alb.add_listener(
       "tap_alb_http_listener",
       port=80,
       protocol=elbv2.ApplicationProtocol.HTTP,
-      default_target_groups=[self.target_group]
+      default_action=elbv2.ListenerAction.redirect(
+        protocol="HTTPS",
+        port="443",
+        permanent=True
+      )
     )
 
-    # Note: For production with HTTPS, uncomment and configure with your domain certificate
-    # self.alb_https_listener = self.alb.add_listener(
-    #   "tap_alb_https_listener",
-    #   port=443,
-    #   protocol=elbv2.ApplicationProtocol.HTTPS,
-    #   default_target_groups=[self.target_group],
-    #   certificates=[elbv2.ListenerCertificate.from_arn(
-    #     # Using AWS Certificate Manager for SSL/TLS termination
-    #     # For production, replace with your domain certificate ARN
-    #     certificate_arn="arn:aws:acm:us-east-1:123456789012:certificate/example"
-    #   )]
-    # )
+    # Create HTTPS listener with TLS termination
+    # Note: For production, replace with your actual domain certificate ARN
+    # You can create a certificate using AWS Certificate Manager (ACM)
+    self.alb_https_listener = self.alb.add_listener(
+      "tap_alb_https_listener",
+      port=443,
+      protocol=elbv2.ApplicationProtocol.HTTPS,
+      default_target_groups=[self.target_group],
+      # For demo purposes, using a placeholder certificate
+      # In production, use: certificates=[elbv2.ListenerCertificate.from_arn("your-cert-arn")]
+      certificates=[elbv2.ListenerCertificate.from_arn(
+        # Placeholder - replace with actual certificate ARN for production
+        certificate_arn="arn:aws:acm:us-east-1:123456789012:certificate/placeholder"
+      )]
+    )
 
   def _create_monitoring_and_alarms(self):
     """Create CloudWatch monitoring and alarms"""

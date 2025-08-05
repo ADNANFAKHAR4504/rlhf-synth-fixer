@@ -186,18 +186,36 @@ class TestTapStack(unittest.TestCase):
       "Type": "application"
     })
 
-  @mark.it("creates HTTP listener with target group")
-  def test_creates_http_listener_with_target_group(self):
+  @mark.it("creates HTTP and HTTPS listeners with proper configuration")
+  def test_creates_http_and_https_listeners(self):
     # ARRANGE
     props = TapStackProps(environment_suffix="test")
     stack = TapStack(self.app, "TapStackTest", props=props)
     template = Template.from_stack(stack)
 
-    # ASSERT - Should have HTTP listener that forwards to target group
-    template.resource_count_is("AWS::ElasticLoadBalancingV2::Listener", 1)
+    # ASSERT - Should have 2 listeners (HTTP redirect + HTTPS forward)
+    template.resource_count_is("AWS::ElasticLoadBalancingV2::Listener", 2)
+    
+    # Verify HTTP listener redirects to HTTPS
     template.has_resource_properties("AWS::ElasticLoadBalancingV2::Listener", {
       "Port": 80,
       "Protocol": "HTTP",
+      "DefaultActions": [
+        {
+          "Type": "redirect",
+          "RedirectConfig": {
+            "Port": "443",
+            "Protocol": "HTTPS",
+            "StatusCode": "HTTP_301"
+          }
+        }
+      ]
+    })
+    
+    # Verify HTTPS listener forwards to target group
+    template.has_resource_properties("AWS::ElasticLoadBalancingV2::Listener", {
+      "Port": 443,
+      "Protocol": "HTTPS",
       "DefaultActions": [
         {
           "Type": "forward",
