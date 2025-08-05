@@ -52,7 +52,7 @@ Expert that validates and improves IaC through automated testing pipeline.
 - Create `lib/IDEAL_RESPONSE.md` with perfect IaC solution (code-focused). Make the `lib/IDEAL_RESPONSE.md` similar
 in structure to the `lib/MODEL_RESPONSE.md`.
 - Verify solution meets requirements
-- Re-run all tests to ensure quality
+- Re-run all build, lint and tests to ensure quality
 - Generate `lib/MODEL_FAILURES.md` explaining the fixes made to reach the IDEAL_RESPONS from the MODEL_RESPONSE  
 
 ### 6. Cleanup
