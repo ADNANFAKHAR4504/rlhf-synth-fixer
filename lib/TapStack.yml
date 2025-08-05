@@ -25,14 +25,14 @@ Parameters:
     Type: String
     AllowedPattern: ^([a-zA-Z0-9]+(-[a-zA-Z0-9]+)*\.)+[a-zA-Z]{2,}\.$
     ConstraintDescription: Must be a valid domain name ending with a period.
-    Default: 'app.tap-us-east-1.turing229221.com.'
+    Default: 'app.tap-us-west-2.turing229221.com.'
 
   pAcmCertificateArn:
     Description: The ARN of the AWS Certificate Manager (ACM) certificate for the ALB HTTPS listener.
     Type: String
     AllowedPattern: ^arn:aws[a-zA-Z-]*:acm:[a-z0-9-]+:\d{12}:certificate/.+$
     ConstraintDescription: Must be a valid ACM Certificate ARN.
-    Default: 'arn:aws:acm:us-east-1:718240086340:certificate/6f65b67a-bb90-471b-ab0b-8727ad2d7583'
+    Default: 'arn:aws:acm:us-west-2:718240086340:certificate/552b99d9-ee18-44d7-bed1-cabe94056e65'
 
 Mappings:
   # Using a mapping for AMIs allows for easy updates and region portability.

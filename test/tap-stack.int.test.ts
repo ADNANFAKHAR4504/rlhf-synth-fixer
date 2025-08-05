@@ -47,7 +47,6 @@ import path from 'path';
 const outputs: { [key: string]: string } = JSON.parse(
   fs.readFileSync(path.join(__dirname, './cfn-outputs.json'), 'utf8')
 );
-
 /*
  * =================================================================
  * REQUIRED `cfn-outputs.json` KEYS
