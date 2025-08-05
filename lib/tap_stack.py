@@ -131,9 +131,10 @@ class TapStackProps(NestedStack):
     )
 
     # Add auto scaling policies (Nice to Have: Add auto scaling policies)
-    self.asg.scale_on_cpu(
+    self.asg.scale_on_target_utilization( # Changed from scale_on_cpu
         "CpuScaling",
         target_utilization_percent=50,
+        predefined_metric=autoscaling.PredefinedMetric.ASG_AVERAGE_CPU_UTILIZATION,
         cooldown=Duration.seconds(300)
     )
 
