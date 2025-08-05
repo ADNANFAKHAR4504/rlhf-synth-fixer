@@ -189,8 +189,7 @@ jobs:
           export TF_INIT_OPTS="-backend-config=bucket=${{ env.TERRAFORM_STATE_BUCKET }} \
               -backend-config=key=${{ env.ENVIRONMENT_SUFFIX }}/terraform.tfstate \
               -backend-config=region=${{ env.TERRAFORM_STATE_BUCKET_REGION }}"
-          npm run tf:init -reconfigure  -lock=false -upgrade \
-          terraform force-unlock 50373a6f-621c-f0fa-57cd-727d6111a1cf
+          npm run tf:init && terraform force-unlock 50373a6f-621c-f0fa-57cd-727d6111a1cf
         shell: bash
 
       - name: Upload build artifacts
