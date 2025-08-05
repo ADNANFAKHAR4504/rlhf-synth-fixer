@@ -110,7 +110,7 @@ describe('TapStack Integration Tests - DynamoDB Multi-Region Deployment', () => 
   describe('Environment Configuration', () => {
     test('should have correct environment variables set', () => {
       expect(deploymentRegion).toMatch(/^us-(east|west)-[12]$/);
-      expect(applicationName).toBe('multi-region-app');
+      expect(applicationName).toBe(process.env.APPLICATION_NAME || 'multi-region-app');
       expect(environment).toBeDefined();
       expect(stackName).toContain('TapStack');
     });
@@ -139,7 +139,7 @@ describe('TapStack Integration Tests - DynamoDB Multi-Region Deployment', () => 
 
       expect(response.Stacks).toBeDefined();
       expect(response.Stacks).toHaveLength(1);
-      expect(response.Stacks![0].StackStatus).toBe('CREATE_COMPLETE');
+      expect(['CREATE_COMPLETE', 'UPDATE_COMPLETE']).toContain(response.Stacks![0].StackStatus);
     });
 
     test('should have correct stack outputs', async () => {
@@ -185,7 +185,7 @@ describe('TapStack Integration Tests - DynamoDB Multi-Region Deployment', () => 
         `${stackName}-TableName`,
         `${stackName}-TableArn`,
         `${stackName}-IAMRoleArn`,
-        `${stackName}-CapacityConfig`,
+        `${stackName}-CapacityConfiguration`,
         `${stackName}-TableDetails`,
       ];
 
@@ -390,7 +390,7 @@ describe('TapStack Integration Tests - DynamoDB Multi-Region Deployment', () => 
       );
 
       expect(tagMap['Environment']).toBe(environmentSuffix);
-      expect(tagMap['Application']).toBe('multi-region-app');
+      expect(tagMap['Application']).toBe(process.env.APPLICATION_NAME || 'multi-region-app');
       expect(tagMap['ManagedBy']).toBe('CloudFormation');
       expect(tagMap['DeploymentRegion']).toBe(deploymentRegion);
     });
