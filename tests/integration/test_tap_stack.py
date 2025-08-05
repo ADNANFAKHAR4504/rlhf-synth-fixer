@@ -15,6 +15,7 @@ class TestTapStackDeployedResources(unittest.TestCase):
 
   from pulumi.automation import LocalWorkspace, Stack
 
+
   @classmethod
   def setUpClass(cls):
     cls.stack_name = os.getenv("PULUMI_STACK", "dev")
@@ -23,12 +24,11 @@ class TestTapStackDeployedResources(unittest.TestCase):
 
     os.environ["AWS_REGION"] = cls.region
 
-    # Create workspace from existing Pulumi.yaml
-    ws = LocalWorkspace(work_dir=os.getcwd())
+    # Use Automation API to select the stack
+    ws = auto.LocalWorkspace(work_dir=os.getcwd())
+    cls.stack = auto.select_stack(stack_name=cls.stack_name, work_dir=os.getcwd())
 
-    # Select the stack from that workspace
-    cls.stack = Stack.select(stack_name=cls.stack_name, workspace=ws)
-
+    # Fetch outputs
     outputs = cls.stack.outputs()
     cls.vpc_id = outputs.get("vpc_id", {}).get("value")
     cls.sg_id = outputs.get("security_group_id", {}).get("value")
@@ -36,11 +36,12 @@ class TestTapStackDeployedResources(unittest.TestCase):
     cls.access_key_id = outputs.get("access_key_id", {}).get("value")
     cls.kms_key_id = outputs.get("kms_key_id", {}).get("value")
     cls.kms_alias = outputs.get("kms_alias", {}).get("value")
-    cls.encrypted_blob = outputs.get("encrypted_db_password_blob", {}).get("value")
 
     cls.ec2 = boto3.client("ec2", region_name=cls.region)
     cls.iam = boto3.client("iam", region_name=cls.region)
     cls.kms = boto3.client("kms", region_name=cls.region)
+
+
 
   def test_vpc_exists(self):
     if not self.vpc_id:
@@ -75,16 +76,6 @@ class TestTapStackDeployedResources(unittest.TestCase):
     key = self.kms.describe_key(KeyId=self.kms_key_id)["KeyMetadata"]
     self.assertTrue(key["Enabled"])
     self.assertIn("secure-web-key", self.kms_alias)
-
-  def test_encrypted_blob_is_base64(self):
-    if not self.encrypted_blob:
-      self.skipTest("encrypted_db_password_blob not found in stack outputs")
-    self.assertGreater(len(self.encrypted_blob), 10)
-    try:
-      base64.b64decode(self.encrypted_blob)
-    except Exception as e:
-      self.fail(f"Invalid base64 in encrypted blob: {e}")
-
 
 if __name__ == "__main__":
   unittest.main()

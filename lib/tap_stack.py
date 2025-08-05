@@ -88,20 +88,12 @@ class TapStack(pulumi.ComponentResource):
     # --------------------------------------------------------
     # IAM User + Conditional Rotation Policy
     # --------------------------------------------------------
-    user_name = f"secure-web-app-user-{env}"
-
-
-    try:
-      existing_user = aws.iam.get_user_output(user_name=user_name)
-      user = aws.iam.User.get(f"existing-user-{env}", id=user_name)
-    except:
-      user = aws.iam.User(
-        f"web-app-user-{env}",
-        name=user_name,
-        path="/applications/",
-        tags={**tags, "Application": "secure-web-app"}
-      )
-
+    user = aws.iam.User(
+      f"web-app-user-{env}",
+      name=f"secure-web-app-user-{env}",
+      path="/applications/",
+      tags={**tags, "Application": "secure-web-app"}
+    )
 
     def rotation_policy(days: int) -> str:
       return json.dumps({
@@ -136,20 +128,14 @@ class TapStack(pulumi.ComponentResource):
       f"rotate-policy-{env}",
       user=user.name,
       name="AccessKeyRotationPolicy",
-      policy=rotation_policy(max_key_age_days),
-      opts=ResourceOptions(parent=self, depends_on=[user])
+      policy=rotation_policy(max_key_age_days)
     )
 
     access_key = aws.iam.AccessKey(
       f"secure-access-key-{env}",
       user=user.name,
-      opts=ResourceOptions(
-        parent=self,
-        depends_on=[user],
-        additional_secret_outputs=["secret"]
-      )
+      opts=ResourceOptions(parent=self, additional_secret_outputs=["secret"])
     )
-
 
     # --------------------------------------------------------
     # KMS Key + IAM Principal Policy
