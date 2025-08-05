@@ -14,12 +14,6 @@ Parameters:
     Default: 'secureapp'
     AllowedPattern: '^[a-z0-9]+$'
     ConstraintDescription: 'Must be lowercase alphanumeric characters only.'
-  EnvironmentSuffix:
-    Type: String
-    Description: 'Environment suffix for stack naming (e.g., dev, prod, pr479)'
-    Default: 'dev'
-    AllowedPattern: '^[a-z0-9]+$'
-    ConstraintDescription: 'Must be lowercase alphanumeric characters only.'
 
 Resources:
   InfrastructureKMSKey:
@@ -46,12 +40,6 @@ Resources:
               - 'kms:ReEncrypt*'
             Resource: '*'
 
-  InfrastructureKMSKeyAlias:
-    Type: AWS::KMS::Alias
-    Properties:
-      AliasName: !Sub 'alias/${AWS::StackName}-infrastructure-key'
-      TargetKeyId: !Ref InfrastructureKMSKey
-
   SecureVPC:
     Type: AWS::EC2::VPC
     Properties:
@@ -62,7 +50,7 @@ Resources:
         - Key: Name
           Value: !Sub '${AWS::StackName}-secure-vpc'
         - Key: Environment
-          Value: !Ref EnvironmentSuffix
+          Value: 'Production'
 
   PublicSubnet:
     Type: AWS::EC2::Subnet
@@ -172,11 +160,6 @@ Resources:
                 Resource: !GetAtt InfrastructureKMSKey.Arn
       ManagedPolicyArns:
         - 'arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy'
-      # Tags:
-      #   - Key: Name
-      #     Value: 'EC2 Instance Role'
-      #   - Key: Purpose
-      #     Value: 'Least Privilege S3 Access'
 
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
@@ -229,6 +212,11 @@ Resources:
             Condition:
               StringEquals:
                 aws:SourceAccount: !Sub '${AWS::AccountId}'
+              ArnLike:
+                aws:SourceArn:
+                  - !Sub 'arn:aws:s3:::website-content-${UniqueId}'
+                  - !Sub 'arn:aws:s3:::application-logs-${UniqueId}'
+                  - !Sub 'arn:aws:s3:::backup-data-${UniqueId}'
 
   WebsiteContentBucket:
     Type: AWS::S3::Bucket
@@ -347,15 +335,14 @@ Resources:
           - Sid: AllowCloudFormationLogging
             Effect: Allow
             Principal:
-              Service: cloudformation.amazonaws.com
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:user/iac-deployment-runner'
             Action: 's3:PutBucketLogging'
             Resource: !GetAtt BackupDataBucket.Arn
           - Sid: AllowS3Logging
             Effect: Allow
             Principal:
               Service: logging.s3.amazonaws.com
-            Action:
-              - 's3:PutObject'
+            Action: 's3:PutObject'
             Resource: !Sub 'arn:aws:s3:::s3-access-logs-${UniqueId}/*'
             Condition:
               StringEquals:
@@ -389,7 +376,7 @@ Resources:
         - Key: Name
           Value: !Sub '${AWS::StackName}-secure-instance'
         - Key: Environment
-          Value: !Ref EnvironmentSuffix
+          Value: 'Production'
         - Key: Purpose
           Value: 'Web Application Server'
 
@@ -398,44 +385,44 @@ Outputs:
     Description: 'ID of the created VPC'
     Value: !Ref SecureVPC
     Export:
-      Name: !Sub '${AWS::StackName}-VPC-ID'
+      Name: !Sub '${AWS::StackName}-VPCId'
   EC2InstanceId:
     Description: 'ID of the created EC2 instance'
     Value: !Ref SecureEC2Instance
     Export:
-      Name: !Sub '${AWS::StackName}-EC2-Instance-ID'
+      Name: !Sub '${AWS::StackName}-EC2InstanceId'
   EC2PublicIP:
     Description: 'Public IP address of the EC2 instance'
     Value: !GetAtt SecureEC2Instance.PublicIp
     Export:
-      Name: !Sub '${AWS::StackName}-EC2-Public-IP'
+      Name: !Sub '${AWS::StackName}-EC2PublicIP'
   WebsiteContentBucket:
     Description: 'Name of the website content S3 bucket'
     Value: !Ref WebsiteContentBucket
     Export:
-      Name: !Sub '${AWS::StackName}-WebsiteContent-Bucket'
+      Name: !Sub '${AWS::StackName}-WebsiteContentBucket'
   ApplicationLogsBucket:
     Description: 'Name of the application logs S3 bucket'
     Value: !Ref ApplicationLogsBucket
     Export:
-      Name: !Sub '${AWS::StackName}-ApplicationLogs-Bucket'
+      Name: !Sub '${AWS::StackName}-ApplicationLogsBucket'
   BackupDataBucket:
     Description: 'Name of the backup data S3 bucket'
     Value: !Ref BackupDataBucket
     Export:
-      Name: !Sub '${AWS::StackName}-BackupData-Bucket'
+      Name: !Sub '${AWS::StackName}-BackupDataBucket'
   S3AccessLogsBucket:
     Description: 'Name of the S3 access logs bucket'
     Value: !Ref S3AccessLogsBucket
     Export:
-      Name: !Sub '${AWS::StackName}-S3-Access-Logs-Bucket'
+      Name: !Sub '${AWS::StackName}-S3AccessLogsBucket'
   KMSKeyId:
     Description: 'ID of the KMS key used for S3 encryption'
     Value: !Ref InfrastructureKMSKey
     Export:
-      Name: !Sub '${AWS::StackName}-KMS-Key'
+      Name: !Sub '${AWS::StackName}-KMSKeyId'
   EC2InstanceRoleArn:
     Description: 'ARN of the EC2 instance IAM role'
     Value: !GetAtt EC2InstanceRole.Arn
     Export:
-      Name: !Sub '${AWS::StackName}-EC2-Instance-Role-ARN'
+      Name: !Sub '${AWS::StackName}-EC2InstanceRoleArn'
