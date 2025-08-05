@@ -76,11 +76,22 @@ class TapStack(cdk.Stack):
       }
     )
 
-    # Grant Permissions
+    # Grant permissions manually to avoid circular dependency
     self.table.grant_read_write_data(self.lambda_fn)
-    self.bucket.grant_read_write(self.lambda_fn)
 
-    # Trigger Lambda on S3 upload
+    self.bucket.add_to_resource_policy(
+      PolicyStatement(
+        actions=[
+          "s3:GetObject",
+          "s3:PutObject",
+          "s3:DeleteObject"
+        ],
+        resources=[self.bucket.arn_for_objects("*")],
+        principals=[self.lambda_fn.grant_principal]
+      )
+    )
+
+    # Add S3 trigger after permissions are in place
     self.lambda_fn.add_event_source(
       S3EventSource(
         self.bucket,
@@ -103,4 +114,36 @@ class TapStack(cdk.Stack):
         ],
         resources=[log_group_arn]
       )
+    )
+
+    # ----------------------------
+    # Outputs (Exports)
+    # ----------------------------
+
+    cdk.CfnOutput(
+      self,
+      "S3BucketName",
+      value=self.bucket.bucket_name,
+      export_name=f"{resource_name('bucket')}-name"
+    )
+
+    cdk.CfnOutput(
+      self,
+      "DynamoDBTableName",
+      value=self.table.table_name,
+      export_name=f"{resource_name('table')}-name"
+    )
+
+    cdk.CfnOutput(
+      self,
+      "LambdaFunctionName",
+      value=self.lambda_fn.function_name,
+      export_name=f"{resource_name('lambda')}-name"
+    )
+
+    cdk.CfnOutput(
+      self,
+      "LambdaRoleArn",
+      value=self.lambda_fn.role.role_arn if self.lambda_fn.role else "N/A",
+      export_name=f"{resource_name('lambda')}-role-arn"
     )
