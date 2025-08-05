@@ -12,6 +12,7 @@ describe('TapStack Unit Tests', () => {
     app = new App();
   });
 
+
   test('TapStack instantiates successfully via props', () => {
     // Objective: Verify that the TapStack constructor runs without errors when
     // all possible props are provided.
