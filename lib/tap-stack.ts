@@ -4,9 +4,10 @@ import {
 } from '@cdktf/provider-aws/lib/provider';
 import { S3Backend, TerraformStack } from 'cdktf';
 import { Construct } from 'constructs';
-
-// ? Import your stacks here
-// import { MyStack } from './my-stack';
+import { VpcConstruct } from './constructs/vpc-construct';
+import { SecurityConstruct } from './constructs/security-construct';
+import { environments } from './config/environments';
+import { NamingConvention } from './utils/naming';
 
 interface TapStackProps {
   environmentSuffix?: string;
@@ -22,6 +23,10 @@ interface TapStackProps {
 const AWS_REGION_OVERRIDE = '';
 
 export class TapStack extends TerraformStack {
+  public vpc: VpcConstruct;
+  public security: SecurityConstruct;
+  public naming: NamingConvention;
+
   constructor(scope: Construct, id: string, props?: TapStackProps) {
     super(scope, id);
 
@@ -33,10 +38,26 @@ export class TapStack extends TerraformStack {
     const stateBucket = props?.stateBucket || 'iac-rlhf-tf-states';
     const defaultTags = props?.defaultTags ? [props.defaultTags] : [];
 
+    // Get environment configuration
+    if (!environments[environmentSuffix]) {
+      throw new Error(
+        `Environment '${environmentSuffix}' not found in configuration`
+      );
+    }
+    const config = environments[environmentSuffix];
+    this.naming = new NamingConvention(environmentSuffix);
+
     // Configure AWS Provider - this expects AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY to be set in the environment
     new AwsProvider(this, 'aws', {
       region: awsRegion,
-      defaultTags: defaultTags,
+      defaultTags: [
+        {
+          tags: {
+            ...config.tags,
+            ...(defaultTags.length > 0 ? defaultTags[0].tags : {}),
+          },
+        },
+      ],
     });
 
     // Configure S3 Backend with native state locking
@@ -50,8 +71,17 @@ export class TapStack extends TerraformStack {
     // ref - https://developer.hashicorp.com/terraform/cdktf/concepts/resources#escape-hatch
     this.addOverride('terraform.backend.s3.use_lockfile', true);
 
-    // ? Add your stack instantiations here
-    // ! Do NOT create resources directly in this stack.
-    // ! Instead, create separate stacks for each resource type.
+    // VPC Infrastructure
+    this.vpc = new VpcConstruct(this, 'vpc', {
+      config: config.network,
+      naming: this.naming,
+    });
+
+    // Security Infrastructure
+    this.security = new SecurityConstruct(this, 'security', {
+      vpcId: this.vpc.vpc.id,
+      environment: environmentSuffix,
+      naming: this.naming,
+    });
   }
 }
