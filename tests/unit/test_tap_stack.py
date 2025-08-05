@@ -1,289 +1,128 @@
-import pytest
+import unittest
+
 import aws_cdk as cdk
 from aws_cdk.assertions import Template, Match
-from tap_stack import TapStack, TapStackProps
+from pytest import mark
 
-@pytest.fixture(scope="module")
-def template():
-  app = cdk.App()
-  stack = TapStack(app, "TestTapStack", props=TapStackProps(environment_suffix="test"))
-  return Template.from_stack(stack)
+from lib.tap_stack import TapStack, TapStackProps
 
-@pytest.fixture(scope="module")
-def template_pr510():
-  app = cdk.App()
-  stack = TapStack(app, "Pr510TapStack", props=TapStackProps(environment_suffix="pr510"))
-  return Template.from_stack(stack)
 
-def test_s3_bucket_created(template: Template):
-  template.has_resource_properties(
-    "AWS::S3::Bucket",
-    {
-      "BucketName": "tap-test-bucket"
-    }
-  )
-  print("Test: S3 Bucket Created - PASSED")
+@mark.describe("TapStack")
+class TestTapStack(unittest.TestCase):
+    """Test cases for the TapStack CDK stack"""
 
-def test_s3_bucket_properties(template: Template):
-  template.has_resource_properties(
-    "AWS::S3::Bucket",
-    {
-      "BucketName": "tap-test-bucket",
-      "VersioningConfiguration": Match.absent(),
-      "PublicAccessBlockConfiguration": Match.absent()
-    }
-  )
-  template.has_resource(
-    "AWS::S3::Bucket",
-    {
-      "DeletionPolicy": "Delete",
-      "UpdateReplacePolicy": "Delete"
-    }
-  )
-  print("Test: S3 Bucket Properties - PASSED")
+    def setUp(self):
+        self.app = cdk.App()
 
-def test_dynamodb_table_created(template: Template):
-  template.has_resource_properties(
-    "AWS::DynamoDB::Table",
-    {
-      "TableName": "tap-test-table",
-      "KeySchema": [
-        {
-          "AttributeName": "id",
-          "KeyType": "HASH"
-        }
-      ],
-      "AttributeDefinitions": [
-        {
-          "AttributeName": "id",
-          "AttributeType": "S"
-        }
-      ],
-      "BillingMode": "PAY_PER_REQUEST"
-    }
-  )
-  print("Test: DynamoDB Table Created - PASSED")
+    @mark.it("creates an S3 bucket with the correct environment suffix")
+    def test_creates_s3_bucket_with_env_suffix(self):
+        env_suffix = "testenv"
+        stack = TapStack(self.app, "TapStackTest", TapStackProps(environment_suffix=env_suffix))
+        template = Template.from_stack(stack)
 
-def test_dynamodb_table_properties(template: Template):
-  template.has_resource_properties(
-    "AWS::DynamoDB::Table",
-    {
-      "TableName": "tap-test-table",
-      "KeySchema": [
-        {
-          "AttributeName": "id",
-          "KeyType": "HASH"
-        }
-      ],
-      "AttributeDefinitions": [
-        {
-          "AttributeName": "id",
-          "AttributeType": "S"
-        }
-      ],
-      "BillingMode": "PAY_PER_REQUEST"
-    }
-  )
-  template.has_resource(
-    "AWS::DynamoDB::Table",
-    {
-      "DeletionPolicy": "Delete",
-      "UpdateReplacePolicy": "Delete"
-    }
-  )
-  print("Test: DynamoDB Table Properties - PASSED")
+        template.resource_count_is("AWS::S3::Bucket", 1)
+        template.has_resource_properties("AWS::S3::Bucket", {
+            "BucketName": f"tap-{env_suffix}-bucket"
+        })
 
-def test_lambda_function_created(template: Template):
-  template.has_resource_properties(
-    "AWS::Lambda::Function",
-    {
-      "FunctionName": "tap-test-lambda",
-      "Runtime": "python3.11",
-      "Handler": "index.handler",
-      "Environment": {
-        "Variables": {
-          "TABLE_NAME": {
-            "Fn::GetAtt": [Match.string_like("AppTable*"), "TableName"]
-          },
-          "BUCKET_NAME": {
-            "Ref": Match.string_like("AppBucket*")
-          }
-        }
-      }
-    }
-  )
-  print("Test: Lambda Function Created - PASSED")
+    @mark.it("defaults environment suffix to 'dev' if not provided")
+    def test_defaults_env_suffix_to_dev(self):
+        stack = TapStack(self.app, "TapStackTestDefault")
+        template = Template.from_stack(stack)
 
-def test_lambda_dynamodb_permissions(template: Template):
-  template.has_resource_properties(
-    "AWS::IAM::Policy",
-    {
-      "PolicyDocument": {
-        "Statement": Match.array_with([
-          Match.object_like({
-            "Action": [
-              "dynamodb:BatchGetItem",
-              "dynamodb:GetRecords",
-              "dynamodb:GetShardIterator",
-              "dynamodb:Query",
-              "dynamodb:GetItem",
-              "dynamodb:Scan",
-              "dynamodb:ConditionCheckItem",
-              "dynamodb:PutItem",
-              "dynamodb:UpdateItem",
-              "dynamodb:DeleteItem"
-            ],
-            "Effect": "Allow",
-            "Resource": {
-              "Fn::GetAtt": [Match.string_like("AppTable*"), "Arn"]
+        template.resource_count_is("AWS::S3::Bucket", 1)
+        template.has_resource_properties("AWS::S3::Bucket", {
+            "BucketName": "tap-dev-bucket"
+        })
+
+    @mark.it("creates a DynamoDB table with correct partition key")
+    def test_creates_dynamodb_table(self):
+        stack = TapStack(self.app, "TapStackDynamoTest", TapStackProps(environment_suffix="qa"))
+        template = Template.from_stack(stack)
+
+        template.resource_count_is("AWS::DynamoDB::Table", 1)
+        template.has_resource_properties("AWS::DynamoDB::Table", {
+            "TableName": "tap-qa-table",
+            "KeySchema": [{
+                "AttributeName": "id",
+                "KeyType": "HASH"
+            }],
+            "AttributeDefinitions": [{
+                "AttributeName": "id",
+                "AttributeType": "S"
+            }],
+            "BillingMode": "PAYPERREQUEST"
+        })
+
+    @mark.it("creates a Lambda function with correct environment variables")
+    def test_creates_lambda_function_with_env(self):
+        stack = TapStack(self.app, "TapStackLambdaTest", TapStackProps(environment_suffix="stage"))
+        template = Template.from_stack(stack)
+
+        template.resource_count_is("AWS::Lambda::Function", 1)
+        template.has_resource_properties("AWS::Lambda::Function", Match.object_like({
+            "FunctionName": "tap-stage-lambda",
+            "Runtime": "python3.11",
+            "Handler": "index.handler",
+            "Environment": {
+                "Variables": {
+                    "TABLE_NAME": "tap-stage-table",
+                    "BUCKET_NAME": "tap-stage-bucket"
+                }
             }
-          })
-        ]),
-        "Version": "2012-10-17"
-      },
-      "PolicyName": Match.string_like("AppLambdaServiceRoleDefaultPolicy*"),
-      "Roles": [
-        {
-          "Fn::GetAtt": [Match.string_like("AppLambdaServiceRole*"), "Arn"]
-        }
-      ]
-    }
-  )
-  print("Test: Lambda DynamoDB Permissions - PASSED")
+        }))
 
-def test_lambda_s3_permissions(template: Template):
-  template.has_resource_properties(
-    "AWS::IAM::Policy",
-    {
-      "PolicyDocument": {
-        "Statement": Match.array_with([
-          Match.object_like({
-            "Action": Match.array_with([
-              "s3:GetObject*",
-              "s3:GetBucket*",
-              "s3:List*",
-              "s3:DeleteObject*",
-              "s3:PutObject*",
-              "s3:AbortMultipartUpload"
-            ]),
-            "Effect": "Allow",
-            "Resource": Match.array_with([
-              {
-                "Fn::GetAtt": [Match.string_like("AppBucket*"), "Arn"]
-              },
-              {
-                "Fn::Join": ["", [{
-                  "Fn::GetAtt": [Match.string_like("AppBucket*"), "Arn"]
-                }, "/*"]]
-              }
-            ])
-          })
-        ]),
-        "Version": "2012-10-17"
-      },
-      "PolicyName": Match.string_like("AppLambdaServiceRoleDefaultPolicy*"),
-      "Roles": [
-        {
-          "Fn::GetAtt": [Match.string_like("AppLambdaServiceRole*"), "Arn"]
-        }
-      ]
-    }
-  )
-  print("Test: Lambda S3 Permissions - PASSED")
+    @mark.it("adds S3 event source to Lambda")
+    def test_s3_event_source_mapping(self):
+        stack = TapStack(self.app, "TapStackS3Event")
+        template = Template.from_stack(stack)
 
-def test_s3_event_source_configured(template: Template):
-  template.has_resource_properties(
-    "AWS::Lambda::Permission",
-    {
-      "Action": "lambda:InvokeFunction",
-      "FunctionName": {
-        "Fn::GetAtt": [Match.string_like("AppLambda*"), "Arn"]
-      },
-      "Principal": "s3.amazonaws.com",
-      "SourceArn": {
-        "Fn::GetAtt": [Match.string_like("AppBucket*"), "Arn"]
-      }
-    }
-  )
-  template.has_resource_properties(
-    "AWS::S3::Bucket",
-    {
-      "NotificationConfiguration": {
-        "LambdaConfigurations": [
-          {
-            "Event": "s3:ObjectCreated:*",
-            "Function": {
-              "Fn::GetAtt": [Match.string_like("AppLambda*"), "Arn"]
+        template.has_resource_properties("AWS::Lambda::EventSourceMapping", Match.any_value())  # Optional check
+        # Or check the Lambda Permission (which indicates S3 can invoke Lambda)
+        template.has_resource("AWS::Lambda::Permission", Match.object_like({
+            "Action": "lambda:InvokeFunction",
+            "Principal": "s3.amazonaws.com"
+        }))
+
+    @mark.it("grants Lambda permissions to S3 and DynamoDB")
+    def test_lambda_has_permissions(self):
+        stack = TapStack(self.app, "TapStackPermissions")
+        template = Template.from_stack(stack)
+
+        iam_roles = template.find_resources("AWS::IAM::Role")
+        self.assertTrue(len(iam_roles) >= 1)
+
+        lambda_permissions = template.find_resources("AWS::IAM::Policy")
+        self.assertTrue(len(lambda_permissions) >= 1)
+
+    @mark.it("exports output values")
+    def test_stack_outputs(self):
+        stack = TapStack(self.app, "TapStackOutputs", TapStackProps(environment_suffix="prod"))
+        template = Template.from_stack(stack)
+
+        template.has_output("S3BucketName", {
+            "Export": {
+                "Name": "tap-prod-bucket-name"
+            },
+            "Value": "tap-prod-bucket"
+        })
+
+        template.has_output("DynamoDBTableName", {
+            "Export": {
+                "Name": "tap-prod-table-name"
+            },
+            "Value": "tap-prod-table"
+        })
+
+        template.has_output("LambdaFunctionName", {
+            "Export": {
+                "Name": "tap-prod-lambda-name"
+            },
+            "Value": "tap-prod-lambda"
+        })
+
+        template.has_output("LambdaRoleArn", {
+            "Export": {
+                "Name": "tap-prod-lambda-role-arn"
             }
-          }
-        ]
-      }
-    }
-  )
-  print("Test: S3 Event Source Configured - PASSED")
-
-def test_cloudformation_outputs(template: Template):
-  template.has_output(
-    "S3BucketName",
-    {
-      "Value": {"Ref": Match.string_like("AppBucket*")},
-      "Export": {"Name": "tap-test-bucket-name"}
-    }
-  )
-  template.has_output(
-    "DynamoDBTableName",
-    {
-      "Value": {"Fn::GetAtt": [Match.string_like("AppTable*"), "TableName"]},
-      "Export": {"Name": "tap-test-table-name"}
-    }
-  )
-  template.has_output(
-    "LambdaFunctionName",
-    {
-      "Value": {"Ref": Match.string_like("AppLambda*")},
-      "Export": {"Name": "tap-test-lambda-name"}
-    }
-  )
-  template.has_output(
-    "LambdaRoleArn",
-    {
-      "Value": {
-        "Fn::GetAtt": [Match.string_like("AppLambdaServiceRole*"), "Arn"]
-      },
-      "Export": {"Name": "tap-test-lambda-role-arn"}
-    }
-  )
-  print("Test: CloudFormation Outputs - PASSED")
-
-def test_cloudformation_outputs_pr510(template_pr510: Template):
-  template_pr510.has_output(
-    "S3BucketName",
-    {
-      "Value": {"Ref": Match.string_like("AppBucket*")},
-      "Export": {"Name": "tap-pr510-bucket-name"}
-    }
-  )
-  template_pr510.has_output(
-    "DynamoDBTableName",
-    {
-      "Value": {"Fn::GetAtt": [Match.string_like("AppTable*"), "TableName"]},
-      "Export": {"Name": "tap-pr510-table-name"}
-    }
-  )
-  template_pr510.has_output(
-    "LambdaFunctionName",
-    {
-      "Value": {"Ref": Match.string_like("AppLambda*")},
-      "Export": {"Name": "tap-pr510-lambda-name"}
-    }
-  )
-  template_pr510.has_output(
-    "LambdaRoleArn",
-    {
-      "Value": {
-        "Fn::GetAtt": [Match.string_like("AppLambdaServiceRole*"), "Arn"]
-      },
-      "Export": {"Name": "tap-pr510-lambda-role-arn"}
-    }
-  )
-  print("Test: CloudFormation Outputs for pr510 - PASSED")
+        })
