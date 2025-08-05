@@ -22,8 +22,8 @@ Parameters:
 Mappings:
   RegionMap:
     us-east-1:
-      AZ1: us-west-1a
-      AZ2: us-west-1b
+      AZ1: us-east-1a
+      AZ2: us-east-1b
 
 Resources:
   # S3 Bucket for File Uploads (Secured)
