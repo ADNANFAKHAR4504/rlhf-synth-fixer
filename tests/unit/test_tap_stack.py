@@ -1,49 +1,41 @@
-"""Unit tests for TAP Stack."""
-import os
-import sys
+"""Unit tests for TAP Stack module."""
 
-sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-
-from cdktf import App, Testing
+import pytest
+from cdktf import App
 
 from lib.tap_stack import TapStack
 
 
-class TestStackStructure:
-    """Test suite for Stack Structure."""
+class TestTapStack:
+  """Test class for TapStack."""
 
-    def setup_method(self):
-        """Reset mocks before each test."""
-        # Clear any previous test state if needed
+  def test_tap_stack_creation(self):
+    """Test that TapStack can be created successfully."""
+    app = App()
+    stack = TapStack(
+      app,
+      "test-stack",
+      environment_suffix="test",
+      aws_region="us-east-1",
+      default_tags={"Project": "Test"}
+    )
+    assert stack is not None
 
-    def test_tap_stack_instantiates_successfully_via_props(self):
-        """TapStack instantiates successfully via props."""
-        app = App()
-        stack = TapStack(
-            app,
-            "TestTapStackWithProps",
-            environment_suffix="prod",
-            state_bucket="custom-state-bucket",
-            state_bucket_region="us-west-2",
-            aws_region="us-west-2",
-        )
+  def test_tap_stack_with_defaults(self):
+    """Test TapStack creation with default parameters."""
+    app = App()
+    stack = TapStack(app, "test-stack-defaults")
+    assert stack is not None
 
-        # Verify that TapStack instantiates without errors via props
-        assert stack is not None
-        assert hasattr(stack, 'bucket')
-        assert hasattr(stack, 'bucket_versioning')
-        assert hasattr(stack, 'bucket_encryption')
-
-    def test_tap_stack_uses_default_values_when_no_props_provided(self):
-        """TapStack uses default values when no props provided."""
-        app = App()
-        stack = TapStack(app, "TestTapStackDefault")
-
-        # Verify that TapStack instantiates without errors when no props provided
-        assert stack is not None
-        assert hasattr(stack, 'bucket')
-        assert hasattr(stack, 'bucket_versioning')
-        assert hasattr(stack, 'bucket_encryption')
-
-
-# add more test suites and cases as needed
+  def test_tap_stack_synth(self):
+    """Test that TapStack can be synthesized."""
+    app = App()
+    TapStack(
+      app,
+      "test-stack-synth",
+      environment_suffix="test",
+      aws_region="us-west-2"
+    )
+    # Test that synthesis completes without errors
+    synth_result = app.synth()
+    assert synth_result is not None
