@@ -216,13 +216,13 @@ Resources:
             Effect: Allow
             Principal:
               Service: logging.s3.amazonaws.com
-            Action: s3:PutObject
+            Action: 's3:PutObject'
             Resource: !Sub 'arn:aws:s3:::s3-access-logs-${EnvironmentSuffix}-${UniqueId}/*'
             Condition:
               StringEquals:
-                aws:SourceAccount: !Sub '${AWS::AccountId}'
+                'aws:SourceAccount': !Sub '${AWS::AccountId}'
               ArnLike:
-                aws:SourceArn:
+                'aws:SourceArn':
                   - !Sub 'arn:aws:s3:::website-content-${EnvironmentSuffix}-${UniqueId}'
                   - !Sub 'arn:aws:s3:::application-logs-${EnvironmentSuffix}-${UniqueId}'
                   - !Sub 'arn:aws:s3:::backup-data-${EnvironmentSuffix}-${UniqueId}'
@@ -349,15 +349,6 @@ Resources:
               AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:user/iac-deployment-runner'
             Action: 's3:PutBucketLogging'
             Resource: !GetAtt BackupDataBucket.Arn
-          - Sid: AllowS3Logging
-            Effect: Allow
-            Principal:
-              Service: logging.s3.amazonaws.com
-            Action: 's3:PutObject'
-            Resource: !Sub 'arn:aws:s3:::s3-access-logs-${EnvironmentSuffix}-${UniqueId}/*'
-            Condition:
-              StringEquals:
-                'aws:SourceAccount': !Sub '${AWS::AccountId}'
 
   SecureEC2Instance:
     Type: AWS::EC2::Instance
