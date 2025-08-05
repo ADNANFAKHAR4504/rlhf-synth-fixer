@@ -19,7 +19,7 @@ import ipaddress
 config = pulumi.Config()
 domain_name = config.get("domain_name") or "example.com"
 environment = config.get("environment") or "dev"
-project_name = config.get("project_name") or "dualstack-web-app-v3"
+project_name = config.get("project_name") or "dualstack-web-app-v4"
 aws_region = config.get("aws:region") or "us-east-1"
 
 # Tags for all resources
@@ -63,7 +63,7 @@ def create_vpc_and_networking() -> Dict[str, Any]:
             availability_zone=az,
             cidr_block=f"10.0.{idx+1}.0/24",
             ipv6_cidr_block=vpc.ipv6_cidr_block.apply(
-                lambda cidr: str(list(ipaddress.IPv6Network(cidr).subnets(new_prefix=64))[idx])),
+                lambda cidr: str(list(ipaddress.IPv6Network(cidr).subnets(new_prefix=64))[idx + 4])),
             map_public_ip_on_launch=True,
             assign_ipv6_address_on_creation=True,
             tags={
