@@ -93,10 +93,17 @@ describe('Secure Infrastructure CloudFormation Template', () => {
             Sid: 'ReadWebsiteContent',
             Action: ['s3:GetObject', 's3:ListBucket'],
             Resource: expect.arrayContaining([
-              { 'Fn::Sub': 'arn:aws:s3:::website-content-${UniqueId}/*' },
-              { 'Fn::GetAtt': ['WebsiteContentBucket', 'Arn'] },
+              {
+                'Fn::Sub':
+                  'arn:aws:s3:::website-content-${EnvironmentSuffix}-${UniqueId}',
+              },
+              {
+                'Fn::Sub':
+                  'arn:aws:s3:::website-content-${EnvironmentSuffix}-${UniqueId}/*',
+              },
             ]),
           }),
+
           expect.objectContaining({
             Sid: 'WriteApplicationLogs',
             Action: ['s3:PutObject', 's3:PutObjectAcl'],
