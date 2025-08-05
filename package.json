@@ -46,7 +46,7 @@
     "tf:fmt": "cd bin && terraform fmt -check -recursive",
     "tf:validate": "cd bin && terraform validate",
     "tf:help": "cd bin && terraform -help",
-    "tf:output": "cd bin && terraform show -json > ../cfn-outputs/tfplan.json",
+    "tf:output": "cd bin && terraform show -json > ../tf-outputs/tfplan.json",
     "cfn:deploy-yaml": "aws cloudformation deploy --template-file lib/TapStack.yml --stack-name TapStack${ENVIRONMENT_SUFFIX:-dev} --capabilities CAPABILITY_IAM --parameter-overrides EnvironmentSuffix=${ENVIRONMENT_SUFFIX:-dev} --tags Repository=${REPOSITORY:-unknown} CommitAuthor=${COMMIT_AUTHOR:-unknown} --s3-bucket=iac-rlhf-cfn-states-${AWS_REGION:-us-east-1} --s3-prefix=${ENVIRONMENT_SUFFIX:-dev}",
     "cfn:deploy-json": "aws cloudformation deploy --template-file lib/TapStack.json --stack-name TapStack${ENVIRONMENT_SUFFIX:-dev} --capabilities CAPABILITY_IAM --parameter-overrides EnvironmentSuffix=${ENVIRONMENT_SUFFIX:-dev} --tags Repository=${REPOSITORY:-unknown} CommitAuthor=${COMMIT_AUTHOR:-unknown} --s3-bucket=iac-rlhf-cfn-states-${AWS_REGION:-us-east-1} --s3-prefix=${ENVIRONMENT_SUFFIX:-dev}",
     "cfn:destroy": "aws cloudformation delete-stack --stack-name TapStack${ENVIRONMENT_SUFFIX:-dev}",
