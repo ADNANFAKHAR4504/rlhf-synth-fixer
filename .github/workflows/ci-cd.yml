@@ -239,6 +239,7 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           download-artifacts: 'true'
+          platform: ${{ needs.detect-metadata.outputs.platform }}
 
       - name: Configure AWS
         uses: ./.github/actions/configure-aws
@@ -286,8 +287,7 @@ jobs:
   deploy:
     name: Deploy
     runs-on: ubuntu-24.04
-    timeout-minutes: 120 
-    needs: synth
+    needs: [detect-metadata, synth]
     if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
     environment: dev
 
@@ -300,7 +300,7 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           download-artifacts: 'true'
-          download-cdk-artifacts: 'true'
+          platform: ${{ needs.detect-metadata.outputs.platform }}
 
       - name: Configure AWS
         uses: ./.github/actions/configure-aws
@@ -572,6 +572,7 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           download-artifacts: 'true'
+          platform: ${{ needs.detect-metadata.outputs.platform }}
 
       # Python setup is handled by the setup-environment action
 
@@ -642,7 +643,7 @@ jobs:
   unit-tests:
     name: Unit Testing
     runs-on: ubuntu-24.04
-    needs: lint
+    needs: [detect-metadata, lint]
     if: >
       ${{
         github.event_name == 'pull_request' &&
@@ -665,6 +666,7 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           download-artifacts: 'true'
+          platform: ${{ needs.detect-metadata.outputs.platform }}
 
       - name: Convert YAML to JSON for CloudFormation projects
         if: ${{ needs.lint.outputs.platform == 'cfn' && needs.lint.outputs.language == 'yaml' }}
@@ -722,7 +724,7 @@ jobs:
   integration-tests-live:
     name: Integration Tests (Live)
     runs-on: ubuntu-24.04
-    needs: [lint, unit-tests, deploy]
+    needs: [detect-metadata, lint, unit-tests, deploy]
     environment: qa
     if: >
       ${{
@@ -745,6 +747,7 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           download-artifacts: 'true'
+          platform: ${{ needs.detect-metadata.outputs.platform }}
 
       - name: Download Deployment Outputs
         uses: actions/download-artifact@v4
@@ -843,6 +846,7 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           download-artifacts: 'false'
+          platform: ${{ needs.detect-metadata.outputs.platform }}
 
       - name: Configure AWS
         uses: ./.github/actions/configure-aws

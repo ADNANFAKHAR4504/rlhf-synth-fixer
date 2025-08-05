@@ -55,13 +55,13 @@ runs:
         check-latest: true
 
     - name: Setup Terraform
-      if: ${{ inputs.platform == 'cdktf' || inputs.platform == 'tf'}}
+      if: ${{ inputs.platform == 'cdktf' || inputs.platform == 'tf' || inputs.platform == '' }}
       uses: hashicorp/setup-terraform@v3
       with:
         terraform_version: ${{ inputs.terraform-version }}
 
     - name: Install Pulumi CLI
-      if: ${{ inputs.platform == 'pulumi' }}
+      if: ${{ inputs.platform == 'pulumi' || inputs.platform == '' }}
       uses: pulumi/actions@v5
       with:
         pulumi-version: ${{ inputs.pulumi-version }}
