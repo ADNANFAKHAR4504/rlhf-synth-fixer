@@ -316,9 +316,9 @@ jobs:
 
       - name: Initialize Terraform
         run: |
-          export TF_INIT_OPTS="-backend-config=bucket=${{ env.TERRAFORM_STATE_BUCKET }} \
-            -backend-config=key=${{ env.ENVIRONMENT_SUFFIX }} \
-            -backend-config=region=${{ env.TERRAFORM_STATE_BUCKET_REGION }}"
+          export TF_INIT_OPTS="-backend-config="bucket=${{ env.TERRAFORM_STATE_BUCKET }}" \
+              -backend-config="key=${{ env.ENVIRONMENT_SUFFIX }}/terraform.tfstate" \
+              -backend-config="region=${{ env.TERRAFORM_STATE_BUCKET_REGION }}"
           npm run tf:init -lock=false -upgrade
         shell: bash
 
@@ -341,9 +341,9 @@ jobs:
 
           elif [ "$PLATFORM" = "tf" ]; then
             echo "✅ Terraform project detected, setting up environment..."
-            npm run tf:plan -lock=false \
+            npm run tf:plan \
               -backend-config="bucket=${{ env.TERRAFORM_STATE_BUCKET }}" \
-              -backend-config="key=${{ env.ENVIRONMENT_SUFFIX }}" \
+              -backend-config="key=${{ env.ENVIRONMENT_SUFFIX }}/terraform.tfstate" \
               -backend-config="region=${{ env.TERRAFORM_STATE_BUCKET_REGION }}"
             echo "✅ Terraform Plan completed"
 
@@ -373,9 +373,8 @@ jobs:
             echo "✅ Terraform HCL project detected, running Terraform deploy..."
             npm run tf:deploy \
               -backend-config="bucket=${{ env.TERRAFORM_STATE_BUCKET }}" \
-              -backend-config="key=${{ env.ENVIRONMENT_SUFFIX }}" \
+              -backend-config="key=${{ env.ENVIRONMENT_SUFFIX }}/terraform.tfstate" \
               -backend-config="region=${{ env.TERRAFORM_STATE_BUCKET_REGION }}"
-              -backend-config="aws_region=${{ env.TERRAFORM_STATE_BUCKET_REGION }}"
           elif [ "$PLATFORM" = "cfn" ] && [ "$LANGUAGE" = "yaml" ]; then
             echo "✅ CloudFormation YAML project detected, deploying with AWS CLI..."
             npm run cfn:deploy-yaml
