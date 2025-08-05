@@ -641,8 +641,8 @@ class TapStack(cdk.Stack):
       principals=[iam.ServicePrincipal("cloudtrail.amazonaws.com")],
       actions=["s3:GetBucketAcl", "s3:PutObject"],
       resources=[
-          trail_bucket.bucket_arn,
-          f"{trail_bucket.bucket_arn}/AWSLogs/{self.account}/*"
+        trail_bucket.bucket_arn,
+        f"{trail_bucket.bucket_arn}/AWSLogs/{self.account}/*"
       ],
       conditions={"StringEquals": {"s3:x-amz-acl": "bucket-owner-full-control"}}
     ))
@@ -652,9 +652,7 @@ class TapStack(cdk.Stack):
       self, "SecureAppTrail",
       trail_name="secureapp-trail",
       s3_bucket_name=trail_bucket.bucket_name,
-      cloud_watch_logs_log_group_arn=cdk.Fn.sub(
-          "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/secureapp/cloudtrail"
-      ),
+      cloud_watch_logs_log_group_arn=trail_log_group.log_group_arn,
       cloud_watch_logs_role_arn=self._create_cloudtrail_log_role().role_arn,
       is_logging=True,
       is_multi_region_trail=True,
