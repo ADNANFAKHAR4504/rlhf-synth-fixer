@@ -163,28 +163,27 @@ Resources:
               Service: lambda.amazonaws.com
             Action: sts:AssumeRole
       Policies:
-        - PolicyName: ServerlessAppLambdaPolicy
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              # Only allow reading this one secret
-              - Effect: Allow
-                Action:
-                  - secretsmanager:GetSecretValue
-                Resource: !Ref ServerlessAppSecret
-              # Allow logging to its own log group
-              - Effect: Allow
-                Action:
-                  - logs:CreateLogGroup
-                  - logs:CreateLogStream
-                  - logs:PutLogEvents
-                Resource:
-                  - !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/ServerlessAppLambda:*
-              # Allows read access to objects in the S3 bucket for processing
-              - Effect: Allow
-                Action:
-                  - s3:GetObject
-                Resource: !Sub arn:aws:s3:::${S3BucketName}/*
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            # Only allow reading this one secret
+            - Effect: Allow
+              Action:
+                - secretsmanager:GetSecretValue
+              Resource: !Ref ServerlessAppSecret
+            # Allow logging to its own log group
+            - Effect: Allow
+              Action:
+                - logs:CreateLogGroup
+                - logs:CreateLogStream
+                - logs:PutLogEvents
+              Resource:
+                - !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/ServerlessAppLambda:*
+            # Allows read access to objects in the S3 bucket for processing
+            - Effect: Allow
+              Action:
+                - s3:GetObject
+              Resource: !Sub arn:aws:s3:::${S3BucketName}/*
       Path: '/'
       Tags:
         - Key: Name
