@@ -24,6 +24,8 @@ igw = aws.ec2.InternetGateway("igw",
 public_subnet = aws.ec2.Subnet("public-subnet",
     vpc_id=vpc.id,
     cidr_block="10.0.1.0/24",
+    ipv6_cidr_block=vpc.ipv6_cidr_block.apply(lambda x: x[:-2] + "64"),
+    availability_zone=aws.get_availability_zones().names[0],
     assign_ipv6_address_on_creation=True,
     map_public_ip_on_launch=True,
     tags={
@@ -35,6 +37,8 @@ public_subnet = aws.ec2.Subnet("public-subnet",
 private_subnet = aws.ec2.Subnet("private-subnet",
     vpc_id=vpc.id,
     cidr_block="10.0.2.0/24",
+    ipv6_cidr_block=vpc.ipv6_cidr_block.apply(lambda x: x[:-2] + "65"),
+    availability_zone=aws.get_availability_zones().names[1],
     assign_ipv6_address_on_creation=True,
     tags={
         "Environment": "Production",
@@ -44,10 +48,16 @@ private_subnet = aws.ec2.Subnet("private-subnet",
 # Create a route table for the public subnet
 public_rt = aws.ec2.RouteTable("public-rt",
     vpc_id=vpc.id,
-    routes=[aws.ec2.RouteTableRouteArgs(
-        cidr_block="0.0.0.0/0",
-        gateway_id=igw.id,
-    )],
+    routes=[
+        aws.ec2.RouteTableRouteArgs(
+            cidr_block="0.0.0.0/0",
+            gateway_id=igw.id,
+        ),
+        aws.ec2.RouteTableRouteArgs(
+            ipv6_cidr_block="::/0",
+            gateway_id=igw.id,
+        )
+    ],
     tags={
         "Environment": "Production",
         "Project": "IPv6StaticTest"
@@ -74,13 +84,27 @@ nat_gateway = aws.ec2.NatGateway("nat-gateway",
         "Project": "IPv6StaticTest"
     })
 
+# Create an Egress-Only Internet Gateway for private subnet IPv6 access
+egress_igw = aws.ec2.EgressOnlyInternetGateway("egress-igw",
+    vpc_id=vpc.id,
+    tags={
+        "Environment": "Production",
+        "Project": "IPv6StaticTest"
+    })
+
 # Create a route table for the private subnet
 private_rt = aws.ec2.RouteTable("private-rt",
     vpc_id=vpc.id,
-    routes=[aws.ec2.RouteTableRouteArgs(
-        cidr_block="0.0.0.0/0",
-        nat_gateway_id=nat_gateway.id,
-    )],
+    routes=[
+        aws.ec2.RouteTableRouteArgs(
+            cidr_block="0.0.0.0/0",
+            nat_gateway_id=nat_gateway.id,
+        ),
+        aws.ec2.RouteTableRouteArgs(
+            ipv6_cidr_block="::/0",
+            egress_only_gateway_id=egress_igw.id,
+        )
+    ],
     tags={
         "Environment": "Production",
         "Project": "IPv6StaticTest"
@@ -98,8 +122,7 @@ security_group = aws.ec2.SecurityGroup("sec-group",
         protocol="tcp",
         from_port=22,
         to_port=22,
-        cidr_blocks=["2001:db8::/32"],  # Example IPv6 range
-        ipv6_cidr_blocks=["2001:db8::/32"]
+        ipv6_cidr_blocks=["2001:db8::/32"]  # Example IPv6 range
     )],
     egress=[aws.ec2.SecurityGroupEgressArgs(
         protocol="-1",
@@ -113,31 +136,68 @@ security_group = aws.ec2.SecurityGroup("sec-group",
         "Project": "IPv6StaticTest"
     })
 
-# Create a launch configuration for the auto-scaling group
+# Create a launch template for the auto-scaling group
 ami = aws.ec2.get_ami(most_recent=True,
     owners=["amazon"],
     filters=[{"name": "name", "values": ["amzn2-ami-hvm-*-x86_64-gp2"]}])
 
 user_data = """#!/bin/bash
 echo "Hello, World!" > index.html
-nohup python -m SimpleHTTPServer 80 &
+nohup python3 -m http.server 80 &
 """
 
-launch_config = aws.ec2.LaunchConfiguration("web-server-lc",
+launch_template = aws.ec2.LaunchTemplate("web-server-lt",
     image_id=ami.id,
-    instance_type="t2.micro",
-    security_groups=[security_group.name],
-    user_data=user_data,
-    associate_public_ip_address=True,
-    vpc_classic_link_id=vpc.id,
+    instance_type="t3.micro",
+    vpc_security_group_ids=[security_group.id],
+    user_data=pulumi.Output.from_input(user_data).apply(lambda x: __import__('base64').b64encode(x.encode()).decode()),
+    tag_specifications=[
+        aws.ec2.LaunchTemplateTagSpecificationArgs(
+            resource_type="instance",
+            tags={
+                "Environment": "Production",
+                "Project": "IPv6StaticTest"
+            }
+        )
+    ],
     tags={
         "Environment": "Production",
         "Project": "IPv6StaticTest"
     })
 
+# Create EC2 instances with static IPv6 addresses in public subnet
+instance1 = aws.ec2.Instance("web-server-1",
+    ami=ami.id,
+    instance_type="t3.micro",
+    subnet_id=public_subnet.id,
+    vpc_security_group_ids=[security_group.id],
+    user_data=user_data,
+    ipv6_address_count=1,
+    tags={
+        "Environment": "Production",
+        "Project": "IPv6StaticTest",
+        "Name": "web-server-1"
+    })
+
+instance2 = aws.ec2.Instance("web-server-2",
+    ami=ami.id,
+    instance_type="t3.micro",
+    subnet_id=public_subnet.id,
+    vpc_security_group_ids=[security_group.id],
+    user_data=user_data,
+    ipv6_address_count=1,
+    tags={
+        "Environment": "Production",
+        "Project": "IPv6StaticTest",
+        "Name": "web-server-2"
+    })
+
 # Create an auto-scaling group for the public subnet
 asg = aws.autoscaling.Group("web-server-asg",
-    launch_configuration=launch_config.id,
+    launch_template=aws.autoscaling.GroupLaunchTemplateArgs(
+        id=launch_template.id,
+        version="$Latest"
+    ),
     min_size=1,
     max_size=2,
     desired_capacity=1,
@@ -152,7 +212,17 @@ asg = aws.autoscaling.Group("web-server-asg",
         "propagate_at_launch": True
     }])
 
+# Export key resource IDs and IPv6 information
 pulumi.export("vpc_id", vpc.id)
+pulumi.export("vpc_ipv6_cidr_block", vpc.ipv6_cidr_block)
 pulumi.export("public_subnet_id", public_subnet.id)
+pulumi.export("public_subnet_ipv6_cidr_block", public_subnet.ipv6_cidr_block)
 pulumi.export("private_subnet_id", private_subnet.id)
+pulumi.export("private_subnet_ipv6_cidr_block", private_subnet.ipv6_cidr_block)
 pulumi.export("security_group_id", security_group.id)
+pulumi.export("instance1_id", instance1.id)
+pulumi.export("instance1_ipv6_addresses", instance1.ipv6_addresses)
+pulumi.export("instance2_id", instance2.id)
+pulumi.export("instance2_ipv6_addresses", instance2.ipv6_addresses)
+pulumi.export("nat_gateway_id", nat_gateway.id)
+pulumi.export("egress_igw_id", egress_igw.id)
