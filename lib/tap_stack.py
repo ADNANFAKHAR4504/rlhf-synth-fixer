@@ -262,7 +262,6 @@ class TapStack(TerraformStack):
         handler="handler.lambda_handler",
         runtime="python3.12",
         filename=lambda_zip_path,
-        source_code_hash="${filebase64sha256(\"lambda_function.zip\")}",
         timeout=30,
         memory_size=256,
         environment={
