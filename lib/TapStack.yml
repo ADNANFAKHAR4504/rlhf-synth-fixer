@@ -326,30 +326,38 @@ Resources:
               - !Sub 'arn:aws:s3:::application-logs-${EnvironmentSuffix}-${UniqueId}/*'
               - !Sub 'arn:aws:s3:::application-logs-${EnvironmentSuffix}-${UniqueId}'
 
-  BackupDataBucketPolicy:
-    Type: AWS::S3::BucketPolicy
-    Properties:
-      Bucket: !Ref BackupDataBucket
-      PolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Sid: DenyAllAccess
-            Effect: Deny
-            Principal: '*'
-            Action: 's3:*'
-            Resource:
-              - !GetAtt BackupDataBucket.Arn
-              - !Sub 'arn:aws:s3:::backup-data-${EnvironmentSuffix}-${UniqueId}/*'
-            Condition:
-              StringNotEquals:
-                'aws:PrincipalServiceName': 'cloudformation.amazonaws.com'
-
-          - Sid: AllowCloudFormationLogging
-            Effect: Allow
-            Principal:
-              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:user/iac-deployment-runner'
-            Action: 's3:PutBucketLogging'
-            Resource: !GetAtt BackupDataBucket.Arn
+BackupDataBucketPolicy:
+  Type: AWS::S3::BucketPolicy
+  Properties:
+    Bucket: !Ref BackupDataBucket
+    PolicyDocument:
+      Version: '2012-10-17'
+      Statement:
+        - Sid: DenyAllAccess
+          Effect: Deny
+          Principal: '*'
+          Action: 's3:*'
+          Resource:
+            - !GetAtt BackupDataBucket.Arn
+            - !Sub 'arn:aws:s3:::backup-data-${EnvironmentSuffix}-${UniqueId}/*'
+          Condition:
+            StringNotEquals:
+              'aws:PrincipalServiceName': 'cloudformation.amazonaws.com'
+        - Sid: AllowCloudFormationLogging
+          Effect: Allow
+          Principal:
+            AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:user/iac-deployment-runner'
+          Action: 's3:PutBucketLogging'
+          Resource: !GetAtt BackupDataBucket.Arn
+        - Sid: AllowTestAccess
+          Effect: Allow
+          Principal:
+            AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:user/iac-deployment-runner'
+          Action:
+            - 's3:GetBucketEncryption'
+            - 's3:GetBucketPublicAccessBlock'
+            - 's3:GetBucketLogging'
+          Resource: !GetAtt BackupDataBucket.Arn
 
   SecureEC2Instance:
     Type: AWS::EC2::Instance
