@@ -24,10 +24,9 @@ const defaultTags = {
 };
 
 // Create the TapStack with the calculated properties
+// Note: stateBucket and stateBucketRegion removed for local development/testing
 new TapStack(app, stackName, {
   environmentSuffix: environmentSuffix,
-  stateBucket: stateBucket,
-  stateBucketRegion: stateBucketRegion,
   awsRegion: awsRegion,
   defaultTags: defaultTags,
 });
