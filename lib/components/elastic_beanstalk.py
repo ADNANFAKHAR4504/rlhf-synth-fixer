@@ -259,7 +259,7 @@ class ElasticBeanstalkInfrastructure(pulumi.ComponentResource):
       name=f"nova-env-{self.region_suffix}-{self.environment_suffix}",
       application=self.application.name,
       template_name=self.config_template.name,
-      tier="WebServer",
+      tier="SingleInstance",
       tags=self.tags,
       opts=ResourceOptions(parent=self)
     )
