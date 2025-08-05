@@ -104,7 +104,7 @@ class ElasticBeanstalkInfrastructure(pulumi.ComponentResource):
       )
 
     # Create dynamic settings using apply()
-    vpc_setting = create_vpc_setting(self.vpc_id)
+    # vpc_setting = create_vpc_setting(self.vpc_id)
     subnet_setting = create_subnet_setting("aws:ec2:vpc", "Subnets", self.private_subnet_ids[0])
     elb_subnet_setting = create_subnet_setting("aws:ec2:vpc", "ELBSubnets", self.public_subnet_ids[0])
     service_role_setting = create_role_setting(self.eb_service_role_arn)
