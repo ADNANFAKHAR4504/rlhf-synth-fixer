@@ -564,20 +564,6 @@
                 ]
             }
         },
-        "IAMAccountPasswordPolicy": {
-            "Type": "AWS::IAM::AccountPasswordPolicy",
-            "Properties": {
-                "AllowUsersToChangePassword": true,
-                "HardExpiry": false,
-                "MaxPasswordAge": 90,
-                "MinimumPasswordLength": 14,
-                "PasswordReusePrevention": 24,
-                "RequireLowercaseCharacters": true,
-                "RequireNumbers": true,
-                "RequireSymbols": true,
-                "RequireUppercaseCharacters": true
-            }
-        },
         "WebServerLaunchTemplate": {
             "Type": "AWS::EC2::LaunchTemplate",
             "Properties": {
@@ -951,6 +937,19 @@
                     "SourceIdentifier": "RDS_STORAGE_ENCRYPTED"
                 }
             }
+        },
+        "IAMPasswordPolicyRule": {
+            "Type": "AWS::Config::ConfigRule",
+            "DependsOn": "ConfigurationRecorder",
+            "Properties": {
+                "ConfigRuleName": {
+                    "Fn::Sub": "iam-password-policy-${AWSRegion}"
+                },
+                "Source": {
+                    "Owner": "AWS",
+                    "SourceIdentifier": "IAM_PASSWORD_POLICY"
+                }
+            }
         }
     },
     "Outputs": {
@@ -1012,17 +1011,6 @@
             "Export": {
                 "Name": {
                     "Fn::Sub": "${AWS::StackName}-AWS-Region"
-                }
-            }
-        },
-        "IAMAccountPasswordPolicy": {
-            "Description": "IAM Account Password Policy that enforces MFA",
-            "Value": {
-                "Ref": "IAMAccountPasswordPolicy"
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${AWS::StackName}-Password-Policy"
                 }
             }
         }

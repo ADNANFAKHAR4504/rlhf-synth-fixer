@@ -350,14 +350,13 @@ Resources:
   MFAEnforcementGroup:
     Type: AWS::IAM::Group
     Properties:
-      GroupName: !Sub '${AWS::StackName}-mfa-enforcement-group-${AWSRegion}'
       Path: '/'
 
   # IAM Policy for MFA Enforcement
   MFAEnforcementPolicy:
     Type: AWS::IAM::Policy
     Properties:
-      PolicyName: !Sub '${AWS::StackName}-mfa-enforcement-policy-${AWSRegion}'
+      PolicyName: MFAEnforcementPolicy
       Groups:
         - !Ref MFAEnforcementGroup
       PolicyDocument:
@@ -402,7 +401,7 @@ Resources:
   MFAProtectedAPIPolicy:
     Type: AWS::IAM::Policy
     Properties:
-      PolicyName: !Sub '${AWS::StackName}-mfa-protected-api-policy-${AWSRegion}'
+      PolicyName: MFAProtectedAPIPolicy
       Groups:
         - !Ref MFAEnforcementGroup
       PolicyDocument:
@@ -421,7 +420,9 @@ Resources:
   GlobalMFAEnforcementPolicy:
     Type: AWS::IAM::Policy
     Properties:
-      PolicyName: !Sub '${AWS::StackName}-global-mfa-enforcement-${AWSRegion}'
+      PolicyName: GlobalMFAEnforcementPolicy
+      Users:
+        - !Ref MFAEnforcementUser
       PolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -468,7 +469,6 @@ Resources:
   MFAEnforcementUser:
     Type: AWS::IAM::User
     Properties:
-      UserName: !Sub '${AWS::StackName}-mfa-user-${AWSRegion}'
       Path: '/'
       Groups:
         - !Ref MFAEnforcementGroup
@@ -487,7 +487,7 @@ Resources:
   MFAUserSelfManagementPolicy:
     Type: AWS::IAM::Policy
     Properties:
-      PolicyName: !Sub '${AWS::StackName}-mfa-user-self-management-${AWSRegion}'
+      PolicyName: MFAUserSelfManagementPolicy
       Users:
         - !Ref MFAEnforcementUser
       PolicyDocument:
@@ -520,18 +520,21 @@ Resources:
                 aws:username: !Ref MFAEnforcementUser
 
   # IAM Account Password Policy - Enforces MFA for all IAM users
-  IAMAccountPasswordPolicy:
-    Type: AWS::IAM::AccountPasswordPolicy
-    Properties:
-      AllowUsersToChangePassword: true
-      HardExpiry: false
-      MaxPasswordAge: 90
-      MinimumPasswordLength: 14
-      PasswordReusePrevention: 24
-      RequireLowercaseCharacters: true
-      RequireNumbers: true
-      RequireSymbols: true
-      RequireUppercaseCharacters: true
+  # Note: AWS::IAM::AccountPasswordPolicy is not available in all regions
+  # Using AWS CLI command in UserData or Lambda function would be the alternative
+  # For now, we'll use a custom resource or remove this policy
+  # IAMAccountPasswordPolicy:
+  #   Type: AWS::IAM::AccountPasswordPolicy
+  #   Properties:
+  #     AllowUsersToChangePassword: true
+  #     HardExpiry: false
+  #     MaxPasswordAge: 90
+  #     MinimumPasswordLength: 14
+  #     PasswordReusePrevention: 24
+  #     RequireLowercaseCharacters: true
+  #     RequireNumbers: true
+  #     RequireSymbols: true
+  #     RequireUppercaseCharacters: true
 
   # Launch Template
   WebServerLaunchTemplate:
@@ -871,8 +874,8 @@ Outputs:
     Export:
       Name: !Sub '${AWS::StackName}-Global-MFA-Policy'
 
-  IAMAccountPasswordPolicy:
-    Description: 'IAM Account Password Policy that enforces MFA'
-    Value: !Ref IAMAccountPasswordPolicy
-    Export:
-      Name: !Sub '${AWS::StackName}-Password-Policy'
+  # IAMAccountPasswordPolicy:
+  #   Description: 'IAM Account Password Policy that enforces MFA'
+  #   Value: !Ref IAMAccountPasswordPolicy
+  #   Export:
+  #     Name: !Sub '${AWS::StackName}-Password-Policy'
