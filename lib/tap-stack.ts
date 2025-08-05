@@ -9,7 +9,6 @@ import { ConfigDeliveryChannel } from '@cdktf/provider-aws/lib/config-delivery-c
 import { DataAwsAvailabilityZones } from '@cdktf/provider-aws/lib/data-aws-availability-zones';
 import { DataAwsCallerIdentity } from '@cdktf/provider-aws/lib/data-aws-caller-identity';
 import { Eip } from '@cdktf/provider-aws/lib/eip';
-import { GuarddutyDetector } from '@cdktf/provider-aws/lib/guardduty-detector';
 import { IamAccountPasswordPolicy } from '@cdktf/provider-aws/lib/iam-account-password-policy';
 import { IamPolicy } from '@cdktf/provider-aws/lib/iam-policy';
 import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
@@ -331,9 +330,12 @@ export class TapStack extends TerraformStack {
       tags: { ...commonTags, Name: 'prod-sec-db-sg', Tier: 'Database' },
     });
 
+    // Generate random suffix for unique bucket names
+    const randomSuffix = Math.random().toString(36).substring(2, 8);
+
     // S3 Buckets with security configurations
     const logsBucket = new S3Bucket(this, 'prod-sec-logs-bucket', {
-      bucket: `prod-sec-logs-${current.accountId}`,
+      bucket: `prod-sec-logs-${current.accountId}-${randomSuffix}`,
       tags: { ...commonTags, Name: 'prod-sec-logs-bucket', Purpose: 'Logging' },
     });
 
@@ -370,7 +372,7 @@ export class TapStack extends TerraformStack {
     });
 
     const appDataBucket = new S3Bucket(this, 'prod-sec-app-data-bucket', {
-      bucket: `prod-sec-app-data-${current.accountId}`,
+      bucket: `prod-sec-app-data-${current.accountId}-${randomSuffix}`,
       tags: {
         ...commonTags,
         Name: 'prod-sec-app-data-bucket',
@@ -726,7 +728,9 @@ export class TapStack extends TerraformStack {
           },
         ],
       }),
-      managedPolicyArns: ['arn:aws:iam::aws:policy/service-role/ConfigRole'],
+      managedPolicyArns: [
+        'arn:aws:iam::aws:policy/service-role/AWS_ConfigRole',
+      ],
       tags: commonTags,
     });
 
@@ -823,12 +827,13 @@ export class TapStack extends TerraformStack {
       dependsOn: [configRecorder],
     });
 
-    // GuardDuty - Basic configuration (features configured separately)
-    new GuarddutyDetector(this, 'prod-sec-guardduty', {
-      enable: true,
-      findingPublishingFrequency: 'FIFTEEN_MINUTES',
-      tags: commonTags,
-    });
+    // GuardDuty - Commented out as detector already exists in account
+    // Note: If GuardDuty detector doesn't exist, uncomment the following:
+    // new GuarddutyDetector(this, 'prod-sec-guardduty', {
+    //   enable: true,
+    //   findingPublishingFrequency: 'FIFTEEN_MINUTES',
+    //   tags: commonTags,
+    // });
 
     // Outputs
     new TerraformOutput(this, 'vpc_id', {
