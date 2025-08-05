@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'Secure-by-default multi-region infrastructure with comprehensive security controls'
+Description: 'Secure by default multi-region infrastructure with comprehensive security controls'
 
 Parameters:
   AllowedSSHCIDR:
