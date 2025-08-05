@@ -20,11 +20,13 @@ export class TapStack extends cdk.Stack {
     const config = getEnvironmentConfig(environmentSuffix);
 
     // Create the MultiEnvStack
-    const multiEnvStackId = `TapStackMultiEnvStack${environmentSuffix}`;
-    new MultiEnvStack(scope, multiEnvStackId, {
-      stackName: multiEnvStackId,
+    new MultiEnvStack(this, 'MultiEnvStack', {
       config: config,
-      env: environmentSuffix,
+      environmentSuffix: environmentSuffix,
+      env: {
+        account: this.account,
+        region: this.region,
+      },
     });
   }
 }

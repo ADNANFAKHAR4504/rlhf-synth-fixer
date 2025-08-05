@@ -1,10 +1,10 @@
 import * as cdk from 'aws-cdk-lib';
+import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
-import * as s3 from 'aws-cdk-lib/aws-s3';
+import * as ecs from 'aws-cdk-lib/aws-ecs';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as logs from 'aws-cdk-lib/aws-logs';
-import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
-import * as ecs from 'aws-cdk-lib/aws-ecs';
+import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as servicediscovery from 'aws-cdk-lib/aws-servicediscovery';
 import { Construct } from 'constructs';
 
@@ -27,6 +27,7 @@ export interface MultiEnvConfig {
 export interface MultiEnvStackProps extends cdk.StackProps {
   config: MultiEnvConfig;
   crossRegionReferences?: boolean;
+  environmentSuffix: string;
 }
 
 /**
@@ -46,6 +47,7 @@ export class MultiEnvStack extends cdk.Stack {
   public readonly primaryBucket: s3.Bucket;
   public readonly executionRole: iam.Role;
   public readonly taskRole: iam.Role;
+  public readonly environmentSuffix: string;
 
   constructor(scope: Construct, id: string, props: MultiEnvStackProps) {
     super(scope, id, props);
@@ -54,7 +56,7 @@ export class MultiEnvStack extends cdk.Stack {
     if (props.crossRegionReferences) {
       this.node.setContext('@aws-cdk/core:enableCrossRegionReferences', true);
     }
-
+    this.environmentSuffix = props.environmentSuffix;
     // Create VPC with consistent configuration across environments
     this.vpc = this.createVpc(props.config);
 
@@ -77,6 +79,9 @@ export class MultiEnvStack extends cdk.Stack {
 
     // Apply consistent tags across all resources
     this.applyEnvironmentTags(props.config);
+
+    // Export outputs for testing and cross-stack references
+    this.exportOutputs(props.config);
   }
 
   /**
@@ -95,7 +100,7 @@ export class MultiEnvStack extends cdk.Stack {
       resourceType: ec2.FlowLogResourceType.fromVpc(vpc),
       destination: ec2.FlowLogDestination.toCloudWatchLogs(
         new logs.LogGroup(this, 'VpcFlowLogGroup', {
-          logGroupName: `/aws/vpc/flowlogs/${config.environmentName}-${this.stackName}`,
+          logGroupName: `/aws/vpc/flowlogs/${config.environmentName}-${this.environmentSuffix}-${this.stackName}`,
           retention: config.logRetentionDays,
           removalPolicy: cdk.RemovalPolicy.DESTROY,
         })
@@ -115,7 +120,7 @@ export class MultiEnvStack extends cdk.Stack {
   } {
     // ECS Task Execution Role - only permissions needed to start tasks
     const executionRole = new iam.Role(this, 'EcsExecutionRole', {
-      roleName: `${config.environmentName}-ecs-execution-role`,
+      roleName: `${config.environmentName}-${this.environmentSuffix}-ecs-execution-role`,
       assumedBy: new iam.ServicePrincipal('ecs-tasks.amazonaws.com'),
       managedPolicies: [
         iam.ManagedPolicy.fromAwsManagedPolicyName(
@@ -134,7 +139,7 @@ export class MultiEnvStack extends cdk.Stack {
                 'logs:PutLogEvents',
               ],
               resources: [
-                `arn:aws:logs:${this.region}:${this.account}:log-group:/aws/ecs/${config.environmentName}/*`,
+                `arn:aws:logs:${this.region}:${this.account}:log-group:/aws/ecs/${config.environmentName}-${this.environmentSuffix}/*`,
               ],
             }),
           ],
@@ -144,7 +149,7 @@ export class MultiEnvStack extends cdk.Stack {
 
     // ECS Task Role - application-specific permissions
     const taskRole = new iam.Role(this, 'EcsTaskRole', {
-      roleName: `${config.environmentName}-ecs-task-role`,
+      roleName: `${config.environmentName}-${this.environmentSuffix}-ecs-task-role`,
       assumedBy: new iam.ServicePrincipal('ecs-tasks.amazonaws.com'),
       inlinePolicies: {
         S3Access: new iam.PolicyDocument({
@@ -153,7 +158,7 @@ export class MultiEnvStack extends cdk.Stack {
               effect: iam.Effect.ALLOW,
               actions: ['s3:GetObject', 's3:PutObject', 's3:DeleteObject'],
               resources: [
-                `arn:aws:s3:::${config.environmentName}-multi-env-bucket/*`,
+                `arn:aws:s3:::${config.environmentName}-${this.environmentSuffix}-multi-env-bucket/*`,
               ],
             }),
           ],
@@ -182,7 +187,7 @@ export class MultiEnvStack extends cdk.Stack {
    * Implements versioning, encryption, and replication to specified regions
    */
   private createS3BucketWithReplication(config: MultiEnvConfig): s3.Bucket {
-    const bucketName = `${config.environmentName}-multi-env-bucket-${this.account}-${this.region}`;
+    const bucketName = `${config.environmentName}-${this.environmentSuffix}-multi-env-bucket-${this.account}-${this.region}`;
 
     // Create the primary S3 bucket
     const primaryBucket = new s3.Bucket(this, 'PrimaryBucket', {
@@ -238,7 +243,7 @@ export class MultiEnvStack extends cdk.Stack {
     config.s3ReplicationRegions.forEach(region => {
       if (region !== this.region) {
         // Create destination bucket in target region (would need cross-region support)
-        const destinationBucketArn = `arn:aws:s3:::${config.environmentName}-multi-env-replica-${this.account}-${region}`;
+        const destinationBucketArn = `arn:aws:s3:::${config.environmentName}-${this.environmentSuffix}-multi-env-replica-${this.account}-${region}`;
 
         // Add destination permissions to replication role
         replicationRole.addToPolicy(
@@ -264,7 +269,7 @@ export class MultiEnvStack extends cdk.Stack {
    */
   private createEcsCluster(config: MultiEnvConfig): ecs.Cluster {
     const cluster = new ecs.Cluster(this, 'MultiEnvCluster', {
-      clusterName: `${config.environmentName}-multi-env-cluster`,
+      clusterName: `${config.environmentName}-${this.environmentSuffix}-multi-env-cluster`,
       vpc: this.vpc,
       // Enable Container Insights for enhanced observability
       containerInsights: config.enableContainerInsights,
@@ -274,7 +279,7 @@ export class MultiEnvStack extends cdk.Stack {
 
     // Configure Service Connect on the cluster with unique namespace
     cluster.addDefaultCloudMapNamespace({
-      name: `${config.environmentName}-${this.stackName}.local`,
+      name: `${config.environmentName}-${this.environmentSuffix}-${this.stackName}.local`,
       type: servicediscovery.NamespaceType.DNS_PRIVATE,
     });
 
@@ -288,7 +293,7 @@ export class MultiEnvStack extends cdk.Stack {
   private setupCloudWatchMonitoring(config: MultiEnvConfig): void {
     // Create CloudWatch Dashboard for environment overview
     const dashboard = new cloudwatch.Dashboard(this, 'MultiEnvDashboard', {
-      dashboardName: `${config.environmentName}-multi-env-dashboard`,
+      dashboardName: `${config.environmentName}-${this.environmentSuffix}-multi-env-dashboard`,
     });
 
     // Add VPC metrics widget
@@ -339,7 +344,7 @@ export class MultiEnvStack extends cdk.Stack {
 
     // Create CloudWatch Alarms for critical metrics
     new cloudwatch.Alarm(this, 'HighCPUAlarm', {
-      alarmName: `${config.environmentName}-high-cpu-utilization`,
+      alarmName: `${config.environmentName}-${this.environmentSuffix}-high-cpu-utilization`,
       metric: new cloudwatch.Metric({
         namespace: 'AWS/ECS',
         metricName: 'CPUUtilization',
@@ -356,7 +361,7 @@ export class MultiEnvStack extends cdk.Stack {
 
     // Create alarm for S3 bucket access
     new cloudwatch.Alarm(this, 'S3AccessAlarm', {
-      alarmName: `${config.environmentName}-s3-high-error-rate`,
+      alarmName: `${config.environmentName}-${this.environmentSuffix}-s3-high-error-rate`,
       metric: new cloudwatch.Metric({
         namespace: 'AWS/S3',
         metricName: '4xxErrors',
@@ -377,21 +382,21 @@ export class MultiEnvStack extends cdk.Stack {
   private createLogGroups(config: MultiEnvConfig): void {
     // Application log group
     new logs.LogGroup(this, 'ApplicationLogGroup', {
-      logGroupName: `/aws/ecs/${config.environmentName}/application`,
+      logGroupName: `/aws/ecs/${config.environmentName}-${this.environmentSuffix}/application`,
       retention: config.logRetentionDays,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
     // System log group
     new logs.LogGroup(this, 'SystemLogGroup', {
-      logGroupName: `/aws/ecs/${config.environmentName}/system`,
+      logGroupName: `/aws/ecs/${config.environmentName}-${this.environmentSuffix}/system`,
       retention: config.logRetentionDays,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
     // Security log group
     new logs.LogGroup(this, 'SecurityLogGroup', {
-      logGroupName: `/aws/security/${config.environmentName}`,
+      logGroupName: `/aws/security/${config.environmentName}-${this.environmentSuffix}`,
       retention: logs.RetentionDays.ONE_YEAR, // Keep security logs longer
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
@@ -407,6 +412,142 @@ export class MultiEnvStack extends cdk.Stack {
     cdk.Tags.of(this).add('ManagedBy', 'CDK');
     cdk.Tags.of(this).add('Project', 'MultiEnvDeployment');
     cdk.Tags.of(this).add('CostCenter', config.environmentName);
+  }
+
+  /**
+   * Exports CloudFormation outputs for cross-stack references and testing
+   * These outputs are used by integration tests to validate the infrastructure
+   */
+  private exportOutputs(config: MultiEnvConfig): void {
+    // VPC outputs
+    new cdk.CfnOutput(this, 'VpcId', {
+      value: this.vpc.vpcId,
+      description: 'The ID of the VPC',
+      exportName: `${this.stackName}-VpcId`,
+    });
+
+    // ECS Cluster outputs
+    new cdk.CfnOutput(this, 'EcsClusterName', {
+      value: this.ecsCluster.clusterName,
+      description: 'The name of the ECS cluster',
+      exportName: `${this.stackName}-EcsClusterName`,
+    });
+
+    new cdk.CfnOutput(this, 'EcsClusterArn', {
+      value: this.ecsCluster.clusterArn,
+      description: 'The ARN of the ECS cluster',
+      exportName: `${this.stackName}-EcsClusterArn`,
+    });
+
+    // S3 Bucket outputs
+    new cdk.CfnOutput(this, 'PrimaryBucketName', {
+      value: this.primaryBucket.bucketName,
+      description: 'The name of the primary S3 bucket',
+      exportName: `${this.stackName}-PrimaryBucketName`,
+    });
+
+    new cdk.CfnOutput(this, 'PrimaryBucketArn', {
+      value: this.primaryBucket.bucketArn,
+      description: 'The ARN of the primary S3 bucket',
+      exportName: `${this.stackName}-PrimaryBucketArn`,
+    });
+
+    // IAM Role outputs
+    new cdk.CfnOutput(this, 'ExecutionRoleName', {
+      value: this.executionRole.roleName,
+      description: 'The name of the ECS execution IAM role',
+      exportName: `${this.stackName}-ExecutionRoleName`,
+    });
+
+    new cdk.CfnOutput(this, 'ExecutionRoleArn', {
+      value: this.executionRole.roleArn,
+      description: 'The ARN of the ECS execution IAM role',
+      exportName: `${this.stackName}-ExecutionRoleArn`,
+    });
+
+    new cdk.CfnOutput(this, 'TaskRoleName', {
+      value: this.taskRole.roleName,
+      description: 'The name of the ECS task IAM role',
+      exportName: `${this.stackName}-TaskRoleName`,
+    });
+
+    new cdk.CfnOutput(this, 'TaskRoleArn', {
+      value: this.taskRole.roleArn,
+      description: 'The ARN of the ECS task IAM role',
+      exportName: `${this.stackName}-TaskRoleArn`,
+    });
+
+    // CloudWatch Logs outputs
+    const appLogGroup = `/aws/ecs/${config.environmentName}-${this.environmentSuffix}/application`;
+    new cdk.CfnOutput(this, 'ApplicationLogGroupName', {
+      value: appLogGroup,
+      description: 'The name of the application log group',
+      exportName: `${this.stackName}-ApplicationLogGroupName`,
+    });
+
+    const sysLogGroup = `/aws/ecs/${config.environmentName}-${this.environmentSuffix}/system`;
+    new cdk.CfnOutput(this, 'SystemLogGroupName', {
+      value: sysLogGroup,
+      description: 'The name of the system log group',
+      exportName: `${this.stackName}-SystemLogGroupName`,
+    });
+
+    const secLogGroup = `/aws/security/${config.environmentName}-${this.environmentSuffix}`;
+    new cdk.CfnOutput(this, 'SecurityLogGroupName', {
+      value: secLogGroup,
+      description: 'The name of the security log group',
+      exportName: `${this.stackName}-SecurityLogGroupName`,
+    });
+
+    const vpcFlowLogGroup = `/aws/vpc/flowlogs/${config.environmentName}-${this.environmentSuffix}-${this.stackName}`;
+    new cdk.CfnOutput(this, 'VpcFlowLogGroupName', {
+      value: vpcFlowLogGroup,
+      description: 'The name of the VPC flow log group',
+      exportName: `${this.stackName}-VpcFlowLogGroupName`,
+    });
+
+    // CloudWatch Dashboard and Alarms outputs
+    const dashboardName = `${config.environmentName}-${this.environmentSuffix}-multi-env-dashboard`;
+    new cdk.CfnOutput(this, 'DashboardName', {
+      value: dashboardName,
+      description: 'The name of the CloudWatch dashboard',
+      exportName: `${this.stackName}-DashboardName`,
+    });
+
+    const cpuAlarmName = `${config.environmentName}-${this.environmentSuffix}-high-cpu-utilization`;
+    new cdk.CfnOutput(this, 'CpuAlarmName', {
+      value: cpuAlarmName,
+      description: 'The name of the CPU utilization alarm',
+      exportName: `${this.stackName}-CpuAlarmName`,
+    });
+
+    const s3AlarmName = `${config.environmentName}-${this.environmentSuffix}-s3-high-error-rate`;
+    new cdk.CfnOutput(this, 'S3AlarmName', {
+      value: s3AlarmName,
+      description: 'The name of the S3 error rate alarm',
+      exportName: `${this.stackName}-S3AlarmName`,
+    });
+
+    // Service Discovery namespace output
+    const namespaceName = `${config.environmentName}-${this.environmentSuffix}-${this.stackName}.local`;
+    new cdk.CfnOutput(this, 'ServiceDiscoveryNamespace', {
+      value: namespaceName,
+      description: 'The name of the Service Discovery namespace',
+      exportName: `${this.stackName}-ServiceDiscoveryNamespace`,
+    });
+
+    // Environment configuration outputs
+    new cdk.CfnOutput(this, 'EnvironmentName', {
+      value: config.environmentName,
+      description: 'The name of the environment',
+      exportName: `${this.stackName}-EnvironmentName`,
+    });
+
+    new cdk.CfnOutput(this, 'EnvironmentSuffix', {
+      value: this.environmentSuffix,
+      description: 'The suffix of the environment',
+      exportName: `${this.stackName}-EnvironmentSuffix`,
+    });
   }
 }
 

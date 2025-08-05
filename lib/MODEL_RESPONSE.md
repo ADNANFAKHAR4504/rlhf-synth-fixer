@@ -1,5 +1,44 @@
 I'll create a comprehensive multi-environment AWS infrastructure solution using CDK with TypeScript that addresses all your requirements. This solution will provide consistency across multiple environments and regions with proper parameterization, security, and observability.
 
+## file: tap-stack.ts
+```typescript
+import * as cdk from 'aws-cdk-lib';
+import { Construct } from 'constructs';
+import { MultiEnvStack, getEnvironmentConfig } from './multi-env-stack';
+
+interface TapStackProps extends cdk.StackProps {
+  environmentSuffix?: string;
+}
+
+export class TapStack extends cdk.Stack {
+  constructor(scope: Construct, id: string, props?: TapStackProps) {
+    super(scope, id, props);
+
+    // Get environment suffix from props, context, or use 'dev' as default
+    const environmentSuffix =
+      props?.environmentSuffix ||
+      this.node.tryGetContext('environmentSuffix') ||
+      'dev';
+
+    // Get environment-specific configuration
+    const config = getEnvironmentConfig(environmentSuffix);
+
+    // Create the MultiEnvStack
+    const multiEnvStackId = `TapStackMultiEnvStack${environmentSuffix}`;
+    new MultiEnvStack(scope, multiEnvStackId, {
+      stackName: multiEnvStackId,
+      config: config,
+      environmentSuffix: environmentSuffix,
+      env: {
+        account: this.account,
+        region: this.region,
+      },
+    });
+  }
+}
+
+```
+
 ## File: multi-env-stack.ts
 
 ```typescript
@@ -32,6 +71,7 @@ export interface MultiEnvConfig {
 export interface MultiEnvStackProps extends cdk.StackProps {
   config: MultiEnvConfig;
   crossRegionReferences?: boolean;
+  environmentSuffix: string;
 }
 
 /**
@@ -51,6 +91,7 @@ export class MultiEnvStack extends cdk.Stack {
   public readonly primaryBucket: s3.Bucket;
   public readonly executionRole: iam.Role;
   public readonly taskRole: iam.Role;
+  public readonly environmentSuffix: string;
 
   constructor(scope: Construct, id: string, props: MultiEnvStackProps) {
     super(scope, id, props);
@@ -59,6 +100,7 @@ export class MultiEnvStack extends cdk.Stack {
     if (props.crossRegionReferences) {
       this.node.setContext('@aws-cdk/core:enableCrossRegionReferences', true);
     }
+    this.environmentSuffix = props.environmentSuffix;
 
     // Create VPC with consistent configuration across environments
     this.vpc = this.createVpc(props.config);
@@ -121,7 +163,7 @@ export class MultiEnvStack extends cdk.Stack {
       resourceType: ec2.FlowLogResourceType.fromVpc(vpc),
       destination: ec2.FlowLogDestination.toCloudWatchLogs(
         new logs.LogGroup(this, 'VpcFlowLogGroup', {
-          logGroupName: `/aws/vpc/flowlogs/${config.environmentName}`,
+          logGroupName: `/aws/vpc/flowlogs/${config.environmentName}-${this.environmentSuffix}-${environmentSuffix}`,
           retention: config.logRetentionDays,
           removalPolicy: cdk.RemovalPolicy.DESTROY,
         })
@@ -141,7 +183,7 @@ export class MultiEnvStack extends cdk.Stack {
   } {
     // ECS Task Execution Role - only permissions needed to start tasks
     const executionRole = new iam.Role(this, 'EcsExecutionRole', {
-      roleName: `${config.environmentName}-ecs-execution-role`,
+      roleName: `${config.environmentName}-${this.environmentSuffix}-${environmentSuffix}-ecs-execution-role`,
       assumedBy: new iam.ServicePrincipal('ecs-tasks.amazonaws.com'),
       managedPolicies: [
         iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AmazonECSTaskExecutionRolePolicy'),
@@ -157,7 +199,7 @@ export class MultiEnvStack extends cdk.Stack {
                 'logs:CreateLogStream',
                 'logs:PutLogEvents',
               ],
-              resources: [`arn:aws:logs:${this.region}:${this.account}:log-group:/aws/ecs/${config.environmentName}/*`],
+              resources: [`arn:aws:logs:${this.region}:${this.account}:log-group:/aws/ecs/${config.environmentName}-${this.environmentSuffix}-${environmentSuffix}/*`],
             }),
           ],
         }),
@@ -166,7 +208,7 @@ export class MultiEnvStack extends cdk.Stack {
 
     // ECS Task Role - application-specific permissions
     const taskRole = new iam.Role(this, 'EcsTaskRole', {
-      roleName: `${config.environmentName}-ecs-task-role`,
+      roleName: `${config.environmentName}-${this.environmentSuffix}-${environmentSuffix}-ecs-task-role`,
       assumedBy: new iam.ServicePrincipal('ecs-tasks.amazonaws.com'),
       inlinePolicies: {
         S3Access: new iam.PolicyDocument({
@@ -178,7 +220,7 @@ export class MultiEnvStack extends cdk.Stack {
                 's3:PutObject',
                 's3:DeleteObject',
               ],
-              resources: [`arn:aws:s3:::${config.environmentName}-multi-env-bucket/*`],
+              resources: [`arn:aws:s3:::${config.environmentName}-${this.environmentSuffix}-${environmentSuffix}-multi-env-bucket/*`],
             }),
           ],
         }),
@@ -206,7 +248,7 @@ export class MultiEnvStack extends cdk.Stack {
    * Implements versioning, encryption, and replication to specified regions
    */
   private createS3BucketWithReplication(config: MultiEnvConfig): s3.Bucket {
-    const bucketName = `${config.environmentName}-multi-env-bucket-${this.account}-${this.region}`;
+    const bucketName = `${config.environmentName}-${this.environmentSuffix}-${environmentSuffix}-multi-env-bucket-${this.account}-${this.region}`;
 
     // Create the primary S3 bucket
     const primaryBucket = new s3.Bucket(this, 'PrimaryBucket', {
@@ -264,7 +306,7 @@ export class MultiEnvStack extends cdk.Stack {
     config.s3ReplicationRegions.forEach((region, index) => {
       if (region !== this.region) {
         // Create destination bucket in target region (would need cross-region support)
-        const destinationBucketArn = `arn:aws:s3:::${config.environmentName}-multi-env-replica-${this.account}-${region}`;
+        const destinationBucketArn = `arn:aws:s3:::${config.environmentName}-${this.environmentSuffix}-${environmentSuffix}-multi-env-replica-${this.account}-${region}`;
         
         // Add destination permissions to replication role
         replicationRole.addToPolicy(
@@ -290,7 +332,7 @@ export class MultiEnvStack extends cdk.Stack {
    */
   private createEcsCluster(config: MultiEnvConfig): ecs.Cluster {
     const cluster = new ecs.Cluster(this, 'MultiEnvCluster', {
-      clusterName: `${config.environmentName}-multi-env-cluster`,
+      clusterName: `${config.environmentName}-${this.environmentSuffix}-${environmentSuffix}-multi-env-cluster`,
       vpc: this.vpc,
       // Enable Container Insights for enhanced observability
       containerInsights: config.enableContainerInsights,
@@ -300,14 +342,14 @@ export class MultiEnvStack extends cdk.Stack {
 
     // Create Service Connect namespace for service discovery
     const serviceConnectNamespace = new ecs.CloudMapNamespace(this, 'ServiceConnectNamespace', {
-      name: `${config.environmentName}.local`,
+      name: `${config.environmentName}-${this.environmentSuffix}-${environmentSuffix}.local`,
       type: ecs.NamespaceType.DNS_PRIVATE,
       vpc: this.vpc,
     });
 
     // Configure Service Connect on the cluster
     cluster.addDefaultCloudMapNamespace({
-      name: `${config.environmentName}.local`,
+      name: `${config.environmentName}-${this.environmentSuffix}-${environmentSuffix}.local`,
       type: ecs.NamespaceType.DNS_PRIVATE,
     });
 
@@ -321,7 +363,7 @@ export class MultiEnvStack extends cdk.Stack {
   private setupCloudWatchMonitoring(config: MultiEnvConfig): void {
     // Create CloudWatch Dashboard for environment overview
     const dashboard = new cloudwatch.Dashboard(this, 'MultiEnvDashboard', {
-      dashboardName: `${config.environmentName}-multi-env-dashboard`,
+      dashboardName: `${config.environmentName}-${this.environmentSuffix}-${environmentSuffix}-multi-env-dashboard`,
     });
 
     // Add VPC metrics widget
@@ -372,7 +414,7 @@ export class MultiEnvStack extends cdk.Stack {
 
     // Create CloudWatch Alarms for critical metrics
     new cloudwatch.Alarm(this, 'HighCPUAlarm', {
-      alarmName: `${config.environmentName}-high-cpu-utilization`,
+      alarmName: `${config.environmentName}-${this.environmentSuffix}-${environmentSuffix}-high-cpu-utilization`,
       metric: new cloudwatch.Metric({
         namespace: 'AWS/ECS',
         metricName: 'CPUUtilization',
@@ -389,7 +431,7 @@ export class MultiEnvStack extends cdk.Stack {
 
     // Create alarm for S3 bucket access
     new cloudwatch.Alarm(this, 'S3AccessAlarm', {
-      alarmName: `${config.environmentName}-s3-high-error-rate`,
+      alarmName: `${config.environmentName}-${this.environmentSuffix}-${environmentSuffix}-s3-high-error-rate`,
       metric: new cloudwatch.Metric({
         namespace: 'AWS/S3',
         metricName: '4xxErrors',
@@ -410,21 +452,21 @@ export class MultiEnvStack extends cdk.Stack {
   private createLogGroups(config: MultiEnvConfig): void {
     // Application log group
     new logs.LogGroup(this, 'ApplicationLogGroup', {
-      logGroupName: `/aws/ecs/${config.environmentName}/application`,
+      logGroupName: `/aws/ecs/${config.environmentName}-${this.environmentSuffix}-${environmentSuffix}/application`,
       retention: config.logRetentionDays,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
     // System log group
     new logs.LogGroup(this, 'SystemLogGroup', {
-      logGroupName: `/aws/ecs/${config.environmentName}/system`,
+      logGroupName: `/aws/ecs/${config.environmentName}-${this.environmentSuffix}-${environmentSuffix}/system`,
       retention: config.logRetentionDays,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
     // Security log group
     new logs.LogGroup(this, 'SecurityLogGroup', {
-      logGroupName: `/aws/security/${config.environmentName}`,
+      logGroupName: `/aws/security/${config.environmentName}-${this.environmentSuffix}-${environmentSuffix}`,
       retention: logs.RetentionDays.ONE_YEAR, // Keep security logs longer
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });

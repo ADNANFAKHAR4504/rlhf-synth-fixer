@@ -19,6 +19,7 @@ describe('MultiEnvStack', () => {
         account: '123456789012',
         region: 'us-east-1',
       },
+      environmentSuffix: environmentSuffix,
     });
     template = Template.fromStack(stack);
   });
@@ -236,7 +237,8 @@ describe('MultiEnvStack', () => {
           account: '123456789012',
           region: 'us-east-1',
         },
-        crossRegionReferences: true
+        crossRegionReferences: true,
+        environmentSuffix: environmentSuffix
       });
       
       // Ensure the stack was created successfully (validation check)
