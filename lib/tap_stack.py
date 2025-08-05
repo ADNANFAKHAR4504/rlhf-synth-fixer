@@ -639,13 +639,22 @@ class TapStack(cdk.Stack):
     trail_bucket.add_to_resource_policy(iam.PolicyStatement(
       effect=iam.Effect.ALLOW,
       principals=[iam.ServicePrincipal("cloudtrail.amazonaws.com")],
-      actions=["s3:GetBucketAcl", "s3:PutObject"],
-      resources=[
-        trail_bucket.bucket_arn,
-        f"{trail_bucket.bucket_arn}/AWSLogs/{self.account}/*"
-      ],
-      conditions={"StringEquals": {"s3:x-amz-acl": "bucket-owner-full-control"}}
+      actions=["s3:GetBucketAcl"],
+      resources=[trail_bucket.bucket_arn]
     ))
+
+    trail_bucket.add_to_resource_policy(iam.PolicyStatement(
+      effect=iam.Effect.ALLOW,
+      principals=[iam.ServicePrincipal("cloudtrail.amazonaws.com")],
+      actions=["s3:PutObject"],
+      resources=[f"{trail_bucket.bucket_arn}/AWSLogs/{self.account}/*"],
+      conditions={
+        "StringEquals": {
+          "s3:x-amz-acl": "bucket-owner-full-control"
+        }
+      }
+    ))
+
 
     # Create CloudTrail
     trail = cloudtrail.CfnTrail(
