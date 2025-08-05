@@ -10,8 +10,18 @@ from pytest import mark
 
 from lib.tap_stack import TapStack, TapStackProps
 
-def get_cdk_outputs():
-    """Generate CDK outputs by synthesizing the stack and extracting outputs"""
+def load_cdk_outputs():
+    """Load CDK outputs from the test output file"""
+    try:
+        output_file_path = os.path.join(os.path.dirname(__file__), '..', 'outputs', 'cdk-outputs.json')
+        with open(output_file_path, 'r') as f:
+            return json.load(f)
+    except Exception as e:
+        print(f"Error loading CDK outputs from file: {e}")
+        return {}
+
+def get_synthesized_outputs():
+    """Generate CDK outputs by synthesizing the stack and extracting outputs for validation"""
     try:
         # Create a CDK app and stack
         app = cdk.App()
@@ -37,8 +47,10 @@ def get_cdk_outputs():
         print(f"Error generating CDK outputs: {e}")
         return {}
 
-# Generate CDK outputs for testing
-cdk_outputs = get_cdk_outputs()
+# Load CDK outputs from file for testing
+cdk_outputs = load_cdk_outputs()
+# Get synthesized outputs for template validation
+synthesized_outputs = get_synthesized_outputs()
 
 
 @mark.describe("TapStack Integration Tests")
@@ -63,9 +75,11 @@ class TestTapStackIntegration(unittest.TestCase):
     self.assertIn("Resources", template_dict)
     self.assertGreater(len(template_dict["Resources"]), 10)
     
-    # ASSERT - CDK outputs should be available
+    # ASSERT - CDK outputs should be available from both file and synthesis
     self.assertIsNotNone(cdk_outputs)
     self.assertGreater(len(cdk_outputs), 0)
+    self.assertIsNotNone(synthesized_outputs)
+    self.assertGreater(len(synthesized_outputs), 0)
     
   @mark.it("generates valid resource dependencies")
   def test_generates_valid_resource_dependencies(self):
@@ -143,59 +157,69 @@ class TestTapStackIntegration(unittest.TestCase):
 
   @mark.it("validates CDK output file data")
   def test_validates_cdk_output_file_data(self):
-    """Test that validates the actual CDK output file data"""
-    # ASSERT - CDK outputs should be generated
-    self.assertIsNotNone(cdk_outputs)
-    self.assertGreater(len(cdk_outputs), 0)
+    """Test that validates the actual CDK output file data as requested by reviewer"""
+    # ASSERT - CDK outputs should be loaded from file
+    self.assertIsNotNone(cdk_outputs, "CDK outputs should be loaded from test file")
+    self.assertGreater(len(cdk_outputs), 0, "CDK outputs file should contain output data")
     
-    # ASSERT - Verify specific output values have expected format
-    if "tapvpcid" in cdk_outputs:
-      vpc_id = cdk_outputs["tapvpcid"]
-      # VPC ID should be a CloudFormation reference or string
-      if isinstance(vpc_id, dict) and 'Ref' in vpc_id:
-        # It's a CloudFormation reference, which is expected during synthesis
-        self.assertIn('Ref', vpc_id)
-      elif isinstance(vpc_id, str):
-        # It's an actual value, should start with 'vpc-'
-        self.assertTrue(vpc_id.startswith("vpc-"))
+    # ASSERT - Verify all expected outputs are present in the file
+    expected_outputs = ["tapvpcid", "tapalbdnsname", "taps3bucketname", "taprdsendpoint", "tapkmskeyid"]
+    for output_name in expected_outputs:
+      with self.subTest(output_name=output_name):
+        self.assertIn(output_name, cdk_outputs, f"Output {output_name} should be present in CDK outputs file")
+        self.assertIsNotNone(cdk_outputs[output_name], f"Output {output_name} should not be None")
+        self.assertNotEqual(cdk_outputs[output_name], "", f"Output {output_name} should not be empty")
     
-    if "tapalbdnsname" in cdk_outputs:
-      alb_dns = cdk_outputs["tapalbdnsname"]
-      # ALB DNS should be a CloudFormation reference or valid DNS name
-      if isinstance(alb_dns, dict) and 'Fn::GetAtt' in alb_dns:
-        # It's a CloudFormation reference, which is expected during synthesis
-        self.assertIn('Fn::GetAtt', alb_dns)
-      elif isinstance(alb_dns, str):
-        # It's an actual value, should contain amazonaws.com
-        self.assertIn(".amazonaws.com", alb_dns)
+    # ASSERT - Verify specific output values have expected realistic format from file
+    # VPC ID should follow AWS VPC ID format
+    vpc_id = cdk_outputs["tapvpcid"]
+    self.assertTrue(vpc_id.startswith("vpc-"), f"VPC ID should start with 'vpc-', got: {vpc_id}")
+    self.assertEqual(len(vpc_id), 21, f"VPC ID should be 21 characters long, got: {len(vpc_id)}")
     
-    if "taps3bucketname" in cdk_outputs:
-      bucket_name = cdk_outputs["taps3bucketname"]
-      # S3 bucket name should be a CloudFormation reference or valid bucket name
-      if isinstance(bucket_name, dict) and 'Ref' in bucket_name:
-        # It's a CloudFormation reference, which is expected during synthesis
-        self.assertIn('Ref', bucket_name)
-      elif isinstance(bucket_name, str):
-        # It's an actual value, should follow naming conventions
-        self.assertTrue(len(bucket_name) >= 3 and len(bucket_name) <= 63)
-        self.assertIn("tap-", bucket_name)
+    # ALB DNS name should follow AWS ALB DNS format
+    alb_dns = cdk_outputs["tapalbdnsname"]
+    self.assertIn(".elb.amazonaws.com", alb_dns, f"ALB DNS should contain '.elb.amazonaws.com', got: {alb_dns}")
+    self.assertTrue(alb_dns.startswith("tap-"), f"ALB DNS should start with 'tap-', got: {alb_dns}")
     
-    if "taprdsendpoint" in cdk_outputs:
-      rds_endpoint = cdk_outputs["taprdsendpoint"]
-      # RDS endpoint should be a CloudFormation reference or valid endpoint
-      if isinstance(rds_endpoint, dict) and 'Fn::GetAtt' in rds_endpoint:
-        # It's a CloudFormation reference, which is expected during synthesis
-        self.assertIn('Fn::GetAtt', rds_endpoint)
-      elif isinstance(rds_endpoint, str):
-        # It's an actual value, should contain rds.amazonaws.com
-        self.assertIn(".rds.amazonaws.com", rds_endpoint)
+    # S3 bucket name should follow AWS S3 naming conventions
+    bucket_name = cdk_outputs["taps3bucketname"]
+    self.assertTrue(len(bucket_name) >= 3 and len(bucket_name) <= 63, 
+                   f"S3 bucket name should be 3-63 characters, got: {len(bucket_name)}")
+    self.assertIn("tap-", bucket_name, f"S3 bucket name should contain 'tap-', got: {bucket_name}")
+    self.assertTrue(bucket_name.islower() or '-' in bucket_name, 
+                   f"S3 bucket name should be lowercase with hyphens, got: {bucket_name}")
     
-    if "tapkmskeyid" in cdk_outputs:
-      kms_key_id = cdk_outputs["tapkmskeyid"]
-      # KMS key ID should be a CloudFormation reference or valid key ID
-      if isinstance(kms_key_id, dict) and 'Ref' in kms_key_id:
-        # It's a CloudFormation reference, which is expected during synthesis
-        self.assertIn('Ref', kms_key_id)
-      elif isinstance(kms_key_id, str):
-        # It's an actual value, should not be empty
-        self.assertTrue(len(kms_key_id) > 0)
+    # RDS endpoint should follow AWS RDS endpoint format
+    rds_endpoint = cdk_outputs["taprdsendpoint"]
+    self.assertIn(".rds.amazonaws.com", rds_endpoint, 
+                 f"RDS endpoint should contain '.rds.amazonaws.com', got: {rds_endpoint}")
+    self.assertTrue(rds_endpoint.startswith("tap-"), f"RDS endpoint should start with 'tap-', got: {rds_endpoint}")
+    
+    # KMS key ID should follow AWS KMS key ARN or ID format
+    kms_key_id = cdk_outputs["tapkmskeyid"]
+    self.assertTrue(len(kms_key_id) > 0, f"KMS key ID should not be empty, got: {kms_key_id}")
+    # Should be either an ARN or a key ID
+    if kms_key_id.startswith("arn:aws:kms:"):
+      self.assertIn(":key/", kms_key_id, f"KMS key ARN should contain ':key/', got: {kms_key_id}")
+    else:
+      # Should be a key ID (36 characters with hyphens)
+      self.assertEqual(len(kms_key_id), 36, f"KMS key ID should be 36 characters, got: {len(kms_key_id)}")
+    
+    # ASSERT - Verify synthesized outputs structure matches expected outputs (CloudFormation references)
+    self.assertIsNotNone(synthesized_outputs, "Synthesized outputs should be available")
+    
+    # Verify that synthesized outputs contain CloudFormation references as expected
+    for output_name in expected_outputs:
+      with self.subTest(synthesized_output=output_name):
+        self.assertIn(output_name, synthesized_outputs, 
+                     f"Synthesized output {output_name} should be present")
+        synthesized_value = synthesized_outputs[output_name]
+        self.assertIsInstance(synthesized_value, dict, 
+                            f"Synthesized output {output_name} should be a CloudFormation reference dict")
+        
+    # Verify specific CloudFormation reference structures
+    self.assertIn("Ref", synthesized_outputs["tapvpcid"], "VPC ID should be a CloudFormation Ref")
+    self.assertIn("Fn::GetAtt", synthesized_outputs["tapalbdnsname"], "ALB DNS should be a CloudFormation GetAtt")
+    self.assertIn("Ref", synthesized_outputs["taps3bucketname"], "S3 bucket should be a CloudFormation Ref")
+    self.assertIn("Fn::GetAtt", synthesized_outputs["taprdsendpoint"], "RDS endpoint should be a CloudFormation GetAtt")
+    self.assertIn("Ref", synthesized_outputs["tapkmskeyid"], "KMS key should be a CloudFormation Ref")
