@@ -43,5 +43,35 @@ This document highlights the discrepancies between the LLM-generated code in `MO
 - **Issue**: The generated code lacks inline comments explaining the logic and design choices.
 - **Details**: This makes the code less maintainable and harder to understand.
 
+### 8. Missing API Gateway API Key and Usage Plan
+- **Issue**: The LLM-generated code does not include an API Gateway API Key or Usage Plan.
+- **Details**:
+  - The `ApiGatewayApiKey` and `ApiGatewayUsagePlan` resources are missing, which are essential for securing API Gateway endpoints.
+  - The `ApiGatewayUsagePlanKey` resource is also absent, which links the API Key to the Usage Plan.
+
+### 9. Missing Archive Provider for Lambda Deployment
+- **Issue**: The LLM-generated code does not use the `ArchiveProvider` for packaging and deploying Lambda functions.
+- **Details**:
+  - The `File` resource from the `@cdktf/provider-archive` module is not used to create a ZIP archive for the Lambda function code.
+  - This omission makes the Lambda deployment process incomplete and non-functional.
+
+### 10. Incomplete CloudFront Configuration
+- **Issue**: The LLM-generated code lacks critical CloudFront configuration settings.
+- **Details**:
+  - The `CloudfrontOriginAccessControl` resource is missing, which is necessary for securing access to the S3 bucket.
+  - The `Comment` field in the CloudFront distribution is not set to include the resource prefix, making it harder to identify the distribution.
+
+### 11. Missing API Gateway Resource Paths
+- **Issue**: The LLM-generated code does not define all required API Gateway resource paths.
+- **Details**:
+  - The `/content/{contentId}` resource path is missing, which is essential for handling specific content operations.
+  - The integration between this resource path and the Lambda function is also absent.
+
+### 12. Lack of Error Handling in Lambda Function
+- **Issue**: The Lambda function code lacks comprehensive error handling.
+- **Details**:
+  - There are no try-catch blocks to handle exceptions during DynamoDB or S3 operations.
+  - The function does not return meaningful error messages to the API Gateway in case of failures.
+
 ## Conclusion
 The LLM-generated code in `MODEL_RESPONSE.md` fails to meet several critical requirements outlined in `PROMPT.md`. These issues must be addressed to ensure the implementation is correct, secure, and adheres to best practices.

@@ -215,7 +215,6 @@ describe('TapStack Integration Tests', () => {
             Key: { contentId: { S: 'test-id' } },
           })
         );
-        console.log('Retrieved item:', item);
         expect(item).toBeDefined();
         if (item.Item) {
           expect(item.Item.contentType.S).toBe('text');

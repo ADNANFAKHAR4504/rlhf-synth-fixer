@@ -1,12 +1,15 @@
 ```typescript
 import { File } from '@cdktf/provider-archive/lib/file';
 import { ArchiveProvider } from '@cdktf/provider-archive/lib/provider';
+import { ApiGatewayApiKey } from '@cdktf/provider-aws/lib/api-gateway-api-key';
 import { ApiGatewayDeployment } from '@cdktf/provider-aws/lib/api-gateway-deployment';
 import { ApiGatewayIntegration } from '@cdktf/provider-aws/lib/api-gateway-integration';
 import { ApiGatewayMethod } from '@cdktf/provider-aws/lib/api-gateway-method';
 import { ApiGatewayResource } from '@cdktf/provider-aws/lib/api-gateway-resource';
 import { ApiGatewayRestApi } from '@cdktf/provider-aws/lib/api-gateway-rest-api';
 import { ApiGatewayStage } from '@cdktf/provider-aws/lib/api-gateway-stage';
+import { ApiGatewayUsagePlan } from '@cdktf/provider-aws/lib/api-gateway-usage-plan';
+import { ApiGatewayUsagePlanKey } from '@cdktf/provider-aws/lib/api-gateway-usage-plan-key';
 import { CloudfrontDistribution } from '@cdktf/provider-aws/lib/cloudfront-distribution';
 import { CloudfrontOriginAccessControl } from '@cdktf/provider-aws/lib/cloudfront-origin-access-control';
 import { DataAwsRegion } from '@cdktf/provider-aws/lib/data-aws-region';
@@ -245,6 +248,7 @@ export class ServerlessCms extends Construct {
     });
 
     // API Gateway resources and methods
+
     const contentResource = new ApiGatewayResource(this, 'content_resource', {
       provider: props.providerAws,
       restApiId: api.id,
@@ -263,13 +267,14 @@ export class ServerlessCms extends Construct {
       }
     );
 
-    // GET method for retrieving content with Lambda integration
+    // GET method for retrieving content with Lambda integration and API Key required
     const getMethod = new ApiGatewayMethod(this, 'get_content_method', {
       provider: props.providerAws,
       restApiId: api.id,
       resourceId: contentIdResource.id,
       httpMethod: 'GET',
       authorization: 'NONE',
+      apiKeyRequired: true,
     });
 
     const getIntegration = new ApiGatewayIntegration(this, 'get_integration', {
@@ -282,13 +287,14 @@ export class ServerlessCms extends Construct {
       uri: contentLambda.invokeArn,
     });
 
-    // POST method for creating content with Lambda integration
+    // POST method for creating content with Lambda integration and API Key required
     const postMethod = new ApiGatewayMethod(this, 'post_content_method', {
       provider: props.providerAws,
       restApiId: api.id,
       resourceId: contentResource.id,
       httpMethod: 'POST',
       authorization: 'NONE',
+      apiKeyRequired: true,
     });
 
     const postIntegration = new ApiGatewayIntegration(
@@ -305,13 +311,14 @@ export class ServerlessCms extends Construct {
       }
     );
 
-    // PUT method for updating content with Lambda integration
+    // PUT method for updating content with Lambda integration and API Key required
     const putMethod = new ApiGatewayMethod(this, 'put_content_method', {
       provider: props.providerAws,
       restApiId: api.id,
       resourceId: contentIdResource.id,
       httpMethod: 'PUT',
       authorization: 'NONE',
+      apiKeyRequired: true,
     });
 
     const putIntegration = new ApiGatewayIntegration(this, 'put_integration', {
@@ -324,13 +331,14 @@ export class ServerlessCms extends Construct {
       uri: contentLambda.invokeArn,
     });
 
-    // DELETE method for deleting content with Lambda integration
+    // DELETE method for deleting content with Lambda integration and API Key required
     const deleteMethod = new ApiGatewayMethod(this, 'delete_content_method', {
       provider: props.providerAws,
       restApiId: api.id,
       resourceId: contentIdResource.id,
       httpMethod: 'DELETE',
       authorization: 'NONE',
+      apiKeyRequired: true,
     });
 
     const deleteIntegration = new ApiGatewayIntegration(
@@ -374,7 +382,7 @@ export class ServerlessCms extends Construct {
     });
 
     // API Gateway stage
-    new ApiGatewayStage(this, 'api_stage', {
+    const apiGatewayStage = new ApiGatewayStage(this, 'api_stage', {
       provider: props.providerAws,
       deploymentId: deployment.id,
       restApiId: api.id,
@@ -383,6 +391,43 @@ export class ServerlessCms extends Construct {
         Environment: props.environment,
         Service: 'cms',
       },
+    });
+
+    // Create API Gateway API Key and Usage Plan using CDKTF constructs
+    const apiKey = new ApiGatewayApiKey(this, 'cms_api_key', {
+      provider: props.providerAws,
+      name: `${resourcePrefix}-api-key`,
+      description: 'API Key for CMS API Gateway',
+      enabled: true,
+      tags: {
+        Environment: props.environment,
+        Service: 'cms',
+      },
+    });
+
+    const usagePlan = new ApiGatewayUsagePlan(this, 'cms_usage_plan', {
+      provider: props.providerAws,
+      name: `${resourcePrefix}-usage-plan`,
+      description: 'Usage plan for CMS API Gateway',
+      apiStages: [
+        {
+          apiId: api.id,
+          stage: apiGatewayStage.stageName,
+        },
+      ],
+      tags: {
+        Environment: props.environment,
+        Service: 'cms',
+      },
+
+      dependsOn: [apiGatewayStage],
+    });
+
+    new ApiGatewayUsagePlanKey(this, 'cms_usage_plan_key', {
+      provider: props.providerAws,
+      keyId: apiKey.id,
+      keyType: 'API_KEY',
+      usagePlanId: usagePlan.id,
     });
 
     // CloudFront Origin Access Control
