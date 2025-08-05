@@ -24,7 +24,6 @@ class NetworkingInfrastructure(pulumi.ComponentResource):
     self.tags = tags
     self.region_suffix = region.replace('-', '').replace('gov', '')
 
-    # VPC CIDR blocks - different for each region
     self.vpc_cidr = "10.0.0.0/16" if is_primary else "10.1.0.0/16"
 
     self._create_vpc()
@@ -34,7 +33,6 @@ class NetworkingInfrastructure(pulumi.ComponentResource):
     self._create_route_tables()
     self._create_security_groups()
 
-    # Register outputs
     self.register_outputs({
       'vpc_id': self.vpc.id,
       'vpc_cidr': self.vpc.cidr_block,
@@ -57,32 +55,30 @@ class NetworkingInfrastructure(pulumi.ComponentResource):
 
   def _create_subnets(self):
     """Create public and private subnets across multiple AZs"""
-    # Get availability zones
-    self.azs = aws.get_availability_zones(state="available")
-    
+    azs = aws.get_availability_zones(state="available")
+
     self.public_subnets = []
     self.private_subnets = []
-    
-    # Create subnets in first 2 AZs for high availability
-    for i, az in enumerate(self.azs.names[:2]):
-      # Public subnet for ALB
+
+    for i in range(2):
+      az_output = pulumi.Output.from_input(azs).apply(lambda az: az.names[i])
+
       public_subnet = aws.ec2.Subnet(
         f"public-subnet-{i}-{self.region_suffix}",
         vpc_id=self.vpc.id,
         cidr_block=f"10.{'0' if self.is_primary else '1'}.{i+1}.0/24",
-        availability_zone=az,
+        availability_zone=az_output,
         map_public_ip_on_launch=True,
         tags={**self.tags, "Name": f"nova-public-{i}-{self.region_suffix}"},
         opts=ResourceOptions(parent=self)
       )
       self.public_subnets.append(public_subnet)
-      
-      # Private subnet for Elastic Beanstalk instances
+
       private_subnet = aws.ec2.Subnet(
         f"private-subnet-{i}-{self.region_suffix}",
         vpc_id=self.vpc.id,
         cidr_block=f"10.{'0' if self.is_primary else '1'}.{i+10}.0/24",
-        availability_zone=az,
+        availability_zone=az_output,
         tags={**self.tags, "Name": f"nova-private-{i}-{self.region_suffix}"},
         opts=ResourceOptions(parent=self)
       )
@@ -100,17 +96,15 @@ class NetworkingInfrastructure(pulumi.ComponentResource):
   def _create_nat_gateways(self):
     """Create NAT Gateways for private subnet internet access"""
     self.nat_gateways = []
-    
+
     for i, public_subnet in enumerate(self.public_subnets):
-      # Elastic IP for NAT Gateway
       eip = aws.ec2.Eip(
         f"nat-eip-{i}-{self.region_suffix}",
         domain="vpc",
         tags={**self.tags, "Name": f"nova-nat-eip-{i}-{self.region_suffix}"},
         opts=ResourceOptions(parent=self)
       )
-      
-      # NAT Gateway
+
       nat_gw = aws.ec2.NatGateway(
         f"nat-gw-{i}-{self.region_suffix}",
         allocation_id=eip.id,
@@ -122,7 +116,6 @@ class NetworkingInfrastructure(pulumi.ComponentResource):
 
   def _create_route_tables(self):
     """Create and configure route tables"""
-    # Public route table
     self.public_rt = aws.ec2.RouteTable(
       f"public-rt-{self.region_suffix}",
       vpc_id=self.vpc.id,
@@ -135,8 +128,7 @@ class NetworkingInfrastructure(pulumi.ComponentResource):
       tags={**self.tags, "Name": f"nova-public-rt-{self.region_suffix}"},
       opts=ResourceOptions(parent=self)
     )
-    
-    # Associate public subnets with public route table
+
     for i, subnet in enumerate(self.public_subnets):
       aws.ec2.RouteTableAssociation(
         f"public-rt-assoc-{i}-{self.region_suffix}",
@@ -144,8 +136,7 @@ class NetworkingInfrastructure(pulumi.ComponentResource):
         route_table_id=self.public_rt.id,
         opts=ResourceOptions(parent=self)
       )
-    
-    # Private route tables (one per AZ for HA)
+
     self.private_rts = []
     for i, (subnet, nat_gw) in enumerate(zip(self.private_subnets, self.nat_gateways)):
       private_rt = aws.ec2.RouteTable(
@@ -161,8 +152,7 @@ class NetworkingInfrastructure(pulumi.ComponentResource):
         opts=ResourceOptions(parent=self)
       )
       self.private_rts.append(private_rt)
-      
-      # Associate private subnet with its route table
+
       aws.ec2.RouteTableAssociation(
         f"private-rt-assoc-{i}-{self.region_suffix}",
         subnet_id=subnet.id,
@@ -172,7 +162,6 @@ class NetworkingInfrastructure(pulumi.ComponentResource):
 
   def _create_security_groups(self):
     """Create security groups for ALB and Elastic Beanstalk"""
-    # ALB Security Group
     self.alb_security_group = aws.ec2.SecurityGroup(
       f"alb-sg-{self.region_suffix}",
       description="Security group for Application Load Balancer",
@@ -205,8 +194,7 @@ class NetworkingInfrastructure(pulumi.ComponentResource):
       tags={**self.tags, "Name": f"nova-alb-sg-{self.region_suffix}"},
       opts=ResourceOptions(parent=self)
     )
-    
-    # Elastic Beanstalk Security Group
+
     self.eb_security_group = aws.ec2.SecurityGroup(
       f"eb-sg-{self.region_suffix}",
       description="Security group for Elastic Beanstalk instances",
@@ -240,7 +228,6 @@ class NetworkingInfrastructure(pulumi.ComponentResource):
       opts=ResourceOptions(parent=self)
     )
 
-  # Properties for easy access
   @property
   def vpc_id(self):
     return self.vpc.id
