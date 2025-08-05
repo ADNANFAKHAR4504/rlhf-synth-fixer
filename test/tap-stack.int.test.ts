@@ -1,9 +1,8 @@
 import {
-  APIGatewayClient,
-  GetMethodCommand,
-  GetResourcesCommand,
-  GetRestApiCommand
-} from '@aws-sdk/client-api-gateway';
+  ApiGatewayV2Client,
+  GetApiCommand,
+  GetRoutesCommand
+} from '@aws-sdk/client-apigatewayv2';
 import { CloudFormationClient, DescribeStacksCommand } from '@aws-sdk/client-cloudformation';
 import {
   GetRoleCommand,
@@ -33,7 +32,7 @@ const stackName = `TapStack${environmentSuffix}`;
 // Initialize AWS SDK clients
 const s3 = new S3Client({ region });
 const lambda = new LambdaClient({ region });
-const apigateway = new APIGatewayClient({ region });
+const apigatewayv2 = new ApiGatewayV2Client({ region });
 const cloudformation = new CloudFormationClient({ region });
 const iam = new IAMClient({ region });
 
@@ -79,12 +78,12 @@ describe('TapStack Serverless Infrastructure Integration Tests', () => {
   beforeAll(async () => {
     console.log(`🚀 Setting up integration tests for environment: ${environmentSuffix}`);
     outputs = await getStackOutputs();
-    
+
     // Verify we have the required outputs
     const requiredOutputs = [
       'S3BucketName',
       'LambdaFunctionArn',
-      'ApiGatewayUrl',
+      'HttpApiUrl',
       'LambdaExecutionRoleArn'
     ];
 
@@ -227,7 +226,7 @@ describe('TapStack Serverless Infrastructure Integration Tests', () => {
       }));
 
       expect(response.Configuration?.FunctionName).toBe(functionName);
-      expect(response.Configuration?.Runtime).toBe('python3.13');
+      expect(response.Configuration?.Runtime).toBe('python3.8');
       expect(response.Configuration?.Handler).toBe('index.lambda_handler');
       expect(response.Configuration?.State).toBe('Active');
       console.log(`✅ Lambda function verified: ${functionName}`);
@@ -326,81 +325,52 @@ describe('TapStack Serverless Infrastructure Integration Tests', () => {
       }));
 
       expect(response.FunctionName).toBe(functionName);
-      expect(response.Runtime).toBe('python3.13');
+      expect(response.Runtime).toBe('python3.8');
       expect(response.Handler).toBe('index.lambda_handler');
       expect(response.Timeout).toBe(30);
       expect(response.MemorySize).toBe(128);
       console.log(`✅ Lambda function configuration verified: ${functionName}`);
     });
   });
-
-  describe('API Gateway Infrastructure', () => {
+  describe('HTTP API Gateway Infrastructure', () => {
     test('should exist and be properly configured', async () => {
-      const apiUrl = outputs.ApiGatewayUrl;
+      const apiUrl = outputs.HttpApiUrl;
       
       expect(apiUrl).toBeDefined();
-      expect(apiUrl).toMatch(/^https:\/\/.*\.execute-api\..+\.amazonaws\.com\/prod$/);
+      expect(apiUrl).toMatch(/^https:\/\/.*\.execute-api\..+\.amazonaws\.com\/$/);
 
       // Extract API ID from URL
       const apiId = apiUrl.split('//')[1].split('.')[0];
 
-      const response = await apigateway.send(new GetRestApiCommand({
-        restApiId: apiId
+      const response = await apigatewayv2.send(new GetApiCommand({
+        ApiId: apiId
       }));
 
-      expect(response.id).toBe(apiId);
-      expect(response.name).toContain(environmentSuffix);
-      expect(response.endpointConfiguration?.types).toContain('REGIONAL');
-      console.log(`✅ API Gateway verified: ${apiId}`);
+      expect(response.ApiId).toBe(apiId);
+      expect(response.Name).toContain(environmentSuffix);
+      expect(response.ProtocolType).toBe('HTTP');
+      console.log(`✅ HTTP API Gateway verified: ${apiId}`);
     });
 
-    test('should have correct resource structure', async () => {
-      const apiUrl = outputs.ApiGatewayUrl;
+    test('should have correct route structure', async () => {
+      const apiUrl = outputs.HttpApiUrl;
       const apiId = apiUrl.split('//')[1].split('.')[0];
 
-      const response = await apigateway.send(new GetResourcesCommand({
-        restApiId: apiId
+      const response = await apigatewayv2.send(new GetRoutesCommand({
+        ApiId: apiId
       }));
 
-      const resources = response.items || [];
-      expect(resources.length).toBeGreaterThan(1); // Root + proxy resource
+      const routes = response.Items || [];
+      expect(routes.length).toBeGreaterThan(0);
 
-      // Find proxy resource
-      const proxyResource = resources.find(r => r.pathPart === '{proxy+}');
-      expect(proxyResource).toBeDefined();
-      console.log(`✅ API Gateway resources verified`);
-    });
-
-    test('should have correct HTTP methods configured', async () => {
-      const apiUrl = outputs.ApiGatewayUrl;
-      const apiId = apiUrl.split('//')[1].split('.')[0];
-
-      // Get resources first
-      const resourcesResponse = await apigateway.send(new GetResourcesCommand({
-        restApiId: apiId
-      }));
-
-      const rootResource = resourcesResponse.items?.find(r => r.path === '/');
-      expect(rootResource?.id).toBeDefined();
-
-      // Check for ANY method on root
-      try {
-        const methodResponse = await apigateway.send(new GetMethodCommand({
-          restApiId: apiId,
-          resourceId: rootResource!.id!,
-          httpMethod: 'ANY'
-        }));
-
-        expect(methodResponse.httpMethod).toBe('ANY');
-        expect(methodResponse.authorizationType).toBe('NONE');
-        console.log(`✅ API Gateway ANY method verified`);
-      } catch (error: any) {
-        console.warn(`⚠️  Could not verify ANY method: ${error.message}`);
-      }
+      // Check for ANY routes
+      const anyRoutes = routes.filter(r => r.RouteKey?.includes('ANY'));
+      expect(anyRoutes.length).toBeGreaterThan(0);
+      console.log(`✅ HTTP API Gateway routes verified: ${routes.length} routes found`);
     });
 
     test('should be accessible via HTTP requests', async () => {
-      const apiUrl = outputs.ApiGatewayUrl;
+      const apiUrl = outputs.HttpApiUrl;
 
       try {
         // Test GET request
@@ -412,7 +382,7 @@ describe('TapStack Serverless Infrastructure Integration Tests', () => {
         });
 
         expect([200, 403, 404, 500, 502, 503]).toContain(getResponse.status);
-        console.log(`✅ API Gateway GET request verified: ${getResponse.status}`);
+        console.log(`✅ HTTP API Gateway GET request verified: ${getResponse.status}`);
 
         // Test POST request
         const postResponse = await fetch(apiUrl, {
@@ -424,10 +394,10 @@ describe('TapStack Serverless Infrastructure Integration Tests', () => {
         });
 
         expect([200, 201, 403, 404, 500, 502, 503]).toContain(postResponse.status);
-        console.log(`✅ API Gateway POST request verified: ${postResponse.status}`);
+        console.log(`✅ HTTP API Gateway POST request verified: ${postResponse.status}`);
 
       } catch (error: any) {
-        console.warn(`⚠️  Could not test API Gateway HTTP requests: ${error.message}`);
+        console.warn(`⚠️  Could not test HTTP API Gateway HTTP requests: ${error.message}`);
       }
     });
   });
@@ -446,9 +416,9 @@ describe('TapStack Serverless Infrastructure Integration Tests', () => {
       expect(envVars.BUCKET_NAME).toBe(bucketName);
       console.log(`✅ Lambda-S3 integration verified`);
     });
-
+    
     test('should have API Gateway invoking Lambda function', async () => {
-      const apiUrl = outputs.ApiGatewayUrl;
+      const apiUrl = outputs.HttpApiUrl;
 
       try {
         const response = await fetch(apiUrl, {
@@ -464,15 +434,15 @@ describe('TapStack Serverless Infrastructure Integration Tests', () => {
             const jsonResponse = JSON.parse(responseBody);
             expect(jsonResponse.message).toBeDefined();
             expect(jsonResponse.environment).toBe(environmentSuffix);
-            console.log(`✅ API Gateway to Lambda integration verified`);
+            console.log(`✅ HTTP API Gateway to Lambda integration verified`);
           } catch (parseError) {
-            console.log(`✅ API Gateway responding (non-JSON response)`);
+            console.log(`✅ HTTP API Gateway responding (non-JSON response)`);
           }
         } else {
-          console.log(`✅ API Gateway responding with status: ${response.status}`);
+          console.log(`✅ HTTP API Gateway responding with status: ${response.status}`);
         }
       } catch (error: any) {
-        console.warn(`⚠️  Could not test API-Lambda integration: ${error.message}`);
+        console.warn(`⚠️  Could not test HTTP API-Lambda integration: ${error.message}`);
       }
     });
   });
@@ -481,14 +451,14 @@ describe('TapStack Serverless Infrastructure Integration Tests', () => {
     test('should follow naming conventions', () => {
       expect(outputs.S3BucketName).toContain('tap-lambda-assets');
       expect(outputs.LambdaFunctionArn).toContain('TapFunction');
-      expect(outputs.ApiGatewayUrl).toMatch(/^https:\/\//);
+      expect(outputs.HttpApiUrl).toMatch(/^https:\/\//);
       console.log(`✅ Resource naming conventions verified`);
-    });
-
+  });
+    
     test('should have environment suffix in resource names', () => {
       expect(outputs.S3BucketName).toContain(environmentSuffix);
       expect(outputs.LambdaFunctionArn).toContain(environmentSuffix);
-      expect(outputs.ApiGatewayUrl).toBeDefined();
+      expect(outputs.HttpApiUrl).toBeDefined();
       console.log(`✅ Environment suffix consistency verified: ${environmentSuffix}`);
     });
 
@@ -496,7 +466,7 @@ describe('TapStack Serverless Infrastructure Integration Tests', () => {
       const requiredOutputs = [
         'S3BucketName',
         'LambdaFunctionArn',
-        'ApiGatewayUrl',
+        'HttpApiUrl',
         'LambdaExecutionRoleArn'
       ];
 
@@ -514,11 +484,11 @@ describe('TapStack Serverless Infrastructure Integration Tests', () => {
       // This is verified in the Lambda IAM role test above
       console.log(`✅ IAM permissions validated through role verification`);
     });
-
-    test('should have HTTPS-only API Gateway', () => {
-      const apiUrl = outputs.ApiGatewayUrl;
+    
+    test('should have HTTPS-only HTTP API Gateway', () => {
+      const apiUrl = outputs.HttpApiUrl;
       expect(apiUrl).toMatch(/^https:/);
-      console.log(`✅ API Gateway HTTPS enforcement verified`);
+      console.log(`✅ HTTP API Gateway HTTPS enforcement verified`);
     });
 
     test('should have S3 bucket with proper configuration', async () => {

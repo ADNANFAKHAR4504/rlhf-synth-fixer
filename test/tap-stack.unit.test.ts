@@ -18,10 +18,14 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.AWSTemplateFormatVersion).toBe('2010-09-09');
     });
 
+    test('should have SAM Transform', () => {
+      expect(template.Transform).toBe('AWS::Serverless-2016-10-31');
+    });
+
     test('should have a description', () => {
       expect(template.Description).toBeDefined();
       expect(template.Description).toBe(
-        'TAP Stack - Task Assignment Platform CloudFormation Template - Serverless Application'
+        'TAP Stack - Task Assignment Platform SAM Template - Serverless Application'
       );
     });
   });
@@ -38,7 +42,6 @@ describe('TapStack CloudFormation Template', () => {
       expect(param.Description).toBe('Environment suffix for resource naming');
     });
   });
-
   describe('Resources', () => {
     test('should have LambdaExecutionRole resource', () => {
       expect(template.Resources.LambdaExecutionRole).toBeDefined();
@@ -50,54 +53,23 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Resources.LambdaAssetsBucket.Type).toBe('AWS::S3::Bucket');
     });
 
-    test('should have LambdaFunction resource', () => {
-      expect(template.Resources.LambdaFunction).toBeDefined();
-      expect(template.Resources.LambdaFunction.Type).toBe('AWS::Lambda::Function');
-    });
-
-    test('should have ApiGateway resource', () => {
-      expect(template.Resources.ApiGateway).toBeDefined();
-      expect(template.Resources.ApiGateway.Type).toBe('AWS::ApiGateway::RestApi');
-    });
-
-    test('should have ApiGatewayResource resource', () => {
-      expect(template.Resources.ApiGatewayResource).toBeDefined();
-      expect(template.Resources.ApiGatewayResource.Type).toBe('AWS::ApiGateway::Resource');
-    });
-
-    test('should have ApiGatewayMethodRoot resource', () => {
-      expect(template.Resources.ApiGatewayMethodRoot).toBeDefined();
-      expect(template.Resources.ApiGatewayMethodRoot.Type).toBe('AWS::ApiGateway::Method');
-    });
-
-    test('should have ApiGatewayMethodProxy resource', () => {
-      expect(template.Resources.ApiGatewayMethodProxy).toBeDefined();
-      expect(template.Resources.ApiGatewayMethodProxy.Type).toBe('AWS::ApiGateway::Method');
-    });
-
-    test('should have ApiGatewayDeployment resource', () => {
-      expect(template.Resources.ApiGatewayDeployment).toBeDefined();
-      expect(template.Resources.ApiGatewayDeployment.Type).toBe('AWS::ApiGateway::Deployment');
-    });
-
-    test('should have LambdaPermission resource', () => {
-      expect(template.Resources.LambdaPermission).toBeDefined();
-      expect(template.Resources.LambdaPermission.Type).toBe('AWS::Lambda::Permission');
+    test('should have TapFunction SAM resource', () => {
+      expect(template.Resources.TapFunction).toBeDefined();
+      expect(template.Resources.TapFunction.Type).toBe('AWS::Serverless::Function');
     });
   });
-
   describe('Outputs', () => {
-    test('should have ApiGatewayUrl output', () => {
-      expect(template.Outputs.ApiGatewayUrl).toBeDefined();
-      expect(template.Outputs.ApiGatewayUrl.Value).toEqual({
-        'Fn::Sub': 'https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/prod'
+    test('should have HttpApiUrl output', () => {
+      expect(template.Outputs.HttpApiUrl).toBeDefined();
+      expect(template.Outputs.HttpApiUrl.Value).toEqual({
+        'Fn::Sub': 'https://${ServerlessHttpApi}.execute-api.${AWS::Region}.amazonaws.com/'
       });
     });
 
     test('should have LambdaFunctionArn output', () => {
       expect(template.Outputs.LambdaFunctionArn).toBeDefined();
       expect(template.Outputs.LambdaFunctionArn.Value).toEqual({
-        'Fn::GetAtt': ['LambdaFunction', 'Arn'],
+        'Fn::GetAtt': ['TapFunction', 'Arn'],
       });
     });
 
@@ -120,11 +92,9 @@ describe('TapStack CloudFormation Template', () => {
       expect(role.Properties.ManagedPolicyArns).toContain(
         'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
       );
-    });
-
-    test('LambdaFunction should have correct runtime and handler', () => {
-      const lambda = template.Resources.LambdaFunction;
-      expect(lambda.Properties.Runtime).toBe('python3.13');
+    });    test('TapFunction should have correct runtime and handler', () => {
+      const lambda = template.Resources.TapFunction;
+      expect(lambda.Properties.Runtime).toBe('python3.8');
       expect(lambda.Properties.Handler).toBe('index.lambda_handler');
       expect(lambda.Properties.Timeout).toBe(30);
       expect(lambda.Properties.MemorySize).toBe(128);
@@ -146,15 +116,17 @@ describe('TapStack CloudFormation Template', () => {
       expect(bucket.Properties.PublicAccessBlockConfiguration.BlockPublicPolicy).toBe(true);
       expect(bucket.Properties.PublicAccessBlockConfiguration.IgnorePublicAcls).toBe(true);
       expect(bucket.Properties.PublicAccessBlockConfiguration.RestrictPublicBuckets).toBe(true);
+    });    test('ApiGateway should have correct endpoint configuration', () => {
+      const lambda = template.Resources.TapFunction;
+      expect(lambda.Properties.Events).toBeDefined();
+      expect(lambda.Properties.Events.ApiEvent).toBeDefined();
+      expect(lambda.Properties.Events.ApiEvent.Type).toBe('HttpApi');
+      expect(lambda.Properties.Events.RootEvent).toBeDefined();
+      expect(lambda.Properties.Events.RootEvent.Type).toBe('HttpApi');
     });
 
-    test('ApiGateway should have correct endpoint configuration', () => {
-      const api = template.Resources.ApiGateway;
-      expect(api.Properties.EndpointConfiguration.Types).toContain('REGIONAL');
-    });
-
-    test('LambdaFunction should have correct environment variables', () => {
-      const lambda = template.Resources.LambdaFunction;
+    test('TapFunction should have correct environment variables', () => {
+      const lambda = template.Resources.TapFunction;
       expect(lambda.Properties.Environment.Variables.ENVIRONMENT).toEqual({ Ref: 'EnvironmentSuffix' });
       expect(lambda.Properties.Environment.Variables.BUCKET_NAME).toEqual({ Ref: 'LambdaAssetsBucket' });
     });
@@ -189,19 +161,11 @@ describe('TapStack CloudFormation Template', () => {
       expect(outputCount).toBeGreaterThan(0);
     });
   });
-
   describe('Resource Naming Convention', () => {
     test('Lambda function name should follow naming convention with environment suffix', () => {
-      const lambda = template.Resources.LambdaFunction;
+      const lambda = template.Resources.TapFunction;
       expect(lambda.Properties.FunctionName).toEqual({
         'Fn::Sub': 'TapFunction-${EnvironmentSuffix}',
-      });
-    });
-
-    test('API Gateway name should follow naming convention with environment suffix', () => {
-      const api = template.Resources.ApiGateway;
-      expect(api.Properties.Name).toEqual({
-        'Fn::Sub': 'TapApi-${EnvironmentSuffix}',
       });
     });
 
@@ -224,31 +188,61 @@ describe('TapStack CloudFormation Template', () => {
       });
     });
   });
-
   describe('Security and Best Practices', () => {
-    test('API Gateway methods should have proper authorization', () => {
-      const methodRoot = template.Resources.ApiGatewayMethodRoot;
-      const methodProxy = template.Resources.ApiGatewayMethodProxy;
-      expect(methodRoot.Properties.AuthorizationType).toBe('NONE');
-      expect(methodProxy.Properties.AuthorizationType).toBe('NONE');
+    test('SAM Function should have proper HTTP API events configuration', () => {
+      const samFunction = template.Resources.TapFunction;
+      expect(samFunction.Properties.Events.ApiEvent.Type).toBe('HttpApi');
+      expect(samFunction.Properties.Events.ApiEvent.Properties.Path).toBe('/{proxy+}');
+      expect(samFunction.Properties.Events.ApiEvent.Properties.Method).toBe('ANY');
     });
 
-    test('Lambda function should have proper integration with API Gateway', () => {
-      const methodRoot = template.Resources.ApiGatewayMethodRoot;
-      expect(methodRoot.Properties.Integration.Type).toBe('AWS_PROXY');
-      expect(methodRoot.Properties.Integration.IntegrationHttpMethod).toBe('POST');
+    test('SAM Function should have root path event configuration', () => {
+      const samFunction = template.Resources.TapFunction;
+      expect(samFunction.Properties.Events.RootEvent.Type).toBe('HttpApi');
+      expect(samFunction.Properties.Events.RootEvent.Properties.Path).toBe('/');
+      expect(samFunction.Properties.Events.RootEvent.Properties.Method).toBe('ANY');
     });
 
-    test('Lambda permission should allow API Gateway invocation', () => {
-      const permission = template.Resources.LambdaPermission;
-      expect(permission.Properties.Action).toBe('lambda:InvokeFunction');
-      expect(permission.Properties.Principal).toBe('apigateway.amazonaws.com');
+    test('TapFunction should have proper IAM role integration', () => {
+      const samFunction = template.Resources.TapFunction;
+      expect(samFunction.Properties.Role).toEqual({
+        'Fn::GetAtt': ['LambdaExecutionRole', 'Arn']
+      });
+    });  });
+
+  describe('SAM-Specific Validations', () => {
+    test('should use SAM Transform', () => {
+      expect(template.Transform).toBe('AWS::Serverless-2016-10-31');
     });
 
-    test('API Gateway deployment should depend on methods', () => {
-      const deployment = template.Resources.ApiGatewayDeployment;
-      expect(deployment.DependsOn).toContain('ApiGatewayMethodRoot');
-      expect(deployment.DependsOn).toContain('ApiGatewayMethodProxy');
+    test('should have AWS::Serverless::Function resource', () => {
+      const samFunction = template.Resources.TapFunction;
+      expect(samFunction).toBeDefined();
+      expect(samFunction.Type).toBe('AWS::Serverless::Function');
+    });
+
+    test('SAM Function should have HttpApi events instead of REST API', () => {
+      const samFunction = template.Resources.TapFunction;
+      expect(samFunction.Properties.Events).toBeDefined();
+      
+      // Check for HttpApi events (HTTP API v2)
+      expect(samFunction.Properties.Events.ApiEvent.Type).toBe('HttpApi');
+      expect(samFunction.Properties.Events.RootEvent.Type).toBe('HttpApi');
+    });
+
+    test('should not have traditional API Gateway REST API resources', () => {
+      // These should not exist in SAM template as HttpApi is used
+      expect(template.Resources.ApiGateway).toBeUndefined();
+      expect(template.Resources.ApiGatewayResource).toBeUndefined();
+      expect(template.Resources.ApiGatewayMethod).toBeUndefined();
+      expect(template.Resources.ApiGatewayDeployment).toBeUndefined();
+    });
+
+    test('SAM Function should have inline code property', () => {
+      const samFunction = template.Resources.TapFunction;
+      expect(samFunction.Properties.InlineCode).toBeDefined();
+      expect(typeof samFunction.Properties.InlineCode).toBe('string');
+      expect(samFunction.Properties.InlineCode.length).toBeGreaterThan(0);
     });
   });
 });
