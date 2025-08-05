@@ -134,14 +134,20 @@ class TapStack(pulumi.ComponentResource):
       f"rotate-policy-{env}",
       user=user.name,
       name="AccessKeyRotationPolicy",
-      policy=rotation_policy(max_key_age_days)
+      policy=rotation_policy(max_key_age_days),
+      opts=ResourceOptions(parent=self, depends_on=[user])
     )
 
     access_key = aws.iam.AccessKey(
       f"secure-access-key-{env}",
       user=user.name,
-      opts=ResourceOptions(parent=self, additional_secret_outputs=["secret"])
+      opts=ResourceOptions(
+        parent=self,
+        depends_on=[user],
+        additional_secret_outputs=["secret"]
+      )
     )
+
 
     # --------------------------------------------------------
     # KMS Key + IAM Principal Policy
