@@ -134,24 +134,28 @@ export class SecurityConstruct extends Construct {
   }
 
   private createKmsKey(naming: NamingConvention) {
-    const keyPolicy = new dataAwsIamPolicyDocument.DataAwsIamPolicyDocument(this, 'kms-key-policy', {
-      statement: [
-        {
-          sid: 'Enable IAM User Permissions',
-          effect: 'Allow',
-          principals: [
-            {
-              type: 'AWS',
-              identifiers: [
-                'arn:aws:iam::${data.aws_caller_identity.current.account_id}:root',
-              ],
-            },
-          ],
-          actions: ['kms:*'],
-          resources: ['*'],
-        },
-      ],
-    });
+    const keyPolicy = new dataAwsIamPolicyDocument.DataAwsIamPolicyDocument(
+      this,
+      'kms-key-policy',
+      {
+        statement: [
+          {
+            sid: 'Enable IAM User Permissions',
+            effect: 'Allow',
+            principals: [
+              {
+                type: 'AWS',
+                identifiers: [
+                  'arn:aws:iam::${data.aws_caller_identity.current.account_id}:root',
+                ],
+              },
+            ],
+            actions: ['kms:*'],
+            resources: ['*'],
+          },
+        ],
+      }
+    );
 
     this.kmsKey = new kmsKey.KmsKey(this, 'kms-key', {
       description: `KMS key for ${naming.resource('', 'encryption')}`,
@@ -166,24 +170,25 @@ export class SecurityConstruct extends Construct {
   }
 
   private createIamRoles(naming: NamingConvention) {
-    const assumeRolePolicy = new dataAwsIamPolicyDocument.DataAwsIamPolicyDocument(
-      this,
-      'ec2-assume-role-policy',
-      {
-        statement: [
-          {
-            actions: ['sts:AssumeRole'],
-            effect: 'Allow',
-            principals: [
-              {
-                type: 'Service',
-                identifiers: ['ec2.amazonaws.com'],
-              },
-            ],
-          },
-        ],
-      }
-    );
+    const assumeRolePolicy =
+      new dataAwsIamPolicyDocument.DataAwsIamPolicyDocument(
+        this,
+        'ec2-assume-role-policy',
+        {
+          statement: [
+            {
+              actions: ['sts:AssumeRole'],
+              effect: 'Allow',
+              principals: [
+                {
+                  type: 'Service',
+                  identifiers: ['ec2.amazonaws.com'],
+                },
+              ],
+            },
+          ],
+        }
+      );
 
     this.ec2Role = new iamRole.IamRole(this, 'ec2-role', {
       name: naming.resource('role', 'ec2'),
@@ -191,22 +196,26 @@ export class SecurityConstruct extends Construct {
       tags: naming.tag({ Name: naming.resource('role', 'ec2') }),
     });
 
-    const ec2Policy = new dataAwsIamPolicyDocument.DataAwsIamPolicyDocument(this, 'ec2-policy', {
-      statement: [
-        {
-          effect: 'Allow',
-          actions: [
-            'cloudwatch:PutMetricData',
-            'ec2:DescribeVolumes',
-            'ec2:DescribeTags',
-            'logs:PutLogEvents',
-            'logs:CreateLogGroup',
-            'logs:CreateLogStream',
-          ],
-          resources: ['*'],
-        },
-      ],
-    });
+    const ec2Policy = new dataAwsIamPolicyDocument.DataAwsIamPolicyDocument(
+      this,
+      'ec2-policy',
+      {
+        statement: [
+          {
+            effect: 'Allow',
+            actions: [
+              'cloudwatch:PutMetricData',
+              'ec2:DescribeVolumes',
+              'ec2:DescribeTags',
+              'logs:PutLogEvents',
+              'logs:CreateLogGroup',
+              'logs:CreateLogStream',
+            ],
+            resources: ['*'],
+          },
+        ],
+      }
+    );
 
     new iamRolePolicy.IamRolePolicy(this, 'ec2-role-policy', {
       name: naming.resource('policy', 'ec2'),

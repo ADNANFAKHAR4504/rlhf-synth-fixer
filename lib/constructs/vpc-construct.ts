@@ -124,20 +124,28 @@ export class VpcConstruct extends Construct {
     });
 
     this.publicSubnets.forEach((subnet, index) => {
-      new routeTableAssociation.RouteTableAssociation(this, `public-rta-${index}`, {
-        subnetId: subnet.id,
-        routeTableId: publicRouteTable.id,
-      });
+      new routeTableAssociation.RouteTableAssociation(
+        this,
+        `public-rta-${index}`,
+        {
+          subnetId: subnet.id,
+          routeTableId: publicRouteTable.id,
+        }
+      );
     });
 
     // Private Route Tables
     this.privateSubnets.forEach((subnet, index) => {
-      const privateRouteTable = new routeTable.RouteTable(this, `private-rt-${index}`, {
-        vpcId: this.vpc.id,
-        tags: naming.tag({
-          Name: naming.resource('rt', `private-${index + 1}`),
-        }),
-      });
+      const privateRouteTable = new routeTable.RouteTable(
+        this,
+        `private-rt-${index}`,
+        {
+          vpcId: this.vpc.id,
+          tags: naming.tag({
+            Name: naming.resource('rt', `private-${index + 1}`),
+          }),
+        }
+      );
 
       new route.Route(this, `private-route-${index}`, {
         routeTableId: privateRouteTable.id,
@@ -145,10 +153,14 @@ export class VpcConstruct extends Construct {
         natGatewayId: this.natGateways[index].id,
       });
 
-      new routeTableAssociation.RouteTableAssociation(this, `private-rta-${index}`, {
-        subnetId: subnet.id,
-        routeTableId: privateRouteTable.id,
-      });
+      new routeTableAssociation.RouteTableAssociation(
+        this,
+        `private-rta-${index}`,
+        {
+          subnetId: subnet.id,
+          routeTableId: privateRouteTable.id,
+        }
+      );
     });
 
     // Database Route Table
@@ -158,19 +170,27 @@ export class VpcConstruct extends Construct {
     });
 
     this.databaseSubnets.forEach((subnet, index) => {
-      new routeTableAssociation.RouteTableAssociation(this, `database-rta-${index}`, {
-        subnetId: subnet.id,
-        routeTableId: databaseRouteTable.id,
-      });
+      new routeTableAssociation.RouteTableAssociation(
+        this,
+        `database-rta-${index}`,
+        {
+          subnetId: subnet.id,
+          routeTableId: databaseRouteTable.id,
+        }
+      );
     });
   }
 
   private createVpcFlowLogs(naming: NamingConvention) {
-    const logGroup = new cloudwatchLogGroup.CloudwatchLogGroup(this, 'vpc-flow-logs', {
-      name: naming.resource('log-group', 'vpc-flow-logs'),
-      retentionInDays: 14,
-      tags: naming.tag(),
-    });
+    const logGroup = new cloudwatchLogGroup.CloudwatchLogGroup(
+      this,
+      'vpc-flow-logs',
+      {
+        name: naming.resource('log-group', 'vpc-flow-logs'),
+        retentionInDays: 14,
+        tags: naming.tag(),
+      }
+    );
 
     new flowLog.FlowLog(this, 'vpc-flow-log', {
       vpcId: this.vpc.id,

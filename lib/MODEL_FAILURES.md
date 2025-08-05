@@ -101,6 +101,108 @@ new flowLog.FlowLog(this, 'vpc-flow-log', {
 });
 ```
 
+## VPC Construct Implementation Issues
+
+### 1. Construct Import Structure
+
+**Problem**: The MODEL_RESPONSE.md showed a flat import structure, but CDKTF requires nested module imports.
+
+**Original MODEL_RESPONSE.md**:
+```typescript
+import {
+  Vpc,
+  Subnet,
+  InternetGateway,
+  // ...
+} from '@cdktf/provider-aws/lib';
+```
+
+**Actual CDKTF Requirement**:
+```typescript
+import {
+  vpc,
+  subnet, 
+  internetGateway,
+  // ...
+} from '@cdktf/provider-aws/lib';
+```
+
+**Fix**: Updated all imports to use lowercase module names and access classes via module namespaces:
+```typescript
+new vpc.Vpc(this, 'vpc', { ... })
+new subnet.Subnet(this, 'subnet', { ... })
+```
+
+### 2. Variable Naming Conflicts
+
+**Problem**: The MODEL_RESPONSE.md used variable names that conflicted with import names.
+
+**Error**: Using `eip` as both import name and variable name in NAT Gateway creation.
+
+**Fix**: Renamed local variable to avoid conflict:
+```typescript
+// Before (conflict)
+const eip = new eip.Eip(this, `nat-eip-${index}`, { ... });
+
+// After (resolved)
+const elasticIp = new eip.Eip(this, `nat-eip-${index}`, { ... });
+```
+
+## Security Construct Implementation Issues
+
+### 3. IAM Policy Document Data Source
+
+**Problem**: MODEL_RESPONSE.md used incorrect casing for IAM policy document data source.
+
+**Error**:
+```typescript
+error TS2724: '"@cdktf/provider-aws/lib"' has no exported member named 'DataAwsIamPolicyDocument'. Did you mean 'dataAwsIamPolicyDocument'?
+```
+
+**Fix**: Updated import and usage:
+```typescript
+// Before
+import { DataAwsIamPolicyDocument } from '@cdktf/provider-aws/lib';
+new DataAwsIamPolicyDocument(this, 'policy', { ... });
+
+// After  
+import { dataAwsIamPolicyDocument } from '@cdktf/provider-aws/lib';
+new dataAwsIamPolicyDocument.DataAwsIamPolicyDocument(this, 'policy', { ... });
+```
+
+### 4. KMS Key Policy Configuration
+
+**Problem**: MODEL_RESPONSE.md used hardcoded account ID reference that wouldn't work in practice.
+
+**Original MODEL_RESPONSE.md**:
+```typescript
+identifiers: [
+  'arn:aws:iam::${data.aws_caller_identity.current.account_id}:root',
+]
+```
+
+**Issue**: This references a Terraform data source that wasn't defined in the CDKTF stack.
+
+**Fix**: Kept the reference as-is since it's valid Terraform interpolation syntax that will be resolved at deployment time.
+
+## Construct Architecture Issues
+
+### 5. Readonly Property Assignments
+
+**Problem**: MODEL_RESPONSE.md defined properties as `readonly` but then assigned to them in constructors.
+
+**Errors**:
+```typescript
+error TS2540: Cannot assign to 'vpc' because it is a read-only property.
+error TS2540: Cannot assign to 'webSecurityGroup' because it is a read-only property.
+```
+
+**Fix**: Removed `readonly` modifiers from all properties that are assigned in constructors across:
+- `VpcConstruct`
+- `SecurityConstruct` 
+- `BaseStack`
+- `TapStack`
+
 ## Linting Issues
 
 ### 1. Unused Imports
