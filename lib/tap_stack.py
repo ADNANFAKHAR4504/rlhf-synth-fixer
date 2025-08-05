@@ -69,7 +69,7 @@ class TapStack(pulumi.ComponentResource):
     project_name = pulumi.get_project()
     stack_name = pulumi.get_stack()
     region = "us-east-1" 
-    stage_name = f"{self.environment_suffix}-{self.project_name}-{self.stack_name}-api-stage"
+    stage_name = f"{self.environment_suffix}-{project_name}-{stack_name}-api-stage"
 
     # Tags for all resources
     common_tags = {
