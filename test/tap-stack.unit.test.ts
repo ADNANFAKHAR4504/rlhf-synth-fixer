@@ -218,7 +218,7 @@ describe('Secure Infrastructure CloudFormation Template', () => {
       expect(output.Description).toBe('ID of the created VPC');
       expect(output.Value).toEqual({ Ref: 'SecureVPC' });
       expect(output.Export.Name).toEqual({
-        'Fn::Sub': `${'${AWS::StackName}'}-${outputKey.replace(/Id$/, 'ID')}`,
+        'Fn::Sub': '${AWS::StackName}-VPC-ID',
       });
     });
 
