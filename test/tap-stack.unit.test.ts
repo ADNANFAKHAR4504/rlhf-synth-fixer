@@ -331,7 +331,7 @@ describe('Secure Infrastructure CloudFormation Template', () => {
 
     test('should have the correct number of parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(2);
+      expect(parameterCount).toBe(3);
     });
 
     test('should have the correct number of outputs', () => {
@@ -354,22 +354,22 @@ describe('Secure Infrastructure CloudFormation Template', () => {
     test('S3 bucket names should follow naming convention with UniqueId', () => {
       const s3AccessLogsBucket = template.Resources.S3AccessLogsBucket;
       expect(s3AccessLogsBucket.Properties.BucketName).toEqual({
-        'Fn::Sub': 's3-access-logs-${UniqueId}',
+        'Fn::Sub': 's3-access-logs-${EnvironmentSuffix}-${UniqueId}',
       });
 
       const websiteContentBucket = template.Resources.WebsiteContentBucket;
       expect(websiteContentBucket.Properties.BucketName).toEqual({
-        'Fn::Sub': 'website-content-${UniqueId}',
+        'Fn::Sub': 'website-content-${EnvironmentSuffix}-${UniqueId}',
       });
 
       const applicationLogsBucket = template.Resources.ApplicationLogsBucket;
       expect(applicationLogsBucket.Properties.BucketName).toEqual({
-        'Fn::Sub': 'application-logs-${UniqueId}',
+        'Fn::Sub': 'application-logs-${EnvironmentSuffix}-${UniqueId}',
       });
 
       const backupDataBucket = template.Resources.BackupDataBucket;
       expect(backupDataBucket.Properties.BucketName).toEqual({
-        'Fn::Sub': 'backup-data-${UniqueId}',
+        'Fn::Sub': 'backup-data-${EnvironmentSuffix}-${UniqueId}',
       });
     });
 
