@@ -341,7 +341,6 @@ jobs:
 
           elif [ "$PLATFORM" = "tf" ]; then
             echo "✅ Terraform project detected, setting up environment..."
-            ls -la /bin
             npm run tf:plan -lock=false \
               -backend-config="bucket=${{ env.TERRAFORM_STATE_BUCKET }}" \
               -backend-config="key=${{ env.ENVIRONMENT_SUFFIX }}" \
