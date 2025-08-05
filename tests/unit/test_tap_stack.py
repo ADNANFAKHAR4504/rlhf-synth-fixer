@@ -6,15 +6,16 @@ using pytest and CDKTF testing utilities. Tests cover all infrastructure
 components, security configurations, and production requirements.
 """
 
-import pytest
 import json
+
+import pytest
 from cdktf import Testing, App
 from lib.tap_stack import TapStack
 
 
 def synth_stack(stack):
-    """Helper function to synthesize a stack and return parsed JSON."""
-    return json.loads(Testing.synth(stack))
+  """Helper function to synthesize a stack and return parsed JSON."""
+  return json.loads(Testing.synth(stack))
 
 
 class TestTapStack:
@@ -64,10 +65,6 @@ class TestTapStack:
     assert default_tags["Project"] == "AWS Nova Model Breaking"
     assert default_tags["ManagedBy"] == "CDKTF"
 
-    # Check Random provider configuration
-    random_provider = synthesized_stack.get("provider", {}).get("random")
-    assert random_provider is not None
-
   def test_vpc_creation(self, synthesized_stack):
     """Test VPC resource creation and configuration."""
     vpc_resources = synthesized_stack.get("resource", {}).get("aws_vpc", {})
@@ -108,7 +105,7 @@ class TestTapStack:
     public_subnets = []
     private_subnets = []
 
-    for subnet_name, subnet_config in subnet_resources.items():
+    for _, subnet_config in subnet_resources.items():
       tags = subnet_config.get("tags", {})
       subnet_type = tags.get("Type", "")
 
@@ -210,7 +207,7 @@ class TestTapStack:
     bastion_sgs = []
     private_sgs = []
 
-    for sg_name, sg_config in sg_resources.items():
+    for _, sg_config in sg_resources.items():
       tags = sg_config.get("tags", {})
       purpose = tags.get("Purpose", "")
 
@@ -371,9 +368,10 @@ class TestTapStack:
       for resource_name, resource_config in resource_instances.items():
         if "tags" in resource_config:
           tags = resource_config["tags"]
-          assert "Environment" in tags, f"Missing Environment tag in {resource_type}.{resource_name}"
-          assert tags[
-              "Environment"] == "Production", f"Wrong Environment tag value in {resource_type}.{resource_name}"
+          assert "Environment" in tags, (
+              f"Missing Environment tag in {resource_type}.{resource_name}")
+          assert tags["Environment"] == "Production", (
+              f"Wrong Environment tag value in {resource_type}.{resource_name}")
 
   def test_high_availability_design(self, synthesized_stack):
     """Test that the infrastructure follows high availability principles."""
@@ -437,14 +435,14 @@ class TestTapStack:
         "aws_key_pair": 1,  # Bastion key
         "aws_s3_bucket": 2,  # Logs + Backup
         "aws_s3_bucket_versioning": 2,
-        "aws_s3_bucket_public_access_block": 2,
-        "random_id": 1
+        "aws_s3_bucket_public_access_block": 2
     }
 
     resources = synthesized_stack.get("resource", {})
     for resource_type, expected_count in resource_counts.items():
       actual_count = len(resources.get(resource_type, {}))
-      assert actual_count == expected_count, f"Expected {expected_count} {resource_type}, got {actual_count}"
+      assert actual_count == expected_count, (
+          f"Expected {expected_count} {resource_type}, got {actual_count}")
 
   def test_stack_validation(self, stack):
     """Test stack validation passes without errors."""

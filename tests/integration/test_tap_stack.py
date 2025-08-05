@@ -6,16 +6,17 @@ production infrastructure stack behavior, security implementations, high availab
 and real-world deployment scenarios.
 """
 
-import pytest
-import json
 import ipaddress
+import json
+
+import pytest
 from cdktf import App, Testing
 from lib.tap_stack import TapStack
 
 
 def synth_stack(stack):
-    """Helper function to synthesize a stack and return parsed JSON."""
-    return json.loads(Testing.synth(stack))
+  """Helper function to synthesize a stack and return parsed JSON."""
+  return json.loads(Testing.synth(stack))
 
 
 @pytest.mark.integration
@@ -161,7 +162,7 @@ class TestProductionNetworkingIntegration:
     # Verify no subnet overlaps
     all_subnets = public_subnets + private_subnets
     for i, cidr1 in enumerate(all_subnets):
-      for j, cidr2 in enumerate(all_subnets[i + 1:], i + 1):
+      for _, cidr2 in enumerate(all_subnets[i + 1:], i + 1):
         assert not cidr1.overlaps(
             cidr2), f"Subnets {cidr1} and {cidr2} overlap"
 
@@ -500,9 +501,12 @@ class TestProductionComplianceAndBestPractices:
         tags = resource_config.get("tags", {})
 
         for required_tag, expected_value in required_tags.items():
-          assert required_tag in tags, f"Missing tag '{required_tag}' in {resource_type}.{resource_name}"
+          assert required_tag in tags, (
+              f"Missing tag '{required_tag}' in {resource_type}.{resource_name}")
           actual_value = tags[required_tag]
-          assert actual_value == expected_value, f"Wrong tag value in {resource_type}.{resource_name}: expected '{expected_value}', got '{actual_value}'"
+          assert actual_value == expected_value, (
+              f"Wrong tag value in {resource_type}.{resource_name}: "
+              f"expected '{expected_value}', got '{actual_value}'")
 
   def test_aws_well_architected_framework_compliance(self, compliance_stack):
     """Test compliance with AWS Well-Architected Framework for production."""
@@ -616,7 +620,8 @@ class TestProductionScalabilityAndPerformance:
     utilization_percentage = (total_allocated_ips / vpc_total_ips) * 100
 
     # Should have room for growth (production environments need scalability)
-    assert utilization_percentage < 10, f"IP utilization too high for production: {utilization_percentage}%"
+    assert utilization_percentage < 10, (
+        f"IP utilization too high for production: {utilization_percentage}%")
 
   def test_high_availability_scalability(self, scalability_stack):
     """Test that high availability design supports scaling."""

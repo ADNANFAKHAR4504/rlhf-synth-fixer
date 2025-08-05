@@ -30,8 +30,6 @@ from cdktf_cdktf_provider_aws.security_group import SecurityGroup
 from cdktf_cdktf_provider_aws.security_group_rule import SecurityGroupRule
 from cdktf_cdktf_provider_aws.subnet import Subnet
 from cdktf_cdktf_provider_aws.vpc import Vpc
-from cdktf_cdktf_provider_random.id import Id as RandomId
-from cdktf_cdktf_provider_random.provider import RandomProvider
 from constructs import Construct
 
 
@@ -103,9 +101,6 @@ class TapStack(TerraformStack):
       }]
     )
 
-    # Configure Random provider for unique resource naming
-    RandomProvider(self, "random")
-
   def _create_networking_infrastructure(self) -> None:
     """Create VPC, subnets, gateways, and routing components."""
     # Get availability zones for high availability deployment
@@ -114,11 +109,8 @@ class TapStack(TerraformStack):
       state="available"
     )
 
-    # Generate random ID for unique resource naming
-    self.config['infrastructure_id'] = RandomId(
-      self, "infrastructure_id",
-      byte_length=4
-    )
+    # Use a static infrastructure identifier instead of random
+    self.config['infrastructure_id'] = "prod-infra"
 
     # Common tags for all networking resources
     self.config['common_tags'] = {
@@ -143,7 +135,7 @@ class TapStack(TerraformStack):
       enable_dns_support=True,
       tags={
         **self.config['common_tags'],
-        "Name": f"nova-production-vpc-{self.config['infrastructure_id'].hex}",
+        "Name": f"nova-production-vpc-{self.config['infrastructure_id']}",
         "Description": "Main VPC for production infrastructure"
       }
     )
@@ -155,7 +147,7 @@ class TapStack(TerraformStack):
       vpc_id=self.networking['vpc'].id,
       tags={
         **self.config['common_tags'],
-        "Name": f"nova-production-igw-{self.config['infrastructure_id'].hex}",
+        "Name": f"nova-production-igw-{self.config['infrastructure_id']}",
         "Description": "Internet Gateway for public subnet access"
       }
     )
@@ -175,7 +167,7 @@ class TapStack(TerraformStack):
         map_public_ip_on_launch=True,
         tags={
           **self.config['common_tags'],
-          "Name": f"nova-production-public-subnet-{i+1}-{self.config['infrastructure_id'].hex}",
+          "Name": f"nova-production-public-subnet-{i+1}-{self.config['infrastructure_id']}",
           "Type": "Public",
           "AZ": Fn.element(self.config['azs'].names, i),
           "Description": f"Public subnet {i+1} in AZ {i+1}"
@@ -193,7 +185,7 @@ class TapStack(TerraformStack):
         availability_zone=Fn.element(self.config['azs'].names, i),
         tags={
           **self.config['common_tags'],
-          "Name": f"nova-production-private-subnet-{i+1}-{self.config['infrastructure_id'].hex}",
+          "Name": f"nova-production-private-subnet-{i+1}-{self.config['infrastructure_id']}",
           "Type": "Private",
           "AZ": Fn.element(self.config['azs'].names, i),
           "Description": f"Private subnet {i+1} in AZ {i+1}"
@@ -212,7 +204,7 @@ class TapStack(TerraformStack):
         depends_on=[self.networking['internet_gateway']],
         tags={
           **self.config['common_tags'],
-          "Name": f"nova-production-nat-eip-{i+1}-{self.config['infrastructure_id'].hex}",
+          "Name": f"nova-production-nat-eip-{i+1}-{self.config['infrastructure_id']}",
           "Description": f"Elastic IP for NAT Gateway {i+1}"
         }
       )
@@ -228,7 +220,7 @@ class TapStack(TerraformStack):
         depends_on=[self.networking['internet_gateway']],
         tags={
           **self.config['common_tags'],
-          "Name": f"nova-production-nat-gw-{i+1}-{self.config['infrastructure_id'].hex}",
+          "Name": f"nova-production-nat-gw-{i+1}-{self.config['infrastructure_id']}",
           "AZ": Fn.element(self.config['azs'].names, i),
           "Description": f"NAT Gateway {i+1} in AZ {i+1}"
         }
@@ -243,7 +235,7 @@ class TapStack(TerraformStack):
       vpc_id=self.networking['vpc'].id,
       tags={
         **self.config['common_tags'],
-        "Name": f"nova-production-public-rt-{self.config['infrastructure_id'].hex}",
+        "Name": f"nova-production-public-rt-{self.config['infrastructure_id']}",
         "Type": "Public",
         "Description": "Route table for public subnets"
       }
@@ -273,7 +265,7 @@ class TapStack(TerraformStack):
         vpc_id=self.networking['vpc'].id,
         tags={
           **self.config['common_tags'],
-          "Name": f"nova-production-private-rt-{i+1}-{self.config['infrastructure_id'].hex}",
+          "Name": f"nova-production-private-rt-{i+1}-{self.config['infrastructure_id']}",
           "Type": "Private",
           "AZ": Fn.element(self.config['azs'].names, i),
           "Description": f"Route table for private subnet {i+1}"
@@ -301,7 +293,7 @@ class TapStack(TerraformStack):
     # Security Group for Bastion Host
     self.security['bastion_sg'] = SecurityGroup(
       self, "production_bastion_security_group",
-      name=f"nova-production-bastion-sg-{self.config['infrastructure_id'].hex}",
+      name=f"nova-production-bastion-sg-{self.config['infrastructure_id']}",
       description="Security group for Bastion host with restricted SSH access",
       vpc_id=self.networking['vpc'].id,
       tags={
@@ -309,7 +301,7 @@ class TapStack(TerraformStack):
         "Project": "AWS Nova Model Breaking",
         "Component": "Security",
         "Purpose": "Bastion Host Access",
-        "Name": f"nova-production-bastion-sg-{self.config['infrastructure_id'].hex}",
+        "Name": f"nova-production-bastion-sg-{self.config['infrastructure_id']}",
         "Description": "Security group for Bastion host"
       }
     )
@@ -319,7 +311,7 @@ class TapStack(TerraformStack):
     # Security Group for Private Instances
     self.security['private_sg'] = SecurityGroup(
       self, "production_private_security_group",
-      name=f"nova-production-private-sg-{self.config['infrastructure_id'].hex}",
+      name=f"nova-production-private-sg-{self.config['infrastructure_id']}",
       description="Security group for private subnet instances",
       vpc_id=self.networking['vpc'].id,
       tags={
@@ -327,7 +319,7 @@ class TapStack(TerraformStack):
         "Project": "AWS Nova Model Breaking",
         "Component": "Security",
         "Purpose": "Private Instance Access",
-        "Name": f"nova-production-private-sg-{self.config['infrastructure_id'].hex}",
+        "Name": f"nova-production-private-sg-{self.config['infrastructure_id']}",
         "Description": "Security group for private instances"
       }
     )
@@ -460,14 +452,14 @@ class TapStack(TerraformStack):
 
     self.security['bastion_key_pair'] = KeyPair(
       self, "production_bastion_key_pair",
-      key_name=f"nova-production-bastion-key-{self.config['infrastructure_id'].hex}",
+      key_name=f"nova-production-bastion-key-{self.config['infrastructure_id']}",
       public_key=ssh_public_key,
       tags={
         "Environment": self.environment,
         "Project": "AWS Nova Model Breaking",
         "Component": "Security",
         "Purpose": "Bastion Host Access",
-        "Name": f"nova-production-bastion-key-{self.config['infrastructure_id'].hex}"
+        "Name": f"nova-production-bastion-key-{self.config['infrastructure_id']}"
       }
     )
 
@@ -490,7 +482,7 @@ echo 'Bastion host setup complete' > /var/log/bastion-setup.log
         "Project": "AWS Nova Model Breaking",
         "Component": "Security",
         "Purpose": "Bastion Host",
-        "Name": f"nova-production-bastion-{self.config['infrastructure_id'].hex}",
+        "Name": f"nova-production-bastion-{self.config['infrastructure_id']}",
         "Description": "Bastion host for secure access to private subnets"
       }
     )
@@ -505,7 +497,7 @@ echo 'Bastion host setup complete' > /var/log/bastion-setup.log
         "Project": "AWS Nova Model Breaking",
         "Component": "Storage",
         "Purpose": "Application Logs",
-        "Name": f"nova-production-app-logs-{self.config['infrastructure_id'].hex}",
+        "Name": f"nova-production-app-logs-{self.config['infrastructure_id']}",
         "DataClassification": "Internal"
       }
     )
@@ -520,7 +512,7 @@ echo 'Bastion host setup complete' > /var/log/bastion-setup.log
         "Project": "AWS Nova Model Breaking",
         "Component": "Storage",
         "Purpose": "Backup Storage",
-        "Name": f"nova-production-backup-{self.config['infrastructure_id'].hex}",
+        "Name": f"nova-production-backup-{self.config['infrastructure_id']}",
         "DataClassification": "Confidential"
       }
     )
