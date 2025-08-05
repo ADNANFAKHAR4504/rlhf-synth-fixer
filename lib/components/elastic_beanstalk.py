@@ -72,14 +72,13 @@ class ElasticBeanstalkInfrastructure(pulumi.ComponentResource):
       if not public_subnets or not private_subnets:
         raise Exception(f"Missing subnets for region {self.region}. Public: {len(public_subnets) if public_subnets else 0}, Private: {len(private_subnets) if private_subnets else 0}")
       
-      # For load balancer: use only the first public subnet to avoid multi-AZ LB issues
-      # For instances: use all private subnets for better distribution
-      elb_subnets = public_subnets[0]  # Single AZ for load balancer
-      app_subnets = ",".join(private_subnets)  # Multi-AZ for instances if available
+      # CRITICAL FIX: Use only ONE subnet to avoid "multiple subnets in same AZ" error
+      # This is the safest approach - single AZ deployment
+      elb_subnets = public_subnets[0]   # Single public subnet for load balancer
+      app_subnets = private_subnets[0]  # Single private subnet for instances
       
-      # Set availability zones based on instance subnets, not LB subnets
-      num_azs = len(private_subnets)
-      availability_zones = f"Any {num_azs}" if num_azs > 1 else "Any 1"
+      # Single AZ deployment to avoid any AZ conflicts
+      availability_zones = "Any 1"
 
       subnet_settings = [
         aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
