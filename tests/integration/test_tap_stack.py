@@ -30,12 +30,13 @@ class TestTapStackDeployedResources(unittest.TestCase):
 
     # Fetch outputs
     outputs = cls.stack.outputs()
-    cls.vpc_id = outputs.get("vpc_id", {}).get("value")
-    cls.sg_id = outputs.get("security_group_id", {}).get("value")
-    cls.user_arn = outputs.get("iam_user_arn", {}).get("value")
-    cls.access_key_id = outputs.get("access_key_id", {}).get("value")
-    cls.kms_key_id = outputs.get("kms_key_id", {}).get("value")
-    cls.kms_alias = outputs.get("kms_alias", {}).get("value")
+    cls.vpc_id = outputs.get("vpc_id").value if outputs.get("vpc_id") else None
+    cls.sg_id = outputs.get("security_group_id").value if outputs.get("security_group_id") else None
+    cls.user_arn = outputs.get("iam_user_arn").value if outputs.get("iam_user_arn") else None
+    cls.access_key_id = outputs.get("access_key_id").value if outputs.get("access_key_id") else None
+    cls.kms_key_id = outputs.get("kms_key_id").value if outputs.get("kms_key_id") else None
+    cls.kms_alias = outputs.get("kms_alias").value if outputs.get("kms_alias") else None
+
 
     cls.ec2 = boto3.client("ec2", region_name=cls.region)
     cls.iam = boto3.client("iam", region_name=cls.region)
