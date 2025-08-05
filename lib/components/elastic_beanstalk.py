@@ -66,24 +66,6 @@ class ElasticBeanstalkInfrastructure(pulumi.ComponentResource):
   def _create_configuration_template(self):
     # Use the Output.apply() method directly on individual outputs
     # This is more reliable than Output.all() in some Pulumi versions
-    
-    def create_subnet_setting(namespace: str, name: str, subnet_output: Output[str]):
-      return subnet_output.apply(
-        lambda subnet_id: aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
-          namespace=namespace,
-          name=name,
-          value=subnet_id
-        )
-      )
-
-    def create_vpc_setting(vpc_output: Output[str]):
-      return vpc_output.apply(
-        lambda vpc_id: aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
-          namespace="aws:ec2:vpc",
-          name="VPCId",
-          value=vpc_id
-        )
-      )
 
     def create_role_setting(role_output: Output[str]):
       return role_output.apply(
@@ -266,9 +248,6 @@ class ElasticBeanstalkInfrastructure(pulumi.ComponentResource):
 
     # Combine all settings using Output.all() to properly resolve dynamic settings
     all_settings = Output.all(
-      vpc_setting,
-      subnet_setting,
-      elb_subnet_setting,
       service_role_setting,
       instance_profile_setting
     ).apply(lambda dynamic_settings: dynamic_settings + static_settings)
