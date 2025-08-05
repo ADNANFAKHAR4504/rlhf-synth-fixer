@@ -20,43 +20,35 @@ class TestTapStackLiveIntegration(unittest.TestCase):
     cls.s3_backend = os.getenv("PULUMI_BACKEND_URL", "s3://iac-rlhf-pulumi-states")
 
     def pulumi_program():
-      return tap_stack.TapStack("TapStack", 
-                                tap_stack.TapStackArgs(environment_suffix=cls.stack_name))
+      return tap_stack.TapStack(
+      "TapStack",
+      tap_stack.TapStackArgs(environment_suffix=cls.stack_name)
+      )
 
-    cls.workspace = auto.LocalWorkspace(
-      project_settings=auto.ProjectSettings(
-        name=cls.project_name,
-        runtime="python",
-      ),
-      env_vars={
-        "AWS_REGION": cls.region,
-        "PULUMI_BACKEND_URL": cls.s3_backend,
-      }
-    )
-
-    # Select or create the stack
     try:
       cls.stack = auto.select_stack(
         stack_name=cls.stack_name,
         project_name=cls.project_name,
         program=pulumi_program,
-        workspace=cls.workspace
-      )
+        )
     except auto.StackNotFoundError:
       cls.stack = auto.create_stack(
         stack_name=cls.stack_name,
         project_name=cls.project_name,
         program=pulumi_program,
-        workspace=cls.workspace
-      )
+        )
+        # Optional: set config values if stack is newly created
       cls.stack.set_config("aws:region", auto.ConfigValue(value=cls.region))
       cls.stack.set_config("TapStack:db_password",
-                        auto.ConfigValue(value="dummy-password", secret=True))
+                            auto.ConfigValue(value="dummy-password", secret=True))
       cls.stack.up(on_output=print)
 
-    # Get stack outputs
-    cls.outputs = cls.stack.outputs()
+    # Set AWS_REGION and backend env after stack creation
+    cls.stack.workspace.env_vars["AWS_REGION"] = cls.region
+    cls.stack.workspace.env_vars["PULUMI_BACKEND_URL"] = cls.s3_backend
 
+    # Get outputs
+    cls.outputs = cls.stack.outputs()
     cls.vpc_id = cls.outputs.get("vpc_id").value
     cls.sg_id = cls.outputs.get("security_group_id").value
     cls.user_arn = cls.outputs.get("iam_user_arn").value
@@ -65,10 +57,11 @@ class TestTapStackLiveIntegration(unittest.TestCase):
     cls.kms_alias = cls.outputs.get("kms_alias").value
     cls.encrypted_blob = cls.outputs.get("encrypted_db_password_blob").value
 
-    # AWS SDK clients
+    # AWS clients
     cls.ec2 = boto3.client("ec2", region_name=cls.region)
     cls.iam = boto3.client("iam", region_name=cls.region)
     cls.kms = boto3.client("kms", region_name=cls.region)
+
 
   def test_vpc_exists(self):
     response = self.ec2.describe_vpcs(VpcIds=[self.vpc_id])
