@@ -149,12 +149,15 @@ describe('TapStack Unit Tests', () => {
     const myStackSynthesized = JSON.parse(Testing.synth(myStackInstance));
 
     // Corrected: MyStack resources will appear directly under 'resource' in the parent stack's JSON
+    // The resource type is 'aws_s3_bucket' and its name will be a combination of the nested stack ID and the resource ID
     expect(myStackSynthesized).toHaveProperty('resource');
-    expect(myStackSynthesized.resource).toHaveProperty('MyModularStack');
-    expect(myStackSynthesized.resource.MyModularStack).toHaveProperty('my_example_bucket');
+    expect(myStackSynthesized.resource).toHaveProperty('aws_s3_bucket'); // Check for the S3 bucket resource type
+    // The full resource name will be 'nested_stack_id_resource_id' (snake_case)
+    const s3ResourceName = 'my_modular_stack_my_example_bucket';
+    expect(myStackSynthesized.resource.aws_s3_bucket).toHaveProperty(s3ResourceName);
 
     // Verify properties of the S3 bucket created by MyStack
-    const s3BucketResource = myStackSynthesized.resource.MyModularStack.my_example_bucket;
+    const s3BucketResource = myStackSynthesized.resource.aws_s3_bucket[s3ResourceName];
     expect(s3BucketResource.bucket).toBe('dev-my-example-bucket');
     expect(s3BucketResource.tags.Project).toBe('TestProject');
     expect(s3BucketResource.tags.Environment).toBe('dev');
@@ -168,11 +171,13 @@ describe('TapStack Unit Tests', () => {
     // Test with createMyStack explicitly false
     const noMyStackFalse = new TapStack(app, 'TestNoMyStackFalse', { createMyStack: false });
     const noMyStackFalseSynthesized = JSON.parse(Testing.synth(noMyStackFalse));
-    expect(noMyStackFalseSynthesized.resource).toBeUndefined(); // Check for absence of resource
+    // Check for absence of the specific S3 bucket resource
+    expect(noMyStackFalseSynthesized.resource).not.toHaveProperty('aws_s3_bucket');
 
     // Test with createMyStack undefined (default behavior)
     const noMyStackUndefined = new TapStack(app, 'TestNoMyStackUndefined');
     const noMyStackUndefinedSynthesized = JSON.parse(Testing.synth(noMyStackUndefined));
-    expect(noMyStackUndefinedSynthesized.resource).toBeUndefined(); // Check for absence of resource
+    // Check for absence of the specific S3 bucket resource
+    expect(noMyStackUndefinedSynthesized.resource).not.toHaveProperty('aws_s3_bucket');
   });
 });
