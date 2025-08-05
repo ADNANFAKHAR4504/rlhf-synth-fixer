@@ -7,6 +7,8 @@ from typing import Optional, List
 import pulumi
 import pulumi_aws as aws
 from pulumi import ResourceOptions, Output
+import random
+import string
 
 class ElasticBeanstalkInfrastructure(pulumi.ComponentResource):
   def __init__(
@@ -31,7 +33,6 @@ class ElasticBeanstalkInfrastructure(pulumi.ComponentResource):
     self.region = region
     self.is_primary = is_primary
     self.environment = environment
-    self.environment_suffix = environment_suffix
     self.vpc_id = vpc_id
     self.public_subnet_ids = public_subnet_ids
     self.private_subnet_ids = private_subnet_ids
@@ -41,6 +42,7 @@ class ElasticBeanstalkInfrastructure(pulumi.ComponentResource):
     self.eb_instance_profile_name = eb_instance_profile_name
     self.tags = tags
     self.region_suffix = region.replace('-', '').replace('gov', '')
+    self.environment_suffix = f"{environment_suffix}-{self._random_suffix()}"
 
     self._create_application()
     self._create_configuration_template()
@@ -53,11 +55,14 @@ class ElasticBeanstalkInfrastructure(pulumi.ComponentResource):
       'environment_cname': self.eb_environment.cname
     })
 
+  def _random_suffix(self, length: int = 6) -> str:
+    return ''.join(random.choices(string.ascii_lowercase + string.digits, k=length))
+
   def _create_application(self):
     """Create Elastic Beanstalk application"""
     self.application = aws.elasticbeanstalk.Application(
       f"eb-app-{self.region_suffix}",
-      name=f"nova-env-{self.region_suffix},
+      name=f"nova-app-{self.region_suffix}",
       description=f"Nova Web Application - {self.region_suffix.title()} Region",
       tags=self.tags,
       opts=ResourceOptions(parent=self)
@@ -83,13 +88,6 @@ class ElasticBeanstalkInfrastructure(pulumi.ComponentResource):
             lambda subnets: ",".join(subnets)
           )
         ),
-        # aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
-        #   namespace="aws:ec2:vpc",
-        #   name="ELBSubnets",
-        #   value=Output.all(*self.public_subnet_ids).apply(
-        #     lambda subnets: ",".join(subnets)
-        #   )
-        # ),
         aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
           namespace="aws:ec2:vpc",
           name="AssociatePublicIpAddress",
@@ -170,26 +168,6 @@ class ElasticBeanstalkInfrastructure(pulumi.ComponentResource):
           name="RootVolumeSize",
           value="20"
         ),
-        # aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
-        #   namespace="aws:elasticbeanstalk:environment",
-        #   name="LoadBalancerType",
-        #   value="application"
-        # ),
-        # aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
-        #   namespace="aws:elbv2:loadbalancer",
-        #   name="SecurityGroups",
-        #   value=self.alb_security_group_id
-        # ),
-        # aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
-        #   namespace="aws:elbv2:loadbalancer",
-        #   name="ManagedSecurityGroup",
-        #   value=self.alb_security_group_id
-        # ),
-        # aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
-        #   namespace="aws:elbv2:listener:80",
-        #   name="Protocol",
-        #   value="HTTP"
-        # ),
         aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
           namespace="aws:elasticbeanstalk:healthreporting:system",
           name="SystemType",
@@ -200,11 +178,6 @@ class ElasticBeanstalkInfrastructure(pulumi.ComponentResource):
           name="HealthCheckSuccessThreshold",
           value="Ok"
         ),
-        # aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
-        #   namespace="aws:elbv2:loadbalancer",
-        #   name="IdleTimeout",
-        #   value="60"
-        # ),
         aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
           namespace="aws:elasticbeanstalk:command",
           name="DeploymentPolicy",
