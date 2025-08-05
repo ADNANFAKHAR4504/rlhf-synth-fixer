@@ -149,16 +149,15 @@ Resources:
                   - 's3:GetObject'
                   - 's3:ListBucket'
                 Resource:
-                  - !Sub 'arn:aws:s3:::${WebsiteContentBucket}'
-                  - !Sub 'arn:aws:s3:::${WebsiteContentBucket}/*'
+                  - !Sub 'arn:aws:s3:::website-content-${EnvironmentSuffix}-${UniqueId}'
+                  - !Sub 'arn:aws:s3:::website-content-${EnvironmentSuffix}-${UniqueId}/*'
               - Sid: 'WriteApplicationLogs'
                 Effect: Allow
                 Action:
                   - 's3:PutObject'
                   - 's3:PutObjectAcl'
                 Resource:
-                  - !Sub 'arn:aws:s3:::${ApplicationLogsBucket}'
-                  - !Sub 'arn:aws:s3:::${ApplicationLogsBucket}/*'
+                  - !Sub 'arn:aws:s3:::application-logs-${EnvironmentSuffix}-${UniqueId}/*'
               - Sid: 'KMSAccess'
                 Effect: Allow
                 Action:
@@ -218,16 +217,15 @@ Resources:
             Principal:
               Service: logging.s3.amazonaws.com
             Action: s3:PutObject
-            Resource:
-              - !Sub 'arn:aws:s3:::${S3AccessLogsBucket}/*'
+            Resource: !Sub 'arn:aws:s3:::s3-access-logs-${EnvironmentSuffix}-${UniqueId}/*'
             Condition:
               StringEquals:
                 aws:SourceAccount: !Sub '${AWS::AccountId}'
               ArnLike:
                 aws:SourceArn:
-                  - !Sub 'arn:aws:s3:::${WebsiteContentBucket}'
-                  - !Sub 'arn:aws:s3:::${ApplicationLogsBucket}'
-                  - !Sub 'arn:aws:s3:::${BackupDataBucket}'
+                  - !Sub 'arn:aws:s3:::website-content-${EnvironmentSuffix}-${UniqueId}'
+                  - !Sub 'arn:aws:s3:::application-logs-${EnvironmentSuffix}-${UniqueId}'
+                  - !Sub 'arn:aws:s3:::backup-data-${EnvironmentSuffix}-${UniqueId}'
 
   WebsiteContentBucket:
     Type: AWS::S3::Bucket
@@ -340,9 +338,8 @@ Resources:
             Principal: '*'
             Action: 's3:*'
             Resource:
-              - !Sub 'arn:aws:s3:::${BackupDataBucket}'
-              - !Sub 'arn:aws:s3:::${BackupDataBucket}/*'
-
+              - !Sub 'arn:aws:s3:::backup-data-${EnvironmentSuffix}-${UniqueId}'
+              - !Sub 'arn:aws:s3:::backup-data-${EnvironmentSuffix}-${UniqueId}/*'
             Condition:
               StringNotEquals:
                 'aws:PrincipalServiceName': 'cloudformation.amazonaws.com'
@@ -351,7 +348,7 @@ Resources:
             Principal:
               AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:user/iac-deployment-runner'
             Action: 's3:PutBucketLogging'
-            Resource: !GetAtt BackupDataBucket.Arn
+            Resource: !Sub 'arn:aws:s3:::backup-data-${EnvironmentSuffix}-${UniqueId}'
           - Sid: AllowS3Logging
             Effect: Allow
             Principal:
