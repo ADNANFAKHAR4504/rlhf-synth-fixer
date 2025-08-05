@@ -1,10 +1,10 @@
-You are an expert DevOps/SRE engineer skilled in Terraform and AWS infrastructure design. I need you to generate idiomatic, syntactically correct, production-ready Terraform code for the following task:
+You are an expert DevOps/SRE engineer skilled in CDKTF (Cloud Development Kit for Terraform) and AWS infrastructure design. I need you to generate idiomatic, syntactically correct, production-ready CDKTF code using TypeScript for the following task:
 
 ---
 
 **Objective:**
 
-Create a modular Terraform configuration to provision a secure and well-tagged AWS infrastructure in `us-east-1`. The environment must fulfill the following requirements:
+Create a modular CDKTF configuration to provision a secure and well-tagged AWS infrastructure in `us-east-1`. The environment must fulfill the following requirements:
 
 1. **Networking:**
    - Create a Virtual Private Cloud (VPC) spanning 3 different subnets across 3 Availability Zones in `us-east-1`.
@@ -21,11 +21,11 @@ Create a modular Terraform configuration to provision a secure and well-tagged A
    - Allow the EC2 instances to securely access S3 buckets **without hardcoding credentials**.
 
 4. **Modularity:**
-   - Use separate Terraform **modules** for each major component:
-     - `networking` (VPC, subnets, NAT gateway)
-     - `security` (security groups)
-     - `iam` (IAM roles and policies)
-     - `compute` (optional EC2 instance for testing)
+   - Use separate CDKTF **constructs** for each major component:
+     - `NetworkingConstruct` (VPC, subnets, NAT gateway)
+     - `SecurityConstruct` (security groups)
+     - `IamConstruct` (IAM roles and policies)
+     - `ComputeConstruct` (optional EC2 instance for testing)
 
 5. **Tagging & Governance:**
    - Apply consistent tags to **all resources**, such as:
@@ -37,20 +37,21 @@ Create a modular Terraform configuration to provision a secure and well-tagged A
 
 **Expected Output Structure:**
 
-- A `main` directory with:
-  - `main.tf`, `variables.tf`, `outputs.tf`
-- A `modules/` folder with:
-  - `networking/`
-  - `security/`
-  - `iam/`
-- Code should be clean, readable, and idiomatic Terraform.
+- A main TypeScript file (e.g., `main.ts` or `stack.ts`) with the primary stack class
+- Separate TypeScript files for each construct:
+  - `networking-construct.ts`
+  - `security-construct.ts`
+  - `iam-construct.ts`
+  - `compute-construct.ts` (optional)
+- Code should be clean, readable, and follow CDKTF TypeScript best practices.
 
 ---
 
 **Deliverables:**
-- Terraform files ready to be used with `terraform init`, `plan`, and `apply`.
-- All variables clearly defined with defaults where appropriate.
+- CDKTF TypeScript files ready to be used with `cdktf synth`, `cdktf plan`, and `cdktf deploy`.
+- All configuration properties clearly defined with proper TypeScript interfaces and defaults where appropriate.
 - No hardcoded secrets or credentials.
-- Assume the AWS provider is already configured via `~/.aws/credentials`.
+- Use `@cdktf/provider-aws` for AWS resources.
+- Assume the AWS provider is configured via `~/.aws/credentials` or environment variables.
 
-Please generate the complete Terraform configuration accordingly.
+Please generate the complete CDKTF configuration accordingly.
