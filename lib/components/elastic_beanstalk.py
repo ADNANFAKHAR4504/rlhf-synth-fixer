@@ -81,13 +81,13 @@ class ElasticBeanstalkInfrastructure(pulumi.ComponentResource):
             lambda subnets: ",".join(subnets)
           )
         ),
-        aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
-          namespace="aws:ec2:vpc",
-          name="ELBSubnets",
-          value=Output.all(*self.public_subnet_ids).apply(
-            lambda subnets: ",".join(subnets)
-          )
-        ),
+        # aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
+        #   namespace="aws:ec2:vpc",
+        #   name="ELBSubnets",
+        #   value=Output.all(*self.public_subnet_ids).apply(
+        #     lambda subnets: ",".join(subnets)
+        #   )
+        # ),
         aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
           namespace="aws:ec2:vpc",
           name="AssociatePublicIpAddress",
@@ -168,26 +168,26 @@ class ElasticBeanstalkInfrastructure(pulumi.ComponentResource):
           name="RootVolumeSize",
           value="20"
         ),
-        aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
-          namespace="aws:elasticbeanstalk:environment",
-          name="LoadBalancerType",
-          value="application"
-        ),
-        aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
-          namespace="aws:elbv2:loadbalancer",
-          name="SecurityGroups",
-          value=self.alb_security_group_id
-        ),
-        aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
-          namespace="aws:elbv2:loadbalancer",
-          name="ManagedSecurityGroup",
-          value=self.alb_security_group_id
-        ),
-        aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
-          namespace="aws:elbv2:listener:80",
-          name="Protocol",
-          value="HTTP"
-        ),
+        # aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
+        #   namespace="aws:elasticbeanstalk:environment",
+        #   name="LoadBalancerType",
+        #   value="application"
+        # ),
+        # aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
+        #   namespace="aws:elbv2:loadbalancer",
+        #   name="SecurityGroups",
+        #   value=self.alb_security_group_id
+        # ),
+        # aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
+        #   namespace="aws:elbv2:loadbalancer",
+        #   name="ManagedSecurityGroup",
+        #   value=self.alb_security_group_id
+        # ),
+        # aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
+        #   namespace="aws:elbv2:listener:80",
+        #   name="Protocol",
+        #   value="HTTP"
+        # ),
         aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
           namespace="aws:elasticbeanstalk:healthreporting:system",
           name="SystemType",
@@ -198,11 +198,11 @@ class ElasticBeanstalkInfrastructure(pulumi.ComponentResource):
           name="HealthCheckSuccessThreshold",
           value="Ok"
         ),
-        aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
-          namespace="aws:elbv2:loadbalancer",
-          name="IdleTimeout",
-          value="60"
-        ),
+        # aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
+        #   namespace="aws:elbv2:loadbalancer",
+        #   name="IdleTimeout",
+        #   value="60"
+        # ),
         aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
           namespace="aws:elasticbeanstalk:command",
           name="DeploymentPolicy",
