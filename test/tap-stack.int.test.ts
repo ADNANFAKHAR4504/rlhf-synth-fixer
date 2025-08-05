@@ -11,18 +11,14 @@ import {
   ConfigServiceClient,
   DescribeConfigurationRecordersCommand,
 } from '@aws-sdk/client-config-service';
-import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import {
   DescribeInstancesCommand,
   DescribeSecurityGroupsCommand,
   DescribeVpcsCommand,
   EC2Client,
 } from '@aws-sdk/client-ec2';
-import { ElasticLoadBalancingV2Client } from '@aws-sdk/client-elastic-load-balancing-v2';
 import { GetRoleCommand, IAMClient } from '@aws-sdk/client-iam';
 import { DescribeKeyCommand, KMSClient } from '@aws-sdk/client-kms';
-import { LambdaClient } from '@aws-sdk/client-lambda';
-import { RDSClient } from '@aws-sdk/client-rds';
 import { GetBucketEncryptionCommand, S3Client } from '@aws-sdk/client-s3';
 import fs from 'fs';
 
@@ -40,20 +36,10 @@ const cloudfront = new CloudFrontClient({ region });
 
 const configservice = new ConfigServiceClient({ region });
 const kms = new KMSClient({ region });
-const dynamodb = new DynamoDBClient({ region });
-const elbv2 = new ElasticLoadBalancingV2Client({ region });
-const rds = new RDSClient({ region });
-const lambda = new LambdaClient({ region });
 
 // Define the types for CloudFormation outputs
 interface StackOutputs {
   [key: string]: string;
-}
-
-interface CloudFormationOutput {
-  OutputKey?: string;
-  OutputValue?: string;
-  Description?: string;
 }
 
 interface OutputKeyMapping {
@@ -200,56 +186,6 @@ function getOutput(key: string): string {
       'kmsKeyArn',
       `${stackName}KMSKeyArn`,
       `${stackName}-kms-key-arn`,
-    ],
-
-    // DynamoDB
-    DynamoDBTableName: [
-      'DynamoDBTableName',
-      'dynamoDBTableName',
-      `${stackName}DynamoDBTableName`,
-      `${stackName}-dynamodb-table-name`,
-    ],
-
-    // RDS
-    RDSInstanceIdentifier: [
-      'RDSInstanceIdentifier',
-      'rdsInstanceIdentifier',
-      `${stackName}RDSInstanceIdentifier`,
-      `${stackName}-rds-instance-id`,
-    ],
-    RDSEndpoint: [
-      'RDSEndpoint',
-      'rdsEndpoint',
-      `${stackName}RDSEndpoint`,
-      `${stackName}-rds-endpoint`,
-    ],
-
-    // Load Balancer
-    LoadBalancerArn: [
-      'LoadBalancerArn',
-      'loadBalancerArn',
-      `${stackName}LoadBalancerArn`,
-      `${stackName}-load-balancer-arn`,
-    ],
-    LoadBalancerDNSName: [
-      'LoadBalancerDNSName',
-      'loadBalancerDnsName',
-      `${stackName}LoadBalancerDNSName`,
-      `${stackName}-load-balancer-dns`,
-    ],
-
-    // Lambda
-    LambdaFunctionName: [
-      'LambdaFunctionName',
-      'lambdaFunctionName',
-      `${stackName}LambdaFunctionName`,
-      `${stackName}-lambda-function-name`,
-    ],
-    LambdaFunctionArn: [
-      'LambdaFunctionArn',
-      'lambdaFunctionArn',
-      `${stackName}LambdaFunctionArn`,
-      `${stackName}-lambda-function-arn`,
     ],
   };
 

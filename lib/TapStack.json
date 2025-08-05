@@ -414,9 +414,6 @@
     "WebAppInstanceRole": {
       "Type": "AWS::IAM::Role",
       "Properties": {
-        "RoleName": {
-          "Fn::Sub": "WebApp-Instance-Role-${AWS::Region}"
-        },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
           "Statement": [
@@ -478,9 +475,6 @@
     "WebAppInstanceProfile": {
       "Type": "AWS::IAM::InstanceProfile",
       "Properties": {
-        "InstanceProfileName": {
-          "Fn::Sub": "WebApp-Instance-Profile-${AWS::Region}"
-        },
         "Roles": [
           {
             "Ref": "WebAppInstanceRole"
@@ -870,9 +864,6 @@
     "WebAppConfigRole": {
       "Type": "AWS::IAM::Role",
       "Properties": {
-        "RoleName": {
-          "Fn::Sub": "WebApp-Config-Role-${AWS::Region}"
-        },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
           "Statement": [

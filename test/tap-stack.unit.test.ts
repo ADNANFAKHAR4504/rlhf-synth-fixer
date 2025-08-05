@@ -556,19 +556,6 @@ describe('CloudFormation Template', () => {
       });
     });
 
-    test('should use region-specific resource names where needed', () => {
-      // Check IAM roles have region in their name to avoid cross-region conflicts
-      const instanceRole = template.Resources.WebAppInstanceRole;
-      const configRole = template.Resources.WebAppConfigRole;
-
-      expect(instanceRole.Properties.RoleName['Fn::Sub']).toContain(
-        '${AWS::Region}'
-      );
-      expect(configRole.Properties.RoleName['Fn::Sub']).toContain(
-        '${AWS::Region}'
-      );
-    });
-
     test('should use account-specific bucket names', () => {
       const contentBucket = template.Resources.WebAppS3Bucket;
       const cloudTrailBucket = template.Resources.WebAppCloudTrailS3Bucket;
