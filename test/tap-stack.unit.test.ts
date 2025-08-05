@@ -1,10 +1,10 @@
 import fs from 'fs';
 import path from 'path';
 
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
+// const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
 describe('TapStack CloudFormation Template - Unified DynamoDB Multi-Region', () => {
-  let template: any;
+  let template: any; // eslint-disable-line @typescript-eslint/no-explicit-any
 
   beforeAll(() => {
     // Template should be in JSON format (converted from YAML using cfn-flip)
@@ -28,7 +28,7 @@ describe('TapStack CloudFormation Template - Unified DynamoDB Multi-Region', () 
     test('should have metadata section with interface configuration', () => {
       expect(template.Metadata).toBeDefined();
       expect(template.Metadata['AWS::CloudFormation::Interface']).toBeDefined();
-      
+
       const cfnInterface = template.Metadata['AWS::CloudFormation::Interface'];
       expect(cfnInterface.ParameterGroups).toBeDefined();
       expect(cfnInterface.ParameterLabels).toBeDefined();
@@ -44,9 +44,7 @@ describe('TapStack CloudFormation Template - Unified DynamoDB Multi-Region', () 
 
   describe('Parameters', () => {
     test('should have all required parameters', () => {
-      const expectedParams = [
-        'EnvironmentSuffix'
-      ];
+      const expectedParams = ['EnvironmentSuffix'];
 
       expectedParams.forEach(paramName => {
         expect(template.Parameters[paramName]).toBeDefined();
@@ -57,7 +55,9 @@ describe('TapStack CloudFormation Template - Unified DynamoDB Multi-Region', () 
       const envParam = template.Parameters.EnvironmentSuffix;
       expect(envParam.Type).toBe('String');
       expect(envParam.Default).toBe('dev');
-      expect(envParam.Description).toBe('Environment suffix for resource naming (e.g., dev, staging, prod)');
+      expect(envParam.Description).toBe(
+        'Environment suffix for resource naming (e.g., dev, staging, prod)'
+      );
     });
   });
 
@@ -67,7 +67,7 @@ describe('TapStack CloudFormation Template - Unified DynamoDB Multi-Region', () 
         'IsWest1',
         'IsWest2',
         'EnableStreams',
-        'HasCrossRegionReference'
+        'HasCrossRegionReference',
       ];
 
       expectedConditions.forEach(conditionName => {
@@ -79,7 +79,7 @@ describe('TapStack CloudFormation Template - Unified DynamoDB Multi-Region', () 
       const condition = template.Conditions.IsWest1;
       expect(condition['Fn::Equals']).toEqual([
         { Ref: 'AWS::Region' },
-        'us-west-1'
+        'us-west-1',
       ]);
     });
 
@@ -87,7 +87,7 @@ describe('TapStack CloudFormation Template - Unified DynamoDB Multi-Region', () 
       const condition = template.Conditions.IsWest2;
       expect(condition['Fn::Equals']).toEqual([
         { Ref: 'AWS::Region' },
-        'us-west-2'
+        'us-west-2',
       ]);
     });
 
@@ -95,7 +95,7 @@ describe('TapStack CloudFormation Template - Unified DynamoDB Multi-Region', () 
       const condition = template.Conditions.EnableStreams;
       expect(condition['Fn::Equals']).toEqual([
         { Ref: 'AWS::Region' },
-        'us-west-2'
+        'us-west-2',
       ]);
     });
 
@@ -103,7 +103,7 @@ describe('TapStack CloudFormation Template - Unified DynamoDB Multi-Region', () 
       const condition = template.Conditions.HasCrossRegionReference;
       expect(condition['Fn::Equals']).toEqual([
         { Ref: 'AWS::Region' },
-        'us-west-2'
+        'us-west-2',
       ]);
     });
   });
@@ -114,7 +114,7 @@ describe('TapStack CloudFormation Template - Unified DynamoDB Multi-Region', () 
         'DynamoDBTable',
         'DynamoDBAccessRole',
         'CrossRegionLambdaFunction',
-        'LambdaExecutionRole'
+        'LambdaExecutionRole',
       ];
 
       expectedResources.forEach(resourceName => {
@@ -123,7 +123,7 @@ describe('TapStack CloudFormation Template - Unified DynamoDB Multi-Region', () 
     });
 
     describe('DynamoDBTable Resource', () => {
-      let dynamoTable: any;
+      let dynamoTable: any; // eslint-disable-line @typescript-eslint/no-explicit-any
 
       beforeEach(() => {
         dynamoTable = template.Resources.DynamoDBTable;
@@ -139,10 +139,10 @@ describe('TapStack CloudFormation Template - Unified DynamoDB Multi-Region', () 
             'multi-region-app-${EnvironmentSuffix}-${RegionSuffix}-table',
             {
               RegionSuffix: {
-                'Fn::If': ['IsWest1', 'west1', 'west2']
-              }
-            }
-          ]
+                'Fn::If': ['IsWest1', 'west1', 'west2'],
+              },
+            },
+          ],
         });
       });
 
@@ -153,10 +153,10 @@ describe('TapStack CloudFormation Template - Unified DynamoDB Multi-Region', () 
       test('should have conditional capacity settings', () => {
         const throughput = dynamoTable.Properties.ProvisionedThroughput;
         expect(throughput.ReadCapacityUnits).toEqual({
-          'Fn::If': ['IsWest1', 5, 10]
+          'Fn::If': ['IsWest1', 5, 10],
         });
         expect(throughput.WriteCapacityUnits).toEqual({
-          'Fn::If': ['IsWest1', 5, 10]
+          'Fn::If': ['IsWest1', 5, 10],
         });
       });
 
@@ -164,11 +164,11 @@ describe('TapStack CloudFormation Template - Unified DynamoDB Multi-Region', () 
         const attrs = dynamoTable.Properties.AttributeDefinitions;
         expect(attrs).toContainEqual({
           AttributeName: 'PrimaryKey',
-          AttributeType: 'S'
+          AttributeType: 'S',
         });
         expect(attrs).toContainEqual({
           AttributeName: 'SortKey',
-          AttributeType: 'S'
+          AttributeType: 'S',
         });
       });
 
@@ -176,7 +176,7 @@ describe('TapStack CloudFormation Template - Unified DynamoDB Multi-Region', () 
         const keySchema = dynamoTable.Properties.KeySchema;
         expect(keySchema).toEqual([
           { AttributeName: 'PrimaryKey', KeyType: 'HASH' },
-          { AttributeName: 'SortKey', KeyType: 'RANGE' }
+          { AttributeName: 'SortKey', KeyType: 'RANGE' },
         ]);
       });
 
@@ -187,7 +187,10 @@ describe('TapStack CloudFormation Template - Unified DynamoDB Multi-Region', () 
       });
 
       test('should have point-in-time recovery enabled', () => {
-        expect(dynamoTable.Properties.PointInTimeRecoverySpecification.PointInTimeRecoveryEnabled).toBe(true);
+        expect(
+          dynamoTable.Properties.PointInTimeRecoverySpecification
+            .PointInTimeRecoveryEnabled
+        ).toBe(true);
       });
 
       test('should have server-side encryption enabled', () => {
@@ -204,21 +207,21 @@ describe('TapStack CloudFormation Template - Unified DynamoDB Multi-Region', () 
         const tags = dynamoTable.Properties.Tags;
         expect(tags).toContainEqual({
           Key: 'Environment',
-          Value: { Ref: 'EnvironmentSuffix' }
+          Value: { Ref: 'EnvironmentSuffix' },
         });
         expect(tags).toContainEqual({
           Key: 'Application',
-          Value: 'multi-region-app'
+          Value: 'multi-region-app',
         });
         expect(tags).toContainEqual({
           Key: 'ManagedBy',
-          Value: 'CloudFormation'
+          Value: 'CloudFormation',
         });
       });
     });
 
     describe('DynamoDBAccessRole Resource', () => {
-      let iamRole: any;
+      let iamRole: any; // eslint-disable-line @typescript-eslint/no-explicit-any
 
       beforeEach(() => {
         iamRole = template.Resources.DynamoDBAccessRole;
@@ -232,7 +235,9 @@ describe('TapStack CloudFormation Template - Unified DynamoDB Multi-Region', () 
         const policy = iamRole.Properties.AssumeRolePolicyDocument;
         expect(policy.Version).toBe('2012-10-17');
         expect(policy.Statement[0].Effect).toBe('Allow');
-        expect(policy.Statement[0].Principal.Service).toBe('lambda.amazonaws.com');
+        expect(policy.Statement[0].Principal.Service).toBe(
+          'lambda.amazonaws.com'
+        );
         expect(policy.Statement[0].Action).toBe('sts:AssumeRole');
       });
 
@@ -251,7 +256,7 @@ describe('TapStack CloudFormation Template - Unified DynamoDB Multi-Region', () 
     });
 
     describe('CrossRegionLambdaFunction Resource', () => {
-      let lambdaFunction: any;
+      let lambdaFunction: any; // eslint-disable-line @typescript-eslint/no-explicit-any
 
       beforeEach(() => {
         lambdaFunction = template.Resources.CrossRegionLambdaFunction;
@@ -274,23 +279,25 @@ describe('TapStack CloudFormation Template - Unified DynamoDB Multi-Region', () 
         const envVars = lambdaFunction.Properties.Environment.Variables;
         expect(envVars.LOCAL_TABLE_NAME).toEqual({ Ref: 'DynamoDBTable' });
         expect(envVars.LOCAL_TABLE_ARN).toEqual({
-          'Fn::GetAtt': ['DynamoDBTable', 'Arn']
+          'Fn::GetAtt': ['DynamoDBTable', 'Arn'],
         });
         expect(envVars.REMOTE_TABLE_NAME).toEqual({
           'Fn::ImportValue': {
-            'Fn::Sub': 'TapStack${EnvironmentSuffix}-TableName'
-          }
+            'Fn::Sub': 'TapStack${EnvironmentSuffix}-TableName',
+          },
         });
       });
 
       test('should have inline code', () => {
         expect(lambdaFunction.Properties.Code.ZipFile).toBeDefined();
-        expect(lambdaFunction.Properties.Code.ZipFile).toContain('lambda_handler');
+        expect(lambdaFunction.Properties.Code.ZipFile).toContain(
+          'lambda_handler'
+        );
       });
     });
 
     describe('LambdaExecutionRole Resource', () => {
-      let lambdaRole: any;
+      let lambdaRole: any; // eslint-disable-line @typescript-eslint/no-explicit-any
 
       beforeEach(() => {
         lambdaRole = template.Resources.LambdaExecutionRole;
@@ -329,7 +336,7 @@ describe('TapStack CloudFormation Template - Unified DynamoDB Multi-Region', () 
         'CrossRegionConfig',
         'LambdaFunctionArn',
         'CapacityConfiguration',
-        'TableDetails'
+        'TableDetails',
       ];
 
       expectedOutputs.forEach(outputName => {
@@ -342,7 +349,7 @@ describe('TapStack CloudFormation Template - Unified DynamoDB Multi-Region', () 
       expect(output.Description).toBe('DynamoDB Table Name');
       expect(output.Value).toEqual({ Ref: 'DynamoDBTable' });
       expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-TableName'
+        'Fn::Sub': '${AWS::StackName}-TableName',
       });
     });
 
@@ -350,10 +357,10 @@ describe('TapStack CloudFormation Template - Unified DynamoDB Multi-Region', () 
       const output = template.Outputs.TableArn;
       expect(output.Description).toBe('DynamoDB Table ARN');
       expect(output.Value).toEqual({
-        'Fn::GetAtt': ['DynamoDBTable', 'Arn']
+        'Fn::GetAtt': ['DynamoDBTable', 'Arn'],
       });
       expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-TableArn'
+        'Fn::Sub': '${AWS::StackName}-TableArn',
       });
     });
 
@@ -361,7 +368,7 @@ describe('TapStack CloudFormation Template - Unified DynamoDB Multi-Region', () 
       const output = template.Outputs.TableStreamArn;
       expect(output.Condition).toBe('EnableStreams');
       expect(output.Value).toEqual({
-        'Fn::GetAtt': ['DynamoDBTable', 'StreamArn']
+        'Fn::GetAtt': ['DynamoDBTable', 'StreamArn'],
       });
     });
 
@@ -369,7 +376,7 @@ describe('TapStack CloudFormation Template - Unified DynamoDB Multi-Region', () 
       const output = template.Outputs.GSIArn;
       expect(output.Condition).toBe('IsWest2');
       expect(output.Value).toEqual({
-        'Fn::Sub': '${DynamoDBTable.Arn}/index/GSI1'
+        'Fn::Sub': '${DynamoDBTable.Arn}/index/GSI1',
       });
     });
 
@@ -383,7 +390,7 @@ describe('TapStack CloudFormation Template - Unified DynamoDB Multi-Region', () 
       const output = template.Outputs.LambdaFunctionArn;
       expect(output.Condition).toBe('IsWest2');
       expect(output.Value).toEqual({
-        'Fn::GetAtt': ['CrossRegionLambdaFunction', 'Arn']
+        'Fn::GetAtt': ['CrossRegionLambdaFunction', 'Arn'],
       });
     });
 
@@ -435,8 +442,9 @@ describe('TapStack CloudFormation Template - Unified DynamoDB Multi-Region', () 
     test('should use Ref function correctly', () => {
       // Check in DynamoDB table capacity configuration
       const dynamoTable = template.Resources.DynamoDBTable;
-      const readCapacity = dynamoTable.Properties.ProvisionedThroughput.ReadCapacityUnits;
-      
+      const readCapacity =
+        dynamoTable.Properties.ProvisionedThroughput.ReadCapacityUnits;
+
       expect(readCapacity['Fn::If'][2]).toEqual(10);
     });
 
@@ -444,7 +452,7 @@ describe('TapStack CloudFormation Template - Unified DynamoDB Multi-Region', () 
       // Check in outputs
       const tableArnOutput = template.Outputs.TableArn;
       expect(tableArnOutput.Value).toEqual({
-        'Fn::GetAtt': ['DynamoDBTable', 'Arn']
+        'Fn::GetAtt': ['DynamoDBTable', 'Arn'],
       });
     });
 
@@ -463,7 +471,8 @@ describe('TapStack CloudFormation Template - Unified DynamoDB Multi-Region', () 
     test('should use Fn::ImportValue correctly', () => {
       // Check in Lambda environment variables
       const lambdaFunction = template.Resources.CrossRegionLambdaFunction;
-      const remoteTableName = lambdaFunction.Properties.Environment.Variables.REMOTE_TABLE_NAME;
+      const remoteTableName =
+        lambdaFunction.Properties.Environment.Variables.REMOTE_TABLE_NAME;
       expect(remoteTableName['Fn::ImportValue']).toBeDefined();
     });
 
@@ -488,12 +497,12 @@ describe('TapStack CloudFormation Template - Unified DynamoDB Multi-Region', () 
     test('should have ImportValue references for cross-region access', () => {
       const lambdaFunction = template.Resources.CrossRegionLambdaFunction;
       const envVars = lambdaFunction.Properties.Environment.Variables;
-      
+
       expect(envVars.REMOTE_TABLE_NAME['Fn::ImportValue']).toEqual({
-        'Fn::Sub': 'TapStack${EnvironmentSuffix}-TableName'
+        'Fn::Sub': 'TapStack${EnvironmentSuffix}-TableName',
       });
       expect(envVars.REMOTE_TABLE_ARN['Fn::ImportValue']).toEqual({
-        'Fn::Sub': 'TapStack${EnvironmentSuffix}-TableArn'
+        'Fn::Sub': 'TapStack${EnvironmentSuffix}-TableArn',
       });
     });
 
@@ -509,20 +518,22 @@ describe('TapStack CloudFormation Template - Unified DynamoDB Multi-Region', () 
   describe('Region-Specific Behavior', () => {
     test('should have different configurations for different regions', () => {
       const dynamoTable = template.Resources.DynamoDBTable;
-      
+
       // Table name should have region suffix
-      expect(dynamoTable.Properties.TableName['Fn::Sub'][1].RegionSuffix['Fn::If']).toEqual([
-        'IsWest1', 'west1', 'west2'
-      ]);
-      
+      expect(
+        dynamoTable.Properties.TableName['Fn::Sub'][1].RegionSuffix['Fn::If']
+      ).toEqual(['IsWest1', 'west1', 'west2']);
+
       // Capacity should be different for each region
-      expect(dynamoTable.Properties.ProvisionedThroughput.ReadCapacityUnits['Fn::If']).toEqual([
-        'IsWest1', 5, 10
-      ]);
+      expect(
+        dynamoTable.Properties.ProvisionedThroughput.ReadCapacityUnits['Fn::If']
+      ).toEqual(['IsWest1', 5, 10]);
     });
 
     test('should have conditional resources only for us-west-2', () => {
-      expect(template.Resources.CrossRegionLambdaFunction.Condition).toBe('IsWest2');
+      expect(template.Resources.CrossRegionLambdaFunction.Condition).toBe(
+        'IsWest2'
+      );
       expect(template.Resources.LambdaExecutionRole.Condition).toBe('IsWest2');
     });
 
@@ -530,7 +541,9 @@ describe('TapStack CloudFormation Template - Unified DynamoDB Multi-Region', () 
       expect(template.Outputs.TableStreamArn.Condition).toBe('EnableStreams');
       expect(template.Outputs.GSIArn.Condition).toBe('IsWest2');
       expect(template.Outputs.LambdaFunctionArn.Condition).toBe('IsWest2');
-      expect(template.Outputs.CrossRegionConfig.Condition).toBe('HasCrossRegionReference');
+      expect(template.Outputs.CrossRegionConfig.Condition).toBe(
+        'HasCrossRegionReference'
+      );
     });
   });
 });

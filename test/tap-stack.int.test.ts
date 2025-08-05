@@ -1,24 +1,52 @@
-import { CloudFormationClient, DescribeStacksCommand, ListExportsCommand } from '@aws-sdk/client-cloudformation';
-import { DeleteItemCommand, DescribeContinuousBackupsCommand, DescribeTableCommand, DynamoDBClient, GetItemCommand, ListTagsOfResourceCommand, PutItemCommand, QueryCommand } from '@aws-sdk/client-dynamodb';
-import { GetRoleCommand, GetRolePolicyCommand, IAMClient, ListRolePoliciesCommand } from '@aws-sdk/client-iam';
-import { GetFunctionCommand, InvokeCommand, LambdaClient } from '@aws-sdk/client-lambda';
+import {
+  CloudFormationClient,
+  DescribeStacksCommand,
+  ListExportsCommand,
+} from '@aws-sdk/client-cloudformation';
+import {
+  DeleteItemCommand,
+  DescribeContinuousBackupsCommand,
+  DescribeTableCommand,
+  DynamoDBClient,
+  GetItemCommand,
+  ListTagsOfResourceCommand,
+  PutItemCommand,
+  QueryCommand,
+} from '@aws-sdk/client-dynamodb';
+import {
+  GetRoleCommand,
+  GetRolePolicyCommand,
+  IAMClient,
+  ListRolePoliciesCommand,
+} from '@aws-sdk/client-iam';
+import {
+  GetFunctionCommand,
+  InvokeCommand,
+  LambdaClient,
+} from '@aws-sdk/client-lambda';
 import fs from 'fs';
 import path from 'path';
 
 // Configuration - These are coming from cfn-outputs after deployment
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const getOutputs = () => {
   try {
-    const outputsPath = path.join(__dirname, '../cfn-outputs/flat-outputs.json');
+    const outputsPath = path.join(
+      __dirname,
+      '../cfn-outputs/flat-outputs.json'
+    );
     if (fs.existsSync(outputsPath)) {
       return JSON.parse(fs.readFileSync(outputsPath, 'utf8'));
     }
   } catch (error) {
-    console.warn('CFN outputs file not found, using environment variables or defaults');
+    console.warn(
+      'CFN outputs file not found, using environment variables or defaults'
+    );
   }
   return {};
 };
 
-const outputs = getOutputs();
+// const outputs = getOutputs();
 
 // Get environment configuration
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
@@ -35,11 +63,11 @@ const iam = new IAMClient({ region: awsRegion });
 const cloudformation = new CloudFormationClient({ region: awsRegion });
 
 describe('TapStack Integration Tests - DynamoDB Multi-Region Deployment', () => {
-  let stackOutputs: any = {};
+  let stackOutputs: any = {}; // eslint-disable-line @typescript-eslint/no-explicit-any
   let expectedTableName: string;
   let expectedRoleName: string;
   let expectedFunctionName: string;
-  let stackExists = false;
+  let stackExists = false; // eslint-disable-line @typescript-eslint/no-explicit-any
 
   beforeAll(async () => {
     // Calculate expected resource names based on parameters
@@ -50,9 +78,11 @@ describe('TapStack Integration Tests - DynamoDB Multi-Region Deployment', () => 
 
     try {
       // Get stack outputs from CloudFormation
-      const stackResponse = await cloudformation.send(new DescribeStacksCommand({
-        StackName: stackName
-      }));
+      const stackResponse = await cloudformation.send(
+        new DescribeStacksCommand({
+          StackName: stackName,
+        })
+      );
 
       if (stackResponse.Stacks && stackResponse.Stacks[0].Outputs) {
         stackExists = true;
@@ -63,7 +93,10 @@ describe('TapStack Integration Tests - DynamoDB Multi-Region Deployment', () => 
         });
       }
     } catch (error) {
-      console.warn('Stack not found or accessible. Some tests will be skipped:', (error as Error).message);
+      console.warn(
+        'Stack not found or accessible. Some tests will be skipped:',
+        (error as Error).message
+      );
       stackExists = false;
     }
   });
@@ -78,9 +111,15 @@ describe('TapStack Integration Tests - DynamoDB Multi-Region Deployment', () => 
 
     test('should calculate correct resource names', () => {
       const regionSuffix = deploymentRegion === 'us-west-1' ? 'west1' : 'west2';
-      expect(expectedTableName).toBe(`${applicationName}-${environment}-${regionSuffix}-table`);
-      expect(expectedRoleName).toBe(`${applicationName}-${environment}-dynamodb-role-${deploymentRegion}`);
-      expect(expectedFunctionName).toBe(`${applicationName}-${environment}-cross-region-function`);
+      expect(expectedTableName).toBe(
+        `${applicationName}-${environment}-${regionSuffix}-table`
+      );
+      expect(expectedRoleName).toBe(
+        `${applicationName}-${environment}-dynamodb-role-${deploymentRegion}`
+      );
+      expect(expectedFunctionName).toBe(
+        `${applicationName}-${environment}-cross-region-function`
+      );
     });
   });
 
@@ -91,9 +130,11 @@ describe('TapStack Integration Tests - DynamoDB Multi-Region Deployment', () => 
         return;
       }
 
-      const response = await cloudformation.send(new DescribeStacksCommand({
-        StackName: stackName
-      }));
+      const response = await cloudformation.send(
+        new DescribeStacksCommand({
+          StackName: stackName,
+        })
+      );
 
       expect(response.Stacks).toBeDefined();
       expect(response.Stacks).toHaveLength(1);
@@ -106,11 +147,22 @@ describe('TapStack Integration Tests - DynamoDB Multi-Region Deployment', () => 
         return;
       }
 
-      const requiredOutputs = ['TableName', 'TableArn', 'IAMRoleArn', 'CapacityConfiguration', 'TableDetails'];
-      
+      const requiredOutputs = [
+        'TableName',
+        'TableArn',
+        'IAMRoleArn',
+        'CapacityConfiguration',
+        'TableDetails',
+      ];
+
       // Additional outputs for us-west-2
       if (deploymentRegion === 'us-west-2') {
-        requiredOutputs.push('TableStreamArn', 'GSIArn', 'LambdaFunctionArn', 'CrossRegionConfig');
+        requiredOutputs.push(
+          'TableStreamArn',
+          'GSIArn',
+          'LambdaFunctionArn',
+          'CrossRegionConfig'
+        );
       }
 
       requiredOutputs.forEach(outputKey => {
@@ -127,13 +179,13 @@ describe('TapStack Integration Tests - DynamoDB Multi-Region Deployment', () => 
 
       const response = await cloudformation.send(new ListExportsCommand({}));
       const exports = response.Exports || [];
-      
+
       const expectedExports = [
         `${stackName}-TableName`,
         `${stackName}-TableArn`,
         `${stackName}-IAMRoleArn`,
         `${stackName}-CapacityConfig`,
-        `${stackName}-TableDetails`
+        `${stackName}-TableDetails`,
       ];
 
       // Additional exports for us-west-2
@@ -160,9 +212,11 @@ describe('TapStack Integration Tests - DynamoDB Multi-Region Deployment', () => 
         return;
       }
 
-      const response = await dynamodb.send(new DescribeTableCommand({
-        TableName: expectedTableName
-      }));
+      const response = await dynamodb.send(
+        new DescribeTableCommand({
+          TableName: expectedTableName,
+        })
+      );
 
       expect(response.Table).toBeDefined();
       expect(response.Table!.TableName).toBe(expectedTableName);
@@ -171,19 +225,23 @@ describe('TapStack Integration Tests - DynamoDB Multi-Region Deployment', () => 
 
     test('should have correct table configuration', async () => {
       if (!stackExists) {
-        console.log('Skipping table configuration validation - stack not deployed');
+        console.log(
+          'Skipping table configuration validation - stack not deployed'
+        );
         return;
       }
 
-      const response = await dynamodb.send(new DescribeTableCommand({
-        TableName: expectedTableName
-      }));
+      const response = await dynamodb.send(
+        new DescribeTableCommand({
+          TableName: expectedTableName,
+        })
+      );
 
       const table = response.Table!;
-      
+
       // Verify billing mode
       expect(table.BillingModeSummary?.BillingMode).toBe('PROVISIONED');
-      
+
       // Verify key schema
       expect(table.KeySchema).toHaveLength(2);
       expect(table.KeySchema![0].AttributeName).toBe('PrimaryKey');
@@ -194,48 +252,65 @@ describe('TapStack Integration Tests - DynamoDB Multi-Region Deployment', () => 
 
     test('should have correct capacity settings based on region', async () => {
       if (!stackExists) {
-        console.log('Skipping capacity settings validation - stack not deployed');
+        console.log(
+          'Skipping capacity settings validation - stack not deployed'
+        );
         return;
       }
 
-      const response = await dynamodb.send(new DescribeTableCommand({
-        TableName: expectedTableName
-      }));
+      const response = await dynamodb.send(
+        new DescribeTableCommand({
+          TableName: expectedTableName,
+        })
+      );
 
       const table = response.Table!;
-      
+
       if (deploymentRegion === 'us-west-1') {
         // Fixed capacity for us-west-1
         expect(table.ProvisionedThroughput!.ReadCapacityUnits).toBe(5);
         expect(table.ProvisionedThroughput!.WriteCapacityUnits).toBe(5);
       } else {
         // Parameterized capacity for us-west-2
-        expect(table.ProvisionedThroughput!.ReadCapacityUnits).toBeGreaterThan(0);
-        expect(table.ProvisionedThroughput!.WriteCapacityUnits).toBeGreaterThan(0);
+        expect(table.ProvisionedThroughput!.ReadCapacityUnits).toBeGreaterThan(
+          0
+        );
+        expect(table.ProvisionedThroughput!.WriteCapacityUnits).toBeGreaterThan(
+          0
+        );
       }
     });
 
     test('should have correct encryption and backup settings', async () => {
       if (!stackExists) {
-        console.log('Skipping encryption and backup validation - stack not deployed');
+        console.log(
+          'Skipping encryption and backup validation - stack not deployed'
+        );
         return;
       }
 
-      const response = await dynamodb.send(new DescribeTableCommand({
-        TableName: expectedTableName
-      }));
+      const response = await dynamodb.send(
+        new DescribeTableCommand({
+          TableName: expectedTableName,
+        })
+      );
 
       const table = response.Table!;
-      
+
       // Verify encryption
       expect(table.SSEDescription?.Status).toBe('ENABLED');
-      
+
       // Verify point-in-time recovery
-      const backupResponse = await dynamodb.send(new DescribeContinuousBackupsCommand({
-        TableName: expectedTableName
-      }));
-      
-      expect(backupResponse.ContinuousBackupsDescription?.PointInTimeRecoveryDescription?.PointInTimeRecoveryStatus).toBe('ENABLED');
+      const backupResponse = await dynamodb.send(
+        new DescribeContinuousBackupsCommand({
+          TableName: expectedTableName,
+        })
+      );
+
+      expect(
+        backupResponse.ContinuousBackupsDescription
+          ?.PointInTimeRecoveryDescription?.PointInTimeRecoveryStatus
+      ).toBe('ENABLED');
     });
 
     test('should have GSI only for us-west-2', async () => {
@@ -244,12 +319,14 @@ describe('TapStack Integration Tests - DynamoDB Multi-Region Deployment', () => 
         return;
       }
 
-      const response = await dynamodb.send(new DescribeTableCommand({
-        TableName: expectedTableName
-      }));
+      const response = await dynamodb.send(
+        new DescribeTableCommand({
+          TableName: expectedTableName,
+        })
+      );
 
       const table = response.Table!;
-      
+
       if (deploymentRegion === 'us-west-2') {
         expect(table.GlobalSecondaryIndexes).toBeDefined();
         expect(table.GlobalSecondaryIndexes).toHaveLength(1);
@@ -266,15 +343,19 @@ describe('TapStack Integration Tests - DynamoDB Multi-Region Deployment', () => 
         return;
       }
 
-      const response = await dynamodb.send(new DescribeTableCommand({
-        TableName: expectedTableName
-      }));
+      const response = await dynamodb.send(
+        new DescribeTableCommand({
+          TableName: expectedTableName,
+        })
+      );
 
       const table = response.Table!;
-      
+
       if (deploymentRegion === 'us-west-2') {
         expect(table.StreamSpecification?.StreamEnabled).toBe(true);
-        expect(table.StreamSpecification?.StreamViewType).toBe('NEW_AND_OLD_IMAGES');
+        expect(table.StreamSpecification?.StreamViewType).toBe(
+          'NEW_AND_OLD_IMAGES'
+        );
         expect(table.LatestStreamArn).toBeDefined();
       } else {
         expect(table.StreamSpecification?.StreamEnabled).toBeFalsy();
@@ -283,19 +364,26 @@ describe('TapStack Integration Tests - DynamoDB Multi-Region Deployment', () => 
 
     test('should have correct tags', async () => {
       if (!stackExists || !stackOutputs.TableArn) {
-        console.log('Skipping tags validation - stack not deployed or TableArn not available');
+        console.log(
+          'Skipping tags validation - stack not deployed or TableArn not available'
+        );
         return;
       }
 
-      const response = await dynamodb.send(new ListTagsOfResourceCommand({
-        ResourceArn: stackOutputs.TableArn
-      }));
+      const response = await dynamodb.send(
+        new ListTagsOfResourceCommand({
+          ResourceArn: stackOutputs.TableArn,
+        })
+      );
 
       const tags = response.Tags || [];
-      const tagMap = tags.reduce((acc, tag) => {
-        acc[tag.Key!] = tag.Value!;
-        return acc;
-      }, {} as Record<string, string>);
+      const tagMap = tags.reduce(
+        (acc, tag) => {
+          acc[tag.Key!] = tag.Value!;
+          return acc;
+        },
+        {} as Record<string, string>
+      );
 
       expect(tagMap['Environment']).toBe(environment);
       expect(tagMap['Application']).toBe(applicationName);
@@ -311,9 +399,11 @@ describe('TapStack Integration Tests - DynamoDB Multi-Region Deployment', () => 
         return;
       }
 
-      const response = await iam.send(new GetRoleCommand({
-        RoleName: expectedRoleName
-      }));
+      const response = await iam.send(
+        new GetRoleCommand({
+          RoleName: expectedRoleName,
+        })
+      );
 
       expect(response.Role).toBeDefined();
       expect(response.Role!.RoleName).toBe(expectedRoleName);
@@ -321,41 +411,57 @@ describe('TapStack Integration Tests - DynamoDB Multi-Region Deployment', () => 
 
     test('should have correct assume role policy', async () => {
       if (!stackExists) {
-        console.log('Skipping assume role policy validation - stack not deployed');
+        console.log(
+          'Skipping assume role policy validation - stack not deployed'
+        );
         return;
       }
 
-      const response = await iam.send(new GetRoleCommand({
-        RoleName: expectedRoleName
-      }));
+      const response = await iam.send(
+        new GetRoleCommand({
+          RoleName: expectedRoleName,
+        })
+      );
 
-      const assumeRolePolicy = JSON.parse(decodeURIComponent(response.Role!.AssumeRolePolicyDocument!));
-      
+      const assumeRolePolicy = JSON.parse(
+        decodeURIComponent(response.Role!.AssumeRolePolicyDocument!)
+      );
+
       expect(assumeRolePolicy.Version).toBe('2012-10-17');
       expect(assumeRolePolicy.Statement).toHaveLength(1);
       expect(assumeRolePolicy.Statement[0].Effect).toBe('Allow');
-      expect(assumeRolePolicy.Statement[0].Principal.Service).toBe('lambda.amazonaws.com');
+      expect(assumeRolePolicy.Statement[0].Principal.Service).toBe(
+        'lambda.amazonaws.com'
+      );
       expect(assumeRolePolicy.Statement[0].Action).toBe('sts:AssumeRole');
     });
 
     test('should have DynamoDB access policies', async () => {
       if (!stackExists) {
-        console.log('Skipping DynamoDB access policies validation - stack not deployed');
+        console.log(
+          'Skipping DynamoDB access policies validation - stack not deployed'
+        );
         return;
       }
 
-      const response = await iam.send(new ListRolePoliciesCommand({
-        RoleName: expectedRoleName
-      }));
+      const response = await iam.send(
+        new ListRolePoliciesCommand({
+          RoleName: expectedRoleName,
+        })
+      );
 
       expect(response.PolicyNames).toContain('DynamoDBAccess');
 
-      const policyResponse = await iam.send(new GetRolePolicyCommand({
-        RoleName: expectedRoleName,
-        PolicyName: 'DynamoDBAccess'
-      }));
+      const policyResponse = await iam.send(
+        new GetRolePolicyCommand({
+          RoleName: expectedRoleName,
+          PolicyName: 'DynamoDBAccess',
+        })
+      );
 
-      const policyDocument = JSON.parse(decodeURIComponent(policyResponse.PolicyDocument!));
+      const policyDocument = JSON.parse(
+        decodeURIComponent(policyResponse.PolicyDocument!)
+      );
       const statement = policyDocument.Statement[0];
 
       expect(statement.Effect).toBe('Allow');
@@ -368,7 +474,9 @@ describe('TapStack Integration Tests - DynamoDB Multi-Region Deployment', () => 
   describe('Lambda Function Validation (us-west-2 only)', () => {
     test('should have created cross-region Lambda function', async () => {
       if (deploymentRegion !== 'us-west-2') {
-        console.log('Skipping Lambda function test - only applies to us-west-2');
+        console.log(
+          'Skipping Lambda function test - only applies to us-west-2'
+        );
         return;
       }
       if (!stackExists) {
@@ -376,9 +484,11 @@ describe('TapStack Integration Tests - DynamoDB Multi-Region Deployment', () => 
         return;
       }
 
-      const response = await lambda.send(new GetFunctionCommand({
-        FunctionName: expectedFunctionName
-      }));
+      const response = await lambda.send(
+        new GetFunctionCommand({
+          FunctionName: expectedFunctionName,
+        })
+      );
 
       expect(response.Configuration).toBeDefined();
       expect(response.Configuration!.FunctionName).toBe(expectedFunctionName);
@@ -388,20 +498,26 @@ describe('TapStack Integration Tests - DynamoDB Multi-Region Deployment', () => 
 
     test('should have correct environment variables', async () => {
       if (deploymentRegion !== 'us-west-2') {
-        console.log('Skipping Lambda environment variables test - only applies to us-west-2');
+        console.log(
+          'Skipping Lambda environment variables test - only applies to us-west-2'
+        );
         return;
       }
       if (!stackExists) {
-        console.log('Skipping Lambda environment variables validation - stack not deployed');
+        console.log(
+          'Skipping Lambda environment variables validation - stack not deployed'
+        );
         return;
       }
 
-      const response = await lambda.send(new GetFunctionCommand({
-        FunctionName: expectedFunctionName
-      }));
+      const response = await lambda.send(
+        new GetFunctionCommand({
+          FunctionName: expectedFunctionName,
+        })
+      );
 
       const envVars = response.Configuration!.Environment!.Variables!;
-      
+
       expect(envVars.LOCAL_TABLE_NAME).toBe(expectedTableName);
       expect(envVars.LOCAL_TABLE_ARN).toBe(stackOutputs.TableArn);
       expect(envVars.REMOTE_TABLE_NAME).toBeDefined();
@@ -419,19 +535,21 @@ describe('TapStack Integration Tests - DynamoDB Multi-Region Deployment', () => 
         return;
       }
 
-      const response = await lambda.send(new InvokeCommand({
-        FunctionName: expectedFunctionName,
-        InvocationType: 'RequestResponse',
-        Payload: new TextEncoder().encode(JSON.stringify({}))
-      }));
+      const response = await lambda.send(
+        new InvokeCommand({
+          FunctionName: expectedFunctionName,
+          InvocationType: 'RequestResponse',
+          Payload: new TextEncoder().encode(JSON.stringify({})),
+        })
+      );
 
       expect(response.StatusCode).toBe(200);
-      
+
       if (response.Payload) {
         const payloadString = new TextDecoder().decode(response.Payload);
         const payload = JSON.parse(payloadString);
         expect(payload.statusCode).toBe(200);
-        
+
         const body = JSON.parse(payload.body);
         expect(body.message).toBe('Cross-region DynamoDB access configured');
         expect(body.local_table).toBe(expectedTableName);
@@ -441,24 +559,26 @@ describe('TapStack Integration Tests - DynamoDB Multi-Region Deployment', () => 
 
   describe('DynamoDB Operations Validation', () => {
     const testItem = {
-      'PrimaryKey': { S: 'test-key-integration' },
-      'SortKey': { S: 'test-sort-integration' },
-      'TestData': { S: 'integration-test-data' },
-      'Timestamp': { N: Date.now().toString() }
+      PrimaryKey: { S: 'test-key-integration' },
+      SortKey: { S: 'test-sort-integration' },
+      TestData: { S: 'integration-test-data' },
+      Timestamp: { N: Date.now().toString() },
     };
 
     afterEach(async () => {
       if (!stackExists) return;
-      
+
       // Clean up test data
       try {
-        await dynamodb.send(new DeleteItemCommand({
-          TableName: expectedTableName,
-          Key: {
-            'PrimaryKey': testItem.PrimaryKey,
-            'SortKey': testItem.SortKey
-          }
-        }));
+        await dynamodb.send(
+          new DeleteItemCommand({
+            TableName: expectedTableName,
+            Key: {
+              PrimaryKey: testItem.PrimaryKey,
+              SortKey: testItem.SortKey,
+            },
+          })
+        );
       } catch (error) {
         // Ignore errors during cleanup
       }
@@ -466,24 +586,30 @@ describe('TapStack Integration Tests - DynamoDB Multi-Region Deployment', () => 
 
     test('should be able to put and get item from DynamoDB table', async () => {
       if (!stackExists) {
-        console.log('Skipping DynamoDB operations validation - stack not deployed');
+        console.log(
+          'Skipping DynamoDB operations validation - stack not deployed'
+        );
         return;
       }
 
       // Put item
-      await dynamodb.send(new PutItemCommand({
-        TableName: expectedTableName,
-        Item: testItem
-      }));
+      await dynamodb.send(
+        new PutItemCommand({
+          TableName: expectedTableName,
+          Item: testItem,
+        })
+      );
 
       // Get item
-      const response = await dynamodb.send(new GetItemCommand({
-        TableName: expectedTableName,
-        Key: {
-          'PrimaryKey': testItem.PrimaryKey,
-          'SortKey': testItem.SortKey
-        }
-      }));
+      const response = await dynamodb.send(
+        new GetItemCommand({
+          TableName: expectedTableName,
+          Key: {
+            PrimaryKey: testItem.PrimaryKey,
+            SortKey: testItem.SortKey,
+          },
+        })
+      );
 
       expect(response.Item).toBeDefined();
       expect(response.Item!.PrimaryKey.S).toBe('test-key-integration');
@@ -497,19 +623,23 @@ describe('TapStack Integration Tests - DynamoDB Multi-Region Deployment', () => 
       }
 
       // Put item first
-      await dynamodb.send(new PutItemCommand({
-        TableName: expectedTableName,
-        Item: testItem
-      }));
+      await dynamodb.send(
+        new PutItemCommand({
+          TableName: expectedTableName,
+          Item: testItem,
+        })
+      );
 
       // Query it
-      const response = await dynamodb.send(new QueryCommand({
-        TableName: expectedTableName,
-        KeyConditionExpression: 'PrimaryKey = :pk',
-        ExpressionAttributeValues: {
-          ':pk': { S: 'test-key-integration' }
-        }
-      }));
+      const response = await dynamodb.send(
+        new QueryCommand({
+          TableName: expectedTableName,
+          KeyConditionExpression: 'PrimaryKey = :pk',
+          ExpressionAttributeValues: {
+            ':pk': { S: 'test-key-integration' },
+          },
+        })
+      );
 
       expect(response.Items).toBeDefined();
       expect(response.Items).toHaveLength(1);
@@ -525,13 +655,15 @@ describe('TapStack Integration Tests - DynamoDB Multi-Region Deployment', () => 
       }
 
       const startTime = Date.now();
-      
-      await dynamodb.send(new DescribeTableCommand({
-        TableName: expectedTableName
-      }));
-      
+
+      await dynamodb.send(
+        new DescribeTableCommand({
+          TableName: expectedTableName,
+        })
+      );
+
       const responseTime = Date.now() - startTime;
-      
+
       // Response time should be less than 5 seconds for describe operation
       expect(responseTime).toBeLessThan(5000);
     });
