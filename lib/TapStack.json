@@ -22,7 +22,7 @@
                 "VpcId": {
                     "Ref": "ExistingVPCId"
                 },
-                "CidrBlock": "172.31.0.0/16",
+                "CidrBlock": "172.31.64.0/20",
                 "MapPublicIpOnLaunch": true,
                 "AvailabilityZone": {
                     "Fn::Select": [
