@@ -669,7 +669,7 @@
                 "ConfigRuleName": "root-access-key-check",
                 "Source": {
                     "Owner": "AWS",
-                    "SourceIdentifier": "IAM_ROOT_ACCESS_KEY_CHECK"
+                    "SourceIdentifier": "ROOT_ACCESS_KEY_CHECK"
                 }
             }
         },
