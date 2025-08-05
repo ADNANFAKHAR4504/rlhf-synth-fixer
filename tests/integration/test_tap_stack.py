@@ -1,15 +1,11 @@
-"""
-test_tap_stack_integration.py
-
-Integration tests for live deployed TapStack Pulumi infrastructure.
-Tests actual AWS resources created by the Pulumi stack.
-"""
 # pylint: disable=no-member,missing-function-docstring
 
 import os
 import unittest
 import boto3
 from pulumi import automation as auto
+from lib import tap_stack
+
 
 
 class TestTapStackLiveIntegration(unittest.TestCase):
@@ -23,6 +19,10 @@ class TestTapStackLiveIntegration(unittest.TestCase):
     cls.region = os.getenv("AWS_REGION", "us-east-1")
     cls.s3_backend = os.getenv("PULUMI_BACKEND_URL", "s3://iac-rlhf-pulumi-states")
 
+    def pulumi_program():
+      return tap_stack.TapStack("TapStack", 
+                                tap_stack.TapStackArgs(environment_suffix=cls.stack_name))
+
     cls.workspace = auto.LocalWorkspace(
       project_settings=auto.ProjectSettings(
         name=cls.project_name,
@@ -34,7 +34,27 @@ class TestTapStackLiveIntegration(unittest.TestCase):
       }
     )
 
-    cls.stack = auto.Stack.select(cls.stack_name, cls.workspace)
+    # Select or create the stack
+    try:
+      cls.stack = auto.select_stack(
+        stack_name=cls.stack_name,
+        project_name=cls.project_name,
+        program=pulumi_program,
+        workspace=cls.workspace
+      )
+    except auto.StackNotFoundError:
+      cls.stack = auto.create_stack(
+        stack_name=cls.stack_name,
+        project_name=cls.project_name,
+        program=pulumi_program,
+        workspace=cls.workspace
+      )
+      cls.stack.set_config("aws:region", auto.ConfigValue(value=cls.region))
+      cls.stack.set_config("TapStack:db_password",
+                        auto.ConfigValue(value="dummy-password", secret=True))
+      cls.stack.up(on_output=print)
+
+    # Get stack outputs
     cls.outputs = cls.stack.outputs()
 
     cls.vpc_id = cls.outputs.get("vpc_id").value
@@ -43,43 +63,38 @@ class TestTapStackLiveIntegration(unittest.TestCase):
     cls.access_key_id = cls.outputs.get("access_key_id").value
     cls.kms_key_id = cls.outputs.get("kms_key_id").value
     cls.kms_alias = cls.outputs.get("kms_alias").value
+    cls.encrypted_blob = cls.outputs.get("encrypted_db_password_blob").value
 
+    # AWS SDK clients
     cls.ec2 = boto3.client("ec2", region_name=cls.region)
     cls.iam = boto3.client("iam", region_name=cls.region)
     cls.kms = boto3.client("kms", region_name=cls.region)
 
   def test_vpc_exists(self):
-    """Validate the VPC exists and is active."""
     response = self.ec2.describe_vpcs(VpcIds=[self.vpc_id])
-    vpc = response["Vpcs"][0]
-    self.assertEqual(vpc["State"], "available")
+    self.assertEqual(response["Vpcs"][0]["State"], "available")
 
   def test_security_group_exists(self):
-    """Validate the security group exists."""
     response = self.ec2.describe_security_groups(GroupIds=[self.sg_id])
     self.assertEqual(len(response["SecurityGroups"]), 1)
 
   def test_iam_user_exists(self):
-    """Validate the IAM user ARN exists."""
     username = self.user_arn.split("/")[-1]
     response = self.iam.get_user(UserName=username)
     self.assertEqual(response["User"]["Arn"], self.user_arn)
 
   def test_access_key_active(self):
-    """Ensure the access key is active."""
     username = self.user_arn.split("/")[-1]
     keys = self.iam.list_access_keys(UserName=username)["AccessKeyMetadata"]
     key_ids = [k["AccessKeyId"] for k in keys]
     self.assertIn(self.access_key_id, key_ids)
 
   def test_kms_key_is_enabled(self):
-    """Ensure the KMS key is enabled and matches alias."""
     key = self.kms.describe_key(KeyId=self.kms_key_id)["KeyMetadata"]
     self.assertTrue(key["Enabled"])
     self.assertIn("secure-web-key", self.kms_alias)
 
   def test_encrypted_blob_is_non_empty(self):
-    """Check that the KMS-encrypted blob is present."""
     self.assertIsInstance(self.encrypted_blob, str)
     self.assertGreater(len(self.encrypted_blob), 10)
 
