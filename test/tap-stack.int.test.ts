@@ -14,60 +14,65 @@ import {
   GetApplicationCommand,
   GetDeploymentGroupCommand,
 } from '@aws-sdk/client-codedeploy';
-import { execSync } from 'child_process';
+import * as fs from 'fs';
+import * as path from 'path';
 
-// Strongly typed outputs from `cdktf output -json`
-interface TerraformOutput {
-  'api-gateway-url': { value: string };
-  'lambda-function-1-name': { value: string };
-  'lambda-function-1-alias-arn': { value: string };
-  'lambda-function-2-name': { value: string };
-  'lambda-function-2-alias-arn': { value: string };
-  'codedeploy-application-1': { value: string };
-  'codedeploy-application-2': { value: string };
-}
-
-// Region selection with fallback
+// Prioritize AWS_REGION, then AWS_DEFAULT_REGION, and finally fall back to 'us-east-1'
 const awsRegion = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || 'us-east-1';
 const lambdaClient = new LambdaClient({ region: awsRegion });
 const apigwClient = new ApiGatewayV2Client({ region: awsRegion });
 const codedeployClient = new CodeDeployClient({ region: awsRegion });
 
 describe('TAP Stack AWS Infrastructure Integration Tests', () => {
-  let outputs: TerraformOutput;
   let apiId: string;
+  let function1Name: string;
+  let function2Name: string;
+  let app1Name: string;
+  let app2Name: string;
 
   beforeAll(() => {
-    try {
-      console.log('Fetching Terraform outputs from the deployed stack...');
-      const outputJson = execSync('cdktf output -json', { encoding: 'utf-8' });
-      outputs = JSON.parse(outputJson);
-
-      const apiUrl = outputs['api-gateway-url']?.value;
-      if (!apiUrl) {
-        throw new Error('API Gateway URL not found in terraform output.');
-      }
-      apiId = apiUrl.split('//')[1].split('.')[0];
-      console.log(`Successfully fetched outputs and derived API ID: ${apiId}`);
-    } catch (error) {
-      console.error(
-        'Failed to fetch terraform outputs. Error:',
-        error instanceof Error ? error.message : String(error)
-      );
-      console.error(
-        'Ensure the stack is deployed with `cdktf deploy` and tests are run from the project root.'
-      );
-      process.exit(1);
+    // Load flat-outputs.json from shared path
+    const suffix = process.env.ENVIRONMENT_SUFFIX;
+    if (!suffix) {
+      throw new Error('ENVIRONMENT_SUFFIX environment variable is not set.');
     }
+
+    const outputFilePath = path.join(__dirname, '..', 'cfn-outputs', 'flat-outputs.json');
+
+    if (!fs.existsSync(outputFilePath)) {
+      throw new Error(`flat-outputs.json not found at ${outputFilePath}`);
+    }
+
+    const outputs = JSON.parse(fs.readFileSync(outputFilePath, 'utf-8'));
+    const stackKey = Object.keys(outputs).find(k => k.includes(suffix));
+
+    if (!stackKey) {
+      throw new Error(`No output found for environment: ${suffix}`);
+    }
+
+    const stackOutputs = outputs[stackKey];
+
+    const apiUrl = stackOutputs['api-gateway-url'];
+    function1Name = stackOutputs['lambda-function-1-name'];
+    function2Name = stackOutputs['lambda-function-2-name'];
+    app1Name = stackOutputs['codedeploy-application-1'];
+    app2Name = stackOutputs['codedeploy-application-2'];
+
+    if (!apiUrl || !function1Name || !app1Name) {
+      throw new Error(`Missing one or more required outputs in stack: api-gateway-url, lambda-function-1-name, codedeploy-application-1`);
+    }
+
+    // Derive API ID from the URL
+    apiId = apiUrl.split('//')[1].split('.')[0];
+    console.log(`Derived API ID: ${apiId}`);
   });
 
-  // Test Suite for AWS Lambda Functions
+  // Lambda Function Tests
   describe('Lambda Functions and Aliases', () => {
-    const function1Name = 'serverless-function-1';
-
     test(`should have function "${function1Name}" configured correctly`, async () => {
-      const command = new GetFunctionCommand({ FunctionName: function1Name });
-      const { Configuration } = await lambdaClient.send(command);
+      const { Configuration } = await lambdaClient.send(new GetFunctionCommand({
+        FunctionName: function1Name,
+      }));
 
       expect(Configuration).toBeDefined();
       expect(Configuration?.FunctionName).toBe(function1Name);
@@ -82,8 +87,10 @@ describe('TAP Stack AWS Infrastructure Integration Tests', () => {
     }, 20000);
 
     test(`should have a "live" alias for function "${function1Name}"`, async () => {
-      const command = new GetAliasCommand({ FunctionName: function1Name, Name: 'live' });
-      const alias = await lambdaClient.send(command);
+      const alias = await lambdaClient.send(new GetAliasCommand({
+        FunctionName: function1Name,
+        Name: 'live',
+      }));
 
       expect(alias).toBeDefined();
       expect(alias.FunctionVersion).toBeDefined();
@@ -91,11 +98,10 @@ describe('TAP Stack AWS Infrastructure Integration Tests', () => {
     }, 20000);
   });
 
-  // Test Suite for API Gateway V2
+  // API Gateway Tests
   describe('API Gateway V2 Configuration', () => {
     test('should have the HTTP API configured correctly', async () => {
-      const command = new GetApiCommand({ ApiId: apiId });
-      const api = await apigwClient.send(command);
+      const api = await apigwClient.send(new GetApiCommand({ ApiId: apiId }));
 
       expect(api).toBeDefined();
       expect(api.Name).toBe('serverless-microservices-api');
@@ -103,18 +109,19 @@ describe('TAP Stack AWS Infrastructure Integration Tests', () => {
       expect(api.CorsConfiguration?.AllowOrigins).toContain('*');
     }, 20000);
 
-    test('should have the "v1" stage configured for auto-deployment', async () => {
-      const command = new GetStageCommand({ ApiId: apiId, StageName: 'v1' });
-      const stage = await apigwClient.send(command);
+    test('should have the "v1" stage with auto-deploy', async () => {
+      const stage = await apigwClient.send(new GetStageCommand({
+        ApiId: apiId,
+        StageName: 'v1',
+      }));
 
       expect(stage).toBeDefined();
       expect(stage.StageName).toBe('v1');
       expect(stage.AutoDeploy).toBe(true);
     }, 20000);
 
-    test('should have a route "GET /v1/function1" integrated with the correct Lambda alias', async () => {
-      const command = new GetRoutesCommand({ ApiId: apiId });
-      const { Items } = await apigwClient.send(command);
+    test('should have route GET /v1/function1 integrated with Lambda alias', async () => {
+      const { Items } = await apigwClient.send(new GetRoutesCommand({ ApiId: apiId }));
       const route = Items?.find(r => r.RouteKey === 'GET /v1/function1');
 
       expect(route).toBeDefined();
@@ -122,25 +129,23 @@ describe('TAP Stack AWS Infrastructure Integration Tests', () => {
     }, 20000);
   });
 
-  // Test Suite for AWS CodeDeploy
-  describe('CodeDeploy Canary Deployment Configuration', () => {
-    const app1Name = 'serverless-function-1-app';
-
-    test(`should have the CodeDeploy application "${app1Name}"`, async () => {
-      const command = new GetApplicationCommand({ applicationName: app1Name });
-      const { application } = await codedeployClient.send(command);
+  // CodeDeploy Canary Deployment Tests
+  describe('CodeDeploy Canary Deployment', () => {
+    test(`should have CodeDeploy application "${app1Name}"`, async () => {
+      const { application } = await codedeployClient.send(new GetApplicationCommand({
+        applicationName: app1Name,
+      }));
 
       expect(application).toBeDefined();
       expect(application?.applicationName).toBe(app1Name);
       expect(application?.computePlatform).toBe('Lambda');
     }, 20000);
 
-    test(`should have the CodeDeploy deployment group for "${app1Name}"`, async () => {
-      const command = new GetDeploymentGroupCommand({
+    test(`should have CodeDeploy deployment group for "${app1Name}" with custom config`, async () => {
+      const { deploymentGroupInfo } = await codedeployClient.send(new GetDeploymentGroupCommand({
         applicationName: app1Name,
         deploymentGroupName: 'serverless-function-1-deployment-group',
-      });
-      const { deploymentGroupInfo } = await codedeployClient.send(command);
+      }));
 
       expect(deploymentGroupInfo).toBeDefined();
       expect(deploymentGroupInfo?.deploymentStyle?.deploymentType).toBe('BLUE_GREEN');
