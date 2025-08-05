@@ -2,7 +2,7 @@ You are tasked with designing and implementing a secure-by-default infrastructur
 
 ### **Infrastructure Requirements:**
 
-1. A **VPC** configured with public and private subnets, distributed across **two different AWS regions**.
+1. A **VPC** configured with public and private subnets.
 2. An **Internet-facing Application Load Balancer** (ALB) that routes traffic to a **web server fleet** managed by an **Auto Scaling group**.
 3. **Security Groups** that restrict access to only allow **HTTP (port 80)** and **HTTPS (port 443)** traffic; all other inbound access must be denied.
 4. An **RDS database instance** with:

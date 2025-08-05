@@ -2,7 +2,7 @@ I'll design a secure-by-default infrastructure using AWS CloudFormation. Here's 
 
 ```yaml
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'Secure-by-default multi-region infrastructure with comprehensive security controls'
+Description: 'Secure-by-default region infrastructure with comprehensive security controls'
 
 Parameters:
   AllowedSSHCIDR:
