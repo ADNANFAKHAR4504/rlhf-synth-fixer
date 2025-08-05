@@ -16,13 +16,11 @@ const commitAuthor = process.env.COMMIT_AUTHOR || 'unknown';
 // Calculate the stack name
 const stackName = `TapStack${environmentSuffix}`;
 
-// defautlTags is structured in adherence to the AwsProviderDefaultTags interface
+// defautlTags is structured in adherence to the TapStackProps interface
 const defaultTags = {
-  tags: {
-    Environment: environmentSuffix,
-    Repository: repositoryName,
-    CommitAuthor: commitAuthor,
-  },
+  Environment: environmentSuffix,
+  Repository: repositoryName,
+  CommitAuthor: commitAuthor,
 };
 
 // Create the TapStack with the calculated properties
