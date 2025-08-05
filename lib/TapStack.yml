@@ -204,27 +204,27 @@ Resources:
         - Key: Purpose
           Value: 'Access Logging'
 
-  # S3AccessLogsBucketPolicy:
-  #   Type: AWS::S3::BucketPolicy
-  #   Properties:
-  #     Bucket: !Ref S3AccessLogsBucket
-  #     PolicyDocument:
-  #       Version: '2012-10-17'
-  #       Statement:
-  #         - Sid: AllowS3Logging
-  #           Effect: Allow
-  #           Principal:
-  #             Service: logging.s3.amazonaws.com
-  #           Action: s3:PutObject
-  #           Resource: !Sub 'arn:aws:s3:::${S3AccessLogsBucket}/*'
-  #           Condition:
-  #             StringEquals:
-  #               aws:SourceAccount: !Sub '${AWS::AccountId}'
-  #             ArnLike:
-  #               aws:SourceArn:
-  #                 - !Sub 'arn:aws:s3:::website-content-${EnvironmentSuffix}-${UniqueId}/*'
-  #                 - !Sub 'arn:aws:s3:::application-logs-${EnvironmentSuffix}-${UniqueId}/*'
-  #                 - !Sub 'arn:aws:s3:::backup-data-${EnvironmentSuffix}-${UniqueId}/*'
+  S3AccessLogsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref S3AccessLogsBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowS3Logging
+            Effect: Allow
+            Principal:
+              Service: logging.s3.amazonaws.com
+            Action: s3:PutObject
+            Resource: !Sub 'arn:aws:s3:::${S3AccessLogsBucket}/*'
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Sub '${AWS::AccountId}'
+              ArnLike:
+                aws:SourceArn:
+                  - !Sub 'arn:aws:s3:::website-content-${EnvironmentSuffix}-${UniqueId}/*'
+                  - !Sub 'arn:aws:s3:::application-logs-${EnvironmentSuffix}-${UniqueId}/*'
+                  - !Sub 'arn:aws:s3:::backup-data-${EnvironmentSuffix}-${UniqueId}/*'
 
   WebsiteContentBucket:
     Type: AWS::S3::Bucket
@@ -289,74 +289,74 @@ Resources:
         DestinationBucketName: !Ref S3AccessLogsBucket
         LogFilePrefix: 'backup-data-access-logs/'
 
-  # WebsiteContentBucketPolicy:
-  #   Type: AWS::S3::BucketPolicy
-  #   Properties:
-  #     Bucket: !Ref WebsiteContentBucket
-  #     PolicyDocument:
-  #       Version: '2012-10-17'
-  #       Statement:
-  #         - Sid: AllowEC2RoleReadAccess
-  #           Effect: Allow
-  #           Principal:
-  #             AWS: !GetAtt EC2InstanceRole.Arn
-  #           Action:
-  #             - 's3:GetObject'
-  #             - 's3:ListBucket'
-  #           Resource:
-  #             - !Sub 'arn:aws:s3:::website-content-${EnvironmentSuffix}-${UniqueId}/*'
-  #             - !Sub 'arn:aws:s3:::website-content-${EnvironmentSuffix}-${UniqueId}'
+  WebsiteContentBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref WebsiteContentBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowEC2RoleReadAccess
+            Effect: Allow
+            Principal:
+              AWS: !GetAtt EC2InstanceRole.Arn
+            Action:
+              - 's3:GetObject'
+              - 's3:ListBucket'
+            Resource:
+              - !Sub 'arn:aws:s3:::website-content-${EnvironmentSuffix}-${UniqueId}/*'
+              - !Sub 'arn:aws:s3:::website-content-${EnvironmentSuffix}-${UniqueId}'
 
-  # ApplicationLogsBucketPolicy:
-  #   Type: AWS::S3::BucketPolicy
-  #   Properties:
-  #     Bucket: !Ref ApplicationLogsBucket
-  #     PolicyDocument:
-  #       Version: '2012-10-17'
-  #       Statement:
-  #         - Sid: AllowEC2RoleWriteAccess
-  #           Effect: Allow
-  #           Principal:
-  #             AWS: !GetAtt EC2InstanceRole.Arn
-  #           Action:
-  #             - 's3:PutObject'
-  #             - 's3:PutObjectAcl'
-  #           Resource:
-  #             - !Sub 'arn:aws:s3:::application-logs-${EnvironmentSuffix}-${UniqueId}/*'
-  #             - !Sub 'arn:aws:s3:::application-logs-${EnvironmentSuffix}-${UniqueId}'
+  ApplicationLogsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref ApplicationLogsBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowEC2RoleWriteAccess
+            Effect: Allow
+            Principal:
+              AWS: !GetAtt EC2InstanceRole.Arn
+            Action:
+              - 's3:PutObject'
+              - 's3:PutObjectAcl'
+            Resource:
+              - !Sub 'arn:aws:s3:::application-logs-${EnvironmentSuffix}-${UniqueId}/*'
+              - !Sub 'arn:aws:s3:::application-logs-${EnvironmentSuffix}-${UniqueId}'
 
-  # BackupDataBucketPolicy:
-  #   Type: AWS::S3::BucketPolicy
-  #   Properties:
-  #     Bucket: !Ref BackupDataBucket
-  #     PolicyDocument:
-  #       Version: '2012-10-17'
-  #       Statement:
-  #         - Sid: DenyAllAccess
-  #           Effect: Deny
-  #           Principal: '*'
-  #           Action: 's3:*'
-  #           Resource:
-  #             - !Sub 'arn:aws:s3:::backup-data-${EnvironmentSuffix}-${UniqueId}/*'
-  #             - !Sub 'arn:aws:s3:::backup-data-${EnvironmentSuffix}-${UniqueId}'
-  #           Condition:
-  #             StringNotEquals:
-  #               'aws:PrincipalServiceName': 'cloudformation.amazonaws.com'
-  #         - Sid: AllowCloudFormationLogging
-  #           Effect: Allow
-  #           Principal:
-  #             AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:user/iac-deployment-runner'
-  #           Action: 's3:PutBucketLogging'
-  #           Resource: !GetAtt BackupDataBucket.Arn
-  #         - Sid: AllowS3Logging
-  #           Effect: Allow
-  #           Principal:
-  #             Service: logging.s3.amazonaws.com
-  #           Action: 's3:PutObject'
-  #           Resource: !Sub 'arn:aws:s3:::s3-access-logs-${EnvironmentSuffix}-${UniqueId}/*'
-  #           Condition:
-  #             StringEquals:
-  #               'aws:SourceAccount': !Sub '${AWS::AccountId}'
+  BackupDataBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref BackupDataBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: DenyAllAccess
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource:
+              - !Sub 'arn:aws:s3:::backup-data-${EnvironmentSuffix}-${UniqueId}/*'
+              - !Sub 'arn:aws:s3:::backup-data-${EnvironmentSuffix}-${UniqueId}'
+            Condition:
+              StringNotEquals:
+                'aws:PrincipalServiceName': 'cloudformation.amazonaws.com'
+          - Sid: AllowCloudFormationLogging
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:user/iac-deployment-runner'
+            Action: 's3:PutBucketLogging'
+            Resource: !GetAtt BackupDataBucket.Arn
+          - Sid: AllowS3Logging
+            Effect: Allow
+            Principal:
+              Service: logging.s3.amazonaws.com
+            Action: 's3:PutObject'
+            Resource: !Sub 'arn:aws:s3:::s3-access-logs-${EnvironmentSuffix}-${UniqueId}/*'
+            Condition:
+              StringEquals:
+                'aws:SourceAccount': !Sub '${AWS::AccountId}'
 
   SecureEC2Instance:
     Type: AWS::EC2::Instance
