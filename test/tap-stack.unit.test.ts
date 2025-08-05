@@ -68,13 +68,18 @@ describe('Secure Infrastructure CloudFormation Template', () => {
 
     test('should have InfrastructureKMSKey resource', () => {
       expect(template.Resources.InfrastructureKMSKey).toBeDefined();
-      expect(template.Resources.InfrastructureKMSKey.Type).toBe('AWS::KMS::Key');
+      expect(template.Resources.InfrastructureKMSKey.Type).toBe(
+        'AWS::KMS::Key'
+      );
     });
 
     test('should have EC2InstanceRole resource', () => {
       expect(template.Resources.EC2InstanceRole).toBeDefined();
       expect(template.Resources.EC2InstanceRole.Type).toBe('AWS::IAM::Role');
-      expect(template.Resources.EC2InstanceRole.Properties.Policies[0].PolicyDocument.Statement).toEqual(
+      expect(
+        template.Resources.EC2InstanceRole.Properties.Policies[0].PolicyDocument
+          .Statement
+      ).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
             Sid: 'ReadWebsiteContent',
@@ -106,8 +111,12 @@ describe('Secure Infrastructure CloudFormation Template', () => {
 
     test('should have S3AccessLogsBucket resource', () => {
       expect(template.Resources.S3AccessLogsBucket).toBeDefined();
-      expect(template.Resources.S3AccessLogsBucket.Type).toBe('AWS::S3::Bucket');
-      expect(template.Resources.S3AccessLogsBucket.Properties.BucketEncryption).toBeDefined();
+      expect(template.Resources.S3AccessLogsBucket.Type).toBe(
+        'AWS::S3::Bucket'
+      );
+      expect(
+        template.Resources.S3AccessLogsBucket.Properties.BucketEncryption
+      ).toBeDefined();
     });
 
     test('should have WebsiteContentBucket resource with encryption and public access blocked', () => {
@@ -115,8 +124,12 @@ describe('Secure Infrastructure CloudFormation Template', () => {
       expect(bucket).toBeDefined();
       expect(bucket.Type).toBe('AWS::S3::Bucket');
       expect(bucket.Properties.BucketEncryption).toBeDefined();
-      expect(bucket.Properties.PublicAccessBlockConfiguration.BlockPublicAcls).toBe(true);
-      expect(bucket.Properties.LoggingConfiguration.DestinationBucketName).toEqual({
+      expect(
+        bucket.Properties.PublicAccessBlockConfiguration.BlockPublicAcls
+      ).toBe(true);
+      expect(
+        bucket.Properties.LoggingConfiguration.DestinationBucketName
+      ).toEqual({
         Ref: 'S3AccessLogsBucket',
       });
     });
@@ -126,8 +139,12 @@ describe('Secure Infrastructure CloudFormation Template', () => {
       expect(bucket).toBeDefined();
       expect(bucket.Type).toBe('AWS::S3::Bucket');
       expect(bucket.Properties.BucketEncryption).toBeDefined();
-      expect(bucket.Properties.PublicAccessBlockConfiguration.BlockPublicAcls).toBe(true);
-      expect(bucket.Properties.LoggingConfiguration.DestinationBucketName).toEqual({
+      expect(
+        bucket.Properties.PublicAccessBlockConfiguration.BlockPublicAcls
+      ).toBe(true);
+      expect(
+        bucket.Properties.LoggingConfiguration.DestinationBucketName
+      ).toEqual({
         Ref: 'S3AccessLogsBucket',
       });
     });
@@ -137,16 +154,25 @@ describe('Secure Infrastructure CloudFormation Template', () => {
       expect(bucket).toBeDefined();
       expect(bucket.Type).toBe('AWS::S3::Bucket');
       expect(bucket.Properties.BucketEncryption).toBeDefined();
-      expect(bucket.Properties.PublicAccessBlockConfiguration.BlockPublicAcls).toBe(true);
-      expect(bucket.Properties.LoggingConfiguration.DestinationBucketName).toEqual({
+      expect(
+        bucket.Properties.PublicAccessBlockConfiguration.BlockPublicAcls
+      ).toBe(true);
+      expect(
+        bucket.Properties.LoggingConfiguration.DestinationBucketName
+      ).toEqual({
         Ref: 'S3AccessLogsBucket',
       });
     });
 
     test('should have EC2SecurityGroup resource', () => {
       expect(template.Resources.EC2SecurityGroup).toBeDefined();
-      expect(template.Resources.EC2SecurityGroup.Type).toBe('AWS::EC2::SecurityGroup');
-      expect(template.Resources.EC2SecurityGroup.Properties.SecurityGroupIngress[0].CidrIp).toEqual({
+      expect(template.Resources.EC2SecurityGroup.Type).toBe(
+        'AWS::EC2::SecurityGroup'
+      );
+      expect(
+        template.Resources.EC2SecurityGroup.Properties.SecurityGroupIngress[0]
+          .CidrIp
+      ).toEqual({
         Ref: 'YourPublicIP',
       });
     });
@@ -155,7 +181,9 @@ describe('Secure Infrastructure CloudFormation Template', () => {
       const instance = template.Resources.SecureEC2Instance;
       expect(instance).toBeDefined();
       expect(instance.Type).toBe('AWS::EC2::Instance');
-      expect(instance.Properties.BlockDeviceMappings[0].Ebs.Encrypted).toBe(true);
+      expect(instance.Properties.BlockDeviceMappings[0].Ebs.Encrypted).toBe(
+        true
+      );
       expect(instance.Properties.BlockDeviceMappings[0].Ebs.KmsKeyId).toEqual({
         Ref: 'InfrastructureKMSKey',
       });
@@ -178,7 +206,7 @@ describe('Secure Infrastructure CloudFormation Template', () => {
         'KMSKeyId',
         'EC2InstanceRoleArn',
       ];
-      expectedOutputs.forEach((outputName) => {
+      expectedOutputs.forEach(outputName => {
         expect(template.Outputs[outputName]).toBeDefined();
       });
     });
@@ -187,63 +215,87 @@ describe('Secure Infrastructure CloudFormation Template', () => {
       const output = template.Outputs.VPCId;
       expect(output.Description).toBe('ID of the created VPC');
       expect(output.Value).toEqual({ Ref: 'SecureVPC' });
-      expect(output.Export.Name).toEqual({ 'Fn::Sub': '${AWS::StackName}-VPC-ID' });
+      expect(output.Export.Name).toEqual({
+        'Fn::Sub': '${AWS::StackName}-VPC-ID',
+      });
     });
 
     test('EC2InstanceId output should be correct', () => {
       const output = template.Outputs.EC2InstanceId;
       expect(output.Description).toBe('ID of the created EC2 instance');
       expect(output.Value).toEqual({ Ref: 'SecureEC2Instance' });
-      expect(output.Export.Name).toEqual({ 'Fn::Sub': '${AWS::StackName}-EC2-Instance-ID' });
+      expect(output.Export.Name).toEqual({
+        'Fn::Sub': '${AWS::StackName}-EC2-Instance-ID',
+      });
     });
 
     test('EC2PublicIP output should be correct', () => {
       const output = template.Outputs.EC2PublicIP;
       expect(output.Description).toBe('Public IP address of the EC2 instance');
-      expect(output.Value).toEqual({ 'Fn::GetAtt': ['SecureEC2Instance', 'PublicIp'] });
-      expect(output.Export.Name).toEqual({ 'Fn::Sub': '${AWS::StackName}-EC2-Public-IP' });
+      expect(output.Value).toEqual({
+        'Fn::GetAtt': ['SecureEC2Instance', 'PublicIp'],
+      });
+      expect(output.Export.Name).toEqual({
+        'Fn::Sub': '${AWS::StackName}-EC2-Public-IP',
+      });
     });
 
     test('WebsiteContentBucket output should be correct', () => {
       const output = template.Outputs.WebsiteContentBucket;
       expect(output.Description).toBe('Name of the website content S3 bucket');
       expect(output.Value).toEqual({ Ref: 'WebsiteContentBucket' });
-      expect(output.Export.Name).toEqual({ 'Fn::Sub': '${AWS::StackName}-WebsiteContent-Bucket' });
+      expect(output.Export.Name).toEqual({
+        'Fn::Sub': '${AWS::StackName}-WebsiteContent-Bucket',
+      });
     });
 
     test('ApplicationLogsBucket output should be correct', () => {
       const output = template.Outputs.ApplicationLogsBucket;
       expect(output.Description).toBe('Name of the application logs S3 bucket');
       expect(output.Value).toEqual({ Ref: 'ApplicationLogsBucket' });
-      expect(output.Export.Name).toEqual({ 'Fn::Sub': '${AWS::StackName}-ApplicationLogs-Bucket' });
+      expect(output.Export.Name).toEqual({
+        'Fn::Sub': '${AWS::StackName}-ApplicationLogs-Bucket',
+      });
     });
 
     test('BackupDataBucket output should be correct', () => {
       const output = template.Outputs.BackupDataBucket;
       expect(output.Description).toBe('Name of the backup data S3 bucket');
       expect(output.Value).toEqual({ Ref: 'BackupDataBucket' });
-      expect(output.Export.Name).toEqual({ 'Fn::Sub': '${AWS::StackName}-BackupData-Bucket' });
+      expect(output.Export.Name).toEqual({
+        'Fn::Sub': '${AWS::StackName}-BackupData-Bucket',
+      });
     });
 
     test('S3AccessLogsBucket output should be correct', () => {
       const output = template.Outputs.S3AccessLogsBucket;
       expect(output.Description).toBe('Name of the S3 access logs bucket');
       expect(output.Value).toEqual({ Ref: 'S3AccessLogsBucket' });
-      expect(output.Export.Name).toEqual({ 'Fn::Sub': '${AWS::StackName}-S3-Access-Logs-Bucket' });
+      expect(output.Export.Name).toEqual({
+        'Fn::Sub': '${AWS::StackName}-S3-Access-Logs-Bucket',
+      });
     });
 
     test('KMSKeyId output should be correct', () => {
       const output = template.Outputs.KMSKeyId;
-      expect(output.Description).toBe('ID of the KMS key used for S3 encryption');
+      expect(output.Description).toBe(
+        'ID of the KMS key used for S3 encryption'
+      );
       expect(output.Value).toEqual({ Ref: 'InfrastructureKMSKey' });
-      expect(output.Export.Name).toEqual({ 'Fn::Sub': '${AWS::StackName}-KMS-Key' });
+      expect(output.Export.Name).toEqual({
+        'Fn::Sub': '${AWS::StackName}-KMS-Key',
+      });
     });
 
     test('EC2InstanceRoleArn output should be correct', () => {
       const output = template.Outputs.EC2InstanceRoleArn;
       expect(output.Description).toBe('ARN of the EC2 instance IAM role');
-      expect(output.Value).toEqual({ 'Fn::GetAtt': ['EC2InstanceRole', 'Arn'] });
-      expect(output.Export.Name).toEqual({ 'Fn::Sub': '${AWS::StackName}-EC2-Instance-Role-ARN' });
+      expect(output.Value).toEqual({
+        'Fn::GetAtt': ['EC2InstanceRole', 'Arn'],
+      });
+      expect(output.Export.Name).toEqual({
+        'Fn::Sub': '${AWS::StackName}-EC2-Instance-Role-ARN',
+      });
     });
   });
 
@@ -280,8 +332,12 @@ describe('Secure Infrastructure CloudFormation Template', () => {
   describe('Resource Naming Convention', () => {
     test('VPC name should follow naming convention', () => {
       const vpc = template.Resources.SecureVPC;
-      const vpcNameTag = vpc.Properties.Tags.find((tag: any) => tag.Key === 'Name');
-      expect(vpcNameTag.Value).toEqual({ 'Fn::Sub': '${AWS::StackName}-secure-vpc' });
+      const vpcNameTag = vpc.Properties.Tags.find(
+        (tag: any) => tag.Key === 'Name'
+      );
+      expect(vpcNameTag.Value).toEqual({
+        'Fn::Sub': '${AWS::StackName}-secure-vpc',
+      });
     });
 
     test('S3 bucket names should follow naming convention with UniqueId', () => {
@@ -307,19 +363,22 @@ describe('Secure Infrastructure CloudFormation Template', () => {
     });
 
     test('export names should follow naming convention', () => {
-      Object.keys(template.Outputs).forEach((outputKey) => {
+      Object.keys(template.Outputs).forEach(outputKey => {
         const output = template.Outputs[outputKey];
         if (outputKey === 'KMSKeyId') {
-          expect(output.Export.Name).toEqual({ 'Fn::Sub': '${AWS::StackName}-KMS-Key' });
+          expect(output.Export.Name).toEqual({
+            'Fn::Sub': '${AWS::StackName}-KMS-Key',
+          });
         } else if (outputKey === 'EC2InstanceRoleArn') {
           expect(output.Export.Name).toEqual({
             'Fn::Sub': '${AWS::StackName}-EC2-Instance-Role-ARN',
           });
         } else {
-          expect(output.Export.Name).toEqual({ 'Fn::Sub': `\${AWS::StackName}-${outputKey}` });
+          expect(output.Export.Name).toEqual({
+            'Fn::Sub': `\${AWS::StackName}-${outputKey}`,
+          });
         }
       });
     });
   });
 });
-```
