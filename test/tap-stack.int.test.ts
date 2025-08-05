@@ -852,15 +852,27 @@ describe('TapStack Integration Tests', () => {
 
   describe('Security and Compliance', () => {
     test('should create CloudTrail', async () => {
+      // Debug logging
+      console.log('=== CloudTrail Debug Info ===');
+      console.log('Environment suffix:', environmentSuffix);
+      
       // First try to find CloudTrail by stack resources
       const cloudTrailResource = stackResources.find(
         resource => resource.ResourceType === 'AWS::CloudTrail::Trail'
       );
+      console.log('CloudTrail resource from stack:', cloudTrailResource);
+      
+      // List all stack resources to see what's available
+      const cloudTrailResources = stackResources.filter(
+        resource => resource.ResourceType?.includes('CloudTrail')
+      );
+      console.log('All CloudTrail-related resources in stack:', cloudTrailResources);
       
       let trails = [];
       
       if (cloudTrailResource?.PhysicalResourceId) {
         // Use the physical resource ID from stack
+        console.log('Using physical resource ID:', cloudTrailResource.PhysicalResourceId);
         const command = new DescribeTrailsCommand({
           trailNameList: [cloudTrailResource.PhysicalResourceId],
         });
@@ -868,15 +880,22 @@ describe('TapStack Integration Tests', () => {
         trails = response.trailList || [];
       } else {
         // Fallback: search for trails with environment suffix
+        console.log('No CloudTrail resource found in stack, searching all trails...');
         const allTrailsCommand = new DescribeTrailsCommand({});
         const allTrailsResponse = await cloudTrailClient.send(allTrailsCommand);
         const allTrails = allTrailsResponse.trailList || [];
+        
+        console.log('All trails found:', allTrails.map(t => ({ name: t.Name, arn: t.TrailARN })));
         
         trails = allTrails.filter(trail => 
           trail.Name?.includes(environmentSuffix) || 
           trail.Name?.includes('TapCloudTrail')
         );
+        console.log('Filtered trails matching our criteria:', trails.map(t => ({ name: t.Name, arn: t.TrailARN })));
       }
+
+      console.log('Final trails array length:', trails.length);
+      console.log('==============================');
 
       expect(trails.length).toBeGreaterThan(0);
       const trail = trails[0];
@@ -1335,15 +1354,21 @@ describe('TapStack Integration Tests', () => {
     });
 
     test('should validate CloudTrail for audit logging', async () => {
+      // Debug logging
+      console.log('=== CloudTrail Audit Debug Info ===');
+      console.log('Environment suffix:', environmentSuffix);
+      
       // First try to find CloudTrail by stack resources
       const cloudTrailResource = stackResources.find(
         resource => resource.ResourceType === 'AWS::CloudTrail::Trail'
       );
+      console.log('CloudTrail resource from stack:', cloudTrailResource);
       
       let stackTrail;
       
       if (cloudTrailResource?.PhysicalResourceId) {
         // Use the physical resource ID from stack
+        console.log('Using physical resource ID:', cloudTrailResource.PhysicalResourceId);
         const command = new DescribeTrailsCommand({
           trailNameList: [cloudTrailResource.PhysicalResourceId],
         });
@@ -1351,12 +1376,19 @@ describe('TapStack Integration Tests', () => {
         stackTrail = response.trailList?.[0];
       } else {
         // Fallback: search all trails for one matching our environment
+        console.log('No CloudTrail resource found in stack, searching all trails...');
         const trails = await cloudTrailClient.send(new DescribeTrailsCommand({}));
+        console.log('All trails found:', trails.trailList?.map(t => ({ name: t.Name, arn: t.TrailARN })));
+        
         stackTrail = trails.trailList?.find(trail => 
           trail.Name?.includes(environmentSuffix) || 
           trail.Name?.includes('TapCloudTrail')
         );
+        console.log('Filtered trail matching our criteria:', stackTrail ? { name: stackTrail.Name, arn: stackTrail.TrailARN } : 'None found');
       }
+      
+      console.log('Final stackTrail:', stackTrail ? { name: stackTrail.Name, arn: stackTrail.TrailARN } : 'undefined');
+      console.log('=====================================');
       
       expect(stackTrail).toBeDefined();
       expect(stackTrail?.IncludeGlobalServiceEvents).toBe(true);
