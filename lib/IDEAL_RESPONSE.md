@@ -432,7 +432,7 @@ export class TapStack extends TerraformStack {
       description: 'The public IPv6 address of the EC2 instance',
     });
     // ! Do NOT create resources directly in this stack.
-    // ! Instead, create separate stacks for each resource type.
+    // ! Instead, create separate stacks for each resource type
   }
 }
 ```
