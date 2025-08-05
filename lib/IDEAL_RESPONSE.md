@@ -1,6 +1,6 @@
 ## 🏗️ Architecture Overview
 
-```mermaid
+```mermaid 
 graph TB
     subgraph "API Layer"
         API[API Gateway]
