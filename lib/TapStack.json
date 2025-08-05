@@ -492,7 +492,7 @@
       "Type": "AWS::EC2::Instance",
       "Properties": {
         "InstanceType": "t3.micro",
-        "ImageId": "ami-03b6c12f592f54cf3",
+        "ImageId": "ami-0f74c08b8b5effa56",
         "SubnetId": {
           "Ref": "WebAppPrivateSubnet1"
         },
@@ -535,7 +535,7 @@
       "Type": "AWS::EC2::Instance",
       "Properties": {
         "InstanceType": "t3.micro",
-        "ImageId": "ami-03b6c12f592f54cf3",
+        "ImageId": "ami-0f74c08b8b5effa56",
         "SubnetId": {
           "Ref": "WebAppPrivateSubnet2"
         },
@@ -703,7 +703,7 @@
               },
               "Action": "s3:GetObject",
               "Resource": {
-                "Fn::Sub": "${WebAppS3Bucket}/*"
+                "Fn::Sub": "arn:aws:s3:::${WebAppS3Bucket}/*"
               },
               "Condition": {
                 "StringEquals": {
@@ -786,7 +786,7 @@
               },
               "Action": "s3:GetBucketAcl",
               "Resource": {
-                "Ref": "WebAppCloudTrailS3Bucket"
+                "Fn::Sub": "arn:aws:s3:::${WebAppCloudTrailS3Bucket}"
               }
             },
             {
@@ -797,7 +797,7 @@
               },
               "Action": "s3:PutObject",
               "Resource": {
-                "Fn::Sub": "${WebAppCloudTrailS3Bucket}/*"
+                "Fn::Sub": "arn:aws:s3:::${WebAppCloudTrailS3Bucket}/*"
               },
               "Condition": {
                 "StringEquals": {
@@ -1056,6 +1056,50 @@
       "Export": {
         "Name": {
           "Fn::Sub": "${AWS::StackName}-Config-Role-Arn"
+        }
+      }
+    },
+    "DynamoDBTableName": {
+      "Description": "Name of the DynamoDB table",
+      "Value": {
+        "Ref": "WebAppDynamoDBTable"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-DynamoDB-Table-Name"
+        }
+      }
+    },
+    "RDSInstanceIdentifier": {
+      "Description": "Identifier of the RDS instance",
+      "Value": {
+        "Ref": "WebAppRDSInstance"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-RDS-Instance-Identifier"
+        }
+      }
+    },
+    "LambdaFunctionName": {
+      "Description": "Name of the Lambda function",
+      "Value": {
+        "Ref": "WebAppLambdaFunction"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-Lambda-Function-Name"
+        }
+      }
+    },
+    "LoadBalancerArn": {
+      "Description": "ARN of the Application Load Balancer",
+      "Value": {
+        "Ref": "WebAppALB"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-ALB-Arn"
         }
       }
     }
