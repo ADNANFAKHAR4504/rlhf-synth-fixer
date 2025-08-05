@@ -5,7 +5,7 @@
         "EnvironmentSuffix": {
             "Type": "String",
             "Description": "Suffix for the environment (e.g., dev, prod)",
-            "Default": "production",
+            "Default": "staging",
             "AllowedPattern": "^[a-zA-Z0-9]+$",
             "ConstraintDescription": "Must contain only alphanumeric characters."
         },
@@ -227,7 +227,19 @@
                 "Tags": [
                     {
                         "Key": "Environment",
-                        "Value": "Production"
+                        "Value": {
+                            "Fn::If": [
+                                "IsProductionEnv",
+                                "Production",
+                                {
+                                    "Fn::If": [
+                                        "IsStagingEnv",
+                                        "Staging",
+                                        "PR"
+                                    ]
+                                }
+                            ]
+                        }
                     },
                     {
                         "Key": "Name",
@@ -1062,25 +1074,67 @@
                         ]
                     }
                 },
-                "MinSize": 1,
+                "MinSize": {
+                    "Fn::If": [
+                        "IsKnownEnvironment",
+                        {
+                            "Fn::FindInMap": [
+                                "EnvironmentMap",
+                                {
+                                    "Ref": "EnvironmentSuffix"
+                                },
+                                "MinSize"
+                            ]
+                        },
+                        {
+                            "Fn::FindInMap": [
+                                "EnvironmentMap",
+                                "default",
+                                "MinSize"
+                            ]
+                        }
+                    ]
+                },
                 "MaxSize": {
                     "Fn::If": [
-                        "IsProductionEnv",
-                        6,
+                        "IsKnownEnvironment",
                         {
-                            "Fn::If": [
-                                "IsStagingEnv",
-                                3,
-                                2
+                            "Fn::FindInMap": [
+                                "EnvironmentMap",
+                                {
+                                    "Ref": "EnvironmentSuffix"
+                                },
+                                "MaxSize"
+                            ]
+                        },
+                        {
+                            "Fn::FindInMap": [
+                                "EnvironmentMap",
+                                "default",
+                                "MaxSize"
                             ]
                         }
                     ]
                 },
                 "DesiredCapacity": {
                     "Fn::If": [
-                        "IsProductionEnv",
-                        2,
-                        1
+                        "IsKnownEnvironment",
+                        {
+                            "Fn::FindInMap": [
+                                "EnvironmentMap",
+                                {
+                                    "Ref": "EnvironmentSuffix"
+                                },
+                                "DesiredCapacity"
+                            ]
+                        },
+                        {
+                            "Fn::FindInMap": [
+                                "EnvironmentMap",
+                                "default",
+                                "DesiredCapacity"
+                            ]
+                        }
                     ]
                 },
                 "TargetGroupARNs": [
@@ -1270,9 +1324,23 @@
                 "EvaluationPeriods": 2,
                 "Threshold": {
                     "Fn::If": [
-                        "IsProductionEnv",
-                        70,
-                        80
+                        "IsKnownEnvironment",
+                        {
+                            "Fn::FindInMap": [
+                                "EnvironmentMap",
+                                {
+                                    "Ref": "EnvironmentSuffix"
+                                },
+                                "CPUThreshold"
+                            ]
+                        },
+                        {
+                            "Fn::FindInMap": [
+                                "EnvironmentMap",
+                                "default",
+                                "CPUThreshold"
+                            ]
+                        }
                     ]
                 },
                 "ComparisonOperator": "GreaterThanThreshold",

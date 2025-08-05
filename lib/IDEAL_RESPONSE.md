@@ -25,7 +25,7 @@ Parameters:
   EnvironmentSuffix:
     Type: String
     Description: Suffix for the environment (e.g., dev, prod)
-    Default: production
+    Default: staging
     AllowedPattern: '^[a-zA-Z0-9]+$'
     ConstraintDescription: Must contain only alphanumeric characters.
 
@@ -158,7 +158,7 @@ Resources:
       EnableDnsSupport: true
       Tags:
         - Key: Environment
-          Value: Production
+          Value: !If [IsProductionEnv, Production, !If [IsStagingEnv, Staging, PR]]
         - Key: Name
           Value: !Sub '${EnvironmentSuffix}-vpc'
 
@@ -635,9 +635,18 @@ Resources:
       LaunchTemplate:
         LaunchTemplateId: !Ref LaunchTemplate
         Version: !GetAtt LaunchTemplate.LatestVersionNumber
-      MinSize: 1
-      MaxSize: !If [IsProductionEnv, 6, !If [IsStagingEnv, 3, 2]]
-      DesiredCapacity: !If [IsProductionEnv, 2, 1]
+      MinSize: !If 
+        - IsKnownEnvironment
+        - !FindInMap [EnvironmentMap, !Ref EnvironmentSuffix, MinSize]
+        - !FindInMap [EnvironmentMap, default, MinSize]
+      MaxSize: !If 
+        - IsKnownEnvironment
+        - !FindInMap [EnvironmentMap, !Ref EnvironmentSuffix, MaxSize]
+        - !FindInMap [EnvironmentMap, default, MaxSize]
+      DesiredCapacity: !If 
+        - IsKnownEnvironment
+        - !FindInMap [EnvironmentMap, !Ref EnvironmentSuffix, DesiredCapacity]
+        - !FindInMap [EnvironmentMap, default, DesiredCapacity]
       TargetGroupARNs:
         - !Ref ALBTargetGroup
       HealthCheckType: ELB
@@ -746,7 +755,10 @@ Resources:
       Statistic: Average
       Period: 300
       EvaluationPeriods: 2
-      Threshold: !If [IsProductionEnv, 70, 80]
+      Threshold: !If 
+        - IsKnownEnvironment
+        - !FindInMap [EnvironmentMap, !Ref EnvironmentSuffix, CPUThreshold]
+        - !FindInMap [EnvironmentMap, default, CPUThreshold]
       ComparisonOperator: GreaterThanThreshold
       Dimensions:
         - Name: AutoScalingGroupName
@@ -864,4 +876,5 @@ Outputs:
     Value: !GetAtt RDSDatabase.MasterUserSecret.SecretArn
     Export:
       Name: !Sub '${EnvironmentSuffix}-prod-DB-Secret-ARN'
+
 ```
