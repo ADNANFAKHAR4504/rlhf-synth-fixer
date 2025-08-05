@@ -27,7 +27,8 @@ def pulumi_outputs():
     result = subprocess.run(command, capture_output=True, text=True, check=True)
     
     # Parse the JSON output. The output from 'pulumi stack output --json'
-    # directly provides the flat outputs as a dictionary.
+    # directly provides the flat outputs as a dictionary, with nested structures
+    # already parsed into native Python types (lists, dicts).
     outputs = json.loads(result.stdout)
     
     print(f"Successfully fetched outputs for stack: {PULUMI_STACK_NAME}")
@@ -52,8 +53,8 @@ def aws_clients(pulumi_outputs):
   This fixture runs once per test session.
   """
   clients = {}
-  # The 'deployed_regions' output is a JSON string, so it needs to be parsed
-  deployed_regions = json.loads(pulumi_outputs["deployed_regions"])
+  # 'deployed_regions' is already a list, no need for json.loads() here
+  deployed_regions = pulumi_outputs["deployed_regions"]
   print(f"Initializing boto3 clients for regions: {deployed_regions}")
   for region in deployed_regions:
     clients[region] = {
@@ -95,9 +96,9 @@ def test_vpcs_exist_and_match_cidr(pulumi_outputs, aws_clients):
   """
   Verifies that VPCs exist in the deployed regions and their CIDR blocks match.
   """
-  # 'all_regions_data' is a JSON string, so it needs to be parsed
-  all_regions_data = json.loads(pulumi_outputs["all_regions_data"])
-  deployed_regions = json.loads(pulumi_outputs["deployed_regions"])
+  # 'all_regions_data' is already a dictionary, no need for json.loads() here
+  all_regions_data = pulumi_outputs["all_regions_data"]
+  deployed_regions = pulumi_outputs["deployed_regions"] # Already a list
 
   for region_name in deployed_regions:
     region_data = all_regions_data[region_name]
@@ -122,9 +123,9 @@ def test_subnets_exist_and_match_vpc(pulumi_outputs, aws_clients):
   """
   Verifies that public and private subnets exist and are associated with the correct VPC.
   """
-  # 'all_regions_data' is a JSON string, so it needs to be parsed
-  all_regions_data = json.loads(pulumi_outputs["all_regions_data"])
-  deployed_regions = json.loads(pulumi_outputs["deployed_regions"])
+  # 'all_regions_data' is already a dictionary, no need for json.loads() here
+  all_regions_data = pulumi_outputs["all_regions_data"]
+  deployed_regions = pulumi_outputs["deployed_regions"] # Already a list
 
   for region_name in deployed_regions:
     region_data = all_regions_data[region_name]
@@ -132,13 +133,13 @@ def test_subnets_exist_and_match_vpc(pulumi_outputs, aws_clients):
     vpc_id = region_data["vpc_id"]
 
     # Determine which subnet IDs to use based on primary/secondary region
-    # These are also JSON strings in the flat outputs, so parse them
+    # These are already lists, no need for json.loads()
     if region_name == pulumi_outputs["primary_region"]:
-      public_subnet_ids = json.loads(pulumi_outputs["primary_public_subnet_ids"])
-      private_subnet_ids = json.loads(pulumi_outputs["primary_private_subnet_ids"])
+      public_subnet_ids = pulumi_outputs["primary_public_subnet_ids"]
+      private_subnet_ids = pulumi_outputs["primary_private_subnet_ids"]
     elif region_name == pulumi_outputs["secondary_region"]:
-      public_subnet_ids = json.loads(pulumi_outputs["secondary_public_subnet_ids"])
-      private_subnet_ids = json.loads(pulumi_outputs["secondary_private_subnet_ids"])
+      public_subnet_ids = pulumi_outputs["secondary_public_subnet_ids"]
+      private_subnet_ids = pulumi_outputs["secondary_private_subnet_ids"]
     else:
       pytest.fail(f"Region {region_name} found in all_regions_data but not explicitly primary/secondary in outputs.")
       continue
@@ -174,9 +175,9 @@ def test_eb_application_exists(pulumi_outputs, aws_clients):
   """
   Verifies that Elastic Beanstalk applications exist in the deployed regions.
   """
-  # 'all_regions_data' is a JSON string, so it needs to be parsed
-  all_regions_data = json.loads(pulumi_outputs["all_regions_data"])
-  deployed_regions = json.loads(pulumi_outputs["deployed_regions"])
+  # 'all_regions_data' is already a dictionary, no need for json.loads() here
+  all_regions_data = pulumi_outputs["all_regions_data"]
+  deployed_regions = pulumi_outputs["deployed_regions"] # Already a list
 
   for region_name in deployed_regions:
     eb_client = aws_clients[region_name]["elasticbeanstalk"]
@@ -208,9 +209,9 @@ def test_eb_environment_exists_and_is_ready(pulumi_outputs, aws_clients):
   Verifies that Elastic Beanstalk environments exist, are 'Ready' and 'Green',
   and their URLs match the expected outputs.
   """
-  # 'all_regions_data' is a JSON string, so it needs to be parsed
-  all_regions_data = json.loads(pulumi_outputs["all_regions_data"])
-  deployed_regions = json.loads(pulumi_outputs["deployed_regions"])
+  # 'all_regions_data' is already a dictionary, no need for json.loads() here
+  all_regions_data = pulumi_outputs["all_regions_data"]
+  deployed_regions = pulumi_outputs["deployed_regions"] # Already a list
 
   for region_name in deployed_regions:
     region_data = all_regions_data[region_name]
@@ -244,9 +245,9 @@ def test_cloudwatch_dashboard_exists(pulumi_outputs, aws_clients):
   """
   Verifies that CloudWatch Dashboards exist in the deployed regions.
   """
-  # 'all_regions_data' is a JSON string, so it needs to be parsed
-  all_regions_data = json.loads(pulumi_outputs["all_regions_data"])
-  deployed_regions = json.loads(pulumi_outputs["deployed_regions"])
+  # 'all_regions_data' is already a dictionary, no need for json.loads() here
+  all_regions_data = pulumi_outputs["all_regions_data"]
+  deployed_regions = pulumi_outputs["deployed_regions"] # Already a list
 
   for region_name in deployed_regions:
     region_data = all_regions_data[region_name]
@@ -270,9 +271,9 @@ def test_sns_topic_exists(pulumi_outputs, aws_clients):
   """
   Verifies that SNS Topics exist in the deployed regions.
   """
-  # 'all_regions_data' is a JSON string, so it needs to be parsed
-  all_regions_data = json.loads(pulumi_outputs["all_regions_data"])
-  deployed_regions = json.loads(pulumi_outputs["deployed_regions"])
+  # 'all_regions_data' is already a dictionary, no need for json.loads() here
+  all_regions_data = pulumi_outputs["all_regions_data"]
+  deployed_regions = pulumi_outputs["deployed_regions"] # Already a list
 
   for region_name in deployed_regions:
     region_data = all_regions_data[region_name]
@@ -359,4 +360,3 @@ def test_iam_service_role_exists(pulumi_outputs, aws_clients):
     pytest.fail(f"AWS ClientError testing IAM Service Role {service_role_name}: {e}")
   except Exception as e:
     pytest.fail(f"Unexpected error testing IAM Service Role {service_role_name}: {e}")
-
