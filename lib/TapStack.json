@@ -151,9 +151,7 @@
                     "Ref": "EC2InstanceProfile"
                 },
                 "UserData": {
-                    "Fn::Base64": {
-                        "Fn::Sub": "#!/bin/bash\nyum update -y\n# Retrieving configuration from Parameter Store\nCONFIG_VALUE=$(aws ssm get-parameter --name \"/secure-web/config\" --region us-west-2 --query Parameter.Value --output text)\necho \"Configuration: $CONFIG_VALUE\" >> /var/log/config.log\n"
-                    }
+                    "Fn::Base64": "#!/bin/bash\nyum update -y\n# Retrieving configuration from Parameter Store\nCONFIG_VALUE=$(aws ssm get-parameter --name \"/secure-web/config\" --region us-west-2 --query Parameter.Value --output text)\necho \"Configuration: $CONFIG_VALUE\" >> /var/log/config.log\n"
                 },
                 "Tags": [
                     {
