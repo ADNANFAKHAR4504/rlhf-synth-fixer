@@ -101,8 +101,8 @@ class TestTapStack(unittest.TestCase):
     env_suffix = "nat"
     stack = TapStack(self.app, "TapStackNAT", TapStackProps(environment_suffix=env_suffix))
     template = Template.from_stack(stack)
-    # VPC with max_azs=2 creates 2 NAT gateways
-    template.resource_count_is("AWS::EC2::NatGateway", 2)
+    # VPC with max_azs=1 creates 2 NAT gateways
+    template.resource_count_is("AWS::EC2::NatGateway", 1)
 
   @mark.it("creates route tables for subnets")
   def test_creates_route_tables(self):

@@ -66,7 +66,8 @@ class TapStack(Stack):
     vpc = ec2.Vpc(
       self,
       "TapVpc",
-      max_azs=2
+      max_azs=2,
+      nat_gateways=1
     )
 
     # S3 Bucket
@@ -153,7 +154,7 @@ class TapStack(Stack):
       self,
       "TapObjectProcessor",
       function_name=f"tap-object-processor-{environment_suffix}",
-      runtime=_lambda.Runtime.PYTHON_3_8,
+      runtime=_lambda.Runtime.PYTHON_3_11,
       handler="index.lambda_handler",
       code=_lambda.Code.from_inline(
         """
@@ -166,8 +167,13 @@ logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 def get_secret(secret_name):
-  # Placeholder for AWS Secrets Manager or SSM Parameter Store retrieval
-  return "dummy_secret"
+  client = boto3.client('secretsmanager')
+  try:
+    response = client.get_secret_value(SecretId=secret_name)
+    return response.get('SecretString')
+  except Exception as e:
+    logger.error(f"Failed to retrieve secret {secret_name}: {e}")
+    return None
 
 def lambda_handler(event, context):
   try:
@@ -184,16 +190,24 @@ def lambda_handler(event, context):
       key = record['s3']['object']['key']
       size = record['s3']['object'].get('size', 0)
       timestamp = record['eventTime']
-      table.put_item(Item={
-        'objectKey': key,
-        'uploadTime': timestamp,
-        'bucket': bucket,
-        'size': size
-      })
-      sns.publish(
-        TopicArn=topic_arn,
-        Message=f"New object {key} uploaded to {bucket} at {timestamp}."
-      )
+      try:
+        table.put_item(Item={
+          'objectKey': key,
+          'uploadTime': timestamp,
+          'bucket': bucket,
+          'size': size
+        })
+      except Exception as ddb_err:
+        logger.error(f"DynamoDB error: {ddb_err}")
+        return {'statusCode': 500, 'body': f"DynamoDB error: {ddb_err}"}
+      try:
+        sns.publish(
+          TopicArn=topic_arn,
+          Message=f"New object {key} uploaded to {bucket} at {timestamp}."
+        )
+      except Exception as sns_err:
+        logger.error(f"SNS error: {sns_err}")
+        return {'statusCode': 500, 'body': f"SNS error: {sns_err}"}
       logger.info(f"Processed S3 event for {key}")
       return {'statusCode': 200, 'body': 'S3 event processed'}
     elif 'httpMethod' in event:
