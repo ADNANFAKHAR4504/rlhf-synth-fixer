@@ -1,98 +1,475 @@
 {
   "AWSTemplateFormatVersion": "2010-09-09",
-  "Description": "TAP Stack - Task Assignment Platform CloudFormation Template",
-  "Metadata": {
-    "AWS::CloudFormation::Interface": {
-      "ParameterGroups": [
-        {
-          "Label": {
-            "default": "Environment Configuration"
-          },
-          "Parameters": [
-            "EnvironmentSuffix"
-          ]
-        }
+  "Description": "ServerlessApp - Highly Available, Secure Serverless Application Template. Deploys Lambda triggered by S3, with secure secrets, HA, monitoring, and least-privilege IAM.",
+  "Parameters": {
+    "LambdaRuntime": {
+      "Type": "String",
+      "Default": "python3.12",
+      "Description": "Lambda function runtime version.",
+      "AllowedValues": [
+        "python3.12",
+        "nodejs20.x"
       ]
+    },
+    "LambdaHandler": {
+      "Type": "String",
+      "Default": "lambda_function.lambda_handler",
+      "Description": "The handler for the Lambda function executable."
+    },
+    "S3BucketName": {
+      "Type": "String",
+      "Default": "serverlessapp-bucket",
+      "Description": "Unique S3 bucket name for object triggers."
     }
   },
-  "Parameters": {
-    "EnvironmentSuffix": {
-      "Type": "String",
-      "Default": "dev",
-      "Description": "Environment suffix for resource naming (e.g., dev, staging, prod)"
+  "Mappings": {
+    "RegionMap": {
+      "us-west-2": {
+        "AZ1": "us-west-2a",
+        "AZ2": "us-west-2b"
+      }
     }
   },
   "Resources": {
-    "TurnAroundPromptTable": {
-      "Type": "AWS::DynamoDB::Table",
-      "DeletionPolicy": "Delete",
-      "UpdateReplacePolicy": "Delete",
+    "ServerlessAppBucket": {
+      "Type": "AWS::S3::Bucket",
       "Properties": {
-        "TableName": {
-          "Fn::Sub": "TurnAroundPromptTable${EnvironmentSuffix}"
+        "BucketName": {
+          "Ref": "S3BucketName"
         },
-        "BillingMode": "PAY_PER_REQUEST",
-        "AttributeDefinitions": [
+        "NotificationConfiguration": {
+          "LambdaConfigurations": [
+            {
+              "Event": "s3:ObjectCreated:*",
+              "Function": {
+                "Fn::GetAtt": [
+                  "ServerlessAppLambda",
+                  "Arn"
+                ]
+              }
+            }
+          ]
+        },
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256"
+              }
+            }
+          ]
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true
+        },
+        "Tags": [
           {
-            "AttributeName": "id",
-            "AttributeType": "S"
-          }
-        ],
-        "KeySchema": [
-          {
-            "AttributeName": "id",
-            "KeyType": "HASH"
+            "Key": "Name",
+            "Value": "ServerlessAppBucket"
           }
         ]
+      }
+    },
+    "ServerlessAppBucketInvokePermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "Action": "lambda:InvokeFunction",
+        "FunctionName": {
+          "Ref": "ServerlessAppLambda"
+        },
+        "Principal": "s3.amazonaws.com",
+        "SourceArn": {
+          "Fn::GetAtt": [
+            "ServerlessAppBucket",
+            "Arn"
+          ]
+        },
+        "SourceAccount": {
+          "Ref": "AWS::AccountId"
+        }
+      }
+    },
+    "ServerlessAppVPC": {
+      "Type": "AWS::EC2::VPC",
+      "Properties": {
+        "CidrBlock": "10.0.0.0/24",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "ServerlessAppVPC"
+          }
+        ]
+      }
+    },
+    "ServerlessAppSubnetAZ1": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "ServerlessAppVPC"
+        },
+        "CidrBlock": "10.0.0.0/26",
+        "AvailabilityZone": {
+          "Fn::FindInMap": [
+            "RegionMap",
+            "us-west-2",
+            "AZ1"
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "ServerlessAppSubnetAZ1"
+          }
+        ]
+      }
+    },
+    "ServerlessAppSubnetAZ2": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "ServerlessAppVPC"
+        },
+        "CidrBlock": "10.0.0.64/26",
+        "AvailabilityZone": {
+          "Fn::FindInMap": [
+            "RegionMap",
+            "us-west-2",
+            "AZ2"
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "ServerlessAppSubnetAZ2"
+          }
+        ]
+      }
+    },
+    "ServerlessAppInternetGateway": {
+      "Type": "AWS::EC2::InternetGateway",
+      "Properties": {
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "ServerlessAppInternetGateway"
+          }
+        ]
+      }
+    },
+    "ServerlessAppVPCGatewayAttachment": {
+      "Type": "AWS::EC2::VPCGatewayAttachment",
+      "Properties": {
+        "VpcId": {
+          "Ref": "ServerlessAppVPC"
+        },
+        "InternetGatewayId": {
+          "Ref": "ServerlessAppInternetGateway"
+        }
+      }
+    },
+    "ServerlessAppRouteTable": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": {
+          "Ref": "ServerlessAppVPC"
+        }
+      }
+    },
+    "ServerlessAppRoute": {
+      "Type": "AWS::EC2::Route",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "ServerlessAppRouteTable"
+        },
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "GatewayId": {
+          "Ref": "ServerlessAppInternetGateway"
+        }
+      }
+    },
+    "ServerlessAppSubnetRouteTableAssocAZ1": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "ServerlessAppSubnetAZ1"
+        },
+        "RouteTableId": {
+          "Ref": "ServerlessAppRouteTable"
+        }
+      }
+    },
+    "ServerlessAppSubnetRouteTableAssocAZ2": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "ServerlessAppSubnetAZ2"
+        },
+        "RouteTableId": {
+          "Ref": "ServerlessAppRouteTable"
+        }
+      }
+    },
+    "ServerlessAppLambdaSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Allow Lambda internet access",
+        "VpcId": {
+          "Ref": "ServerlessAppVPC"
+        },
+        "SecurityGroupEgress": [
+          {
+            "IpProtocol": "-1",
+            "CidrIp": "0.0.0.0/0"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "ServerlessAppLambdaSG"
+          }
+        ]
+      }
+    },
+    "ServerlessAppSecret": {
+      "Type": "AWS::SecretsManager::Secret",
+      "Properties": {
+        "Name": "ServerlessAppSecret",
+        "Description": "Sensitive information for ServerlessApp Lambda function.",
+        "GenerateSecretString": {
+          "SecretStringTemplate": "{\"api_key\": \"\"}",
+          "GenerateStringKey": "api_key",
+          "PasswordLength": 32
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "ServerlessAppSecret"
+          }
+        ]
+      }
+    },
+    "ServerlessAppLambdaRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "ServerlessAppLambdaPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "secretsmanager:GetSecretValue"
+                  ],
+                  "Resource": {
+                    "Ref": "ServerlessAppSecret"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogGroup",
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/ServerlessAppLambda:*"
+                    }
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetObject"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:aws:s3:::${S3BucketName}/*"
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        "Path": "/",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "ServerlessAppLambdaRole"
+          }
+        ]
+      }
+    },
+    "ServerlessAppLambda": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": "ServerlessAppLambda",
+        "Description": "ServerlessApp Lambda triggered by S3, using secrets, VPC-aware, secure.",
+        "Role": {
+          "Fn::GetAtt": [
+            "ServerlessAppLambdaRole",
+            "Arn"
+          ]
+        },
+        "Runtime": {
+          "Ref": "LambdaRuntime"
+        },
+        "Handler": {
+          "Ref": "LambdaHandler"
+        },
+        "Timeout": 60,
+        "MemorySize": 256,
+        "Code": {
+          "ZipFile": "import boto3\nimport os\nimport json\n\ndef lambda_handler(event, context):\n    secret_name = os.environ['SERVERLESSAPP_SECRET_ARN']\n    # Get secret value\n    session = boto3.session.Session()\n    client = session.client(service_name='secretsmanager')\n    get_secret_value_response = client.get_secret_value(SecretId=secret_name)\n    secret = json.loads(get_secret_value_response['SecretString'])\n    # Process S3 event (get bucket and key)\n    for record in event['Records']:\n        s3 = boto3.client('s3')\n        bucket = record['s3']['bucket']['name']\n        key = record['s3']['object']['key']\n        # For example: read file\n        obj = s3.get_object(Bucket=bucket, Key=key)\n        data = obj['Body'].read()\n        # ... further processing ...\n    return {'statusCode': 200, 'body': 'Processed.'}\n"
+        },
+        "Environment": {
+          "Variables": {
+            "SERVERLESSAPP_SECRET_ARN": {
+              "Ref": "ServerlessAppSecret"
+            }
+          }
+        },
+        "VpcConfig": {
+          "SecurityGroupIds": [
+            {
+              "Ref": "ServerlessAppLambdaSecurityGroup"
+            }
+          ],
+          "SubnetIds": [
+            {
+              "Ref": "ServerlessAppSubnetAZ1"
+            },
+            {
+              "Ref": "ServerlessAppSubnetAZ2"
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "ServerlessAppLambda"
+          }
+        ]
+      }
+    },
+    "ServerlessAppLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": "/aws/lambda/ServerlessAppLambda",
+        "RetentionInDays": 7,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "ServerlessAppLogGroup"
+          }
+        ]
+      }
+    },
+    "ServerlessAppLambdaErrorAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": "ServerlessAppLambdaErrorAlarm",
+        "AlarmDescription": "Alarm if error count > 1 in 5-minute period",
+        "Namespace": "AWS/Lambda",
+        "MetricName": "Errors",
+        "Dimensions": [
+          {
+            "Name": "FunctionName",
+            "Value": {
+              "Ref": "ServerlessAppLambda"
+            }
+          }
+        ],
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "Threshold": 1,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "ServerlessAppLambdaInvocationsAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": "ServerlessAppLambdaInvocationsAlarm",
+        "AlarmDescription": "Alarm if invocation count > 100 in 5 minutes",
+        "Namespace": "AWS/Lambda",
+        "MetricName": "Invocations",
+        "Dimensions": [
+          {
+            "Name": "FunctionName",
+            "Value": {
+              "Ref": "ServerlessAppLambda"
+            }
+          }
+        ],
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "Threshold": 100,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "TreatMissingData": "notBreaching"
       }
     }
   },
   "Outputs": {
-    "TurnAroundPromptTableName": {
-      "Description": "Name of the DynamoDB table",
+    "S3BucketName": {
+      "Description": "ServerlessApp S3 bucket name for triggering uploads",
       "Value": {
-        "Ref": "TurnAroundPromptTable"
-      },
-      "Export": {
-        "Name": {
-          "Fn::Sub": "${AWS::StackName}-TurnAroundPromptTableName"
-        }
+        "Ref": "ServerlessAppBucket"
       }
     },
-    "TurnAroundPromptTableArn": {
-      "Description": "ARN of the DynamoDB table",
+    "LambdaFunctionName": {
+      "Description": "ServerlessApp Lambda function name",
+      "Value": {
+        "Ref": "ServerlessAppLambda"
+      }
+    },
+    "LambdaFunctionArn": {
+      "Description": "ServerlessApp Lambda function ARN",
       "Value": {
         "Fn::GetAtt": [
-          "TurnAroundPromptTable",
+          "ServerlessAppLambda",
           "Arn"
         ]
-      },
-      "Export": {
-        "Name": {
-          "Fn::Sub": "${AWS::StackName}-TurnAroundPromptTableArn"
-        }
       }
     },
-    "StackName": {
-      "Description": "Name of this CloudFormation stack",
+    "SecretArn": {
+      "Description": "ARN of the ServerlessApp Lambda Secret",
       "Value": {
-        "Ref": "AWS::StackName"
-      },
-      "Export": {
-        "Name": {
-          "Fn::Sub": "${AWS::StackName}-StackName"
-        }
+        "Ref": "ServerlessAppSecret"
       }
     },
-    "EnvironmentSuffix": {
-      "Description": "Environment suffix used for this deployment",
+    "Alarms": {
+      "Description": "CloudWatch Alarms monitoring Lambda errors and invocations",
       "Value": {
-        "Ref": "EnvironmentSuffix"
-      },
-      "Export": {
-        "Name": {
-          "Fn::Sub": "${AWS::StackName}-EnvironmentSuffix"
-        }
+        "Fn::Join": [
+          ", ",
+          [
+            {
+              "Ref": "ServerlessAppLambdaErrorAlarm"
+            },
+            {
+              "Ref": "ServerlessAppLambdaInvocationsAlarm"
+            }
+          ]
+        ]
       }
     }
   }

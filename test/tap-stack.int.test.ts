@@ -1,13 +1,28 @@
 // Configuration - These are coming from cfn-outputs after stack deployment
 import fs from 'fs';
+import path from 'path';
 
-// Mock the outputs for integration testing (in real deployment, these would come from AWS)
-const mockOutputs = {
-  'S3BucketName': 'serverlessapp-bucket-test',
-  'LambdaFunctionName': 'ServerlessAppLambda',
-  'LambdaFunctionArn': 'arn:aws:lambda:us-west-2:123456789012:function:ServerlessAppLambda',
-  'SecretArn': 'arn:aws:secretsmanager:us-west-2:123456789012:secret:ServerlessAppSecret-ABC123'
-};
+// In real integration tests, these outputs would come from CloudFormation stack outputs
+// For testing purposes, we validate against the template structure
+let template: any;
+let mockOutputs: any;
+
+beforeAll(() => {
+  // Load the CloudFormation template to validate integration test expectations
+  const templatePath = path.join(__dirname, '../lib/TapStack.json');
+  const templateContent = fs.readFileSync(templatePath, 'utf8');
+  template = JSON.parse(templateContent);
+  
+  // Mock the outputs for integration testing (in real deployment, these would come from AWS)
+  mockOutputs = {
+    'S3BucketName': 'serverlessapp-bucket-test',
+    'LambdaFunctionName': 'ServerlessAppLambda',
+    'LambdaFunctionArn': 'arn:aws:lambda:us-west-2:123456789012:function:ServerlessAppLambda',
+    'SecretArn': 'arn:aws:secretsmanager:us-west-2:123456789012:secret:ServerlessAppSecret-ABC123',
+    'ErrorAlarmName': 'ServerlessAppLambdaErrorAlarm',
+    'InvocationsAlarmName': 'ServerlessAppLambdaInvocationsAlarm'
+  };
+});
 
 // Get environment suffix from environment variable (set by CI/CD pipeline)
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
@@ -149,18 +164,102 @@ describe('ServerlessApp Integration Tests', () => {
     test('should generate CloudWatch metrics', async () => {
       // In real implementation, we would verify metrics are being published
       expect(mockOutputs.LambdaFunctionName).toBeDefined();
+      
+      // Verify template has the necessary CloudWatch resources
+      expect(template.Resources.ServerlessAppLogGroup).toBeDefined();
+      expect(template.Resources.ServerlessAppLambdaErrorAlarm).toBeDefined();
+      expect(template.Resources.ServerlessAppLambdaInvocationsAlarm).toBeDefined();
     });
 
     test('should trigger alarms on error conditions', async () => {
       // In real implementation, we would simulate error conditions
       // and verify alarms are triggered
       expect(mockOutputs.LambdaFunctionArn).toBeDefined();
+      
+      // Verify alarm configuration in template
+      const errorAlarm = template.Resources.ServerlessAppLambdaErrorAlarm;
+      expect(errorAlarm.Properties.Threshold).toBe(1);
+      expect(errorAlarm.Properties.ComparisonOperator).toBe('GreaterThanThreshold');
     });
 
     test('should maintain audit logs', async () => {
       // In real implementation, we would verify CloudTrail logging
       // and Lambda execution logs
       expect(mockOutputs.LambdaFunctionName).toBeDefined();
+      
+      // Verify log group configuration
+      const logGroup = template.Resources.ServerlessAppLogGroup;
+      expect(logGroup.Properties.LogGroupName).toBe('/aws/lambda/ServerlessAppLambda');
+      expect(logGroup.Properties.RetentionInDays).toBe(7);
+    });
+  });
+
+  describe('Template Validation for Integration', () => {
+    test('should have all expected outputs for integration tests', async () => {
+      const requiredOutputs = ['S3BucketName', 'LambdaFunctionName', 'LambdaFunctionArn', 'SecretArn', 'Alarms'];
+      
+      requiredOutputs.forEach(outputName => {
+        expect(template.Outputs[outputName]).toBeDefined();
+      });
+    });
+
+    test('should have proper resource dependencies', async () => {
+      // Lambda should depend on IAM role
+      const lambda = template.Resources.ServerlessAppLambda;
+      expect(lambda.Properties.Role).toBeDefined();
+      
+      // S3 bucket should have lambda permission
+      expect(template.Resources.ServerlessAppBucketInvokePermission).toBeDefined();
+      
+      // Lambda should have VPC configuration
+      expect(lambda.Properties.VpcConfig).toBeDefined();
+    });
+
+    test('should validate cross-resource references', async () => {
+      const lambda = template.Resources.ServerlessAppLambda;
+      const bucket = template.Resources.ServerlessAppBucket;
+      
+      // Lambda should reference the secret ARN in environment
+      expect(lambda.Properties.Environment.Variables.SERVERLESSAPP_SECRET_ARN).toBeDefined();
+      
+      // S3 bucket should reference Lambda function for notifications
+      expect(bucket.Properties.NotificationConfiguration.LambdaConfigurations[0].Function).toBeDefined();
+    });
+  });
+
+  describe('Deployment Readiness Tests', () => {
+    test('should have all required parameters with defaults', async () => {
+      const params = template.Parameters;
+      
+      expect(params.LambdaRuntime.Default).toBe('python3.12');
+      expect(params.LambdaHandler.Default).toBe('lambda_function.lambda_handler');
+      expect(params.S3BucketName.Default).toBe('serverlessapp-bucket');
+    });
+
+    test('should have proper resource tags for cost tracking', async () => {
+      const taggedResources = [
+        'ServerlessAppBucket',
+        'ServerlessAppVPC', 
+        'ServerlessAppLambda',
+        'ServerlessAppSecret',
+        'ServerlessAppLogGroup'
+      ];
+      
+      taggedResources.forEach(resourceName => {
+        const resource = template.Resources[resourceName];
+        if (resource && resource.Properties.Tags) {
+          expect(resource.Properties.Tags.length).toBeGreaterThan(0);
+          const nameTag = resource.Properties.Tags.find((tag: any) => tag.Key === 'Name');
+          expect(nameTag).toBeDefined();
+        }
+      });
+    });
+
+    test('should have proper region targeting', async () => {
+      // Template should target us-west-2 as specified in PROMPT.md
+      expect(template.Mappings.RegionMap['us-west-2']).toBeDefined();
+      expect(template.Mappings.RegionMap['us-west-2'].AZ1).toBe('us-west-2a');
+      expect(template.Mappings.RegionMap['us-west-2'].AZ2).toBe('us-west-2b');
     });
   });
 });
