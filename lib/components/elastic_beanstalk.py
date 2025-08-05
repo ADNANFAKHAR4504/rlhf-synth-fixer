@@ -23,8 +23,8 @@ class ElasticBeanstalkInfrastructure(pulumi.ComponentResource):
     private_subnet_ids: List[Output[str]],
     eb_service_role_arn: Output[str],
     eb_instance_profile_name: Output[str],
-    alb_security_group_id: Output[str], # Added: ALB Security Group ID
-    eb_security_group_id: Output[str],   # Added: EB Instance Security Group ID
+    alb_security_group_id: Output[str],
+    eb_security_group_id: Output[str],
     tags: dict,
     opts: Optional[ResourceOptions] = None
   ):
@@ -38,8 +38,8 @@ class ElasticBeanstalkInfrastructure(pulumi.ComponentResource):
     self.private_subnet_ids = private_subnet_ids
     self.eb_service_role_arn = eb_service_role_arn
     self.eb_instance_profile_name = eb_instance_profile_name
-    self.alb_security_group_id = alb_security_group_id # Stored for use in config template
-    self.eb_security_group_id = eb_security_group_id   # Stored for use in config template
+    self.alb_security_group_id = alb_security_group_id
+    self.eb_security_group_id = eb_security_group_id
     self.tags = tags
     self.region_suffix = region.replace('-', '').replace('gov', '')
     self.environment_suffix = f"{environment_suffix}-{self._random_suffix()}"
@@ -146,17 +146,17 @@ class ElasticBeanstalkInfrastructure(pulumi.ComponentResource):
       aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
         namespace="aws:ec2:vpc",
         name="AssociatePublicIpAddress",
-        value="false" # Instances in private subnets should not have public IPs
+        value="false"
       ),
       aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
         namespace="aws:elasticbeanstalk:environment",
         name="LoadBalancerType",
-        value="application" # Explicitly use Application Load Balancer
+        value="application"
       ),
       aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
         namespace="aws:elasticbeanstalk:environment",
         name="EnvironmentType",
-        value="LoadBalanced" # Essential for multi-instance environments
+        value="LoadBalanced"
       ),
       aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
         namespace="aws:autoscaling:asg",
@@ -302,8 +302,8 @@ class ElasticBeanstalkInfrastructure(pulumi.ComponentResource):
       elb_subnet_setting,
       service_role_setting,
       instance_profile_setting,
-      instance_sg_setting, # Include the instance security group setting
-      alb_sg_setting       # Include the ALB security group setting
+      instance_sg_setting,
+      alb_sg_setting
     ).apply(lambda dynamic_settings: dynamic_settings + static_settings)
 
     self.config_template = aws.elasticbeanstalk.ConfigurationTemplate(
@@ -323,7 +323,9 @@ class ElasticBeanstalkInfrastructure(pulumi.ComponentResource):
       template_name=self.config_template.name,
       tier="WebServer",
       tags=self.tags,
-      opts=ResourceOptions(parent=self)
+      # FIX: Add this option to force replacement of the environment
+      # This is necessary to break the dependency cycle with the subnets.
+      opts=ResourceOptions(parent=self, delete_before_replace=True)
     )
 
   @property
