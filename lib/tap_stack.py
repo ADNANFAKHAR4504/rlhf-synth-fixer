@@ -88,6 +88,7 @@ class TapStack(cdk.Stack):
     self.iam_roles = self._create_iam_roles()
     self.cloudwatch_resources = self._create_cloudwatch_resources()
     self.ec2_instances = self._create_ec2_instances()
+    self.cloudtrail = self._create_cloudtrail()
 
     # Create outputs
     self._create_outputs()
@@ -617,6 +618,67 @@ class TapStack(cdk.Stack):
         "launch_template": launch_template,
         "instance": instance
     }
+
+  def _create_cloudtrail(self) -> logs.LogGroup:
+    """Create CloudTrail for auditing IAM and AWS activity"""
+
+    # CloudTrail log group
+    trail_log_group = logs.LogGroup(
+      self, "CloudTrailLogGroup",
+      log_group_name="/secureapp/cloudtrail",
+      encryption_key=self.kms_key,
+      retention=logs.RetentionDays.ONE_YEAR,
+      removal_policy=RemovalPolicy.DESTROY
+    )
+
+    # S3 bucket for CloudTrail logs
+    trail_bucket = s3.Bucket(
+      self, "CloudTrailBucket",
+      bucket_name=f"secureapp-cloudtrail-{self.account}-{self.region}",
+      encryption=s3.BucketEncryption.KMS,
+      encryption_key=self.kms_key,
+      block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
+      versioned=True,
+      server_access_logs_bucket=self.s3_buckets["logs_bucket"],
+      server_access_logs_prefix="cloudtrail-access-logs/",
+      removal_policy=RemovalPolicy.DESTROY
+    )
+
+    # Create CloudTrail
+    trail = cloudwatch.CfnTrail(
+      self, "SecureAppTrail",
+      trail_name="secureapp-trail",
+      s3_bucket_name=trail_bucket.bucket_name,
+      cloud_watch_logs_log_group_arn=trail_log_group.log_group_arn,
+      cloud_watch_logs_role_arn=self._create_cloudtrail_log_role().role_arn,
+      is_logging=True,
+      is_multi_region_trail=True,
+      include_global_service_events=True,
+      enable_log_file_validation=True
+    )
+
+    return trail_log_group
+
+  def _create_cloudtrail_log_role(self) -> iam.Role:
+    """IAM role to allow CloudTrail to publish logs to CloudWatch"""
+
+    role = iam.Role(
+      self, "CloudTrailLogRole",
+      role_name="secureapp-cloudtrail-log-role",
+      assumed_by=iam.ServicePrincipal("cloudtrail.amazonaws.com")
+    )
+
+    role.add_to_policy(iam.PolicyStatement(
+      effect=iam.Effect.ALLOW,
+      actions=[
+        "logs:CreateLogStream",
+        "logs:PutLogEvents"
+      ],
+      resources=["*"]
+    ))
+
+    return role
+
 
   def _create_outputs(self) -> None:
     """Create CloudFormation outputs"""
