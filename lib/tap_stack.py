@@ -69,6 +69,7 @@ class TapStack(pulumi.ComponentResource):
     project_name = pulumi.get_project()
     stack_name = pulumi.get_stack()
     region = "us-east-1" 
+    stage_name = f"{self.environment_suffix}-{self.project_name}-{self.stack_name}-api-stage"
 
     # Tags for all resources
     common_tags = {
@@ -553,7 +554,7 @@ class TapStack(pulumi.ComponentResource):
     api_deployment = aws.apigateway.Deployment(
         "api-deployment",
         rest_api=api_gateway.id,
-        stage_name=f"{project_name}-{stack_name}-{self.environment_suffix}-api-stage",
+        stage_name= f"{self.stage_name}",
         opts=pulumi.ResourceOptions(depends_on=[
             health_integration,
             process_integration,
@@ -573,7 +574,7 @@ class TapStack(pulumi.ComponentResource):
         "api-stage",
         deployment=api_deployment.id,
         rest_api=api_gateway.id,
-        stage_name=f"{project_name}-{stack_name}-{self.environment_suffix}-api-stage",
+        stage_name=f"{self.stage_name}",
         access_log_settings=aws.apigateway.StageAccessLogSettingsArgs(
             destination_arn=api_log_group.arn,
             format=json.dumps({
@@ -683,8 +684,7 @@ class TapStack(pulumi.ComponentResource):
     pulumi.export("s3_bucket_arn", s3_bucket.arn)
     pulumi.export("api_gateway_url", api_deployment.invoke_url)
     pulumi.export("api_gateway_stage_url", Output.concat(
-        "https://", api_gateway.id, ".execute-api.", region,
-        ".amazonaws.com/prod"
+    "https://", api_gateway.id, f".execute-api.{self.region}.amazonaws.com/", f"{self.stage_name}" 
     ))
     pulumi.export("s3_processor_lambda_arn", s3_processor_lambda.arn)
     pulumi.export("api_handler_lambda_arn", api_handler_lambda.arn)
