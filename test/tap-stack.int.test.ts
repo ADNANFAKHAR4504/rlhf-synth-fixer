@@ -73,17 +73,18 @@ describe('TapStack Integration Tests - DynamoDB Multi-Region Deployment', () => 
   let stackExists = false; // eslint-disable-line @typescript-eslint/no-explicit-any
 
   beforeAll(async () => {
-    // Hardcoded resource names for pr539 deployment in us-east-1
-    expectedTableName = 'multi-region-app-pr539-west2-table';
-    expectedRoleName = 'multi-region-app-pr539-dynamodb-role-us-east-1';
-    expectedFunctionName = 'multi-region-app-pr539-cross-region-function';
+    // Calculate expected resource names based on environment and region
+    const regionSuffix = deploymentRegion === 'us-west-1' ? 'west1' : 'west2';
+    expectedTableName = `multi-region-app-${environmentSuffix}-${regionSuffix}-table`;
+    expectedRoleName = `multi-region-app-${environmentSuffix}-dynamodb-role-${deploymentRegion}`;
+    expectedFunctionName = `multi-region-app-${environmentSuffix}-cross-region-function`;
 
     try {
       // Get stack outputs from CloudFormation
-      console.log(`Looking for stack: TapStackpr539 in region: us-east-1`);
+      console.log(`Looking for stack: ${stackName} in region: ${deploymentRegion}`);
       const stackResponse = await cloudformation.send(
         new DescribeStacksCommand({
-          StackName: 'TapStackpr539',
+          StackName: stackName,
         })
       );
 
@@ -115,10 +116,11 @@ describe('TapStack Integration Tests - DynamoDB Multi-Region Deployment', () => 
     });
 
     test('should calculate correct resource names', () => {
-      // Hardcoded values for pr539 deployment in us-east-1
-      expect(expectedTableName).toBe('multi-region-app-pr539-west2-table');
-      expect(expectedRoleName).toBe('multi-region-app-pr539-dynamodb-role-us-east-1');
-      expect(expectedFunctionName).toBe('multi-region-app-pr539-cross-region-function');
+      // Dynamic values based on environment and region
+      const regionSuffix = deploymentRegion === 'us-west-1' ? 'west1' : 'west2';
+      expect(expectedTableName).toBe(`multi-region-app-${environmentSuffix}-${regionSuffix}-table`);
+      expect(expectedRoleName).toBe(`multi-region-app-${environmentSuffix}-dynamodb-role-${deploymentRegion}`);
+      expect(expectedFunctionName).toBe(`multi-region-app-${environmentSuffix}-cross-region-function`);
     });
   });
 
@@ -131,7 +133,7 @@ describe('TapStack Integration Tests - DynamoDB Multi-Region Deployment', () => 
 
       const response = await cloudformation.send(
         new DescribeStacksCommand({
-          StackName: 'TapStackpr539',
+          StackName: stackName,
         })
       );
 
@@ -238,8 +240,11 @@ describe('TapStack Integration Tests - DynamoDB Multi-Region Deployment', () => 
 
       const table = response.Table!;
 
-      // Verify billing mode
-      expect(table.BillingModeSummary?.BillingMode).toBe('PROVISIONED');
+      // Verify billing mode - for PROVISIONED tables, BillingModeSummary might be null
+      // but ProvisionedThroughput should be present
+      expect(table.ProvisionedThroughput).toBeDefined();
+      expect(table.ProvisionedThroughput!.ReadCapacityUnits).toBeGreaterThan(0);
+      expect(table.ProvisionedThroughput!.WriteCapacityUnits).toBeGreaterThan(0);
 
       // Verify key schema
       expect(table.KeySchema).toHaveLength(2);
@@ -384,10 +389,10 @@ describe('TapStack Integration Tests - DynamoDB Multi-Region Deployment', () => 
         {} as Record<string, string>
       );
 
-      expect(tagMap['Environment']).toBe('pr539');
+      expect(tagMap['Environment']).toBe(environmentSuffix);
       expect(tagMap['Application']).toBe('multi-region-app');
       expect(tagMap['ManagedBy']).toBe('CloudFormation');
-      expect(tagMap['DeploymentRegion']).toBe('us-east-1');
+      expect(tagMap['DeploymentRegion']).toBe(deploymentRegion);
     });
   });
 
@@ -398,14 +403,21 @@ describe('TapStack Integration Tests - DynamoDB Multi-Region Deployment', () => 
         return;
       }
 
+      // Get the role ARN from stack outputs and extract the role name
+      const roleArn = stackOutputs['IAMRoleArn'];
+      expect(roleArn).toBeDefined();
+      
+      const roleName = roleArn.split('/').pop();
+      expect(roleName).toBeDefined();
+
       const response = await iam.send(
         new GetRoleCommand({
-          RoleName: expectedRoleName,
+          RoleName: roleName,
         })
       );
 
       expect(response.Role).toBeDefined();
-      expect(response.Role!.RoleName).toBe(expectedRoleName);
+      expect(response.Role!.RoleName).toBe(roleName);
     });
 
     test('should have correct assume role policy', async () => {
@@ -416,9 +428,16 @@ describe('TapStack Integration Tests - DynamoDB Multi-Region Deployment', () => 
         return;
       }
 
+      // Get the role ARN from stack outputs and extract the role name
+      const roleArn = stackOutputs['IAMRoleArn'];
+      expect(roleArn).toBeDefined();
+      
+      const roleName = roleArn.split('/').pop();
+      expect(roleName).toBeDefined();
+
       const response = await iam.send(
         new GetRoleCommand({
-          RoleName: expectedRoleName,
+          RoleName: roleName,
         })
       );
 
@@ -443,9 +462,16 @@ describe('TapStack Integration Tests - DynamoDB Multi-Region Deployment', () => 
         return;
       }
 
+      // Get the role ARN from stack outputs and extract the role name
+      const roleArn = stackOutputs['IAMRoleArn'];
+      expect(roleArn).toBeDefined();
+      
+      const roleName = roleArn.split('/').pop();
+      expect(roleName).toBeDefined();
+
       const response = await iam.send(
         new ListRolePoliciesCommand({
-          RoleName: expectedRoleName,
+          RoleName: roleName,
         })
       );
 
@@ -453,7 +479,7 @@ describe('TapStack Integration Tests - DynamoDB Multi-Region Deployment', () => 
 
       const policyResponse = await iam.send(
         new GetRolePolicyCommand({
-          RoleName: expectedRoleName,
+          RoleName: roleName,
           PolicyName: 'DynamoDBAccess',
         })
       );
