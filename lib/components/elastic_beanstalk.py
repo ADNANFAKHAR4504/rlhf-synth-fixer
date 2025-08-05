@@ -9,20 +9,22 @@ import pulumi_aws as aws
 from pulumi import ResourceOptions, Output
 
 class ElasticBeanstalkInfrastructure(pulumi.ComponentResource):
-  def __init__(self, 
-               name: str,
-               region: str,
-               is_primary: bool,
-               environment: str,
-               vpc_id: Output[str],
-               public_subnet_ids: List[Output[str]],
-               private_subnet_ids: List[Output[str]],
-               alb_security_group_id: Output[str],
-               eb_security_group_id: Output[str],
-               eb_service_role_arn: Output[str],
-               eb_instance_profile_name: Output[str],
-               tags: dict,
-               opts: Optional[ResourceOptions] = None):
+  def __init__(
+    self,
+    name: str,
+    region: str,
+    is_primary: bool,
+    environment: str,
+    vpc_id: Output[str],
+    public_subnet_ids: List[Output[str]],
+    private_subnet_ids: List[Output[str]],
+    alb_security_group_id: Output[str],
+    eb_security_group_id: Output[str],
+    eb_service_role_arn: Output[str],
+    eb_instance_profile_name: Output[str],
+    tags: dict,
+    opts: Optional[ResourceOptions] = None
+  ):
     super().__init__('nova:infrastructure:ElasticBeanstalk', name, None, opts)
 
     self.region = region
@@ -39,11 +41,9 @@ class ElasticBeanstalkInfrastructure(pulumi.ComponentResource):
     self.region_suffix = region.replace('-', '').replace('gov', '')
 
     self._create_application()
-    self._create_application_version()
     self._create_configuration_template()
     self._create_environment()
 
-    # Register outputs
     self.register_outputs({
       'application_name': self.application.name,
       'environment_name': self.eb_environment.name,
@@ -57,29 +57,6 @@ class ElasticBeanstalkInfrastructure(pulumi.ComponentResource):
       f"eb-app-{self.region_suffix}",
       name=f"nova-app-{self.region_suffix}",
       description=f"Nova Web Application - {self.region_suffix.title()} Region",
-      application_version_lifecycle_config=aws.elasticbeanstalk.ApplicationApplicationVersionLifecycleConfigArgs(
-        service_role=self.eb_service_role_arn,
-        max_count=10,
-        delete_source_from_s3=True
-      ),
-      tags=self.tags,
-      opts=ResourceOptions(parent=self)
-    )
-
-  def _create_application_version(self):
-    """Create application version using sample application"""
-    # For GovCloud, we need to use a sample app or custom deployment bucket
-    # Using a simple Node.js sample application
-    self.app_version = aws.elasticbeanstalk.ApplicationVersion(
-      f"eb-app-version-{self.region_suffix}",
-      application=self.application.name,
-      name=f"v1-{self.region_suffix}",
-      description="Initial Nova Web Application version",
-      # Note: In production, you would use your own S3 bucket with your application code
-      source_bundle=aws.elasticbeanstalk.ApplicationVersionSourceBundleArgs(
-        bucket=f"elasticbeanstalk-samples-{self.region}",
-        key="nodejs-sample-app.zip"
-      ),
       tags=self.tags,
       opts=ResourceOptions(parent=self)
     )
@@ -92,7 +69,6 @@ class ElasticBeanstalkInfrastructure(pulumi.ComponentResource):
       application=self.application.name,
       solution_stack_name="64bit Amazon Linux 2 v5.8.0 running Node.js 18",
       settings=[
-        # VPC Configuration
         aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
           namespace="aws:ec2:vpc",
           name="VPCId",
@@ -117,8 +93,6 @@ class ElasticBeanstalkInfrastructure(pulumi.ComponentResource):
           name="AssociatePublicIpAddress",
           value="false"
         ),
-        
-        # Auto Scaling Configuration
         aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
           namespace="aws:autoscaling:asg",
           name="MinSize",
@@ -134,8 +108,6 @@ class ElasticBeanstalkInfrastructure(pulumi.ComponentResource):
           name="Availability Zones",
           value="Any 2"
         ),
-        
-        # Auto Scaling Triggers
         aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
           namespace="aws:autoscaling:trigger",
           name="MeasureName",
@@ -181,8 +153,6 @@ class ElasticBeanstalkInfrastructure(pulumi.ComponentResource):
           name="EvaluationPeriods",
           value="1"
         ),
-        
-        # Instance Configuration
         aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
           namespace="aws:autoscaling:launchconfiguration",
           name="InstanceType",
@@ -208,8 +178,6 @@ class ElasticBeanstalkInfrastructure(pulumi.ComponentResource):
           name="RootVolumeSize",
           value="20"
         ),
-        
-        # Load Balancer Configuration
         aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
           namespace="aws:elasticbeanstalk:environment",
           name="LoadBalancerType",
@@ -230,8 +198,6 @@ class ElasticBeanstalkInfrastructure(pulumi.ComponentResource):
           name="Protocol",
           value="HTTP"
         ),
-        
-        # Health Check Configuration
         aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
           namespace="aws:elasticbeanstalk:healthreporting:system",
           name="SystemType",
@@ -247,8 +213,6 @@ class ElasticBeanstalkInfrastructure(pulumi.ComponentResource):
           name="IdleTimeout",
           value="60"
         ),
-        
-        # Deployment Configuration
         aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
           namespace="aws:elasticbeanstalk:command",
           name="DeploymentPolicy",
@@ -284,15 +248,11 @@ class ElasticBeanstalkInfrastructure(pulumi.ComponentResource):
           name="RollingUpdateType",
           value="Health"
         ),
-        
-        # Service Role
         aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
           namespace="aws:elasticbeanstalk:environment",
           name="ServiceRole",
           value=self.eb_service_role_arn
         ),
-        
-        # Environment Variables for compliance
         aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
           namespace="aws:elasticbeanstalk:application:environment",
           name="NODE_ENV",
@@ -308,8 +268,6 @@ class ElasticBeanstalkInfrastructure(pulumi.ComponentResource):
           name="REGION",
           value=self.region
         ),
-        
-        # Logging Configuration
         aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
           namespace="aws:elasticbeanstalk:cloudwatch:logs",
           name="StreamLogs",
@@ -337,13 +295,11 @@ class ElasticBeanstalkInfrastructure(pulumi.ComponentResource):
       name=f"nova-env-{self.region_suffix}",
       application=self.application.name,
       template_name=self.config_template.name,
-      version_label=self.app_version.name,
       tier="WebServer",
       tags=self.tags,
       opts=ResourceOptions(parent=self)
     )
 
-  # Properties for easy access
   @property
   def application_name(self):
     return self.application.name
