@@ -24,7 +24,7 @@ QA expert that ensures IaC meets quality standards and requirements.
 
 ### Phase 3: Test Coverage
 
-- Analyze integration test coverage for all resources
+- Analyze integration test coverage for all resources (Note: Integration should use stack output file to test live resource and it should not use any mocks)
 - Generate coverage report: Requirement | Covered? | Test Name | Notes
 - Provide Ready/Pending recommendation
 
