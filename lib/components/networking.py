@@ -26,22 +26,24 @@ class NetworkingInfrastructure(pulumi.ComponentResource):
 
     self.provider = opts.provider if opts else None
     self.vpc_cidr = "10.0.0.0/16" if is_primary else "10.1.0.0/16"
-    
+
     self.public_subnets = []
     self.private_subnets = []
     self.nat_gateways = []
     self.private_rts = []
-
+    
     self._create_vpc()
+    self._create_subnets()
     self._create_internet_gateway()
+    self._create_nat_gateways()
+    self._create_route_tables()
     self._create_security_groups()
-    self._create_network_resources_from_azs()
 
     self.register_outputs({
       'vpc_id': self.vpc.id,
       'vpc_cidr': self.vpc.cidr_block,
-      'public_subnet_ids': pulumi.Output.all(*self.public_subnets).apply(lambda subnets: [s.id for s in subnets]),
-      'private_subnet_ids': pulumi.Output.all(*self.private_subnets).apply(lambda subnets: [s.id for s in subnets]),
+      'public_subnet_ids': [subnet.id for subnet in self.public_subnets],
+      'private_subnet_ids': [subnet.id for subnet in self.private_subnets],
       'alb_security_group_id': self.alb_security_group.id,
       'eb_security_group_id': self.eb_security_group.id
     })
@@ -57,6 +59,47 @@ class NetworkingInfrastructure(pulumi.ComponentResource):
       opts=ResourceOptions(parent=self)
     )
 
+  def _create_subnets(self):
+    """Create public and private subnets across multiple AZs"""
+    # FIX: Correctly get availability zones. The function returns a standard object.
+    azs = aws.get_availability_zones(
+      state="available",
+      opts=InvokeOptions(provider=self.provider)
+    )
+
+    # Use min(2, len(azs.names)) to handle regions with fewer than 2 AZs.
+    num_azs_to_use = min(2, len(azs.names))
+    
+    base = 0 if self.is_primary else 1
+    public_base = 100
+    private_base = 120
+
+    for i in range(num_azs_to_use):
+      az_name = azs.names[i]
+      public_cidr = f"10.{base}.{public_base + i}.0/24"
+      private_cidr = f"10.{base}.{private_base + i}.0/24"
+
+      public_subnet = aws.ec2.Subnet(
+        f"public-subnet-{i}-{self.region_suffix}",
+        vpc_id=self.vpc.id,
+        cidr_block=public_cidr,
+        availability_zone=az_name,
+        map_public_ip_on_launch=True,
+        tags={**self.tags, "Name": f"nova-public-{i}-{self.region_suffix}"},
+        opts=ResourceOptions(parent=self, provider=self.provider)
+      )
+      self.public_subnets.append(public_subnet)
+
+      private_subnet = aws.ec2.Subnet(
+        f"private-subnet-{i}-{self.region_suffix}",
+        vpc_id=self.vpc.id,
+        cidr_block=private_cidr,
+        availability_zone=az_name,
+        tags={**self.tags, "Name": f"nova-private-{i}-{self.region_suffix}"},
+        opts=ResourceOptions(parent=self, provider=self.provider)
+      )
+      self.private_subnets.append(private_subnet)
+
   def _create_internet_gateway(self):
     """Create Internet Gateway for public internet access"""
     self.igw = aws.ec2.InternetGateway(
@@ -65,7 +108,81 @@ class NetworkingInfrastructure(pulumi.ComponentResource):
       tags={**self.tags, "Name": f"nova-igw-{self.region_suffix}"},
       opts=ResourceOptions(parent=self, provider=self.provider)
     )
-    
+
+  def _create_nat_gateways(self):
+    """Create NAT Gateways for private subnet internet access"""
+    # Create one NAT Gateway per public subnet
+    for i, public_subnet in enumerate(self.public_subnets):
+      eip = aws.ec2.Eip(
+        f"nat-eip-{i}-{self.region_suffix}",
+        domain="vpc",
+        tags={**self.tags, "Name": f"nova-nat-eip-{i}-{self.region_suffix}"},
+        opts=ResourceOptions(
+          parent=self,
+          provider=self.provider,
+          delete_before_replace=True  
+        )
+      )
+
+      nat_gw = aws.ec2.NatGateway(
+        f"nat-gw-{i}-{self.region_suffix}",
+        allocation_id=eip.id,
+        subnet_id=public_subnet.id,
+        tags={**self.tags, "Name": f"nova-nat-gw-{i}-{self.region_suffix}"},
+        opts=ResourceOptions(
+          parent=self,
+          provider=self.provider,
+          delete_before_replace=True
+        )
+      )
+      self.nat_gateways.append(nat_gw)
+
+  def _create_route_tables(self):
+    """Create and configure route tables"""
+    self.public_rt = aws.ec2.RouteTable(
+      f"public-rt-{self.region_suffix}",
+      vpc_id=self.vpc.id,
+      routes=[
+        aws.ec2.RouteTableRouteArgs(
+          cidr_block="0.0.0.0/0",
+          gateway_id=self.igw.id
+        )
+      ],
+      tags={**self.tags, "Name": f"nova-public-rt-{self.region_suffix}"},
+      opts=ResourceOptions(parent=self, provider=self.provider)
+    )
+
+    for i, subnet in enumerate(self.public_subnets):
+      aws.ec2.RouteTableAssociation(
+        f"public-rt-assoc-{i}-{self.region_suffix}",
+        subnet_id=subnet.id,
+        route_table_id=self.public_rt.id,
+        opts=ResourceOptions(parent=self, provider=self.provider)
+      )
+
+    self.private_rts = []
+    for i, (subnet, nat_gw) in enumerate(zip(self.private_subnets, self.nat_gateways)):
+      private_rt = aws.ec2.RouteTable(
+        f"private-rt-{i}-{self.region_suffix}",
+        vpc_id=self.vpc.id,
+        routes=[
+          aws.ec2.RouteTableRouteArgs(
+            cidr_block="0.0.0.0/0",
+            nat_gateway_id=nat_gw.id
+          )
+        ],
+        tags={**self.tags, "Name": f"nova-private-rt-{i}-{self.region_suffix}"},
+        opts=ResourceOptions(parent=self)
+      )
+      self.private_rts.append(private_rt)
+
+      aws.ec2.RouteTableAssociation(
+        f"private-rt-assoc-{i}-{self.region_suffix}",
+        subnet_id=subnet.id,
+        route_table_id=private_rt.id,
+        opts=ResourceOptions(parent=self)
+      )
+
   def _create_security_groups(self):
     """Create security groups for ALB and Elastic Beanstalk"""
     self.alb_security_group = aws.ec2.SecurityGroup(
@@ -134,126 +251,17 @@ class NetworkingInfrastructure(pulumi.ComponentResource):
       opts=ResourceOptions(parent=self)
     )
 
-  def _create_network_resources_from_azs(self):
-    """
-    Creates subnets, NAT gateways, and route tables based on available AZs.
-    This method uses .apply() to correctly handle the asynchronous nature of
-    the get_availability_zones call.
-    """
-    azs_output = aws.get_availability_zones(
-      state="available",
-      opts=InvokeOptions(provider=self.provider)
-    )
-
-    azs_output.names.apply(self._create_dependent_resources)
-
-  def _create_dependent_resources(self, az_names):
-    base = 0 if self.is_primary else 1
-    public_base = 100
-    private_base = 120
-    
-    # We can now safely use len() on az_names because it's a resolved list.
-    num_azs_to_use = min(2, len(az_names))
-
-    for i in range(num_azs_to_use):
-      az_name = az_names[i]
-      public_cidr = f"10.{base}.{public_base + i}.0/24"
-      private_cidr = f"10.{base}.{private_base + i}.0/24"
-
-      public_subnet = aws.ec2.Subnet(
-        f"public-subnet-{i}-{self.region_suffix}",
-        vpc_id=self.vpc.id,
-        cidr_block=public_cidr,
-        availability_zone=az_name,
-        map_public_ip_on_launch=True,
-        tags={**self.tags, "Name": f"nova-public-{i}-{self.region_suffix}"},
-        opts=ResourceOptions(parent=self, provider=self.provider)
-      )
-      self.public_subnets.append(public_subnet)
-
-      private_subnet = aws.ec2.Subnet(
-        f"private-subnet-{i}-{self.region_suffix}",
-        vpc_id=self.vpc.id,
-        cidr_block=private_cidr,
-        availability_zone=az_name,
-        tags={**self.tags, "Name": f"nova-private-{i}-{self.region_suffix}"},
-        opts=ResourceOptions(parent=self, provider=self.provider)
-      )
-      self.private_subnets.append(private_subnet)
-
-      # Create NAT Gateway for this public subnet
-      eip = aws.ec2.Eip(
-        f"nat-eip-{i}-{self.region_suffix}",
-        domain="vpc",
-        tags={**self.tags, "Name": f"nova-nat-eip-{i}-{self.region_suffix}"},
-        opts=ResourceOptions(parent=self, provider=self.provider, delete_before_replace=True)
-      )
-
-      nat_gw = aws.ec2.NatGateway(
-        f"nat-gw-{i}-{self.region_suffix}",
-        allocation_id=eip.id,
-        subnet_id=public_subnet.id,
-        tags={**self.tags, "Name": f"nova-nat-gw-{i}-{self.region_suffix}"},
-        opts=ResourceOptions(parent=self, provider=self.provider, delete_before_replace=True)
-      )
-      self.nat_gateways.append(nat_gw)
-      
-      # Create Private Route Table for this private subnet
-      private_rt = aws.ec2.RouteTable(
-        f"private-rt-{i}-{self.region_suffix}",
-        vpc_id=self.vpc.id,
-        routes=[
-          aws.ec2.RouteTableRouteArgs(
-            cidr_block="0.0.0.0/0",
-            nat_gateway_id=nat_gw.id
-          )
-        ],
-        tags={**self.tags, "Name": f"nova-private-rt-{i}-{self.region_suffix}"},
-        opts=ResourceOptions(parent=self)
-      )
-      self.private_rts.append(private_rt)
-
-      aws.ec2.RouteTableAssociation(
-        f"private-rt-assoc-{i}-{self.region_suffix}",
-        subnet_id=private_subnet.id,
-        route_table_id=private_rt.id,
-        opts=ResourceOptions(parent=self)
-      )
-      
-    # Now create the Public Route Table and its associations
-    self.public_rt = aws.ec2.RouteTable(
-      f"public-rt-{self.region_suffix}",
-      vpc_id=self.vpc.id,
-      routes=[
-        aws.ec2.RouteTableRouteArgs(
-          cidr_block="0.0.0.0/0",
-          gateway_id=self.igw.id
-        )
-      ],
-      tags={**self.tags, "Name": f"nova-public-rt-{self.region_suffix}"},
-      opts=ResourceOptions(parent=self, provider=self.provider)
-    )
-    
-    for i, subnet in enumerate(self.public_subnets):
-      aws.ec2.RouteTableAssociation(
-        f"public-rt-assoc-{i}-{self.region_suffix}",
-        subnet_id=subnet.id,
-        route_table_id=self.public_rt.id,
-        opts=ResourceOptions(parent=self, provider=self.provider)
-      )
-
-
   @property
   def vpc_id(self):
     return self.vpc.id
 
   @property
   def public_subnet_ids(self):
-    return pulumi.Output.all(*self.public_subnets).apply(lambda subnets: [s.id for s in subnets])
+    return [subnet.id for subnet in self.public_subnets]
 
   @property
   def private_subnet_ids(self):
-    return pulumi.Output.all(*self.private_subnets).apply(lambda subnets: [s.id for s in subnets])
+    return [subnet.id for subnet in self.private_subnets]
 
   @property
   def alb_security_group_id(self):
