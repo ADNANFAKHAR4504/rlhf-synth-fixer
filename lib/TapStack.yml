@@ -260,6 +260,7 @@ Resources:
   EC2SSMPolicy:
     Type: AWS::IAM::Policy
     Properties:
+      PolicyName: EC2SSMPolicy
       PolicyDocument:
         Version: '2012-10-17'
         Statement:
