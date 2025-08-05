@@ -65,11 +65,13 @@ class NetworkingInfrastructure(pulumi.ComponentResource):
     self.private_subnets = []
 
     base = 0 if self.is_primary else 1
+    public_base = 100
+    private_base = 120
 
     for i in range(2):
       az_output = pulumi.Output.from_input(self.azs).apply(lambda az: az.names[i])
-      public_cidr = f"10.{base}.{10 + i}.0/24"
-      private_cidr = f"10.{base}.{20 + i}.0/24"
+      public_cidr = f"10.{base}.{public_base + i}.0/24"
+      private_cidr = f"10.{base}.{private_base + i}.0/24"
 
       public_subnet = aws.ec2.Subnet(
         f"public-subnet-{i}-{self.region_suffix}",
