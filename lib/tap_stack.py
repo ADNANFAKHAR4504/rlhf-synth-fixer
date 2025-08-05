@@ -295,7 +295,8 @@ class TapStack(Stack):
     self.s3_bucket = s3.Bucket(
       self, "tap_secure_bucket",
       # Using random suffix instead of account ID to prevent information leakage
-      bucket_name=f"tap-secure-bucket-{self.environment_suffix}-{self.node.addr}",
+      # Shortened to ensure bucket name is under 63 characters
+      bucket_name=f"tap-bucket-{self.environment_suffix}-{self.node.addr[:8]}",
       versioned=True,
       encryption=s3.BucketEncryption.KMS,
       encryption_key=self.kms_key,
