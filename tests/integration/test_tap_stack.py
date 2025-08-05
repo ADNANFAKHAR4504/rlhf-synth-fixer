@@ -15,6 +15,7 @@ def pulumi_outputs():
   """
   Fetches and parses Pulumi stack outputs.
   This fixture runs once per test session and provides the outputs to all tests.
+  It also prints the consolidated outputs for verification.
   """
   print(f"\nAttempting to fetch outputs from Pulumi stack: {PULUMI_STACK_NAME}")
   try:
@@ -27,22 +28,21 @@ def pulumi_outputs():
     # Parse the JSON output
     outputs = json.loads(result.stdout)
     
-    # The provided output format has a top-level key that is the stack name.
-    # We need to extract the actual outputs from under that key.
-    if PULUMI_STACK_NAME in outputs:
-      print(f"Successfully fetched outputs for stack: {PULUMI_STACK_NAME}")
-      return outputs[PULUMI_STACK_NAME]
-    else:
-      raise ValueError(f"Pulumi outputs for stack '{PULUMI_STACK_NAME}' not found in JSON output. "
-                       f"Available keys: {list(outputs.keys())}")
+    # The provided output format has the outputs directly at the top level,
+    # not nested under the stack name. So, we return the parsed outputs directly.
+    print(f"Successfully fetched outputs for stack: {PULUMI_STACK_NAME}")
+    print("\n--- Pulumi Stack Outputs ---")
+    print(json.dumps(outputs, indent=2))
+    print("----------------------------\n")
+    return outputs
   except subprocess.CalledProcessError as e:
     pytest.fail(f"Failed to get Pulumi stack outputs. "
                 f"Ensure Pulumi CLI is installed, configured, and logged in. "
                 f"Error: {e.stderr}")
   except json.JSONDecodeError as e:
     pytest.fail(f"Failed to parse Pulumi JSON output. Check if output is valid JSON. Error: {e}")
-  except ValueError as e:
-    pytest.fail(f"Error processing Pulumi outputs: {e}")
+  except Exception as e:
+    pytest.fail(f"An unexpected error occurred while processing Pulumi outputs: {e}")
 
 
 @pytest.fixture(scope="session")
@@ -52,7 +52,8 @@ def aws_clients(pulumi_outputs):
   This fixture runs once per test session.
   """
   clients = {}
-  deployed_regions = pulumi_outputs["deployed_regions"]
+  # Parse the deployed_regions string into a list
+  deployed_regions = json.loads(pulumi_outputs["deployed_regions"])
   print(f"Initializing boto3 clients for regions: {deployed_regions}")
   for region in deployed_regions:
     clients[region] = {
@@ -89,8 +90,12 @@ def test_vpcs_exist_and_match_cidr(pulumi_outputs, aws_clients):
   """
   Verifies that VPCs exist in the deployed regions and their CIDR blocks match.
   """
-  for region_name in pulumi_outputs["deployed_regions"]:
-    region_data = pulumi_outputs["all_regions_data"][region_name]
+  # Parse the all_regions_data string into a dictionary
+  all_regions_data = json.loads(pulumi_outputs["all_regions_data"])
+  deployed_regions = json.loads(pulumi_outputs["deployed_regions"])
+
+  for region_name in deployed_regions:
+    region_data = all_regions_data[region_name]
     ec2_client = aws_clients[region_name]["ec2"]
     vpc_id = region_data["vpc_id"]
     vpc_cidr = region_data["vpc_cidr"]
@@ -110,12 +115,17 @@ def test_subnets_exist_and_match_vpc(pulumi_outputs, aws_clients):
   """
   Verifies that public and private subnets exist and are associated with the correct VPC.
   """
-  for region_name in pulumi_outputs["deployed_regions"]:
-    region_data = pulumi_outputs["all_regions_data"][region_name]
+  # Parse the all_regions_data string into a dictionary
+  all_regions_data = json.loads(pulumi_outputs["all_regions_data"])
+  deployed_regions = json.loads(pulumi_outputs["deployed_regions"])
+
+  for region_name in deployed_regions:
+    region_data = all_regions_data[region_name]
     ec2_client = aws_clients[region_name]["ec2"]
     vpc_id = region_data["vpc_id"]
 
     # Determine which subnet IDs to use based on primary/secondary region
+    # These are also JSON strings in the flat outputs, so parse them
     if region_name == pulumi_outputs["primary_region"]:
       public_subnet_ids = json.loads(pulumi_outputs["primary_public_subnet_ids"])
       private_subnet_ids = json.loads(pulumi_outputs["primary_private_subnet_ids"])
@@ -153,8 +163,12 @@ def test_eb_application_exists(pulumi_outputs, aws_clients):
   """
   Verifies that Elastic Beanstalk applications exist in the deployed regions.
   """
-  for region_name in pulumi_outputs["deployed_regions"]:
-    region_data = pulumi_outputs["all_regions_data"][region_name]
+  # Parse the all_regions_data string into a dictionary
+  all_regions_data = json.loads(pulumi_outputs["all_regions_data"])
+  deployed_regions = json.loads(pulumi_outputs["deployed_regions"])
+
+  for region_name in deployed_regions:
+    region_data = all_regions_data[region_name]
     eb_client = aws_clients[region_name]["elasticbeanstalk"]
     
     # The application name is derived from the environment name in the provided output.
@@ -176,8 +190,12 @@ def test_eb_environment_exists_and_is_ready(pulumi_outputs, aws_clients):
   Verifies that Elastic Beanstalk environments exist, are 'Ready' and 'Green',
   and their URLs match the expected outputs.
   """
-  for region_name in pulumi_outputs["deployed_regions"]:
-    region_data = pulumi_outputs["all_regions_data"][region_name]
+  # Parse the all_regions_data string into a dictionary
+  all_regions_data = json.loads(pulumi_outputs["all_regions_data"])
+  deployed_regions = json.loads(pulumi_outputs["deployed_regions"])
+
+  for region_name in deployed_regions:
+    region_data = all_regions_data[region_name]
     eb_client = aws_clients[region_name]["elasticbeanstalk"]
     eb_env_name = region_data["eb_environment_name"]
     eb_env_url = region_data["eb_environment_url"]
@@ -206,8 +224,12 @@ def test_cloudwatch_dashboard_exists(pulumi_outputs, aws_clients):
   """
   Verifies that CloudWatch Dashboards exist in the deployed regions.
   """
-  for region_name in pulumi_outputs["deployed_regions"]:
-    region_data = pulumi_outputs["all_regions_data"][region_name]
+  # Parse the all_regions_data string into a dictionary
+  all_regions_data = json.loads(pulumi_outputs["all_regions_data"])
+  deployed_regions = json.loads(pulumi_outputs["deployed_regions"])
+
+  for region_name in deployed_regions:
+    region_data = all_regions_data[region_name]
     cloudwatch_client = aws_clients[region_name]["cloudwatch"]
     dashboard_name = region_data["dashboard_name"]
     
@@ -226,8 +248,12 @@ def test_sns_topic_exists(pulumi_outputs, aws_clients):
   """
   Verifies that SNS Topics exist in the deployed regions.
   """
-  for region_name in pulumi_outputs["deployed_regions"]:
-    region_data = pulumi_outputs["all_regions_data"][region_name]
+  # Parse the all_regions_data string into a dictionary
+  all_regions_data = json.loads(pulumi_outputs["all_regions_data"])
+  deployed_regions = json.loads(pulumi_outputs["deployed_regions"])
+
+  for region_name in deployed_regions:
+    region_data = all_regions_data[region_name]
     sns_client = aws_clients[region_name]["sns"]
     sns_topic_arn = region_data["sns_topic_arn"]
     
