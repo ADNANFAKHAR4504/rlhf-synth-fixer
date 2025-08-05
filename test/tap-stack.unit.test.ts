@@ -103,13 +103,15 @@ describe('Secure Infrastructure CloudFormation Template', () => {
               },
             ]),
           }),
-
           expect.objectContaining({
             Sid: 'WriteApplicationLogs',
             Action: ['s3:PutObject', 's3:PutObjectAcl'],
-            Resource: {
-              'Fn::Sub': 'arn:aws:s3:::application-logs-${UniqueId}/*',
-            },
+            Resource: expect.arrayContaining([
+              {
+                'Fn::Sub':
+                  'arn:aws:s3:::application-logs-${EnvironmentSuffix}-${UniqueId}/*',
+              },
+            ]),
           }),
           expect.objectContaining({
             Sid: 'KMSAccess',
