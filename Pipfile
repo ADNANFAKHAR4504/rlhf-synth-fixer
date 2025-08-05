@@ -19,10 +19,10 @@ pytest-cov = "*"
 boto3 = "*"
 moto = "*"
 pytest-testdox = "*"
-pytest-cov = "*"
 pytest-env = "*"
 pylint = "*"
 pytest = "*"
+pytest-cov = "*"
 
 [requires]
 python_version = "3.12.11"
