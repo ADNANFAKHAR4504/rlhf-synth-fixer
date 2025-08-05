@@ -432,20 +432,15 @@ class TapStack(Stack):
         InstanceTarget(instance, 80)
       )
 
-    # Create HTTP listener (redirects to HTTPS for production)
+    # Create HTTP listener (forwards to target group)
     self.alb_http_listener = self.alb.add_listener(
       "tap_alb_http_listener",
       port=80,
       protocol=elbv2.ApplicationProtocol.HTTP,
-      default_action=elbv2.ListenerAction.redirect(
-        protocol="HTTPS",
-        port="443",
-        permanent=True
-      )
+      default_target_groups=[self.target_group]
     )
 
-    # Create HTTPS listener with TLS termination
-    # Note: For production, uncomment and configure with your domain certificate
+    # Note: For production with HTTPS, uncomment and configure with your domain certificate
     # self.alb_https_listener = self.alb.add_listener(
     #   "tap_alb_https_listener",
     #   port=443,
