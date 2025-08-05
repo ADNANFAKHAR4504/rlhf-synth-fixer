@@ -445,18 +445,15 @@ class TapStack(Stack):
     )
 
     # Create HTTPS listener with TLS termination
-    # Note: For production, replace with your actual domain certificate ARN
-    # You can create a certificate using AWS Certificate Manager (ACM)
+    # Note: Using available certificate from ACM
     self.alb_https_listener = self.alb.add_listener(
       "tap_alb_https_listener",
       port=443,
       protocol=elbv2.ApplicationProtocol.HTTPS,
       default_target_groups=[self.target_group],
-      # For demo purposes, using a placeholder certificate
-      # In production, use: certificates=[elbv2.ListenerCertificate.from_arn("your-cert-arn")]
       certificates=[elbv2.ListenerCertificate.from_arn(
-        # Placeholder - replace with actual certificate ARN for production
-        certificate_arn="arn:aws:acm:us-east-1:123456789012:certificate/placeholder"
+        # Using available certificate from ACM
+        certificate_arn="arn:aws:acm:us-east-1:718240086340:certificate/1c3986ff-2aed-4eeb-ac19-79e08aace09c"
       )]
     )
 
