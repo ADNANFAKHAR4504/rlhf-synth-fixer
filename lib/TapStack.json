@@ -30,7 +30,22 @@
                   "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
                 }
               },
-              "Action": "kms:*",
+              "Action": [
+                "kms:Create*",
+                "kms:Describe*",
+                "kms:Enable*",
+                "kms:List*",
+                "kms:Put*",
+                "kms:Update*",
+                "kms:Revoke*",
+                "kms:Disable*",
+                "kms:Get*",
+                "kms:Delete*",
+                "kms:TagResource",
+                "kms:UntagResource",
+                "kms:ScheduleKeyDeletion",
+                "kms:CancelKeyDeletion"
+              ],
               "Resource": "*"
             },
             {
@@ -486,7 +501,7 @@
       "Type": "AWS::EC2::Instance",
       "Properties": {
         "InstanceType": "t3.micro",
-        "ImageId": "ami-0f74c08b8b5effa56",
+        "ImageId": "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}",
         "SubnetId": {
           "Ref": "WebAppPrivateSubnet1"
         },
@@ -529,7 +544,7 @@
       "Type": "AWS::EC2::Instance",
       "Properties": {
         "InstanceType": "t3.micro",
-        "ImageId": "ami-0f74c08b8b5effa56",
+        "ImageId": "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}",
         "SubnetId": {
           "Ref": "WebAppPrivateSubnet2"
         },
@@ -928,6 +943,102 @@
             "Value": {
               "Ref": "Environment"
             }
+          }
+        ]
+      }
+    },
+    "WebAppLaunchTemplate": {
+      "Type": "AWS::EC2::LaunchTemplate",
+      "Properties": {
+        "LaunchTemplateName": {
+          "Fn::Sub": "WebApp-LT-${AWS::StackName}"
+        },
+        "LaunchTemplateData": {
+          "InstanceType": "t3.micro",
+          "ImageId": "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}",
+          "IamInstanceProfile": {
+            "Arn": {
+              "Fn::GetAtt": [
+                "WebAppInstanceProfile",
+                "Arn"
+              ]
+            }
+          },
+          "SecurityGroupIds": [
+            {
+              "Ref": "WebAppSecurityGroup"
+            }
+          ],
+          "BlockDeviceMappings": [
+            {
+              "DeviceName": "/dev/xvda",
+              "Ebs": {
+                "VolumeType": "gp3",
+                "VolumeSize": 20,
+                "Encrypted": true,
+                "KmsKeyId": {
+                  "Ref": "WebAppKMSKey"
+                }
+              }
+            }
+          ],
+          "TagSpecifications": [
+            {
+              "ResourceType": "instance",
+              "Tags": [
+                {
+                  "Key": "Name",
+                  "Value": "WebApp-ASG-Instance"
+                },
+                {
+                  "Key": "Environment",
+                  "Value": {
+                    "Ref": "Environment"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "WebAppAutoScalingGroup": {
+      "Type": "AWS::AutoScaling::AutoScalingGroup",
+      "Properties": {
+        "VPCZoneIdentifier": [
+          {
+            "Ref": "WebAppPrivateSubnet1"
+          },
+          {
+            "Ref": "WebAppPrivateSubnet2"
+          }
+        ],
+        "MinSize": "2",
+        "MaxSize": "4",
+        "DesiredCapacity": "2",
+        "LaunchTemplate": {
+          "LaunchTemplateId": {
+            "Ref": "WebAppLaunchTemplate"
+          },
+          "Version": {
+            "Fn::GetAtt": [
+              "WebAppLaunchTemplate",
+              "LatestVersionNumber"
+            ]
+          }
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "WebApp-ASG-Instance",
+            "PropagateAtLaunch": true
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            },
+            "PropagateAtLaunch": true
           }
         ]
       }
