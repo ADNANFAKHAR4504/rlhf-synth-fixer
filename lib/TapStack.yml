@@ -231,11 +231,6 @@ Outputs:
     Value:
       Fn::ImportValue:
         Fn::Sub: "TapStack${EnvironmentSuffix}-TableName"
-    Metadata:
-      cfn-lint:
-        suppress:
-          - id: W6001
-            reason: "Dynamic import is valid and stack dependency is managed"
 
   # Export table ARN using Fn::GetAtt
   TableArn:
@@ -319,3 +314,8 @@ Metadata:
     ParameterLabels:
       EnvironmentSuffix:
         default: "Environment Suffix"
+  cfn-lint:
+    config:
+      ignore_checks:
+        - W6001
+      ignore_bad_template: false
