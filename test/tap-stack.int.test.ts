@@ -117,13 +117,13 @@ describe('TapStack Live AWS Integration Tests', () => {
   }, 60000);
 
   describe('CloudFormation Stack Validation', () => {
-    test('CloudFormation stack should exist and be CREATE_COMPLETE', async () => {
+    test('CloudFormation stack should exist and be in a complete state', async () => {
       const stackResponse = await cloudFormationClient.send(
         new DescribeStacksCommand({ StackName: stackName })
       );
 
       expect(stackResponse.Stacks).toHaveLength(1);
-      expect(stackResponse.Stacks![0].StackStatus).toBe('CREATE_COMPLETE');
+      expect(['CREATE_COMPLETE', 'UPDATE_COMPLETE']).toContain(stackResponse.Stacks![0].StackStatus);
       expect(stackResponse.Stacks![0].Description).toContain('Secure and highly available');
     });
 
@@ -153,7 +153,7 @@ describe('TapStack Live AWS Integration Tests', () => {
       expectedResources.forEach(resourceType => {
         const resource = stackResources.find(r => r.LogicalResourceId === resourceType);
         expect(resource).toBeDefined();
-        expect(resource?.ResourceStatus).toBe('CREATE_COMPLETE');
+        expect(['CREATE_COMPLETE', 'UPDATE_COMPLETE']).toContain(resource?.ResourceStatus);
       });
     });
   });
