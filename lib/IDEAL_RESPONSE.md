@@ -1,8 +1,114 @@
-# Serverless Image Detector - Complete Implementation
+## 🏗️ Architecture Overview
 
-This document contains the complete, corrected implementation of the serverless image detector infrastructure using AWS CDK with TypeScript.
+```mermaid
+graph TB
+    subgraph "API Layer"
+        API[API Gateway]
+        AUTH[API Key Auth]
+        VAL[Request Validation]
+    end
 
-## File Structure
+    subgraph "Processing Layer"
+        IP[ImageProcessor Lambda]
+        FM[FileManager Lambda]
+        NS[NotificationService Lambda]
+    end
+
+    subgraph "AI/ML Layer"
+        REK[Amazon Rekognition]
+        IAM[IAM Roles]
+    end
+
+    subgraph "Storage Layer"
+        S3[S3 Bucket]
+        DDB[DynamoDB]
+        SNS[SNS Topic]
+    end
+
+    subgraph "Monitoring Layer"
+        CW[CloudWatch]
+        DASH[Dashboard]
+        ALARMS[Alarms]
+    end
+
+    API --> IP
+    IP --> REK
+    IP --> DDB
+    IP --> FM
+    IP --> NS
+    FM --> S3
+    NS --> SNS
+
+    S3 --> IP
+    DDB --> CW
+    IP --> CW
+    FM --> CW
+    NS --> CW
+    API --> CW
+```
+
+## 📁 Project Structure
+
+```
+serverless-image-detector/
+├── lib/
+│   ├── stacks/
+│   │   ├── api-stack.ts
+│   │   ├── lambda-stack.ts
+│   │   ├── storage-stack.ts
+│   │   ├── monitoring-stack.ts
+│   │   └── rekognition-stack.ts
+│   ├── lambdas/
+│   │   ├── image-processor/
+│   │   │   └── index.js
+│   │   ├── file-manager/
+│   │   └── notification-service/
+│   └── tap-stack.ts
+├── bin/
+│   └── tap.ts
+├── test/
+├── package.json
+├── tsconfig.json
+└── README.md
+```
+
+## 🚀 Implementation
+
+### 1. Main CDK App Entry Point
+
+**`bin/tap.ts`**
+
+```typescript
+#!/usr/bin/env node
+import 'source-map-support/register';
+import * as cdk from 'aws-cdk-lib';
+import { TapStack } from '../lib/tap-stack';
+
+const app = new cdk.App();
+
+// Environment configuration
+const env = {
+  account: process.env.CDK_DEFAULT_ACCOUNT,
+  region: 'us-east-1',
+};
+
+// Get environment suffix from context or use default
+const environmentSuffix = app.node.tryGetContext('environmentSuffix') || 'dev';
+
+// Deploy stack with environment-specific configuration
+new TapStack(app, 'TapStack', {
+  env,
+  stackName: 'serverlessapp-image-detector',
+  description: 'Production-ready serverless image classification system',
+  environmentSuffix,
+  tags: {
+    Environment: environmentSuffix,
+    Project: 'ServerlessImageDetector',
+    Owner: 'DevOps Team',
+    CostCenter: 'Engineering',
+  },
+});
+```
 
 ### 1. Main Stack (`lib/tap-stack.ts`)
 
@@ -1203,18 +1309,6 @@ export class RekognitionStack extends cdk.NestedStack {
 - `/serverlessapp/{env}/rekognition/min-confidence`
 - `/serverlessapp/{env}/rekognition/max-labels`
 - `/serverlessapp/{env}/rekognition/free-tier-limit`
-
-## Production Readiness Status: ✅ READY
-
-All critical issues have been resolved. The infrastructure now provides:
-
-- ✅ Complete CloudWatch metrics collection
-- ✅ Robust image format validation
-- ✅ Proper error handling and debugging
-- ✅ Full integration test coverage
-- ✅ Production-grade security and monitoring
-
-The implementation is ready for production deployment and can handle real-world image processing workloads with proper security, monitoring, and testing coverage.
 
 ```
 
