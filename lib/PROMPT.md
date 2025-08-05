@@ -1,68 +1,54 @@
-Here is a **comprehensive and production-grade user prompt** tailored for your use case:
+Write a production-ready AWS CloudFormation template in YAML that defines a highly available serverless application infrastructure to be deployed in the us-west-2 region. The template must meet all of the following requirements, without exception:
 
----
+Naming Convention: All resources must be named using the prefix "ServerlessApp" followed by their type (e.g., ServerlessAppLambda, ServerlessAppS3Bucket, ServerlessAppSecret).
 
-### ✅ Prompt Title:
+Region & High Availability: All resources must be explicitly deployed to us-west-2 and distributed for high availability across multiple Availability Zones where possible.
 
-**Generate CloudFormation YAML for ServerlessApp: S3-Triggered Lambda with Secrets Manager, HA Design, IAM Least Privilege, and CloudWatch Monitoring**
+Lambda Setup:
 
----
+Deploy at least one AWS Lambda function as the core compute resource.
 
-### 📌 Prompt Description:
+The Lambda function must be automatically triggered by file uploads (e.g., object created events) to a designated S3 bucket.
 
-Act as an expert AWS Solutions Architect. Your task is to generate a **secure**, **highly available**, and **fault-tolerant** AWS CloudFormation YAML template that provisions a **serverless application infrastructure**. All resources must follow AWS best practices, least privilege IAM, and naming conventions based on the prefix `ServerlessApp`.
+Lambda code/configuration should include secure access to sensitive values stored in AWS Secrets Manager.
 
----
+S3 Bucket:
 
-### 🧩 Functional Requirements:
+Create a specific S3 bucket (with ServerlessApp naming) to trigger the Lambda on file upload events.
 
-1. **Lambda Function (`ServerlessAppLambda`)**
-   - Must be the primary compute unit.
-   - Must be triggered by **file uploads** (PUT events) to a specific **S3 bucket**.
-   - Must retrieve **sensitive data** (e.g., API keys) securely from **AWS Secrets Manager**.
-   - Must have **least privilege IAM role** with:
-     - Access to read from S3
-     - Access to specific Secrets Manager secret
-     - Permissions to log to CloudWatch
+Secrets Management:
 
-2. **S3 Bucket (`ServerlessAppBucket`)**
-   - Triggers the Lambda function on `s3:ObjectCreated:*` events.
-   - Must include bucket policy that allows only necessary permissions.
-   - Must be deployed with versioning enabled and encryption at rest.
+Store all sensitive information needed by the Lambda in AWS Secrets Manager.
 
-3. **AWS Secrets Manager (`ServerlessAppSecret`)**
-   - Stores confidential values such as API keys or database credentials.
-   - Lambda must be granted **read-only access** to this secret.
+Ensure IAM policies grant Lambda only the minimal (least-privilege) permissions required to access its secrets.
 
-4. **IAM Role and Policy (`ServerlessAppLambdaExecutionRole`)**
-   - IAM Role for Lambda must use **AssumeRolePolicyDocument** for `lambda.amazonaws.com`.
-   - IAM Policy must include:
-     - `s3:GetObject` for the specific bucket
-     - `secretsmanager:GetSecretValue` for the defined secret
-     - `logs:CreateLogGroup`, `logs:CreateLogStream`, and `logs:PutLogEvents`
+IAM Roles and Policies:
 
-5. **CloudWatch Alarms**
-   - Must monitor:
-     - **Lambda invocation count**
-     - **Lambda error count**
+Define all required IAM roles, policies, and trust relationships for Lambda, S3, and Secrets Manager.
 
-   - Alarms should be named using the `ServerlessApp` prefix and should be associated with `ServerlessAppLambda`.
+All permissions must strictly adhere to the principle of least privilege.
 
----
+CloudWatch Monitoring:
 
-### 🌍 Deployment Constraints:
+Integrate AWS CloudWatch to monitor Lambda’s invocation count and error rates via appropriate metrics and alarms.
 
-- All resources must be deployed in **`us-west-2`**.
-- High availability and fault tolerance must be considered (e.g., multi-AZ deployments where applicable).
-- Use **CloudFormation YAML format**, not JSON.
-- Ensure the template is **fully validated**, adheres to **AWS best practices**, and is **free from security misconfigurations**.
-- Use appropriate **tags** for all resources (e.g., `Environment`, `Project`, etc.).
-- All resource names must be **prefixed with `ServerlessApp`**, e.g., `ServerlessAppLambda`, `ServerlessAppBucket`, etc.
+Best Practices & Compliance:
 
----
+The template must be free from AWS best practice violations.
 
-### ✅ Expected Output:
+It must strictly follow the specified project naming convention for all resources.
 
-- A single YAML file named `serverlessapp-stack.yaml`.
-- It should be **modular**, **readable**, and **production-grade**, passing all linter and CloudFormation validator checks.
-- Include `Metadata` or `Description` blocks for major resources for clarity and documentation.
+It must pass all CloudFormation validations.
+
+Constraints:
+
+The entire infrastructure must be described exclusively in AWS CloudFormation YAML syntax (no JSON, no scripts outside YAML).
+
+All resources must be highly available and fault tolerant wherever possible.
+
+Use variables and parameters appropriately for resource naming and configuration.
+
+No requirements should be omitted or assumed; all must be clearly and explicitly implemented.
+
+Expected Output:
+A single CloudFormation YAML template that provisions the specified environment, adheres to the naming convention, implements all required infrastructure, access control, monitoring, and security, and passes validation checks.
