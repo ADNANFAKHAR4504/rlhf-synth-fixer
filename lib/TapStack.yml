@@ -1,325 +1,59 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'Secure, scalable web application infrastructure with multi-region deployment, GDPR compliance, and comprehensive security controls.'
+Description: 'Secure AWS Infrastructure with encrypted storage, least-privilege IAM, and comprehensive logging'
 
 Parameters:
-  EnvironmentSuffix:
+  AllowedSSHCIDR:
     Type: String
-    Default: 'prod'
-    Description: 'Environment suffix for resource naming (e.g., dev, staging, prod)'
-    AllowedPattern: '^[a-zA-Z0-9]+$'
-    ConstraintDescription: 'Must contain only alphanumeric characters'
+    Description: 'CIDR block allowed for SSH access (e.g., YOUR_IP/32)'
+    Default: '0.0.0.0/32'
+    AllowedPattern: '^([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,2}$'
+    ConstraintDescription: 'Must be a valid CIDR notation (e.g., 192.168.1.1/32)'
 
-  ProjectName:
+  UniqueId:
     Type: String
-    Default: 'secure-web-app'
-    Description: 'Project name for resource naming'
-    AllowedPattern: '^[a-zA-Z0-9-]+$'
-    ConstraintDescription: 'Must contain only alphanumeric characters and hyphens'
-
-  VpcCidr:
-    Type: String
-    Default: '10.0.0.0/16'
-    Description: 'CIDR block for the VPC in the primary region (us-east-1)'
-    AllowedPattern: '^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/(1[6-9]|2[0-8]))$'
-
-  PublicSubnetCidr:
-    Type: String
-    Default: '10.0.1.0/24'
-    Description: 'CIDR block for the first public subnet in primary region'
-
-  PrivateSubnetCidr:
-    Type: String
-    Default: '10.0.2.0/24'
-    Description: 'CIDR block for the first private subnet in primary region'
-
-  BastionSshCidr:
-    Type: String
-    Default: '203.0.113.0/24'
-    Description: 'CIDR block for SSH access to Bastion Host (MUST be restricted in production)'
-    AllowedPattern: '^([0-9]{1,3}\.){3}[0-9]{1,3}(\/([0-9]|[1-2][0-9]|3[0-2]))?$'
-
-  WebServerAmiId:
-    Type: AWS::EC2::Image::Id
-    Default: ami-0abcdef1234567890
-    Description: 'AMI ID for web servers (e.g., ami-0abcdef1234567890 for Amazon Linux 2)'
-
-  InstanceType:
-    Type: String
-    Default: 't3.medium'
-    Description: 'EC2 instance type for web servers'
-
-  MinInstances:
-    Type: Number
-    Default: 2
-    Description: 'Minimum number of web server instances in Auto Scaling Group'
-
-  MaxInstances:
-    Type: Number
-    Default: 4
-    Description: 'Maximum number of web server instances in Auto Scaling Group'
-
-  WebAppPort:
-    Type: Number
-    Default: 8080
-    Description: 'Port on which the web application runs on EC2 instances'
-
-  DataRetentionDays:
-    Type: Number
-    Default: 365
-    MinValue: 1
-    MaxValue: 3650
-    Description: 'Data retention period in days for logs and backups (e.g., for GDPR)'
-
-  EnableSecurityResources:
-    Type: String
-    Default: 'false'
-    AllowedValues: ['true', 'false']
-    Description: 'Whether to enable GuardDuty, WebACL, Certificate, and KMS Key'
-
-  AdminMfaRequired:
-    Type: String
-    Default: 'true'
-    AllowedValues: ['true', 'false']
-    Description: 'Set to true to enforce MFA for admin users (IAM Account Password Policy)'
-
-  AdminUserEmail:
-    Type: String
-    Description: 'Email address for security notifications and MFA setup'
-    Default: 'sudhakar.s@turing.com'
-    AllowedPattern: '^[^\s@]+@[^\s@]+\.[^\s@]+$'
-
-Conditions:
-  EnableOptionalSecurity: !Equals [!Ref EnableSecurityResources, 'true']
-  EnforceMfa: !Equals [!Ref AdminMfaRequired, 'true']
+    Description: 'Unique identifier for resource naming'
+    Default: !Sub '${AWS::StackName}-${AWS::AccountId}'
 
 Resources:
   # ============================================================================
-  # KMS KEY & ALIAS
+  # VPC AND NETWORKING COMPONENTS
   # ============================================================================
-  SecurityKMSKey:
-    Condition: EnableOptionalSecurity
-    Type: AWS::KMS::Key
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Retain
-    Properties:
-      Description: !Sub '${ProjectName}-${EnvironmentSuffix} KMS key for encryption at rest'
-      KeyPolicy:
-        Version: '2012-10-17'
-        Statement:
-          - Sid: Enable IAM User Permissions
-            Effect: Allow
-            Principal:
-              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
-            Action: 'kms:*'
-            Resource: '*'
-          - Sid: Allow use of the key for CloudWatch Logs
-            Effect: Allow
-            Principal:
-              Service: !Sub 'logs.${AWS::Region}.amazonaws.com'
-            Action:
-              - 'kms:Encrypt'
-              - 'kms:Decrypt'
-              - 'kms:ReEncrypt*'
-              - 'kms:GenerateDataKey*'
-              - 'kms:DescribeKey'
-            Resource: '*'
-            Condition:
-              ArnEquals:
-                kms:EncryptionContext:aws:logs:arn: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*'
-          - Sid: Allow RDS to use the key
-            Effect: Allow
-            Principal:
-              Service: rds.amazonaws.com
-            Action:
-              - kms:CreateGrant
-              - kms:ListGrants
-              - kms:RevokeGrant
-              - kms:Decrypt
-            Resource: '*'
-          - Sid: Allow DynamoDB to use the key
-            Effect: Allow
-            Principal:
-              Service: dynamodb.amazonaws.com
-            Action:
-              - 'kms:Encrypt'
-              - 'kms:Decrypt'
-              - 'kms:ReEncrypt*'
-              - 'kms:GenerateDataKey*'
-            Resource: '*'
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-kms-key'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Project
-          Value: !Ref ProjectName
 
-  SecurityKMSKeyAlias:
-    Condition: EnableOptionalSecurity
-    Type: AWS::KMS::Alias
-    Properties:
-      AliasName: !Sub 'alias/${ProjectName}-${EnvironmentSuffix}-security-key'
-      TargetKeyId: !Ref SecurityKMSKey
-
-  # ============================================================================
-  # NETWORKING
-  # ============================================================================
   SecureVPC:
     Type: AWS::EC2::VPC
     Properties:
-      CidrBlock: !Ref VpcCidr
+      CidrBlock: '10.0.0.0/16'
       EnableDnsHostnames: true
       EnableDnsSupport: true
       Tags:
         - Key: Name
-          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-vpc'
+          Value: !Sub '${AWS::StackName}-secure-vpc'
         - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Region
-          Value: !Ref 'AWS::Region'
+          Value: 'Production'
+
+  PublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref SecureVPC
+      CidrBlock: '10.0.1.0/24'
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-public-subnet'
 
   InternetGateway:
     Type: AWS::EC2::InternetGateway
     Properties:
       Tags:
         - Key: Name
-          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-igw'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Region
-          Value: !Ref 'AWS::Region'
+          Value: !Sub '${AWS::StackName}-igw'
 
-  InternetGatewayAttachment:
+  AttachGateway:
     Type: AWS::EC2::VPCGatewayAttachment
     Properties:
+      VpcId: !Ref SecureVPC
       InternetGatewayId: !Ref InternetGateway
-      VpcId: !Ref SecureVPC
-
-  PublicSubnet:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref SecureVPC
-      AvailabilityZone: !Select [0, !GetAZs '']
-      CidrBlock: !Ref PublicSubnetCidr
-      MapPublicIpOnLaunch: true
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-public-subnet-1'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Type
-          Value: 'Public'
-        - Key: Region
-          Value: !Ref 'AWS::Region'
-
-  PrivateSubnet:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref SecureVPC
-      AvailabilityZone: !Select [0, !GetAZs '']
-      CidrBlock: !Ref PrivateSubnetCidr
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-private-subnet-1'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Type
-          Value: 'Private'
-        - Key: Region
-          Value: !Ref 'AWS::Region'
-
-  PublicSubnet2:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref SecureVPC
-      AvailabilityZone: !Select [1, !GetAZs '']
-      CidrBlock: !Select [2, !Cidr [!Ref VpcCidr, 6, 8]]
-      MapPublicIpOnLaunch: true
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-public-subnet-2'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Type
-          Value: 'Public'
-        - Key: Region
-          Value: !Ref 'AWS::Region'
-
-  PrivateSubnet2:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref SecureVPC
-      AvailabilityZone: !Select [1, !GetAZs '']
-      CidrBlock: !Select [3, !Cidr [!Ref VpcCidr, 6, 8]]
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-private-subnet-2'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Type
-          Value: 'Private'
-        - Key: Region
-          Value: !Ref 'AWS::Region'
-
-  DatabaseSubnet1:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref SecureVPC
-      AvailabilityZone: !Select [0, !GetAZs '']
-      CidrBlock: !Select [4, !Cidr [!Ref VpcCidr, 6, 8]]
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-db-subnet-1'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Type
-          Value: 'Database'
-        - Key: Region
-          Value: !Ref 'AWS::Region'
-
-  DatabaseSubnet2:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref SecureVPC
-      AvailabilityZone: !Select [1, !GetAZs '']
-      CidrBlock: !Select [5, !Cidr [!Ref VpcCidr, 6, 8]]
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-db-subnet-2'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Type
-          Value: 'Database'
-        - Key: Region
-          Value: !Ref 'AWS::Region'
-
-  NATGatewayEIP:
-    Type: AWS::EC2::EIP
-    DependsOn: InternetGatewayAttachment
-    Properties:
-      Domain: vpc
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-nat-eip'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Region
-          Value: !Ref 'AWS::Region'
-
-  NATGateway:
-    Type: AWS::EC2::NatGateway
-    Properties:
-      AllocationId: !GetAtt NATGatewayEIP.AllocationId
-      SubnetId: !Ref PublicSubnet
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-nat-gateway'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Region
-          Value: !Ref 'AWS::Region'
 
   PublicRouteTable:
     Type: AWS::EC2::RouteTable
@@ -327,1242 +61,443 @@ Resources:
       VpcId: !Ref SecureVPC
       Tags:
         - Key: Name
-          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-public-rt'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Region
-          Value: !Ref 'AWS::Region'
+          Value: !Sub '${AWS::StackName}-public-rt'
 
-  DefaultPublicRoute:
+  PublicRoute:
     Type: AWS::EC2::Route
-    DependsOn: InternetGatewayAttachment
+    DependsOn: AttachGateway
     Properties:
       RouteTableId: !Ref PublicRouteTable
-      DestinationCidrBlock: 0.0.0.0/0
+      DestinationCidrBlock: '0.0.0.0/0'
       GatewayId: !Ref InternetGateway
 
-  PublicSubnetRouteTableAssociation:
+  SubnetRouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      RouteTableId: !Ref PublicRouteTable
-      SubnetId: !Ref PublicSubnet
-
-  PublicSubnet2RouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      RouteTableId: !Ref PublicRouteTable
-      SubnetId: !Ref PublicSubnet2
-
-  PrivateRouteTable:
-    Type: AWS::EC2::RouteTable
-    Properties:
-      VpcId: !Ref SecureVPC
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-private-rt'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Region
-          Value: !Ref 'AWS::Region'
-
-  DefaultPrivateRoute:
-    Type: AWS::EC2::Route
-    Properties:
-      RouteTableId: !Ref PrivateRouteTable
-      DestinationCidrBlock: 0.0.0.0/0
-      NatGatewayId: !Ref NATGateway
-
-  PrivateSubnetRouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      RouteTableId: !Ref PrivateRouteTable
-      SubnetId: !Ref PrivateSubnet
-
-  PrivateSubnet2RouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      RouteTableId: !Ref PrivateRouteTable
-      SubnetId: !Ref PrivateSubnet2
-
-  DatabaseRouteTable:
-    Type: AWS::EC2::RouteTable
-    Properties:
-      VpcId: !Ref SecureVPC
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-db-rt'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Region
-          Value: !Ref 'AWS::Region'
-
-  DefaultDatabaseRoute:
-    Type: AWS::EC2::Route
-    Properties:
-      RouteTableId: !Ref DatabaseRouteTable
-      DestinationCidrBlock: 0.0.0.0/0
-      NatGatewayId: !Ref NATGateway
-
-  DatabaseSubnet1RouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      RouteTableId: !Ref DatabaseRouteTable
-      SubnetId: !Ref DatabaseSubnet1
-
-  DatabaseSubnet2RouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      RouteTableId: !Ref DatabaseRouteTable
-      SubnetId: !Ref DatabaseSubnet2
-
-  # ============================================================================
-  # SECURITY GROUPS
-  # ============================================================================
-  WebApplicationSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: 'Security group for web application servers'
-      VpcId: !Ref SecureVPC
-      SecurityGroupIngress: []
-      SecurityGroupEgress:
-        - IpProtocol: tcp
-          FromPort: 443
-          ToPort: 443
-          CidrIp: 0.0.0.0/0
-          Description: 'HTTPS outbound for updates'
-        - IpProtocol: tcp
-          FromPort: 80
-          ToPort: 80
-          CidrIp: 0.0.0.0/0
-          Description: 'HTTP outbound'
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-web-sg'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Project
-          Value: !Ref ProjectName
-
-  ALBSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: 'Security group for Application Load Balancer'
-      VpcId: !Ref SecureVPC
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 80
-          ToPort: 80
-          CidrIp: 0.0.0.0/0
-          Description: 'HTTP from internet'
-        - IpProtocol: tcp
-          FromPort: 443
-          ToPort: 443
-          CidrIp: 0.0.0.0/0
-          Description: 'HTTPS from internet'
-      SecurityGroupEgress: []
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-alb-sg'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Project
-          Value: !Ref ProjectName
-
-  DatabaseSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: 'Security group for database servers'
-      VpcId: !Ref SecureVPC
-      SecurityGroupIngress: []
-      SecurityGroupEgress: []
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-db-sg'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Project
-          Value: !Ref ProjectName
-
-  BastionSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: 'Security group for Bastion Host'
-      VpcId: !Ref SecureVPC
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 22
-          ToPort: 22
-          CidrIp: !Ref BastionSshCidr
-          Description: 'SSH access from specified CIDR'
-      SecurityGroupEgress:
-        - IpProtocol: tcp
-          FromPort: 443
-          ToPort: 443
-          CidrIp: 0.0.0.0/0
-          Description: 'HTTPS outbound for updates'
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-bastion-sg'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Project
-          Value: !Ref ProjectName
-
-  WebAppIngressFromALB:
-    Type: AWS::EC2::SecurityGroupIngress
-    Properties:
-      GroupId: !Ref WebApplicationSecurityGroup
-      IpProtocol: tcp
-      FromPort: !Ref WebAppPort
-      ToPort: !Ref WebAppPort
-      SourceSecurityGroupId: !Ref ALBSecurityGroup
-      Description: 'Application traffic from ALB'
-
-  ALBEgressToWebApp:
-    Type: AWS::EC2::SecurityGroupEgress
-    Properties:
-      GroupId: !Ref ALBSecurityGroup
-      IpProtocol: tcp
-      FromPort: !Ref WebAppPort
-      ToPort: !Ref WebAppPort
-      DestinationSecurityGroupId: !Ref WebApplicationSecurityGroup
-      Description: 'Outbound to web servers on application port'
-
-  WebAppIngressFromBastion:
-    Type: AWS::EC2::SecurityGroupIngress
-    Properties:
-      GroupId: !Ref WebApplicationSecurityGroup
-      IpProtocol: tcp
-      FromPort: 22
-      ToPort: 22
-      SourceSecurityGroupId: !Ref BastionSecurityGroup
-      Description: 'SSH from bastion host'
-
-  BastionEgressToWebApp:
-    Type: AWS::EC2::SecurityGroupEgress
-    Properties:
-      GroupId: !Ref BastionSecurityGroup
-      IpProtocol: tcp
-      FromPort: 22
-      ToPort: 22
-      DestinationSecurityGroupId: !Ref WebApplicationSecurityGroup
-      Description: 'SSH to web servers'
-
-  WebAppEgressToDatabase:
-    Type: AWS::EC2::SecurityGroupEgress
-    Properties:
-      GroupId: !Ref WebApplicationSecurityGroup
-      IpProtocol: tcp
-      FromPort: 3306
-      ToPort: 3306
-      DestinationSecurityGroupId: !Ref DatabaseSecurityGroup
-      Description: 'MySQL to database'
-
-  DatabaseIngressFromWebApp:
-    Type: AWS::EC2::SecurityGroupIngress
-    Properties:
-      GroupId: !Ref DatabaseSecurityGroup
-      IpProtocol: tcp
-      FromPort: 3306
-      ToPort: 3306
-      SourceSecurityGroupId: !Ref WebApplicationSecurityGroup
-      Description: 'MySQL from web servers'
-
-  BastionEgressToDatabase:
-    Type: AWS::EC2::SecurityGroupEgress
-    Properties:
-      GroupId: !Ref BastionSecurityGroup
-      IpProtocol: tcp
-      FromPort: 3306
-      ToPort: 3306
-      DestinationSecurityGroupId: !Ref DatabaseSecurityGroup
-      Description: 'MySQL to database'
-
-  # ============================================================================
-  # NETWORK ACLs
-  # ============================================================================
-  PublicNetworkACL:
-    Type: AWS::EC2::NetworkAcl
-    Properties:
-      VpcId: !Ref SecureVPC
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-public-nacl'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Project
-          Value: !Ref ProjectName
-
-  PublicNetworkACLEntryInboundHttp:
-    Type: AWS::EC2::NetworkAclEntry
-    Properties:
-      NetworkAclId: !Ref PublicNetworkACL
-      RuleNumber: 100
-      Protocol: 6
-      RuleAction: allow
-      CidrBlock: 0.0.0.0/0
-      PortRange: { From: 80, To: 80 }
-      Egress: false
-
-  PublicNetworkACLEntryInboundHttps:
-    Type: AWS::EC2::NetworkAclEntry
-    Properties:
-      NetworkAclId: !Ref PublicNetworkACL
-      RuleNumber: 110
-      Protocol: 6
-      RuleAction: allow
-      CidrBlock: 0.0.0.0/0
-      PortRange: { From: 443, To: 443 }
-      Egress: false
-
-  PublicNetworkACLEntryInboundSsh:
-    Type: AWS::EC2::NetworkAclEntry
-    Properties:
-      NetworkAclId: !Ref PublicNetworkACL
-      RuleNumber: 120
-      Protocol: 6
-      RuleAction: allow
-      CidrBlock: !Ref BastionSshCidr
-      PortRange: { From: 22, To: 22 }
-      Egress: false
-
-  PublicNetworkACLEntryInboundEphemeral:
-    Type: AWS::EC2::NetworkAclEntry
-    Properties:
-      NetworkAclId: !Ref PublicNetworkACL
-      RuleNumber: 130
-      Protocol: 6
-      RuleAction: allow
-      CidrBlock: 0.0.0.0/0
-      PortRange: { From: 1024, To: 65535 }
-      Egress: false
-
-  PublicNetworkACLEntryOutboundAll:
-    Type: AWS::EC2::NetworkAclEntry
-    Properties:
-      NetworkAclId: !Ref PublicNetworkACL
-      RuleNumber: 100
-      Protocol: -1
-      Egress: true
-      RuleAction: allow
-      CidrBlock: 0.0.0.0/0
-
-  PublicNetworkACLEntryOutboundDenyAll:
-    Type: AWS::EC2::NetworkAclEntry
-    Properties:
-      NetworkAclId: !Ref PublicNetworkACL
-      RuleNumber: 2000
-      Protocol: -1
-      RuleAction: deny
-      CidrBlock: 0.0.0.0/0
-      Egress: true
-
-  PublicSubnetNetworkACLAssociation:
-    Type: AWS::EC2::SubnetNetworkAclAssociation
     Properties:
       SubnetId: !Ref PublicSubnet
-      NetworkAclId: !Ref PublicNetworkACL
-
-  PublicSubnet2NetworkACLAssociation:
-    Type: AWS::EC2::SubnetNetworkAclAssociation
-    Properties:
-      SubnetId: !Ref PublicSubnet2
-      NetworkAclId: !Ref PublicNetworkACL
-
-  PrivateNetworkACL:
-    Type: AWS::EC2::NetworkAcl
-    Properties:
-      VpcId: !Ref SecureVPC
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-private-nacl'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Project
-          Value: !Ref ProjectName
-
-  PrivateNetworkACLEntryInboundApp:
-    Type: AWS::EC2::NetworkAclEntry
-    Properties:
-      NetworkAclId: !Ref PrivateNetworkACL
-      RuleNumber: 100
-      Protocol: 6
-      RuleAction: allow
-      CidrBlock: !Ref VpcCidr
-      PortRange: { From: !Ref WebAppPort, To: !Ref WebAppPort }
-      Egress: false
-
-  PrivateNetworkACLEntryInboundSsh:
-    Type: AWS::EC2::NetworkAclEntry
-    Properties:
-      NetworkAclId: !Ref PrivateNetworkACL
-      RuleNumber: 110
-      Protocol: 6
-      RuleAction: allow
-      CidrBlock: !Ref BastionSshCidr
-      PortRange: { From: 22, To: 22 }
-      Egress: false
-
-  PrivateNetworkACLEntryInboundEphemeral:
-    Type: AWS::EC2::NetworkAclEntry
-    Properties:
-      NetworkAclId: !Ref PrivateNetworkACL
-      RuleNumber: 120
-      Protocol: 6
-      RuleAction: allow
-      CidrBlock: 0.0.0.0/0
-      PortRange: { From: 1024, To: 65535 }
-      Egress: false
-
-  PrivateNetworkACLEntryOutboundAll:
-    Type: AWS::EC2::NetworkAclEntry
-    Properties:
-      NetworkAclId: !Ref PrivateNetworkACL
-      RuleNumber: 100
-      Protocol: -1
-      Egress: true
-      RuleAction: allow
-      CidrBlock: 0.0.0.0/0
-
-  PrivateNetworkACLEntryOutboundDenyAll:
-    Type: AWS::EC2::NetworkAclEntry
-    Properties:
-      NetworkAclId: !Ref PrivateNetworkACL
-      RuleNumber: 2000
-      Protocol: -1
-      RuleAction: deny
-      CidrBlock: 0.0.0.0/0
-      Egress: true
-
-  PrivateSubnetNetworkACLAssociation:
-    Type: AWS::EC2::SubnetNetworkAclAssociation
-    Properties:
-      SubnetId: !Ref PrivateSubnet
-      NetworkAclId: !Ref PrivateNetworkACL
-
-  PrivateSubnet2NetworkACLAssociation:
-    Type: AWS::EC2::SubnetNetworkAclAssociation
-    Properties:
-      SubnetId: !Ref PrivateSubnet2
-      NetworkAclId: !Ref PrivateNetworkACL
-
-  DatabaseNetworkACL:
-    Type: AWS::EC2::NetworkAcl
-    Properties:
-      VpcId: !Ref SecureVPC
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-db-nacl'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Project
-          Value: !Ref ProjectName
-
-  DatabaseNetworkACLEntryInboundMysql:
-    Type: AWS::EC2::NetworkAclEntry
-    Properties:
-      NetworkAclId: !Ref DatabaseNetworkACL
-      RuleNumber: 100
-      Protocol: 6
-      RuleAction: allow
-      CidrBlock: !Ref PrivateSubnetCidr
-      PortRange: { From: 3306, To: 3306 }
-      Egress: false
-
-  DatabaseNetworkACLEntryInboundSsh:
-    Type: AWS::EC2::NetworkAclEntry
-    Properties:
-      NetworkAclId: !Ref DatabaseNetworkACL
-      RuleNumber: 110
-      Protocol: 6
-      RuleAction: allow
-      CidrBlock: !Ref BastionSshCidr
-      PortRange: { From: 22, To: 22 }
-      Egress: false
-
-  DatabaseNetworkACLEntryInboundEphemeral:
-    Type: AWS::EC2::NetworkAclEntry
-    Properties:
-      NetworkAclId: !Ref DatabaseNetworkACL
-      RuleNumber: 120
-      Protocol: 6
-      RuleAction: allow
-      CidrBlock: 0.0.0.0/0
-      PortRange: { From: 1024, To: 65535 }
-      Egress: false
-
-  DatabaseNetworkACLEntryOutboundAll:
-    Type: AWS::EC2::NetworkAclEntry
-    Properties:
-      NetworkAclId: !Ref DatabaseNetworkACL
-      RuleNumber: 100
-      Protocol: -1
-      Egress: true
-      RuleAction: allow
-      CidrBlock: 0.0.0.0/0
-
-  DatabaseNetworkACLEntryOutboundDenyAll:
-    Type: AWS::EC2::NetworkAclEntry
-    Properties:
-      NetworkAclId: !Ref DatabaseNetworkACL
-      RuleNumber: 2000
-      Protocol: -1
-      RuleAction: deny
-      CidrBlock: 0.0.0.0/0
-      Egress: true
-
-  DatabaseSubnet1NetworkACLAssociation:
-    Type: AWS::EC2::SubnetNetworkAclAssociation
-    Properties:
-      SubnetId: !Ref DatabaseSubnet1
-      NetworkAclId: !Ref DatabaseNetworkACL
-
-  DatabaseSubnet2NetworkACLAssociation:
-    Type: AWS::EC2::SubnetNetworkAclAssociation
-    Properties:
-      SubnetId: !Ref DatabaseSubnet2
-      NetworkAclId: !Ref DatabaseNetworkACL
+      RouteTableId: !Ref PublicRouteTable
 
   # ============================================================================
-  # IAM - ROLE & INSTANCE PROFILE
+  # ENCRYPTION KEY FOR S3 BUCKETS
   # ============================================================================
-  WebApplicationRole:
+
+  S3EncryptionKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: 'KMS Key for S3 bucket encryption'
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: 'Enable IAM User Permissions'
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: 'kms:*'
+            Resource: '*'
+          - Sid: 'Allow S3 Service'
+            Effect: Allow
+            Principal:
+              Service: s3.amazonaws.com
+            Action:
+              - 'kms:Decrypt'
+              - 'kms:GenerateDataKey'
+            Resource: '*'
+          - Sid: 'Allow EC2 Instance Role'
+            Effect: Allow
+            Principal:
+              AWS: !GetAtt EC2InstanceRole.Arn
+            Action:
+              - 'kms:Decrypt'
+              - 'kms:GenerateDataKey'
+            Resource: '*'
+
+  S3EncryptionKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Sub 'alias/${AWS::StackName}-s3-encryption-key'
+      TargetKeyId: !Ref S3EncryptionKey
+
+  # ============================================================================
+  # S3 BUCKETS WITH ENCRYPTION AND ACCESS LOGGING
+  # ============================================================================
+
+  # Dedicated bucket for storing S3 access logs
+  S3AccessLogsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 's3-access-logs-${UniqueId}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !Ref S3EncryptionKey
+            BucketKeyEnabled: true
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      Tags:
+        - Key: Name
+          Value: 'S3 Access Logs Bucket'
+        - Key: Purpose
+          Value: 'Access Logging'
+
+  # Website content bucket
+  WebsiteContentBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'website-content-${UniqueId}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !Ref S3EncryptionKey
+            BucketKeyEnabled: true
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LoggingConfiguration:
+        DestinationBucketName: !Ref S3AccessLogsBucket
+        LogFilePrefix: 'website-content-access-logs/'
+      VersioningConfiguration:
+        Status: Enabled
+      Tags:
+        - Key: Name
+          Value: 'Website Content Bucket'
+        - Key: Purpose
+          Value: 'Static Content Storage'
+
+  # Application logs bucket
+  ApplicationLogsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'application-logs-${UniqueId}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !Ref S3EncryptionKey
+            BucketKeyEnabled: true
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LoggingConfiguration:
+        DestinationBucketName: !Ref S3AccessLogsBucket
+        LogFilePrefix: 'application-logs-access-logs/'
+      VersioningConfiguration:
+        Status: Enabled
+      Tags:
+        - Key: Name
+          Value: 'Application Logs Bucket'
+        - Key: Purpose
+          Value: 'Application Log Storage'
+
+  # Backup data bucket
+  BackupDataBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'backup-data-${UniqueId}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !Ref S3EncryptionKey
+            BucketKeyEnabled: true
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LoggingConfiguration:
+        DestinationBucketName: !Ref S3AccessLogsBucket
+        LogFilePrefix: 'backup-data-access-logs/'
+      VersioningConfiguration:
+        Status: Enabled
+      Tags:
+        - Key: Name
+          Value: 'Backup Data Bucket'
+        - Key: Purpose
+          Value: 'Backup Storage'
+
+  # ============================================================================
+  # S3 BUCKET POLICIES FOR ACCESS CONTROL
+  # ============================================================================
+
+  WebsiteContentBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref WebsiteContentBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: 'DenyPublicAccess'
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource:
+              - !Sub '${WebsiteContentBucket}/*'
+              - !Sub '${WebsiteContentBucket}'
+            Condition:
+              StringNotEquals:
+                'aws:PrincipalArn': !GetAtt EC2InstanceRole.Arn
+          - Sid: 'AllowEC2InstanceReadAccess'
+            Effect: Allow
+            Principal:
+              AWS: !GetAtt EC2InstanceRole.Arn
+            Action:
+              - 's3:GetObject'
+              - 's3:ListBucket'
+            Resource:
+              - !Sub '${WebsiteContentBucket}/*'
+              - !Sub '${WebsiteContentBucket}'
+
+  ApplicationLogsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref ApplicationLogsBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: 'DenyPublicAccess'
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource:
+              - !Sub '${ApplicationLogsBucket}/*'
+              - !Sub '${ApplicationLogsBucket}'
+            Condition:
+              StringNotEquals:
+                'aws:PrincipalArn': !GetAtt EC2InstanceRole.Arn
+          - Sid: 'AllowEC2InstanceWriteAccess'
+            Effect: Allow
+            Principal:
+              AWS: !GetAtt EC2InstanceRole.Arn
+            Action:
+              - 's3:PutObject'
+              - 's3:PutObjectAcl'
+              - 's3:ListBucket'
+            Resource:
+              - !Sub '${ApplicationLogsBucket}/*'
+              - !Sub '${ApplicationLogsBucket}'
+
+  BackupDataBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref BackupDataBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: 'DenyAllAccess'
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource:
+              - !Sub '${BackupDataBucket}/*'
+              - !Sub '${BackupDataBucket}'
+
+  # ============================================================================
+  # IAM ROLE AND POLICIES FOR EC2 INSTANCE
+  # ============================================================================
+
+  EC2InstanceRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${ProjectName}-${EnvironmentSuffix}-web-app-role'
+      RoleName: !Sub '${AWS::StackName}-ec2-instance-role'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
           - Effect: Allow
             Principal:
               Service: ec2.amazonaws.com
-            Action: sts:AssumeRole
+            Action: 'sts:AssumeRole'
       ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
+        - 'arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy'
       Policies:
-        - PolicyName: SecureWebAppPolicy
+        - PolicyName: 'S3AccessPolicy'
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
-              - Effect: Allow
-                Action:
-                  - 'logs:CreateLogGroup'
-                  - 'logs:CreateLogStream'
-                  - 'logs:PutLogEvents'
-                  - 'logs:DescribeLogStreams'
-                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/ec2/*'
-              - !If
-                - EnableOptionalSecurity
-                - Effect: Allow
-                  Action:
-                    - 'kms:Decrypt'
-                    - 'kms:DescribeKey'
-                  Resource: !GetAtt SecurityKMSKey.Arn
-                - !Ref 'AWS::NoValue'
-              - Effect: Allow
-                Action:
-                  - 'ssm:GetParameter'
-                  - 'ssm:GetParameters'
-                  - 'ssm:GetParametersByPath'
-                Resource: !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${ProjectName}/${EnvironmentSuffix}/*'
-              - Effect: Allow
+              - Sid: 'ReadWebsiteContent'
+                Effect: Allow
                 Action:
                   - 's3:GetObject'
                   - 's3:ListBucket'
+                Resource:
+                  - !Sub '${WebsiteContentBucket}/*'
+                  - !Sub '${WebsiteContentBucket}'
+              - Sid: 'WriteApplicationLogs'
+                Effect: Allow
+                Action:
                   - 's3:PutObject'
-                Resource: # Ensured Resources are arrays
-                  - !Sub 'arn:aws:s3:::${ProjectName}-${EnvironmentSuffix}-static-content/*'
-                  - !Sub 'arn:aws:s3:::${ProjectName}-${EnvironmentSuffix}-app-logs/*'
-                  - !Sub 'arn:aws:s3:::${ProjectName}-${EnvironmentSuffix}-static-content'
-                  - !Sub 'arn:aws:s3:::${ProjectName}-${EnvironmentSuffix}-app-logs'
+                  - 's3:PutObjectAcl'
+                  - 's3:ListBucket'
+                Resource:
+                  - !Sub '${ApplicationLogsBucket}/*'
+                  - !Sub '${ApplicationLogsBucket}'
+              - Sid: 'KMSAccess'
+                Effect: Allow
+                Action:
+                  - 'kms:Decrypt'
+                  - 'kms:GenerateDataKey'
+                Resource: !GetAtt S3EncryptionKey.Arn
       Tags:
         - Key: Name
-          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-web-app-role'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Project
-          Value: !Ref ProjectName
+          Value: 'EC2 Instance Role'
+        - Key: Purpose
+          Value: 'Least Privilege S3 Access'
 
-  WebApplicationInstanceProfile:
+  EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
-      InstanceProfileName: !Sub '${ProjectName}-${EnvironmentSuffix}-web-app-profile'
+      InstanceProfileName: !Sub '${AWS::StackName}-ec2-instance-profile'
       Roles:
-        - !Ref WebApplicationRole
+        - !Ref EC2InstanceRole
 
-  AccountPasswordPolicy:
-    Type: AWS::IAM::AccountPasswordPolicy
-    Condition: EnforceMfa
+  # ============================================================================
+  # SECURITY GROUP FOR EC2 INSTANCE
+  # ============================================================================
 
-  # Secret for Admin IAM User Password
-  AdminUserSecret:
-    Type: AWS::SecretsManager::Secret
-    Condition: EnforceMfa
-
-  AdminUser:
-    Type: AWS::IAM::User
-    Condition: EnforceMfa
-
-  AdminUserGroup:
-    Type: AWS::IAM::Group
-    Condition: EnforceMfa
+  EC2SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub '${ProjectName}-${EnvironmentSuffix}-admins'
-      ManagedPolicyArns:
-        - 'arn:aws:iam::aws:policy/AdministratorAccess'
-
-  AdminUserGroupMembership:
-    Type: AWS::IAM::UserToGroupAddition
-    Condition: EnforceMfa
-    Properties:
-      GroupName: !Ref AdminUserGroup
-      Users:
-        - !Ref AdminUser
-
-  # ============================================================================
-  # LOGGING - CLOUDTRAIL & S3
-  # ============================================================================
-  CloudTrailLogGroup:
-    Type: AWS::Logs::LogGroup
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Retain
-
-  CloudTrailRole:
-    Type: AWS::IAM::Role
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Retain
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: cloudtrail.amazonaws.com
-            Action: sts:AssumeRole
-      Policies:
-        - PolicyName: CloudTrailLogsPolicy
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - 'logs:CreateLogStream'
-                  - 'logs:PutLogEvents'
-                Resource: !GetAtt CloudTrailLogGroup.Arn
-
-  CloudTrailS3Bucket:
-    Type: AWS::S3::Bucket
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Retain
-
-  CloudTrailS3BucketPolicy:
-    Type: AWS::S3::BucketPolicy
-    Properties:
-      Bucket: !Ref CloudTrailS3Bucket
-      PolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Sid: AWSCloudTrailAclCheck
-            Effect: Allow
-            Principal:
-              Service: cloudtrail.amazonaws.com
-            Action: s3:GetBucketAcl
-            Resource: !GetAtt CloudTrailS3Bucket.Arn
-          - Sid: AWSCloudTrailWrite
-            Effect: Allow
-            Principal:
-              Service: cloudtrail.amazonaws.com
-            Action: s3:PutObject
-            Resource: !Sub '${CloudTrailS3Bucket.Arn}/*'
-            Condition:
-              StringEquals:
-                's3:x-amz-acl': bucket-owner-full-control
-
-  CloudTrail:
-    Type: AWS::CloudTrail::Trail
-    DependsOn: CloudTrailS3BucketPolicy
+      GroupName: !Sub '${AWS::StackName}-ec2-security-group'
+      GroupDescription: 'Security group for EC2 instance with restricted SSH access'
+      VpcId: !Ref SecureVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref AllowedSSHCIDR
+          Description: 'SSH access from specified CIDR'
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: '0.0.0.0/0'
+          Description: 'All outbound traffic'
+      Tags:
+        - Key: Name
+          Value: 'EC2 Security Group'
+        - Key: Purpose
+          Value: 'Restricted SSH Access'
 
   # ============================================================================
-  # GUARDDUTY
+  # EC2 INSTANCE WITH ENCRYPTED EBS VOLUME
   # ============================================================================
-  GuardDutyDetector:
-    Type: AWS::GuardDuty::Detector
-    Condition: EnableOptionalSecurity
 
-  #=========================================================================
-  # EC2 BASTION
-  # ============================================================================
-  BastionHost:
+  EC2Instance:
     Type: AWS::EC2::Instance
     Properties:
-      ImageId: !Ref WebServerAmiId
-      InstanceType: t3.micro
-      KeyName: !Sub '${ProjectName}-${EnvironmentSuffix}-key'
+      ImageId: !Sub '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}'
+      InstanceType: 't2.micro'
       SubnetId: !Ref PublicSubnet
       SecurityGroupIds:
-        - !Ref BastionSecurityGroup
-      IamInstanceProfile: !Ref WebApplicationInstanceProfile
+        - !Ref EC2SecurityGroup
+      IamInstanceProfile: !Ref EC2InstanceProfile
+      BlockDeviceMappings:
+        - DeviceName: '/dev/xvda'
+          Ebs:
+            VolumeType: 'gp3'
+            VolumeSize: 8
+            Encrypted: true
+            DeleteOnTermination: true
       UserData:
-        Fn::Base64: |
+        Fn::Base64: !Sub |
           #!/bin/bash
-          echo "Hello from CloudFormation bastion host!" > /tmp/bastion_message.txt
           yum update -y
-          yum install -y mysql
+          yum install -y aws-cli
+
+          # Create a test script to verify S3 access
+          cat > /home/ec2-user/test_s3_access.sh << 'EOF'
+          #!/bin/bash
+          echo "Testing S3 access..."
+
+          # Test read access to website-content bucket
+          echo "Testing read access to website-content bucket:"
+          aws s3 ls s3://${WebsiteContentBucket}/ || echo "Read access test failed"
+
+          # Test write access to application-logs bucket
+          echo "Testing write access to application-logs bucket:"
+          echo "Test log entry $(date)" > /tmp/test-log.txt
+          aws s3 cp /tmp/test-log.txt s3://${ApplicationLogsBucket}/test-log.txt || echo "Write access test failed"
+
+          echo "S3 access tests completed."
+          EOF
+
+          chmod +x /home/ec2-user/test_s3_access.sh
+          chown ec2-user:ec2-user /home/ec2-user/test_s3_access.sh
+
+          # Install CloudWatch agent
+          wget https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm
+          rpm -U ./amazon-cloudwatch-agent.rpm
       Tags:
         - Key: Name
-          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-bastion'
+          Value: !Sub '${AWS::StackName}-secure-ec2-instance'
         - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Project
-          Value: !Ref ProjectName
+          Value: 'Production'
+        - Key: Purpose
+          Value: 'Web Application Server'
 
-  # ============================================================================
-  # LOG GROUPS & MONITORING
-  # ============================================================================
-  ApplicationLogGroup:
-    Type: AWS::Logs::LogGroup
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Retain
-
-  SecurityLogGroup:
-    Type: AWS::Logs::LogGroup
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Retain
-
-  VPCFlowLogsLogGroup:
-    Type: AWS::Logs::LogGroup
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Retain
-    Properties:
-      LogGroupName: !Sub '/aws/vpcflowlogs/${ProjectName}-${EnvironmentSuffix}'
-      RetentionInDays: !Ref DataRetentionDays
-      KmsKeyId:
-        !If [
-          EnableOptionalSecurity,
-          !GetAtt SecurityKMSKey.Arn,
-          !Ref 'AWS::NoValue',
-        ]
-
-  VPCFlowLogsRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: vpc-flow-logs.amazonaws.com
-            Action: sts:AssumeRole
-      Policies:
-        - PolicyName: VPCFlowLogsPolicy
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - 'logs:CreateLogGroup'
-                  - 'logs:CreateLogStream'
-                  - 'logs:PutLogEvents'
-                Resource: !GetAtt VPCFlowLogsLogGroup.Arn
-
-  VPCFlowLog:
-    Type: AWS::EC2::FlowLog
-    Properties:
-      DeliverLogsPermissionArn: !GetAtt VPCFlowLogsRole.Arn
-      LogGroupName: !Ref VPCFlowLogsLogGroup
-      ResourceId: !Ref SecureVPC
-      ResourceType: VPC
-      TrafficType: ALL
-
-  SecurityNotificationsTopic:
-    Type: AWS::SNS::Topic
-
-  SecurityNotificationsSubscription:
-    Type: AWS::SNS::Subscription
-    Properties:
-      Protocol: email
-      Endpoint: !Ref AdminUserEmail
-      TopicArn: !Ref SecurityNotificationsTopic
-
-  UnauthorizedApiCallAlarm:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName: !Sub '${ProjectName}-${EnvironmentSuffix}-unauthorized-api-call-alarm'
-      ComparisonOperator: GreaterThanOrEqualToThreshold
-      EvaluationPeriods: 1
-      MetricName: UnauthorizedApiCallCount
-      Namespace: CloudTrailMetrics
-      Period: 300
-      Statistic: Sum
-      Threshold: 1
-      AlarmActions:
-        - !Ref SecurityNotificationsTopic
-      Dimensions:
-        - Name: TrailName
-          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-cloudtrail'
-
-  # ============================================================================
-  # EC2 LAUNCH TEMPLATE + ASG + ALARMS
-  # ============================================================================
-  WebServerLaunchTemplate:
-    Type: AWS::EC2::LaunchTemplate
-    Properties:
-      LaunchTemplateName: !Sub '${ProjectName}-${EnvironmentSuffix}-web-lt'
-      LaunchTemplateData:
-        ImageId: !Ref WebServerAmiId
-        InstanceType: !Ref InstanceType
-        SecurityGroupIds:
-          - !Ref WebApplicationSecurityGroup
-        IamInstanceProfile:
-          Arn: !GetAtt WebApplicationInstanceProfile.Arn
-        UserData:
-          Fn::Base64: |
-            #!/bin/bash
-            echo "Hello from CloudFormation web server!" > /var/www/html/index.html
-            yum update -y
-            yum install -y httpd
-            systemctl start httpd
-            systemctl enable httpd
-        BlockDeviceMappings:
-          - DeviceName: /dev/xvda
-            Ebs:
-              VolumeSize: 30
-              Encrypted: true
-              KmsKeyId:
-                !If [
-                  EnableOptionalSecurity,
-                  !Ref SecurityKMSKey,
-                  !Ref 'AWS::NoValue',
-                ]
-        TagSpecifications:
-          - ResourceType: instance
-            Tags:
-              - Key: Name
-                Value: !Sub '${ProjectName}-${EnvironmentSuffix}-web-instance'
-              - Key: Environment
-                Value: !Ref EnvironmentSuffix
-              - Key: Project
-                Value: !Ref ProjectName
-
-  WebServerAutoScalingGroup:
-    Type: AWS::AutoScaling::AutoScalingGroup
-    Properties:
-      AutoScalingGroupName: !Sub '${ProjectName}-${EnvironmentSuffix}-web-asg'
-      VPCZoneIdentifier:
-        - !Ref PrivateSubnet
-        - !Ref PrivateSubnet2
-      LaunchTemplate:
-        LaunchTemplateId: !Ref WebServerLaunchTemplate
-        Version: !GetAtt WebServerLaunchTemplate.LatestVersionNumber
-      MinSize: !Ref MinInstances
-      MaxSize: !Ref MaxInstances
-      DesiredCapacity: !Ref MinInstances
-      TargetGroupARNs:
-        - !Ref WebServerTargetGroup
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-web-asg'
-          PropagateAtLaunch: true
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-          PropagateAtLaunch: true
-        - Key: Project
-          Value: !Ref ProjectName
-          PropagateAtLaunch: true
-
-  WebServerScaleUpPolicy:
-    Type: AWS::AutoScaling::ScalingPolicy
-    Properties:
-      PolicyName: !Sub '${ProjectName}-${EnvironmentSuffix}-web-scale-up'
-      AutoScalingGroupName: !Ref WebServerAutoScalingGroup
-      AdjustmentType: ChangeInCapacity
-      ScalingAdjustment: 1
-      Cooldown: '300'
-
-  WebServerScaleDownPolicy:
-    Type: AWS::AutoScaling::ScalingPolicy
-    Properties:
-      PolicyName: !Sub '${ProjectName}-${EnvironmentSuffix}-web-scale-down'
-      AutoScalingGroupName: !Ref WebServerAutoScalingGroup
-      AdjustmentType: ChangeInCapacity
-      ScalingAdjustment: -1
-      Cooldown: '300'
-
-  WebServerCpuUtilizationAlarm:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName: !Sub '${ProjectName}-${EnvironmentSuffix}-web-cpu-high'
-      ComparisonOperator: GreaterThanOrEqualToThreshold
-      EvaluationPeriods: 2
-      MetricName: CPUUtilization
-      Namespace: AWS/EC2
-      Period: 300
-      Statistic: Average
-      Threshold: 75
-      AlarmActions:
-        - !Ref WebServerScaleUpPolicy
-      Dimensions:
-        - Name: AutoScalingGroupName
-          Value: !Ref WebServerAutoScalingGroup
-
-  WebServerCpuLowAlarm:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName: !Sub '${ProjectName}-${EnvironmentSuffix}-web-cpu-low'
-      ComparisonOperator: LessThanOrEqualToThreshold
-      EvaluationPeriods: 2
-      MetricName: CPUUtilization
-      Namespace: AWS/EC2
-      Period: 300
-      Statistic: Average
-      Threshold: 25
-      AlarmActions:
-        - !Ref WebServerScaleDownPolicy
-      Dimensions:
-        - Name: AutoScalingGroupName
-          Value: !Ref WebServerAutoScalingGroup
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-web-cpu-low-alarm'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Project
-          Value: !Ref ProjectName
-
-  # ============================================================================
-  # ENCRYPTED DATABASE (RDS) + SECRET
-  # ============================================================================
-  DatabaseSubnetGroup:
-    Type: AWS::RDS::DBSubnetGroup
-    Properties:
-      DBSubnetGroupName: !Sub '${ProjectName}-${EnvironmentSuffix}-db-subnet-group'
-      DBSubnetGroupDescription: 'Subnet group for RDS database'
-      SubnetIds:
-        - !Ref DatabaseSubnet1
-        - !Ref DatabaseSubnet2
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-db-subnet-group'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Project
-          Value: !Ref ProjectName
-
-  DatabaseSecret:
-    Type: AWS::SecretsManager::Secret
-    Condition: EnforceMfa
-
-  SecureDatabase:
-    Type: AWS::RDS::DBInstance
-    Condition: EnforceMfa
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Retain
-
-  # ============================================================================
-  # DYNAMODB
-  # ============================================================================
-  SecureDynamoTable:
-    Type: AWS::DynamoDB::Table
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Retain
-    Properties:
-      TableName: !Sub '${ProjectName}-${EnvironmentSuffix}-secure-table'
-      AttributeDefinitions:
-        - AttributeName: 'id'
-          AttributeType: 'S'
-      KeySchema:
-        - AttributeName: 'id'
-          KeyType: HASH
-      BillingMode: PAY_PER_REQUEST
-      SSESpecification:
-        SSEEnabled: true
-        SSEType: KMS
-        KMSMasterKeyId:
-          !If [EnableOptionalSecurity, !Ref SecurityKMSKey, !Ref 'AWS::NoValue']
-      DeletionProtectionEnabled: true
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-secure-table'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Project
-          Value: !Ref ProjectName
-
-  # ============================================================================
-  # GDPR AUX (LOG GROUP) - OPTIONAL
-  # ============================================================================
-  GDPRDataRetentionPolicy:
-    Type: AWS::Logs::LogGroup
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Retain
-
-  WebServerTargetGroup:
-    Type: AWS::ElasticLoadBalancingV2::TargetGroup
-    Properties:
-      Name: !Sub '${ProjectName}-${EnvironmentSuffix}-tg'
-      Port: 80
-      Protocol: HTTP
-      VpcId: !Ref SecureVPC
-      TargetType: instance
-
-  ApplicationLoadBalancer:
-    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
-    Properties:
-      Name: !Sub '${ProjectName}-${EnvironmentSuffix}-alb'
-      Subnets:
-        - !Ref PublicSubnet
-        - !Ref PublicSubnet2
-      SecurityGroups:
-        - !Ref ALBSecurityGroup
-      Scheme: internet-facing
-      Type: application
-
-  WebACL:
-    Type: AWS::WAFv2::WebACL
-    Condition: EnableOptionalSecurity
-    Properties:
-      DefaultAction:
-        Allow: {}
-      Scope: REGIONAL
-      VisibilityConfig:
-        SampledRequestsEnabled: true
-        CloudWatchMetricsEnabled: true
-        MetricName: webACL
-      Rules: []
-
-  WebAppCertificate:
-    Type: AWS::CertificateManager::Certificate
-    Condition: EnableOptionalSecurity
-    Properties:
-      DomainName: !Sub 'webapp.${ProjectName}.com'
-      ValidationMethod: DNS
-
-  WebACLAssociation:
-    Type: AWS::WAFv2::WebACLAssociation
-    Condition: EnableOptionalSecurity
-    Properties:
-      ResourceArn: !GetAtt ApplicationLoadBalancer.LoadBalancerArn
-      WebACLArn: !GetAtt WebACL.Arn
-
-  ALBListener:
-    Type: AWS::ElasticLoadBalancingV2::Listener
-    Properties:
-      LoadBalancerArn: !Ref ApplicationLoadBalancer
-      Port: 80
-      Protocol: HTTP
-      DefaultActions:
-        - Type: forward
-          TargetGroupArn: !Ref WebServerTargetGroup
+# ============================================================================
+# OUTPUTS
+# ============================================================================
 
 Outputs:
   VPCId:
     Description: 'ID of the created VPC'
     Value: !Ref SecureVPC
     Export:
-      Name: !Sub '${AWS::StackName}-VPCId'
+      Name: !Sub '${AWS::StackName}-VPC-ID'
 
-  PublicSubnetId:
-    Description: 'ID of the public subnet'
-    Value: !Ref PublicSubnet
+  EC2InstanceId:
+    Description: 'ID of the created EC2 instance'
+    Value: !Ref EC2Instance
     Export:
-      Name: !Sub '${AWS::StackName}-PublicSubnetId'
+      Name: !Sub '${AWS::StackName}-EC2-Instance-ID'
 
-  PrivateSubnetId:
-    Description: 'ID of the private subnet'
-    Value: !Ref PrivateSubnet
+  EC2PublicIP:
+    Description: 'Public IP address of the EC2 instance'
+    Value: !GetAtt EC2Instance.PublicIp
     Export:
-      Name: !Sub '${AWS::StackName}-PrivateSubnetId'
+      Name: !Sub '${AWS::StackName}-EC2-Public-IP'
 
-  PublicSubnet2Id:
-    Description: 'ID of the public subnet 2'
-    Value: !Ref PublicSubnet2
+  WebsiteContentBucket:
+    Description: 'Name of the website content S3 bucket'
+    Value: !Ref WebsiteContentBucket
     Export:
-      Name: !Sub '${AWS::StackName}-PublicSubnet2Id'
+      Name: !Sub '${AWS::StackName}-Website-Content-Bucket'
 
-  PrivateSubnet2Id:
-    Description: 'ID of the private subnet 2'
-    Value: !Ref PrivateSubnet2
+  ApplicationLogsBucket:
+    Description: 'Name of the application logs S3 bucket'
+    Value: !Ref ApplicationLogsBucket
     Export:
-      Name: !Sub '${AWS::StackName}-PrivateSubnet2Id'
+      Name: !Sub '${AWS::StackName}-Application-Logs-Bucket'
 
-  DatabaseSubnet1Id:
-    Description: 'ID of the database subnet 1'
-    Value: !Ref DatabaseSubnet1
+  BackupDataBucket:
+    Description: 'Name of the backup data S3 bucket'
+    Value: !Ref BackupDataBucket
     Export:
-      Name: !Sub '${AWS::StackName}-DatabaseSubnet1Id'
+      Name: !Sub '${AWS::StackName}-Backup-Data-Bucket'
 
-  DatabaseSubnet2Id:
-    Description: 'ID of the database subnet 2'
-    Value: !Ref DatabaseSubnet2
+  S3AccessLogsBucket:
+    Description: 'Name of the S3 access logs bucket'
+    Value: !Ref S3AccessLogsBucket
     Export:
-      Name: !Sub '${AWS::StackName}-DatabaseSubnet2Id'
-
-  WebApplicationSecurityGroupId:
-    Description: 'ID of the web application security group'
-    Value: !Ref WebApplicationSecurityGroup
-    Export:
-      Name: !Sub '${AWS::StackName}-WebApplicationSecurityGroupId'
-
-  DatabaseSecurityGroupId:
-    Description: 'ID of the database security group'
-    Value: !Ref DatabaseSecurityGroup
-    Export:
-      Name: !Sub '${AWS::StackName}-DatabaseSecurityGroupId'
-
-  ALBSecurityGroupId:
-    Description: 'ID of the ALB security group'
-    Value: !Ref ALBSecurityGroup
-    Export:
-      Name: !Sub '${AWS::StackName}-ALBSecurityGroupId'
-
-  PublicNetworkACLId:
-    Description: 'ID of the Public Network ACL'
-    Value: !Ref PublicNetworkACL
-    Export:
-      Name: !Sub '${AWS::StackName}-PublicNetworkACLId'
-
-  PrivateNetworkACLId:
-    Description: 'ID of the Private Network ACL'
-    Value: !Ref PrivateNetworkACL
-    Export:
-      Name: !Sub '${AWS::StackName}-PrivateNetworkACLId'
-
-  DatabaseNetworkACLId:
-    Description: 'ID of the Database Network ACL'
-    Value: !Ref DatabaseNetworkACL
-    Export:
-      Name: !Sub '${AWS::StackName}-DatabaseNetworkACLId'
-
-  ApplicationLoadBalancerDNS:
-    Description: 'DNS name of the Application Load Balancer'
-    Value: !GetAtt ApplicationLoadBalancer.DNSName
-    Export:
-      Name: !Sub '${AWS::StackName}-ApplicationLoadBalancerDNS'
-
-  ApplicationLoadBalancerArn:
-    Description: 'ARN of the Application Load Balancer'
-    Value: !GetAtt ApplicationLoadBalancer.LoadBalancerArn
-    Export:
-      Name: !Sub '${AWS::StackName}-ApplicationLoadBalancerArn'
-
-  WebACLArn:
-    Description: 'ARN of the Web Application Firewall'
-    Value: !If [EnableOptionalSecurity, !GetAtt WebACL.Arn, !Ref 'AWS::NoValue']
-
-  DatabaseEndpoint:
-    Description: 'RDS Endpoint'
-    Value: !If
-      - EnforceMfa
-      - !GetAtt SecureDatabase.Endpoint.Address
-      - !Ref AWS::NoValue
-
-  SecureDynamoTableName:
-    Description: 'Name of the secure DynamoDB table'
-    Value: !Ref SecureDynamoTable
-    Export:
-      Name: !Sub '${AWS::StackName}-SecureDynamoTableName'
-
-  SecureDynamoTableArn:
-    Description: 'ARN of the secure DynamoDB table'
-    Value: !GetAtt SecureDynamoTable.Arn
-    Export:
-      Name: !Sub '${AWS::StackName}-SecureDynamoTableArn'
+      Name: !Sub '${AWS::StackName}-S3-Access-Logs-Bucket'
 
   KMSKeyId:
-    Description: 'ID of the KMS key used for encryption'
-    Value:
-      !If [EnableOptionalSecurity, !Ref SecurityKMSKey, !Ref 'AWS::NoValue']
-
-  CloudTrailArn:
-    Description: 'ARN of the CloudTrail'
-    Value: !GetAtt CloudTrail.Arn
+    Description: 'ID of the KMS key used for S3 encryption'
+    Value: !Ref S3EncryptionKey
     Export:
-      Name: !Sub '${AWS::StackName}-CloudTrailArn'
+      Name: !Sub '${AWS::StackName}-KMS-Key-ID'
 
-  GuardDutyDetectorId:
-    Condition: EnableOptionalSecurity
-    Value:
-      !If [EnableOptionalSecurity, !Ref GuardDutyDetector, !Ref 'AWS::NoValue']
-    Description: 'ID of the GuardDuty detector'
-
-  StackName:
-    Description: 'Name of this CloudFormation stack'
-    Value: !Ref 'AWS::StackName'
+  EC2InstanceRoleArn:
+    Description: 'ARN of the EC2 instance IAM role'
+    Value: !GetAtt EC2InstanceRole.Arn
     Export:
-      Name: !Sub '${AWS::StackName}-StackName'
-
-  EnvironmentSuffixOut:
-    Description: 'Environment suffix used for this deployment'
-    Value: !Ref EnvironmentSuffix
-    Export:
-      Name: !Sub '${AWS::StackName}-EnvironmentSuffixOut'
-
-  BastionHostPublicIp:
-    Description: 'Public IP of the Bastion Host'
-    Value: !GetAtt BastionHost.PublicIp
-    Export:
-      Name: !Sub '${AWS::StackName}-BastionHostPublicIp'
-
-  WebServerLaunchTemplateId:
-    Description: 'ID of the Web Server Launch Template'
-    Value: !Ref WebServerLaunchTemplate
-    Export:
-      Name: !Sub '${AWS::StackName}-WebServerLaunchTemplateId'
-
-  WebServerTargetGroupArn:
-    Description: 'ARN of the Web Server Target Group'
-    Value: !Ref WebServerTargetGroup
-    Export:
-      Name: !Sub '${AWS::StackName}-WebServerTargetGroupArn'
-
-  WebServerAutoScalingGroupName:
-    Description: 'Name of the Web Server Auto Scaling Group'
-    Value: !Ref WebServerAutoScalingGroup
-    Export:
-      Name: !Sub '${AWS::StackName}-WebServerAutoScalingGroupName'
-
-  WebServerScaleUpPolicyArn:
-    Description: 'ARN of the Web Server Scale Up Policy'
-    Value: !GetAtt WebServerScaleUpPolicy.Arn
-    Export:
-      Name: !Sub '${AWS::StackName}-WebServerScaleUpPolicyArn'
-
-  WebServerCpuUtilizationAlarmName:
-    Description: 'Name of the Web Server CPU Utilization Alarm'
-    Value: !Ref WebServerCpuUtilizationAlarm
-    Export:
-      Name: !Sub '${AWS::StackName}-WebServerCpuUtilizationAlarmName'
-
-  WebServerCpuLowAlarmName:
-    Description: 'Name of the Web Server CPU Low Alarm'
-    Value: !Ref WebServerCpuLowAlarm
-    Export:
-      Name: !Sub '${AWS::StackName}-WebServerCpuLowAlarmName'
-
-  WebServerScaleDownPolicyArn:
-    Description: 'ARN of the Web Server Scale Down Policy'
-    Value: !GetAtt WebServerScaleDownPolicy.Arn
-    Export:
-      Name: !Sub '${AWS::StackName}-WebServerScaleDownPolicyArn'
-
-  WebAppCertificateArn:
-    Description: 'ARN of the Web Application Certificate'
-    Value:
-      !If [EnableOptionalSecurity, !Ref WebAppCertificate, !Ref 'AWS::NoValue']
-
-  SecurityNotificationsTopicArn:
-    Description: 'ARN of the Security Notifications SNS Topic'
-    Value: !Ref SecurityNotificationsTopic
-    Export:
-      Name: !Sub '${AWS::StackName}-SecurityNotificationsTopicArn'
-
-  AdminUserArn:
-    Condition: EnforceMfa
-    Description: 'ARN of the example Admin IAM User'
-    Value: !If [EnforceMfa, !GetAtt AdminUser.Arn, !Ref 'AWS::NoValue']
-
-  VPCFlowLogsLogGroupName:
-    Description: 'Name of the VPC Flow Logs Log Group'
-    Value: !Ref VPCFlowLogsLogGroup
-    Export:
-      Name: !Sub '${AWS::StackName}-VPCFlowLogsLogGroupName'
+      Name: !Sub '${AWS::StackName}-EC2-Instance-Role-ARN'

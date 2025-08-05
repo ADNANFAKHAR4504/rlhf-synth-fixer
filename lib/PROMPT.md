@@ -1,53 +1,58 @@
-# AWS CloudFormation YAML Infrastructure for Secure Web Application
+### Prompt for Claude Sonnet
 
-## Problem Statement:
+Prompt Title: Secure AWS Infrastructure with CloudFormation
 
-Design an AWS CloudFormation YAML template to set up a secure, scalable web application infrastructure. The solution must include the following requirements:
+1. Role and Context:
 
-1. Define IAM roles with the least privilege necessary for all specified services.
-2. Implement comprehensive logging and monitoring, with retention policies in place.
-3. Ensure data storage and transfer security, complying with both AWS standards and GDPR.
-4. Architect VPCs for component isolation with appropriate security group settings.
-5. Design for regional redundancy to ensure high availability.
+You are an expert AWS Solutions Architect specializing in secure infrastructure design. Your task is to generate a complete AWS CloudFormation template and a detailed README file for a secure, multi-component infrastructure. The solution must be production-ready and adhere to all specified security best practices. The infrastructure should be deployed in the `us-east-1` region.
 
-## Constraints and Specific Requirements:
+2. Overall Goal:
 
-**1. Deployment & Regions:**
+Design and manage a highly secure infrastructure environment on AWS using CloudFormation YAML. This environment will host a web application and its data, with a strong emphasis on data encryption, least-privilege access, and robust access logging and monitoring.
 
-- Use a multi-region AWS environment.
-- Focus on `US-EAST-1` and `EU-WEST-1` regions for all resource deployments.
-- Ensure the architecture is regionally redundant for disaster recovery.
+3. Required Tools and Technologies:
 
-**2. Core AWS Services & Architecture:**
+The entire infrastructure must be defined in a single AWS CloudFormation YAML template named `secure_infrastructure.yaml`.
 
-- **VPCs:** Create VPCs for component isolation.
-  - Implement appropriate security group settings and Network ACLs (NACLs) for protection.
-  - Use default VPC for initial configurations but ensure eventual migration to a custom VPC.
-- **IAM:** Define IAM roles with the least privilege necessary for specified services.
-  - Enable multifactor authentication (MFA) for all IAM user accounts.
-- **Logging & Monitoring:**
-  - Implement comprehensive logging and monitoring.
-  - Incorporate CloudTrail to log API call history.
-  - Set up automated backups for critical data stores with defined retention policies.
-  - Utilize AWS GuardDuty for threat detection and response.
-- **Data Security:**
-  - Ensure all data stored is encrypted at rest and during transit.
-  - Use Parameter Store to manage sensitive credentials securely.
-- **Web Application Security:**
-  - Implement a Web Application Firewall (WAF) to protect against common attacks.
-  - Deploy an Intrusion Detection System (IDS) within the VPC.
-- **Database Access:** Apply least privilege access to all database instances.
+4. Infrastructure Requirements:
 
-**3. Compliance & Best Practices:**
+- VPC: Create a new VPC with a single public subnet to host the EC2 instance.
+- EC2 Instances:
+  - Deploy a single EC2 instance in the public subnet.
+  - The instance should use the latest Amazon Linux 2 AMI and a `t2.micro` instance type.
+  - The EBS root volume attached to this instance must be encrypted.
+- Data Storage Solutions:
+  - Create three S3 buckets for different purposes: `website-content`, `application-logs`, and `backup-data`.
+  - Ensure all data stored in these buckets is encrypted at rest using AWS KMS (Key Management Service) with an automatically generated key.
+- IAM Roles:
+  - Create a specific IAM Role for the EC2 instance. This role must follow the principle of least privilege.
+  - The IAM Role's policy should grant permissions only for what is necessary, specifically:
+    - Read-only access to the `website-content` S3 bucket.
+    - Write access (uploading objects) to the `application-logs` S3 bucket.
+- Security Groups:
+  - Create a Security Group for the EC2 instance.
+  - The Security Group must only allow inbound SSH traffic (port 22) from a specified CIDR block `[Your Public IP Address]/32` for management purposes.
 
-- Ensure compliance with GDPR for user data handling.
-- Ensure all deployed resources comply with AWS best practices for secure configurations.
-- Naming conventions must follow the format `<project>-<environment>-<resource>`, where `<environment>` is 'dev', 'staging', or 'prod'.
+5. Resource Connection and Security Policies (The Most Important Part):
 
-**4. Documentation:**
+- EC2 to S3: The EC2 instance must be able to interact with the S3 buckets.
+  - The IAM Role created for the EC2 instance must be attached to the instance profile.
+  - The S3 bucket policies must be written to explicitly allow the IAM Role attached to the EC2 instance to perform the permitted actions (read from `website-content`, write to `application-logs`). This ensures that the buckets are not publicly accessible and that access is strictly controlled via the IAM role.
+- S3 Access Controls & Logging:
+  - For all three S3 buckets, enforce strict access controls.
+  - Implement bucket policies on each bucket to prevent public access.
+  - Enable S3 Access Logging for each of the three buckets. The logs should be stored in a separate, dedicated S3 bucket named `s3-access-logs-[unique-id]`.
+- Encryption Enforcement:
+  - Ensure the EBS volume of the EC2 instance has encryption enabled.
+  - Ensure the S3 buckets have server-side encryption with an automatically generated KMS key enabled by default for all new objects.
 
-- Include detailed documentation in the CloudFormation templates to describe resources and their security purposes.
+6. Expected Output:
 
-## Expected Output:
+Provide two separate blocks of output:
 
-A valid CloudFormation YAML file named `secure-web-app-setup.yaml` that meets all the listed requirements and constraints. It should pass CloudFormation validation checks, and relevant integration tests must validate compliance with security and architectural requirements.
+1.  A complete, well-commented YAML CloudFormation template named `secure_infrastructure.yaml`. The template should include all the resources and their configurations as specified above.
+2.  A detailed `README.md` file that explains:
+    - The purpose of the infrastructure.
+    - The design choices made to ensure security (encryption, least-privilege, access controls).
+    - A breakdown of how the CloudFormation template fulfills each requirement, with specific references to the template's resources (e.g., "The `EC2InstanceRole` IAM role is attached to the instance via the `InstanceProfile` property...").
+    - Steps for deployment and validation, including how to verify that the security controls are correctly in place after deployment.
