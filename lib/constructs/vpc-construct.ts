@@ -10,6 +10,9 @@ import {
   routeTableAssociation,
   flowLog,
   cloudwatchLogGroup,
+  iamRole,
+  iamRolePolicy,
+  dataAwsIamPolicyDocument,
 } from '@cdktf/provider-aws/lib';
 import { NetworkConfig } from '../config/environments';
 import { NamingConvention } from '../utils/naming';
@@ -182,6 +185,59 @@ export class VpcConstruct extends Construct {
   }
 
   private createVpcFlowLogs(naming: NamingConvention) {
+    // Create IAM role for VPC Flow Logs
+    const flowLogAssumeRolePolicy =
+      new dataAwsIamPolicyDocument.DataAwsIamPolicyDocument(
+        this,
+        'flow-log-assume-role-policy',
+        {
+          statement: [
+            {
+              actions: ['sts:AssumeRole'],
+              effect: 'Allow',
+              principals: [
+                {
+                  type: 'Service',
+                  identifiers: ['vpc-flow-logs.amazonaws.com'],
+                },
+              ],
+            },
+          ],
+        }
+      );
+
+    const flowLogRole = new iamRole.IamRole(this, 'flow-log-role', {
+      name: naming.resource('role', 'vpc-flow-logs'),
+      assumeRolePolicy: flowLogAssumeRolePolicy.json,
+      tags: naming.tag({ Name: naming.resource('role', 'vpc-flow-logs') }),
+    });
+
+    const flowLogPolicy = new dataAwsIamPolicyDocument.DataAwsIamPolicyDocument(
+      this,
+      'flow-log-policy',
+      {
+        statement: [
+          {
+            effect: 'Allow',
+            actions: [
+              'logs:CreateLogGroup',
+              'logs:CreateLogStream',
+              'logs:PutLogEvents',
+              'logs:DescribeLogGroups',
+              'logs:DescribeLogStreams',
+            ],
+            resources: ['*'],
+          },
+        ],
+      }
+    );
+
+    new iamRolePolicy.IamRolePolicy(this, 'flow-log-role-policy', {
+      name: naming.resource('policy', 'vpc-flow-logs'),
+      role: flowLogRole.id,
+      policy: flowLogPolicy.json,
+    });
+
     const logGroup = new cloudwatchLogGroup.CloudwatchLogGroup(
       this,
       'vpc-flow-logs',
@@ -197,6 +253,7 @@ export class VpcConstruct extends Construct {
       trafficType: 'ALL',
       logDestination: logGroup.arn,
       logDestinationType: 'cloud-watch-logs',
+      iamRoleArn: flowLogRole.arn,
       tags: naming.tag({ Name: naming.resource('flow-log', 'vpc') }),
     });
   }

@@ -43,7 +43,7 @@ export const environments: Record<string, EnvironmentConfig> = {
         private: ['10.0.3.0/24', '10.0.4.0/24'],
         database: ['10.0.5.0/24', '10.0.6.0/24'],
       },
-      availabilityZones: ['us-west-2a', 'us-west-2b'],
+      availabilityZones: ['us-east-1a', 'us-east-1b'],
     },
     compute: {
       instanceType: 't3.micro',
@@ -76,7 +76,7 @@ export const environments: Record<string, EnvironmentConfig> = {
         private: ['10.1.3.0/24', '10.1.4.0/24'],
         database: ['10.1.5.0/24', '10.1.6.0/24'],
       },
-      availabilityZones: ['us-west-2a', 'us-west-2b'],
+      availabilityZones: ['us-east-1a', 'us-east-1b'],
     },
     compute: {
       instanceType: 't3.small',
@@ -109,7 +109,7 @@ export const environments: Record<string, EnvironmentConfig> = {
         private: ['10.2.3.0/24', '10.2.4.0/24'],
         database: ['10.2.5.0/24', '10.2.6.0/24'],
       },
-      availabilityZones: ['us-west-2a', 'us-west-2b'],
+      availabilityZones: ['us-east-1a', 'us-east-1b'],
     },
     compute: {
       instanceType: 't3.medium',
