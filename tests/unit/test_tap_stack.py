@@ -201,15 +201,8 @@ class TestTapStack(unittest.TestCase):
       "DefaultActions": [
         {
           "Type": "forward",
-          "ForwardConfig": {
-            "TargetGroups": [
-              {
-                "TargetGroupArn": {
-                  "Ref": "taptargetgroup81865027"
-                },
-                "Weight": 1
-              }
-            ]
+          "TargetGroupArn": {
+            "Ref": "taptargetgroup81865027"
           }
         }
       ]
