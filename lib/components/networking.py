@@ -68,7 +68,13 @@ class NetworkingInfrastructure(pulumi.ComponentResource):
     public_base = 100
     private_base = 120
 
-    for i in range(2):
+    # FIX: Dynamically determine the number of subnets to create based on available AZs.
+    # This ensures that we don't try to create more subnets than there are unique AZs,
+    # which causes the "ELB cannot be attached to multiple subnets in the same AZ" error.
+    # We aim for up to 2 subnets, but will use fewer if the region has fewer available AZs.
+    num_azs_to_use = min(2, len(self.azs.names))
+
+    for i in range(num_azs_to_use):
       az_output = pulumi.Output.from_input(self.azs).apply(lambda az: az.names[i])
       public_cidr = f"10.{base}.{public_base + i}.0/24"
       private_cidr = f"10.{base}.{private_base + i}.0/24"
@@ -107,6 +113,8 @@ class NetworkingInfrastructure(pulumi.ComponentResource):
     """Create NAT Gateways for private subnet internet access"""
     self.nat_gateways = []
 
+    # Create one NAT Gateway per public subnet
+    # This loop now correctly aligns with the number of public subnets created
     for i, public_subnet in enumerate(self.public_subnets):
       eip = aws.ec2.Eip(
         f"nat-eip-{i}-{self.region_suffix}",
@@ -156,6 +164,7 @@ class NetworkingInfrastructure(pulumi.ComponentResource):
       )
 
     self.private_rts = []
+    # This loop now correctly aligns with the number of private subnets created
     for i, (subnet, nat_gw) in enumerate(zip(self.private_subnets, self.nat_gateways)):
       private_rt = aws.ec2.RouteTable(
         f"private-rt-{i}-{self.region_suffix}",
