@@ -46,9 +46,12 @@ class TestTapStackIntegration(unittest.TestCase):
     self.lambda_client = boto3.client('lambda')
     self.logs_client = boto3.client('logs')
 
+    # Access the 'Flat outputs' dictionary within the loaded JSON
+    actual_flat_outputs = flat_outputs.get("Flat outputs", {})
+
     # Dynamically determine the environment suffix from the S3 Bucket Name output
     self.environment_suffix = "dev" # Default fallback
-    s3_bucket_output = flat_outputs.get('S3BucketName')
+    s3_bucket_output = actual_flat_outputs.get('S3BucketName')
     if s3_bucket_output and s3_bucket_output.startswith("tap-") and \
        s3_bucket_output.endswith("-bucket"):
         parts = s3_bucket_output.split('-')
@@ -60,7 +63,7 @@ class TestTapStackIntegration(unittest.TestCase):
     self.table_name = f"tap-{self.environment_suffix}-table"
     self.lambda_function_name = f"tap-{self.environment_suffix}-lambda"
     # LambdaRoleArn is directly taken from outputs as its full ARN includes unique IDs
-    self.lambda_role_arn = flat_outputs.get('LambdaRoleArn')
+    self.lambda_role_arn = actual_flat_outputs.get('LambdaRoleArn')
 
     if not all([self.bucket_name, self.table_name, self.lambda_function_name,
                 self.lambda_role_arn]):
