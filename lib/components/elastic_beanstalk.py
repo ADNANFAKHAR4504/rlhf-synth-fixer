@@ -312,7 +312,9 @@ class ElasticBeanstalkInfrastructure(pulumi.ComponentResource):
       application=self.application.name,
       solution_stack_name="64bit Amazon Linux 2023 v6.6.2 running Node.js 18",
       settings=all_settings,
-      opts=ResourceOptions(parent=self)
+      # FIX: Add this option to force replacement of the template
+      # This prevents the update from failing with null subnet values.
+      opts=ResourceOptions(parent=self, delete_before_replace=True)
     )
 
   def _create_environment(self):
@@ -323,8 +325,7 @@ class ElasticBeanstalkInfrastructure(pulumi.ComponentResource):
       template_name=self.config_template.name,
       tier="WebServer",
       tags=self.tags,
-      # FIX: Add this option to force replacement of the environment
-      # This is necessary to break the dependency cycle with the subnets.
+      # FIX: This option is still needed to break the dependency cycle with the subnets.
       opts=ResourceOptions(parent=self, delete_before_replace=True)
     )
 
