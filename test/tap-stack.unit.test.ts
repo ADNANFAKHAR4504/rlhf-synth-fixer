@@ -52,14 +52,38 @@ describe('TapStack CloudFormation Template', () => {
 
     test('KeyPairName parameter schema', () => {
       const p = template.Parameters.KeyPairName;
-      expect(p.Type).toBe('AWS::EC2::KeyPair::KeyName');
+      expect(p.Type).toBe('String'); // Changed from 'AWS::EC2::KeyPair::KeyName'
+      expect(p.Default).toBe(''); // Added check for default empty value
       expect(p.Description).toBe(
-        'Name of an existing EC2 KeyPair to enable SSH access to instances'
-      );
+        'Name of an existing EC2 KeyPair to enable SSH access to instances (leave empty to disable SSH access)'
+      ); // Updated description
     });
 
     test('template defines exactly two parameters', () => {
       expect(Object.keys(template.Parameters)).toHaveLength(2);
+    });
+  });
+
+  /* -------------------------------------------------------------------- */
+  /* Conditions validation                                                 */
+  /* -------------------------------------------------------------------- */
+  describe('Conditions', () => {
+    test('HasKeyPair condition exists', () => {
+      expect(template.Conditions.HasKeyPair).toBeDefined();
+    });
+
+    test('HasKeyPair condition has correct logic', () => {
+      const condition = template.Conditions.HasKeyPair;
+      expect(condition).toEqual({
+        'Fn::Not': [
+          {
+            'Fn::Equals': [
+              { 'Ref': 'KeyPairName' },
+              ''
+            ]
+          }
+        ]
+      });
     });
   });
 
@@ -82,6 +106,17 @@ describe('TapStack CloudFormation Template', () => {
         expect(template.Resources[id]).toBeDefined();
       })
     );
+
+    test('Launch Template uses conditional KeyName', () => {
+      const launchTemplate = template.Resources.ProdLaunchTemplate;
+      expect(launchTemplate.Properties.LaunchTemplateData.KeyName).toEqual({
+        'Fn::If': [
+          'HasKeyPair',
+          { 'Ref': 'KeyPairName' },
+          { 'Ref': 'AWS::NoValue' }
+        ]
+      });
+    });
   });
 
   /* -------------------------------------------------------------------- */
@@ -111,7 +146,7 @@ describe('TapStack CloudFormation Template', () => {
   /* -------------------------------------------------------------------- */
   describe('Template Structure', () => {
     test('required top-level sections exist', () => {
-      ['AWSTemplateFormatVersion', 'Description', 'Parameters', 'Resources', 'Outputs'].forEach(
+      ['AWSTemplateFormatVersion', 'Description', 'Parameters', 'Resources', 'Outputs', 'Conditions'].forEach(
         section => expect(template[section]).toBeDefined()
       );
     });
