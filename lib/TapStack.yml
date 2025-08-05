@@ -48,7 +48,6 @@ Resources:
   EC2InstanceRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub ${AWS::StackName}-EC2-Instance-Role
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -65,14 +64,12 @@ Resources:
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
-      InstanceProfileName: !Sub ${AWS::StackName}-EC2-Instance-Profile
       Roles:
         - !Ref EC2InstanceRole
 
   BackupRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub ${AWS::StackName}-Backup-Role
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
