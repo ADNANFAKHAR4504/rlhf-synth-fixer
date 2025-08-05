@@ -538,19 +538,8 @@ Resources:
         - Key: Environment
           Value: !Ref EnvironmentSuffix
   # =============================================================================
-  # ACM Certificate and CloudFront (Requirement 12)
+  # CloudFront Distribution (Requirement 12)
   # =============================================================================
-  ApplicationCertificate:
-    Type: AWS::CertificateManager::Certificate
-    Properties:
-      DomainName: !Sub "${ApplicationName}-${EnvironmentSuffix}.example.com"
-      ValidationMethod: DNS
-      Tags:
-        - Key: Name
-          Value: !Sub "${ApplicationName}-cert"
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-
   ApplicationCloudFront:
     Type: AWS::CloudFront::Distribution
     Properties:
@@ -571,8 +560,7 @@ Resources:
             Cookies:
               Forward: none
         ViewerCertificate:
-          AcmCertificateArn: !Ref ApplicationCertificate
-          SslSupportMethod: sni-only
+          CloudFrontDefaultCertificate: true
         HttpVersion: http2
         PriceClass: PriceClass_100
       Tags:
@@ -745,12 +733,6 @@ Outputs:
     Value: !GetAtt ApplicationAccelerator.DnsName
     Export:
       Name: !Sub "${AWS::StackName}-ApplicationAcceleratorDns"
-
-  ApplicationCertificateArn:
-    Description: "ARN of the ACM certificate"
-    Value: !Ref ApplicationCertificate
-    Export:
-      Name: !Sub "${AWS::StackName}-ApplicationCertificateArn"
 
   ApplicationCloudFrontDomain:
     Description: "Domain name of the CloudFront distribution"
