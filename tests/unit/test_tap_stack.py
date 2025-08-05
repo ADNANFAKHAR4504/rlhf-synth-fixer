@@ -1,196 +1,202 @@
-import json
-import os
-import unittest
-import time
-import logging
-
-import boto3
-from pytest import mark
-
-# Configure logging for better visibility during tests
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-# Open file cfn-outputs/flat-outputs.json
-# This assumes that the CDK stack has been deployed and its outputs
-# have been flattened into this JSON file.
-base_dir = os.path.dirname(os.path.abspath(__file__))
-flat_outputs_path = os.path.join(
-    base_dir, '..', '..', 'cfn-outputs', 'flat-outputs.json'
-)
-
-flat_outputs = {}
-if os.path.exists(flat_outputs_path):
-  try:
-    with open(flat_outputs_path, 'r', encoding='utf-8') as f:
-      flat_outputs = json.load(f)
-    logger.info(f"Loaded flat_outputs from: {flat_outputs_path}")
-  except json.JSONDecodeError as e:
-    logger.error(f"Error decoding flat-outputs.json: {e}")
-    flat_outputs = {}
-else:
-  logger.warning(
-      f"flat-outputs.json not found at: {flat_outputs_path}. "
-      "Integration tests may fail."
-  )
+import pytest
+from aws_cdk import App
+from aws_cdk.assertions import Template
+from tap_stack import TapStack, TapStackProps  # Adjust import based on your file structure
 
 
-@mark.describe("TapStackIntegration")
-class TestTapStackIntegration(unittest.TestCase):
-  """Integration test cases for the TapStack CDK stack"""
+@pytest.fixture
+def template():
+    app = App(context={"environmentSuffix": "test"})
+    stack = TapStack(app, "TapStack", props=TapStackProps(environment_suffix="test"))
+    return Template.from_stack(stack)
 
-  def setUp(self):
-    """Set up AWS clients and retrieve resource names from outputs"""
-    self.s3_client = boto3.client('s3')
-    self.dynamodb_client = boto3.client('dynamodb')
-    self.lambda_client = boto3.client('lambda')
-    self.logs_client = boto3.client('logs')
 
-    # Access the 'Flat outputs' dictionary within the loaded JSON
-    actual_flat_outputs = flat_outputs.get("Flat outputs", {})
-
-    # Dynamically determine the environment suffix from the S3 Bucket Name output
-    self.environment_suffix = "dev" # Default fallback
-    s3_bucket_output = actual_flat_outputs.get('S3BucketName')
-    if s3_bucket_output and s3_bucket_output.startswith("tap-") and \
-       s3_bucket_output.endswith("-bucket"):
-        parts = s3_bucket_output.split('-')
-        if len(parts) >= 3:
-            self.environment_suffix = parts[1] # Extracts 'pr510' from 'tap-pr510-bucket'
-
-    # Construct resource names dynamically using the extracted environment suffix
-    self.bucket_name = f"tap-{self.environment_suffix}-bucket"
-    self.table_name = f"tap-{self.environment_suffix}-table"
-    self.lambda_function_name = f"tap-{self.environment_suffix}-lambda"
-    # LambdaRoleArn is directly taken from outputs as its full ARN includes unique IDs
-    self.lambda_role_arn = actual_flat_outputs.get('LambdaRoleArn')
-
-    if not all([self.bucket_name, self.table_name, self.lambda_function_name,
-                self.lambda_role_arn]):
-      self.fail(
-          "Missing one or more required stack outputs. Ensure the stack is "
-          "deployed and flat-outputs.json is updated."
-      )
-
-    logger.info(
-        f"Integration Test Setup Complete (Environment Suffix: "
-        f"{self.environment_suffix}):"
-    )
-    logger.info(f"  S3 Bucket: {self.bucket_name}")
-    logger.info(f"  DynamoDB Table: {self.table_name}")
-    logger.info(f"  Lambda Function: {self.lambda_function_name}")
-    logger.info(f"  Lambda Role ARN: {self.lambda_role_arn}")
-
-  def tearDown(self):
-    """Clean up resources created during tests"""
-    # Clean up S3 objects
-    test_s3_key = "test-integration-object.txt"
-    try:
-      self.s3_client.delete_object(Bucket=self.bucket_name, Key=test_s3_key)
-      logger.info(f"Cleaned up S3 object: {test_s3_key}")
-    except Exception as e:
-      logger.warning(f"Could not delete S3 object {test_s3_key}: {e}")
-
-    # Clean up DynamoDB items
-    test_dynamodb_id = "test-integration-item"
-    try:
-      self.dynamodb_client.delete_item(
-          TableName=self.table_name,
-          Key={'id': {'S': test_dynamodb_id}}
-      )
-      logger.info(f"Cleaned up DynamoDB item: {test_dynamodb_id}")
-    except Exception as e:
-      logger.warning(f"Could not delete DynamoDB item {test_dynamodb_id}: {e}")
-
-  @mark.it("should successfully upload and retrieve an object from S3")
-  def test_s3_object_upload_and_retrieve(self):
-    test_key = "integration-test-upload.txt"
-    test_content = "Hello from S3 integration test!"
-
-    # Upload object
-    logger.info(f"Uploading object '{test_key}' to bucket '{self.bucket_name}'")
-    self.s3_client.put_object(
-        Bucket=self.bucket_name,
-        Key=test_key,
-        Body=test_content
-    )
-
-    # Retrieve object
-    logger.info(f"Retrieving object '{test_key}' from bucket '{self.bucket_name}'")
-    response = self.s3_client.get_object(Bucket=self.bucket_name, Key=test_key)
-    retrieved_content = response['Body'].read().decode('utf-8')
-
-    self.assertEqual(retrieved_content, test_content)
-    logger.info(f"Successfully uploaded and retrieved S3 object.")
-
-  @mark.it("should successfully put and get an item from DynamoDB")
-  def test_dynamodb_item_put_and_get(self):
-    item_id = "integration-test-item-1"
-    item_value = "Test Value"
-
-    # Put item
-    logger.info(f"Putting item '{item_id}' into table '{self.table_name}'")
-    self.dynamodb_client.put_item(
-        TableName=self.table_name,
-        Item={
-            'id': {'S': item_id},
-            'data': {'S': item_value}
+def test_s3_bucket_created(template):
+    template.has_resource_properties("AWS::S3::Bucket", {
+        "BucketName": "tap-test-bucket",
+        "PublicAccessBlockConfiguration": {
+            "RestrictPublicBuckets": True,
+            "BlockPublicAcls": True,
+            "IgnorePublicAcls": True,
+            "BlockPublicPolicy": True
         }
-    )
+    })
 
-    # Get item
-    logger.info(f"Getting item '{item_id}' from table '{self.table_name}'")
-    response = self.dynamodb_client.get_item(
-        TableName=self.table_name,
-        Key={'id': {'S': item_id}}
-    )
 
-    self.assertIn('Item', response)
-    self.assertEqual(response['Item']['id']['S'], item_id)
-    self.assertEqual(response['Item']['data']['S'], item_value)
-    logger.info(f"Successfully put and got DynamoDB item.")
+def test_dynamodb_table_created(template):
+    template.has_resource_properties("AWS::DynamoDB::Table", {
+        "TableName": "tap-test-table",
+        "BillingMode": "PAY_PER_REQUEST",
+        "KeySchema": [{"AttributeName": "id", "KeyType": "HASH"}],
+        "AttributeDefinitions": [{"AttributeName": "id", "AttributeType": "S"}],
+    })
 
-  @mark.it("should successfully invoke the Lambda function directly")
-  def test_lambda_direct_invocation(self):
-    payload = {"message": "Hello Lambda!"}
-    logger.info(
-        f"Invoking Lambda function '{self.lambda_function_name}' directly "
-        f"with payload: {payload}"
-    )
-    response = self.lambda_client.invoke(
-        FunctionName=self.lambda_function_name,
-        InvocationType='RequestResponse', # Synchronous invocation
-        Payload=json.dumps(payload)
-    )
 
-    status_code = response['StatusCode']
-    response_payload = json.loads(response['Payload'].read().decode('utf-8'))
+def test_lambda_function_created(template):
+    template.has_resource_properties("AWS::Lambda::Function", {
+        "FunctionName": "tap-test-lambda",
+        "Handler": "index.handler",
+        "Runtime": "python3.11",
+        "Environment": {
+            "Variables": {
+                "TABLE_NAME": {"Ref": "AppTable"},
+                "BUCKET_NAME": {"Ref": "AppBucket"}
+            }
+        }
+    })
 
-    self.assertEqual(status_code, 200)
-    self.assertIn('statusCode', response_payload)
-    self.assertEqual(response_payload['statusCode'], 200)
-    self.assertIn('body', response_payload)
-    self.assertEqual(response_payload['body'], 'Hello from Lambda')
-    logger.info(f"Successfully invoked Lambda function directly.")
 
-  @mark.it("should trigger Lambda function on S3 object creation")
-  def test_lambda_triggered_by_s3(self):
-    test_key = "lambda-trigger-test-object.txt"
-    test_content = "This should trigger the Lambda."
+def test_lambda_has_bucket_and_table_permissions(template):
+    resources = template.find_resources("AWS::IAM::Policy")
+    found_bucket_permission = False
+    found_table_permission = False
 
-    logger.info(f"Uploading object '{test_key}' to S3 to trigger Lambda...")
-    self.s3_client.put_object(
-        Bucket=self.bucket_name,
-        Key=test_key,
-        Body=test_content
-    )
+    for resource in resources.values():
+        policy_doc = resource["Properties"]["PolicyDocument"]
+        statements = policy_doc.get("Statement", [])
+        for stmt in statements:
+            actions = stmt.get("Action", [])
+            if isinstance(actions, str):
+                actions = [actions]
 
-    # Give Lambda time to process the event
-    logger.info("Waiting for Lambda to process S3 event (5 seconds)...")
-    time.sleep(5)
+            if "s3:GetObject" in actions or "s3:PutObject" in actions:
+                found_bucket_permission = True
+            if "dynamodb:GetItem" in actions or "dynamodb:PutItem" in actions:
+                found_table_permission = True
 
-    logger.info(
-        f"S3 object '{test_key}' uploaded. Assuming Lambda trigger mechanism "
-        "is functional."
-    )
-    self.assertTrue(True)
+    assert found_bucket_permission, "Lambda does not have bucket permissions"
+    assert found_table_permission, "Lambda does not have DynamoDB permissions"
+
+
+def test_lambda_has_s3_event_source_mapping(template):
+    resources = template.find_resources("AWS::Lambda::EventSourceMapping")
+    assert len(resources) == 1
+    for resource in resources.values():
+        assert resource["Properties"]["EventSourceArn"]
+        assert resource["Properties"]["StartingPosition"] == "LATEST"
+
+
+def test_outputs_created(template):
+    template.has_output("S3BucketName", {
+        "Value": {"Ref": "AppBucket"},
+        "Export": {"Name": "tap-test-bucket-name"}
+    })
+
+    template.has_output("DynamoDBTableName", {
+        "Value": {"Ref": "AppTable"},
+        "Export": {"Name": "tap-test-table-name"}
+    })
+
+    template.has_output("LambdaFunctionName", {
+        "Value": {"Ref": "AppLambda"},
+        "Export": {"Name": "tap-test-lambda-name"}
+    })
+
+    template.has_output("LambdaRoleArn", {
+        "Value": {
+            "Fn::GetAtt": ["AppLambdaServiceRole", "Arn"]
+        },
+        "Export": {"Name": "tap-test-lambda-role-arn"}
+    })
+import pytest
+from aws_cdk import App
+from aws_cdk.assertions import Template
+from tap_stack import TapStack, TapStackProps  # Adjust import path as needed
+
+
+@pytest.fixture
+def template():
+  app = App(context={"environmentSuffix": "test"})
+  stack = TapStack(app, "TapStack", props=TapStackProps(environment_suffix="test"))
+  return Template.from_stack(stack)
+
+
+def test_s3_bucket_created(template):
+  template.has_resource_properties("AWS::S3::Bucket", {
+    "BucketName": "tap-test-bucket",
+    "PublicAccessBlockConfiguration": {
+      "RestrictPublicBuckets": True,
+      "BlockPublicAcls": True,
+      "IgnorePublicAcls": True,
+      "BlockPublicPolicy": True
+    }
+  })
+
+
+def test_dynamodb_table_created(template):
+  template.has_resource_properties("AWS::DynamoDB::Table", {
+    "TableName": "tap-test-table",
+    "BillingMode": "PAY_PER_REQUEST",
+    "KeySchema": [
+      {"AttributeName": "id", "KeyType": "HASH"}
+    ],
+    "AttributeDefinitions": [
+      {"AttributeName": "id", "AttributeType": "S"}
+    ]
+  })
+
+
+def test_lambda_function_created(template):
+  template.has_resource_properties("AWS::Lambda::Function", {
+    "FunctionName": "tap-test-lambda",
+    "Handler": "index.handler",
+    "Runtime": "python3.11",
+    "Environment": {
+      "Variables": {
+        "TABLE_NAME": {"Ref": "AppTable"},
+        "BUCKET_NAME": {"Ref": "AppBucket"}
+      }
+    }
+  })
+
+
+def test_lambda_has_bucket_and_table_permissions(template):
+  resources = template.find_resources("AWS::IAM::Policy")
+  found_bucket_permission = False
+  found_table_permission = False
+
+  for resource in resources.values():
+    policy_doc = resource["Properties"]["PolicyDocument"]
+    statements = policy_doc.get("Statement", [])
+    for stmt in statements:
+      actions = stmt.get("Action", [])
+      if isinstance(actions, str):
+        actions = [actions]
+
+      if "s3:GetObject" in actions or "s3:PutObject" in actions:
+        found_bucket_permission = True
+      if "dynamodb:GetItem" in actions or "dynamodb:PutItem" in actions:
+        found_table_permission = True
+
+  assert found_bucket_permission, "Lambda does not have bucket permissions"
+  assert found_table_permission, "Lambda does not have DynamoDB permissions"
+
+
+def test_lambda_has_s3_event_source_mapping(template):
+  resources = template.find_resources("AWS::Lambda::EventSourceMapping")
+  assert len(resources) == 1
+  for resource in resources.values():
+    assert resource["Properties"]["EventSourceArn"]
+    assert resource["Properties"]["StartingPosition"] == "LATEST"
+
+
+def test_outputs_created(template):
+  template.has_output("S3BucketName", {
+    "Value": {"Ref": "AppBucket"},
+    "Export": {"Name": "tap-test-bucket-name"}
+  })
+
+  template.has_output("DynamoDBTableName", {
+    "Value": {"Ref": "AppTable"},
+    "Export": {"Name": "tap-test-table-name"}
+  })
+
+  template.has_output("LambdaFunctionName", {
+    "Value": {"Ref": "AppLambda"},
+    "Export": {"Name": "tap-test-lambda-name"}
+  })
+
+  template.has_output("LambdaRoleArn", {
+    "Value": {"Fn::GetAtt": ["AppLambdaServiceRole", "Arn"]},
+    "Export": {"Name": "tap-test-lambda-role-arn"}
+  })
