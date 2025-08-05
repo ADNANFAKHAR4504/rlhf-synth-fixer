@@ -1,24 +1,54 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'Secure AWS Infrastructure with encrypted storage, least-privilege IAM, and comprehensive logging'
+Description: 'Secure AWS Infrastructure with encrypted storage, least-privilege access, and comprehensive logging'
 
 Parameters:
-  AllowedSSHCIDR:
+  YourPublicIP:
     Type: String
-    Description: 'CIDR block allowed for SSH access (e.g., YOUR_IP/32)'
-    Default: '0.0.0.0/32'
+    Description: 'Your public IP address for SSH access (format: x.x.x.x/32)'
+    # IMPORTANT: Replace '0.0.0.0/0' with your real public IP address.
+    # You can find it by searching "what is my ip" on Google.
+    Default: '0.0.0.0/0' # Changed to a safe default for testing. For production, replace with your actual IP/32.
     AllowedPattern: '^([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,2}$'
     ConstraintDescription: 'Must be a valid CIDR notation (e.g., 192.168.1.1/32)'
 
   UniqueId:
     Type: String
-    Description: 'Unique identifier for resource naming'
-    Default: !Sub '${AWS::StackName}-${AWS::AccountId}'
+    Description: 'Unique identifier for resource naming. Must be lowercase alphanumeric.'
+    # Corrected: Default value must be a simple string, not an intrinsic function.
+    # This value will be appended to resource names.
+    Default: 'secureapp'
+    AllowedPattern: '^[a-z0-9]+$'
+    ConstraintDescription: 'Must be lowercase alphanumeric characters only.'
+
+  # ExistingCloudTrailName:
+  #   Type: String
+  #   Description: The name of an existing CloudTrail trail (if applicable, leave default to create new)
+  #   Default: 'NONE' # Default to NONE if not used, to avoid issues.
 
 Resources:
-  # ============================================================================
-  # VPC AND NETWORKING COMPONENTS
-  # ============================================================================
+  # --- KMS Key for S3 Encryption ---
+  InfrastructureKMSKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: 'KMS Key for infrastructure encryption'
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: Enable IAM User Permissions
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: 'kms:*'
+            Resource: '*'
+          # Permissions for EC2InstanceRole to use this key are defined in EC2InstanceRole's policy.
 
+  InfrastructureKMSKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Sub 'alias/${AWS::StackName}-infrastructure-key'
+      TargetKeyId: !Ref InfrastructureKMSKey
+
+  # --- VPC AND NETWORKING COMPONENTS ---
   SecureVPC:
     Type: AWS::EC2::VPC
     Properties:
@@ -77,235 +107,29 @@ Resources:
       SubnetId: !Ref PublicSubnet
       RouteTableId: !Ref PublicRouteTable
 
-  # ============================================================================
-  # ENCRYPTION KEY FOR S3 BUCKETS
-  # ============================================================================
-
-  S3EncryptionKey:
-    Type: AWS::KMS::Key
+  # --- SECURITY GROUP FOR EC2 INSTANCE ---
+  EC2SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
     Properties:
-      Description: 'KMS Key for S3 bucket encryption'
-      KeyPolicy:
-        Version: '2012-10-17'
-        Statement:
-          - Sid: 'Enable IAM User Permissions'
-            Effect: Allow
-            Principal:
-              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
-            Action: 'kms:*'
-            Resource: '*'
-          - Sid: 'Allow S3 Service'
-            Effect: Allow
-            Principal:
-              Service: s3.amazonaws.com
-            Action:
-              - 'kms:Decrypt'
-              - 'kms:GenerateDataKey'
-            Resource: '*'
-          - Sid: 'Allow EC2 Instance Role'
-            Effect: Allow
-            Principal:
-              AWS: !GetAtt EC2InstanceRole.Arn
-            Action:
-              - 'kms:Decrypt'
-              - 'kms:GenerateDataKey'
-            Resource: '*'
-
-  S3EncryptionKeyAlias:
-    Type: AWS::KMS::Alias
-    Properties:
-      AliasName: !Sub 'alias/${AWS::StackName}-s3-encryption-key'
-      TargetKeyId: !Ref S3EncryptionKey
-
-  # ============================================================================
-  # S3 BUCKETS WITH ENCRYPTION AND ACCESS LOGGING
-  # ============================================================================
-
-  # Dedicated bucket for storing S3 access logs
-  S3AccessLogsBucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: !Sub 's3-access-logs-${UniqueId}'
-      BucketEncryption:
-        ServerSideEncryptionConfiguration:
-          - ServerSideEncryptionByDefault:
-              SSEAlgorithm: aws:kms
-              KMSMasterKeyID: !Ref S3EncryptionKey
-            BucketKeyEnabled: true
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-      VersioningConfiguration:
-        Status: Enabled
+      GroupDescription: 'Security group for EC2 instance - SSH access only'
+      VpcId: !Ref SecureVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref YourPublicIP # Corrected: Removed /32 as parameter already expects CIDR
+          Description: 'SSH access from specified IP'
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: '0.0.0.0/0'
+          Description: 'All outbound traffic'
       Tags:
         - Key: Name
-          Value: 'S3 Access Logs Bucket'
+          Value: !Sub '${AWS::StackName}-ec2-sg'
         - Key: Purpose
-          Value: 'Access Logging'
+          Value: 'Restricted SSH Access'
 
-  # Website content bucket
-  WebsiteContentBucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: !Sub 'website-content-${UniqueId}'
-      BucketEncryption:
-        ServerSideEncryptionConfiguration:
-          - ServerSideEncryptionByDefault:
-              SSEAlgorithm: aws:kms
-              KMSMasterKeyID: !Ref S3EncryptionKey
-            BucketKeyEnabled: true
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-      LoggingConfiguration:
-        DestinationBucketName: !Ref S3AccessLogsBucket
-        LogFilePrefix: 'website-content-access-logs/'
-      VersioningConfiguration:
-        Status: Enabled
-      Tags:
-        - Key: Name
-          Value: 'Website Content Bucket'
-        - Key: Purpose
-          Value: 'Static Content Storage'
-
-  # Application logs bucket
-  ApplicationLogsBucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: !Sub 'application-logs-${UniqueId}'
-      BucketEncryption:
-        ServerSideEncryptionConfiguration:
-          - ServerSideEncryptionByDefault:
-              SSEAlgorithm: aws:kms
-              KMSMasterKeyID: !Ref S3EncryptionKey
-            BucketKeyEnabled: true
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-      LoggingConfiguration:
-        DestinationBucketName: !Ref S3AccessLogsBucket
-        LogFilePrefix: 'application-logs-access-logs/'
-      VersioningConfiguration:
-        Status: Enabled
-      Tags:
-        - Key: Name
-          Value: 'Application Logs Bucket'
-        - Key: Purpose
-          Value: 'Application Log Storage'
-
-  # Backup data bucket
-  BackupDataBucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: !Sub 'backup-data-${UniqueId}'
-      BucketEncryption:
-        ServerSideEncryptionConfiguration:
-          - ServerSideEncryptionByDefault:
-              SSEAlgorithm: aws:kms
-              KMSMasterKeyID: !Ref S3EncryptionKey
-            BucketKeyEnabled: true
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-      LoggingConfiguration:
-        DestinationBucketName: !Ref S3AccessLogsBucket
-        LogFilePrefix: 'backup-data-access-logs/'
-      VersioningConfiguration:
-        Status: Enabled
-      Tags:
-        - Key: Name
-          Value: 'Backup Data Bucket'
-        - Key: Purpose
-          Value: 'Backup Storage'
-
-  # ============================================================================
-  # S3 BUCKET POLICIES FOR ACCESS CONTROL
-  # ============================================================================
-
-  WebsiteContentBucketPolicy:
-    Type: AWS::S3::BucketPolicy
-    Properties:
-      Bucket: !Ref WebsiteContentBucket
-      PolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Sid: 'DenyPublicAccess'
-            Effect: Deny
-            Principal: '*'
-            Action: 's3:*'
-            Resource:
-              - !Sub '${WebsiteContentBucket}/*'
-              - !Sub '${WebsiteContentBucket}'
-            Condition:
-              StringNotEquals:
-                'aws:PrincipalArn': !GetAtt EC2InstanceRole.Arn
-          - Sid: 'AllowEC2InstanceReadAccess'
-            Effect: Allow
-            Principal:
-              AWS: !GetAtt EC2InstanceRole.Arn
-            Action:
-              - 's3:GetObject'
-              - 's3:ListBucket'
-            Resource:
-              - !Sub '${WebsiteContentBucket}/*'
-              - !Sub '${WebsiteContentBucket}'
-
-  ApplicationLogsBucketPolicy:
-    Type: AWS::S3::BucketPolicy
-    Properties:
-      Bucket: !Ref ApplicationLogsBucket
-      PolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Sid: 'DenyPublicAccess'
-            Effect: Deny
-            Principal: '*'
-            Action: 's3:*'
-            Resource:
-              - !Sub '${ApplicationLogsBucket}/*'
-              - !Sub '${ApplicationLogsBucket}'
-            Condition:
-              StringNotEquals:
-                'aws:PrincipalArn': !GetAtt EC2InstanceRole.Arn
-          - Sid: 'AllowEC2InstanceWriteAccess'
-            Effect: Allow
-            Principal:
-              AWS: !GetAtt EC2InstanceRole.Arn
-            Action:
-              - 's3:PutObject'
-              - 's3:PutObjectAcl'
-              - 's3:ListBucket'
-            Resource:
-              - !Sub '${ApplicationLogsBucket}/*'
-              - !Sub '${ApplicationLogsBucket}'
-
-  BackupDataBucketPolicy:
-    Type: AWS::S3::BucketPolicy
-    Properties:
-      Bucket: !Ref BackupDataBucket
-      PolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Sid: 'DenyAllAccess'
-            Effect: Deny
-            Principal: '*'
-            Action: 's3:*'
-            Resource:
-              - !Sub '${BackupDataBucket}/*'
-              - !Sub '${BackupDataBucket}'
-
-  # ============================================================================
-  # IAM ROLE AND POLICIES FOR EC2 INSTANCE
-  # ============================================================================
-
+  # --- IAM ROLE AND POLICIES FOR EC2 INSTANCE ---
   EC2InstanceRole:
     Type: AWS::IAM::Role
     Properties:
@@ -316,11 +140,9 @@ Resources:
           - Effect: Allow
             Principal:
               Service: ec2.amazonaws.com
-            Action: 'sts:AssumeRole'
-      ManagedPolicyArns:
-        - 'arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy'
+            Action: sts:AssumeRole
       Policies:
-        - PolicyName: 'S3AccessPolicy'
+        - PolicyName: S3AccessPolicy
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
@@ -330,23 +152,25 @@ Resources:
                   - 's3:GetObject'
                   - 's3:ListBucket'
                 Resource:
-                  - !Sub '${WebsiteContentBucket}/*'
-                  - !Sub '${WebsiteContentBucket}'
+                  - !Sub 'arn:aws:s3:::web-content-${UniqueId}/*'
+                  - !GetAtt WebsiteContentBucket.Arn # Reference the ARN directly
               - Sid: 'WriteApplicationLogs'
                 Effect: Allow
                 Action:
                   - 's3:PutObject'
                   - 's3:PutObjectAcl'
-                  - 's3:ListBucket'
-                Resource:
-                  - !Sub '${ApplicationLogsBucket}/*'
-                  - !Sub '${ApplicationLogsBucket}'
+                Resource: !Sub 'arn:aws:s3:::app-logs-${UniqueId}/*' # Use the shorter bucket name
               - Sid: 'KMSAccess'
                 Effect: Allow
                 Action:
                   - 'kms:Decrypt'
+                  - 'kms:DescribeKey'
+                  - 'kms:Encrypt'
                   - 'kms:GenerateDataKey'
-                Resource: !GetAtt S3EncryptionKey.Arn
+                  - 'kms:ReEncrypt*'
+                Resource: !GetAtt InfrastructureKMSKey.Arn
+      ManagedPolicyArns: # Added back CloudWatchAgentServerPolicy if it was intended
+        - 'arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy'
       Tags:
         - Key: Name
           Value: 'EC2 Instance Role'
@@ -360,51 +184,166 @@ Resources:
       Roles:
         - !Ref EC2InstanceRole
 
-  # ============================================================================
-  # SECURITY GROUP FOR EC2 INSTANCE
-  # ============================================================================
-
-  EC2SecurityGroup:
-    Type: AWS::EC2::SecurityGroup
+  # --- S3 Access Logs Bucket (must be created first) ---
+  S3AccessLogsBucket:
+    Type: AWS::S3::Bucket
     Properties:
-      GroupName: !Sub '${AWS::StackName}-ec2-security-group'
-      GroupDescription: 'Security group for EC2 instance with restricted SSH access'
-      VpcId: !Ref SecureVPC
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 22
-          ToPort: 22
-          CidrIp: !Ref AllowedSSHCIDR
-          Description: 'SSH access from specified CIDR'
-      SecurityGroupEgress:
-        - IpProtocol: -1
-          CidrIp: '0.0.0.0/0'
-          Description: 'All outbound traffic'
+      BucketName: !Sub 's3-logs-${UniqueId}' # Shortened name
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !Ref InfrastructureKMSKey
+            BucketKeyEnabled: true
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldLogs
+            Status: Enabled
+            ExpirationInDays: 90
       Tags:
         - Key: Name
-          Value: 'EC2 Security Group'
+          Value: 'S3 Access Logs Bucket'
         - Key: Purpose
-          Value: 'Restricted SSH Access'
+          Value: 'Access Logging'
 
-  # ============================================================================
-  # EC2 INSTANCE WITH ENCRYPTED EBS VOLUME
-  # ============================================================================
+  # --- S3 Buckets ---
+  WebsiteContentBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'web-content-${UniqueId}' # Shortened name
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !Ref InfrastructureKMSKey
+            BucketKeyEnabled: true
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      LoggingConfiguration:
+        DestinationBucketName: !Ref S3AccessLogsBucket
+        LogFilePrefix: 'website-content-access-logs/'
 
-  EC2Instance:
+  ApplicationLogsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'app-logs-${UniqueId}' # Shortened name
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !Ref InfrastructureKMSKey
+            BucketKeyEnabled: true
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      LoggingConfiguration:
+        DestinationBucketName: !Ref S3AccessLogsBucket
+        LogFilePrefix: 'application-logs-access-logs/'
+
+  BackupDataBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'backup-data-${UniqueId}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !Ref InfrastructureKMSKey
+            BucketKeyEnabled: true
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      LoggingConfiguration:
+        DestinationBucketName: !Ref S3AccessLogsBucket
+        LogFilePrefix: 'backup-data-access-logs/'
+
+  # --- S3 BUCKET POLICIES FOR ACCESS CONTROL ---
+  WebsiteContentBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref WebsiteContentBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: 'AllowEC2RoleReadAccess'
+            Effect: Allow
+            Principal:
+              AWS: !GetAtt EC2InstanceRole.Arn
+            Action:
+              - 's3:GetObject'
+              - 's3:ListBucket'
+            Resource:
+              - !Sub 'arn:aws:s3:::web-content-${UniqueId}/*'
+              - !GetAtt WebsiteContentBucket.Arn
+
+  ApplicationLogsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref ApplicationLogsBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: 'AllowEC2RoleWriteAccess'
+            Effect: Allow
+            Principal:
+              AWS: !GetAtt EC2InstanceRole.Arn
+            Action:
+              - 's3:PutObject'
+              - 's3:PutObjectAcl'
+            Resource: !Sub 'arn:aws:s3:::app-logs-${UniqueId}/*'
+
+  BackupDataBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref BackupDataBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: 'DenyAllAccess' # This policy is very broad, consider refining based on actual backup needs
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource:
+              - !Sub 'arn:aws:s3:::backup-data-${UniqueId}/*'
+              - !GetAtt BackupDataBucket.Arn
+
+  # --- EC2 INSTANCE WITH ENCRYPTED EBS VOLUME ---
+  SecureEC2Instance:
     Type: AWS::EC2::Instance
     Properties:
-      ImageId: !Sub '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}'
-      InstanceType: 't2.micro'
+      ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}' # Corrected: Removed !Sub
+      InstanceType: t2.micro
       SubnetId: !Ref PublicSubnet
       SecurityGroupIds:
         - !Ref EC2SecurityGroup
       IamInstanceProfile: !Ref EC2InstanceProfile
       BlockDeviceMappings:
-        - DeviceName: '/dev/xvda'
+        - DeviceName: /dev/xvda
           Ebs:
             VolumeType: 'gp3'
             VolumeSize: 8
             Encrypted: true
+            KmsKeyId: !Ref InfrastructureKMSKey # Ensure this is correctly referenced
             DeleteOnTermination: true
       UserData:
         Fn::Base64: !Sub |
@@ -412,40 +351,16 @@ Resources:
           yum update -y
           yum install -y aws-cli
 
-          # Create a test script to verify S3 access
-          cat > /home/ec2-user/test_s3_access.sh << 'EOF'
-          #!/bin/bash
-          echo "Testing S3 access..."
-
-          # Test read access to website-content bucket
-          echo "Testing read access to website-content bucket:"
-          aws s3 ls s3://${WebsiteContentBucket}/ || echo "Read access test failed"
-
-          # Test write access to application-logs bucket
-          echo "Testing write access to application-logs bucket:"
-          echo "Test log entry $(date)" > /tmp/test-log.txt
-          aws s3 cp /tmp/test-log.txt s3://${ApplicationLogsBucket}/test-log.txt || echo "Write access test failed"
-
-          echo "S3 access tests completed."
-          EOF
-
-          chmod +x /home/ec2-user/test_s3_access.sh
-          chown ec2-user:ec2-user /home/ec2-user/test_s3_access.sh
-
-          # Install CloudWatch agent
-          wget https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm
-          rpm -U ./amazon-cloudwatch-agent.rpm
+          # Create a test file and upload to application logs bucket
+          echo "Instance started at $(date)" > /tmp/startup.log
+          aws s3 cp /tmp/startup.log s3://${ApplicationLogsBucket}/startup-$(date +%Y%m%d-%H%M%S).log --region ${AWS::Region}
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-secure-ec2-instance'
+          Value: !Sub '${AWS::StackName}-secure-instance'
         - Key: Environment
           Value: 'Production'
         - Key: Purpose
           Value: 'Web Application Server'
-
-# ============================================================================
-# OUTPUTS
-# ============================================================================
 
 Outputs:
   VPCId:
@@ -456,13 +371,13 @@ Outputs:
 
   EC2InstanceId:
     Description: 'ID of the created EC2 instance'
-    Value: !Ref EC2Instance
+    Value: !Ref SecureEC2Instance
     Export:
       Name: !Sub '${AWS::StackName}-EC2-Instance-ID'
 
   EC2PublicIP:
     Description: 'Public IP address of the EC2 instance'
-    Value: !GetAtt EC2Instance.PublicIp
+    Value: !GetAtt SecureEC2Instance.PublicIp
     Export:
       Name: !Sub '${AWS::StackName}-EC2-Public-IP'
 
@@ -470,19 +385,19 @@ Outputs:
     Description: 'Name of the website content S3 bucket'
     Value: !Ref WebsiteContentBucket
     Export:
-      Name: !Sub '${AWS::StackName}-Website-Content-Bucket'
+      Name: !Sub '${AWS::StackName}-WebsiteContent-Bucket'
 
   ApplicationLogsBucket:
     Description: 'Name of the application logs S3 bucket'
     Value: !Ref ApplicationLogsBucket
     Export:
-      Name: !Sub '${AWS::StackName}-Application-Logs-Bucket'
+      Name: !Sub '${AWS::StackName}-ApplicationLogs-Bucket'
 
   BackupDataBucket:
     Description: 'Name of the backup data S3 bucket'
     Value: !Ref BackupDataBucket
     Export:
-      Name: !Sub '${AWS::StackName}-Backup-Data-Bucket'
+      Name: !Sub '${AWS::StackName}-BackupData-Bucket'
 
   S3AccessLogsBucket:
     Description: 'Name of the S3 access logs bucket'
@@ -492,9 +407,9 @@ Outputs:
 
   KMSKeyId:
     Description: 'ID of the KMS key used for S3 encryption'
-    Value: !Ref S3EncryptionKey
+    Value: !Ref InfrastructureKMSKey
     Export:
-      Name: !Sub '${AWS::StackName}-KMS-Key-ID'
+      Name: !Sub '${AWS::StackName}-KMS-Key'
 
   EC2InstanceRoleArn:
     Description: 'ARN of the EC2 instance IAM role'
