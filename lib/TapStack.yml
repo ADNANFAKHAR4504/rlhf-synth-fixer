@@ -281,28 +281,20 @@ Resources:
 
 Outputs:
   S3BucketName:
-    Description: Name of the S3 bucket created for the serverless application
-    Value: !Ref ServerlessAppBucket: 'ServerlessApp S3 bucket name for triggering uploads'
-
-  LambdaFunctionName:
-    Description: 'ServerlessApp Lambda function name'
-    Value: !Ref ServerlessAppLambda
-
+    Description: Name of the S3 bucket
+    Value: !Ref ServerlessAppBucket
   LambdaFunctionArn:
-    Description: 'ServerlessApp Lambda function ARN'
+    Description: ARN of the Lambda function
     Value: !GetAtt ServerlessAppLambda.Arn
-
+  LambdaFunctionName:
+    Description: Name of the Lambda function
+    Value: !Ref ServerlessAppLambda
   SecretArn:
-    Description: 'ARN of the ServerlessApp Lambda Secret'
+    Description: ARN of the Secrets Manager secret
     Value: !Ref ServerlessAppSecret
-
-  Alarms:
-    Description: 'CloudWatch Alarms monitoring Lambda errors and invocations'
-    Value:
-      !Join [
-        ', ',
-        [
-          !Ref ServerlessAppLambdaErrorAlarm,
-          !Ref ServerlessAppLambdaInvocationsAlarm,
-        ],
-      ]
+  VPCId:
+    Description: VPC ID for the serverless application
+    Value: !Ref ServerlessAppVPC
+  SecurityGroupId:
+    Description: Security Group ID for Lambda
+    Value: !Ref ServerlessAppLambdaSecurityGroup
