@@ -11,6 +11,7 @@ from typing import Optional
 import pulumi
 from pulumi import ResourceOptions
 import pulumi_aws as aws
+from pulumi_random import RandomPassword
 
 
 class TapStackArgs:
@@ -48,10 +49,35 @@ class TapStack(pulumi.ComponentResource):
     env = args.environment_suffix
     tags = args.tags
 
+    # Generate secure random password
+    db_password_resource = RandomPassword(
+        f"tap-db-password-{env}",
+        length=16,
+        special=True,
+        override_special="_%@",
+        opts=ResourceOptions(parent=self)
+    )
+
+    # Store password in AWS Secrets Manager
+    db_secret = aws.secretsmanager.Secret(
+        f"tap-db-secret-{env}",
+        description=f"Database password for {env} environment",
+        opts=ResourceOptions(parent=self)
+    )
+
+    aws.secretsmanager.SecretVersion(
+        f"tap-db-secret-version-{env}",
+        secret_id=db_secret.id,
+        secret_string=db_password_resource.result,
+        opts=ResourceOptions(parent=self)
+    )
+
     # Pulumi config
     config = pulumi.Config()
-    db_username = config.require("dbUsername")
-    db_password = config.require_secret("dbPassword")
+
+    # Use db_username from config, but password from Secrets Manager
+    db_username = config.get("dbUsername") or "adminuser"
+    db_password = db_password_resource.result  # Securely referenced
 
     # Get AZs
     azs = aws.get_availability_zones(state="available")
