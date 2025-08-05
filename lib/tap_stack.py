@@ -17,16 +17,16 @@ class TapStackProps(cdk.StackProps):
 
 class TapStack(cdk.Stack):
   def __init__(
-    self,
-    scope: Construct,
-    construct_id: str,
-    props: Optional[TapStackProps] = None,
-    **kwargs
+      self,
+      scope: Construct,
+      construct_id: str,
+      props: Optional[TapStackProps] = None,
+      **kwargs
   ):
     super().__init__(scope, construct_id, **kwargs)
 
     environment_suffix = (
-      props.environment_suffix if props else None
+        props.environment_suffix if props else None
     ) or self.node.try_get_context("environmentSuffix") or "dev"
 
     project_name = "tap"
@@ -36,44 +36,44 @@ class TapStack(cdk.Stack):
 
     # S3 Bucket
     self.bucket = s3.Bucket(
-      self,
-      "AppBucket",
-      bucket_name=resource_name("bucket"),
-      versioned=False,
-      removal_policy=cdk.RemovalPolicy.DESTROY,
-      auto_delete_objects=True,
-      public_read_access=False
+        self,
+        "AppBucket",
+        bucket_name=resource_name("bucket"),
+        versioned=False,
+        removal_policy=cdk.RemovalPolicy.DESTROY,
+        auto_delete_objects=True,
+        public_read_access=False
     )
 
     # DynamoDB Table
     self.table = dynamodb.Table(
-      self,
-      "AppTable",
-      table_name=resource_name("table"),
-      partition_key=dynamodb.Attribute(
-        name="id",
-        type=dynamodb.AttributeType.STRING
-      ),
-      billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
-      removal_policy=cdk.RemovalPolicy.DESTROY
+        self,
+        "AppTable",
+        table_name=resource_name("table"),
+        partition_key=dynamodb.Attribute(
+            name="id",
+            type=dynamodb.AttributeType.STRING
+        ),
+        billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
+        removal_policy=cdk.RemovalPolicy.DESTROY
     )
 
     # Lambda Function
     self.lambda_fn = _lambda.Function(
-      self,
-      "AppLambda",
-      function_name=resource_name("lambda"),
-      runtime=_lambda.Runtime.PYTHON_3_11,
-      handler="index.handler",
-      code=_lambda.Code.from_inline(
-        "def handler(event, context):\n"
-        "  print('Event:', event)\n"
-        "  return {'statusCode': 200, 'body': 'Hello from Lambda'}"
-      ),
-      environment={
-        "TABLE_NAME": self.table.table_name,
-        "BUCKET_NAME": self.bucket.bucket_name
-      }
+        self,
+        "AppLambda",
+        function_name=resource_name("lambda"),
+        runtime=_lambda.Runtime.PYTHON_3_11,
+        handler="index.handler",
+        code=_lambda.Code.from_inline(
+            "def handler(event, context):\n"
+            "  print('Event:', event)\n"
+            "  return {'statusCode': 200, 'body': 'Hello from Lambda'}"
+        ),
+        environment={
+            "TABLE_NAME": self.table.table_name,
+            "BUCKET_NAME": self.bucket.bucket_name
+        }
     )
 
     # Grant permissions to DynamoDB table
@@ -86,10 +86,10 @@ class TapStack(cdk.Stack):
     # Add S3 trigger. This automatically adds the necessary permissions
     # for the S3 service to invoke the Lambda function.
     self.lambda_fn.add_event_source(
-      S3EventSource(
-        self.bucket,
-        events=[s3.EventType.OBJECT_CREATED]
-      )
+        S3EventSource(
+            self.bucket,
+            events=[s3.EventType.OBJECT_CREATED]
+        )
     )
 
     # The scoped CloudWatch log permissions are not necessary because
@@ -102,29 +102,29 @@ class TapStack(cdk.Stack):
     # ----------------------------
 
     cdk.CfnOutput(
-      self,
-      "S3BucketName",
-      value=self.bucket.bucket_name,
-      export_name=f"{resource_name('bucket')}-name"
+        self,
+        "S3BucketName",
+        value=self.bucket.bucket_name,
+        export_name=f"{resource_name('bucket')}-name"
     )
 
     cdk.CfnOutput(
-      self,
-      "DynamoDBTableName",
-      value=self.table.table_name,
-      export_name=f"{resource_name('table')}-name"
+        self,
+        "DynamoDBTableName",
+        value=self.table.table_name,
+        export_name=f"{resource_name('table')}-name"
     )
 
     cdk.CfnOutput(
-      self,
-      "LambdaFunctionName",
-      value=self.lambda_fn.function_name,
-      export_name=f"{resource_name('lambda')}-name"
+        self,
+        "LambdaFunctionName",
+        value=self.lambda_fn.function_name,
+        export_name=f"{resource_name('lambda')}-name"
     )
 
     cdk.CfnOutput(
-      self,
-      "LambdaRoleArn",
-      value=self.lambda_fn.role.role_arn if self.lambda_fn.role else "N/A",
-      export_name=f"{resource_name('lambda')}-role-arn"
+        self,
+        "LambdaRoleArn",
+        value=self.lambda_fn.role.role_arn if self.lambda_fn.role else "N/A",
+        export_name=f"{resource_name('lambda')}-role-arn"
     )

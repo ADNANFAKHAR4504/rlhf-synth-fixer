@@ -29,7 +29,10 @@ if os.path.exists(flat_outputs_path):
     logger.error(f"Error decoding flat-outputs.json: {e}")
     flat_outputs = {}
 else:
-  logger.warning(f"flat-outputs.json not found at: {flat_outputs_path}. Integration tests may fail.")
+  logger.warning(
+      f"flat-outputs.json not found at: {flat_outputs_path}. "
+      "Integration tests may fail."
+  )
 
 
 @mark.describe("TapStackIntegration")
@@ -46,10 +49,11 @@ class TestTapStackIntegration(unittest.TestCase):
     # Dynamically determine the environment suffix from the S3 Bucket Name output
     self.environment_suffix = "dev" # Default fallback
     s3_bucket_output = flat_outputs.get('S3BucketName')
-    if s3_bucket_output and s3_bucket_output.startswith("tap-") and s3_bucket_output.endswith("-bucket"):
+    if s3_bucket_output and s3_bucket_output.startswith("tap-") and \
+       s3_bucket_output.endswith("-bucket"):
         parts = s3_bucket_output.split('-')
         if len(parts) >= 3:
-            self.environment_suffix = parts[1] # This extracts 'pr510' from 'tap-pr510-bucket'
+            self.environment_suffix = parts[1] # Extracts 'pr510' from 'tap-pr510-bucket'
 
     # Construct resource names dynamically using the extracted environment suffix
     self.bucket_name = f"tap-{self.environment_suffix}-bucket"
@@ -58,15 +62,21 @@ class TestTapStackIntegration(unittest.TestCase):
     # LambdaRoleArn is directly taken from outputs as its full ARN includes unique IDs
     self.lambda_role_arn = flat_outputs.get('LambdaRoleArn')
 
-    if not all([self.bucket_name, self.table_name, self.lambda_function_name, self.lambda_role_arn]):
-      self.fail("Missing one or more required stack outputs. Ensure the stack is deployed and flat-outputs.json is updated.")
+    if not all([self.bucket_name, self.table_name, self.lambda_function_name,
+                self.lambda_role_arn]):
+      self.fail(
+          "Missing one or more required stack outputs. Ensure the stack is "
+          "deployed and flat-outputs.json is updated."
+      )
 
-    logger.info(f"Integration Test Setup Complete (Environment Suffix: {self.environment_suffix}):")
+    logger.info(
+        f"Integration Test Setup Complete (Environment Suffix: "
+        f"{self.environment_suffix}):"
+    )
     logger.info(f"  S3 Bucket: {self.bucket_name}")
     logger.info(f"  DynamoDB Table: {self.table_name}")
     logger.info(f"  Lambda Function: {self.lambda_function_name}")
     logger.info(f"  Lambda Role ARN: {self.lambda_role_arn}")
-
 
   def tearDown(self):
     """Clean up resources created during tests"""
@@ -140,7 +150,10 @@ class TestTapStackIntegration(unittest.TestCase):
   @mark.it("should successfully invoke the Lambda function directly")
   def test_lambda_direct_invocation(self):
     payload = {"message": "Hello Lambda!"}
-    logger.info(f"Invoking Lambda function '{self.lambda_function_name}' directly with payload: {payload}")
+    logger.info(
+        f"Invoking Lambda function '{self.lambda_function_name}' directly "
+        f"with payload: {payload}"
+    )
     response = self.lambda_client.invoke(
         FunctionName=self.lambda_function_name,
         InvocationType='RequestResponse', # Synchronous invocation
@@ -173,5 +186,8 @@ class TestTapStackIntegration(unittest.TestCase):
     logger.info("Waiting for Lambda to process S3 event (5 seconds)...")
     time.sleep(5)
 
-    logger.info(f"S3 object '{test_key}' uploaded. Assuming Lambda trigger mechanism is functional.")
+    logger.info(
+        f"S3 object '{test_key}' uploaded. Assuming Lambda trigger mechanism "
+        "is functional."
+    )
     self.assertTrue(True)
