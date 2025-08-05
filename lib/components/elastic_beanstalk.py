@@ -18,9 +18,9 @@ class ElasticBeanstalkInfrastructure(pulumi.ComponentResource):
     is_primary: bool,
     environment: str,
     environment_suffix: str,
-    # vpc_id: Output[str],
-    # public_subnet_ids: List[Output[str]],
-    # private_subnet_ids: List[Output[str]],
+    vpc_id: Output[str],
+    public_subnet_ids: List[Output[str]],
+    private_subnet_ids: List[Output[str]],
     eb_service_role_arn: Output[str],
     eb_instance_profile_name: Output[str],
     tags: dict,
@@ -31,9 +31,9 @@ class ElasticBeanstalkInfrastructure(pulumi.ComponentResource):
     self.region = region
     self.is_primary = is_primary
     self.environment = environment
-    # self.vpc_id = vpc_id
-    # self.public_subnet_ids = public_subnet_ids
-    # self.private_subnet_ids = private_subnet_ids
+    self.vpc_id = vpc_id
+    self.public_subnet_ids = public_subnet_ids
+    self.private_subnet_ids = private_subnet_ids
     self.eb_service_role_arn = eb_service_role_arn
     self.eb_instance_profile_name = eb_instance_profile_name
     self.tags = tags
@@ -64,9 +64,19 @@ class ElasticBeanstalkInfrastructure(pulumi.ComponentResource):
     )
 
   def _create_configuration_template(self):
-    # Use the Output.apply() method directly on individual outputs
-    # This is more reliable than Output.all() in some Pulumi versions
+    # This helper function takes a list of Output[str] and joins them into a comma-separated string for Beanstalk
+    def create_subnet_setting(namespace: str, name: str, subnet_outputs: List[Output[str]]):
+      # Combine all subnet outputs into a single output string
+      subnets_output = Output.all(*subnet_outputs).apply(lambda s: ','.join(s))
+      return subnets_output.apply(
+        lambda subnets: aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
+          namespace=namespace,
+          name=name,
+          value=subnets
+        )
+      )
 
+    # Helper functions for other settings
     def create_role_setting(role_output: Output[str]):
       return role_output.apply(
         lambda role_arn: aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
@@ -85,10 +95,20 @@ class ElasticBeanstalkInfrastructure(pulumi.ComponentResource):
         )
       )
 
-    # Create dynamic settings using apply()
-    # vpc_setting = create_vpc_setting(self.vpc_id)
-    # subnet_setting = create_subnet_setting("aws:ec2:vpc", "Subnets")
-    # elb_subnet_setting = create_subnet_setting("aws:ec2:vpc", "ELBSubnets", self.public_subnet_ids[0])
+    # Dynamic settings using apply()
+    vpc_setting = self.vpc_id.apply(
+      lambda vpc_id: aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
+        namespace="aws:ec2:vpc",
+        name="VPCId",
+        value=vpc_id
+      )
+    )
+    
+    instance_subnet_setting = create_subnet_setting("aws:ec2:vpc", "Subnets", self.private_subnet_ids)
+    
+    # ELB must be in public subnets to be internet-facing
+    elb_subnet_setting = create_subnet_setting("aws:ec2:vpc", "ELBSubnets", self.public_subnet_ids)
+    
     service_role_setting = create_role_setting(self.eb_service_role_arn)
     instance_profile_setting = create_instance_profile_setting(self.eb_instance_profile_name)
 
@@ -97,12 +117,17 @@ class ElasticBeanstalkInfrastructure(pulumi.ComponentResource):
       aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
         namespace="aws:ec2:vpc",
         name="AssociatePublicIpAddress",
-        value="false"
+        value="false" # Instance will be in private subnet, no public IP
       ),
       aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
         namespace="aws:elasticbeanstalk:environment",
         name="LoadBalancerType",
-        value="classic"
+        value="application" # Use application load balancer, it is more modern
+      ),
+      aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
+        namespace="aws:elasticbeanstalk:environment",
+        name="EnvironmentType",
+        value="LoadBalanced"
       ),
       aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
         namespace="aws:autoscaling:asg",
@@ -113,11 +138,6 @@ class ElasticBeanstalkInfrastructure(pulumi.ComponentResource):
         namespace="aws:autoscaling:asg",
         name="MaxSize",
         value="10"
-      ),
-      aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
-        namespace="aws:autoscaling:asg",
-        name="Availability Zones",
-        value="Any 1"
       ),
       aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
         namespace="aws:autoscaling:trigger",
@@ -246,10 +266,13 @@ class ElasticBeanstalkInfrastructure(pulumi.ComponentResource):
       ),
     ]
 
-    # Combine all settings using Output.all() to properly resolve dynamic settings
+    # Combine all settings using Output.all()
     all_settings = Output.all(
+      vpc_setting,
+      instance_subnet_setting,
+      elb_subnet_setting,
       service_role_setting,
-      instance_profile_setting
+      instance_profile_setting,
     ).apply(lambda dynamic_settings: dynamic_settings + static_settings)
 
     self.config_template = aws.elasticbeanstalk.ConfigurationTemplate(
