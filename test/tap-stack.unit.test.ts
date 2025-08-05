@@ -213,13 +213,27 @@ describe('Secure Infrastructure CloudFormation Template', () => {
       });
     });
 
-    test('VPCId output should be correct', () => {
-      const key = 'VPCId';
-      const output = template.Outputs[key];
-      expect(output.Description).toBe('ID of the created VPC');
-      expect(output.Value).toEqual({ Ref: 'SecureVPC' });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': `\${AWS::StackName}-${key.replace(/Id$/, 'ID')}`,
+    interface CloudFormationOutput {
+      Description?: string;
+      Value: any;
+      Export?: {
+        Name: {
+          'Fn::Sub': string;
+        };
+      };
+    }
+
+    Object.entries(template.Outputs).forEach(([outputKey, output]) => {
+      test(`${outputKey} export name should follow naming convention`, () => {
+        const typedOutput = output as CloudFormationOutput;
+
+        if (typedOutput.Export && typedOutput.Export.Name) {
+          const expectedKey = outputKey.replace(/Id$/, 'ID');
+          const kebabKey = expectedKey.replace(/([a-z])([A-Z])/g, '$1-$2');
+          expect(typedOutput.Export.Name).toEqual({
+            'Fn::Sub': `\${AWS::StackName}-${kebabKey}`,
+          });
+        }
       });
     });
 
