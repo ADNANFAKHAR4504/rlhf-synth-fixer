@@ -154,10 +154,10 @@ class TapStack(ComponentResource):
         """
         Create S3 bucket with security configurations and bucket notification to trigger Lambda.
         """
-        bucket_name = f"{self.project_name}-{self.stack}-{self.stage}".lower()
+        bucket_name = f"tapstack-{self.environment_suffix}-bucket".lower()
 
         self.s3_bucket = aws.s3.Bucket(
-            f"{self.name_prefix}-bucket",
+            f"TapStack-bucket-{self.environment_suffix}",
             bucket=bucket_name,
             force_destroy=True,
             versioning=aws.s3.BucketVersioningArgs(
@@ -170,30 +170,19 @@ class TapStack(ComponentResource):
                     )
                 )
             ),
-            tags=self.common_tags
+            tags=self.common_tags,
+            opts=ResourceOptions(provider=self.provider, parent=self)
         )
 
         # Block all public access to the bucket
         aws.s3.BucketPublicAccessBlock(
-            f"{self.name_prefix}-bucket-public-access",
+            f"TapStack-bucket-public-access-{self.environment_suffix}",
             bucket=self.s3_bucket.id,
             block_public_acls=True,
             block_public_policy=True,
             ignore_public_acls=True,
-            restrict_public_buckets=True
-        )
-
-        # Bucket notification for Lambda trigger
-        aws.s3.BucketNotification(
-            f"{self.name_prefix}-bucket-notification",
-            bucket=self.s3_bucket.id,
-            lambda_functions=[
-                aws.s3.BucketNotificationLambdaFunctionArgs(
-                    lambda_function_arn=self.lambda_function.arn,
-                    events=["s3:ObjectCreated:*"],
-                )
-            ],
-            opts=ResourceOptions(depends_on=[self.lambda_permission])
+            restrict_public_buckets=True,
+            opts=ResourceOptions(provider=self.provider, parent=self)
         )
 
 
@@ -222,7 +211,7 @@ class TapStack(ComponentResource):
         aws.iam.RolePolicy(
             f"TapStack-lambda-s3-policy-{self.environment_suffix}",
             role=self.lambda_role.id,
-            policy=self.bucket.id.apply(
+            policy=self.s3_bucket.id.apply(
                 lambda b: json.dumps({
                     "Version": "2012-10-17",
                     "Statement": [{
@@ -293,7 +282,7 @@ def handler(event, context):
             }),
             environment=aws.lambda_.FunctionEnvironmentArgs(variables={
                 "STAGE": self.environment_suffix,
-                "BUCKET": self.bucket.bucket,
+                "BUCKET": self.s3_bucket.bucket,
             }),
             timeout=30,
             memory_size=128,
@@ -305,13 +294,13 @@ def handler(event, context):
             action="lambda:InvokeFunction",
             function=self.lambda_function.name,
             principal="s3.amazonaws.com",
-            source_arn=self.bucket.arn,
+            source_arn=self.s3_bucket.arn,
             opts=ResourceOptions(provider=self.provider, parent=self)
         )
 
         aws.s3.BucketNotification(
             f"TapStack-bucket-notif-{self.environment_suffix}",
-            bucket=self.bucket.id,
+            bucket=self.s3_bucket.id,
             lambda_functions=[aws.s3.BucketNotificationLambdaFunctionArgs(
                 lambda_function_arn=self.lambda_function.arn,
                 events=["s3:ObjectCreated:*"],
@@ -342,7 +331,7 @@ def handler(event, context):
 
     @property
     def bucket_name(self):
-        return self.bucket.bucket
+        return self.s3_bucket.bucket
 
     @property
     def lambda_name(self):

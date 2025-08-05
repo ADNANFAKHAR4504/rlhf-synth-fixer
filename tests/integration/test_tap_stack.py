@@ -3,7 +3,6 @@ Integration tests for live AWS Nova Model Breaking infrastructure.
 Tests actual deployed resources and end-to-end functionality.
 """
 
-import json
 import time
 import unittest
 
@@ -13,7 +12,7 @@ from pulumi import automation as auto
 
 class TestAWSNovaModelIntegration(unittest.TestCase):
   """Integration tests against live deployed infrastructure."""
-
+  
   def setUp(self):
     """Initialize AWS clients and get stack outputs."""
     self.region = "us-east-1"
@@ -29,7 +28,7 @@ class TestAWSNovaModelIntegration(unittest.TestCase):
     
     # Get stack outputs
     self.outputs = self._get_stack_outputs()
-
+  
   def _get_stack_outputs(self):
     """Retrieve outputs from deployed Pulumi stack."""
     try:
@@ -39,8 +38,9 @@ class TestAWSNovaModelIntegration(unittest.TestCase):
         program=lambda: None
       )
       return stack.outputs()
-    except Exception as e:
+    except auto.StackNotFoundError as e:
       self.skipTest(f"Stack not deployed: {e}")
+      return None
 
   def test_vpc_deployment_and_configuration(self):
     """Test VPC is deployed with correct configuration."""
@@ -161,7 +161,6 @@ class TestAWSNovaModelIntegration(unittest.TestCase):
 
   def test_iam_role_least_privilege(self):
     """Test IAM role has least privilege permissions."""
-    lambda_name = self.outputs['lambdaName']['value']
     role_arn = self.outputs['lambdaRoleArn']['value']
     
     # Extract role name from ARN
@@ -277,8 +276,6 @@ class TestAWSNovaModelIntegration(unittest.TestCase):
   def test_infrastructure_tags(self):
     """Test all resources are properly tagged."""
     vpc_id = self.outputs['vpcId']['value']
-    bucket_name = self.outputs['bucketName']['value']
-    lambda_name = self.outputs['lambdaName']['value']
     
     # Check VPC tags
     response = self.ec2.describe_vpcs(VpcIds=[vpc_id])
@@ -289,9 +286,6 @@ class TestAWSNovaModelIntegration(unittest.TestCase):
     self.assertIn('Managed', vpc_tags)
     self.assertEqual(vpc_tags['Managed'], 'pulumi')
 
-  def tearDown(self):
-    """Clean up after tests."""
-    pass
 
 
 if __name__ == '__main__':
