@@ -351,7 +351,7 @@ def create_load_balancer(
     f"{project_name}-alb",
     name=f"{project_name}-alb",
     load_balancer_type="application",
-    scheme="internet-facing",
+    internal=False,
     ip_address_type="dualstack",
     security_groups=[security_group.id],
     subnets=[subnet.id for subnet in subnets],
