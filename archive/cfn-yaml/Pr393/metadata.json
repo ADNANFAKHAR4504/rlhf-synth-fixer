@@ -7,5 +7,9 @@
   "startedAt": "2025-08-01T07:21:12.497Z",
   "team": "4",
   "author": "balasl342",
-  "dockerS3Location": ""
+  "dockerS3Location": "",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  }
 }
