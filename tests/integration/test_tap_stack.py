@@ -95,6 +95,7 @@ class TestTapStackIntegration(unittest.TestCase):
       ("AWS::S3::Bucket", 1),
       ("AWS::ElasticLoadBalancingV2::LoadBalancer", 1),
       ("AWS::ElasticLoadBalancingV2::TargetGroup", 1),
+      ("AWS::ElasticLoadBalancingV2::Listener", 1),  # HTTP listener with redirect
       ("AWS::KMS::Key", 1),
       ("AWS::CloudWatch::Alarm", 5)
     ]

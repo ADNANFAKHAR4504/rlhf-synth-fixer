@@ -186,6 +186,30 @@ class TestTapStack(unittest.TestCase):
       "Type": "application"
     })
 
+  @mark.it("creates HTTP listener with HTTPS redirect")
+  def test_creates_http_listener_with_redirect(self):
+    # ARRANGE
+    props = TapStackProps(environment_suffix="test")
+    stack = TapStack(self.app, "TapStackTest", props=props)
+    template = Template.from_stack(stack)
+
+    # ASSERT - Should have HTTP listener that redirects to HTTPS
+    template.resource_count_is("AWS::ElasticLoadBalancingV2::Listener", 1)
+    template.has_resource_properties("AWS::ElasticLoadBalancingV2::Listener", {
+      "Port": 80,
+      "Protocol": "HTTP",
+      "DefaultActions": [
+        {
+          "Type": "redirect",
+          "RedirectConfig": {
+            "Protocol": "HTTPS",
+            "Port": "443",
+            "StatusCode": "HTTP_301"
+          }
+        }
+      ]
+    })
+
   @mark.it("creates CloudWatch alarms for monitoring")
   def test_creates_cloudwatch_alarms(self):
     # ARRANGE
