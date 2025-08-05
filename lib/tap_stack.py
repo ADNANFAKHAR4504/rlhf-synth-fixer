@@ -161,7 +161,7 @@ class TapStack(pulumi.ComponentResource):
     for region in self.regions:
       region_suffix = region.replace('-', '').replace('gov', '')
       all_regions_data[region] = {
-        "vpc_id": self.regional_networks[region].vpc_id,
+        # "vpc_id": self.regional_networks[region].vpc_id,
         "vpc_cidr": self.regional_networks[region].vpc_cidr,
         "eb_environment_url": self.regional_elastic_beanstalk[region].environment_url,
         "eb_environment_name": self.regional_elastic_beanstalk[region].environment_name,
