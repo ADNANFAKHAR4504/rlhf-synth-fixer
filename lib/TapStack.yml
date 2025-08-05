@@ -8,12 +8,20 @@ Parameters:
     Default: '0.0.0.0/0'
     AllowedPattern: '^([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,2}$'
     ConstraintDescription: 'Must be a valid CIDR notation (e.g., 192.168.1.1/32)'
+
   UniqueId:
     Type: String
     Description: 'Unique identifier for resource naming. Must be lowercase alphanumeric.'
     Default: 'secureapp'
     AllowedPattern: '^[a-z0-9]+$'
     ConstraintDescription: 'Must be lowercase alphanumeric characters only.'
+
+  EnvironmentSuffix:
+    Type: String
+    Description: 'Environment name or identifier (e.g., dev, pr487)'
+    Default: 'dev'
+    AllowedPattern: '^[a-zA-Z0-9\-]+$'
+    ConstraintDescription: 'Must contain only alphanumeric characters or hyphens.'
 
 Resources:
   InfrastructureKMSKey:
@@ -242,7 +250,7 @@ Resources:
   ApplicationLogsBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 'application-logs--${EnvironmentSuffix}-${UniqueId}'
+      BucketName: !Sub 'application-logs-${EnvironmentSuffix}-${UniqueId}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
