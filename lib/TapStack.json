@@ -212,7 +212,7 @@
                 }
             }
         },
-        "ProdPublicSubnet1RtAssoc": {
+        "ProdPublicSubnet1RouteTableAssociation": {
             "Type": "AWS::EC2::SubnetRouteTableAssociation",
             "Properties": {
                 "SubnetId": {
@@ -223,7 +223,7 @@
                 }
             }
         },
-        "ProdPublicSubnet2RtAssoc": {
+        "ProdPublicSubnet2RouteTableAssociation": {
             "Type": "AWS::EC2::SubnetRouteTableAssociation",
             "Properties": {
                 "SubnetId": {
@@ -234,7 +234,7 @@
                 }
             }
         },
-        "ProdNatEip1": {
+        "ProdNatGateway1Eip": {
             "Type": "AWS::EC2::EIP",
             "DependsOn": "ProdVpcGatewayAttachment",
             "Properties": {
@@ -253,7 +253,7 @@
                 ]
             }
         },
-        "ProdNatEip2": {
+        "ProdNatGateway2Eip": {
             "Type": "AWS::EC2::EIP",
             "DependsOn": "ProdVpcGatewayAttachment",
             "Properties": {
@@ -272,12 +272,12 @@
                 ]
             }
         },
-        "ProdNatGw1": {
+        "ProdNatGateway1": {
             "Type": "AWS::EC2::NatGateway",
             "Properties": {
                 "AllocationId": {
                     "Fn::GetAtt": [
-                        "ProdNatEip1",
+                        "ProdNatGateway1Eip",
                         "AllocationId"
                     ]
                 },
@@ -298,12 +298,12 @@
                 ]
             }
         },
-        "ProdNatGw2": {
+        "ProdNatGateway2": {
             "Type": "AWS::EC2::NatGateway",
             "Properties": {
                 "AllocationId": {
                     "Fn::GetAtt": [
-                        "ProdNatEip2",
+                        "ProdNatGateway2Eip",
                         "AllocationId"
                     ]
                 },
@@ -372,7 +372,7 @@
                 },
                 "DestinationCidrBlock": "0.0.0.0/0",
                 "NatGatewayId": {
-                    "Ref": "ProdNatGw1"
+                    "Ref": "ProdNatGateway1"
                 }
             }
         },
@@ -384,11 +384,11 @@
                 },
                 "DestinationCidrBlock": "0.0.0.0/0",
                 "NatGatewayId": {
-                    "Ref": "ProdNatGw2"
+                    "Ref": "ProdNatGateway2"
                 }
             }
         },
-        "ProdPrivateSubnet1RtAssoc": {
+        "ProdPrivateSubnet1RouteTableAssociation": {
             "Type": "AWS::EC2::SubnetRouteTableAssociation",
             "Properties": {
                 "SubnetId": {
@@ -399,7 +399,7 @@
                 }
             }
         },
-        "ProdPrivateSubnet2RtAssoc": {
+        "ProdPrivateSubnet2RouteTableAssociation": {
             "Type": "AWS::EC2::SubnetRouteTableAssociation",
             "Properties": {
                 "SubnetId": {
@@ -408,48 +408,6 @@
                 "RouteTableId": {
                     "Ref": "ProdPrivateRouteTable2"
                 }
-            }
-        },
-        "ProdAlbSecurityGroup": {
-            "Type": "AWS::EC2::SecurityGroup",
-            "Properties": {
-                "GroupName": "prod-alb-security-group",
-                "GroupDescription": "Security group for Application Load Balancer",
-                "VpcId": {
-                    "Ref": "ProdVpc"
-                },
-                "SecurityGroupIngress": [
-                    {
-                        "IpProtocol": "tcp",
-                        "FromPort": 80,
-                        "ToPort": 80,
-                        "CidrIp": "0.0.0.0/0"
-                    },
-                    {
-                        "IpProtocol": "tcp",
-                        "FromPort": 443,
-                        "ToPort": 443,
-                        "CidrIp": "0.0.0.0/0"
-                    }
-                ],
-                "SecurityGroupEgress": [
-                    {
-                        "IpProtocol": -1,
-                        "CidrIp": "0.0.0.0/0"
-                    }
-                ],
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": "prod-alb-security-group"
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "Environment"
-                        }
-                    }
-                ]
             }
         },
         "ProdWebSecurityGroup": {
@@ -496,6 +454,48 @@
                 ]
             }
         },
+        "ProdAlbSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupName": "prod-alb-security-group",
+                "GroupDescription": "Security group for Application Load Balancer",
+                "VpcId": {
+                    "Ref": "ProdVpc"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 80,
+                        "ToPort": 80,
+                        "CidrIp": "0.0.0.0/0"
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 443,
+                        "ToPort": 443,
+                        "CidrIp": "0.0.0.0/0"
+                    }
+                ],
+                "SecurityGroupEgress": [
+                    {
+                        "IpProtocol": -1,
+                        "CidrIp": "0.0.0.0/0"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "prod-alb-security-group"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
+                ]
+            }
+        },
         "ProdRdsSecurityGroup": {
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
@@ -518,6 +518,605 @@
                     {
                         "Key": "Name",
                         "Value": "prod-rds-security-group"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
+                ]
+            }
+        },
+        "ProdEc2Role": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": "prod-ec2-role",
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "ec2.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "prod-s3-access-policy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:GetObject",
+                                        "s3:PutObject"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "${ProdS3Bucket}/*"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "prod-ec2-role"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
+                ]
+            }
+        },
+        "ProdEc2InstanceProfile": {
+            "Type": "AWS::IAM::InstanceProfile",
+            "Properties": {
+                "InstanceProfileName": "prod-ec2-instance-profile",
+                "Roles": [
+                    {
+                        "Ref": "ProdEc2Role"
+                    }
+                ]
+            }
+        },
+        "ProdLaunchTemplate": {
+            "Type": "AWS::EC2::LaunchTemplate",
+            "Properties": {
+                "LaunchTemplateName": "prod-launch-template",
+                "LaunchTemplateData": {
+                    "ImageId": "ami-0c02fb55956c7d316",
+                    "InstanceType": "t3.micro",
+                    "KeyName": {
+                        "Ref": "KeyPairName"
+                    },
+                    "IamInstanceProfile": {
+                        "Arn": {
+                            "Fn::GetAtt": [
+                                "ProdEc2InstanceProfile",
+                                "Arn"
+                            ]
+                        }
+                    },
+                    "SecurityGroupIds": [
+                        {
+                            "Ref": "ProdWebSecurityGroup"
+                        }
+                    ],
+                    "UserData": {
+                        "Fn::Base64": {
+                            "Fn::Sub": "#!/bin/bash\nyum update -y\nyum install -y httpd\nsystemctl start httpd\nsystemctl enable httpd\necho \"<h1>Hello from prod-web-server!</h1>\" > /var/www/html/index.html\n/opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource ProdAutoScalingGroup --region ${AWS::Region}\n"
+                        }
+                    },
+                    "TagSpecifications": [
+                        {
+                            "ResourceType": "instance",
+                            "Tags": [
+                                {
+                                    "Key": "Name",
+                                    "Value": "prod-web-server"
+                                },
+                                {
+                                    "Key": "Environment",
+                                    "Value": {
+                                        "Ref": "Environment"
+                                    }
+                                }
+                            ]
+                        }
+                    ]
+                }
+            }
+        },
+        "ProdAutoScalingGroup": {
+            "Type": "AWS::AutoScaling::AutoScalingGroup",
+            "Properties": {
+                "AutoScalingGroupName": "prod-auto-scaling-group",
+                "LaunchTemplate": {
+                    "LaunchTemplateId": {
+                        "Ref": "ProdLaunchTemplate"
+                    },
+                    "Version": {
+                        "Fn::GetAtt": [
+                            "ProdLaunchTemplate",
+                            "LatestVersionNumber"
+                        ]
+                    }
+                },
+                "MinSize": 2,
+                "MaxSize": 6,
+                "DesiredCapacity": 2,
+                "VPCZoneIdentifier": [
+                    {
+                        "Ref": "ProdPublicSubnet1"
+                    },
+                    {
+                        "Ref": "ProdPublicSubnet2"
+                    }
+                ],
+                "TargetGroupARNs": [
+                    {
+                        "Ref": "ProdTargetGroup"
+                    }
+                ],
+                "HealthCheckType": "ELB",
+                "HealthCheckGracePeriod": 300,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "prod-auto-scaling-group",
+                        "PropagateAtLaunch": false
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        },
+                        "PropagateAtLaunch": true
+                    }
+                ]
+            },
+            "CreationPolicy": {
+                "ResourceSignal": {
+                    "Count": 2,
+                    "Timeout": "PT10M"
+                }
+            }
+        },
+        "ProdApplicationLoadBalancer": {
+            "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
+            "Properties": {
+                "Name": "prod-application-load-balancer",
+                "Scheme": "internet-facing",
+                "Type": "application",
+                "SecurityGroups": [
+                    {
+                        "Ref": "ProdAlbSecurityGroup"
+                    }
+                ],
+                "Subnets": [
+                    {
+                        "Ref": "ProdPublicSubnet1"
+                    },
+                    {
+                        "Ref": "ProdPublicSubnet2"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "prod-application-load-balancer"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
+                ]
+            }
+        },
+        "ProdTargetGroup": {
+            "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
+            "Properties": {
+                "Name": "prod-target-group",
+                "Protocol": "HTTP",
+                "Port": 80,
+                "VpcId": {
+                    "Ref": "ProdVpc"
+                },
+                "HealthCheckIntervalSeconds": 30,
+                "HealthCheckPath": "/",
+                "HealthCheckProtocol": "HTTP",
+                "HealthCheckTimeoutSeconds": 5,
+                "HealthyThresholdCount": 2,
+                "UnhealthyThresholdCount": 3,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "prod-target-group"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
+                ]
+            }
+        },
+        "ProdListener": {
+            "Type": "AWS::ElasticLoadBalancingV2::Listener",
+            "Properties": {
+                "DefaultActions": [
+                    {
+                        "Type": "forward",
+                        "TargetGroupArn": {
+                            "Ref": "ProdTargetGroup"
+                        }
+                    }
+                ],
+                "LoadBalancerArn": {
+                    "Ref": "ProdApplicationLoadBalancer"
+                },
+                "Port": 80,
+                "Protocol": "HTTP"
+            }
+        },
+        "ProdRdsSubnetGroup": {
+            "Type": "AWS::RDS::DBSubnetGroup",
+            "Properties": {
+                "DBSubnetGroupName": "prod-rds-subnet-group",
+                "DBSubnetGroupDescription": "Subnet group for RDS MySQL instance",
+                "SubnetIds": [
+                    {
+                        "Ref": "ProdPrivateSubnet1"
+                    },
+                    {
+                        "Ref": "ProdPrivateSubnet2"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "prod-rds-subnet-group"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
+                ]
+            }
+        },
+        "ProdRdsInstance": {
+            "Type": "AWS::RDS::DBInstance",
+            "Properties": {
+                "DBInstanceIdentifier": "prod-rds-instance",
+                "DBInstanceClass": "db.t3.micro",
+                "Engine": "mysql",
+                "EngineVersion": "8.0.35",
+                "MasterUsername": "admin",
+                "MasterUserPassword": {
+                    "Fn::Sub": "{{resolve:secretsmanager:prod-rds-password:SecretString:password}}"
+                },
+                "AllocatedStorage": 20,
+                "StorageType": "gp2",
+                "DBSubnetGroupName": {
+                    "Ref": "ProdRdsSubnetGroup"
+                },
+                "VPCSecurityGroups": [
+                    {
+                        "Ref": "ProdRdsSecurityGroup"
+                    }
+                ],
+                "BackupRetentionPeriod": 7,
+                "MultiAZ": true,
+                "StorageEncrypted": true,
+                "MonitoringInterval": 60,
+                "MonitoringRoleArn": {
+                    "Fn::GetAtt": [
+                        "ProdRdsMonitoringRole",
+                        "Arn"
+                    ]
+                },
+                "EnablePerformanceInsights": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "prod-rds-instance"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
+                ]
+            },
+            "DeletionPolicy": "Snapshot"
+        },
+        "ProdRdsMonitoringRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": "prod-rds-monitoring-role",
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "monitoring.rds.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole"
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "prod-rds-monitoring-role"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
+                ]
+            }
+        },
+        "ProdRdsPassword": {
+            "Type": "AWS::SecretsManager::Secret",
+            "Properties": {
+                "Name": "prod-rds-password",
+                "Description": "Password for RDS MySQL instance",
+                "GenerateSecretString": {
+                    "SecretStringTemplate": "{\"username\": \"admin\"}",
+                    "GenerateStringKey": "password",
+                    "PasswordLength": 16,
+                    "ExcludeCharacters": "\"@/\\"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "prod-rds-password"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
+                ]
+            }
+        },
+        "ProdS3Bucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "prod-static-assets-${AWS::AccountId}-${AWS::Region}"
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": false,
+                    "BlockPublicPolicy": false,
+                    "IgnorePublicAcls": false,
+                    "RestrictPublicBuckets": false
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "prod-s3-bucket"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
+                ]
+            }
+        },
+        "ProdS3BucketPolicy": {
+            "Type": "AWS::S3::BucketPolicy",
+            "Properties": {
+                "Bucket": {
+                    "Ref": "ProdS3Bucket"
+                },
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "PublicReadGetObject",
+                            "Effect": "Allow",
+                            "Principal": "*",
+                            "Action": "s3:GetObject",
+                            "Resource": {
+                                "Fn::Sub": "${ProdS3Bucket}/*"
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "ProdWebLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": "/aws/ec2/prod-web-servers",
+                "RetentionInDays": 14,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "prod-web-log-group"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
+                ]
+            }
+        },
+        "ProdRdsLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": "/aws/rds/instance/prod-rds-instance/error",
+                "RetentionInDays": 14,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "prod-rds-log-group"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
+                ]
+            }
+        },
+        "ProdAsgCpuAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": "prod-asg-high-cpu",
+                "AlarmDescription": "High CPU utilization alarm for Auto Scaling Group",
+                "MetricName": "CPUUtilization",
+                "Namespace": "AWS/EC2",
+                "Statistic": "Average",
+                "Period": 300,
+                "EvaluationPeriods": 2,
+                "Threshold": 70,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "AutoScalingGroupName",
+                        "Value": {
+                            "Ref": "ProdAutoScalingGroup"
+                        }
+                    }
+                ],
+                "AlarmActions": [
+                    {
+                        "Ref": "ProdScaleUpPolicy"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "prod-asg-cpu-alarm"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
+                ]
+            }
+        },
+        "ProdRdsCpuAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": "prod-rds-high-cpu",
+                "AlarmDescription": "High CPU utilization alarm for RDS instance",
+                "MetricName": "CPUUtilization",
+                "Namespace": "AWS/RDS",
+                "Statistic": "Average",
+                "Period": 300,
+                "EvaluationPeriods": 2,
+                "Threshold": 70,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "DBInstanceIdentifier",
+                        "Value": {
+                            "Ref": "ProdRdsInstance"
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "prod-rds-cpu-alarm"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
+                ]
+            }
+        },
+        "ProdScaleUpPolicy": {
+            "Type": "AWS::AutoScaling::ScalingPolicy",
+            "Properties": {
+                "AdjustmentType": "ChangeInCapacity",
+                "AutoScalingGroupName": {
+                    "Ref": "ProdAutoScalingGroup"
+                },
+                "Cooldown": 300,
+                "ScalingAdjustment": 1
+            }
+        },
+        "ProdScaleDownPolicy": {
+            "Type": "AWS::AutoScaling::ScalingPolicy",
+            "Properties": {
+                "AdjustmentType": "ChangeInCapacity",
+                "AutoScalingGroupName": {
+                    "Ref": "ProdAutoScalingGroup"
+                },
+                "Cooldown": 300,
+                "ScalingAdjustment": -1
+            }
+        },
+        "ProdAsgLowCpuAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": "prod-asg-low-cpu",
+                "AlarmDescription": "Low CPU utilization alarm for Auto Scaling Group",
+                "MetricName": "CPUUtilization",
+                "Namespace": "AWS/EC2",
+                "Statistic": "Average",
+                "Period": 300,
+                "EvaluationPeriods": 2,
+                "Threshold": 20,
+                "ComparisonOperator": "LessThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "AutoScalingGroupName",
+                        "Value": {
+                            "Ref": "ProdAutoScalingGroup"
+                        }
+                    }
+                ],
+                "AlarmActions": [
+                    {
+                        "Ref": "ProdScaleDownPolicy"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "prod-asg-low-cpu-alarm"
                     },
                     {
                         "Key": "Environment",
