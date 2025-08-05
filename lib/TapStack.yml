@@ -224,12 +224,11 @@ Resources:
             Effect: Allow
             Principal:
               Service: logging.s3.amazonaws.com
-            Action:
-              - 's3:PutObject'
-            Resource: !Sub 'arn:aws:s3:::s3-access-logs-${UniqueId}/*'
+            Action: s3:PutObject
+            Resource: !Sub 'arn:aws:s3:::${S3AccessLogsBucket}/*'
             Condition:
               StringEquals:
-                'aws:SourceAccount': !Sub '${AWS::AccountId}'
+                aws:SourceAccount: !Sub '${AWS::AccountId}'
 
   WebsiteContentBucket:
     Type: AWS::S3::Bucket
