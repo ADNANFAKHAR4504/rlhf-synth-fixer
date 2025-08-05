@@ -21,7 +21,6 @@ You are tasked with designing and implementing a **production-ready, event-drive
   * Also triggered **via HTTP using API Gateway**.
 * **Constraints:**
 
-  * Deployed **within a VPC**.
   * Timeout must be **≤ 30 seconds**, set using **environment variables**.
   * Logs output to **CloudWatch Logs**.
   * **IAM Role** must permit:
@@ -29,7 +28,6 @@ You are tasked with designing and implementing a **production-ready, event-drive
     * Reading from S3
     * Writing to DynamoDB
     * Publishing to SNS
-* **Scalability:** Configure **concurrent execution limit** based on historical usage (e.g., `reserved_concurrent_executions` setting).
 
 ### 3. **SNS Topic**
 

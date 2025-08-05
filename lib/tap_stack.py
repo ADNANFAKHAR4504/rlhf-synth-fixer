@@ -118,6 +118,9 @@ class TapStack(Stack):
     ))
 
     # 5. Lambda Function
+    LAMBDA_TIMEOUT = 30
+    LOG_RETENTION_DAYS = logs.RetentionDays.ONE_WEEK
+
     lambda_fn = _lambda.Function(
       self,
       "TapObjectProcessor",
@@ -130,46 +133,53 @@ import os
 import json
 import boto3
 def lambda_handler(event, context):
-  s3_client = boto3.client('s3')
-  ddb = boto3.resource('dynamodb')
-  sns = boto3.client('sns')
-  table_name = os.environ['DDB_TABLE']
-  topic_arn = os.environ['SNS_TOPIC']
-  table = ddb.Table(table_name)
-  if 'Records' in event and event['Records'][0]['eventSource'] == 'aws:s3':
-    record = event['Records'][0]
-    bucket = record['s3']['bucket']['name']
-    key = record['s3']['object']['key']
-    size = record['s3']['object'].get('size', 0)
-    timestamp = record['eventTime']
-    table.put_item(Item={
-      'objectKey': key,
-      'uploadTime': timestamp,
-      'bucket': bucket,
-      'size': size
-    })
-    sns.publish(
-      TopicArn=topic_arn,
-      Message=f"New object {key} uploaded to {bucket} at {timestamp}."
-    )
-    return {'statusCode': 200, 'body': 'S3 event processed'}
-  elif 'httpMethod' in event:
-    return {
-      'statusCode': 200,
-      'body': json.dumps({'message': 'API Gateway trigger successful'})
-    }
-  else:
-    return {'statusCode': 400, 'body': 'Unknown event'}
+  import logging
+  logger = logging.getLogger()
+  logger.setLevel(logging.INFO)
+  try:
+    s3_client = boto3.client('s3')
+    ddb = boto3.resource('dynamodb')
+    sns = boto3.client('sns')
+    table_name = os.environ['DDB_TABLE']
+    topic_arn = os.environ['SNS_TOPIC']
+    table = ddb.Table(table_name)
+    if 'Records' in event and event['Records'][0]['eventSource'] == 'aws:s3':
+      record = event['Records'][0]
+      bucket = record['s3']['bucket']['name']
+      key = record['s3']['object']['key']
+      size = record['s3']['object'].get('size', 0)
+      timestamp = record['eventTime']
+      table.put_item(Item={
+        'objectKey': key,
+        'uploadTime': timestamp,
+        'bucket': bucket,
+        'size': size
+      })
+      sns.publish(
+        TopicArn=topic_arn,
+        Message=f"New object {key} uploaded to {bucket} at {timestamp}."
+      )
+      return {'statusCode': 200, 'body': 'S3 event processed'}
+    elif 'httpMethod' in event:
+      return {
+        'statusCode': 200,
+        'body': json.dumps({'message': 'API Gateway trigger successful'})
+      }
+    else:
+      return {'statusCode': 400, 'body': 'Unknown event'}
+  except Exception as e:
+    logger.error(f"Error processing event: {e}")
+    return {'statusCode': 500, 'body': str(e)}
         """
       ),
       role=lambda_role,
-      timeout=Duration.seconds(30),
+      timeout=Duration.seconds(LAMBDA_TIMEOUT),
       environment={
         "DDB_TABLE": table.table_name,
         "SNS_TOPIC": topic.topic_arn,
-        "TIMEOUT": "30"
+        "TIMEOUT": str(LAMBDA_TIMEOUT)
       },
-      log_retention=logs.RetentionDays.ONE_WEEK
+      log_retention=LOG_RETENTION_DAYS
     )
     for k, v in tags.items():
       lambda_fn.node.default_child.add_property_override(
