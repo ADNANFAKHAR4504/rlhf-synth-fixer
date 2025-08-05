@@ -46,7 +46,7 @@ Implement the solution such that upon execution of `setup_infrastructure`, the *
 ---
 
 ## Problem Difficulty  
-**Expert**
+**Expert** 
 
 ---
 
