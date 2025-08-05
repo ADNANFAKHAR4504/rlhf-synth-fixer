@@ -390,7 +390,7 @@ Resources:
       ConfigRuleName: 'root-access-key-check'
       Source:
         Owner: AWS
-        SourceIdentifier: ROOT_ACCESS_KEY_CHECK
+        SourceIdentifier: IAM_ROOT_ACCESS_KEY_CHECK
 
   # RDS Subnet Group
   RDSSubnetGroup:
