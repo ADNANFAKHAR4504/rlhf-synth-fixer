@@ -82,7 +82,7 @@ describe('TapStack', () => {
 
     test('should handle empty props object', () => {
       expect(() => {
-        new TapStack(app, 'TestTapStack', {});
+        new TapStack(app, 'TestTapStack', {} as any);
       }).toThrow();
     });
   });
@@ -93,7 +93,7 @@ describe('TapStack', () => {
         new TapStack(app, 'TestTapStack', {
           environment: 'test'
           // Missing owner, costCenter, compliance
-        });
+        } as any);
       }).toThrow();
     });
 
