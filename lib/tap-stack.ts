@@ -2,9 +2,9 @@ import {
   AwsProvider,
   AwsProviderDefaultTags,
 } from '@cdktf/provider-aws/lib/provider';
-import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
 import { S3Backend, TerraformStack } from 'cdktf';
 import { Construct } from 'constructs';
+import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
 
 /**
  * Props for MyStack.
@@ -18,16 +18,15 @@ interface MyStackProps {
 }
 
 /**
- * MyStack is a modular TerraformStack that provisions a simple S3 bucket.
- * This serves as an example of a stack that TapStack can instantiate.
- * (Now defined within the same file as TapStack)
+ * MyStack is a reusable Construct that provisions a simple S3 bucket.
+ * It is designed to be instantiated within another TerraformStack (like TapStack)
+ * so its resources are directly included in the parent stack's synthesis.
  */
-class MyStack extends TerraformStack {
-  // Note: Not exported as it's used internally by TapStack
+class MyStack extends Construct { // KEY CHANGE: Extends Construct, not TerraformStack
   constructor(scope: Construct, id: string, props: MyStackProps) {
     super(scope, id);
 
-    // Create an S3 bucket within this modular stack
+    // Create an S3 bucket within the scope of the parent stack (TapStack in this case)
     new S3Bucket(this, 'my_example_bucket', {
       bucket: props.bucketName,
       acl: 'private', // Access Control List set to private
@@ -66,7 +65,7 @@ const AWS_REGION_OVERRIDE = '';
 /**
  * TapStack is the main CDKTF stack for provisioning AWS infrastructure.
  * It configures the AWS provider, S3 backend for state management,
- * and acts as a orchestrator for other modular stacks (like MyStack, now internal).
+ * and acts as a orchestrator for other modular constructs (like MyStack, now internal).
  */
 export class TapStack extends TerraformStack {
   constructor(scope: Construct, id: string, props?: TapStackProps) {
@@ -105,8 +104,8 @@ export class TapStack extends TerraformStack {
 
     // Conditionally instantiate MyStack (now defined internally)
     if (props?.createMyStack) {
+      // MyStack is now a Construct, so its resources will be part of this stack's synthesis
       new MyStack(this, 'MyModularStack', {
-        // MyStack is now accessible directly
         bucketName: `${environmentSuffix}-my-example-bucket`, // Example bucket name
         tags: {
           Project: 'TestProject',

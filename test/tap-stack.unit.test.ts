@@ -172,12 +172,23 @@ describe('TapStack Unit Tests', () => {
     const noMyStackFalse = new TapStack(app, 'TestNoMyStackFalse', { createMyStack: false });
     const noMyStackFalseSynthesized = JSON.parse(Testing.synth(noMyStackFalse));
     // Check for absence of the specific S3 bucket resource
-    expect(noMyStackFalseSynthesized.resource).not.toHaveProperty('aws_s3_bucket');
+    // The 'resource' key itself might be undefined if no resources are created.
+    // So, we need to check if 'resource' exists first, then check for 'aws_s3_bucket'.
+    if (noMyStackFalseSynthesized.resource) {
+      expect(noMyStackFalseSynthesized.resource).not.toHaveProperty('aws_s3_bucket');
+    } else {
+      expect(noMyStackFalseSynthesized.resource).toBeUndefined(); // If no resources at all, this is also valid
+    }
+
 
     // Test with createMyStack undefined (default behavior)
     const noMyStackUndefined = new TapStack(app, 'TestNoMyStackUndefined');
     const noMyStackUndefinedSynthesized = JSON.parse(Testing.synth(noMyStackUndefined));
     // Check for absence of the specific S3 bucket resource
-    expect(noMyStackUndefinedSynthesized.resource).not.toHaveProperty('aws_s3_bucket');
+    if (noMyStackUndefinedSynthesized.resource) {
+      expect(noMyStackUndefinedSynthesized.resource).not.toHaveProperty('aws_s3_bucket');
+    } else {
+      expect(noMyStackUndefinedSynthesized.resource).toBeUndefined(); // If no resources at all, this is also valid
+    }
   });
 });
