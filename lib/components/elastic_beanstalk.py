@@ -306,14 +306,16 @@ class ElasticBeanstalkInfrastructure(pulumi.ComponentResource):
       alb_sg_setting
     ).apply(lambda dynamic_settings: dynamic_settings + static_settings)
 
+    # FIX: Add a random suffix to the template name to force a new template to be created on every change.
+    template_name = pulumi.Output.concat(f"nova-config-{self.region_suffix}-{self._random_suffix()}")
+
     self.config_template = aws.elasticbeanstalk.ConfigurationTemplate(
       f"eb-config-template-{self.region_suffix}",
-      name=f"nova-config-{self.region_suffix}",
+      name=template_name,
       application=self.application.name,
       solution_stack_name="64bit Amazon Linux 2023 v6.6.2 running Node.js 18",
       settings=all_settings,
-      # FIX: Add this option to force replacement of the template
-      # This prevents the update from failing with null subnet values.
+      # FIX: This option is now redundant, but kept for clarity.
       opts=ResourceOptions(parent=self, delete_before_replace=True)
     )
 
@@ -325,7 +327,7 @@ class ElasticBeanstalkInfrastructure(pulumi.ComponentResource):
       template_name=self.config_template.name,
       tier="WebServer",
       tags=self.tags,
-      # FIX: This option is still needed to break the dependency cycle with the subnets.
+      # This option is still needed to break the dependency cycle with the subnets.
       opts=ResourceOptions(parent=self, delete_before_replace=True)
     )
 
