@@ -1,6 +1,6 @@
 ✅ Requirements:
 
-    Region & Environment 
+    Region & Environment
 
         Deploy all resources in the us-east-1 region.
 
