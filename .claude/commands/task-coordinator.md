@@ -34,6 +34,7 @@ ID in the initial prompt and ask for confirmation.
    - Determine language (ts, py, yaml, json) from task description  
    - Set complexity from CSV difficulty field
    - Set team as "synth"
+   - Do not add more fields to metadata.json than the ones that are referenced in cli/create-task.ts
    - Set startedAt as current timestamp (execute bash `date -Iseconds` and print it in startedAt)
    - Copy appropriate template from `templates/` directory
    - Generate `metadata.json` with extracted information
