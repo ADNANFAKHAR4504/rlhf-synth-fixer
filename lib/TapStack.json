@@ -428,37 +428,6 @@
                     }
                 ]
             }
-        }
-    },
-    "Outputs": {
-        "TableName": {
-            "Description": "DynamoDB Table Name",
-            "Value": {
-                "Ref": "DynamoDBTable"
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${AWS::StackName}-TableName"
-                }
-            }
-        },
-        "TableNameImport": {
-            "Description": "Import table name from TapStack",
-            "Value": {
-                "Fn::ImportValue": {
-                    "Fn::Sub": "TapStack${EnvironmentSuffix}-TableName"
-                }
-            },
-            "Metadata": {
-                "cfn-lint": {
-                    "suppress": [
-                        {
-                            "id": "W6001",
-                            "reason": "Dynamic import is valid and stack dependency is managed"
-                        }
-                    ]
-                }
-            }
         },
         "TableArn": {
             "Description": "DynamoDB Table ARN",

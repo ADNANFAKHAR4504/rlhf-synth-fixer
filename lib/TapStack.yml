@@ -217,26 +217,6 @@ Resources:
                   - !ImportValue
                     Fn::Sub: "TapStack${EnvironmentSuffix}-TableArn"
 
-Outputs:
-  # Export table name for cross-stack reference
-  TableName:
-    Description: "DynamoDB Table Name"
-    Value: !Ref DynamoDBTable
-    Export:
-      Name: !Sub "${AWS::StackName}-TableName"
-
-  # Import table name from TapStack
-  TableNameImport:
-    Description: "Import table name from TapStack"
-    Value:
-      Fn::ImportValue:
-        Fn::Sub: "TapStack${EnvironmentSuffix}-TableName"
-    Metadata:
-      cfn-lint:
-        suppress:
-          - id: W6001
-            reason: "Dynamic import is valid and stack dependency is managed"
-
   # Export table ARN using Fn::GetAtt
   TableArn:
     Description: "DynamoDB Table ARN"
