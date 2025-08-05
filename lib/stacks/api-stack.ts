@@ -32,7 +32,7 @@ export class ApiStack extends cdk.NestedStack {
       description: 'Production-ready API for serverless image detection system',
       deployOptions: {
         stageName: environmentSuffix,
-        loggingLevel: apigateway.MethodLoggingLevel.OFF, // Completely disable to avoid role issues
+        loggingLevel: apigateway.MethodLoggingLevel.ERROR, // Enable ERROR level logging for production debugging
         dataTraceEnabled: false,
         metricsEnabled: true,
         tracingEnabled: false,
