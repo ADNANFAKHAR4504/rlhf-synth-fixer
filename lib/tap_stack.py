@@ -541,7 +541,7 @@ def main():
     instances,
     network["vpc"].id
   )
-  create_route53_records(load_balancer["alb"])
+  #create_route53_records(load_balancer["alb"])
   dashboard = create_cloudwatch_dashboard(load_balancer["alb"], load_balancer["target_group"], instances)
   pulumi.export("vpc_id", network["vpc"].id)
   pulumi.export("vpc_ipv6_cidr", network["vpc"].ipv6_cidr_block)
@@ -553,9 +553,9 @@ def main():
   pulumi.export("instance_ids", [instance.id for instance in instances])
   pulumi.export("instance_public_ips", [instance.public_ip for instance in instances])
   pulumi.export("instance_ipv6_addresses", [instance.ipv6_addresses for instance in instances])
-  pulumi.export("domain_name", domain_name)
-  pulumi.export("website_url_ipv4", f"http://{domain_name}")
-  pulumi.export("website_url_ipv6", f"http://[{domain_name}]")
+  #pulumi.export("domain_name", domain_name)
+  #pulumi.export("website_url_ipv4", f"http://{domain_name}")
+  #pulumi.export("website_url_ipv6", f"http://[{domain_name}]")
   pulumi.export("dashboard_url", dashboard.dashboard_name.apply(
     lambda name: f"https://{aws_region}.console.aws.amazon.com/cloudwatch/home?region={aws_region}#dashboards:name={name}"
   ))
