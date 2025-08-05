@@ -22,8 +22,8 @@ Parameters:
 Mappings:
   RegionMap:
     us-west-2:
-      AZ1: us-west-2a
-      AZ2: us-west-2b
+      AZ1: us-west-1a
+      AZ2: us-west-1b
 
 Resources:
   # S3 Bucket for File Uploads (Secured)
@@ -72,7 +72,7 @@ Resources:
     Properties:
       VpcId: !Ref ServerlessAppVPC
       CidrBlock: 10.0.0.0/26
-      AvailabilityZone: !FindInMap [RegionMap, us-west-2, AZ1]
+      AvailabilityZone: !FindInMap [RegionMap, us-east-1, AZ1]
       Tags:
         - Key: Name
           Value: ServerlessAppSubnetAZ1
@@ -82,7 +82,7 @@ Resources:
     Properties:
       VpcId: !Ref ServerlessAppVPC
       CidrBlock: 10.0.0.64/26
-      AvailabilityZone: !FindInMap [RegionMap, us-west-2, AZ2]
+      AvailabilityZone: !FindInMap [RegionMap, us-east-1, AZ2]
       Tags:
         - Key: Name
           Value: ServerlessAppSubnetAZ2
