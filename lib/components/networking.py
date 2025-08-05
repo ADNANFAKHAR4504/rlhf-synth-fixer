@@ -64,13 +64,17 @@ class NetworkingInfrastructure(pulumi.ComponentResource):
     self.public_subnets = []
     self.private_subnets = []
 
+    base = 0 if self.is_primary else 1
+
     for i in range(2):
       az_output = pulumi.Output.from_input(self.azs).apply(lambda az: az.names[i])
+      public_cidr = f"10.{base}.{10 + i}.0/24"
+      private_cidr = f"10.{base}.{20 + i}.0/24"
 
       public_subnet = aws.ec2.Subnet(
         f"public-subnet-{i}-{self.region_suffix}",
         vpc_id=self.vpc.id,
-        cidr_block=f"10.{"0" if self.is_primary else "1"}.{i+1}.0/24",
+        cidr_block=public_cidr,
         availability_zone=az_output,
         map_public_ip_on_launch=True,
         tags={**self.tags, "Name": f"nova-public-{i}-{self.region_suffix}"},
@@ -81,7 +85,7 @@ class NetworkingInfrastructure(pulumi.ComponentResource):
       private_subnet = aws.ec2.Subnet(
         f"private-subnet-{i}-{self.region_suffix}",
         vpc_id=self.vpc.id,
-        cidr_block=f"10.{"0" if self.is_primary else "1"}.{i+20}.0/24",
+        cidr_block=private_cidr,
         availability_zone=az_output,
         tags={**self.tags, "Name": f"nova-private-{i}-{self.region_suffix}"},
         opts=ResourceOptions(parent=self, provider=self.provider)
