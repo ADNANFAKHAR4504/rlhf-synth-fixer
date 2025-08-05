@@ -326,38 +326,38 @@ Resources:
               - !Sub 'arn:aws:s3:::application-logs-${EnvironmentSuffix}-${UniqueId}/*'
               - !Sub 'arn:aws:s3:::application-logs-${EnvironmentSuffix}-${UniqueId}'
 
-  BackupDataBucketPolicy:
-    Type: AWS::S3::BucketPolicy
-    Properties:
-      Bucket: !Ref BackupDataBucket
-      PolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Sid: DenyAllAccess
-            Effect: Deny
-            Principal: '*'
-            Action: 's3:*'
-            Resource:
-              - !Sub 'arn:aws:s3:::backup-data-${EnvironmentSuffix}-${UniqueId}'
-              - !Sub 'arn:aws:s3:::backup-data-${EnvironmentSuffix}-${UniqueId}/*'
-            Condition:
-              StringNotEquals:
-                'aws:PrincipalServiceName': 'cloudformation.amazonaws.com'
-          - Sid: AllowCloudFormationLogging
-            Effect: Allow
-            Principal:
-              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:user/iac-deployment-runner'
-            Action: 's3:PutBucketLogging'
-            Resource: !Sub 'arn:aws:s3:::backup-data-${EnvironmentSuffix}-${UniqueId}'
-          - Sid: AllowS3Logging
-            Effect: Allow
-            Principal:
-              Service: logging.s3.amazonaws.com
-            Action: 's3:PutObject'
-            Resource: !Sub 'arn:aws:s3:::s3-access-logs-${EnvironmentSuffix}-${UniqueId}/*'
-            Condition:
-              StringEquals:
-                'aws:SourceAccount': !Sub '${AWS::AccountId}'
+BackupDataBucketPolicy:
+  Type: AWS::S3::BucketPolicy
+  Properties:
+    Bucket: !Ref BackupDataBucket
+    PolicyDocument:
+      Version: '2012-10-17'
+      Statement:
+        - Sid: DenyAllAccess
+          Effect: Deny
+          Principal: '*'
+          Action: 's3:*'
+          Resource:
+            - !GetAtt BackupDataBucket.Arn
+            - !Sub 'arn:aws:s3:::backup-data-${EnvironmentSuffix}-${UniqueId}/*'
+          Condition:
+            StringNotEquals:
+              'aws:PrincipalServiceName': 'cloudformation.amazonaws.com'
+        - Sid: AllowCloudFormationLogging
+          Effect: Allow
+          Principal:
+            AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:user/iac-deployment-runner'
+          Action: 's3:PutBucketLogging'
+          Resource: !GetAtt BackupDataBucket.Arn
+        - Sid: AllowS3Logging
+          Effect: Allow
+          Principal:
+            Service: logging.s3.amazonaws.com
+          Action: 's3:PutObject'
+          Resource: !Sub 'arn:aws:s3:::s3-access-logs-${EnvironmentSuffix}-${UniqueId}/*'
+          Condition:
+            StringEquals:
+              'aws:SourceAccount': !Sub '${AWS::AccountId}'
 
   SecureEC2Instance:
     Type: AWS::EC2::Instance
