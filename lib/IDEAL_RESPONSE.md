@@ -77,22 +77,15 @@ class TapStack(cdk.Stack):
       }
     )
 
-    # Grant permissions manually to avoid circular dependency
+    # Grant permissions to DynamoDB table
     self.table.grant_read_write_data(self.lambda_fn)
 
-    self.bucket.add_to_resource_policy(
-      PolicyStatement(
-        actions=[
-          "s3:GetObject",
-          "s3:PutObject",
-          "s3:DeleteObject"
-        ],
-        resources=[self.bucket.arn_for_objects("*")],
-        principals=[self.lambda_fn.grant_principal]
-      )
-    )
+    # Grant permissions to S3 bucket
+    # Note: Using `grant_read_write` is better than a manual policy for common actions
+    self.bucket.grant_read_write(self.lambda_fn)
 
-    # Add S3 trigger after permissions are in place
+    # Add S3 trigger. This automatically adds the necessary permissions
+    # for the S3 service to invoke the Lambda function.
     self.lambda_fn.add_event_source(
       S3EventSource(
         self.bucket,
@@ -100,22 +93,10 @@ class TapStack(cdk.Stack):
       )
     )
 
-    # Add scoped CloudWatch log permissions
-    log_group_arn = (
-      f"arn:aws:logs:{self.region}:{self.account}:"
-      f"log-group:/aws/lambda/{self.lambda_fn.function_name}:*"
-    )
-
-    self.lambda_fn.add_to_role_policy(
-      PolicyStatement(
-        actions=[
-          "logs:CreateLogGroup",
-          "logs:CreateLogStream",
-          "logs:PutLogEvents"
-        ],
-        resources=[log_group_arn]
-      )
-    )
+    # The scoped CloudWatch log permissions are not necessary because
+    # the Lambda execution role automatically gets these permissions.
+    # The default Lambda IAM role policy already includes permissions for
+    # creating log groups, streams, and putting events.
 
     # ----------------------------
     # Outputs (Exports)
