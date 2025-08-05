@@ -1,6 +1,7 @@
 """Infrastructure construct module for CDKTF Python infrastructure."""
 
 import json
+import re
 
 from cdktf import TerraformOutput
 from cdktf_cdktf_provider_aws.cloudwatch_metric_alarm import \
@@ -34,12 +35,25 @@ class Infrastructure(Construct):
     if default_tags is None:
       default_tags = {}
 
-    # Create consolidated tags for resources
-    resource_tags = {
-      "Name": f"EC2 Backup Bucket - {environment_suffix}",
-      "Environment": environment_suffix
-    }
-    resource_tags.update({k: str(v) for k, v in default_tags.items()})
+    def sanitize_tag_value(value):
+      """Sanitize tag value to meet AWS requirements."""
+      if not isinstance(value, str):
+        value = str(value)
+      # AWS tag pattern: [\p{L}\p{Z}\p{N}_.:/=+\-@]*
+      # Keep only allowed characters
+      sanitized = re.sub(r'[^\w\s_.:/=+\-@]', '', value)
+      # Trim to max length (256 chars for tag values)
+      return sanitized[:256].strip()
+
+    def create_sanitized_tags(base_tags, additional_tags=None):
+      """Create sanitized tags dictionary."""
+      tags = {}
+      tags.update(base_tags)
+      if additional_tags:
+        for key, value in additional_tags.items():
+          if isinstance(key, str) and key.strip():
+            tags[key] = sanitize_tag_value(value)
+      return tags
 
     # Data source to get the latest Amazon Linux 2 AMI
     amazon_linux_ami = DataAwsAmi(
@@ -62,7 +76,10 @@ class Infrastructure(Construct):
     backup_bucket = S3Bucket(
       self, "backup_bucket",
       bucket=f"ec2-backup-bucket-{environment_suffix}",
-      tags=resource_tags
+      tags=create_sanitized_tags({
+        "Name": f"EC2 Backup Bucket - {environment_suffix}",
+        "Environment": environment_suffix
+      }, default_tags)
     )
 
     # Enable versioning on S3 bucket
@@ -114,18 +131,14 @@ class Infrastructure(Construct):
       ]
     }
 
-    # Create consolidated tags for IAM role
-    iam_role_tags = {
-      "Name": f"EC2 Backup Role - {environment_suffix}",
-      "Environment": environment_suffix
-    }
-    iam_role_tags.update({k: str(v) for k, v in default_tags.items()})
-
     ec2_role = IamRole(
       self, "ec2_role",
       name=f"EC2BackupRole-{environment_suffix}",
       assume_role_policy=json.dumps(ec2_assume_role_policy),
-      tags=iam_role_tags
+      tags=create_sanitized_tags({
+        "Name": f"EC2 Backup Role - {environment_suffix}",
+        "Environment": environment_suffix
+      }, default_tags)
     )
 
     # Attach the S3 access policy to the IAM role
@@ -142,42 +155,27 @@ class Infrastructure(Construct):
       role=ec2_role.name
     )
 
-    # Create consolidated tags for EC2 instance
-    ec2_instance_tags = {
-      "Name": f"EC2 Instance with S3 Access - {environment_suffix}",
-      "Environment": environment_suffix
-    }
-    ec2_instance_tags.update({k: str(v) for k, v in default_tags.items()})
-
     # Create EC2 instance
     ec2_instance = Instance(
       self, "ec2_instance",
       ami=amazon_linux_ami.id,
       instance_type="t3.micro",
       iam_instance_profile=instance_profile.name,
-      tags=ec2_instance_tags
+      tags=create_sanitized_tags({
+        "Name": f"EC2 Instance with S3 Access - {environment_suffix}",
+        "Environment": environment_suffix
+      }, default_tags)
     )
-
-    # Create consolidated tags for SNS topic
-    sns_topic_tags = {
-      "Name": f"CPU Alarm Notifications - {environment_suffix}",
-      "Environment": environment_suffix
-    }
-    sns_topic_tags.update({k: str(v) for k, v in default_tags.items()})
 
     # Create SNS topic for CloudWatch alarm notifications
     alarm_topic = SnsTopic(
       self, "cpu_alarm_topic",
       name=f"ec2-cpu-alarm-notifications-{environment_suffix}",
-      tags=sns_topic_tags
+      tags=create_sanitized_tags({
+        "Name": f"CPU Alarm Notifications - {environment_suffix}",
+        "Environment": environment_suffix
+      }, default_tags)
     )
-
-    # Create consolidated tags for CloudWatch alarm
-    alarm_tags = {
-      "Name": f"EC2 CPU High Utilization Alarm - {environment_suffix}",
-      "Environment": environment_suffix
-    }
-    alarm_tags.update({k: str(v) for k, v in default_tags.items()})
 
     # Create CloudWatch alarm for EC2 CPU usage
     CloudwatchMetricAlarm(
@@ -195,7 +193,10 @@ class Infrastructure(Construct):
       dimensions={
         "InstanceId": ec2_instance.id
       },
-      tags=alarm_tags
+      tags=create_sanitized_tags({
+        "Name": f"EC2 CPU High Utilization Alarm - {environment_suffix}",
+        "Environment": environment_suffix
+      }, default_tags)
     )
 
     # Outputs
