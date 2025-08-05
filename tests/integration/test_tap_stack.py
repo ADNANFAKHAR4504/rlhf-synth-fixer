@@ -18,7 +18,7 @@ class TestTapStackDeployedResources(unittest.TestCase):
 
   @classmethod
   def setUpClass(cls):
-    cls.stack_name = os.getenv("PULUMI_STACK", "dev")
+    cls.stack_name = os.getenv("PULUMI_STACK", "TapStackpr505")
     cls.project_name = os.getenv("PULUMI_PROJECT", "pulumi-infra")
     cls.region = os.getenv("AWS_REGION", "us-east-1")
 
