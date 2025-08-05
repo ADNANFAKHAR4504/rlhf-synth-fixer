@@ -74,10 +74,6 @@ Mappings:
 # Rules for parameter validation
 Rules:
   ValidateEnvironmentName:
-    RuleCondition: !Not
-      - !Contains
-        - [dev, staging, prod]
-        - !Ref EnvironmentName
     Assertions:
       - Assert: !Contains
           - [dev, staging, prod]
@@ -85,20 +81,14 @@ Rules:
         AssertDescription: EnvironmentName must be one of dev, staging, or prod
 
   ValidateArtifactBucket:
-    RuleCondition: !Not [!Equals [!Ref ArtifactBucketName, '']]
     Assertions:
       - Assert: !Not [!Equals [!Ref ArtifactBucketName, '']]
         AssertDescription: ArtifactBucketName must be provided and cannot be empty
-      - Assert: !Not [!Equals [!Ref ArtifactBucketName, 'null']]
-        AssertDescription: ArtifactBucketName must be a valid S3 bucket name
 
   ValidateArtifactS3Key:
-    RuleCondition: !Not [!Equals [!Ref ArtifactS3Key, '']]
     Assertions:
       - Assert: !Not [!Equals [!Ref ArtifactS3Key, '']]
         AssertDescription: ArtifactS3Key must be provided and cannot be empty
-      - Assert: !Not [!Equals [!Ref ArtifactS3Key, 'null']]
-        AssertDescription: ArtifactS3Key must be a valid S3 key
 
 # Conditions for conditional resource creation
 Conditions:
@@ -443,23 +433,6 @@ Resources:
       Description: !Sub "Stage for ${EnvironmentName} environment"
       Variables:
         Environment: !Ref EnvironmentName
-      AccessLogSetting: !If
-        - CreateAccessLogsBucket
-        - DestinationArn: !Sub "arn:aws:s3:::${AccessLogsBucket}/api-gateway-logs/"
-          Format: >
-            {
-              "requestId": "$context.requestId",
-              "ip": "$context.identity.sourceIp",
-              "caller": "$context.identity.caller",
-              "user": "$context.identity.user",
-              "requestTime": "$context.requestTime",
-              "httpMethod": "$context.httpMethod",
-              "resourcePath": "$context.resourcePath",
-              "status": "$context.status",
-              "protocol": "$context.protocol",
-              "responseLength": "$context.responseLength"
-            }
-        - !Ref AWS::NoValue
       Tags:
         - Key: Environment
           Value: !Ref EnvironmentName
