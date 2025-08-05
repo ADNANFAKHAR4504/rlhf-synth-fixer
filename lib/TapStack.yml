@@ -305,7 +305,7 @@ Resources:
               - 's3:ListBucket'
             Resource:
               - !Sub 'arn:aws:s3:::website-content-${EnvironmentSuffix}-${UniqueId}/*'
-              - !GetAtt WebsiteContentBucket.Arn
+              - !Sub 'arn:aws:s3:::website-content-${EnvironmentSuffix}-${UniqueId}'
 
   ApplicationLogsBucketPolicy:
     Type: AWS::S3::BucketPolicy
@@ -321,7 +321,9 @@ Resources:
             Action:
               - 's3:PutObject'
               - 's3:PutObjectAcl'
-            Resource: !Sub 'arn:aws:s3:::application-logs-${EnvironmentSuffix}-${UniqueId}/*'
+            Resource:
+              - !Sub 'arn:aws:s3:::application-logs-${EnvironmentSuffix}-${UniqueId}/*'
+              - !Sub 'arn:aws:s3:::application-logs-${EnvironmentSuffix}-${UniqueId}'
 
   BackupDataBucketPolicy:
     Type: AWS::S3::BucketPolicy
@@ -336,7 +338,7 @@ Resources:
             Action: 's3:*'
             Resource:
               - !Sub 'arn:aws:s3:::backup-data-${EnvironmentSuffix}-${UniqueId}/*'
-              - !GetAtt BackupDataBucket.Arn
+              - !Sub 'arn:aws:s3:::backup-data-${EnvironmentSuffix}-${UniqueId}'
             Condition:
               StringNotEquals:
                 'aws:PrincipalServiceName': 'cloudformation.amazonaws.com'
