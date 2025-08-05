@@ -1681,6 +1681,45 @@ const businessMetricAlarm = new cloudwatch.Alarm(this, 'LowDetectionConfidence',
 2. **CloudFront Distribution**: Cache static assets
 3. **S3 Request Patterns**: Optimize prefix distribution
 
+## 🎯 Advanced Features
+
+### Auto-Scaling Configuration
+
+The serverless architecture automatically scales, but you can configure limits:
+
+```typescript
+// Add concurrent execution limits
+reservedConcurrentExecutions: 100, // Prevent account-level throttling
+```
+
+### Multi-Region Deployment
+
+Deploy to multiple regions for global availability:
+
+```bash
+# Deploy to different regions
+CDK_DEFAULT_REGION=us-west-2 cdk deploy --context environmentSuffix=prod-west
+CDK_DEFAULT_REGION=eu-west-1 cdk deploy --context environmentSuffix=prod-eu
+```
+
+### Custom Metrics and Alarms
+
+Extend monitoring with custom business metrics:
+
+```typescript
+// Add custom alarms in monitoring-stack.ts
+const businessMetricAlarm = new cloudwatch.Alarm(this, 'LowDetectionConfidence', {
+  alarmName: `low-detection-confidence-${environmentSuffix}`,
+  metric: new cloudwatch.Metric({
+    namespace: 'ServerlessImageDetector',
+    metricName: 'DetectionConfidence',
+    statistic: 'Average'
+  }),
+  threshold: 70, // Alert if average confidence drops below 70%
+  evaluationPeriods: 3
+});
+```
+
 ---
 
 ## 🎉 Summary
