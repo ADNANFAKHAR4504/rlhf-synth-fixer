@@ -874,6 +874,12 @@ Outputs:
     Export:
       Name: !Sub '${AWS::StackName}-Global-MFA-Policy'
 
+  EC2RoleName:
+    Description: 'EC2 Instance Role Name'
+    Value: !Ref EC2Role
+    Export:
+      Name: !Sub '${AWS::StackName}-EC2-Role-Name'
+
   # IAMAccountPasswordPolicy:
   #   Description: 'IAM Account Password Policy that enforces MFA'
   #   Value: !Ref IAMAccountPasswordPolicy
