@@ -1,40 +1,54 @@
+import { AwsProviderDefaultTags } from '@cdktf/provider-aws/lib/provider';
 import { App, Testing } from 'cdktf';
 import { TapStack } from '../lib/tap-stack';
 
-describe('Stack Structure', () => {
-  let app: App;
-  let stack: TapStack;
-  let synthesized: string;
+describe('TapStack', () => {
+  const baseProps = {
+    environmentSuffix: 'testenv',
+    stateBucket: 'test-bucket',
+    stateBucketRegion: 'us-west-2',
+    awsRegion: 'us-west-2',
+    defaultTags: {
+      tags: { Project: 'unit-test', Owner: 'QA' },
+    } as AwsProviderDefaultTags,
+  };
 
-  beforeEach(() => {
-    // Reset mocks before each test
-    jest.clearAllMocks();
+  it('should synthesize with correct S3 backend and lockfile config', () => {
+    const app = new App();
+    const stack = new TapStack(app, 'TapStackTest', baseProps);
+    const synth = Testing.synth(stack);
+    // S3 backend config
+    expect(JSON.stringify(synth)).toContain('test-bucket');
+    expect(JSON.stringify(synth)).toContain('testenv/TapStackTest.tfstate');
+    expect(JSON.stringify(synth)).toContain('use_lockfile');
   });
 
-  test('TapStack instantiates successfully via props', () => {
-    app = new App();
-    stack = new TapStack(app, 'TestTapStackWithProps', {
-      environmentSuffix: 'prod',
-      stateBucket: 'custom-state-bucket',
-      stateBucketRegion: 'us-west-2',
-      awsRegion: 'us-west-2',
+  it('should use default values if props are not provided', () => {
+    const app = Testing.app();
+    const stack = new TapStack(app, 'TapStackDefault');
+    const synth = Testing.synth(stack);
+    expect(JSON.stringify(synth)).toContain('iac-rlhf-tf-states');
+    expect(JSON.stringify(synth)).toContain('dev/TapStackDefault.tfstate');
+    expect(JSON.stringify(synth)).toContain('us-east-1');
+  });
+
+  it('should instantiate ScalableInfrastructure for each region in AWS_REGION_OVERRIDE', () => {
+    const app = Testing.app();
+    const stack = new TapStack(app, 'TapStackMultiRegion', baseProps);
+    const synth = Testing.synth(stack);
+    ['us-east-1', 'us-west-2'].forEach(region => {
+      expect(JSON.stringify(synth)).toContain(
+        `region_${region.replace(/-/g, '_')}`
+      );
+      expect(JSON.stringify(synth)).toContain(region);
     });
-    synthesized = Testing.synth(stack);
-
-    // Verify that TapStack instantiates without errors via props
-    expect(stack).toBeDefined();
-    expect(synthesized).toBeDefined();
   });
 
-  test('TapStack uses default values when no props provided', () => {
-    app = new App();
-    stack = new TapStack(app, 'TestTapStackDefault');
-    synthesized = Testing.synth(stack);
-
-    // Verify that TapStack instantiates without errors when no props are provided
-    expect(stack).toBeDefined();
-    expect(synthesized).toBeDefined();
+  it('should apply defaultTags to all providers', () => {
+    const app = Testing.app();
+    const stack = new TapStack(app, 'TapStackTags', baseProps);
+    const synth = Testing.synth(stack);
+    expect(JSON.stringify(synth)).toContain('unit-test');
+    expect(JSON.stringify(synth)).toContain('Owner');
   });
 });
-
-// add more test suites and cases as needed
