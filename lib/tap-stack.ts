@@ -2,9 +2,9 @@ import {
   AwsProvider,
   AwsProviderDefaultTags,
 } from '@cdktf/provider-aws/lib/provider';
+import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
 import { S3Backend, TerraformStack } from 'cdktf';
 import { Construct } from 'constructs';
-import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
 
 /**
  * Props for MyStack.
@@ -45,7 +45,7 @@ class MyStack extends TerraformStack { // Note: Not exported as it's used intern
  * @property {string} [stateBucket='iac-rlhf-tf-states'] - S3 bucket name for Terraform state.
  * @property {string} [stateBucketRegion='us-east-1'] - AWS region for the S3 state bucket.
  * @property {string} [awsRegion='us-east-1'] - AWS region for provisioning resources.
- * @property {AwsProviderDefaultTags['tags']} [defaultTags] - Default tags to apply to all AWS resources.
+ * @property { { [key: string]: string } } [defaultTags] - Default tags to apply to all AWS resources.
  * @property {boolean} [createMyStack=false] - Flag to conditionally instantiate MyStack for testing purposes.
  */
 interface TapStackProps {
@@ -53,8 +53,7 @@ interface TapStackProps {
   stateBucket?: string;
   stateBucketRegion?: string;
   awsRegion?: string;
-  // Corrected: defaultTags should be of type AwsProviderDefaultTags['tags'] (i.e., { [key: string]: string })
-  // and then wrapped in { tags: ... } when passed to AwsProvider.
+  // This is the correct type: a direct map of string to string
   defaultTags?: { [key: string]: string };
   createMyStack?: boolean; // Prop to control MyStack instantiation for testing
 }
@@ -80,7 +79,7 @@ export class TapStack extends TerraformStack {
     const stateBucketRegion = props?.stateBucketRegion || 'us-east-1';
     const stateBucket = props?.stateBucket || 'iac-rlhf-tf-states';
 
-    // Corrected: defaultTags need to be wrapped in an object with a 'tags' key
+    // Corrected: defaultTags needs to be wrapped in an object with a 'tags' key
     // when passed to the AwsProvider constructor.
     const awsProviderDefaultTags: AwsProviderDefaultTags[] = props?.defaultTags
       ? [{ tags: props.defaultTags }]

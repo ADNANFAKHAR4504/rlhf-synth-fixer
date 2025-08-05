@@ -16,13 +16,13 @@ const commitAuthor = process.env.COMMIT_AUTHOR || 'unknown';
 // Calculate the stack name
 const stackName = `TapStack${environmentSuffix}`;
 
-// defautlTags is structured in adherence to the AwsProviderDefaultTags interface
+// Corrected: defaultTags should be a direct map of string keys to string values,
+// matching the `defaultTags?: { [key: string]: string };` type in TapStackProps.
+// The wrapping into `{ tags: ... }` happens internally within TapStack.
 const defaultTags = {
-  tags: {
-    Environment: environmentSuffix,
-    Repository: repositoryName,
-    CommitAuthor: commitAuthor,
-  },
+  Environment: environmentSuffix,
+  Repository: repositoryName,
+  CommitAuthor: commitAuthor,
 };
 
 // Create the TapStack with the calculated properties
@@ -31,7 +31,7 @@ new TapStack(app, stackName, {
   stateBucket: stateBucket,
   stateBucketRegion: stateBucketRegion,
   awsRegion: awsRegion,
-  defaultTags: defaultTags,
+  defaultTags: defaultTags, // Now `defaultTags` matches the expected type
 });
 
 // Synthesize the app to generate the Terraform configuration
