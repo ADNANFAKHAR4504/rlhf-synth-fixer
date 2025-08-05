@@ -383,7 +383,7 @@ describe('TapStack CloudFormation Template - Unified DynamoDB Multi-Region', () 
     test('CrossRegionConfig output should have HasCrossRegionReference condition', () => {
       const output = template.Outputs.CrossRegionConfig;
       expect(output.Condition).toBe('HasCrossRegionReference');
-      expect(output.Value['Fn::Join']).toBeDefined();
+      expect(output.Value['Fn::Sub']).toBeDefined();
     });
 
     test('LambdaFunctionArn output should have IsWest2 condition', () => {
