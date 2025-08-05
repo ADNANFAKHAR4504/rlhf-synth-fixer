@@ -15,7 +15,6 @@ from cdktf_cdktf_provider_aws.data_aws_availability_zones import \
 from cdktf_cdktf_provider_aws.eip import Eip
 from cdktf_cdktf_provider_aws.instance import Instance
 from cdktf_cdktf_provider_aws.internet_gateway import InternetGateway
-from cdktf_cdktf_provider_aws.key_pair import KeyPair
 from cdktf_cdktf_provider_aws.nat_gateway import NatGateway
 from cdktf_cdktf_provider_aws.provider import AwsProvider
 from cdktf_cdktf_provider_aws.route import Route
@@ -446,35 +445,20 @@ class TapStack(TerraformStack):
       ]
     )
 
-    # Create Key Pair for Bastion Host
-    ssh_public_key = ("ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC7... "
-             "# Replace with your actual public key")
-
-    self.security['bastion_key_pair'] = KeyPair(
-      self, "production_bastion_key_pair",
-      key_name=f"nova-production-bastion-key-{self.config['infrastructure_id']}",
-      public_key=ssh_public_key,
-      tags={
-        "Environment": self.environment,
-        "Project": "AWS Nova Model Breaking",
-        "Component": "Security",
-        "Purpose": "Bastion Host Access",
-        "Name": f"nova-production-bastion-key-{self.config['infrastructure_id']}"
-      }
-    )
-
-    # Create Bastion Host Instance
+    # Create Bastion Host Instance (No SSH key - using Session Manager)
     self.security['bastion_host'] = Instance(
       self, "production_bastion_host",
       ami=self.security['amazon_linux_ami'].id,
       instance_type="t3.micro",
-      key_name=self.security['bastion_key_pair'].key_name,
+      # No key_name parameter - Session Manager access only
       subnet_id=self.networking['public_subnets'][0].id,
       vpc_security_group_ids=[self.security['bastion_sg'].id],
       associate_public_ip_address=True,
       user_data="""#!/bin/bash
 yum update -y
-yum install -y htop
+yum install -y htop amazon-ssm-agent
+systemctl enable amazon-ssm-agent
+systemctl start amazon-ssm-agent
 echo 'Bastion host setup complete' > /var/log/bastion-setup.log
 """,
       tags={
@@ -483,7 +467,7 @@ echo 'Bastion host setup complete' > /var/log/bastion-setup.log
         "Component": "Security",
         "Purpose": "Bastion Host",
         "Name": f"nova-production-bastion-{self.config['infrastructure_id']}",
-        "Description": "Bastion host for secure access to private subnets"
+        "Description": "Bastion host for secure access via Session Manager"
       }
     )
 

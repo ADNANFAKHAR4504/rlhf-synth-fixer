@@ -9,7 +9,8 @@ components, security configurations, and production requirements.
 import json
 
 import pytest
-from cdktf import Testing, App
+from cdktf import App, Testing
+
 from lib.tap_stack import TapStack
 
 
@@ -274,21 +275,23 @@ class TestTapStack:
     assert tags["Component"] == "Security"
     assert tags["Purpose"] == "Bastion Host"
 
-  def test_key_pair_creation(self, synthesized_stack):
-    """Test Key Pair creation for Bastion host."""
+  def test_session_manager_bastion(self, synthesized_stack):
+    """Test Bastion host uses Session Manager (no SSH keys)."""
+    # Verify no SSH key pairs exist (Session Manager approach)
     key_pair_resources = synthesized_stack.get(
         "resource", {}).get("aws_key_pair", {})
     assert len(
-        key_pair_resources) == 1, "Should have exactly 1 Key Pair for Bastion"
+        key_pair_resources) == 0, "Should have no Key Pairs with Session Manager"
 
-    key_pair_config = list(key_pair_resources.values())[0]
-    assert "public_key" in key_pair_config
-    assert "key_name" in key_pair_config
+    # Verify bastion has SSM agent in user_data
+    bastion_config = synthesized_stack["resource"]["aws_instance"]["production_bastion_host"]
+    user_data = bastion_config["user_data"]
+    assert "amazon-ssm-agent" in user_data
+    assert "systemctl enable amazon-ssm-agent" in user_data
+    assert "systemctl start amazon-ssm-agent" in user_data
 
-    # Check Key Pair tags
-    tags = key_pair_config["tags"]
-    assert tags["Environment"] == "Production"
-    assert tags["Component"] == "Security"
+    # Verify no key_name in bastion configuration
+    assert "key_name" not in bastion_config
 
   def test_s3_buckets_creation(self, synthesized_stack):
     """Test S3 bucket creation with Block Public Access."""
@@ -432,7 +435,6 @@ class TestTapStack:
         "aws_route_table_association": 4,  # One per subnet
         "aws_security_group": 2,  # Bastion + Private
         "aws_instance": 1,  # Bastion host
-        "aws_key_pair": 1,  # Bastion key
         "aws_s3_bucket": 2,  # Logs + Backup
         "aws_s3_bucket_versioning": 2,
         "aws_s3_bucket_public_access_block": 2

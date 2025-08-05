@@ -11,6 +11,7 @@ import json
 
 import pytest
 from cdktf import App, Testing
+
 from lib.tap_stack import TapStack
 
 
@@ -486,11 +487,11 @@ class TestProductionComplianceAndBestPractices:
         "Project": "AWS Nova Model Breaking"
     }
 
-    # Check all taggable resources
+    # Check all taggable resources (excluding aws_key_pair for Session Manager)
     taggable_resources = [
         "aws_vpc", "aws_subnet", "aws_internet_gateway", "aws_nat_gateway",
         "aws_eip", "aws_route_table", "aws_security_group", "aws_instance",
-        "aws_key_pair", "aws_s3_bucket"
+        "aws_s3_bucket"
     ]
 
     resources = synthesized.get("resource", {})
