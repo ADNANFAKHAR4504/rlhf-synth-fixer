@@ -189,7 +189,7 @@ class TapStack(pulumi.ComponentResource):
 
     # Parameter Group
     db_param_group = aws.rds.ParameterGroup(
-        f"tap-postgres-params-{env}",
+        f"tap-postgres-params-group-{env}",
         family="postgres17",
         parameters=[
             aws.rds.ParameterGroupParameterArgs(
