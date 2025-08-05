@@ -380,9 +380,6 @@
         "PublicSecurityGroup": {
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
-                "GroupName": {
-                    "Fn::Sub": "${AWS::StackName}-PublicSG"
-                },
                 "GroupDescription": "Security group for public subnets - HTTPS only inbound access",
                 "VpcId": {
                     "Ref": "SecureVPC"
@@ -420,9 +417,6 @@
         "PrivateSecurityGroup": {
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
-                "GroupName": {
-                    "Fn::Sub": "${AWS::StackName}-PrivateSG"
-                },
                 "GroupDescription": "Security group for private subnets - No internet inbound access",
                 "VpcId": {
                     "Ref": "SecureVPC"
@@ -468,9 +462,6 @@
         "EC2LeastPrivilegeRole": {
             "Type": "AWS::IAM::Role",
             "Properties": {
-                "RoleName": {
-                    "Fn::Sub": "${AWS::StackName}-EC2LeastPrivilegeRole"
-                },
                 "AssumeRolePolicyDocument": {
                     "Version": "2012-10-17",
                     "Statement": [
@@ -508,9 +499,6 @@
         "EC2SSMPolicy": {
             "Type": "AWS::IAM::Policy",
             "Properties": {
-                "PolicyName": {
-                    "Fn::Sub": "${AWS::StackName}-EC2SSMPolicy"
-                },
                 "PolicyDocument": {
                     "Version": "2012-10-17",
                     "Statement": [
@@ -557,9 +545,6 @@
         "EC2InstanceProfile": {
             "Type": "AWS::IAM::InstanceProfile",
             "Properties": {
-                "InstanceProfileName": {
-                    "Fn::Sub": "${AWS::StackName}-EC2InstanceProfile"
-                },
                 "Path": "/",
                 "Roles": [
                     {
