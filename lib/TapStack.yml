@@ -333,6 +333,12 @@ Resources:
       PolicyDocument:
         Version: '2012-10-17'
         Statement:
+          - Sid: AllowDeploymentRunnerPolicyUpdate
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:user/iac-deployment-runner'
+            Action: 's3:PutBucketPolicy'
+            Resource: !GetAtt BackupDataBucket.Arn
           - Sid: DenyAllAccess
             Effect: Deny
             Principal: '*'
@@ -354,7 +360,7 @@ Resources:
             Principal:
               AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:user/iac-deployment-runner'
             Action:
-              - 's3:GetEncryptionConfiguration' # Changed from s3:GetBucketEncryption
+              - 's3:GetEncryptionConfiguration'
               - 's3:GetBucketPublicAccessBlock'
               - 's3:GetBucketLogging'
             Resource: !GetAtt BackupDataBucket.Arn
@@ -371,25 +377,25 @@ Resources:
       BlockDeviceMappings:
         - DeviceName: /dev/xvda
           Ebs:
-            VolumeType: 'gp3'
             VolumeSize: 8
+            VolumeType: gp3
+            DeleteOnTermination: true
             Encrypted: true
             KmsKeyId: !Ref InfrastructureKMSKey
-            DeleteOnTermination: true
+      Tags:
+        - Key: Name
+          Value: !Sub 'TapStack${EnvironmentSuffix}-secure-instance'
+        - Key: Environment
+          Value: Production
+        - Key: Purpose
+          Value: Web Application Server
       UserData:
         Fn::Base64: !Sub |
           #!/bin/bash
           yum update -y
           yum install -y aws-cli
           echo "Instance started at $(date)" > /tmp/startup.log
-          aws s3 cp /tmp/startup.log s3://application-logs-${UniqueId}/startup-$(date +%Y%m%d-%H%M%S).log --region ${AWS::Region}
-      Tags:
-        - Key: Name
-          Value: !Sub '${AWS::StackName}-secure-instance'
-        - Key: Environment
-          Value: 'Production'
-        - Key: Purpose
-          Value: 'Web Application Server'
+          aws s3 cp /tmp/startup.log s3://application-logs-${EnvironmentSuffix}-${UniqueId}/startup-$(date +%Y%m%d-%H%M%S).log --region ${AWS::Region}
 
 Outputs:
   VPCId:
