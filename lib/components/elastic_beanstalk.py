@@ -15,6 +15,7 @@ class ElasticBeanstalkInfrastructure(pulumi.ComponentResource):
     region: str,
     is_primary: bool,
     environment: str,
+    environment_suffix: str,
     vpc_id: Output[str],
     public_subnet_ids: List[Output[str]],
     private_subnet_ids: List[Output[str]],
@@ -30,6 +31,7 @@ class ElasticBeanstalkInfrastructure(pulumi.ComponentResource):
     self.region = region
     self.is_primary = is_primary
     self.environment = environment
+    self.environment_suffix = environment_suffix
     self.vpc_id = vpc_id
     self.public_subnet_ids = public_subnet_ids
     self.private_subnet_ids = private_subnet_ids
@@ -55,7 +57,7 @@ class ElasticBeanstalkInfrastructure(pulumi.ComponentResource):
     """Create Elastic Beanstalk application"""
     self.application = aws.elasticbeanstalk.Application(
       f"eb-app-{self.region_suffix}",
-      name=f"nova-app-{self.region_suffix}",
+      name=f"nova-env-{self.region_suffix},
       description=f"Nova Web Application - {self.region_suffix.title()} Region",
       tags=self.tags,
       opts=ResourceOptions(parent=self)
@@ -281,7 +283,7 @@ class ElasticBeanstalkInfrastructure(pulumi.ComponentResource):
     """Create Elastic Beanstalk environment"""
     self.eb_environment = aws.elasticbeanstalk.Environment(
       f"eb-env-{self.region_suffix}",
-      name=f"nova-env-{self.region_suffix}",
+      name=f"nova-env-{self.region_suffix}-{self.environment_suffix}",
       application=self.application.name,
       template_name=self.config_template.name,
       tier="WebServer",
