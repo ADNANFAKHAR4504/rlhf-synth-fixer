@@ -284,7 +284,6 @@ class ElasticBeanstalkInfrastructure(pulumi.ComponentResource):
           value="30"
         ),
       ],
-      tags=self.tags,
       opts=ResourceOptions(parent=self)
     )
 
