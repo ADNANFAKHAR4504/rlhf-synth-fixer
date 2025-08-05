@@ -149,14 +149,16 @@ Resources:
                   - 's3:GetObject'
                   - 's3:ListBucket'
                 Resource:
-                  - !Sub 'arn:aws:s3:::website-content-${UniqueId}/*'
-                  - !GetAtt WebsiteContentBucket.Arn
+                  - !Sub 'arn:aws:s3:::${WebsiteContentBucket}'
+                  - !Sub 'arn:aws:s3:::${WebsiteContentBucket}/*'
               - Sid: 'WriteApplicationLogs'
                 Effect: Allow
                 Action:
                   - 's3:PutObject'
                   - 's3:PutObjectAcl'
-                Resource: !Sub 'arn:aws:s3:::application-logs-${UniqueId}/*'
+                Resource:
+                  - !Sub 'arn:aws:s3:::${ApplicationLogsBucket}'
+                  - !Sub 'arn:aws:s3:::${ApplicationLogsBucket}/*'
               - Sid: 'KMSAccess'
                 Effect: Allow
                 Action:
@@ -216,15 +218,16 @@ Resources:
             Principal:
               Service: logging.s3.amazonaws.com
             Action: s3:PutObject
-            Resource: !Sub 'arn:aws:s3:::${S3AccessLogsBucket}/*'
+            Resource:
+              - !Sub 'arn:aws:s3:::${S3AccessLogsBucket}/*'
             Condition:
               StringEquals:
                 aws:SourceAccount: !Sub '${AWS::AccountId}'
               ArnLike:
                 aws:SourceArn:
-                  - !Sub 'arn:aws:s3:::website-content-${EnvironmentSuffix}-${UniqueId}/*'
-                  - !Sub 'arn:aws:s3:::application-logs-${EnvironmentSuffix}-${UniqueId}/*'
-                  - !Sub 'arn:aws:s3:::backup-data-${EnvironmentSuffix}-${UniqueId}/*'
+                  - !Sub 'arn:aws:s3:::${WebsiteContentBucket}'
+                  - !Sub 'arn:aws:s3:::${ApplicationLogsBucket}'
+                  - !Sub 'arn:aws:s3:::${BackupDataBucket}'
 
   WebsiteContentBucket:
     Type: AWS::S3::Bucket
@@ -337,8 +340,9 @@ Resources:
             Principal: '*'
             Action: 's3:*'
             Resource:
-              - !Sub 'arn:aws:s3:::backup-data-${EnvironmentSuffix}-${UniqueId}/*'
-              - !Sub 'arn:aws:s3:::backup-data-${EnvironmentSuffix}-${UniqueId}'
+              - !Sub 'arn:aws:s3:::${BackupDataBucket}'
+              - !Sub 'arn:aws:s3:::${BackupDataBucket}/*'
+
             Condition:
               StringNotEquals:
                 'aws:PrincipalServiceName': 'cloudformation.amazonaws.com'
