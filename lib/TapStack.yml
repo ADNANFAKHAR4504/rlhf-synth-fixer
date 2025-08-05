@@ -281,7 +281,8 @@ Resources:
 
 Outputs:
   S3BucketName:
-    Description: 'ServerlessApp S3 bucket name for triggering uploads'
+    Description: Name of the S3 bucket created for the serverless application
+    Value: !Ref ServerlessAppBucket: 'ServerlessApp S3 bucket name for triggering uploads'
     Value: !Ref ServerlessAppBucket
 
   LambdaFunctionName:
