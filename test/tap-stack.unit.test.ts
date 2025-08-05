@@ -14,6 +14,7 @@ describe('TapStack Unit Tests', () => {
     synthesized = JSON.parse(Testing.synth(stack));
 
     // --- DEBUGGING AID: Log the synthesized output ---
+    // This will show you the exact structure of the generated Terraform JSON
     console.log('--- Synthesized Output for TestTapStackDefault ---');
     console.log(JSON.stringify(synthesized, null, 2));
     console.log('--------------------------------------------------');
@@ -49,8 +50,9 @@ describe('TapStack Unit Tests', () => {
     // Assert default values in the synthesized output
     expect(synthesized).toHaveProperty('provider');
     expect(synthesized.provider).toHaveProperty('aws');
-    expect(synthesized.provider.aws).toHaveProperty('region');
-    expect(synthesized.provider.aws.region).toBe('us-east-1');
+    // Corrected: Access the first element of the 'aws' array
+    expect(synthesized.provider.aws[0]).toHaveProperty('region');
+    expect(synthesized.provider.aws[0].region).toBe('us-east-1');
 
     expect(synthesized).toHaveProperty('terraform');
     expect(synthesized.terraform).toHaveProperty('backend');
@@ -60,7 +62,8 @@ describe('TapStack Unit Tests', () => {
     expect(synthesized.terraform.backend.s3.region).toBe('us-east-1');
     expect(synthesized.terraform.backend.s3.encrypt).toBe(true);
     expect(synthesized.terraform.backend.s3.use_lockfile).toBe(true);
-    expect(synthesized.provider.aws.default_tags).toBeUndefined(); // No default tags if not provided
+    // Corrected: Access the first element of the 'aws' array
+    expect(synthesized.provider.aws[0].default_tags).toEqual([]); // Should be an empty array if no tags
     expect(synthesized.module).toBeUndefined(); // MyStack should not be created by default
   });
 
@@ -71,8 +74,9 @@ describe('TapStack Unit Tests', () => {
 
     expect(regionSynthesized).toHaveProperty('provider');
     expect(regionSynthesized.provider).toHaveProperty('aws');
-    expect(regionSynthesized.provider.aws).toHaveProperty('region');
-    expect(regionSynthesized.provider.aws.region).toBe('eu-west-1');
+    // Corrected: Access the first element of the 'aws' array
+    expect(regionSynthesized.provider.aws[0]).toHaveProperty('region');
+    expect(regionSynthesized.provider.aws[0].region).toBe('eu-west-1');
   });
 
   test('AWS Provider region defaults to us-east-1 if not specified', () => {
@@ -83,8 +87,9 @@ describe('TapStack Unit Tests', () => {
 
     expect(defaultRegionSynthesized).toHaveProperty('provider');
     expect(defaultRegionSynthesized.provider).toHaveProperty('aws');
-    expect(defaultRegionSynthesized.provider.aws).toHaveProperty('region');
-    expect(defaultRegionSynthesized.provider.aws.region).toBe('us-east-1');
+    // Corrected: Access the first element of the 'aws' array
+    expect(defaultRegionSynthesized.provider.aws[0]).toHaveProperty('region');
+    expect(defaultRegionSynthesized.provider.aws[0].region).toBe('us-east-1');
   });
 
   test('AWS Provider defaultTags are correctly applied', () => {
@@ -95,9 +100,10 @@ describe('TapStack Unit Tests', () => {
 
     expect(tagsSynthesized).toHaveProperty('provider');
     expect(tagsSynthesized.provider).toHaveProperty('aws');
-    expect(tagsSynthesized.provider.aws).toHaveProperty('default_tags');
-    // CDKTF wraps default_tags in an array
-    expect(tagsSynthesized.provider.aws.default_tags[0].tags).toEqual(testTags);
+    // Corrected: Access the first element of the 'aws' array
+    expect(tagsSynthesized.provider.aws[0]).toHaveProperty('default_tags');
+    // CDKTF wraps default_tags in an array, so we access the first element
+    expect(tagsSynthesized.provider.aws[0].default_tags[0].tags).toEqual(testTags);
   });
 
   test('S3 Backend bucket is correctly set from props', () => {
@@ -142,16 +148,17 @@ describe('TapStack Unit Tests', () => {
     const myStackInstance = new TapStack(app, 'TestMyStackInstantiation', { createMyStack: true, environmentSuffix: 'dev' });
     const myStackSynthesized = JSON.parse(Testing.synth(myStackInstance));
 
-    // Check if the module for MyStack exists in the synthesized output
-    expect(myStackSynthesized).toHaveProperty('module');
-    expect(myStackSynthesized.module).toHaveProperty('MyModularStack');
+    // Corrected: MyStack resources will appear directly under 'resource' in the parent stack's JSON
+    expect(myStackSynthesized).toHaveProperty('resource');
+    expect(myStackSynthesized.resource).toHaveProperty('MyModularStack');
+    expect(myStackSynthesized.resource.MyModularStack).toHaveProperty('my_example_bucket');
 
-    // Verify properties passed to MyStack's constructor via the module's inputs
-    const myStackModule = myStackSynthesized.module.MyModularStack;
-    expect(myStackModule.bucketName).toBe('dev-my-example-bucket');
-    expect(myStackModule.tags.Project).toBe('TestProject');
-    expect(myStackModule.tags.Environment).toBe('dev');
-    expect(myStackModule.tags.ManagedBy).toBe('CDKTF');
+    // Verify properties of the S3 bucket created by MyStack
+    const s3BucketResource = myStackSynthesized.resource.MyModularStack.my_example_bucket;
+    expect(s3BucketResource.bucket).toBe('dev-my-example-bucket');
+    expect(s3BucketResource.tags.Project).toBe('TestProject');
+    expect(s3BucketResource.tags.Environment).toBe('dev');
+    expect(s3BucketResource.tags.ManagedBy).toBe('CDKTF');
   });
 
   test('MyStack is NOT instantiated when createMyStack is false or undefined', () => {
@@ -161,11 +168,11 @@ describe('TapStack Unit Tests', () => {
     // Test with createMyStack explicitly false
     const noMyStackFalse = new TapStack(app, 'TestNoMyStackFalse', { createMyStack: false });
     const noMyStackFalseSynthesized = JSON.parse(Testing.synth(noMyStackFalse));
-    expect(noMyStackFalseSynthesized.module).toBeUndefined();
+    expect(noMyStackFalseSynthesized.resource).toBeUndefined(); // Check for absence of resource
 
     // Test with createMyStack undefined (default behavior)
     const noMyStackUndefined = new TapStack(app, 'TestNoMyStackUndefined');
     const noMyStackUndefinedSynthesized = JSON.parse(Testing.synth(noMyStackUndefined));
-    expect(noMyStackUndefinedSynthesized.module).toBeUndefined();
+    expect(noMyStackUndefinedSynthesized.resource).toBeUndefined(); // Check for absence of resource
   });
 });
