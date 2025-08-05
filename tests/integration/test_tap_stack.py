@@ -19,11 +19,14 @@ class TestTapStackLiveIntegration(unittest.TestCase):
     cls.region = os.getenv("AWS_REGION", "us-east-1")
     cls.s3_backend = os.getenv("PULUMI_BACKEND_URL", "s3://iac-rlhf-pulumi-states")
 
+    os.environ["AWS_REGION"] = cls.region
+    os.environ["PULUMI_BACKEND_URL"] = cls.s3_backend
+
     def pulumi_program():
       return tap_stack.TapStack(
-      "TapStack",
-      tap_stack.TapStackArgs(environment_suffix=cls.stack_name)
-      )
+        "TapStack",
+        tap_stack.TapStackArgs(environment_suffix=cls.stack_name)
+        )
 
     try:
       cls.stack = auto.select_stack(
@@ -37,31 +40,35 @@ class TestTapStackLiveIntegration(unittest.TestCase):
         project_name=cls.project_name,
         program=pulumi_program,
         )
-        # Optional: set config values if stack is newly created
       cls.stack.set_config("aws:region", auto.ConfigValue(value=cls.region))
       cls.stack.set_config("TapStack:db_password",
                             auto.ConfigValue(value="dummy-password", secret=True))
-      cls.stack.up(on_output=print)
 
-    # Set AWS_REGION and backend env after stack creation
+    # Ensure workspace env vars
     cls.stack.workspace.env_vars["AWS_REGION"] = cls.region
     cls.stack.workspace.env_vars["PULUMI_BACKEND_URL"] = cls.s3_backend
 
-    # Get outputs
-    cls.outputs = cls.stack.outputs()
-    cls.vpc_id = cls.outputs.get("vpc_id").value
-    cls.sg_id = cls.outputs.get("security_group_id").value
-    cls.user_arn = cls.outputs.get("iam_user_arn").value
-    cls.access_key_id = cls.outputs.get("access_key_id").value
-    cls.kms_key_id = cls.outputs.get("kms_key_id").value
-    cls.kms_alias = cls.outputs.get("kms_alias").value
-    cls.encrypted_blob = cls.outputs.get("encrypted_db_password_blob").value
+    # Refresh to avoid duplicate errors if resources already exist
+    cls.stack.refresh(on_output=print)
+
+    # Deploy stack (no-op if already up-to-date)
+    cls.stack.up(on_output=print)
+
+    # Safe output extraction
+    outputs = cls.stack.outputs()
+    cls.outputs = outputs
+    cls.vpc_id = outputs.get("vpc_id", auto.Output.from_input(None)).value
+    cls.sg_id = outputs.get("security_group_id", auto.Output.from_input(None)).value
+    cls.user_arn = outputs.get("iam_user_arn", auto.Output.from_input(None)).value
+    cls.access_key_id = outputs.get("access_key_id", auto.Output.from_input(None)).value
+    cls.kms_key_id = outputs.get("kms_key_id", auto.Output.from_input(None)).value
+    cls.kms_alias = outputs.get("kms_alias", auto.Output.from_input("")).value
+    cls.encrypted_blob = outputs.get("encrypted_db_password_blob", auto.Output.from_input("")).value
 
     # AWS clients
     cls.ec2 = boto3.client("ec2", region_name=cls.region)
     cls.iam = boto3.client("iam", region_name=cls.region)
     cls.kms = boto3.client("kms", region_name=cls.region)
-
 
   def test_vpc_exists(self):
     response = self.ec2.describe_vpcs(VpcIds=[self.vpc_id])
