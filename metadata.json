@@ -4,7 +4,7 @@
   "complexity": "hard",
   "turn_type": "single",
   "po_id": "229157",
-  "startedAt": "2025-07-29T03:47:46.003Z",
+  "started_at": "2025-07-29T03:47:46.003Z",
   "coverage": {
     "lines": 100,
     "branches": 100
