@@ -10,13 +10,26 @@ from aws_cdk import (
   Duration,
 )
 from constructs import Construct
+from typing import Optional
 
 
 class TapStackProps(NestedStack):
-  def __init__(self, scope: Construct, id: str, environment_suffix: str = "dev", **kwargs):
+  """
+  Properties for the TapStack, defining the core infrastructure components.
+  This nested stack encapsulates the S3 bucket, IAM role, VPC, Security Group,
+  Auto Scaling Group, and Application Load Balancer.
+  """
+  def __init__(
+    self,
+    scope: Construct,
+    id: str,
+    environment_suffix: str = "dev",
+    instance_type: str = "t3.micro", # Make instance type configurable (Nice to Have)
+    **kwargs
+  ):
     super().__init__(scope, id, **kwargs)
 
-    # S3 bucket for logs
+    # S3 bucket for logs (Should Fix: Add S3 bucket public access block)
     self.log_bucket = s3.Bucket(
       self,
       f"AppLogsBucket-{environment_suffix}",
@@ -34,6 +47,8 @@ class TapStackProps(NestedStack):
           ],
         )
       ],
+      # Implement public access block for S3 bucket
+      block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
     )
 
     # IAM Role for EC2
@@ -45,19 +60,24 @@ class TapStackProps(NestedStack):
     )
     self.log_bucket.grant_read_write(self.ec2_role)
 
-    # VPC
+    # VPC (Should Fix: Consider adding private subnets for better security)
     self.vpc = ec2.Vpc(
       self,
       f"AppVPC-{environment_suffix}",
-      max_azs=2,
+      max_azs=2, # Use 2 Availability Zones
       subnet_configuration=[
         ec2.SubnetConfiguration(
           name="PublicSubnet",
           subnet_type=ec2.SubnetType.PUBLIC,
           cidr_mask=24,
+        ),
+        ec2.SubnetConfiguration(
+          name="PrivateSubnet",
+          subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS, # Private subnets with NAT Gateway
+          cidr_mask=24,
         )
       ],
-      nat_gateways=0,
+      nat_gateways=1, # One NAT Gateway for private subnets egress
     )
 
     # Security group
@@ -65,12 +85,30 @@ class TapStackProps(NestedStack):
       self,
       f"InstanceSG-{environment_suffix}",
       vpc=self.vpc,
-      description="Allow HTTP",
+      description="Allow HTTP and SSH",
+      allow_all_outbound=True, # Instances need outbound access for updates/packages
     )
+    # Allow HTTP access from ALB
     self.security_group.add_ingress_rule(
-      ec2.Peer.any_ipv4(),
+      ec2.Peer.ipv4(self.vpc.vpc_cidr_block), # Restrict to VPC CIDR for internal access
       ec2.Port.tcp(80),
-      "Allow HTTP access from anywhere",
+      "Allow HTTP access from within VPC (ALB)",
+    )
+    # Allow SSH access for management (consider restricting source IP in production)
+    self.security_group.add_ingress_rule(
+        ec2.Peer.any_ipv4(), # For simplicity, allow from anywhere. Restrict in production.
+        ec2.Port.tcp(22),
+        "Allow SSH access"
+    )
+
+    # User data for EC2 bootstrap (Nice to Have: Implement user data for EC2 bootstrap)
+    user_data = ec2.UserData.for_linux()
+    user_data.add_commands(
+        "yum update -y",
+        "yum install -y httpd",
+        "systemctl start httpd",
+        "systemctl enable httpd",
+        "echo '<h1>Hello from CDK!</h1>' > /var/www/html/index.html"
     )
 
     # AMI
@@ -81,13 +119,22 @@ class TapStackProps(NestedStack):
       self,
       f"AppASG-{environment_suffix}",
       vpc=self.vpc,
-      instance_type=ec2.InstanceType("t3.micro"),
+      instance_type=ec2.InstanceType(instance_type), # Use configurable instance type
       machine_image=ami,
       role=self.ec2_role,
       security_group=self.security_group,
       min_capacity=1,
       max_capacity=3,
-      vpc_subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PUBLIC),
+      # Deploy ASG into private subnets for better security
+      vpc_subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS),
+      user_data=user_data, # Add user data for bootstrapping
+    )
+
+    # Add auto scaling policies (Nice to Have: Add auto scaling policies)
+    self.asg.scale_on_cpu(
+        "CpuScaling",
+        target_utilization_percent=50,
+        cooldown=Duration.seconds(300)
     )
 
     # Application Load Balancer
@@ -105,10 +152,19 @@ class TapStackProps(NestedStack):
       open=True,
     )
 
+    # Implement proper health checks for ALB targets (Should Fix)
     self.listener.add_targets(
       f"AppTargets-{environment_suffix}",
       port=80,
       targets=[self.asg],
+      health_check=elbv2.HealthCheck(
+          path="/", # Default path for HTTP health check
+          interval=Duration.seconds(30), # Check every 30 seconds
+          timeout=Duration.seconds(5), # Timeout after 5 seconds
+          healthy_threshold_count=2, # 2 consecutive successful checks for healthy
+          unhealthy_threshold_count=5, # 5 consecutive failed checks for unhealthy
+          healthy_http_codes="200", # Expect HTTP 200 OK
+      )
     )
 
     # Outputs
@@ -116,36 +172,66 @@ class TapStackProps(NestedStack):
       self,
       f"LogBucketName-{environment_suffix}",
       value=self.log_bucket.bucket_name,
+      description="Name of the S3 bucket for application logs.",
     )
     CfnOutput(
       self,
       f"EC2RoleName-{environment_suffix}",
       value=self.ec2_role.role_name,
+      description="Name of the IAM role for EC2 instances.",
     )
     CfnOutput(
       self,
       f"ASGName-{environment_suffix}",
       value=self.asg.auto_scaling_group_name,
+      description="Name of the Auto Scaling Group.",
     )
     CfnOutput(
       self,
       f"ALBDNS-{environment_suffix}",
       value=self.alb.load_balancer_dns_name,
+      description="DNS name of the Application Load Balancer.",
     )
     CfnOutput(
       self,
       f"VPCId-{environment_suffix}",
       value=self.vpc.vpc_id,
+      description="ID of the main VPC.",
     )
     CfnOutput(
       self,
       f"SecurityGroupId-{environment_suffix}",
       value=self.security_group.security_group_id,
+      description="ID of the EC2 instance Security Group.",
+    )
+    CfnOutput(
+      self,
+      f"PrivateSubnetIds-{environment_suffix}", # New output for private subnets
+      value=str([subnet.subnet_id for subnet in self.vpc.private_subnets]),
+      description="IDs of the private subnets.",
     )
 
 
 class TapStack(Stack):
-  def __init__(self, scope: Construct, id: str, environment_suffix: str = "dev", **kwargs):
+  """
+  Main CDK Stack for the Test Automation Platform (TAP).
+  This stack deploys the core infrastructure components by instantiating
+  the TapStackProps nested stack.
+  """
+  def __init__(
+    self,
+    scope: Construct,
+    id: str,
+    environment_suffix: str = "dev",
+    instance_type: str = "t3.micro", # Make instance type configurable
+    **kwargs
+  ):
     super().__init__(scope, id, **kwargs)
 
-    TapStackProps(self, f"{id}Props", environment_suffix=environment_suffix)
+    # Instantiate the TapStackProps nested stack with configurable instance type
+    TapStackProps(
+        self,
+        f"{id}Props",
+        environment_suffix=environment_suffix,
+        instance_type=instance_type # Pass instance type to nested stack
+    )

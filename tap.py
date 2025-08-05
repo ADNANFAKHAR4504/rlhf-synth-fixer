@@ -23,7 +23,7 @@ stack = TapStack(
     environment_suffix=environment_suffix,
     env=cdk.Environment(
         account=os.getenv('CDK_DEFAULT_ACCOUNT'),
-        region=os.getenv('CDK_DEFAULT_REGION') or 'us-west-2'
+        region=os.getenv('CDK_DEFAULT_REGION')
     )
 )
 
