@@ -5,6 +5,7 @@ import os
 import tempfile
 import base64
 import zipfile
+import hashlib
 from cdktf import TerraformStack, S3Backend, TerraformOutput
 from constructs import Construct
 from cdktf_cdktf_provider_aws.provider import AwsProvider
@@ -68,11 +69,15 @@ class TapStack(TerraformStack):
     # Add S3 state locking using escape hatch
     self.add_override("terraform.backend.s3.use_lockfile", True)
 
+    # Create unique bucket name that follows S3 naming conventions
+    bucket_hash = hashlib.md5(f"{environment_suffix}-{construct_id}".encode()).hexdigest()[:8]
+    bucket_name = f"tap-bucket-{environment_suffix}-{bucket_hash}".lower()
+
     # Create S3 bucket for demonstration
     tap_bucket = S3Bucket(
         self,
         "tap_bucket",
-        bucket=f"tap-bucket-{environment_suffix}-{construct_id}",
+        bucket=bucket_name,
         versioning={"enabled": True}
     )
 
