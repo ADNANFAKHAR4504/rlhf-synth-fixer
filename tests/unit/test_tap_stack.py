@@ -76,6 +76,6 @@ class TestTapStack:
     # Test that synthesis completes without errors
     synth_result = app.synth()
     assert synth_result is not None
-    # Test that synthesis completes without errors
-    synth_result = app.synth()
+    # Verify that stacks were created
+    assert hasattr(synth_result, 'stacks')
     assert synth_result is not None
