@@ -442,14 +442,6 @@
                 }
             }
         },
-        "TableNameImport": {
-            "Description": "Import table name from TapStack",
-            "Value": {
-                "Fn::ImportValue": {
-                    "Fn::Sub": "TapStack${EnvironmentSuffix}-TableName"
-                }
-            }
-        },
         "TableArn": {
             "Description": "DynamoDB Table ARN",
             "Value": {
@@ -508,19 +500,7 @@
         "CrossRegionConfig": {
             "Description": "Cross-region table configuration",
             "Value": {
-                "Fn::Join": [
-                    " -> ",
-                    [
-                        {
-                            "Fn::ImportValue": {
-                                "Fn::Sub": "TapStack${EnvironmentSuffix}-TableName"
-                            }
-                        },
-                        {
-                            "Ref": "DynamoDBTable"
-                        }
-                    ]
-                ]
+                "Fn::Sub": "Cross-region setup for ${DynamoDBTable}"
             },
             "Export": {
                 "Name": {

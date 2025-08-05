@@ -225,13 +225,6 @@ Outputs:
     Export:
       Name: !Sub "${AWS::StackName}-TableName"
 
-  # Import table name from TapStack
-  TableNameImport:
-    Description: "Import table name from TapStack"
-    Value:
-      Fn::ImportValue:
-        Fn::Sub: "TapStack${EnvironmentSuffix}-TableName"
-
   # Export table ARN using Fn::GetAtt
   TableArn:
     Description: "DynamoDB Table ARN"
@@ -265,11 +258,7 @@ Outputs:
   # Cross-region configuration summary (only for us-west-2)
   CrossRegionConfig:
     Description: "Cross-region table configuration"
-    Value: !Join
-      - " -> "
-      - - !ImportValue
-          Fn::Sub: "TapStack${EnvironmentSuffix}-TableName"
-        - !Ref DynamoDBTable
+    Value: !Sub "Cross-region setup for ${DynamoDBTable}"
     Export:
       Name: !Sub "${AWS::StackName}-CrossRegionConfig"
     Condition: HasCrossRegionReference
