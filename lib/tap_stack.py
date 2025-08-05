@@ -187,23 +187,28 @@ class TapStack(pulumi.ComponentResource):
             parent=self))
     pulumi.export("rds_monitoring_role_arn", rds_monitoring_role.arn)
 
-    # Parameter Group
     db_param_group = aws.rds.ParameterGroup(
         f"tap-postgres-params-group-{env}",
-        family="postgres17",
+        family="postgres17",  # Make sure version matches your engine
         parameters=[
             aws.rds.ParameterGroupParameterArgs(
                 name="shared_preload_libraries",
-                value="pg_stat_statements"),
+                value="pg_stat_statements",
+                apply_method="pending-reboot"   # ✅ Required for static params
+            ),
             aws.rds.ParameterGroupParameterArgs(
                 name="log_statement",
-                value="all")],
+                value="all",
+                apply_method="immediate"        # ✅ Dynamic param can be immediate
+            )
+        ],
         tags={
             **tags,
             "Name": f"tap-postgres-params-{env}",
-            "Environment": env},
-        opts=ResourceOptions(
-            parent=self))
+            "Environment": env
+        },
+        opts=ResourceOptions(parent=self)
+    )
     pulumi.export("db_parameter_group_name", db_param_group.name)
 
     # RDS Multi-AZ Instance
