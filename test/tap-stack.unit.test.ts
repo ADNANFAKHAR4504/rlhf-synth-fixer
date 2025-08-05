@@ -1,7 +1,7 @@
 import fs from 'fs';
 import yaml from 'js-yaml';
 import path from 'path';
-import { schema } from 'yaml-cfn';
+import { YAML_CFN_SCHEMA } from 'yaml-cfn';
 
 process.env.AWS_REGION = 'us-east-1';
 process.env.AWS_ACCOUNT_ID = '123456789012';
@@ -12,7 +12,7 @@ describe('Secure Infrastructure CloudFormation Template', () => {
   beforeAll(() => {
     const templatePath = path.join(__dirname, '../lib/TapStack.yml');
     const templateContent = fs.readFileSync(templatePath, 'utf8');
-    template = yaml.load(templateContent, { schema });
+    template = yaml.load(templateContent, { schema: YAML_CFN_SCHEMA });
   });
 
   describe('Template Structure', () => {
@@ -174,9 +174,7 @@ describe('Secure Infrastructure CloudFormation Template', () => {
       expect(
         template.Resources.EC2SecurityGroup.Properties.SecurityGroupIngress[0]
           .CidrIp
-      ).toEqual({
-        Ref: 'YourPublicIP',
-      });
+      ).toEqual({ Ref: 'YourPublicIP' });
     });
 
     test('should have SecureEC2Instance resource with encrypted EBS', () => {
@@ -193,6 +191,36 @@ describe('Secure Infrastructure CloudFormation Template', () => {
         '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}'
       );
     });
+
+    test('should have CloudTrailBucket resource', () => {
+      expect(template.Resources.CloudTrailBucket).toBeDefined();
+      expect(template.Resources.CloudTrailBucket.Type).toBe('AWS::S3::Bucket');
+    });
+
+    test('should have CloudTrail resource', () => {
+      expect(template.Resources.CloudTrail).toBeDefined();
+      expect(template.Resources.CloudTrail.Type).toBe('AWS::CloudTrail::Trail');
+      expect(template.Resources.CloudTrail.Properties.IsMultiRegionTrail).toBe(
+        true
+      );
+      expect(
+        template.Resources.CloudTrail.Properties.EnableLogFileValidation
+      ).toBe(true);
+    });
+
+    test('should have CloudTrailLogGroup resource', () => {
+      expect(template.Resources.CloudTrailLogGroup).toBeDefined();
+      expect(template.Resources.CloudTrailLogGroup.Type).toBe(
+        'AWS::Logs::LogGroup'
+      );
+    });
+
+    test('should have CloudTrailCloudWatchLogsRole resource', () => {
+      expect(template.Resources.CloudTrailCloudWatchLogsRole).toBeDefined();
+      expect(template.Resources.CloudTrailCloudWatchLogsRole.Type).toBe(
+        'AWS::IAM::Role'
+      );
+    });
   });
 
   describe('Outputs', () => {
@@ -207,7 +235,10 @@ describe('Secure Infrastructure CloudFormation Template', () => {
         'S3AccessLogsBucket',
         'KMSKeyId',
         'EC2InstanceRoleArn',
+        'CloudTrailName',
+        'CloudTrailBucketName',
       ];
+
       expectedOutputs.forEach(outputName => {
         expect(template.Outputs[outputName]).toBeDefined();
       });
@@ -299,6 +330,26 @@ describe('Secure Infrastructure CloudFormation Template', () => {
         'Fn::Sub': '${AWS::StackName}-EC2-Instance-Role-ARN',
       });
     });
+
+    test('CloudTrailName output should be correct', () => {
+      const output = template.Outputs.CloudTrailName;
+      expect(output.Description).toBe('Name of the CloudTrail trail');
+      expect(output.Value).toEqual({ Ref: 'CloudTrail' });
+      expect(output.Export.Name).toEqual({
+        'Fn::Sub': '${AWS::StackName}-CloudTrail-Name',
+      });
+    });
+
+    test('CloudTrailBucketName output should be correct', () => {
+      const output = template.Outputs.CloudTrailBucketName;
+      expect(output.Description).toBe(
+        'Name of the S3 bucket storing CloudTrail logs'
+      );
+      expect(output.Value).toEqual({ Ref: 'CloudTrailBucket' });
+      expect(output.Export.Name).toEqual({
+        'Fn::Sub': '${AWS::StackName}-CloudTrail-Bucket',
+      });
+    });
   });
 
   describe('Template Validation', () => {
@@ -317,17 +368,17 @@ describe('Secure Infrastructure CloudFormation Template', () => {
 
     test('should have the correct number of resources', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(20);
+      expect(resourceCount).toBe(24);
     });
 
     test('should have the correct number of parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(2);
+      expect(parameterCount).toBe(3);
     });
 
     test('should have the correct number of outputs', () => {
       const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(9);
+      expect(outputCount).toBe(11);
     });
   });
 
@@ -345,17 +396,17 @@ describe('Secure Infrastructure CloudFormation Template', () => {
     test('S3 bucket names should follow naming convention with UniqueId', () => {
       const s3AccessLogsBucket = template.Resources.S3AccessLogsBucket;
       expect(s3AccessLogsBucket.Properties.BucketName).toEqual({
-        'Fn::Sub': 's3-access-logs-${UniqueId}',
+        'Fn::Sub': 's3-logs-${UniqueId}',
       });
 
       const websiteContentBucket = template.Resources.WebsiteContentBucket;
       expect(websiteContentBucket.Properties.BucketName).toEqual({
-        'Fn::Sub': 'website-content-${UniqueId}',
+        'Fn::Sub': 'web-content-${UniqueId}',
       });
 
       const applicationLogsBucket = template.Resources.ApplicationLogsBucket;
       expect(applicationLogsBucket.Properties.BucketName).toEqual({
-        'Fn::Sub': 'application-logs-${UniqueId}',
+        'Fn::Sub': 'app-logs-${UniqueId}',
       });
 
       const backupDataBucket = template.Resources.BackupDataBucket;
@@ -367,6 +418,7 @@ describe('Secure Infrastructure CloudFormation Template', () => {
     test('export names should follow naming convention', () => {
       Object.keys(template.Outputs).forEach(outputKey => {
         const output = template.Outputs[outputKey];
+        // Special handling for outputs that don't directly match the resource name
         if (outputKey === 'KMSKeyId') {
           expect(output.Export.Name).toEqual({
             'Fn::Sub': '${AWS::StackName}-KMS-Key',
@@ -375,9 +427,17 @@ describe('Secure Infrastructure CloudFormation Template', () => {
           expect(output.Export.Name).toEqual({
             'Fn::Sub': '${AWS::StackName}-EC2-Instance-Role-ARN',
           });
+        } else if (outputKey === 'CloudTrailName') {
+          expect(output.Export.Name).toEqual({
+            'Fn::Sub': '${AWS::StackName}-CloudTrail-Name',
+          });
+        } else if (outputKey === 'CloudTrailBucketName') {
+          expect(output.Export.Name).toEqual({
+            'Fn::Sub': '${AWS::StackName}-CloudTrail-Bucket',
+          });
         } else {
           expect(output.Export.Name).toEqual({
-            'Fn::Sub': `\${AWS::StackName}-${outputKey}`,
+            'Fn::Sub': `\${AWS::StackName}-${outputKey.replace(/([A-Z])/g, '-$1').toUpperCase()}`,
           });
         }
       });

@@ -172,11 +172,11 @@ Resources:
                 Resource: !GetAtt InfrastructureKMSKey.Arn
       ManagedPolicyArns:
         - 'arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy'
-      Tags:
-        - Key: Name
-          Value: 'EC2 Instance Role'
-        - Key: Purpose
-          Value: 'Least Privilege S3 Access'
+      # Tags:
+      #   - Key: Name
+      #     Value: 'EC2 Instance Role'
+      #   - Key: Purpose
+      #     Value: 'Least Privilege S3 Access'
 
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
