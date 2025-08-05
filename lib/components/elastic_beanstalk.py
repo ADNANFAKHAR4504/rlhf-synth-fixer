@@ -23,6 +23,8 @@ class ElasticBeanstalkInfrastructure(pulumi.ComponentResource):
     private_subnet_ids: List[Output[str]],
     eb_service_role_arn: Output[str],
     eb_instance_profile_name: Output[str],
+    alb_security_group_id: Output[str], # Added: ALB Security Group ID
+    eb_security_group_id: Output[str],   # Added: EB Instance Security Group ID
     tags: dict,
     opts: Optional[ResourceOptions] = None
   ):
@@ -36,6 +38,8 @@ class ElasticBeanstalkInfrastructure(pulumi.ComponentResource):
     self.private_subnet_ids = private_subnet_ids
     self.eb_service_role_arn = eb_service_role_arn
     self.eb_instance_profile_name = eb_instance_profile_name
+    self.alb_security_group_id = alb_security_group_id # Stored for use in config template
+    self.eb_security_group_id = eb_security_group_id   # Stored for use in config template
     self.tags = tags
     self.region_suffix = region.replace('-', '').replace('gov', '')
     self.environment_suffix = f"{environment_suffix}-{self._random_suffix()}"
@@ -64,9 +68,8 @@ class ElasticBeanstalkInfrastructure(pulumi.ComponentResource):
     )
 
   def _create_configuration_template(self):
-    # This helper function takes a list of Output[str] and joins them into a comma-separated string for Beanstalk
+    # Helper function to join a list of Output[str] into a comma-separated string
     def create_subnet_setting(namespace: str, name: str, subnet_outputs: List[Output[str]]):
-      # Combine all subnet outputs into a single output string
       subnets_output = Output.all(*subnet_outputs).apply(lambda s: ','.join(s))
       return subnets_output.apply(
         lambda subnets: aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
@@ -76,7 +79,7 @@ class ElasticBeanstalkInfrastructure(pulumi.ComponentResource):
         )
       )
 
-    # Helper functions for other settings
+    # Helper function for ServiceRole
     def create_role_setting(role_output: Output[str]):
       return role_output.apply(
         lambda role_arn: aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
@@ -86,6 +89,7 @@ class ElasticBeanstalkInfrastructure(pulumi.ComponentResource):
         )
       )
 
+    # Helper function for IamInstanceProfile
     def create_instance_profile_setting(profile_output: Output[str]):
       return profile_output.apply(
         lambda profile_name: aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
@@ -95,7 +99,17 @@ class ElasticBeanstalkInfrastructure(pulumi.ComponentResource):
         )
       )
 
-    # Dynamic settings using apply()
+    # New helper function for SecurityGroups
+    def create_security_group_setting(namespace: str, name: str, sg_id_output: Output[str]):
+      return sg_id_output.apply(
+        lambda sg_id: aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
+          namespace=namespace,
+          name=name,
+          value=sg_id
+        )
+      )
+
+    # Dynamic settings that depend on Outputs from other resources
     vpc_setting = self.vpc_id.apply(
       lambda vpc_id: aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
         namespace="aws:ec2:vpc",
@@ -104,30 +118,45 @@ class ElasticBeanstalkInfrastructure(pulumi.ComponentResource):
       )
     )
     
+    # Elastic Beanstalk instances should be placed in private subnets
     instance_subnet_setting = create_subnet_setting("aws:ec2:vpc", "Subnets", self.private_subnet_ids)
     
-    # ELB must be in public subnets to be internet-facing
+    # The Application Load Balancer should be placed in public subnets
     elb_subnet_setting = create_subnet_setting("aws:ec2:vpc", "ELBSubnets", self.public_subnet_ids)
     
     service_role_setting = create_role_setting(self.eb_service_role_arn)
     instance_profile_setting = create_instance_profile_setting(self.eb_instance_profile_name)
 
-    # Static settings that don't depend on outputs
+    # Security Group settings for instances and ALB
+    # For EC2 instances managed by Elastic Beanstalk
+    instance_sg_setting = create_security_group_setting(
+      "aws:autoscaling:launchconfiguration",
+      "SecurityGroups",
+      self.eb_security_group_id
+    )
+    # For the Application Load Balancer (using the elbv2 namespace)
+    alb_sg_setting = create_security_group_setting(
+      "aws:elbv2:loadbalancer",
+      "SecurityGroups",
+      self.alb_security_group_id
+    )
+
+    # Static settings that do not depend on outputs
     static_settings = [
       aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
         namespace="aws:ec2:vpc",
         name="AssociatePublicIpAddress",
-        value="false" # Instance will be in private subnet, no public IP
+        value="false" # Instances in private subnets should not have public IPs
       ),
       aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
         namespace="aws:elasticbeanstalk:environment",
         name="LoadBalancerType",
-        value="application" # Use application load balancer, it is more modern
+        value="application" # Explicitly use Application Load Balancer
       ),
       aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
         namespace="aws:elasticbeanstalk:environment",
         name="EnvironmentType",
-        value="LoadBalanced"
+        value="LoadBalanced" # Essential for multi-instance environments
       ),
       aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
         namespace="aws:autoscaling:asg",
@@ -266,13 +295,15 @@ class ElasticBeanstalkInfrastructure(pulumi.ComponentResource):
       ),
     ]
 
-    # Combine all settings using Output.all()
+    # Combine all dynamic and static settings
     all_settings = Output.all(
       vpc_setting,
       instance_subnet_setting,
       elb_subnet_setting,
       service_role_setting,
       instance_profile_setting,
+      instance_sg_setting, # Include the instance security group setting
+      alb_sg_setting       # Include the ALB security group setting
     ).apply(lambda dynamic_settings: dynamic_settings + static_settings)
 
     self.config_template = aws.elasticbeanstalk.ConfigurationTemplate(

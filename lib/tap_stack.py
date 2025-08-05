@@ -100,10 +100,11 @@ class TapStack(pulumi.ComponentResource):
         is_primary=is_primary,
         environment=self.environment_suffix,
         environment_suffix=f"{region_suffix}-{self.environment_suffix}",
-        # FIX: Pass VPC and subnet outputs from networking component
         vpc_id=self.regional_networks[region].vpc_id,
         public_subnet_ids=self.regional_networks[region].public_subnet_ids,
         private_subnet_ids=self.regional_networks[region].private_subnet_ids,
+        alb_security_group_id=self.regional_networks[region].alb_security_group_id, # FIX: Added this line
+        eb_security_group_id=self.regional_networks[region].eb_security_group_id,   # FIX: Added this line
         eb_service_role_arn=self.identity.eb_service_role.arn,
         eb_instance_profile_name=self.identity.eb_instance_profile.name,
         tags=self.tags,
