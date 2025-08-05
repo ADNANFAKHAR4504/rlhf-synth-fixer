@@ -19,6 +19,7 @@ RUN apt-get update && apt-get install -y \
     liblzma-dev \
     unzip \
     jq \
+    bc \
     && rm -rf /var/lib/apt/lists/*
 
 # Install AWS CLI
@@ -84,5 +85,7 @@ WORKDIR /app
 # Copy application code
 COPY . .
 RUN chmod -R +x scripts
+# Run setup.sh to prepare the environment
+RUN ./scripts/setup.sh
 # Set entrypoint    
 ENTRYPOINT ["/dockerEntryPoint.sh"]
