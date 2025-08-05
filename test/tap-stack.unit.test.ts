@@ -61,7 +61,7 @@ describe('Secure Web Environment CloudFormation Template', () => {
       const subnet = template.Resources.PublicSubnet;
       expect(subnet.Type).toBe('AWS::EC2::Subnet');
       expect(subnet.Properties.VpcId).toEqual({ Ref: 'ExistingVPCId' });
-      expect(subnet.Properties.CidrBlock).toBe('10.0.1.0/24');
+      expect(subnet.Properties.CidrBlock).toBe('172.31.64.0/20');
       expect(subnet.Properties.MapPublicIpOnLaunch).toBe(true);
       expect(subnet.Properties.Tags).toContainEqual({ Key: 'Name', Value: 'SecureWebSubnet' });
     });
@@ -113,7 +113,7 @@ describe('Secure Web Environment CloudFormation Template', () => {
     test('EC2Instance should have correct configuration', () => {
       const instance = template.Resources.EC2Instance;
       expect(instance.Properties.InstanceType).toBe('t2.micro');
-      expect(instance.Properties.ImageId).toBe('ami-0c55b159cbfafe1f0');
+      expect(instance.Properties.ImageId).toBe('ami-0e0d5cba8c90ba8c5');
       expect(instance.Properties.SubnetId).toEqual({ Ref: 'PublicSubnet' });
       expect(instance.Properties.SecurityGroupIds).toEqual([{ Ref: 'InstanceSecurityGroup' }]);
       expect(instance.Properties.IamInstanceProfile).toEqual({ Ref: 'EC2InstanceProfile' });
