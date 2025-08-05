@@ -34,24 +34,26 @@ try {
   outputs = JSON.parse(
     fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
   );
+  console.log(
+    '✅ Loaded CloudFormation outputs from cfn-outputs/flat-outputs.json'
+  );
 } catch (error) {
   console.warn(
-    '⚠️  cfn-outputs/flat-outputs.json not found. Using mock data for testing.'
+    '⚠️  cfn-outputs/flat-outputs.json not found. Integration tests require deployed infrastructure.'
   );
   console.warn(
-    '💡 To run real integration tests, deploy the stack first with: npm run cdk:deploy'
+    '💡 To run integration tests, deploy the stack first with: npm run cdk:deploy'
   );
 
-  // Mock outputs for testing without deployment
-  outputs = {
-    [`tap-${environmentSuffix}-alb-dns`]:
-      'tap-dev-alb-1234567890.us-east-1.elb.amazonaws.com',
-    [`tap-${environmentSuffix}-db-endpoint`]:
-      'tap-dev-database.xyz123.us-east-1.rds.amazonaws.com',
-    [`tap-${environmentSuffix}-kms-key-id`]:
-      '12345678-1234-1234-1234-123456789012',
-    [`tap-${environmentSuffix}-rds-subnet-type`]: 'Public',
-  };
+  // Exit early if no outputs file exists in CI/CD
+  if (process.env.CI) {
+    throw new Error(
+      'cfn-outputs/flat-outputs.json not found in CI/CD environment. Cannot run integration tests without deployed infrastructure.'
+    );
+  }
+
+  // For local development only - create empty outputs to prevent test framework errors
+  outputs = {};
 }
 
 // AWS SDK v3 Configuration
@@ -83,12 +85,29 @@ const waitForCondition = async (
 const usingMockData = !fs.existsSync('cfn-outputs/flat-outputs.json');
 
 describe('TAP Infrastructure End-to-End Integration Tests', () => {
-  const loadBalancerDns = outputs[`tap-${environmentSuffix}-alb-dns`];
-  const databaseEndpoint = outputs[`tap-${environmentSuffix}-db-endpoint`];
-  const kmsKeyId = outputs[`tap-${environmentSuffix}-kms-key-id`];
-  const rdsSubnetType = outputs[`tap-${environmentSuffix}-rds-subnet-type`];
+  // Use CloudFormation OutputKey values (not exportName values)
+  // The CI/CD pipeline stores outputs using the OutputKey from CDK CfnOutput
+  const loadBalancerDns = outputs['LoadBalancerDNS'];
+  const databaseEndpoint = outputs['DatabaseEndpoint'];
+  const kmsKeyId = outputs['KMSKeyId'];
+  const rdsSubnetType = outputs['RDSSubnetType'];
 
   beforeAll(() => {
+    // Skip tests if no outputs are available
+    if (Object.keys(outputs).length === 0) {
+      console.log(
+        '⚠️ No CloudFormation outputs available. Skipping integration tests.'
+      );
+      return;
+    }
+
+    console.log('🔍 Available CloudFormation outputs:', Object.keys(outputs));
+    console.log('🔍 Test values:');
+    console.log('  - LoadBalancerDNS:', loadBalancerDns);
+    console.log('  - DatabaseEndpoint:', databaseEndpoint);
+    console.log('  - KMSKeyId:', kmsKeyId);
+    console.log('  - RDSSubnetType:', rdsSubnetType);
+
     // Validate that required outputs are available
     expect(loadBalancerDns).toBeDefined();
     expect(databaseEndpoint).toBeDefined();
@@ -129,12 +148,18 @@ describe('TAP Infrastructure End-to-End Integration Tests', () => {
     });
 
     test('should follow project-stage-resource naming convention', () => {
-      // Verify outputs follow naming convention
-      expect(outputs).toHaveProperty(`tap-${environmentSuffix}-alb-dns`);
-      expect(outputs).toHaveProperty(`tap-${environmentSuffix}-db-endpoint`);
-      expect(outputs).toHaveProperty(`tap-${environmentSuffix}-kms-key-id`);
-      expect(outputs).toHaveProperty(
-        `tap-${environmentSuffix}-rds-subnet-type`
+      // Verify outputs are available using CloudFormation OutputKey values
+      expect(outputs).toHaveProperty('LoadBalancerDNS');
+      expect(outputs).toHaveProperty('DatabaseEndpoint');
+      expect(outputs).toHaveProperty('KMSKeyId');
+      expect(outputs).toHaveProperty('RDSSubnetType');
+
+      // Verify the actual resource names follow the naming convention
+      expect(loadBalancerDns).toMatch(
+        new RegExp(`^tap-.*\.elb\.amazonaws\.com$`)
+      );
+      expect(databaseEndpoint).toMatch(
+        new RegExp(`^tap-.*\.rds\.amazonaws\.com$`)
       );
     });
   });
