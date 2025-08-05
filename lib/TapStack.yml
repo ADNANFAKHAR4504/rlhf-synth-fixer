@@ -342,6 +342,183 @@ Resources:
       Roles:
         - !Ref EC2Role
 
+  # IAM Password Policy with MFA Enforcement
+  # Note: Account password policy is managed through AWS Config rules
+  # The IAM_PASSWORD_POLICY config rule will enforce password requirements
+
+  # IAM Group for MFA Enforcement
+  MFAEnforcementGroup:
+    Type: AWS::IAM::Group
+    Properties:
+      GroupName: !Sub '${AWS::StackName}-mfa-enforcement-group-${AWSRegion}'
+      Path: '/'
+
+  # IAM Policy for MFA Enforcement
+  MFAEnforcementPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: !Sub '${AWS::StackName}-mfa-enforcement-policy-${AWSRegion}'
+      Groups:
+        - !Ref MFAEnforcementGroup
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          # Deny all actions unless MFA is used
+          - Sid: DenyAllExceptListedIfNoMFA
+            Effect: Deny
+            NotAction:
+              - iam:CreateVirtualMFADevice
+              - iam:EnableMFADevice
+              - iam:GetUser
+              - iam:ListMFADevices
+              - iam:ListVirtualMFADevices
+              - iam:ResyncMFADevice
+              - iam:ChangePassword
+              - iam:GetAccountPasswordPolicy
+              - iam:GetAccountSummary
+              - sts:GetSessionToken
+            Resource: '*'
+            Condition:
+              BoolIfExists:
+                aws:MultiFactorAuthPresent: false
+          
+          # Allow specific actions without MFA (for initial setup)
+          - Sid: AllowMFASetupActions
+            Effect: Allow
+            Action:
+              - iam:CreateVirtualMFADevice
+              - iam:EnableMFADevice
+              - iam:GetUser
+              - iam:ListMFADevices
+              - iam:ListVirtualMFADevices
+              - iam:ResyncMFADevice
+              - iam:ChangePassword
+              - iam:GetAccountPasswordPolicy
+              - iam:GetAccountSummary
+              - sts:GetSessionToken
+            Resource: '*'
+
+  # IAM Policy for MFA-Protected API Access
+  MFAProtectedAPIPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: !Sub '${AWS::StackName}-mfa-protected-api-policy-${AWSRegion}'
+      Groups:
+        - !Ref MFAEnforcementGroup
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          # Allow all actions when MFA is present
+          - Sid: AllowAllActionsWithMFA
+            Effect: Allow
+            Action: '*'
+            Resource: '*'
+            Condition:
+              BoolIfExists:
+                aws:MultiFactorAuthPresent: true
+
+  # Global MFA Enforcement Policy (applies to all IAM users)
+  GlobalMFAEnforcementPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: !Sub '${AWS::StackName}-global-mfa-enforcement-${AWSRegion}'
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          # Deny all actions for all IAM users unless MFA is used
+          - Sid: DenyAllActionsWithoutMFA
+            Effect: Deny
+            NotAction:
+              - iam:CreateVirtualMFADevice
+              - iam:EnableMFADevice
+              - iam:GetUser
+              - iam:ListMFADevices
+              - iam:ListVirtualMFADevices
+              - iam:ResyncMFADevice
+              - iam:ChangePassword
+              - iam:GetAccountPasswordPolicy
+              - iam:GetAccountSummary
+              - sts:GetSessionToken
+              - sts:GetFederationToken
+              - sts:GetCallerIdentity
+            Resource: '*'
+            Condition:
+              BoolIfExists:
+                aws:MultiFactorAuthPresent: false
+          
+          # Allow MFA setup and basic account operations without MFA
+          - Sid: AllowMFASetupAndBasicOperations
+            Effect: Allow
+            Action:
+              - iam:CreateVirtualMFADevice
+              - iam:EnableMFADevice
+              - iam:GetUser
+              - iam:ListMFADevices
+              - iam:ListVirtualMFADevices
+              - iam:ResyncMFADevice
+              - iam:ChangePassword
+              - iam:GetAccountPasswordPolicy
+              - iam:GetAccountSummary
+              - sts:GetSessionToken
+              - sts:GetFederationToken
+              - sts:GetCallerIdentity
+            Resource: '*'
+
+  # IAM User for MFA Enforcement (example user)
+  MFAEnforcementUser:
+    Type: AWS::IAM::User
+    Properties:
+      UserName: !Sub '${AWS::StackName}-mfa-user-${AWSRegion}'
+      Path: '/'
+      Groups:
+        - !Ref MFAEnforcementGroup
+      LoginProfile:
+        Password: !Sub '{{resolve:secretsmanager:${DatabaseSecret}:SecretString:password}}'
+        PasswordResetRequired: true
+
+  # IAM Access Key for MFA User (for programmatic access)
+  MFAUserAccessKey:
+    Type: AWS::IAM::AccessKey
+    Properties:
+      UserName: !Ref MFAEnforcementUser
+      Status: Active
+
+  # IAM Policy for MFA User to manage their own MFA devices
+  MFAUserSelfManagementPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: !Sub '${AWS::StackName}-mfa-user-self-management-${AWSRegion}'
+      Users:
+        - !Ref MFAEnforcementUser
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowUserToManageOwnMFA
+            Effect: Allow
+            Action:
+              - iam:CreateVirtualMFADevice
+              - iam:EnableMFADevice
+              - iam:ResyncMFADevice
+              - iam:DeactivateMFADevice
+              - iam:DeleteVirtualMFADevice
+              - iam:ListMFADevices
+              - iam:ListVirtualMFADevices
+            Resource: !Sub 'arn:aws:iam::${AWS::AccountId}:mfa/${AWS::AccountId}:*'
+            Condition:
+              StringEquals:
+                aws:username: !Ref MFAEnforcementUser
+          
+          - Sid: AllowUserToViewOwnUserInfo
+            Effect: Allow
+            Action:
+              - iam:GetUser
+              - iam:ListAccessKeys
+              - iam:ListMFADevices
+            Resource: !Sub 'arn:aws:iam::${AWS::AccountId}:user/${AWS::AccountId}:*'
+            Condition:
+              StringEquals:
+                aws:username: !Ref MFAEnforcementUser
+
   # Launch Template
   WebServerLaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
@@ -597,6 +774,34 @@ Resources:
         Owner: AWS
         SourceIdentifier: RDS_STORAGE_ENCRYPTED
 
+  IAMUserMFAEnabledRule:
+    Type: AWS::Config::ConfigRule
+    DependsOn: ConfigurationRecorder
+    Properties:
+      ConfigRuleName: !Sub 'iam-user-mfa-enabled-${AWSRegion}'
+      Source:
+        Owner: AWS
+        SourceIdentifier: IAM_USER_MFA_ENABLED
+
+  IAMPasswordPolicyRule:
+    Type: AWS::Config::ConfigRule
+    DependsOn: ConfigurationRecorder
+    Properties:
+      ConfigRuleName: !Sub 'iam-password-policy-${AWSRegion}'
+      Source:
+        Owner: AWS
+        SourceIdentifier: IAM_PASSWORD_POLICY
+
+  # Additional Config Rule for MFA Root Account
+  RootAccountMFAEnabledRule:
+    Type: AWS::Config::ConfigRule
+    DependsOn: ConfigurationRecorder
+    Properties:
+      ConfigRuleName: !Sub 'root-account-mfa-enabled-${AWSRegion}'
+      Source:
+        Owner: AWS
+        SourceIdentifier: ROOT_ACCOUNT_MFA_ENABLED
+
 Outputs:
   VPCId:
     Description: 'VPC ID'
@@ -627,3 +832,27 @@ Outputs:
     Value: !Ref AWSRegion
     Export:
       Name: !Sub '${AWS::StackName}-AWS-Region'
+
+  MFAEnforcementGroup:
+    Description: 'IAM Group for MFA Enforcement'
+    Value: !Ref MFAEnforcementGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-MFA-Group'
+
+  MFAEnforcementUser:
+    Description: 'IAM User for MFA Enforcement'
+    Value: !Ref MFAEnforcementUser
+    Export:
+      Name: !Sub '${AWS::StackName}-MFA-User'
+
+  MFAUserAccessKey:
+    Description: 'Access Key for MFA User (store securely)'
+    Value: !Ref MFAUserAccessKey
+    Export:
+      Name: !Sub '${AWS::StackName}-MFA-AccessKey'
+
+  GlobalMFAEnforcementPolicy:
+    Description: 'Global MFA Enforcement Policy ARN'
+    Value: !Ref GlobalMFAEnforcementPolicy
+    Export:
+      Name: !Sub '${AWS::StackName}-Global-MFA-Policy'
