@@ -96,7 +96,7 @@ Resources:
   DynamoDBAccessRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub "multi-region-app-${EnvironmentSuffix}-dynamodb-role-${AWS::Region}"
+      # RoleName: !Sub "multi-region-app-${EnvironmentSuffix}-dynamodb-role-${AWS::Region}"
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -141,7 +141,7 @@ Resources:
     Type: AWS::Lambda::Function
     Condition: IsWest2
     Properties:
-      FunctionName: !Sub "multi-region-app-${EnvironmentSuffix}-cross-region-function"
+      # FunctionName: !Sub "multi-region-app-${EnvironmentSuffix}-cross-region-function"
       Runtime: python3.9
       Handler: index.lambda_handler
       Role: !GetAtt LambdaExecutionRole.Arn
@@ -187,7 +187,7 @@ Resources:
     Type: AWS::IAM::Role
     Condition: IsWest2
     Properties:
-      RoleName: !Sub "multi-region-app-${EnvironmentSuffix}-lambda-role-${AWS::Region}"
+      # RoleName: !Sub "multi-region-app-${EnvironmentSuffix}-lambda-role-${AWS::Region}"
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
