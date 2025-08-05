@@ -4,11 +4,7 @@
   "complexity": "hard",
   "turn_type": "single",
   "po_id": "284212",
-  "started_at": "2025-08-01T07:21:12.497Z",
-  "coverage": {
-    "lines": 100,
-    "branches": 100
-  },
+  "startedAt": "2025-08-01T07:21:12.497Z",
   "author": "balasl342",
   "dockerS3Location": ""
 }
