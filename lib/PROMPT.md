@@ -76,9 +76,9 @@ Document the solution with clear inline comments and docstrings explaining logic
 
 Constraints:
 
-All code must be written in a single Python file.
+All code must be written in a single Python file per component (one for tap_stack.py, one for test_tap_stack.py integration test, one for test_tap_stack.py unit test).
 
-The single-file implementation must reside within the existing folder structure shown above—preferably inside lib/tap_stack.py.
+The implementations must reside within the existing folder structure shown above.
 
 Do not introduce new files or folders.
 
@@ -86,4 +86,4 @@ Pulumi configuration (e.g., environment settings) should be handled in-code or v
 
 Only include Python code output, no extra explanations.
 
-The code must be clean, production-ready, and immediately deployable.
+The code must be clean, production-ready, and immediately deployable and testable.
