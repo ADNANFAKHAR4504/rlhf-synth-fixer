@@ -666,7 +666,14 @@ class TapStack(cdk.Stack):
       is_logging=True,
       is_multi_region_trail=True,
       include_global_service_events=True,
-      enable_log_file_validation=True
+      enable_log_file_validation=True,
+      event_selectors=[
+        cloudtrail.CfnTrail.EventSelectorProperty(
+          read_write_type="All",
+          include_management_events=True,
+          data_resources=[]
+        )
+      ]
     )
 
     return trail_log_group
