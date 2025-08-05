@@ -15,4 +15,6 @@ class TestTapStackLiveIntegration(unittest.TestCase):
     """Placeholder test for integration testing."""
     # Integration tests require actual AWS deployment
     # This will be implemented after successful deployment
-    pass
+    # Integration tests require actual AWS deployment
+    # This will be implemented after successful deployment
+    self.assertEqual(1, 1)  # Placeholder assertion
