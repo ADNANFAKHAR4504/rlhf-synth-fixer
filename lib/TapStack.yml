@@ -2,21 +2,18 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: ServerlessApp - Highly Available, Secure Serverless Application Template.
 
 Parameters:
-  LambdaRuntime:
-    Type: String
-    Default: python3.12
-    Description: Lambda function runtime version.
-    AllowedValues:
-      - python3.12
-      - nodejs20.x
-  LambdaHandler:
-    Type: String
-    Default: lambda_function.lambda_handler
-    Description: The handler for the Lambda function executable.
   S3BucketName:
     Type: String
     Default: serverlessapp-bucket
     Description: Unique S3 bucket name for object triggers.
+  LambdaRuntime:
+    Type: String
+    Default: python3.12
+    Description: Lambda runtime version
+  LambdaHandler:
+    Type: String
+    Default: index.lambda_handler
+    Description: Lambda handler function
 
 Resources:
   # S3 Bucket for File Uploads (Secured)
@@ -48,7 +45,7 @@ Resources:
       Action: lambda:InvokeFunction
       FunctionName: !Ref ServerlessAppLambda
       Principal: s3.amazonaws.com
-      SourceArn: !GetAtt ServerlessAppBucket.Arn
+      SourceArn: !Sub '${ServerlessAppBucket}'
       SourceAccount: !Ref AWS::AccountId
 
   # VPC for Lambda isolation (Multi-AZ)
@@ -164,7 +161,7 @@ Resources:
               - Effect: Allow
                 Action:
                   - secretsmanager:GetSecretValue
-                Resource: !GetAtt ServerlessAppSecret.Arn
+                Resource: !Ref ServerlessAppSecret
               # Allow logging to its own log group
               - Effect: Allow
                 Action:
@@ -219,7 +216,7 @@ Resources:
               return {'statusCode': 200, 'body': 'Processed.'}
       Environment:
         Variables:
-          SERVERLESSAPP_SECRET_ARN: !GetAtt ServerlessAppSecret.Arn
+          SERVERLESSAPP_SECRET_ARN: !Ref ServerlessAppSecret
       VpcConfig:
         SecurityGroupIds:
           - !Ref ServerlessAppLambdaSecurityGroup
@@ -283,7 +280,7 @@ Outputs:
     Value: !Ref S3BucketName
   LambdaFunctionArn:
     Description: ARN of the Lambda function
-    Value: !GetAtt ServerlessAppLambda.Arn
+    Value: !Ref ServerlessAppLambda
   LambdaFunctionName:
     Description: Name of the Lambda function
     Value: !Ref ServerlessAppLambda
