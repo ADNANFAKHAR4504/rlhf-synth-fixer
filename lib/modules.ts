@@ -15,6 +15,7 @@ import { CodedeployApp } from '@cdktf/provider-aws/lib/codedeploy-app';
 import { CodedeployDeploymentGroup } from '@cdktf/provider-aws/lib/codedeploy-deployment-group';
 import { CloudwatchLogGroup } from '@cdktf/provider-aws/lib/cloudwatch-log-group';
 import { DataAwsIamPolicyDocument } from '@cdktf/provider-aws/lib/data-aws-iam-policy-document';
+import { CodedeployDeploymentConfig } from '@cdktf/provider-aws/lib/codedeploy-deployment-config'; // ADD THIS IMPORT
 // Terraform's Fn for filebase64sha256
 import { Fn } from 'cdktf';
 
@@ -372,6 +373,7 @@ export class CanaryDeploymentModule extends Construct {
   public readonly application: CodedeployApp;
   public readonly deploymentGroup: CodedeployDeploymentGroup;
   public readonly serviceRole: IamRole;
+  public readonly deploymentConfig: CodedeployDeploymentConfig;
 
   constructor(scope: Construct, id: string, config: CanaryDeploymentConfig) {
     super(scope, id);
@@ -389,6 +391,24 @@ export class CanaryDeploymentModule extends Construct {
       tags: config.tags,
     });
 
+    // Create a custom deployment configuration (NEW CODE)
+    this.deploymentConfig = new CodedeployDeploymentConfig(
+      this,
+      'deployment-config',
+      {
+        deploymentConfigName: `${config.applicationName}-canary-10-percent-5-minutes`,
+        computePlatform: 'Lambda',
+        trafficRoutingConfig: {
+          type: 'TimeBasedCanary',
+          timeBasedCanary: {
+            interval: 5,
+            percentage: 10, // CORRECTED: Use 'percentage' instead of 'messages'
+          },
+        },
+      }
+    );
+
+    // Create deployment group with a simplified canary configuration
     // Create deployment group with a simplified canary configuration
     this.deploymentGroup = new CodedeployDeploymentGroup(
       this,
@@ -397,7 +417,8 @@ export class CanaryDeploymentModule extends Construct {
         appName: this.application.name,
         deploymentGroupName: config.deploymentGroupName,
         serviceRoleArn: this.serviceRole.arn,
-        deploymentConfigName: 'CodeDeployDefault.Lambda10PercentEvery5Minutes', // This is key to canary
+        // Reference the name of the new custom configuration here (UPDATED LINE)
+        deploymentConfigName: this.deploymentConfig.deploymentConfigName,
 
         deploymentStyle: {
           deploymentOption: 'WITH_TRAFFIC_CONTROL',
