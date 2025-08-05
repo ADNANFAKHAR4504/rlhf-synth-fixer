@@ -31,75 +31,82 @@ common_tags = {
 }
 
 def create_vpc_and_networking() -> Dict[str, Any]:
-  """
-  Create VPC with dual-stack networking configuration.
-  Returns:
-      Dict containing VPC, subnets, IGW, and route tables
-  """
-  vpc = aws.ec2.Vpc(
-    f"{project_name}-vpc",
-    cidr_block="10.0.0.0/16",
-    enable_dns_hostnames=True,
-    enable_dns_support=True,
-    assign_generated_ipv6_cidr_block=True,
-    tags={**common_tags, "Name": f"{project_name}-vpc"}
-  )
-  azs = aws.get_availability_zones(state="available")
-  igw = aws.ec2.InternetGateway(
-    f"{project_name}-igw",
-    vpc_id=vpc.id,
-    tags={**common_tags, "Name": f"{project_name}-igw"}
-  )
-  public_subnets = []
-  for idx, az in enumerate(azs.names[:2]):
-      resource_opts = None
-      if idx > 0:
-          resource_opts = pulumi.ResourceOptions(depends_on=[public_subnets[idx-1]])
-      subnet = aws.ec2.Subnet(
-      f"{project_name}-public-subnet-{idx+1}",
-      vpc_id=vpc.id,
-      availability_zone=az,
-      cidr_block=f"10.0.{idx+1}.0/24",
-      ipv6_cidr_block=vpc.ipv6_cidr_block.apply(
+    """
+    Create VPC with dual-stack networking configuration.
+    Returns:
+        Dict containing VPC, subnets, IGW, and route tables
+    """
+    vpc = aws.ec2.Vpc(
+        f"{project_name}-vpc",
+        cidr_block="10.0.0.0/16",
+        enable_dns_hostnames=True,
+        enable_dns_support=True,
+        assign_generated_ipv6_cidr_block=True,
+        tags={**common_tags, "Name": f"{project_name}-vpc"}
+    )
+    azs = aws.get_availability_zones(state="available")
+    igw = aws.ec2.InternetGateway(
+        f"{project_name}-igw",
+        vpc_id=vpc.id,
+        tags={**common_tags, "Name": f"{project_name}-igw"}
+    )
+    
+    public_subnets = []
+    for idx, az in enumerate(azs.names[:2]):
+        # Dependency set karne ke liye yeh logic
+        resource_opts = None
+        if idx > 0:
+            resource_opts = pulumi.ResourceOptions(depends_on=[public_subnets[idx-1]])
+        
+        subnet = aws.ec2.Subnet(
+            f"{project_name}-public-subnet-{idx+1}",
+            vpc_id=vpc.id,
+            availability_zone=az,
+            cidr_block=f"10.0.{idx+1}.0/24",
+            ipv6_cidr_block=vpc.ipv6_cidr_block.apply(
                 lambda cidr: str(list(ipaddress.IPv6Network(cidr).subnets(new_prefix=64))[idx])),
-      map_public_ip_on_launch=True,
-      assign_ipv6_address_on_creation=True,
-      tags={
-        **common_tags,
-        "Name": f"{project_name}-public-subnet-{idx+1}",
-        "Type": "Public"
-      }
+            map_public_ip_on_launch=True,
+            assign_ipv6_address_on_creation=True,
+            tags={
+                **common_tags,
+                "Name": f"{project_name}-public-subnet-{idx+1}",
+                "Type": "Public"
+            },
+            opts=resource_opts
+        )
+        public_subnets.append(subnet)
+
+    public_route_table = aws.ec2.RouteTable(
+        f"{project_name}-public-rt",
+        vpc_id=vpc.id,
+        tags={**common_tags, "Name": f"{project_name}-public-rt"}
     )
-    public_subnets.append(subnet)
-  public_route_table = aws.ec2.RouteTable(
-    f"{project_name}-public-rt",
-    vpc_id=vpc.id,
-    tags={**common_tags, "Name": f"{project_name}-public-rt"}
-  )
-  aws.ec2.Route(
-    f"{project_name}-public-route-ipv4",
-    route_table_id=public_route_table.id,
-    destination_cidr_block="0.0.0.0/0",
-    gateway_id=igw.id
-  )
-  aws.ec2.Route(
-    f"{project_name}-public-route-ipv6",
-    route_table_id=public_route_table.id,
-    destination_ipv6_cidr_block="::/0",
-    gateway_id=igw.id
-  )
-  for idx, subnet in enumerate(public_subnets):
-    aws.ec2.RouteTableAssociation(
-      f"{project_name}-public-rta-{idx+1}",
-      subnet_id=subnet.id,
-      route_table_id=public_route_table.id
+    aws.ec2.Route(
+        f"{project_name}-public-route-ipv4",
+        route_table_id=public_route_table.id,
+        destination_cidr_block="0.0.0.0/0",
+        gateway_id=igw.id
     )
-  return {
-    "vpc": vpc,
-    "public_subnets": public_subnets,
-    "igw": igw,
-    "public_route_table": public_route_table
-  }
+    aws.ec2.Route(
+        f"{project_name}-public-route-ipv6",
+        route_table_id=public_route_table.id,
+        destination_ipv6_cidr_block="::/0",
+        gateway_id=igw.id
+    )
+    
+    for idx, subnet in enumerate(public_subnets):
+        aws.ec2.RouteTableAssociation(
+            f"{project_name}-public-rta-{idx+1}",
+            subnet_id=subnet.id,
+            route_table_id=public_route_table.id
+        )
+        
+    return {
+        "vpc": vpc,
+        "public_subnets": public_subnets,
+        "igw": igw,
+        "public_route_table": public_route_table
+    }
 
 def create_security_groups(vpc_id: pulumi.Output[str]) -> Dict[str, aws.ec2.SecurityGroup]:
   """
