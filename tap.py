@@ -37,3 +37,4 @@ stack = TapStack(
     name="TapStack",
     args=TapStackArgs(environment_suffix=environment_suffix),
 )
+
