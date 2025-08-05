@@ -2,9 +2,9 @@ import {
   AwsProvider,
   AwsProviderDefaultTags,
 } from '@cdktf/provider-aws/lib/provider';
+import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
 import { S3Backend, TerraformStack } from 'cdktf';
 import { Construct } from 'constructs';
-import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
 
 /**
  * Props for MyStack.
@@ -22,7 +22,8 @@ interface MyStackProps {
  * It is designed to be instantiated within another TerraformStack (like TapStack)
  * so its resources are directly included in the parent stack's synthesis.
  */
-class MyStack extends Construct { // KEY CHANGE: Extends Construct, not TerraformStack
+class MyStack extends Construct {
+  // Note: Not exported as it's used internally by TapStack
   constructor(scope: Construct, id: string, props: MyStackProps) {
     super(scope, id);
 
