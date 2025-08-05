@@ -161,7 +161,6 @@ async function main(): Promise<void> {
         { name: '3', value: '3' },
         { name: '4', value: '4' },
         { name: '5', value: '5' },
-        { name: '6', value: '6' },
         { name: 'synth', value: 'synth' },
       ],
     });
