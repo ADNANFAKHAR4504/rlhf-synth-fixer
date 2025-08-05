@@ -5,21 +5,20 @@ Parameters:
   KeyPairName:
     Type: AWS::EC2::KeyPair::KeyName
     Description: Name of an existing EC2 KeyPair for SSH access
-    Default: my-key-pair  # Replace with your actual key pair name
+    Default: my-dev-keypair  
     ConstraintDescription: Must be an existing EC2 KeyPair
   AllowedSSHIPAddress:
     Type: String
-    Description: IP address allowed for SSH access (e.g., 203.0.113.0/32)
-    Default: 203.0.113.0/32  # Replace with your IP or pipeline-supplied value
+    Description: IP address allowed for SSH access 
+    Default: 49.206.60.227/32  # Replace with your IP or pipeline-supplied value
     AllowedPattern: '^(\d{1,3}\.){3}\d{1,3}/\d{1,2}$'
-    ConstraintDescription: Must be a valid CIDR (e.g., 203.0.113.0/32)
+    ConstraintDescription: Must be a valid CIDR 
   AmiId:
     Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
     Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
     Description: Latest Amazon Linux 2 AMI ID
 
 Resources:
-  # VPC Configuration
   VPC:
     Type: AWS::EC2::VPC
     Properties:
@@ -32,13 +31,12 @@ Resources:
         - Key: batchName
           Value: Batch 003 -Expert-CloudFormation-YAML
         - Key: projectId
-          Value: 166
+          Value: '166'  # Stringified
         - Key: projectName
           Value: IaC - AWS Nova Model Breaking
         - Key: ProblemID
           Value: Cloud_Environment_Setup_CloudFormation_YAML_9kfhjsre9e3f
 
-  # Internet Gateway
   InternetGateway:
     Type: AWS::EC2::InternetGateway
     Properties:
@@ -48,20 +46,18 @@ Resources:
         - Key: batchName
           Value: Batch 003 -Expert-CloudFormation-YAML
         - Key: projectId
-          Value: 166
+          Value: '166'
         - Key: projectName
           Value: IaC - AWS Nova Model Breaking
         - Key: ProblemID
           Value: Cloud_Environment_Setup_CloudFormation_YAML_9kfhjsre9e3f
 
-  # Attach Internet Gateway to VPC
   AttachGateway:
     Type: AWS::EC2::VPCGatewayAttachment
     Properties:
       VpcId: !Ref VPC
       InternetGatewayId: !Ref InternetGateway
 
-  # Public Subnet
   Subnet:
     Type: AWS::EC2::Subnet
     Properties:
@@ -75,13 +71,12 @@ Resources:
         - Key: batchName
           Value: Batch 003 -Expert-CloudFormation-YAML
         - Key: projectId
-          Value: 166
+          Value: '166'
         - Key: projectName
           Value: IaC - AWS Nova Model Breaking
         - Key: ProblemID
           Value: Cloud_Environment_Setup_CloudFormation_YAML_9kfhjsre9e3f
 
-  # Route Table
   RouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
@@ -92,13 +87,12 @@ Resources:
         - Key: batchName
           Value: Batch 003 -Expert-CloudFormation-YAML
         - Key: projectId
-          Value: 166
+          Value: '166'
         - Key: projectName
           Value: IaC - AWS Nova Model Breaking
         - Key: ProblemID
           Value: Cloud_Environment_Setup_CloudFormation_YAML_9kfhjsre9e3f
 
-  # Route to Internet Gateway
   Route:
     Type: AWS::EC2::Route
     Properties:
@@ -106,14 +100,12 @@ Resources:
       DestinationCidrBlock: 0.0.0.0/0
       GatewayId: !Ref InternetGateway
 
-  # Associate Route Table with Subnet
   SubnetRouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       SubnetId: !Ref Subnet
       RouteTableId: !Ref RouteTable
 
-  # Security Group
   SecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -130,13 +122,12 @@ Resources:
         - Key: batchName
           Value: Batch 003 -Expert-CloudFormation-YAML
         - Key: projectId
-          Value: 166
+          Value: '166'
         - Key: projectName
           Value: IaC - AWS Nova Model Breaking
         - Key: ProblemID
           Value: Cloud_Environment_Setup_CloudFormation_YAML_9kfhjsre9e3f
 
-  # IAM Role for EC2
   EC2Role:
     Type: AWS::IAM::Role
     Properties:
@@ -150,26 +141,32 @@ Resources:
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess
         - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+      Policies:
+        - PolicyName: SSMGetParameter
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: ssm:GetParameter
+                Resource: !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/MyConfig'
       Tags:
         - Key: Name
           Value: MyEC2Role
         - Key: batchName
           Value: Batch 003 -Expert-CloudFormation-YAML
         - Key: projectId
-          Value: 166
+          Value: '166'
         - Key: projectName
           Value: IaC - AWS Nova Model Breaking
         - Key: ProblemID
           Value: Cloud_Environment_Setup_CloudFormation_YAML_9kfhjsre9e3f
 
-  # Instance Profile
   InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
       Roles:
         - !Ref EC2Role
 
-  # SSM Parameter
   SSMParameter:
     Type: AWS::SSM::Parameter
     Properties:
@@ -183,13 +180,12 @@ Resources:
         - Key: batchName
           Value: Batch 003 -Expert-CloudFormation-YAML
         - Key: projectId
-          Value: 166
+          Value: '166'
         - Key: projectName
           Value: IaC - AWS Nova Model Breaking
         - Key: ProblemID
           Value: Cloud_Environment_Setup_CloudFormation_YAML_9kfhjsre9e3f
 
-  # EC2 Instance
   EC2Instance:
     Type: AWS::EC2::Instance
     Properties:
@@ -217,13 +213,12 @@ Resources:
         - Key: batchName
           Value: Batch 003 -Expert-CloudFormation-YAML
         - Key: projectId
-          Value: 166
+          Value: '166'
         - Key: projectName
           Value: IaC - AWS Nova Model Breaking
         - Key: ProblemID
           Value: Cloud_Environment_Setup_CloudFormation_YAML_9kfhjsre9e3f
 
-  # Elastic IP
   ElasticIP:
     Type: AWS::EC2::EIP
     Properties:
@@ -235,7 +230,7 @@ Resources:
         - Key: batchName
           Value: Batch 003 -Expert-CloudFormation-YAML
         - Key: projectId
-          Value: 166
+          Value: '166'
         - Key: projectName
           Value: IaC - AWS Nova Model Breaking
         - Key: ProblemID
