@@ -307,6 +307,14 @@ jobs:
       - name: Clean Terraform directory
         run: cd bin && rm -rf .terraform .terraform.lock.hcl tfplan
 
+      - name: Initialize Terraform
+        run: |
+          export TF_INIT_OPTS="-backend-config=bucket=${{ env.TERRAFORM_STATE_BUCKET }} \
+              -backend-config=key=${{ env.ENVIRONMENT_SUFFIX }}/terraform.tfstate \
+              -backend-config=region=${{ env.TERRAFORM_STATE_BUCKET_REGION }}"
+          npm run tf:init -lock=false -upgrade
+        shell: bash
+
       # Debuging Terraform Output - Start
 
       - name: Set up Terraform
