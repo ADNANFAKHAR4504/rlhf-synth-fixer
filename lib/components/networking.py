@@ -6,7 +6,7 @@ Handles VPC, subnets, security groups, and network-related resources
 from typing import Optional
 import pulumi
 import pulumi_aws as aws
-from pulumi import ResourceOptions
+from pulumi import ResourceOptions, InvokeOptions
 
 class NetworkingInfrastructure(pulumi.ComponentResource):
   def __init__(self, 
@@ -58,7 +58,7 @@ class NetworkingInfrastructure(pulumi.ComponentResource):
     """Create public and private subnets across multiple AZs"""
     self.azs = aws.get_availability_zones(
       state="available",
-      opts=ResourceOptions(provider=self.provider)
+      opts=InvokeOptions(provider=self.provider)
     )
 
     self.public_subnets = []
