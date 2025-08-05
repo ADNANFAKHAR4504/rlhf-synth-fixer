@@ -232,7 +232,7 @@ class TapStack(cdk.Stack):
 
     # Allow SSH access from specific CIDR (replace with your IP range)
     ec2_sg.add_ingress_rule(
-        peer=ec2.Peer.ipv4("10.0.0.0/16"),  # Only from VPC
+        peer=ec2.Peer.ipv4("10.0.1.0/24"),  # Only from VPC
         connection=ec2.Port.tcp(22),
         description="SSH access from VPC"
     )
@@ -265,63 +265,65 @@ class TapStack(cdk.Stack):
   def _create_s3_buckets(self) -> dict:
     """Create S3 buckets with encryption and lifecycle policies"""
 
-    # Application data bucket
-    app_data_bucket = s3.Bucket(
-        self, "AppDataBucket",
-        bucket_name=f"secureapp-data-{self.account}-{self.region}",
-        encryption=s3.BucketEncryption.KMS,
-        encryption_key=self.kms_key,
-        block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
-        versioned=True,
-        lifecycle_rules=[
-            s3.LifecycleRule(
-                id="TransitionToIA",
-                enabled=True,
-                transitions=[
-                    s3.Transition(
-                        storage_class=s3.StorageClass.INFREQUENT_ACCESS,
-                        transition_after=Duration.days(30)
-                    ),
-                    s3.Transition(
-                        storage_class=s3.StorageClass.GLACIER,
-                        transition_after=Duration.days(90)
-                    )
-                ]
-            )
-        ],
-        removal_policy=RemovalPolicy.DESTROY
-    )
-
     # Logging bucket
     logs_bucket = s3.Bucket(
-        self, "LogsBucket",
-        bucket_name=f"secureapp-logs-{self.account}-{self.region}",
-        encryption=s3.BucketEncryption.KMS,
-        encryption_key=self.kms_key,
-        block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
-        versioned=True,
-        lifecycle_rules=[
-            s3.LifecycleRule(
-                id="LogsRetention",
-                enabled=True,
-                expiration=Duration.days(2555),  # 7 years for compliance
-                transitions=[
-                    s3.Transition(
-                        storage_class=s3.StorageClass.INFREQUENT_ACCESS,
-                        transition_after=Duration.days(30)
-                    ),
-                    s3.Transition(
-                        storage_class=s3.StorageClass.GLACIER,
-                        transition_after=Duration.days(90)
-                    ),
-                    s3.Transition(
-                        storage_class=s3.StorageClass.DEEP_ARCHIVE,
-                        transition_after=Duration.days(365)
-                    )
-                ]
+      self, "LogsBucket",
+      bucket_name=f"secureapp-logs-{self.account}-{self.region}",
+      encryption=s3.BucketEncryption.KMS,
+      encryption_key=self.kms_key,
+      block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
+      versioned=True,
+      lifecycle_rules=[
+        s3.LifecycleRule(
+          id="LogsRetention",
+          enabled=True,
+          expiration=Duration.days(2555),  # 7 years for compliance
+          transitions=[
+            s3.Transition(
+              storage_class=s3.StorageClass.INFREQUENT_ACCESS,
+              transition_after=Duration.days(30)
+            ),
+            s3.Transition(
+              storage_class=s3.StorageClass.GLACIER,
+              transition_after=Duration.days(90)
+            ),
+            s3.Transition(
+              storage_class=s3.StorageClass.DEEP_ARCHIVE,
+              transition_after=Duration.days(365)
             )
-        ],
-        removal_policy=RemovalPolicy.DESTROY
+          ]
+        )
+      ],
+      removal_policy=RemovalPolicy.DESTROY
+    )
+
+    # Application data bucket
+    app_data_bucket = s3.Bucket(
+      self, "AppDataBucket",
+      bucket_name=f"secureapp-data-{self.account}-{self.region}",
+      encryption=s3.BucketEncryption.KMS,
+      encryption_key=self.kms_key,
+      block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
+      versioned=True,
+      lifecycle_rules=[
+        s3.LifecycleRule(
+          id="TransitionToIA",
+          enabled=True,
+          transitions=[
+            s3.Transition(
+              storage_class=s3.StorageClass.INFREQUENT_ACCESS,
+              transition_after=Duration.days(30)
+            ),
+            s3.Transition(
+              storage_class=s3.StorageClass.GLACIER,
+              transition_after=Duration.days(90)
+            )
+          ]
+        )
+      ],
+      server_access_logs_bucket=logs_bucket,
+      server_access_logs_prefix="access-logs/",
+      removal_policy=RemovalPolicy.DESTROY
     )
 
     # Note: Event notifications would typically go to SNS/SQS/Lambda
@@ -563,7 +565,8 @@ class TapStack(cdk.Stack):
         "systemctl start awslogsd"
     )
 
-    # Launch Template for consistent configuration
+    # Launch Template defined (optional use in future autoscaling groups)
+    # Not attaching it now to avoid breaking flow
     launch_template = ec2.LaunchTemplate(
         self,
         "SecureAppLaunchTemplate",
