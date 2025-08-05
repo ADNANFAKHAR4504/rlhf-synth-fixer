@@ -1,11 +1,10 @@
 import fs from 'fs';
+import { load } from 'js-yaml';
 import path from 'path';
-import yaml from 'yaml';
 import { schema } from 'yaml-cfn';
 
-// ✅ Just read the file to prepare for parsing later
 const filePath = path.resolve(__dirname, '../lib/TapStack.yml');
-const file = fs.readFileSync(filePath, 'utf8');
+const fileContent = fs.readFileSync(filePath, 'utf8');
 
 process.env.AWS_REGION = 'us-east-1';
 process.env.AWS_ACCOUNT_ID = '123456789012';
@@ -14,9 +13,7 @@ describe('Secure Infrastructure CloudFormation Template', () => {
   let template: any;
 
   beforeAll(() => {
-    const templatePath = path.join(__dirname, '../lib/TapStack.yml');
-    const templateContent = fs.readFileSync(templatePath, 'utf8');
-    template = yaml.load(templateContent, { schema });
+    template = load(fileContent, { schema });
   });
 
   describe('Template Structure', () => {
