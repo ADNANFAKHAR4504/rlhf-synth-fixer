@@ -17,6 +17,7 @@ class IdentityInfrastructure(pulumi.ComponentResource):
     super().__init__('nova:infrastructure:Identity', name, None, opts)
 
     self.tags = tags
+    self.stack = pulumi.get_stack()
 
     self._create_eb_service_role()
     self._create_eb_instance_role()
@@ -34,7 +35,7 @@ class IdentityInfrastructure(pulumi.ComponentResource):
     """Create Elastic Beanstalk service role"""
     self.eb_service_role = aws.iam.Role(
       "eb-service-role",
-      name="nova-eb-service-role",
+      name=f"nova-eb-service-role-{self.stack}",
       description="Service role for Elastic Beanstalk",
       assume_role_policy=json.dumps({
         "Version": "2012-10-17",
@@ -62,7 +63,7 @@ class IdentityInfrastructure(pulumi.ComponentResource):
     """Create EC2 instance role for Elastic Beanstalk instances"""
     self.eb_instance_role = aws.iam.Role(
       "eb-instance-role",
-      name="nova-eb-instance-role",
+      name=f"nova-eb-instance-role-{self.stack}",
       description="Instance role for Elastic Beanstalk EC2 instances",
       assume_role_policy=json.dumps({
         "Version": "2012-10-17",
@@ -84,7 +85,7 @@ class IdentityInfrastructure(pulumi.ComponentResource):
     self.eb_instance_policy = aws.iam.RolePolicy(
       "eb-instance-additional-policy",
       role=self.eb_instance_role.id,
-      name="NovaEBInstanceAdditionalPolicy",
+      name=f"NovaEBInstanceAdditionalPolicy-{self.stack}",
       policy=json.dumps({
         "Version": "2012-10-17",
         "Statement": [
@@ -129,7 +130,7 @@ class IdentityInfrastructure(pulumi.ComponentResource):
     """Create instance profile for Elastic Beanstalk instances"""
     self.eb_instance_profile = aws.iam.InstanceProfile(
       "eb-instance-profile",
-      name="nova-eb-instance-profile",
+      name=f"nova-eb-instance-profile-{self.stack}",
       role=self.eb_instance_role.name,
       opts=ResourceOptions(parent=self)
     )
@@ -138,7 +139,7 @@ class IdentityInfrastructure(pulumi.ComponentResource):
     """Create Auto Scaling service role"""
     self.autoscaling_role = aws.iam.Role(
       "autoscaling-role",
-      name="nova-autoscaling-role",
+      name=f"nova-autoscaling-role-{self.stack}",
       description="Service role for Auto Scaling",
       assume_role_policy=json.dumps({
         "Version": "2012-10-17",
@@ -158,7 +159,7 @@ class IdentityInfrastructure(pulumi.ComponentResource):
     self.autoscaling_policy = aws.iam.RolePolicy(
       "autoscaling-additional-policy",
       role=self.autoscaling_role.id,
-      name="NovaAutoScalingAdditionalPolicy",
+      name=f"NovaAutoScalingAdditionalPolicy-{self.stack}",
       policy=json.dumps({
         "Version": "2012-10-17",
         "Statement": [
