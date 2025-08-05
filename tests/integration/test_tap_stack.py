@@ -25,7 +25,7 @@ def boto_clients():
 # ---------- VPC ----------
 
 
-def test_vpc_exists(boto_clients, outputs):
+def test_vpc(boto_clients, outputs):
   ec2 = boto_clients["ec2"]
   vpc_id = outputs["VpcId"]
   resp = ec2.describe_vpcs(VpcIds=[vpc_id])
@@ -41,25 +41,25 @@ def test_vpc_cidr(boto_clients, outputs):
 # ---------- Subnets ----------
 
 
-def test_public_subnet_1_exists(boto_clients, outputs):
+def test_public_subnet_1(boto_clients, outputs):
   ec2 = boto_clients["ec2"]
   resp = ec2.describe_subnets(SubnetIds=[outputs["PublicSubnet-1Id"]])
   assert resp["Subnets"], "Public Subnet 1 not found"
 
 
-def test_public_subnet_2_exists(boto_clients, outputs):
+def test_public_subnet_2(boto_clients, outputs):
   ec2 = boto_clients["ec2"]
   resp = ec2.describe_subnets(SubnetIds=[outputs["PublicSubnet-2Id"]])
   assert resp["Subnets"], "Public Subnet 2 not found"
 
 
-def test_private_subnet_1_exists(boto_clients, outputs):
+def test_private_subnet_1(boto_clients, outputs):
   ec2 = boto_clients["ec2"]
   resp = ec2.describe_subnets(SubnetIds=[outputs["PrivateSubnet-1Id"]])
   assert resp["Subnets"], "Private Subnet 1 not found"
 
 
-def test_private_subnet_2_exists(boto_clients, outputs):
+def test_private_subnet_2(boto_clients, outputs):
   ec2 = boto_clients["ec2"]
   resp = ec2.describe_subnets(SubnetIds=[outputs["PrivateSubnet-2Id"]])
   assert resp["Subnets"], "Private Subnet 2 not found"
@@ -67,21 +67,21 @@ def test_private_subnet_2_exists(boto_clients, outputs):
 # ---------- Networking ----------
 
 
-def test_security_group_exists(boto_clients, outputs):
+def test_security_group(boto_clients, outputs):
   ec2 = boto_clients["ec2"]
   resp = ec2.describe_security_groups(
       GroupIds=[outputs["LambdaSecurityGroupId"]])
   assert resp["SecurityGroups"], "Lambda Security Group not found"
 
 
-def test_internet_gateway_exists(boto_clients, outputs):
+def test_internet_gateway(boto_clients, outputs):
   ec2 = boto_clients["ec2"]
   resp = ec2.describe_internet_gateways(
       InternetGatewayIds=[outputs["InternetGatewayId"]])
   assert resp["InternetGateways"], "Internet Gateway not found"
 
 
-def test_public_route_table_exists(boto_clients, outputs):
+def test_public_route_table(boto_clients, outputs):
   ec2 = boto_clients["ec2"]
   resp = ec2.describe_route_tables(
       RouteTableIds=[outputs["PublicRouteTableId"]])
@@ -90,19 +90,19 @@ def test_public_route_table_exists(boto_clients, outputs):
 # ---------- Lambda ----------
 
 
-def test_orders_lambda_exists(boto_clients, outputs):
+def test_orders_lambda(boto_clients, outputs):
   lambda_client = boto_clients["lambda"]
   resp = lambda_client.get_function(FunctionName=outputs["OrdersLambdaName"])
   assert "Configuration" in resp, "Orders Lambda not found"
 
 
-def test_products_lambda_exists(boto_clients, outputs):
+def test_products_lambda(boto_clients, outputs):
   lambda_client = boto_clients["lambda"]
   resp = lambda_client.get_function(FunctionName=outputs["ProductsLambdaName"])
   assert "Configuration" in resp, "Products Lambda not found"
 
 
-def test_users_lambda_exists(boto_clients, outputs):
+def test_users_lambda(boto_clients, outputs):
   lambda_client = boto_clients["lambda"]
   resp = lambda_client.get_function(FunctionName=outputs["UsersLambdaName"])
   assert "Configuration" in resp, "Users Lambda not found"
@@ -110,19 +110,19 @@ def test_users_lambda_exists(boto_clients, outputs):
 # ---------- DynamoDB ----------
 
 
-def test_orders_table_exists(boto_clients, outputs):
+def test_orders_table(boto_clients, outputs):
   dynamodb_client = boto_clients["dynamodb"]
   resp = dynamodb_client.describe_table(TableName=outputs["OrdersTableName"])
   assert resp["Table"]["TableStatus"] in ["ACTIVE", "UPDATING"]
 
 
-def test_products_table_exists(boto_clients, outputs):
+def test_products_table(boto_clients, outputs):
   dynamodb_client = boto_clients["dynamodb"]
   resp = dynamodb_client.describe_table(TableName=outputs["ProductsTableName"])
   assert resp["Table"]["TableStatus"] in ["ACTIVE", "UPDATING"]
 
 
-def test_users_table_exists(boto_clients, outputs):
+def test_users_table(boto_clients, outputs):
   dynamodb_client = boto_clients["dynamodb"]
   resp = dynamodb_client.describe_table(TableName=outputs["UsersTableName"])
   assert resp["Table"]["TableStatus"] in ["ACTIVE", "UPDATING"]
