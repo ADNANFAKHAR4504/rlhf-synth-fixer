@@ -6,6 +6,7 @@ the TAP (Test Automation Platform) project.
 from typing import Optional
 from aws_cdk import (
   Stack,
+  StackProps,
   Duration,
   RemovalPolicy,
   aws_s3 as s3,
@@ -16,11 +17,12 @@ from aws_cdk import (
   aws_iam as iam,
   aws_apigateway as apigw,
   aws_logs as logs,
+  aws_ec2 as ec2,
 )
 from constructs import Construct
 
 
-class TapStackProps(Stack):
+class TapStackProps(StackProps):
   """TapStackProps defines the properties for the TapStack CDK stack."""
 
   def __init__(self, environment_suffix: Optional[str] = None, **kwargs):
@@ -45,6 +47,13 @@ class TapStack(Stack):
     ) or self.node.try_get_context('environmentSuffix') or 'dev'
 
     tags = {"env": environment_suffix}
+
+    # 0. VPC for Lambda
+    vpc = ec2.Vpc(
+      self,
+      "TapVpc",
+      max_azs=2
+    )
 
     # 1. S3 Bucket with AES-256 encryption and tagging
     bucket = s3.Bucket(
@@ -116,6 +125,14 @@ class TapStack(Stack):
       actions=["sns:Publish"],
       resources=[topic.topic_arn]
     ))
+    lambda_role.add_to_policy(iam.PolicyStatement(
+      actions=[
+        "ec2:CreateNetworkInterface",
+        "ec2:DescribeNetworkInterfaces",
+        "ec2:DeleteNetworkInterface"
+      ],
+      resources=["*"]
+    ))
 
     # 5. Lambda Function
     LAMBDA_TIMEOUT = 30
@@ -179,7 +196,8 @@ def lambda_handler(event, context):
         "SNS_TOPIC": topic.topic_arn,
         "TIMEOUT": str(LAMBDA_TIMEOUT)
       },
-      log_retention=LOG_RETENTION_DAYS
+      log_retention=LOG_RETENTION_DAYS,
+      vpc=vpc
     )
     for k, v in tags.items():
       lambda_fn.node.default_child.add_property_override(
