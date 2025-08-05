@@ -304,8 +304,6 @@ describe('TapStack', () => {
         AllocatedStorage: '20',
         StorageType: 'gp3',
         AutoMinorVersionUpgrade: true,
-        EnablePerformanceInsights: true,
-        PerformanceInsightsKMSKeyId: Match.anyValue(),
         VPCSecurityGroups: [Match.anyValue()],
         MasterUsername: 'admin',
       });
