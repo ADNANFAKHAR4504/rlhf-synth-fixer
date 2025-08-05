@@ -189,6 +189,12 @@ class ElasticBeanstalkInfrastructure(pulumi.ComponentResource):
           value="Fixed"
         ),
         aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
+          namespace="aws:elasticbeanstalk:environment",
+          name="LoadBalancerType",
+          value="none"
+        ),
+
+        aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
           namespace="aws:elasticbeanstalk:command",
           name="BatchSize",
           value="2"
@@ -259,7 +265,7 @@ class ElasticBeanstalkInfrastructure(pulumi.ComponentResource):
       name=f"nova-env-{self.region_suffix}-{self.environment_suffix}",
       application=self.application.name,
       template_name=self.config_template.name,
-      tier="SingleInstance",
+      tier="WebServer",
       tags=self.tags,
       opts=ResourceOptions(parent=self)
     )
