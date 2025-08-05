@@ -177,9 +177,23 @@ class TapStack(cdk.Stack):
         self, "VPCFlowLogRole",
         role_name="secureapp-vpc-flow-log-role",
         assumed_by=iam.ServicePrincipal("vpc-flow-logs.amazonaws.com"),
-        managed_policies=[
-            iam.ManagedPolicy.from_aws_managed_policy_name("service-role/VPCFlowLogsDeliveryRolePolicy")
-        ]
+        inline_policies={
+        "VPCFlowLogsPolicy": iam.PolicyDocument(
+          statements=[
+            iam.PolicyStatement(
+              effect=iam.Effect.ALLOW,
+              actions=[
+                "logs:CreateLogGroup",
+                "logs:CreateLogStream",
+                "logs:PutLogEvents",
+                "logs:DescribeLogGroups",
+                "logs:DescribeLogStreams"
+              ],
+              resources=["*"]
+            )
+          ]
+        )
+      }
     )
 
     vpc_flow_log_group = logs.LogGroup(
