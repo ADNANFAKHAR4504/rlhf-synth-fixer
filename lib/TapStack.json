@@ -492,7 +492,7 @@
       "Type": "AWS::EC2::Instance",
       "Properties": {
         "InstanceType": "t3.micro",
-        "ImageId": "ami-0c02fb55956c7d316",
+        "ImageId": "ami-03b6c12f592f54cf3",
         "SubnetId": {
           "Ref": "WebAppPrivateSubnet1"
         },
@@ -535,7 +535,7 @@
       "Type": "AWS::EC2::Instance",
       "Properties": {
         "InstanceType": "t3.micro",
-        "ImageId": "ami-0c02fb55956c7d316",
+        "ImageId": "ami-03b6c12f592f54cf3",
         "SubnetId": {
           "Ref": "WebAppPrivateSubnet2"
         },
@@ -886,7 +886,7 @@
           ]
         },
         "ManagedPolicyArns": [
-          "arn:aws:iam::aws:policy/service-role/ConfigRole"
+          "arn:aws:iam::aws:policy/service-role/AWS_ConfigRole"
         ],
         "Policies": [
           {
@@ -901,14 +901,14 @@
                     "s3:ListBucket"
                   ],
                   "Resource": {
-                    "Ref": "WebAppCloudTrailS3Bucket"
+                    "Fn::Sub": "arn:aws:s3:::${WebAppCloudTrailS3Bucket}"
                   }
                 },
                 {
                   "Effect": "Allow",
                   "Action": "s3:PutObject",
                   "Resource": {
-                    "Fn::Sub": "${WebAppCloudTrailS3Bucket}/config/*"
+                    "Fn::Sub": "arn:aws:s3:::${WebAppCloudTrailS3Bucket}/config/*"
                   },
                   "Condition": {
                     "StringEquals": {
@@ -920,7 +920,7 @@
                   "Effect": "Allow",
                   "Action": "s3:GetObject",
                   "Resource": {
-                    "Fn::Sub": "${WebAppCloudTrailS3Bucket}/config/*"
+                    "Fn::Sub": "arn:aws:s3:::${WebAppCloudTrailS3Bucket}/config/*"
                   }
                 }
               ]
