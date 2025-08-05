@@ -94,7 +94,9 @@ class TestTurnAroundPromptAPIIntegrationTests:
         "lambda_function_name", 
         "secrets_manager_secret_name",
         "api_access_role_arn",
-        "lambda_log_group_name"
+        "lambda_log_group_name",
+        "api_gateway_id",
+        "lambda_role_arn"
     ]
     
     for output_name in required_outputs:

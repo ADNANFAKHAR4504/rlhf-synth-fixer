@@ -372,7 +372,7 @@ class TapStack(TerraformStack):
     # Outputs
     TerraformOutput(
         self, "api_gateway_url",
-        value=f"https://{api_gateway.id}.execute-api.us-east-1.amazonaws.com/prod",
+        value=f"https://{api_gateway.id}.execute-api.{aws_region}.amazonaws.com/prod",
         description="API Gateway endpoint URL"
     )
 
@@ -398,6 +398,18 @@ class TapStack(TerraformStack):
         self, "lambda_log_group_name",
         value=lambda_log_group.name,
         description="CloudWatch log group name for Lambda"
+    )
+
+    TerraformOutput(
+        self, "api_gateway_id",
+        value=api_gateway.id,
+        description="API Gateway ID"
+    )
+
+    TerraformOutput(
+        self, "lambda_role_arn",
+        value=lambda_execution_role.arn,
+        description="Lambda execution role ARN"
     )
 
 
