@@ -36,7 +36,7 @@ describe('Secure Web Environment CloudFormation Template', () => {
   let template: CloudFormationTemplate;
 
   beforeAll(() => {
-    const templatePath: string = path.join(__dirname, '../lib/cloudformation-template.yml');
+    const templatePath: string = path.join(__dirname, '../lib/TapStack.yml');
     const templateContent: string = fs.readFileSync(templatePath, 'utf8');
     template = yaml.load(templateContent) as CloudFormationTemplate;
   });
