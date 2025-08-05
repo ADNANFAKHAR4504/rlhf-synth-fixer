@@ -222,9 +222,9 @@ Resources:
                 aws:SourceAccount: !Sub '${AWS::AccountId}'
               ArnLike:
                 aws:SourceArn:
-                  - !Sub 'arn:aws:s3:::website-content-${EnvironmentSuffix}-${UniqueId}'
-                  - !Sub 'arn:aws:s3:::application-logs-${EnvironmentSuffix}-${UniqueId}'
-                  - !Sub 'arn:aws:s3:::backup-data-${EnvironmentSuffix}-${UniqueId}'
+                  - !Sub 'arn:aws:s3:::website-content-${EnvironmentSuffix}-${UniqueId}/*'
+                  - !Sub 'arn:aws:s3:::application-logs-${EnvironmentSuffix}-${UniqueId}/*'
+                  - !Sub 'arn:aws:s3:::backup-data-${EnvironmentSuffix}-${UniqueId}/*'
 
   WebsiteContentBucket:
     Type: AWS::S3::Bucket
