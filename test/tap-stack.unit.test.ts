@@ -1,6 +1,8 @@
 import fs from 'fs';
 import yaml from 'js-yaml'; // Import js-yaml to parse YAML
 import path from 'path';
+// Import the CloudFormation tag resolvers
+import { YAML_AWS_TAGS } from 'yaml-cfn-tag-resolvers'; // Assuming this library is available or needs to be installed
 
 // Mock AWS::Region and AWS::AccountId for unit tests
 process.env.AWS_REGION = 'us-east-1';
@@ -11,9 +13,10 @@ describe('Secure Infrastructure CloudFormation Template', () => {
 
   beforeAll(() => {
     // Corrected: Path now points to lib/TapStack.yml
-    const templatePath = path.join(__dirname, '../lib/TapStack.yml');
+    const templatePath = path.join(__dirname, '../TapStack.yml');
     const templateContent = fs.readFileSync(templatePath, 'utf8');
-    template = yaml.load(templateContent); // Use yaml.load for YAML files
+    // Use yaml.load with the CloudFormation tag resolvers
+    template = yaml.load(templateContent, { schema: YAML_AWS_TAGS });
   });
 
   // Removed the "Write Integration TESTS" block as it was a placeholder
