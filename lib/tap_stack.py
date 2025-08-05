@@ -3,7 +3,7 @@ CDK Stack definition for the TAP (Test Automation Platform) infrastructure.
 
 This module defines the TapStack class and supporting configurations for
 creating secure, scalable AWS infrastructure including VPC, EC2, RDS,
-S3, and monitoring components.
+S3, and monitoring components..
 """
 from typing import Optional
 from dataclasses import dataclass
