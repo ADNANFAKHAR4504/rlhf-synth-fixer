@@ -86,7 +86,8 @@ class NetworkingInfrastructure(pulumi.ComponentResource):
         availability_zone=az_name,
         map_public_ip_on_launch=True,
         tags={**self.tags, "Name": f"nova-public-{i}-{self.region_suffix}"},
-        opts=ResourceOptions(parent=self, provider=self.provider)
+        # FIX: Add this option to correctly handle replacing the subnet
+        opts=ResourceOptions(parent=self, provider=self.provider, delete_before_replace=True)
       )
       self.public_subnets.append(public_subnet)
 
@@ -96,7 +97,8 @@ class NetworkingInfrastructure(pulumi.ComponentResource):
         cidr_block=private_cidr,
         availability_zone=az_name,
         tags={**self.tags, "Name": f"nova-private-{i}-{self.region_suffix}"},
-        opts=ResourceOptions(parent=self, provider=self.provider)
+        # FIX: Add this option to correctly handle replacing the subnet
+        opts=ResourceOptions(parent=self, provider=self.provider, delete_before_replace=True)
       )
       self.private_subnets.append(private_subnet)
 
