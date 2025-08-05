@@ -546,7 +546,6 @@
         "ProdEc2Role": {
             "Type": "AWS::IAM::Role",
             "Properties": {
-                "RoleName": "prod-ec2-role",
                 "AssumeRolePolicyDocument": {
                     "Version": "2012-10-17",
                     "Statement": [
@@ -599,7 +598,6 @@
         "ProdEc2InstanceProfile": {
             "Type": "AWS::IAM::InstanceProfile",
             "Properties": {
-                "InstanceProfileName": "prod-ec2-instance-profile",
                 "Roles": [
                     {
                         "Ref": "ProdEc2Role"
@@ -874,7 +872,6 @@
         "ProdRdsMonitoringRole": {
             "Type": "AWS::IAM::Role",
             "Properties": {
-                "RoleName": "prod-rds-monitoring-role",
                 "AssumeRolePolicyDocument": {
                     "Version": "2012-10-17",
                     "Statement": [

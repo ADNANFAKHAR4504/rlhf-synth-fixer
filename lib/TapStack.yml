@@ -290,7 +290,7 @@ Resources:
   ProdEc2Role:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: 'prod-ec2-role'
+      # RoleName: 'prod-ec2-role'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -319,7 +319,7 @@ Resources:
   ProdEc2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
-      InstanceProfileName: 'prod-ec2-instance-profile'
+      # InstanceProfileName: 'prod-ec2-instance-profile'
       Roles:
         - !Ref ProdEc2Role
 
@@ -478,7 +478,7 @@ Resources:
   ProdRdsMonitoringRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: 'prod-rds-monitoring-role'
+      # RoleName: 'prod-rds-monitoring-role'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
