@@ -55,13 +55,13 @@ class NetworkingInfrastructure(pulumi.ComponentResource):
 
   def _create_subnets(self):
     """Create public and private subnets across multiple AZs"""
-    azs = aws.get_availability_zones(state="available")
+    self.azs = aws.get_availability_zones(state="available", region=self.region)
 
     self.public_subnets = []
     self.private_subnets = []
 
     for i in range(2):
-      az_output = pulumi.Output.from_input(azs).apply(lambda az: az.names[i])
+      az_output = pulumi.Output.from_input(self.azs).apply(lambda az: az.names[i])
 
       public_subnet = aws.ec2.Subnet(
         f"public-subnet-{i}-{self.region_suffix}",
@@ -77,7 +77,7 @@ class NetworkingInfrastructure(pulumi.ComponentResource):
       private_subnet = aws.ec2.Subnet(
         f"private-subnet-{i}-{self.region_suffix}",
         vpc_id=self.vpc.id,
-        cidr_block=f"10.{'0' if self.is_primary else '1'}.{i+10}.0/24",
+        cidr_block=f"10.{'0' if self.is_primary else '1'}.{i+20}.0/24",
         availability_zone=az_output,
         tags={**self.tags, "Name": f"nova-private-{i}-{self.region_suffix}"},
         opts=ResourceOptions(parent=self)
