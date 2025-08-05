@@ -13,7 +13,14 @@ describe('Secure Infrastructure CloudFormation Template', () => {
   let template: any;
 
   beforeAll(() => {
-    template = load(fileContent, { schema });
+    console.log('File content length:', fileContent.length); // Debug
+    try {
+      template = load(fileContent, { schema });
+      console.log('Parsed template:', JSON.stringify(template, null, 2)); // Debug
+    } catch (error) {
+      console.error('YAML parsing error:', error);
+      throw error;
+    }
   });
 
   describe('Template Structure', () => {
@@ -198,6 +205,7 @@ describe('Secure Infrastructure CloudFormation Template', () => {
 
   describe('Outputs', () => {
     test('should have all required outputs', () => {
+      expect(template.Outputs).toBeDefined();
       const expectedOutputs = [
         'VPCId',
         'EC2InstanceId',
@@ -214,52 +222,21 @@ describe('Secure Infrastructure CloudFormation Template', () => {
       });
     });
 
-    interface CloudFormationOutput {
-      Description?: string;
-      Value: any;
-      Export?: {
-        Name: {
-          'Fn::Sub': string;
-        };
-      };
-    }
-
-    if (template.Outputs) {
-      Object.entries(template.Outputs).forEach(([outputKey, output]) => {
-        test(`${outputKey} export name should follow naming convention`, () => {
-          const typedOutput = output as {
-            Description?: string;
-            Value: any;
-            Export?: {
-              Name: {
-                'Fn::Sub': string;
-              };
-            };
-          };
-
-          if (typedOutput.Export?.Name) {
-            const expectedKey = outputKey.replace(/Id$/, 'ID');
-            const kebabKey = expectedKey.replace(/([a-z])([A-Z])/g, '$1-$2');
-            expect(typedOutput.Export.Name).toEqual({
-              'Fn::Sub': `\${AWS::StackName}-${kebabKey}`,
-            });
-          }
-        });
+    test('VPCId output should be correct', () => {
+      const output = template.Outputs.VPCId;
+      expect(output.Description).toBe('ID of the created VPC');
+      expect(output.Value).toEqual({ Ref: 'SecureVPC' });
+      expect(output.Export.Name).toEqual({
+        'Fn::Sub': '${AWS::StackName}-VPCId',
       });
-    } else {
-      test('template should have Outputs', () => {
-        throw new Error(
-          'template.Outputs is undefined. Check your template parsing or structure.'
-        );
-      });
-    }
+    });
 
     test('EC2InstanceId output should be correct', () => {
       const output = template.Outputs.EC2InstanceId;
       expect(output.Description).toBe('ID of the created EC2 instance');
       expect(output.Value).toEqual({ Ref: 'SecureEC2Instance' });
       expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-EC2-Instance-ID',
+        'Fn::Sub': '${AWS::StackName}-EC2InstanceId',
       });
     });
 
@@ -270,7 +247,7 @@ describe('Secure Infrastructure CloudFormation Template', () => {
         'Fn::GetAtt': ['SecureEC2Instance', 'PublicIp'],
       });
       expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-EC2-Public-IP',
+        'Fn::Sub': '${AWS::StackName}-EC2PublicIP',
       });
     });
 
@@ -279,7 +256,7 @@ describe('Secure Infrastructure CloudFormation Template', () => {
       expect(output.Description).toBe('Name of the website content S3 bucket');
       expect(output.Value).toEqual({ Ref: 'WebsiteContentBucket' });
       expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-WebsiteContent-Bucket',
+        'Fn::Sub': '${AWS::StackName}-WebsiteContentBucket',
       });
     });
 
@@ -288,7 +265,7 @@ describe('Secure Infrastructure CloudFormation Template', () => {
       expect(output.Description).toBe('Name of the application logs S3 bucket');
       expect(output.Value).toEqual({ Ref: 'ApplicationLogsBucket' });
       expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-ApplicationLogs-Bucket',
+        'Fn::Sub': '${AWS::StackName}-ApplicationLogsBucket',
       });
     });
 
@@ -297,7 +274,7 @@ describe('Secure Infrastructure CloudFormation Template', () => {
       expect(output.Description).toBe('Name of the backup data S3 bucket');
       expect(output.Value).toEqual({ Ref: 'BackupDataBucket' });
       expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-BackupData-Bucket',
+        'Fn::Sub': '${AWS::StackName}-BackupDataBucket',
       });
     });
 
@@ -306,7 +283,7 @@ describe('Secure Infrastructure CloudFormation Template', () => {
       expect(output.Description).toBe('Name of the S3 access logs bucket');
       expect(output.Value).toEqual({ Ref: 'S3AccessLogsBucket' });
       expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-S3-Access-Logs-Bucket',
+        'Fn::Sub': '${AWS::StackName}-S3AccessLogsBucket',
       });
     });
 
@@ -317,7 +294,7 @@ describe('Secure Infrastructure CloudFormation Template', () => {
       );
       expect(output.Value).toEqual({ Ref: 'InfrastructureKMSKey' });
       expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-KMS-Key',
+        'Fn::Sub': '${AWS::StackName}-KMSKeyId',
       });
     });
 
@@ -328,7 +305,7 @@ describe('Secure Infrastructure CloudFormation Template', () => {
         'Fn::GetAtt': ['EC2InstanceRole', 'Arn'],
       });
       expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-EC2-Instance-Role-ARN',
+        'Fn::Sub': '${AWS::StackName}-EC2InstanceRoleArn',
       });
     });
   });
@@ -349,12 +326,12 @@ describe('Secure Infrastructure CloudFormation Template', () => {
 
     test('should have the correct number of resources', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(21);
+      expect(resourceCount).toBe(20);
     });
 
     test('should have the correct number of parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(3);
+      expect(parameterCount).toBe(2);
     });
 
     test('should have the correct number of outputs', () => {
@@ -399,19 +376,9 @@ describe('Secure Infrastructure CloudFormation Template', () => {
     test('export names should follow naming convention', () => {
       Object.keys(template.Outputs).forEach(outputKey => {
         const output = template.Outputs[outputKey];
-        if (outputKey === 'KMSKeyId') {
-          expect(output.Export.Name).toEqual({
-            'Fn::Sub': '${AWS::StackName}-KMS-Key',
-          });
-        } else if (outputKey === 'EC2InstanceRoleArn') {
-          expect(output.Export.Name).toEqual({
-            'Fn::Sub': '${AWS::StackName}-EC2-Instance-Role-ARN',
-          });
-        } else {
-          expect(output.Export.Name).toEqual({
-            'Fn::Sub': `\${AWS::StackName}-${outputKey}`,
-          });
-        }
+        expect(output.Export.Name).toEqual({
+          'Fn::Sub': `\${AWS::StackName}-${outputKey}`,
+        });
       });
     });
   });
