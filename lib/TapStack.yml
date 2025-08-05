@@ -77,8 +77,8 @@ Resources:
         - Key: "CapacityConfig"
           Value: !If
             - IsWest2
-            - "Read=10|Write=10"
-            - "Read=5|Write=5"
+            - "10-10"
+            - "5-5"
 
       # Enable point-in-time recovery
       PointInTimeRecoverySpecification:
