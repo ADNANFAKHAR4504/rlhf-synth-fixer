@@ -443,7 +443,11 @@ def create_route53_records(alb: aws.lb.LoadBalancer) -> Dict[str, aws.route53.Re
     "aaaa_record": aaaa_record
   }
 
-def create_cloudwatch_dashboard(alb: aws.lb.LoadBalancer, instances: List[aws.ec2.Instance]) -> aws.cloudwatch.Dashboard:
+def create_cloudwatch_dashboard(
+    alb: aws.lb.LoadBalancer,
+    target_group: aws.lb.TargetGroup,
+    instances: List[aws.ec2.Instance]
+) -> aws.cloudwatch.Dashboard:
   """
   Create CloudWatch dashboard for monitoring.
   Args:
@@ -483,8 +487,7 @@ def create_cloudwatch_dashboard(alb: aws.lb.LoadBalancer, instances: List[aws.ec
         "height": 6,
         "properties": {
           "metrics": [
-            ["AWS/ApplicationELB", "HealthyHostCount", "TargetGroup",
-             pulumi.Output.concat(alb.arn_suffix, "/", "targetgroup/", project_name, "-tg/", "123456789")],
+            ["AWS/ApplicationELB", "HealthyHostCount", "TargetGroup", target_group.arn_suffix],
             [".", "UnHealthyHostCount", ".", "."]
           ],
           "view": "timeSeries",
@@ -539,7 +542,7 @@ def main():
     network["vpc"].id
   )
   create_route53_records(load_balancer["alb"])
-  dashboard = create_cloudwatch_dashboard(load_balancer["alb"], instances)
+  dashboard = create_cloudwatch_dashboard(load_balancer["alb"], load_balancer["target_group"], instances)
   pulumi.export("vpc_id", network["vpc"].id)
   pulumi.export("vpc_ipv6_cidr", network["vpc"].ipv6_cidr_block)
   pulumi.export("public_subnet_ids", [subnet.id for subnet in network["public_subnets"]])
