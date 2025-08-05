@@ -21,8 +21,8 @@ class ElasticBeanstalkInfrastructure(pulumi.ComponentResource):
     vpc_id: Output[str],
     public_subnet_ids: List[Output[str]],
     private_subnet_ids: List[Output[str]],
-    alb_security_group_id: Output[str],
-    eb_security_group_id: Output[str],
+    # alb_security_group_id: Output[str],
+    # eb_security_group_id: Output[str],
     eb_service_role_arn: Output[str],
     eb_instance_profile_name: Output[str],
     tags: dict,
@@ -36,8 +36,8 @@ class ElasticBeanstalkInfrastructure(pulumi.ComponentResource):
     self.vpc_id = vpc_id
     self.public_subnet_ids = public_subnet_ids
     self.private_subnet_ids = private_subnet_ids
-    self.alb_security_group_id = alb_security_group_id
-    self.eb_security_group_id = eb_security_group_id
+    # self.alb_security_group_id = alb_security_group_id
+    # self.eb_security_group_id = eb_security_group_id
     self.eb_service_role_arn = eb_service_role_arn
     self.eb_instance_profile_name = eb_instance_profile_name
     self.tags = tags
@@ -84,7 +84,7 @@ class ElasticBeanstalkInfrastructure(pulumi.ComponentResource):
         aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
           namespace="aws:ec2:vpc",
           name="Subnets",
-          value=self.private_subnet_ids[0]  # Use only one subnet (1 AZ)
+          value=self.private_subnet_ids[0] if self.private_subnet_ids else ""
         ),
         aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
           namespace="aws:ec2:vpc",
@@ -150,11 +150,6 @@ class ElasticBeanstalkInfrastructure(pulumi.ComponentResource):
           namespace="aws:autoscaling:launchconfiguration",
           name="IamInstanceProfile",
           value=self.eb_instance_profile_name
-        ),
-        aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
-          namespace="aws:autoscaling:launchconfiguration",
-          name="SecurityGroups",
-          value=self.eb_security_group_id
         ),
         aws.elasticbeanstalk.ConfigurationTemplateSettingArgs(
           namespace="aws:autoscaling:launchconfiguration",

@@ -103,8 +103,8 @@ class TapStack(pulumi.ComponentResource):
         vpc_id=self.regional_networks[region].vpc_id,
         public_subnet_ids=self.regional_networks[region].public_subnet_ids,
         private_subnet_ids=self.regional_networks[region].private_subnet_ids,
-        alb_security_group_id=self.regional_networks[region].alb_security_group_id,
-        eb_security_group_id=self.regional_networks[region].eb_security_group_id,
+        # alb_security_group_id=self.regional_networks[region].alb_security_group_id,
+        # eb_security_group_id=self.regional_networks[region].eb_security_group_id,
         eb_service_role_arn=self.identity.eb_service_role.arn,
         eb_instance_profile_name=self.identity.eb_instance_profile.name,
         tags=self.tags,
@@ -136,8 +136,8 @@ class TapStack(pulumi.ComponentResource):
     pulumi.export("primary_eb_environment_cname", self.regional_elastic_beanstalk[primary_region].environment_cname)
     pulumi.export("primary_dashboard_name", self.regional_monitoring[primary_region].dashboard_name)
     pulumi.export("primary_sns_topic_arn", self.regional_monitoring[primary_region].sns_topic_arn)
-    pulumi.export("primary_alb_security_group_id", self.regional_networks[primary_region].alb_security_group_id)
-    pulumi.export("primary_eb_security_group_id", self.regional_networks[primary_region].eb_security_group_id)
+    # pulumi.export("primary_alb_security_group_id", self.regional_networks[primary_region].alb_security_group_id)
+    # pulumi.export("primary_eb_security_group_id", self.regional_networks[primary_region].eb_security_group_id)
 
     # Secondary region outputs (us-gov-east-1) if deployed
     if len(self.regions) > 1:
@@ -153,8 +153,8 @@ class TapStack(pulumi.ComponentResource):
       pulumi.export("secondary_eb_environment_cname", self.regional_elastic_beanstalk[secondary_region].environment_cname)
       pulumi.export("secondary_dashboard_name", self.regional_monitoring[secondary_region].dashboard_name)
       pulumi.export("secondary_sns_topic_arn", self.regional_monitoring[secondary_region].sns_topic_arn)
-      pulumi.export("secondary_alb_security_group_id", self.regional_networks[secondary_region].alb_security_group_id)
-      pulumi.export("secondary_eb_security_group_id", self.regional_networks[secondary_region].eb_security_group_id)
+    #   pulumi.export("secondary_alb_security_group_id", self.regional_networks[secondary_region].alb_security_group_id)
+    #   pulumi.export("secondary_eb_security_group_id", self.regional_networks[secondary_region].eb_security_group_id)
 
     # All regions data for reference
     all_regions_data = {}
