@@ -6,7 +6,9 @@ Tests use Pulumi mocks to validate resource configuration.
 import unittest
 from typing import Any, Dict
 from unittest.mock import patch
+
 import pulumi
+
 from lib.tap_stack import TapStack, TapStackArgs
 
 
@@ -160,9 +162,8 @@ class MockPulumiProvider:
       return {"names": ["us-east-1a", "us-east-1b", "us-east-1c"]}
     return {}
   
-  def new_resource(self, args, type_: str, name: str, inputs: Dict[str, Any]):
+  def new_resource(self, type_, name, inputs, provider, id_):
     """Mock new_resource method for provider"""
-    del args  # Unused argument
     resource_id = f"mock-{type_}-{name}"
     if type_ == "aws:ec2/vpc:Vpc":
       outputs = {
