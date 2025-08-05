@@ -554,7 +554,7 @@ class TapStack(pulumi.ComponentResource):
     api_deployment = aws.apigateway.Deployment(
         "api-deployment",
         rest_api=api_gateway.id,
-        stage_name= f"{self.stage_name}",
+        stage_name= f"{stage_name}",
         opts=pulumi.ResourceOptions(depends_on=[
             health_integration,
             process_integration,
@@ -574,7 +574,7 @@ class TapStack(pulumi.ComponentResource):
         "api-stage",
         deployment=api_deployment.id,
         rest_api=api_gateway.id,
-        stage_name=f"{self.stage_name}",
+        stage_name=f"{stage_name}",
         access_log_settings=aws.apigateway.StageAccessLogSettingsArgs(
             destination_arn=api_log_group.arn,
             format=json.dumps({
@@ -684,7 +684,7 @@ class TapStack(pulumi.ComponentResource):
     pulumi.export("s3_bucket_arn", s3_bucket.arn)
     pulumi.export("api_gateway_url", api_deployment.invoke_url)
     pulumi.export("api_gateway_stage_url", Output.concat(
-    "https://", api_gateway.id, f".execute-api.{self.region}.amazonaws.com/", f"{self.stage_name}" 
+    "https://", api_gateway.id, f".execute-api.{self.region}.amazonaws.com/", f"{stage_name}" 
     ))
     pulumi.export("s3_processor_lambda_arn", s3_processor_lambda.arn)
     pulumi.export("api_handler_lambda_arn", api_handler_lambda.arn)
