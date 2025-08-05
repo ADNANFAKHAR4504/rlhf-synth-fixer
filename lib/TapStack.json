@@ -410,51 +410,7 @@
                 }
             }
         },
-        "ProdWebSg": {
-            "Type": "AWS::EC2::SecurityGroup",
-            "Properties": {
-                "GroupName": "prod-web-security-group",
-                "GroupDescription": "Security group for web servers",
-                "VpcId": {
-                    "Ref": "ProdVpc"
-                },
-                "SecurityGroupIngress": [
-                    {
-                        "IpProtocol": "tcp",
-                        "FromPort": 80,
-                        "ToPort": 80,
-                        "SourceSecurityGroupId": {
-                            "Ref": "ProdAlbSg"
-                        }
-                    },
-                    {
-                        "IpProtocol": "tcp",
-                        "FromPort": 22,
-                        "ToPort": 22,
-                        "CidrIp": "10.0.0.0/16"
-                    }
-                ],
-                "SecurityGroupEgress": [
-                    {
-                        "IpProtocol": -1,
-                        "CidrIp": "0.0.0.0/0"
-                    }
-                ],
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": "prod-web-security-group"
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "Environment"
-                        }
-                    }
-                ]
-            }
-        },
-        "ProdAlbSg": {
+        "ProdAlbSecurityGroup": {
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
                 "GroupName": "prod-alb-security-group",
@@ -496,7 +452,51 @@
                 ]
             }
         },
-        "ProdRdsSg": {
+        "ProdWebSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupName": "prod-web-security-group",
+                "GroupDescription": "Security group for web servers",
+                "VpcId": {
+                    "Ref": "ProdVpc"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 80,
+                        "ToPort": 80,
+                        "SourceSecurityGroupId": {
+                            "Ref": "ProdAlbSecurityGroup"
+                        }
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 22,
+                        "ToPort": 22,
+                        "CidrIp": "10.0.0.0/16"
+                    }
+                ],
+                "SecurityGroupEgress": [
+                    {
+                        "IpProtocol": -1,
+                        "CidrIp": "0.0.0.0/0"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "prod-web-security-group"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
+                ]
+            }
+        },
+        "ProdRdsSecurityGroup": {
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
                 "GroupName": "prod-rds-security-group",
@@ -510,7 +510,7 @@
                         "FromPort": 3306,
                         "ToPort": 3306,
                         "SourceSecurityGroupId": {
-                            "Ref": "ProdWebSg"
+                            "Ref": "ProdWebSecurityGroup"
                         }
                     }
                 ],
@@ -530,7 +530,7 @@
         }
     },
     "Outputs": {
-        "VpcId": {
+        "VPCId": {
             "Description": "VPC ID",
             "Value": {
                 "Ref": "ProdVpc"

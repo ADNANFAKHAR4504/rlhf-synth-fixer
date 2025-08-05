@@ -12,7 +12,7 @@ Parameters:
     Description: Name of an existing EC2 KeyPair to enable SSH access to instances
 
 Resources:
-  # VPC and IGW
+  # VPC and Internet gateway
   ProdVpc:
     Type: AWS::EC2::VPC
     Properties:
@@ -92,7 +92,7 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
-  # Public route table & routes
+  # Public route table and routes
   ProdPublicRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
@@ -123,7 +123,7 @@ Resources:
       SubnetId: !Ref ProdPublicSubnet2
       RouteTableId: !Ref ProdPublicRouteTable
 
-  # NAT gateways & EIPs
+  # NAT gateways (EIPs first)
   ProdNatEip1:
     Type: AWS::EC2::EIP
     DependsOn: ProdVpcGatewayAttachment
@@ -168,7 +168,7 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
-  # Private route tables & routes
+  # Private route tables
   ProdPrivateRouteTable1:
     Type: AWS::EC2::RouteTable
     Properties:
@@ -215,32 +215,8 @@ Resources:
       SubnetId: !Ref ProdPrivateSubnet2
       RouteTableId: !Ref ProdPrivateRouteTable2
 
-  # Security groups (same pattern continues)
-  ProdWebSg:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupName: prod-web-security-group
-      GroupDescription: Security group for web servers
-      VpcId: !Ref ProdVpc
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 80
-          ToPort: 80
-          SourceSecurityGroupId: !Ref ProdAlbSg
-        - IpProtocol: tcp
-          FromPort: 22
-          ToPort: 22
-          CidrIp: 10.0.0.0/16
-      SecurityGroupEgress:
-        - IpProtocol: -1
-          CidrIp: 0.0.0.0/0
-      Tags:
-        - Key: Name
-          Value: prod-web-security-group
-        - Key: Environment
-          Value: !Ref Environment
-
-  ProdAlbSg:
+  # Security groups
+  ProdAlbSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupName: prod-alb-security-group
@@ -264,7 +240,31 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
-  ProdRdsSg:
+  ProdWebSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: prod-web-security-group
+      GroupDescription: Security group for web servers
+      VpcId: !Ref ProdVpc
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          SourceSecurityGroupId: !Ref ProdAlbSecurityGroup
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 10.0.0.0/16
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: prod-web-security-group
+        - Key: Environment
+          Value: !Ref Environment
+
+  ProdRdsSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupName: prod-rds-security-group
@@ -274,38 +274,37 @@ Resources:
         - IpProtocol: tcp
           FromPort: 3306
           ToPort: 3306
-          SourceSecurityGroupId: !Ref ProdWebSg
+          SourceSecurityGroupId: !Ref ProdWebSecurityGroup
       Tags:
         - Key: Name
           Value: prod-rds-security-group
         - Key: Environment
           Value: !Ref Environment
 
-  # (Continue renaming for IAM roles, LaunchTemplate, ASG, ALB, RDS, S3, etc.)
-  # Example: ProdEc2Role, ProdLaunchTemplate, ProdAutoScalingGroup, ProdApplicationLoadBalancer,
-  #          ProdTargetGroup, ProdListener, ProdRdsSubnetGroup, ProdRdsInstance, ProdS3Bucket, ...
+  # (------ unchanged resources continue here ------)
+  # Update every Ref/GetAtt/DependsOn to the new logical IDs.
 
 Outputs:
-  VpcId:
+  VPCId:
     Description: VPC ID
     Value: !Ref ProdVpc
     Export:
-      Name: !Sub ${AWS::StackName}-VPC-ID
+      Name: !Sub '${AWS::StackName}-VPC-ID'
 
   LoadBalancerDNS:
     Description: DNS name of the load balancer
     Value: !GetAtt ProdApplicationLoadBalancer.DNSName
     Export:
-      Name: !Sub ${AWS::StackName}-LoadBalancer-DNS
+      Name: !Sub '${AWS::StackName}-LoadBalancer-DNS'
 
   RDSEndpoint:
     Description: RDS instance endpoint
     Value: !GetAtt ProdRdsInstance.Endpoint.Address
     Export:
-      Name: !Sub ${AWS::StackName}-RDS-Endpoint
+      Name: !Sub '${AWS::StackName}-RDS-Endpoint'
 
   S3BucketName:
     Description: S3 bucket name for static assets
     Value: !Ref ProdS3Bucket
     Export:
-      Name: !Sub ${AWS::StackName}-S3-Bucket
+      Name: !Sub '${AWS::StackName}-S3-Bucket'
