@@ -1,7 +1,7 @@
 import fs from 'fs';
 import yaml from 'js-yaml';
 import path from 'path';
-import { YAML_AWS_TAGS } from 'yaml-cfn-tag-resolvers';
+import { schema } from 'yaml-cfn';
 
 process.env.AWS_REGION = 'us-east-1';
 process.env.AWS_ACCOUNT_ID = '123456789012';
@@ -12,7 +12,7 @@ describe('Secure Infrastructure CloudFormation Template', () => {
   beforeAll(() => {
     const templatePath = path.join(__dirname, '../lib/TapStack.yml');
     const templateContent = fs.readFileSync(templatePath, 'utf8');
-    template = yaml.load(templateContent, { schema: YAML_AWS_TAGS });
+    template = yaml.load(templateContent, { schema });
   });
 
   describe('Template Structure', () => {
@@ -85,14 +85,16 @@ describe('Secure Infrastructure CloudFormation Template', () => {
             Sid: 'ReadWebsiteContent',
             Action: ['s3:GetObject', 's3:ListBucket'],
             Resource: expect.arrayContaining([
-              { 'Fn::Sub': 'arn:aws:s3:::web-content-${UniqueId}/*' },
+              { 'Fn::Sub': 'arn:aws:s3:::website-content-${UniqueId}/*' },
               { 'Fn::GetAtt': ['WebsiteContentBucket', 'Arn'] },
             ]),
           }),
           expect.objectContaining({
             Sid: 'WriteApplicationLogs',
             Action: ['s3:PutObject', 's3:PutObjectAcl'],
-            Resource: { 'Fn::Sub': 'arn:aws:s3:::app-logs-${UniqueId}/*' },
+            Resource: {
+              'Fn::Sub': 'arn:aws:s3:::application-logs-${UniqueId}/*',
+            },
           }),
           expect.objectContaining({
             Sid: 'KMSAccess',
@@ -343,7 +345,7 @@ describe('Secure Infrastructure CloudFormation Template', () => {
     test('S3 bucket names should follow naming convention with UniqueId', () => {
       const s3AccessLogsBucket = template.Resources.S3AccessLogsBucket;
       expect(s3AccessLogsBucket.Properties.BucketName).toEqual({
-        'Fn::Sub': 's3-logs-${UniqueId}',
+        'Fn::Sub': 's3-access-logs-${UniqueId}',
       });
 
       const websiteContentBucket = template.Resources.WebsiteContentBucket;
