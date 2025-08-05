@@ -22,7 +22,8 @@ interface MyStackProps {
  * This serves as an example of a stack that TapStack can instantiate.
  * (Now defined within the same file as TapStack)
  */
-class MyStack extends TerraformStack { // Note: Not exported as it's used internally by TapStack
+class MyStack extends TerraformStack {
+  // Note: Not exported as it's used internally by TapStack
   constructor(scope: Construct, id: string, props: MyStackProps) {
     super(scope, id);
 
@@ -104,7 +105,8 @@ export class TapStack extends TerraformStack {
 
     // Conditionally instantiate MyStack (now defined internally)
     if (props?.createMyStack) {
-      new MyStack(this, 'MyModularStack', { // MyStack is now accessible directly
+      new MyStack(this, 'MyModularStack', {
+        // MyStack is now accessible directly
         bucketName: `${environmentSuffix}-my-example-bucket`, // Example bucket name
         tags: {
           Project: 'TestProject',
