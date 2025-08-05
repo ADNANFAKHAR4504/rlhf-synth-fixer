@@ -1,19 +1,29 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: ServerlessApp - Highly Available, Secure Serverless Application Template.
-
+Description: >
+  ServerlessApp - Highly Available, Secure Serverless Application Template.
+  Deploys Lambda triggered by S3, with secure secrets, HA, monitoring, and least-privilege IAM.
 Parameters:
+  LambdaRuntime:
+    Type: String
+    Default: python3.12
+    Description: Lambda function runtime version.
+    AllowedValues:
+      - python3.12
+      - nodejs20.x
+  LambdaHandler:
+    Type: String
+    Default: lambda_function.lambda_handler
+    Description: The handler for the Lambda function executable.
   S3BucketName:
     Type: String
     Default: serverlessapp-bucket
     Description: Unique S3 bucket name for object triggers.
-  LambdaRuntime:
-    Type: String
-    Default: python3.12
-    Description: Lambda runtime version
-  LambdaHandler:
-    Type: String
-    Default: index.lambda_handler
-    Description: Lambda handler function
+
+Mappings:
+  RegionMap:
+    us-west-2:
+      AZ1: us-west-2a
+      AZ2: us-west-2b
 
 Resources:
   # S3 Bucket for File Uploads (Secured)
@@ -45,7 +55,7 @@ Resources:
       Action: lambda:InvokeFunction
       FunctionName: !Ref ServerlessAppLambda
       Principal: s3.amazonaws.com
-      SourceArn: !Sub '${ServerlessAppBucket}'
+      SourceArn: !GetAtt ServerlessAppBucket.Arn
       SourceAccount: !Ref AWS::AccountId
 
   # VPC for Lambda isolation (Multi-AZ)
@@ -62,7 +72,7 @@ Resources:
     Properties:
       VpcId: !Ref ServerlessAppVPC
       CidrBlock: 10.0.0.0/26
-      AvailabilityZone: !Select [0, !GetAZs '']
+      AvailabilityZone: !FindInMap [RegionMap, us-west-2, AZ1]
       Tags:
         - Key: Name
           Value: ServerlessAppSubnetAZ1
@@ -72,7 +82,7 @@ Resources:
     Properties:
       VpcId: !Ref ServerlessAppVPC
       CidrBlock: 10.0.0.64/26
-      AvailabilityZone: !Select [1, !GetAZs '']
+      AvailabilityZone: !FindInMap [RegionMap, us-west-2, AZ2]
       Tags:
         - Key: Name
           Value: ServerlessAppSubnetAZ2
@@ -145,6 +155,7 @@ Resources:
   ServerlessAppLambdaRole:
     Type: AWS::IAM::Role
     Properties:
+      RoleName: ServerlessAppLambdaRole
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -196,7 +207,6 @@ Resources:
           import boto3
           import os
           import json
-
           def lambda_handler(event, context):
               secret_name = os.environ['SERVERLESSAPP_SECRET_ARN']
               # Get secret value
@@ -276,20 +286,28 @@ Resources:
 
 Outputs:
   S3BucketName:
-    Description: Name of the S3 bucket
-    Value: !Ref S3BucketName
-  LambdaFunctionArn:
-    Description: ARN of the Lambda function
-    Value: !Ref ServerlessAppLambda
+    Description: 'ServerlessApp S3 bucket name for triggering uploads'
+    Value: !Ref ServerlessAppBucket
+
   LambdaFunctionName:
-    Description: Name of the Lambda function
+    Description: 'ServerlessApp Lambda function name'
     Value: !Ref ServerlessAppLambda
+
+  LambdaFunctionArn:
+    Description: 'ServerlessApp Lambda function ARN'
+    Value: !GetAtt ServerlessAppLambda.Arn
+
   SecretArn:
-    Description: ARN of the Secrets Manager secret
+    Description: 'ARN of the ServerlessApp Lambda Secret'
     Value: !Ref ServerlessAppSecret
-  VPCId:
-    Description: VPC ID for the serverless application
-    Value: !Ref ServerlessAppVPC
-  SecurityGroupId:
-    Description: Security Group ID for Lambda
-    Value: !Ref ServerlessAppLambdaSecurityGroup
+
+  Alarms:
+    Description: 'CloudWatch Alarms monitoring Lambda errors and invocations'
+    Value:
+      !Join [
+        ', ',
+        [
+          !Ref ServerlessAppLambdaErrorAlarm,
+          !Ref ServerlessAppLambdaInvocationsAlarm,
+        ],
+      ]
