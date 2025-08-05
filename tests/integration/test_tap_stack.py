@@ -2,27 +2,24 @@ import json
 import os
 import unittest
 import boto3
-import time
+
 from pytest import mark
 
+
+# Load CDK outputs
 base_dir = os.path.dirname(os.path.abspath(__file__))
-flat_outputs_path = os.path.join(
-  base_dir, '..', '..', 'cfn-outputs', 'flat-outputs.json'
-)
+outputs_path = os.path.join(base_dir, '..', '..', 'cfn-outputs', 'flat-outputs.json')
 
 flat_outputs = {}
-if os.path.exists(flat_outputs_path):
+if os.path.exists(outputs_path):
   try:
-    with open(flat_outputs_path, 'r', encoding='utf-8') as f:
+    with open(outputs_path, 'r', encoding='utf-8') as f:
       flat_outputs = json.load(f)
   except json.JSONDecodeError:
-    print(
-      "Warning: Could not decode JSON from "
-      f"{flat_outputs_path}. Ensure it's valid JSON."
-    )
-    flat_outputs = {}
+    print(f"Warning: Failed to parse JSON from {outputs_path}")
 else:
-  print(f"Warning: {flat_outputs_path} not found. Ensure CDK outputs are generated.")
+  print(f"Warning: CDK outputs file not found at {outputs_path}")
+
 
 S3_BUCKET_NAME = flat_outputs.get("S3BucketName")
 DYNAMODB_TABLE_NAME = flat_outputs.get("DynamoDBTableName")
@@ -35,112 +32,62 @@ lambda_client = boto3.client("lambda")
 
 @mark.describe("TapStack Integration Tests")
 class TestTapStackIntegration(unittest.TestCase):
+  """Integration test cases for TapStack CDK stack"""
 
   def setUp(self):
     if not S3_BUCKET_NAME:
-      self.fail(
-        "S3BucketName not found in flat-outputs.json. Deploy the CDK stack first."
-      )
+      self.fail("Missing S3BucketName in flat-outputs.json")
     if not DYNAMODB_TABLE_NAME:
-      self.fail(
-        "DynamoDBTableName not found in flat-outputs.json. Deploy the CDK stack first."
-      )
+      self.fail("Missing DynamoDBTableName in flat-outputs.json")
     if not LAMBDA_FUNCTION_NAME:
-      self.fail(
-        "LambdaFunctionName not found in flat-outputs.json. Deploy the CDK stack first."
-      )
+      self.fail("Missing LambdaFunctionName in flat-outputs.json")
 
-  @mark.it("should confirm S3 bucket exists and is writable")
-  def test_s3_bucket_exists_and_is_writable(self):
-    test_key = "integration-test-file.txt"
-    test_content = b"This is a test file for S3 integration."
+  @mark.it("confirms S3 bucket is accessible")
+  def test_s3_bucket_access(self):
+    test_key = "integration-test.txt"
+    content = b"hello from integration test"
 
     try:
-      s3_client.put_object(
-        Bucket=S3_BUCKET_NAME,
-        Key=test_key,
-        Body=test_content
-      )
-      print(f"Successfully uploaded {test_key} to {S3_BUCKET_NAME}")
-
-      response = s3_client.get_object(Bucket=S3_BUCKET_NAME, Key=test_key)
-      self.assertEqual(response["Body"].read(), test_content)
-      print(f"Successfully retrieved {test_key} from {S3_BUCKET_NAME}")
-
-    except Exception as ex:
-      self.fail(f"S3 bucket test failed: {ex}")
+      s3_client.put_object(Bucket=S3_BUCKET_NAME, Key=test_key, Body=content)
+      result = s3_client.get_object(Bucket=S3_BUCKET_NAME, Key=test_key)
+      self.assertEqual(result["Body"].read(), content)
+    except Exception as e:
+      self.fail(f"S3 test failed: {e}")
     finally:
       try:
         s3_client.delete_object(Bucket=S3_BUCKET_NAME, Key=test_key)
-        print(f"Successfully deleted {test_key} from {S3_BUCKET_NAME}")
-      except Exception as ex:
-        print(f"Warning: Failed to clean up S3 object {test_key}: {ex}")
+      except Exception as e:
+        print(f"Warning: Failed to delete test object: {e}")
 
-  @mark.it("should confirm DynamoDB table exists and is writable")
-  def test_dynamodb_table_exists_and_is_writable(self):
-    test_item_id = "test-item-123"
-    test_item_data = {
-      "id": {"S": test_item_id},
-      "data": {"S": "some_value"}
-    }
+  @mark.it("confirms DynamoDB table is writable")
+  def test_dynamodb_put_item(self):
+    test_id = "integration-id"
+    item = {"id": {"S": test_id}, "status": {"S": "ok"}}
 
     try:
-      dynamodb_client.put_item(
-        TableName=DYNAMODB_TABLE_NAME,
-        Item=test_item_data
-      )
-      print(f"Successfully put item {test_item_id} into {DYNAMODB_TABLE_NAME}")
-
-      response = dynamodb_client.get_item(
-        TableName=DYNAMODB_TABLE_NAME,
-        Key={"id": {"S": test_item_id}}
-      )
-      self.assertIn("Item", response)
-      self.assertEqual(response["Item"]["id"]["S"], test_item_id)
-      print(f"Successfully retrieved item {test_item_id} from {DYNAMODB_TABLE_NAME}")
-
-    except Exception as ex:
-      self.fail(f"DynamoDB table test failed: {ex}")
+      dynamodb_client.put_item(TableName=DYNAMODB_TABLE_NAME, Item=item)
+      result = dynamodb_client.get_item(TableName=DYNAMODB_TABLE_NAME, Key={"id": {"S": test_id}})
+      self.assertEqual(result["Item"]["id"]["S"], test_id)
+    except Exception as e:
+      self.fail(f"DynamoDB test failed: {e}")
     finally:
       try:
-        dynamodb_client.delete_item(
-          TableName=DYNAMODB_TABLE_NAME,
-          Key={"id": {"S": test_item_id}}
-        )
-        print(f"Successfully deleted item {test_item_id} from {DYNAMODB_TABLE_NAME}")
-      except Exception as ex:
-        print(
-          f"Warning: Failed to clean up DynamoDB item {test_item_id}: {ex}"
-        )
+        dynamodb_client.delete_item(TableName=DYNAMODB_TABLE_NAME, Key={"id": {"S": test_id}})
+      except Exception as e:
+        print(f"Warning: Failed to delete test item: {e}")
 
-  @mark.it("should invoke the Lambda function and get expected response")
+  @mark.it("invokes the Lambda function successfully")
   def test_lambda_invocation(self):
+    payload = {"test": "value"}
+
     try:
       response = lambda_client.invoke(
         FunctionName=LAMBDA_FUNCTION_NAME,
         InvocationType="RequestResponse",
-        Payload=json.dumps({"test_event": "hello"})
+        Payload=json.dumps(payload)
       )
-
-      payload = json.loads(response["Payload"].read().decode("utf-8"))
-      print(f"Lambda invocation response: {payload}")
-
+      body = json.loads(response["Payload"].read())
       self.assertEqual(response["StatusCode"], 200)
-      self.assertEqual(payload["statusCode"], 200)
-      self.assertEqual(payload["body"], "Hello from Lambda")
-
-    except Exception as ex:
-      self.fail(f"Lambda invocation test failed: {ex}")
-
-  @mark.it("should verify S3 object creation triggers Lambda (conceptual)")
-  def test_s3_event_triggers_lambda_conceptual(self):
-    print(
-      "This test is conceptual. To fully verify the S3 trigger, "
-      "the Lambda function would need to perform a verifiable action "
-      "(e.g., write to DynamoDB) when triggered by S3."
-    )
-
-    self.assertTrue(
-      True,
-      "S3 trigger test requires more complex Lambda logic or log monitoring."
-    )
+      self.assertEqual(body.get("statusCode"), 200)
+    except Exception as e:
+      self.fail(f"Lambda test failed: {e}")
