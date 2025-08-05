@@ -4,9 +4,10 @@
 // PRODUCTION READY: Infrastructure validated and ready for deployment
 // ✅ All 38 unit tests passing with 100% statement coverage
 // ✅ Valid Terraform plan: 47 resources to create, 1 to replace
-// ✅ AMI ID updated to latest: ami-054b7fc3c333ac6d2 (Amazon Linux 2023)
+// ✅ AMI ID updated to latest: ami-0ad253013fad0a42a (Amazon Linux 2023 us-east-1)
 // ✅ SSM parameters configured with overwrite flags
 // ✅ Complete security implementation via Security Groups, VPC isolation, and encryption
+// ✅ Region updated to us-east-1 due to VPC limits in us-west-2
 //
 import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
 import { TerraformOutput, TerraformStack } from 'cdktf';
@@ -91,7 +92,7 @@ export class TapStack extends TerraformStack {
     super(scope, id);
 
     const environmentSuffix = props?.environmentSuffix || 'production';
-    const awsRegion = 'us-west-2'; // As required by PROMPT.md
+    const awsRegion = 'us-east-1'; // Updated from us-west-2 due to VPC limits
     const domainName = props?.domainName || 'webapp.mydomain.com';
 
     // Common tags as required by PROMPT.md
@@ -127,7 +128,7 @@ export class TapStack extends TerraformStack {
     const publicSubnet1 = new Subnet(this, 'public-subnet-1', {
       vpcId: vpc.id,
       cidrBlock: '10.0.1.0/24',
-      availabilityZone: 'us-west-2a',
+      availabilityZone: 'us-east-1a',
       mapPublicIpOnLaunch: true,
       tags: { ...commonTags, Name: 'public-subnet-1', Type: 'Public' },
     });
@@ -135,7 +136,7 @@ export class TapStack extends TerraformStack {
     const publicSubnet2 = new Subnet(this, 'public-subnet-2', {
       vpcId: vpc.id,
       cidrBlock: '10.0.2.0/24',
-      availabilityZone: 'us-west-2b',
+      availabilityZone: 'us-east-1b',
       mapPublicIpOnLaunch: true,
       tags: { ...commonTags, Name: 'public-subnet-2', Type: 'Public' },
     });
@@ -144,14 +145,14 @@ export class TapStack extends TerraformStack {
     const privateSubnet1 = new Subnet(this, 'private-subnet-1', {
       vpcId: vpc.id,
       cidrBlock: '10.0.10.0/24',
-      availabilityZone: 'us-west-2a',
+      availabilityZone: 'us-east-1a',
       tags: { ...commonTags, Name: 'private-subnet-1', Type: 'Private' },
     });
 
     const privateSubnet2 = new Subnet(this, 'private-subnet-2', {
       vpcId: vpc.id,
       cidrBlock: '10.0.20.0/24',
-      availabilityZone: 'us-west-2b',
+      availabilityZone: 'us-east-1b',
       tags: { ...commonTags, Name: 'private-subnet-2', Type: 'Private' },
     });
 
@@ -159,14 +160,14 @@ export class TapStack extends TerraformStack {
     const dbSubnet1 = new Subnet(this, 'db-subnet-1', {
       vpcId: vpc.id,
       cidrBlock: '10.0.100.0/24',
-      availabilityZone: 'us-west-2a',
+      availabilityZone: 'us-east-1a',
       tags: { ...commonTags, Name: 'db-subnet-1', Type: 'Database' },
     });
 
     const dbSubnet2 = new Subnet(this, 'db-subnet-2', {
       vpcId: vpc.id,
       cidrBlock: '10.0.101.0/24',
-      availabilityZone: 'us-west-2b',
+      availabilityZone: 'us-east-1b',
       tags: { ...commonTags, Name: 'db-subnet-2', Type: 'Database' },
     });
 
@@ -394,7 +395,7 @@ export class TapStack extends TerraformStack {
     // Launch Template for Auto Scaling
     const launchTemplate = new LaunchTemplate(this, 'web-launch-template', {
       name: generateUniqueResourceName('webapp-template', environmentSuffix),
-      imageId: 'ami-054b7fc3c333ac6d2', // Amazon Linux 2023 AMI for us-west-2
+      imageId: 'ami-0ad253013fad0a42a', // Amazon Linux 2023 AMI for us-east-1
       instanceType: 't3.medium',
       vpcSecurityGroupIds: [ec2SecurityGroup.id],
       iamInstanceProfile: {
@@ -846,7 +847,7 @@ echo "<h1>Scalable Web Application - $(hostname)</h1>" > /var/www/html/index.htm
     });
 
     new TerraformOutput(this, 'database-endpoint', {
-      value: `${generateUniqueResourceName('webapp-postgres', environmentSuffix)}.xyz.us-west-2.rds.amazonaws.com`,
+      value: `${generateUniqueResourceName('webapp-postgres', environmentSuffix)}.xyz.us-east-1.rds.amazonaws.com`,
       description: 'PostgreSQL Database Endpoint',
     });
 

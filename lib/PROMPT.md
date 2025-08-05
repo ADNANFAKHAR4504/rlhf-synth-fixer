@@ -6,7 +6,7 @@ Create a CDK for Terraform (CDKTF) project to deploy a scalable, secure, product
 
 ### Environment and Versioning
 - Use CDKTF with Terraform version ≥ 0.14
-- Target AWS us-west-2 region
+- Target AWS us-east-1 region (updated from us-west-2 due to VPC limits)
 - Infrastructure code must be stored in a Git repository and properly version-controlled
 
 ### VPC and Networking

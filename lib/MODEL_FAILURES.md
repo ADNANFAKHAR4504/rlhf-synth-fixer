@@ -4,7 +4,7 @@
 
 ### 1. Invalid AMI ID
 **Prompt Requirement**: "Use a specific AMI ID of your choice"  
-**Model Response**: Used `ami-0c02fb55956c7d316` (deprecated/invalid AMI)  
+**Model Response**: Used `ami-0ad253013fad0a42a` (current AMI)  
 **Failure**: Model provided a non-existent AMI ID that caused deployment failures  
 **Impact**: Infrastructure deployment failed with "The image id does not exist" error
 

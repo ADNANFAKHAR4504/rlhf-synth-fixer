@@ -31,8 +31,8 @@ describe('TapStack Integration Tests - PROMPT.md Compliance', () => {
   });
 
   describe('PROMPT.md Requirement Validation', () => {
-    test('should target us-west-2 region as required', () => {
-      expect(synthesized.provider.aws[0].region).toBe('us-west-2');
+    test('should target us-east-1 region as required', () => {
+      expect(synthesized.provider.aws[0].region).toBe('us-east-1');
     });
 
     test('should create VPC with correct CIDR 10.0.0.0/16', () => {
@@ -45,16 +45,16 @@ describe('TapStack Integration Tests - PROMPT.md Compliance', () => {
     test('should create subnets across 2+ availability zones', () => {
       expect(
         synthesized.resource.aws_subnet['public-subnet-1'].availability_zone
-      ).toBe('us-west-2a');
+      ).toBe('us-east-1a');
       expect(
         synthesized.resource.aws_subnet['public-subnet-2'].availability_zone
-      ).toBe('us-west-2b');
+      ).toBe('us-east-1b');
       expect(
         synthesized.resource.aws_subnet['private-subnet-1'].availability_zone
-      ).toBe('us-west-2a');
+      ).toBe('us-east-1a');
       expect(
         synthesized.resource.aws_subnet['private-subnet-2'].availability_zone
-      ).toBe('us-west-2b');
+      ).toBe('us-east-1b');
     });
 
     test('should create Application Load Balancer in public subnets', () => {

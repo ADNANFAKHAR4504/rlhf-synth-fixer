@@ -16,13 +16,13 @@ describe('TapStack Unit Tests - PROMPT.md Compliance Validation', () => {
       stack = new TapStack(app, 'TestTapStackWithProps', {
         environmentSuffix: 'production',
         domainName: 'app.example.com',
-        awsRegion: 'us-west-2',
+        awsRegion: 'us-east-1',
       });
       synthesized = JSON.parse(Testing.synth(stack));
 
       expect(stack).toBeDefined();
       expect(synthesized).toBeDefined();
-      expect(synthesized.provider?.aws?.[0]?.region).toBe('us-west-2');
+      expect(synthesized.provider?.aws?.[0]?.region).toBe('us-east-1');
     });
 
     test('should use default values when no props provided', () => {
@@ -56,7 +56,7 @@ describe('TapStack Unit Tests - PROMPT.md Compliance Validation', () => {
       expect(synthesized.resource.aws_subnet['public-subnet-1']).toEqual(
         expect.objectContaining({
           cidr_block: '10.0.1.0/24',
-          availability_zone: 'us-west-2a',
+          availability_zone: 'us-east-1a',
           map_public_ip_on_launch: true,
         })
       );
@@ -64,7 +64,7 @@ describe('TapStack Unit Tests - PROMPT.md Compliance Validation', () => {
       expect(synthesized.resource.aws_subnet['public-subnet-2']).toEqual(
         expect.objectContaining({
           cidr_block: '10.0.2.0/24',
-          availability_zone: 'us-west-2b',
+          availability_zone: 'us-east-1b',
           map_public_ip_on_launch: true,
         })
       );
@@ -74,14 +74,14 @@ describe('TapStack Unit Tests - PROMPT.md Compliance Validation', () => {
       expect(synthesized.resource.aws_subnet['private-subnet-1']).toEqual(
         expect.objectContaining({
           cidr_block: '10.0.10.0/24',
-          availability_zone: 'us-west-2a',
+          availability_zone: 'us-east-1a',
         })
       );
 
       expect(synthesized.resource.aws_subnet['private-subnet-2']).toEqual(
         expect.objectContaining({
           cidr_block: '10.0.20.0/24',
-          availability_zone: 'us-west-2b',
+          availability_zone: 'us-east-1b',
         })
       );
     });
@@ -90,14 +90,14 @@ describe('TapStack Unit Tests - PROMPT.md Compliance Validation', () => {
       expect(synthesized.resource.aws_subnet['db-subnet-1']).toEqual(
         expect.objectContaining({
           cidr_block: '10.0.100.0/24',
-          availability_zone: 'us-west-2a',
+          availability_zone: 'us-east-1a',
         })
       );
 
       expect(synthesized.resource.aws_subnet['db-subnet-2']).toEqual(
         expect.objectContaining({
           cidr_block: '10.0.101.0/24',
-          availability_zone: 'us-west-2b',
+          availability_zone: 'us-east-1b',
         })
       );
     });
@@ -261,7 +261,7 @@ describe('TapStack Unit Tests - PROMPT.md Compliance Validation', () => {
         synthesized.resource.aws_launch_template['web-launch-template']
       ).toEqual(
         expect.objectContaining({
-          image_id: 'ami-054b7fc3c333ac6d2',
+          image_id: 'ami-0ad253013fad0a42a',
           instance_type: 't3.medium',
         })
       );
@@ -454,7 +454,7 @@ describe('TapStack Unit Tests - PROMPT.md Compliance Validation', () => {
         s.Action.includes('cloudwatch:PutMetricData')
       );
       expect(cwStatement.Resource).toContain(
-        'arn:aws:cloudwatch:us-west-2:*:*'
+        'arn:aws:cloudwatch:us-east-1:*:*'
       );
 
       // Verify SSM access is limited to webapp parameters
@@ -462,7 +462,7 @@ describe('TapStack Unit Tests - PROMPT.md Compliance Validation', () => {
         s.Action.includes('ssm:GetParameter')
       );
       expect(ssmStatement.Resource).toBe(
-        'arn:aws:ssm:us-west-2:*:parameter/webapp/*'
+        'arn:aws:ssm:us-east-1:*:parameter/webapp/*'
       );
     });
   });
