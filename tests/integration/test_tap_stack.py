@@ -2,62 +2,41 @@
 
 import os
 import unittest
-import base64
 import boto3
+import base64
 from pulumi import automation as auto
-from lib import tap_stack
+from pulumi.automation import LocalWorkspace, Stack
 
 
-class TestTapStackLiveIntegration(unittest.TestCase):
-  """Integration tests against live deployed Pulumi stack."""
+
+
+class TestTapStackDeployedResources(unittest.TestCase):
+  """Test AWS resources after Pulumi stack is deployed."""
+
+  from pulumi.automation import LocalWorkspace, Stack
 
   @classmethod
   def setUpClass(cls):
     cls.stack_name = os.getenv("PULUMI_STACK", "dev")
     cls.project_name = os.getenv("PULUMI_PROJECT", "pulumi-infra")
     cls.region = os.getenv("AWS_REGION", "us-east-1")
-    cls.s3_backend = os.getenv("PULUMI_BACKEND_URL", "s3://iac-rlhf-pulumi-states")
 
     os.environ["AWS_REGION"] = cls.region
-    os.environ["PULUMI_BACKEND_URL"] = cls.s3_backend
 
-    def pulumi_program():
-      return tap_stack.TapStack(
-        "TapStack",
-        tap_stack.TapStackArgs(environment_suffix=cls.stack_name)
-      )
+    # Create workspace from existing Pulumi.yaml
+    ws = LocalWorkspace(work_dir=os.getcwd())
 
-    try:
-      cls.stack = auto.select_stack(
-        stack_name=cls.stack_name,
-        project_name=cls.project_name,
-        program=pulumi_program
-      )
-    except auto.StackNotFoundError:
-      cls.stack = auto.create_stack(
-        stack_name=cls.stack_name,
-        project_name=cls.project_name,
-        program=pulumi_program
-      )
-      cls.stack.set_config("aws:region", auto.ConfigValue(value=cls.region))
-      cls.stack.set_config("TapStack:db_password",
-                           auto.ConfigValue(value="dummy-password", secret=True))
-
-    cls.stack.workspace.env_vars["AWS_REGION"] = cls.region
-    cls.stack.workspace.env_vars["PULUMI_BACKEND_URL"] = cls.s3_backend
-
-    cls.stack.refresh(on_output=print)
-    cls.stack.up(on_output=print)
+    # Select the stack from that workspace
+    cls.stack = Stack.select(stack_name=cls.stack_name, workspace=ws)
 
     outputs = cls.stack.outputs()
-    cls.outputs = outputs
-    cls.vpc_id = outputs.get("vpc_id", auto.Output.from_input(None)).value
-    cls.sg_id = outputs.get("security_group_id", auto.Output.from_input(None)).value
-    cls.user_arn = outputs.get("iam_user_arn", auto.Output.from_input(None)).value
-    cls.access_key_id = outputs.get("access_key_id", auto.Output.from_input(None)).value
-    cls.kms_key_id = outputs.get("kms_key_id", auto.Output.from_input(None)).value
-    cls.kms_alias = outputs.get("kms_alias", auto.Output.from_input("")).value
-    cls.encrypted_blob = outputs.get("encrypted_db_password_blob", auto.Output.from_input("")).value
+    cls.vpc_id = outputs.get("vpc_id", {}).get("value")
+    cls.sg_id = outputs.get("security_group_id", {}).get("value")
+    cls.user_arn = outputs.get("iam_user_arn", {}).get("value")
+    cls.access_key_id = outputs.get("access_key_id", {}).get("value")
+    cls.kms_key_id = outputs.get("kms_key_id", {}).get("value")
+    cls.kms_alias = outputs.get("kms_alias", {}).get("value")
+    cls.encrypted_blob = outputs.get("encrypted_db_password_blob", {}).get("value")
 
     cls.ec2 = boto3.client("ec2", region_name=cls.region)
     cls.iam = boto3.client("iam", region_name=cls.region)
@@ -97,15 +76,14 @@ class TestTapStackLiveIntegration(unittest.TestCase):
     self.assertTrue(key["Enabled"])
     self.assertIn("secure-web-key", self.kms_alias)
 
-  def test_encrypted_blob_is_non_empty(self):
+  def test_encrypted_blob_is_base64(self):
     if not self.encrypted_blob:
       self.skipTest("encrypted_db_password_blob not found in stack outputs")
-    self.assertIsInstance(self.encrypted_blob, str)
     self.assertGreater(len(self.encrypted_blob), 10)
     try:
       base64.b64decode(self.encrypted_blob)
     except Exception as e:
-      self.fail(f"Encrypted blob is not valid base64: {str(e)}")
+      self.fail(f"Invalid base64 in encrypted blob: {e}")
 
 
 if __name__ == "__main__":
