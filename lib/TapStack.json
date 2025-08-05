@@ -1,102 +1,29 @@
 {
     "AWSTemplateFormatVersion": "2010-09-09",
-    "Description": "Secure web environment with VPC, EC2, and Parameter Store - Batch 003 Expert CloudFormation YAML",
+    "Description": "CloudFormation template for a secure web environment using the default VPC with default parameters",
     "Parameters": {
-        "KeyPairName": {
-            "Type": "AWS::EC2::KeyPair::KeyName",
-            "Description": "Name of an existing EC2 KeyPair for SSH access",
-            "Default": "my-dev-keypair",
-            "ConstraintDescription": "Must be an existing EC2 KeyPair"
-        },
-        "AllowedSSHIPAddress": {
+        "AllowedIPAddress": {
             "Type": "String",
             "Description": "IP address allowed for SSH access",
-            "Default": "49.206.60.227/32",
-            "AllowedPattern": "^(\\d{1,3}\\.){3}\\d{1,3}/\\d{1,2}$",
-            "ConstraintDescription": "Must be a valid CIDR"
+            "AllowedPattern": "^\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}/32$",
+            "ConstraintDescription": "Must be a valid CIDR IP address",
+            "Default": "203.0.113.10/32"
         },
-        "AmiId": {
-            "Type": "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>",
-            "Default": "/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2",
-            "Description": "Latest Amazon Linux 2 AMI ID"
+        "ExistingVPCId": {
+            "Type": "String",
+            "Description": "ID of the existing default VPC (e.g., vpc-xxxxxxxx)",
+            "Default": "vpc-0b094aa4091786d92"
         }
     },
     "Resources": {
-        "VPC": {
-            "Type": "AWS::EC2::VPC",
-            "Properties": {
-                "CidrBlock": "10.0.0.0/16",
-                "EnableDnsSupport": true,
-                "EnableDnsHostnames": true,
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": "MyVPC"
-                    },
-                    {
-                        "Key": "batchName",
-                        "Value": "Batch 003 -Expert-CloudFormation-YAML"
-                    },
-                    {
-                        "Key": "projectId",
-                        "Value": "166"
-                    },
-                    {
-                        "Key": "projectName",
-                        "Value": "IaC - AWS Nova Model Breaking"
-                    },
-                    {
-                        "Key": "ProblemID",
-                        "Value": "Cloud_Environment_Setup_CloudFormation_YAML_9kfhjsre9e3f"
-                    }
-                ]
-            }
-        },
-        "InternetGateway": {
-            "Type": "AWS::EC2::InternetGateway",
-            "Properties": {
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": "MyIGW"
-                    },
-                    {
-                        "Key": "batchName",
-                        "Value": "Batch 003 -Expert-CloudFormation-YAML"
-                    },
-                    {
-                        "Key": "projectId",
-                        "Value": "166"
-                    },
-                    {
-                        "Key": "projectName",
-                        "Value": "IaC - AWS Nova Model Breaking"
-                    },
-                    {
-                        "Key": "ProblemID",
-                        "Value": "Cloud_Environment_Setup_CloudFormation_YAML_9kfhjsre9e3f"
-                    }
-                ]
-            }
-        },
-        "AttachGateway": {
-            "Type": "AWS::EC2::VPCGatewayAttachment",
-            "Properties": {
-                "VpcId": {
-                    "Ref": "VPC"
-                },
-                "InternetGatewayId": {
-                    "Ref": "InternetGateway"
-                }
-            }
-        },
-        "Subnet": {
+        "PublicSubnet": {
             "Type": "AWS::EC2::Subnet",
             "Properties": {
                 "VpcId": {
-                    "Ref": "VPC"
+                    "Ref": "ExistingVPCId"
                 },
                 "CidrBlock": "10.0.1.0/24",
+                "MapPublicIpOnLaunch": true,
                 "AvailabilityZone": {
                     "Fn::Select": [
                         0,
@@ -105,90 +32,20 @@
                         }
                     ]
                 },
-                "MapPublicIpOnLaunch": true,
                 "Tags": [
                     {
                         "Key": "Name",
-                        "Value": "MySubnet"
-                    },
-                    {
-                        "Key": "batchName",
-                        "Value": "Batch 003 -Expert-CloudFormation-YAML"
-                    },
-                    {
-                        "Key": "projectId",
-                        "Value": "166"
-                    },
-                    {
-                        "Key": "projectName",
-                        "Value": "IaC - AWS Nova Model Breaking"
-                    },
-                    {
-                        "Key": "ProblemID",
-                        "Value": "Cloud_Environment_Setup_CloudFormation_YAML_9kfhjsre9e3f"
+                        "Value": "SecureWebSubnet"
                     }
                 ]
             }
         },
-        "RouteTable": {
-            "Type": "AWS::EC2::RouteTable",
-            "Properties": {
-                "VpcId": {
-                    "Ref": "VPC"
-                },
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": "MyRouteTable"
-                    },
-                    {
-                        "Key": "batchName",
-                        "Value": "Batch 003 -Expert-CloudFormation-YAML"
-                    },
-                    {
-                        "Key": "projectId",
-                        "Value": "166"
-                    },
-                    {
-                        "Key": "projectName",
-                        "Value": "IaC - AWS Nova Model Breaking"
-                    },
-                    {
-                        "Key": "ProblemID",
-                        "Value": "Cloud_Environment_Setup_CloudFormation_YAML_9kfhjsre9e3f"
-                    }
-                ]
-            }
-        },
-        "Route": {
-            "Type": "AWS::EC2::Route",
-            "Properties": {
-                "RouteTableId": {
-                    "Ref": "RouteTable"
-                },
-                "DestinationCidrBlock": "0.0.0.0/0",
-                "GatewayId": {
-                    "Ref": "InternetGateway"
-                }
-            }
-        },
-        "SubnetRouteTableAssociation": {
-            "Type": "AWS::EC2::SubnetRouteTableAssociation",
-            "Properties": {
-                "SubnetId": {
-                    "Ref": "Subnet"
-                },
-                "RouteTableId": {
-                    "Ref": "RouteTable"
-                }
-            }
-        },
-        "SecurityGroup": {
+        "InstanceSecurityGroup": {
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
-                "GroupDescription": "Allow SSH from specific IP",
+                "GroupDescription": "Security group for EC2 instance with restricted SSH access",
                 "VpcId": {
-                    "Ref": "VPC"
+                    "Ref": "ExistingVPCId"
                 },
                 "SecurityGroupIngress": [
                     {
@@ -196,30 +53,14 @@
                         "FromPort": 22,
                         "ToPort": 22,
                         "CidrIp": {
-                            "Ref": "AllowedSSHIPAddress"
+                            "Ref": "AllowedIPAddress"
                         }
                     }
                 ],
                 "Tags": [
                     {
                         "Key": "Name",
-                        "Value": "MySecurityGroup"
-                    },
-                    {
-                        "Key": "batchName",
-                        "Value": "Batch 003 -Expert-CloudFormation-YAML"
-                    },
-                    {
-                        "Key": "projectId",
-                        "Value": "166"
-                    },
-                    {
-                        "Key": "projectName",
-                        "Value": "IaC - AWS Nova Model Breaking"
-                    },
-                    {
-                        "Key": "ProblemID",
-                        "Value": "Cloud_Environment_Setup_CloudFormation_YAML_9kfhjsre9e3f"
+                        "Value": "SecureWebSG"
                     }
                 ]
             }
@@ -239,52 +80,36 @@
                         }
                     ]
                 },
-                "ManagedPolicyArns": [
-                    "arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess",
-                    "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
-                ],
                 "Policies": [
                     {
-                        "PolicyName": "SSMGetParameter",
+                        "PolicyName": "S3ReadOnlyPolicy",
                         "PolicyDocument": {
                             "Version": "2012-10-17",
                             "Statement": [
                                 {
                                     "Effect": "Allow",
-                                    "Action": "ssm:GetParameter",
-                                    "Resource": {
-                                        "Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/MyConfig"
-                                    }
+                                    "Action": [
+                                        "s3:Get*",
+                                        "s3:List*"
+                                    ],
+                                    "Resource": "*"
                                 }
                             ]
                         }
                     }
                 ],
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+                ],
                 "Tags": [
                     {
                         "Key": "Name",
-                        "Value": "MyEC2Role"
-                    },
-                    {
-                        "Key": "batchName",
-                        "Value": "Batch 003 -Expert-CloudFormation-YAML"
-                    },
-                    {
-                        "Key": "projectId",
-                        "Value": "166"
-                    },
-                    {
-                        "Key": "projectName",
-                        "Value": "IaC - AWS Nova Model Breaking"
-                    },
-                    {
-                        "Key": "ProblemID",
-                        "Value": "Cloud_Environment_Setup_CloudFormation_YAML_9kfhjsre9e3f"
+                        "Value": "EC2S3ReadOnlyRole"
                     }
                 ]
             }
         },
-        "InstanceProfile": {
+        "EC2InstanceProfile": {
             "Type": "AWS::IAM::InstanceProfile",
             "Properties": {
                 "Roles": [
@@ -294,116 +119,59 @@
                 ]
             }
         },
-        "SSMParameter": {
+        "ConfigParameter": {
             "Type": "AWS::SSM::Parameter",
             "Properties": {
-                "Name": "MyConfig",
-                "Type": "SecureString",
-                "Value": "some_sensitive_value",
-                "Description": "Sensitive configuration value for EC2 initialization",
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": "MyConfigParameter"
-                    },
-                    {
-                        "Key": "batchName",
-                        "Value": "Batch 003 -Expert-CloudFormation-YAML"
-                    },
-                    {
-                        "Key": "projectId",
-                        "Value": "166"
-                    },
-                    {
-                        "Key": "projectName",
-                        "Value": "IaC - AWS Nova Model Breaking"
-                    },
-                    {
-                        "Key": "ProblemID",
-                        "Value": "Cloud_Environment_Setup_CloudFormation_YAML_9kfhjsre9e3f"
-                    }
-                ]
-            }
-        },
-        "EC2Instance": {
-            "Type": "AWS::EC2::Instance",
-            "Properties": {
-                "InstanceType": "t3.micro",
-                "ImageId": {
-                    "Ref": "AmiId"
-                },
-                "KeyName": {
-                    "Ref": "KeyPairName"
-                },
-                "SubnetId": {
-                    "Ref": "Subnet"
-                },
-                "SecurityGroupIds": [
-                    {
-                        "Ref": "SecurityGroup"
-                    }
-                ],
-                "IamInstanceProfile": {
-                    "Ref": "InstanceProfile"
-                },
-                "UserData": {
-                    "Fn::Base64": {
-                        "Fn::Sub": "#!/bin/bash\nyum update -y\nyum install -y aws-cli\necho \"Retrieving parameter from SSM\" > /var/log/user-data.log\nPARAMETER_VALUE=$(aws ssm get-parameter --name MyConfig --with-decryption --query 'Parameter.Value' --output text)\necho \"Parameter value: $PARAMETER_VALUE\" >> /var/log/user-data.log\necho $PARAMETER_VALUE > /home/ec2-user/config.txt\nchmod 600 /home/ec2-user/config.txt\n"
-                    }
-                },
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": "MyEC2Instance"
-                    },
-                    {
-                        "Key": "batchName",
-                        "Value": "Batch 003 -Expert-CloudFormation-YAML"
-                    },
-                    {
-                        "Key": "projectId",
-                        "Value": "166"
-                    },
-                    {
-                        "Key": "projectName",
-                        "Value": "IaC - AWS Nova Model Breaking"
-                    },
-                    {
-                        "Key": "ProblemID",
-                        "Value": "Cloud_Environment_Setup_CloudFormation_YAML_9kfhjsre9e3f"
-                    }
-                ]
+                "Name": "/secure-web/config",
+                "Type": "String",
+                "Value": "example-config-value",
+                "Description": "Configuration value for EC2 instance"
             }
         },
         "ElasticIP": {
             "Type": "AWS::EC2::EIP",
             "Properties": {
-                "Domain": "vpc",
-                "InstanceId": {
-                    "Ref": "EC2Instance"
+                "Domain": "vpc"
+            }
+        },
+        "EC2Instance": {
+            "Type": "AWS::EC2::Instance",
+            "Properties": {
+                "InstanceType": "t2.micro",
+                "ImageId": "ami-0c55b159cbfafe1f0",
+                "SubnetId": {
+                    "Ref": "PublicSubnet"
+                },
+                "SecurityGroupIds": [
+                    {
+                        "Ref": "InstanceSecurityGroup"
+                    }
+                ],
+                "IamInstanceProfile": {
+                    "Ref": "EC2InstanceProfile"
+                },
+                "UserData": {
+                    "Fn::Base64": {
+                        "Fn::Sub": "#!/bin/bash\nyum update -y\n# Retrieving configuration from Parameter Store\nCONFIG_VALUE=$(aws ssm get-parameter --name \"/secure-web/config\" --region us-west-2 --query Parameter.Value --output text)\necho \"Configuration: $CONFIG_VALUE\" >> /var/log/config.log\n"
+                    }
                 },
                 "Tags": [
                     {
                         "Key": "Name",
-                        "Value": "MyElasticIP"
-                    },
-                    {
-                        "Key": "batchName",
-                        "Value": "Batch 003 -Expert-CloudFormation-YAML"
-                    },
-                    {
-                        "Key": "projectId",
-                        "Value": "166"
-                    },
-                    {
-                        "Key": "projectName",
-                        "Value": "IaC - AWS Nova Model Breaking"
-                    },
-                    {
-                        "Key": "ProblemID",
-                        "Value": "Cloud_Environment_Setup_CloudFormation_YAML_9kfhjsre9e3f"
+                        "Value": "SecureWebInstance"
                     }
                 ]
+            }
+        },
+        "EIPAssociation": {
+            "Type": "AWS::EC2::EIPAssociation",
+            "Properties": {
+                "InstanceId": {
+                    "Ref": "EC2Instance"
+                },
+                "EIP": {
+                    "Ref": "ElasticIP"
+                }
             }
         }
     },
@@ -411,37 +179,19 @@
         "InstancePublicIP": {
             "Description": "Public IP address of the EC2 instance",
             "Value": {
-                "Fn::GetAtt": [
-                    "ElasticIP",
-                    "PublicIp"
-                ]
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${AWS::StackName}-InstancePublicIP"
-                }
+                "Ref": "ElasticIP"
+            }
+        },
+        "VPCId": {
+            "Description": "ID of the existing VPC used",
+            "Value": {
+                "Ref": "ExistingVPCId"
             }
         },
         "InstanceId": {
             "Description": "ID of the EC2 instance",
             "Value": {
                 "Ref": "EC2Instance"
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${AWS::StackName}-InstanceId"
-                }
-            }
-        },
-        "VPCId": {
-            "Description": "ID of the VPC",
-            "Value": {
-                "Ref": "VPC"
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${AWS::StackName}-VPCId"
-                }
             }
         }
     }
