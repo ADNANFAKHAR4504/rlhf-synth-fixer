@@ -130,7 +130,7 @@ class TestTapStackUnit(unittest.TestCase):
                 "IpProtocol": "tcp",
                 "FromPort": 22,
                 "ToPort": 22,
-                "CidrIp": "10.0.0.0/16"
+                "CidrIp": "10.0.1.0/24"
             }
         ],
         "SecurityGroupEgress": [

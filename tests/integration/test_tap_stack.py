@@ -195,7 +195,7 @@ class TestTapStackIntegration(unittest.TestCase):
           # Verify SSH rule exists and is limited to VPC
           if rule.get("FromPort") == 22:
             self.assertEqual(rule["IpProtocol"], "tcp")
-            self.assertEqual(rule["CidrIp"], "10.0.0.0/16")
+            self.assertEqual(rule["CidrIp"], "10.0.1.0/24")
 
       # Check egress rules
       if "SecurityGroupEgress" in properties:
