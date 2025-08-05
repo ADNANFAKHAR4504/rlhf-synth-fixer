@@ -67,10 +67,15 @@ describe('Turn Around Prompt API Integration Tests', () => {
         const command = new GetBucketEncryptionCommand({ Bucket: bucket.name });
         const response = await s3Client.send(command);
         const encryption =
-          response.ServerSideEncryptionConfiguration?.Rules[0]
+          response.ServerSideEncryptionConfiguration?.Rules?.[0]
             ?.ApplyServerSideEncryptionByDefault;
-        expect(encryption?.SSEAlgorithm).toBe('aws:kms');
-        expect(encryption?.KMSMasterKeyID).toContain(stackOutputs.KMSKeyId);
+        if (!encryption) {
+          throw new Error(
+            `No encryption configuration found for bucket ${bucket.name}`
+          );
+        }
+        expect(encryption.SSEAlgorithm).toBe('aws:kms');
+        expect(encryption.KMSMasterKeyID).toContain(stackOutputs.KMSKeyId);
       });
 
       test(`should have ${bucket.name} with public access blocked`, async () => {
@@ -118,8 +123,12 @@ describe('Turn Around Prompt API Integration Tests', () => {
       try {
         await s3Client.send(command);
         objectExists = true;
-      } catch (error) {
-        if (error.name !== 'NotFound') throw error;
+      } catch (error: unknown) {
+        if (error instanceof Error && error.name === 'NotFound') {
+          // Object not found, test will fail
+        } else {
+          throw error;
+        }
       }
       expect(objectExists).toBe(true);
     });
