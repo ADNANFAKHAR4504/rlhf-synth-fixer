@@ -20,12 +20,6 @@ Parameters:
     Default: serverlessapp-bucket
     Description: Unique S3 bucket name for object triggers.
 
-Mappings:
-  RegionMap:
-    us-west-2:
-      AZ1: us-west-2a
-      AZ2: us-west-2b
-
 Resources:
   # S3 Bucket for File Uploads (Secured)
   ServerlessAppBucket:
@@ -73,7 +67,7 @@ Resources:
     Properties:
       VpcId: !Ref ServerlessAppVPC
       CidrBlock: 10.0.0.0/26
-      AvailabilityZone: !FindInMap [RegionMap, us-west-2, AZ1]
+      AvailabilityZone: !FindInMap [RegionMap, !Ref 'AWS::Region', AZ1]
       Tags:
         - Key: Name
           Value: ServerlessAppSubnetAZ1
@@ -83,7 +77,7 @@ Resources:
     Properties:
       VpcId: !Ref ServerlessAppVPC
       CidrBlock: 10.0.0.64/26
-      AvailabilityZone: !FindInMap [RegionMap, us-west-2, AZ2]
+      AvailabilityZone: !FindInMap [RegionMap, !Ref 'AWS::Region', AZ2]
       Tags:
         - Key: Name
           Value: ServerlessAppSubnetAZ2
