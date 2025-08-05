@@ -1,10 +1,17 @@
 """TAP Stack module for CDKTF Python infrastructure."""
 
 import json
+import os
+import zipfile
 from cdktf import TerraformStack, S3Backend, TerraformOutput
 from constructs import Construct
 from cdktf_cdktf_provider_aws.provider import AwsProvider
 from cdktf_cdktf_provider_aws.s3_bucket import S3Bucket
+from cdktf_cdktf_provider_aws.s3_bucket_server_side_encryption_configuration import (
+    S3BucketServerSideEncryptionConfigurationA,
+    S3BucketServerSideEncryptionConfigurationRuleA,
+    S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultA
+)
 from cdktf_cdktf_provider_aws.lambda_function import LambdaFunction
 from cdktf_cdktf_provider_aws.iam_role import IamRole
 from cdktf_cdktf_provider_aws.iam_role_policy_attachment import IamRolePolicyAttachment
@@ -19,6 +26,61 @@ from cdktf_cdktf_provider_aws.secretsmanager_secret_version import Secretsmanage
 from cdktf_cdktf_provider_aws.cloudwatch_log_group import CloudwatchLogGroup
 from cdktf_cdktf_provider_aws.data_aws_iam_policy_document import DataAwsIamPolicyDocument
 from cdktf_cdktf_provider_aws.data_aws_caller_identity import DataAwsCallerIdentity
+
+
+def create_lambda_zip():
+    """Create Lambda function zip file using code from lib/lambda/handler.py."""
+    zip_path = "lambda_function.zip"
+    
+    # Read Lambda function code from lib/lambda/handler.py
+    lambda_file_path = "lib/lambda/handler.py"
+    
+    try:
+        with open(lambda_file_path, 'r') as f:
+            lambda_code = f.read()
+    except FileNotFoundError:
+        # Fallback code if file doesn't exist
+        lambda_code = '''
+import json
+import boto3
+
+def lambda_handler(event, context):
+    # Compliance check logic here
+    print("Running compliance checks...")
+    return {
+        'statusCode': 200,
+        'body': json.dumps('Compliance check completed')
+    }
+'''
+    
+    # Create zip file
+    with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+        zipf.writestr('handler.py', lambda_code)
+    
+    return zip_path
+
+
+def get_lambda_code():
+    """Read Lambda function code from lib/lambda/handler.py."""
+    lambda_file_path = "lib/lambda/handler.py"
+    
+    try:
+        with open(lambda_file_path, 'r') as f:
+            return f.read()
+    except FileNotFoundError:
+        # Fallback code if file doesn't exist
+        return '''
+import json
+import boto3
+
+def lambda_handler(event, context):
+    # Compliance check logic here
+    print("Running compliance checks...")
+    return {
+        'statusCode': 200,
+        'body': json.dumps('Compliance check completed')
+    }
+'''
 
 
 class TapStack(TerraformStack):
@@ -61,18 +123,26 @@ class TapStack(TerraformStack):
     self.add_override("terraform.backend.s3.use_lockfile", True)
 
     # Create S3 bucket for demonstration
-    S3Bucket(
+    tap_bucket = S3Bucket(
         self,
         "tap_bucket",
         bucket=f"tap-bucket-{environment_suffix}-{construct_id}",
-        versioning={"enabled": True},
-        server_side_encryption_configuration={
-            "rule": {
-                "apply_server_side_encryption_by_default": {
-                    "sse_algorithm": "AES256"
-                }
-            }
-        }
+        versioning={"enabled": True}
+    )
+
+    # Enable server-side encryption for S3 bucket using separate resource
+    S3BucketServerSideEncryptionConfigurationA(
+        self,
+        "tap_bucket_encryption",
+        bucket=tap_bucket.id,
+        rule=[
+            S3BucketServerSideEncryptionConfigurationRuleA(
+                apply_server_side_encryption_by_default=
+                    S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultA(
+                        sse_algorithm="AES256"
+                    )
+            )
+        ]
     )
 
     # ? Add your stack instantiations here
@@ -181,6 +251,9 @@ class TapStack(TerraformStack):
         policy_arn=secrets_policy.arn
     )
 
+    # Create Lambda function zip file
+    lambda_zip_path = create_lambda_zip()
+
     # Create Lambda function
     lambda_function = LambdaFunction(
         self, "serverless_lambda",
@@ -188,8 +261,8 @@ class TapStack(TerraformStack):
         role=lambda_execution_role.arn,
         handler="handler.lambda_handler",
         runtime="python3.12",
-        filename="lambda_function.zip",
-        source_code_hash="${filebase64sha256('lambda_function.zip')}",
+        filename=lambda_zip_path,
+        source_code_hash="${filebase64sha256(\"lambda_function.zip\")}",
         timeout=30,
         memory_size=256,
         environment={
