@@ -9,11 +9,33 @@ from typing import Dict, List, Optional
 class TapStackArgs:
     """Arguments for TapStack component"""
     
-    def __init__(self, config: Dict):
-        self.config = config
-        self.environment = config.get("environment", "dev")
-        self.region = config.get("region", "us-east-1")
-        self.app_name = config.get("app_name", "tap-app")
+    def __init__(self, config: Dict = None, environment_suffix: str = None):
+        # Support both the dict-style config (for tests) and environment_suffix (for tap.py)
+        if config is not None:
+            self.config = config
+            self.environment = config.get("environment", "dev")
+            self.region = config.get("region", "us-east-1")
+            self.app_name = config.get("app_name", "tap-app")
+        elif environment_suffix is not None:
+            # Use environment_suffix from tap.py
+            self.config = {
+                "environment": environment_suffix,
+                "region": "us-east-1",
+                "app_name": "tap-app"
+            }
+            self.environment = environment_suffix
+            self.region = "us-east-1"
+            self.app_name = "tap-app"
+        else:
+            # Default fallback
+            self.config = {
+                "environment": "dev",
+                "region": "us-east-1", 
+                "app_name": "tap-app"
+            }
+            self.environment = "dev"
+            self.region = "us-east-1"
+            self.app_name = "tap-app"
 
 
 class TapStack(pulumi.ComponentResource):
@@ -667,7 +689,10 @@ systemctl start app-health
         # CodeBuild policy
         self.codebuild_policy = aws.iam.Policy(
             f"{self.app_name}-codebuild-policy-{self.environment}",
-            policy=json.dumps({
+            policy=pulumi.Output.all(
+                self.artifacts_bucket.arn,
+                self.app_secrets.arn
+            ).apply(lambda args: json.dumps({
                 "Version": "2012-10-17",
                 "Statement": [
                     {
@@ -687,7 +712,7 @@ systemctl start app-health
                             "s3:PutObject"
                         ],
                         "Resource": [
-                            self.artifacts_bucket.arn.apply(lambda arn: f"{arn}/*")
+                            f"{args[0]}/*"
                         ]
                     },
                     {
@@ -695,10 +720,10 @@ systemctl start app-health
                         "Action": [
                             "secretsmanager:GetSecretValue"
                         ],
-                        "Resource": self.app_secrets.arn
+                        "Resource": args[1]
                     }
                 ]
-            }),
+            })),
             opts=pulumi.ResourceOptions(parent=self)
         )
         
@@ -855,7 +880,13 @@ artifacts:
             deployment_group_name=f"{self.app_name}-deployment-group-{self.environment}",
             service_role_arn=self.codedeploy_role.arn,
             deployment_config_name="CodeDeployDefault.AllAtOneTime",
-            auto_scaling_groups=[self.asg.name],
+            ec2_tag_filters=[
+                aws.codedeploy.DeploymentGroupEc2TagFilterArgs(
+                    key="Name",
+                    type="KEY_AND_VALUE",
+                    value=f"{self.app_name}-instance-{self.environment}"
+                )
+            ],
             load_balancer_info=aws.codedeploy.DeploymentGroupLoadBalancerInfoArgs(
                 target_group_infos=[
                     aws.codedeploy.DeploymentGroupLoadBalancerInfoTargetGroupInfoArgs(
@@ -880,10 +911,11 @@ artifacts:
             f"{self.app_name}-pipeline-{self.environment}",
             name=f"{self.app_name}-pipeline-{self.environment}",
             role_arn=self.codepipeline_role.arn,
-            artifact_store=aws.codepipeline.PipelineArtifactStoreArgs(
+            artifact_stores=[aws.codepipeline.PipelineArtifactStoreArgs(
                 location=self.artifacts_bucket.bucket,
-                type="S3"
-            ),
+                type="S3",
+                region=self.region
+            )],
             stages=[
                 aws.codepipeline.PipelineStageArgs(
                     name="Source",
@@ -962,7 +994,7 @@ artifacts:
         # CloudWatch Alarms
         self.cpu_alarm = aws.cloudwatch.MetricAlarm(
             f"{self.app_name}-cpu-alarm-{self.environment}",
-            alarm_name=f"{self.app_name}-high-cpu-{self.environment}",
+            name=f"{self.app_name}-high-cpu-{self.environment}",
             comparison_operator="GreaterThanThreshold",
             evaluation_periods=2,
             metric_name="CPUUtilization",
@@ -984,7 +1016,7 @@ artifacts:
         # ALB target healthy hosts alarm
         self.healthy_hosts_alarm = aws.cloudwatch.MetricAlarm(
             f"{self.app_name}-healthy-hosts-alarm-{self.environment}",
-            alarm_name=f"{self.app_name}-unhealthy-hosts-{self.environment}",
+            name=f"{self.app_name}-unhealthy-hosts-{self.environment}",
             comparison_operator="LessThanThreshold",
             evaluation_periods=2,
             metric_name="HealthyHostCount",
