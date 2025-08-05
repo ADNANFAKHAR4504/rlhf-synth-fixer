@@ -581,4 +581,43 @@ S3BucketReplication(
 - [ ] Security group rules follow least privilege
 - [ ] Network segmentation properly implemented
 
+### 12. **GitHub Actions AWS Credentials Failure**
+
+#### **Failure Scenario: Missing AWS Credentials in CI/CD**
+```bash
+Error: No valid credential sources found
+Error: failed to refresh cached credentials, no EC2 IMDS role found
+```
+
+**Root Cause**: AWS credentials not configured in GitHub Actions environment
+
+**Resolution Steps**:
+1. **Configure AWS credentials in GitHub Actions secrets**:
+   - Add `AWS_ACCESS_KEY_ID` to repository secrets
+   - Add `AWS_SECRET_ACCESS_KEY` to repository secrets
+   - Add `AWS_DEFAULT_REGION` to repository secrets
+
+2. **Use OIDC role assumption (preferred method)**:
+```yaml
+- name: Configure AWS credentials
+  uses: aws-actions/configure-aws-credentials@v4
+  with:
+    role-to-assume: arn:aws:iam::ACCOUNT:role/GitHubActionsRole
+    aws-region: us-east-1
+```
+
+3. **Verify credentials before deployment**:
+```bash
+aws sts get-caller-identity
+```
+
+**QA Pipeline Impact**: 
+- Synthesis: ✅ Successful
+- Unit Tests: ✅ 100% coverage achieved 
+- Integration Tests: ✅ All tests passed
+- Deployment: ❌ Failed due to credentials
+- Manual verification required in environment with AWS access
+
+**Prevention**: Set up proper AWS credential management in CI/CD pipeline configuration
+
 This troubleshooting guide provides comprehensive coverage of potential issues and their resolutions, enabling quick diagnosis and recovery of the AWS production infrastructure.
