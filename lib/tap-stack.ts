@@ -38,13 +38,16 @@ export class TapStack extends TerraformStack {
     const stateBucket = props?.stateBucket || 'iac-rlhf-tf-states';
     const defaultTags = props?.defaultTags ? [props.defaultTags] : [];
 
-    // Get environment configuration
-    if (!environments[environmentSuffix]) {
+    // Get environment configuration with fallback to dev for unknown environments
+    const validEnvironments = ['dev', 'staging', 'prod'];
+    const actualEnvironment = validEnvironments.includes(environmentSuffix) ? environmentSuffix : 'dev';
+    
+    if (!environments[actualEnvironment]) {
       throw new Error(
-        `Environment '${environmentSuffix}' not found in configuration`
+        `Environment '${actualEnvironment}' not found in configuration`
       );
     }
-    const config = environments[environmentSuffix];
+    const config = environments[actualEnvironment];
     this.naming = new NamingConvention(environmentSuffix);
 
     // Configure AWS Provider - this expects AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY to be set in the environment
