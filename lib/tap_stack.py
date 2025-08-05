@@ -573,7 +573,7 @@ class TapStack(pulumi.ComponentResource):
         "api-stage",
         deployment=api_deployment.id,
         rest_api=api_gateway.id,
-        stage_name=self.environment_suffix
+        stage_name=self.environment_suffix,
         access_log_settings=aws.apigateway.StageAccessLogSettingsArgs(
             destination_arn=api_log_group.arn,
             format=json.dumps({
