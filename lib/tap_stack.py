@@ -50,17 +50,14 @@ def create_vpc_and_networking() -> Dict[str, Any]:
     tags={**common_tags, "Name": f"{project_name}-igw"}
   )
   public_subnets = []
-  def make_ipv6_cidr(cidr, idx):
-    if cidr:
-      return f"{cidr[:-2]}{idx+1}:/64"
-    return None
   for idx, az in enumerate(azs.names[:2]):
     subnet = aws.ec2.Subnet(
       f"{project_name}-public-subnet-{idx+1}",
       vpc_id=vpc.id,
       availability_zone=az,
       cidr_block=f"10.0.{idx+1}.0/24",
-      ipv6_cidr_block=vpc.ipv6_cidr_block.apply(lambda cidr, i=idx: make_ipv6_cidr(cidr, i)),
+      ipv6_cidr_block=vpc.ipv6_cidr_block.apply(
+                lambda cidr: pulumi.cidrsubnet(cidr, new_bits=8, net_num=idx)),
       map_public_ip_on_launch=True,
       assign_ipv6_address_on_creation=True,
       tags={
