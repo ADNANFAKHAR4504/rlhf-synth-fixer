@@ -1,49 +1,73 @@
-You are an expert AWS Cloud Solutions Architect specializing in Infrastructure as Code ($IaC$) with AWS CloudFormation.
+You are an expert AWS Solutions Architect specializing in Infrastructure as Code (IaC) and building highly available, resilient systems. Your task is to generate a comprehensive, production-ready AWS CloudFormation template in YAML format that adheres strictly to the following requirements.
 
-Your task is to create a complete, production-ready, and reusable AWS CloudFormation template in YAML format for a project named **"AWS Nova Model"**. The architecture must be designed for high availability, automatic failure recovery, scalability, and security, intended for deployment across multiple AWS accounts.
+**[BEGIN_SCENARIO]**
+The goal is to provision a complete, high-availability web application infrastructure for the "**Failure Recovery and High Availability Stack**" project. The architecture must be deployed in the `us-west-2` region, leveraging multiple Availability Zones to ensure automatic failure recovery and fault tolerance. The design must prioritize security, durability, and operational excellence through monitoring and notifications.
+**[END_SCENARIO]**
 
-**Architectural Overview:**
-The infrastructure will be deployed in the `us-west-2` region across a minimum of three Availability Zones. It will consist of an Application Load Balancer distributing traffic to an Auto Scaling Group of $EC2$ instances. DNS will be managed by Route 53 with health checks for automatic failover. Data persistence will be handled by $EBS$ and $S3$, with a strong focus on security, monitoring, and disaster recovery.
+**[BEGIN_TEMPLATE_STRUCTURE_AND_CONVENTIONS]**
+- The output MUST be a single, complete CloudFormation template in **YAML** format.
+- The template must be valid and pass AWS CloudFormation linter checks (`cfn-lint`).
+- Add descriptive comments to explain the purpose of major resources and logical sections.
+- Use a consistent naming convention for all resources, prefixed with `${AWS::StackName}` to ensure uniqueness and clarity.
+- **Use a minimal, essential set of `Parameters` only for values that must change between deployments (e.g., environment size, domain names, or account-specific identifiers). This makes the template reusable without being overly complex.**
+- Use `Mappings` for environment-specific values like AMIs.
+- Use `Outputs` to expose critical resource information like the application URL and load balancer DNS name.
+**[END_TEMPLATE_STRUCTURE_AND_CONVENTIONS]**
 
-**Detailed Requirements:**
+**[BEGIN_CORE_ARCHITECTURE_REQUIREMENTS]**
+1.  **Networking:**
+    - Create a new VPC.
+    - Provision public and private subnets across **at least three** Availability Zones.
+    - Create an Internet Gateway for public access and a NAT Gateway in a public subnet to allow outbound internet access for instances in private subnets.
+    - Configure Route Tables accordingly for public and private subnets.
 
-1.  **Networking & Load Balancing:**
-    * Provision an Application Load Balancer ($ALB$) to distribute incoming HTTPS traffic.
-    * The $ALB$ must span at least three Availability Zones (e.g., `us-west-2a`, `us-west-2b`, `us-west-2c`).
-    * Configure an HTTPS listener on the $ALB$ using an SSL/TLS certificate from AWS Certificate Manager ($ACM$). Assume the certificate ARN is provided as a parameter.
-    * Implement a redirect from HTTP to HTTPS.
+2.  **Load Balancing & DNS:**
+    - Deploy an **Application Load Balancer (ALB)** that is internet-facing and spans all public subnets across the three AZs.
+    - Configure an HTTPS listener on port 443 and an HTTP listener on port 80 that redirects to HTTPS.
+    - Create a **Route 53 Alias record at the zone apex** (e.g., `example.com`) of the provided Hosted Zone, pointing to the ALB.
+    - Implement a **Route 53 Health Check** that monitors the health of the ALB endpoint.
 
-2.  **Compute & Auto Scaling:**
-    * Create an Auto Scaling Group ($ASG$) for $EC2$ instances, linked to the $ALB$'s target group.
-    * The $ASG$ should use a Launch Template.
-    * Implement a CPU-based scaling policy: scale out when average CPU utilization exceeds 70% and scale in when it drops below 30%.
-    * Enable detailed monitoring for all $EC2$ instances.
+3.  **Compute & Scaling:**
+    - Create a Launch Template for EC2 instances. The instances should:
+        - Be deployed into the private subnets.
+        - Use an `Amazon Linux 2` AMI (use a mapping to find the latest).
+        - Have **Detailed Monitoring** enabled.
+        - Be assigned an IAM role with the necessary permissions.
+    - Implement an **Auto Scaling Group (ASG)** using the Launch Template. The ASG must:
+        - Span all private subnets across the three AZs.
+        - Use the ALB's health checks to determine instance health.
+        - Implement a target tracking scaling policy based on average CPU utilization (e.g., scale out when CPU > 70%).
 
-3.  **DNS & Health Checks:**
-    * Create a Route 53 health check that monitors the health of the $ALB$.
-    * Create a Route 53 Alias record pointing a given domain name (e.g., `api.novamodel.com`) to the $ALB$. The domain name should be a parameter.
-    * This setup must ensure that traffic is automatically redirected away from failing Availability Zones.
+4.  **Security:**
+    - Implement granular Security Groups:
+        - One for the ALB, allowing inbound traffic on ports 80 and 443 from anywhere (`0.0.0.0/0`).
+        - One for the EC2 instances, allowing inbound traffic only from the ALB's security group on the application port (e.g., 8080).
+    - Create an **IAM Instance Profile** and **Role** for the EC2 instances, granting least-privilege permissions (e.g., permissions for the CloudWatch agent).
+    - Encrypt all data in transit to the ALB using an SSL/TLS certificate from AWS Certificate Manager (ACM). The ARN for this certificate will be provided as a parameter.
 
-4.  **Storage & Data Durability:**
-    * Ensure the root $EBS$ volumes for the $EC2$ instances are encrypted.
-    * Create a separate, general-purpose $S3$ bucket for application data storage. This bucket must be private, encrypted, and have versioning enabled.
-
-5.  **Security & IAM:**
-    * Create a dedicated $IAM$ role for the $EC2$ instances with the principle of least privilege. It should include permissions for CloudWatch Logs agent and read-only access to the specified $S3$ bucket.
-    * Implement security groups: one for the $ALB$ allowing public traffic on ports 80 and 443, and another for the $EC2$ instances allowing traffic only from the $ALB$'s security group.
+5.  **Data & Backup:**
+    - Ensure EC2 instances launched by the ASG use **encrypted EBS volumes**.
+    - Implement a backup strategy using **AWS Backup**. The template must create:
+        - A Backup Vault.
+        - A Backup Plan that schedules daily snapshots of resources tagged appropriately with the stack name, with a 7-day retention period.
 
 6.  **Monitoring & Notifications:**
-    * Create a CloudWatch Alarm based on the $ASG$'s CPU scaling policy.
-    * Create an $SNS$ topic for notifications.
-    * Configure the $ASG$ to send notifications to the $SNS$ topic for scaling events (launch, terminate, fail).
-    * Configure the CloudWatch Alarms to send notifications to the same $SNS$ topic.
+    - Create an **SNS Topic** for operational alerts. (Note: Subscriptions to this topic should be configured manually after deployment).
+    - Create a **CloudWatch Alarm** based on the ASG's CPU utilization scaling policy.
+    - Configure the ASG and the CloudWatch alarm to send notifications to the SNS Topic for events like scaling actions and alarm state changes.
+**[END_CORE_ARCHITECTURE_REQUIREMENTS]**
 
-7.  **Backup & Disaster Recovery:**
-    * Implement a backup plan using AWS Backup to take daily snapshots of the $EC2$ instances' $EBS$ volumes. The plan should have a retention policy of 7 days.
+**[BEGIN_ADVANCED_DEPLOYMENT_FEATURES]**
+- **StackSets Readiness:** Design the template so it can be deployed via CloudFormation StackSets across multiple AWS accounts and regions. This means avoiding hardcoded, account-specific values and using parameters for all configurable items. Add a comment explaining how this template is StackSet-ready.
+- **Update & Rollback:** Ensure resource `Logical IDs` are stable and the template is structured to smoothly handle updates and rollbacks using CloudFormation's native capabilities.
+**[END_ADVANCED_DEPLOYMENT_FEATURES]**
 
-8.  **Deployment & Management:**
-    * The template must be structured to be deployable via CloudFormation StackSets across multiple AWS accounts and regions. Parameterize key values like VPC ID, Subnet IDs, and AMI ID to facilitate this.
-    * Adhere to IaC best practices, including using a consistent naming convention for all resources (e.g., `${ProjectName}-${Environment}-${ResourceName}`) and adding `Description` fields to parameters and resources.
+**[BEGIN_PARAMETERS_TO_INCLUDE]**
+- `pInstanceType`: The EC2 instance type (e.g., `t3.micro`).
+- `pHostedZoneName`: The Route 53 hosted zone name for creating the DNS record (e.g., `example.com.`).
+- `pAcmCertificateArn`: The ARN of the ACM certificate for the ALB's HTTPS listener.
+**[END_PARAMETERS_TO_INCLUDE]**
 
-**Expected Output:**
-A single, complete CloudFormation template in **YAML format**. The template must be well-commented, parameterized, and pass `cfn-lint` and AWS CloudFormation validation checks without errors. It should be ready for direct deployment.
+**[BEGIN_EXPECTED_OUTPUT]**
+Produce a single block of YAML code representing the complete CloudFormation template. Do not include any explanatory text before or after the YAML block. The code should be ready for direct deployment.
+**[END_EXPECTED_OUTPUT]**

@@ -1,481 +1,304 @@
 ```yaml
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'IaC-AWS-Nova-Model: Production-ready, highly available web application infrastructure with multi-AZ deployment, auto-scaling, and comprehensive monitoring'
+Description: 'Failure Recovery and High Availability Stack - Production-ready web application infrastructure with multi-AZ deployment, auto-scaling, and comprehensive monitoring'
 
-# ================================
-# PARAMETERS SECTION
-# ================================
+# This template is designed to be StackSet-ready by:
+# 1. Using parameters for all configurable values instead of hardcoded account-specific data
+# 2. Leveraging AWS::Region and AWS::AccountId pseudo parameters for dynamic resource naming
+# 3. Using mappings for region-specific values like AMI IDs
+# 4. Avoiding dependencies on external resources that may not exist in target accounts
+
 Parameters:
-  # Network Configuration
-  VpcCidr:
+  pInstanceType:
     Type: String
-    Default: '10.0.0.0/16'
-    Description: 'CIDR block for the VPC'
-    AllowedPattern: '^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/(1[6-9]|2[0-8]))$'
-    ConstraintDescription: 'CIDR block parameter must be in the form x.x.x.x/16-28'
+    Default: t3.micro
+    AllowedValues: [t3.micro, t3.small, t3.medium, t3.large]
+    Description: EC2 instance type for the web application servers
 
-  # Compute Configuration
-  InstanceType:
+  pHostedZoneName:
     Type: String
-    Default: 't3.medium'
-    Description: 'EC2 instance type for web servers'
-    AllowedValues:
-      - t3.micro
-      - t3.small
-      - t3.medium
-      - t3.large
-      - m5.large
-      - m5.xlarge
-    ConstraintDescription: 'Must be a valid EC2 instance type'
+    Description: Route 53 hosted zone name (e.g., example.com.)
+    AllowedPattern: '^[a-zA-Z0-9.-]+\.$'
+    ConstraintDescription: Must be a valid domain name ending with a dot
 
-  # Auto Scaling Configuration
-  MinSize:
-    Type: Number
-    Default: 2
-    MinValue: 1
-    MaxValue: 10
-    Description: 'Minimum number of instances in Auto Scaling Group'
-
-  MaxSize:
-    Type: Number
-    Default: 6
-    MinValue: 1
-    MaxValue: 20
-    Description: 'Maximum number of instances in Auto Scaling Group'
-
-  DesiredCapacity:
-    Type: Number
-    Default: 3
-    MinValue: 1
-    MaxValue: 20
-    Description: 'Desired number of instances in Auto Scaling Group'
-
-  # DNS and SSL Configuration
-  DomainName:
+  pAcmCertificateArn:
     Type: String
-    Description: 'Domain name for the application (e.g., app.example.com)'
-    AllowedPattern: '^[a-zA-Z0-9][a-zA-Z0-9-]{1,61}[a-zA-Z0-9]\.[a-zA-Z]{2,}$'
-    ConstraintDescription: 'Must be a valid domain name'
+    Description: ARN of the ACM certificate for HTTPS listener
+    AllowedPattern: '^arn:aws:acm:[a-z0-9-]+:[0-9]+:certificate/[a-f0-9-]+$'
+    ConstraintDescription: Must be a valid ACM certificate ARN
 
-  HostedZoneId:
-    Type: String
-    Description: 'Route 53 Hosted Zone ID for the domain'
-    AllowedPattern: '^Z[A-Z0-9]+$'
-    ConstraintDescription: 'Must be a valid Route 53 Hosted Zone ID'
-
-  CertificateArn:
-    Type: String
-    Description: 'ARN of the ACM SSL certificate for HTTPS'
-    AllowedPattern: '^arn:aws:acm:[a-z0-9-]+:[0-9]{12}:certificate\/[a-f0-9-]+$'
-    ConstraintDescription: 'Must be a valid ACM certificate ARN'
-
-  # Notification Configuration
-  NotificationEmail:
-    Type: String
-    Description: 'Email address for SNS notifications'
-    AllowedPattern: '^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
-    ConstraintDescription: 'Must be a valid email address'
-
-# ================================
-# MAPPINGS SECTION
-# ================================
 Mappings:
-  # Subnet CIDR blocks for three AZ deployment
-  SubnetConfig:
-    VPC:
-      CIDR: '10.0.0.0/16'
-    PublicSubnetAZ1:
-      CIDR: '10.0.1.0/24'
-    PublicSubnetAZ2:
-      CIDR: '10.0.2.0/24'
-    PublicSubnetAZ3:
-      CIDR: '10.0.3.0/24'
-    PrivateSubnetAZ1:
-      CIDR: '10.0.11.0/24'
-    PrivateSubnetAZ2:
-      CIDR: '10.0.12.0/24'
-    PrivateSubnetAZ3:
-      CIDR: '10.0.13.0/24'
+  # Amazon Linux 2 AMI IDs by region - updated regularly
+  RegionMap:
+    us-west-2:
+      AMI: ami-0c2d3e23b7e0a8e9f
+    us-east-1:
+      AMI: ami-0abcdef1234567890
+    eu-west-1:
+      AMI: ami-0987654321abcdef0
 
-# ================================
-# RESOURCES SECTION
-# ================================
 Resources:
-  # ================================
-  # NETWORKING RESOURCES
-  # ================================
+  # ============================================================================
+  # NETWORKING INFRASTRUCTURE
+  # ============================================================================
 
-  # VPC - Virtual Private Cloud
-  IaCNovaModelVPC:
+  # VPC with DNS support for Route 53 integration
+  VPC:
     Type: AWS::EC2::VPC
     Properties:
-      CidrBlock: !Ref VpcCidr
+      CidrBlock: 10.0.0.0/16
       EnableDnsHostnames: true
       EnableDnsSupport: true
       Tags:
         - Key: Name
-          Value: IaC-AWS-Nova-Model-VPC
-        - Key: Project
-          Value: IaC-AWS-Nova-Model
-        - Key: Environment
-          Value: Production
+          Value: !Sub '${AWS::StackName}-vpc'
+        - Key: StackName
+          Value: !Ref AWS::StackName
 
-  # Internet Gateway
-  IaCNovaModelIGW:
+  # Internet Gateway for public subnet internet access
+  InternetGateway:
     Type: AWS::EC2::InternetGateway
     Properties:
       Tags:
         - Key: Name
-          Value: IaC-AWS-Nova-Model-IGW
-        - Key: Project
-          Value: IaC-AWS-Nova-Model
+          Value: !Sub '${AWS::StackName}-igw'
+        - Key: StackName
+          Value: !Ref AWS::StackName
 
-  # Attach Internet Gateway to VPC
-  IaCNovaModelIGWAttachment:
+  InternetGatewayAttachment:
     Type: AWS::EC2::VPCGatewayAttachment
     Properties:
-      VpcId: !Ref IaCNovaModelVPC
-      InternetGatewayId: !Ref IaCNovaModelIGW
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref VPC
 
-  # Public Subnets (3 AZs)
-  IaCNovaModelPublicSubnetAZ1:
+  # Public Subnets across three AZs for ALB and NAT Gateway
+  PublicSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
-      VpcId: !Ref IaCNovaModelVPC
-      CidrBlock: !FindInMap [SubnetConfig, PublicSubnetAZ1, CIDR]
+      VpcId: !Ref VPC
       AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: 10.0.1.0/24
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: IaC-AWS-Nova-Model-Public-Subnet-AZ1
-        - Key: Project
-          Value: IaC-AWS-Nova-Model
-        - Key: Type
-          Value: Public
+          Value: !Sub '${AWS::StackName}-public-subnet-1'
+        - Key: StackName
+          Value: !Ref AWS::StackName
 
-  IaCNovaModelPublicSubnetAZ2:
+  PublicSubnet2:
     Type: AWS::EC2::Subnet
     Properties:
-      VpcId: !Ref IaCNovaModelVPC
-      CidrBlock: !FindInMap [SubnetConfig, PublicSubnetAZ2, CIDR]
+      VpcId: !Ref VPC
       AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: 10.0.2.0/24
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: IaC-AWS-Nova-Model-Public-Subnet-AZ2
-        - Key: Project
-          Value: IaC-AWS-Nova-Model
-        - Key: Type
-          Value: Public
+          Value: !Sub '${AWS::StackName}-public-subnet-2'
+        - Key: StackName
+          Value: !Ref AWS::StackName
 
-  IaCNovaModelPublicSubnetAZ3:
+  PublicSubnet3:
     Type: AWS::EC2::Subnet
     Properties:
-      VpcId: !Ref IaCNovaModelVPC
-      CidrBlock: !FindInMap [SubnetConfig, PublicSubnetAZ3, CIDR]
+      VpcId: !Ref VPC
       AvailabilityZone: !Select [2, !GetAZs '']
+      CidrBlock: 10.0.3.0/24
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: IaC-AWS-Nova-Model-Public-Subnet-AZ3
-        - Key: Project
-          Value: IaC-AWS-Nova-Model
-        - Key: Type
-          Value: Public
+          Value: !Sub '${AWS::StackName}-public-subnet-3'
+        - Key: StackName
+          Value: !Ref AWS::StackName
 
-  # Private Subnets (3 AZs)
-  IaCNovaModelPrivateSubnetAZ1:
+  # Private Subnets for application servers
+  PrivateSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
-      VpcId: !Ref IaCNovaModelVPC
-      CidrBlock: !FindInMap [SubnetConfig, PrivateSubnetAZ1, CIDR]
+      VpcId: !Ref VPC
       AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: 10.0.11.0/24
       Tags:
         - Key: Name
-          Value: IaC-AWS-Nova-Model-Private-Subnet-AZ1
-        - Key: Project
-          Value: IaC-AWS-Nova-Model
-        - Key: Type
-          Value: Private
-        - Key: BackupTarget
-          Value: 'true'
+          Value: !Sub '${AWS::StackName}-private-subnet-1'
+        - Key: StackName
+          Value: !Ref AWS::StackName
 
-  IaCNovaModelPrivateSubnetAZ2:
+  PrivateSubnet2:
     Type: AWS::EC2::Subnet
     Properties:
-      VpcId: !Ref IaCNovaModelVPC
-      CidrBlock: !FindInMap [SubnetConfig, PrivateSubnetAZ2, CIDR]
+      VpcId: !Ref VPC
       AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: 10.0.12.0/24
       Tags:
         - Key: Name
-          Value: IaC-AWS-Nova-Model-Private-Subnet-AZ2
-        - Key: Project
-          Value: IaC-AWS-Nova-Model
-        - Key: Type
-          Value: Private
-        - Key: BackupTarget
-          Value: 'true'
+          Value: !Sub '${AWS::StackName}-private-subnet-2'
+        - Key: StackName
+          Value: !Ref AWS::StackName
 
-  IaCNovaModelPrivateSubnetAZ3:
+  PrivateSubnet3:
     Type: AWS::EC2::Subnet
     Properties:
-      VpcId: !Ref IaCNovaModelVPC
-      CidrBlock: !FindInMap [SubnetConfig, PrivateSubnetAZ3, CIDR]
+      VpcId: !Ref VPC
       AvailabilityZone: !Select [2, !GetAZs '']
+      CidrBlock: 10.0.13.0/24
       Tags:
         - Key: Name
-          Value: IaC-AWS-Nova-Model-Private-Subnet-AZ3
-        - Key: Project
-          Value: IaC-AWS-Nova-Model
-        - Key: Type
-          Value: Private
-        - Key: BackupTarget
-          Value: 'true'
+          Value: !Sub '${AWS::StackName}-private-subnet-3'
+        - Key: StackName
+          Value: !Ref AWS::StackName
 
-  # NAT Gateways for Private Subnets (3 AZs for high availability)
-  IaCNovaModelNATGatewayEIP1:
+  # NAT Gateway for private subnet outbound internet access
+  NatGatewayEIP:
     Type: AWS::EC2::EIP
-    DependsOn: IaCNovaModelIGWAttachment
+    DependsOn: InternetGatewayAttachment
     Properties:
       Domain: vpc
       Tags:
         - Key: Name
-          Value: IaC-AWS-Nova-Model-NAT-EIP-AZ1
-        - Key: Project
-          Value: IaC-AWS-Nova-Model
+          Value: !Sub '${AWS::StackName}-nat-eip'
+        - Key: StackName
+          Value: !Ref AWS::StackName
 
-  IaCNovaModelNATGatewayEIP2:
-    Type: AWS::EC2::EIP
-    DependsOn: IaCNovaModelIGWAttachment
-    Properties:
-      Domain: vpc
-      Tags:
-        - Key: Name
-          Value: IaC-AWS-Nova-Model-NAT-EIP-AZ2
-        - Key: Project
-          Value: IaC-AWS-Nova-Model
-
-  IaCNovaModelNATGatewayEIP3:
-    Type: AWS::EC2::EIP
-    DependsOn: IaCNovaModelIGWAttachment
-    Properties:
-      Domain: vpc
-      Tags:
-        - Key: Name
-          Value: IaC-AWS-Nova-Model-NAT-EIP-AZ3
-        - Key: Project
-          Value: IaC-AWS-Nova-Model
-
-  IaCNovaModelNATGatewayAZ1:
+  NatGateway:
     Type: AWS::EC2::NatGateway
     Properties:
-      AllocationId: !GetAtt IaCNovaModelNATGatewayEIP1.AllocationId
-      SubnetId: !Ref IaCNovaModelPublicSubnetAZ1
+      AllocationId: !GetAtt NatGatewayEIP.AllocationId
+      SubnetId: !Ref PublicSubnet1
       Tags:
         - Key: Name
-          Value: IaC-AWS-Nova-Model-NAT-Gateway-AZ1
-        - Key: Project
-          Value: IaC-AWS-Nova-Model
-
-  IaCNovaModelNATGatewayAZ2:
-    Type: AWS::EC2::NatGateway
-    Properties:
-      AllocationId: !GetAtt IaCNovaModelNATGatewayEIP2.AllocationId
-      SubnetId: !Ref IaCNovaModelPublicSubnetAZ2
-      Tags:
-        - Key: Name
-          Value: IaC-AWS-Nova-Model-NAT-Gateway-AZ2
-        - Key: Project
-          Value: IaC-AWS-Nova-Model
-
-  IaCNovaModelNATGatewayAZ3:
-    Type: AWS::EC2::NatGateway
-    Properties:
-      AllocationId: !GetAtt IaCNovaModelNATGatewayEIP3.AllocationId
-      SubnetId: !Ref IaCNovaModelPublicSubnetAZ3
-      Tags:
-        - Key: Name
-          Value: IaC-AWS-Nova-Model-NAT-Gateway-AZ3
-        - Key: Project
-          Value: IaC-AWS-Nova-Model
+          Value: !Sub '${AWS::StackName}-nat-gateway'
+        - Key: StackName
+          Value: !Ref AWS::StackName
 
   # Route Tables
-  IaCNovaModelPublicRouteTable:
+  PublicRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
-      VpcId: !Ref IaCNovaModelVPC
+      VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: IaC-AWS-Nova-Model-Public-Route-Table
-        - Key: Project
-          Value: IaC-AWS-Nova-Model
+          Value: !Sub '${AWS::StackName}-public-rt'
+        - Key: StackName
+          Value: !Ref AWS::StackName
 
-  IaCNovaModelPrivateRouteTableAZ1:
+  DefaultPublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet1
+
+  PublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet2
+
+  PublicSubnet3RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet3
+
+  PrivateRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
-      VpcId: !Ref IaCNovaModelVPC
+      VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: IaC-AWS-Nova-Model-Private-Route-Table-AZ1
-        - Key: Project
-          Value: IaC-AWS-Nova-Model
+          Value: !Sub '${AWS::StackName}-private-rt'
+        - Key: StackName
+          Value: !Ref AWS::StackName
 
-  IaCNovaModelPrivateRouteTableAZ2:
-    Type: AWS::EC2::RouteTable
-    Properties:
-      VpcId: !Ref IaCNovaModelVPC
-      Tags:
-        - Key: Name
-          Value: IaC-AWS-Nova-Model-Private-Route-Table-AZ2
-        - Key: Project
-          Value: IaC-AWS-Nova-Model
-
-  IaCNovaModelPrivateRouteTableAZ3:
-    Type: AWS::EC2::RouteTable
-    Properties:
-      VpcId: !Ref IaCNovaModelVPC
-      Tags:
-        - Key: Name
-          Value: IaC-AWS-Nova-Model-Private-Route-Table-AZ3
-        - Key: Project
-          Value: IaC-AWS-Nova-Model
-
-  # Routes
-  IaCNovaModelPublicRoute:
-    Type: AWS::EC2::Route
-    DependsOn: IaCNovaModelIGWAttachment
-    Properties:
-      RouteTableId: !Ref IaCNovaModelPublicRouteTable
-      DestinationCidrBlock: '0.0.0.0/0'
-      GatewayId: !Ref IaCNovaModelIGW
-
-  IaCNovaModelPrivateRouteAZ1:
+  DefaultPrivateRoute:
     Type: AWS::EC2::Route
     Properties:
-      RouteTableId: !Ref IaCNovaModelPrivateRouteTableAZ1
-      DestinationCidrBlock: '0.0.0.0/0'
-      NatGatewayId: !Ref IaCNovaModelNATGatewayAZ1
+      RouteTableId: !Ref PrivateRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway
 
-  IaCNovaModelPrivateRouteAZ2:
-    Type: AWS::EC2::Route
-    Properties:
-      RouteTableId: !Ref IaCNovaModelPrivateRouteTableAZ2
-      DestinationCidrBlock: '0.0.0.0/0'
-      NatGatewayId: !Ref IaCNovaModelNATGatewayAZ2
-
-  IaCNovaModelPrivateRouteAZ3:
-    Type: AWS::EC2::Route
-    Properties:
-      RouteTableId: !Ref IaCNovaModelPrivateRouteTableAZ3
-      DestinationCidrBlock: '0.0.0.0/0'
-      NatGatewayId: !Ref IaCNovaModelNATGatewayAZ3
-
-  # Subnet Route Table Associations
-  IaCNovaModelPublicSubnetRouteTableAssociationAZ1:
+  PrivateSubnet1RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
-      SubnetId: !Ref IaCNovaModelPublicSubnetAZ1
-      RouteTableId: !Ref IaCNovaModelPublicRouteTable
+      RouteTableId: !Ref PrivateRouteTable
+      SubnetId: !Ref PrivateSubnet1
 
-  IaCNovaModelPublicSubnetRouteTableAssociationAZ2:
+  PrivateSubnet2RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
-      SubnetId: !Ref IaCNovaModelPublicSubnetAZ2
-      RouteTableId: !Ref IaCNovaModelPublicRouteTable
+      RouteTableId: !Ref PrivateRouteTable
+      SubnetId: !Ref PrivateSubnet2
 
-  IaCNovaModelPublicSubnetRouteTableAssociationAZ3:
+  PrivateSubnet3RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
-      SubnetId: !Ref IaCNovaModelPublicSubnetAZ3
-      RouteTableId: !Ref IaCNovaModelPublicRouteTable
+      RouteTableId: !Ref PrivateRouteTable
+      SubnetId: !Ref PrivateSubnet3
 
-  IaCNovaModelPrivateSubnetRouteTableAssociationAZ1:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      SubnetId: !Ref IaCNovaModelPrivateSubnetAZ1
-      RouteTableId: !Ref IaCNovaModelPrivateRouteTableAZ1
-
-  IaCNovaModelPrivateSubnetRouteTableAssociationAZ2:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      SubnetId: !Ref IaCNovaModelPrivateSubnetAZ2
-      RouteTableId: !Ref IaCNovaModelPrivateRouteTableAZ2
-
-  IaCNovaModelPrivateSubnetRouteTableAssociationAZ3:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      SubnetId: !Ref IaCNovaModelPrivateSubnetAZ3
-      RouteTableId: !Ref IaCNovaModelPrivateRouteTableAZ3
-
-  # ================================
+  # ============================================================================
   # SECURITY GROUPS
-  # ================================
+  # ============================================================================
 
-  # ALB Security Group - Allows HTTP/HTTPS from internet
-  IaCNovaModelALBSecurityGroup:
+  # ALB Security Group - allows HTTP/HTTPS from internet
+  ALBSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: IaC-AWS-Nova-Model-ALB-SG
-      GroupDescription: 'Security group for Application Load Balancer - allows HTTP/HTTPS from internet'
-      VpcId: !Ref IaCNovaModelVPC
+      GroupName: !Sub '${AWS::StackName}-alb-sg'
+      GroupDescription: Security group for Application Load Balancer
+      VpcId: !Ref VPC
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 80
           ToPort: 80
-          CidrIp: '0.0.0.0/0'
-          Description: 'Allow HTTP from internet'
+          CidrIp: 0.0.0.0/0
+          Description: HTTP from internet
         - IpProtocol: tcp
           FromPort: 443
           ToPort: 443
-          CidrIp: '0.0.0.0/0'
-          Description: 'Allow HTTPS from internet'
-      SecurityGroupEgress:
-        - IpProtocol: -1
-          CidrIp: '0.0.0.0/0'
-          Description: 'Allow all outbound traffic'
+          CidrIp: 0.0.0.0/0
+          Description: HTTPS from internet
       Tags:
         - Key: Name
-          Value: IaC-AWS-Nova-Model-ALB-SG
-        - Key: Project
-          Value: IaC-AWS-Nova-Model
+          Value: !Sub '${AWS::StackName}-alb-sg'
+        - Key: StackName
+          Value: !Ref AWS::StackName
 
-  # EC2 Security Group - Allows traffic only from ALB
-  IaCNovaModelEC2SecurityGroup:
+  # EC2 Security Group - allows traffic only from ALB
+  EC2SecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: IaC-AWS-Nova-Model-EC2-SG
-      GroupDescription: 'Security group for EC2 instances - allows traffic only from ALB'
-      VpcId: !Ref IaCNovaModelVPC
+      GroupName: !Sub '${AWS::StackName}-ec2-sg'
+      GroupDescription: Security group for EC2 instances
+      VpcId: !Ref VPC
       SecurityGroupIngress:
         - IpProtocol: tcp
-          FromPort: 80
-          ToPort: 80
-          SourceSecurityGroupId: !Ref IaCNovaModelALBSecurityGroup
-          Description: 'Allow HTTP from ALB'
-        - IpProtocol: tcp
-          FromPort: 443
-          ToPort: 443
-          SourceSecurityGroupId: !Ref IaCNovaModelALBSecurityGroup
-          Description: 'Allow HTTPS from ALB'
-      SecurityGroupEgress:
-        - IpProtocol: -1
-          CidrIp: '0.0.0.0/0'
-          Description: 'Allow all outbound traffic'
+          FromPort: 8080
+          ToPort: 8080
+          SourceSecurityGroupId: !Ref ALBSecurityGroup
+          Description: Application port from ALB
       Tags:
         - Key: Name
-          Value: IaC-AWS-Nova-Model-EC2-SG
-        - Key: Project
-          Value: IaC-AWS-Nova-Model
+          Value: !Sub '${AWS::StackName}-ec2-sg'
+        - Key: StackName
+          Value: !Ref AWS::StackName
 
-  # ================================
+  # ============================================================================
   # IAM ROLES AND POLICIES
-  # ================================
+  # ============================================================================
 
-  # IAM Role for EC2 instances
-  IaCNovaModelEC2Role:
+  # IAM Role for EC2 instances with least-privilege permissions
+  EC2InstanceRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: IaC-AWS-Nova-Model-EC2-Role
+      RoleName: !Sub '${AWS::StackName}-ec2-role'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -484,102 +307,285 @@ Resources:
               Service: ec2.amazonaws.com
             Action: sts:AssumeRole
       ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
-      Policies:
-        - PolicyName: IaC-AWS-Nova-Model-EC2-Policy
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              # CloudWatch permissions
-              - Effect: Allow
-                Action:
-                  - cloudwatch:PutMetricData
-                  - cloudwatch:GetMetricStatistics
-                  - cloudwatch:ListMetrics
-                Resource: '*'
-              # CloudWatch Logs permissions
-              - Effect: Allow
-                Action:
-                  - logs:CreateLogGroup
-                  - logs:CreateLogStream
-                  - logs:PutLogEvents
-                  - logs:DescribeLogStreams
-                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/ec2/IaC-AWS-Nova-Model*'
-              # S3 permissions for application bucket
-              - Effect: Allow
-                Action:
-                  - s3:GetObject
-                  - s3:GetObjectVersion
-                Resource: !Sub '${IaCNovaModelS3Bucket}/*'
-              - Effect: Allow
-                Action:
-                  - s3:ListBucket
-                Resource: !Ref IaCNovaModelS3Bucket
+        - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
       Tags:
-        - Key: Name
-          Value: IaC-AWS-Nova-Model-EC2-Role
-        - Key: Project
-          Value: IaC-AWS-Nova-Model
+        - Key: StackName
+          Value: !Ref AWS::StackName
 
-  # Instance Profile for EC2 Role
-  IaCNovaModelEC2InstanceProfile:
+  EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
-      InstanceProfileName: IaC-AWS-Nova-Model-EC2-Instance-Profile
+      InstanceProfileName: !Sub '${AWS::StackName}-ec2-profile'
       Roles:
-        - !Ref IaCNovaModelEC2Role
+        - !Ref EC2InstanceRole
 
-  # ================================
-  # STORAGE RESOURCES
-  # ================================
+  # ============================================================================
+  # APPLICATION LOAD BALANCER
+  # ============================================================================
 
-  # S3 Bucket for application assets
-  IaCNovaModelS3Bucket:
-    Type: AWS::S3::Bucket
+  ApplicationLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
-      BucketName: !Sub 'iac-aws-nova-model-assets-${AWS::AccountId}-${AWS::Region}'
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-      BucketEncryption:
-        ServerSideEncryptionConfiguration:
-          - ServerSideEncryptionByDefault:
-              SSEAlgorithm: AES256
-      VersioningConfiguration:
-        Status: Enabled
-      LifecycleConfiguration:
-        Rules:
-          - Id: DeleteIncompleteMultipartUploads
-            Status: Enabled
-            AbortIncompleteMultipartUpload:
-              DaysAfterInitiation: 7
+      Name: !Sub '${AWS::StackName}-alb'
+      Scheme: internet-facing
+      Type: application
+      SecurityGroups:
+        - !Ref ALBSecurityGroup
+      Subnets:
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
+        - !Ref PublicSubnet3
       Tags:
         - Key: Name
-          Value: IaC-AWS-Nova-Model-S3-Bucket
-        - Key: Project
-          Value: IaC-AWS-Nova-Model
+          Value: !Sub '${AWS::StackName}-alb'
+        - Key: StackName
+          Value: !Ref AWS::StackName
 
-  # ================================
-  # BACKUP RESOURCES
-  # ================================
+  ALBTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub '${AWS::StackName}-tg'
+      Port: 8080
+      Protocol: HTTP
+      VpcId: !Ref VPC
+      HealthCheckEnabled: true
+      HealthCheckIntervalSeconds: 30
+      HealthCheckPath: /
+      HealthCheckProtocol: HTTP
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 3
+      TargetType: instance
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-tg'
+        - Key: StackName
+          Value: !Ref AWS::StackName
 
-  # Backup Vault
-  IaCNovaModelBackupVault:
+  # HTTPS Listener (primary)
+  ALBListenerHTTPS:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref ALBTargetGroup
+      LoadBalancerArn: !Ref ApplicationLoadBalancer
+      Port: 443
+      Protocol: HTTPS
+      Certificates:
+        - CertificateArn: !Ref pAcmCertificateArn
+
+  # HTTP Listener (redirects to HTTPS)
+  ALBListenerHTTP:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: redirect
+          RedirectConfig:
+            Protocol: HTTPS
+            Port: 443
+            StatusCode: HTTP_301
+      LoadBalancerArn: !Ref ApplicationLoadBalancer
+      Port: 80
+      Protocol: HTTP
+
+  # ============================================================================
+  # AUTO SCALING GROUP AND LAUNCH TEMPLATE
+  # ============================================================================
+
+  LaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: !Sub '${AWS::StackName}-lt'
+      LaunchTemplateData:
+        ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
+        InstanceType: !Ref pInstanceType
+        IamInstanceProfile:
+          Arn: !GetAtt EC2InstanceProfile.Arn
+        SecurityGroupIds:
+          - !Ref EC2SecurityGroup
+        Monitoring:
+          Enabled: true
+        BlockDeviceMappings:
+          - DeviceName: /dev/xvda
+            Ebs:
+              VolumeSize: 20
+              VolumeType: gp3
+              Encrypted: true
+              DeleteOnTermination: true
+        UserData:
+          Fn::Base64: !Sub |
+            #!/bin/bash
+            yum update -y
+            yum install -y amazon-cloudwatch-agent
+
+            # Simple web server for demonstration
+            yum install -y python3
+            cat > /home/ec2-user/app.py << 'EOF'
+            #!/usr/bin/env python3
+            import http.server
+            import socketserver
+            import json
+            from datetime import datetime
+
+            class HealthHandler(http.server.SimpleHTTPRequestHandler):
+                def do_GET(self):
+                    if self.path == '/':
+                        self.send_response(200)
+                        self.send_header('Content-type', 'application/json')
+                        self.end_headers()
+                        response = {
+                            'status': 'healthy',
+                            'timestamp': datetime.now().isoformat(),
+                            'instance_id': '${AWS::StackName}'
+                        }
+                        self.wfile.write(json.dumps(response).encode())
+                    else:
+                        super().do_GET()
+
+            PORT = 8080
+            with socketserver.TCPServer(("", PORT), HealthHandler) as httpd:
+                httpd.serve_forever()
+            EOF
+
+            chmod +x /home/ec2-user/app.py
+            nohup python3 /home/ec2-user/app.py > /var/log/app.log 2>&1 &
+        TagSpecifications:
+          - ResourceType: instance
+            Tags:
+              - Key: Name
+                Value: !Sub '${AWS::StackName}-instance'
+              - Key: StackName
+                Value: !Ref AWS::StackName
+
+  AutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AutoScalingGroupName: !Sub '${AWS::StackName}-asg'
+      VPCZoneIdentifier:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+        - !Ref PrivateSubnet3
+      LaunchTemplate:
+        LaunchTemplateId: !Ref LaunchTemplate
+        Version: !GetAtt LaunchTemplate.LatestVersionNumber
+      MinSize: 2
+      MaxSize: 6
+      DesiredCapacity: 3
+      HealthCheckType: ELB
+      HealthCheckGracePeriod: 300
+      TargetGroupARNs:
+        - !Ref ALBTargetGroup
+      NotificationConfigurations:
+        - TopicARN: !Ref SNSAlarmTopic
+          NotificationTypes:
+            - autoscaling:EC2_INSTANCE_LAUNCH
+            - autoscaling:EC2_INSTANCE_LAUNCH_ERROR
+            - autoscaling:EC2_INSTANCE_TERMINATE
+            - autoscaling:EC2_INSTANCE_TERMINATE_ERROR
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-asg'
+          PropagateAtLaunch: false
+        - Key: StackName
+          Value: !Ref AWS::StackName
+          PropagateAtLaunch: true
+
+  # Target Tracking Scaling Policy
+  ScalingPolicy:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      AutoScalingGroupName: !Ref AutoScalingGroup
+      PolicyType: TargetTrackingScaling
+      TargetTrackingConfiguration:
+        PredefinedMetricSpecification:
+          PredefinedMetricType: ASGAverageCPUUtilization
+        TargetValue: 70.0
+
+  # ============================================================================
+  # ROUTE 53 DNS AND HEALTH CHECKS
+  # ============================================================================
+
+  # Route 53 Alias Record pointing to ALB
+  DNSRecord:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneName: !Ref pHostedZoneName
+      Name: !Ref pHostedZoneName
+      Type: A
+      AliasTarget:
+        DNSName: !GetAtt ApplicationLoadBalancer.DNSName
+        HostedZoneId: !GetAtt ApplicationLoadBalancer.CanonicalHostedZoneID
+
+  # Route 53 Health Check for ALB endpoint
+  HealthCheck:
+    Type: AWS::Route53::HealthCheck
+    Properties:
+      Type: HTTPS
+      ResourcePath: /
+      FullyQualifiedDomainName: !GetAtt ApplicationLoadBalancer.DNSName
+      Port: 443
+      RequestInterval: 30
+      FailureThreshold: 3
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-health-check'
+        - Key: StackName
+          Value: !Ref AWS::StackName
+
+  # ============================================================================
+  # MONITORING AND NOTIFICATIONS
+  # ============================================================================
+
+  # SNS Topic for operational alerts
+  SNSAlarmTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub '${AWS::StackName}-alerts'
+      DisplayName: !Sub '${AWS::StackName} Operational Alerts'
+      Tags:
+        - Key: StackName
+          Value: !Ref AWS::StackName
+
+  # CloudWatch Alarm for high CPU utilization
+  HighCPUAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${AWS::StackName}-high-cpu'
+      AlarmDescription: Alarm when CPU exceeds 70%
+      MetricName: CPUUtilization
+      Namespace: AWS/AutoScaling
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 70
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref AutoScalingGroup
+      AlarmActions:
+        - !Ref SNSAlarmTopic
+      OKActions:
+        - !Ref SNSAlarmTopic
+
+  # ============================================================================
+  # BACKUP CONFIGURATION
+  # ============================================================================
+
+  # AWS Backup Vault
+  BackupVault:
     Type: AWS::Backup::BackupVault
     Properties:
-      BackupVaultName: IaC-AWS-Nova-Model-Backup-Vault
+      BackupVaultName: !Sub '${AWS::StackName}-backup-vault'
       EncryptionKeyArn: alias/aws/backup
       BackupVaultTags:
-        Name: IaC-AWS-Nova-Model-Backup-Vault
-        Project: IaC-AWS-Nova-Model
+        StackName: !Ref AWS::StackName
 
-  # Backup Service Role
-  IaCNovaModelBackupRole:
+  # IAM Role for AWS Backup
+  BackupRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: IaC-AWS-Nova-Model-Backup-Role
+      RoleName: !Sub '${AWS::StackName}-backup-role'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -591,174 +597,73 @@ Resources:
         - arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForBackup
         - arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForRestores
       Tags:
-        - Key: Name
-          Value: IaC-AWS-Nova-Model-Backup-Role
-        - Key: Project
-          Value: IaC-AWS-Nova-Model
+        - Key: StackName
+          Value: !Ref AWS::StackName
 
-  # Backup Plan
-  IaCNovaModelBackupPlan:
+  # Backup Plan with daily snapshots and 7-day retention
+  BackupPlan:
     Type: AWS::Backup::BackupPlan
     Properties:
       BackupPlan:
-        BackupPlanName: IaC-AWS-Nova-Model-Backup-Plan
+        BackupPlanName: !Sub '${AWS::StackName}-backup-plan'
         BackupPlanRule:
-          - RuleName: DailyBackupRule
-            TargetBackupVault: !Ref IaCNovaModelBackupVault
-            ScheduleExpression: 'cron(0 2 ? * * *)'  # Daily at 2 AM UTC
+          - RuleName: DailyBackups
+            TargetBackupVault: !Ref BackupVault
+            ScheduleExpression: cron(0 2 ? * * *)
             StartWindowMinutes: 60
             CompletionWindowMinutes: 120
             Lifecycle:
               DeleteAfterDays: 7
-            RecoveryPointTags:
-              Name: IaC-AWS-Nova-Model-Daily-Backup
-              Project: IaC-AWS-Nova-Model
       BackupPlanTags:
-        Name: IaC-AWS-Nova-Model-Backup-Plan
-        Project: IaC-AWS-Nova-Model
+        StackName: !Ref AWS::StackName
 
-  # Backup Selection
-  IaCNovaModelBackupSelection:
+  # Backup Selection to target resources with StackName tag
+  BackupSelection:
     Type: AWS::Backup::BackupSelection
     Properties:
-      BackupPlanId: !Ref IaCNovaModelBackupPlan
+      BackupPlanId: !Ref BackupPlan
       BackupSelection:
-        SelectionName: IaC-AWS-Nova-Model-Backup-Selection
-        IamRoleArn: !GetAtt IaCNovaModelBackupRole.Arn
-        Resources:
-          - '*'
+        SelectionName: !Sub '${AWS::StackName}-backup-selection'
+        IamRoleArn: !GetAtt BackupRole.Arn
         Conditions:
           StringEquals:
-            'aws:ResourceTag/BackupTarget':
-              - 'true'
+            'aws:ResourceTag/StackName':
+              - !Ref AWS::StackName
+        Resources:
+          - '*'
 
-  # ================================
-  # NOTIFICATION RESOURCES
-  # ================================
+# ============================================================================
+# OUTPUTS
+# ============================================================================
 
-  # SNS Topic for notifications
-  IaCNovaModelSNSTopic:
-    Type: AWS::SNS::Topic
-    Properties:
-      TopicName: IaC-AWS-Nova-Model-Notifications
-      DisplayName: 'IaC AWS Nova Model Notifications'
-      Tags:
-        - Key: Name
-          Value: IaC-AWS-Nova-Model-SNS-Topic
-        - Key: Project
-          Value: IaC-AWS-Nova-Model
+Outputs:
+  ApplicationURL:
+    Description: URL of the application
+    Value: !Sub 'https://${pHostedZoneName}'
+    Export:
+      Name: !Sub '${AWS::StackName}-app-url'
 
-  # SNS Subscription
-  IaCNovaModelSNSSubscription:
-    Type: AWS::SNS::Subscription
-    Properties:
-      Protocol: email
-      TopicArn: !Ref IaCNovaModelSNSTopic
-      Endpoint: !Ref NotificationEmail
+  LoadBalancerDNS:
+    Description: DNS name of the Application Load Balancer
+    Value: !GetAtt ApplicationLoadBalancer.DNSName
+    Export:
+      Name: !Sub '${AWS::StackName}-alb-dns'
 
-  # ================================
-  # LOAD BALANCER RESOURCES
-  # ================================
+  VPCId:
+    Description: ID of the VPC
+    Value: !Ref VPC
+    Export:
+      Name: !Sub '${AWS::StackName}-vpc-id'
 
-  # Application Load Balancer
-  IaCNovaModelALB:
-    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
-    Properties:
-      Name: IaC-AWS-Nova-Model-ALB
-      Type: application
-      Scheme: internet-facing
-      IpAddressType: ipv4
-      SecurityGroups:
-        - !Ref IaCNovaModelALBSecurityGroup
-      Subnets:
-        - !Ref IaCNovaModelPublicSubnetAZ1
-        - !Ref IaCNovaModelPublicSubnetAZ2
-        - !Ref IaCNovaModelPublicSubnetAZ3
-      Tags:
-        - Key: Name
-          Value: IaC-AWS-Nova-Model-ALB
-        - Key: Project
-          Value: IaC-AWS-Nova-Model
+  SNSTopicArn:
+    Description: ARN of the SNS topic for alerts
+    Value: !Ref SNSAlarmTopic
+    Export:
+      Name: !Sub '${AWS::StackName}-sns-topic'
 
-  # Target Group for ALB
-  IaCNovaModelTargetGroup:
-    Type: AWS::ElasticLoadBalancingV2::TargetGroup
-    Properties:
-      Name: IaC-AWS-Nova-Model-TG
-      Port: 80
-      Protocol: HTTP
-      VpcId: !Ref IaCNovaModelVPC
-      HealthCheckEnabled: true
-      HealthCheckIntervalSeconds: 30
-      HealthCheckPath: /
-      HealthCheckProtocol: HTTP
-      HealthCheckTimeoutSeconds: 5
-      HealthyThresholdCount: 2
-      UnhealthyThresholdCount: 3
-      TargetType: instance
-      Tags:
-        - Key: Name
-          Value: IaC-AWS-Nova-Model-Target-Group
-        - Key: Project
-          Value: IaC-AWS-Nova-Model
-
-  # HTTPS Listener for ALB
-  IaCNovaModelALBHTTPSListener:
-    Type: AWS::ElasticLoadBalancingV2::Listener
-    Properties:
-      DefaultActions:
-        - Type: forward
-          TargetGroupArn: !Ref IaCNovaModelTargetGroup
-      LoadBalancerArn: !Ref IaCNovaModelALB
-      Port: 443
-      Protocol: HTTPS
-      Certificates:
-        - CertificateArn: !Ref CertificateArn
-
-  # HTTP Listener for ALB (redirects to HTTPS)
-  IaCNovaModelALBHTTPListener:
-    Type: AWS::ElasticLoadBalancingV2::Listener
-    Properties:
-      DefaultActions:
-        - Type: redirect
-          RedirectConfig:
-            Protocol: HTTPS
-            Port: 443
-            StatusCode: HTTP_301
-      LoadBalancerArn: !Ref IaCNovaModelALB
-      Port: 80
-      Protocol: HTTP
-
-  # ================================
-  # LAUNCH TEMPLATE AND AUTO SCALING
-  # ================================
-
-  # Launch Template for EC2 instances
-  IaCNovaModelLaunchTemplate:
-    Type: AWS::EC2::LaunchTemplate
-    Properties:
-      LaunchTemplateName: IaC-AWS-Nova-Model-Launch-Template
-      LaunchTemplateData:
-        ImageId: !Sub '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64}}'
-        InstanceType: !Ref InstanceType
-        IamInstanceProfile:
-          Arn: !GetAtt IaCNovaModelEC2InstanceProfile.Arn
-        SecurityGroupIds:
-          - !Ref IaCNovaModelEC2SecurityGroup
-        BlockDeviceMappings:
-          - DeviceName: /dev/xvda
-            Ebs:
-              VolumeType: gp3
-              VolumeSize: 20
-              DeleteOnTermination: true
-              Encrypted: true
-        Monitoring:
-          Enabled: true  # Enable detailed monitoring
-        UserData:
-          Fn::Base64: !Sub |
-            #!/bin/bash
-            yum update -y
-            yum install -y httpd
-            systemctl start httpd
-            systemctl enable httpd
+  BackupVaultName:
+    Description: Name of the backup vault
+    Value: !Ref BackupVault
+    Export:
+      Name: !Sub '${AWS::StackName}-backup-vault'
 ```
