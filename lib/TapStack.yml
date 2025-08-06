@@ -47,9 +47,7 @@ Resources:
   # S3 Bucket Notification Configuration (separate to avoid circular dependency)
   ServerlessAppBucketNotification:
     Type: AWS::S3::Bucket
-    DependsOn: 
-      - ServerlessAppLambda
-      - ServerlessAppBucketInvokePermission
+    DependsOn: ServerlessAppBucketInvokePermission
     Properties:
       BucketName: !Ref ServerlessAppBucket
       NotificationConfiguration:
