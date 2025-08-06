@@ -1,6 +1,7 @@
 import { Construct } from 'constructs';
 import { TerraformStack, TerraformOutput } from 'cdktf';
 import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
+import { DataAwsSsmParameter } from '@cdktf/provider-aws/lib/data-aws-ssm-parameter';
 import {
   createVpcWithInternetAccess,
   createEc2InstanceWithEip,
@@ -19,12 +20,6 @@ export class TapStack extends TerraformStack {
     super(scope, id);
 
     console.log('Environment:', props.environmentSuffix);
-
-    // new S3Backend(this, {
-    //   bucket: props.stateBucket,
-    //   key: `state/${props.environmentSuffix}/terraform.tfstate`,
-    //   region: props.stateBucketRegion,
-    // });
 
     new AwsProvider(this, 'aws', {
       region: props.awsRegion,
@@ -45,13 +40,16 @@ export class TapStack extends TerraformStack {
 
     const instanceIds = [] as string[];
     const allocationIds = [] as string[];
-
+    const amiParam = new DataAwsSsmParameter(this, `${namePrefix}-ami-param`, {
+      name: '/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2',
+    });
     publicSubnets.forEach((subnet, index) => {
       const name = `${namePrefix}-ec2-${index + 1}`;
+
       const result = createEc2InstanceWithEip(this, name, {
         subnetId: subnet.id,
-        ami: 'ami-084a7d336e816906b',
-        instanceType: 't2.micro',
+        ami: amiParam.value,
+        instanceType: 't3.micro',
         sgId: sg.securityGroup.id,
         availabilityZone: subnet.availabilityZone,
       });

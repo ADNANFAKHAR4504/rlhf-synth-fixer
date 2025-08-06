@@ -87,6 +87,9 @@ export function createEc2InstanceWithEip(
     vpcSecurityGroupIds: [props.sgId],
     associatePublicIpAddress: true,
     availabilityZone: props.availabilityZone,
+    rootBlockDevice: {
+      encrypted: true,
+    },
     tags: { Name: name },
   });
 
@@ -136,9 +139,9 @@ export class SecurityGroupConfig extends Construct {
 
     new SecurityGroupRule(this, `${name}-egress`, {
       type: 'egress',
-      fromPort: 0,
-      toPort: 0,
-      protocol: '-1',
+      fromPort: 443,
+      toPort: 443,
+      protocol: 'tcp',
       cidrBlocks: ['0.0.0.0/0'],
       securityGroupId: this.securityGroup.id,
     });
