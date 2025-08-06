@@ -601,9 +601,13 @@ systemctl start app-health
         """Create CI/CD pipeline with CodePipeline, CodeBuild, and CodeDeploy"""
         
         # S3 bucket for artifacts
+        # Generate a valid bucket name (lowercase, no underscores, 3-63 chars)
+        stack_name = pulumi.get_stack().lower().replace('_', '-').replace(' ', '-')[:10]
+        bucket_name = f"{self.app_name}-artifacts-{self.environment}-{stack_name}".lower()
+        
         self.artifacts_bucket = aws.s3.Bucket(
             f"{self.app_name}-artifacts-{self.environment}",
-            bucket=f"{self.app_name}-artifacts-{self.environment}-{pulumi.get_stack()}",
+            bucket=bucket_name,
             versioning=aws.s3.BucketVersioningArgs(enabled=True),
             server_side_encryption_configuration=aws.s3.BucketServerSideEncryptionConfigurationArgs(
                 rule=aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
