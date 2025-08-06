@@ -1,53 +1,1197 @@
-import {
-  AwsProvider,
-  AwsProviderDefaultTags,
-} from '@cdktf/provider-aws/lib/provider';
-import { S3Backend, TerraformStack } from 'cdktf';
+// main.ts - CDKTF Serverless Web Application Infrastructure
+// IaC – AWS Nova Model Breaking - Single File Implementation
+/* eslint-disable @typescript-eslint/no-unused-vars */
+import { ApiGatewayDeployment } from '@cdktf/provider-aws/lib/api-gateway-deployment';
+import { ApiGatewayIntegration } from '@cdktf/provider-aws/lib/api-gateway-integration';
+import { ApiGatewayMethod } from '@cdktf/provider-aws/lib/api-gateway-method';
+import { ApiGatewayMethodSettings } from '@cdktf/provider-aws/lib/api-gateway-method-settings';
+import { ApiGatewayResource } from '@cdktf/provider-aws/lib/api-gateway-resource';
+import { ApiGatewayRestApi } from '@cdktf/provider-aws/lib/api-gateway-rest-api';
+import { ApiGatewayStage } from '@cdktf/provider-aws/lib/api-gateway-stage';
+import { CloudwatchLogGroup } from '@cdktf/provider-aws/lib/cloudwatch-log-group';
+import { DataArchiveFile } from '@cdktf/provider-archive/lib/data-archive-file';
+import { DynamodbTable } from '@cdktf/provider-aws/lib/dynamodb-table';
+import { IamPolicy } from '@cdktf/provider-aws/lib/iam-policy';
+import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
+import { IamRolePolicyAttachment } from '@cdktf/provider-aws/lib/iam-role-policy-attachment';
+import { LambdaFunction } from '@cdktf/provider-aws/lib/lambda-function';
+import { LambdaPermission } from '@cdktf/provider-aws/lib/lambda-permission';
+import { ArchiveProvider } from '@cdktf/provider-archive/lib/provider';
+import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
+import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
+import { S3Object } from '@cdktf/provider-aws/lib/s3-object';
+import { TerraformOutput, TerraformStack } from 'cdktf';
 import { Construct } from 'constructs';
-
-// ? Import your stacks here
-// import { MyStack } from './my-stack';
 
 interface TapStackProps {
   environmentSuffix?: string;
-  stateBucket?: string;
-  stateBucketRegion?: string;
   awsRegion?: string;
-  defaultTags?: AwsProviderDefaultTags;
+  defaultTags?: { [key: string]: string };
 }
 
-// If you need to override the AWS Region for the terraform provider for any particular task,
-// you can set it here. Otherwise, it will default to 'us-east-1'.
-
-const AWS_REGION_OVERRIDE = '';
-
 export class TapStack extends TerraformStack {
+  private readonly resourcePrefix = 'prod-service';
+  private readonly region = 'us-east-1';
+
   constructor(scope: Construct, id: string, props?: TapStackProps) {
     super(scope, id);
 
-    const environmentSuffix = props?.environmentSuffix || 'dev';
-    const awsRegion = AWS_REGION_OVERRIDE
-      ? AWS_REGION_OVERRIDE
-      : props?.awsRegion || 'us-east-1';
-    const stateBucketRegion = props?.stateBucketRegion || 'us-east-1';
-    const stateBucket = props?.stateBucket || 'iac-rlhf-tf-states';
-    const defaultTags = props?.defaultTags ? [props.defaultTags] : [];
-
-    // Configure AWS Provider - this expects AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY to be set in the environment
+    // Providers
     new AwsProvider(this, 'aws', {
-      region: awsRegion,
-      defaultTags: defaultTags,
+      region: this.region,
+      defaultTags: [
+        {
+          tags: {
+            Environment: 'Production',
+            Project: 'IaC-AWS-Nova-Model-Breaking',
+            ManagedBy: 'CDKTF',
+            Architecture: 'Serverless',
+          },
+        },
+      ],
     });
 
-    // Configure S3 Backend with native state locking
-    new S3Backend(this, {
-      bucket: stateBucket,
-      key: `${environmentSuffix}/${id}.tfstate`,
-      region: stateBucketRegion,
-      encrypt: true,
+    new ArchiveProvider(this, 'archive');
+
+    // S3 Bucket for Lambda deployment packages
+    const lambdaBucket = this.createLambdaBucket();
+
+    // DynamoDB Tables
+    const userTable = this.createUserTable();
+    const sessionTable = this.createSessionTable();
+
+    // IAM Roles and Policies
+    const lambdaRole = this.createLambdaExecutionRole(userTable, sessionTable);
+
+    // CloudWatch Log Groups
+    const apiLogGroup = this.createApiLogGroup();
+    const lambdaLogGroups = this.createLambdaLogGroups();
+
+    // Lambda Functions
+    const lambdaFunctions = this.createLambdaFunctions(
+      lambdaBucket,
+      lambdaRole,
+      lambdaLogGroups,
+      userTable,
+      sessionTable
+    );
+
+    // API Gateway
+    const api = this.createApiGateway(apiLogGroup);
+    const apiResources = this.createApiResources(api);
+    const apiMethods = this.createApiMethods(api, apiResources, lambdaFunctions);
+    const deployment = this.createApiDeployment(api, apiMethods);
+    const stage = this.createApiStage(api, deployment, apiLogGroup);
+
+    // Lambda Permissions for API Gateway
+    this.createLambdaPermissions(api, lambdaFunctions);
+
+    // Outputs
+    this.createOutputs(api, stage, userTable, sessionTable, lambdaFunctions);
+  }
+
+  private createLambdaBucket(): S3Bucket {
+    return new S3Bucket(this, `${this.resourcePrefix}-lambda-bucket`, {
+      bucket: `${this.resourcePrefix}-lambda-packages-${Date.now()}`,
+      tags: {
+        Name: `${this.resourcePrefix}-lambda-bucket`,
+        Purpose: 'Lambda deployment packages',
+      },
     });
-    // Using an escape hatch instead of S3Backend construct - CDKTF still does not support S3 state locking natively
-    // ref - https://developer.hashicorp.com/terraform/cdktf/concepts/resources#escape-hatch
+  }
+
+  private createUserTable(): DynamodbTable {
+    return new DynamodbTable(this, `${this.resourcePrefix}-user-table`, {
+      name: `${this.resourcePrefix}-users`,
+      billingMode: 'ON_DEMAND',
+      hashKey: 'userId',
+      attribute: [
+        {
+          name: 'userId',
+          type: 'S',
+        },
+        {
+          name: 'email',
+          type: 'S',
+        },
+      ],
+      globalSecondaryIndex: [
+        {
+          name: 'email-index',
+          hashKey: 'email',
+          projectionType: 'ALL',
+        },
+      ],
+      serverSideEncryption: {
+        enabled: true,
+      },
+      pointInTimeRecovery: {
+        enabled: true,
+      },
+      tags: {
+        Name: `${this.resourcePrefix}-user-table`,
+        Purpose: 'User data storage',
+      },
+    });
+  }
+
+  private createSessionTable(): DynamodbTable {
+    return new DynamodbTable(this, `${this.resourcePrefix}-session-table`, {
+      name: `${this.resourcePrefix}-sessions`,
+      billingMode: 'ON_DEMAND',
+      hashKey: 'sessionId',
+      attribute: [
+        {
+          name: 'sessionId',
+          type: 'S',
+        },
+        {
+          name: 'userId',
+          type: 'S',
+        },
+      ],
+      globalSecondaryIndex: [
+        {
+          name: 'user-sessions-index',
+          hashKey: 'userId',
+          projectionType: 'ALL',
+        },
+      ],
+      ttl: {
+        attributeName: 'expiresAt',
+        enabled: true,
+      },
+      serverSideEncryption: {
+        enabled: true,
+      },
+      tags: {
+        Name: `${this.resourcePrefix}-session-table`,
+        Purpose: 'Session management',
+      },
+    });
+  }
+
+  private createLambdaExecutionRole(
+    userTable: DynamodbTable,
+    sessionTable: DynamodbTable
+  ): IamRole {
+    // Lambda execution role
+    const lambdaRole = new IamRole(this, `${this.resourcePrefix}-lambda-role`, {
+      name: `${this.resourcePrefix}-lambda-execution-role`,
+      assumeRolePolicy: JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Action: 'sts:AssumeRole',
+            Effect: 'Allow',
+            Principal: {
+              Service: 'lambda.amazonaws.com',
+            },
+          },
+        ],
+      }),
+      tags: {
+        Name: `${this.resourcePrefix}-lambda-role`,
+        Purpose: 'Lambda execution role',
+      },
+    });
+
+    // Basic Lambda execution policy
+    new IamRolePolicyAttachment(
+      this,
+      `${this.resourcePrefix}-lambda-basic-policy`,
+      {
+        role: lambdaRole.name,
+        policyArn:
+          'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole',
+      }
+    );
+
+    // DynamoDB access policy
+    const dynamodbPolicy = new IamPolicy(
+      this,
+      `${this.resourcePrefix}-dynamodb-policy`,
+      {
+        name: `${this.resourcePrefix}-lambda-dynamodb-policy`,
+        description: 'DynamoDB access policy for Lambda functions',
+        policy: JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Effect: 'Allow',
+              Action: [
+                'dynamodb:GetItem',
+                'dynamodb:PutItem',
+                'dynamodb:UpdateItem',
+                'dynamodb:DeleteItem',
+                'dynamodb:Query',
+                'dynamodb:Scan',
+              ],
+              Resource: [userTable.arn, sessionTable.arn, `${userTable.arn}/*`, `${sessionTable.arn}/*`],
+            },
+          ],
+        }),
+        tags: {
+          Name: `${this.resourcePrefix}-dynamodb-policy`,
+          Purpose: 'DynamoDB access for Lambda',
+        },
+      }
+    );
+
+    new IamRolePolicyAttachment(
+      this,
+      `${this.resourcePrefix}-lambda-dynamodb-policy-attachment`,
+      {
+        role: lambdaRole.name,
+        policyArn: dynamodbPolicy.arn,
+      }
+    );
+
+    return lambdaRole;
+  }
+
+  private createApiLogGroup(): CloudwatchLogGroup {
+    return new CloudwatchLogGroup(this, `${this.resourcePrefix}-api-logs`, {
+      name: `/aws/apigateway/${this.resourcePrefix}-api`,
+      retentionInDays: 14,
+      tags: {
+        Name: `${this.resourcePrefix}-api-logs`,
+        Purpose: 'API Gateway logs',
+      },
+    });
+  }
+
+  private createLambdaLogGroups(): {
+    userHandler: CloudwatchLogGroup;
+    sessionHandler: CloudwatchLogGroup;
+    healthCheck: CloudwatchLogGroup;
+  } {
+    return {
+      userHandler: new CloudwatchLogGroup(
+        this,
+        `${this.resourcePrefix}-user-handler-logs`,
+        {
+          name: `/aws/lambda/${this.resourcePrefix}-user-handler`,
+          retentionInDays: 14,
+          tags: {
+            Name: `${this.resourcePrefix}-user-handler-logs`,
+            Purpose: 'User handler Lambda logs',
+          },
+        }
+      ),
+      sessionHandler: new CloudwatchLogGroup(
+        this,
+        `${this.resourcePrefix}-session-handler-logs`,
+        {
+          name: `/aws/lambda/${this.resourcePrefix}-session-handler`,
+          retentionInDays: 14,
+          tags: {
+            Name: `${this.resourcePrefix}-session-handler-logs`,
+            Purpose: 'Session handler Lambda logs',
+          },
+        }
+      ),
+      healthCheck: new CloudwatchLogGroup(
+        this,
+        `${this.resourcePrefix}-health-check-logs`,
+        {
+          name: `/aws/lambda/${this.resourcePrefix}-health-check`,
+          retentionInDays: 7,
+          tags: {
+            Name: `${this.resourcePrefix}-health-check-logs`,
+            Purpose: 'Health check Lambda logs',
+          },
+        }
+      ),
+    };
+  }
+
+  private createLambdaFunctions(
+    lambdaBucket: S3Bucket,
+    lambdaRole: IamRole,
+    logGroups: {
+      userHandler: CloudwatchLogGroup;
+      sessionHandler: CloudwatchLogGroup;
+      healthCheck: CloudwatchLogGroup;
+    },
+    userTable: DynamodbTable,
+    sessionTable: DynamodbTable
+  ): {
+    userHandler: LambdaFunction;
+    sessionHandler: LambdaFunction;
+    healthCheck: LambdaFunction;
+  } {
+    // Create Lambda deployment packages
+    const userHandlerZip = new DataArchiveFile(
+      this,
+      `${this.resourcePrefix}-user-handler-zip`,
+      {
+        type: 'zip',
+        outputPath: 'user-handler.zip',
+        source: [
+          {
+            content: this.getUserHandlerCode(),
+            filename: 'index.js',
+          },
+        ],
+      }
+    );
+
+    const sessionHandlerZip = new DataArchiveFile(
+      this,
+      `${this.resourcePrefix}-session-handler-zip`,
+      {
+        type: 'zip',
+        outputPath: 'session-handler.zip',
+        source: [
+          {
+            content: this.getSessionHandlerCode(),
+            filename: 'index.js',
+          },
+        ],
+      }
+    );
+
+    const healthCheckZip = new DataArchiveFile(
+      this,
+      `${this.resourcePrefix}-health-check-zip`,
+      {
+        type: 'zip',
+        outputPath: 'health-check.zip',
+        source: [
+          {
+            content: this.getHealthCheckCode(),
+            filename: 'index.js',
+          },
+        ],
+      }
+    );
+
+    // Upload to S3
+    const userHandlerS3 = new S3Object(
+      this,
+      `${this.resourcePrefix}-user-handler-s3`,
+      {
+        bucket: lambdaBucket.id,
+        key: 'user-handler.zip',
+        source: userHandlerZip.outputPath,
+      }
+    );
+
+    const sessionHandlerS3 = new S3Object(
+      this,
+      `${this.resourcePrefix}-session-handler-s3`,
+      {
+        bucket: lambdaBucket.id,
+        key: 'session-handler.zip',
+        source: sessionHandlerZip.outputPath,
+      }
+    );
+
+    const healthCheckS3 = new S3Object(
+      this,
+      `${this.resourcePrefix}-health-check-s3`,
+      {
+        bucket: lambdaBucket.id,
+        key: 'health-check.zip',
+        source: healthCheckZip.outputPath,
+      }
+    );
+
+    // Lambda Functions
+    const userHandler = new LambdaFunction(
+      this,
+      `${this.resourcePrefix}-user-handler`,
+      {
+        functionName: `${this.resourcePrefix}-user-handler`,
+        role: lambdaRole.arn,
+        handler: 'index.handler',
+        runtime: 'nodejs18.x',
+        timeout: 30,
+        memorySize: 256,
+        s3Bucket: lambdaBucket.id,
+        s3Key: userHandlerS3.key,
+        environment: {
+          variables: {
+            USER_TABLE_NAME: userTable.name,
+            SESSION_TABLE_NAME: sessionTable.name,
+            AWS_REGION: this.region,
+          },
+        },
+        dependsOn: [logGroups.userHandler],
+        tags: {
+          Name: `${this.resourcePrefix}-user-handler`,
+          Purpose: 'User CRUD operations',
+        },
+      }
+    );
+
+    const sessionHandler = new LambdaFunction(
+      this,
+      `${this.resourcePrefix}-session-handler`,
+      {
+        functionName: `${this.resourcePrefix}-session-handler`,
+        role: lambdaRole.arn,
+        handler: 'index.handler',
+        runtime: 'nodejs18.x',
+        timeout: 15,
+        memorySize: 128,
+        s3Bucket: lambdaBucket.id,
+        s3Key: sessionHandlerS3.key,
+        environment: {
+          variables: {
+            USER_TABLE_NAME: userTable.name,
+            SESSION_TABLE_NAME: sessionTable.name,
+            AWS_REGION: this.region,
+          },
+        },
+        dependsOn: [logGroups.sessionHandler],
+        tags: {
+          Name: `${this.resourcePrefix}-session-handler`,
+          Purpose: 'Session management',
+        },
+      }
+    );
+
+    const healthCheck = new LambdaFunction(
+      this,
+      `${this.resourcePrefix}-health-check`,
+      {
+        functionName: `${this.resourcePrefix}-health-check`,
+        role: lambdaRole.arn,
+        handler: 'index.handler',
+        runtime: 'nodejs18.x',
+        timeout: 10,
+        memorySize: 128,
+        s3Bucket: lambdaBucket.id,
+        s3Key: healthCheckS3.key,
+        environment: {
+          variables: {
+            USER_TABLE_NAME: userTable.name,
+            SESSION_TABLE_NAME: sessionTable.name,
+            AWS_REGION: this.region,
+          },
+        },
+        dependsOn: [logGroups.healthCheck],
+        tags: {
+          Name: `${this.resourcePrefix}-health-check`,
+          Purpose: 'Health monitoring',
+        },
+      }
+    );
+
+    return { userHandler, sessionHandler, healthCheck };
+  }
+
+  private createApiGateway(logGroup: CloudwatchLogGroup): ApiGatewayRestApi {
+    return new ApiGatewayRestApi(this, `${this.resourcePrefix}-api`, {
+      name: `${this.resourcePrefix}-api`,
+      description: 'Serverless Web Application API',
+      endpointConfiguration: {
+        types: ['REGIONAL'],
+      },
+      tags: {
+        Name: `${this.resourcePrefix}-api`,
+        Purpose: 'REST API Gateway',
+      },
+    });
+  }
+
+  private createApiResources(api: ApiGatewayRestApi): {
+    users: ApiGatewayResource;
+    userById: ApiGatewayResource;
+    sessions: ApiGatewayResource;
+    sessionById: ApiGatewayResource;
+    health: ApiGatewayResource;
+  } {
+    const users = new ApiGatewayResource(this, `${this.resourcePrefix}-users-resource`, {
+      restApiId: api.id,
+      parentId: api.rootResourceId,
+      pathPart: 'users',
+    });
+
+    const userById = new ApiGatewayResource(this, `${this.resourcePrefix}-user-by-id-resource`, {
+      restApiId: api.id,
+      parentId: users.id,
+      pathPart: '{userId}',
+    });
+
+    const sessions = new ApiGatewayResource(this, `${this.resourcePrefix}-sessions-resource`, {
+      restApiId: api.id,
+      parentId: api.rootResourceId,
+      pathPart: 'sessions',
+    });
+
+    const sessionById = new ApiGatewayResource(this, `${this.resourcePrefix}-session-by-id-resource`, {
+      restApiId: api.id,
+      parentId: sessions.id,
+      pathPart: '{sessionId}',
+    });
+
+    const health = new ApiGatewayResource(this, `${this.resourcePrefix}-health-resource`, {
+      restApiId: api.id,
+      parentId: api.rootResourceId,
+      pathPart: 'health',
+    });
+
+    return { users, userById, sessions, sessionById, health };
+  }
+
+  private createApiMethods(
+    api: ApiGatewayRestApi,
+    resources: {
+      users: ApiGatewayResource;
+      userById: ApiGatewayResource;
+      sessions: ApiGatewayResource;
+      sessionById: ApiGatewayResource;
+      health: ApiGatewayResource;
+    },
+    lambdaFunctions: {
+      userHandler: LambdaFunction;
+      sessionHandler: LambdaFunction;
+      healthCheck: LambdaFunction;
+    }
+  ): ApiGatewayMethod[] {
+    const methods: ApiGatewayMethod[] = [];
+
+    // Users endpoints
+    const createUser = this.createApiMethod(
+      api,
+      resources.users,
+      'POST',
+      lambdaFunctions.userHandler,
+      `${this.resourcePrefix}-create-user`
+    );
+    const getUsers = this.createApiMethod(
+      api,
+      resources.users,
+      'GET',
+      lambdaFunctions.userHandler,
+      `${this.resourcePrefix}-get-users`
+    );
+    const getUser = this.createApiMethod(
+      api,
+      resources.userById,
+      'GET',
+      lambdaFunctions.userHandler,
+      `${this.resourcePrefix}-get-user`
+    );
+    const updateUser = this.createApiMethod(
+      api,
+      resources.userById,
+      'PUT',
+      lambdaFunctions.userHandler,
+      `${this.resourcePrefix}-update-user`
+    );
+    const deleteUser = this.createApiMethod(
+      api,
+      resources.userById,
+      'DELETE',
+      lambdaFunctions.userHandler,
+      `${this.resourcePrefix}-delete-user`
+    );
+
+    // Sessions endpoints
+    const createSession = this.createApiMethod(
+      api,
+      resources.sessions,
+      'POST',
+      lambdaFunctions.sessionHandler,
+      `${this.resourcePrefix}-create-session`
+    );
+    const getSession = this.createApiMethod(
+      api,
+      resources.sessionById,
+      'GET',
+      lambdaFunctions.sessionHandler,
+      `${this.resourcePrefix}-get-session`
+    );
+    const deleteSession = this.createApiMethod(
+      api,
+      resources.sessionById,
+      'DELETE',
+      lambdaFunctions.sessionHandler,
+      `${this.resourcePrefix}-delete-session`
+    );
+
+    // Health check endpoint
+    const healthCheck = this.createApiMethod(
+      api,
+      resources.health,
+      'GET',
+      lambdaFunctions.healthCheck,
+      `${this.resourcePrefix}-health-check`
+    );
+
+    methods.push(
+      createUser,
+      getUsers,
+      getUser,
+      updateUser,
+      deleteUser,
+      createSession,
+      getSession,
+      deleteSession,
+      healthCheck
+    );
+
+    return methods;
+  }
+
+  private createApiMethod(
+    api: ApiGatewayRestApi,
+    resource: ApiGatewayResource,
+    httpMethod: string,
+    lambdaFunction: LambdaFunction,
+    id: string
+  ): ApiGatewayMethod {
+    const method = new ApiGatewayMethod(this, `${id}-method`, {
+      restApiId: api.id,
+      resourceId: resource.id,
+      httpMethod: httpMethod,
+      authorization: 'NONE',
+      requestParameters: {
+        'method.request.header.Content-Type': false,
+      },
+    });
+
+    new ApiGatewayIntegration(this, `${id}-integration`, {
+      restApiId: api.id,
+      resourceId: resource.id,
+      httpMethod: method.httpMethod,
+      integrationHttpMethod: 'POST',
+      type: 'AWS_PROXY',
+      uri: lambdaFunction.invokeArn,
+      requestTemplates: {
+        'application/json': '{"statusCode": 200}',
+      },
+    });
+
+    return method;
+  }
+
+  private createApiDeployment(
+    api: ApiGatewayRestApi,
+    methods: ApiGatewayMethod[]
+  ): ApiGatewayDeployment {
+    return new ApiGatewayDeployment(this, `${this.resourcePrefix}-api-deployment`, {
+      restApiId: api.id,
+      dependsOn: methods,
+      lifecycle: {
+        createBeforeDestroy: true,
+      },
+    });
+  }
+
+  private createApiStage(
+    api: ApiGatewayRestApi,
+    deployment: ApiGatewayDeployment,
+    logGroup: CloudwatchLogGroup
+  ): ApiGatewayStage {
+    const stage = new ApiGatewayStage(this, `${this.resourcePrefix}-api-stage`, {
+      restApiId: api.id,
+      deploymentId: deployment.id,
+      stageName: 'prod',
+      accessLogSettings: {
+        destinationArn: logGroup.arn,
+        format: JSON.stringify({
+          requestId: '$requestId',
+          ip: '$sourceIp',
+          caller: '$caller',
+          user: '$user',
+          requestTime: '$requestTime',
+          httpMethod: '$httpMethod',
+          resourcePath: '$resourcePath',
+          status: '$status',
+          protocol: '$protocol',
+          responseLength: '$responseLength',
+        }),
+      },
+      tags: {
+        Name: `${this.resourcePrefix}-api-stage`,
+        Environment: 'Production',
+      },
+    });
+
+    // Configure method settings for throttling and monitoring
+    new ApiGatewayMethodSettings(this, `${this.resourcePrefix}-api-method-settings`, {
+      restApiId: api.id,
+      stageName: stage.stageName,
+      methodPath: '*/*',
+      settings: {
+        metricsEnabled: true,
+        loggingLevel: 'INFO',
+        dataTraceEnabled: true,
+        throttlingBurstLimit: 5000,
+        throttlingRateLimit: 2000,
+      },
+    });
+
+    return stage;
+  }
+
+  private createLambdaPermissions(
+    api: ApiGatewayRestApi,
+    lambdaFunctions: {
+      userHandler: LambdaFunction;
+      sessionHandler: LambdaFunction;
+      healthCheck: LambdaFunction;
+    }
+  ): void {
+    // User handler permissions
+    new LambdaPermission(this, `${this.resourcePrefix}-user-handler-permission`, {
+      statementId: 'AllowExecutionFromAPIGateway',
+      action: 'lambda:InvokeFunction',
+      functionName: lambdaFunctions.userHandler.functionName,
+      principal: 'apigateway.amazonaws.com',
+      sourceArn: `${api.executionArn}/*/*`,
+    });
+
+    // Session handler permissions
+    new LambdaPermission(this, `${this.resourcePrefix}-session-handler-permission`, {
+      statementId: 'AllowExecutionFromAPIGateway',
+      action: 'lambda:InvokeFunction',
+      functionName: lambdaFunctions.sessionHandler.functionName,
+      principal: 'apigateway.amazonaws.com',
+      sourceArn: `${api.executionArn}/*/*`,
+    });
+
+    // Health check permissions
+    new LambdaPermission(this, `${this.resourcePrefix}-health-check-permission`, {
+      statementId: 'AllowExecutionFromAPIGateway',
+      action: 'lambda:InvokeFunction',
+      functionName: lambdaFunctions.healthCheck.functionName,
+      principal: 'apigateway.amazonaws.com',
+      sourceArn: `${api.executionArn}/*/*`,
+    });
+  }
+
+  private createOutputs(
+    api: ApiGatewayRestApi,
+    stage: ApiGatewayStage,
+    userTable: DynamodbTable,
+    sessionTable: DynamodbTable,
+    lambdaFunctions: {
+      userHandler: LambdaFunction;
+      sessionHandler: LambdaFunction;
+      healthCheck: LambdaFunction;
+    }
+  ): void {
+    new TerraformOutput(this, 'api_gateway_url', {
+      value: `https://${api.id}.execute-api.${this.region}.amazonaws.com/${stage.stageName}`,
+      description: 'API Gateway endpoint URL',
+    });
+
+    new TerraformOutput(this, 'user_table_name', {
+      value: userTable.name,
+      description: 'DynamoDB Users table name',
+    });
+
+    new TerraformOutput(this, 'session_table_name', {
+      value: sessionTable.name,
+      description: 'DynamoDB Sessions table name',
+    });
+
+    new TerraformOutput(this, 'lambda_function_names', {
+      value: {
+        userHandler: lambdaFunctions.userHandler.functionName,
+        sessionHandler: lambdaFunctions.sessionHandler.functionName,
+        healthCheck: lambdaFunctions.healthCheck.functionName,
+      },
+      description: 'Lambda function names',
+    });
+
+    new TerraformOutput(this, 'health_check_url', {
+      value: `https://${api.id}.execute-api.${this.region}.amazonaws.com/${stage.stageName}/health`,
+      description: 'Health check endpoint for deployment validation',
+    });
+  }
+
+  // Lambda function code implementations
+  private getUserHandlerCode(): string {
+    return `
+const AWS = require('aws-sdk');
+const dynamodb = new AWS.DynamoDB.DocumentClient();
+
+exports.handler = async (event) => {
+    console.log('Event:', JSON.stringify(event, null, 2));
+    
+    const { httpMethod, pathParameters, body } = event;
+    const userTableName = process.env.USER_TABLE_NAME;
+    
+    try {
+        switch (httpMethod) {
+            case 'GET':
+                if (pathParameters && pathParameters.userId) {
+                    return await getUser(userTableName, pathParameters.userId);
+                } else {
+                    return await getUsers(userTableName);
+                }
+            case 'POST':
+                return await createUser(userTableName, JSON.parse(body || '{}'));
+            case 'PUT':
+                return await updateUser(userTableName, pathParameters.userId, JSON.parse(body || '{}'));
+            case 'DELETE':
+                return await deleteUser(userTableName, pathParameters.userId);
+            default:
+                return {
+                    statusCode: 405,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ error: 'Method not allowed' })
+                };
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        return {
+            statusCode: 500,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ error: 'Internal server error' })
+        };
+    }
+};
+
+async function getUser(tableName, userId) {
+    const params = {
+        TableName: tableName,
+        Key: { userId }
+    };
+    
+    const result = await dynamodb.get(params).promise();
+    
+    if (!result.Item) {
+        return {
+            statusCode: 404,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ error: 'User not found' })
+        };
+    }
+    
+    return {
+        statusCode: 200,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(result.Item)
+    };
+}
+
+async function getUsers(tableName) {
+    const params = {
+        TableName: tableName,
+        Limit: 50
+    };
+    
+    const result = await dynamodb.scan(params).promise();
+    
+    return {
+        statusCode: 200,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ users: result.Items, count: result.Count })
+    };
+}
+
+async function createUser(tableName, userData) {
+    const userId = 'user_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+    const timestamp = new Date().toISOString();
+    
+    const user = {
+        userId,
+        ...userData,
+        createdAt: timestamp,
+        updatedAt: timestamp
+    };
+    
+    const params = {
+        TableName: tableName,
+        Item: user,
+        ConditionExpression: 'attribute_not_exists(userId)'
+    };
+    
+    await dynamodb.put(params).promise();
+    
+    return {
+        statusCode: 201,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(user)
+    };
+}
+
+async function updateUser(tableName, userId, updateData) {
+    const timestamp = new Date().toISOString();
+    updateData.updatedAt = timestamp;
+    
+    const updateExpression = 'SET ' + Object.keys(updateData).map(key => \`#\${key} = :\${key}\`).join(', ');
+    const expressionAttributeNames = {};
+    const expressionAttributeValues = {};
+    
+    Object.keys(updateData).forEach(key => {
+        expressionAttributeNames[\`#\${key}\`] = key;
+        expressionAttributeValues[\`:\${key}\`] = updateData[key];
+    });
+    
+    const params = {
+        TableName: tableName,
+        Key: { userId },
+        UpdateExpression: updateExpression,
+        ExpressionAttributeNames: expressionAttributeNames,
+        ExpressionAttributeValues: expressionAttributeValues,
+        ReturnValues: 'ALL_NEW'
+    };
+    
+    const result = await dynamodb.update(params).promise();
+    
+    return {
+        statusCode: 200,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(result.Attributes)
+    };
+}
+
+async function deleteUser(tableName, userId) {
+    const params = {
+        TableName: tableName,
+        Key: { userId },
+        ReturnValues: 'ALL_OLD'
+    };
+    
+    const result = await dynamodb.delete(params).promise();
+    
+    if (!result.Attributes) {
+        return {
+            statusCode: 404,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ error: 'User not found' })
+        };
+    }
+    
+    return {
+        statusCode: 200,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: 'User deleted successfully', user: result.Attributes })
+    };
+}
+`;
+  }
+
+  private getSessionHandlerCode(): string {
+    return `
+const AWS = require('aws-sdk');
+const dynamodb = new AWS.DynamoDB.DocumentClient();
+
+exports.handler = async (event) => {
+    console.log('Event:', JSON.stringify(event, null, 2));
+    
+    const { httpMethod, pathParameters, body } = event;
+    const sessionTableName = process.env.SESSION_TABLE_NAME;
+    
+    try {
+        switch (httpMethod) {
+            case 'GET':
+                return await getSession(sessionTableName, pathParameters.sessionId);
+            case 'POST':
+                return await createSession(sessionTableName, JSON.parse(body || '{}'));
+            case 'DELETE':
+                return await deleteSession(sessionTableName, pathParameters.sessionId);
+            default:
+                return {
+                    statusCode: 405,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ error: 'Method not allowed' })
+                };
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        return {
+            statusCode: 500,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ error: 'Internal server error' })
+        };
+    }
+};
+
+async function getSession(tableName, sessionId) {
+    const params = {
+        TableName: tableName,
+        Key: { sessionId }
+    };
+    
+    const result = await dynamodb.get(params).promise();
+    
+    if (!result.Item) {
+        return {
+            statusCode: 404,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ error: 'Session not found' })
+        };
+    }
+    
+    return {
+        statusCode: 200,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(result.Item)
+    };
+}
+
+async function createSession(tableName, sessionData) {
+    const sessionId = 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+    const timestamp = new Date().toISOString();
+    const expiresAt = Math.floor(Date.now() / 1000) + (24 * 60 * 60); // 24 hours from now
+    
+    const session = {
+        sessionId,
+        ...sessionData,
+        createdAt: timestamp,
+        expiresAt
+    };
+    
+    const params = {
+        TableName: tableName,
+        Item: session,
+        ConditionExpression: 'attribute_not_exists(sessionId)'
+    };
+    
+    await dynamodb.put(params).promise();
+    
+    return {
+        statusCode: 201,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(session)
+    };
+}
+
+async function deleteSession(tableName, sessionId) {
+    const params = {
+        TableName: tableName,
+        Key: { sessionId },
+        ReturnValues: 'ALL_OLD'
+    };
+    
+    const result = await dynamodb.delete(params).promise();
+    
+    if (!result.Attributes) {
+        return {
+            statusCode: 404,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ error: 'Session not found' })
+        };
+    }
+    
+    return {
+        statusCode: 200,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: 'Session deleted successfully', session: result.Attributes })
+    };
+}
+`;
+  }
+
+  private getHealthCheckCode(): string {
+    return `
+const AWS = require('aws-sdk');
+const dynamodb = new AWS.DynamoDB.DocumentClient();
+
+exports.handler = async (event) => {
+    console.log('Health check requested');
+    
+    const userTableName = process.env.USER_TABLE_NAME;
+    const sessionTableName = process.env.SESSION_TABLE_NAME;
+    
+    try {
+        // Test DynamoDB connectivity
+        const userTableResult = await dynamodb.describeTable({ TableName: userTableName }).promise();
+        const sessionTableResult = await dynamodb.describeTable({ TableName: sessionTableName }).promise();
+        
+        // Test write/read capability
+        const testKey = 'health_check_' + Date.now();
+        const testData = {
+            userId: testKey,
+            email: 'healthcheck@example.com',
+            name: 'Health Check Test',
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+        };
+        
+        // Write test data
+        await dynamodb.put({
+            TableName: userTableName,
+            Item: testData
+        }).promise();
+        
+        // Read test data
+        const readResult = await dynamodb.get({
+            TableName: userTableName,
+            Key: { userId: testKey }
+        }).promise();
+        
+        // Clean up test data
+        await dynamodb.delete({
+            TableName: userTableName,
+            Key: { userId: testKey }
+        }).promise();
+        
+        const healthStatus = {
+            status: 'healthy',
+            timestamp: new Date().toISOString(),
+            services: {
+                dynamodb: {
+                    userTable: {
+                        status: userTableResult.Table.TableStatus,
+                        itemCount: userTableResult.Table.ItemCount || 0
+                    },
+                    sessionTable: {
+                        status: sessionTableResult.Table.TableStatus,
+                        itemCount: sessionTableResult.Table.ItemCount || 0
+                    }
+                },
+                dataAccess: {
+                    writeTest: 'success',
+                    readTest: readResult.Item ? 'success' : 'failed'
+                }
+            },
+            environment: {
+                region: process.env.AWS_REGION,
+                functionName: process.env.AWS_LAMBDA_FUNCTION_NAME,
+                version: process.env.AWS_LAMBDA_FUNCTION_VERSION
+            }
+        };
+        
+        return {
+            statusCode: 200,
+            headers: { 
+                'Content-Type': 'application/json',
+                'Cache-Control': 'no-cache'
+            },
+            body: JSON.stringify(healthStatus)
+        };
+        
+    } catch (error) {
+        console.error('Health check failed:', error);
+        
+        const errorStatus = {
+            status: 'unhealthy',
+            timestamp: new Date().toISOString(),
+            error: {
+                message: error.message,
+                code: error.code
+            },
+            environment: {
+                region: process.env.AWS_REGION,
+                functionName: process.env.AWS_LAMBDA_FUNCTION_NAME,
+                version: process.env.AWS_LAMBDA_FUNCTION_VERSION
+            }
+        };
+        
+        return {
+            statusCode: 503,
+            headers: { 
+                'Content-Type': 'application/json',
+                'Cache-Control': 'no-cache'
+            },
+            body: JSON.stringify(errorStatus)
+        };
+    }
+};
+`;
+  }
+}
     this.addOverride('terraform.backend.s3.use_lockfile', true);
 
     // ? Add your stack instantiations here
