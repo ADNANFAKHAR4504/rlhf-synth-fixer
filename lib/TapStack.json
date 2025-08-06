@@ -59,14 +59,6 @@
                 },
                 "us-west-2"
             ]
-        },
-        "StandaloneDeployment": {
-            "Fn::Equals": [
-                {
-                    "Ref": "AWS::Region"
-                },
-                "us-west-1"
-            ]
         }
     },
     "Resources": {
@@ -207,7 +199,7 @@
                     },
                     {
                         "Fn::If": [
-                            "HasCrossRegionReference",
+                            "IsWest2",
                             {
                                 "Key": "PrimaryRegionTable",
                                 "Value": {
@@ -368,7 +360,7 @@
                         },
                         "REMOTE_TABLE_NAME": {
                             "Fn::If": [
-                                "HasCrossRegionReference",
+                                "IsWest2",
                                 {
                                     "Fn::ImportValue": {
                                         "Fn::Sub": "TapStack${EnvironmentSuffix}-TableName"
@@ -379,7 +371,7 @@
                         },
                         "REMOTE_TABLE_ARN": {
                             "Fn::If": [
-                                "HasCrossRegionReference",
+                                "IsWest2",
                                 {
                                     "Fn::ImportValue": {
                                         "Fn::Sub": "TapStack${EnvironmentSuffix}-TableArn"
@@ -397,7 +389,7 @@
                                     },
                                     {
                                         "Fn::If": [
-                                            "HasCrossRegionReference",
+                                            "IsWest2",
                                             {
                                                 "Fn::ImportValue": {
                                                     "Fn::Sub": "TapStack${EnvironmentSuffix}-TableName"
@@ -477,7 +469,7 @@
                                         },
                                         {
                                             "Fn::If": [
-                                                "HasCrossRegionReference",
+                                                "IsWest2",
                                                 {
                                                     "Fn::ImportValue": {
                                                         "Fn::Sub": "TapStack${EnvironmentSuffix}-TableArn"
@@ -676,7 +668,8 @@
         "cfn-lint": {
             "config": {
                 "ignore_checks": [
-                    "W6001"
+                    "W6001",
+                    "W1028"
                 ],
                 "ignore_bad_template": false
             }

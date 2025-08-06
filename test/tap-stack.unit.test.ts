@@ -282,7 +282,7 @@ describe('TapStack CloudFormation Template - Unified DynamoDB Multi-Region', () 
           'Fn::GetAtt': ['DynamoDBTable', 'Arn'],
         });
         expect(envVars.REMOTE_TABLE_NAME['Fn::If']).toBeDefined();
-        expect(envVars.REMOTE_TABLE_NAME['Fn::If'][0]).toBe('HasCrossRegionReference');
+        expect(envVars.REMOTE_TABLE_NAME['Fn::If'][0]).toBe('IsWest2');
         expect(envVars.REMOTE_TABLE_NAME['Fn::If'][1]['Fn::ImportValue']).toEqual({
           'Fn::Sub': 'TapStack${EnvironmentSuffix}-TableName',
         });
@@ -430,7 +430,7 @@ describe('TapStack CloudFormation Template - Unified DynamoDB Multi-Region', () 
 
     test('should have correct condition count', () => {
       const conditionCount = Object.keys(template.Conditions).length;
-      expect(conditionCount).toBe(5); // IsWest1, IsWest2, EnableStreams, HasCrossRegionReference, IsWest1
+      expect(conditionCount).toBe(4); // IsWest1, IsWest2, EnableStreams, HasCrossRegionReference
     });
 
     test('should have correct output count', () => {
