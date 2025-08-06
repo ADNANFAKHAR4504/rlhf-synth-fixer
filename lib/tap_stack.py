@@ -8,7 +8,9 @@ from constructs import Construct
 from cdktf_cdktf_provider_aws.provider import AwsProvider, AwsProviderDefaultTags
 from cdktf_cdktf_provider_aws.s3_bucket import S3Bucket
 from cdktf_cdktf_provider_aws.s3_bucket_server_side_encryption_configuration import (
-  S3BucketServerSideEncryptionConfigurationA
+  S3BucketServerSideEncryptionConfigurationA,
+  S3BucketServerSideEncryptionConfigurationRule,
+  S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefault
 )
 from cdktf_cdktf_provider_aws.s3_bucket_versioning import S3BucketVersioningA
 from cdktf_cdktf_provider_aws.s3_bucket_policy import S3BucketPolicy
@@ -103,13 +105,14 @@ class TapStack(TerraformStack):
       S3BucketServerSideEncryptionConfigurationA(
         self, f"bucket-encryption-{bucket_type}",
         bucket=bucket.id,
-        rule=[{
-          "apply_server_side_encryption_by_default": {
-            "sse_algorithm": "AES256"
-          },
-          "bucket_key_enabled": False
-        }]
-      )
+        rule=[
+          S3BucketServerSideEncryptionConfigurationRule(
+            apply_server_side_encryption_by_default=S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefault(
+              sse_algorithm="AES256"
+            ),
+            bucket_key_enabled=False
+          )
+        ])
       
       # Enable versioning for data recovery and compliance
       S3BucketVersioningA(
