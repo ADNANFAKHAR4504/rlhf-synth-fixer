@@ -16,8 +16,8 @@ class TapStackArgs:
     
     def __init__(
         self,
-        environment: str,
-        region: str,
+        environment_suffix: str = "dev",
+        region: str = "us-east-1",
         project_name: str = "NovaModelBreaking",
         enable_multi_region: bool = False,
         lambda_memory_size: int = 256,
@@ -28,7 +28,8 @@ class TapStackArgs:
         enable_xray_tracing: bool = True,
         custom_tags: Optional[Dict[str, str]] = None
     ):
-        self.environment = environment
+        self.environment_suffix = environment_suffix
+        self.environment = environment_suffix  # Compatibility alias
         self.region = region
         self.project_name = project_name
         self.enable_multi_region = enable_multi_region
@@ -53,7 +54,11 @@ class TapStack(ComponentResource):
         # Initialize configuration and tags
         self.config = pulumi.Config()
         self.args = args
-        self.region = aws.config.region or args.region
+        # Try to get region from AWS provider or use args region
+        try:
+            self.region = aws.get_region().name
+        except:
+            self.region = args.region
         
         # Standard tagging policy for all resources
         self.tags = {
@@ -435,6 +440,7 @@ def lambda_handler(event: Dict[str, Any], context) -> Dict[str, Any]:
             code=pulumi.AssetArchive({
                 "lambda_function.py": pulumi.StringAsset("""
 import json
+import os
 import logging
 from typing import Dict, Any
 
