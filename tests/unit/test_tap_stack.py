@@ -1,12 +1,13 @@
+import os
+import sys
+import unittest
+from unittest.mock import Mock
+
 from lib.components.serverless import ServerlessComponent
 from lib.components.database import DatabaseComponent
 from lib.components.vpc import ComputeComponent
 from lib.components.iam import IAMComponent
 from lib.tap_stack import TapStackArgs, TapStack
-import os
-import sys
-import unittest
-from unittest.mock import Mock
 
 # Set environment variable for Pulumi testing
 os.environ["PULUMI_TEST_MODE"] = "true"
@@ -59,13 +60,12 @@ mock_aws.get_availability_zones.return_value = Mock(
 sys.modules["pulumi"] = mock_pulumi
 sys.modules["pulumi_aws"] = mock_aws
 
-# Now import components
-
 
 class TestTapStackComponents(unittest.TestCase):
   def setUp(self):
     self.test_args = TapStackArgs(
         environment_suffix="test",
+        # passed only to TapStack, not to components
         tags={"Environment": "test", "Project": "tap-stack"}
     )
 
