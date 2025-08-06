@@ -68,7 +68,31 @@ class TestTapStackIntegration(unittest.TestCase):
   @mark.it("invokes the Lambda function successfully")
   def test_lambda_invocation(self):
     """Test invoking the Lambda function returns expected results."""
-    payload = {"Records": [{"eventSource": "aws:s3", "test": "value"}]}
+    test_object_key = "integration/test/object.txt"
+    payload = {
+      "Records": [
+        {
+          "eventVersion": "2.1",
+          "eventSource": "aws:s3",
+          "awsRegion": "us-east-1",
+          "eventName": "ObjectCreated:Put",
+          "s3": {
+            "s3SchemaVersion": "1.0",
+            "bucket": {
+              "name": S3_BUCKET_NAME,
+              "ownerIdentity": {"principalId": "A1EXAMPLEBKT"},
+              "arn": f"arn:aws:s3:::{S3_BUCKET_NAME}"
+            },
+            "object": {
+              "key": test_object_key,
+              "size": 1024,
+              "eTag": "d41d8cd98f00b204e9800998ecf8427e",
+              "sequencer": "0A1B2C3D4E5F678901"
+            }
+          }
+        }
+      ]
+    }
 
     try:
       response = lambda_client.invoke(
@@ -81,8 +105,9 @@ class TestTapStackIntegration(unittest.TestCase):
       self.assertEqual(response["StatusCode"], 200)
 
       body_string = response_payload_dict.get("body")
-      parsed_body = json.loads(body_string)
+      self.assertIsNotNone(body_string)
 
+      parsed_body = json.loads(body_string)
       self.assertEqual(parsed_body.get("statusCode"), 200)
 
     except (ClientError, BotoCoreError, json.JSONDecodeError) as ex:
