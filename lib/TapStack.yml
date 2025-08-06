@@ -372,6 +372,7 @@ Resources:
   LambdaLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
+      LogGroupName: !Sub '/aws/lambda/${AWS::StackName}-DataProcessorLambda'
       RetentionInDays: 30
 
   # ===========================================
