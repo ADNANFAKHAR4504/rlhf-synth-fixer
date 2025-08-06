@@ -23,6 +23,12 @@ Parameters:
     AllowedPattern: '^[a-zA-Z0-9\-]+$'
     ConstraintDescription: 'Must contain only alphanumeric characters or hyphens.'
 
+  StackNameLower:
+  Type: String
+  Description: 'Lowercase version of the stack name for use in S3 bucket names.'
+  AllowedPattern: '^[a-z0-9\-]+$'
+  ConstraintDescription: 'Must be lowercase letters, numbers, and hyphens only.'
+
 Resources:
   InfrastructureKMSKey:
     Type: AWS::KMS::Key
@@ -175,10 +181,10 @@ Resources:
       Roles:
         - !Ref EC2InstanceRole
 
-  S3AccessLogsBucket:
+    S3AccessLogsBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 's3-access-logs-${EnvironmentSuffix}-${UniqueId}-${AWS::StackName}'
+      BucketName: !Sub 's3-access-logs-${EnvironmentSuffix}-${UniqueId}-${StackNameLower}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -215,20 +221,21 @@ Resources:
             Principal:
               Service: logging.s3.amazonaws.com
             Action: 's3:PutObject'
-            Resource: !Sub 'arn:aws:s3:::s3-access-logs-${EnvironmentSuffix}-${UniqueId}-${AWS::StackName}/*'
+            Resource: !Sub 'arn:aws:s3:::s3-access-logs-${EnvironmentSuffix}-${UniqueId}-${StackNameLower}/*'
             Condition:
               StringEquals:
                 'aws:SourceAccount': !Sub '${AWS::AccountId}'
               ArnLike:
                 'aws:SourceArn':
-                  - !Sub 'arn:aws:s3:::website-content-${EnvironmentSuffix}-${UniqueId}-${AWS::StackName}'
-                  - !Sub 'arn:aws:s3:::application-logs-${EnvironmentSuffix}-${UniqueId}-${AWS::StackName}'
-                  - !Sub 'arn:aws:s3:::backup-data-${EnvironmentSuffix}-${UniqueId}-${AWS::StackName}'
+                  - !Sub 'arn:aws:s3:::website-content-${EnvironmentSuffix}-${UniqueId}-${StackNameLower}'
+                  - !Sub 'arn:aws:s3:::application-logs-${EnvironmentSuffix}-${UniqueId}-${StackNameLower}'
+                  - !Sub 'arn:aws:s3:::backup-data-${EnvironmentSuffix}-${UniqueId}-${StackNameLower}'
+
 
   WebsiteContentBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 'website-content-${EnvironmentSuffix}-${UniqueId}-${AWS::StackName}'
+      BucketName: !Sub 'website-content-${EnvironmentSuffix}-${UniqueId}-${StackNameLower}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -249,7 +256,7 @@ Resources:
   ApplicationLogsBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 'application-logs-${EnvironmentSuffix}-${UniqueId}-${AWS::StackName}'
+      BucketName: !Sub 'application-logs-${EnvironmentSuffix}-${UniqueId}-${StackNameLower}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -270,7 +277,7 @@ Resources:
   BackupDataBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 'backup-data-${EnvironmentSuffix}-${UniqueId}-${AWS::StackName}'
+      BucketName: !Sub 'backup-data-${EnvironmentSuffix}-${UniqueId}-${StackNameLower}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -303,8 +310,8 @@ Resources:
               - 's3:GetObject'
               - 's3:ListBucket'
             Resource:
-              - !Sub 'arn:aws:s3:::website-content-${EnvironmentSuffix}-${UniqueId}-${AWS::StackName}/*'
-              - !Sub 'arn:aws:s3:::website-content-${EnvironmentSuffix}-${UniqueId}-${AWS::StackName}'
+              - !Sub 'arn:aws:s3:::website-content-${EnvironmentSuffix}-${UniqueId}-${StackNameLower}/*'
+              - !Sub 'arn:aws:s3:::website-content-${EnvironmentSuffix}-${UniqueId}-${StackNameLower}'
 
   ApplicationLogsBucketPolicy:
     Type: AWS::S3::BucketPolicy
@@ -321,8 +328,8 @@ Resources:
               - 's3:PutObject'
               - 's3:PutObjectAcl'
             Resource:
-              - !Sub 'arn:aws:s3:::application-logs-${EnvironmentSuffix}-${UniqueId}-${AWS::StackName}/*'
-              - !Sub 'arn:aws:s3:::application-logs-${EnvironmentSuffix}-${UniqueId}-${AWS::StackName}'
+              - !Sub 'arn:aws:s3:::application-logs-${EnvironmentSuffix}-${UniqueId}-${StackNameLower}/*'
+              - !Sub 'arn:aws:s3:::application-logs-${EnvironmentSuffix}-${UniqueId}-${StackNameLower}'
 
   BackupDataBucketPolicy:
     Type: AWS::S3::BucketPolicy
@@ -337,7 +344,7 @@ Resources:
             Action: 's3:*'
             Resource:
               - !GetAtt BackupDataBucket.Arn
-              - !Sub 'arn:aws:s3:::backup-data-${EnvironmentSuffix}-${UniqueId}-${AWS::StackName}/*'
+              - !Sub 'arn:aws:s3:::backup-data-${EnvironmentSuffix}-${UniqueId}-${StackNameLower}/*'
             Condition:
               StringNotEquals:
                 'aws:PrincipalServiceName': 'cloudformation.amazonaws.com'
@@ -371,7 +378,7 @@ Resources:
           yum update -y
           yum install -y aws-cli
           echo "Instance started at $(date)" > /tmp/startup.log
-          aws s3 cp /tmp/startup.log s3://application-logs-${EnvironmentSuffix}-${UniqueId}-${AWS::StackName}/startup-$(date +%Y%m%d-%H%M%S).log --region ${AWS::Region}
+          aws s3 cp /tmp/startup.log s3://application-logs-${EnvironmentSuffix}-${UniqueId}-${StackNameLower}/startup-$(date +%Y%m%d-%H%M%S).log --region ${AWS::Region}
       Tags:
         - Key: Name
           Value: !Sub '${AWS::StackName}-secure-instance'
