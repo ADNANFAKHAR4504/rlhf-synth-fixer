@@ -1,7 +1,3 @@
-from lib.components.serverless import ServerlessComponent
-from lib.components.database import DatabaseComponent
-from lib.components.vpc import ComputeComponent
-from lib.components.iam import IAMComponent
 from lib.tap_stack import TapStackArgs, TapStack
 import pulumi
 import os
@@ -10,16 +6,16 @@ import unittest
 from unittest.mock import Mock
 import types
 
-# Helper to create mock packages
+# === Helper: Create fake Pulumi AWS modules ===
 
 
 def create_mock_package(name):
   mod = types.ModuleType(name)
-  mod.__path__ = []  # makes it a package
+  mod.__path__ = []  # mark as package
   return mod
 
 
-# Setup mock modules before importing your components
+# === Stub Pulumi AWS modules ===
 sys.modules["pulumi_aws"] = create_mock_package("pulumi_aws")
 sys.modules["pulumi_aws.ec2"] = create_mock_package("pulumi_aws.ec2")
 sys.modules["pulumi_aws.rds"] = create_mock_package("pulumi_aws.rds")
@@ -27,12 +23,11 @@ sys.modules["pulumi_aws.iam"] = create_mock_package("pulumi_aws.iam")
 sys.modules["pulumi_aws.apigateway"] = create_mock_package(
     "pulumi_aws.apigateway")
 
-# Attach mocked classes/functions
+# === Attach mocks ===
 sys.modules["pulumi_aws.ec2"].Vpc = Mock(return_value=Mock(id="vpc-123"))
 sys.modules["pulumi_aws.ec2"].Subnet = Mock(return_value=Mock(id="subnet-123"))
 sys.modules["pulumi_aws.ec2"].SecurityGroup = Mock(
     return_value=Mock(id="sg-123"))
-
 sys.modules["pulumi_aws.rds"].Instance = Mock(
     return_value=Mock(endpoint="db-endpoint", id="db-123"))
 sys.modules["pulumi_aws.iam"].Role = Mock(
@@ -48,10 +43,10 @@ sys.modules["pulumi_aws.apigateway"].Integration = Mock()
 sys.modules["pulumi_aws.apigateway"].IntegrationResponse = Mock()
 sys.modules["pulumi_aws.apigateway"].MethodResponse = Mock()
 
-# Only now import pulumi and your components
-
-# Set environment variable for Pulumi testing
+# === Set environment variable ===
 os.environ["PULUMI_TEST_MODE"] = "true"
+
+# === Pulumi Mocks ===
 
 
 class MockComponentResource:
@@ -83,12 +78,7 @@ class MockOutput:
     return mock_output
 
 
-class FakeResourceOptions:
-  def __init__(self, *args, **kwargs):
-    pass
-
-
-# Inject Pulumi and AWS mocks before instantiation
+# === Pulumi mock injection ===
 mock_pulumi = Mock()
 mock_pulumi.ComponentResource = MockComponentResource
 mock_pulumi.ResourceOptions = pulumi.ResourceOptions
@@ -99,43 +89,7 @@ mock_pulumi.AssetArchive = Mock()
 mock_pulumi.StringAsset = Mock()
 mock_pulumi.get_stack = Mock(return_value="test")
 
-mock_aws = Mock()
-mock_aws.get_region.return_value = Mock(name="us-east-1")
-mock_aws.get_availability_zones.return_value = Mock(
-    names=["us-east-1a", "us-east-1b"]
-)
-
-# sys.modules["pulumi_aws"] = mock_aws
-
-
-# ✅ Add mocked submodules to match how your components import them
-mock_aws_ec2 = Mock()
-mock_aws_ec2.Vpc = Mock(return_value=Mock(id="vpc-123"))
-mock_aws_ec2.Subnet = Mock(return_value=Mock(id="subnet-123"))
-mock_aws_ec2.SecurityGroup = Mock(return_value=Mock(id="sg-123"))
-
-mock_aws_rds = Mock()
-mock_aws_rds.Instance = Mock(
-    return_value=Mock(endpoint="db-endpoint", id="db-123"))
-
-mock_aws_iam = Mock()
-mock_aws_iam.Role = Mock(return_value=Mock(arn="arn:aws:iam::123:role/test"))
-
-mock_aws_apigateway = Mock()
-mock_aws_apigateway.RestApi = Mock(return_value=Mock(id="api-123"))
-mock_aws_apigateway.Deployment = Mock(return_value=Mock())
-mock_aws_apigateway.Stage = Mock(return_value=Mock())
-mock_aws_apigateway.Resource = Mock(return_value=Mock())
-mock_aws_apigateway.Method = Mock(return_value=Mock())
-mock_aws_apigateway.Integration = Mock(return_value=Mock())
-mock_aws_apigateway.IntegrationResponse = Mock(return_value=Mock())
-mock_aws_apigateway.MethodResponse = Mock(return_value=Mock())
-
-# ✅ Add to sys.modules to make sure all submodules resolve properly
-sys.modules["pulumi_aws.ec2"] = mock_aws_ec2
-sys.modules["pulumi_aws.rds"] = mock_aws_rds
-sys.modules["pulumi_aws.iam"] = mock_aws_iam
-sys.modules["pulumi_aws.apigateway"] = mock_aws_apigateway
+# === Test class ===
 
 
 class TestTapStackComponents(unittest.TestCase):
@@ -145,89 +99,38 @@ class TestTapStackComponents(unittest.TestCase):
         tags={"Environment": "test", "Project": "tap-stack"}
     )
 
-  def test_iam_component_initialization(self):
-    iam = IAMComponent(
-        name="test-iam",
-        environment="test",
-        opts=mock_pulumi.ResourceOptions(),
-    )
-    self.assertTrue(hasattr(iam, "lambda_role"))
-
-  def test_compute_component_initialization(self):
-    compute = ComputeComponent(
-        name="test-compute",
-        cidr_block="10.3.0.0/16",
-        environment="test",
-        opts=mock_pulumi.ResourceOptions(),
-    )
-    self.assertTrue(hasattr(compute, "vpc"))
-    self.assertTrue(hasattr(compute, "private_subnet_ids"))
-    self.assertTrue(hasattr(compute, "lambda_sg"))
-
-  def test_database_component_initialization(self):
-    compute = ComputeComponent(
-        name="test-compute",
-        cidr_block="10.3.0.0/16",
-        environment="test",
-        opts=mock_pulumi.ResourceOptions(),
-    )
-    db = DatabaseComponent(
-        name="test-db",
-        environment="test",
-        db_security_group_id=compute.db_sg.id,
-        username="admin",
-        password="passw0rd",
-        private_subnet_ids=compute.private_subnet_ids,
-        opts=mock_pulumi.ResourceOptions(),
-    )
-    self.assertTrue(hasattr(db, "rds_instance"))
-
-  def test_serverless_component_initialization(self):
-    compute = ComputeComponent(
-        name="test-compute",
-        cidr_block="10.3.0.0/16",
-        environment="test",
-        opts=mock_pulumi.ResourceOptions(),
-    )
-    db = DatabaseComponent(
-        name="test-db",
-        environment="test",
-        db_security_group_id=compute.db_sg.id,
-        username="admin",
-        password="passw0rd",
-        private_subnet_ids=compute.private_subnet_ids,
-        opts=mock_pulumi.ResourceOptions(),
-    )
-    iam = IAMComponent(
-        name="test-iam",
-        environment="test",
-        opts=mock_pulumi.ResourceOptions(),
-    )
-    serverless = ServerlessComponent(
-        name="test-serverless",
-        environment="test",
-        lambda_role_arn=iam.lambda_role.arn,
-        private_subnet_ids=compute.private_subnet_ids,
-        lambda_security_group_id=compute.lambda_sg.id,
-        rds_endpoint=db.rds_instance.endpoint,
-        db_name="tapdb",
-        db_username="admin",
-        db_password="passw0rd",
-        opts=mock_pulumi.ResourceOptions(),
-    )
-    self.assertTrue(hasattr(serverless, "lambda_function"))
-    self.assertTrue(hasattr(serverless, "api"))
-
   def test_tap_stack_initialization(self):
     stack = TapStack(
         name="tap-test",
         args=self.test_args,
         opts=mock_pulumi.ResourceOptions(),
     )
-    self.assertTrue(hasattr(stack, "iam_component"))
-    self.assertTrue(hasattr(stack, "compute_component"))
-    self.assertTrue(hasattr(stack, "database_component"))
-    self.assertTrue(hasattr(stack, "serverless_component"))
+
+    # IAM Component
+    self.assertIsNotNone(stack.iam_component)
+    self.assertTrue(hasattr(stack.iam_component, "lambda_role"))
+    self.assertEqual(stack.iam_component.lambda_role.arn,
+                     "arn:aws:iam::123:role/test")
+
+    # Compute Component
+    self.assertIsNotNone(stack.compute_component)
+    self.assertTrue(hasattr(stack.compute_component, "vpc"))
+    self.assertEqual(stack.compute_component.vpc.id, "vpc-123")
+    self.assertTrue(hasattr(stack.compute_component, "private_subnet_ids"))
+    self.assertTrue(hasattr(stack.compute_component, "lambda_sg"))
+    self.assertEqual(stack.compute_component.lambda_sg.id, "sg-123")
+
+    # Database Component
+    self.assertIsNotNone(stack.database_component)
+    self.assertTrue(hasattr(stack.database_component, "rds_instance"))
+    self.assertEqual(
+        stack.database_component.rds_instance.endpoint, "db-endpoint")
+
+    # Serverless Component
+    self.assertIsNotNone(stack.serverless_component)
+    self.assertTrue(hasattr(stack.serverless_component, "lambda_function"))
+    self.assertTrue(hasattr(stack.serverless_component, "api"))
+    self.assertEqual(stack.serverless_component.api.id, "api-123")
 
 
 if __name__ == "__main__":
