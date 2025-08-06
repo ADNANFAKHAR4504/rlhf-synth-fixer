@@ -83,8 +83,8 @@ describe('TapStack Unit Tests', () => {
     const instances = resourcesByType['aws_instance'] || [];
     expect(instances.length).toBe(2);
     instances.forEach(instance => {
-      expect(instance.ami).toBe('ami-084a7d336e816906b');
-      expect(instance.instance_type).toBe('t2.micro');
+      expect(instance.ami).toBe('${data.aws_ssm_parameter.iacProject-dev-ami-param.value}');
+      expect(instance.instance_type).toBe('t3.micro');
     });
   });
 
