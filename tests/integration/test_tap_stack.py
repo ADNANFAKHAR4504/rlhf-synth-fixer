@@ -40,7 +40,7 @@ def test_integration():
     
     print(f"--- Testing URL: {url} ---")
     
-    time.sleep(90)
+    time.sleep(150)
 
     response = requests.get(url, timeout=30)
     
