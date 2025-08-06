@@ -7,7 +7,7 @@ import pulumi
 import os
 import sys
 import unittest
-from unittest.mock import Mock, MagicMock
+from unittest.mock import Mock, MagicMock, patch
 import types
 
 # Helper to create mock packages
@@ -22,75 +22,63 @@ def create_mock_package(name):
 # Setup mock modules before importing your components
 sys.modules["pulumi"] = MagicMock()
 sys.modules["pulumi_aws"] = create_mock_package("pulumi_aws")
-sys.modules["pulumi_aws"].get_region = Mock(return_value="us-east-1")
+sys.modules["pulumi_aws"].get_region = Mock(
+    return_value=MagicMock(name="us-east-1"))
 sys.modules["pulumi_aws"].get_availability_zones = Mock(
-    return_value=Mock(names=["us-east-1a", "us-east-1b"])
+    return_value=MagicMock(names=["us-east-1a", "us-east-1b"])
 )
 
-# Create and mock all required submodules
-sys.modules["pulumi_aws"].ec2 = create_mock_package("pulumi_aws.ec2")
-sys.modules["pulumi_aws"].ec2._enums = create_mock_package(
-    "pulumi_aws.ec2._enums")
-sys.modules["pulumi_aws"].rds = create_mock_package("pulumi_aws.rds")
-sys.modules["pulumi_aws"].iam = create_mock_package("pulumi_aws.iam")
-sys.modules["pulumi_aws"].iam._enums = create_mock_package(
-    "pulumi_aws.iam._enums")
-sys.modules["pulumi_aws"].apigateway = create_mock_package(
-    "pulumi_aws.apigateway")
-sys.modules["pulumi_aws"].lambda_ = create_mock_package("pulumi_aws.lambda_")
+# Create proper mock structure for AWS modules
+aws_ec2 = create_mock_package("pulumi_aws.ec2")
+aws_ec2.Vpc = Mock(return_value=MagicMock(id="vpc-123"))
+aws_ec2.Subnet = Mock(return_value=MagicMock(id="subnet-123"))
+aws_ec2.SecurityGroup = Mock(return_value=MagicMock(id="sg-123"))
+aws_ec2.SecurityGroupRule = Mock()
+aws_ec2._enums = create_mock_package("pulumi_aws.ec2._enums")
+sys.modules["pulumi_aws"].ec2 = aws_ec2
 
-# Mock specific classes and functions
-sys.modules["pulumi_aws"].ec2.Vpc = Mock(return_value=MagicMock(id="vpc-123"))
-sys.modules["pulumi_aws"].ec2.Subnet = Mock(
-    return_value=MagicMock(id="subnet-123"))
-sys.modules["pulumi_aws"].ec2.SecurityGroup = Mock(
-    return_value=MagicMock(id="sg-123"))
-sys.modules["pulumi_aws"].ec2.SecurityGroupRule = Mock()
+aws_rds = create_mock_package("pulumi_aws.rds")
+aws_rds.Instance = Mock(return_value=MagicMock(
+    endpoint="db-endpoint", id="db-123"))
+aws_rds.SubnetGroup = Mock()
+sys.modules["pulumi_aws"].rds = aws_rds
 
-sys.modules["pulumi_aws"].rds.Instance = Mock(
-    return_value=MagicMock(endpoint="db-endpoint", id="db-123"))
-sys.modules["pulumi_aws"].rds.SubnetGroup = Mock()
+aws_iam = create_mock_package("pulumi_aws.iam")
+aws_iam.Role = Mock(return_value=MagicMock(arn="arn:aws:iam::123:role/test"))
+aws_iam.RolePolicy = Mock()
+aws_iam.RolePolicyAttachment = Mock()
+aws_iam._enums = create_mock_package("pulumi_aws.iam._enums")
+sys.modules["pulumi_aws"].iam = aws_iam
 
-sys.modules["pulumi_aws"].iam.Role = Mock(
-    return_value=MagicMock(arn="arn:aws:iam::123:role/test"))
-sys.modules["pulumi_aws"].iam.RolePolicy = Mock()
-sys.modules["pulumi_aws"].iam.RolePolicyAttachment = Mock()
+aws_apigateway = create_mock_package("pulumi_aws.apigateway")
+aws_apigateway.RestApi = Mock(return_value=MagicMock(id="api-123"))
+aws_apigateway.Deployment = Mock()
+aws_apigateway.Stage = Mock()
+aws_apigateway.Resource = Mock()
+aws_apigateway.Method = Mock()
+aws_apigateway.Integration = Mock()
+aws_apigateway.IntegrationResponse = Mock()
+aws_apigateway.MethodResponse = Mock()
+sys.modules["pulumi_aws"].apigateway = aws_apigateway
 
-sys.modules["pulumi_aws"].apigateway.RestApi = Mock(
-    return_value=MagicMock(id="api-123"))
-sys.modules["pulumi_aws"].apigateway.Deployment = Mock()
-sys.modules["pulumi_aws"].apigateway.Stage = Mock()
-sys.modules["pulumi_aws"].apigateway.Resource = Mock()
-sys.modules["pulumi_aws"].apigateway.Method = Mock()
-sys.modules["pulumi_aws"].apigateway.Integration = Mock()
-sys.modules["pulumi_aws"].apigateway.IntegrationResponse = Mock()
-sys.modules["pulumi_aws"].apigateway.MethodResponse = Mock()
+aws_lambda = create_mock_package("pulumi_aws.lambda_")
+aws_lambda.Function = Mock()
+aws_lambda.Permission = Mock()
+sys.modules["pulumi_aws"].lambda_ = aws_lambda
 
-sys.modules["pulumi_aws"].lambda_.Function = Mock()
-sys.modules["pulumi_aws"].lambda_.Permission = Mock()
-
-# Mock Pulumi specific functionality
-sys.modules["pulumi"].ComponentResource = MagicMock()
-sys.modules["pulumi"].ResourceOptions = pulumi.ResourceOptions
-sys.modules["pulumi"].Output = MagicMock()
-sys.modules["pulumi"].Output.all = MagicMock(return_value=MagicMock())
-sys.modules["pulumi"].Output.concat = MagicMock(return_value=MagicMock())
-sys.modules["pulumi"].AssetArchive = MagicMock()
-sys.modules["pulumi"].StringAsset = MagicMock()
-sys.modules["pulumi"].get_stack = MagicMock(return_value="test")
-sys.modules["pulumi"].Config = MagicMock()
-sys.modules["pulumi"].export = MagicMock()
-
-# Set environment variable for Pulumi testing
-os.environ["PULUMI_TEST_MODE"] = "true"
+# Mock Pulumi functionality
 
 
 class MockOutput:
   def __init__(self, value=None):
     self.value = value
+    self._is_output = True  # To pass isinstance checks
 
   def apply(self, func):
-    return func(self.value) if self.value else MockOutput()
+    return MockOutput(func(self.value)) if self.value else MockOutput()
+
+  def __getitem__(self, key):
+    return self.value[key] if self.value else MockOutput()
 
   @staticmethod
   def all(*args):
@@ -108,6 +96,7 @@ class MockComponentResource:
     self.props = kwargs.get("props", {})
     self.opts = kwargs.get("opts", None)
     self.outputs = {}
+    self._childResources = []
 
   def register_outputs(self, outputs):
     self.outputs.update(outputs)
@@ -116,6 +105,15 @@ class MockComponentResource:
 # Replace the mocks in sys.modules
 sys.modules["pulumi"].Output = MockOutput
 sys.modules["pulumi"].ComponentResource = MockComponentResource
+sys.modules["pulumi"].ResourceOptions = pulumi.ResourceOptions
+sys.modules["pulumi"].AssetArchive = MagicMock()
+sys.modules["pulumi"].StringAsset = MagicMock()
+sys.modules["pulumi"].get_stack = MagicMock(return_value="test")
+sys.modules["pulumi"].Config = MagicMock()
+sys.modules["pulumi"].export = MagicMock()
+
+# Set environment variable for Pulumi testing
+os.environ["PULUMI_TEST_MODE"] = "true"
 
 
 class TestTapStackComponents(unittest.TestCase):
@@ -145,36 +143,41 @@ class TestTapStackComponents(unittest.TestCase):
     self.assertTrue(hasattr(compute, "lambda_sg"))
 
   def test_database_component_initialization(self):
-    compute = ComputeComponent(
-        name="test-compute",
-        cidr_block="10.3.0.0/16",
-        environment="test",
-        opts=pulumi.ResourceOptions(),
-    )
+    # Mock the compute component outputs
+    compute_mock = MagicMock()
+    compute_mock.db_sg = MagicMock(id="sg-123")
+    compute_mock.private_subnet_ids = MockOutput(["subnet-123"])
+
     db = DatabaseComponent(
         name="test-db",
         environment="test",
-        db_security_group_id="sg-123",  # Using direct mock value
+        db_security_group_id=compute_mock.db_sg.id,
         username="admin",
         password="passw0rd",
-        private_subnet_ids=["subnet-123"],  # Using direct mock value
+        private_subnet_ids=compute_mock.private_subnet_ids,
         opts=pulumi.ResourceOptions(),
     )
     self.assertTrue(hasattr(db, "rds_instance"))
 
   def test_serverless_component_initialization(self):
-    iam = IAMComponent(
-        name="test-iam",
-        environment="test",
-        opts=pulumi.ResourceOptions(),
-    )
+    # Mock the required components
+    iam_mock = MagicMock()
+    iam_mock.lambda_role = MagicMock(arn="arn:aws:iam::123:role/test")
+
+    compute_mock = MagicMock()
+    compute_mock.private_subnet_ids = MockOutput(["subnet-123"])
+    compute_mock.lambda_sg = MagicMock(id="sg-123")
+
+    db_mock = MagicMock()
+    db_mock.rds_instance = MagicMock(endpoint="db-endpoint")
+
     serverless = ServerlessComponent(
         name="test-serverless",
         environment="test",
-        lambda_role_arn="arn:aws:iam::123:role/test",  # Using direct mock value
-        private_subnet_ids=["subnet-123"],  # Using direct mock value
-        lambda_security_group_id="sg-123",  # Using direct mock value
-        rds_endpoint="db-endpoint",  # Using direct mock value
+        lambda_role_arn=iam_mock.lambda_role.arn,
+        private_subnet_ids=compute_mock.private_subnet_ids,
+        lambda_security_group_id=compute_mock.lambda_sg.id,
+        rds_endpoint=db_mock.rds_instance.endpoint,
         db_name="tapdb",
         db_username="admin",
         db_password="passw0rd",
