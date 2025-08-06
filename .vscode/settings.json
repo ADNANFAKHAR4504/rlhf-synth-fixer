@@ -5,7 +5,7 @@
 
   // Environment variables for Jest integration tests
   "jest.nodeEnv": {
-    "ENVIRONMENT_SUFFIX_": ""
+    "ENVIRONMENT_SUFFIX": "pr563"
   },
 
   // TypeScript settings
