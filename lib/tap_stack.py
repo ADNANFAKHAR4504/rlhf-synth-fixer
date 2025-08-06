@@ -43,6 +43,7 @@ class TapStack(cdk.Stack):
         removal_policy=cdk.RemovalPolicy.DESTROY,
         auto_delete_objects=True,
         public_read_access=False
+        encryption=s3.BucketEncryption.S3_MANAGED
     )
 
     # DynamoDB Table

@@ -35,6 +35,10 @@ stack_env = cdk.Environment(
   region=os.getenv('CDK_DEFAULT_REGION')
 )
 
+# Add region validation
+if stack_env.region != 'us-east-1':
+    raise ValueError("Deployment is restricted to 'us-east-1' region only.")
+
 # Define props
 props = TapStackProps(
   environment_suffix=environment_suffix,
