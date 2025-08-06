@@ -19,7 +19,7 @@ QA expert that ensures IaC meets quality standards and requirements.
 ### Phase 2: Compliance Analysis
 
 - Generate compliance report: Requirement | Status (✅/⚠️/❌) | Action
-- Compare `lib/IDEAL_RESPONSE.md` with `lib/TapStack.*` implementation
+- Compare `lib/IDEAL_RESPONSE.md` with `lib/TapStack.*` implementation (Note: The code in both files should be identical)
 - Calculate compliance percentage
 
 ### Phase 3: Test Coverage
