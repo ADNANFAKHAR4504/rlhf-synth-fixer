@@ -36,11 +36,11 @@ class TapStack(pulumi.ComponentResource):
   """
   Represents the main Pulumi component resource for the TAP project.
 
-  This component creates and manages the exact AWS infrastructure specified 
+  This component creates and manages the exact AWS infrastructure specified
   in the original prompt requirements:
-  
+
   - Lambda Function with "Hello from Lambda" response (Python 3.8)
-  - API Gateway HTTP API with GET / endpoint 
+  - API Gateway HTTP API with GET / endpoint
   - S3 static website with hardcoded index.html
   - RDS PostgreSQL database (version 14+, publicly accessible, 7-day backups)
   - IAM role for Lambda with AWSLambdaBasicExecutionRole
@@ -77,26 +77,26 @@ class TapStack(pulumi.ComponentResource):
 
   def _create_infrastructure(self):
     """Create AWS infrastructure exactly as specified in prompt."""
-    
+
     environment = self.environment_suffix
-    
+
     # Resource naming convention: simple-demo-{resource-type}-{environment}
     def get_resource_name(resource_type: str) -> str:
       """Generate a standardized resource name."""
       return f"simple-demo-{resource_type}-{environment}"
-      
+
     # Helper function to create base tags
     def get_base_tags():
       """Create standardized base tags for all resources."""
       return {
-        "Environment": environment,
-        "Project": "simple-demo",
-        "ManagedBy": "Pulumi",
-        **self.tags
+          "Environment": environment,
+          "Project": "simple-demo",
+          "ManagedBy": "Pulumi",
+          **self.tags
       }
 
     # === EXACT PROMPT IMPLEMENTATION ===
-    
+
     # 1. Create IAM Role for Lambda function (as required by prompt)
     self.lambda_role = aws.iam.Role(
         get_resource_name("lambda-role"),
@@ -126,7 +126,7 @@ class TapStack(pulumi.ComponentResource):
         opts=ResourceOptions(parent=self)
     )
 
-    # 2. Create Lambda function with "Hello from Lambda" response 
+    # 2. Create Lambda function with "Hello from Lambda" response
     # (exact prompt requirement)
     lambda_function_code = """
 import json
@@ -293,7 +293,7 @@ def lambda_handler(event, context):
         opts=ResourceOptions(parent=self)
     )
 
-    # Create security group for RDS 
+    # Create security group for RDS
     self.rds_security_group = aws.ec2.SecurityGroup(
         get_resource_name("rds-security-group"),
         description="Allow PostgreSQL traffic for simple demo",
