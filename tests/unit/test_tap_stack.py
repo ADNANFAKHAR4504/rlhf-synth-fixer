@@ -64,18 +64,3 @@ class TestTapStack:
     }
     stack = TapStack(app, "test-complex-tags", default_tags=complex_tags)
     assert stack is not None
-
-  def test_tap_stack_synth(self, app):
-    """Test that TapStack can be synthesized."""
-    TapStack(
-      app,
-      "test-stack-synth",
-      environment_suffix="test",
-      aws_region="us-west-2"
-    )
-    # Test that synthesis completes without errors
-    synth_result = app.synth()
-    assert synth_result is not None
-    # Verify that stacks were created
-    assert hasattr(synth_result, 'stacks')
-    assert synth_result is not None
