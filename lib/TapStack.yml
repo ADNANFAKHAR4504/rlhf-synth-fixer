@@ -224,7 +224,6 @@ Resources:
   ProdWebSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: 'prod-web-security-group'
       GroupDescription: 'Security group for web servers'
       VpcId: !Ref ProdVpc
       SecurityGroupIngress:
@@ -248,7 +247,6 @@ Resources:
   ProdAlbSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: 'prod-alb-security-group'
       GroupDescription: 'Security group for Application Load Balancer'
       VpcId: !Ref ProdVpc
       SecurityGroupIngress:
@@ -272,7 +270,6 @@ Resources:
   ProdRdsSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: 'prod-rds-security-group'
       GroupDescription: 'Security group for RDS MySQL instance'
       VpcId: !Ref ProdVpc
       SecurityGroupIngress:
@@ -290,7 +287,6 @@ Resources:
   ProdEc2Role:
     Type: AWS::IAM::Role
     Properties:
-      # RoleName: 'prod-ec2-role'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -319,7 +315,6 @@ Resources:
   ProdEc2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
-      # InstanceProfileName: 'prod-ec2-instance-profile'
       Roles:
         - !Ref ProdEc2Role
 
@@ -327,7 +322,6 @@ Resources:
   ProdLaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
     Properties:
-      LaunchTemplateName: 'prod-launch-template'
       LaunchTemplateData:
         ImageId: ami-0c02fb55956c7d316
         InstanceType: t3.micro
@@ -357,7 +351,6 @@ Resources:
   ProdAutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
-      AutoScalingGroupName: 'prod-auto-scaling-group'
       LaunchTemplate:
         LaunchTemplateId: !Ref ProdLaunchTemplate
         Version: !GetAtt ProdLaunchTemplate.LatestVersionNumber
@@ -387,7 +380,6 @@ Resources:
   ProdAlb:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
-      Name: 'prod-application-load-balancer'
       Scheme: internet-facing
       Type: application
       SecurityGroups:
@@ -404,7 +396,6 @@ Resources:
   ProdTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      Name: 'prod-target-group'
       Protocol: HTTP
       Port: 80
       VpcId: !Ref ProdVpc
@@ -434,7 +425,6 @@ Resources:
   ProdRdsSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
-      DBSubnetGroupName: 'prod-rds-subnet-group'
       DBSubnetGroupDescription: 'Subnet group for RDS MySQL instance'
       SubnetIds:
         - !Ref ProdPrivateSubnet1
@@ -449,12 +439,11 @@ Resources:
   ProdRdsInstance:
     Type: AWS::RDS::DBInstance
     Properties:
-      DBInstanceIdentifier: 'prod-rds-instance'
       DBInstanceClass: db.t3.micro
       Engine: mysql
       EngineVersion: '8.0.35'
       MasterUsername: admin
-      MasterUserPassword: '{{resolve:secretsmanager:prod-rds-password:SecretString:password}}'
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${ProdRdsPassword}:SecretString:password}}'
       AllocatedStorage: 20
       StorageType: gp2
       DBSubnetGroupName: !Ref ProdRdsSubnetGroup
@@ -478,7 +467,6 @@ Resources:
   ProdRdsMonitoringRole:
     Type: AWS::IAM::Role
     Properties:
-      # RoleName: 'prod-rds-monitoring-role'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -498,7 +486,6 @@ Resources:
   ProdRdsPassword:
     Type: AWS::SecretsManager::Secret
     Properties:
-      Name: 'prod-rds-password'
       Description: 'Password for RDS MySQL instance'
       GenerateSecretString:
         SecretStringTemplate: '{"username": "admin"}'
@@ -515,7 +502,6 @@ Resources:
   ProdS3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 'prod-static-assets-${AWS::AccountId}-${AWS::Region}'
       PublicAccessBlockConfiguration:
         BlockPublicAcls: false
         BlockPublicPolicy: false
@@ -544,7 +530,6 @@ Resources:
   ProdWebLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: '/aws/ec2/prod-web-servers'
       RetentionInDays: 14
       Tags:
         - Key: Name
@@ -555,7 +540,6 @@ Resources:
   ProdRdsLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: '/aws/rds/instance/prod-rds-instance/error'
       RetentionInDays: 14
       Tags:
         - Key: Name
@@ -567,7 +551,6 @@ Resources:
   ProdAsgCpuAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: 'prod-asg-high-cpu'
       AlarmDescription: 'High CPU utilization alarm for Auto Scaling Group'
       MetricName: CPUUtilization
       Namespace: AWS/EC2
@@ -590,7 +573,6 @@ Resources:
   ProdRdsCpuAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: 'prod-rds-high-cpu'
       AlarmDescription: 'High CPU utilization alarm for RDS instance'
       MetricName: CPUUtilization
       Namespace: AWS/RDS
@@ -628,7 +610,6 @@ Resources:
   ProdAsgLowCpuAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: 'prod-asg-low-cpu'
       AlarmDescription: 'Low CPU utilization alarm for Auto Scaling Group'
       MetricName: CPUUtilization
       Namespace: AWS/EC2

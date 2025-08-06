@@ -428,7 +428,6 @@
         "ProdWebSecurityGroup": {
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
-                "GroupName": "prod-web-security-group",
                 "GroupDescription": "Security group for web servers",
                 "VpcId": {
                     "Ref": "ProdVpc"
@@ -472,7 +471,6 @@
         "ProdAlbSecurityGroup": {
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
-                "GroupName": "prod-alb-security-group",
                 "GroupDescription": "Security group for Application Load Balancer",
                 "VpcId": {
                     "Ref": "ProdVpc"
@@ -514,7 +512,6 @@
         "ProdRdsSecurityGroup": {
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
-                "GroupName": "prod-rds-security-group",
                 "GroupDescription": "Security group for RDS MySQL instance",
                 "VpcId": {
                     "Ref": "ProdVpc"
@@ -608,7 +605,6 @@
         "ProdLaunchTemplate": {
             "Type": "AWS::EC2::LaunchTemplate",
             "Properties": {
-                "LaunchTemplateName": "prod-launch-template",
                 "LaunchTemplateData": {
                     "ImageId": "ami-0c02fb55956c7d316",
                     "InstanceType": "t3.micro",
@@ -664,7 +660,6 @@
         "ProdAutoScalingGroup": {
             "Type": "AWS::AutoScaling::AutoScalingGroup",
             "Properties": {
-                "AutoScalingGroupName": "prod-auto-scaling-group",
                 "LaunchTemplate": {
                     "LaunchTemplateId": {
                         "Ref": "ProdLaunchTemplate"
@@ -719,7 +714,6 @@
         "ProdAlb": {
             "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
             "Properties": {
-                "Name": "prod-application-load-balancer",
                 "Scheme": "internet-facing",
                 "Type": "application",
                 "SecurityGroups": [
@@ -752,7 +746,6 @@
         "ProdTargetGroup": {
             "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
             "Properties": {
-                "Name": "prod-target-group",
                 "Protocol": "HTTP",
                 "Port": 80,
                 "VpcId": {
@@ -799,7 +792,6 @@
         "ProdRdsSubnetGroup": {
             "Type": "AWS::RDS::DBSubnetGroup",
             "Properties": {
-                "DBSubnetGroupName": "prod-rds-subnet-group",
                 "DBSubnetGroupDescription": "Subnet group for RDS MySQL instance",
                 "SubnetIds": [
                     {
@@ -826,12 +818,13 @@
         "ProdRdsInstance": {
             "Type": "AWS::RDS::DBInstance",
             "Properties": {
-                "DBInstanceIdentifier": "prod-rds-instance",
                 "DBInstanceClass": "db.t3.micro",
                 "Engine": "mysql",
                 "EngineVersion": "8.0.35",
                 "MasterUsername": "admin",
-                "MasterUserPassword": "{{resolve:secretsmanager:prod-rds-password:SecretString:password}}",
+                "MasterUserPassword": {
+                    "Fn::Sub": "{{resolve:secretsmanager:${ProdRdsPassword}:SecretString:password}}"
+                },
                 "AllocatedStorage": 20,
                 "StorageType": "gp2",
                 "DBSubnetGroupName": {
@@ -904,7 +897,6 @@
         "ProdRdsPassword": {
             "Type": "AWS::SecretsManager::Secret",
             "Properties": {
-                "Name": "prod-rds-password",
                 "Description": "Password for RDS MySQL instance",
                 "GenerateSecretString": {
                     "SecretStringTemplate": "{\"username\": \"admin\"}",
@@ -929,9 +921,6 @@
         "ProdS3Bucket": {
             "Type": "AWS::S3::Bucket",
             "Properties": {
-                "BucketName": {
-                    "Fn::Sub": "prod-static-assets-${AWS::AccountId}-${AWS::Region}"
-                },
                 "PublicAccessBlockConfiguration": {
                     "BlockPublicAcls": false,
                     "BlockPublicPolicy": false,
@@ -977,7 +966,6 @@
         "ProdWebLogGroup": {
             "Type": "AWS::Logs::LogGroup",
             "Properties": {
-                "LogGroupName": "/aws/ec2/prod-web-servers",
                 "RetentionInDays": 14,
                 "Tags": [
                     {
@@ -996,7 +984,6 @@
         "ProdRdsLogGroup": {
             "Type": "AWS::Logs::LogGroup",
             "Properties": {
-                "LogGroupName": "/aws/rds/instance/prod-rds-instance/error",
                 "RetentionInDays": 14,
                 "Tags": [
                     {
@@ -1015,7 +1002,6 @@
         "ProdAsgCpuAlarm": {
             "Type": "AWS::CloudWatch::Alarm",
             "Properties": {
-                "AlarmName": "prod-asg-high-cpu",
                 "AlarmDescription": "High CPU utilization alarm for Auto Scaling Group",
                 "MetricName": "CPUUtilization",
                 "Namespace": "AWS/EC2",
@@ -1054,7 +1040,6 @@
         "ProdRdsCpuAlarm": {
             "Type": "AWS::CloudWatch::Alarm",
             "Properties": {
-                "AlarmName": "prod-rds-high-cpu",
                 "AlarmDescription": "High CPU utilization alarm for RDS instance",
                 "MetricName": "CPUUtilization",
                 "Namespace": "AWS/RDS",
@@ -1110,7 +1095,6 @@
         "ProdAsgLowCpuAlarm": {
             "Type": "AWS::CloudWatch::Alarm",
             "Properties": {
-                "AlarmName": "prod-asg-low-cpu",
                 "AlarmDescription": "Low CPU utilization alarm for Auto Scaling Group",
                 "MetricName": "CPUUtilization",
                 "Namespace": "AWS/EC2",
