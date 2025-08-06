@@ -95,7 +95,7 @@ export class SecureFoundationalEnvironmentStack extends cdk.Stack {
     this.vpc = new ec2.Vpc(this, 'SecureFoundationVPC', {
       vpcName: `secure-foundation-vpc-${environmentSuffix}`,
       ipAddresses: ec2.IpAddresses.cidr('10.0.0.0/16'),
-      maxAzs: 2, // Reduced from 3 to 2 AZs to minimize NAT Gateway usage
+      maxAzs: 3, // Use 3 AZs to meet high availability requirements
       enableDnsHostnames: true,
       enableDnsSupport: true,
       natGateways: 1, // Use only 1 NAT Gateway shared across all private subnets
