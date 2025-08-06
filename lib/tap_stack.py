@@ -1,4 +1,4 @@
-"""CDK Stack definition for TAP (Test Automation Platform) infrastructure."""
+"""CDK Stack definition for TAP (Test Automation Platform) infrastructure.."""
 from dataclasses import dataclass
 from typing import Optional
 
