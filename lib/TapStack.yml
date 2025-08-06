@@ -200,7 +200,7 @@ Resources:
                   - 's3:ListBucket'
                   - 's3:GetBucketLocation'
                   - 's3:GetBucketVersioning'
-                Resource: !Ref FinAppSecureDocuments
+                Resource: !GetAtt FinAppSecureDocuments.Arn
               
               # Allow object operations on financial documents
               - Sid: AllowObjectOperations
@@ -235,7 +235,7 @@ Resources:
                   - 's3:PutEncryptionConfiguration'
                   - 's3:PutBucketPublicAccessBlock'
                 Resource: 
-                  - !Ref FinAppSecureDocuments
+                  - !GetAtt FinAppSecureDocuments.Arn
                   - !Sub '${FinAppSecureDocuments}/*'
       
       # Resource Tags
