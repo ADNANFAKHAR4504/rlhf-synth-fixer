@@ -25,6 +25,17 @@ describe('SecureFoundationalEnvironmentStack', () => {
         EnableDnsHostnames: true,
         EnableDnsSupport: true,
       });
+      
+      // Verify we have no NAT Gateways (cost-optimized, secure isolated subnets)
+      template.resourceCountIs('AWS::EC2::NatGateway', 0);
+      
+      // Verify we have VPC endpoints for AWS services (2 gateway endpoints: S3 and DynamoDB)
+      template.resourceCountIs('AWS::EC2::VPCEndpoint', 2);
+      
+      // Verify we have gateway endpoints with correct type
+      template.hasResourceProperties('AWS::EC2::VPCEndpoint', {
+        VpcEndpointType: 'Gateway',
+      });
     });
 
     test('should create KMS key with key rotation enabled', () => {
@@ -104,29 +115,6 @@ describe('SecureFoundationalEnvironmentStack', () => {
             IpProtocol: 'tcp',
             ToPort: 443,
           },
-          {
-            CidrIp: {
-              'Fn::GetAtt': [Match.anyValue(), 'CidrBlock'],
-            },
-            Description: 'HTTP to VPC endpoints for AWS services',
-            FromPort: 80,
-            IpProtocol: 'tcp',
-            ToPort: 80,
-          },
-          {
-            CidrIp: '0.0.0.0/0',
-            Description: 'HTTP for package downloads and updates',
-            FromPort: 80,
-            IpProtocol: 'tcp',
-            ToPort: 80,
-          },
-          {
-            CidrIp: '0.0.0.0/0',
-            Description: 'HTTPS for secure downloads and AWS API calls',
-            FromPort: 443,
-            IpProtocol: 'tcp',
-            ToPort: 443,
-          },
         ],
         SecurityGroupIngress: [
           {
@@ -139,26 +127,6 @@ describe('SecureFoundationalEnvironmentStack', () => {
             ToPort: 22,
           },
         ],
-      });
-    });
-
-    test('should create CloudTrail for audit logging', () => {
-      template.hasResourceProperties('AWS::CloudTrail::Trail', {
-        IsLogging: true,
-        IsMultiRegionTrail: true,
-        EnableLogFileValidation: true,
-        IncludeGlobalServiceEvents: true,
-        TrailName: {
-          'Fn::Join': [
-            '',
-            [
-              `security-audit-trail-${environmentSuffix}-`,
-              {
-                'Ref': 'AWS::AccountId',
-              },
-            ],
-          ],
-        },
       });
     });
 

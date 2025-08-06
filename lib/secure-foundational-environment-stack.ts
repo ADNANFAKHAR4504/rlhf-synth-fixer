@@ -7,7 +7,6 @@ import * as kms from 'aws-cdk-lib/aws-kms';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
-import * as cloudtrail from 'aws-cdk-lib/aws-cloudtrail';
 import { Construct } from 'constructs';
 
 interface SecureFoundationalEnvironmentStackProps extends cdk.StackProps {
@@ -79,19 +78,6 @@ export class SecureFoundationalEnvironmentStack extends cdk.Stack {
             sid: 'AllowS3Service',
             effect: iam.Effect.ALLOW,
             principals: [new iam.ServicePrincipal('s3.amazonaws.com')],
-            actions: [
-              'kms:Encrypt',
-              'kms:Decrypt',
-              'kms:ReEncrypt*',
-              'kms:GenerateDataKey*',
-              'kms:DescribeKey',
-            ],
-            resources: ['*'],
-          }),
-          new iam.PolicyStatement({
-            sid: 'AllowCloudTrailService',
-            effect: iam.Effect.ALLOW,
-            principals: [new iam.ServicePrincipal('cloudtrail.amazonaws.com')],
             actions: [
               'kms:Encrypt',
               'kms:Decrypt',
@@ -282,38 +268,6 @@ export class SecureFoundationalEnvironmentStack extends cdk.Stack {
       }),
     });
 
-    // Add bucket policy for CloudTrail
-    this.secureS3Bucket.addToResourcePolicy(
-      new iam.PolicyStatement({
-        sid: 'AWSCloudTrailAclCheck',
-        effect: iam.Effect.ALLOW,
-        principals: [new iam.ServicePrincipal('cloudtrail.amazonaws.com')],
-        actions: ['s3:GetBucketAcl'],
-        resources: [this.secureS3Bucket.bucketArn],
-        conditions: {
-          StringEquals: {
-            'AWS:SourceArn': `arn:aws:cloudtrail:${this.region}:${this.account}:trail/security-audit-trail-${environmentSuffix}-${this.account}`,
-          },
-        },
-      })
-    );
-
-    this.secureS3Bucket.addToResourcePolicy(
-      new iam.PolicyStatement({
-        sid: 'AWSCloudTrailWrite',
-        effect: iam.Effect.ALLOW,
-        principals: [new iam.ServicePrincipal('cloudtrail.amazonaws.com')],
-        actions: ['s3:PutObject'],
-        resources: [`${this.secureS3Bucket.bucketArn}/cloudtrail-logs/*`],
-        conditions: {
-          StringEquals: {
-            's3:x-amz-acl': 'bucket-owner-full-control',
-            'AWS:SourceArn': `arn:aws:cloudtrail:${this.region}:${this.account}:trail/security-audit-trail-${environmentSuffix}-${this.account}`,
-          },
-        },
-      })
-    );
-
     // 7. EC2 Instance with Amazon Linux 2023
     const userData = ec2.UserData.forLinux();
     userData.addCommands(
@@ -400,8 +354,10 @@ export class SecureFoundationalEnvironmentStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
-    // 9. CloudTrail for API logging
-
+    // 9. CloudTrail for API logging (Optional - only create if not at limit)
+    // Note: AWS has a limit of 5 trails per region per account
+    // Uncomment the following block if you have trail capacity available
+    /*
     new cloudtrail.Trail(this, 'SecurityAuditTrail', {
       trailName: `security-audit-trail-${environmentSuffix}-${this.account}`,
       bucket: this.secureS3Bucket,
@@ -412,6 +368,7 @@ export class SecureFoundationalEnvironmentStack extends cdk.Stack {
       encryptionKey: this.kmsKey,
       sendToCloudWatchLogs: true,
     });
+    */
 
     // 10. CloudWatch Dashboard for monitoring
     const dashboard = new cloudwatch.Dashboard(this, 'SecurityDashboard', {
