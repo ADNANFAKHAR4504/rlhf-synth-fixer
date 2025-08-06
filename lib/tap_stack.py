@@ -9,8 +9,8 @@ from cdktf_cdktf_provider_aws.provider import AwsProvider, AwsProviderDefaultTag
 from cdktf_cdktf_provider_aws.s3_bucket import S3Bucket
 from cdktf_cdktf_provider_aws.s3_bucket_server_side_encryption_configuration import (
   S3BucketServerSideEncryptionConfigurationA,
-  S3BucketServerSideEncryptionConfigurationRule,
-  S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefault
+  S3BucketServerSideEncryptionConfigurationRuleA,
+  S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultA
 )
 from cdktf_cdktf_provider_aws.s3_bucket_versioning import S3BucketVersioningA
 from cdktf_cdktf_provider_aws.s3_bucket_policy import S3BucketPolicy
@@ -106,8 +106,8 @@ class TapStack(TerraformStack):
         self, f"bucket-encryption-{bucket_type}",
         bucket=bucket.id,
         rule=[
-          S3BucketServerSideEncryptionConfigurationRule(
-            apply_server_side_encryption_by_default=S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefault(
+          S3BucketServerSideEncryptionConfigurationRuleA(
+            apply_server_side_encryption_by_default=S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultA(
               sse_algorithm="AES256"
             ),
             bucket_key_enabled=False
