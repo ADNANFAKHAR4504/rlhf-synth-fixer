@@ -23,6 +23,7 @@ import { IamRolePolicyAttachment } from '@cdktf/provider-aws/lib/iam-role-policy
 import { IamInstanceProfile } from '@cdktf/provider-aws/lib/iam-instance-profile';
 import { Instance } from '@cdktf/provider-aws/lib/instance';
 import { DataAwsAmi } from '@cdktf/provider-aws/lib/data-aws-ami';
+import { Route } from '@cdktf/provider-aws/lib/route'; // Import Route for explicit route creation
 
 // Import common types
 import { CommonTags, BaseConstructProps } from './types/common';
@@ -151,9 +152,10 @@ class NetworkingConstruct extends Construct {
         },
       });
 
-      // Add route to Internet Gateway for Public Route Table
-      publicRouteTable.addRoute('internet_route', {
-        cidrBlock: '0.0.0.0/0',
+      // Explicitly create Route for Internet Gateway for Public Route Table
+      new Route(this, `public_internet_route_${index}`, {
+        routeTableId: publicRouteTable.id,
+        destinationCidrBlock: '0.0.0.0/0',
         gatewayId: internetGateway.id,
       });
 
@@ -185,14 +187,15 @@ class NetworkingConstruct extends Construct {
         },
       });
 
-      // Add route to NAT Gateway for Private Route Table
+      // Explicitly create Route for NAT Gateway for Private Route Table
+      // Ensure natGateway is defined before creating the route
       if (natGateway!) {
-        privateRouteTable.addRoute('nat_route', {
-          cidrBlock: '0.0.0.0/0',
+        new Route(this, `private_nat_route_${index}`, {
+          routeTableId: privateRouteTable.id,
+          destinationCidrBlock: '0.0.0.0/0',
           natGatewayId: natGateway.id,
         });
       }
-
 
       // Associate Private Subnet with Private Route Table
       new RouteTableAssociation(this, `private_rt_assoc_${index}`, {
