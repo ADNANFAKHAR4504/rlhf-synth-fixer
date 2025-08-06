@@ -148,7 +148,18 @@ class TestTapStack:
         "PolicyDocument": {
             "Statement": Match.array_with([
                 Match.object_like({
-                    "Action": Match.array_with(["s3:GetObject*", "s3:GetBucket*", "s3:List*", "s3:DeleteObject*", "s3:PutObject*", "s3:AbortMultipartUpload"]),
+                    "Action": Match.array_with([
+                        "s3:GetObject*",
+                        "s3:GetBucket*",
+                        "s3:List*",
+                        "s3:DeleteObject*",
+                        "s3:PutObject", # Specific action
+                        "s3:PutObjectLegalHold",
+                        "s3:PutObjectRetention",
+                        "s3:PutObjectTagging",
+                        "s3:PutObjectVersionTagging",
+                        "s3:AbortMultipartUpload" # Specific action
+                    ]),
                     "Effect": "Allow",
                     "Resource": Match.array_with([
                         Match.object_like({"Fn::GetAtt": [Match.string_like_regexp("AppBucket.*"), "Arn"]}), # Bucket ARN
