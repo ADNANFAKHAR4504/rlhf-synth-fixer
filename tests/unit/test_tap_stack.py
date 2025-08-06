@@ -88,8 +88,10 @@ class MockOutput:
 
   def __iter__(self):
     if isinstance(self.value, (list, tuple)):
-      return iter([MockOutput(x) for x in self.value])
-    return iter([])
+      for x in self.value:
+        yield MockOutput(x)
+    else:
+      yield MockOutput()
 
   @staticmethod
   def all(*args):
@@ -113,24 +115,36 @@ class MockComponentResource:
     self.opts = kwargs.get("opts", None)
     self.outputs = {}
     self._childResources = []
+    self.id = "mock-resource-id"  # Add id attribute for depends_on
 
   def register_outputs(self, outputs):
     self.outputs.update(outputs)
 
+# Create a proper mock Resource class
+
+
+class MockResource:
+  def __init__(self, *args, **kwargs):
+    self.id = "mock-resource-id"
+    self.urn = "mock-resource-urn"
+
 
 # Patch isinstance to handle MockOutput checks
-original_isinstance = isinstance
+original_isinstance = builtins.isinstance
 
 
 def patched_isinstance(obj, cls):
   if cls == pulumi.Output and hasattr(obj, '_is_output'):
     return True
-  return original_isinstance(obj, cls)
+  if isinstance(cls, (type, tuple)):
+    return original_isinstance(obj, cls)
+  return False
 
 
 # Apply patches
 pulumi.Output = MockOutput
 pulumi.ComponentResource = MockComponentResource
+pulumi.Resource = MockResource
 pulumi.ResourceOptions = pulumi.ResourceOptions
 pulumi.AssetArchive = MagicMock()
 pulumi.StringAsset = MagicMock()
@@ -172,7 +186,7 @@ class TestTapStackComponents(unittest.TestCase):
     self.assertTrue(hasattr(compute, "lambda_sg"))
 
   def test_database_component_initialization(self):
-    compute_mock = MagicMock()
+    compute_mock = MockComponentResource()
     compute_mock.db_sg = MagicMock(id="sg-123")
     compute_mock.private_subnet_ids = MockOutput(["subnet-123"])
 
@@ -188,14 +202,14 @@ class TestTapStackComponents(unittest.TestCase):
     self.assertTrue(hasattr(db, "rds_instance"))
 
   def test_serverless_component_initialization(self):
-    iam_mock = MagicMock()
+    iam_mock = MockComponentResource()
     iam_mock.lambda_role = MagicMock(arn="arn:aws:iam::123:role/test")
 
-    compute_mock = MagicMock()
+    compute_mock = MockComponentResource()
     compute_mock.private_subnet_ids = MockOutput(["subnet-123"])
     compute_mock.lambda_sg = MagicMock(id="sg-123")
 
-    db_mock = MagicMock()
+    db_mock = MockComponentResource()
     db_mock.rds_instance = MagicMock(endpoint="db-endpoint")
 
     serverless = ServerlessComponent(
@@ -208,7 +222,7 @@ class TestTapStackComponents(unittest.TestCase):
         db_name="tapdb",
         db_username="admin",
         db_password="passw0rd",
-        opts=pulumi.ResourceOptions(),
+        opts=pulumi.ResourceOptions(depends_on=[db_mock]),
     )
     self.assertTrue(hasattr(serverless, "lambda_function"))
     self.assertTrue(hasattr(serverless, "api"))
