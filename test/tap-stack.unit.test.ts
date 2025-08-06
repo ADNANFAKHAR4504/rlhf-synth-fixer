@@ -251,7 +251,9 @@ describe('Expert-Level Secure CloudFormation Template', () => {
       const logGroup = template.Resources.LambdaLogGroup;
       expect(logGroup.Type).toBe('AWS::Logs::LogGroup');
       // LogGroupName was removed for auto-generated naming
-      expect(logGroup.Properties.LogGroupName).toBeUndefined();
+      expect(logGroup.Properties.LogGroupName).toEqual({
+  'Fn::Sub': '/aws/lambda/${AWS::StackName}-DataProcessorLambda'
+});
       expect(logGroup.Properties.RetentionInDays).toBe(30);
     });
   });
