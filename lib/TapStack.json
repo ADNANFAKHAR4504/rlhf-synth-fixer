@@ -2579,6 +2579,17 @@
                 }
             }
         },
+        "NatGateway1Id": {
+            "Description": "ID of the NAT Gateway",
+            "Value": {
+                "Ref": "NatGateway1"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-NatGateway1Id"
+                }
+            }
+        },
         "ApplicationLoadBalancerDNS": {
             "Description": "DNS name of the Application Load Balancer",
             "Value": {
