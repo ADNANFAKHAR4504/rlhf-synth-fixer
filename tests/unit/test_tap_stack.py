@@ -168,6 +168,32 @@ class MockResourceOptions:
     self.id = kwargs.get('id', None)
     self.kwargs = kwargs
 
+  def _copy(self, **kwargs):
+    """Internal method that Pulumi uses to copy ResourceOptions with modifications"""
+    new_kwargs = self.kwargs.copy()
+    new_kwargs.update(kwargs)
+
+    return MockResourceOptions(
+        parent=kwargs.get('parent', self.parent),
+        depends_on=kwargs.get('depends_on', self.depends_on),
+        **new_kwargs
+    )
+
+  def merge(self, other):
+    """Merge this ResourceOptions with another"""
+    if other is None:
+      return self
+    return self._copy()
+
+  @staticmethod
+  def merge_options(opts1, opts2):
+    """Static method to merge two ResourceOptions"""
+    if opts1 is None:
+      return opts2
+    if opts2 is None:
+      return opts1
+    return opts1._copy()
+
 
 # Patch isinstance to handle MockOutput and Resource checks
 original_isinstance = builtins.isinstance
