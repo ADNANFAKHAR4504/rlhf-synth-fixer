@@ -349,7 +349,6 @@ EOF
       iam_instance_profile=instance_profile.name,
       user_data=user_data,
       monitoring=True,
-      ipv6_address_count=1,
       tags={
         **common_tags,
         "Name": f"{project_name}-web-{idx+1}",
