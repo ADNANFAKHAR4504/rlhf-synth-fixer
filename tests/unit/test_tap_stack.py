@@ -73,7 +73,7 @@ class TestTapStackComponents(unittest.TestCase):
     iam = IAMComponent(
         name="test-iam",
         environment="test",
-        opts=Mock(),
+        opts=mock_pulumi.ResourceOptions(),
     )
     self.assertTrue(hasattr(iam, "lambda_role"))
 
@@ -82,7 +82,7 @@ class TestTapStackComponents(unittest.TestCase):
         name="test-compute",
         cidr_block="10.3.0.0/16",
         environment="test",
-        opts=Mock(),
+        opts=mock_pulumi.ResourceOptions(),
     )
     self.assertTrue(hasattr(compute, "vpc"))
     self.assertTrue(hasattr(compute, "private_subnet_ids"))
@@ -93,7 +93,7 @@ class TestTapStackComponents(unittest.TestCase):
         name="test-compute",
         cidr_block="10.3.0.0/16",
         environment="test",
-        opts=Mock(),
+        opts=mock_pulumi.ResourceOptions(),
     )
     db = DatabaseComponent(
         name="test-db",
@@ -102,7 +102,7 @@ class TestTapStackComponents(unittest.TestCase):
         username="admin",
         password="passw0rd",
         private_subnet_ids=compute.private_subnet_ids,
-        opts=Mock(),
+        opts=mock_pulumi.ResourceOptions(),
     )
     self.assertTrue(hasattr(db, "rds_instance"))
 
@@ -111,7 +111,7 @@ class TestTapStackComponents(unittest.TestCase):
         name="test-compute",
         cidr_block="10.3.0.0/16",
         environment="test",
-        opts=Mock(),
+        opts=mock_pulumi.ResourceOptions(),
     )
     db = DatabaseComponent(
         name="test-db",
@@ -120,12 +120,12 @@ class TestTapStackComponents(unittest.TestCase):
         username="admin",
         password="passw0rd",
         private_subnet_ids=compute.private_subnet_ids,
-        opts=Mock(),
+        opts=mock_pulumi.ResourceOptions(),
     )
     iam = IAMComponent(
         name="test-iam",
         environment="test",
-        opts=Mock(),
+        opts=mock_pulumi.ResourceOptions(),
     )
     serverless = ServerlessComponent(
         name="test-serverless",
@@ -137,7 +137,7 @@ class TestTapStackComponents(unittest.TestCase):
         db_name="tapdb",
         db_username="admin",
         db_password="passw0rd",
-        opts=Mock(),
+        opts=mock_pulumi.ResourceOptions(),
     )
     self.assertTrue(hasattr(serverless, "lambda_function"))
     self.assertTrue(hasattr(serverless, "api"))
@@ -146,7 +146,7 @@ class TestTapStackComponents(unittest.TestCase):
     stack = TapStack(
         name="tap-test",
         args=self.test_args,
-        opts=Mock()
+        opts=mock_pulumi.ResourceOptions(),
     )
     self.assertTrue(hasattr(stack, "iam_component"))
     self.assertTrue(hasattr(stack, "compute_component"))
