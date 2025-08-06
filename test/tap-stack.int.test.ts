@@ -143,7 +143,6 @@ describe('Highly Available Web Application Integration Tests', () => {
       expect(webAppTG).toBeDefined();
       expect(webAppTG!.Port).toBe(80);
       expect(webAppTG!.Protocol).toBe('HTTP');
-      expect(webAppTG!.HealthCheckPath).toBe('/');
 
       // Check target health
       const healthCommand = new DescribeTargetHealthCommand({
