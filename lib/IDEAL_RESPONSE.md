@@ -2,29 +2,6 @@
 
 This document provides a comprehensive implementation of the AWS multi-environment infrastructure using CDKTF with TypeScript. This solution follows best practices and is deployment-ready.
 
-## Project Structure
-
-```
-iac-test-automations/
-├── lib/
-│   ├── constructs/
-│   │   ├── vpc-construct.ts
-│   │   └── security-construct.ts
-│   ├── config/
-│   │   └── environments.ts
-│   ├── utils/
-│   │   └── naming.ts
-│   └── tap-stack.ts
-├── bin/
-│   └── tap.ts
-├── test/
-│   ├── tap-stack.unit.test.ts
-│   └── tap-stack.int.test.ts
-├── package.json
-├── tsconfig.json
-└── cdktf.json
-```
-
 ## 1. Environment Configuration
 
 ### lib/config/environments.ts
@@ -251,7 +228,9 @@ export class VpcConstruct extends Construct {
         cidrBlock: cidr,
         availabilityZone: config.availabilityZones[index],
         mapPublicIpOnLaunch: true,
-        tags: naming.tag({ Name: naming.resource('subnet', `public-${index}`) }),
+        tags: naming.tag({
+          Name: naming.resource('subnet', `public-${index}`),
+        }),
       });
     });
 
@@ -261,7 +240,9 @@ export class VpcConstruct extends Construct {
         vpcId: this.vpc.id,
         cidrBlock: cidr,
         availabilityZone: config.availabilityZones[index],
-        tags: naming.tag({ Name: naming.resource('subnet', `private-${index}`) }),
+        tags: naming.tag({
+          Name: naming.resource('subnet', `private-${index}`),
+        }),
       });
     });
 
@@ -271,7 +252,9 @@ export class VpcConstruct extends Construct {
         vpcId: this.vpc.id,
         cidrBlock: cidr,
         availabilityZone: config.availabilityZones[index],
-        tags: naming.tag({ Name: naming.resource('subnet', `database-${index}`) }),
+        tags: naming.tag({
+          Name: naming.resource('subnet', `database-${index}`),
+        }),
       });
     });
   }
@@ -699,24 +682,25 @@ VPC Flow Logs require proper IAM role with CloudWatch Logs permissions:
 
 ```typescript
 // Create IAM role for VPC Flow Logs
-const flowLogAssumeRolePolicy = new dataAwsIamPolicyDocument.DataAwsIamPolicyDocument(
-  this,
-  'flow-log-assume-role-policy',
-  {
-    statement: [
-      {
-        actions: ['sts:AssumeRole'],
-        effect: 'Allow',
-        principals: [
-          {
-            type: 'Service',
-            identifiers: ['vpc-flow-logs.amazonaws.com'],
-          },
-        ],
-      },
-    ],
-  }
-);
+const flowLogAssumeRolePolicy =
+  new dataAwsIamPolicyDocument.DataAwsIamPolicyDocument(
+    this,
+    'flow-log-assume-role-policy',
+    {
+      statement: [
+        {
+          actions: ['sts:AssumeRole'],
+          effect: 'Allow',
+          principals: [
+            {
+              type: 'Service',
+              identifiers: ['vpc-flow-logs.amazonaws.com'],
+            },
+          ],
+        },
+      ],
+    }
+  );
 
 const flowLogRole = new iamRole.IamRole(this, 'flow-log-role', {
   name: naming.resource('role', 'vpc-flow-logs'),
@@ -803,7 +787,7 @@ const keyPolicy = new dataAwsIamPolicyDocument.DataAwsIamPolicyDocument(
  **Linting**: `npm run lint` - No errors  
  **Testing**: `npm test` - All 37 tests pass (98.93% coverage)  
  **Type Checking**: All TypeScript compilation errors resolved  
- **Deployment**: Both Flow Log and AZ issues resolved  
+ **Deployment**: Both Flow Log and AZ issues resolved
 
 ## Summary
 
