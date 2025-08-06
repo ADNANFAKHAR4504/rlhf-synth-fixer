@@ -1,7 +1,23 @@
 {
     "AWSTemplateFormatVersion": "2010-09-09",
-    "Description": "CloudFormation template for a secure web environment using the default VPC with default parameters",
+    "Description": "Compliant CloudFormation template for a secure web environment with a new VPC and best practices applied",
     "Parameters": {
+        "BatchName": {
+            "Type": "String",
+            "Description": "Batch name for tagging"
+        },
+        "ProjectId": {
+            "Type": "String",
+            "Description": "Project ID for tagging"
+        },
+        "ProjectName": {
+            "Type": "String",
+            "Description": "Project name for tagging"
+        },
+        "ProblemID": {
+            "Type": "String",
+            "Description": "Problem ID for tagging"
+        },
         "AllowedIPAddress": {
             "Type": "String",
             "Description": "IP address allowed for SSH access",
@@ -9,20 +25,104 @@
             "ConstraintDescription": "Must be a valid CIDR IP address",
             "Default": "203.0.113.10/32"
         },
-        "ExistingVPCId": {
-            "Type": "String",
-            "Description": "ID of the existing default VPC (e.g., vpc-xxxxxxxx)",
-            "Default": "vpc-0b094aa4091786d92"
+        "LatestAmiId": {
+            "Type": "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>",
+            "Default": "/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2",
+            "Description": "Latest Amazon Linux 2 AMI from SSM Parameter Store"
         }
     },
     "Resources": {
+        "VPC": {
+            "Type": "AWS::EC2::VPC",
+            "Properties": {
+                "CidrBlock": "10.0.0.0/16",
+                "EnableDnsHostnames": true,
+                "EnableDnsSupport": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "SecureWebVPC"
+                    },
+                    {
+                        "Key": "batchName",
+                        "Value": {
+                            "Ref": "BatchName"
+                        }
+                    },
+                    {
+                        "Key": "projectId",
+                        "Value": {
+                            "Ref": "ProjectId"
+                        }
+                    },
+                    {
+                        "Key": "projectName",
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
+                    },
+                    {
+                        "Key": "ProblemID",
+                        "Value": {
+                            "Ref": "ProblemID"
+                        }
+                    }
+                ]
+            }
+        },
+        "InternetGateway": {
+            "Type": "AWS::EC2::InternetGateway",
+            "Properties": {
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "SecureWebIGW"
+                    },
+                    {
+                        "Key": "batchName",
+                        "Value": {
+                            "Ref": "BatchName"
+                        }
+                    },
+                    {
+                        "Key": "projectId",
+                        "Value": {
+                            "Ref": "ProjectId"
+                        }
+                    },
+                    {
+                        "Key": "projectName",
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
+                    },
+                    {
+                        "Key": "ProblemID",
+                        "Value": {
+                            "Ref": "ProblemID"
+                        }
+                    }
+                ]
+            }
+        },
+        "VPCGatewayAttachment": {
+            "Type": "AWS::EC2::VPCGatewayAttachment",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "InternetGatewayId": {
+                    "Ref": "InternetGateway"
+                }
+            }
+        },
         "PublicSubnet": {
             "Type": "AWS::EC2::Subnet",
             "Properties": {
                 "VpcId": {
-                    "Ref": "ExistingVPCId"
+                    "Ref": "VPC"
                 },
-                "CidrBlock": "172.31.64.0/20",
+                "CidrBlock": "10.0.1.0/24",
                 "MapPublicIpOnLaunch": true,
                 "AvailabilityZone": {
                     "Fn::Select": [
@@ -36,8 +136,94 @@
                     {
                         "Key": "Name",
                         "Value": "SecureWebSubnet"
+                    },
+                    {
+                        "Key": "batchName",
+                        "Value": {
+                            "Ref": "BatchName"
+                        }
+                    },
+                    {
+                        "Key": "projectId",
+                        "Value": {
+                            "Ref": "ProjectId"
+                        }
+                    },
+                    {
+                        "Key": "projectName",
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
+                    },
+                    {
+                        "Key": "ProblemID",
+                        "Value": {
+                            "Ref": "ProblemID"
+                        }
                     }
                 ]
+            }
+        },
+        "PublicRouteTable": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "SecureWebPublicRT"
+                    },
+                    {
+                        "Key": "batchName",
+                        "Value": {
+                            "Ref": "BatchName"
+                        }
+                    },
+                    {
+                        "Key": "projectId",
+                        "Value": {
+                            "Ref": "ProjectId"
+                        }
+                    },
+                    {
+                        "Key": "projectName",
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
+                    },
+                    {
+                        "Key": "ProblemID",
+                        "Value": {
+                            "Ref": "ProblemID"
+                        }
+                    }
+                ]
+            }
+        },
+        "PublicRoute": {
+            "Type": "AWS::EC2::Route",
+            "DependsOn": "VPCGatewayAttachment",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "GatewayId": {
+                    "Ref": "InternetGateway"
+                }
+            }
+        },
+        "SubnetRouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "PublicSubnet"
+                },
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                }
             }
         },
         "InstanceSecurityGroup": {
@@ -45,7 +231,7 @@
             "Properties": {
                 "GroupDescription": "Security group for EC2 instance with restricted SSH access",
                 "VpcId": {
-                    "Ref": "ExistingVPCId"
+                    "Ref": "VPC"
                 },
                 "SecurityGroupIngress": [
                     {
@@ -61,6 +247,30 @@
                     {
                         "Key": "Name",
                         "Value": "SecureWebSG"
+                    },
+                    {
+                        "Key": "batchName",
+                        "Value": {
+                            "Ref": "BatchName"
+                        }
+                    },
+                    {
+                        "Key": "projectId",
+                        "Value": {
+                            "Ref": "ProjectId"
+                        }
+                    },
+                    {
+                        "Key": "projectName",
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
+                    },
+                    {
+                        "Key": "ProblemID",
+                        "Value": {
+                            "Ref": "ProblemID"
+                        }
                     }
                 ]
             }
@@ -80,31 +290,38 @@
                         }
                     ]
                 },
-                "Policies": [
-                    {
-                        "PolicyName": "S3ReadOnlyPolicy",
-                        "PolicyDocument": {
-                            "Version": "2012-10-17",
-                            "Statement": [
-                                {
-                                    "Effect": "Allow",
-                                    "Action": [
-                                        "s3:Get*",
-                                        "s3:List*"
-                                    ],
-                                    "Resource": "*"
-                                }
-                            ]
-                        }
-                    }
-                ],
                 "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess",
                     "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
                 ],
                 "Tags": [
                     {
                         "Key": "Name",
                         "Value": "EC2S3ReadOnlyRole"
+                    },
+                    {
+                        "Key": "batchName",
+                        "Value": {
+                            "Ref": "BatchName"
+                        }
+                    },
+                    {
+                        "Key": "projectId",
+                        "Value": {
+                            "Ref": "ProjectId"
+                        }
+                    },
+                    {
+                        "Key": "projectName",
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
+                    },
+                    {
+                        "Key": "ProblemID",
+                        "Value": {
+                            "Ref": "ProblemID"
+                        }
                     }
                 ]
             }
@@ -123,22 +340,76 @@
             "Type": "AWS::SSM::Parameter",
             "Properties": {
                 "Name": "/secure-web/config",
-                "Type": "String",
+                "Type": "SecureString",
                 "Value": "example-config-value",
-                "Description": "Configuration value for EC2 instance"
+                "Description": "Configuration value for EC2 instance",
+                "Tags": [
+                    {
+                        "Key": "batchName",
+                        "Value": {
+                            "Ref": "BatchName"
+                        }
+                    },
+                    {
+                        "Key": "projectId",
+                        "Value": {
+                            "Ref": "ProjectId"
+                        }
+                    },
+                    {
+                        "Key": "projectName",
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
+                    },
+                    {
+                        "Key": "ProblemID",
+                        "Value": {
+                            "Ref": "ProblemID"
+                        }
+                    }
+                ]
             }
         },
         "ElasticIP": {
             "Type": "AWS::EC2::EIP",
             "Properties": {
-                "Domain": "vpc"
+                "Domain": "vpc",
+                "Tags": [
+                    {
+                        "Key": "batchName",
+                        "Value": {
+                            "Ref": "BatchName"
+                        }
+                    },
+                    {
+                        "Key": "projectId",
+                        "Value": {
+                            "Ref": "ProjectId"
+                        }
+                    },
+                    {
+                        "Key": "projectName",
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
+                    },
+                    {
+                        "Key": "ProblemID",
+                        "Value": {
+                            "Ref": "ProblemID"
+                        }
+                    }
+                ]
             }
         },
         "EC2Instance": {
             "Type": "AWS::EC2::Instance",
             "Properties": {
-                "InstanceType": "t2.micro",
-                "ImageId": "ami-0e0d5cba8c90ba8c5",
+                "InstanceType": "t3.micro",
+                "ImageId": {
+                    "Ref": "LatestAmiId"
+                },
                 "SubnetId": {
                     "Ref": "PublicSubnet"
                 },
@@ -151,12 +422,38 @@
                     "Ref": "EC2InstanceProfile"
                 },
                 "UserData": {
-                    "Fn::Base64": "#!/bin/bash\nyum update -y\n# Retrieving configuration from Parameter Store\nCONFIG_VALUE=$(aws ssm get-parameter --name \"/secure-web/config\" --region us-west-2 --query Parameter.Value --output text)\necho \"Configuration: $CONFIG_VALUE\" >> /var/log/config.log\n"
+                    "Fn::Base64": {
+                        "Fn::Sub": "#!/bin/bash\nyum update -y\nCONFIG_VALUE=$(aws ssm get-parameter --name \"/secure-web/config\" --region ${AWS::Region} --with-decryption --query Parameter.Value --output text)\necho \"Configuration: $CONFIG_VALUE\" >> /var/log/config.log\n"
+                    }
                 },
                 "Tags": [
                     {
                         "Key": "Name",
                         "Value": "SecureWebInstance"
+                    },
+                    {
+                        "Key": "batchName",
+                        "Value": {
+                            "Ref": "BatchName"
+                        }
+                    },
+                    {
+                        "Key": "projectId",
+                        "Value": {
+                            "Ref": "ProjectId"
+                        }
+                    },
+                    {
+                        "Key": "projectName",
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
+                    },
+                    {
+                        "Key": "ProblemID",
+                        "Value": {
+                            "Ref": "ProblemID"
+                        }
                     }
                 ]
             }
@@ -181,9 +478,9 @@
             }
         },
         "VPCId": {
-            "Description": "ID of the existing VPC used",
+            "Description": "ID of the VPC used",
             "Value": {
-                "Ref": "ExistingVPCId"
+                "Ref": "VPC"
             }
         },
         "InstanceId": {

@@ -1,37 +1,129 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: CloudFormation template for a secure web environment using the default VPC with default parameters
+Description: Compliant CloudFormation template for a secure web environment with a new VPC and best practices applied
 
 Parameters:
+  BatchName:
+    Type: String
+    Description: Batch name for tagging
+  ProjectId:
+    Type: String
+    Description: Project ID for tagging
+  ProjectName:
+    Type: String
+    Description: Project name for tagging
+  ProblemID:
+    Type: String
+    Description: Problem ID for tagging
   AllowedIPAddress:
     Type: String
-    Description: IP address allowed for SSH access 
+    Description: IP address allowed for SSH access
     AllowedPattern: ^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/32$
-    ConstraintDescription: Must be a valid CIDR IP address 
+    ConstraintDescription: Must be a valid CIDR IP address
     Default: 203.0.113.10/32
-  ExistingVPCId:
-    Type: String
-    Description: ID of the existing default VPC (e.g., vpc-xxxxxxxx)
-    Default: vpc-0b094aa4091786d92
+  LatestAmiId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
+    Description: Latest Amazon Linux 2 AMI from SSM Parameter Store
 
 Resources:
-  # Creating Subnet in the existing VPC
+  # New VPC
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: SecureWebVPC
+        - Key: batchName
+          Value: !Ref BatchName
+        - Key: projectId
+          Value: !Ref ProjectId
+        - Key: projectName
+          Value: !Ref ProjectName
+        - Key: ProblemID
+          Value: !Ref ProblemID
+
+  # Internet Gateway
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: SecureWebIGW
+        - Key: batchName
+          Value: !Ref BatchName
+        - Key: projectId
+          Value: !Ref ProjectId
+        - Key: projectName
+          Value: !Ref ProjectName
+        - Key: ProblemID
+          Value: !Ref ProblemID
+
+  VPCGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  # Public Subnet
   PublicSubnet:
     Type: AWS::EC2::Subnet
     Properties:
-      VpcId: !Ref ExistingVPCId
-      CidrBlock: 172.31.64.0/20
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.1.0/24
       MapPublicIpOnLaunch: true
       AvailabilityZone: !Select [0, !GetAZs '']
       Tags:
         - Key: Name
           Value: SecureWebSubnet
+        - Key: batchName
+          Value: !Ref BatchName
+        - Key: projectId
+          Value: !Ref ProjectId
+        - Key: projectName
+          Value: !Ref ProjectName
+        - Key: ProblemID
+          Value: !Ref ProblemID
 
-  # Creating Security Group
+  # Route Table and Route
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: SecureWebPublicRT
+        - Key: batchName
+          Value: !Ref BatchName
+        - Key: projectId
+          Value: !Ref ProjectId
+        - Key: projectName
+          Value: !Ref ProjectName
+        - Key: ProblemID
+          Value: !Ref ProblemID
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: VPCGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  SubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet
+      RouteTableId: !Ref PublicRouteTable
+
+  # Security Group
   InstanceSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: Security group for EC2 instance with restricted SSH access
-      VpcId: !Ref ExistingVPCId
+      VpcId: !Ref VPC
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 22
@@ -40,8 +132,16 @@ Resources:
       Tags:
         - Key: Name
           Value: SecureWebSG
+        - Key: batchName
+          Value: !Ref BatchName
+        - Key: projectId
+          Value: !Ref ProjectId
+        - Key: projectName
+          Value: !Ref ProjectName
+        - Key: ProblemID
+          Value: !Ref ProblemID
 
-  # Creating IAM Role for EC2
+  # IAM Role
   EC2Role:
     Type: AWS::IAM::Role
     Properties:
@@ -52,66 +152,89 @@ Resources:
             Principal:
               Service: ec2.amazonaws.com
             Action: sts:AssumeRole
-      Policies:
-        - PolicyName: S3ReadOnlyPolicy
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - s3:Get*
-                  - s3:List*
-                Resource: '*'
       ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess
         - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
       Tags:
         - Key: Name
           Value: EC2S3ReadOnlyRole
+        - Key: batchName
+          Value: !Ref BatchName
+        - Key: projectId
+          Value: !Ref ProjectId
+        - Key: projectName
+          Value: !Ref ProjectName
+        - Key: ProblemID
+          Value: !Ref ProblemID
 
-  # Creating Instance Profile
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
       Roles:
         - !Ref EC2Role
 
-  # Creating Parameter Store for configuration
+  # Secure Parameter Store
   ConfigParameter:
     Type: AWS::SSM::Parameter
     Properties:
       Name: /secure-web/config
-      Type: String
+      Type: SecureString
       Value: 'example-config-value'
       Description: Configuration value for EC2 instance
+      Tags:
+        - Key: batchName
+          Value: !Ref BatchName
+        - Key: projectId
+          Value: !Ref ProjectId
+        - Key: projectName
+          Value: !Ref ProjectName
+        - Key: ProblemID
+          Value: !Ref ProblemID
 
-  # Creating Elastic IP
+  # Elastic IP
   ElasticIP:
     Type: AWS::EC2::EIP
     Properties:
       Domain: vpc
+      Tags:
+        - Key: batchName
+          Value: !Ref BatchName
+        - Key: projectId
+          Value: !Ref ProjectId
+        - Key: projectName
+          Value: !Ref ProjectName
+        - Key: ProblemID
+          Value: !Ref ProblemID
 
-  # Creating EC2 Instance
+  # EC2 Instance
   EC2Instance:
     Type: AWS::EC2::Instance
     Properties:
-      InstanceType: t2.micro
-      ImageId: ami-0e0d5cba8c90ba8c5 # Amazon Linux 2 AMI in us-west-2
+      InstanceType: t3.micro
+      ImageId: !Ref LatestAmiId
       SubnetId: !Ref PublicSubnet
       SecurityGroupIds:
         - !Ref InstanceSecurityGroup
       IamInstanceProfile: !Ref EC2InstanceProfile
-      UserData: 
-        Fn::Base64: |
+      UserData:
+        Fn::Base64: !Sub |
           #!/bin/bash
           yum update -y
-          # Retrieving configuration from Parameter Store
-          CONFIG_VALUE=$(aws ssm get-parameter --name "/secure-web/config" --region us-west-2 --query Parameter.Value --output text)
+          CONFIG_VALUE=$(aws ssm get-parameter --name "/secure-web/config" --region ${AWS::Region} --with-decryption --query Parameter.Value --output text)
           echo "Configuration: $CONFIG_VALUE" >> /var/log/config.log
       Tags:
         - Key: Name
           Value: SecureWebInstance
+        - Key: batchName
+          Value: !Ref BatchName
+        - Key: projectId
+          Value: !Ref ProjectId
+        - Key: projectName
+          Value: !Ref ProjectName
+        - Key: ProblemID
+          Value: !Ref ProblemID
 
-  # Associating Elastic IP with EC2 Instance
+  # EIP Association
   EIPAssociation:
     Type: AWS::EC2::EIPAssociation
     Properties:
@@ -123,8 +246,8 @@ Outputs:
     Description: Public IP address of the EC2 instance
     Value: !Ref ElasticIP
   VPCId:
-    Description: ID of the existing VPC used
-    Value: !Ref ExistingVPCId
+    Description: ID of the VPC used
+    Value: !Ref VPC
   InstanceId:
     Description: ID of the EC2 instance
     Value: !Ref EC2Instance
