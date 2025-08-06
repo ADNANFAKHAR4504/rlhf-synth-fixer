@@ -18,7 +18,7 @@
     "build": "tsc",
     "start": "ts-node cli/create-task.ts",
     "lint": "eslint .",
-    "format": "prettier --write 'lib/*.{ts,tsx}' 'bin/*.{ts, tsx}' 'test/*.{ts,tsx}'",
+    "format": "prettier --write 'lib/*.{ts,tsx}' 'bin/*.{ts,tsx}' 'test/*.{ts,tsx}'",
     "format:check": "prettier --check 'lib/*.{ts,tsx}'",
     "format-all": "npm run format && npm run lint",
     "watch": "tsc -w",
