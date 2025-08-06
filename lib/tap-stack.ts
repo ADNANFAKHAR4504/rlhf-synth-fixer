@@ -1,6 +1,8 @@
 // main.ts - CDKTF Serverless Web Application Infrastructure
 // IaC – AWS Nova Model Breaking - Single File Implementation
 /* eslint-disable @typescript-eslint/no-unused-vars */
+import { DataArchiveFile } from '@cdktf/provider-archive/lib/data-archive-file';
+import { ArchiveProvider } from '@cdktf/provider-archive/lib/provider';
 import { ApiGatewayDeployment } from '@cdktf/provider-aws/lib/api-gateway-deployment';
 import { ApiGatewayIntegration } from '@cdktf/provider-aws/lib/api-gateway-integration';
 import { ApiGatewayMethod } from '@cdktf/provider-aws/lib/api-gateway-method';
@@ -9,14 +11,12 @@ import { ApiGatewayResource } from '@cdktf/provider-aws/lib/api-gateway-resource
 import { ApiGatewayRestApi } from '@cdktf/provider-aws/lib/api-gateway-rest-api';
 import { ApiGatewayStage } from '@cdktf/provider-aws/lib/api-gateway-stage';
 import { CloudwatchLogGroup } from '@cdktf/provider-aws/lib/cloudwatch-log-group';
-import { DataArchiveFile } from '@cdktf/provider-archive/lib/data-archive-file';
 import { DynamodbTable } from '@cdktf/provider-aws/lib/dynamodb-table';
 import { IamPolicy } from '@cdktf/provider-aws/lib/iam-policy';
 import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
 import { IamRolePolicyAttachment } from '@cdktf/provider-aws/lib/iam-role-policy-attachment';
 import { LambdaFunction } from '@cdktf/provider-aws/lib/lambda-function';
 import { LambdaPermission } from '@cdktf/provider-aws/lib/lambda-permission';
-import { ArchiveProvider } from '@cdktf/provider-archive/lib/provider';
 import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
 import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
 import { S3Object } from '@cdktf/provider-aws/lib/s3-object';
@@ -84,7 +84,11 @@ export class TapStack extends TerraformStack {
     // API Gateway
     const api = this.createApiGateway(apiLogGroup);
     const apiResources = this.createApiResources(api);
-    const apiMethods = this.createApiMethods(api, apiResources, lambdaFunctions);
+    const apiMethods = this.createApiMethods(
+      api,
+      apiResources,
+      lambdaFunctions
+    );
     const deployment = this.createApiDeployment(api, apiMethods);
     const stage = this.createApiStage(api, deployment, apiLogGroup);
 
@@ -232,7 +236,12 @@ export class TapStack extends TerraformStack {
                 'dynamodb:Query',
                 'dynamodb:Scan',
               ],
-              Resource: [userTable.arn, sessionTable.arn, `${userTable.arn}/*`, `${sessionTable.arn}/*`],
+              Resource: [
+                userTable.arn,
+                sessionTable.arn,
+                `${userTable.arn}/*`,
+                `${sessionTable.arn}/*`,
+              ],
             },
           ],
         }),
@@ -509,35 +518,55 @@ export class TapStack extends TerraformStack {
     sessionById: ApiGatewayResource;
     health: ApiGatewayResource;
   } {
-    const users = new ApiGatewayResource(this, `${this.resourcePrefix}-users-resource`, {
-      restApiId: api.id,
-      parentId: api.rootResourceId,
-      pathPart: 'users',
-    });
+    const users = new ApiGatewayResource(
+      this,
+      `${this.resourcePrefix}-users-resource`,
+      {
+        restApiId: api.id,
+        parentId: api.rootResourceId,
+        pathPart: 'users',
+      }
+    );
 
-    const userById = new ApiGatewayResource(this, `${this.resourcePrefix}-user-by-id-resource`, {
-      restApiId: api.id,
-      parentId: users.id,
-      pathPart: '{userId}',
-    });
+    const userById = new ApiGatewayResource(
+      this,
+      `${this.resourcePrefix}-user-by-id-resource`,
+      {
+        restApiId: api.id,
+        parentId: users.id,
+        pathPart: '{userId}',
+      }
+    );
 
-    const sessions = new ApiGatewayResource(this, `${this.resourcePrefix}-sessions-resource`, {
-      restApiId: api.id,
-      parentId: api.rootResourceId,
-      pathPart: 'sessions',
-    });
+    const sessions = new ApiGatewayResource(
+      this,
+      `${this.resourcePrefix}-sessions-resource`,
+      {
+        restApiId: api.id,
+        parentId: api.rootResourceId,
+        pathPart: 'sessions',
+      }
+    );
 
-    const sessionById = new ApiGatewayResource(this, `${this.resourcePrefix}-session-by-id-resource`, {
-      restApiId: api.id,
-      parentId: sessions.id,
-      pathPart: '{sessionId}',
-    });
+    const sessionById = new ApiGatewayResource(
+      this,
+      `${this.resourcePrefix}-session-by-id-resource`,
+      {
+        restApiId: api.id,
+        parentId: sessions.id,
+        pathPart: '{sessionId}',
+      }
+    );
 
-    const health = new ApiGatewayResource(this, `${this.resourcePrefix}-health-resource`, {
-      restApiId: api.id,
-      parentId: api.rootResourceId,
-      pathPart: 'health',
-    });
+    const health = new ApiGatewayResource(
+      this,
+      `${this.resourcePrefix}-health-resource`,
+      {
+        restApiId: api.id,
+        parentId: api.rootResourceId,
+        pathPart: 'health',
+      }
+    );
 
     return { users, userById, sessions, sessionById, health };
   }
@@ -679,13 +708,17 @@ export class TapStack extends TerraformStack {
     api: ApiGatewayRestApi,
     methods: ApiGatewayMethod[]
   ): ApiGatewayDeployment {
-    return new ApiGatewayDeployment(this, `${this.resourcePrefix}-api-deployment`, {
-      restApiId: api.id,
-      dependsOn: methods,
-      lifecycle: {
-        createBeforeDestroy: true,
-      },
-    });
+    return new ApiGatewayDeployment(
+      this,
+      `${this.resourcePrefix}-api-deployment`,
+      {
+        restApiId: api.id,
+        dependsOn: methods,
+        lifecycle: {
+          createBeforeDestroy: true,
+        },
+      }
+    );
   }
 
   private createApiStage(
@@ -693,44 +726,52 @@ export class TapStack extends TerraformStack {
     deployment: ApiGatewayDeployment,
     logGroup: CloudwatchLogGroup
   ): ApiGatewayStage {
-    const stage = new ApiGatewayStage(this, `${this.resourcePrefix}-api-stage`, {
-      restApiId: api.id,
-      deploymentId: deployment.id,
-      stageName: 'prod',
-      accessLogSettings: {
-        destinationArn: logGroup.arn,
-        format: JSON.stringify({
-          requestId: '$requestId',
-          ip: '$sourceIp',
-          caller: '$caller',
-          user: '$user',
-          requestTime: '$requestTime',
-          httpMethod: '$httpMethod',
-          resourcePath: '$resourcePath',
-          status: '$status',
-          protocol: '$protocol',
-          responseLength: '$responseLength',
-        }),
-      },
-      tags: {
-        Name: `${this.resourcePrefix}-api-stage`,
-        Environment: 'Production',
-      },
-    });
+    const stage = new ApiGatewayStage(
+      this,
+      `${this.resourcePrefix}-api-stage`,
+      {
+        restApiId: api.id,
+        deploymentId: deployment.id,
+        stageName: 'prod',
+        accessLogSettings: {
+          destinationArn: logGroup.arn,
+          format: JSON.stringify({
+            requestId: '$requestId',
+            ip: '$sourceIp',
+            caller: '$caller',
+            user: '$user',
+            requestTime: '$requestTime',
+            httpMethod: '$httpMethod',
+            resourcePath: '$resourcePath',
+            status: '$status',
+            protocol: '$protocol',
+            responseLength: '$responseLength',
+          }),
+        },
+        tags: {
+          Name: `${this.resourcePrefix}-api-stage`,
+          Environment: 'Production',
+        },
+      }
+    );
 
     // Configure method settings for throttling and monitoring
-    new ApiGatewayMethodSettings(this, `${this.resourcePrefix}-api-method-settings`, {
-      restApiId: api.id,
-      stageName: stage.stageName,
-      methodPath: '*/*',
-      settings: {
-        metricsEnabled: true,
-        loggingLevel: 'INFO',
-        dataTraceEnabled: true,
-        throttlingBurstLimit: 5000,
-        throttlingRateLimit: 2000,
-      },
-    });
+    new ApiGatewayMethodSettings(
+      this,
+      `${this.resourcePrefix}-api-method-settings`,
+      {
+        restApiId: api.id,
+        stageName: stage.stageName,
+        methodPath: '*/*',
+        settings: {
+          metricsEnabled: true,
+          loggingLevel: 'INFO',
+          dataTraceEnabled: true,
+          throttlingBurstLimit: 5000,
+          throttlingRateLimit: 2000,
+        },
+      }
+    );
 
     return stage;
   }
@@ -744,31 +785,43 @@ export class TapStack extends TerraformStack {
     }
   ): void {
     // User handler permissions
-    new LambdaPermission(this, `${this.resourcePrefix}-user-handler-permission`, {
-      statementId: 'AllowExecutionFromAPIGateway',
-      action: 'lambda:InvokeFunction',
-      functionName: lambdaFunctions.userHandler.functionName,
-      principal: 'apigateway.amazonaws.com',
-      sourceArn: `${api.executionArn}/*/*`,
-    });
+    new LambdaPermission(
+      this,
+      `${this.resourcePrefix}-user-handler-permission`,
+      {
+        statementId: 'AllowExecutionFromAPIGateway',
+        action: 'lambda:InvokeFunction',
+        functionName: lambdaFunctions.userHandler.functionName,
+        principal: 'apigateway.amazonaws.com',
+        sourceArn: `${api.executionArn}/*/*`,
+      }
+    );
 
     // Session handler permissions
-    new LambdaPermission(this, `${this.resourcePrefix}-session-handler-permission`, {
-      statementId: 'AllowExecutionFromAPIGateway',
-      action: 'lambda:InvokeFunction',
-      functionName: lambdaFunctions.sessionHandler.functionName,
-      principal: 'apigateway.amazonaws.com',
-      sourceArn: `${api.executionArn}/*/*`,
-    });
+    new LambdaPermission(
+      this,
+      `${this.resourcePrefix}-session-handler-permission`,
+      {
+        statementId: 'AllowExecutionFromAPIGateway',
+        action: 'lambda:InvokeFunction',
+        functionName: lambdaFunctions.sessionHandler.functionName,
+        principal: 'apigateway.amazonaws.com',
+        sourceArn: `${api.executionArn}/*/*`,
+      }
+    );
 
     // Health check permissions
-    new LambdaPermission(this, `${this.resourcePrefix}-health-check-permission`, {
-      statementId: 'AllowExecutionFromAPIGateway',
-      action: 'lambda:InvokeFunction',
-      functionName: lambdaFunctions.healthCheck.functionName,
-      principal: 'apigateway.amazonaws.com',
-      sourceArn: `${api.executionArn}/*/*`,
-    });
+    new LambdaPermission(
+      this,
+      `${this.resourcePrefix}-health-check-permission`,
+      {
+        statementId: 'AllowExecutionFromAPIGateway',
+        action: 'lambda:InvokeFunction',
+        functionName: lambdaFunctions.healthCheck.functionName,
+        principal: 'apigateway.amazonaws.com',
+        sourceArn: `${api.executionArn}/*/*`,
+      }
+    );
   }
 
   private createOutputs(
@@ -923,13 +976,13 @@ async function updateUser(tableName, userId, updateData) {
     const timestamp = new Date().toISOString();
     updateData.updatedAt = timestamp;
     
-    const updateExpression = 'SET ' + Object.keys(updateData).map(key => \`#\${key} = :\${key}\`).join(', ');
+    const updateExpression = 'SET ' + Object.keys(updateData).map(key => '#' + key + ' = :' + key).join(', ');
     const expressionAttributeNames = {};
     const expressionAttributeValues = {};
     
     Object.keys(updateData).forEach(key => {
-        expressionAttributeNames[\`#\${key}\`] = key;
-        expressionAttributeValues[\`:\${key}\`] = updateData[key];
+        expressionAttributeNames['#' + key] = key;
+        expressionAttributeValues[':' + key] = updateData[key];
     });
     
     const params = {
