@@ -1,12 +1,10 @@
 // main.ts - CDKTF Secure Enterprise Infrastructure
 // IaC – AWS Nova Model Breaking - Single File Implementation
 /* eslint-disable @typescript-eslint/no-unused-vars */
-import { Cloudtrail } from '@cdktf/provider-aws/lib/cloudtrail';
 import { CloudwatchLogGroup } from '@cdktf/provider-aws/lib/cloudwatch-log-group';
 import { CloudwatchMetricAlarm } from '@cdktf/provider-aws/lib/cloudwatch-metric-alarm';
 import { DataAwsAvailabilityZones } from '@cdktf/provider-aws/lib/data-aws-availability-zones';
 import { DataAwsCallerIdentity } from '@cdktf/provider-aws/lib/data-aws-caller-identity';
-import { Eip } from '@cdktf/provider-aws/lib/eip';
 import { IamAccountPasswordPolicy } from '@cdktf/provider-aws/lib/iam-account-password-policy';
 import { IamPolicy } from '@cdktf/provider-aws/lib/iam-policy';
 import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
@@ -16,14 +14,12 @@ import { IamUserPolicyAttachment } from '@cdktf/provider-aws/lib/iam-user-policy
 import { InternetGateway } from '@cdktf/provider-aws/lib/internet-gateway';
 import { KmsAlias } from '@cdktf/provider-aws/lib/kms-alias';
 import { KmsKey } from '@cdktf/provider-aws/lib/kms-key';
-import { NatGateway } from '@cdktf/provider-aws/lib/nat-gateway';
 import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
 import { Route } from '@cdktf/provider-aws/lib/route';
 import { RouteTable } from '@cdktf/provider-aws/lib/route-table';
 import { RouteTableAssociation } from '@cdktf/provider-aws/lib/route-table-association';
 import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
 import { S3BucketLoggingA } from '@cdktf/provider-aws/lib/s3-bucket-logging';
-import { S3BucketPolicy } from '@cdktf/provider-aws/lib/s3-bucket-policy';
 import { S3BucketPublicAccessBlock } from '@cdktf/provider-aws/lib/s3-bucket-public-access-block';
 import { S3BucketServerSideEncryptionConfigurationA } from '@cdktf/provider-aws/lib/s3-bucket-server-side-encryption-configuration';
 import { S3BucketVersioningA } from '@cdktf/provider-aws/lib/s3-bucket-versioning';
@@ -89,15 +85,6 @@ export class TapStack extends TerraformStack {
               AWS: `arn:aws:iam::${current.accountId}:root`,
             },
             Action: 'kms:*',
-            Resource: '*',
-          },
-          {
-            Sid: 'Allow CloudTrail to encrypt logs',
-            Effect: 'Allow',
-            Principal: {
-              Service: 'cloudtrail.amazonaws.com',
-            },
-            Action: ['kms:GenerateDataKey*', 'kms:DescribeKey'],
             Resource: '*',
           },
           {
@@ -179,66 +166,20 @@ export class TapStack extends TerraformStack {
       },
     });
 
-    // Elastic IPs for NAT Gateways
-    const eip1 = new Eip(this, 'prod-sec-nat-eip-1', {
-      domain: 'vpc',
-      tags: { ...commonTags, Name: 'prod-sec-nat-eip-1' },
-    });
-
-    const eip2 = new Eip(this, 'prod-sec-nat-eip-2', {
-      domain: 'vpc',
-      tags: { ...commonTags, Name: 'prod-sec-nat-eip-2' },
-    });
-
-    // NAT Gateways
-    const natGw1 = new NatGateway(this, 'prod-sec-nat-gw-1', {
-      allocationId: eip1.id,
-      subnetId: publicSubnet1.id,
-      tags: { ...commonTags, Name: 'prod-sec-nat-gw-1' },
-    });
-
-    const natGw2 = new NatGateway(this, 'prod-sec-nat-gw-2', {
-      allocationId: eip2.id,
-      subnetId: publicSubnet2.id,
-      tags: { ...commonTags, Name: 'prod-sec-nat-gw-2' },
-    });
-
     // Route Tables
     const publicRouteTable = new RouteTable(this, 'prod-sec-public-rt', {
       vpcId: vpc.id,
       tags: { ...commonTags, Name: 'prod-sec-public-rt' },
     });
 
-    const privateRouteTable1 = new RouteTable(this, 'prod-sec-private-rt-1', {
-      vpcId: vpc.id,
-      tags: { ...commonTags, Name: 'prod-sec-private-rt-1' },
-    });
-
-    const privateRouteTable2 = new RouteTable(this, 'prod-sec-private-rt-2', {
-      vpcId: vpc.id,
-      tags: { ...commonTags, Name: 'prod-sec-private-rt-2' },
-    });
-
-    // Routes
+    // Routes - Public subnet routes to internet gateway only
     new Route(this, 'prod-sec-public-route', {
       routeTableId: publicRouteTable.id,
       destinationCidrBlock: '0.0.0.0/0',
       gatewayId: igw.id,
     });
 
-    new Route(this, 'prod-sec-private-route-1', {
-      routeTableId: privateRouteTable1.id,
-      destinationCidrBlock: '0.0.0.0/0',
-      natGatewayId: natGw1.id,
-    });
-
-    new Route(this, 'prod-sec-private-route-2', {
-      routeTableId: privateRouteTable2.id,
-      destinationCidrBlock: '0.0.0.0/0',
-      natGatewayId: natGw2.id,
-    });
-
-    // Route Table Associations
+    // Route Table Associations - Only public subnets need routing
     new RouteTableAssociation(this, 'prod-sec-public-rta-1', {
       subnetId: publicSubnet1.id,
       routeTableId: publicRouteTable.id,
@@ -247,16 +188,6 @@ export class TapStack extends TerraformStack {
     new RouteTableAssociation(this, 'prod-sec-public-rta-2', {
       subnetId: publicSubnet2.id,
       routeTableId: publicRouteTable.id,
-    });
-
-    new RouteTableAssociation(this, 'prod-sec-private-rta-1', {
-      subnetId: privateSubnet1.id,
-      routeTableId: privateRouteTable1.id,
-    });
-
-    new RouteTableAssociation(this, 'prod-sec-private-rta-2', {
-      subnetId: privateSubnet2.id,
-      routeTableId: privateRouteTable2.id,
     });
 
     // Security Groups - CORRECTED Implementation
@@ -368,45 +299,6 @@ export class TapStack extends TerraformStack {
       versioningConfiguration: {
         status: 'Enabled',
       },
-    });
-
-    // S3 Bucket Policy for CloudTrail
-    new S3BucketPolicy(this, 'prod-sec-logs-bucket-policy', {
-      bucket: logsBucket.id,
-      policy: JSON.stringify({
-        Version: '2012-10-17',
-        Statement: [
-          {
-            Sid: 'AWSCloudTrailAclCheck',
-            Effect: 'Allow',
-            Principal: {
-              Service: 'cloudtrail.amazonaws.com',
-            },
-            Action: 's3:GetBucketAcl',
-            Resource: logsBucket.arn,
-            Condition: {
-              StringEquals: {
-                'AWS:SourceArn': `arn:aws:cloudtrail:us-east-1:${current.accountId}:trail/prod-sec-cloudtrail-${uniqueSuffix}`,
-              },
-            },
-          },
-          {
-            Sid: 'AWSCloudTrailWrite',
-            Effect: 'Allow',
-            Principal: {
-              Service: 'cloudtrail.amazonaws.com',
-            },
-            Action: 's3:PutObject',
-            Resource: `${logsBucket.arn}/cloudtrail-logs/*`,
-            Condition: {
-              StringEquals: {
-                's3:x-amz-acl': 'bucket-owner-full-control',
-                'AWS:SourceArn': `arn:aws:cloudtrail:us-east-1:${current.accountId}:trail/prod-sec-cloudtrail-${uniqueSuffix}`,
-              },
-            },
-          },
-        ],
-      }),
     });
 
     const appDataBucket = new S3Bucket(this, 'prod-sec-app-data-bucket', {
@@ -575,54 +467,6 @@ export class TapStack extends TerraformStack {
       policyArn: s3AppDataPolicy.arn,
     });
 
-    // CloudTrail IAM Role - using unique name to avoid conflicts
-    const cloudtrailRole = new IamRole(this, 'prod-sec-cloudtrail-role', {
-      name: `prod-sec-cloudtrail-role-${uniqueSuffix}`,
-      description: 'Role for CloudTrail CloudWatch Logs delivery',
-      assumeRolePolicy: JSON.stringify({
-        Version: '2012-10-17',
-        Statement: [
-          {
-            Action: 'sts:AssumeRole',
-            Effect: 'Allow',
-            Principal: {
-              Service: 'cloudtrail.amazonaws.com',
-            },
-          },
-        ],
-      }),
-      tags: commonTags,
-    });
-
-    const cloudtrailLogPolicy = new IamPolicy(
-      this,
-      'prod-sec-cloudtrail-log-policy',
-      {
-        name: `prod-sec-cloudtrail-log-policy-${uniqueSuffix}`,
-        description: 'CloudTrail CloudWatch Logs delivery policy',
-        policy: JSON.stringify({
-          Version: '2012-10-17',
-          Statement: [
-            {
-              Effect: 'Allow',
-              Action: [
-                'logs:PutLogEvents',
-                'logs:CreateLogGroup',
-                'logs:CreateLogStream',
-              ],
-              Resource: `arn:aws:logs:us-east-1:${current.accountId}:log-group:/aws/cloudtrail/*`,
-            },
-          ],
-        }),
-        tags: commonTags,
-      }
-    );
-
-    new IamRolePolicyAttachment(this, 'prod-sec-cloudtrail-role-log-policy', {
-      role: cloudtrailRole.name,
-      policyArn: cloudtrailLogPolicy.arn,
-    });
-
     // IAM Users with least privilege
     const devUser = new IamUser(this, 'prod-sec-dev-user', {
       name: `prod-sec-dev-user-${uniqueSuffix}`,
@@ -742,19 +586,6 @@ export class TapStack extends TerraformStack {
       tags: commonTags,
     });
 
-    // CloudTrail - Using S3 logging with unique naming
-    const cloudtrail = new Cloudtrail(this, 'prod-sec-cloudtrail', {
-      name: `prod-sec-cloudtrail-${uniqueSuffix}`,
-      s3BucketName: logsBucket.id,
-      s3KeyPrefix: 'cloudtrail-logs/',
-      includeGlobalServiceEvents: true,
-      isMultiRegionTrail: true,
-      enableLogging: true,
-      enableLogFileValidation: true,
-      kmsKeyId: mainKmsKey.arn,
-      tags: commonTags,
-    });
-
     // GuardDuty - Commented out as detector already exists in account
     // Note: If GuardDuty detector doesn't exist, uncomment the following:
     // new GuarddutyDetector(this, 'prod-sec-guardduty', {
@@ -795,11 +626,6 @@ export class TapStack extends TerraformStack {
         db: dbSecurityGroup.id,
       },
       description: 'Security group IDs by tier',
-    });
-
-    new TerraformOutput(this, 'cloudtrail_name', {
-      value: cloudtrail.name,
-      description: 'CloudTrail name',
     });
 
     new TerraformOutput(this, 'logs_bucket_name', {
