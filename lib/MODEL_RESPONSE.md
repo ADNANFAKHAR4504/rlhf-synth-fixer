@@ -1,3 +1,4 @@
+```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Secure, highly available infrastructure with environment isolation - Production/Development'
 
@@ -562,3 +563,4 @@ Outputs:
     Value: !Ref PublicSubnet1
     Export:
       Name: !Sub '${EnvironmentSuffix}-PublicSubnet1-ID'
+```
