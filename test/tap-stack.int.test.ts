@@ -116,10 +116,10 @@ describe('CloudFormation Template Integration Tests', () => {
       const subnet2 = resources.ServerlessAppSubnetAZ2;
 
       expect(subnet1.Properties.AvailabilityZone).toEqual({
-        'Fn::FindInMap': ['RegionMap', 'us-east-1', 'AZ1'],
+        'Fn::Select': [0, { 'Fn::GetAZs': '' }],
       });
       expect(subnet2.Properties.AvailabilityZone).toEqual({
-        'Fn::FindInMap': ['RegionMap', 'us-east-1', 'AZ2'],
+        'Fn::Select': [1, { 'Fn::GetAZs': '' }],
       });
 
       // Different CIDR blocks
@@ -197,11 +197,18 @@ describe('CloudFormation Template Integration Tests', () => {
         Ref: 'ServerlessAppInternetGateway',
       });
 
-      // Proper routing
-      const route = resources.ServerlessAppRoute;
-      expect(route.Properties.DestinationCidrBlock).toBe('0.0.0.0/0');
-      expect(route.Properties.GatewayId).toEqual({
+      // Proper routing - check public route
+      const publicRoute = resources.ServerlessAppPublicRoute;
+      expect(publicRoute.Properties.DestinationCidrBlock).toBe('0.0.0.0/0');
+      expect(publicRoute.Properties.GatewayId).toEqual({
         Ref: 'ServerlessAppInternetGateway',
+      });
+
+      // Check private route  
+      const privateRoute = resources.ServerlessAppPrivateRoute;
+      expect(privateRoute.Properties.DestinationCidrBlock).toBe('0.0.0.0/0');
+      expect(privateRoute.Properties.NatGatewayId).toEqual({
+        Ref: 'ServerlessAppNATGateway',
       });
 
       // Security group allowing outbound traffic
