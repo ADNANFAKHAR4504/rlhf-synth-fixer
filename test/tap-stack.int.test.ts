@@ -691,15 +691,24 @@ describe('Expert-Level Secure Infrastructure Integration Tests', () => {
     });
 
     test('should verify deployment in correct AWS region', () => {
-      // Verify all ARNs contain us-east-1 region
-      const arnResources = [
-        outputs.LambdaFunctionArn,
+      // Verify only Lambda ARNs contain us-east-1 region (IAM resources are global)
+      const regionSpecificResources = [
+        outputs.LambdaFunctionArn
+      ].filter(Boolean);
+
+      regionSpecificResources.forEach(arn => {
+        expect(arn).toContain('us-east-1');
+      });
+
+      // IAM resources (roles and policies) are global and don't contain region
+      const iamResources = [
         outputs.LambdaExecutionRoleArn,
         outputs.SecurityPolicyArn
       ].filter(Boolean);
 
-      arnResources.forEach(arn => {
-        expect(arn).toContain('us-east-1');
+      // Just verify IAM resources have proper ARN format (no region check)
+      iamResources.forEach(arn => {
+        expect(arn).toMatch(/^arn:aws:iam::/);
       });
 
       // Verify region consistency
