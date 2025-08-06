@@ -48,7 +48,7 @@
                     "default": "EC2 Instance Type"
                 },
                 "KeyPairName": {
-                    "default": "EC2 Key Pair Name"
+                    "default": "EC2 Key Pair Name (leave empty to create new)"
                 },
                 "DBInstanceClass": {
                     "default": "RDS Instance Class"
@@ -90,8 +90,9 @@
             "Description": "EC2 instance type for web servers"
         },
         "KeyPairName": {
-            "Type": "AWS::EC2::KeyPair::KeyName",
-            "Description": "EC2 Key Pair for SSH access"
+            "Type": "String",
+            "Default": "",
+            "Description": "EC2 Key Pair name for SSH access (leave empty to create a new one)"
         },
         "DBInstanceClass": {
             "Type": "String",
@@ -142,7 +143,34 @@
             "Description": "Email address for CloudWatch alerts"
         }
     },
+    "Conditions": {
+        "CreateKeyPair": {
+            "Fn::Equals": [
+                {
+                    "Ref": "KeyPairName"
+                },
+                ""
+            ]
+        }
+    },
     "Resources": {
+        "KeyPair": {
+            "Type": "AWS::EC2::KeyPair",
+            "Condition": "CreateKeyPair",
+            "Properties": {
+                "KeyName": {
+                    "Fn::Sub": "${AWS::StackName}-keypair"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-KeyPair"
+                        }
+                    }
+                ]
+            }
+        },
         "VPC": {
             "Type": "AWS::EC2::VPC",
             "Properties": {
@@ -577,9 +605,6 @@
         "EC2InstanceRole": {
             "Type": "AWS::IAM::Role",
             "Properties": {
-                "RoleName": {
-                    "Fn::Sub": "${AWS::StackName}-EC2-Role"
-                },
                 "AssumeRolePolicyDocument": {
                     "Version": "2012-10-17",
                     "Statement": [
@@ -636,9 +661,6 @@
         "EC2InstanceProfile": {
             "Type": "AWS::IAM::InstanceProfile",
             "Properties": {
-                "InstanceProfileName": {
-                    "Fn::Sub": "${AWS::StackName}-EC2-Profile"
-                },
                 "Roles": [
                     {
                         "Ref": "EC2InstanceRole"
@@ -658,7 +680,15 @@
                         "Ref": "InstanceType"
                     },
                     "KeyName": {
-                        "Ref": "KeyPairName"
+                        "Fn::If": [
+                            "CreateKeyPair",
+                            {
+                                "Ref": "KeyPair"
+                            },
+                            {
+                                "Ref": "KeyPairName"
+                            }
+                        ]
                     },
                     "IamInstanceProfile": {
                         "Arn": {
@@ -1194,6 +1224,25 @@
             "Export": {
                 "Name": {
                     "Fn::Sub": "${AWS::StackName}-SNS-Topic"
+                }
+            }
+        },
+        "KeyPairName": {
+            "Description": "Name of the EC2 Key Pair",
+            "Value": {
+                "Fn::If": [
+                    "CreateKeyPair",
+                    {
+                        "Ref": "KeyPair"
+                    },
+                    {
+                        "Ref": "KeyPairName"
+                    }
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-KeyPair-Name"
                 }
             }
         }

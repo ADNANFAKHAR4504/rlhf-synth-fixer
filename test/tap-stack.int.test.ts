@@ -20,6 +20,7 @@ describe('TAP Stack Infrastructure Integration Tests', () => {
   const autoScalingGroupName = outputs.AutoScalingGroupName;
   const s3BucketName = outputs.S3BucketName;
   const snsTopicArn = outputs.SNSTopicArn;
+  const keyPairName = outputs.KeyPairName;
 
   describe('Load Balancer Tests', () => {
     test('should have valid load balancer DNS name', () => {
@@ -111,6 +112,15 @@ describe('TAP Stack Infrastructure Integration Tests', () => {
     });
   });
 
+  describe('Key Pair Tests', () => {
+    test('should have valid key pair name', () => {
+      expect(keyPairName).toBeDefined();
+      expect(typeof keyPairName).toBe('string');
+      expect(keyPairName.length).toBeGreaterThan(0);
+      expect(keyPairName).toMatch(/^[a-zA-Z0-9\-]+$/);
+    });
+  });
+
   describe('Infrastructure Connectivity Tests', () => {
     test('all critical outputs should be present', () => {
       const requiredOutputs = [
@@ -120,7 +130,8 @@ describe('TAP Stack Infrastructure Integration Tests', () => {
         'VPCId',
         'AutoScalingGroupName',
         'S3BucketName',
-        'SNSTopicArn'
+        'SNSTopicArn',
+        'KeyPairName'
       ];
 
       requiredOutputs.forEach(outputName => {

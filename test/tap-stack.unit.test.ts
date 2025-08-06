@@ -69,8 +69,40 @@ describe('TapStack CloudFormation Template', () => {
       expect(param.AllowedValues).toContain('t3.large');
     });
 
+    test('KeyPairName parameter should have correct properties', () => {
+      const param = template.Parameters.KeyPairName;
+      expect(param.Type).toBe('String');
+      expect(param.Default).toBe('');
+      expect(param.Description).toContain('leave empty to create a new one');
+    });
+
     test('DBPassword parameter should be removed in favor of Secrets Manager', () => {
       expect(template.Parameters.DBPassword).toBeUndefined();
+    });
+  });
+
+  describe('Conditions', () => {
+    test('should have CreateKeyPair condition', () => {
+      expect(template.Conditions).toBeDefined();
+      expect(template.Conditions.CreateKeyPair).toBeDefined();
+    });
+  });
+
+  describe('Key Pair Resources', () => {
+    test('should have key pair resource', () => {
+      expect(template.Resources.KeyPair).toBeDefined();
+      expect(template.Resources.KeyPair.Type).toBe('AWS::EC2::KeyPair');
+    });
+
+    test('key pair should have condition', () => {
+      const keyPair = template.Resources.KeyPair;
+      expect(keyPair.Condition).toBe('CreateKeyPair');
+    });
+
+    test('key pair should have proper properties', () => {
+      const keyPair = template.Resources.KeyPair;
+      expect(keyPair.Properties.KeyName).toBeDefined();
+      expect(keyPair.Properties.Tags).toBeDefined();
     });
   });
 
@@ -268,7 +300,8 @@ describe('TapStack CloudFormation Template', () => {
         'DatabaseEndpoint',
         'AutoScalingGroupName',
         'S3BucketName',
-        'SNSTopicArn'
+        'SNSTopicArn',
+        'KeyPairName'
       ];
 
       expectedOutputs.forEach(outputName => {
@@ -305,6 +338,28 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Parameters).not.toBeNull();
       expect(template.Resources).not.toBeNull();
       expect(template.Outputs).not.toBeNull();
+    });
+
+    test('should require IAM capabilities due to IAM resources', () => {
+      // Check for IAM resources that require CAPABILITY_IAM
+      const iamResources = [
+        'EC2InstanceRole',
+        'EC2InstanceProfile'
+      ];
+      
+      iamResources.forEach(resourceName => {
+        expect(template.Resources[resourceName]).toBeDefined();
+        expect(template.Resources[resourceName].Type).toMatch(/^AWS::IAM::/);
+      });
+    });
+
+    test('IAM resources should not have custom names (CAPABILITY_IAM compatible)', () => {
+      // IAM resources should not have RoleName or InstanceProfileName for CAPABILITY_IAM
+      const ec2Role = template.Resources.EC2InstanceRole;
+      const ec2Profile = template.Resources.EC2InstanceProfile;
+      
+      expect(ec2Role.Properties.RoleName).toBeUndefined();
+      expect(ec2Profile.Properties.InstanceProfileName).toBeUndefined();
     });
 
     test('should have multiple resources for complete infrastructure', () => {
