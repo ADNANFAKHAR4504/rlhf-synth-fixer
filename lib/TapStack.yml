@@ -24,12 +24,6 @@ Mappings:
     us-east-1:
       AZ1: us-east-1a
       AZ2: us-east-1b
-    us-west-2:
-      AZ1: us-west-2a
-      AZ2: us-west-2b
-    eu-west-1:
-      AZ1: eu-west-1a
-      AZ2: eu-west-1b
 
 Resources:
   # S3 Bucket Policy to allow Lambda invocation
@@ -74,13 +68,12 @@ Resources:
         - Key: Name
           Value: ServerlessAppVPC
 
-  # Private subnets for Lambda
   ServerlessAppSubnetAZ1:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref ServerlessAppVPC
       CidrBlock: 10.0.0.0/26
-      AvailabilityZone: !FindInMap [RegionMap, !Ref 'AWS::Region', AZ1]
+      AvailabilityZone: !FindInMap [RegionMap, us-east-1, AZ1]
       Tags:
         - Key: Name
           Value: ServerlessAppSubnetAZ1
@@ -90,41 +83,10 @@ Resources:
     Properties:
       VpcId: !Ref ServerlessAppVPC
       CidrBlock: 10.0.0.64/26
-      AvailabilityZone: !FindInMap [RegionMap, !Ref 'AWS::Region', AZ2]
+      AvailabilityZone: !FindInMap [RegionMap, us-east-1, AZ2]
       Tags:
         - Key: Name
           Value: ServerlessAppSubnetAZ2
-
-  # Public subnets for NAT Gateway
-  ServerlessAppPublicSubnetAZ1:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref ServerlessAppVPC
-      CidrBlock: 10.0.0.128/26
-      AvailabilityZone: !FindInMap [RegionMap, !Ref 'AWS::Region', AZ1]
-      MapPublicIpOnLaunch: true
-      Tags:
-        - Key: Name
-          Value: ServerlessAppPublicSubnetAZ1
-
-  # NAT Gateway for Lambda internet access
-  ServerlessAppNATGatewayEIP:
-    Type: AWS::EC2::EIP
-    DependsOn: ServerlessAppVPCGatewayAttachment
-    Properties:
-      Domain: vpc
-      Tags:
-        - Key: Name
-          Value: ServerlessAppNATGatewayEIP
-
-  ServerlessAppNATGateway:
-    Type: AWS::EC2::NatGateway
-    Properties:
-      AllocationId: !GetAtt ServerlessAppNATGatewayEIP.AllocationId
-      SubnetId: !Ref ServerlessAppPublicSubnetAZ1
-      Tags:
-        - Key: Name
-          Value: ServerlessAppNATGateway
 
   ServerlessAppInternetGateway:
     Type: AWS::EC2::InternetGateway
@@ -139,56 +101,29 @@ Resources:
       VpcId: !Ref ServerlessAppVPC
       InternetGatewayId: !Ref ServerlessAppInternetGateway
 
-  # Public route table for NAT Gateway
-  ServerlessAppPublicRouteTable:
+  ServerlessAppRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref ServerlessAppVPC
-      Tags:
-        - Key: Name
-          Value: ServerlessAppPublicRouteTable
 
-  ServerlessAppPublicRoute:
+  ServerlessAppRoute:
     Type: AWS::EC2::Route
-    DependsOn: ServerlessAppVPCGatewayAttachment
     Properties:
-      RouteTableId: !Ref ServerlessAppPublicRouteTable
+      RouteTableId: !Ref ServerlessAppRouteTable
       DestinationCidrBlock: 0.0.0.0/0
       GatewayId: !Ref ServerlessAppInternetGateway
 
-  ServerlessAppPublicSubnetRouteTableAssoc:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      SubnetId: !Ref ServerlessAppPublicSubnetAZ1
-      RouteTableId: !Ref ServerlessAppPublicRouteTable
-
-  # Private route table for Lambda subnets
-  ServerlessAppPrivateRouteTable:
-    Type: AWS::EC2::RouteTable
-    Properties:
-      VpcId: !Ref ServerlessAppVPC
-      Tags:
-        - Key: Name
-          Value: ServerlessAppPrivateRouteTable
-
-  ServerlessAppPrivateRoute:
-    Type: AWS::EC2::Route
-    Properties:
-      RouteTableId: !Ref ServerlessAppPrivateRouteTable
-      DestinationCidrBlock: 0.0.0.0/0
-      NatGatewayId: !Ref ServerlessAppNATGateway
-
-  ServerlessAppPrivateSubnetRouteTableAssocAZ1:
+  ServerlessAppSubnetRouteTableAssocAZ1:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       SubnetId: !Ref ServerlessAppSubnetAZ1
-      RouteTableId: !Ref ServerlessAppPrivateRouteTable
+      RouteTableId: !Ref ServerlessAppRouteTable
 
-  ServerlessAppPrivateSubnetRouteTableAssocAZ2:
+  ServerlessAppSubnetRouteTableAssocAZ2:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       SubnetId: !Ref ServerlessAppSubnetAZ2
-      RouteTableId: !Ref ServerlessAppPrivateRouteTable
+      RouteTableId: !Ref ServerlessAppRouteTable
 
   # Security Group to allow Lambda outbound access
   ServerlessAppLambdaSecurityGroup:
@@ -251,21 +186,14 @@ Resources:
                 Action:
                   - s3:GetObject
                 Resource: !Sub arn:aws:s3:::${S3BucketName}/*
-              # VPC permissions for Lambda network interface management (tightened to specific resources)
+              # VPC permissions for Lambda network interface management
               - Effect: Allow
                 Action:
                   - ec2:CreateNetworkInterface
+                  - ec2:DescribeNetworkInterfaces
                   - ec2:DeleteNetworkInterface
                   - ec2:AttachNetworkInterface
                   - ec2:DetachNetworkInterface
-                Resource:
-                  - !Sub arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:network-interface/*
-                  - !Sub arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:subnet/${ServerlessAppSubnetAZ1}
-                  - !Sub arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:subnet/${ServerlessAppSubnetAZ2}
-                  - !Sub arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:security-group/${ServerlessAppLambdaSecurityGroup}
-              - Effect: Allow
-                Action:
-                  - ec2:DescribeNetworkInterfaces
                 Resource: '*'
       Path: '/'
       Tags:
@@ -348,22 +276,7 @@ Resources:
       TreatMissingData: notBreaching
 
   # CloudWatch Alarm - High Invocation Count (workload indicator)
-  ServerlessAppLambdaInvocationAlarm:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName: ServerlessAppLambdaInvocationAlarm
-      AlarmDescription: 'Alarm if invocation count > 100 in 5-minute period'
-      Namespace: AWS/Lambda
-      MetricName: Invocations
-      Dimensions:
-        - Name: FunctionName
-          Value: !Ref ServerlessAppLambda
-      Statistic: Sum
-      Period: 300
-      EvaluationPeriods: 1
-      Threshold: 100
-      ComparisonOperator: GreaterThanThreshold
-      TreatMissingData: notBreachingrverlessAppLambdaInvocationsAlarm:
+  ServerlessAppLambdaInvocationsAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName: ServerlessAppLambdaInvocationsAlarm
