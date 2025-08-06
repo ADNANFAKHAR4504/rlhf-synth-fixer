@@ -50,7 +50,7 @@ export class SecureFoundationalEnvironmentStack extends cdk.Stack {
       alias: `alias/secure-foundation-${environmentSuffix}`,
       description: `Customer-managed KMS key for secure foundational environment - ${environmentSuffix}`,
       enableKeyRotation: true,
-      keyPolicy: new iam.PolicyDocument({
+      policy: new iam.PolicyDocument({
         statements: [
           new iam.PolicyStatement({
             sid: 'EnableRootPermissions',
@@ -63,7 +63,7 @@ export class SecureFoundationalEnvironmentStack extends cdk.Stack {
             sid: 'AllowCloudWatchLogs',
             effect: iam.Effect.ALLOW,
             principals: [
-              new iam.ServicePrincipal(`logs.us-east-1.amazonaws.com`),
+              new iam.ServicePrincipal('logs.us-east-1.amazonaws.com'),
             ],
             actions: [
               'kms:Encrypt',
@@ -94,7 +94,7 @@ export class SecureFoundationalEnvironmentStack extends cdk.Stack {
     // 2. VPC with Multi-AZ Configuration
     this.vpc = new ec2.Vpc(this, 'SecureFoundationVPC', {
       vpcName: `secure-foundation-vpc-${environmentSuffix}`,
-      cidr: '10.0.0.0/16',
+      ipAddresses: ec2.IpAddresses.cidr('10.0.0.0/16'),
       maxAzs: 3, // Use 3 AZs for high availability
       enableDnsHostnames: true,
       enableDnsSupport: true,
@@ -224,14 +224,10 @@ export class SecureFoundationalEnvironmentStack extends cdk.Stack {
       },
     });
 
-    const ec2InstanceProfile = new iam.InstanceProfile(
-      this,
-      'SecureEC2InstanceProfile',
-      {
-        instanceProfileName: `secure-ec2-instance-profile-${environmentSuffix}`,
-        role: ec2Role,
-      }
-    );
+    new iam.InstanceProfile(this, 'SecureEC2InstanceProfile', {
+      instanceProfileName: `secure-ec2-instance-profile-${environmentSuffix}`,
+      role: ec2Role,
+    });
 
     // 6. S3 Bucket with SSE-KMS encryption
     this.secureS3Bucket = new s3.Bucket(this, 'SecureFoundationS3Bucket', {
@@ -340,50 +336,29 @@ export class SecureFoundationalEnvironmentStack extends cdk.Stack {
     });
 
     // 8. CloudWatch Log Groups with KMS encryption
-    const applicationLogGroup = new logs.LogGroup(this, 'ApplicationLogGroup', {
+    new logs.LogGroup(this, 'ApplicationLogGroup', {
       logGroupName: `/aws/application/${environmentSuffix}`,
       retention: logs.RetentionDays.ONE_MONTH,
       encryptionKey: this.kmsKey,
     });
 
-    const systemLogGroup = new logs.LogGroup(this, 'SystemLogGroup', {
+    new logs.LogGroup(this, 'SystemLogGroup', {
       logGroupName: `/aws/ec2/system-logs/${environmentSuffix}`,
       retention: logs.RetentionDays.ONE_MONTH,
       encryptionKey: this.kmsKey,
     });
 
     // 9. CloudTrail for API logging
-    const cloudTrailLogGroup = new logs.LogGroup(this, 'CloudTrailLogGroup', {
-      logGroupName: `/aws/cloudtrail/${environmentSuffix}`,
-      retention: logs.RetentionDays.ONE_YEAR,
-      encryptionKey: this.kmsKey,
-    });
-
-    const cloudTrailRole = new iam.Role(this, 'CloudTrailRole', {
-      assumedBy: new iam.ServicePrincipal('cloudtrail.amazonaws.com'),
-      inlinePolicies: {
-        CloudWatchLogsPolicy: new iam.PolicyDocument({
-          statements: [
-            new iam.PolicyStatement({
-              effect: iam.Effect.ALLOW,
-              actions: ['logs:CreateLogStream', 'logs:PutLogEvents'],
-              resources: [cloudTrailLogGroup.logGroupArn],
-            }),
-          ],
-        }),
-      },
-    });
 
     new cloudtrail.Trail(this, 'SecurityAuditTrail', {
       trailName: `security-audit-trail-${environmentSuffix}`,
-      s3Bucket: this.secureS3Bucket,
+      bucket: this.secureS3Bucket,
       s3KeyPrefix: 'cloudtrail-logs/',
       includeGlobalServiceEvents: true,
       isMultiRegionTrail: true,
       enableFileValidation: true,
       encryptionKey: this.kmsKey,
-      cloudWatchLogGroup: cloudTrailLogGroup,
-      cloudWatchLogsRole: cloudTrailRole,
+      sendToCloudWatchLogs: true,
     });
 
     // 10. CloudWatch Dashboard for monitoring
