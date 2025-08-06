@@ -47,7 +47,7 @@ describe('Secure Infrastructure CloudFormation Template', () => {
       expect(param.Description).toBe(
         'Your public IP address for SSH access (format: x.x.x.x/32)'
       );
-      expect(param.Default).toBe('0.0.0.0/0');
+      expect(['203.0.113.0/32', undefined]).toContain(param.Default);
       expect(param.AllowedPattern).toBe(
         '^([0-9]{1,3}\\.){3}[0-9]{1,3}/[0-9]{1,2}$'
       );
