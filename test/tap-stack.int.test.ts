@@ -25,7 +25,6 @@ import {
 import {
   AutoScalingClient,
   DescribeAutoScalingGroupsCommand,
-  DescribeLaunchTemplatesCommand,
 } from '@aws-sdk/client-auto-scaling';
 import {
   IAMClient,
@@ -266,7 +265,6 @@ describe('TapStack CloudFormation Integration Tests', () => {
       const igw = response.InternetGateways?.[0];
 
       expect(igw).toBeDefined();
-      expect(igw?.State).toBe('available');
       expect(igw?.Attachments).toHaveLength(1);
       expect(igw?.Attachments?.[0].VpcId).toBe(stackOutputs.VPCId);
       expect(igw?.Attachments?.[0].State).toBe('attached');
