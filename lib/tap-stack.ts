@@ -20,30 +20,32 @@ export class TapStack extends TerraformStack {
 
     console.log('Environment:', props.environmentSuffix);
 
+    // new S3Backend(this, {
+    //   bucket: props.stateBucket,
+    //   key: `state/${props.environmentSuffix}/terraform.tfstate`,
+    //   region: props.stateBucketRegion,
+    // });
+
     new AwsProvider(this, 'aws', {
-      region: 'us-east-1',
+      region: props.awsRegion,
     });
 
     const namePrefix = `iacProject-${props.environmentSuffix}`;
 
-    // ✅ Create VPC and related networking resources
     const vpcResources = createVpcWithInternetAccess(this, namePrefix);
     const vpc = vpcResources.vpc;
     const igw = vpcResources.igw;
     const routeTable = vpcResources.routeTable;
     const publicSubnets = vpcResources.publicSubnets;
 
-    // ✅ Create security group
     const sg = new SecurityGroupConfig(this, `${namePrefix}-sg`, {
       vpcId: vpc.id,
       allowedCidr: '203.0.113.0/24',
     });
 
-    // ✅ Arrays to collect EC2 and EIP output IDs
-    const instanceIds: string[] = [];
-    const allocationIds: string[] = [];
+    const instanceIds = [] as string[];
+    const allocationIds = [] as string[];
 
-    // ✅ Launch EC2 instances + EIP
     publicSubnets.forEach((subnet, index) => {
       const name = `${namePrefix}-ec2-${index + 1}`;
       const result = createEc2InstanceWithEip(this, name, {
@@ -58,33 +60,39 @@ export class TapStack extends TerraformStack {
       allocationIds.push(result.eip.id);
     });
 
-    // ✅ Terraform Outputs for Integration Tests
     new TerraformOutput(this, 'VpcId', {
       value: vpc.id,
+      description: 'ID of the created VPC',
     });
 
     new TerraformOutput(this, 'SubnetIds', {
       value: publicSubnets.map(s => s.id),
+      description: 'IDs of the public subnets',
     });
 
     new TerraformOutput(this, 'InternetGatewayId', {
       value: igw.id,
+      description: 'ID of the attached Internet Gateway',
     });
 
     new TerraformOutput(this, 'RouteTableId', {
       value: routeTable.id,
+      description: 'ID of the public route table with IGW route',
     });
 
     new TerraformOutput(this, 'SecurityGroupId', {
       value: sg.securityGroup.id,
+      description: 'ID of the security group allowing SSH and HTTP',
     });
 
     new TerraformOutput(this, 'InstanceIds', {
       value: instanceIds,
+      description: 'IDs of the EC2 instances launched',
     });
 
     new TerraformOutput(this, 'ElasticIpAllocationIds', {
       value: allocationIds,
+      description: 'Elastic IP allocation IDs associated with EC2 instances',
     });
   }
 }
