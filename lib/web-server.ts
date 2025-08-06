@@ -233,7 +233,7 @@ export class WebServerStack extends cdk.Stack {
       vpc,
       vpcSubnets: { subnetType: SubnetType.PRIVATE_ISOLATED }, // PRIVATE_ISOLATED
       removalPolicy: cdk.RemovalPolicy.DESTROY,
-      subnetGroupName: 'rds-subnet-group',
+      subnetGroupName: `rds-subnet-group-${props?.environmentSuffix || 'dev'}`,
     });
 
     // Enhanced RDS Instance with backup and monitoring
