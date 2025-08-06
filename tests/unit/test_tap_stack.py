@@ -138,7 +138,7 @@ class MockComponentResource(MockResource):
   def register_outputs(self, outputs):
     self.outputs.update(outputs)
 
-# Create a proper mock ResourceOptions class
+# Create a proper mock ResourceOptions class that matches Pulumi's expected interface
 
 
 class MockResourceOptions:
@@ -159,6 +159,10 @@ def patched_isinstance(obj, cls):
   if hasattr(cls, '__name__') and cls.__name__ == 'Output' and hasattr(obj, '_is_output'):
     return True
 
+  # Handle ResourceOptions checks
+  if hasattr(cls, '__name__') and cls.__name__ == 'ResourceOptions' and isinstance(obj, MockResourceOptions):
+    return True
+
   # Handle Resource checks - allow MockResource and its subclasses
   if hasattr(cls, '__name__') and cls.__name__ == 'Resource':
     return isinstance(obj, MockResource)
@@ -166,6 +170,10 @@ def patched_isinstance(obj, cls):
   # Handle pulumi.Resource checks specifically
   if str(cls).find('pulumi') != -1 and str(cls).find('Resource') != -1:
     return isinstance(obj, MockResource)
+
+  # Handle pulumi.ResourceOptions checks specifically
+  if str(cls).find('pulumi') != -1 and str(cls).find('ResourceOptions') != -1:
+    return isinstance(obj, MockResourceOptions)
 
   # Use original isinstance for everything else
   try:
@@ -194,6 +202,9 @@ class MockPulumiResource(MockResource):
 
 
 pulumi.Resource = MockPulumiResource
+
+# Also patch the pulumi module's ResourceOptions in sys.modules
+sys.modules["pulumi"].ResourceOptions = MockResourceOptions
 
 # Monkey patch isinstance
 builtins.isinstance = patched_isinstance
@@ -233,7 +244,7 @@ class TestTapStackComponents(unittest.TestCase):
     iam = IAMComponent(
         name="test-iam",
         environment="test",
-        opts=MockResourceOptions(),
+        opts=pulumi.ResourceOptions(),
     )
     self.assertTrue(hasattr(iam, "lambda_role"))
 
@@ -242,7 +253,7 @@ class TestTapStackComponents(unittest.TestCase):
         name="test-compute",
         cidr_block="10.3.0.0/16",
         environment="test",
-        opts=MockResourceOptions(),
+        opts=pulumi.ResourceOptions(),
     )
     self.assertTrue(hasattr(compute, "vpc"))
     self.assertTrue(hasattr(compute, "private_subnet_ids"))
@@ -260,7 +271,7 @@ class TestTapStackComponents(unittest.TestCase):
         username="admin",
         password="passw0rd",
         private_subnet_ids=compute_mock.private_subnet_ids,
-        opts=MockResourceOptions(),
+        opts=pulumi.ResourceOptions(),
     )
     self.assertTrue(hasattr(db, "rds_instance"))
 
@@ -288,7 +299,7 @@ class TestTapStackComponents(unittest.TestCase):
         db_name="tapdb",
         db_username="admin",
         db_password="passw0rd",
-        opts=MockResourceOptions(depends_on=[mock_depends_resource]),
+        opts=pulumi.ResourceOptions(depends_on=[mock_depends_resource]),
     )
     self.assertTrue(hasattr(serverless, "lambda_function"))
     self.assertTrue(hasattr(serverless, "api"))
@@ -297,7 +308,7 @@ class TestTapStackComponents(unittest.TestCase):
     stack = TapStack(
         name="tap-test",
         args=self.test_args,
-        opts=MockResourceOptions(),
+        opts=pulumi.ResourceOptions(),
     )
     self.assertTrue(hasattr(stack, "iam_component"))
     self.assertTrue(hasattr(stack, "compute_component"))
