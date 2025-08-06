@@ -1,10 +1,27 @@
 from lib.tap_stack import TapStackArgs, TapStack
 import pulumi
+import pulumi.runtime
 import os
 import sys
 import unittest
 from unittest.mock import Mock
 import types
+
+# === Set Pulumi test mode environment variable ===
+os.environ["PULUMI_TEST_MODE"] = "true"
+
+# === Register Pulumi mocks ===
+
+
+class MyMocks(pulumi.runtime.Mocks):
+  def new_resource(self, type_, name, inputs, provider, id_):
+    return [f"{name}-id", inputs]
+
+  def call(self, token, args, provider):
+    return {}
+
+
+pulumi.runtime.set_mocks(MyMocks())
 
 # === Helper: Create fake Pulumi AWS modules ===
 
@@ -23,7 +40,7 @@ sys.modules["pulumi_aws.iam"] = create_mock_package("pulumi_aws.iam")
 sys.modules["pulumi_aws.apigateway"] = create_mock_package(
     "pulumi_aws.apigateway")
 
-# === Attach mocks ===
+# === Attach mocks to stub modules ===
 sys.modules["pulumi_aws.ec2"].Vpc = Mock(return_value=Mock(id="vpc-123"))
 sys.modules["pulumi_aws.ec2"].Subnet = Mock(return_value=Mock(id="subnet-123"))
 sys.modules["pulumi_aws.ec2"].SecurityGroup = Mock(
@@ -43,52 +60,6 @@ sys.modules["pulumi_aws.apigateway"].Integration = Mock()
 sys.modules["pulumi_aws.apigateway"].IntegrationResponse = Mock()
 sys.modules["pulumi_aws.apigateway"].MethodResponse = Mock()
 
-# === Set environment variable ===
-os.environ["PULUMI_TEST_MODE"] = "true"
-
-# === Pulumi Mocks ===
-
-
-class MockComponentResource:
-  def __init__(self, *args, **kwargs):
-    self.type_name = args[0] if len(args) > 0 else None
-    self.name = args[1] if len(args) > 1 else None
-    self.props = kwargs.get("props", {})
-    self.opts = kwargs.get("opts", None)
-    self.outputs = None
-
-  def register_outputs(self, outputs):
-    self.outputs = outputs
-
-
-class MockOutput:
-  def __init__(self, value=None):
-    self.value = value
-
-  @staticmethod
-  def all(*args):
-    mock_result = Mock()
-    mock_result.apply = Mock(return_value=Mock())
-    return mock_result
-
-  @staticmethod
-  def concat(*args):
-    mock_output = Mock()
-    mock_output.apply = Mock()
-    return mock_output
-
-
-# === Pulumi mock injection ===
-mock_pulumi = Mock()
-mock_pulumi.ComponentResource = MockComponentResource
-mock_pulumi.ResourceOptions = pulumi.ResourceOptions
-mock_pulumi.Output = MockOutput
-mock_pulumi.Output.concat = MockOutput.concat
-mock_pulumi.Output.all = MockOutput.all
-mock_pulumi.AssetArchive = Mock()
-mock_pulumi.StringAsset = Mock()
-mock_pulumi.get_stack = Mock(return_value="test")
-
 # === Test class ===
 
 
@@ -103,7 +74,7 @@ class TestTapStackComponents(unittest.TestCase):
     stack = TapStack(
         name="tap-test",
         args=self.test_args,
-        opts=mock_pulumi.ResourceOptions(),
+        opts=pulumi.ResourceOptions(),
     )
 
     # IAM Component
