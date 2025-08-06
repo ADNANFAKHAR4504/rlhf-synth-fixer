@@ -1,9 +1,9 @@
-import builtins
-from lib.components.serverless import ServerlessComponent
-from lib.components.database import DatabaseComponent
-from lib.components.vpc import ComputeComponent
-from lib.components.iam import IAMComponent
 from lib.tap_stack import TapStackArgs, TapStack
+from lib.components.iam import IAMComponent
+from lib.components.vpc import ComputeComponent
+from lib.components.database import DatabaseComponent
+from lib.components.serverless import ServerlessComponent
+import builtins
 import pulumi
 import os
 import sys
@@ -11,6 +11,9 @@ import unittest
 from unittest.mock import Mock, MagicMock, patch
 import types
 import zipfile
+
+# Set environment variable for Pulumi testing FIRST
+os.environ["PULUMI_TEST_MODE"] = "true"
 
 # Helper to create mock packages
 
@@ -21,14 +24,20 @@ def create_mock_package(name):
   return mod
 
 
-# Setup mock modules before importing your components
+# Setup comprehensive pulumi mock before any imports
 pulumi_mock = MagicMock()
 pulumi_mock.Invoke = MagicMock(return_value=MagicMock())
+pulumi_mock.get_region = Mock(return_value=MagicMock(name="us-east-1"))
+pulumi_mock.export = MagicMock()
+pulumi_mock.Config = MagicMock()
+pulumi_mock.get_stack = MagicMock(return_value="test")
 sys.modules["pulumi"] = pulumi_mock
 
 sys.modules["pulumi_aws"] = create_mock_package("pulumi_aws")
-sys.modules["pulumi_aws"].get_region = Mock(
-    return_value=MagicMock(name="us-east-1"))
+# Add get_region directly to pulumi_aws mock
+mock_region = MagicMock()
+mock_region.name = "us-east-1"
+sys.modules["pulumi_aws"].get_region = Mock(return_value=mock_region)
 sys.modules["pulumi_aws"].get_availability_zones = Mock(
     return_value=MagicMock(names=["us-east-1a", "us-east-1b"])
 )
@@ -103,11 +112,9 @@ class MockOutput:
       for x in self.value:
         yield MockOutput(x) if not isinstance(x, MockOutput) else x
     elif self.value is not None:
-      # Handle single values
-      yield MockOutput(self.value)
-    else:
-      # Return empty iterator for None values
-      return iter([])
+      # Handle single values - yield the value itself
+      yield self
+    # For None values, don't yield anything (empty iterator)
 
   def __class_getitem__(cls, item):
     """Handle MockOutput[type] syntax for type hints"""
@@ -246,7 +253,7 @@ def patched_isinstance(obj, cls):
     return False
 
 
-# Apply patches
+# Apply patches - ensure pulumi module has all necessary attributes
 pulumi.Output = MockOutput
 pulumi.ComponentResource = MockComponentResource
 pulumi.ResourceOptions = MockResourceOptions
@@ -257,6 +264,7 @@ pulumi.get_stack = MagicMock(return_value="test")
 pulumi.Config = MagicMock()
 pulumi.export = MagicMock()
 pulumi.Invoke = MagicMock(return_value=MagicMock())
+pulumi.get_region = Mock(return_value=MagicMock(name="us-east-1"))
 
 # Create a base Resource class for Pulumi
 
@@ -267,17 +275,25 @@ class MockPulumiResource(MockResource):
 
 pulumi.Resource = MockPulumiResource
 
-# Also patch the pulumi module's ResourceOptions in sys.modules
+# Also patch the pulumi module's ResourceOptions in sys.modules with all attributes
 sys.modules["pulumi"].ResourceOptions = MockResourceOptions
 sys.modules["pulumi"].Output = MockOutput
 sys.modules["pulumi"].ComponentResource = MockComponentResource
 sys.modules["pulumi"].Invoke = MagicMock(return_value=MagicMock())
+sys.modules["pulumi"].get_region = Mock(
+    return_value=MagicMock(name="us-east-1"))
+sys.modules["pulumi"].export = MagicMock()
+sys.modules["pulumi"].Config = MagicMock()
+sys.modules["pulumi"].get_stack = MagicMock(return_value="test")
+sys.modules["pulumi"].AssetArchive = MagicMock()
+sys.modules["pulumi"].StringAsset = MagicMock()
+sys.modules["pulumi"].FileArchive = MagicMock()
+sys.modules["pulumi"].Resource = MockPulumiResource
 
 # Monkey patch isinstance
 builtins.isinstance = patched_isinstance
 
-# Set environment variable for Pulumi testing
-os.environ["PULUMI_TEST_MODE"] = "true"
+# Now import the actual components after all mocking is set up
 
 # Use patch decorator approach for file operations to avoid pytest conflicts
 
