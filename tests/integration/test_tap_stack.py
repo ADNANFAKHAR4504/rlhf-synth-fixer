@@ -31,9 +31,6 @@ def rds():
 def iam():
   return boto3.client("iam", region_name=REGION)
 
-# --- Tests with test case 8 removed ---
-
-
 def test_subnets_exist_and_in_vpc(ec2):
   resp = ec2.describe_subnets(
       SubnetIds=[
