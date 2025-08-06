@@ -345,7 +345,7 @@ Resources:
           LoggingLevel: INFO
       AccessLogSetting:
         DestinationArn: !GetAtt ApiGatewayLogGroup.Arn
-        Format: '$requestId $requestTime $httpMethod $resourcePath $status $responseLength $responseTime'
+        Format: '$context.requestId $requestTime $httpMethod $resourcePath $status $responseLength $responseTime'
       Tags:
         - Key: Environment
           Value: !Ref Environment
