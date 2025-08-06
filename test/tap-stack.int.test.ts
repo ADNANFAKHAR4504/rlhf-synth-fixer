@@ -1,16 +1,29 @@
-// Configuration - These are coming from cfn-outputs after cdk deploy
 import fs from 'fs';
+
 const outputs = JSON.parse(
   fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
 );
 
-// Get environment suffix from environment variable (set by CI/CD pipeline)
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
-describe('Turn Around Prompt API Integration Tests', () => {
-  describe('Write Integration TESTS', () => {
-    test('Dont forget!', async () => {
-      expect(false).toBe(true);
+describe('TapStack CloudFormation Integration Tests', () => {
+  test('Should have all expected outputs from the stack', () => {
+    const expectedKeys = [
+      'VPCId',
+      'EC2InstanceId',
+      'EC2PublicIP',
+      'WebsiteContentBucket',
+      'ApplicationLogsBucket',
+      'BackupDataBucket',
+      'S3AccessLogsBucket',
+      'KMSKeyId',
+      'EC2InstanceRoleArn',
+    ];
+
+    expectedKeys.forEach(key => {
+      const fullKey = `TapStack${environmentSuffix}-${key}`;
+      expect(outputs[fullKey]).toBeDefined();
+      expect(outputs[fullKey]).not.toBeNull();
     });
   });
 });
