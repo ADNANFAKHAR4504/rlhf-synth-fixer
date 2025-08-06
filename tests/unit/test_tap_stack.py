@@ -1,20 +1,30 @@
-import pulumi
-from lib.tap_stack import TapStackArgs, TapStack
-from lib.components.iam import IAMComponent
-from lib.components.vpc import ComputeComponent
-from lib.components.database import DatabaseComponent
 from lib.components.serverless import ServerlessComponent
+from lib.components.database import DatabaseComponent
+from lib.components.vpc import ComputeComponent
+from lib.components.iam import IAMComponent
+from lib.tap_stack import TapStackArgs, TapStack
+import pulumi
 import os
 import sys
 import unittest
 from unittest.mock import Mock
 import types
 
-sys.modules["pulumi_aws"] = types.ModuleType("pulumi_aws")
-sys.modules["pulumi_aws.ec2"] = types.ModuleType("pulumi_aws.ec2")
-sys.modules["pulumi_aws.rds"] = types.ModuleType("pulumi_aws.rds")
-sys.modules["pulumi_aws.iam"] = types.ModuleType("pulumi_aws.iam")
-sys.modules["pulumi_aws.apigateway"] = types.ModuleType(
+# Helper to create mock packages
+
+
+def create_mock_package(name):
+  mod = types.ModuleType(name)
+  mod.__path__ = []  # makes it a package
+  return mod
+
+
+# Setup mock modules before importing your components
+sys.modules["pulumi_aws"] = create_mock_package("pulumi_aws")
+sys.modules["pulumi_aws.ec2"] = create_mock_package("pulumi_aws.ec2")
+sys.modules["pulumi_aws.rds"] = create_mock_package("pulumi_aws.rds")
+sys.modules["pulumi_aws.iam"] = create_mock_package("pulumi_aws.iam")
+sys.modules["pulumi_aws.apigateway"] = create_mock_package(
     "pulumi_aws.apigateway")
 
 # Attach mocked classes/functions
@@ -38,6 +48,7 @@ sys.modules["pulumi_aws.apigateway"].Integration = Mock()
 sys.modules["pulumi_aws.apigateway"].IntegrationResponse = Mock()
 sys.modules["pulumi_aws.apigateway"].MethodResponse = Mock()
 
+# Only now import pulumi and your components
 
 # Set environment variable for Pulumi testing
 os.environ["PULUMI_TEST_MODE"] = "true"
@@ -77,7 +88,7 @@ class FakeResourceOptions:
     pass
 
 
-# Inject Pulumi and AWS mocks before importing actual components
+# Inject Pulumi and AWS mocks before instantiation
 mock_pulumi = Mock()
 mock_pulumi.ComponentResource = MockComponentResource
 mock_pulumi.ResourceOptions = pulumi.ResourceOptions
@@ -94,44 +105,11 @@ mock_aws.get_availability_zones.return_value = Mock(
     names=["us-east-1a", "us-east-1b"]
 )
 
-# sys.modules["pulumi_aws"] = mock_aws
-
-
-# ✅ Add mocked submodules to match how your components import them
-mock_aws_ec2 = Mock()
-mock_aws_ec2.Vpc = Mock(return_value=Mock(id="vpc-123"))
-mock_aws_ec2.Subnet = Mock(return_value=Mock(id="subnet-123"))
-mock_aws_ec2.SecurityGroup = Mock(return_value=Mock(id="sg-123"))
-
-mock_aws_rds = Mock()
-mock_aws_rds.Instance = Mock(
-    return_value=Mock(endpoint="db-endpoint", id="db-123"))
-
-mock_aws_iam = Mock()
-mock_aws_iam.Role = Mock(return_value=Mock(arn="arn:aws:iam::123:role/test"))
-
-mock_aws_apigateway = Mock()
-mock_aws_apigateway.RestApi = Mock(return_value=Mock(id="api-123"))
-mock_aws_apigateway.Deployment = Mock(return_value=Mock())
-mock_aws_apigateway.Stage = Mock(return_value=Mock())
-mock_aws_apigateway.Resource = Mock(return_value=Mock())
-mock_aws_apigateway.Method = Mock(return_value=Mock())
-mock_aws_apigateway.Integration = Mock(return_value=Mock())
-mock_aws_apigateway.IntegrationResponse = Mock(return_value=Mock())
-mock_aws_apigateway.MethodResponse = Mock(return_value=Mock())
-
-# ✅ Add to sys.modules to make sure all submodules resolve properly
-sys.modules["pulumi_aws.ec2"] = mock_aws_ec2
-sys.modules["pulumi_aws.rds"] = mock_aws_rds
-sys.modules["pulumi_aws.iam"] = mock_aws_iam
-sys.modules["pulumi_aws.apigateway"] = mock_aws_apigateway
-
 
 class TestTapStackComponents(unittest.TestCase):
   def setUp(self):
     self.test_args = TapStackArgs(
         environment_suffix="test",
-        # passed only to TapStack, not to components
         tags={"Environment": "test", "Project": "tap-stack"}
     )
 
