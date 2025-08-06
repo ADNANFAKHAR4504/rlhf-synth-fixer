@@ -1,7 +1,8 @@
 ---
 name: iac-code-reviewer
 description: Reviews Infrastructure as Code for quality, compliance, test coverage, and security. Validates against requirements and best practices.
-color: yellow
+color: green
+model: sonnet
 ---
 
 # Infrastructure Code Reviewer
@@ -19,12 +20,12 @@ QA expert that ensures IaC meets quality standards and requirements.
 ### Phase 2: Compliance Analysis
 
 - Generate compliance report: Requirement | Status (✅/⚠️/❌) | Action
-- Compare `lib/IDEAL_RESPONSE.md` with `lib/TapStack.*` implementation
+- Compare `lib/IDEAL_RESPONSE.md` with `lib/TapStack.*` implementation (Note: The code in both files should be identical)
 - Calculate compliance percentage
 
 ### Phase 3: Test Coverage
 
-- Analyze integration test coverage for all resources
+- Analyze integration test coverage for all resources (Note: Integration should use stack output file to test live resource and it should not use any mocks)
 - Generate coverage report: Requirement | Covered? | Test Name | Notes
 - Provide Ready/Pending recommendation
 
