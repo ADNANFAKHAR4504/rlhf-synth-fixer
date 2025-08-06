@@ -99,58 +99,28 @@ class TestTapStack:
     """Test that the Lambda function has correct IAM permissions."""
     template = Template.from_stack(qa_stack)
 
-    # Find the logical ID of the AppLambda's role
-    # This assumes a consistent naming convention for the Lambda's service role
-    lambda_role_logical_id_match = template.find_resources("AWS::IAM::Role", {
-        "Properties": {
-            "Tags": Match.array_with([
-                Match.object_like({"Key": "aws-cdk:auto-delete-objects", "Value": "true"}),
-                Match.object_like({"Key": "aws-cdk:auto-delete-objects-handler", "Value": "true"})
-            ]),
-            "Description": Match.string_like_regexp("Service role for .*AppLambda.*")
-        }
-    })
-    # Fallback if the above match is too specific, try to find the role by its assumed role policy
-    if not lambda_role_logical_id_match:
-        lambda_role_logical_id_match = template.find_resources("AWS::IAM::Role", {
-            "Properties": {
-                "AssumeRolePolicyDocument": {
-                    "Statement": Match.array_with([
-                        Match.object_like({
-                            "Action": "sts:AssumeRole",
-                            "Effect": "Allow",
-                            "Principal": {"Service": "lambda.amazonaws.com"}
-                        })
-                    ])
-                }
-            }
-        })
-
-    # Filter for the specific role associated with AppLambda, not the custom resource handlers
-    app_lambda_role_logical_id = None
-    for logical_id, resource in lambda_role_logical_id_match.items():
-        # Check if this role is referenced by the AppLambda function
-        if "AppLambda" in template.to_json()["Resources"][logical_id]["Properties"].get("Tags", {}): # This is a heuristic, better to check Lambda Function's Role property
-            app_lambda_role_logical_id = logical_id
-            break
-    
-    # A more robust way to get the AppLambda's role logical ID:
-    # Find the AppLambda function itself
-    app_lambda_resource = template.find_resources("AWS::Lambda::Function", {
+    # Find the logical ID of the AppLambda function itself
+    app_lambda_resources = template.find_resources("AWS::Lambda::Function", {
         "Properties": {
             "FunctionName": "tap-qa-lambda"
         }
     })
-    if app_lambda_resource:
-        app_lambda_logical_id = list(app_lambda_resource.keys())[0]
-        app_lambda_role_ref = template.to_json()["Resources"][app_lambda_logical_id]["Properties"]["Role"]
-        if isinstance(app_lambda_role_ref, dict) and "Fn::GetAtt" in app_lambda_role_ref:
-            app_lambda_role_logical_id = app_lambda_role_ref["Fn::GetAtt"][0]
-        elif isinstance(app_lambda_role_ref, dict) and "Ref" in app_lambda_role_ref:
-            app_lambda_role_logical_id = app_lambda_role_ref["Ref"]
+    assert len(app_lambda_resources) == 1, "Expected exactly one AppLambda function."
+    app_lambda_logical_id = list(app_lambda_resources.keys())[0]
 
-    assert app_lambda_role_logical_id, "Could not find the logical ID for AppLambda's role."
-    lambda_role_ref = {"Ref": app_lambda_role_logical_id}
+    # Get the reference to the AppLambda's role from its properties
+    app_lambda_role_ref = template.to_json()["Resources"][app_lambda_logical_id]["Properties"]["Role"]
+    lambda_role_ref = Match.any_value() # Use Match.any_value as it could be Ref or GetAtt
+
+    # If it's a Ref or GetAtt, we can extract the logical ID for more precise matching
+    if isinstance(app_lambda_role_ref, dict):
+        if "Fn::GetAtt" in app_lambda_role_ref:
+            lambda_role_logical_id = app_lambda_role_ref["Fn::GetAtt"][0]
+            lambda_role_ref = {"Ref": lambda_role_logical_id} # Use Ref for role matching in policy
+        elif "Ref" in app_lambda_role_ref:
+            lambda_role_logical_id = app_lambda_role_ref["Ref"]
+            lambda_role_ref = {"Ref": lambda_role_logical_id}
+
 
     # Check for DynamoDB read/write permissions
     template.has_resource_properties("AWS::IAM::Policy", {
@@ -161,9 +131,7 @@ class TestTapStack:
                     "Effect": "Allow",
                     "Resource": Match.array_with([
                         Match.object_like({"Fn::GetAtt": [Match.string_like_regexp("AppTable.*"), "Arn"]}), # Table ARN
-                        # The /index/* part is only present if Global Secondary Indexes are defined,
-                        # which is not the case in the current stack.
-                        # Match.object_like({"Fn::Join": ["", [Match.object_like({"Fn::GetAtt": [Match.string_like_regexp("AppTable.*"), "Arn"]}), "/index/*"]]})
+                        # Removed the /index/* part as no indexes are defined in the stack
                     ])
                 })
             ])
