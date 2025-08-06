@@ -68,7 +68,7 @@ export class TapStack extends TerraformStack {
         .substring(2, 10)
         .replace(/[^a-z]/g, ''); // Generates an 8-char random string with only lowercase letters
 
-      new ScalableInfrastructure(this, `scalable-infra -${region}`, {
+      new ScalableInfrastructure(this, `scalable-infra-${region}`, {
         provider: awsProvider,
         allowedCidr: `${localIp}/32`,
         dbUsername: dbUsername,

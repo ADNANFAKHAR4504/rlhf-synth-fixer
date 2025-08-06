@@ -46,7 +46,7 @@ export class ScalableInfrastructure extends Construct {
       state: 'available',
     });
 
-    const amazonLinuxAmi = new DataAwsAmi(this, 'amazon-linux', {
+    new DataAwsAmi(this, 'amazon-linux', {
       provider: props.provider,
       mostRecent: true,
       owners: ['amazon'],
