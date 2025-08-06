@@ -296,8 +296,6 @@ cat > /var/www/html/index.html << EOF
 </body>
 </html>
 EOF
-yum install -y amazon-cloudwatch-agent
-systemctl enable amazon-cloudwatch-agent
 """
   instances = []
   for idx, subnet in enumerate(subnets):
