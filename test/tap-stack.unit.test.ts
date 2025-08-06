@@ -331,7 +331,10 @@ describe('CloudFormation Template Tests', () => {
       expect(permission.Properties.Action).toBe('lambda:InvokeFunction');
       expect(permission.Properties.Principal).toBe('s3.amazonaws.com');
       expect(permission.Properties.SourceArn).toEqual({
-        'Fn::GetAtt': ['ServerlessAppBucket', 'Arn'],
+        'Fn::Sub': 'arn:aws:s3:::${S3BucketName}',
+      });
+      expect(permission.Properties.FunctionName).toEqual({
+        Ref: 'ServerlessAppLambda',
       });
     });
   });
