@@ -28,13 +28,16 @@ Parameters:
     AllowedValues: ['dev', 'staging', 'prod']
     Description: 'Environment for resource naming convention'
   ExistingVpcId:
-    Type: AWS::EC2::VPC::Id
+    Type: String
+    Default: ''
     Description: 'ID of existing VPC where resources will be deployed'
   PrivateSubnetIds:
-    Type: List<AWS::EC2::Subnet::Id>
-    Description: 'List of private subnet IDs within the existing VPC'
+    Type: String
+    Default: ''
+    Description: 'Comma-delimited list of private subnet IDs within the existing VPC'
   DBSubnetGroupName:
     Type: String
+    Default: ''
     Description: 'Name of existing DB subnet group for RDS instances'
   DBMasterUsername:
     Type: String
@@ -48,6 +51,15 @@ Parameters:
     Default: 't3.micro'
     AllowedValues: ['t3.micro', 't3.small', 't3.medium']
     Description: 'EC2 instance type for private instances'
+
+Conditions:
+  HasExistingVpcId: !Not [!Equals [!Ref ExistingVpcId, '']]
+  HasPrivateSubnetIds: !Not [!Equals [!Ref PrivateSubnetIds, '']]
+  HasDBSubnetGroupName: !Not [!Equals [!Ref DBSubnetGroupName, '']]
+  DeployEC2AndRDS: !And 
+    - !Condition HasExistingVpcId
+    - !Condition HasPrivateSubnetIds
+    - !Condition HasDBSubnetGroupName
 
 Resources:
   # IAM Role for EC2 instances with least privilege
@@ -132,7 +144,7 @@ Resources:
         - Key: Name
           Value: !Sub '${CompanyName}-${Environment}-S3Bucket'
 
-  # S3 Bucket Policy to allow EC2 role access - Removed redundant DependsOn
+  # S3 Bucket Policy to allow EC2 role access
   S3BucketPolicy:
     Type: AWS::S3::BucketPolicy
     Properties:
@@ -151,7 +163,7 @@ Resources:
               - !Sub 'arn:aws:s3:::${SecureS3Bucket}'
               - !Sub 'arn:aws:s3:::${SecureS3Bucket}/*'
 
-  # Update EC2 Role policy for KMS access - Removed redundant DependsOn
+  # Update EC2 Role policy for KMS access
   EC2RoleKMSPolicy:
     Type: AWS::IAM::Policy
     Properties:
@@ -177,6 +189,7 @@ Resources:
   # IAM Role for RDS Enhanced Monitoring
   RDSEnhancedMonitoringRole:
     Type: AWS::IAM::Role
+    Condition: DeployEC2AndRDS
     Properties:
       RoleName: !Sub '${CompanyName}-${Environment}-RDSEnhancedMonitoringRole'
       AssumeRolePolicyDocument:
@@ -195,6 +208,7 @@ Resources:
   # DB Parameter Group for MySQL with logging enabled
   DBParameterGroup:
     Type: AWS::RDS::DBParameterGroup
+    Condition: DeployEC2AndRDS
     Properties:
       DBParameterGroupName: !Sub '${CompanyName}-${Environment}-mysql-params'
       Family: mysql8.0
@@ -211,6 +225,7 @@ Resources:
   # Security Group for EC2 instances
   EC2SecurityGroup:
     Type: AWS::EC2::SecurityGroup
+    Condition: DeployEC2AndRDS
     Properties:
       GroupName: !Sub '${CompanyName}-${Environment}-EC2-SG'
       GroupDescription: 'Security group for EC2 instances in private subnets'
@@ -238,6 +253,7 @@ Resources:
   # Security Group for RDS
   RDSSecurityGroup:
     Type: AWS::EC2::SecurityGroup
+    Condition: DeployEC2AndRDS
     Properties:
       GroupName: !Sub '${CompanyName}-${Environment}-RDS-SG'
       GroupDescription: 'Security group for RDS instance'
@@ -246,9 +262,10 @@ Resources:
         - Key: Name
           Value: !Sub '${CompanyName}-${Environment}-RDSSecurityGroup'
 
-  # Adding ingress rule after both security groups are created - Removed redundant DependsOn
+  # Adding ingress rule after both security groups are created
   RDSSecurityGroupIngress:
     Type: AWS::EC2::SecurityGroupIngress
+    Condition: DeployEC2AndRDS
     Properties:
       GroupId: !Ref RDSSecurityGroup
       IpProtocol: tcp
@@ -260,6 +277,7 @@ Resources:
   # Launch Template for EC2 instances
   EC2LaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
+    Condition: DeployEC2AndRDS
     Properties:
       LaunchTemplateName: !Sub '${CompanyName}-${Environment}-LaunchTemplate'
       LaunchTemplateData:
@@ -285,11 +303,12 @@ Resources:
   # EC2 Instance in private subnet
   EC2Instance:
     Type: AWS::EC2::Instance
+    Condition: DeployEC2AndRDS
     Properties:
       LaunchTemplate:
         LaunchTemplateId: !Ref EC2LaunchTemplate
         Version: !GetAtt EC2LaunchTemplate.LatestVersionNumber
-      SubnetId: !Select [0, !Ref PrivateSubnetIds]
+      SubnetId: !Select [0, !Split [',', !Ref PrivateSubnetIds]]
       Tags:
         - Key: Name
           Value: !Sub '${CompanyName}-${Environment}-EC2Instance'
@@ -297,6 +316,7 @@ Resources:
   # Create AWS Secrets Manager secret with a deterministic name
   RDSSecret:
     Type: AWS::SecretsManager::Secret
+    Condition: DeployEC2AndRDS
     Properties:
       Name: !Sub '${CompanyName}-${Environment}-db-secret'
       Description: !Sub 'Secret for ${CompanyName}-${Environment} RDS instance'
@@ -312,6 +332,7 @@ Resources:
   # RDS Instance - Use fixed secret name in dynamic reference
   RDSInstance:
     Type: AWS::RDS::DBInstance
+    Condition: DeployEC2AndRDS
     Properties:
       DBInstanceIdentifier: !Sub '${CompanyName}-${Environment}-rds-instance'
       DBInstanceClass: db.t3.micro
@@ -380,25 +401,30 @@ Outputs:
     Export:
       Name: !Sub '${AWS::StackName}-EC2RoleArn'
 
+  # Conditional outputs for EC2/RDS resources
   RDSInstanceEndpoint:
+    Condition: DeployEC2AndRDS
     Description: 'RDS instance endpoint'
     Value: !GetAtt RDSInstance.Endpoint.Address
     Export:
       Name: !Sub '${AWS::StackName}-RDSEndpoint'
 
   RDSInstanceArn:
+    Condition: DeployEC2AndRDS
     Description: 'ARN of the RDS instance'
     Value: !Sub 'arn:aws:rds:${AWS::Region}:${AWS::AccountId}:db:${RDSInstance}'
     Export:
       Name: !Sub '${AWS::StackName}-RDSInstanceArn'
 
   EC2InstanceId:
+    Condition: DeployEC2AndRDS
     Description: 'ID of the EC2 instance'
     Value: !Ref EC2Instance
     Export:
       Name: !Sub '${AWS::StackName}-EC2InstanceId'
 
   RDSEnhancedMonitoringRoleArn:
+    Condition: DeployEC2AndRDS
     Description: 'ARN of the RDS Enhanced Monitoring role'
     Value: !GetAtt RDSEnhancedMonitoringRole.Arn
     Export:
