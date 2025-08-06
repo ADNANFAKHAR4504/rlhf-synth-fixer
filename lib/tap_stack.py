@@ -22,11 +22,11 @@ Author: AWS Infrastructure Team
 Version: 1.0.0
 """
 
-import json
 import base64
+import json
 import random
 import string
-from typing import Dict, List, Optional, Any
+from typing import Any, Dict, List, Optional
 
 import pulumi
 import pulumi_aws as aws
@@ -837,7 +837,7 @@ pip3 install pytest boto3 requests
                 aws.codepipeline.PipelineArtifactStoreArgs(
                     location=self.artifacts_bucket.bucket,
                     type="S3",
-                    region=self.region
+                    # region=self.region
                 )
             ],
             stages=[
