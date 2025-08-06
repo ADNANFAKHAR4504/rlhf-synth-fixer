@@ -69,6 +69,7 @@ Resources:
       Environment:
         Variables:
           STAGE: !Ref Environment
+          AWS_REGION: us-east-1
           LOG_LEVEL: !Ref LogLevel
           DYNAMODB_TABLE: !Ref DataTable
       Code:
