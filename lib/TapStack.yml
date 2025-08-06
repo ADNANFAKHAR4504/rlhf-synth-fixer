@@ -31,10 +31,6 @@ Resources:
     Type: AWS::S3::Bucket
     Properties:
       BucketName: !Ref S3BucketName
-      NotificationConfiguration:
-        LambdaConfigurations:
-          - Event: s3:ObjectCreated:*
-            Function: !GetAtt ServerlessAppLambda.Arn
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -47,6 +43,19 @@ Resources:
       Tags:
         - Key: Name
           Value: ServerlessAppBucket
+
+  # S3 Bucket Notification Configuration (separate to avoid circular dependency)
+  ServerlessAppBucketNotification:
+    Type: AWS::S3::Bucket
+    DependsOn: 
+      - ServerlessAppLambda
+      - ServerlessAppBucketInvokePermission
+    Properties:
+      BucketName: !Ref ServerlessAppBucket
+      NotificationConfiguration:
+        LambdaConfigurations:
+          - Event: s3:ObjectCreated:*
+            Function: !GetAtt ServerlessAppLambda.Arn
 
   # S3 Bucket Policy to allow Lambda invocation
   ServerlessAppBucketInvokePermission:
