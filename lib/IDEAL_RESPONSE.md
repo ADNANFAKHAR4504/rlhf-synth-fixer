@@ -1,236 +1,256 @@
-# IDEAL RESPONSE: Secure AWS Infrastructure with CDK Python
+# SecureApp CDK Stack — Ideal Response
 
-This repository contains a complete AWS CDK Python implementation for the SecureApp project, following security-first infrastructure as code principles with comprehensive testing and quality assurance.
+This CDK stack provisions a **secure, production-ready AWS infrastructure** for the SecureApp project. It follows industry best practices including:
 
-## 🏗️ Architecture Overview
+* KMS key encryption
+* IAM least privilege
+* CloudTrail and VPC Flow Logs
+* CloudWatch metrics and dashboards
+* Encrypted, versioned S3 buckets with lifecycle rules
+* EC2 instance with CloudWatch agent and encrypted EBS
 
-The solution implements a secure, multi-tier AWS infrastructure with the following components:
+---
 
-### Core Infrastructure
-- **VPC**: Custom VPC (10.0.0.0/16) with public and private subnets across 2 AZs
-- **Security Groups**: Least-privilege security groups with minimal required access
-- **NAT Gateways**: Secure outbound internet access for private subnets
-- **VPC Flow Logs**: Complete traffic monitoring for security compliance
+## File: `tap_stack.py`
 
-### Security & Encryption
-- **KMS Key**: Customer-managed KMS key with automatic rotation enabled
-- **S3 Encryption**: All S3 buckets encrypted with KMS keys
-- **EBS Encryption**: EC2 volumes encrypted with KMS keys
-- **CloudWatch Encryption**: Log groups encrypted with KMS keys
-
-### Compute & Storage
-- **EC2 Instance**: t3.micro instance in private subnet with security hardening
-- **Launch Template**: Standardized EC2 configuration with encryption and monitoring
-- **S3 Buckets**: Separate buckets for application data and logging with lifecycle policies
-- **IAM Roles**: Least-privilege roles for EC2 service access
-
-### Monitoring & Logging
-- **CloudWatch Logs**: Centralized logging for application, system, and VPC flow logs
-- **CloudWatch Dashboard**: Infrastructure monitoring dashboard
-- **CloudWatch Agent**: Automated metrics and log collection from EC2 instances
-
-## 📁 Project Structure
-
-```
-├── tap.py                          # CDK App entry point
-├── lib/
-│   ├── __init__.py
-│   ├── tap_stack.py               # Main CDK stack implementation
-│   ├── PROMPT.md                  # Original requirements
-│   ├── MODEL_RESPONSE.md          # Generated solution documentation
-│   ├── MODEL_FAILURES.md         # Known issues and limitations
-│   └── IDEAL_RESPONSE.md          # This file - ideal solution summary
-├── tests/
-│   ├── __init__.py
-│   ├── conftest.py
-│   ├── unit/
-│   │   ├── __init__.py
-│   │   └── test_tap_stack.py      # Comprehensive unit tests (100% coverage)
-│   └── integration/
-│       ├── __init__.py
-│       └── test_tap_stack.py      # End-to-end integration tests
-├── cdk.json                       # CDK configuration
-└── metadata.json                  # Project metadata
-```
-
-## 🔧 Implementation Highlights
-
-### 1. Security-First Design
-- **Principle of Least Privilege**: All IAM roles and security groups follow minimal access patterns
-- **Network Isolation**: EC2 instances deployed only in private subnets
-- **Encryption Everywhere**: All data encrypted in transit and at rest using customer-managed KMS keys
-- **Access Control**: Security groups restrict access to VPC CIDR blocks only
-
-### 2. Infrastructure as Code Best Practices
-- **Modular Design**: Clean separation of concerns with dedicated methods for each resource type
-- **Consistent Naming**: All resources follow `secureapp-*` naming convention
-- **Comprehensive Tagging**: Resources tagged for cost allocation, environment tracking, and compliance
-- **Resource Lifecycle**: Proper removal policies for testing environments
-
-### 3. Monitoring & Observability
-- **Complete Logging**: Application logs, system logs, and VPC flow logs centralized in CloudWatch
-- **Automated Monitoring**: CloudWatch agent configured for CPU, memory, and disk metrics
-- **Dashboard Integration**: Pre-configured monitoring dashboard for infrastructure oversight
-- **Log Retention**: Appropriate retention policies for compliance (7 years for audit logs)
-
-### 4. Testing Excellence
-- **100% Code Coverage**: Comprehensive unit tests covering all infrastructure components
-- **Integration Testing**: End-to-end tests validating complete stack synthesis and configuration
-- **Template Validation**: Tests verify CloudFormation template structure and resource properties
-- **Security Testing**: Tests validate encryption, access controls, and network isolation
-
-## 🚀 Key Features
-
-### Secure Networking
 ```python
-# VPC with public/private subnets across 2 AZs
-vpc = ec2.Vpc(
-    self, "SecureAppVPC",
-    vpc_name="secureapp-vpc",
-    ip_addresses=ec2.IpAddresses.cidr("10.0.0.0/16"),
-    max_azs=2,
-    subnet_configuration=[
-        ec2.SubnetConfiguration(
-            name="secureapp-public-subnet",
-            subnet_type=ec2.SubnetType.PUBLIC,
-            cidr_mask=24
+"""tap_stack.py
+This module defines the TapStack class, which serves as the main CDK stack for
+the TAP (Test Automation Platform) project.
+It orchestrates the instantiation of other resource-specific stacks and
+manages environment-specific configurations.
+"""
+```
+
+---
+
+## Stack Initialization and Properties
+
+```python
+class TapStackProps(cdk.StackProps):
+    def __init__(self, environment_suffix: Optional[str] = None, **kwargs):
+        super().__init__(**kwargs)
+        self.environment_suffix = environment_suffix
+
+
+class TapStack(cdk.Stack):
+    def __init__(self, scope: Construct, construct_id: str, props: Optional[TapStackProps] = None, **kwargs):
+        super().__init__(scope, construct_id, **kwargs)
+
+        environment_suffix = (
+            props.environment_suffix if props else None
+        ) or self.node.try_get_context('environmentSuffix') or 'dev'
+
+        self.kms_key = self._create_kms_key()
+        self.vpc = self._create_vpc()
+        self.security_groups = self._create_security_groups()
+        self.s3_buckets = self._create_s3_buckets()
+        self.iam_roles = self._create_iam_roles()
+        self.cloudwatch_resources = self._create_cloudwatch_resources()
+        self.ec2_instances = self._create_ec2_instances()
+        self.cloudtrail = self._create_cloudtrail()
+        self._create_outputs()
+```
+
+---
+
+## KMS Key with Rotation and Secure Access
+
+```python
+def _create_kms_key(self) -> kms.Key:
+    key_policy = iam.PolicyDocument(statements=[
+        iam.PolicyStatement(
+            sid="Enable IAM User Permissions",
+            effect=iam.Effect.ALLOW,
+            principals=[iam.AccountRootPrincipal()],
+            actions=["kms:*"],
+            resources=["*"]
         ),
-        ec2.SubnetConfiguration(
-            name="secureapp-private-subnet",
-            subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS,
-            cidr_mask=24
+        iam.PolicyStatement(
+            sid="Allow CloudWatch Logs",
+            effect=iam.Effect.ALLOW,
+            principals=[iam.ServicePrincipal("logs.amazonaws.com")],
+            actions=["kms:Encrypt", "kms:Decrypt", "kms:ReEncrypt*", "kms:GenerateDataKey*", "kms:DescribeKey"],
+            resources=["*"]
+        ),
+        iam.PolicyStatement(
+            sid="Allow S3 Service",
+            effect=iam.Effect.ALLOW,
+            principals=[iam.ServicePrincipal("s3.amazonaws.com")],
+            actions=["kms:Encrypt", "kms:Decrypt", "kms:ReEncrypt*", "kms:GenerateDataKey*", "kms:DescribeKey"],
+            resources=["*"]
         )
-    ]
-)
+    ])
+
+    kms_key = kms.Key(
+        self, "SecureAppKMSKey",
+        alias="secureapp-encryption-key",
+        description="KMS key for SecureApp encryption with automatic rotation",
+        enable_key_rotation=True,
+        policy=key_policy,
+        removal_policy=RemovalPolicy.DESTROY
+    )
+
+    Tags.of(kms_key).add("Name", "secureapp-kms-key")
+    return kms_key
 ```
 
-### KMS Encryption
+---
+
+## VPC with Public & Private Subnets + Flow Logs
+
 ```python
-# Customer-managed KMS key with rotation
-kms_key = kms.Key(
-    self, "SecureAppKMSKey",
-    alias="secureapp-encryption-key",
-    description="KMS key for SecureApp encryption with automatic rotation",
-    enable_key_rotation=True,
-    policy=key_policy
-)
+def _create_vpc(self) -> ec2.Vpc:
+    vpc = ec2.Vpc(
+        self, "SecureAppVPC",
+        vpc_name="secureapp-vpc",
+        ip_addresses=ec2.IpAddresses.cidr("10.0.0.0/16"),
+        max_azs=2,
+        subnet_configuration=[
+            ec2.SubnetConfiguration(name="secureapp-public-subnet", subnet_type=ec2.SubnetType.PUBLIC, cidr_mask=24),
+            ec2.SubnetConfiguration(name="secureapp-private-subnet", subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS, cidr_mask=24),
+        ],
+        enable_dns_hostnames=True,
+        enable_dns_support=True
+    )
+
+    vpc_flow_log_group = logs.LogGroup(
+        self, "VPCFlowLogGroup",
+        log_group_name="/secureapp/vpc/flowlogs",
+        encryption_key=self.kms_key,
+        retention=logs.RetentionDays.ONE_MONTH,
+        removal_policy=RemovalPolicy.DESTROY
+    )
+
+    flow_log_role = iam.Role(
+        self, "VPCFlowLogRole",
+        assumed_by=iam.ServicePrincipal("vpc-flow-logs.amazonaws.com"),
+        inline_policies={
+            "VPCFlowLogsPolicy": iam.PolicyDocument(statements=[
+                iam.PolicyStatement(
+                    effect=iam.Effect.ALLOW,
+                    actions=["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"],
+                    resources=["*"]
+                )
+            ])
+        }
+    )
+
+    ec2.FlowLog(
+        self, "VPCFlowLog",
+        resource_type=ec2.FlowLogResourceType.from_vpc(vpc),
+        destination=ec2.FlowLogDestination.to_cloud_watch_logs(
+            log_group=vpc_flow_log_group,
+            iam_role=flow_log_role
+        ),
+        traffic_type=ec2.FlowLogTrafficType.ALL
+    )
+
+    return vpc
 ```
 
-### S3 Security
+---
+
+## Secure EC2 Instance with Logging & Monitoring
+
 ```python
-# Encrypted S3 bucket with lifecycle policies
-app_data_bucket = s3.Bucket(
-    self, "AppDataBucket",
-    bucket_name=f"secureapp-data-{self.account}-{self.region}",
-    encryption=s3.BucketEncryption.KMS,
-    encryption_key=self.kms_key,
-    block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
-    versioned=True,
-    lifecycle_rules=[...]
-)
+def _create_ec2_instances(self) -> dict:
+    user_data = ec2.UserData.for_linux()
+    user_data.add_commands(
+        "yum update -y",
+        "yum install -y amazon-cloudwatch-agent",
+        "yum install -y awslogs",
+        # CloudWatch agent config omitted for brevity...
+    )
+
+    instance = ec2.Instance(
+        self, "SecureAppInstance",
+        instance_type=ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MICRO),
+        machine_image=ec2.MachineImage.latest_amazon_linux2(),
+        vpc=self.vpc,
+        vpc_subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS),
+        security_group=self.security_groups["ec2_sg"],
+        role=self.iam_roles["ec2_role"],
+        user_data=user_data,
+        block_devices=[
+            ec2.BlockDevice(
+                device_name="/dev/xvda",
+                volume=ec2.BlockDeviceVolume.ebs(volume_size=20, encrypted=True, kms_key=self.kms_key)
+            )
+        ]
+    )
+
+    Tags.of(instance).add("Name", "secureapp-instance-01")
+    return {"instance": instance}
 ```
 
-### IAM Least Privilege
+---
+
+## CloudTrail with Secure Logging
+
 ```python
-# EC2 role with minimal required permissions
-ec2_role = iam.Role(
-    self, "EC2InstanceRole",
-    role_name="secureapp-ec2-role",
-    assumed_by=iam.ServicePrincipal("ec2.amazonaws.com"),
-    description="IAM role for SecureApp EC2 instances"
-)
+def _create_cloudtrail(self) -> logs.LogGroup:
+    trail_log_group = logs.LogGroup(
+        self, "CloudTrailLogGroup",
+        log_group_name="/secureapp/cloudtrail",
+        encryption_key=self.kms_key,
+        retention=logs.RetentionDays.ONE_YEAR
+    )
+
+    trail_bucket = self.s3_buckets["logs_bucket"]
+
+    trail_bucket.add_to_resource_policy(iam.PolicyStatement(
+        effect=iam.Effect.ALLOW,
+        principals=[iam.ServicePrincipal("cloudtrail.amazonaws.com")],
+        actions=["s3:GetBucketAcl"],
+        resources=[trail_bucket.bucket_arn]
+    ))
+
+    trail_bucket.add_to_resource_policy(iam.PolicyStatement(
+        effect=iam.Effect.ALLOW,
+        principals=[iam.ServicePrincipal("cloudtrail.amazonaws.com")],
+        actions=["s3:PutObject"],
+        resources=[f"{trail_bucket.bucket_arn}/AWSLogs/{self.account}/*"],
+        conditions={"StringEquals": {"s3:x-amz-acl": "bucket-owner-full-control"}}
+    ))
+
+    trail = cloudtrail.CfnTrail(
+        self, "SecureAppTrail",
+        trail_name="secureapp-trail",
+        s3_bucket_name=trail_bucket.bucket_name,
+        cloud_watch_logs_log_group_arn=trail_log_group.log_group_arn,
+        cloud_watch_logs_role_arn=self._create_cloudtrail_log_role().role_arn,
+        is_logging=True,
+        is_multi_region_trail=True,
+        enable_log_file_validation=True,
+        include_global_service_events=True
+    )
+
+    return trail_log_group
 ```
 
-## 📊 Test Coverage
+---
 
-### Unit Tests (15 test cases)
-- ✅ KMS key creation and rotation
-- ✅ VPC configuration and subnets
-- ✅ S3 bucket encryption and versioning
-- ✅ S3 lifecycle policies
-- ✅ Security group rules
-- ✅ IAM roles and policies
-- ✅ CloudWatch log groups encryption
-- ✅ EC2 instance configuration
-- ✅ VPC flow logs
-- ✅ CloudWatch dashboard
-- ✅ Resource naming conventions
-- ✅ Resource tagging
-- ✅ Stack outputs
-- ✅ Removal policies
-- ✅ Region constraints
+## CloudFormation Outputs
 
-### Integration Tests (12 test cases)
-- ✅ Stack synthesis without errors
-- ✅ Template resource counts
-- ✅ Template outputs validation
-- ✅ KMS key properties
-- ✅ VPC configuration
-- ✅ S3 bucket configuration
-- ✅ Security group rules
-- ✅ IAM role policies
-- ✅ CloudWatch resources
-- ✅ EC2 instance configuration
-- ✅ Tagging consistency
-- ✅ Removal policies
+```python
+def _create_outputs(self) -> None:
+    CfnOutput(self, "VPCId", value=self.vpc.vpc_id)
+    CfnOutput(self, "KMSKeyId", value=self.kms_key.key_id)
+    CfnOutput(self, "AppDataBucketOutput", value=self.s3_buckets["app_data_bucket"].bucket_name)
+    CfnOutput(self, "LogsBucketOutput", value=self.s3_buckets["logs_bucket"].bucket_name)
+    CfnOutput(self, "InstanceId", value=self.ec2_instances["instance"].instance_id)
+```
 
-**Total Coverage: 100%** - All code paths tested with comprehensive assertions
+---
 
-## 🔍 Quality Assurance
+## Summary
 
-### Code Quality
-- **Linting**: Clean code following Python best practices
-- **Type Safety**: Proper type hints and CDK construct usage
-- **Documentation**: Comprehensive docstrings and inline comments
-- **Error Handling**: Robust error handling and validation
+This stack is well-architected for:
 
-### Security Validation
-- **Encryption**: All data encrypted with customer-managed keys
-- **Network Security**: Private subnet deployment with security groups
-- **Access Control**: IAM roles follow least privilege principle
-- **Compliance**: 7-year log retention for regulatory compliance
+* **Security**: Encryption, least privilege, flow logs, IAM hardening.
+* **Observability**: CloudTrail, CloudWatch Logs, metrics dashboard.
+* **Maintainability**: Logical separation, reusable components.
+* **Compliance**: S3 lifecycle, log retention, KMS policies.
 
-### Infrastructure Validation
-- **Resource Naming**: Consistent `secureapp-*` prefix
-- **Tagging Strategy**: Comprehensive tagging for cost and compliance
-- **Lifecycle Management**: Proper resource cleanup policies
-- **Multi-AZ Design**: High availability across availability zones
-
-## 🎯 Compliance & Security
-
-### Security Requirements Met
-- ✅ **Region Constraint**: All resources in us-east-1
-- ✅ **Naming Convention**: All resources prefixed with `secureapp-`
-- ✅ **IAM Least Privilege**: Minimal permissions for all roles
-- ✅ **KMS Encryption**: Customer-managed key with rotation
-- ✅ **S3 Security**: Encrypted buckets with public access blocked
-- ✅ **EC2 Isolation**: Instances in private subnets only
-- ✅ **Network Security**: VPC with proper subnet design
-- ✅ **Security Groups**: Least privilege access rules
-- ✅ **CloudWatch Monitoring**: Comprehensive logging and monitoring
-
-### Best Practices Implemented
-- **Infrastructure as Code**: Complete CDK implementation
-- **Testing**: 100% test coverage with unit and integration tests
-- **Documentation**: Comprehensive documentation and examples
-- **Monitoring**: CloudWatch integration with custom dashboard
-- **Lifecycle Management**: Proper resource cleanup and retention policies
-
-## ⚡ Performance Characteristics
-
-- **Deployment Time**: ~8-12 minutes for complete stack
-- **Resource Count**: ~45 AWS resources total
-- **Cost Optimization**: Lifecycle policies for storage cost management
-- **Scalability**: Multi-AZ design supports horizontal scaling
-- **Monitoring Overhead**: Minimal with CloudWatch agent configuration
-
-## 🏆 Success Metrics
-
-1. **Security**: Zero security findings in infrastructure scan
-2. **Testing**: 100% code coverage with comprehensive test suite
-3. **Compliance**: All security requirements met
-4. **Quality**: Clean synthesis and deployment without errors
-5. **Documentation**: Complete documentation with examples
-6. **Maintainability**: Modular, well-structured code following CDK best practices
-
-This implementation represents a production-ready, secure AWS infrastructure solution with comprehensive testing, monitoring, and compliance capabilities suitable for enterprise environments.
+---
