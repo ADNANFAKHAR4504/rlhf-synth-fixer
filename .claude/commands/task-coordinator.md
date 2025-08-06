@@ -38,6 +38,8 @@ ID in the initial prompt and ask for confirmation.
    - Set startedAt as current timestamp (execute bash `date -Iseconds` and print it in startedAt)
    - Copy appropriate template from `templates/` directory
    - Generate `metadata.json` with extracted information
+   - If the deployment needs to be done in a specific region, create the file `lib/AWS_REGION` with the
+   region name. e.g: `echo "us-east-1" > lib/AWS_REGION`
 6. Use the selected task description for the workflow.
 7. Once the entire workflow is completed. Raise a Pull Request to main branch and remove the task form tasks.csv
 
