@@ -1,6 +1,6 @@
 # Prompt for Claude 3.7 Sonnet _(Pulumi + AWS multi‑AZ RDS)_  
 
-> This file is formatted as **Markdown**, combining a **system role** and a **user prompt**. It follows best‑in‑class prompt‑design for Claude 3.7 Sonnet: role prompting, clear instructions, example outputs, chain‑of‑thought guidance, and structured format (JSON or code).  
+> This file is formatted as **Markdown**, combining a **system role** and a **user prompt**. It follows best‑in‑class prompt‑design: role prompting, clear instructions, example outputs, chain‑of‑thought guidance, and structured format (JSON or code).  
 
 ---
 

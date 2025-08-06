@@ -1,7 +1,6 @@
 import unittest
 import warnings
 from unittest.mock import MagicMock, patch
-import pulumi
 import pulumi_aws as aws
 from lib.tap_stack import TapStack, TapStackArgs
 
