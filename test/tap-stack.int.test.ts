@@ -41,30 +41,33 @@ const outputs = JSON.parse(
 // Get environment suffix from environment variable (set by CI/CD pipeline)
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'pr13';
 
+// Get AWS region from environment variable (region agnostic)
+const awsRegion = process.env.AWS_REGION || 'us-east-1';
+
 // AWS clients
 const ec2Client = new EC2Client({
-  region: process.env.AWS_REGION || 'us-east-1',
+  region: awsRegion,
 });
 const elbv2Client = new ElasticLoadBalancingV2Client({
-  region: process.env.AWS_REGION || 'us-east-1',
+  region: awsRegion,
 });
 const autoScalingClient = new AutoScalingClient({
-  region: process.env.AWS_REGION || 'us-east-1',
+  region: awsRegion,
 });
 const efsClient = new EFSClient({
-  region: process.env.AWS_REGION || 'us-east-1',
+  region: awsRegion,
 });
 const iamClient = new IAMClient({
-  region: process.env.AWS_REGION || 'us-east-1',
+  region: awsRegion,
 });
 const cloudTrailClient = new CloudTrailClient({
-  region: process.env.AWS_REGION || 'us-east-1',
+  region: awsRegion,
 });
 const snsClient = new SNSClient({
-  region: process.env.AWS_REGION || 'us-east-1',
+  region: awsRegion,
 });
 const cloudWatchClient = new CloudWatchClient({
-  region: process.env.AWS_REGION || 'us-east-1',
+  region: awsRegion,
 });
 
 describe('TapStack Infrastructure Integration Tests', () => {
@@ -483,7 +486,7 @@ describe('TapStack Infrastructure Integration Tests', () => {
 
           if (response.status === 200) {
             expect(response.status).toBe(200);
-            
+
             // Verify response headers indicate nginx (if present)
             const server = response.headers.get('server');
             if (server) {
@@ -494,19 +497,27 @@ describe('TapStack Infrastructure Integration Tests', () => {
             const responseText = await response.text();
             expect(responseText.length).toBeGreaterThan(0);
             expect(responseText.toLowerCase()).toContain('healthy');
-            
+
             // Success - exit the retry loop
             return;
           } else if (response.status === 503) {
             // Service temporarily unavailable - likely still starting up
-            console.log(`Attempt ${attempts + 1}: Health endpoint returned ${response.status}, retrying...`);
+            console.log(
+              `Attempt ${attempts + 1}: Health endpoint returned ${response.status}, retrying...`
+            );
           } else {
             // Unexpected status code
-            console.log(`Attempt ${attempts + 1}: Health endpoint returned ${response.status}`);
+            console.log(
+              `Attempt ${attempts + 1}: Health endpoint returned ${response.status}`
+            );
           }
         } catch (error) {
-          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-          console.log(`Attempt ${attempts + 1}: Health endpoint request failed:`, errorMessage);
+          const errorMessage =
+            error instanceof Error ? error.message : 'Unknown error';
+          console.log(
+            `Attempt ${attempts + 1}: Health endpoint request failed:`,
+            errorMessage
+          );
         }
 
         attempts++;
@@ -517,7 +528,9 @@ describe('TapStack Infrastructure Integration Tests', () => {
       }
 
       // If we reach here, all attempts failed
-      throw new Error(`Health endpoint did not return 200 status after ${maxAttempts} attempts. ALB may still be initializing or instances may not be healthy yet.`);
+      throw new Error(
+        `Health endpoint did not return 200 status after ${maxAttempts} attempts. ALB may still be initializing or instances may not be healthy yet.`
+      );
     }, 60000); // 60 second timeout for this test
   });
 
@@ -615,7 +628,7 @@ describe('TapStack Infrastructure Integration Tests', () => {
 
       // Basic DNS resolution test
       expect(albDnsName).toMatch(/^[a-zA-Z0-9\-\.]+\.elb\.amazonaws\.com$/);
-      expect(albDnsName).toContain('us-east-1.elb.amazonaws.com');
+      expect(albDnsName).toContain(`${awsRegion}.elb.amazonaws.com`);
 
       // The ALB should be accessible (this is a deployment verification)
       // In a real scenario, you might want to make an HTTP request to verify it's serving traffic
