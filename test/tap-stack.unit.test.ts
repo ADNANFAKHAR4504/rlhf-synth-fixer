@@ -32,6 +32,11 @@ describe('SecureFoundationalEnvironmentStack', () => {
         EnableKeyRotation: true,
         Description: Match.stringLikeRegexp(`Customer-managed KMS key for secure foundational environment - ${environmentSuffix}`),
       });
+
+      // Check KMS alias with unique name
+      template.hasResourceProperties('AWS::KMS::Alias', {
+        AliasName: `alias/secure-foundation-${environmentSuffix}-${Match.anyValue()}`,
+      });
     });
 
     test('should create S3 bucket with encryption', () => {
@@ -78,16 +83,30 @@ describe('SecureFoundationalEnvironmentStack', () => {
         GroupDescription: 'Secure security group for EC2 instances with strict access controls',
         SecurityGroupEgress: [
           {
-            CidrIp: '0.0.0.0/0',
+            CidrIp: {
+              'Fn::GetAtt': [
+                Match.anyValue(),
+                'CidrBlock'
+              ]
+            },
+            Description: 'HTTPS to VPC endpoints for AWS services',
             FromPort: 443,
             IpProtocol: 'tcp',
             ToPort: 443,
           },
+        ],
+        SecurityGroupIngress: [
           {
-            CidrIp: '0.0.0.0/0',
-            FromPort: 80,
+            CidrIp: {
+              'Fn::GetAtt': [
+                Match.anyValue(),
+                'CidrBlock'
+              ]
+            },
+            Description: 'SSH access from within VPC only',
+            FromPort: 22,
             IpProtocol: 'tcp',
-            ToPort: 80,
+            ToPort: 22,
           },
         ],
       });
@@ -99,6 +118,7 @@ describe('SecureFoundationalEnvironmentStack', () => {
         IsMultiRegionTrail: true,
         EnableLogFileValidation: true,
         IncludeGlobalServiceEvents: true,
+        TrailName: `security-audit-trail-${environmentSuffix}-${Match.anyValue()}`,
       });
     });
 
@@ -113,6 +133,26 @@ describe('SecureFoundationalEnvironmentStack', () => {
     test('should create CloudWatch Dashboard', () => {
       template.hasResourceProperties('AWS::CloudWatch::Dashboard', {
         DashboardName: `secure-foundation-dashboard-${environmentSuffix}`,
+      });
+    });
+
+    test('should create CloudWatch Log Groups with unique names', () => {
+      // Check VPC Flow Logs group
+      template.hasResourceProperties('AWS::Logs::LogGroup', {
+        LogGroupName: `/aws/vpc/flowlogs/${environmentSuffix}-${Match.anyValue()}`,
+        RetentionInDays: 30,
+      });
+
+      // Check Application Log Group
+      template.hasResourceProperties('AWS::Logs::LogGroup', {
+        LogGroupName: `/aws/application/${environmentSuffix}-${Match.anyValue()}`,
+        RetentionInDays: 30,
+      });
+
+      // Check System Log Group
+      template.hasResourceProperties('AWS::Logs::LogGroup', {
+        LogGroupName: `/aws/ec2/system-logs/${environmentSuffix}-${Match.anyValue()}`,
+        RetentionInDays: 30,
       });
     });
 

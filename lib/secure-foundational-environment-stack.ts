@@ -47,9 +47,10 @@ export class SecureFoundationalEnvironmentStack extends cdk.Stack {
 
     // 1. Customer-Managed KMS Key for encryption
     this.kmsKey = new kms.Key(this, 'SecureFoundationKMSKey', {
-      alias: `alias/secure-foundation-${environmentSuffix}`,
+      alias: `alias/secure-foundation-${environmentSuffix}-${this.account}`,
       description: `Customer-managed KMS key for secure foundational environment - ${environmentSuffix}`,
       enableKeyRotation: true,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
       policy: new iam.PolicyDocument({
         statements: [
           new iam.PolicyStatement({
@@ -146,9 +147,10 @@ export class SecureFoundationalEnvironmentStack extends cdk.Stack {
     });
 
     const vpcFlowLogsGroup = new logs.LogGroup(this, 'VPCFlowLogsGroup', {
-      logGroupName: `/aws/vpc/flowlogs/${environmentSuffix}`,
+      logGroupName: `/aws/vpc/flowlogs/${environmentSuffix}-${this.account}`,
       retention: logs.RetentionDays.ONE_MONTH,
       encryptionKey: this.kmsKey,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
     new ec2.FlowLog(this, 'VPCFlowLogs', {
@@ -305,7 +307,7 @@ export class SecureFoundationalEnvironmentStack extends cdk.Stack {
                 collect_list: [
                   {
                     file_path: '/var/log/messages',
-                    log_group_name: `/aws/ec2/system-logs/${environmentSuffix}`,
+                    log_group_name: `/aws/ec2/system-logs/${environmentSuffix}-${this.account}`,
                     log_stream_name: '{instance_id}',
                   },
                 ],
@@ -340,21 +342,23 @@ export class SecureFoundationalEnvironmentStack extends cdk.Stack {
 
     // 8. CloudWatch Log Groups with KMS encryption
     new logs.LogGroup(this, 'ApplicationLogGroup', {
-      logGroupName: `/aws/application/${environmentSuffix}`,
+      logGroupName: `/aws/application/${environmentSuffix}-${this.account}`,
       retention: logs.RetentionDays.ONE_MONTH,
       encryptionKey: this.kmsKey,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
     new logs.LogGroup(this, 'SystemLogGroup', {
-      logGroupName: `/aws/ec2/system-logs/${environmentSuffix}`,
+      logGroupName: `/aws/ec2/system-logs/${environmentSuffix}-${this.account}`,
       retention: logs.RetentionDays.ONE_MONTH,
       encryptionKey: this.kmsKey,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
     // 9. CloudTrail for API logging
 
     new cloudtrail.Trail(this, 'SecurityAuditTrail', {
-      trailName: `security-audit-trail-${environmentSuffix}`,
+      trailName: `security-audit-trail-${environmentSuffix}-${this.account}`,
       bucket: this.secureS3Bucket,
       s3KeyPrefix: 'cloudtrail-logs/',
       includeGlobalServiceEvents: true,
