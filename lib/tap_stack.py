@@ -1,22 +1,22 @@
 # lib/tap_stack.py
+import base64
+import json
+from typing import Dict, Optional
+
 import pulumi
 import pulumi_aws as aws
-import json
-import base64
-from typing import Dict, List, Optional
 
 
 class TapStackArgs:
     """Arguments for TapStack component"""
     
     def __init__(self, config: Dict = None, environment_suffix: str = None):
-        # Support both the dict-style config (for tests) and environment_suffix (for tap.py)
-        if config is not None:
+        if config:  # This checks for both None and empty dict
             self.config = config
             self.environment = config.get("environment", "dev")
             self.region = config.get("region", "us-east-1")
             self.app_name = config.get("app_name", "tap-app")
-        elif environment_suffix is not None:
+        elif environment_suffix:
             # Use environment_suffix from tap.py
             self.config = {
                 "environment": environment_suffix,
@@ -38,11 +38,9 @@ class TapStackArgs:
             self.app_name = "tap-app"
 
 
+
 class TapStack(pulumi.ComponentResource):
-    """
-    Complete AWS CI/CD infrastructure stack with multi-environment support,
-    blue-green deployments, security scanning, and monitoring.
-    """
+    """Complete AWS CI/CD infrastructure stack"""
     
     def __init__(self, name: str, args: TapStackArgs, 
                  opts: Optional[pulumi.ResourceOptions] = None):
@@ -70,7 +68,7 @@ class TapStack(pulumi.ComponentResource):
         })
     
     def _create_networking(self):
-        """Create VPC, subnets, and networking components for multi-AZ deployment"""
+        """Create VPC, subnets, and networking components with proper dependencies"""
         
         # VPC
         self.vpc = aws.ec2.Vpc(
@@ -93,7 +91,7 @@ class TapStack(pulumi.ComponentResource):
                 "Name": f"{self.app_name}-igw-{self.environment}",
                 "Environment": self.environment
             },
-            opts=pulumi.ResourceOptions(parent=self)
+            opts=pulumi.ResourceOptions(parent=self, depends_on=[self.vpc])
         )
         
         # Availability Zones
@@ -113,7 +111,7 @@ class TapStack(pulumi.ComponentResource):
                     "Environment": self.environment,
                     "Type": "public"
                 },
-                opts=pulumi.ResourceOptions(parent=self)
+                opts=pulumi.ResourceOptions(parent=self, depends_on=[self.vpc])
             )
             self.public_subnets.append(subnet)
         
@@ -130,11 +128,11 @@ class TapStack(pulumi.ComponentResource):
                     "Environment": self.environment,
                     "Type": "private"
                 },
-                opts=pulumi.ResourceOptions(parent=self)
+                opts=pulumi.ResourceOptions(parent=self, depends_on=[self.vpc])
             )
             self.private_subnets.append(subnet)
         
-        # Create EIPs first, then NAT Gateways for private subnets
+        # Create EIPs FIRST with proper dependencies
         self.eips = []
         for i, subnet in enumerate(self.public_subnets):
             eip = aws.ec2.Eip(
@@ -148,7 +146,7 @@ class TapStack(pulumi.ComponentResource):
             )
             self.eips.append(eip)
         
-        # NAT Gateways using the pre-created EIPs
+        # Create NAT Gateways AFTER EIPs with explicit dependencies
         self.nat_gateways = []
         for i, (subnet, eip) in enumerate(zip(self.public_subnets, self.eips)):
             nat_gw = aws.ec2.NatGateway(
@@ -177,7 +175,7 @@ class TapStack(pulumi.ComponentResource):
                 "Name": f"{self.app_name}-public-rt-{self.environment}",
                 "Environment": self.environment
             },
-            opts=pulumi.ResourceOptions(parent=self)
+            opts=pulumi.ResourceOptions(parent=self, depends_on=[self.igw])
         )
         
         # Associate public subnets with public route table
@@ -186,10 +184,10 @@ class TapStack(pulumi.ComponentResource):
                 f"{self.app_name}-public-rta-{i+1}-{self.environment}",
                 subnet_id=subnet.id,
                 route_table_id=self.public_rt.id,
-                opts=pulumi.ResourceOptions(parent=self)
+                opts=pulumi.ResourceOptions(parent=self, depends_on=[self.public_rt, subnet])
             )
         
-        # Private route tables - ensure proper dependency handling
+        # Private route tables with proper NAT Gateway dependencies
         self.private_rts = []
         for i, (subnet, nat_gw) in enumerate(zip(self.private_subnets, self.nat_gateways)):
             route_table = aws.ec2.RouteTable(
@@ -386,7 +384,7 @@ class TapStack(pulumi.ComponentResource):
     def _create_application_infrastructure(self):
         """Create application infrastructure with blue-green deployment support"""
         
-        # Application Load Balancer with enhanced configuration
+        # Application Load Balancer
         self.alb = aws.lb.LoadBalancer(
             f"{self.app_name}-alb-{self.environment}",
             name=f"{self.app_name}-alb-{self.environment}",
@@ -396,7 +394,6 @@ class TapStack(pulumi.ComponentResource):
             enable_deletion_protection=self.environment == "prod",
             enable_cross_zone_load_balancing=True,
             idle_timeout=60,
-            # Access logs configuration removed as it requires additional S3 bucket policy setup
             tags={
                 "Name": f"{self.app_name}-alb-{self.environment}",
                 "Environment": self.environment
@@ -498,7 +495,7 @@ class TapStack(pulumi.ComponentResource):
             opts=pulumi.ResourceOptions(parent=self)
         )
         
-        # Auto Scaling Group with enhanced configuration
+        # Auto Scaling Group
         self.asg = aws.autoscaling.Group(
             f"{self.app_name}-asg-{self.environment}",
             name=f"{self.app_name}-asg-{self.environment}",
@@ -614,11 +611,11 @@ systemctl start app-health
     def _create_cicd_pipeline(self):
         """Create CI/CD pipeline with CodePipeline, CodeBuild, and CodeDeploy"""
         
-        # S3 bucket for artifacts with enhanced security and lifecycle management
-        # Generate a valid bucket name (lowercase, no underscores, 3-63 chars)
+        # Generate valid S3 bucket name
         stack_name = pulumi.get_stack().lower().replace('_', '-').replace(' ', '-')[:10]
         bucket_name = f"{self.app_name}-artifacts-{self.environment}-{stack_name}".lower()
         
+        # S3 bucket for artifacts
         self.artifacts_bucket = aws.s3.Bucket(
             f"{self.app_name}-artifacts-{self.environment}",
             bucket=bucket_name,
@@ -735,7 +732,7 @@ systemctl start app-health
             opts=pulumi.ResourceOptions(parent=self)
         )
         
-        # CodeBuild policy - with enhanced permissions and error handling
+        # CodeBuild policy
         self.codebuild_policy = aws.iam.Policy(
             f"{self.app_name}-codebuild-policy-{self.environment}",
             policy=pulumi.Output.all(
@@ -764,7 +761,7 @@ systemctl start app-health
                             "s3:ListBucket"
                         ],
                         "Resource": [
-                            f"{args[0]}",
+                            args[0],
                             f"{args[0]}/*"
                         ]
                     },
@@ -840,7 +837,7 @@ systemctl start app-health
             opts=pulumi.ResourceOptions(parent=self)
         )
         
-        # CodePipeline policy - enhanced with proper resource scoping
+        # CodePipeline policy
         self.codepipeline_policy = aws.iam.Policy(
             f"{self.app_name}-codepipeline-policy-{self.environment}",
             policy=pulumi.Output.all(
@@ -1295,4 +1292,3 @@ def lambda_handler(event, context):
         })
     }
 """
-
