@@ -20,7 +20,7 @@ import pulumi_random as random
 # Configuration
 config = pulumi.Config()
 # Project name change to avoid conflicts with orphaned resources
-project_name = "dualstack-web-app-v4"
+project_name = "dualstack-web-app-v5"
 domain_name = config.get("domain_name") or "example.com"
 environment = config.get("environment") or "dev"
 aws_region = config.get("aws:region") or "us-east-1"
@@ -51,7 +51,7 @@ def create_vpc_and_networking() -> Dict[str, Any]:
   
   # Random offset to prevent subnet conflicts from previous failed runs
   random_subnet_offset = random.RandomInteger(
-      "subnet-offset", min=100, max=250
+      "subnet-offset", min=100, max=250, keepers={"project_name": project_name}
   )
 
   azs = aws.get_availability_zones(state="available")
