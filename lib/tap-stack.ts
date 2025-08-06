@@ -1,5 +1,6 @@
 // main.ts - CDKTF Secure Enterprise Infrastructure
 // IaC – AWS Nova Model Breaking - Single File Implementation
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import { Cloudtrail } from '@cdktf/provider-aws/lib/cloudtrail';
 import { CloudwatchLogGroup } from '@cdktf/provider-aws/lib/cloudwatch-log-group';
 import { CloudwatchMetricAlarm } from '@cdktf/provider-aws/lib/cloudwatch-metric-alarm';
@@ -44,7 +45,7 @@ interface TapStackProps {
 }
 
 export class TapStack extends TerraformStack {
-  constructor(scope: Construct, id: string, props?: TapStackProps) {
+  constructor(scope: Construct, id: string, _props?: TapStackProps) {
     super(scope, id);
 
     // Generate unique suffix for all resources to avoid naming conflicts
@@ -65,7 +66,7 @@ export class TapStack extends TerraformStack {
     });
 
     // Data sources
-    const azs = new DataAwsAvailabilityZones(this, 'available', {
+    const _azs = new DataAwsAvailabilityZones(this, 'available', {
       state: 'available',
     });
 
@@ -142,7 +143,7 @@ export class TapStack extends TerraformStack {
     const publicSubnet1 = new Subnet(this, 'prod-sec-public-subnet-1', {
       vpcId: vpc.id,
       cidrBlock: '10.0.1.0/24',
-      availabilityZone: `us-east-1a`,
+      availabilityZone: 'us-east-1a',
       mapPublicIpOnLaunch: true,
       tags: { ...commonTags, Name: 'prod-sec-public-subnet-1', Type: 'Public' },
     });
@@ -150,7 +151,7 @@ export class TapStack extends TerraformStack {
     const publicSubnet2 = new Subnet(this, 'prod-sec-public-subnet-2', {
       vpcId: vpc.id,
       cidrBlock: '10.0.2.0/24',
-      availabilityZone: `us-east-1b`,
+      availabilityZone: 'us-east-1b',
       mapPublicIpOnLaunch: true,
       tags: { ...commonTags, Name: 'prod-sec-public-subnet-2', Type: 'Public' },
     });
@@ -159,7 +160,7 @@ export class TapStack extends TerraformStack {
     const privateSubnet1 = new Subnet(this, 'prod-sec-private-subnet-1', {
       vpcId: vpc.id,
       cidrBlock: '10.0.10.0/24',
-      availabilityZone: `us-east-1a`,
+      availabilityZone: 'us-east-1a',
       tags: {
         ...commonTags,
         Name: 'prod-sec-private-subnet-1',
@@ -170,7 +171,7 @@ export class TapStack extends TerraformStack {
     const privateSubnet2 = new Subnet(this, 'prod-sec-private-subnet-2', {
       vpcId: vpc.id,
       cidrBlock: '10.0.11.0/24',
-      availabilityZone: `us-east-1b`,
+      availabilityZone: 'us-east-1b',
       tags: {
         ...commonTags,
         Name: 'prod-sec-private-subnet-2',
@@ -651,12 +652,16 @@ export class TapStack extends TerraformStack {
     });
 
     // Secrets Manager
-    const dbSecret = new SecretsmanagerSecret(this, 'prod-sec-db-credentials', {
-      name: `prod-sec/database/credentials-${uniqueSuffix}`,
-      description: 'Database credentials for prod-sec environment',
-      kmsKeyId: mainKmsKey.arn,
-      tags: commonTags,
-    });
+    const _dbSecret = new SecretsmanagerSecret(
+      this,
+      'prod-sec-db-credentials',
+      {
+        name: `prod-sec/database/credentials-${uniqueSuffix}`,
+        description: 'Database credentials for prod-sec environment',
+        kmsKeyId: mainKmsKey.arn,
+        tags: commonTags,
+      }
+    );
 
     // SSM Parameters
     new SsmParameter(this, 'prod-sec-app-config', {
@@ -673,14 +678,14 @@ export class TapStack extends TerraformStack {
     });
 
     // CloudWatch Log Groups - using unique names to avoid conflicts
-    const appLogGroup = new CloudwatchLogGroup(this, 'prod-sec-app-logs', {
+    const _appLogGroup = new CloudwatchLogGroup(this, 'prod-sec-app-logs', {
       name: `/aws/ec2/prod-sec-app-${uniqueSuffix}`,
       retentionInDays: 90,
       kmsKeyId: mainKmsKey.arn,
       tags: commonTags,
     });
 
-    const cloudtrailLogGroup = new CloudwatchLogGroup(
+    const _cloudtrailLogGroup = new CloudwatchLogGroup(
       this,
       'prod-sec-cloudtrail-logs',
       {
@@ -691,7 +696,7 @@ export class TapStack extends TerraformStack {
       }
     );
 
-    const vpcFlowLogGroup = new CloudwatchLogGroup(
+    const _vpcFlowLogGroup = new CloudwatchLogGroup(
       this,
       'prod-sec-vpc-flow-logs',
       {
