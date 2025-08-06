@@ -9,12 +9,11 @@ and manages environment-specific configurations.
 """
 
 import json
-from decimal import Decimal
 from typing import Optional
 
 import pulumi
 import pulumi_aws as aws
-from pulumi import Config, Output, ResourceOptions
+from pulumi import ResourceOptions
 
 
 class TapStackArgs:
@@ -55,6 +54,8 @@ class TapStack(pulumi.ComponentResource):
   opts (ResourceOptions): Pulumi options.
   """
 
+  # pylint: disable=too-many-instance-attributes
+
   def __init__(
       self,
       name: str,
@@ -70,26 +71,29 @@ class TapStack(pulumi.ComponentResource):
     # You would replace this with instantiation of imported components
     # like DynamoDBStack
     #
-    # Create comprehensive AWS infrastructure with integrated inventory management and simple demo
+    # Create comprehensive AWS infrastructure with integrated inventory
+    # management and simple demo
     self._create_infrastructure()
 
   def _create_infrastructure(self):
-    """Create AWS infrastructure exactly as specified in the original prompt."""
+    """Create AWS infrastructure exactly as specified in prompt."""
     
     environment = self.environment_suffix
     
     # Resource naming convention: simple-demo-{resource-type}-{environment}
     def get_resource_name(resource_type: str) -> str:
-        return f"simple-demo-{resource_type}-{environment}"
-        
+      """Generate a standardized resource name."""
+      return f"simple-demo-{resource_type}-{environment}"
+      
     # Helper function to create base tags
     def get_base_tags():
-        return {
-            "Environment": environment,
-            "Project": "simple-demo",
-            "ManagedBy": "Pulumi",
-            **self.tags
-        }
+      """Create standardized base tags for all resources."""
+      return {
+        "Environment": environment,
+        "Project": "simple-demo",
+        "ManagedBy": "Pulumi",
+        **self.tags
+      }
 
     # === EXACT PROMPT IMPLEMENTATION ===
     
@@ -116,11 +120,14 @@ class TapStack(pulumi.ComponentResource):
     self.lambda_role_policy_attachment = aws.iam.RolePolicyAttachment(
         get_resource_name("lambda-role-policy"),
         role=self.lambda_role.name,
-        policy_arn="arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
+        policy_arn=(
+            "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+        ),
         opts=ResourceOptions(parent=self)
     )
 
-    # 2. Create Lambda function with "Hello from Lambda" response (exact prompt requirement)
+    # 2. Create Lambda function with "Hello from Lambda" response 
+    # (exact prompt requirement)
     lambda_function_code = """
 import json
 
@@ -191,7 +198,9 @@ def lambda_handler(event, context):
         action="lambda:InvokeFunction",
         function=self.lambda_function.name,
         principal="apigateway.amazonaws.com",
-        source_arn=self.api_gateway.execution_arn.apply(lambda arn: f"{arn}/*/*"),
+        source_arn=self.api_gateway.execution_arn.apply(
+            lambda arn: f"{arn}/*/*"
+        ),
         opts=ResourceOptions(parent=self)
     )
 
@@ -322,7 +331,7 @@ def lambda_handler(event, context):
         password="demopassword123",  # Default username/password for testing
         vpc_security_group_ids=[self.rds_security_group.id],
         db_subnet_group_name=self.db_subnet_group.name,
-        publicly_accessible=True,  # Publicly accessible for simplicity as required
+        publicly_accessible=True,  # Publicly accessible for simplicity
         backup_retention_period=7,  # 7-day retention as required
         backup_window="03:00-04:00",
         maintenance_window="sun:04:00-sun:05:00",

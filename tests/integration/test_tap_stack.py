@@ -305,8 +305,3 @@ def lambda_handler(event, context):
         self.assertTrue(self.s3_website_url.startswith('http://'))  # S3 website URL
         self.assertTrue(self.api_gateway_url.startswith('https://'))  # API Gateway URL
         self.assertIn(':5432', self.rds_endpoint)  # PostgreSQL endpoint with port
-
-
-if __name__ == '__main__':
-    # Run integration tests
-    unittest.main(verbosity=2, buffer=True)

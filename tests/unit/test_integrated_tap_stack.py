@@ -98,6 +98,3 @@ class TestTapStackStructure(unittest.TestCase):
         self.assertTrue(hasattr(tap_module, 'TapStack'))
         self.assertTrue(hasattr(tap_module, 'TapStackArgs'))
 
-
-if __name__ == '__main__':
-    unittest.main()
