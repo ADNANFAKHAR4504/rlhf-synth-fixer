@@ -259,7 +259,6 @@ export class RdsDatabase extends Construct {
     // --- Step 5: Create the RDS Instance Using the Secret ---
     const dbInstance = new DbInstance(this, 'postgres-db', {
       engine: 'postgres',
-      engineVersion: '14.6',
       instanceClass: 'db.t3.micro',
       allocatedStorage: 20,
       dbName: 'appdb',
