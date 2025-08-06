@@ -19,8 +19,6 @@ Parameters:
     Default: serverlessapp-bucket-284210-1
     Description: Unique S3 bucket name for object triggers.
 
-
-
 Resources:
   # S3 Bucket Policy to allow Lambda invocation
   ServerlessAppBucketInvokePermission:
@@ -69,7 +67,7 @@ Resources:
     Properties:
       VpcId: !Ref ServerlessAppVPC
       CidrBlock: 10.0.0.0/26
-      AvailabilityZone: us-west-2a
+      AvailabilityZone: !Select [0, !GetAZs '']
       Tags:
         - Key: Name
           Value: ServerlessAppSubnetAZ1
@@ -79,7 +77,7 @@ Resources:
     Properties:
       VpcId: !Ref ServerlessAppVPC
       CidrBlock: 10.0.0.64/26
-      AvailabilityZone: us-west-2b
+      AvailabilityZone: !Select [1, !GetAZs '']
       Tags:
         - Key: Name
           Value: ServerlessAppSubnetAZ2
@@ -90,7 +88,7 @@ Resources:
     Properties:
       VpcId: !Ref ServerlessAppVPC
       CidrBlock: 10.0.0.128/26
-      AvailabilityZone: us-west-2a
+      AvailabilityZone: !Select [0, !GetAZs '']
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -252,7 +250,7 @@ Resources:
                   - ec2:DeleteNetworkInterface
                   - ec2:AttachNetworkInterface
                   - ec2:DetachNetworkInterface
-                Resource: 
+                Resource:
                   - !Sub 'arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:network-interface/*'
                   - !Sub 'arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:subnet/${ServerlessAppSubnetAZ1}'
                   - !Sub 'arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:subnet/${ServerlessAppSubnetAZ2}'
@@ -278,7 +276,7 @@ Resources:
           import boto3
           import os
           import json
-          
+
           def lambda_handler(event, context):
               return {
                   'statusCode': 200,
