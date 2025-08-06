@@ -43,7 +43,7 @@ Resources:
     Properties:
       VpcId: !Ref prod-vpc
       CidrBlock: 10.0.1.0/24
-      AvailabilityZone: us-east-1a
+      AvailabilityZone: !Select [0, !GetAZs '']
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -54,7 +54,7 @@ Resources:
     Properties:
       VpcId: !Ref prod-vpc
       CidrBlock: 10.0.2.0/24
-      AvailabilityZone: us-east-1b
+      AvailabilityZone: !Select [1, !GetAZs '']
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -66,7 +66,7 @@ Resources:
     Properties:
       VpcId: !Ref prod-vpc
       CidrBlock: 10.0.3.0/24
-      AvailabilityZone: us-east-1a
+      AvailabilityZone: !Select [0, !GetAZs '']
       Tags:
         - Key: Name
           Value: !Sub '${Environment}-private-subnet-1'
@@ -76,7 +76,7 @@ Resources:
     Properties:
       VpcId: !Ref prod-vpc
       CidrBlock: 10.0.4.0/24
-      AvailabilityZone: us-east-1b
+      AvailabilityZone: !Select [1, !GetAZs '']
       Tags:
         - Key: Name
           Value: !Sub '${Environment}-private-subnet-2'
