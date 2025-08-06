@@ -21,7 +21,10 @@ def create_mock_package(name):
 
 
 # Setup mock modules before importing your components
-sys.modules["pulumi"] = MagicMock()
+pulumi_mock = MagicMock()
+pulumi_mock.Invoke = MagicMock(return_value=MagicMock())
+sys.modules["pulumi"] = pulumi_mock
+
 sys.modules["pulumi_aws"] = create_mock_package("pulumi_aws")
 sys.modules["pulumi_aws"].get_region = Mock(
     return_value=MagicMock(name="us-east-1"))
