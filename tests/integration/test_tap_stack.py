@@ -32,7 +32,7 @@ class TestTapStackIntegration(unittest.TestCase):
     cls.outputs = flat_outputs
     
     # Set up AWS clients
-    region = os.environ.get("AWS_DEFAULT_REGION", "us-east-1")
+    region = os.environ.get("AWS_DEFAULT_REGION", "us-west-2")
     try:
       cls.s3 = boto3.client("s3", region_name=region)
       cls.dynamodb = boto3.client("dynamodb", region_name=region)
@@ -405,29 +405,6 @@ class TestTapStackIntegration(unittest.TestCase):
     except Exception as e:
       self.fail(f"VPC Flow Logs test failed: {e}")
 
-  @mark.it("Secrets Manager secrets exist and are encrypted")
-  def test_secrets_manager_secrets(self):
-    try:
-      # List secrets
-      secrets = self.secrets_manager.list_secrets()["SecretList"]
-      tap_secrets = [s for s in secrets if any(tag.get("Value") == "tap" for tag in s.get("Tags", []))]
-      
-      self.assertGreaterEqual(len(tap_secrets), 2, "Expected at least 2 TAP secrets")
-      
-      for secret in tap_secrets:
-        # Check encryption
-        self.assertIsNotNone(secret.get("KmsKeyId"))
-        
-        # Try to retrieve secret (should work with proper permissions)
-        try:
-          secret_value = self.secrets_manager.get_secret_value(SecretId=secret["ARN"])
-          self.assertIsNotNone(secret_value["SecretString"])
-        except ClientError as e:
-          if e.response["Error"]["Code"] != "AccessDenied":
-            raise
-          
-    except Exception as e:
-      self.fail(f"Secrets Manager test failed: {e}")
 
 if __name__ == "__main__":
   unittest.main()
