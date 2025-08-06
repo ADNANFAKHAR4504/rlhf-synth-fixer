@@ -72,13 +72,22 @@ class TestTapStackIntegration(unittest.TestCase):
     payload = {
       "Records": [
         {
+          "eventVersion": "2.1",
           "eventSource": "aws:s3",
+          "awsRegion": "us-east-1",
+          "eventName": "ObjectCreated:Put",
           "s3": {
+            "s3SchemaVersion": "1.0",
             "bucket": {
-              "name": S3_BUCKET_NAME
+              "name": S3_BUCKET_NAME,
+              "ownerIdentity": {"principalId": "A1EXAMPLEBKT"},
+              "arn": f"arn:aws:s3:::{S3_BUCKET_NAME}"
             },
             "object": {
-              "key": test_object_key
+              "key": test_object_key,
+              "size": 1024,
+              "eTag": "d41d8cd98f00b204e9800998ecf8427e",
+              "sequencer": "0A1B2C3D4E5F678901"
             }
           }
         }
@@ -91,14 +100,15 @@ class TestTapStackIntegration(unittest.TestCase):
         InvocationType="RequestResponse",
         Payload=json.dumps(payload)
       )
-
-      function_response = json.loads(response["Payload"].read())
+      response_payload_dict = json.loads(response["Payload"].read())
       self.assertEqual(response["StatusCode"], 200)
-      self.assertEqual(function_response.get("statusCode"), 200)
-      self.assertEqual(
-        function_response.get("body"),
-        "Successfully processed S3 event"
-      )
+
+      body_string = response_payload_dict.get("body")
+      self.assertIsNotNone(body_string)
+
+      parsed_body = json.loads(body_string)
+      self.assertEqual(parsed_body.get("message"), "Successfully processed S3 event")
+      self.assertEqual(parsed_body.get("status"), "success")
 
     except (ClientError, BotoCoreError, json.JSONDecodeError) as ex:
       self.fail(f"Lambda test failed: {ex}")
