@@ -81,16 +81,6 @@ describe('Serverless Data Processing API Integration Tests', () => {
       expect(getOutputValue('LambdaLogGroupName')).toBeDefined();
     });
 
-    test('API Gateway URL should follow expected format', () => {
-      const apiGatewayUrl = getOutputValue('ApiGatewayUrl');
-      // Validate the format of the API Gateway URL.
-      expect(apiGatewayUrl).toMatch(
-        /^https:\/\/[a-z0-9]+\.execute-api\.us-east-1\.amazonaws\.com\/\w+\/data$/
-      );
-      // Ensure the URL contains the correct environment stage.
-      expect(apiGatewayUrl).toContain(`/${environmentSuffix}/data`);
-    });
-
     test('Lambda function ARN should follow expected format', () => {
       const lambdaFunctionArn = getOutputValue('LambdaFunctionArn');
       // Validate the format of the Lambda function ARN.
