@@ -195,6 +195,13 @@ export class SecureFoundationalEnvironmentStack extends cdk.Stack {
       'HTTPS to VPC endpoints for AWS services'
     );
 
+    // Also allow HTTP for package downloads and updates
+    this.ec2SecurityGroup.addEgressRule(
+      ec2.Peer.ipv4(this.vpc.vpcCidrBlock),
+      ec2.Port.tcp(80),
+      'HTTP to VPC endpoints for AWS services'
+    );
+
     // Internal VPC communication only
     this.ec2SecurityGroup.addIngressRule(
       ec2.Peer.ipv4(this.vpc.vpcCidrBlock),
@@ -280,6 +287,8 @@ export class SecureFoundationalEnvironmentStack extends cdk.Stack {
           ),
         ],
       }),
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      autoDeleteObjects: true,
     });
 
     // Add bucket policy for CloudTrail

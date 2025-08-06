@@ -30,7 +30,9 @@ describe('SecureFoundationalEnvironmentStack', () => {
     test('should create KMS key with key rotation enabled', () => {
       template.hasResourceProperties('AWS::KMS::Key', {
         EnableKeyRotation: true,
-        Description: Match.stringLikeRegexp(`Customer-managed KMS key for secure foundational environment - ${environmentSuffix}`),
+        Description: Match.stringLikeRegexp(
+          `Customer-managed KMS key for secure foundational environment - ${environmentSuffix}`
+        ),
       });
 
       // Check KMS alias with unique name (uses Fn::Join)
@@ -77,7 +79,7 @@ describe('SecureFoundationalEnvironmentStack', () => {
         InstanceType: 't3.micro',
         Monitoring: true,
       });
-      
+
       // Check that instance uses LaunchTemplate which contains MetadataOptions
       template.hasResourceProperties('AWS::EC2::LaunchTemplate', {
         LaunchTemplateData: {
@@ -90,28 +92,32 @@ describe('SecureFoundationalEnvironmentStack', () => {
 
     test('should create security group with restricted access', () => {
       template.hasResourceProperties('AWS::EC2::SecurityGroup', {
-        GroupDescription: 'Secure security group for EC2 instances with strict access controls',
+        GroupDescription:
+          'Secure security group for EC2 instances with strict access controls',
         SecurityGroupEgress: [
           {
             CidrIp: {
-              'Fn::GetAtt': [
-                Match.anyValue(),
-                'CidrBlock'
-              ]
+              'Fn::GetAtt': [Match.anyValue(), 'CidrBlock'],
             },
             Description: 'HTTPS to VPC endpoints for AWS services',
             FromPort: 443,
             IpProtocol: 'tcp',
             ToPort: 443,
           },
+          {
+            CidrIp: {
+              'Fn::GetAtt': [Match.anyValue(), 'CidrBlock'],
+            },
+            Description: 'HTTP to VPC endpoints for AWS services',
+            FromPort: 80,
+            IpProtocol: 'tcp',
+            ToPort: 80,
+          },
         ],
         SecurityGroupIngress: [
           {
             CidrIp: {
-              'Fn::GetAtt': [
-                Match.anyValue(),
-                'CidrBlock'
-              ]
+              'Fn::GetAtt': [Match.anyValue(), 'CidrBlock'],
             },
             Description: 'SSH access from within VPC only',
             FromPort: 22,
@@ -209,13 +215,19 @@ describe('SecureFoundationalEnvironmentStack', () => {
     test('should apply common tags to all resources', () => {
       const resources = template.findResources('AWS::EC2::VPC');
       expect(Object.keys(resources).length).toBeGreaterThan(0);
-      
+
       // Check that resources have the expected tags
       for (const resource of Object.values(resources)) {
         expect((resource as any).Properties?.Tags).toEqual(
           expect.arrayContaining([
-            expect.objectContaining({ Key: 'Environment', Value: environmentSuffix }),
-            expect.objectContaining({ Key: 'Project', Value: 'IaC-AWS-Nova-Model-Breaking' }),
+            expect.objectContaining({
+              Key: 'Environment',
+              Value: environmentSuffix,
+            }),
+            expect.objectContaining({
+              Key: 'Project',
+              Value: 'IaC-AWS-Nova-Model-Breaking',
+            }),
             expect.objectContaining({ Key: 'ManagedBy', Value: 'AWS-CDK' }),
           ])
         );
@@ -237,7 +249,7 @@ describe('SecureFoundationalEnvironmentStack', () => {
         },
         RoleName: `secure-ec2-role-${environmentSuffix}`,
       });
-      
+
       // Verify the role has the SSM managed policy (referenced via Fn::Join)
       const roles = template.findResources('AWS::IAM::Role', {
         Properties: {
@@ -254,7 +266,7 @@ describe('SecureFoundationalEnvironmentStack', () => {
           },
         },
       });
-      
+
       expect(Object.keys(roles).length).toBeGreaterThan(0);
     });
   });
