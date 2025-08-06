@@ -1,5 +1,5 @@
 import pytest
-from aws_cdk import App, Stack
+from aws_cdk import App
 from aws_cdk.assertions import Template, Match
 
 # Assuming your TapStack is in a file named 'lib/tap_stack.py'
@@ -8,23 +8,23 @@ from lib.tap_stack import TapStack, TapStackProps
 
 @pytest.fixture
 def app():
-    """Fixture to provide a CDK App instance for testing."""
-    return App()
+  """Fixture to provide a CDK App instance for testing."""
+  return App()
 
 @pytest.fixture
 def default_stack(app):
-    """Fixture to provide a default TapStack instance for testing."""
-    return TapStack(app, "TapStackTest")
+  """Fixture to provide a default TapStack instance for testing."""
+  return TapStack(app, "TapStackTest")
 
 @pytest.fixture
 def qa_stack(app):
-    """Fixture to provide a TapStack instance with 'qa' environment suffix."""
-    return TapStack(app, "TapStackQaTest", props=TapStackProps(environment_suffix="qa"))
+  """Fixture to provide a TapStack instance with 'qa' environment suffix."""
+  return TapStack(app, "TapStackQaTest", props=TapStackProps(environment_suffix="qa"))
 
 @pytest.fixture
 def prod_stack(app):
-    """Fixture to provide a TapStack instance with 'prod' environment suffix."""
-    return TapStack(app, "TapStackProdTest", props=TapStackProps(environment_suffix="prod"))
+  """Fixture to provide a TapStack instance with 'prod' environment suffix."""
+  return TapStack(app, "TapStackProdTest", props=TapStackProps(environment_suffix="prod"))
 
 class TestTapStack:
   """
@@ -108,67 +108,89 @@ class TestTapStack:
     assert len(app_lambda_resources) == 1, "Expected exactly one AppLambda function."
     app_lambda_logical_id = list(app_lambda_resources.keys())[0]
 
-    # Get the Ref/Fn::GetAtt to the AppLambda's role from its properties in the synthesized template
-    lambda_role_property_from_template = template.to_json()["Resources"][app_lambda_logical_id]["Properties"]["Role"]
+    # Get the Ref/Fn::GetAtt to the AppLambda's role from its properties in the
+    # synthesized template
+    lambda_role_property_from_template = \
+      template.to_json()["Resources"][app_lambda_logical_id]["Properties"]["Role"]
 
     # Extract the logical ID of the role from this property
     lambda_role_logical_id_in_template = None
     if isinstance(lambda_role_property_from_template, dict):
-        if "Ref" in lambda_role_property_from_template:
-            lambda_role_logical_id_in_template = lambda_role_property_from_template["Ref"]
-        elif "Fn::GetAtt" in lambda_role_property_from_template:
-            lambda_role_logical_id_in_template = lambda_role_property_from_template["Fn::GetAtt"][0]
+      if "Ref" in lambda_role_property_from_template:
+        lambda_role_logical_id_in_template = lambda_role_property_from_template["Ref"]
+      elif "Fn::GetAtt" in lambda_role_property_from_template:
+        lambda_role_logical_id_in_template = \
+          lambda_role_property_from_template["Fn::GetAtt"][0]
 
-    assert lambda_role_logical_id_in_template, "Could not extract logical ID of Lambda role from template."
+    assert lambda_role_logical_id_in_template, \
+      "Could not extract logical ID of Lambda role from template."
 
-    # Now, find the specific IAM Policy resource associated with this role
-    # We look for a policy that has this exact role logical ID in its 'Roles' array
-    app_lambda_policy_resources = template.find_resources("AWS::IAM::Policy", {
-        "Properties": {
-            "Roles": Match.array_with([{"Ref": lambda_role_logical_id_in_template}]),
-            "PolicyName": Match.string_like_regexp("AppLambdaServiceRoleDefaultPolicy.*")
-        }
-    })
-    assert len(app_lambda_policy_resources) == 1, f"Expected exactly one IAM Policy for role {lambda_role_logical_id_in_template}"
-    app_lambda_policy_logical_id = list(app_lambda_policy_resources.keys())[0]
-    policy_document = template.to_json()["Resources"][app_lambda_policy_logical_id]["Properties"]["PolicyDocument"]
+    # Now use this extracted logical ID for the assertion
+    # Use Match.object_like with a regex for the Ref value to handle dynamic logical IDs
+    lambda_role_ref_matcher = \
+      Match.object_like({"Ref": Match.string_like_regexp(
+          f"^{lambda_role_logical_id_in_template}$")})
 
 
     # Check for DynamoDB read/write permissions
-    assert Match.array_with([
-        Match.object_like({
-            "Action": Match.array_with(["dynamodb:BatchGetItem", "dynamodb:GetRecords", "dynamodb:GetShardIterator", "dynamodb:Query", "dynamodb:GetItem", "dynamodb:Scan", "dynamodb:BatchWriteItem", "dynamodb:PutItem", "dynamodb:UpdateItem", "dynamodb:DeleteItem"]),
-            "Effect": "Allow",
-            "Resource": Match.array_with([
-                Match.object_like({"Fn::GetAtt": [Match.string_like_regexp("AppTable.*"), "Arn"]}), # Table ARN
-                # Removed the /index/* part as no indexes are defined in the stack
+    template.has_resource_properties("AWS::IAM::Policy", {
+        "PolicyDocument": {
+            "Statement": Match.array_with([
+                Match.object_like({
+                    "Action": Match.array_with([
+                        "dynamodb:BatchGetItem",
+                        "dynamodb:GetRecords",
+                        "dynamodb:GetShardIterator",
+                        "dynamodb:Query",
+                        "dynamodb:GetItem",
+                        "dynamodb:Scan",
+                        "dynamodb:BatchWriteItem",
+                        "dynamodb:PutItem",
+                        "dynamodb:UpdateItem",
+                        "dynamodb:DeleteItem"
+                    ]),
+                    "Effect": "Allow",
+                    "Resource": Match.array_with([
+                        Match.object_like({"Fn::GetAtt": [Match.string_like_regexp("AppTable.*"), "Arn"]}), # Table ARN
+                        # Removed the /index/* part as no indexes are defined in the stack
+                    ])
+                })
             ])
-        })
-    ]).test(policy_document["Statement"]), "DynamoDB permissions mismatch"
+        },
+        "PolicyName": Match.string_like_regexp("AppLambdaServiceRoleDefaultPolicy.*"),
+        "Roles": Match.array_with([lambda_role_ref_matcher]) # Ensure this policy is attached to the AppLambda's role
+    })
 
     # Check for S3 read/write permissions
-    assert Match.array_with([
-        Match.object_like({
-            "Action": Match.array_with([
-                Match.string_like_regexp("s3:GetObject.*"),
-                Match.string_like_regexp("s3:GetBucket.*"),
-                Match.string_like_regexp("s3:List.*"),
-                Match.string_like_regexp("s3:DeleteObject.*"),
-                "s3:PutObject", # Specific action
-                "s3:PutObjectLegalHold",
-                "s3:PutObjectRetention",
-                "s3:PutObjectTagging",
-                "s3:PutObjectVersionTagging",
-                "s3:AbortMultipartUpload" # Specific action
-            ]),
-            "Effect": "Allow",
-            "Resource": Match.array_with([
-                Match.object_like({"Fn::GetAtt": [Match.string_like_regexp("AppBucket.*"), "Arn"]}), # Bucket ARN
-                Match.object_like({"Fn::Join": ["", [Match.object_like({"Fn::GetAtt": [Match.string_like_regexp("AppBucket.*"), "Arn"]}), "/*"]]}) # Objects ARN
+    template.has_resource_properties("AWS::IAM::Policy", {
+        "PolicyDocument": {
+            "Statement": Match.array_with([
+                Match.object_like({
+                    "Action": Match.array_with([
+                        Match.string_like_regexp("s3:GetObject.*"),
+                        Match.string_like_regexp("s3:GetBucket.*"),
+                        Match.string_like_regexp("s3:List.*"),
+                        Match.string_like_regexp("s3:DeleteObject.*"),
+                        "s3:PutObject", # Specific action
+                        "s3:PutObjectLegalHold",
+                        "s3:PutObjectRetention",
+                        "s3:PutObjectTagging",
+                        "s3:PutObjectVersionTagging",
+                        "s3:AbortMultipartUpload" # Specific action
+                    ]),
+                    "Effect": "Allow",
+                    "Resource": Match.array_with([
+                        Match.object_like({"Fn::GetAtt": [Match.string_like_regexp("AppBucket.*"), "Arn"]}), # Bucket ARN
+                        Match.object_like({"Fn::Join": ["", [
+                            Match.object_like({"Fn::GetAtt": [
+                                Match.string_like_regexp("AppBucket.*"), "Arn"]}), "/*"]]}) # Objects ARN
+                    ])
+                })
             ])
-        })
-    ]).test(policy_document["Statement"]), "S3 permissions mismatch"
-
+        },
+        "PolicyName": Match.string_like_regexp("AppLambdaServiceRoleDefaultPolicy.*"),
+        "Roles": Match.array_with([lambda_role_ref_matcher]) # Ensure this policy is attached to the AppLambda's role
+    })
 
   def test_s3_event_source_mapping(self, default_stack):
     """
