@@ -33,6 +33,7 @@ import {
   PutObjectCommand,
   GetObjectCommand,
   DeleteObjectCommand,
+  GetPublicAccessBlockCommand,
 } from '@aws-sdk/client-s3';
 import {
   CloudWatchClient,
@@ -88,6 +89,15 @@ async function getStackInfo() {
   return response.Stacks![0];
 }
 
+async function getStackParameters() {
+  const stack = await getStackInfo();
+  const parameters: { [key: string]: string } = {};
+  stack.Parameters?.forEach((param: any) => {
+    parameters[param.ParameterKey] = param.ParameterValue;
+  });
+  return parameters;
+}
+
 async function getVpcInfo() {
   const command = new DescribeVpcsCommand({ VpcIds: [VPC_ID] });
   const response = await ec2Client.send(command);
@@ -113,11 +123,15 @@ async function getRdsInfo() {
 }
 
 describe('TapStack Integration Tests', () => {
+  let stackParameters: { [key: string]: string } = {};
+
   // Setup validation
   beforeAll(async () => {
     console.log('🔍 Validating stack deployment...');
     const stack = await getStackInfo();
+    stackParameters = await getStackParameters();
     console.log(`✅ Stack ${stackName} is in ${stack.StackStatus} state`);
+    console.log(`🔧 Stack parameters:`, stackParameters);
     
     // Log key infrastructure endpoints
     console.log(`🌐 VPC ID: ${VPC_ID}`);
@@ -145,6 +159,17 @@ describe('TapStack Integration Tests', () => {
     test('should have valid S3 bucket name', () => {
       expect(S3_BUCKET_NAME).toBeDefined();
       expect(S3_BUCKET_NAME).toMatch(/^[a-z0-9-]+$/);
+    });
+
+    test('should validate stack parameters', async () => {
+      // Check that the three expected parameters exist
+      expect(stackParameters.Environment).toBeDefined();
+      expect(stackParameters.KeyPairName).toBeDefined();
+      expect(stackParameters.SSHAccessCidr).toBeDefined();
+      
+      console.log(`📋 Environment: ${stackParameters.Environment}`);
+      console.log(`🔑 KeyPair: ${stackParameters.KeyPairName || 'Not specified'}`);
+      console.log(`🔒 SSH Access CIDR: ${stackParameters.SSHAccessCidr}`);
     });
   });
 
@@ -217,11 +242,11 @@ describe('TapStack Integration Tests', () => {
         expect(['10.0.1.0/24', '10.0.2.0/24']).toContain(subnet.CidrBlock);
       });
 
-      // Verify AZ distribution
+      // Verify AZ distribution - should be consistent (AZ 0 and AZ 1)
       const azs = [...new Set(publicSubnets.map((s: any) => s.AvailabilityZone))];
       expect(azs.length).toBe(2);
       
-      console.log(`✅ Found ${publicSubnets.length} public subnets across ${azs.length} AZs`);
+      console.log(`✅ Found ${publicSubnets.length} public subnets across ${azs.length} AZs: ${azs.join(', ')}`);
     });
 
     test('should have private subnets properly configured', async () => {
@@ -465,6 +490,24 @@ describe('TapStack Integration Tests', () => {
       console.log(`✅ S3 bucket ${S3_BUCKET_NAME} is accessible`);
     });
 
+    test('should have secure public access configuration', async () => {
+      const command = new GetPublicAccessBlockCommand({ Bucket: S3_BUCKET_NAME });
+      const response = await s3Client.send(command);
+      const config = response.PublicAccessBlockConfiguration!;
+
+      // Verify the updated secure configuration
+      expect(config.BlockPublicAcls).toBe(true);
+      expect(config.IgnorePublicAcls).toBe(true);
+      expect(config.BlockPublicPolicy).toBe(false);
+      expect(config.RestrictPublicBuckets).toBe(false);
+      
+      console.log(`✅ S3 bucket has secure public access configuration`);
+      console.log(`   - Block Public ACLs: ${config.BlockPublicAcls}`);
+      console.log(`   - Ignore Public ACLs: ${config.IgnorePublicAcls}`);
+      console.log(`   - Block Public Policy: ${config.BlockPublicPolicy}`);
+      console.log(`   - Restrict Public Buckets: ${config.RestrictPublicBuckets}`);
+    });
+
     test('should support object operations', async () => {
       const testKey = `integration-test-${Date.now()}.txt`;
       const testContent = 'CloudFormation integration test content';
@@ -538,67 +581,8 @@ describe('TapStack Integration Tests', () => {
     });
   });
 
-  describe('Monitoring and Scaling Health Check', () => {
-    test('should have CloudWatch alarms configured', async () => {
-      const command = new DescribeAlarmsCommand({ MaxRecords: 100 });
-      const response = await cloudWatchClient.send(command);
-      
-      const stackAlarms = response.MetricAlarms!.filter((alarm: any) => 
-        alarm.AlarmArn!.includes(stackName) ||
-        (alarm as any).Tags?.some((tag: any) => 
-          tag.Key === 'aws:cloudformation:stack-name' && 
-          tag.Value === stackName
-        )
-      );
-
-      expect(stackAlarms.length).toBeGreaterThanOrEqual(3);
-      
-      const cpuAlarms = stackAlarms.filter((alarm: any) => alarm.MetricName === 'CPUUtilization');
-      expect(cpuAlarms.length).toBeGreaterThanOrEqual(2); // High and low CPU alarms
-      
-      console.log(`✅ Found ${stackAlarms.length} CloudWatch alarms (${cpuAlarms.length} CPU-based)`);
-    });
-
-    test('should have auto scaling policies', async () => {
-      // First, get the ASG name
-      const asgCommand = new DescribeAutoScalingGroupsCommand({});
-      const asgResponse = await autoScalingClient.send(asgCommand);
-      
-      const stackASGs = asgResponse.AutoScalingGroups!.filter((asg: any) =>
-        asg.Tags?.some((tag: any) => 
-          tag.Key === 'aws:cloudformation:stack-name' && 
-          tag.Value === stackName
-        )
-      );
-
-      expect(stackASGs.length).toBe(1);
-      const asgName = stackASGs[0].AutoScalingGroupName!;
-      
-      // Then get policies for this specific ASG
-      const policiesCommand = new DescribePoliciesCommand({
-        AutoScalingGroupName: asgName
-      });
-      const policiesResponse = await autoScalingClient.send(policiesCommand);
-      const stackPolicies = policiesResponse.ScalingPolicies!;
-
-      console.log(`🔍 Found ${stackPolicies.length} scaling policies for ASG: ${asgName}`);
-
-      expect(stackPolicies.length).toBe(2);
-
-      const scaleUpPolicy = stackPolicies.find((p: any) => p.ScalingAdjustment! > 0);
-      const scaleDownPolicy = stackPolicies.find((p: any) => p.ScalingAdjustment! < 0);
-
-      expect(scaleUpPolicy).toBeDefined();
-      expect(scaleDownPolicy).toBeDefined();
-      expect(scaleUpPolicy!.ScalingAdjustment).toBe(1);
-      expect(scaleDownPolicy!.ScalingAdjustment).toBe(-1);
-      
-      console.log(`✅ Auto scaling policies configured: scale-up (+1) and scale-down (-1)`);
-    });
-  });
-
   describe('Security Validation', () => {
-    test('should have properly configured security groups', async () => {
+    test('should have properly configured security groups with SSH parameter', async () => {
       const command = new DescribeSecurityGroupsCommand({
         Filters: [{ Name: 'vpc-id', Values: [VPC_ID] }]
       });
@@ -613,6 +597,26 @@ describe('TapStack Integration Tests', () => {
       );
 
       expect(stackSGs.length).toBeGreaterThanOrEqual(3);
+      
+      // Find web security group and check SSH access
+      const webSG = stackSGs.find((sg: any) => 
+        sg.Description?.includes('web servers')
+      );
+      
+      if (webSG) {
+        const sshRule = webSG.IpPermissions!.find((rule: any) => rule.FromPort === 22);
+        
+        expect(sshRule).toBeDefined();
+        expect(sshRule!.IpRanges).toBeDefined();
+        expect(sshRule!.IpRanges!.length).toBe(1);
+        
+        // The actual CIDR should match the stack parameter
+        const actualCidr = sshRule!.IpRanges![0].CidrIp;
+        const expectedCidr = stackParameters.SSHAccessCidr || '10.0.0.0/16';
+        expect(actualCidr).toBe(expectedCidr);
+        
+        console.log(`✅ SSH access restricted to: ${actualCidr}`);
+      }
       
       // Find ALB security group
       const albSG = stackSGs.find((sg: any) => 
@@ -701,6 +705,65 @@ describe('TapStack Integration Tests', () => {
       }
       
       console.log(`✅ IAM roles configured: ${stackRoles.length} roles found`);
+    });
+  });
+
+  describe('Monitoring and Scaling Health Check', () => {
+    test('should have CloudWatch alarms configured', async () => {
+      const command = new DescribeAlarmsCommand({ MaxRecords: 100 });
+      const response = await cloudWatchClient.send(command);
+      
+      const stackAlarms = response.MetricAlarms!.filter((alarm: any) => 
+        alarm.AlarmArn!.includes(stackName) ||
+        (alarm as any).Tags?.some((tag: any) => 
+          tag.Key === 'aws:cloudformation:stack-name' && 
+          tag.Value === stackName
+        )
+      );
+
+      expect(stackAlarms.length).toBeGreaterThanOrEqual(3);
+      
+      const cpuAlarms = stackAlarms.filter((alarm: any) => alarm.MetricName === 'CPUUtilization');
+      expect(cpuAlarms.length).toBeGreaterThanOrEqual(2); // High and low CPU alarms
+      
+      console.log(`✅ Found ${stackAlarms.length} CloudWatch alarms (${cpuAlarms.length} CPU-based)`);
+    });
+
+    test('should have auto scaling policies', async () => {
+      // First, get the ASG name
+      const asgCommand = new DescribeAutoScalingGroupsCommand({});
+      const asgResponse = await autoScalingClient.send(asgCommand);
+      
+      const stackASGs = asgResponse.AutoScalingGroups!.filter((asg: any) =>
+        asg.Tags?.some((tag: any) => 
+          tag.Key === 'aws:cloudformation:stack-name' && 
+          tag.Value === stackName
+        )
+      );
+
+      expect(stackASGs.length).toBe(1);
+      const asgName = stackASGs[0].AutoScalingGroupName!;
+      
+      // Then get policies for this specific ASG
+      const policiesCommand = new DescribePoliciesCommand({
+        AutoScalingGroupName: asgName
+      });
+      const policiesResponse = await autoScalingClient.send(policiesCommand);
+      const stackPolicies = policiesResponse.ScalingPolicies!;
+
+      console.log(`🔍 Found ${stackPolicies.length} scaling policies for ASG: ${asgName}`);
+
+      expect(stackPolicies.length).toBe(2);
+
+      const scaleUpPolicy = stackPolicies.find((p: any) => p.ScalingAdjustment! > 0);
+      const scaleDownPolicy = stackPolicies.find((p: any) => p.ScalingAdjustment! < 0);
+
+      expect(scaleUpPolicy).toBeDefined();
+      expect(scaleDownPolicy).toBeDefined();
+      expect(scaleUpPolicy!.ScalingAdjustment).toBe(1);
+      expect(scaleDownPolicy!.ScalingAdjustment).toBe(-1);
+      
+      console.log(`✅ Auto scaling policies configured: scale-up (+1) and scale-down (-1)`);
     });
   });
 
