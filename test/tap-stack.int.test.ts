@@ -293,7 +293,7 @@ describe('TapStack Integration Tests', () => {
       app = new App();
       stack = new TapStack(app, stackName, {
         environmentSuffix: environmentSuffix,
-        awsRegion: 'eu-west-1',
+        awsRegion: 'us-east-1',
       });
 
       const synthesized = Testing.synth(stack);
@@ -324,8 +324,8 @@ describe('TapStack Integration Tests', () => {
       stack = new TapStack(app, stackName, {
         environmentSuffix: environmentSuffix,
         stateBucket: 'complete-test-bucket',
-        stateBucketRegion: 'eu-west-1',
-        awsRegion: 'eu-west-1',
+        stateBucketRegion: 'us-east-1',
+        awsRegion: 'us-east-1',
       });
 
       const synthesized = Testing.synth(stack);

@@ -4,9 +4,9 @@ import {
 } from '@cdktf/provider-aws/lib/provider';
 import { S3Backend, TerraformStack } from 'cdktf';
 import { Construct } from 'constructs';
-import { VpcConstruct } from './constructs/vpc-construct';
-import { SecurityConstruct } from './constructs/security-construct';
 import { environments } from './config/environments';
+import { SecurityConstruct } from './constructs/security-construct';
+import { VpcConstruct } from './constructs/vpc-construct';
 import { NamingConvention } from './utils/naming';
 
 interface TapStackProps {
@@ -20,7 +20,7 @@ interface TapStackProps {
 // If you need to override the AWS Region for the terraform provider for any particular task,
 // you can set it here. Otherwise, it will default to 'us-east-1'.
 
-const AWS_REGION_OVERRIDE = 'eu-west-1';
+const AWS_REGION_OVERRIDE = 'us-east-1';
 
 export class TapStack extends TerraformStack {
   public vpc: VpcConstruct;
@@ -33,8 +33,8 @@ export class TapStack extends TerraformStack {
     const environmentSuffix = props?.environmentSuffix || 'dev';
     const awsRegion = AWS_REGION_OVERRIDE
       ? AWS_REGION_OVERRIDE
-      : props?.awsRegion || 'eu-west-1';
-    const stateBucketRegion = props?.stateBucketRegion || 'eu-west-1';
+      : props?.awsRegion || 'us-east-1';
+    const stateBucketRegion = props?.stateBucketRegion || 'us-east-1';
     const stateBucket = props?.stateBucket || 'iac-rlhf-tf-states';
     const defaultTags = props?.defaultTags ? [props.defaultTags] : [];
 

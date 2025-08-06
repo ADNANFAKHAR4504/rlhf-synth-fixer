@@ -1,9 +1,9 @@
 import { App, Testing } from 'cdktf';
-import { TapStack } from '../lib/tap-stack';
-import { VpcConstruct } from '../lib/constructs/vpc-construct';
-import { SecurityConstruct } from '../lib/constructs/security-construct';
-import { NamingConvention } from '../lib/utils/naming';
 import { environments } from '../lib/config/environments';
+import { SecurityConstruct } from '../lib/constructs/security-construct';
+import { VpcConstruct } from '../lib/constructs/vpc-construct';
+import { TapStack } from '../lib/tap-stack';
+import { NamingConvention } from '../lib/utils/naming';
 
 describe('TapStack Unit Tests', () => {
   let app: App;
@@ -20,8 +20,8 @@ describe('TapStack Unit Tests', () => {
       stack = new TapStack(app, 'TestTapStackWithProps', {
         environmentSuffix: 'prod',
         stateBucket: 'custom-state-bucket',
-        stateBucketRegion: 'eu-west-1',
-        awsRegion: 'eu-west-1',
+        stateBucketRegion: 'us-east-1',
+        awsRegion: 'us-east-1',
       });
       synthesized = Testing.synth(stack);
 
@@ -88,7 +88,9 @@ describe('TapStack Unit Tests', () => {
       expect(stack.security).toBeDefined();
       expect(stack.naming).toBeDefined();
       // Naming should still use the original environmentSuffix
-      expect(stack.naming.resource('test', 'resource')).toBe('cdktf-infra-invalid-test-resource');
+      expect(stack.naming.resource('test', 'resource')).toBe(
+        'cdktf-infra-invalid-test-resource'
+      );
     });
   });
 
@@ -143,7 +145,7 @@ describe('TapStack Unit Tests', () => {
     test('should configure AWS provider with custom region', () => {
       app = new App();
       stack = new TapStack(app, 'TestTapStackProviderCustom', {
-        awsRegion: 'eu-west-1',
+        awsRegion: 'us-east-1',
       });
       synthesized = Testing.synth(stack);
 
@@ -154,7 +156,7 @@ describe('TapStack Unit Tests', () => {
     test('should respect AWS_REGION_OVERRIDE when set', () => {
       app = new App();
       stack = new TapStack(app, 'TestTapStackOverride', {
-        awsRegion: 'eu-west-1',
+        awsRegion: 'us-east-1',
       });
 
       expect(stack).toBeDefined();
@@ -222,7 +224,9 @@ describe('TapStack Unit Tests', () => {
       });
 
       expect(stack.naming).toBeDefined();
-      expect(stack.naming.resource('vpc', 'main')).toBe('cdktf-infra-prod-vpc-main');
+      expect(stack.naming.resource('vpc', 'main')).toBe(
+        'cdktf-infra-prod-vpc-main'
+      );
       expect(stack.naming.tag()).toEqual({
         Environment: 'prod',
         Project: 'cdktf-infra',
