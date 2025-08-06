@@ -31,18 +31,17 @@ Parameters:
     Default: ''
     Description: 'Name of an existing EC2 KeyPair to enable SSH access to instances (leave empty to disable SSH access)'
 
-#==============================================================================
-# CONDITIONS - Logic for conditional resource creation
-#==============================================================================
+  SSHAccessCidr:
+    Type: String
+    Default: '10.0.0.0/16'
+    Description: 'CIDR block for SSH access (default: VPC CIDR)'
+    AllowedPattern: '^(\d{1,3}\.){3}\d{1,3}/\d{1,2}$'
+    ConstraintDescription: 'Must be a valid CIDR notation (e.g., 10.0.0.0/16)'
+
 Conditions:
   HasKeyPair: !Not [!Equals [!Ref KeyPairName, '']]
 
 Resources:
-  #============================================================================
-  # NETWORKING INFRASTRUCTURE
-  # VPC, Subnets, Internet Gateway, NAT Gateways, Route Tables
-  #============================================================================
-  
   # VPC with CIDR 10.0.0.0/16
   ProdVpc:
     Type: AWS::EC2::VPC
@@ -56,7 +55,7 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
-  # Internet Gateway for public internet access
+  # Internet Gateway
   ProdInternetGateway:
     Type: AWS::EC2::InternetGateway
     Properties:
@@ -72,16 +71,13 @@ Resources:
       VpcId: !Ref ProdVpc
       InternetGatewayId: !Ref ProdInternetGateway
 
-  #============================================================================
-  # PUBLIC SUBNETS - For ALB and NAT Gateways (Multi-AZ)
-  #============================================================================
-  
+  # Public Subnets in two AZs - FIXED AZ selection
   ProdPublicSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref ProdVpc
       CidrBlock: '10.0.1.0/24'
-      AvailabilityZone: !Select [1, !GetAZs '']  # AZ-b
+      AvailabilityZone: !Select [0, !GetAZs '']
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -94,7 +90,7 @@ Resources:
     Properties:
       VpcId: !Ref ProdVpc
       CidrBlock: '10.0.2.0/24'
-      AvailabilityZone: !Select [2, !GetAZs '']  # AZ-c
+      AvailabilityZone: !Select [1, !GetAZs '']
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -102,16 +98,13 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
-  #============================================================================
-  # PRIVATE SUBNETS - For EC2 instances and RDS database (Multi-AZ)
-  #============================================================================
-  
+  # Private Subnets in two AZs - FIXED AZ selection
   ProdPrivateSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref ProdVpc
       CidrBlock: '10.0.3.0/24'
-      AvailabilityZone: !Select [0, !GetAZs '']  # AZ-a
+      AvailabilityZone: !Select [0, !GetAZs '']
       Tags:
         - Key: Name
           Value: 'prod-private-subnet-1'
@@ -123,19 +116,14 @@ Resources:
     Properties:
       VpcId: !Ref ProdVpc
       CidrBlock: '10.0.4.0/24'
-      AvailabilityZone: !Select [1, !GetAZs '']  # AZ-b
+      AvailabilityZone: !Select [1, !GetAZs '']
       Tags:
         - Key: Name
           Value: 'prod-private-subnet-2'
         - Key: Environment
           Value: !Ref Environment
 
-  #============================================================================
-  # ROUTING INFRASTRUCTURE
-  # Route Tables, Routes, and Subnet Associations
-  #============================================================================
-  
-  # Public Route Table - Routes to Internet Gateway
+  # Route Table for Public Subnets
   ProdPublicRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
@@ -166,11 +154,7 @@ Resources:
       SubnetId: !Ref ProdPublicSubnet2
       RouteTableId: !Ref ProdPublicRouteTable
 
-  #============================================================================
-  # NAT GATEWAYS - For private subnet internet access (High Availability)
-  #============================================================================
-  
-  # Elastic IPs for NAT Gateways
+  # NAT Gateways for Private Subnets
   ProdNatGateway1Eip:
     Type: AWS::EC2::EIP
     DependsOn: ProdVpcGatewayAttachment
@@ -193,7 +177,6 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
-  # NAT Gateways in each public subnet
   ProdNatGateway1:
     Type: AWS::EC2::NatGateway
     Properties:
@@ -216,7 +199,7 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
-  # Private Route Tables - Route to respective NAT Gateways
+  # Route Tables for Private Subnets
   ProdPrivateRouteTable1:
     Type: AWS::EC2::RouteTable
     Properties:
@@ -263,11 +246,7 @@ Resources:
       SubnetId: !Ref ProdPrivateSubnet2
       RouteTableId: !Ref ProdPrivateRouteTable2
 
-  #============================================================================
-  # SECURITY GROUPS - Network-level security for different tiers
-  #============================================================================
-  
-  # Security Group for Web Servers (EC2 instances)
+  # Security Groups - FIXED SSH access with parameter
   ProdWebSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -277,21 +256,20 @@ Resources:
         - IpProtocol: tcp
           FromPort: 80
           ToPort: 80
-          SourceSecurityGroupId: !Ref ProdAlbSecurityGroup  # Only from ALB
+          SourceSecurityGroupId: !Ref ProdAlbSecurityGroup
         - IpProtocol: tcp
           FromPort: 22
           ToPort: 22
-          CidrIp: '10.0.0.0/16'  # SSH from VPC only
+          CidrIp: !Ref SSHAccessCidr
       SecurityGroupEgress:
         - IpProtocol: -1
-          CidrIp: '0.0.0.0/0'  # Allow all outbound
+          CidrIp: '0.0.0.0/0'
       Tags:
         - Key: Name
           Value: 'prod-web-security-group'
         - Key: Environment
           Value: !Ref Environment
 
-  # Security Group for Application Load Balancer
   ProdAlbSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -301,11 +279,11 @@ Resources:
         - IpProtocol: tcp
           FromPort: 80
           ToPort: 80
-          CidrIp: '0.0.0.0/0'  # HTTP from anywhere
+          CidrIp: '0.0.0.0/0'
         - IpProtocol: tcp
           FromPort: 443
           ToPort: 443
-          CidrIp: '0.0.0.0/0'  # HTTPS from anywhere
+          CidrIp: '0.0.0.0/0'
       SecurityGroupEgress:
         - IpProtocol: -1
           CidrIp: '0.0.0.0/0'
@@ -315,7 +293,6 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
-  # Security Group for RDS Database
   ProdRdsSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -325,17 +302,13 @@ Resources:
         - IpProtocol: tcp
           FromPort: 3306
           ToPort: 3306
-          SourceSecurityGroupId: !Ref ProdWebSecurityGroup  # Only from web servers
+          SourceSecurityGroupId: !Ref ProdWebSecurityGroup
       Tags:
         - Key: Name
           Value: 'prod-rds-security-group'
         - Key: Environment
           Value: !Ref Environment
 
-  #============================================================================
-  # IAM ROLES AND POLICIES - Service permissions and access control
-  #============================================================================
-  
   # IAM Role for EC2 instances
   ProdEc2Role:
     Type: AWS::IAM::Role
@@ -348,7 +321,7 @@ Resources:
               Service: ec2.amazonaws.com
             Action: sts:AssumeRole
       ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy  # CloudWatch monitoring
+        - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
       Policies:
         - PolicyName: 'prod-s3-access-policy'
           PolicyDocument:
@@ -358,7 +331,7 @@ Resources:
                 Action:
                   - s3:GetObject
                   - s3:PutObject
-                Resource: "*"  # Wildcard for S3 access
+                Resource: "*"
       Tags:
         - Key: Name
           Value: 'prod-ec2-role'
@@ -371,23 +344,19 @@ Resources:
       Roles:
         - !Ref ProdEc2Role
 
-  #============================================================================
-  # COMPUTE INFRASTRUCTURE - Auto Scaling Group and Launch Template
-  #============================================================================
-  
-  # Launch Template for EC2 instances
+  # Launch Template
   ProdLaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
     Properties:
       LaunchTemplateData:
-        ImageId: ami-0c02fb55956c7d316  # Amazon Linux 2023
+        ImageId: ami-0c02fb55956c7d316
         InstanceType: t3.micro
-        KeyName: !If [HasKeyPair, !Ref KeyPairName, !Ref 'AWS::NoValue']  # Conditional SSH key
+        KeyName: !If [HasKeyPair, !Ref KeyPairName, !Ref 'AWS::NoValue']
         IamInstanceProfile:
           Arn: !GetAtt ProdEc2InstanceProfile.Arn
         SecurityGroupIds:
           - !Ref ProdWebSecurityGroup
-        UserData:  # Bootstrap script for web server setup
+        UserData:
           Fn::Base64: !Sub |
             #!/bin/bash
             yum update -y
@@ -404,7 +373,7 @@ Resources:
               - Key: Environment
                 Value: !Ref Environment
 
-  # Auto Scaling Group with health checks and scaling policies
+  # Auto Scaling Group
   ProdAutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
@@ -414,7 +383,7 @@ Resources:
       MinSize: 2
       MaxSize: 6
       DesiredCapacity: 2
-      VPCZoneIdentifier:  # Deploy in public subnets for this example
+      VPCZoneIdentifier:
         - !Ref ProdPublicSubnet1
         - !Ref ProdPublicSubnet2
       TargetGroupARNs:
@@ -428,15 +397,11 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
           PropagateAtLaunch: true
-    CreationPolicy:  # Wait for instances to signal successful startup
+    CreationPolicy:
       ResourceSignal:
         Count: 2
         Timeout: PT10M
 
-  #============================================================================
-  # LOAD BALANCER - Application Load Balancer for high availability
-  #============================================================================
-  
   # Application Load Balancer
   ProdAlb:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
@@ -454,7 +419,6 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
-  # Target Group for health checks and traffic distribution
   ProdTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
@@ -473,7 +437,6 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
-  # Listener for HTTP traffic
   ProdListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
@@ -484,11 +447,7 @@ Resources:
       Port: 80
       Protocol: HTTP
 
-  #============================================================================
-  # DATABASE INFRASTRUCTURE - RDS MySQL with Multi-AZ deployment
-  #============================================================================
-  
-  # RDS Subnet Group for database placement in private subnets
+  # RDS Subnet Group
   ProdRdsSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
@@ -502,11 +461,11 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
-  # RDS MySQL Instance with high availability and security
+  # RDS MySQL Instance
   ProdRdsInstance:
     Type: AWS::RDS::DBInstance
     Properties:
-      DBInstanceClass: db.t3.small  # Upgraded for better performance
+      DBInstanceClass: db.t3.small
       Engine: mysql
       EngineVersion: '8.0.35'
       MasterUsername: admin
@@ -517,20 +476,20 @@ Resources:
       VPCSecurityGroups:
         - !Ref ProdRdsSecurityGroup
       BackupRetentionPeriod: 7
-      MultiAZ: true  # High availability
+      MultiAZ: true
       StorageEncrypted: true
       MonitoringInterval: 60
       MonitoringRoleArn: !GetAtt ProdRdsMonitoringRole.Arn
-      EnablePerformanceInsights: false  # Disabled for t3.small compatibility
+      EnablePerformanceInsights: false
       Tags:
         - Key: Name
           Value: 'prod-rds-instance'
         - Key: Environment
           Value: !Ref Environment
-    DeletionPolicy: Snapshot  # Create snapshot before deletion
+    DeletionPolicy: Snapshot
     UpdateReplacePolicy: Snapshot
 
-  # IAM Role for RDS Enhanced Monitoring
+  # RDS Monitoring Role
   ProdRdsMonitoringRole:
     Type: AWS::IAM::Role
     Properties:
@@ -549,7 +508,7 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
-  # Secrets Manager for secure password storage
+  # Secrets Manager for RDS Password
   ProdRdsPassword:
     Type: AWS::SecretsManager::Secret
     Properties:
@@ -565,18 +524,14 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
-  #============================================================================
-  # STORAGE - S3 Bucket for static assets
-  #============================================================================
-  
-  # S3 Bucket for static assets with public read access
+  # S3 Bucket for Static Assets - FIXED public access configuration
   ProdS3Bucket:
     Type: AWS::S3::Bucket
     Properties:
       PublicAccessBlockConfiguration:
-        BlockPublicAcls: false
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
         BlockPublicPolicy: false
-        IgnorePublicAcls: false
         RestrictPublicBuckets: false
       Tags:
         - Key: Name
@@ -584,7 +539,6 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
-  # S3 Bucket Policy for public read access
   ProdS3BucketPolicy:
     Type: AWS::S3::BucketPolicy
     Properties:
@@ -596,17 +550,13 @@ Resources:
             Effect: Allow
             Principal: '*'
             Action: s3:GetObject
-            Resource: !Sub 'arn:aws:s3:::${ProdS3Bucket}/*'  # Proper ARN format
+            Resource: !Sub 'arn:aws:s3:::${ProdS3Bucket}/*'
 
-  #============================================================================
-  # MONITORING AND LOGGING - CloudWatch resources for observability
-  #============================================================================
-  
-  # CloudWatch Log Groups for centralized logging
+  # CloudWatch Log Groups
   ProdWebLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      RetentionInDays: 14  # 2 weeks retention
+      RetentionInDays: 14
       Tags:
         - Key: Name
           Value: 'prod-web-log-group'
@@ -623,11 +573,7 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
-  #============================================================================
-  # AUTO SCALING POLICIES AND ALARMS - Performance-based scaling
-  #============================================================================
-  
-  # CloudWatch Alarms for Auto Scaling triggers
+  # CloudWatch Alarms
   ProdAsgCpuAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
@@ -635,9 +581,9 @@ Resources:
       MetricName: CPUUtilization
       Namespace: AWS/EC2
       Statistic: Average
-      Period: 300  # 5 minutes
+      Period: 300
       EvaluationPeriods: 2
-      Threshold: 70  # Scale up when CPU > 70%
+      Threshold: 70
       ComparisonOperator: GreaterThanThreshold
       Dimensions:
         - Name: AutoScalingGroupName
@@ -676,8 +622,8 @@ Resources:
     Properties:
       AdjustmentType: ChangeInCapacity
       AutoScalingGroupName: !Ref ProdAutoScalingGroup
-      Cooldown: 300  # 5 minutes cooldown
-      ScalingAdjustment: 1  # Add 1 instance
+      Cooldown: 300
+      ScalingAdjustment: 1
 
   ProdScaleDownPolicy:
     Type: AWS::AutoScaling::ScalingPolicy
@@ -685,9 +631,8 @@ Resources:
       AdjustmentType: ChangeInCapacity
       AutoScalingGroupName: !Ref ProdAutoScalingGroup
       Cooldown: 300
-      ScalingAdjustment: -1  # Remove 1 instance
+      ScalingAdjustment: -1
 
-  # Low CPU alarm for scale-down
   ProdAsgLowCpuAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
@@ -697,7 +642,7 @@ Resources:
       Statistic: Average
       Period: 300
       EvaluationPeriods: 2
-      Threshold: 20  # Scale down when CPU < 20%
+      Threshold: 20
       ComparisonOperator: LessThanThreshold
       Dimensions:
         - Name: AutoScalingGroupName
@@ -710,33 +655,31 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
-#==============================================================================
-# OUTPUTS - Important resource identifiers and endpoints
-#==============================================================================
 Outputs:
   VPCId:
-    Description: 'VPC ID for network reference'
+    Description: 'VPC ID'
     Value: !Ref ProdVpc
     Export:
       Name: !Sub '${AWS::StackName}-VPC-ID'
 
   LoadBalancerDNS:
-    Description: 'DNS name of the Application Load Balancer for web access'
+    Description: 'DNS name of the load balancer'
     Value: !GetAtt ProdAlb.DNSName
     Export:
       Name: !Sub '${AWS::StackName}-LoadBalancer-DNS'
 
   RDSEndpoint:
-    Description: 'RDS MySQL database connection endpoint'
+    Description: 'RDS instance endpoint'
     Value: !GetAtt ProdRdsInstance.Endpoint.Address
     Export:
       Name: !Sub '${AWS::StackName}-RDS-Endpoint'
 
   S3BucketName:
-    Description: 'S3 bucket name for static assets storage'
+    Description: 'S3 bucket name for static assets'
     Value: !Ref ProdS3Bucket
     Export:
       Name: !Sub '${AWS::StackName}-S3-Bucket'
+
 ```
 #==============================================================================
 # END OF TEMPLATE

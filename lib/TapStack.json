@@ -11,6 +11,13 @@
             "Type": "String",
             "Default": "",
             "Description": "Name of an existing EC2 KeyPair to enable SSH access to instances (leave empty to disable SSH access)"
+        },
+        "SSHAccessCidr": {
+            "Type": "String",
+            "Default": "10.0.0.0/16",
+            "Description": "CIDR block for SSH access (default: VPC CIDR)",
+            "AllowedPattern": "^(\\d{1,3}\\.){3}\\d{1,3}/\\d{1,2}$",
+            "ConstraintDescription": "Must be a valid CIDR notation (e.g., 10.0.0.0/16)"
         }
     },
     "Conditions": {
@@ -445,7 +452,9 @@
                         "IpProtocol": "tcp",
                         "FromPort": 22,
                         "ToPort": 22,
-                        "CidrIp": "10.0.0.0/16"
+                        "CidrIp": {
+                            "Ref": "SSHAccessCidr"
+                        }
                     }
                 ],
                 "SecurityGroupEgress": [
@@ -920,9 +929,9 @@
             "Type": "AWS::S3::Bucket",
             "Properties": {
                 "PublicAccessBlockConfiguration": {
-                    "BlockPublicAcls": false,
+                    "BlockPublicAcls": true,
+                    "IgnorePublicAcls": true,
                     "BlockPublicPolicy": false,
-                    "IgnorePublicAcls": false,
                     "RestrictPublicBuckets": false
                 },
                 "Tags": [
