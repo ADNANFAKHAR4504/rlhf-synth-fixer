@@ -18,7 +18,7 @@ Create IAM users with least privilege policies.
 
 Enforce Multi-Factor Authentication (MFA).
 
-Avoid wildcard "*" permissions unless absolutely necessary and justified.
+Avoid wildcard "\*" permissions unless absolutely necessary and justified.
 
 Apply least privilege in all IAM policies and roles.
 

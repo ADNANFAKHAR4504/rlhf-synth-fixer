@@ -29,7 +29,11 @@ const defaultTags = {
 new TapStack(app, stackName, {
   environmentSuffix: environmentSuffix,
   awsRegion: awsRegion,
-  defaultTags: defaultTags,
+  defaultTags: {
+    Environment: environmentSuffix,
+    Repository: repositoryName,
+    CommitAuthor: commitAuthor,
+  },
 });
 
 // Synthesize the app to generate the Terraform configuration
