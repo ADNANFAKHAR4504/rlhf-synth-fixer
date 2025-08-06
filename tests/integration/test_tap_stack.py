@@ -41,8 +41,7 @@ def test_integration():
     print(f"--- Testing URL: {url} ---")
     
     max_retries = 16
-    response = None
-       for i in range(max_retries):
+    for i in range(max_retries):
       try:
         response = requests.get(url, timeout=10)
         print(f"Attempt {i+1}/{max_retries}: Got status code {response.status_code}")
@@ -54,8 +53,7 @@ def test_integration():
       
       if i < max_retries - 1:
         time.sleep(15)
-        
-    assert response is not None,
+    
     assert response.status_code == 200
     assert "Dual-Stack Web App" in response.text
     
