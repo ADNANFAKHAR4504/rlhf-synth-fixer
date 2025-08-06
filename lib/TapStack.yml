@@ -23,6 +23,7 @@ Parameters:
 
   SNSEmail:
     Type: String
+    Default: 'no-reply@example.com' # Add a default value here
     Description: 'Email address for SNS notifications'
     AllowedPattern: '^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
     ConstraintDescription: 'Must be a valid email address'
