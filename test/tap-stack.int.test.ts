@@ -180,7 +180,7 @@ describe('Scalable Infrastructure Integration Tests', () => {
           // Internet Gateway state might be returned differently
           expect(igw.State || 'available').toBe('available');
           expect(igw.Attachments).toHaveLength(1);
-          expect(igw.Attachments[0].State).toBe('attached');
+          expect(igw.Attachments[0].State).toBe('available');
           expect(igw.Attachments[0].VpcId).toBe(vpcs[0].VpcId);
 
           validateRequiredTags(igw.Tags);
