@@ -112,7 +112,7 @@ export class TapStack extends TerraformStack {
   private createUserTable(): DynamodbTable {
     return new DynamodbTable(this, `${this.resourcePrefix}-user-table`, {
       name: `${this.resourcePrefix}-users`,
-      billingMode: 'ON_DEMAND',
+      billingMode: 'PAY_PER_REQUEST',
       hashKey: 'userId',
       attribute: [
         {
@@ -147,7 +147,7 @@ export class TapStack extends TerraformStack {
   private createSessionTable(): DynamodbTable {
     return new DynamodbTable(this, `${this.resourcePrefix}-session-table`, {
       name: `${this.resourcePrefix}-sessions`,
-      billingMode: 'ON_DEMAND',
+      billingMode: 'PAY_PER_REQUEST',
       hashKey: 'sessionId',
       attribute: [
         {
