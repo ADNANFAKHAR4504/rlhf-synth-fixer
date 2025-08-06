@@ -203,10 +203,10 @@ def lambda_handler(event, context):
     )
 
     # Configure S3 bucket website using modern approach
-    self.s3_website_config = aws.s3.BucketWebsiteConfiguration(
+    self.s3_website_config = aws.s3.BucketWebsiteConfigurationV2(
         get_resource_name("website-config"),
         bucket=self.s3_bucket.id,
-        index_document=aws.s3.BucketWebsiteConfigurationIndexDocumentArgs(
+        index_document=aws.s3.BucketWebsiteConfigurationV2IndexDocumentArgs(
             suffix="index.html"
         ),
         opts=ResourceOptions(parent=self)
