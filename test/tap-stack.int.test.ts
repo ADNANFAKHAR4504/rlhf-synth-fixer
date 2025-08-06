@@ -113,15 +113,14 @@ describe('TapStack Integration Tests', () => {
       const privateSubnet1 =
         synthesized.resource.aws_subnet['prod-sec-private-subnet-1'];
       const igw = synthesized.resource.aws_internet_gateway['prod-sec-igw'];
-      const natGw1 = synthesized.resource.aws_nat_gateway['prod-sec-nat-gw-1'];
 
       expect(vpc).toBeDefined();
       expect(publicSubnet1.vpc_id).toBe('${aws_vpc.prod-sec-vpc.id}');
       expect(privateSubnet1.vpc_id).toBe('${aws_vpc.prod-sec-vpc.id}');
       expect(igw.vpc_id).toBe('${aws_vpc.prod-sec-vpc.id}');
-      expect(natGw1.subnet_id).toBe(
-        '${aws_subnet.prod-sec-public-subnet-1.id}'
-      );
+      
+      // NAT Gateways were removed due to AWS service limits
+      expect(synthesized.resource.aws_nat_gateway).toBeUndefined();
     });
 
     test('Security group dependencies are correctly established', () => {
@@ -145,10 +144,6 @@ describe('TapStack Integration Tests', () => {
     test('S3 bucket and policy dependencies are correctly established', () => {
       const logsBucket =
         synthesized.resource.aws_s3_bucket['prod-sec-logs-bucket'];
-      const bucketPolicy =
-        synthesized.resource.aws_s3_bucket_policy[
-          'prod-sec-logs-bucket-policy'
-        ];
       const bucketEncryption =
         synthesized.resource.aws_s3_bucket_server_side_encryption_configuration[
           'prod-sec-logs-bucket-encryption'
@@ -163,9 +158,6 @@ describe('TapStack Integration Tests', () => {
         ];
 
       expect(logsBucket).toBeDefined();
-      expect(bucketPolicy.bucket).toBe(
-        '${aws_s3_bucket.prod-sec-logs-bucket.id}'
-      );
       expect(bucketEncryption.bucket).toBe(
         '${aws_s3_bucket.prod-sec-logs-bucket.id}'
       );
@@ -173,21 +165,22 @@ describe('TapStack Integration Tests', () => {
         '${aws_s3_bucket.prod-sec-logs-bucket.id}'
       );
       expect(bucketPAB.bucket).toBe('${aws_s3_bucket.prod-sec-logs-bucket.id}');
+      
+      // S3 bucket policy was removed with CloudTrail
+      expect(synthesized.resource.aws_s3_bucket_policy).toBeUndefined();
     });
 
-    test('CloudTrail dependencies are correctly established', () => {
-      const cloudtrail =
-        synthesized.resource.aws_cloudtrail['prod-sec-cloudtrail'];
+    test('CloudTrail dependencies were removed due to AWS service limits', () => {
+      // CloudTrail was removed due to AWS service limits (5 trails per region)
+      expect(synthesized.resource.aws_cloudtrail).toBeUndefined();
+      
+      // Verify related resources still exist
       const logsBucket =
         synthesized.resource.aws_s3_bucket['prod-sec-logs-bucket'];
       const kmsKey = synthesized.resource.aws_kms_key['prod-sec-main-kms-key'];
 
-      expect(cloudtrail.s3_bucket_name).toBe(
-        '${aws_s3_bucket.prod-sec-logs-bucket.id}'
-      );
-      expect(cloudtrail.kms_key_id).toBe(
-        '${aws_kms_key.prod-sec-main-kms-key.arn}'
-      );
+      expect(logsBucket).toBeDefined();
+      expect(kmsKey).toBeDefined();
     });
 
     test('IAM role and policy dependencies are correctly established', () => {
@@ -241,45 +234,40 @@ describe('TapStack Integration Tests', () => {
       const policy = JSON.parse(kmsKey.policy);
 
       expect(policy.Version).toBe('2012-10-17');
-      expect(policy.Statement).toHaveLength(3);
+      expect(policy.Statement).toHaveLength(2); // CloudTrail statement removed
 
       const rootStatement = policy.Statement.find(
         (stmt: any) => stmt.Sid === 'Enable IAM User Permissions'
-      );
-      const cloudtrailStatement = policy.Statement.find(
-        (stmt: any) => stmt.Sid === 'Allow CloudTrail to encrypt logs'
       );
       const cloudwatchStatement = policy.Statement.find(
         (stmt: any) => stmt.Sid === 'Allow CloudWatch Logs'
       );
 
       expect(rootStatement).toBeDefined();
-      expect(cloudtrailStatement).toBeDefined();
       expect(cloudwatchStatement).toBeDefined();
+      
+      // CloudTrail statement removed with CloudTrail resource
+      const cloudtrailStatement = policy.Statement.find(
+        (stmt: any) => stmt.Sid === 'Allow CloudTrail to encrypt logs'
+      );
+      expect(cloudtrailStatement).toBeUndefined();
     });
 
-    test('S3 bucket policy contains correct CloudTrail permissions', () => {
-      const bucketPolicy =
-        synthesized.resource.aws_s3_bucket_policy[
-          'prod-sec-logs-bucket-policy'
+    test('S3 bucket policy was removed with CloudTrail', () => {
+      // S3 bucket policy was removed along with CloudTrail due to service limits
+      expect(synthesized.resource.aws_s3_bucket_policy).toBeUndefined();
+      
+      // Verify bucket still exists with proper security configurations
+      const logsBucket =
+        synthesized.resource.aws_s3_bucket['prod-sec-logs-bucket'];
+      const bucketPAB =
+        synthesized.resource.aws_s3_bucket_public_access_block[
+          'prod-sec-logs-bucket-pab'
         ];
-      const policy = JSON.parse(bucketPolicy.policy);
-
-      expect(policy.Statement).toHaveLength(2);
-
-      const aclStatement = policy.Statement.find(
-        (stmt: any) => stmt.Sid === 'AWSCloudTrailAclCheck'
-      );
-      const writeStatement = policy.Statement.find(
-        (stmt: any) => stmt.Sid === 'AWSCloudTrailWrite'
-      );
-
-      expect(aclStatement).toBeDefined();
-      expect(aclStatement.Action).toBe('s3:GetBucketAcl');
-
-      expect(writeStatement).toBeDefined();
-      expect(writeStatement.Action).toBe('s3:PutObject');
-      expect(writeStatement.Resource).toContain('/cloudtrail-logs/*');
+      
+      expect(logsBucket).toBeDefined();
+      expect(bucketPAB).toBeDefined();
+      expect(bucketPAB.block_public_acls).toBe(true);
     });
 
     test('IAM policies contain appropriate permissions', () => {
@@ -361,18 +349,18 @@ describe('TapStack Integration Tests', () => {
 
       const suffix = suffixMatch![1];
 
-      // Verify other resources use the same suffix
-      const cloudtrail =
-        synthesized.resource.aws_cloudtrail['prod-sec-cloudtrail'];
+      // Verify other resources use the same suffix (CloudTrail removed)
       const appRole = synthesized.resource.aws_iam_role['prod-sec-app-role'];
       const dbSecret =
         synthesized.resource.aws_secretsmanager_secret[
           'prod-sec-db-credentials'
         ];
 
-      expect(cloudtrail.name).toBe(`prod-sec-cloudtrail-${suffix}`);
       expect(appRole.name).toBe(`prod-sec-app-role-${suffix}`);
       expect(dbSecret.name).toBe(`prod-sec/database/credentials-${suffix}`);
+      
+      // CloudTrail was removed due to AWS service limits
+      expect(synthesized.resource.aws_cloudtrail).toBeUndefined();
     });
 
     test('S3 bucket names include account ID and unique suffix', () => {
@@ -498,17 +486,16 @@ describe('TapStack Integration Tests', () => {
       );
     });
 
-    test('CloudTrail has comprehensive logging configuration', () => {
-      const cloudtrail =
-        synthesized.resource.aws_cloudtrail['prod-sec-cloudtrail'];
-
-      expect(cloudtrail.include_global_service_events).toBe(true);
-      expect(cloudtrail.is_multi_region_trail).toBe(true);
-      expect(cloudtrail.enable_logging).toBe(true);
-      expect(cloudtrail.enable_log_file_validation).toBe(true);
-      expect(cloudtrail.kms_key_id).toBe(
-        '${aws_kms_key.prod-sec-main-kms-key.arn}'
-      );
+    test('CloudTrail logging was removed due to AWS service limits', () => {
+      // CloudTrail was removed due to AWS service limits (5 trails per region)
+      expect(synthesized.resource.aws_cloudtrail).toBeUndefined();
+      
+      // Verify other security monitoring features remain
+      const securityAlerts = synthesized.resource.aws_sns_topic['prod-sec-security-alerts'];
+      const rootAccessAlarm = synthesized.resource.aws_cloudwatch_metric_alarm['prod-sec-root-access-alarm'];
+      
+      expect(securityAlerts).toBeDefined();
+      expect(rootAccessAlarm).toBeDefined();
     });
   });
 
@@ -586,14 +573,11 @@ describe('TapStack Integration Tests', () => {
         'aws_vpc',
         'aws_subnet',
         'aws_internet_gateway',
-        'aws_nat_gateway',
-        'aws_eip',
         'aws_route_table',
         'aws_route',
         'aws_route_table_association',
         'aws_security_group',
         'aws_s3_bucket',
-        'aws_s3_bucket_policy',
         'aws_s3_bucket_server_side_encryption_configuration',
         'aws_s3_bucket_public_access_block',
         'aws_s3_bucket_versioning',
@@ -611,7 +595,11 @@ describe('TapStack Integration Tests', () => {
         'aws_cloudwatch_log_group',
         'aws_cloudwatch_metric_alarm',
         'aws_sns_topic',
-        'aws_cloudtrail',
+        // Removed due to AWS service limits:
+        // 'aws_cloudtrail',
+        // 'aws_nat_gateway', 
+        // 'aws_eip',
+        // 'aws_s3_bucket_policy',
       ];
 
       expectedResourceTypes.forEach(resourceType => {
