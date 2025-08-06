@@ -69,7 +69,7 @@ describe('CloudFormation Template Integration Tests', () => {
         Ref: 'ServerlessAppLambda',
       });
       expect(permission.Properties.SourceArn).toEqual({
-        'Fn::GetAtt': ['ServerlessAppBucket', 'Arn'],
+        'Fn::Sub': 'arn:aws:s3:::${S3BucketName}',
       });
     });
 
@@ -116,10 +116,10 @@ describe('CloudFormation Template Integration Tests', () => {
       const subnet2 = resources.ServerlessAppSubnetAZ2;
 
       expect(subnet1.Properties.AvailabilityZone).toEqual({
-        'Fn::Select': [0, { 'Fn::GetAZs': '' }],
+        'Fn::FindInMap': ['RegionMap', 'us-east-1', 'AZ1'],
       });
       expect(subnet2.Properties.AvailabilityZone).toEqual({
-        'Fn::Select': [1, { 'Fn::GetAZs': '' }],
+        'Fn::FindInMap': ['RegionMap', 'us-east-1', 'AZ2'],
       });
 
       // Different CIDR blocks
