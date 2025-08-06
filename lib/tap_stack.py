@@ -224,6 +224,49 @@ def create_security_groups(
     "ec2_sg": ec2_sg
   }
 
+def create_network_acls(vpc_id: pulumi.Output[str], subnets: list):
+  """
+  Creates a permissive Network ACL for the VPC to ensure traffic flow.
+  """
+  nacl = aws.ec2.NetworkAcl(
+    f"{project_name}-nacl",
+    vpc_id=vpc_id,
+    tags={**common_tags, "Name": f"{project_name}-nacl"}
+  )
+
+  # Allow all outbound traffic
+  aws.ec2.NetworkAclRule(
+    f"{project_name}-nacl-egress",
+    network_acl_id=nacl.id,
+    rule_number=100,
+    protocol="-1",
+    rule_action="allow",
+    cidr_block="0.0.0.0/0",
+    egress=True,
+    from_port=0,
+    to_port=0
+  )
+
+  # Allow all inbound traffic
+  aws.ec2.NetworkAclRule(
+    f"{project_name}-nacl-ingress",
+    network_acl_id=nacl.id,
+    rule_number=100,
+    protocol="-1",
+    rule_action="allow",
+    cidr_block="0.0.0.0/0",
+    egress=False,
+    from_port=0,
+    to_port=0
+  )
+
+  # Associate the NACL with all public subnets
+  for i, subnet in enumerate(subnets):
+    aws.ec2.NetworkAclAssociation(
+      f"{project_name}-nacl-assoc-{i}",
+      subnet_id=subnet.id,
+      network_acl_id=nacl.id
+    )
 
 def create_iam_role() -> aws.iam.Role:
   """
@@ -453,6 +496,7 @@ def create_cloudwatch_dashboard(
 def main():
   """Main function to provision the infrastructure."""
   network = create_vpc_and_networking()
+  create_network_acls(network["vpc"].id, network["public_subnets"])
   security_groups = create_security_groups(network["vpc"].id)
   _, instance_profile = create_iam_role()
   instances = create_ec2_instances(
