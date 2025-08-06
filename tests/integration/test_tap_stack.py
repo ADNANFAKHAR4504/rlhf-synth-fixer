@@ -34,6 +34,10 @@ class OutputReader:
       base_dir, "..", "..", "cfn-outputs", "flat-outputs.json"
     )
 
+    # Debug information
+    print(f"DEBUG: Looking for outputs file at: {flat_outputs_path}")
+    print(f"DEBUG: File exists: {os.path.exists(flat_outputs_path)}")
+
     # Initialize with empty outputs
     flat_outputs = "{}"
 
@@ -42,12 +46,26 @@ class OutputReader:
       try:
         with open(flat_outputs_path, "r", encoding="utf-8") as f:
           flat_outputs = f.read()
+          print(f"DEBUG: File content length: {len(flat_outputs)}")
+          if len(flat_outputs) > 2:  # More than just "{}"
+            print(f"DEBUG: File content preview: {flat_outputs[:200]}...")
       except (json.JSONDecodeError, IOError) as e:
         print(f"Warning: Could not read outputs file: {e}")
         flat_outputs = "{}"
 
     try:
       flat_outputs = json.loads(flat_outputs)
+      if isinstance(flat_outputs, dict) and flat_outputs:
+        print(f"DEBUG: Parsed outputs keys: {list(flat_outputs.keys())}")
+        
+        # Check for region indicators in outputs
+        availability_zones = flat_outputs.get('availability_zones', [])
+        if availability_zones:
+          print(f"DEBUG: Deployment availability zones: {availability_zones}")
+          # Extract region from AZ (e.g., 'us-west-2a' -> 'us-west-2')
+          if availability_zones and isinstance(availability_zones, list):
+            deployment_region = availability_zones[0][:-1]  # Remove last character (AZ letter)
+            print(f"DEBUG: Inferred deployment region: {deployment_region}")
     except json.JSONDecodeError:
       print("Warning: Invalid JSON in outputs file, using empty object")
       flat_outputs = {}
@@ -81,22 +99,46 @@ def deployment_outputs():
   Returns:
     Dict containing all deployment outputs from flat-outputs.json
   """
+  print("DEBUG: deployment_outputs fixture called")
+  
   if not OutputReader.check_outputs_exist():
+    print("DEBUG: No outputs file found, skipping tests")
     pytest.skip("No deployment outputs found. Please deploy infrastructure first.")
   
   outputs = OutputReader.get_outputs()
+  print(f"DEBUG: Raw outputs type: {type(outputs)}")
+  
   if not outputs:
+    print("DEBUG: Empty outputs, skipping tests")
     pytest.skip("No deployment outputs found in flat-outputs.json.")
   
   # Handle nested CDKTF outputs structure
   # CDKTF outputs are typically nested under stack names
   if isinstance(outputs, dict):
+    print(f"DEBUG: Outputs is dict with keys: {list(outputs.keys())}")
     # Check if outputs are nested under a stack name
     stack_keys = [key for key in outputs.keys() if isinstance(outputs[key], dict)]
+    print(f"DEBUG: Stack keys found: {stack_keys}")
     if stack_keys:
       # Use the first stack's outputs (typically there's only one)
       stack_name = stack_keys[0]
-      return outputs[stack_name]
+      print(f"DEBUG: Using stack outputs from: {stack_name}")
+      final_outputs = outputs[stack_name]
+      print(f"DEBUG: Final outputs keys: {list(final_outputs.keys()) if isinstance(final_outputs, dict) else 'Not a dict'}")
+      
+      # Check for region indicators
+      availability_zones = final_outputs.get('availability_zones', [])
+      if availability_zones:
+        print(f"DEBUG: Deployment availability zones: {availability_zones}")
+      
+      return final_outputs
+  
+  print(f"DEBUG: Returning flat outputs with keys: {list(outputs.keys()) if isinstance(outputs, dict) else 'Not a dict'}")
+  
+  # Check for region indicators in flat outputs
+  availability_zones = outputs.get('availability_zones', [])
+  if availability_zones:
+    print(f"DEBUG: Deployment availability zones: {availability_zones}")
   
   return outputs
 
@@ -109,18 +151,74 @@ def aws_clients():
   Returns:
     Dict containing initialized AWS clients
   """
-  return {
-    'ec2': boto3.client('ec2'),
-    'iam': boto3.client('iam'),
-    'logs': boto3.client('logs'),
-    'lambda': boto3.client('lambda'),
-    'apigateway': boto3.client('apigateway'),
-    's3': boto3.client('s3'),
-    'dynamodb': boto3.client('dynamodb'),
-    'sts': boto3.client('sts'),
-    'cloudwatch': boto3.client('cloudwatch'),
-    'cloudformation': boto3.client('cloudformation'),
-  }
+  # First, check if we need to determine the region from deployment outputs
+  outputs = OutputReader.get_outputs()
+  deployment_region = None
+  
+  # Try to infer region from deployment outputs
+  if isinstance(outputs, dict):
+    # Handle nested CDKTF outputs structure
+    if outputs:
+      # Check if outputs are nested under a stack name
+      stack_keys = [key for key in outputs.keys() if isinstance(outputs[key], dict)]
+      if stack_keys:
+        # Use the first stack's outputs
+        stack_outputs = outputs[stack_keys[0]]
+        availability_zones = stack_outputs.get('availability_zones', [])
+      else:
+        availability_zones = outputs.get('availability_zones', [])
+      
+      if availability_zones and isinstance(availability_zones, list) and availability_zones:
+        # Extract region from first AZ (e.g., 'us-west-2a' -> 'us-west-2')
+        deployment_region = availability_zones[0][:-1]
+        print(f"DEBUG: Detected deployment region from outputs: {deployment_region}")
+  
+  # Create clients - use deployment region if detected, otherwise default
+  if deployment_region:
+    print(f"DEBUG: Creating AWS clients for region: {deployment_region}")
+    clients = {
+      'ec2': boto3.client('ec2', region_name=deployment_region),
+      'iam': boto3.client('iam', region_name=deployment_region),
+      'logs': boto3.client('logs', region_name=deployment_region),
+      'lambda': boto3.client('lambda', region_name=deployment_region),
+      'apigateway': boto3.client('apigateway', region_name=deployment_region),
+      's3': boto3.client('s3', region_name=deployment_region),
+      'dynamodb': boto3.client('dynamodb', region_name=deployment_region),
+      'sts': boto3.client('sts', region_name=deployment_region),
+      'cloudwatch': boto3.client('cloudwatch', region_name=deployment_region),
+      'cloudformation': boto3.client('cloudformation', region_name=deployment_region),
+    }
+  else:
+    print("DEBUG: Creating AWS clients with default region")
+    clients = {
+      'ec2': boto3.client('ec2'),
+      'iam': boto3.client('iam'),
+      'logs': boto3.client('logs'),
+      'lambda': boto3.client('lambda'),
+      'apigateway': boto3.client('apigateway'),
+      's3': boto3.client('s3'),
+      'dynamodb': boto3.client('dynamodb'),
+      'sts': boto3.client('sts'),
+      'cloudwatch': boto3.client('cloudwatch'),
+      'cloudformation': boto3.client('cloudformation'),
+    }
+  
+  # Debug AWS context
+  try:
+    sts_response = clients['sts'].get_caller_identity()
+    print(f"DEBUG: AWS Account ID: {sts_response.get('Account')}")
+    print(f"DEBUG: AWS User/Role ARN: {sts_response.get('Arn')}")
+    print(f"DEBUG: AWS Test Region: {clients['ec2'].meta.region_name}")
+    
+    if deployment_region and clients['ec2'].meta.region_name != deployment_region:
+      print(f"WARNING: Region mismatch detected!")
+      print(f"  Deployment region (from outputs): {deployment_region}")
+      print(f"  Test region (boto3 client): {clients['ec2'].meta.region_name}")
+      
+  except Exception as e:
+    print(f"DEBUG: Error getting AWS context: {e}")
+  
+  return clients
 
 
 class TestVPCInfrastructure:
@@ -132,11 +230,52 @@ class TestVPCInfrastructure:
     assert vpc_id, "VPC ID not found in deployment outputs"
     
     ec2 = aws_clients['ec2']
-    response = ec2.describe_vpcs(VpcIds=[vpc_id])
+    current_region = ec2.meta.region_name
     
-    assert response['Vpcs'], f"VPC {vpc_id} not found"
-    vpc = response['Vpcs'][0]
-    assert vpc['State'] == 'available', f"VPC {vpc_id} is not available"
+    try:
+      response = ec2.describe_vpcs(VpcIds=[vpc_id])
+      
+      assert response['Vpcs'], f"VPC {vpc_id} not found"
+      vpc = response['Vpcs'][0]
+      assert vpc['State'] == 'available', f"VPC {vpc_id} is not available"
+      
+    except ClientError as e:
+      error_code = e.response['Error']['Code']
+      error_message = e.response['Error']['Message']
+      
+      print(f"DEBUG: AWS Error Code: {error_code}")
+      print(f"DEBUG: AWS Error Message: {error_message}")
+      print(f"DEBUG: Looking for VPC {vpc_id} in region {current_region}")
+      
+      # Try to list all VPCs to see what's available
+      try:
+        all_vpcs = ec2.describe_vpcs()
+        print(f"DEBUG: Available VPCs in {current_region}:")
+        for vpc in all_vpcs['Vpcs']:
+          print(f"  - VPC ID: {vpc['VpcId']}, CIDR: {vpc['CidrBlock']}, State: {vpc['State']}")
+        
+        if not all_vpcs['Vpcs']:
+          print(f"DEBUG: No VPCs found in region {current_region}")
+      except Exception as list_error:
+        print(f"DEBUG: Could not list VPCs: {list_error}")
+      
+      # Provide actionable error message for CI/CD
+      if error_code in ['InvalidVpcID.NotFound', 'InvalidVpcID.Malformed']:
+        pytest.fail(
+          f"❌ VPC {vpc_id} does not exist in region {current_region}.\n"
+          f"💡 Possible causes:\n"
+          f"   1️⃣  Infrastructure deployment failed or was incomplete\n"
+          f"   2️⃣  Infrastructure was destroyed but outputs file is stale\n"
+          f"   3️⃣  Tests are running against wrong AWS account\n"
+          f"   4️⃣  Deployment outputs are from a different environment\n"
+          f"🔧 Troubleshooting steps:\n"
+          f"   • Verify infrastructure deployment completed successfully\n"
+          f"   • Check AWS account ID: {aws_clients['sts'].get_caller_identity().get('Account', 'unknown')}\n"
+          f"   • Confirm deployment region matches test region: {current_region}\n"
+          f"   • Validate deployment outputs are current and not stale"
+        )
+      
+      raise
   
   def test_vpc_cidr_block(self, deployment_outputs, aws_clients):
     """Test that VPC has correct CIDR block."""
@@ -174,16 +313,50 @@ class TestVPCInfrastructure:
       pytest.skip("IGW or VPC ID not found in outputs")
     
     ec2 = aws_clients['ec2']
-    response = ec2.describe_internet_gateways(InternetGatewayIds=[igw_id])
+    current_region = ec2.meta.region_name
     
-    assert response['InternetGateways'], f"IGW {igw_id} not found"
-    igw = response['InternetGateways'][0]
-    
-    # Check attachment
-    attachments = igw.get('Attachments', [])
-    assert len(attachments) == 1, "IGW should be attached to exactly one VPC"
-    assert attachments[0]['VpcId'] == vpc_id
-    assert attachments[0]['State'] == 'available'
+    try:
+      response = ec2.describe_internet_gateways(InternetGatewayIds=[igw_id])
+      
+      assert response['InternetGateways'], f"IGW {igw_id} not found"
+      igw = response['InternetGateways'][0]
+      
+      # Check attachment
+      attachments = igw.get('Attachments', [])
+      assert len(attachments) == 1, "IGW should be attached to exactly one VPC"
+      assert attachments[0]['VpcId'] == vpc_id
+      assert attachments[0]['State'] == 'available'
+      
+    except ClientError as e:
+      error_code = e.response['Error']['Code']
+      error_message = e.response['Error']['Message']
+      
+      print(f"DEBUG: AWS Error Code: {error_code}")
+      print(f"DEBUG: AWS Error Message: {error_message}")
+      print(f"DEBUG: Looking for IGW {igw_id} in region {current_region}")
+      
+      # Try to list all IGWs to see what's available
+      try:
+        all_igws = ec2.describe_internet_gateways()
+        print(f"DEBUG: Available Internet Gateways in {current_region}:")
+        for igw in all_igws['InternetGateways']:
+          attachments = igw.get('Attachments', [])
+          attachment_info = f"attached to {attachments[0]['VpcId']}" if attachments else "not attached"
+          print(f"  - IGW ID: {igw['InternetGatewayId']}, {attachment_info}")
+      except Exception as list_error:
+        print(f"DEBUG: Could not list IGWs: {list_error}")
+      
+      # Provide actionable error message for CI/CD
+      if error_code in ['InvalidInternetGatewayID.NotFound', 'InvalidInternetGatewayID.Malformed']:
+        pytest.fail(
+          f"❌ Internet Gateway {igw_id} does not exist in region {current_region}.\n"
+          f"💡 This suggests the same issues as the VPC test:\n"
+          f"   • Infrastructure deployment was incomplete or failed\n"
+          f"   • Resources were destroyed but outputs are stale\n"
+          f"   • Wrong AWS account or region mismatch"
+        )
+      
+      raise
   
   def test_security_groups_exist(self, deployment_outputs, aws_clients):
     """Test that security groups exist with correct configuration."""
