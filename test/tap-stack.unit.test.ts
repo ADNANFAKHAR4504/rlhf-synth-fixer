@@ -113,6 +113,20 @@ describe('SecureFoundationalEnvironmentStack', () => {
             IpProtocol: 'tcp',
             ToPort: 80,
           },
+          {
+            CidrIp: '0.0.0.0/0',
+            Description: 'HTTP for package downloads and updates',
+            FromPort: 80,
+            IpProtocol: 'tcp',
+            ToPort: 80,
+          },
+          {
+            CidrIp: '0.0.0.0/0',
+            Description: 'HTTPS for secure downloads and AWS API calls',
+            FromPort: 443,
+            IpProtocol: 'tcp',
+            ToPort: 443,
+          },
         ],
         SecurityGroupIngress: [
           {
