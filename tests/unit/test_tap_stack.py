@@ -99,7 +99,7 @@ class TestTapStack:
     """Test that the Lambda function has correct IAM permissions."""
     template = Template.from_stack(qa_stack)
 
-    # Find the logical ID of the AppLambda function itself
+    # Find the AppLambda function resource in the template
     app_lambda_resources = template.find_resources("AWS::Lambda::Function", {
         "Properties": {
             "FunctionName": "tap-qa-lambda"
@@ -108,19 +108,21 @@ class TestTapStack:
     assert len(app_lambda_resources) == 1, "Expected exactly one AppLambda function."
     app_lambda_logical_id = list(app_lambda_resources.keys())[0]
 
-    # Get the Ref to the AppLambda's role from its properties in the synthesized template
-    app_lambda_role_ref_from_lambda = template.to_json()["Resources"][app_lambda_logical_id]["Properties"]["Role"]
+    # Get the Ref/Fn::GetAtt to the AppLambda's role from its properties in the synthesized template
+    lambda_role_property_from_template = template.to_json()["Resources"][app_lambda_logical_id]["Properties"]["Role"]
 
-    # Extract the logical ID from the Ref or GetAtt
-    app_lambda_role_logical_id = None
-    if isinstance(app_lambda_role_ref_from_lambda, dict):
-        if "Fn::GetAtt" in app_lambda_role_ref_from_lambda:
-            app_lambda_role_logical_id = app_lambda_role_ref_from_lambda["Fn::GetAtt"][0]
-        elif "Ref" in app_lambda_role_ref_from_lambda:
-            app_lambda_role_logical_id = app_lambda_role_ref_from_lambda["Ref"]
+    # Extract the logical ID of the role from this property
+    lambda_role_logical_id_in_template = None
+    if isinstance(lambda_role_property_from_template, dict):
+        if "Ref" in lambda_role_property_from_template:
+            lambda_role_logical_id_in_template = lambda_role_property_from_template["Ref"]
+        elif "Fn::GetAtt" in lambda_role_property_from_template:
+            lambda_role_logical_id_in_template = lambda_role_property_from_template["Fn::GetAtt"][0]
 
-    assert app_lambda_role_logical_id, "Could not determine the logical ID for AppLambda's role."
-    lambda_role_ref_dict = {"Ref": app_lambda_role_logical_id}
+    assert lambda_role_logical_id_in_template, "Could not extract logical ID of Lambda role from template."
+
+    # Now use this extracted logical ID for the assertion
+    lambda_role_ref_dict = {"Ref": lambda_role_logical_id_in_template}
 
 
     # Check for DynamoDB read/write permissions
