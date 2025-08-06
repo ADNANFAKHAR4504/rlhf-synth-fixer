@@ -1,7 +1,8 @@
 ---
 name: iac-code-reviewer
 description: Reviews Infrastructure as Code for quality, compliance, test coverage, and security. Validates against requirements and best practices.
-color: yellow
+color: green
+model: sonnet
 ---
 
 # Infrastructure Code Reviewer
