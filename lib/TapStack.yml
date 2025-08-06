@@ -173,7 +173,113 @@ Resources:
         - Key: ProblemID
           Value: !Ref ProblemID
 
-  # IAM Role
+  # IAM Role for Lambda function to create SecureString parameter
+  SecureParameterLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: SSMParameterPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ssm:PutParameter
+                  - ssm:DeleteParameter
+                  - ssm:GetParameter
+                Resource: !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/secure-web/config'
+              - Effect: Allow
+                Action:
+                  - kms:Encrypt
+                  - kms:Decrypt
+                  - kms:ReEncrypt*
+                  - kms:GenerateDataKey*
+                  - kms:DescribeKey
+                Resource: !GetAtt KMSKey.Arn
+      Tags:
+        - Key: Name
+          Value: SecureParameterLambdaRole
+        - Key: batchName
+          Value: !Ref BatchName
+        - Key: projectId
+          Value: !Ref ProjectId
+        - Key: projectName
+          Value: !Ref ProjectName
+        - Key: ProblemID
+          Value: !Ref ProblemID
+
+  # Lambda function to create SecureString parameter
+  SecureParameterLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${AWS::StackName}-secure-parameter-function'
+      Runtime: python3.9
+      Handler: index.lambda_handler
+      Role: !GetAtt SecureParameterLambdaRole.Arn
+      Timeout: 60
+      Code:
+        ZipFile: |
+          import boto3
+          import cfnresponse
+          import json
+          
+          def lambda_handler(event, context):
+              try:
+                  ssm = boto3.client('ssm')
+                  
+                  if event['RequestType'] == 'Create' or event['RequestType'] == 'Update':
+                      response = ssm.put_parameter(
+                          Name=event['ResourceProperties']['Name'],
+                          Value=event['ResourceProperties']['Value'],
+                          Type='SecureString',
+                          KeyId=event['ResourceProperties']['KeyId'],
+                          Description=event['ResourceProperties']['Description'],
+                          Overwrite=True
+                      )
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS, {'ParameterName': event['ResourceProperties']['Name']})
+                  
+                  elif event['RequestType'] == 'Delete':
+                      try:
+                          ssm.delete_parameter(Name=event['ResourceProperties']['Name'])
+                      except ssm.exceptions.ParameterNotFound:
+                          pass  # Parameter already deleted
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+                      
+              except Exception as e:
+                  print(f"Error: {str(e)}")
+                  cfnresponse.send(event, context, cfnresponse.FAILED, {'Error': str(e)})
+      Tags:
+        - Key: Name
+          Value: SecureParameterFunction
+        - Key: batchName
+          Value: !Ref BatchName
+        - Key: projectId
+          Value: !Ref ProjectId
+        - Key: projectName
+          Value: !Ref ProjectName
+        - Key: ProblemID
+          Value: !Ref ProblemID
+
+  # Custom Resource to create SecureString parameter
+  ConfigParameter:
+    Type: AWS::CloudFormation::CustomResource
+    Properties:
+      ServiceToken: !GetAtt SecureParameterLambda.Arn
+      Name: /secure-web/config
+      Value: 'example-config-value'
+      KeyId: !Ref KMSKey
+      Description: 'Configuration value for EC2 instance (SecureString)'
+
+  # IAM Role for EC2
   EC2Role:
     Type: AWS::IAM::Role
     Properties:
@@ -187,6 +293,20 @@ Resources:
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess
         - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+      Policies:
+        - PolicyName: SSMParameterAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ssm:GetParameter
+                  - ssm:GetParameters
+                Resource: !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/secure-web/config'
+              - Effect: Allow
+                Action:
+                  - kms:Decrypt
+                Resource: !GetAtt KMSKey.Arn
       Tags:
         - Key: Name
           Value: EC2S3ReadOnlyRole
@@ -204,21 +324,6 @@ Resources:
     Properties:
       Roles:
         - !Ref EC2Role
-
-  # Secure Parameter Store
-  ConfigParameter:
-    Type: AWS::SSM::Parameter
-    Properties:
-      Name: /secure-web/config
-      Type: SecureString
-      Value: 'example-config-value'
-      Description: Configuration value for EC2 instance
-      KeyId: !Ref KMSKey
-      Tags:
-        batchName: !Ref BatchName
-        projectId: !Ref ProjectId
-        projectName: !Ref ProjectName
-        ProblemID: !Ref ProblemID
 
   # Elastic IP
   ElasticIP:
@@ -284,3 +389,6 @@ Outputs:
   InstanceId:
     Description: ID of the EC2 instance
     Value: !Ref EC2Instance
+  ParameterName:
+    Description: Name of the secure parameter created
+    Value: /secure-web/config
