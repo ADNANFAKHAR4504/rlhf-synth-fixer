@@ -88,6 +88,19 @@ export class SecureFoundationalEnvironmentStack extends cdk.Stack {
             ],
             resources: ['*'],
           }),
+          new iam.PolicyStatement({
+            sid: 'AllowCloudTrailService',
+            effect: iam.Effect.ALLOW,
+            principals: [new iam.ServicePrincipal('cloudtrail.amazonaws.com')],
+            actions: [
+              'kms:Encrypt',
+              'kms:Decrypt',
+              'kms:ReEncrypt*',
+              'kms:GenerateDataKey*',
+              'kms:DescribeKey',
+            ],
+            resources: ['*'],
+          }),
         ],
       }),
     });
@@ -268,6 +281,38 @@ export class SecureFoundationalEnvironmentStack extends cdk.Stack {
         ],
       }),
     });
+
+    // Add bucket policy for CloudTrail
+    this.secureS3Bucket.addToResourcePolicy(
+      new iam.PolicyStatement({
+        sid: 'AWSCloudTrailAclCheck',
+        effect: iam.Effect.ALLOW,
+        principals: [new iam.ServicePrincipal('cloudtrail.amazonaws.com')],
+        actions: ['s3:GetBucketAcl'],
+        resources: [this.secureS3Bucket.bucketArn],
+        conditions: {
+          StringEquals: {
+            'AWS:SourceArn': `arn:aws:cloudtrail:${this.region}:${this.account}:trail/security-audit-trail-${environmentSuffix}-${this.account}`,
+          },
+        },
+      })
+    );
+
+    this.secureS3Bucket.addToResourcePolicy(
+      new iam.PolicyStatement({
+        sid: 'AWSCloudTrailWrite',
+        effect: iam.Effect.ALLOW,
+        principals: [new iam.ServicePrincipal('cloudtrail.amazonaws.com')],
+        actions: ['s3:PutObject'],
+        resources: [`${this.secureS3Bucket.bucketArn}/cloudtrail-logs/*`],
+        conditions: {
+          StringEquals: {
+            's3:x-amz-acl': 'bucket-owner-full-control',
+            'AWS:SourceArn': `arn:aws:cloudtrail:${this.region}:${this.account}:trail/security-audit-trail-${environmentSuffix}-${this.account}`,
+          },
+        },
+      })
+    );
 
     // 7. EC2 Instance with Amazon Linux 2023
     const userData = ec2.UserData.forLinux();

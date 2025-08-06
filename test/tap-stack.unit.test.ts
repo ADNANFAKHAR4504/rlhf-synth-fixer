@@ -33,9 +33,19 @@ describe('SecureFoundationalEnvironmentStack', () => {
         Description: Match.stringLikeRegexp(`Customer-managed KMS key for secure foundational environment - ${environmentSuffix}`),
       });
 
-      // Check KMS alias with unique name
+      // Check KMS alias with unique name (uses Fn::Join)
       template.hasResourceProperties('AWS::KMS::Alias', {
-        AliasName: `alias/secure-foundation-${environmentSuffix}-${Match.anyValue()}`,
+        AliasName: {
+          'Fn::Join': [
+            '',
+            [
+              'alias/secure-foundation-',
+              environmentSuffix,
+              '-',
+              Match.anyValue(),
+            ],
+          ],
+        },
       });
     });
 
@@ -118,7 +128,17 @@ describe('SecureFoundationalEnvironmentStack', () => {
         IsMultiRegionTrail: true,
         EnableLogFileValidation: true,
         IncludeGlobalServiceEvents: true,
-        TrailName: `security-audit-trail-${environmentSuffix}-${Match.anyValue()}`,
+        TrailName: {
+          'Fn::Join': [
+            '',
+            [
+              'security-audit-trail-',
+              environmentSuffix,
+              '-',
+              Match.anyValue(),
+            ],
+          ],
+        },
       });
     });
 
@@ -139,19 +159,49 @@ describe('SecureFoundationalEnvironmentStack', () => {
     test('should create CloudWatch Log Groups with unique names', () => {
       // Check VPC Flow Logs group
       template.hasResourceProperties('AWS::Logs::LogGroup', {
-        LogGroupName: `/aws/vpc/flowlogs/${environmentSuffix}-${Match.anyValue()}`,
+        LogGroupName: {
+          'Fn::Join': [
+            '',
+            [
+              '/aws/vpc/flowlogs/',
+              environmentSuffix,
+              '-',
+              Match.anyValue(),
+            ],
+          ],
+        },
         RetentionInDays: 30,
       });
 
       // Check Application Log Group
       template.hasResourceProperties('AWS::Logs::LogGroup', {
-        LogGroupName: `/aws/application/${environmentSuffix}-${Match.anyValue()}`,
+        LogGroupName: {
+          'Fn::Join': [
+            '',
+            [
+              '/aws/application/',
+              environmentSuffix,
+              '-',
+              Match.anyValue(),
+            ],
+          ],
+        },
         RetentionInDays: 30,
       });
 
       // Check System Log Group
       template.hasResourceProperties('AWS::Logs::LogGroup', {
-        LogGroupName: `/aws/ec2/system-logs/${environmentSuffix}-${Match.anyValue()}`,
+        LogGroupName: {
+          'Fn::Join': [
+            '',
+            [
+              '/aws/ec2/system-logs/',
+              environmentSuffix,
+              '-',
+              Match.anyValue(),
+            ],
+          ],
+        },
         RetentionInDays: 30,
       });
     });
