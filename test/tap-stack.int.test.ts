@@ -37,7 +37,7 @@ import * as path from 'path';
 
 // Configuration
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-const stackName = process.env.STACK_NAME || `TapStack-${environmentSuffix}`;
+const stackName = process.env.STACK_NAME || `TapStack${environmentSuffix}`;
 const region = process.env.AWS_REGION || 'us-east-1';
 const outputsFilePath = path.resolve(__dirname, '../cfn-outputs/flat-outputs.json');
 
