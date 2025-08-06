@@ -8,7 +8,7 @@ security controls, connectivity, and production readiness.
 
 import ipaddress
 import json
-import subprocess
+import os
 import urllib.request
 from typing import Any, Dict
 
@@ -17,62 +17,76 @@ import pytest
 from botocore.exceptions import ClientError
 
 
-class TerraformOutputReader:
-  """Utility class to read and parse Terraform outputs."""
+class OutputReader:
+  """Utility class to read and parse deployment outputs."""
   
   @staticmethod
   def get_outputs() -> Dict[str, Any]:
     """
-    Get Terraform outputs from deployed infrastructure.
+    Get deployment outputs from flat-outputs.json file.
     
     Returns:
-      Dict containing all Terraform outputs
+      Dict containing all deployment outputs
     """
+    # Open file cfn-outputs/flat-outputs.json
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    flat_outputs_path = os.path.join(
+      base_dir, "..", "..", "cfn-outputs", "flat-outputs.json"
+    )
+
+    # Initialize with empty outputs
+    flat_outputs = "{}"
+
+    # Try to read outputs file if it exists
+    if os.path.exists(flat_outputs_path):
+      try:
+        with open(flat_outputs_path, "r", encoding="utf-8") as f:
+          flat_outputs = f.read()
+      except (json.JSONDecodeError, IOError) as e:
+        print(f"Warning: Could not read outputs file: {e}")
+        flat_outputs = "{}"
+
     try:
-      result = subprocess.run(
-        ["terraform", "output", "-json"],
-        capture_output=True,
-        text=True,
-        check=True
-      )
-      outputs = json.loads(result.stdout)
-      return {key: value["value"] for key, value in outputs.items()}
-    except subprocess.CalledProcessError as e:
-      pytest.skip(f"Could not read Terraform outputs: {e}")
-      return {}
-    except json.JSONDecodeError as e:
-      pytest.skip(f"Could not parse Terraform outputs: {e}")
-      return {}
+      flat_outputs = json.loads(flat_outputs)
+    except json.JSONDecodeError:
+      print("Warning: Invalid JSON in outputs file, using empty object")
+      flat_outputs = {}
+    
+    return flat_outputs
 
   @staticmethod
-  def check_terraform_state() -> bool:
-    """Check if Terraform state exists and is valid."""
+  def check_outputs_exist() -> bool:
+    """Check if outputs file exists and is valid."""
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    flat_outputs_path = os.path.join(
+      base_dir, "..", "..", "cfn-outputs", "flat-outputs.json"
+    )
+    
+    if not os.path.exists(flat_outputs_path):
+      return False
+    
     try:
-      subprocess.run(
-        ["terraform", "show", "-json"],
-        capture_output=True,
-        text=True,
-        check=True
-      )
+      with open(flat_outputs_path, "r", encoding="utf-8") as f:
+        json.loads(f.read())
       return True
-    except subprocess.CalledProcessError:
+    except (json.JSONDecodeError, IOError):
       return False
 
 
 @pytest.fixture(scope="session")
-def terraform_outputs():
+def deployment_outputs():
   """
-  Fixture that provides Terraform outputs for all tests.
+  Fixture that provides deployment outputs for all tests.
   
   Returns:
-    Dict containing all Terraform outputs from deployed infrastructure
+    Dict containing all deployment outputs from flat-outputs.json
   """
-  if not TerraformOutputReader.check_terraform_state():
-    pytest.skip("No Terraform state found. Please deploy infrastructure first.")
+  if not OutputReader.check_outputs_exist():
+    pytest.skip("No deployment outputs found. Please deploy infrastructure first.")
   
-  outputs = TerraformOutputReader.get_outputs()
+  outputs = OutputReader.get_outputs()
   if not outputs:
-    pytest.skip("No Terraform outputs found.")
+    pytest.skip("No deployment outputs found in flat-outputs.json.")
   
   return outputs
 
@@ -102,10 +116,10 @@ def aws_clients():
 class TestVPCInfrastructure:
   """Test suite for VPC and networking infrastructure."""
   
-  def test_vpc_exists(self, terraform_outputs, aws_clients):
+  def test_vpc_exists(self, deployment_outputs, aws_clients):
     """Test that VPC exists and is available."""
-    vpc_id = terraform_outputs.get('vpc_id')
-    assert vpc_id, "VPC ID not found in Terraform outputs"
+    vpc_id = deployment_outputs.get('vpc_id')
+    assert vpc_id, "VPC ID not found in deployment outputs"
     
     ec2 = aws_clients['ec2']
     response = ec2.describe_vpcs(VpcIds=[vpc_id])
@@ -114,10 +128,10 @@ class TestVPCInfrastructure:
     vpc = response['Vpcs'][0]
     assert vpc['State'] == 'available', f"VPC {vpc_id} is not available"
   
-  def test_vpc_cidr_block(self, terraform_outputs, aws_clients):
+  def test_vpc_cidr_block(self, deployment_outputs, aws_clients):
     """Test that VPC has correct CIDR block."""
-    vpc_id = terraform_outputs.get('vpc_id')
-    expected_cidr = terraform_outputs.get('vpc_cidr')
+    vpc_id = deployment_outputs.get('vpc_id')
+    expected_cidr = deployment_outputs.get('vpc_cidr')
     
     if not vpc_id or not expected_cidr:
       pytest.skip("VPC ID or CIDR not found in outputs")
@@ -128,9 +142,9 @@ class TestVPCInfrastructure:
     
     assert vpc['CidrBlock'] == expected_cidr
   
-  def test_subnets_exist(self, terraform_outputs, aws_clients):
+  def test_subnets_exist(self, deployment_outputs, aws_clients):
     """Test that all required subnets exist."""
-    subnet_ids = terraform_outputs.get('subnet_ids', [])
+    subnet_ids = deployment_outputs.get('subnet_ids', [])
     if not subnet_ids:
       pytest.skip("No subnet IDs found in outputs")
     
@@ -141,10 +155,10 @@ class TestVPCInfrastructure:
     for subnet in response['Subnets']:
       assert subnet['State'] == 'available'
   
-  def test_internet_gateway_exists(self, terraform_outputs, aws_clients):
+  def test_internet_gateway_exists(self, deployment_outputs, aws_clients):
     """Test that Internet Gateway exists and is attached."""
-    igw_id = terraform_outputs.get('internet_gateway_id')
-    vpc_id = terraform_outputs.get('vpc_id')
+    igw_id = deployment_outputs.get('internet_gateway_id')
+    vpc_id = deployment_outputs.get('vpc_id')
     
     if not igw_id or not vpc_id:
       pytest.skip("IGW or VPC ID not found in outputs")
@@ -161,9 +175,9 @@ class TestVPCInfrastructure:
     assert attachments[0]['VpcId'] == vpc_id
     assert attachments[0]['State'] == 'available'
   
-  def test_security_groups_exist(self, terraform_outputs, aws_clients):
+  def test_security_groups_exist(self, deployment_outputs, aws_clients):
     """Test that security groups exist with correct configuration."""
-    sg_ids = terraform_outputs.get('security_group_ids', [])
+    sg_ids = deployment_outputs.get('security_group_ids', [])
     if not sg_ids:
       pytest.skip("No security group IDs found in outputs")
     
@@ -178,9 +192,9 @@ class TestVPCInfrastructure:
 class TestIAMResources:
   """Test suite for IAM roles and policies."""
   
-  def test_lambda_execution_role_exists(self, terraform_outputs, aws_clients):
+  def test_lambda_execution_role_exists(self, deployment_outputs, aws_clients):
     """Test that Lambda execution role exists."""
-    role_arn = terraform_outputs.get('lambda_execution_role_arn')
+    role_arn = deployment_outputs.get('lambda_execution_role_arn')
     if not role_arn:
       pytest.skip("Lambda execution role ARN not found in outputs")
     
@@ -195,9 +209,9 @@ class TestIAMResources:
         pytest.fail(f"Lambda execution role {role_name} not found")
       raise
   
-  def test_lambda_role_has_execution_policy(self, terraform_outputs, aws_clients):
+  def test_lambda_role_has_execution_policy(self, deployment_outputs, aws_clients):
     """Test that Lambda role has basic execution policy."""
-    role_arn = terraform_outputs.get('lambda_execution_role_arn')
+    role_arn = deployment_outputs.get('lambda_execution_role_arn')
     if not role_arn:
       pytest.skip("Lambda execution role ARN not found in outputs")
     
@@ -213,9 +227,9 @@ class TestIAMResources:
                           'service-role/AWSLambdaBasicExecutionRole')
     assert lambda_basic_policy in attached_policies
   
-  def test_api_gateway_execution_role_exists(self, terraform_outputs, aws_clients):
+  def test_api_gateway_execution_role_exists(self, deployment_outputs, aws_clients):
     """Test that API Gateway execution role exists if configured."""
-    role_arn = terraform_outputs.get('api_gateway_execution_role_arn')
+    role_arn = deployment_outputs.get('api_gateway_execution_role_arn')
     if not role_arn:
       pytest.skip("API Gateway execution role ARN not found in outputs")
     
@@ -234,9 +248,9 @@ class TestIAMResources:
 class TestLambdaFunctions:
   """Test suite for Lambda functions."""
   
-  def test_lambda_function_exists(self, terraform_outputs, aws_clients):
+  def test_lambda_function_exists(self, deployment_outputs, aws_clients):
     """Test that Lambda function exists and is active."""
-    function_name = terraform_outputs.get('lambda_function_name')
+    function_name = deployment_outputs.get('lambda_function_name')
     if not function_name:
       pytest.skip("Lambda function name not found in outputs")
     
@@ -250,9 +264,9 @@ class TestLambdaFunctions:
         pytest.fail(f"Lambda function {function_name} not found")
       raise
   
-  def test_lambda_function_configuration(self, terraform_outputs, aws_clients):
+  def test_lambda_function_configuration(self, deployment_outputs, aws_clients):
     """Test Lambda function configuration."""
-    function_name = terraform_outputs.get('lambda_function_name')
+    function_name = deployment_outputs.get('lambda_function_name')
     if not function_name:
       pytest.skip("Lambda function name not found in outputs")
     
@@ -266,9 +280,9 @@ class TestLambdaFunctions:
     assert config['Timeout'] > 0, "Timeout must be positive"
     assert config['MemorySize'] >= 128, "Memory must be at least 128MB"
   
-  def test_lambda_function_invoke(self, terraform_outputs, aws_clients):
+  def test_lambda_function_invoke(self, deployment_outputs, aws_clients):
     """Test that Lambda function can be invoked."""
-    function_name = terraform_outputs.get('lambda_function_name')
+    function_name = deployment_outputs.get('lambda_function_name')
     if not function_name:
       pytest.skip("Lambda function name not found in outputs")
     
@@ -284,9 +298,9 @@ class TestLambdaFunctions:
     assert response['StatusCode'] == 200
     assert 'Payload' in response
   
-  def test_lambda_environment_variables(self, terraform_outputs, aws_clients):
+  def test_lambda_environment_variables(self, deployment_outputs, aws_clients):
     """Test Lambda environment variables if configured."""
-    function_name = terraform_outputs.get('lambda_function_name')
+    function_name = deployment_outputs.get('lambda_function_name')
     if not function_name:
       pytest.skip("Lambda function name not found in outputs")
     
@@ -306,9 +320,9 @@ class TestLambdaFunctions:
 class TestAPIGateway:
   """Test suite for API Gateway."""
   
-  def test_api_gateway_exists(self, terraform_outputs, aws_clients):
+  def test_api_gateway_exists(self, deployment_outputs, aws_clients):
     """Test that API Gateway exists."""
-    api_id = terraform_outputs.get('api_gateway_id')
+    api_id = deployment_outputs.get('api_gateway_id')
     if not api_id:
       pytest.skip("API Gateway ID not found in outputs")
     
@@ -322,10 +336,10 @@ class TestAPIGateway:
         pytest.fail(f"API Gateway {api_id} not found")
       raise
   
-  def test_api_gateway_deployment(self, terraform_outputs, aws_clients):
+  def test_api_gateway_deployment(self, deployment_outputs, aws_clients):
     """Test that API Gateway is deployed."""
-    api_id = terraform_outputs.get('api_gateway_id')
-    stage_name = terraform_outputs.get('api_gateway_stage', 'prod')
+    api_id = deployment_outputs.get('api_gateway_id')
+    stage_name = deployment_outputs.get('api_gateway_stage', 'prod')
     
     if not api_id:
       pytest.skip("API Gateway ID not found in outputs")
@@ -340,9 +354,9 @@ class TestAPIGateway:
         pytest.fail(f"API Gateway stage {stage_name} not found")
       raise
   
-  def test_api_gateway_endpoint_accessibility(self, terraform_outputs):
+  def test_api_gateway_endpoint_accessibility(self, deployment_outputs):
     """Test that API Gateway endpoint is accessible."""
-    api_url = terraform_outputs.get('api_gateway_url')
+    api_url = deployment_outputs.get('api_gateway_url')
     if not api_url:
       pytest.skip("API Gateway URL not found in outputs")
     
@@ -357,9 +371,9 @@ class TestAPIGateway:
 class TestCloudWatchLogs:
   """Test suite for CloudWatch Logs."""
   
-  def test_lambda_log_group_exists(self, terraform_outputs, aws_clients):
+  def test_lambda_log_group_exists(self, deployment_outputs, aws_clients):
     """Test that Lambda log group exists."""
-    function_name = terraform_outputs.get('lambda_function_name')
+    function_name = deployment_outputs.get('lambda_function_name')
     if not function_name:
       pytest.skip("Lambda function name not found in outputs")
     
@@ -376,9 +390,9 @@ class TestCloudWatchLogs:
     except ClientError as e:
       pytest.fail(f"Error checking log group: {e}")
   
-  def test_log_retention_policy(self, terraform_outputs, aws_clients):
+  def test_log_retention_policy(self, deployment_outputs, aws_clients):
     """Test that log retention policy is set."""
-    function_name = terraform_outputs.get('lambda_function_name')
+    function_name = deployment_outputs.get('lambda_function_name')
     if not function_name:
       pytest.skip("Lambda function name not found in outputs")
     
@@ -404,9 +418,9 @@ class TestCloudWatchLogs:
 class TestS3Resources:
   """Test suite for S3 buckets."""
   
-  def test_s3_bucket_exists(self, terraform_outputs, aws_clients):
+  def test_s3_bucket_exists(self, deployment_outputs, aws_clients):
     """Test that S3 bucket exists if configured."""
-    bucket_name = terraform_outputs.get('s3_bucket_name')
+    bucket_name = deployment_outputs.get('s3_bucket_name')
     if not bucket_name:
       pytest.skip("S3 bucket name not found in outputs")
     
@@ -421,9 +435,9 @@ class TestS3Resources:
       else:
         pytest.fail(f"Error accessing S3 bucket: {e}")
   
-  def test_s3_bucket_versioning(self, terraform_outputs, aws_clients):
+  def test_s3_bucket_versioning(self, deployment_outputs, aws_clients):
     """Test S3 bucket versioning configuration."""
-    bucket_name = terraform_outputs.get('s3_bucket_name')
+    bucket_name = deployment_outputs.get('s3_bucket_name')
     if not bucket_name:
       pytest.skip("S3 bucket name not found in outputs")
     
@@ -438,9 +452,9 @@ class TestS3Resources:
       if e.response['Error']['Code'] != 'NoSuchBucket':
         pytest.fail(f"Error checking bucket versioning: {e}")
   
-  def test_s3_bucket_encryption(self, terraform_outputs, aws_clients):
+  def test_s3_bucket_encryption(self, deployment_outputs, aws_clients):
     """Test S3 bucket encryption configuration."""
-    bucket_name = terraform_outputs.get('s3_bucket_name')
+    bucket_name = deployment_outputs.get('s3_bucket_name')
     if not bucket_name:
       pytest.skip("S3 bucket name not found in outputs")
     
@@ -464,9 +478,9 @@ class TestS3Resources:
 class TestDynamoDBResources:
   """Test suite for DynamoDB tables."""
   
-  def test_dynamodb_table_exists(self, terraform_outputs, aws_clients):
+  def test_dynamodb_table_exists(self, deployment_outputs, aws_clients):
     """Test that DynamoDB table exists if configured."""
-    table_name = terraform_outputs.get('dynamodb_table_name')
+    table_name = deployment_outputs.get('dynamodb_table_name')
     if not table_name:
       pytest.skip("DynamoDB table name not found in outputs")
     
@@ -480,9 +494,9 @@ class TestDynamoDBResources:
         pytest.fail(f"DynamoDB table {table_name} not found")
       raise
   
-  def test_dynamodb_table_configuration(self, terraform_outputs, aws_clients):
+  def test_dynamodb_table_configuration(self, deployment_outputs, aws_clients):
     """Test DynamoDB table configuration."""
-    table_name = terraform_outputs.get('dynamodb_table_name')
+    table_name = deployment_outputs.get('dynamodb_table_name')
     if not table_name:
       pytest.skip("DynamoDB table name not found in outputs")
     
@@ -508,9 +522,9 @@ class TestDynamoDBResources:
 class TestSecurityConfiguration:
   """Test suite for security configuration."""
   
-  def test_no_default_security_groups(self, terraform_outputs, aws_clients):
+  def test_no_default_security_groups(self, deployment_outputs, aws_clients):
     """Test that default security groups are not used."""
-    vpc_id = terraform_outputs.get('vpc_id')
+    vpc_id = deployment_outputs.get('vpc_id')
     if not vpc_id:
       pytest.skip("VPC ID not found in outputs")
     
@@ -531,10 +545,10 @@ class TestSecurityConfiguration:
       assert len(default_sg['IpPermissions']) == 0, \
         "Default security group should have no inbound rules"
   
-  def test_security_group_rules_are_restrictive(self, terraform_outputs, 
+  def test_security_group_rules_are_restrictive(self, deployment_outputs, 
                                                aws_clients):
     """Test that security group rules are not overly permissive."""
-    sg_ids = terraform_outputs.get('security_group_ids', [])
+    sg_ids = deployment_outputs.get('security_group_ids', [])
     if not sg_ids:
       pytest.skip("No security group IDs found in outputs")
     
@@ -552,9 +566,9 @@ class TestSecurityConfiguration:
               pytest.fail(f"Security group {sg['GroupId']} has overly "
                          f"permissive rule: {cidr}")
   
-  def test_iam_roles_have_least_privilege(self, terraform_outputs, aws_clients):
+  def test_iam_roles_have_least_privilege(self, deployment_outputs, aws_clients):
     """Test that IAM roles follow least privilege principle."""
-    role_arn = terraform_outputs.get('lambda_execution_role_arn')
+    role_arn = deployment_outputs.get('lambda_execution_role_arn')
     if not role_arn:
       pytest.skip("Lambda execution role ARN not found in outputs")
     
@@ -590,9 +604,9 @@ class TestSecurityConfiguration:
 class TestConnectivityAndNetworking:
   """Test suite for connectivity and networking."""
   
-  def test_vpc_connectivity(self, terraform_outputs, aws_clients):
+  def test_vpc_connectivity(self, deployment_outputs, aws_clients):
     """Test VPC connectivity and routing."""
-    vpc_id = terraform_outputs.get('vpc_id')
+    vpc_id = deployment_outputs.get('vpc_id')
     if not vpc_id:
       pytest.skip("VPC ID not found in outputs")
     
@@ -615,9 +629,9 @@ class TestConnectivityAndNetworking:
     
     assert has_internet_route, "No internet gateway route found"
   
-  def test_subnet_availability_zones(self, terraform_outputs, aws_clients):
+  def test_subnet_availability_zones(self, deployment_outputs, aws_clients):
     """Test that subnets are distributed across availability zones."""
-    subnet_ids = terraform_outputs.get('subnet_ids', [])
+    subnet_ids = deployment_outputs.get('subnet_ids', [])
     if len(subnet_ids) < 2:
       pytest.skip("Need at least 2 subnets to test AZ distribution")
     
@@ -635,10 +649,10 @@ class TestConnectivityAndNetworking:
 class TestPerformanceAndScaling:
   """Test suite for performance and scaling capabilities."""
   
-  def test_lambda_concurrency_configuration(self, terraform_outputs, 
+  def test_lambda_concurrency_configuration(self, deployment_outputs, 
                                            aws_clients):
     """Test Lambda concurrency configuration."""
-    function_name = terraform_outputs.get('lambda_function_name')
+    function_name = deployment_outputs.get('lambda_function_name')
     if not function_name:
       pytest.skip("Lambda function name not found in outputs")
     
@@ -657,10 +671,10 @@ class TestPerformanceAndScaling:
       if e.response['Error']['Code'] != 'ProvisionedConcurrencyConfigNotFoundException':
         raise
   
-  def test_api_gateway_throttling(self, terraform_outputs, aws_clients):
+  def test_api_gateway_throttling(self, deployment_outputs, aws_clients):
     """Test API Gateway throttling configuration."""
-    api_id = terraform_outputs.get('api_gateway_id')
-    stage_name = terraform_outputs.get('api_gateway_stage', 'prod')
+    api_id = deployment_outputs.get('api_gateway_id')
+    stage_name = deployment_outputs.get('api_gateway_stage', 'prod')
     
     if not api_id:
       pytest.skip("API Gateway ID not found in outputs")
@@ -685,9 +699,9 @@ class TestPerformanceAndScaling:
 class TestMonitoringAndObservability:
   """Test suite for monitoring and observability."""
   
-  def test_cloudwatch_alarms_exist(self, terraform_outputs, aws_clients):
+  def test_cloudwatch_alarms_exist(self, deployment_outputs, aws_clients):
     """Test that CloudWatch alarms are configured."""
-    function_name = terraform_outputs.get('lambda_function_name')
+    function_name = deployment_outputs.get('lambda_function_name')
     if not function_name:
       pytest.skip("Lambda function name not found in outputs")
     
@@ -706,9 +720,9 @@ class TestMonitoringAndObservability:
         assert alarm['StateValue'] in ['OK', 'ALARM', 'INSUFFICIENT_DATA']
         assert alarm['ActionsEnabled'] is True
   
-  def test_lambda_dead_letter_queue(self, terraform_outputs, aws_clients):
+  def test_lambda_dead_letter_queue(self, deployment_outputs, aws_clients):
     """Test Lambda dead letter queue configuration."""
-    function_name = terraform_outputs.get('lambda_function_name')
+    function_name = deployment_outputs.get('lambda_function_name')
     if not function_name:
       pytest.skip("Lambda function name not found in outputs")
     
@@ -725,9 +739,9 @@ class TestMonitoringAndObservability:
 class TestDisasterRecovery:
   """Test suite for disaster recovery capabilities."""
   
-  def test_cross_az_redundancy(self, terraform_outputs, aws_clients):
+  def test_cross_az_redundancy(self, deployment_outputs, aws_clients):
     """Test that resources are deployed across multiple AZs."""
-    subnet_ids = terraform_outputs.get('subnet_ids', [])
+    subnet_ids = deployment_outputs.get('subnet_ids', [])
     if not subnet_ids:
       pytest.skip("No subnet IDs found in outputs")
     
@@ -742,10 +756,10 @@ class TestDisasterRecovery:
     assert len(availability_zones) >= 2, \
       "Resources should be deployed across multiple AZs for redundancy"
   
-  def test_backup_configuration(self, terraform_outputs, aws_clients):
+  def test_backup_configuration(self, deployment_outputs, aws_clients):
     """Test backup configuration for stateful resources."""
     # Check DynamoDB backup if table exists
-    table_name = terraform_outputs.get('dynamodb_table_name')
+    table_name = deployment_outputs.get('dynamodb_table_name')
     if table_name:
       dynamodb = aws_clients['dynamodb']
       
@@ -765,9 +779,9 @@ class TestDisasterRecovery:
 class TestCostOptimization:
   """Test suite for cost optimization."""
   
-  def test_lambda_memory_optimization(self, terraform_outputs, aws_clients):
+  def test_lambda_memory_optimization(self, deployment_outputs, aws_clients):
     """Test Lambda memory configuration for cost optimization."""
-    function_name = terraform_outputs.get('lambda_function_name')
+    function_name = deployment_outputs.get('lambda_function_name')
     if not function_name:
       pytest.skip("Lambda function name not found in outputs")
     
@@ -784,10 +798,10 @@ class TestCostOptimization:
     # Memory should be in 64MB increments
     assert (memory_size - 128) % 64 == 0, "Memory should be in 64MB increments"
   
-  def test_api_gateway_caching(self, terraform_outputs, aws_clients):
+  def test_api_gateway_caching(self, deployment_outputs, aws_clients):
     """Test API Gateway caching configuration."""
-    api_id = terraform_outputs.get('api_gateway_id')
-    stage_name = terraform_outputs.get('api_gateway_stage', 'prod')
+    api_id = deployment_outputs.get('api_gateway_id')
+    stage_name = deployment_outputs.get('api_gateway_stage', 'prod')
     
     if not api_id:
       pytest.skip("API Gateway ID not found in outputs")
@@ -810,10 +824,10 @@ class TestCostOptimization:
 class TestComplianceAndGovernance:
   """Test suite for compliance and governance."""
   
-  def test_resource_tagging(self, terraform_outputs, aws_clients):
+  def test_resource_tagging(self, deployment_outputs, aws_clients):
     """Test that resources are properly tagged."""
     # Check Lambda function tags
-    function_name = terraform_outputs.get('lambda_function_name')
+    function_name = deployment_outputs.get('lambda_function_name')
     if function_name:
       lambda_client = aws_clients['lambda']
       
@@ -835,10 +849,10 @@ class TestComplianceAndGovernance:
       except ClientError:
         pass  # Function might not support tagging
   
-  def test_encryption_at_rest(self, terraform_outputs, aws_clients):
+  def test_encryption_at_rest(self, deployment_outputs, aws_clients):
     """Test that encryption at rest is enabled for supported services."""
     # Check S3 bucket encryption
-    bucket_name = terraform_outputs.get('s3_bucket_name')
+    bucket_name = deployment_outputs.get('s3_bucket_name')
     if bucket_name:
       s3 = aws_clients['s3']
       
@@ -851,7 +865,7 @@ class TestComplianceAndGovernance:
           raise
     
     # Check DynamoDB encryption
-    table_name = terraform_outputs.get('dynamodb_table_name')
+    table_name = deployment_outputs.get('dynamodb_table_name')
     if table_name:
       dynamodb = aws_clients['dynamodb']
       
@@ -867,11 +881,11 @@ class TestComplianceAndGovernance:
         if e.response['Error']['Code'] != 'ResourceNotFoundException':
           raise
   
-  def test_access_logging(self, terraform_outputs, aws_clients):
+  def test_access_logging(self, deployment_outputs, aws_clients):
     """Test that access logging is configured."""
     # Check API Gateway access logging
-    api_id = terraform_outputs.get('api_gateway_id')
-    stage_name = terraform_outputs.get('api_gateway_stage', 'prod')
+    api_id = deployment_outputs.get('api_gateway_id')
+    stage_name = deployment_outputs.get('api_gateway_stage', 'prod')
     
     if api_id:
       apigw = aws_clients['apigateway']
