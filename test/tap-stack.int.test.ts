@@ -130,7 +130,9 @@ describe('Security Group Validation', () => {
   test('should have security group with correct SSH ingress rule', async () => {
     // Skip test if security group is not available (resources might be cleaned up)
     if (!securityGroupId) {
-      console.log('⚠️ Skipping security group test - resources may be cleaned up');
+      console.log(
+        '⚠️ Skipping security group test - resources may be cleaned up'
+      );
       return;
     }
 
@@ -161,7 +163,9 @@ describe('Security Group Validation', () => {
   test('should have security group with correct HTTP ingress rule', async () => {
     // Skip test if security group is not available (resources might be cleaned up)
     if (!securityGroupId) {
-      console.log('⚠️ Skipping security group test - resources may be cleaned up');
+      console.log(
+        '⚠️ Skipping security group test - resources may be cleaned up'
+      );
       return;
     }
 
@@ -192,7 +196,9 @@ describe('Security Group Validation', () => {
   test('should have security group with correct egress rules', async () => {
     // Skip test if security group is not available (resources might be cleaned up)
     if (!securityGroupId) {
-      console.log('⚠️ Skipping security group test - resources may be cleaned up');
+      console.log(
+        '⚠️ Skipping security group test - resources may be cleaned up'
+      );
       return;
     }
 
@@ -393,19 +399,23 @@ describe('EC2 Instance and Role Integration Test', () => {
           tag => tag.Key === 'Name' && tag.Value === outputs.EC2InstanceName
         )
     );
-    
+
     // Skip test if instance is not available (resources might be cleaned up)
     if (!instance) {
-      console.log('⚠️ Skipping EC2 instance test - resources may be cleaned up');
+      console.log(
+        '⚠️ Skipping EC2 instance test - resources may be cleaned up'
+      );
       return;
     }
-    
+
     // Check if instance is running, if not, skip the test
     if (instance.State?.Name !== 'running') {
-      console.log(`⚠️ EC2 instance is in ${instance.State?.Name} state - skipping test`);
+      console.log(
+        `⚠️ EC2 instance is in ${instance.State?.Name} state - skipping test`
+      );
       return;
     }
-    
+
     instanceId = instance?.InstanceId;
 
     const eipRes = await ec2.send(new DescribeAddressesCommand({}));
