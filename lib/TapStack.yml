@@ -73,15 +73,78 @@ Resources:
           PolicyDocument:
             Version: "2012-10-17"
             Statement:
+              # S3 permissions - restricted to specific buckets
               - Effect: Allow
                 Action:
-                  - logs:*
-                  - s3:*
-                  - dynamodb:*
-                  - rds:*
-                  - kms:*
-                  - cloudtrail:*
-                Resource: "*"
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:DeleteObject
+                  - s3:GetObjectVersion
+                  - s3:PutObjectVersion
+                  - s3:DeleteObjectVersion
+                Resource:
+                  - !Sub "${ApplicationBucket}/*"
+                  - !Sub "${ApplicationLogBucket}/*"
+              - Effect: Allow
+                Action:
+                  - s3:ListBucket
+                  - s3:GetBucketLocation
+                  - s3:GetBucketVersioning
+                  - s3:GetBucketAcl
+                  - s3:GetBucketLogging
+                Resource:
+                  - !Ref ApplicationBucket
+                  - !Ref ApplicationLogBucket
+              # DynamoDB permissions - restricted to specific table
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:DeleteItem
+                  - dynamodb:Query
+                  - dynamodb:Scan
+                  - dynamodb:BatchGetItem
+                  - dynamodb:BatchWriteItem
+                Resource:
+                  - !GetAtt TurnAroundPromptTable.Arn
+                  - !Sub "${TurnAroundPromptTable.Arn}/index/*"
+              # KMS permissions - restricted to application key
+              - Effect: Allow
+                Action:
+                  - kms:Decrypt
+                  - kms:GenerateDataKey
+                  - kms:GenerateDataKeyWithoutPlaintext
+                  - kms:DescribeKey
+                Resource: !GetAtt ApplicationKMSKey.Arn
+              # CloudWatch Logs permissions - restricted to application log groups
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                  - logs:DescribeLogGroups
+                  - logs:DescribeLogStreams
+                Resource:
+                  - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${ApplicationName}-${EnvironmentSuffix}-*"
+                  - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/cloudtrail/${ApplicationName}-${EnvironmentSuffix}"
+                  - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/rds/instance/${ApplicationName}-${EnvironmentSuffix}-*"
+              # RDS permissions - restricted to specific database
+              - Effect: Allow
+                Action:
+                  - rds:DescribeDBInstances
+                  - rds:DescribeDBClusters
+                  - rds:DescribeDBSubnetGroups
+                Resource:
+                  - !Sub "arn:aws:rds:${AWS::Region}:${AWS::AccountId}:db:${ApplicationName}-${EnvironmentSuffix}-db"
+                  - !Sub "arn:aws:rds:${AWS::Region}:${AWS::AccountId}:subgrp:${ApplicationName}-dbsubnet"
+              # Secrets Manager permissions - restricted to database secret
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                  - secretsmanager:DescribeSecret
+                Resource: !Ref DatabaseSecret
+              # EC2 VPC permissions for Lambda execution (these need to remain broad for VPC operations)
               - Effect: Allow
                 Action:
                   - ec2:CreateNetworkInterface
@@ -89,6 +152,9 @@ Resources:
                   - ec2:DeleteNetworkInterface
                   - ec2:AttachNetworkInterface
                   - ec2:DetachNetworkInterface
+                Resource: "*"
+              - Effect: Allow
+                Action:
                   - ec2:DescribeSubnets
                   - ec2:DescribeSecurityGroups
                   - ec2:DescribeVpcs
