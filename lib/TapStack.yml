@@ -19,11 +19,7 @@ Parameters:
     Default: serverlessapp-bucket-284210-1
     Description: Unique S3 bucket name for object triggers.
 
-Mappings:
-  RegionMap:
-    us-west-2:
-      AZ1: us-west-2a
-      AZ2: us-west-2b
+
 
 Resources:
   # S3 Bucket Policy to allow Lambda invocation
@@ -73,7 +69,7 @@ Resources:
     Properties:
       VpcId: !Ref ServerlessAppVPC
       CidrBlock: 10.0.0.0/26
-      AvailabilityZone: !FindInMap [RegionMap, us-west-2, AZ1]
+      AvailabilityZone: !Select [0, !GetAZs !Ref AWS::Region]
       Tags:
         - Key: Name
           Value: ServerlessAppSubnetAZ1
@@ -83,7 +79,7 @@ Resources:
     Properties:
       VpcId: !Ref ServerlessAppVPC
       CidrBlock: 10.0.0.64/26
-      AvailabilityZone: !FindInMap [RegionMap, us-west-2, AZ2]
+      AvailabilityZone: !Select [1, !GetAZs !Ref AWS::Region]
       Tags:
         - Key: Name
           Value: ServerlessAppSubnetAZ2
@@ -94,7 +90,7 @@ Resources:
     Properties:
       VpcId: !Ref ServerlessAppVPC
       CidrBlock: 10.0.0.128/26
-      AvailabilityZone: !FindInMap [RegionMap, us-west-2, AZ1]
+      AvailabilityZone: !Select [0, !GetAZs !Ref AWS::Region]
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
