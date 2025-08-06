@@ -23,7 +23,7 @@ class MockComponentResource:
     self.outputs = None
 
   def register_outputs(self, outputs):
-    self.outputs = outputs
+    self.outputs = True
 
 
 class MockOutput:
