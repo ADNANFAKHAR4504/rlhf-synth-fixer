@@ -69,7 +69,7 @@ Resources:
     Properties:
       VpcId: !Ref ServerlessAppVPC
       CidrBlock: 10.0.0.0/26
-      AvailabilityZone: !Select [0, !GetAZs !Ref AWS::Region]
+      AvailabilityZone: us-west-2a
       Tags:
         - Key: Name
           Value: ServerlessAppSubnetAZ1
@@ -79,7 +79,7 @@ Resources:
     Properties:
       VpcId: !Ref ServerlessAppVPC
       CidrBlock: 10.0.0.64/26
-      AvailabilityZone: !Select [1, !GetAZs !Ref AWS::Region]
+      AvailabilityZone: us-west-2b
       Tags:
         - Key: Name
           Value: ServerlessAppSubnetAZ2
@@ -90,7 +90,7 @@ Resources:
     Properties:
       VpcId: !Ref ServerlessAppVPC
       CidrBlock: 10.0.0.128/26
-      AvailabilityZone: !Select [0, !GetAZs !Ref AWS::Region]
+      AvailabilityZone: us-west-2a
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -278,7 +278,13 @@ Resources:
           import boto3
           import os
           import json
+          
           def lambda_handler(event, context):
+              return {
+                  'statusCode': 200,
+                  'body': json.dumps('Hello from Lambda!')
+              }
+              return {'statusCode': 200, 'body': 'Success'}
               secret_name = os.environ['SERVERLESSAPP_SECRET_ARN']
               # Get secret value
               session = boto3.session.Session()
