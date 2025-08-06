@@ -1,8 +1,14 @@
 const fs = require('fs');
 const path = require('path');
+type CloudFormationOutput = {
+  OutputKey: string;
+  OutputValue: string;
+  Description: string;
+  ExportName: string;
+};
 
 // Default outputs array, exactly as provided.
-const defaultOutputs = [
+const defaultOutputs: CloudFormationOutput[] = [
   {
     OutputKey: 'ApiGatewayUrl',
     OutputValue:
@@ -31,7 +37,7 @@ const defaultOutputs = [
   },
 ];
 
-let outputs;
+let outputs: CloudFormationOutput[];
 const outputFilePath = path.join(__dirname, 'cfn-outputs', 'outputs.json');
 
 // Logic to load outputs from file or use defaults.
@@ -52,8 +58,13 @@ if (fs.existsSync(outputFilePath)) {
   outputs = defaultOutputs;
 }
 
-// Helper function to get an output value by its key.
-const getOutputValue = key => {
+type OutputKey =
+  | 'ApiGatewayUrl'
+  | 'LambdaLogGroupName'
+  | 'LambdaFunctionArn'
+  | 'DynamoDBTableName';
+
+const getOutputValue = (key: OutputKey): string | undefined => {
   const output = outputs.find(o => o.OutputKey === key);
   return output ? output.OutputValue : undefined;
 };
