@@ -1,13 +1,13 @@
-import { CloudFormationClient, DescribeStacksCommand } from '@aws-sdk/client-cloudformation';
-import { DynamoDBClient, DescribeTableCommand } from '@aws-sdk/client-dynamodb';
 import { ApiGatewayV2Client, GetApiCommand } from '@aws-sdk/client-apigatewayv2';
-import { LambdaClient, GetFunctionCommand } from '@aws-sdk/client-lambda';
+import { CloudFormationClient, DescribeStacksCommand } from '@aws-sdk/client-cloudformation';
+import { DescribeTableCommand, DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import { GetFunctionCommand, LambdaClient } from '@aws-sdk/client-lambda';
 import * as fs from 'fs';
 import * as path from 'path';
 
 const region = process.env.AWS_REGION || 'us-east-1';
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-const stackName = `TapStacksynth294`;
+const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'pr566';
+const stackName = `TapStack${environmentSuffix}`;
 
 // Read outputs from deployment
 const outputsPath = path.join(__dirname, '..', 'cfn-outputs', 'flat-outputs.json');
@@ -124,7 +124,7 @@ describe('TapStack Integration Tests', () => {
 
   describe('Lambda Functions', () => {
     test('Data processor Lambda function exists', async () => {
-      const functionName = `data-processor-synth294`;
+      const functionName = `data-processor-${environmentSuffix}`;
       const command = new GetFunctionCommand({ FunctionName: functionName });
       const response = await lambdaClient.send(command);
 
@@ -135,7 +135,7 @@ describe('TapStack Integration Tests', () => {
     });
 
     test('Health check Lambda function exists', async () => {
-      const functionName = `health-check-synth294`;
+      const functionName = `health-check-${environmentSuffix}`;
       const command = new GetFunctionCommand({ FunctionName: functionName });
       const response = await lambdaClient.send(command);
 
