@@ -2,8 +2,6 @@ import pytest
 from aws_cdk import App
 from aws_cdk.assertions import Template, Match
 
-# Assuming your TapStack is in a file named 'lib/tap_stack.py'
-# You might need to adjust this import path based on your project structure
 from lib.tap_stack import TapStack, TapStackProps
 
 @pytest.fixture
@@ -37,7 +35,6 @@ class TestTapStack:
   def test_defaults_env_suffix_to_dev(self, default_stack_fixture):
     """Test that the environment suffix defaults to 'dev'."""
     template = Template.from_stack(default_stack_fixture)
-    # Check for a resource that uses the resource_name helper, like the S3 bucket name
     template.has_resource_properties("AWS::S3::Bucket", {
         "BucketName": "tap-dev-bucket"
     })
@@ -48,15 +45,14 @@ class TestTapStack:
     template.resource_count_is("AWS::S3::Bucket", 1)
     template.has_resource_properties("AWS::S3::Bucket", {
         "BucketName": "tap-qa-bucket",
-        "VersioningConfiguration": Match.absent(), # Versioning is False
-        # PublicAccessBlockConfiguration might not be explicitly present if it's the default
-        # due to public_read_access=False, so we remove the explicit check here.
+        "VersioningConfiguration": Match.absent(),
     })
     # Check removal policy
     template.has_resource("AWS::S3::Bucket", {
         "DeletionPolicy": "Delete",
         "UpdateReplacePolicy": "Delete"
     })
+
 
   def test_creates_lambda_function_with_env(self, qa_stack_fixture):
     """Test Lambda function creation with correct environment variables."""
@@ -69,8 +65,7 @@ class TestTapStack:
         "Handler": "index.handler",
         "Environment": {
             "Variables": {
-                "TABLE_NAME": Match.any_value(), # Value is a Ref, so use Match.any_value()
-                "BUCKET_NAME": Match.any_value(), # Value is a Ref, so use Match.any_value()
+                "BUCKET_NAME": Match.any_value(),
             }
         }
     })
@@ -105,10 +100,10 @@ class TestTapStack:
     assert lambda_role_logical_id_in_template, \
       "Could not extract logical ID of Lambda role from template."
 
-    # Now use this extracted logical ID for the assertion
     lambda_role_ref_matcher = \
       Match.object_like({"Ref": Match.string_like_regexp(
           f"^{lambda_role_logical_id_in_template}$")})
+
 
     # Check for S3 read/write permissions
     template.has_resource_properties("AWS::IAM::Policy", {
@@ -149,10 +144,6 @@ class TestTapStack:
     """
     template = Template.from_stack(default_stack_fixture)
 
-    # For S3 event sources, CDK creates an AWS::Lambda::Permission resource.
-    # It does NOT directly add a "NotificationConfiguration" property to the S3 bucket resource.
-    # Therefore, the assertion for NotificationConfiguration on AWS::S3::Bucket has been removed.
-
     template.has_resource_properties("AWS::Lambda::Permission", {
         "Action": "lambda:InvokeFunction",
         "FunctionName": Match.object_like({"Fn::GetAtt": [
@@ -172,7 +163,7 @@ class TestTapStack:
         "Export": {
             "Name": "tap-prod-bucket-name"
         },
-        "Value": Match.any_value() # Value will be a Ref, not a literal string
+        "Value": Match.any_value()
     })
 
     # Lambda Function Output
