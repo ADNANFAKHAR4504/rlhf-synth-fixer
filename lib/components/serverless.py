@@ -35,7 +35,7 @@ class ServerlessComponent(pulumi.ComponentResource):
       db_username: str,
       db_password: pulumi.Output[str],
       handler: str = "lambda_function.lambda_handler",
-      runtime: str = "python3.11",
+      runtime: str = "python3.12",
       opts=None,
   ):
     super().__init__("custom:aws:Serverless", name, None, opts)
@@ -369,6 +369,16 @@ class ServerlessComponent(pulumi.ComponentResource):
         rest_api=self.api.id,
         deployment=self.deployment.id,
         stage_name=environment
+    )
+
+    self.api_url = pulumi.Output.concat(
+        "https://",
+        self.api.id,
+        ".execute-api.",
+        aws.get_region().name,
+        ".amazonaws.com/",
+        self.stage.stage_name,
+        "/users"
     )
 
     # Register outputs

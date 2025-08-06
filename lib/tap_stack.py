@@ -81,6 +81,6 @@ class TapStack(pulumi.ComponentResource):
     pulumi.export("vpc_id", self.compute_component.vpc.id)
     pulumi.export("lambda_function_name",
                   self.serverless_component.lambda_function.name)
-    pulumi.export("api_gateway_address", self.serverless_component.api.arn)
+    pulumi.export("api_gateway_address", self.serverless_component.api_url)
     pulumi.export("environment", self.environment_suffix)
     pulumi.export("region", current_region.name)
