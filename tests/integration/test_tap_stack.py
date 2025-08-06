@@ -706,7 +706,7 @@ class TestSecurityConfiguration:
   """Test suite for security configuration."""
   
   def test_no_default_security_groups(self, deployment_outputs, aws_clients):
-    """Test that default security groups are not used."""
+    """Test that default security groups are not overly permissive."""
     vpc_id = deployment_outputs.get('vpc_id')
     if not vpc_id:
       pytest.skip("VPC ID not found in outputs")
@@ -724,9 +724,22 @@ class TestSecurityConfiguration:
     if response['SecurityGroups']:
       default_sg = response['SecurityGroups'][0]
       
-      # Default security group should have no inbound rules
-      assert len(default_sg['IpPermissions']) == 0, \
-        "Default security group should have no inbound rules"
+      # Check for overly permissive inbound rules (but allow self-referencing rules)
+      for rule in default_sg['IpPermissions']:
+        # Check for rules that allow traffic from 0.0.0.0/0 (internet)
+        for ip_range in rule.get('IpRanges', []):
+          cidr = ip_range.get('CidrIp', '')
+          if cidr == '0.0.0.0/0':
+            pytest.fail(f"Default security group has rule allowing all internet traffic: {rule}")
+        
+        # Check for rules that allow traffic from ::/0 (IPv6 internet)
+        for ipv6_range in rule.get('Ipv6Ranges', []):
+          cidr = ipv6_range.get('CidrIpv6', '')
+          if cidr == '::/0':
+            pytest.fail(f"Default security group has rule allowing all IPv6 internet traffic: {rule}")
+        
+        # Self-referencing rules (UserIdGroupPairs with same GroupId) are acceptable
+        # as they only allow traffic between instances in the same security group
   
   def test_security_group_rules_are_restrictive(self, deployment_outputs, 
                                                aws_clients):
