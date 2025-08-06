@@ -24,7 +24,7 @@ Apply least privilege in all IAM policies and roles.
 
 VPC and Networking:
 
-Create a VPC with public and private subnets in at least 2 Availability Zones.
+Create a VPC with public subnets in at least 2 Availability Zones.
 
 Define Security Groups to allow only necessary inbound/outbound traffic.
 
@@ -43,8 +43,6 @@ Use AWS KMS for encryption at rest (for S3, EBS, RDS, etc.).
 Manage secrets using AWS Secrets Manager or SSM Parameter Store, with encryption enabled.
 
 Logging and Monitoring:
-
-Enable AWS CloudTrail across all regions for account activity logging.
 
 Configure AWS Config rules to ensure compliance (e.g., S3 public access, KMS usage).
 
