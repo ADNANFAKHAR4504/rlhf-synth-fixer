@@ -84,33 +84,41 @@ export class TapStack extends cdk.Stack {
 
   private createVPCWithFlowLogs(props: SecureInfraStackProps): ec2.Vpc {
     // Create CloudWatch Log Group for VPC Flow Logs
-    const flowLogsGroup = new logs.LogGroup(this, `${props.projectName}-VPCFlowLogs-${props.region}`, {
-      logGroupName: `/aws/vpc/flowlogs/${props.projectName}-${props.region}`,
-      retention: logs.RetentionDays.ONE_MONTH,
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
-    });
+    const flowLogsGroup = new logs.LogGroup(
+      this,
+      `${props.projectName}-VPCFlowLogs-${props.region}`,
+      {
+        logGroupName: `/aws/vpc/flowlogs/${props.projectName}-${props.region}`,
+        retention: logs.RetentionDays.ONE_MONTH,
+        removalPolicy: cdk.RemovalPolicy.DESTROY,
+      }
+    );
 
     // Create IAM role for VPC Flow Logs
-    const flowLogsRole = new iam.Role(this, `${props.projectName}-VPCFlowLogsRole-${props.region}`, {
-      assumedBy: new iam.ServicePrincipal('vpc-flow-logs.amazonaws.com'),
-      inlinePolicies: {
-        FlowLogsDeliveryRolePolicy: new iam.PolicyDocument({
-          statements: [
-            new iam.PolicyStatement({
-              effect: iam.Effect.ALLOW,
-              actions: [
-                'logs:CreateLogGroup',
-                'logs:CreateLogStream',
-                'logs:PutLogEvents',
-                'logs:DescribeLogGroups',
-                'logs:DescribeLogStreams',
-              ],
-              resources: ['*'],
-            }),
-          ],
-        }),
-      },
-    });
+    const flowLogsRole = new iam.Role(
+      this,
+      `${props.projectName}-VPCFlowLogsRole-${props.region}`,
+      {
+        assumedBy: new iam.ServicePrincipal('vpc-flow-logs.amazonaws.com'),
+        inlinePolicies: {
+          FlowLogsDeliveryRolePolicy: new iam.PolicyDocument({
+            statements: [
+              new iam.PolicyStatement({
+                effect: iam.Effect.ALLOW,
+                actions: [
+                  'logs:CreateLogGroup',
+                  'logs:CreateLogStream',
+                  'logs:PutLogEvents',
+                  'logs:DescribeLogGroups',
+                  'logs:DescribeLogStreams',
+                ],
+                resources: ['*'],
+              }),
+            ],
+          }),
+        },
+      }
+    );
 
     // Create VPC
     const vpc = new ec2.Vpc(this, `${props.projectName}-VPC-${props.region}`, {
@@ -138,7 +146,10 @@ export class TapStack extends cdk.Stack {
     // Enable VPC Flow Logs
     new ec2.FlowLog(this, `${props.projectName}-VPCFlowLog-${props.region}`, {
       resourceType: ec2.FlowLogResourceType.fromVpc(vpc),
-      destination: ec2.FlowLogDestination.toCloudWatchLogs(flowLogsGroup, flowLogsRole),
+      destination: ec2.FlowLogDestination.toCloudWatchLogs(
+        flowLogsGroup,
+        flowLogsRole
+      ),
       trafficType: ec2.FlowLogTrafficType.ALL,
     });
 
@@ -146,64 +157,73 @@ export class TapStack extends cdk.Stack {
   }
 
   private createEncryptedS3Bucket(props: SecureInfraStackProps): s3.Bucket {
-    return new s3.Bucket(this, `${props.projectName}-S3Bucket-${props.region}`, {
-      bucketName: `${props.projectName.toLowerCase()}-secure-bucket-${props.region}-${props.environment}`,
-      encryption: s3.BucketEncryption.KMS,
-      encryptionKey: this.kmsKey,
-      bucketKeyEnabled: true,
-      versioned: true,
-      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
-      enforceSSL: true,
-      removalPolicy: cdk.RemovalPolicy.DESTROY, // Use RETAIN for production
-      lifecycleRules: [
-        {
-          id: 'DeleteIncompleteMultipartUploads',
-          abortIncompleteMultipartUploadAfter: cdk.Duration.days(1),
-        },
-      ],
-    });
+    return new s3.Bucket(
+      this,
+      `${props.projectName}-S3Bucket-${props.region}`,
+      {
+        bucketName: `${props.projectName.toLowerCase()}-secure-bucket-${props.region}-${props.environment}`,
+        encryption: s3.BucketEncryption.KMS,
+        encryptionKey: this.kmsKey,
+        bucketKeyEnabled: true,
+        versioned: true,
+        blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+        enforceSSL: true,
+        removalPolicy: cdk.RemovalPolicy.DESTROY, // Use RETAIN for production
+        lifecycleRules: [
+          {
+            id: 'DeleteIncompleteMultipartUploads',
+            abortIncompleteMultipartUploadAfter: cdk.Duration.days(1),
+          },
+        ],
+      }
+    );
   }
 
-  private createLambdaWithRestrictedRole(props: SecureInfraStackProps): lambda.Function {
+  private createLambdaWithRestrictedRole(
+    props: SecureInfraStackProps
+  ): lambda.Function {
     // Create restricted IAM role for Lambda
-    const lambdaRole = new iam.Role(this, `${props.projectName}-LambdaRole-${props.region}`, {
-      assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
-      managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicExecutionRole'),
-      ],
-      inlinePolicies: {
-        RestrictedS3Access: new iam.PolicyDocument({
-          statements: [
-            new iam.PolicyStatement({
-              effect: iam.Effect.ALLOW,
-              actions: [
-                's3:GetObject',
-                's3:PutObject',
-              ],
-              resources: [
-                this.s3Bucket.bucketArn,
-                `${this.s3Bucket.bucketArn}/*`,
-              ],
-            }),
-            new iam.PolicyStatement({
-              effect: iam.Effect.ALLOW,
-              actions: [
-                'kms:Decrypt',
-                'kms:GenerateDataKey',
-              ],
-              resources: [this.kmsKey.keyArn],
-            }),
-          ],
-        }),
-      },
-    });
+    const lambdaRole = new iam.Role(
+      this,
+      `${props.projectName}-LambdaRole-${props.region}`,
+      {
+        assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
+        managedPolicies: [
+          iam.ManagedPolicy.fromAwsManagedPolicyName(
+            'service-role/AWSLambdaBasicExecutionRole'
+          ),
+        ],
+        inlinePolicies: {
+          RestrictedS3Access: new iam.PolicyDocument({
+            statements: [
+              new iam.PolicyStatement({
+                effect: iam.Effect.ALLOW,
+                actions: ['s3:GetObject', 's3:PutObject'],
+                resources: [
+                  this.s3Bucket.bucketArn,
+                  `${this.s3Bucket.bucketArn}/*`,
+                ],
+              }),
+              new iam.PolicyStatement({
+                effect: iam.Effect.ALLOW,
+                actions: ['kms:Decrypt', 'kms:GenerateDataKey'],
+                resources: [this.kmsKey.keyArn],
+              }),
+            ],
+          }),
+        },
+      }
+    );
 
-    return new lambda.Function(this, `${props.projectName}-Lambda-${props.region}`, {
-      functionName: `${props.projectName}-SecureFunction-${props.region}`,
-      runtime: lambda.Runtime.NODEJS_18_X,
-      handler: 'index.handler',
-      role: lambdaRole,
-      code: lambda.Code.fromInline(`
+    return new lambda.Function(
+      this,
+      `${props.projectName}-Lambda-${props.region}`,
+      {
+        functionName: `${props.projectName}-SecureFunction-${props.region}`,
+        runtime: lambda.Runtime.NODEJS_18_X,
+        handler: 'index.handler',
+        role: lambdaRole,
+        code: lambda.Code.fromInline(`
         exports.handler = async (event) => {
           console.log('Secure Lambda function executed');
           return {
@@ -215,31 +235,42 @@ export class TapStack extends cdk.Stack {
           };
         };
       `),
-      environment: {
-        BUCKET_NAME: this.s3Bucket.bucketName,
-        KMS_KEY_ID: this.kmsKey.keyId,
-      },
-      timeout: cdk.Duration.seconds(30),
-      memorySize: 128,
-    });
+        environment: {
+          BUCKET_NAME: this.s3Bucket.bucketName,
+          KMS_KEY_ID: this.kmsKey.keyId,
+        },
+        timeout: cdk.Duration.seconds(30),
+        memorySize: 128,
+      }
+    );
   }
 
-  private createMultiAZRDSInstance(props: SecureInfraStackProps): rds.DatabaseInstance {
+  private createMultiAZRDSInstance(
+    props: SecureInfraStackProps
+  ): rds.DatabaseInstance {
     // Create subnet group for RDS in isolated subnets
-    const subnetGroup = new rds.SubnetGroup(this, `${props.projectName}-RDSSubnetGroup-${props.region}`, {
-      description: `Subnet group for ${props.projectName} RDS instance`,
-      vpc: this.vpc,
-      vpcSubnets: {
-        subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
-      },
-    });
+    const subnetGroup = new rds.SubnetGroup(
+      this,
+      `${props.projectName}-RDSSubnetGroup-${props.region}`,
+      {
+        description: `Subnet group for ${props.projectName} RDS instance`,
+        vpc: this.vpc,
+        vpcSubnets: {
+          subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
+        },
+      }
+    );
 
     // Create security group for RDS
-    const rdsSecurityGroup = new ec2.SecurityGroup(this, `${props.projectName}-RDSSecurityGroup-${props.region}`, {
-      vpc: this.vpc,
-      description: 'Security group for RDS instance',
-      allowAllOutbound: false,
-    });
+    const rdsSecurityGroup = new ec2.SecurityGroup(
+      this,
+      `${props.projectName}-RDSSecurityGroup-${props.region}`,
+      {
+        vpc: this.vpc,
+        description: 'Security group for RDS instance',
+        allowAllOutbound: false,
+      }
+    );
 
     rdsSecurityGroup.addIngressRule(
       ec2.Peer.ipv4(this.vpc.vpcCidrBlock),
@@ -247,43 +278,62 @@ export class TapStack extends cdk.Stack {
       'Allow MySQL access from VPC'
     );
 
-    return new rds.DatabaseInstance(this, `${props.projectName}-RDS-${props.region}`, {
-      engine: rds.DatabaseInstanceEngine.mysql({
-        version: rds.MysqlEngineVersion.VER_8_0,
-      }),
-      instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MICRO),
-      credentials: rds.Credentials.fromGeneratedSecret('admin', {
-        secretName: `${props.projectName}-rds-credentials-${props.region}`,
-      }),
-      vpc: this.vpc,
-      subnetGroup,
-      securityGroups: [rdsSecurityGroup],
-      multiAz: true, // Enable Multi-AZ deployment
-      storageEncrypted: true,
-      storageEncryptionKey: this.kmsKey,
-      backupRetention: cdk.Duration.days(7),
-      deletionProtection: false, // Set to true for production
-      removalPolicy: cdk.RemovalPolicy.DESTROY, // Use RETAIN for production
-      enablePerformanceInsights: false, // Disabled for t3.micro compatibility
-      cloudwatchLogsExports: ['error', 'general'],
-    });
+    return new rds.DatabaseInstance(
+      this,
+      `${props.projectName}-RDS-${props.region}`,
+      {
+        engine: rds.DatabaseInstanceEngine.mysql({
+          version: rds.MysqlEngineVersion.VER_8_0,
+        }),
+        instanceType: ec2.InstanceType.of(
+          ec2.InstanceClass.T3,
+          ec2.InstanceSize.MICRO
+        ),
+        credentials: rds.Credentials.fromGeneratedSecret('admin', {
+          secretName: `${props.projectName}-rds-credentials-${props.region}`,
+        }),
+        vpc: this.vpc,
+        subnetGroup,
+        securityGroups: [rdsSecurityGroup],
+        multiAz: true, // Enable Multi-AZ deployment
+        storageEncrypted: true,
+        storageEncryptionKey: this.kmsKey,
+        backupRetention: cdk.Duration.days(7),
+        deletionProtection: false, // Set to true for production
+        removalPolicy: cdk.RemovalPolicy.DESTROY, // Use RETAIN for production
+        enablePerformanceInsights: false, // Disabled for t3.micro compatibility
+        cloudwatchLogsExports: ['error', 'general'],
+      }
+    );
   }
 
-  private createEC2WithDetailedLogging(props: SecureInfraStackProps): ec2.Instance {
+  private createEC2WithDetailedLogging(
+    props: SecureInfraStackProps
+  ): ec2.Instance {
     // Create IAM role for EC2 with CloudWatch permissions
-    const ec2Role = new iam.Role(this, `${props.projectName}-EC2Role-${props.region}`, {
-      assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
-      managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('CloudWatchAgentServerPolicy'),
-      ],
-    });
+    const ec2Role = new iam.Role(
+      this,
+      `${props.projectName}-EC2Role-${props.region}`,
+      {
+        assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
+        managedPolicies: [
+          iam.ManagedPolicy.fromAwsManagedPolicyName(
+            'CloudWatchAgentServerPolicy'
+          ),
+        ],
+      }
+    );
 
     // Create security group for EC2
-    const ec2SecurityGroup = new ec2.SecurityGroup(this, `${props.projectName}-EC2SecurityGroup-${props.region}`, {
-      vpc: this.vpc,
-      description: 'Security group for EC2 instance',
-      allowAllOutbound: true,
-    });
+    const ec2SecurityGroup = new ec2.SecurityGroup(
+      this,
+      `${props.projectName}-EC2SecurityGroup-${props.region}`,
+      {
+        vpc: this.vpc,
+        description: 'Security group for EC2 instance',
+        allowAllOutbound: true,
+      }
+    );
 
     ec2SecurityGroup.addIngressRule(
       ec2.Peer.ipv4(this.vpc.vpcCidrBlock),
@@ -297,71 +347,83 @@ export class TapStack extends cdk.Stack {
       'yum update -y',
       'yum install -y amazon-cloudwatch-agent',
       'cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << EOF',
-      JSON.stringify({
-        agent: {
-          metrics_collection_interval: 60,
-          run_as_user: 'cwagent'
+      JSON.stringify(
+        {
+          agent: {
+            metrics_collection_interval: 60,
+            run_as_user: 'cwagent',
+          },
+          logs: {
+            logs_collected: {
+              files: {
+                collect_list: [
+                  {
+                    file_path: '/var/log/messages',
+                    log_group_name: `/aws/ec2/${props.projectName}-${props.region}/var/log/messages`,
+                    log_stream_name: '{instance_id}',
+                    retention_in_days: 30,
+                  },
+                  {
+                    file_path: '/var/log/secure',
+                    log_group_name: `/aws/ec2/${props.projectName}-${props.region}/var/log/secure`,
+                    log_stream_name: '{instance_id}',
+                    retention_in_days: 30,
+                  },
+                ],
+              },
+            },
+          },
+          metrics: {
+            namespace: `${props.projectName}/EC2`,
+            metrics_collected: {
+              cpu: {
+                measurement: [
+                  'cpu_usage_idle',
+                  'cpu_usage_iowait',
+                  'cpu_usage_user',
+                  'cpu_usage_system',
+                ],
+                metrics_collection_interval: 60,
+                totalcpu: false,
+              },
+              disk: {
+                measurement: ['used_percent'],
+                metrics_collection_interval: 60,
+                resources: ['*'],
+              },
+              diskio: {
+                measurement: ['io_time'],
+                metrics_collection_interval: 60,
+                resources: ['*'],
+              },
+              mem: {
+                measurement: ['mem_used_percent'],
+                metrics_collection_interval: 60,
+              },
+              netstat: {
+                measurement: ['tcp_established', 'tcp_time_wait'],
+                metrics_collection_interval: 60,
+              },
+              swap: {
+                measurement: ['swap_used_percent'],
+                metrics_collection_interval: 60,
+              },
+            },
+          },
         },
-        logs: {
-          logs_collected: {
-            files: {
-              collect_list: [
-                {
-                  file_path: '/var/log/messages',
-                  log_group_name: `/aws/ec2/${props.projectName}-${props.region}/var/log/messages`,
-                  log_stream_name: '{instance_id}',
-                  retention_in_days: 30
-                },
-                {
-                  file_path: '/var/log/secure',
-                  log_group_name: `/aws/ec2/${props.projectName}-${props.region}/var/log/secure`,
-                  log_stream_name: '{instance_id}',
-                  retention_in_days: 30
-                }
-              ]
-            }
-          }
-        },
-        metrics: {
-          namespace: `${props.projectName}/EC2`,
-          metrics_collected: {
-            cpu: {
-              measurement: ['cpu_usage_idle', 'cpu_usage_iowait', 'cpu_usage_user', 'cpu_usage_system'],
-              metrics_collection_interval: 60,
-              totalcpu: false
-            },
-            disk: {
-              measurement: ['used_percent'],
-              metrics_collection_interval: 60,
-              resources: ['*']
-            },
-            diskio: {
-              measurement: ['io_time'],
-              metrics_collection_interval: 60,
-              resources: ['*']
-            },
-            mem: {
-              measurement: ['mem_used_percent'],
-              metrics_collection_interval: 60
-            },
-            netstat: {
-              measurement: ['tcp_established', 'tcp_time_wait'],
-              metrics_collection_interval: 60
-            },
-            swap: {
-              measurement: ['swap_used_percent'],
-              metrics_collection_interval: 60
-            }
-          }
-        }
-      }, null, 2),
+        null,
+        2
+      ),
       'EOF',
       '/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s'
     );
 
     return new ec2.Instance(this, `${props.projectName}-EC2-${props.region}`, {
       instanceName: `${props.projectName}-Instance-${props.region}`,
-      instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MICRO),
+      instanceType: ec2.InstanceType.of(
+        ec2.InstanceClass.T3,
+        ec2.InstanceSize.MICRO
+      ),
       machineImage: ec2.MachineImage.latestAmazonLinux2(),
       vpc: this.vpc,
       vpcSubnets: {
