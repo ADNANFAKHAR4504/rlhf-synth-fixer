@@ -99,27 +99,10 @@ class TestTapStack:
     """Test that the Lambda function has correct IAM permissions."""
     template = Template.from_stack(qa_stack)
 
-    # Find the logical ID of the AppLambda function itself
-    app_lambda_resources = template.find_resources("AWS::Lambda::Function", {
-        "Properties": {
-            "FunctionName": "tap-qa-lambda"
-        }
-    })
-    assert len(app_lambda_resources) == 1, "Expected exactly one AppLambda function."
-    app_lambda_logical_id = list(app_lambda_resources.keys())[0]
-
-    # Get the reference to the AppLambda's role from its properties
-    app_lambda_role_ref = template.to_json()["Resources"][app_lambda_logical_id]["Properties"]["Role"]
-    lambda_role_ref = Match.any_value() # Use Match.any_value as it could be Ref or GetAtt
-
-    # If it's a Ref or GetAtt, we can extract the logical ID for more precise matching
-    if isinstance(app_lambda_role_ref, dict):
-        if "Fn::GetAtt" in app_lambda_role_ref:
-            lambda_role_logical_id = app_lambda_role_ref["Fn::GetAtt"][0]
-            lambda_role_ref = {"Ref": lambda_role_logical_id} # Use Ref for role matching in policy
-        elif "Ref" in app_lambda_role_ref:
-            lambda_role_logical_id = app_lambda_role_ref["Ref"]
-            lambda_role_ref = {"Ref": lambda_role_logical_id}
+    # Get the logical ID of the AppLambda's role directly from the stack's lambda_fn object
+    # This is the most reliable way to get the exact reference CDK uses.
+    lambda_role_ref = qa_stack.lambda_fn.role.node.default_child.logical_id
+    lambda_role_ref_dict = {"Ref": lambda_role_ref}
 
 
     # Check for DynamoDB read/write permissions
@@ -137,7 +120,7 @@ class TestTapStack:
             ])
         },
         "PolicyName": Match.string_like_regexp("AppLambdaServiceRoleDefaultPolicy.*"),
-        "Roles": Match.array_with([lambda_role_ref]) # Ensure this policy is attached to the AppLambda's role
+        "Roles": Match.array_with([lambda_role_ref_dict]) # Ensure this policy is attached to the AppLambda's role
     })
 
     # Check for S3 read/write permissions
@@ -155,7 +138,7 @@ class TestTapStack:
             ])
         },
         "PolicyName": Match.string_like_regexp("AppLambdaServiceRoleDefaultPolicy.*"),
-        "Roles": Match.array_with([lambda_role_ref]) # Ensure this policy is attached to the AppLambda's role
+        "Roles": Match.array_with([lambda_role_ref_dict]) # Ensure this policy is attached to the AppLambda's role
     })
 
   def test_s3_event_source_mapping(self, default_stack):
@@ -174,7 +157,7 @@ class TestTapStack:
             "LambdaConfigurations": [
                 {
                     "Event": "s3:ObjectCreated:*",
-                    "Function": Match.object_like({"Fn::GetAtt": [Match.any_value(), "Arn"]})
+                    "Function": Match.object_like({"Fn::GetAtt": [Match.string_like_regexp("AppLambda.*"), "Arn"]})
                 }
             ]
         }
@@ -183,10 +166,10 @@ class TestTapStack:
     # Check for the Lambda Permission allowing S3 to invoke the function
     template.has_resource_properties("AWS::Lambda::Permission", {
         "Action": "lambda:InvokeFunction",
-        "FunctionName": Match.object_like({"Fn::GetAtt": [Match.any_value(), "Arn"]}),
+        "FunctionName": Match.object_like({"Fn::GetAtt": [Match.string_like_regexp("AppLambda.*"), "Arn"]}),
         "Principal": "s3.amazonaws.com",
         "SourceAccount": Match.object_like({"Ref": "AWS::AccountId"}),
-        "SourceArn": Match.object_like({"Fn::GetAtt": [Match.any_value(), "Arn"]})
+        "SourceArn": Match.object_like({"Fn::GetAtt": [Match.string_like_regexp("AppBucket.*"), "Arn"]})
     })
 
   def test_stack_outputs(self, prod_stack):
