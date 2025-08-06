@@ -66,6 +66,15 @@ export class WebServerStack extends cdk.Stack {
       'Allow HTTP access from anywhere'
     );
 
+    // S3 Bucket
+    const bucketID = generateUniqueBucketName();
+    const s3Bucket = new Bucket(this, 'S3Bucket', {
+      bucketName: `webserver-assets-${bucketID}`,
+      blockPublicAccess: BlockPublicAccess.BLOCK_ALL,
+      versioned: true,
+      removalPolicy: cdk.RemovalPolicy.RETAIN,
+    });
+
     // EC2 Instance Role
     const ec2Role = new Role(this, 'EC2Role', {
       roleName: `ec2-instance-role-${props?.environmentSuffix}`,
@@ -76,7 +85,7 @@ export class WebServerStack extends cdk.Stack {
             new PolicyStatement({
               effect: Effect.ALLOW,
               actions: ['s3:GetObject', 's3:ListBucket'],
-              resources: ['*'],
+              resources: [s3Bucket.bucketArn, `${s3Bucket.bucketArn}/*`],
             }),
           ],
         }),
@@ -114,15 +123,6 @@ export class WebServerStack extends cdk.Stack {
     const eip = new cdk.aws_ec2.CfnEIP(this, 'EIP', {
       domain: 'vpc',
       instanceId: ec2Instance.instanceId,
-    });
-
-    // S3 Bucket
-    const bucketID = generateUniqueBucketName();
-    const s3Bucket = new Bucket(this, 'S3Bucket', {
-      bucketName: `webserver-assets-${bucketID}`,
-      blockPublicAccess: BlockPublicAccess.BLOCK_ALL,
-      versioned: true,
-      removalPolicy: cdk.RemovalPolicy.RETAIN,
     });
 
     // Create RDS Subnet Group

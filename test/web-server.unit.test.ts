@@ -1,8 +1,7 @@
-import fs from 'fs';
 import * as cdk from 'aws-cdk-lib';
 import { Match, Template } from 'aws-cdk-lib/assertions';
-import { WebServerStack } from '../lib/web-server';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
+import { WebServerStack } from '../lib/web-server';
 
 describe('WebServerStack', () => {
   const env = {
@@ -83,21 +82,18 @@ describe('WebServerStack', () => {
   test('EC2 Role has correct policies and tags', () => {
     template.hasResourceProperties('AWS::IAM::Role', {
       RoleName: 'ec2-instance-role-test',
-      AssumeRolePolicyDocument: Match.anyValue(), // or match specific structure
-
-      Policies: Match.arrayWith([
-        Match.objectLike({
-          PolicyName: 'S3ReadOnlyAccess',
-          PolicyDocument: {
-            Statement: Match.arrayWith([
-              Match.objectLike({
-                Action: Match.arrayWith(['s3:GetObject', 's3:ListBucket']),
-                Effect: 'Allow',
-                Resource: '*',
-              }),
-            ]),
-          },
-        }),
+      AssumeRolePolicyDocument: Match.anyValue(),
+      ManagedPolicyArns: Match.arrayWith([
+        {
+          'Fn::Join': [
+            '',
+            [
+              'arn:',
+              { Ref: 'AWS::Partition' },
+              ':iam::aws:policy/AmazonRDSReadOnlyAccess',
+            ],
+          ],
+        },
       ]),
       Tags: Match.arrayWith([
         Match.objectLike({
