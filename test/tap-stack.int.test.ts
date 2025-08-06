@@ -49,16 +49,20 @@ describe('TapStack Integration Tests - Simplified DynamoDB Multi-Region Deployme
         if (stackResponse.Stacks && stackResponse.Stacks[0].Outputs) {
           stackExists = true;
           console.log(`Stack status: ${stackResponse.Stacks[0].StackStatus}`);
+          console.log(`Found ${stackResponse.Stacks[0].Outputs.length} outputs`);
           
           stackResponse.Stacks[0].Outputs.forEach(output => {
             if (output.OutputKey && output.OutputValue) {
               stackOutputs[output.OutputKey] = output.OutputValue;
+              console.log(`Output: ${output.OutputKey} = ${output.OutputValue}`);
             }
           });
 
           // Extract actual resource names from outputs
           actualTableName = stackOutputs['TableName'];
           actualRoleArn = stackOutputs['IAMRoleArn'];
+          
+          console.log(`Stack outputs object:`, stackOutputs);
         }
       }
     } catch (error) {
@@ -69,14 +73,21 @@ describe('TapStack Integration Tests - Simplified DynamoDB Multi-Region Deployme
 
   describe('Basic Stack Validation', () => {
     test('should have deployed stack successfully', async () => {
+      console.log('Test starting - stackExists:', stackExists);
+      console.log('Test starting - stackOutputs:', stackOutputs);
+      
       if (!stackExists) {
         console.log('Skipping stack validation - no stack deployed');
         return;
       }
 
+      console.log('Checking TableName:', stackOutputs['TableName']);
       expect(stackOutputs['TableName']).toBeDefined();
+      console.log('Checking TableArn:', stackOutputs['TableArn']);
       expect(stackOutputs['TableArn']).toBeDefined();
+      console.log('Checking IAMRoleArn:', stackOutputs['IAMRoleArn']);
       expect(stackOutputs['IAMRoleArn']).toBeDefined();
+      console.log('Checking CapacityConfiguration:', stackOutputs['CapacityConfiguration']);
       expect(stackOutputs['CapacityConfiguration']).toBeDefined();
     });
   });
