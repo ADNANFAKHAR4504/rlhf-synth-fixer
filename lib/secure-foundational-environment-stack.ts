@@ -91,13 +91,14 @@ export class SecureFoundationalEnvironmentStack extends cdk.Stack {
       }),
     });
 
-    // 2. VPC with Multi-AZ Configuration
+    // 2. VPC with Multi-AZ Configuration (Optimized)
     this.vpc = new ec2.Vpc(this, 'SecureFoundationVPC', {
       vpcName: `secure-foundation-vpc-${environmentSuffix}`,
       ipAddresses: ec2.IpAddresses.cidr('10.0.0.0/16'),
-      maxAzs: 3, // Use 3 AZs for high availability
+      maxAzs: 2, // Reduced from 3 to 2 AZs to minimize NAT Gateway usage
       enableDnsHostnames: true,
       enableDnsSupport: true,
+      natGateways: 1, // Use only 1 NAT Gateway shared across all private subnets
       subnetConfiguration: [
         {
           cidrMask: 24,
