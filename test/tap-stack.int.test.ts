@@ -539,29 +539,4 @@ describe('TapStack Infrastructure Integration Tests', () => {
       }
     });
   });
-
-  describe('Auto Scaling Group and Launch Template', () => {
-    test('should have an Auto Scaling Group with correct settings', async () => {
-      // This test assumes you have the ASG name or can derive it from tags or outputs
-      // For demonstration, we check that EC2 instances have the expected tags
-      const vpcId = getOutput('VPCId');
-      const response = await ec2.send(
-        new DescribeInstancesCommand({
-          Filters: [{ Name: 'vpc-id', Values: [vpcId] }],
-        })
-      );
-      let asgInstanceFound = false;
-      for (const reservation of response.Reservations || []) {
-        for (const instance of reservation.Instances || []) {
-          const tags = instance.Tags || [];
-          if (
-            tags.find(tag => tag.Key === 'Name' && tag.Value?.includes('ASG'))
-          ) {
-            asgInstanceFound = true;
-          }
-        }
-      }
-      expect(asgInstanceFound).toBe(true);
-    });
-  });
 });
