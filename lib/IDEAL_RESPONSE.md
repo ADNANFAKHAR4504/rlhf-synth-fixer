@@ -1,8 +1,9 @@
 // main.ts
 import { Construct } from 'constructs';
-import { App, TerraformStack, Fn } from 'cdktf';
+import { App, TerraformStack, Fn, TerraformOutput } from 'cdktf'; // Added TerraformOutput
 import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
 import { DataAwsAvailabilityZones } from '@cdktf/provider-aws/lib/data-aws-availability-zones';
+import { S3Backend } from '@cdktf/provider-aws/lib/s3-backend'; // For state management
 
 import { NetworkingConstruct, NetworkingOutput } from './networking-construct';
 import { SecurityConstruct, SecurityOutput } from './security-construct';
@@ -29,6 +30,14 @@ interface MyStackProps {
    * Common tags to apply to all resources.
    */
   commonTags: { [key: string]: string };
+  /**
+   * S3 bucket name for Terraform state backend.
+   */
+  s3BackendBucket: string;
+  /**
+   * DynamoDB table name for Terraform state locking.
+   */
+  dynamoDbTable?: string;
 }
 
 /**
@@ -38,6 +47,15 @@ interface MyStackProps {
 class MyStack extends TerraformStack {
   constructor(scope: Construct, id: string, props: MyStackProps) {
     super(scope, id);
+
+    // Configure S3 backend for Terraform state management
+    new S3Backend(this, {
+      bucket: props.s3BackendBucket,
+      key: `terraform/${id}.tfstate`, // Unique key for this stack's state file
+      region: props.region,
+      encrypt: true, // Ensure state is encrypted at rest
+      dynamodbTable: props.dynamoDbTable, // Optional: for state locking
+    });
 
     // Configure the AWS provider with the specified region and default tags.
     // Default tags are automatically applied to all resources managed by this provider.
@@ -52,8 +70,7 @@ class MyStack extends TerraformStack {
     // We'll use the first 3 AZs for our subnets.
     const azs = new DataAwsAvailabilityZones(this, 'available_azs', {
       state: 'available',
-      // Filter for us-east-1 specific zones if needed, though 'available' should suffice.
-      // E.g., filter: [{ name: 'zone-id', values: ['use1-az1', 'use1-az2', 'use1-az4'] }]
+      // Ensure we get at least 3 AZs. If not, Terraform will error during plan/apply.
     });
 
     // 1. Networking Construct
@@ -80,6 +97,32 @@ class MyStack extends TerraformStack {
       subnetId: networking.outputs.privateSubnetIds[0], // Place in the first private subnet
       securityGroupId: security.outputs.webSecurityGroupId,
       instanceProfileArn: iam.outputs.ec2InstanceProfileArn,
+    });
+
+    // Output key infrastructure identifiers for external reference
+    new TerraformOutput(this, 'vpc_id_output', {
+      value: networking.outputs.vpcId,
+      description: 'The ID of the created VPC',
+    });
+
+    new TerraformOutput(this, 'public_subnet_ids_output', {
+      value: networking.outputs.publicSubnetIds,
+      description: 'IDs of the public subnets',
+    });
+
+    new TerraformOutput(this, 'private_subnet_ids_output', {
+      value: networking.outputs.privateSubnetIds,
+      description: 'IDs of the private subnets',
+    });
+
+    new TerraformOutput(this, 'web_security_group_id_output', {
+      value: security.outputs.webSecurityGroupId,
+      description: 'ID of the security group allowing web and SSH access',
+    });
+
+    new TerraformOutput(this, 'ec2_instance_profile_arn_output', {
+      value: iam.outputs.ec2InstanceProfileArn,
+      description: 'ARN of the EC2 instance profile for S3 access',
     });
   }
 }
@@ -318,6 +361,7 @@ export class SecurityConstruct extends Construct {
       description: 'Allow HTTP and SSH ingress from specific IP range',
       vpcId: props.vpcId,
       ingress: [], // Ingress rules will be added via SecurityGroupRule
+      // Single, comprehensive egress rule for all outbound traffic
       egress: [
         {
           fromPort: 0,
@@ -396,7 +440,7 @@ export class IamConstruct extends Construct {
 
     // IAM Role for EC2 instances
     const ec2Role = new IamRole(this, 'ec2_role', {
-      name: `${id}-ec2-role`,
+      name: `${id}-ec2-role`, // Explicitly setting name
       assumeRolePolicy: JSON.stringify({
         Version: '2012-10-17',
         Statement: [
@@ -416,7 +460,7 @@ export class IamConstruct extends Construct {
 
     // IAM Policy for S3 Read-Only Access
     const s3ReadOnlyPolicy = new IamPolicy(this, 's3_read_only_policy', {
-      name: `${id}-s3-read-only-policy`,
+      name: `${id}-s3-read-only-policy`, // Explicitly setting name
       description: 'Allows EC2 instances to read from S3 buckets',
       policy: JSON.stringify({
         Version: '2012-10-17',
@@ -428,7 +472,7 @@ export class IamConstruct extends Construct {
               's3:ListBucket',
             ],
             Resource: [
-              'arn:aws:s3:::*', // Grants access to all S3 buckets. Refine as needed for production.
+              'arn:aws:s3:::*', // Grants access to all S3 buckets.
               'arn:aws:s3:::*/*',
             ],
           },
@@ -439,6 +483,10 @@ export class IamConstruct extends Construct {
       },
     });
 
+    // IMPORTANT: For production, narrow down the 'Resource' in the S3 policy
+    // to specific bucket ARNs (e.g., 'arn:aws:s3:::your-specific-bucket-name/*')
+    // to adhere to the principle of least privilege.
+
     // Attach the S3 Read-Only Policy to the EC2 Role
     new IamRolePolicyAttachment(this, 'ec2_s3_policy_attachment', {
       role: ec2Role.name,
@@ -447,7 +495,7 @@ export class IamConstruct extends Construct {
 
     // IAM Instance Profile for EC2 instances
     const ec2InstanceProfile = new IamInstanceProfile(this, 'ec2_instance_profile', {
-      name: `${id}-ec2-instance-profile`,
+      name: `${id}-ec2-instance-profile`, // Explicitly setting name
       role: ec2Role.name,
       tags: {
         Name: `${id}-ec2-instance-profile`,
@@ -546,11 +594,13 @@ const app = new App();
 new MyStack(app, 'aws-secure-infra', {
   region: 'us-east-1',
   vpcCidr: '10.0.0.0/16',
-  allowedIngressIpRange: '203.0.113.0/24', // Example IP range
+  allowedIngressIpRange: '203.0.113.0/24', // Example IP range - **UPDATE THIS TO YOUR ACTUAL IP RANGE**
   commonTags: {
     Project: 'MyProject',
     Environment: 'Dev',
     Owner: 'Akshat Jain',
   },
+  s3BackendBucket: 'your-cdktf-state-bucket-name', // **UPDATE THIS TO YOUR S3 BUCKET NAME**
+  dynamoDbTable: 'your-cdktf-state-lock-table', // **OPTIONAL: UPDATE THIS TO YOUR DYNAMODB TABLE NAME FOR LOCKING**
 });
 app.synth();
