@@ -1,8 +1,13 @@
+"""CDK Stack definition for TAP (Test Automation Platform) infrastructure."""
+from dataclasses import dataclass
+from typing import Optional
+
 from aws_cdk import (
     Stack,
     Duration,
     RemovalPolicy,
     Tags,
+    Environment,
     aws_lambda as _lambda,
     aws_apigateway as apigw,
     aws_s3 as s3,
@@ -11,18 +16,28 @@ from aws_cdk import (
     aws_cloudwatch as cloudwatch,
 )
 from constructs import Construct
-import os
+
+
+@dataclass
+class TapStackProps:
+    """Properties for the TAP Stack."""
+    environment_suffix: str
+    env: Optional[Environment] = None
 
 
 class TapStack(Stack):
-    def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
-        super().__init__(scope, construct_id, **kwargs)
+    """CDK Stack for TAP serverless infrastructure."""
+    
+    def __init__(self, scope: Construct, construct_id: str, *, props: TapStackProps) -> None:
+        super().__init__(scope, construct_id, env=props.env)
+        
+        self.environment_suffix = props.environment_suffix
 
         # Create S3 bucket for Lambda logs
         self.log_bucket = s3.Bucket(
             self,
-            "TapLogBucket",
-            bucket_name=f"tap-logs-{self.account}-{self.region}",
+            f"TapLogBucket{self.environment_suffix}",
+            bucket_name=f"tap-logs-{self.environment_suffix.lower()}-{self.account}-{self.region}",
             versioned=True,
             encryption=s3.BucketEncryption.S3_MANAGED,
             block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
@@ -33,8 +48,8 @@ class TapStack(Stack):
         # Create CloudWatch Log Group for Lambda
         log_group = logs.LogGroup(
             self,
-            "TapLambdaLogGroup",
-            log_group_name="/aws/lambda/tap-processor",
+            f"TapLambdaLogGroup{self.environment_suffix}",
+            log_group_name=f"/aws/lambda/tap-processor-{self.environment_suffix.lower()}",
             retention=logs.RetentionDays.ONE_WEEK,
             removal_policy=RemovalPolicy.DESTROY
         )
@@ -42,7 +57,7 @@ class TapStack(Stack):
         # Create IAM role for Lambda
         lambda_role = iam.Role(
             self,
-            "TapLambdaRole",
+            f"TapLambdaRole{self.environment_suffix}",
             assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
             managed_policies=[
                 iam.ManagedPolicy.from_aws_managed_policy_name(
@@ -66,8 +81,8 @@ class TapStack(Stack):
         # Create Lambda function
         self.lambda_function = _lambda.Function(
             self,
-            "TapProcessor",
-            function_name="tap-processor",
+            f"TapProcessor{self.environment_suffix}",
+            function_name=f"tap-processor-{self.environment_suffix.lower()}",
             runtime=_lambda.Runtime.PYTHON_3_11,
             handler="index.handler",
             code=_lambda.Code.from_inline(self._get_lambda_code()),
@@ -86,8 +101,8 @@ class TapStack(Stack):
         # Create API Gateway
         self.api = apigw.RestApi(
             self,
-            "TapApi",
-            rest_api_name="TAP Serverless API",
+            f"TapApi{self.environment_suffix}",
+            rest_api_name=f"TAP Serverless API ({self.environment_suffix})",
             description="API Gateway for TAP serverless application",
             deploy_options=apigw.StageOptions(
                 stage_name="prod",
@@ -229,8 +244,8 @@ def log_to_s3(request_info):
         """Create CloudWatch Dashboard for monitoring."""
         dashboard = cloudwatch.Dashboard(
             self,
-            "TapDashboard",
-            dashboard_name="TAP-Serverless-Monitoring"
+            f"TapDashboard{self.environment_suffix}",
+            dashboard_name=f"TAP-Serverless-Monitoring-{self.environment_suffix}"
         )
 
         # Lambda metrics
@@ -326,6 +341,6 @@ def log_to_s3(request_info):
     def _apply_tags(self):
         """Apply tags to all resources in the stack."""
         Tags.of(self).add("Project", "TAP")
-        Tags.of(self).add("Environment", "prod")
+        Tags.of(self).add("Environment", self.environment_suffix)
         Tags.of(self).add("ManagedBy", "CDK")
         Tags.of(self).add("CostCenter", "Engineering")

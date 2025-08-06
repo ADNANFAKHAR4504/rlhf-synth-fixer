@@ -18,8 +18,8 @@ max-line-length=100
 expected-line-ending-format=LF
 
 # Indentation preference
-indent-string='  '  # 2 spaces
-indent-after-paren=2  # 2 spaces
+indent-string='    '  # 4 spaces (Python standard)
+indent-after-paren=4  # 4 spaces
 
 [BASIC]
 # Good variable names which should always be accepted
