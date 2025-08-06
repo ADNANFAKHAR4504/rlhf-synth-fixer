@@ -69,6 +69,7 @@
     "@aws-sdk/client-sns": "^3.855.0",
     "@aws-sdk/client-sqs": "^3.848.0",
     "@aws-sdk/client-ssm": "^3.848.0",
+    "@aws-sdk/client-sts": "^3.862.0",
     "@aws-sdk/client-wafv2": "^3.848.0",
     "@aws-sdk/credential-provider-node": "^3.846.0",
     "@inquirer/prompts": "^7.8.0",

@@ -4,19 +4,18 @@ import {
   IAMClient,
   SimulatePrincipalPolicyCommand,
 } from '@aws-sdk/client-iam';
-import { 
-  S3Client,
-  HeadBucketCommand,
+import {
+  DeleteObjectCommand,
   GetBucketEncryptionCommand,
   GetBucketPolicyCommand,
   GetBucketTaggingCommand,
-  GetBucketVersioningCommand,
   GetObjectCommand,
+  GetPublicAccessBlockCommand,
+  HeadBucketCommand,
   HeadObjectCommand,
-  PutObjectCommand,
   ListObjectsV2Command,
-  DeleteObjectCommand,
-  GetPublicAccessBlockCommand
+  PutObjectCommand,
+  S3Client,
 } from '@aws-sdk/client-s3';
 import { STSClient } from '@aws-sdk/client-sts';
 import * as fs from 'fs';
