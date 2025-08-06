@@ -20,24 +20,12 @@
                 "prod"
             ],
             "Description": "Environment for deployment (dev, staging, prod)"
-        },
-        "LambdaFunctionName": {
-            "Type": "String",
-            "Default": "secure-data-processor",
-            "Description": "Name for the Lambda function",
-            "AllowedPattern": "^[a-zA-Z][a-zA-Z0-9-]*$",
-            "ConstraintDescription": "Function name must start with a letter and contain only letters, numbers, and hyphens",
-            "MinLength": 3,
-            "MaxLength": 30
         }
     },
     "Resources": {
         "PasswordPolicyLambdaRole": {
             "Type": "AWS::IAM::Role",
             "Properties": {
-                "RoleName": {
-                    "Fn::Sub": "${ProjectName}-${Environment}-password-policy-role"
-                },
                 "AssumeRolePolicyDocument": {
                     "Version": "2012-10-17",
                     "Statement": [
@@ -76,9 +64,6 @@
         "PasswordPolicyLambda": {
             "Type": "AWS::Lambda::Function",
             "Properties": {
-                "FunctionName": {
-                    "Fn::Sub": "${ProjectName}-${Environment}-password-policy-enforcer"
-                },
                 "Runtime": "python3.9",
                 "Handler": "index.lambda_handler",
                 "Role": {
@@ -231,9 +216,6 @@
         "LambdaExecutionRole": {
             "Type": "AWS::IAM::Role",
             "Properties": {
-                "RoleName": {
-                    "Fn::Sub": "${ProjectName}-${Environment}-lambda-execution-role"
-                },
                 "AssumeRolePolicyDocument": {
                     "Version": "2012-10-17",
                     "Statement": [
@@ -311,9 +293,6 @@
         "DataProcessorLambda": {
             "Type": "AWS::Lambda::Function",
             "Properties": {
-                "FunctionName": {
-                    "Fn::Sub": "${ProjectName}-${Environment}-${LambdaFunctionName}"
-                },
                 "Runtime": "python3.9",
                 "Handler": "index.lambda_handler",
                 "Role": {
@@ -411,18 +390,12 @@
         "LambdaLogGroup": {
             "Type": "AWS::Logs::LogGroup",
             "Properties": {
-                "LogGroupName": {
-                    "Fn::Sub": "/aws/lambda/${ProjectName}-${Environment}-${LambdaFunctionName}"
-                },
                 "RetentionInDays": 30
             }
         },
         "OrganizationSecurityPolicy": {
             "Type": "AWS::IAM::ManagedPolicy",
             "Properties": {
-                "ManagedPolicyName": {
-                    "Fn::Sub": "${ProjectName}-${Environment}-security-policy"
-                },
                 "Description": "Organization security policy enforcing best practices",
                 "PolicyDocument": {
                     "Version": "2012-10-17",

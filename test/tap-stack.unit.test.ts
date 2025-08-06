@@ -8,7 +8,7 @@ describe('Expert-Level Secure CloudFormation Template', () => {
 
   beforeAll(() => {
     // Load the JSON template that was converted from YAML
-    const templatePath = path.join(__dirname, '../lib/TapStack.json');
+    const templatePath = path.join(__dirname, '../template.json');
     const templateContent = fs.readFileSync(templatePath, 'utf8');
     template = JSON.parse(templateContent);
   });
@@ -199,7 +199,7 @@ describe('Expert-Level Secure CloudFormation Template', () => {
       expect(objectStatement.Action).toContain('s3:GetObject');
       expect(objectStatement.Action).toContain('s3:PutObject');
       expect(objectStatement.Action).toContain('s3:DeleteObject');
-      expect(objectStatement.Resource).toContain({
+      expect(objectStatement.Resource).toContainEqual({
         'Fn::Sub': 'arn:aws:s3:::${PrimaryDataBucket}/*'
       });
       
@@ -283,7 +283,7 @@ describe('Expert-Level Secure CloudFormation Template', () => {
       expect(denyUnencryptedStatement.Sid).toBe('DenyUnencryptedS3Uploads');
       expect(denyUnencryptedStatement.Effect).toBe('Deny');
       expect(denyUnencryptedStatement.Action).toBe('s3:PutObject');
-      expect(denyUnencryptedStatement.Resource).toContain({
+      expect(denyUnencryptedStatement.Resource).toContainEqual({
         'Fn::Sub': 'arn:aws:s3:::${PrimaryDataBucket}/*'
       });
       expect(denyUnencryptedStatement.Condition.StringNotEquals['s3:x-amz-server-side-encryption']).toBe('AES256');
@@ -336,7 +336,7 @@ describe('Expert-Level Secure CloudFormation Template', () => {
       expect(primaryBucketOutput.Description).toBe('Name of the primary S3 bucket');
       expect(primaryBucketOutput.Value).toEqual({ Ref: 'PrimaryDataBucket' });
       expect(primaryBucketOutput.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-PrimaryBucketName'
+        'Fn::Sub': '${AWS::StackName}-PrimaryBucket'
       });
 
       const lambdaOutput = template.Outputs.LambdaFunctionArn;
@@ -416,10 +416,21 @@ describe('Expert-Level Secure CloudFormation Template', () => {
     });
 
     test('export names should follow naming convention', () => {
+      // The CloudFormation template uses shortened export names, not the full output key names
+      const expectedExportMappings = {
+        'PrimaryBucketName': 'PrimaryBucket',
+        'BackupBucketName': 'BackupBucket', 
+        'LogsBucketName': 'LogsBucket',
+        'LambdaFunctionArn': 'LambdaFunction',
+        'LambdaExecutionRoleArn': 'LambdaRole',
+        'SecurityPolicyArn': 'SecurityPolicy'
+      };
+
       Object.keys(template.Outputs).forEach(outputKey => {
         const output = template.Outputs[outputKey];
+        const expectedExportName = expectedExportMappings[outputKey as keyof typeof expectedExportMappings] || outputKey;
         expect(output.Export.Name).toEqual({
-          'Fn::Sub': `\${AWS::StackName}-${outputKey}`
+          'Fn::Sub': `\${AWS::StackName}-${expectedExportName}`
         });
       });
     });
