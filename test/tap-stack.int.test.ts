@@ -12,21 +12,27 @@ import { DataAwsAmi } from '@cdktf/provider-aws/lib/data-aws-ami';
 
 // Mock DataAwsAvailabilityZones to return predictable AZs for testing
 jest.mock('@cdktf/provider-aws/lib/data-aws-availability-zones', () => ({
-  DataAwsAvailabilityZones: jest.fn().mockImplementation((scope, id, config) => ({
-    id: `mock-data-aws-availability-zones-id-${id}`,
-    names: ['us-east-1a', 'us-east-1b', 'us-east-1c'], // Provide exactly 3 AZs
-    get stringified() { return JSON.stringify(this.names); }
-  })),
+  DataAwsAvailabilityZones: jest
+    .fn()
+    .mockImplementation((scope, id, config) => ({
+      names: ['us-east-1a', 'us-east-1b', 'us-east-1c'], // Provide exactly 3 AZs
+      get id() {
+        return `mock-data-aws-availability-zones-id-${id}`;
+      }, // Keep getter
+      get stringified() {
+        return JSON.stringify(this.names);
+      },
+    })),
 }));
 
 // Mock DataAwsAmi to return a predictable AMI ID
 jest.mock('@cdktf/provider-aws/lib/data-aws-ami', () => ({
   DataAwsAmi: jest.fn().mockImplementation((scope, id, config) => ({
-    id: `mock-ami-id-${id}`,
-    get id() { return `ami-mocked12345`; } // Return a fixed mock AMI ID
+    get id() {
+      return `ami-mocked12345`;
+    }, // Keep getter
   })),
 }));
-
 
 describe('TapStack Integration Tests', () => {
   let app: App;
@@ -103,7 +109,9 @@ describe('TapStack Integration Tests', () => {
   test('S3 backend is configured with default bucket, key, region, and encryption', () => {
     // Objective: Verify that the S3 backend is configured with default properties.
     expect(synthesized.terraform.backend.s3.bucket).toBe('iac-rlhf-tf-states');
-    expect(synthesized.terraform.backend.s3.key).toBe('dev/TestTapStackInt.tfstate');
+    expect(synthesized.terraform.backend.s3.key).toBe(
+      'dev/TestTapStackInt.tfstate'
+    );
     expect(synthesized.terraform.backend.s3.region).toBe('us-east-1');
     expect(synthesized.terraform.backend.s3.encrypt).toBe(true);
   });
@@ -115,11 +123,19 @@ describe('TapStack Integration Tests', () => {
       stateBucketRegion: 'us-west-2',
       environmentSuffix: 'prod',
     });
-    const customBackendSynthesized = JSON.parse(Testing.synth(customBackendStack));
+    const customBackendSynthesized = JSON.parse(
+      Testing.synth(customBackendStack)
+    );
 
-    expect(customBackendSynthesized.terraform.backend.s3.bucket).toBe('my-custom-state-bucket');
-    expect(customBackendSynthesized.terraform.backend.s3.key).toBe('prod/TestCustomBackend.tfstate');
-    expect(customBackendSynthesized.terraform.backend.s3.region).toBe('us-west-2');
+    expect(customBackendSynthesized.terraform.backend.s3.bucket).toBe(
+      'my-custom-state-bucket'
+    );
+    expect(customBackendSynthesized.terraform.backend.s3.key).toBe(
+      'prod/TestCustomBackend.tfstate'
+    );
+    expect(customBackendSynthesized.terraform.backend.s3.region).toBe(
+      'us-west-2'
+    );
   });
 
   test('S3 backend has use_lockfile override set to true', () => {
@@ -130,7 +146,9 @@ describe('TapStack Integration Tests', () => {
   test('MyStack is NOT instantiated by default', () => {
     // Objective: Confirm that MyStack is NOT instantiated when `createMyStack` is false or undefined.
     // Note: For this specific test, we need a stack without createMyStack: true.
-    const noMyStackStack = new TapStack(app, 'TestNoMyStackInt', { createMyStack: false }); // Explicitly set to false
+    const noMyStackStack = new TapStack(app, 'TestNoMyStackInt', {
+      createMyStack: false,
+    }); // Explicitly set to false
     const noMyStackSynthesized = JSON.parse(Testing.synth(noMyStackStack));
     if (noMyStackSynthesized.resource) {
       expect(noMyStackSynthesized.resource).not.toHaveProperty('aws_s3_bucket');
@@ -172,7 +190,6 @@ describe('TapStack Integration Tests', () => {
     const s3ResourceName = s3ResourceNames[0];
 
     const s3BucketResource = s3BucketResources[s3ResourceName];
-
     expect(s3BucketResource).toBeDefined();
     expect(s3BucketResource.bucket).toBe('dev-my-example-bucket'); // Default environment suffix
     expect(s3BucketResource.acl).toBe('private');
@@ -187,7 +204,9 @@ describe('TapStack Integration Tests', () => {
     // Check for VPC resource
     const vpcResources = synthesized.resource.aws_vpc;
     expect(vpcResources).toBeDefined();
-    const vpcName = Object.keys(vpcResources).find(key => key.includes('networking_vpc'));
+    const vpcName = Object.keys(vpcResources).find(key =>
+      key.includes('networking_vpc')
+    ) as string; // Cast to string
     const vpc = vpcResources[vpcName];
     expect(vpc.cidr_block).toBe('10.0.0.0/16'); // Default VPC CIDR from main.ts
     expect(vpc.tags.Name).toMatch(/networking-vpc/);
@@ -201,10 +220,12 @@ describe('TapStack Integration Tests', () => {
     expect(subnetResources).toBeDefined();
 
     const publicSubnets = Object.values(subnetResources).filter(
-      (s: any) => s.map_public_ip_on_launch === true,
+      (s: any) => s.map_public_ip_on_launch === true
     );
     const privateSubnets = Object.values(subnetResources).filter(
-      (s: any) => s.map_public_ip_on_launch === false || s.map_public_ip_on_launch === undefined, // Undefined means false
+      (s: any) =>
+        s.map_public_ip_on_launch === false ||
+        s.map_public_ip_on_launch === undefined // Undefined means false
     );
 
     expect(publicSubnets.length).toBe(3);
@@ -244,7 +265,9 @@ describe('TapStack Integration Tests', () => {
     expect(natGateway.tags.Environment).toBe('Dev');
 
     expect(synthesized.resource.aws_eip).toBeDefined(); // EIP for NAT Gateway
-    const eipName = Object.keys(synthesized.resource.aws_eip).find(key => key.includes('nat_eip'));
+    const eipName = Object.keys(synthesized.resource.aws_eip).find(key =>
+      key.includes('nat_eip')
+    ) as string; // Cast to string
     const eip = synthesized.resource.aws_eip[eipName];
     expect(eip.tags.Project).toBe('MyProject');
     expect(eip.tags.Environment).toBe('Dev');
@@ -252,7 +275,8 @@ describe('TapStack Integration Tests', () => {
 
   test('NetworkingConstruct configures route tables and associations correctly', () => {
     const routeTableResources = synthesized.resource.aws_route_table;
-    const routeTableAssociationResources = synthesized.resource.aws_route_table_association;
+    const routeTableAssociationResources =
+      synthesized.resource.aws_route_table_association;
     const routeResources = synthesized.resource.aws_route; // Explicit route resources
 
     expect(routeTableResources).toBeDefined();
@@ -266,7 +290,6 @@ describe('TapStack Integration Tests', () => {
     // Expecting 6 route entries (3 public, 3 private)
     expect(Object.keys(routeResources).length).toBe(6);
 
-
     // Check tags on route tables and associations
     Object.values(routeTableResources).forEach((rt: any) => {
       expect(rt.tags.Project).toBe('MyProject');
@@ -278,8 +301,12 @@ describe('TapStack Integration Tests', () => {
     });
 
     // Verify routes are correctly associated with gateways
-    const publicRoutes = Object.values(routeResources).filter((r: any) => r.gateway_id);
-    const privateRoutes = Object.values(routeResources).filter((r: any) => r.nat_gateway_id);
+    const publicRoutes = Object.values(routeResources).filter(
+      (r: any) => r.gateway_id
+    );
+    const privateRoutes = Object.values(routeResources).filter(
+      (r: any) => r.nat_gateway_id
+    );
 
     expect(publicRoutes.length).toBe(3); // 3 public routes pointing to IGW
     expect(privateRoutes.length).toBe(3); // 3 private routes pointing to NAT GW
@@ -298,10 +325,14 @@ describe('TapStack Integration Tests', () => {
   test('SecurityConstruct provisions web security group with correct ingress rules', () => {
     const sgResources = synthesized.resource.aws_security_group;
     expect(sgResources).toBeDefined();
-    const webSgName = Object.keys(sgResources).find(key => key.includes('security_web_sg'));
+    const webSgName = Object.keys(sgResources).find(key =>
+      key.includes('security_web_sg')
+    ) as string; // Cast to string
     const webSg = sgResources[webSgName];
     expect(webSg).toBeDefined();
-    expect(webSg.description).toBe('Allow HTTP and SSH ingress from specific IP range');
+    expect(webSg.description).toBe(
+      'Allow HTTP and SSH ingress from specific IP range'
+    );
     expect(webSg.vpc_id).toBeDefined(); // Should be linked to a VPC
     expect(webSg.tags.Project).toBe('MyProject');
     expect(webSg.tags.Environment).toBe('Dev');
@@ -321,9 +352,10 @@ describe('TapStack Integration Tests', () => {
         rule.from_port === 80 &&
         rule.to_port === 80 &&
         rule.protocol === 'tcp' &&
-        rule.cidr_blocks && rule.cidr_blocks.includes('203.0.113.0/24') &&
+        rule.cidr_blocks &&
+        rule.cidr_blocks.includes('203.0.113.0/24') &&
         rule.security_group_id === expectedSgIdRef // Direct comparison to the expected reference string
-    );
+    ) as any; // Cast to any
     expect(httpRule).toBeDefined();
     expect(httpRule.cidr_blocks).toEqual(['203.0.113.0/24']);
 
@@ -334,16 +366,19 @@ describe('TapStack Integration Tests', () => {
         rule.from_port === 22 &&
         rule.to_port === 22 &&
         rule.protocol === 'tcp' &&
-        rule.cidr_blocks && rule.cidr_blocks.includes('203.0.113.0/24') &&
+        rule.cidr_blocks &&
+        rule.cidr_blocks.includes('203.0.113.0/24') &&
         rule.security_group_id === expectedSgIdRef // Direct comparison to the expected reference string
-    );
+    ) as any; // Cast to any
     expect(sshRule).toBeDefined();
     expect(sshRule.cidr_blocks).toEqual(['203.0.113.0/24']);
   });
 
   test('SecurityConstruct provisions web security group with correct egress rules', () => {
     const sgResources = synthesized.resource.aws_security_group;
-    const webSgName = Object.keys(sgResources).find(key => key.includes('security_web_sg'));
+    const webSgName = Object.keys(sgResources).find(key =>
+      key.includes('security_web_sg')
+    ) as string; // Cast to string
     const webSg = sgResources[webSgName];
 
     expect(webSg.egress).toBeDefined();
@@ -358,17 +393,24 @@ describe('TapStack Integration Tests', () => {
   test('IamConstruct provisions EC2 IAM role and instance profile', () => {
     const iamRoleResources = synthesized.resource.aws_iam_role;
     expect(iamRoleResources).toBeDefined();
-    const ec2RoleName = Object.keys(iamRoleResources).find(key => key.includes('iam_ec2_role'));
+    const ec2RoleName = Object.keys(iamRoleResources).find(key =>
+      key.includes('iam_ec2_role')
+    ) as string; // Cast to string
     const ec2Role = iamRoleResources[ec2RoleName];
     expect(ec2Role).toBeDefined();
     expect(ec2Role.assume_role_policy).toBeDefined();
-    expect(JSON.parse(ec2Role.assume_role_policy).Statement[0].Principal.Service).toBe('ec2.amazonaws.com');
+    expect(
+      JSON.parse(ec2Role.assume_role_policy).Statement[0].Principal.Service
+    ).toBe('ec2.amazonaws.com');
     expect(ec2Role.tags.Project).toBe('MyProject');
     expect(ec2Role.tags.Environment).toBe('Dev');
 
-    const iamInstanceProfileResources = synthesized.resource.aws_iam_instance_profile;
+    const iamInstanceProfileResources =
+      synthesized.resource.aws_iam_instance_profile;
     expect(iamInstanceProfileResources).toBeDefined();
-    const instanceProfileName = Object.keys(iamInstanceProfileResources).find(key => key.includes('iam_ec2_instance_profile'));
+    const instanceProfileName = Object.keys(iamInstanceProfileResources).find(
+      key => key.includes('iam_ec2_instance_profile')
+    ) as string; // Cast to string
     const instanceProfile = iamInstanceProfileResources[instanceProfileName];
     expect(instanceProfile).toBeDefined();
     // Assert that the role property is a Terraform reference to the IAM role
@@ -380,21 +422,35 @@ describe('TapStack Integration Tests', () => {
   test('IamConstruct provisions S3 read-only policy and attaches it to EC2 role', () => {
     const iamPolicyResources = synthesized.resource.aws_iam_policy;
     expect(iamPolicyResources).toBeDefined();
-    const s3PolicyName = Object.keys(iamPolicyResources).find(key => key.includes('iam_s3_read_only_policy'));
+    const s3PolicyName = Object.keys(iamPolicyResources).find(key =>
+      key.includes('iam_s3_read_only_policy')
+    ) as string; // Cast to string
     const s3Policy = iamPolicyResources[s3PolicyName];
     expect(s3Policy).toBeDefined();
-    expect(s3Policy.description).toBe('Allows EC2 instances to read from S3 buckets');
-    expect(JSON.parse(s3Policy.policy).Statement[0].Action).toEqual(['s3:GetObject', 's3:ListBucket']);
-    expect(JSON.parse(s3Policy.policy).Statement[0].Resource).toEqual(['arn:aws:s3:::*', 'arn:aws:s3:::*/*']);
+    expect(s3Policy.description).toBe(
+      'Allows EC2 instances to read from S3 buckets'
+    );
+    expect(JSON.parse(s3Policy.policy).Statement[0].Action).toEqual([
+      's3:GetObject',
+      's3:ListBucket',
+    ]);
+    expect(JSON.parse(s3Policy.policy).Statement[0].Resource).toEqual([
+      'arn:aws:s3:::*',
+      'arn:aws:s3:::*/*',
+    ]);
     expect(s3Policy.tags.Project).toBe('MyProject');
     expect(s3Policy.tags.Environment).toBe('Dev');
 
-    const iamRolePolicyAttachmentResources = synthesized.resource.aws_iam_role_policy_attachment;
+    const iamRolePolicyAttachmentResources =
+      synthesized.resource.aws_iam_role_policy_attachment;
     expect(iamRolePolicyAttachmentResources).toBeDefined();
-    const attachmentName = Object.keys(iamRolePolicyAttachmentResources).find(key =>
-      // The role property in the attachment will be a Terraform reference string
-      (iamRolePolicyAttachmentResources[key].role as string).includes('iam_ec2_role')
-    );
+    const attachmentName = Object.keys(iamRolePolicyAttachmentResources).find(
+      key =>
+        // The role property in the attachment will be a Terraform reference string
+        (iamRolePolicyAttachmentResources[key].role as string).includes(
+          'iam_ec2_role'
+        )
+    ) as string; // Cast to string
     const attachment = iamRolePolicyAttachmentResources[attachmentName];
     expect(attachment).toBeDefined();
     // Assert that the policy_arn property is a Terraform reference to the IAM policy

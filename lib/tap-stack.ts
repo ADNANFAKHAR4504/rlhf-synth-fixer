@@ -28,7 +28,6 @@ import { Route } from '@cdktf/provider-aws/lib/route'; // Import Route for expli
 // Import common types
 import { CommonTags, BaseConstructProps } from './types/common';
 
-
 /**
  * Defines the input properties for the NetworkingConstruct.
  */
@@ -77,7 +76,9 @@ class NetworkingConstruct extends Construct {
     super(scope, id);
 
     if (props.azs.length < 3) {
-      throw new Error('NetworkingConstruct requires at least 3 Availability Zones.');
+      throw new Error(
+        'NetworkingConstruct requires at least 3 Availability Zones.'
+      );
     }
 
     // Create a new VPC
@@ -101,8 +102,8 @@ class NetworkingConstruct extends Construct {
     });
 
     // Create an Elastic IP for the NAT Gateway
+    // Removed 'vpc: true' as it's not a valid configurable property for Eip creation.
     const natEip = new Eip(this, 'nat_eip', {
-      vpc: true, // Associate with VPC
       tags: {
         Name: `${id}-nat-eip`,
         ...props.tags, // Merge common tags
@@ -144,13 +145,17 @@ class NetworkingConstruct extends Construct {
       privateSubnetIds.push(privateSubnet.id);
 
       // Create Route Table for Public Subnet
-      const publicRouteTable = new RouteTable(this, `public_route_table_${index}`, {
-        vpcId: vpc.id,
-        tags: {
-          Name: `${id}-public-rt-${az}`,
-          ...props.tags, // Merge common tags
-        },
-      });
+      const publicRouteTable = new RouteTable(
+        this,
+        `public_route_table_${index}`,
+        {
+          vpcId: vpc.id,
+          tags: {
+            Name: `${id}-public-rt-${az}`,
+            ...props.tags, // Merge common tags
+          },
+        }
+      );
 
       // Explicitly create Route for Internet Gateway for Public Route Table
       new Route(this, `public_internet_route_${index}`, {
@@ -179,13 +184,17 @@ class NetworkingConstruct extends Construct {
       }
 
       // Create Route Table for Private Subnet
-      const privateRouteTable = new RouteTable(this, `private_route_table_${index}`, {
-        vpcId: vpc.id,
-        tags: {
-          Name: `${id}-private-rt-${az}`,
-          ...props.tags, // Merge common tags
-        },
-      });
+      const privateRouteTable = new RouteTable(
+        this,
+        `private_route_table_${index}`,
+        {
+          vpcId: vpc.id,
+          tags: {
+            Name: `${id}-private-rt-${az}`,
+            ...props.tags, // Merge common tags
+          },
+        }
+      );
 
       // Explicitly create Route for NAT Gateway for Private Route Table
       // Ensure natGateway is defined before creating the route
@@ -312,6 +321,10 @@ interface IamOutput {
    * The ARN of the created EC2 instance profile.
    */
   ec2InstanceProfileArn: string;
+  /**
+   * The name of the created EC2 instance profile.
+   */
+  ec2InstanceProfileName: string; // Added to expose the name for ComputeConstruct
 }
 
 /**
@@ -354,10 +367,7 @@ class IamConstruct extends Construct {
         Statement: [
           {
             Effect: 'Allow',
-            Action: [
-              's3:GetObject',
-              's3:ListBucket',
-            ],
+            Action: ['s3:GetObject', 's3:ListBucket'],
             Resource: [
               'arn:aws:s3:::*', // Grants access to all S3 buckets.
               'arn:aws:s3:::*/*',
@@ -382,17 +392,22 @@ class IamConstruct extends Construct {
     });
 
     // IAM Instance Profile for EC2 instances
-    const ec2InstanceProfile = new IamInstanceProfile(this, 'ec2_instance_profile', {
-      name: `${id}-ec2-instance-profile`, // Explicitly setting name
-      role: ec2Role.name,
-      tags: {
-        Name: `${id}-ec2-instance-profile`,
-        ...props.tags, // Merge common tags
-      },
-    });
+    const ec2InstanceProfile = new IamInstanceProfile(
+      this,
+      'ec2_instance_profile',
+      {
+        name: `${id}-ec2-instance-profile`, // Explicitly setting name
+        role: ec2Role.name,
+        tags: {
+          Name: `${id}-ec2-instance-profile`,
+          ...props.tags, // Merge common tags
+        },
+      }
+    );
 
     this.outputs = {
       ec2InstanceProfileArn: ec2InstanceProfile.arn,
+      ec2InstanceProfileName: ec2InstanceProfile.name, // Expose name
     };
   }
 }
@@ -411,9 +426,9 @@ interface ComputeProps extends BaseConstructProps {
    */
   securityGroupId: string;
   /**
-   * The ARN of the IAM instance profile to attach to the EC2 instance.
+   * The Name of the IAM instance profile to attach to the EC2 instance.
    */
-  instanceProfileArn: string;
+  instanceProfileName: string; // Changed from instanceProfileArn to instanceProfileName
   /**
    * (Optional) The instance type for the EC2 instance. Defaults to 't3.micro'.
    */
@@ -462,7 +477,7 @@ class ComputeConstruct extends Construct {
       instanceType: props.instanceType || 't3.micro', // Default to t3.micro
       subnetId: props.subnetId,
       vpcSecurityGroupIds: [props.securityGroupId],
-      iamInstanceProfileArn: props.instanceProfileArn,
+      iamInstanceProfile: props.instanceProfileName, // Corrected property name and value
       associatePublicIpAddress: false, // Ensure it's in the private subnet
       tags: {
         Name: `${id}-test-instance`,
@@ -471,7 +486,6 @@ class ComputeConstruct extends Construct {
     });
   }
 }
-
 
 /**
  * Props for MyStack.
@@ -560,7 +574,8 @@ export class TapStack extends TerraformStack {
     const stateBucketRegion = props?.stateBucketRegion || 'us-east-1';
     const stateBucket = props?.stateBucket || 'iac-rlhf-tf-states';
     const vpcCidr = props?.vpcCidr || '10.0.0.0/16'; // Default VPC CIDR
-    const allowedIngressIpRange = props?.allowedIngressIpRange || '203.0.113.0/24'; // Default allowed IP range
+    const allowedIngressIpRange =
+      props?.allowedIngressIpRange || '203.0.113.0/24'; // Default allowed IP range
 
     // Define default tags as required by the prompt
     const requiredDefaultTags: CommonTags = {
@@ -626,7 +641,7 @@ export class TapStack extends TerraformStack {
     new ComputeConstruct(this, 'compute', {
       subnetId: networking.outputs.privateSubnetIds[0], // Place in the first private subnet
       securityGroupId: security.outputs.webSecurityGroupId,
-      instanceProfileArn: iam.outputs.ec2InstanceProfileArn,
+      instanceProfileName: iam.outputs.ec2InstanceProfileName, // Pass the name
       tags: effectiveDefaultTags, // Pass common tags
     });
 

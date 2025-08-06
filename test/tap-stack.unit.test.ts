@@ -4,21 +4,29 @@ import { DataAwsAvailabilityZones } from '@cdktf/provider-aws/lib/data-aws-avail
 import { DataAwsAmi } from '@cdktf/provider-aws/lib/data-aws-ami';
 import { RouteTable } from '@cdktf/provider-aws/lib/route-table'; // Import RouteTable for mocking
 
-
 // Mock DataAwsAvailabilityZones to return predictable AZs for testing
 jest.mock('@cdktf/provider-aws/lib/data-aws-availability-zones', () => ({
-  DataAwsAvailabilityZones: jest.fn().mockImplementation((scope, id, config) => ({
-    id: `mock-data-aws-availability-zones-id-${id}`,
-    names: ['us-east-1a', 'us-east-1b', 'us-east-1c'], // Provide exactly 3 AZs
-    get stringified() { return JSON.stringify(this.names); }
-  })),
+  DataAwsAvailabilityZones: jest
+    .fn()
+    .mockImplementation((scope, id, config) => ({
+      // Removed direct 'id' property to avoid duplicate identifier error
+      names: ['us-east-1a', 'us-east-1b', 'us-east-1c'], // Provide exactly 3 AZs
+      get id() {
+        return `mock-data-aws-availability-zones-id-${id}`;
+      }, // Keep getter
+      get stringified() {
+        return JSON.stringify(this.names);
+      },
+    })),
 }));
 
 // Mock DataAwsAmi to return a predictable AMI ID
 jest.mock('@cdktf/provider-aws/lib/data-aws-ami', () => ({
   DataAwsAmi: jest.fn().mockImplementation((scope, id, config) => ({
-    id: `mock-ami-id-${id}`,
-    get id() { return `ami-mocked12345`; } // Return a fixed mock AMI ID
+    // Removed direct 'id' property to avoid duplicate identifier error
+    get id() {
+      return `ami-mocked12345`;
+    }, // Keep getter
   })),
 }));
 
@@ -29,19 +37,22 @@ jest.mock('@cdktf/provider-aws/lib/route-table', () => ({
   RouteTable: jest.fn().mockImplementation((scope, id, config) => {
     const mockRoutes: any[] = [];
     return {
-      id: `mock-rt-id-${id}`,
-      get id() { return `mock-rt-id-${id}`; }, // Ensure a consistent ID for assertions
+      // Removed direct 'id' property to avoid duplicate identifier error
+      get id() {
+        return `mock-rt-id-${id}`;
+      }, // Keep getter
       addRoute: jest.fn((name, routeConfig) => {
         mockRoutes.push(routeConfig); // Capture routes added
       }),
       // Expose captured routes for potential assertions if needed, though not strictly necessary for this error
-      get route() { return mockRoutes; },
+      get route() {
+        return mockRoutes;
+      },
       ...config,
       tags: config.tags || {}, // Ensure tags are present
     };
   }),
 }));
-
 
 describe('TapStack Unit Tests', () => {
   let app: App;
@@ -72,7 +83,8 @@ describe('TapStack Unit Tests', () => {
       stateBucket: 'custom-state-bucket',
       stateBucketRegion: 'us-west-2',
       awsRegion: 'us-west-2',
-      defaultTags: { // Corrected structure for defaultTags
+      defaultTags: {
+        // Corrected structure for defaultTags
         Project: 'CustomProject',
         Environment: 'test',
         Owner: 'TestUser',
@@ -84,7 +96,9 @@ describe('TapStack Unit Tests', () => {
     const propsSynthesized = JSON.parse(Testing.synth(propsStack));
 
     // Assertions for propsStack
-    expect(propsSynthesized.terraform.backend.s3.bucket).toBe('custom-state-bucket');
+    expect(propsSynthesized.terraform.backend.s3.bucket).toBe(
+      'custom-state-bucket'
+    );
     expect(propsSynthesized.terraform.backend.s3.region).toBe('us-west-2');
     expect(propsSynthesized.provider.aws[0].region).toBe('us-west-2');
     // Verify that defaultTags are merged and applied correctly
@@ -103,8 +117,9 @@ describe('TapStack Unit Tests', () => {
     // Verify SecurityConstruct props - check for the rule in the synthesized output
     const sgRuleResources = propsSynthesized.resource.aws_security_group_rule;
     const httpRule = Object.values(sgRuleResources).find(
-      (rule: any) => rule.from_port === 80 && rule.to_port === 80 && rule.protocol === 'tcp'
-    );
+      (rule: any) =>
+        rule.from_port === 80 && rule.to_port === 80 && rule.protocol === 'tcp'
+    ) as any; // Cast to any
     expect(httpRule).toBeDefined();
     expect(httpRule.cidr_blocks).toEqual(['192.0.2.0/24']);
   });
@@ -114,7 +129,9 @@ describe('TapStack Unit Tests', () => {
     // for region, state bucket, and default tags when no props are given.
     expect(synthesized.provider.aws[0].region).toBe('us-east-1');
     expect(synthesized.terraform.backend.s3.bucket).toBe('iac-rlhf-tf-states');
-    expect(synthesized.terraform.backend.s3.key).toBe('dev/TestTapStackDefault.tfstate');
+    expect(synthesized.terraform.backend.s3.key).toBe(
+      'dev/TestTapStackDefault.tfstate'
+    );
     expect(synthesized.terraform.backend.s3.region).toBe('us-east-1');
     expect(synthesized.terraform.backend.s3.encrypt).toBe(true);
     expect(synthesized.terraform.backend.s3.use_lockfile).toBe(true);
@@ -143,7 +160,9 @@ describe('TapStack Unit Tests', () => {
     const customRegionStack = new TapStack(app, 'TestCustomRegion', {
       awsRegion: 'us-west-2',
     });
-    const customRegionSynthesized = JSON.parse(Testing.synth(customRegionStack));
+    const customRegionSynthesized = JSON.parse(
+      Testing.synth(customRegionStack)
+    );
     expect(customRegionSynthesized.provider.aws[0].region).toBe('us-west-2');
   });
 
@@ -181,8 +200,12 @@ describe('TapStack Unit Tests', () => {
     const customBucketStack = new TapStack(app, 'TestCustomBucket', {
       stateBucket: 'my-custom-tf-state-bucket',
     });
-    const customBucketSynthesized = JSON.parse(Testing.synth(customBucketStack));
-    expect(customBucketSynthesized.terraform.backend.s3.bucket).toBe('my-custom-tf-state-bucket');
+    const customBucketSynthesized = JSON.parse(
+      Testing.synth(customBucketStack)
+    );
+    expect(customBucketSynthesized.terraform.backend.s3.bucket).toBe(
+      'my-custom-tf-state-bucket'
+    );
   });
 
   test('S3 Backend key includes environment suffix and stack ID', () => {
@@ -192,17 +215,27 @@ describe('TapStack Unit Tests', () => {
       environmentSuffix: 'prod',
     });
     const envSynthesized = JSON.parse(Testing.synth(envStack));
-    expect(envSynthesized.terraform.backend.s3.key).toBe('prod/TestEnvStack.tfstate');
+    expect(envSynthesized.terraform.backend.s3.key).toBe(
+      'prod/TestEnvStack.tfstate'
+    );
   });
 
   test('S3 Backend region is correctly set from props', () => {
     // Objective: Verify that the S3 backend region is correctly set
     // when provided via props.
-    const customRegionBackendStack = new TapStack(app, 'TestCustomRegionBackend', {
-      stateBucketRegion: 'eu-west-1',
-    });
-    const customRegionBackendSynthesized = JSON.parse(Testing.synth(customRegionBackendStack));
-    expect(customRegionBackendSynthesized.terraform.backend.s3.region).toBe('eu-west-1');
+    const customRegionBackendStack = new TapStack(
+      app,
+      'TestCustomRegionBackend',
+      {
+        stateBucketRegion: 'eu-west-1',
+      }
+    );
+    const customRegionBackendSynthesized = JSON.parse(
+      Testing.synth(customRegionBackendStack)
+    );
+    expect(customRegionBackendSynthesized.terraform.backend.s3.region).toBe(
+      'eu-west-1'
+    );
   });
 
   test('S3 Backend encryption is enabled by default', () => {
@@ -247,24 +280,31 @@ describe('TapStack Unit Tests', () => {
     // explicitly false or completely omitted (undefined).
 
     // Test with createMyStack explicitly false
-    const noMyStackFalse = new TapStack(app, 'TestNoMyStackFalse', { createMyStack: false });
+    const noMyStackFalse = new TapStack(app, 'TestNoMyStackFalse', {
+      createMyStack: false,
+    });
     const noMyStackFalseSynthesized = JSON.parse(Testing.synth(noMyStackFalse));
     // Check for absence of the specific S3 bucket resource
     // The 'resource' key itself might be undefined if no resources are created.
     // So, we need to check if 'resource' exists first, then check for 'aws_s3_bucket'.
     if (noMyStackFalseSynthesized.resource) {
-      expect(noMyStackFalseSynthesized.resource).not.toHaveProperty('aws_s3_bucket');
+      expect(noMyStackFalseSynthesized.resource).not.toHaveProperty(
+        'aws_s3_bucket'
+      );
     } else {
       expect(noMyStackFalseSynthesized.resource).toBeUndefined(); // If no resources at all, this is also valid
     }
 
-
     // Test with createMyStack undefined (default behavior)
     const noMyStackUndefined = new TapStack(app, 'TestNoMyStackUndefined');
-    const noMyStackUndefinedSynthesized = JSON.parse(Testing.synth(noMyStackUndefined));
+    const noMyStackUndefinedSynthesized = JSON.parse(
+      Testing.synth(noMyStackUndefined)
+    );
     // Check for absence of the specific S3 bucket resource
     if (noMyStackUndefinedSynthesized.resource) {
-      expect(noMyStackUndefinedSynthesized.resource).not.toHaveProperty('aws_s3_bucket');
+      expect(noMyStackUndefinedSynthesized.resource).not.toHaveProperty(
+        'aws_s3_bucket'
+      );
     } else {
       expect(noMyStackUndefinedSynthesized.resource).toBeUndefined(); // If no resources at all, this is also valid
     }
