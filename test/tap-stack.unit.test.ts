@@ -8,7 +8,7 @@ describe('Expert-Level Secure CloudFormation Template', () => {
 
   beforeAll(() => {
     // Load the JSON template that was converted from YAML
-    const templatePath = path.join(__dirname, '../lib/TapStack.json');
+    const templatePath = path.join(__dirname, '../template.json');
     const templateContent = fs.readFileSync(templatePath, 'utf8');
     template = JSON.parse(templateContent);
   });
@@ -36,8 +36,7 @@ describe('Expert-Level Secure CloudFormation Template', () => {
     test('should have all required parameters with proper defaults', () => {
       const expectedParams = [
         'ProjectName',
-        'Environment', 
-        'LambdaFunctionName'
+        'Environment'
       ];
       expectedParams.forEach(param => {
         expect(template.Parameters[param]).toBeDefined();
@@ -62,15 +61,7 @@ describe('Expert-Level Secure CloudFormation Template', () => {
       expect(param.Description).toContain('Environment for deployment');
     });
 
-    test('LambdaFunctionName parameter should have correct properties', () => {
-      const param = template.Parameters.LambdaFunctionName;
-      expect(param.Type).toBe('String');
-      expect(param.Default).toBe('secure-data-processor');
-      expect(param.AllowedPattern).toBe('^[a-zA-Z][a-zA-Z0-9-]*$');
-      expect(param.ConstraintDescription).toContain('start with a letter');
-      expect(param.MinLength).toBe(3);
-      expect(param.MaxLength).toBe(30);
-    });
+
   });
 
   describe('Password Policy Resources', () => {
@@ -168,15 +159,17 @@ describe('Expert-Level Secure CloudFormation Template', () => {
       expect(bucket.Properties.LifecycleConfiguration.Rules[1].ExpirationInDays).toBe(2555); // 7 years
     });
 
-    test('should have S3 Bucket Notification with correct event trigger', () => {
-      const notificationBucket = template.Resources.S3BucketNotification;
-      expect(notificationBucket.Type).toBe('AWS::S3::Bucket');
-      expect(notificationBucket.Properties.NotificationConfiguration.LambdaConfigurations).toHaveLength(1);
-      
-      const lambdaConfig = notificationBucket.Properties.NotificationConfiguration.LambdaConfigurations[0];
-      expect(lambdaConfig.Event).toBe('s3:ObjectCreated:*');
-      expect(lambdaConfig.Function).toEqual({
-        'Fn::GetAtt': ['DataProcessorLambda', 'Arn']
+    test('should verify S3 bucket notification permissions exist', () => {
+      // Since we removed the S3BucketNotification resource, verify the Lambda permission exists
+      const permission = template.Resources.S3InvokeLambdaPermission;
+      expect(permission.Type).toBe('AWS::Lambda::Permission');
+      expect(permission.Properties.Action).toBe('lambda:InvokeFunction');
+      expect(permission.Properties.Principal).toBe('s3.amazonaws.com');
+      expect(permission.Properties.SourceArn).toEqual({
+        'Fn::GetAtt': ['PrimaryDataBucket', 'Arn']
+      });
+      expect(permission.Properties.SourceAccount).toEqual({
+        Ref: 'AWS::AccountId'
       });
     });
   });
@@ -206,7 +199,7 @@ describe('Expert-Level Secure CloudFormation Template', () => {
       // Check S3 bucket permissions with proper ARN format
       const bucketStatement = policy.PolicyDocument.Statement[1];
       expect(bucketStatement.Action).toContain('s3:ListBucket');
-      expect(bucketStatement.Resource).toContain({
+      expect(bucketStatement.Resource).toContainEqual({
         'Fn::GetAtt': ['PrimaryDataBucket', 'Arn']
       });
     });
@@ -257,9 +250,8 @@ describe('Expert-Level Secure CloudFormation Template', () => {
     test('should have Lambda Log Group with appropriate retention', () => {
       const logGroup = template.Resources.LambdaLogGroup;
       expect(logGroup.Type).toBe('AWS::Logs::LogGroup');
-      expect(logGroup.Properties.LogGroupName).toEqual({
-        'Fn::Sub': '/aws/lambda/${ProjectName}-${Environment}-${LambdaFunctionName}'
-      });
+      // LogGroupName was removed for auto-generated naming
+      expect(logGroup.Properties.LogGroupName).toBeUndefined();
       expect(logGroup.Properties.RetentionInDays).toBe(30);
     });
   });
@@ -268,9 +260,8 @@ describe('Expert-Level Secure CloudFormation Template', () => {
     test('should have Organization Security Policy with comprehensive restrictions', () => {
       const policy = template.Resources.OrganizationSecurityPolicy;
       expect(policy.Type).toBe('AWS::IAM::ManagedPolicy');
-      expect(policy.Properties.ManagedPolicyName).toEqual({
-        'Fn::Sub': '${ProjectName}-${Environment}-security-policy'
-      });
+      // ManagedPolicyName was removed for auto-generated naming
+      expect(policy.Properties.ManagedPolicyName).toBeUndefined();
       expect(policy.Properties.Description).toBe(
         'Organization security policy enforcing best practices'
       );
@@ -345,7 +336,7 @@ describe('Expert-Level Secure CloudFormation Template', () => {
         'Fn::GetAtt': ['DataProcessorLambda', 'Arn']
       });
       expect(lambdaOutput.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-LambdaFunctionArn'
+        'Fn::Sub': '${AWS::StackName}-LambdaFunction'
       });
     });
   });
@@ -410,9 +401,8 @@ describe('Expert-Level Secure CloudFormation Template', () => {
       });
 
       const lambda = template.Resources.DataProcessorLambda;
-      expect(lambda.Properties.FunctionName).toEqual({
-        'Fn::Sub': '${ProjectName}-${Environment}-${LambdaFunctionName}'
-      });
+      // FunctionName was removed for auto-generated naming
+      expect(lambda.Properties.FunctionName).toBeUndefined();
     });
 
     test('export names should follow naming convention', () => {
@@ -428,7 +418,7 @@ describe('Expert-Level Secure CloudFormation Template', () => {
 
       Object.keys(template.Outputs).forEach(outputKey => {
         const output = template.Outputs[outputKey];
-        const expectedExportName = expectedExportMappings[outputKey as keyof typeof expectedExportMappings] || outputKey;
+     const expectedExportName = expectedExportMappings[outputKey as keyof typeof expectedExportMappings] || outputKey;
         expect(output.Export.Name).toEqual({
           'Fn::Sub': `\${AWS::StackName}-${expectedExportName}`
         });
