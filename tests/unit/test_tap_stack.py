@@ -2,12 +2,12 @@ import os
 import sys
 import unittest
 from unittest.mock import Mock
-
 from lib.components.serverless import ServerlessComponent
 from lib.components.database import DatabaseComponent
 from lib.components.vpc import ComputeComponent
 from lib.components.iam import IAMComponent
 from lib.tap_stack import TapStackArgs, TapStack
+import pulumi
 
 # Set environment variable for Pulumi testing
 os.environ["PULUMI_TEST_MODE"] = "true"
@@ -48,7 +48,7 @@ class FakeResourceOptions:
 # Inject Pulumi and AWS mocks before importing actual components
 mock_pulumi = Mock()
 mock_pulumi.ComponentResource = MockComponentResource
-mock_pulumi.ResourceOptions = FakeResourceOptions
+mock_pulumi.ResourceOptions = pulumi.ResourceOptions
 mock_pulumi.Output = MockOutput
 mock_pulumi.Output.concat = MockOutput.concat
 mock_pulumi.Output.all = MockOutput.all
@@ -62,7 +62,6 @@ mock_aws.get_availability_zones.return_value = Mock(
     names=["us-east-1a", "us-east-1b"]
 )
 
-sys.modules["pulumi"] = mock_pulumi
 sys.modules["pulumi_aws"] = mock_aws
 
 
