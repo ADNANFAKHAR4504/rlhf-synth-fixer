@@ -126,7 +126,7 @@ export class TapStack extends cdk.Stack {
     // ECS Cluster
     const ecsCluster = new ecs.Cluster(this, 'SecureECSCluster', {
       vpc,
-      containerInsights: true, // Enable CloudWatch Container Insights
+      containerInsightsV2: ecs.ContainerInsights.ENABLED, // Enable CloudWatch Container Insights V2
     });
 
     // ECS Service with Auto Scaling - Optimized for faster deployment

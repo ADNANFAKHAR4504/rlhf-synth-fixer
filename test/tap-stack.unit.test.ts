@@ -160,7 +160,7 @@ describe('TapStack', () => {
   });
 
   describe('IAM Resources', () => {
-    test('should create EC2 instance role', () => {
+    test('should create ECS task role', () => {
       template.hasResourceProperties('AWS::IAM::Role', {
         AssumeRolePolicyDocument: {
           Statement: [
@@ -168,11 +168,12 @@ describe('TapStack', () => {
               Action: 'sts:AssumeRole',
               Effect: 'Allow',
               Principal: {
-                Service: 'ec2.amazonaws.com',
+                Service: 'ecs-tasks.amazonaws.com',
               },
             },
           ],
         },
+        Description: 'IAM role for ECS tasks with least privilege access',
       });
     });
 
