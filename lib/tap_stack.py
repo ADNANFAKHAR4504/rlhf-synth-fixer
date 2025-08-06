@@ -386,6 +386,7 @@ def create_load_balancer(
     protocol="HTTP",
     vpc_id=vpc_id,
     target_type="ip",
+    ip_address_type="ipv4",
     health_check=aws.lb.TargetGroupHealthCheckArgs(
       enabled=True,
       healthy_threshold=2,
