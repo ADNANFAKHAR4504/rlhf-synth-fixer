@@ -1,3 +1,4 @@
+import zipfile
 import builtins
 from lib.components.serverless import ServerlessComponent
 from lib.components.database import DatabaseComponent
@@ -102,8 +103,12 @@ class MockOutput:
     if isinstance(self.value, (list, tuple)):
       for x in self.value:
         yield MockOutput(x)
+    elif self.value is not None:
+      # Handle single values
+      yield MockOutput(self.value)
     else:
-      yield MockOutput()
+      # Return empty iterator for None values
+      return iter([])
 
   @staticmethod
   def all(*args):
@@ -241,6 +246,7 @@ pulumi.FileArchive = MagicMock()
 pulumi.get_stack = MagicMock(return_value="test")
 pulumi.Config = MagicMock()
 pulumi.export = MagicMock()
+pulumi.Invoke = MagicMock(return_value=MagicMock())
 
 # Create a base Resource class for Pulumi
 
@@ -253,9 +259,43 @@ pulumi.Resource = MockPulumiResource
 
 # Also patch the pulumi module's ResourceOptions in sys.modules
 sys.modules["pulumi"].ResourceOptions = MockResourceOptions
+sys.modules["pulumi"].Output = MockOutput
+sys.modules["pulumi"].ComponentResource = MockComponentResource
+sys.modules["pulumi"].Invoke = MagicMock(return_value=MagicMock())
 
 # Monkey patch isinstance
 builtins.isinstance = patched_isinstance
+
+# Mock zipfile operations for ServerlessComponent
+original_zipfile_init = zipfile.ZipFile.__init__
+original_zipfile_write = zipfile.ZipFile.write
+
+
+def mock_zipfile_init(self, file, mode="r", compression=zipfile.ZIP_STORED, allowZip64=True, compresslevel=None, *, strict_timestamps=True):
+  # Just create a mock zipfile that doesn't actually write anything
+  self.filename = file
+  self.mode = mode
+  self._filelist = []
+
+
+def mock_zipfile_write(self, filename, arcname=None, compress_type=None, compresslevel=None):
+  # Mock the write operation
+  pass
+
+
+def mock_zipfile_enter(self):
+  return self
+
+
+def mock_zipfile_exit(self, exc_type, exc_val, exc_tb):
+  pass
+
+
+# Patch zipfile operations
+zipfile.ZipFile.__init__ = mock_zipfile_init
+zipfile.ZipFile.write = mock_zipfile_write
+zipfile.ZipFile.__enter__ = mock_zipfile_enter
+zipfile.ZipFile.__exit__ = mock_zipfile_exit
 
 # Set environment variable for Pulumi testing
 os.environ["PULUMI_TEST_MODE"] = "true"
@@ -266,19 +306,41 @@ original_walk = os.walk
 
 
 def mock_exists(path):
-  if 'lambda.zip' in path or 'lambda_files' in path:
+  # Handle the lambda.zip file and lambda_files directory
+  if 'lambda.zip' in path:
+    return True
+  if 'lambda_files' in path:
+    return True
+  # Handle specific files that ServerlessComponent looks for
+  if path.endswith('handler.py') or path.endswith('requirements.txt'):
+    return True
+  if 'lib/components/lambda_files' in path:
     return True
   return original_exists(path)
 
 
 def mock_walk(path):
+  # Mock the directory walk for lambda_files
   if 'lambda_files' in path:
-    return [('lambda_files', [], ['handler.py', 'requirements.txt'])]
+    return [
+        (path, [], ['handler.py', 'requirements.txt'])
+    ]
   return original_walk(path)
 
 
+# Patch os.path methods
 os.path.exists = mock_exists
 os.walk = mock_walk
+
+# Also mock os.getcwd to return a predictable path
+original_getcwd = os.getcwd
+
+
+def mock_getcwd():
+  return '/mock/project/path'
+
+
+os.getcwd = mock_getcwd
 
 
 class TestTapStackComponents(unittest.TestCase):
