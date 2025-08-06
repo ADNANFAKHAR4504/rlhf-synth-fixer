@@ -26,6 +26,38 @@ Parameters:
     Description: Latest Amazon Linux 2 AMI from SSM Parameter Store
 
 Resources:
+  # KMS Key for SSM Parameter Encryption
+  KMSKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: KMS key for encrypting SSM parameters
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action:
+              - kms:*
+            Resource: '*'
+      Tags:
+        - Key: Name
+          Value: SecureWebKMSKey
+        - Key: batchName
+          Value: !Ref BatchName
+        - Key: projectId
+          Value: !Ref ProjectId
+        - Key: projectName
+          Value: !Ref ProjectName
+        - Key: ProblemID
+          Value: !Ref ProblemID
+
+  KMSKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: alias/secure-web-config
+      TargetKeyId: !Ref KMSKey
+
   # New VPC
   VPC:
     Type: AWS::EC2::VPC
@@ -181,15 +213,12 @@ Resources:
       Type: SecureString
       Value: 'example-config-value'
       Description: Configuration value for EC2 instance
+      KeyId: !Ref KMSKey
       Tags:
-        - Key: batchName
-          Value: !Ref BatchName
-        - Key: projectId
-          Value: !Ref ProjectId
-        - Key: projectName
-          Value: !Ref ProjectName
-        - Key: ProblemID
-          Value: !Ref ProblemID
+        batchName: !Ref BatchName
+        projectId: !Ref ProjectId
+        projectName: !Ref ProjectName
+        ProblemID: !Ref ProblemID
 
   # Elastic IP
   ElasticIP:
@@ -220,8 +249,12 @@ Resources:
         Fn::Base64: !Sub |
           #!/bin/bash
           yum update -y
-          CONFIG_VALUE=$(aws ssm get-parameter --name "/secure-web/config" --region ${AWS::Region} --with-decryption --query Parameter.Value --output text)
-          echo "Configuration: $CONFIG_VALUE" >> /var/log/config.log
+          CONFIG_VALUE=$(aws ssm get-parameter --name "/secure-web/config" --region ${AWS::Region} --with-decryption --query Parameter.Value --output text 2>/dev/null)
+          if [ $? -eq 0 ]; then
+            echo "Configuration: $CONFIG_VALUE" >> /var/log/config.log
+          else
+            echo "Failed to retrieve SSM parameter" >> /var/log/config.log
+          fi
       Tags:
         - Key: Name
           Value: SecureWebInstance

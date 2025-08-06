@@ -32,6 +32,68 @@
         }
     },
     "Resources": {
+        "KMSKey": {
+            "Type": "AWS::KMS::Key",
+            "Properties": {
+                "Description": "KMS key for encrypting SSM parameters",
+                "KeyPolicy": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                                }
+                            },
+                            "Action": [
+                                "kms:*"
+                            ],
+                            "Resource": "*"
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "SecureWebKMSKey"
+                    },
+                    {
+                        "Key": "batchName",
+                        "Value": {
+                            "Ref": "BatchName"
+                        }
+                    },
+                    {
+                        "Key": "projectId",
+                        "Value": {
+                            "Ref": "ProjectId"
+                        }
+                    },
+                    {
+                        "Key": "projectName",
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
+                    },
+                    {
+                        "Key": "ProblemID",
+                        "Value": {
+                            "Ref": "ProblemID"
+                        }
+                    }
+                ]
+            }
+        },
+        "KMSKeyAlias": {
+            "Type": "AWS::KMS::Alias",
+            "Properties": {
+                "AliasName": "alias/secure-web-config",
+                "TargetKeyId": {
+                    "Ref": "KMSKey"
+                }
+            }
+        },
         "VPC": {
             "Type": "AWS::EC2::VPC",
             "Properties": {
@@ -343,32 +405,23 @@
                 "Type": "SecureString",
                 "Value": "example-config-value",
                 "Description": "Configuration value for EC2 instance",
-                "Tags": [
-                    {
-                        "Key": "batchName",
-                        "Value": {
-                            "Ref": "BatchName"
-                        }
+                "KeyId": {
+                    "Ref": "KMSKey"
+                },
+                "Tags": {
+                    "batchName": {
+                        "Ref": "BatchName"
                     },
-                    {
-                        "Key": "projectId",
-                        "Value": {
-                            "Ref": "ProjectId"
-                        }
+                    "projectId": {
+                        "Ref": "ProjectId"
                     },
-                    {
-                        "Key": "projectName",
-                        "Value": {
-                            "Ref": "ProjectName"
-                        }
+                    "projectName": {
+                        "Ref": "ProjectName"
                     },
-                    {
-                        "Key": "ProblemID",
-                        "Value": {
-                            "Ref": "ProblemID"
-                        }
+                    "ProblemID": {
+                        "Ref": "ProblemID"
                     }
-                ]
+                }
             }
         },
         "ElasticIP": {
@@ -423,7 +476,7 @@
                 },
                 "UserData": {
                     "Fn::Base64": {
-                        "Fn::Sub": "#!/bin/bash\nyum update -y\nCONFIG_VALUE=$(aws ssm get-parameter --name \"/secure-web/config\" --region ${AWS::Region} --with-decryption --query Parameter.Value --output text)\necho \"Configuration: $CONFIG_VALUE\" >> /var/log/config.log\n"
+                        "Fn::Sub": "#!/bin/bash\nyum update -y\nCONFIG_VALUE=$(aws ssm get-parameter --name \"/secure-web/config\" --region ${AWS::Region} --with-decryption --query Parameter.Value --output text 2>/dev/null)\nif [ $? -eq 0 ]; then\n  echo \"Configuration: $CONFIG_VALUE\" >> /var/log/config.log\nelse\n  echo \"Failed to retrieve SSM parameter\" >> /var/log/config.log\nfi\n"
                     }
                 },
                 "Tags": [
