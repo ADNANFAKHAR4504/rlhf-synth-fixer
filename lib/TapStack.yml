@@ -132,8 +132,8 @@ Resources:
             Principal: '*'
             Action: 's3:*'
             Resource: 
-              - !Sub '${FinAppSecureDocuments}/*'
-              - !Ref FinAppSecureDocuments
+              - !Sub '${FinAppSecureDocuments.Arn}/*'
+              - !GetAtt FinAppSecureDocuments.Arn
             Condition:
               Bool:
                 'aws:SecureTransport': 'false'
@@ -143,7 +143,7 @@ Resources:
             Effect: Deny
             Principal: '*'
             Action: 's3:PutObject'
-            Resource: !Sub '${FinAppSecureDocuments}/*'
+            Resource: !Sub '${FinAppSecureDocuments.Arn}/*'
             Condition:
               StringNotEquals:
                 's3:x-amz-server-side-encryption': 'AES256'
@@ -156,8 +156,8 @@ Resources:
               - 's3:PutBucketAcl'
               - 's3:PutObjectAcl'
             Resource:
-              - !Ref FinAppSecureDocuments
-              - !Sub '${FinAppSecureDocuments}/*'
+              - !GetAtt FinAppSecureDocuments.Arn
+              - !Sub '${FinAppSecureDocuments.Arn}/*'
             Condition:
               StringLike:
                 's3:x-amz-acl':
@@ -211,7 +211,7 @@ Resources:
                   - 's3:PutObject'
                   - 's3:DeleteObject'
                   - 's3:RestoreObject'
-                Resource: !Sub '${FinAppSecureDocuments}/*'
+                Resource: !Sub '${FinAppSecureDocuments.Arn}/*'
                 Condition:
                   StringEquals:
                     's3:x-amz-server-side-encryption': 'AES256'
@@ -223,7 +223,7 @@ Resources:
                   - 's3:GetObjectAttributes'
                   - 's3:GetObjectTagging'
                   - 's3:PutObjectTagging'
-                Resource: !Sub '${FinAppSecureDocuments}/*'
+                Resource: !Sub '${FinAppSecureDocuments.Arn}/*'
               
               # Explicit deny for dangerous operations
               - Sid: DenyDangerousOperations
@@ -236,7 +236,7 @@ Resources:
                   - 's3:PutBucketPublicAccessBlock'
                 Resource: 
                   - !GetAtt FinAppSecureDocuments.Arn
-                  - !Sub '${FinAppSecureDocuments}/*'
+                  - !Sub '${FinAppSecureDocuments.Arn}/*'
       
       # Resource Tags
       Tags:
