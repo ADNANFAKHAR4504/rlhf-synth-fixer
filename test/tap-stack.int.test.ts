@@ -1,4 +1,4 @@
-import { CloudFormationClient, ListStacksCommand } from '@aws-sdk/client-cloudformation';
+import { CloudFormationClient, DescribeStacksCommand, ListStacksCommand } from '@aws-sdk/client-cloudformation';
 import {
   DescribeTableCommand,
   DynamoDBClient,
@@ -9,8 +9,22 @@ import {
 import { GetRoleCommand, IAMClient, ListRolePoliciesCommand } from '@aws-sdk/client-iam';
 import * as fs from 'fs';
 
+// Function to read region from AWS_REGION file
+function readRegionFromFile(): string {
+  try {
+    if (fs.existsSync('AWS_REGION')) {
+      const region = fs.readFileSync('AWS_REGION', 'utf8').trim();
+      console.log(`Reading region from AWS_REGION file: ${region}`);
+      return region;
+    }
+  } catch (error) {
+    console.log('Failed to read AWS_REGION file:', error);
+  }
+  return 'us-west-1'; // fallback
+}
+
 // Simplified environment configuration - use defaults that work everywhere
-const deploymentRegion = process.env.DEPLOYMENT_REGION || process.env.AWS_REGION || 'us-west-1';
+const deploymentRegion = process.env.DEPLOYMENT_REGION || process.env.AWS_REGION || readRegionFromFile();
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 const applicationName = process.env.APPLICATION_NAME || 'multi-region-app';
 
@@ -74,12 +88,14 @@ function generateOutputsFromTemplate(): Record<string, string> {
     const templateContent = fs.readFileSync('lib/TapStack.json', 'utf8');
     const template = JSON.parse(templateContent);
     
-    // Generate expected outputs based on template
+    // Generate expected outputs based on template (without account ID)
     const regionSuffix = deploymentRegion === 'us-west-1' ? 'west1' : 'west2';
     const tableName = `${applicationName}-${environmentSuffix}-${regionSuffix}-table`;
-    const tableArn = `arn:aws:dynamodb:${deploymentRegion}:730335459272:table/${tableName}`;
     const roleName = `TapStack${environmentSuffix}-DynamoDBAccessRole`;
-    const roleArn = `arn:aws:iam::730335459272:role/${roleName}`;
+    
+    // Use placeholder for account ID - will be replaced by actual values from deployed stack
+    const tableArn = `arn:aws:dynamodb:${deploymentRegion}:ACCOUNT_ID:table/${tableName}`;
+    const roleArn = `arn:aws:iam::ACCOUNT_ID:role/${roleName}`;
     
     // Determine capacity based on region
     const isWest1 = deploymentRegion === 'us-west-1';
@@ -116,47 +132,109 @@ describe('TapStack Integration Tests - Simplified DynamoDB Multi-Region Deployme
     const fileOutputs = readOutputsFromFile();
     
     if (fileOutputs && Object.keys(fileOutputs).length > 0) {
-      console.log('✅ Using outputs from file');
-      stackOutputs = fileOutputs;
-      stackExists = true;
+      // Check if file contains ACCOUNT_ID placeholders
+      const hasPlaceholders = Object.values(fileOutputs).some(value => 
+        typeof value === 'string' && value.includes('ACCOUNT_ID')
+      );
       
-      // Extract actual resource names from outputs
-      actualTableName = stackOutputs['TableName'] || '';
-      actualRoleArn = stackOutputs['IAMRoleArn'] || '';
-      
-      console.log(`Stack outputs from file:`, stackOutputs);
-      
-      // Verify that required outputs exist
-      if (!stackOutputs['TableName'] || !stackOutputs['TableArn'] || !stackOutputs['IAMRoleArn']) {
-        console.warn('Missing required stack outputs in file:', {
-          TableName: stackOutputs['TableName'],
-          TableArn: stackOutputs['TableArn'],
-          IAMRoleArn: stackOutputs['IAMRoleArn']
-        });
-        stackExists = false;
-        stackOutputs = {};
+      if (hasPlaceholders) {
+        console.log('⚠️  Output file contains ACCOUNT_ID placeholders, will use template generation');
+        // Fall through to template generation
+      } else {
+        console.log('✅ Using outputs from file');
+        stackOutputs = fileOutputs;
+        stackExists = true;
+        
+        // Extract actual resource names from outputs
+        actualTableName = stackOutputs['TableName'] || '';
+        actualRoleArn = stackOutputs['IAMRoleArn'] || '';
+        
+        console.log(`Stack outputs from file:`, stackOutputs);
+        
+        // Verify that required outputs exist
+        if (!stackOutputs['TableName'] || !stackOutputs['TableArn'] || !stackOutputs['IAMRoleArn']) {
+          console.warn('Missing required stack outputs in file:', {
+            TableName: stackOutputs['TableName'],
+            TableArn: stackOutputs['TableArn'],
+            IAMRoleArn: stackOutputs['IAMRoleArn']
+          });
+          stackExists = false;
+          stackOutputs = {};
+        }
+        return; // Exit early if using file outputs
       }
-    } else {
-      console.log('📋 Using outputs from TapStack.json template');
-      stackOutputs = generateOutputsFromTemplate();
-      stackExists = Object.keys(stackOutputs).length > 0;
-      
-      // Extract actual resource names from outputs
-      actualTableName = stackOutputs['TableName'] || '';
-      actualRoleArn = stackOutputs['IAMRoleArn'] || '';
-      
-      console.log(`Generated outputs from template:`, stackOutputs);
-      
-      // Verify that required outputs exist
-      if (!stackOutputs['TableName'] || !stackOutputs['TableArn'] || !stackOutputs['IAMRoleArn']) {
-        console.warn('Missing required outputs from template:', {
-          TableName: stackOutputs['TableName'],
-          TableArn: stackOutputs['TableArn'],
-          IAMRoleArn: stackOutputs['IAMRoleArn']
-        });
-        stackExists = false;
-        stackOutputs = {};
+    }
+    
+    // If we reach here, either no file outputs or placeholders found
+    console.log('📋 Using outputs from TapStack.json template');
+    stackOutputs = generateOutputsFromTemplate();
+    
+    // Get actual account ID from deployed stack
+    try {
+      const stacksResponse = await cloudformation.send(
+        new ListStacksCommand({
+          StackStatusFilter: ['CREATE_COMPLETE', 'UPDATE_COMPLETE']
+        })
+      );
+
+      const tapStacks = stacksResponse.StackSummaries?.filter(stack => 
+        stack.StackName?.startsWith('TapStack')
+      ) || [];
+
+      if (tapStacks.length > 0) {
+        const stackName = tapStacks[0].StackName!;
+        const stackResponse = await cloudformation.send(
+          new DescribeStacksCommand({ StackName: stackName })
+        );
+
+        if (stackResponse.Stacks && stackResponse.Stacks[0].Outputs) {
+          const actualOutputs: Record<string, string> = {};
+          stackResponse.Stacks[0].Outputs.forEach(output => {
+            if (output.OutputKey && output.OutputValue) {
+              actualOutputs[output.OutputKey] = output.OutputValue;
+            }
+          });
+
+          // Replace ACCOUNT_ID placeholders with actual values
+          if (actualOutputs['TableArn']) {
+            const accountId = actualOutputs['TableArn'].split(':')[4];
+            console.log(`Found account ID from deployed stack: ${accountId}`);
+            
+            // Update stackOutputs with actual account ID
+            Object.keys(stackOutputs).forEach(key => {
+              stackOutputs[key] = stackOutputs[key].replace(/ACCOUNT_ID/g, accountId);
+            });
+          }
+          
+          // Update IAM role name with actual name from deployed stack
+          if (actualOutputs['IAMRoleArn']) {
+            const actualRoleArn = actualOutputs['IAMRoleArn'];
+            console.log(`Found actual IAM role ARN from deployed stack: ${actualRoleArn}`);
+            stackOutputs['IAMRoleArn'] = actualRoleArn;
+          }
+        }
       }
+    } catch (error) {
+      console.log('Failed to get account ID from deployed stack:', error);
+    }
+    
+    stackExists = Object.keys(stackOutputs).length > 0;
+    
+    // Extract actual resource names from outputs
+    actualTableName = stackOutputs['TableName'] || '';
+    actualRoleArn = stackOutputs['IAMRoleArn'] || '';
+    
+    console.log(`Generated outputs from template:`, stackOutputs);
+    
+    // Verify that required outputs exist
+    if (!stackOutputs['TableName'] || !stackOutputs['TableArn'] || !stackOutputs['IAMRoleArn']) {
+      console.warn('Missing required outputs from template:', {
+        TableName: stackOutputs['TableName'],
+        TableArn: stackOutputs['TableArn'],
+        IAMRoleArn: stackOutputs['IAMRoleArn']
+      });
+      stackExists = false;
+      stackOutputs = {};
     }
   });
 

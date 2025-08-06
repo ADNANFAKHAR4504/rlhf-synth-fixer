@@ -1,7 +1,7 @@
 {
-  "TableName": "multi-region-app-test-west1-table",
-  "TableArn": "arn:aws:dynamodb:us-west-1:730335459272:table/multi-region-app-test-west1-table",
-  "IAMRoleArn": "arn:aws:iam::730335459272:role/TapStacktest-DynamoDBAccessRole-o7v48iDZpeMC",
+  "TableName": "multi-region-app-pr539-west1-table",
+  "TableArn": "arn:aws:dynamodb:us-west-1:ACCOUNT_ID:table/multi-region-app-pr539-west1-table",
+  "IAMRoleArn": "arn:aws:iam::ACCOUNT_ID:role/TapStackpr539-DynamoDBAccessRole",
   "CapacityConfiguration": "Read: 5, Write: 5 (Fixed)",
-  "TableDetails": "Table: multi-region-app-test-west1-table | Region: us-west-1 | Environment: test | DeploymentRegion: us-west-1"
+  "TableDetails": "Table: multi-region-app-pr539-west1-table | Region: us-west-1 | Environment: pr539 | DeploymentRegion: us-west-1"
 }
