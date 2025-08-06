@@ -15,7 +15,7 @@ const REGION = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || 'us-e
 const ec2 = new EC2Client({ region: REGION });
 
 // Load flat-outputs.json
-const outputsPath = path.join(__dirname, '..', 'flat-outputs.json');
+const outputsPath = path.join(__dirname, '..', 'cfn-outputs', 'flat-outputs.json');
 
 if (!fs.existsSync(outputsPath)) {
   throw new Error(` Missing flat-outputs.json at: ${outputsPath}`);
