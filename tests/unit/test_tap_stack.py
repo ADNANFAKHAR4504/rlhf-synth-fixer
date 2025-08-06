@@ -6,8 +6,7 @@ and Pulumi's testing utilities.
 """
 
 import unittest
-import asyncio
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 import pytest
 
 import pulumi
@@ -23,21 +22,49 @@ class MockPulumiMocks(pulumi.runtime.Mocks):
     outputs = args.inputs.copy() if args.inputs else {}
     
     # Handle different AWS resource types
+    self._handle_secrets_manager_resources(args, outputs)
+    self._handle_kms_resources(args, outputs)
+    self._handle_s3_resources(args, outputs)
+    self._handle_kinesis_resources(args, outputs)
+    self._handle_iam_resources(args, outputs)
+    self._handle_lambda_resources(args, outputs)
+    self._handle_api_gateway_resources(args, outputs)
+    self._handle_cloudwatch_resources(args, outputs)
+    self._handle_sns_resources(args, outputs)
+    
+    # Set default id if not already set
+    if "id" not in outputs:
+      outputs["id"] = args.name
+      
+    return [args.name + "_id", outputs]
+  
+  def _handle_secrets_manager_resources(self, args, outputs):
+    """Handle Secrets Manager resource types."""
     if args.typ == "aws:secretsmanager/secret:Secret":
-      outputs["arn"] = f"arn:aws:secretsmanager:us-east-1:123456789012:secret:{args.name}"
+      outputs["arn"] = (
+        f"arn:aws:secretsmanager:us-east-1:123456789012:secret:{args.name}"
+      )
       outputs["name"] = args.name
       outputs["id"] = args.name
     elif args.typ == "aws:secretsmanager/secretVersion:SecretVersion":
-      outputs["arn"] = f"arn:aws:secretsmanager:us-east-1:123456789012:secret:{args.name}:version-id"
+      outputs["arn"] = (
+        f"arn:aws:secretsmanager:us-east-1:123456789012:secret:{args.name}:version-id"
+      )
       outputs["id"] = f"{args.name}:version-id"
-    elif args.typ == "aws:kms/key:Key":
+  
+  def _handle_kms_resources(self, args, outputs):
+    """Handle KMS resource types."""
+    if args.typ == "aws:kms/key:Key":
       outputs["arn"] = f"arn:aws:kms:us-east-1:123456789012:key/{args.name}"
       outputs["key_id"] = f"key-{args.name}"
       outputs["id"] = f"key-{args.name}"
     elif args.typ == "aws:kms/alias:Alias":
       outputs["arn"] = f"arn:aws:kms:us-east-1:123456789012:alias/{args.name}"
       outputs["id"] = args.name
-    elif args.typ == "aws:s3/bucket:Bucket":
+  
+  def _handle_s3_resources(self, args, outputs):
+    """Handle S3 resource types."""
+    if args.typ == "aws:s3/bucket:Bucket":
       outputs["bucket"] = args.name
       outputs["arn"] = f"arn:aws:s3:::{args.name}"
       outputs["id"] = args.name
@@ -45,11 +72,19 @@ class MockPulumiMocks(pulumi.runtime.Mocks):
       # Handle S3 bucket configurations
       outputs["id"] = args.name
       outputs["bucket"] = args.name if "bucket" not in outputs else outputs["bucket"]
-    elif args.typ == "aws:kinesis/stream:Stream":
+    elif args.typ == "aws:s3/bucketNotification:BucketNotification":
+      outputs["id"] = args.name
+  
+  def _handle_kinesis_resources(self, args, outputs):
+    """Handle Kinesis resource types."""
+    if args.typ == "aws:kinesis/stream:Stream":
       outputs["arn"] = f"arn:aws:kinesis:us-east-1:123456789012:stream/{args.name}"
       outputs["name"] = args.name
       outputs["id"] = args.name
-    elif args.typ == "aws:iam/role:Role":
+  
+  def _handle_iam_resources(self, args, outputs):
+    """Handle IAM resource types."""
+    if args.typ == "aws:iam/role:Role":
       outputs["arn"] = f"arn:aws:iam::123456789012:role/{args.name}"
       outputs["name"] = args.name
       outputs["id"] = args.name
@@ -59,7 +94,10 @@ class MockPulumiMocks(pulumi.runtime.Mocks):
       outputs["name"] = args.name
     elif args.typ == "aws:iam/rolePolicyAttachment:RolePolicyAttachment":
       outputs["id"] = args.name
-    elif args.typ == "aws:lambda/function:Function":
+  
+  def _handle_lambda_resources(self, args, outputs):
+    """Handle Lambda resource types."""
+    if args.typ == "aws:lambda/function:Function":
       outputs["arn"] = f"arn:aws:lambda:us-east-1:123456789012:function:{args.name}"
       outputs["function_name"] = args.name
       outputs["name"] = args.name
@@ -68,14 +106,19 @@ class MockPulumiMocks(pulumi.runtime.Mocks):
         f"arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/"
         f"functions/arn:aws:lambda:us-east-1:123456789012:function:{args.name}/invocations"
       )
-      outputs["qualified_arn"] = f"arn:aws:lambda:us-east-1:123456789012:function:{args.name}:$LATEST"
+      outputs["qualified_arn"] = (
+        f"arn:aws:lambda:us-east-1:123456789012:function:{args.name}:$LATEST"
+      )
       outputs["version"] = "$LATEST"
     elif args.typ == "aws:lambda/eventSourceMapping:EventSourceMapping":
       outputs["id"] = f"esm-{args.name}"
       outputs["uuid"] = f"12345678-1234-1234-1234-{args.name[:12]}"
     elif args.typ == "aws:lambda/permission:Permission":
       outputs["id"] = args.name
-    elif args.typ == "aws:apigatewayv2/api:Api":
+  
+  def _handle_api_gateway_resources(self, args, outputs):
+    """Handle API Gateway resource types."""
+    if args.typ == "aws:apigatewayv2/api:Api":
       outputs["id"] = f"api-{args.name}"
       outputs["api_endpoint"] = f"https://{args.name}.execute-api.us-east-1.amazonaws.com"
       outputs["execution_arn"] = f"arn:aws:execute-api:us-east-1:123456789012:{outputs['id']}"
@@ -86,30 +129,28 @@ class MockPulumiMocks(pulumi.runtime.Mocks):
     elif args.typ == "aws:apigatewayv2/stage:Stage":
       outputs["id"] = f"stage-{args.name}"
       outputs["invoke_url"] = f"https://{args.name}.execute-api.us-east-1.amazonaws.com/dev"
-    elif args.typ == "aws:cloudwatch/logGroup:LogGroup":
+  
+  def _handle_cloudwatch_resources(self, args, outputs):
+    """Handle CloudWatch resource types."""
+    if args.typ == "aws:cloudwatch/logGroup:LogGroup":
       outputs["name"] = args.name
       outputs["arn"] = f"arn:aws:logs:us-east-1:123456789012:log-group:{args.name}"
       outputs["id"] = args.name
     elif args.typ == "aws:cloudwatch/metricAlarm:MetricAlarm":
       outputs["id"] = args.name
       outputs["arn"] = f"arn:aws:cloudwatch:us-east-1:123456789012:alarm:{args.name}"
-    elif args.typ == "aws:sns/topic:Topic":
+  
+  def _handle_sns_resources(self, args, outputs):
+    """Handle SNS resource types."""
+    if args.typ == "aws:sns/topic:Topic":
       outputs["arn"] = f"arn:aws:sns:us-east-1:123456789012:{args.name}"
       outputs["name"] = args.name
       outputs["id"] = args.name
-    elif args.typ == "aws:s3/bucketNotification:BucketNotification":
-      outputs["id"] = args.name
-      
-    # Set default id if not already set
-    if "id" not in outputs:
-      outputs["id"] = args.name
-      
-    return [args.name + "_id", outputs]
   
   def call(self, args):
     if args.token == "aws:index/getRegion:getRegion":
       return {"name": "us-east-1", "id": "us-east-1"}
-    elif args.token == "aws:index/getCallerIdentity:getCallerIdentity":
+    if args.token == "aws:index/getCallerIdentity:getCallerIdentity":
       return {
         "accountId": "123456789012",  # AWS provider expects camelCase
         "account_id": "123456789012", # Also provide snake_case for compatibility
@@ -118,13 +159,12 @@ class MockPulumiMocks(pulumi.runtime.Mocks):
         "user_id": "AIDACKCEVSQ6C2EXAMPLE", # Also provide snake_case for compatibility
         "id": "123456789012"
       }
-    else:
-      # Return some default values for unhandled calls to avoid None
-      return {
-        "id": "default-id",
-        "name": "default-name", 
-        "arn": "arn:aws:service:region:123456789012:default"
-      }
+    # Return some default values for unhandled calls to avoid None
+    return {
+      "id": "default-id",
+      "name": "default-name", 
+      "arn": "arn:aws:service:region:123456789012:default"
+    }
 
 
 @pytest.fixture(scope="session", autouse=True)
