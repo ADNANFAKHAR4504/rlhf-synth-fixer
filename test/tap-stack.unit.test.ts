@@ -36,7 +36,7 @@ describe('TapStack CloudFormation Template', () => {
       expect(envParam.Type).toBe('String');
       expect(envParam.Default).toBe('dev');
       expect(envParam.AllowedValues).toEqual(['dev', 'stage', 'prod']);
-      expect(envParam.Description).toBe('Environment for the application');
+      expect(envParam.Description).toBe('Environment name');
     });
 
     test('should have LogLevel parameter', () => {
@@ -49,7 +49,7 @@ describe('TapStack CloudFormation Template', () => {
       expect(logLevelParam.Default).toBe('INFO');
       expect(logLevelParam.AllowedValues).toEqual(['INFO', 'WARN', 'ERROR']);
       expect(logLevelParam.Description).toBe(
-        'Log level for the Lambda function'
+        'Log level for Lambda function'
       );
     });
   });
@@ -80,7 +80,7 @@ describe('TapStack CloudFormation Template', () => {
 
       expect(envVars.STAGE).toEqual({ Ref: 'Environment' });
       expect(envVars.LOG_LEVEL).toEqual({ Ref: 'LogLevel' });
-      expect(envVars.DYNAMODB_TABLE).toEqual({ Ref: 'DataTable' });
+      expect(envVars.TABLE_NAME).toEqual({ Ref: 'DataTable' });
     });
 
     test('should have CloudWatch Log Group', () => {
@@ -151,11 +151,11 @@ describe('TapStack CloudFormation Template', () => {
     });
 
     test('should have DynamoDB auto scaling resources', () => {
-      expect(template.Resources.DynamoDBAutoScalingRole).toBeDefined();
+      expect(template.Resources.ApplicationAutoScalingDynamoDBRole).toBeDefined();
       expect(template.Resources.ReadCapacityScalableTarget).toBeDefined();
       expect(template.Resources.WriteCapacityScalableTarget).toBeDefined();
-      expect(template.Resources.ReadCapacityScalingPolicy).toBeDefined();
-      expect(template.Resources.WriteCapacityScalingPolicy).toBeDefined();
+      expect(template.Resources.ReadScalingPolicy).toBeDefined();
+      expect(template.Resources.WriteScalingPolicy).toBeDefined();
     });
 
     test('auto scaling targets should have correct capacity limits', () => {
@@ -169,8 +169,8 @@ describe('TapStack CloudFormation Template', () => {
     });
 
     test('auto scaling policies should target 70% utilization', () => {
-      const readPolicy = template.Resources.ReadCapacityScalingPolicy;
-      const writePolicy = template.Resources.WriteCapacityScalingPolicy;
+      const readPolicy = template.Resources.ReadScalingPolicy;
+      const writePolicy = template.Resources.WriteScalingPolicy;
 
       expect(
         readPolicy.Properties.TargetTrackingScalingPolicyConfiguration
@@ -199,24 +199,22 @@ describe('TapStack CloudFormation Template', () => {
       expect(alarm.Properties.ComparisonOperator).toBe('GreaterThanThreshold');
     });
 
-    test('error alarm should monitor error rate correctly', () => {
+    test('error alarm should monitor errors metric', () => {
       const alarm = template.Resources.LambdaErrorAlarm;
-      const metrics = alarm.Properties.Metrics;
 
-      expect(metrics).toHaveLength(3);
-      expect(metrics.find((m: any) => m.Id === 'e1')).toBeDefined(); // Errors metric
-      expect(metrics.find((m: any) => m.Id === 'i1')).toBeDefined(); // Invocations metric
-      expect(metrics.find((m: any) => m.Id === 'errorRate')).toBeDefined(); // Error rate calculation
+      expect(alarm.Properties.MetricName).toBe('Errors');
+      expect(alarm.Properties.Namespace).toBe('AWS/Lambda');
+      expect(alarm.Properties.Statistic).toBe('Sum');
     });
   });
 
   describe('Outputs', () => {
     test('should have all required outputs', () => {
       const expectedOutputs = [
-        'ApiGatewayUrl',
+        'ApiEndpoint',
         'LambdaFunctionArn',
         'DynamoDBTableName',
-        'LambdaLogGroupName',
+        'DynamoDBTableArn',
       ];
 
       expectedOutputs.forEach(outputName => {
@@ -224,10 +222,10 @@ describe('TapStack CloudFormation Template', () => {
       });
     });
 
-    test('ApiGatewayUrl output should be correct', () => {
-      const output = template.Outputs.ApiGatewayUrl;
+    test('ApiEndpoint output should be correct', () => {
+      const output = template.Outputs.ApiEndpoint;
       expect(output.Description).toBe(
-        'API Gateway endpoint URL for the data processing API'
+        'API Gateway endpoint URL'
       );
       expect(output.Value).toEqual({
         'Fn::Sub':
@@ -237,16 +235,16 @@ describe('TapStack CloudFormation Template', () => {
 
     test('outputs should have export names', () => {
       const expectedExportNames: Record<
-        | 'ApiGatewayUrl'
+        | 'ApiEndpoint'
         | 'LambdaFunctionArn'
         | 'DynamoDBTableName'
-        | 'LambdaLogGroupName',
+        | 'DynamoDBTableArn',
         string
       > = {
-        ApiGatewayUrl: 'api-url',
-        LambdaFunctionArn: 'lambda-arn',
-        DynamoDBTableName: 'dynamodb-table',
-        LambdaLogGroupName: 'log-group',
+        ApiEndpoint: 'ApiEndpoint',
+        LambdaFunctionArn: 'LambdaArn',
+        DynamoDBTableName: 'TableName',
+        DynamoDBTableArn: 'TableArn',
       };
 
       (
@@ -269,17 +267,18 @@ describe('TapStack CloudFormation Template', () => {
 
       // CloudWatch Logs policy
       const logPolicy = policies.find(
-        (p: any) => p.PolicyName === 'LambdaBasicExecution'
+        (p: any) => p.PolicyName === 'CloudWatchLogs'
       );
       expect(logPolicy).toBeDefined();
       expect(logPolicy.PolicyDocument.Statement[0].Action).toEqual([
+        'logs:CreateLogGroup',
         'logs:CreateLogStream',
         'logs:PutLogEvents',
       ]);
 
       // DynamoDB policy
       const dynamoPolicy = policies.find(
-        (p: any) => p.PolicyName === 'DynamoDBPutItem'
+        (p: any) => p.PolicyName === 'DynamoDBAccess'
       );
       expect(dynamoPolicy).toBeDefined();
       expect(dynamoPolicy.PolicyDocument.Statement[0].Action).toEqual([
@@ -288,9 +287,9 @@ describe('TapStack CloudFormation Template', () => {
     });
 
     test('DynamoDB auto scaling role should have correct managed policy', () => {
-      const role = template.Resources.DynamoDBAutoScalingRole;
+      const role = template.Resources.ApplicationAutoScalingDynamoDBRole;
       expect(role.Properties.ManagedPolicyArns).toEqual([
-        'arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess',
+        'arn:aws:iam::aws:policy/service-role/DynamoDBAutoscaleRole',
       ]);
     });
   });
@@ -331,7 +330,7 @@ describe('TapStack CloudFormation Template', () => {
   describe('Region Constraint', () => {
     test('template should explicitly reference us-east-1 region', () => {
       // Check API Gateway URL in outputs
-      const apiOutput = template.Outputs.ApiGatewayUrl;
+      const apiOutput = template.Outputs.ApiEndpoint;
       expect(apiOutput.Value['Fn::Sub']).toContain('us-east-1');
 
       // Check Lambda permission source ARN

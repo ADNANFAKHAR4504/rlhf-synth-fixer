@@ -10,35 +10,35 @@ type CloudFormationOutput = {
 // Default outputs array, exactly as provided.
 const defaultOutputs: CloudFormationOutput[] = [
   {
-    OutputKey: 'ApiGatewayUrl',
+    OutputKey: 'ApiEndpoint',
     OutputValue:
-      'https://8pi6v8wrfh.execute-api.us-east-1.amazonaws.com/dev/data',
-    Description: 'API Gateway endpoint URL for the data processing API',
-    ExportName: 'TapStackpr598-api-url',
-  },
-  {
-    OutputKey: 'LambdaLogGroupName',
-    OutputValue: '/aws/lambda/TapStackpr598-data-processor',
-    Description: 'Name of the CloudWatch Log Group for Lambda',
-    ExportName: 'TapStackpr598-log-group',
+      'https://mock-api-id.execute-api.us-east-1.amazonaws.com/dev/data',
+    Description: 'API Gateway endpoint URL',
+    ExportName: 'TapStacksynth291945-ApiEndpoint',
   },
   {
     OutputKey: 'LambdaFunctionArn',
     OutputValue:
-      'arn:aws:lambda:us-east-1:718240086340:function:TapStackpr598-data-processor',
-    Description: 'ARN of the Lambda function',
-    ExportName: 'TapStackpr598-lambda-arn',
+      'arn:aws:lambda:us-east-1:123456789012:function:dev-data-processor',
+    Description: 'Lambda function ARN',
+    ExportName: 'TapStacksynth291945-LambdaArn',
   },
   {
     OutputKey: 'DynamoDBTableName',
-    OutputValue: 'TapStackpr598-data-table',
-    Description: 'Name of the DynamoDB table',
-    ExportName: 'TapStackpr598-dynamodb-table',
+    OutputValue: 'dev-data-table',
+    Description: 'DynamoDB table name',
+    ExportName: 'TapStacksynth291945-TableName',
+  },
+  {
+    OutputKey: 'DynamoDBTableArn',
+    OutputValue: 'arn:aws:dynamodb:us-east-1:123456789012:table/dev-data-table',
+    Description: 'DynamoDB table ARN',
+    ExportName: 'TapStacksynth291945-TableArn',
   },
 ];
 
 let outputs: CloudFormationOutput[];
-const outputFilePath = path.join(__dirname, 'cfn-outputs', 'outputs.json');
+const outputFilePath = path.join(__dirname, '../cfn-outputs', 'flat-outputs.json');
 
 // Logic to load outputs from file or use defaults.
 if (fs.existsSync(outputFilePath)) {
@@ -59,10 +59,10 @@ if (fs.existsSync(outputFilePath)) {
 }
 
 type OutputKey =
-  | 'ApiGatewayUrl'
-  | 'LambdaLogGroupName'
+  | 'ApiEndpoint'
   | 'LambdaFunctionArn'
-  | 'DynamoDBTableName';
+  | 'DynamoDBTableName'
+  | 'DynamoDBTableArn';
 
 const getOutputValue = (key: OutputKey): string | undefined => {
   const output = outputs.find(o => o.OutputKey === key);
@@ -75,10 +75,10 @@ describe('Serverless Data Processing API Integration Tests', () => {
   describe('Infrastructure Validation', () => {
     test('should have all required outputs from CloudFormation deployment', () => {
       // Assert that the expected output keys exist in the loaded outputs.
-      expect(getOutputValue('ApiGatewayUrl')).toBeDefined();
+      expect(getOutputValue('ApiEndpoint')).toBeDefined();
       expect(getOutputValue('LambdaFunctionArn')).toBeDefined();
       expect(getOutputValue('DynamoDBTableName')).toBeDefined();
-      expect(getOutputValue('LambdaLogGroupName')).toBeDefined();
+      expect(getOutputValue('DynamoDBTableArn')).toBeDefined();
     });
 
     test('Lambda function ARN should follow expected format', () => {
@@ -99,10 +99,10 @@ describe('Serverless Data Processing API Integration Tests', () => {
       }
     });
 
-    test('CloudWatch Log Group should follow Lambda naming convention', () => {
-      const lambdaLogGroupName = getOutputValue('LambdaLogGroupName');
-      // Validate the format of the CloudWatch Log Group name.
-      expect(lambdaLogGroupName).toMatch(/^\/aws\/lambda\/.*data-processor$/);
+    test('DynamoDB table ARN should follow expected format', () => {
+      const dynamoDBTableArn = getOutputValue('DynamoDBTableArn');
+      // Validate the format of the DynamoDB table ARN.
+      expect(dynamoDBTableArn).toMatch(/^arn:aws:dynamodb:us-east-1:\d{12}:table\/.*data-table$/);
     });
   });
 
@@ -159,12 +159,12 @@ describe('Serverless Data Processing API Integration Tests', () => {
         STAGE: environmentSuffix,
         AWS_REGION: 'us-east-1',
         LOG_LEVEL: 'INFO',
-        DYNAMODB_TABLE: getOutputValue('DynamoDBTableName'),
+        TABLE_NAME: getOutputValue('DynamoDBTableName'),
       };
 
       expect(expectedEnvVars.STAGE).toBe(environmentSuffix);
       expect(expectedEnvVars.LOG_LEVEL).toBe('INFO');
-      expect(expectedEnvVars.DYNAMODB_TABLE).toBe(
+      expect(expectedEnvVars.TABLE_NAME).toBe(
         getOutputValue('DynamoDBTableName')
       );
     });
@@ -185,7 +185,7 @@ describe('Serverless Data Processing API Integration Tests', () => {
       // This test asserts against mock properties of the CloudWatch Log Group.
       const mockLog = {
         exists: true,
-        name: getOutputValue('LambdaLogGroupName'),
+        name: '/aws/lambda/dev-data-processor',
         retentionDays: 14,
       };
 

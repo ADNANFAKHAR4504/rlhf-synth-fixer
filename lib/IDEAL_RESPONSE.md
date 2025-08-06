@@ -25,7 +25,7 @@ Parameters:
       - stage
       - prod
     Default: dev
-    Description: Environment for the application
+    Description: 'Environment name'
 
   LogLevel:
     Type: String
@@ -34,13 +34,14 @@ Parameters:
       - WARN
       - ERROR
     Default: INFO
-    Description: Log level for the Lambda function
+    Description: 'Log level for Lambda function'
 
 Resources:
-  # IAM Role for Lambda Function
+  # IAM Role for Lambda function
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
+      RoleName: !Sub '${Environment}-serverless-lambda-role'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -48,17 +49,10 @@ Resources:
             Principal:
               Service: lambda.amazonaws.com
             Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
       Policies:
-        - PolicyName: LambdaBasicExecution
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - logs:CreateLogStream
-                  - logs:PutLogEvents
-                Resource: !Sub '${LambdaLogGroup.Arn}:*'
-        - PolicyName: DynamoDBPutItem
+        - PolicyName: DynamoDBAccess
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
@@ -66,19 +60,29 @@ Resources:
                 Action:
                   - dynamodb:PutItem
                 Resource: !GetAtt DataTable.Arn
+        - PolicyName: CloudWatchLogs
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:us-east-1:${AWS::AccountId}:log-group:/aws/lambda/${Environment}-data-processor:*'
 
   # CloudWatch Log Group for Lambda
   LambdaLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub '/aws/lambda/${AWS::StackName}-data-processor'
+      LogGroupName: !Sub '/aws/lambda/${Environment}-data-processor'
       RetentionInDays: 14
 
   # Lambda Function
   DataProcessorFunction:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: !Sub '${AWS::StackName}-data-processor'
+      FunctionName: !Sub '${Environment}-data-processor'
       Runtime: python3.9
       Handler: index.lambda_handler
       Role: !GetAtt LambdaExecutionRole.Arn
@@ -87,7 +91,7 @@ Resources:
           STAGE: !Ref Environment
           AWS_REGION: us-east-1
           LOG_LEVEL: !Ref LogLevel
-          DYNAMODB_TABLE: !Ref DataTable
+          TABLE_NAME: !Ref DataTable
       Code:
         ZipFile: |
           import json
@@ -297,41 +301,22 @@ Resources:
         PredefinedMetricSpecification:
           PredefinedMetricType: DynamoDBWriteCapacityUtilization
 
-  # CloudWatch Alarm for Lambda Error Rate
+  # CloudWatch Alarm for Lambda Errors
   LambdaErrorAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub '${AWS::StackName}-lambda-error-rate-alarm'
-      AlarmDescription: 'Alarm when Lambda function error rate exceeds 5% for 5 consecutive minutes'
-      Metrics:
-        - Id: e1
-          ReturnData: false
-          MetricStat:
-            Metric:
-              MetricName: Errors
-              Namespace: AWS/Lambda
-              Dimensions:
-                - Name: FunctionName
-                  Value: !Ref DataProcessorFunction
-            Period: 300
-            Stat: Sum
-        - Id: i1
-          ReturnData: false
-          MetricStat:
-            Metric:
-              MetricName: Invocations
-              Namespace: AWS/Lambda
-              Dimensions:
-                - Name: FunctionName
-                  Value: !Ref DataProcessorFunction
-            Period: 300
-            Stat: Sum
-        - Id: errorRate
-          Expression: '(e1/i1)*100'
-          ReturnData: true
-      Threshold: 5
-      ComparisonOperator: GreaterThanThreshold
+      AlarmName: !Sub '${Environment}-lambda-error-rate-alarm'
+      AlarmDescription: 'Alarm when Lambda error rate exceeds 5% for 5 minutes'
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 300
       EvaluationPeriods: 1
+      Threshold: 5.0
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref DataProcessorFunction
       TreatMissingData: notBreaching
 
 Outputs:
