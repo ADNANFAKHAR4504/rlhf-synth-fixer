@@ -315,11 +315,7 @@ def create_ec2_instances(
     filters=[
       aws.ec2.GetAmiFilterArgs(
         name="name",
-        values=["amzn2-ami-hvm-*-x86_64-gp2"]
-      ),
-      aws.ec2.GetAmiFilterArgs(
-        name="virtualization-type",
-        values=["hvm"]
+        values=["amzn2-ami-ecs-hvm-*-x86_64-ebs"]
       )
     ]
   )
