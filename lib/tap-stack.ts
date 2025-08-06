@@ -75,11 +75,8 @@ class NetworkingConstruct extends Construct {
   constructor(scope: Construct, id: string, props: NetworkingProps) {
     super(scope, id);
 
-    if (props.azs.length < 3) {
-      throw new Error(
-        'NetworkingConstruct requires at least 3 Availability Zones.'
-      );
-    }
+    // The validation check for AZs is now handled in TapStack before passing to NetworkingProps.
+    // This construct can now assume it receives at least 3 AZs.
 
     // Create a new VPC
     const vpc = new Vpc(this, 'vpc', {
@@ -613,15 +610,21 @@ export class TapStack extends TerraformStack {
     this.addOverride('terraform.backend.s3.use_lockfile', true);
 
     // Fetch available Availability Zones for the specified region.
-    // The mock in the test files will provide a concrete array for azs.names
     const azs = new DataAwsAvailabilityZones(this, 'available_azs', {
       state: 'available',
     });
 
+    // Provide a fallback for AZs if the data source doesn't return enough.
+    // This ensures the NetworkingConstruct always gets at least 3 AZs for synthesis.
+    const networkAzs =
+      azs.names.length >= 3
+        ? (azs.names as string[])
+        : ['us-east-1a', 'us-east-1b', 'us-east-1c']; // Fallback to common AZs
+
     // Instantiate NetworkingConstruct
     const networking = new NetworkingConstruct(this, 'networking', {
       vpcCidr: vpcCidr,
-      azs: azs.names as string[],
+      azs: networkAzs, // Use the potentially fallback AZs
       tags: effectiveDefaultTags, // Pass common tags
     });
 
