@@ -284,7 +284,7 @@ describe('Expert-Level Secure CloudFormation Template', () => {
       expect(denyInsecureStatement.Sid).toBe('DenyInsecureS3Operations');
       expect(denyInsecureStatement.Effect).toBe('Deny');
       expect(denyInsecureStatement.Action).toBe('s3:*');
-      expect(denyInsecureStatement.Resource).toContain({
+      expect(denyInsecureStatement.Resource).toContainEqual({
         'Fn::GetAtt': ['PrimaryDataBucket', 'Arn']
       });
       expect(denyInsecureStatement.Condition.Bool['aws:SecureTransport']).toBe('false');
@@ -418,8 +418,7 @@ describe('Expert-Level Secure CloudFormation Template', () => {
 
       Object.keys(template.Outputs).forEach(outputKey => {
         const output = template.Outputs[outputKey];
-     const expectedExportName = expectedExportMappings[outputKey as keyof typeof expectedExportMappings] || outputKey;
-        expect(output.Export.Name).toEqual({
+const expectedExportName = expectedExportMappings[outputKey as keyof typeof expectedExportMappings] || outputKey;        expect(output.Export.Name).toEqual({
           'Fn::Sub': `\${AWS::StackName}-${expectedExportName}`
         });
       });
