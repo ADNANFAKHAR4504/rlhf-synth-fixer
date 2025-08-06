@@ -40,9 +40,19 @@ def test_integration():
     
     print(f"--- Testing URL: {url} ---")
     
-    time.sleep(150)
-
-    response = requests.get(url, timeout=30)
+    max_retries = 16
+    for i in range(max_retries):
+      try:
+        response = requests.get(url, timeout=10)
+        print(f"Attempt {i+1}/{max_retries}: Got status code {response.status_code}")
+        if response.status_code == 200:
+          print("✅ Website is up and running!")
+          break
+      except requests.exceptions.RequestException as e:
+        print(f"Attempt {i+1}/{max_retries}: Website not ready yet ({e})...")
+      
+      if i < max_retries - 1:
+        time.sleep(15)
     
     assert response.status_code == 200
     assert "Dual-Stack Web App" in response.text
