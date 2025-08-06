@@ -14,7 +14,6 @@ pulumi_random = "*"
 pulumi = "==3.109.0" 
 pulumi-aws = ">=6.0.0,<7.0.0"
 pytest-cov = "*"
-autopep8 = "*"
 
 [dev-packages]
 boto3 = "*"
@@ -42,3 +41,4 @@ pulumi-deploy = "pulumi up --yes --stack \"${PULUMI_ORG}/TapStack/TapStack${ENVI
 pulumi-destroy = "pulumi destroy --yes --stack \"${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}\""
 pulumi-remove-stack = "pulumi stack rm \"${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}\" --yes --force"
 lint = "pylint lib tests"
+	
