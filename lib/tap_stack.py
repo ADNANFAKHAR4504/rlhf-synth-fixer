@@ -14,6 +14,7 @@ from typing import List, Dict, Any
 import pulumi
 import pulumi_aws as aws
 import ipaddress
+import pulumi_random as random
 
 # Configuration
 config = pulumi.Config()
@@ -37,6 +38,7 @@ def create_vpc_and_networking() -> Dict[str, Any]:
         Dict containing VPC, subnets, IGW, and route tables
     """
     vpc = aws.ec2.Vpc(
+        # NOTE: Humne project ka naam "v4" par hi rakha hai
         f"{project_name}-vpc",
         cidr_block="10.0.0.0/16",
         enable_dns_hostnames=True,
@@ -44,6 +46,11 @@ def create_vpc_and_networking() -> Dict[str, Any]:
         assign_generated_ipv6_cidr_block=True,
         tags={**common_tags, "Name": f"{project_name}-vpc"}
     )
+    
+    # Step 1: Ek random number generate karein jo har run mein alag hoga
+    # Hum 100 aur 250 ke beech ka number le rahe hain taaki purane conflicts se bach sakein
+    random_subnet_offset = random.RandomInteger("subnet-offset", min=100, max=250)
+
     azs = aws.get_availability_zones(state="available")
     igw = aws.ec2.InternetGateway(
         f"{project_name}-igw",
@@ -57,13 +64,19 @@ def create_vpc_and_networking() -> Dict[str, Any]:
         if idx > 0:
             resource_opts = pulumi.ResourceOptions(depends_on=[public_subnets[idx-1]])
         
+        # Step 2: VPC CIDR aur random offset ko ek saath use karein
+        combined_args = pulumi.Output.all(vpc.ipv6_cidr_block, random_subnet_offset.result)
+
         subnet = aws.ec2.Subnet(
             f"{project_name}-public-subnet-{idx+1}",
             vpc_id=vpc.id,
             availability_zone=az,
             cidr_block=f"10.0.{idx+1}.0/24",
-            ipv6_cidr_block=vpc.ipv6_cidr_block.apply(
-                lambda cidr: str(list(ipaddress.IPv6Network(cidr).subnets(new_prefix=64))[idx + 4])),
+            
+            # Step 3: Naye logic se IPv6 address banayein
+            ipv6_cidr_block=combined_args.apply(
+                lambda args: str(list(ipaddress.IPv6Network(args[0]).subnets(new_prefix=64))[args[1] + idx])),
+
             map_public_ip_on_launch=True,
             assign_ipv6_address_on_creation=True,
             tags={
