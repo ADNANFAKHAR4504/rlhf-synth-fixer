@@ -18,6 +18,11 @@ Execute these phases in sequence to deliver production-ready IaC:
 
 **Agent**: `iac-code-reviewer`
 
+- If the MODEL_FAILURES reported by this agent are minimal (not big deployment
+issues deploying the MODEL_RESPONSE), then request iac-infra-generator but to add 2 more recent AWS
+Features or services to increase the complexity of the task. Then go to phase2 and give it
+another round.
+
 ## Task Selection
 
 ### Option 1: CSV Task Selection
@@ -40,8 +45,9 @@ ID in the initial prompt and ask for confirmation.
    - Generate `metadata.json` with extracted information
    - If the deployment needs to be done in a specific region, create the file `lib/AWS_REGION` with the
    region name. e.g: `echo "us-east-1" > lib/AWS_REGION`
-6. Use the selected task description for the workflow.
-7. Once the entire workflow is completed. Raise a Pull Request to main branch and remove the task form tasks.csv
+6. Install inside the worktree. `pipenv install --dev --ignore-pipfile` if language is py, `npm ci` if its not.
+7. Use the selected task description for the workflow.
+8. Once the entire workflow is completed. Raise a Pull Request to main branch and remove the task form tasks.csv
 
 Important: Do not generate the `/lib/PROMPT.md` code, delegate that to the sub-agent. Just send the task information
 to the generator agent
@@ -59,6 +65,8 @@ If `tasks.csv` is not present:
 3. Proceed with the workflow once requirements are properly defined
 
 ## Status Reporting Requirements
+
+You must always report in each log, the taskId youre working on and the region specified for deployment (default is us-east-1).
 
 All sub-agents MUST report their execution status to the coordinator using the following format:
 
@@ -111,6 +119,7 @@ Each sub-agent must provide status updates at these key points:
 - Report test coverage analysis completion with coverage percentage
 - Report blocking conditions if critical compliance failures prevent approval
 - Report final readiness recommendation with specific issues to resolve
+- Report the final `lib/MODEL_FAILURES.md` content.
 
 ## Usage
 
