@@ -660,7 +660,7 @@ describe('TapStack Unit Tests', () => {
             : [statement.Resource];
           resources.forEach((resource: any) => {
             if (typeof resource === 'object' && resource['Fn::Sub']) {
-              expect(resource['Fn::Sub']).toMatch(/\${FinAppSecureDocuments}/);
+              expect(resource['Fn::Sub']).toMatch(/\${FinAppSecureDocuments\.Arn}/);
             }
           });
         }
