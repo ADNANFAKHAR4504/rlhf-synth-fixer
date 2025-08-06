@@ -1,10 +1,10 @@
 import * as cdk from 'aws-cdk-lib';
-import { Template, Match } from 'aws-cdk-lib/assertions';
-import { TapStack } from '../lib/tap-stack';
-import { NetworkingStack } from '../lib/stacks/networking-stack';
-import { SecurityStack } from '../lib/stacks/security-stack';
+import { Match, Template } from 'aws-cdk-lib/assertions';
 import { ComputeStack } from '../lib/stacks/compute-stack';
 import { MonitoringStack } from '../lib/stacks/monitoring-stack';
+import { NetworkingStack } from '../lib/stacks/networking-stack';
+import { SecurityStack } from '../lib/stacks/security-stack';
+import { TapStack } from '../lib/tap-stack';
 
 const environmentSuffix = 'test';
 
@@ -34,7 +34,7 @@ describe('TapStack Infrastructure Tests', () => {
     test('TapStack creates child stacks', () => {
       const stacks = app.node.children;
       expect(stacks.length).toBeGreaterThan(1);
-      
+
       // Verify all required stacks are created
       const stackNames = stacks.map(stack => stack.node.id);
       expect(stackNames).toContain(`NetworkingStack-${environmentSuffix}`);
@@ -47,7 +47,7 @@ describe('TapStack Infrastructure Tests', () => {
       const appDefault = new cdk.App();
       const stackDefault = new TapStack(appDefault, 'TestTapStackDefault', {});
       expect(stackDefault).toBeDefined();
-      
+
       // Verify default 'dev' suffix is used in child stack names
       const childStacks = appDefault.node.children;
       const stackNames = childStacks.map(stack => stack.node.id);
@@ -56,11 +56,11 @@ describe('TapStack Infrastructure Tests', () => {
 
     test('TapStack uses context environment suffix when props not provided', () => {
       const appContext = new cdk.App({
-        context: { environmentSuffix: 'context-env' }
+        context: { environmentSuffix: 'context-env' },
       });
       const stackContext = new TapStack(appContext, 'TestTapStackContext', {});
       expect(stackContext).toBeDefined();
-      
+
       // Verify context suffix is used
       const childStacks = appContext.node.children;
       const stackNames = childStacks.map(stack => stack.node.id);
@@ -69,7 +69,9 @@ describe('TapStack Infrastructure Tests', () => {
 
     test('TapStack uses default SSH CIDR when not provided', () => {
       const appSsh = new cdk.App();
-      const stackSsh = new TapStack(appSsh, 'TestTapStackSsh', { environmentSuffix });
+      const stackSsh = new TapStack(appSsh, 'TestTapStackSsh', {
+        environmentSuffix,
+      });
       expect(stackSsh).toBeDefined();
       // Default SSH CIDR should be used (10.0.0.0/8)
       expect(stackSsh.node.children.length).toBeGreaterThan(0);
@@ -77,10 +79,14 @@ describe('TapStack Infrastructure Tests', () => {
 
     test('TapStack uses custom SSH CIDR when provided', () => {
       const appCustomSsh = new cdk.App();
-      const stackCustomSsh = new TapStack(appCustomSsh, 'TestTapStackCustomSsh', { 
-        environmentSuffix,
-        allowedSshCidr: '192.168.1.0/24'
-      });
+      const stackCustomSsh = new TapStack(
+        appCustomSsh,
+        'TestTapStackCustomSsh',
+        {
+          environmentSuffix,
+          allowedSshCidr: '192.168.1.0/24',
+        }
+      );
       expect(stackCustomSsh).toBeDefined();
       expect(stackCustomSsh.node.children.length).toBeGreaterThan(0);
     });
@@ -139,12 +145,12 @@ describe('TapStack Infrastructure Tests', () => {
             {
               Effect: 'Allow',
               Principal: {
-                Service: 'vpc-flow-logs.amazonaws.com'
+                Service: 'vpc-flow-logs.amazonaws.com',
               },
-              Action: 'sts:AssumeRole'
-            }
-          ]
-        }
+              Action: 'sts:AssumeRole',
+            },
+          ],
+        },
       });
     });
 
@@ -158,10 +164,10 @@ describe('TapStack Infrastructure Tests', () => {
     test('Creates VPC Endpoints for S3 and DynamoDB', () => {
       // VPC endpoints exist
       networkingTemplate.resourceCountIs('AWS::EC2::VPCEndpoint', 2);
-      
+
       // Should have Gateway type endpoints
       networkingTemplate.hasResourceProperties('AWS::EC2::VPCEndpoint', {
-        VpcEndpointType: 'Gateway'
+        VpcEndpointType: 'Gateway',
       });
     });
 
@@ -174,13 +180,13 @@ describe('TapStack Infrastructure Tests', () => {
     test('Network ACLs are configured (uses default VPC NACLs)', () => {
       // VPC construct automatically creates default NACLs for subnets
       // This satisfies PROMPT.md requirement for "Network ACLs: Subnet-level traffic filtering"
-      
+
       // Default VPC NACLs are created by CDK automatically
       // We verify that the VPC exists which includes default NACL configuration
       networkingTemplate.hasResource('AWS::EC2::VPC', {});
-      
-      // The createNetworkAcls method exists and is called (provides extensibility for custom rules)
-      expect(networkingStack.createNetworkAcls).toBeDefined;
+
+      // Network ACLs are configured through default VPC behavior
+      // The createNetworkAcls method is private and provides extensibility for custom rules
     });
 
     test('Creates expected number of networking resources', () => {
@@ -194,36 +200,48 @@ describe('TapStack Infrastructure Tests', () => {
 
     test('Uses default VPC CIDR when not provided', () => {
       const appDefault = new cdk.App();
-      const networkingDefault = new NetworkingStack(appDefault, 'TestNetworkingDefault', {
-        environmentSuffix: 'default-test'
-      });
+      const networkingDefault = new NetworkingStack(
+        appDefault,
+        'TestNetworkingDefault',
+        {
+          environmentSuffix: 'default-test',
+        }
+      );
       const templateDefault = Template.fromStack(networkingDefault);
 
       // Should use default CIDR 10.0.0.0/16
       templateDefault.hasResourceProperties('AWS::EC2::VPC', {
-        CidrBlock: '10.0.0.0/16'
+        CidrBlock: '10.0.0.0/16',
       });
     });
 
     test('Uses custom VPC CIDR when provided', () => {
       const appCustom = new cdk.App();
-      const networkingCustom = new NetworkingStack(appCustom, 'TestNetworkingCustom', {
-        environmentSuffix: 'custom-test',
-        vpcCidr: '172.16.0.0/16'
-      });
+      const networkingCustom = new NetworkingStack(
+        appCustom,
+        'TestNetworkingCustom',
+        {
+          environmentSuffix: 'custom-test',
+          vpcCidr: '172.16.0.0/16',
+        }
+      );
       const templateCustom = Template.fromStack(networkingCustom);
 
       // Should use custom CIDR
       templateCustom.hasResourceProperties('AWS::EC2::VPC', {
-        CidrBlock: '172.16.0.0/16'
+        CidrBlock: '172.16.0.0/16',
       });
     });
 
     test('Uses default availability zones when not provided', () => {
       const appDefaultAz = new cdk.App();
-      const networkingDefaultAz = new NetworkingStack(appDefaultAz, 'TestNetworkingDefaultAz', {
-        environmentSuffix: 'default-az-test'
-      });
+      const networkingDefaultAz = new NetworkingStack(
+        appDefaultAz,
+        'TestNetworkingDefaultAz',
+        {
+          environmentSuffix: 'default-az-test',
+        }
+      );
       const templateDefaultAz = Template.fromStack(networkingDefaultAz);
 
       // Should create VPC (availability zones are used internally)
@@ -232,10 +250,14 @@ describe('TapStack Infrastructure Tests', () => {
 
     test('Uses custom availability zones when provided', () => {
       const appCustomAz = new cdk.App();
-      const networkingCustomAz = new NetworkingStack(appCustomAz, 'TestNetworkingCustomAz', {
-        environmentSuffix: 'custom-az-test',
-        availabilityZones: ['us-west-2a', 'us-west-2b']
-      });
+      const networkingCustomAz = new NetworkingStack(
+        appCustomAz,
+        'TestNetworkingCustomAz',
+        {
+          environmentSuffix: 'custom-az-test',
+          availabilityZones: ['us-west-2a', 'us-west-2b'],
+        }
+      );
       const templateCustomAz = Template.fromStack(networkingCustomAz);
 
       // Should create VPC with custom AZs
@@ -255,7 +277,7 @@ describe('TapStack Infrastructure Tests', () => {
         environmentSuffix,
         vpcCidr: '10.0.0.0/16',
       });
-      
+
       securityStack = new SecurityStack(app, 'TestSecurityStack', {
         environmentSuffix,
         vpc: networkingStack.vpc,
@@ -266,9 +288,9 @@ describe('TapStack Infrastructure Tests', () => {
 
     test('Creates ALB Security Group with HTTP/HTTPS ingress', () => {
       securityTemplate.hasResourceProperties('AWS::EC2::SecurityGroup', {
-        GroupDescription: 'Security group for Application Load Balancer'
+        GroupDescription: 'Security group for Application Load Balancer',
       });
-      
+
       // ALB security group should allow internet traffic
       // The actual ingress rules are created as separate resources
       const template = securityTemplate.toJSON();
@@ -291,18 +313,18 @@ describe('TapStack Infrastructure Tests', () => {
             {
               Effect: 'Allow',
               Principal: {
-                Service: 'ec2.amazonaws.com'
+                Service: 'ec2.amazonaws.com',
               },
-              Action: 'sts:AssumeRole'
-            }
-          ]
+              Action: 'sts:AssumeRole',
+            },
+          ],
         },
-        Description: 'IAM role for EC2 instances with least privilege'
+        Description: 'IAM role for EC2 instances with least privilege',
       });
-      
+
       // Verify managed policy ARNs exist (they're CloudFormation functions)
       securityTemplate.hasResourceProperties('AWS::IAM::Role', {
-        ManagedPolicyArns: Match.anyValue()
+        ManagedPolicyArns: Match.anyValue(),
       });
     });
 
@@ -313,10 +335,10 @@ describe('TapStack Infrastructure Tests', () => {
             {
               Effect: 'Allow',
               Action: ['s3:GetObject', 's3:PutObject', 's3:DeleteObject'],
-              Resource: `arn:aws:s3:::tf-app-data-bucket-${environmentSuffix}/*`
-            }
-          ])
-        }
+              Resource: `arn:aws:s3:::tf-app-data-bucket-${environmentSuffix}/*`,
+            },
+          ]),
+        },
       });
     });
 
@@ -331,12 +353,12 @@ describe('TapStack Infrastructure Tests', () => {
                 'logs:CreateLogGroup',
                 'logs:CreateLogStream',
                 'logs:PutLogEvents',
-                'logs:DescribeLogStreams'
+                'logs:DescribeLogStreams',
               ]),
-              Resource: '*'
-            }
-          ])
-        }
+              Resource: '*',
+            },
+          ]),
+        },
       });
     });
 
@@ -351,12 +373,12 @@ describe('TapStack Infrastructure Tests', () => {
                 'elasticfilesystem:DescribeMountTargets',
                 'elasticfilesystem:DescribeAccessPoints',
                 'elasticfilesystem:ClientMount',
-                'elasticfilesystem:ClientWrite'
+                'elasticfilesystem:ClientWrite',
               ]),
-              Resource: '*'
-            }
-          ])
-        }
+              Resource: '*',
+            },
+          ]),
+        },
       });
     });
 
@@ -374,16 +396,24 @@ describe('TapStack Infrastructure Tests', () => {
 
     test('Uses default SSH CIDR when not provided', () => {
       const appDefaultSsh = new cdk.App();
-      const networkingDefaultSsh = new NetworkingStack(appDefaultSsh, 'TestNetworkingStackSecDefault', {
-        environmentSuffix: 'default-ssh-test',
-        vpcCidr: '10.0.0.0/16',
-      });
-      
-      const securityDefaultSsh = new SecurityStack(appDefaultSsh, 'TestSecurityStackDefault', {
-        environmentSuffix: 'default-ssh-test',
-        vpc: networkingDefaultSsh.vpc
-        // allowedSshCidr not provided - should use default 10.0.0.0/8
-      });
+      const networkingDefaultSsh = new NetworkingStack(
+        appDefaultSsh,
+        'TestNetworkingStackSecDefault',
+        {
+          environmentSuffix: 'default-ssh-test',
+          vpcCidr: '10.0.0.0/16',
+        }
+      );
+
+      const securityDefaultSsh = new SecurityStack(
+        appDefaultSsh,
+        'TestSecurityStackDefault',
+        {
+          environmentSuffix: 'default-ssh-test',
+          vpc: networkingDefaultSsh.vpc,
+          // allowedSshCidr not provided - should use default 10.0.0.0/8
+        }
+      );
       const templateDefaultSsh = Template.fromStack(securityDefaultSsh);
 
       // Should create security groups (default SSH CIDR used internally)
@@ -392,16 +422,24 @@ describe('TapStack Infrastructure Tests', () => {
 
     test('Uses custom SSH CIDR when provided', () => {
       const appCustomSsh = new cdk.App();
-      const networkingCustomSsh = new NetworkingStack(appCustomSsh, 'TestNetworkingStackSecCustom', {
-        environmentSuffix: 'custom-ssh-test',
-        vpcCidr: '10.0.0.0/16',
-      });
-      
-      const securityCustomSsh = new SecurityStack(appCustomSsh, 'TestSecurityStackCustom', {
-        environmentSuffix: 'custom-ssh-test',
-        vpc: networkingCustomSsh.vpc,
-        allowedSshCidr: '192.168.0.0/16'
-      });
+      const networkingCustomSsh = new NetworkingStack(
+        appCustomSsh,
+        'TestNetworkingStackSecCustom',
+        {
+          environmentSuffix: 'custom-ssh-test',
+          vpcCidr: '10.0.0.0/16',
+        }
+      );
+
+      const securityCustomSsh = new SecurityStack(
+        appCustomSsh,
+        'TestSecurityStackCustom',
+        {
+          environmentSuffix: 'custom-ssh-test',
+          vpc: networkingCustomSsh.vpc,
+          allowedSshCidr: '192.168.0.0/16',
+        }
+      );
       const templateCustomSsh = Template.fromStack(securityCustomSsh);
 
       // Should create security groups with custom SSH CIDR
@@ -422,7 +460,7 @@ describe('TapStack Infrastructure Tests', () => {
         environmentSuffix,
         vpcCidr: '10.0.0.0/16',
       });
-      
+
       securityStack = new SecurityStack(app, 'TestSecurityStackComp', {
         environmentSuffix,
         vpc: networkingStack.vpc,
@@ -442,11 +480,13 @@ describe('TapStack Infrastructure Tests', () => {
     test('Creates EFS File System with correct configuration', () => {
       computeTemplate.hasResourceProperties('AWS::EFS::FileSystem', {
         Encrypted: false,
-        LifecyclePolicies: [{
-          TransitionToIA: 'AFTER_30_DAYS'
-        }],
+        LifecyclePolicies: [
+          {
+            TransitionToIA: 'AFTER_30_DAYS',
+          },
+        ],
         PerformanceMode: 'generalPurpose',
-        ThroughputMode: 'bursting'
+        ThroughputMode: 'bursting',
       });
     });
 
@@ -460,16 +500,19 @@ describe('TapStack Infrastructure Tests', () => {
       computeTemplate.hasResourceProperties('AWS::EFS::AccessPoint', {
         PosixUser: {
           Uid: '1000',
-          Gid: '1000'
-        }
+          Gid: '1000',
+        },
       });
     });
 
     test('Creates Application Load Balancer', () => {
-      computeTemplate.hasResourceProperties('AWS::ElasticLoadBalancingV2::LoadBalancer', {
-        Type: 'application',
-        Scheme: 'internet-facing'
-      });
+      computeTemplate.hasResourceProperties(
+        'AWS::ElasticLoadBalancingV2::LoadBalancer',
+        {
+          Type: 'application',
+          Scheme: 'internet-facing',
+        }
+      );
     });
 
     test('Creates Launch Template with correct configuration', () => {
@@ -483,37 +526,46 @@ describe('TapStack Infrastructure Tests', () => {
               DeviceName: '/dev/xvda',
               Ebs: {
                 VolumeSize: 20,
-                VolumeType: 'gp3'
-              }
-            }
-          ]
-        }
+                VolumeType: 'gp3',
+              },
+            },
+          ],
+        },
       });
     });
 
     test('Creates Auto Scaling Group with correct capacity', () => {
-      computeTemplate.hasResourceProperties('AWS::AutoScaling::AutoScalingGroup', {
-        MinSize: '1',
-        MaxSize: '6',
-        DesiredCapacity: '2',
-      });
+      computeTemplate.hasResourceProperties(
+        'AWS::AutoScaling::AutoScalingGroup',
+        {
+          MinSize: '1',
+          MaxSize: '6',
+          DesiredCapacity: '2',
+        }
+      );
     });
 
     test('Creates Target Group with health checks', () => {
-      computeTemplate.hasResourceProperties('AWS::ElasticLoadBalancingV2::TargetGroup', {
-        Port: 8080,
-        Protocol: 'HTTP',
-        HealthCheckPath: '/health',
-        HealthCheckPort: '8080',
-        HealthCheckProtocol: 'HTTP'
-      });
+      computeTemplate.hasResourceProperties(
+        'AWS::ElasticLoadBalancingV2::TargetGroup',
+        {
+          Port: 8080,
+          Protocol: 'HTTP',
+          HealthCheckPath: '/health',
+          HealthCheckPort: '8080',
+          HealthCheckProtocol: 'HTTP',
+        }
+      );
     });
 
     test('Creates ALB Listener', () => {
-      computeTemplate.hasResourceProperties('AWS::ElasticLoadBalancingV2::Listener', {
-        Port: 80,
-        Protocol: 'HTTP'
-      });
+      computeTemplate.hasResourceProperties(
+        'AWS::ElasticLoadBalancingV2::Listener',
+        {
+          Port: 80,
+          Protocol: 'HTTP',
+        }
+      );
     });
 
     test('Creates Auto Scaling Policies', () => {
@@ -529,8 +581,8 @@ describe('TapStack Infrastructure Tests', () => {
       // Check that launch template has user data
       computeTemplate.hasResourceProperties('AWS::EC2::LaunchTemplate', {
         LaunchTemplateData: {
-          UserData: Match.anyValue()
-        }
+          UserData: Match.anyValue(),
+        },
       });
     });
 
@@ -538,8 +590,8 @@ describe('TapStack Infrastructure Tests', () => {
       // Check that launch template has user data (EFS mounting is included)
       computeTemplate.hasResourceProperties('AWS::EC2::LaunchTemplate', {
         LaunchTemplateData: {
-          UserData: Match.anyValue()
-        }
+          UserData: Match.anyValue(),
+        },
       });
     });
 
@@ -552,7 +604,10 @@ describe('TapStack Infrastructure Tests', () => {
     test('Creates expected number of compute resources', () => {
       computeTemplate.resourceCountIs('AWS::EFS::FileSystem', 1);
       computeTemplate.resourceCountIs('AWS::EFS::AccessPoint', 1);
-      computeTemplate.resourceCountIs('AWS::ElasticLoadBalancingV2::LoadBalancer', 1);
+      computeTemplate.resourceCountIs(
+        'AWS::ElasticLoadBalancingV2::LoadBalancer',
+        1
+      );
       computeTemplate.resourceCountIs('AWS::AutoScaling::AutoScalingGroup', 1); // Single web-app ASG
       computeTemplate.resourceCountIs('AWS::EC2::LaunchTemplate', 1);
       // Step scaling policies may create multiple policies for different scaling steps\n      const scalingPolicyCount = computeTemplate.toJSON().Resources;\n      const scalingPolicies = Object.values(scalingPolicyCount).filter(\n        (resource: any) => resource.Type === 'AWS::AutoScaling::ScalingPolicy'\n      );\n      expect(scalingPolicies.length).toBeGreaterThanOrEqual(2); // At least scale up and down
@@ -575,7 +630,7 @@ describe('TapStack Infrastructure Tests', () => {
         environmentSuffix,
         vpcCidr: '10.0.0.0/16',
       });
-      
+
       securityStack = new SecurityStack(app, 'TestSecurityStackMon', {
         environmentSuffix,
         vpc: networkingStack.vpc,
@@ -601,21 +656,23 @@ describe('TapStack Infrastructure Tests', () => {
     test('Creates S3 bucket for CloudTrail logs with security settings', () => {
       monitoringTemplate.hasResourceProperties('AWS::S3::Bucket', {
         VersioningConfiguration: {
-          Status: 'Enabled'
+          Status: 'Enabled',
         },
         BucketEncryption: {
-          ServerSideEncryptionConfiguration: [{
-            ServerSideEncryptionByDefault: {
-              SSEAlgorithm: 'AES256'
-            }
-          }]
+          ServerSideEncryptionConfiguration: [
+            {
+              ServerSideEncryptionByDefault: {
+                SSEAlgorithm: 'AES256',
+              },
+            },
+          ],
         },
         PublicAccessBlockConfiguration: {
           BlockPublicAcls: true,
           BlockPublicPolicy: true,
           IgnorePublicAcls: true,
-          RestrictPublicBuckets: true
-        }
+          RestrictPublicBuckets: true,
+        },
       });
     });
 
@@ -623,20 +680,20 @@ describe('TapStack Infrastructure Tests', () => {
       monitoringTemplate.hasResourceProperties('AWS::CloudTrail::Trail', {
         IncludeGlobalServiceEvents: true,
         IsMultiRegionTrail: true,
-        EnableLogFileValidation: true
+        EnableLogFileValidation: true,
       });
     });
 
     test('Creates CloudWatch Log Group for CloudTrail', () => {
       monitoringTemplate.hasResourceProperties('AWS::Logs::LogGroup', {
         LogGroupName: `/aws/cloudtrail/${environmentSuffix}`,
-        RetentionInDays: 30
+        RetentionInDays: 30,
       });
     });
 
     test('Creates SNS topic for alerts', () => {
       monitoringTemplate.hasResourceProperties('AWS::SNS::Topic', {
-        DisplayName: `TapStack Alerts - ${environmentSuffix}`
+        DisplayName: `TapStack Alerts - ${environmentSuffix}`,
       });
     });
 
@@ -646,23 +703,25 @@ describe('TapStack Infrastructure Tests', () => {
         EvaluationPeriods: 2,
         MetricName: 'CPUUtilization',
         Namespace: 'AWS/AutoScaling',
-        Threshold: 75
+        Threshold: 75,
       });
     });
 
     test('Creates CloudWatch Dashboard', () => {
       monitoringTemplate.hasResourceProperties('AWS::CloudWatch::Dashboard', {
-        DashboardName: `TapStack-${environmentSuffix}`
+        DashboardName: `TapStack-${environmentSuffix}`,
       });
     });
 
     test('Creates metric filters for security monitoring', () => {
       monitoringTemplate.hasResourceProperties('AWS::Logs::MetricFilter', {
-        MetricTransformations: [{
-          MetricNamespace: `TapStack/Security/${environmentSuffix}`,
-          MetricName: 'RootAccountUsage',
-          MetricValue: '1'
-        }]
+        MetricTransformations: [
+          {
+            MetricNamespace: `TapStack/Security/${environmentSuffix}`,
+            MetricName: 'RootAccountUsage',
+            MetricValue: '1',
+          },
+        ],
       });
     });
 
@@ -672,7 +731,7 @@ describe('TapStack Infrastructure Tests', () => {
         AlarmDescription: 'Root account usage detected',
         ComparisonOperator: 'GreaterThanOrEqualToThreshold',
         EvaluationPeriods: 1,
-        Threshold: 1
+        Threshold: 1,
       });
     });
 
@@ -701,7 +760,9 @@ describe('TapStack Infrastructure Tests', () => {
     });
 
     test('All required stacks are created and properly named', () => {
-      const stacks = app.node.children.filter(child => cdk.Stack.isStack(child)) as cdk.Stack[];
+      const stacks = app.node.children.filter(child =>
+        cdk.Stack.isStack(child)
+      ) as cdk.Stack[];
       expect(stacks.length).toBeGreaterThan(4); // Main stack + 4 child stacks
 
       const stackNames = stacks.map(stack => stack.node.id);
@@ -712,22 +773,30 @@ describe('TapStack Infrastructure Tests', () => {
     });
 
     test('Cross-stack dependencies work properly', () => {
-      const stacks = app.node.children.filter(child => cdk.Stack.isStack(child)) as cdk.Stack[];
-      
+      const stacks = app.node.children.filter(child =>
+        cdk.Stack.isStack(child)
+      ) as cdk.Stack[];
+
       // Find compute stack and verify it has dependencies
-      const computeStack = stacks.find(stack => stack.node.id.includes('Compute')) as cdk.Stack;
+      const computeStack = stacks.find(stack =>
+        stack.node.id.includes('Compute')
+      ) as cdk.Stack;
       expect(computeStack).toBeDefined();
       expect(computeStack.dependencies.length).toBeGreaterThan(0);
 
       // Find monitoring stack and verify it has dependencies
-      const monitoringStack = stacks.find(stack => stack.node.id.includes('Monitoring')) as cdk.Stack;
+      const monitoringStack = stacks.find(stack =>
+        stack.node.id.includes('Monitoring')
+      ) as cdk.Stack;
       expect(monitoringStack).toBeDefined();
       expect(monitoringStack.dependencies.length).toBeGreaterThan(0);
     });
 
     test('Resource tagging is consistent across stacks', () => {
-      const stacks = app.node.children.filter(child => cdk.Stack.isStack(child)) as cdk.Stack[];
-      
+      const stacks = app.node.children.filter(child =>
+        cdk.Stack.isStack(child)
+      ) as cdk.Stack[];
+
       stacks.forEach(stack => {
         if (stack.node.id.includes('Networking')) {
           const template = Template.fromStack(stack);
@@ -735,8 +804,8 @@ describe('TapStack Infrastructure Tests', () => {
           template.hasResourceProperties('AWS::EC2::VPC', {
             Tags: Match.arrayWith([
               { Key: 'Environment', Value: environmentSuffix },
-              { Key: 'Project', Value: 'TapStack' }
-            ])
+              { Key: 'Project', Value: 'TapStack' },
+            ]),
           });
         }
       });
