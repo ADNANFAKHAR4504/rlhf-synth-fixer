@@ -512,17 +512,21 @@ class TapStack(pulumi.ComponentResource):
                                     string.digits, k=8))
     bucket_name = f"{self.config.app_name}-artifacts-{self.environment}-{stack_id}"
     
+    # S3 encryption configuration - avoid long line
+    cls = aws.s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs
+    sse_default_args = cls(sse_algorithm="AES256")
+    
     # S3 bucket for CI/CD artifacts
     self.artifacts_bucket = aws.s3.Bucket(
       f"{self.config.app_name}-artifacts-{self.environment}",
       bucket=bucket_name,
       versioning=aws.s3.BucketVersioningArgs(enabled=True),
-      server_side_encryption_configuration=aws.s3.BucketServerSideEncryptionConfigurationArgs(
-        rule=aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
-          apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
-            sse_algorithm="AES256"
-          ),
-          bucket_key_enabled=True
+      server_side_encryption_configuration=(
+        aws.s3.BucketServerSideEncryptionConfigurationArgs(
+          rule=aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
+            apply_server_side_encryption_by_default=sse_default_args,
+            bucket_key_enabled=True
+          )
         )
       ),
       tags={

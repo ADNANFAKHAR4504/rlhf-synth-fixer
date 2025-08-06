@@ -14,6 +14,7 @@ pulumi_random = "*"
 pulumi = "==3.109.0" 
 pulumi-aws = ">=6.0.0,<7.0.0"
 pytest-cov = "*"
+autopep8 = "*"
 
 [dev-packages]
 boto3 = "*"
