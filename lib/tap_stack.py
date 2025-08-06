@@ -20,7 +20,7 @@ import pulumi_random as random
 # Configuration
 config = pulumi.Config()
 # Project name change to avoid conflicts with orphaned resources
-project_name = "dualstack-web-app-v5"
+project_name = "dualstack-web-app-v6"
 domain_name = config.get("domain_name") or "example.com"
 environment = config.get("environment") or "dev"
 aws_region = config.get("aws:region") or "us-east-1"
