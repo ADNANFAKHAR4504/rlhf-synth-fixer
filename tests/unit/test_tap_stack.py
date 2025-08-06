@@ -147,6 +147,25 @@ class MockResourceOptions:
     self.depends_on = depends_on or []
     if not isinstance(self.depends_on, list):
       self.depends_on = [self.depends_on]
+
+    # Add all the attributes that Pulumi ResourceOptions expects
+    self.transformations = kwargs.get('transformations', [])
+    self.aliases = kwargs.get('aliases', [])
+    self.additional_secret_outputs = kwargs.get(
+        'additional_secret_outputs', [])
+    self.custom_timeouts = kwargs.get('custom_timeouts', None)
+    self.delete_before_replace = kwargs.get('delete_before_replace', None)
+    self.ignore_changes = kwargs.get('ignore_changes', [])
+    self.import_ = kwargs.get('import_', None)
+    self.protect = kwargs.get('protect', None)
+    self.provider = kwargs.get('provider', None)
+    self.providers = kwargs.get('providers', None)
+    self.replace_on_changes = kwargs.get('replace_on_changes', [])
+    self.retain_on_delete = kwargs.get('retain_on_delete', None)
+    self.version = kwargs.get('version', None)
+    self.plugin_download_url = kwargs.get('plugin_download_url', None)
+    self.urn = kwargs.get('urn', None)
+    self.id = kwargs.get('id', None)
     self.kwargs = kwargs
 
 
