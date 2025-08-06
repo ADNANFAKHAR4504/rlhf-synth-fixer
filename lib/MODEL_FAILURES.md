@@ -3,7 +3,7 @@
 
 ## Overview
 
-This document outlines common failure scenarios, their root causes, and recommended solutions for the scalable web application infrastructure defined in PROMPT.md. The infrastructure includes EC2 instances behind an Application Load Balancer, Auto Scaling Group, S3 static content hosting, and CloudWatch monitoring.
+This document outlines common failure scenarios, their root causes, and recommended solutions for the scalable web application infrastructure defined in PROMPT.md file. The infrastructure includes EC2 instances behind an Application Load Balancer, Auto Scaling Group, S3 static content hosting, and CloudWatch monitoring.
 
 ---
 
