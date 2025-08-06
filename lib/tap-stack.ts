@@ -1192,10 +1192,3 @@ exports.handler = async (event) => {
 `;
   }
 }
-    this.addOverride('terraform.backend.s3.use_lockfile', true);
-
-    // ? Add your stack instantiations here
-    // ! Do NOT create resources directly in this stack.
-    // ! Instead, create separate stacks for each resource type.
-  }
-}
