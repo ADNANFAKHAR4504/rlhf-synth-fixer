@@ -201,9 +201,6 @@ Resources:
                   - 's3:GetBucketLocation'
                   - 's3:GetBucketVersioning'
                 Resource: !Ref FinAppSecureDocuments
-                Condition:
-                  StringEquals:
-                    's3:ExistingObjectTag/Environment': !Ref EnvironmentSuffix
               
               # Allow object operations on financial documents
               - Sid: AllowObjectOperations
