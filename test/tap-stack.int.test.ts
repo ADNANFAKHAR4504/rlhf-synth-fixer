@@ -90,7 +90,9 @@ describe('TapStack Integration Tests', () => {
 
       // Validate production-specific settings
       expect(config.terraform.backend.s3).toBeDefined();
-      expect(config.terraform.backend.s3.bucket).toBe('test-state-bucket-prod');
+      expect(config.terraform.backend.s3.bucket).toBe(
+        'test-state-bucket-pr424'
+      );
     });
   });
 
