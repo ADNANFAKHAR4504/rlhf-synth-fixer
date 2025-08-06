@@ -154,15 +154,15 @@ Resources:
                   - 's3:GetObject'
                   - 's3:ListBucket'
                 Resource:
-                  - !Sub 'arn:aws:s3:::website-content-${EnvironmentSuffix}-${UniqueId}-${AWS::StackName}'
-                  - !Sub 'arn:aws:s3:::website-content-${EnvironmentSuffix}-${UniqueId}-${AWS::StackName}/*'
+                  - Fn::Sub: arn:aws:s3:::website-content-${EnvironmentSuffix}-${UniqueId}-${StackNameLower}
+                  - Fn::Sub: arn:aws:s3:::website-content-${EnvironmentSuffix}-${UniqueId}-${StackNameLower}/*
               - Sid: 'WriteApplicationLogs'
                 Effect: Allow
                 Action:
                   - 's3:PutObject'
                   - 's3:PutObjectAcl'
                 Resource:
-                  - !Sub 'arn:aws:s3:::application-logs-${EnvironmentSuffix}-${UniqueId}-${AWS::StackName}/*'
+                  - Fn::Sub: arn:aws:s3:::application-logs-${EnvironmentSuffix}-${UniqueId}-${StackNameLower}/*
               - Sid: 'KMSAccess'
                 Effect: Allow
                 Action:
