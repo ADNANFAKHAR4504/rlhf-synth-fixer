@@ -6,10 +6,11 @@ This document defines the ideal response for implementing a comprehensive, secur
 ## Core Requirements
 
 ### 1. Security-First Architecture
-- **KMS Encryption**: All data at rest must be encrypted using customer-managed KMS keys
+- **KMS Encryption**: All data at rest must be encrypted using customer-managed KMS keys with automatic rotation
 - **Network Security**: VPC with proper subnet isolation, security groups, and flow logs
 - **Access Control**: Least privilege IAM roles with minimal required permissions
 - **Public Access Blocking**: All resources must block public access by default
+- **Data Protection**: Production-safe removal policies to prevent accidental data loss
 
 ### 2. Monitoring and Observability
 - **CloudWatch Integration**: Comprehensive logging and metrics collection
@@ -44,13 +45,38 @@ const vpc = new ec2.Vpc(this, 'SecureVPC', {
 });
 ```
 
-#### KMS Key Management
+#### KMS Key Management with Rotation
 ```typescript
 const kmsKey = new kms.Key(this, 'CustomerManagedKey', {
   description: 'KMS Key for data encryption',
   keyUsage: kms.KeyUsage.ENCRYPT_DECRYPT,
   keySpec: kms.KeySpec.SYMMETRIC_DEFAULT,
-  enableKeyRotation: true,
+  enableKeyRotation: true, // Enable automatic key rotation for enhanced security
+  policy: new iam.PolicyDocument({
+    statements: [
+      new iam.PolicyStatement({
+        sid: 'Enable IAM User Permissions',
+        effect: iam.Effect.ALLOW,
+        principals: [new iam.AccountRootPrincipal()],
+        actions: ['kms:*'],
+        resources: ['*'],
+      }),
+      new iam.PolicyStatement({
+        sid: 'Allow use of the key for AWS services',
+        effect: iam.Effect.ALLOW,
+        principals: [new iam.ServicePrincipal('s3.amazonaws.com')],
+        actions: [
+          'kms:Decrypt',
+          'kms:GenerateDataKey',
+          'kms:ReEncrypt*',
+          'kms:CreateGrant',
+          'kms:DescribeKey',
+        ],
+        resources: ['*'],
+      }),
+    ],
+  }),
+  removalPolicy: cdk.RemovalPolicy.RETAIN, // Use RETAIN for production
 });
 ```
 
@@ -63,6 +89,7 @@ const secureBucket = new s3.Bucket(this, 'SecureBucket', {
   versioned: true,
   blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
   enforceSSL: true,
+  removalPolicy: cdk.RemovalPolicy.RETAIN, // Use RETAIN for production
   lifecycleRules: [
     {
       id: 'DeleteIncompleteMultipartUploads',
@@ -86,6 +113,7 @@ const rdsInstance = new rds.DatabaseInstance(this, 'SecureRDS', {
   backupRetention: cdk.Duration.days(7),
   enablePerformanceInsights: false, // Disabled for t3.micro compatibility
   cloudwatchLogsExports: ['error', 'general'],
+  removalPolicy: cdk.RemovalPolicy.RETAIN, // Use RETAIN for production
 });
 ```
 
@@ -222,6 +250,8 @@ new cdk.CfnOutput(this, 'KMSKeyId', {
 - Verify security settings (encryption, public access blocking)
 - Validate IAM roles and policies
 - Check CloudFormation outputs
+- Verify KMS key rotation settings
+- Test production removal policies
 
 ### Integration Tests
 - Test complete infrastructure deployment
@@ -229,6 +259,7 @@ new cdk.CfnOutput(this, 'KMSKeyId', {
 - Validate security integration (end-to-end encryption)
 - Test monitoring and logging setup
 - Verify high availability features
+- Test data protection mechanisms
 
 ## Best Practices
 
@@ -239,11 +270,13 @@ new cdk.CfnOutput(this, 'KMSKeyId', {
 - Use consistent tagging strategy
 
 ### Security Standards
-- Encrypt all data at rest
-- Use customer-managed KMS keys
+- Encrypt all data at rest with customer-managed KMS keys
+- Enable automatic KMS key rotation for enhanced security
+- Use customer-managed KMS keys with proper policies
 - Implement VPC flow logs
 - Block public access by default
 - Use least privilege IAM roles
+- Use production-safe removal policies (RETAIN)
 
 ### Monitoring Standards
 - Enable detailed monitoring on EC2
@@ -257,14 +290,22 @@ new cdk.CfnOutput(this, 'KMSKeyId', {
 - Tag resources properly
 - Monitor and optimize costs
 
+### Data Protection
+- Use RETAIN removal policy for critical resources
+- Implement proper backup strategies
+- Enable encryption at rest and in transit
+- Follow data retention policies
+
 ## Expected Outcomes
 
 ### Security Compliance
-- ✅ All data encrypted with KMS
+- ✅ All data encrypted with customer-managed KMS keys
+- ✅ Automatic KMS key rotation enabled
 - ✅ Network traffic logged and monitored
 - ✅ Public access blocked on all resources
 - ✅ Least privilege IAM roles implemented
 - ✅ VPC with proper subnet isolation
+- ✅ Production-safe removal policies
 
 ### High Availability
 - ✅ Multi-AZ RDS deployment
@@ -284,4 +325,10 @@ new cdk.CfnOutput(this, 'KMSKeyId', {
 - ✅ Proper resource tagging
 - ✅ Cost-effective instance types
 
-This ideal response ensures a secure, compliant, and well-monitored infrastructure that follows AWS best practices and enterprise security standards. 
+### Data Protection
+- ✅ Production-safe removal policies
+- ✅ Encrypted storage for all resources
+- ✅ Proper backup retention
+- ✅ Data loss prevention
+
+This ideal response ensures a secure, compliant, and well-monitored infrastructure that follows AWS best practices and enterprise security standards with enhanced data protection. 

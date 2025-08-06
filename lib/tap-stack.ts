@@ -54,6 +54,7 @@ export class TapStack extends cdk.Stack {
       description: `KMS Key for ${props.projectName} in ${props.region}`,
       keyUsage: kms.KeyUsage.ENCRYPT_DECRYPT,
       keySpec: kms.KeySpec.SYMMETRIC_DEFAULT,
+      enableKeyRotation: true, // Enable automatic key rotation for enhanced security
       policy: new iam.PolicyDocument({
         statements: [
           new iam.PolicyStatement({
@@ -78,7 +79,7 @@ export class TapStack extends cdk.Stack {
           }),
         ],
       }),
-      removalPolicy: cdk.RemovalPolicy.DESTROY, // Use RETAIN for production
+      removalPolicy: cdk.RemovalPolicy.RETAIN, // Use RETAIN for production
     });
   }
 
@@ -90,7 +91,7 @@ export class TapStack extends cdk.Stack {
       {
         logGroupName: `/aws/vpc/flowlogs/${props.projectName}-${props.region}`,
         retention: logs.RetentionDays.ONE_MONTH,
-        removalPolicy: cdk.RemovalPolicy.DESTROY,
+        removalPolicy: cdk.RemovalPolicy.RETAIN,
       }
     );
 
@@ -168,7 +169,7 @@ export class TapStack extends cdk.Stack {
         versioned: true,
         blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
         enforceSSL: true,
-        removalPolicy: cdk.RemovalPolicy.DESTROY, // Use RETAIN for production
+        removalPolicy: cdk.RemovalPolicy.RETAIN, // Use RETAIN for production
         lifecycleRules: [
           {
             id: 'DeleteIncompleteMultipartUploads',
@@ -300,7 +301,7 @@ export class TapStack extends cdk.Stack {
         storageEncryptionKey: this.kmsKey,
         backupRetention: cdk.Duration.days(7),
         deletionProtection: false, // Set to true for production
-        removalPolicy: cdk.RemovalPolicy.DESTROY, // Use RETAIN for production
+        removalPolicy: cdk.RemovalPolicy.RETAIN, // Use RETAIN for production
         enablePerformanceInsights: false, // Disabled for t3.micro compatibility
         cloudwatchLogsExports: ['error', 'general'],
       }
