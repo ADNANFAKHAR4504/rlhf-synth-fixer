@@ -17,7 +17,7 @@ const commitAuthor = process.env.COMMIT_AUTHOR || 'unknown';
 // Calculate the stack name
 const stackName = `TapStack${environmentSuffix}`;
 
-// defautlTags is structured in adherence to the TapStackProps interface
+// defaultTags is structured in adherence to the TapStackProps interface
 const defaultTags = {
   Environment: environmentSuffix,
   Repository: repositoryName,
