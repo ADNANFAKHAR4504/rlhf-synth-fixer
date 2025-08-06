@@ -1,76 +1,66 @@
+# CDKTF Enterprise AWS Infrastructure Project
+
+## Overview
+
 Create a CDK for Terraform (CDKTF) project using TypeScript or Python, implementing all resources and configurations in a single file named main.ts or main.py. This script should deploy a secure AWS cloud environment for an enterprise application, following strict security best practices and organizational standards.
 
-Environment Configuration:
-Region: us-east-1
+## Environment Configuration
 
-VPC: Includes both public and private subnets.
+- **Region**: us-east-1
+- **VPC**: Includes both public and private subnets.
+- **Resource Naming**: All resources must be prefixed with prod-sec.
+- **Terraform Backend**: Use an existing remote backend for state management (e.g., S3 + DynamoDB) with encryption enabled.
+- **Project Name**: IaC – AWS Nova Model Breaking
 
-Resource Naming: All resources must be prefixed with prod-sec.
+## Security and Compliance Requirements
 
-Terraform Backend: Use an existing remote backend for state management (e.g., S3 + DynamoDB) with encryption enabled.
+### IAM Users and Roles
 
-Project Name: IaC – AWS Nova Model Breaking
+- Create IAM users with least privilege policies.
+- Enforce Multi-Factor Authentication (MFA).
+- Avoid wildcard "\*" permissions unless absolutely necessary and justified.
+- Apply least privilege in all IAM policies and roles.
 
-Security and Compliance Requirements:
-IAM Users and Roles:
+### VPC and Networking
 
-Create IAM users with least privilege policies.
+- Create a VPC with public subnets in at least 2 Availability Zones.
+- Define Security Groups to allow only necessary inbound/outbound traffic.
+- Ensure secure access to resources and isolation between environments.
 
-Enforce Multi-Factor Authentication (MFA).
+### Terraform State Management
 
-Avoid wildcard "\*" permissions unless absolutely necessary and justified.
+- Use secure S3 backend with server-side encryption and state locking via DynamoDB.
+- Prevent unauthorized access through IAM policies and S3 bucket policies.
 
-Apply least privilege in all IAM policies and roles.
+### Data Encryption and Secrets Management
 
-VPC and Networking:
+- Use AWS KMS for encryption at rest (for S3, EBS, RDS, etc.).
+- Manage secrets using AWS Secrets Manager or SSM Parameter Store, with encryption enabled.
 
-Create a VPC with public subnets in at least 2 Availability Zones.
+### Logging and Monitoring
 
-Define Security Groups to allow only necessary inbound/outbound traffic.
+- Configure AWS Config rules to ensure compliance (e.g., S3 public access, KMS usage).
+- Ensure S3 buckets are private by default and enable access logging.
 
-Ensure secure access to resources and isolation between environments.
+### Security Controls and Safeguards
 
-Terraform State Management:
+- Prevent unauthorized data exfiltration (e.g., restrict outbound internet access).
+- Enforce environment isolation using networking and IAM boundaries.
+- Include automated checks for security posture (e.g., Config, GuardDuty, CloudWatch alarms).
 
-Use secure S3 backend with server-side encryption and state locking via DynamoDB.
+## Infrastructure Implementation Style
 
-Prevent unauthorized access through IAM policies and S3 bucket policies.
+- Implement all resources in a single file (main.ts or main.py).
+- Follow CDKTF best practices while maintaining readability and structure within the single file.
+- Apply tags to all resources: Environment=Production, Project=IaC-AWS-Nova.
 
-Data Encryption and Secrets Management:
+## Expected Output
 
-Use AWS KMS for encryption at rest (for S3, EBS, RDS, etc.).
-
-Manage secrets using AWS Secrets Manager or SSM Parameter Store, with encryption enabled.
-
-Logging and Monitoring:
-
-Configure AWS Config rules to ensure compliance (e.g., S3 public access, KMS usage).
-
-Ensure S3 buckets are private by default and enable access logging.
-
-Security Controls and Safeguards:
-
-Prevent unauthorized data exfiltration (e.g., restrict outbound internet access).
-
-Enforce environment isolation using networking and IAM boundaries.
-
-Include automated checks for security posture (e.g., Config, GuardDuty, CloudWatch alarms).
-
-Infrastructure Implementation Style:
-
-Implement all resources in a single file (main.ts or main.py).
-
-Follow CDKTF best practices while maintaining readability and structure within the single file.
-
-Apply tags to all resources: Environment=Production, Project=IaC-AWS-Nova.
-
-Expected Output:
 A single file CDKTF script (main.ts or main.py) that:
 
-Implements all infrastructure and security configurations as described.
+- Implements all infrastructure and security configurations as described.
+- Successfully runs with cdktf synth and cdktf deploy.
+- Passes manual review and automated compliance checks.
+- Uses CDKTF constructs and logic but keeps everything in one file for simplicity.
 
-Successfully runs with cdktf synth and cdktf deploy.
 
-Passes manual review and automated compliance checks.
-
-Uses CDKTF constructs and logic but keeps everything in one file for simplicity.
