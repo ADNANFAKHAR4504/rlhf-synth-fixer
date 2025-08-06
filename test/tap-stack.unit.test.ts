@@ -47,36 +47,35 @@ describe('Highly Available Web Application CloudFormation Template', () => {
       expect(param.AllowedValues).toEqual(['dev', 'staging', 'prod']);
     });
 
-    test('should have VpcId parameter', () => {
-      const param = template.Parameters.VpcId;
+    test('should have VpcCidr parameter', () => {
+      const param = template.Parameters.VpcCidr;
       expect(param).toBeDefined();
-      expect(param.Type).toBe('AWS::EC2::VPC::Id');
+      expect(param.Type).toBe('String');
+      expect(param.Default).toBe('10.0.0.0/16');
+      expect(param.AllowedPattern).toBeDefined();
     });
 
-    test('should have SubnetIds parameter', () => {
-      const param = template.Parameters.SubnetIds;
+    test('should have InstanceType parameter', () => {
+      const param = template.Parameters.InstanceType;
       expect(param).toBeDefined();
-      expect(param.Type).toBe('List<AWS::EC2::Subnet::Id>');
+      expect(param.Type).toBe('String');
+      expect(param.Default).toBe('t3.micro');
+      expect(param.AllowedValues).toContain('t3.micro');
     });
 
-    test('should have DBSubnetIds parameter', () => {
-      const param = template.Parameters.DBSubnetIds;
-      expect(param).toBeDefined();
-      expect(param.Type).toBe('List<AWS::EC2::Subnet::Id>');
-    });
-
-    test('should have database parameters', () => {
+    test('should have database username parameter', () => {
       const username = template.Parameters.DBMasterUsername;
-      const password = template.Parameters.DBMasterPassword;
 
       expect(username).toBeDefined();
       expect(username.Type).toBe('String');
       expect(username.Default).toBe('admin');
+    });
 
-      expect(password).toBeDefined();
-      expect(password.Type).toBe('String');
-      expect(password.NoEcho).toBe(true);
-      expect(password.MinLength).toBe(8);
+    test('should have database password secret instead of parameter', () => {
+      const secret = template.Resources.DatabasePasswordSecret;
+      expect(secret).toBeDefined();
+      expect(secret.Type).toBe('AWS::SecretsManager::Secret');
+      expect(secret.Properties.GenerateSecretString).toBeDefined();
     });
 
     test('should have tag parameters', () => {
@@ -88,6 +87,46 @@ describe('Highly Available Web Application CloudFormation Template', () => {
 
       expect(owner).toBeDefined();
       expect(owner.Default).toBe('DevOpsTeam');
+    });
+  });
+
+  describe('VPC Infrastructure', () => {
+    test('should have VPC', () => {
+      const vpc = template.Resources.VPC;
+      expect(vpc).toBeDefined();
+      expect(vpc.Type).toBe('AWS::EC2::VPC');
+      expect(vpc.Properties.EnableDnsHostnames).toBe(true);
+      expect(vpc.Properties.EnableDnsSupport).toBe(true);
+    });
+
+    test('should have Internet Gateway', () => {
+      const igw = template.Resources.InternetGateway;
+      expect(igw).toBeDefined();
+      expect(igw.Type).toBe('AWS::EC2::InternetGateway');
+    });
+
+    test('should have public subnets', () => {
+      const subnet1 = template.Resources.PublicSubnet1;
+      const subnet2 = template.Resources.PublicSubnet2;
+
+      expect(subnet1).toBeDefined();
+      expect(subnet1.Type).toBe('AWS::EC2::Subnet');
+      expect(subnet1.Properties.MapPublicIpOnLaunch).toBe(true);
+
+      expect(subnet2).toBeDefined();
+      expect(subnet2.Type).toBe('AWS::EC2::Subnet');
+      expect(subnet2.Properties.MapPublicIpOnLaunch).toBe(true);
+    });
+
+    test('should have private subnets', () => {
+      const subnet1 = template.Resources.PrivateSubnet1;
+      const subnet2 = template.Resources.PrivateSubnet2;
+
+      expect(subnet1).toBeDefined();
+      expect(subnet1.Type).toBe('AWS::EC2::Subnet');
+
+      expect(subnet2).toBeDefined();
+      expect(subnet2.Type).toBe('AWS::EC2::Subnet');
     });
   });
 
@@ -512,12 +551,12 @@ describe('Highly Available Web Application CloudFormation Template', () => {
 
     test('should have expected number of resources', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(16); // All required resources
+      expect(resourceCount).toBe(28); // All required resources including VPC infrastructure
     });
 
     test('should have expected number of parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(10); // All configuration parameters
+      expect(parameterCount).toBe(7); // All configuration parameters
     });
 
     test('should have expected number of outputs', () => {
