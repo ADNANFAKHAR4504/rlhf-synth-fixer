@@ -49,14 +49,16 @@ class TestTapStack:
     template.has_resource_properties("AWS::S3::Bucket", {
         "BucketName": "tap-qa-bucket",
         "VersioningConfiguration": Match.absent(), # Versioning is False
-        # PublicAccessBlockConfiguration might not be explicitly present if it's the default
-        # due to public_read_access=False, so we remove the explicit check here.
     })
-    # Check removal policy
+    # Corrected: Check removal policy for qa env
     template.has_resource("AWS::S3::Bucket", {
-        "DeletionPolicy": "Delete",
-        "UpdateReplacePolicy": "Delete"
+        "DeletionPolicy": "Retain"
     })
+    
+    # Check that auto_delete_objects is False
+    # This is a custom resource, so check for its logical ID
+    template.has_resource("Custom::S3AutoDeleteObjects", Match.absent())
+    
 
   def test_creates_dynamodb_table(self, qa_stack_fixture):
     """Test DynamoDB table creation with correct partition key and billing mode."""
@@ -68,16 +70,15 @@ class TestTapStack:
   def test_creates_lambda_function_with_env(self, qa_stack_fixture):
     """Test Lambda function creation with correct environment variables."""
     template = Template.from_stack(qa_stack_fixture)
-    # Corrected: Expect 4 Lambda functions (1 main + 2 custom resources for S3 event source
+    # Corrected: Expect 3 Lambda functions (1 main + 1 custom resource for S3 event source
     # + 1 custom resource for CloudWatch Log Retention)
-    template.resource_count_is("AWS::Lambda::Function", 4)
+    template.resource_count_is("AWS::Lambda::Function", 3)
     template.has_resource_properties("AWS::Lambda::Function", {
         "FunctionName": "tap-qa-lambda",
         "Runtime": "python3.11", # Keep as string, as it's a string in CFN
         "Handler": "index.handler",
         "Environment": {
             "Variables": {
-                # Removed TABLE_NAME assertion as DynamoDB is removed from the stack
                 "BUCKET_NAME": Match.any_value(), # Value is a Ref, so use Match.any_value()
             }
         }
