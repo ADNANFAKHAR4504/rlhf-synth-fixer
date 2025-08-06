@@ -342,7 +342,7 @@ Resources:
       PolicyDocument:
         Version: '2012-10-17'
         Statement:
-          - Sid: DenyPublicAccess
+          - Sid: DenyInsecureTransport
             Effect: Deny
             Principal: '*'
             Action: 's3:*'
@@ -352,6 +352,7 @@ Resources:
             Condition:
               Bool:
                 aws:SecureTransport: false
+
           - Sid: AllowCloudFormationLogging
             Effect: Allow
             Principal:
