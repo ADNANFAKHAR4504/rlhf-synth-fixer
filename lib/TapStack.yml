@@ -51,7 +51,7 @@ Resources:
     Properties:
       VpcId: !Ref ProdVpc
       CidrBlock: '10.0.1.0/24'
-      AvailabilityZone: !Select [0, !GetAZs '']
+      AvailabilityZone: !Select [1, !GetAZs '']
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -64,7 +64,7 @@ Resources:
     Properties:
       VpcId: !Ref ProdVpc
       CidrBlock: '10.0.2.0/24'
-      AvailabilityZone: !Select [1, !GetAZs '']
+      AvailabilityZone: !Select [2, !GetAZs '']
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -305,7 +305,7 @@ Resources:
                 Action:
                   - s3:GetObject
                   - s3:PutObject
-                Resource: !Sub '${ProdS3Bucket}/*'
+                Resource: "*"
       Tags:
         - Key: Name
           Value: 'prod-ec2-role'
@@ -439,7 +439,7 @@ Resources:
   ProdRdsInstance:
     Type: AWS::RDS::DBInstance
     Properties:
-      DBInstanceClass: db.t3.micro
+      DBInstanceClass: db.t3.small
       Engine: mysql
       EngineVersion: '8.0.35'
       MasterUsername: admin
@@ -454,7 +454,7 @@ Resources:
       StorageEncrypted: true
       MonitoringInterval: 60
       MonitoringRoleArn: !GetAtt ProdRdsMonitoringRole.Arn
-      EnablePerformanceInsights: true
+      EnablePerformanceInsights: false
       Tags:
         - Key: Name
           Value: 'prod-rds-instance'
@@ -524,7 +524,7 @@ Resources:
             Effect: Allow
             Principal: '*'
             Action: s3:GetObject
-            Resource: !Sub '${ProdS3Bucket}/*'
+            Resource: !Sub 'arn:aws:s3:::${ProdS3Bucket}/*'
 
   # CloudWatch Log Groups
   ProdWebLogGroup:

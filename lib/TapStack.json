@@ -85,7 +85,7 @@
                 "CidrBlock": "10.0.1.0/24",
                 "AvailabilityZone": {
                     "Fn::Select": [
-                        0,
+                        1,
                         {
                             "Fn::GetAZs": ""
                         }
@@ -115,7 +115,7 @@
                 "CidrBlock": "10.0.2.0/24",
                 "AvailabilityZone": {
                     "Fn::Select": [
-                        1,
+                        2,
                         {
                             "Fn::GetAZs": ""
                         }
@@ -570,9 +570,7 @@
                                         "s3:GetObject",
                                         "s3:PutObject"
                                     ],
-                                    "Resource": {
-                                        "Fn::Sub": "${ProdS3Bucket}/*"
-                                    }
+                                    "Resource": "*"
                                 }
                             ]
                         }
@@ -818,7 +816,7 @@
         "ProdRdsInstance": {
             "Type": "AWS::RDS::DBInstance",
             "Properties": {
-                "DBInstanceClass": "db.t3.micro",
+                "DBInstanceClass": "db.t3.small",
                 "Engine": "mysql",
                 "EngineVersion": "8.0.35",
                 "MasterUsername": "admin",
@@ -845,7 +843,7 @@
                         "Arn"
                     ]
                 },
-                "EnablePerformanceInsights": true,
+                "EnablePerformanceInsights": false,
                 "Tags": [
                     {
                         "Key": "Name",
@@ -956,7 +954,7 @@
                             "Principal": "*",
                             "Action": "s3:GetObject",
                             "Resource": {
-                                "Fn::Sub": "${ProdS3Bucket}/*"
+                                "Fn::Sub": "arn:aws:s3:::${ProdS3Bucket}/*"
                             }
                         }
                     ]
