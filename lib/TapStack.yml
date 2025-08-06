@@ -88,6 +88,38 @@ Resources:
         - Key: Name
           Value: ServerlessAppSubnetAZ2
 
+  # Public subnet for NAT Gateway
+  ServerlessAppPublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref ServerlessAppVPC
+      CidrBlock: 10.0.0.128/26
+      AvailabilityZone: !FindInMap [RegionMap, us-west-2, AZ1]
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: ServerlessAppPublicSubnet
+
+  # Elastic IP for NAT Gateway
+  ServerlessAppNATEIP:
+    Type: AWS::EC2::EIP
+    DependsOn: ServerlessAppVPCGatewayAttachment
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: ServerlessAppNATEIP
+
+  # NAT Gateway for Lambda internet access
+  ServerlessAppNATGateway:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt ServerlessAppNATEIP.AllocationId
+      SubnetId: !Ref ServerlessAppPublicSubnet
+      Tags:
+        - Key: Name
+          Value: ServerlessAppNATGateway
+
   ServerlessAppInternetGateway:
     Type: AWS::EC2::InternetGateway
     Properties:
@@ -101,29 +133,59 @@ Resources:
       VpcId: !Ref ServerlessAppVPC
       InternetGatewayId: !Ref ServerlessAppInternetGateway
 
-  ServerlessAppRouteTable:
+  # Public route table for NAT Gateway subnet
+  ServerlessAppPublicRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref ServerlessAppVPC
+      Tags:
+        - Key: Name
+          Value: ServerlessAppPublicRouteTable
 
-  ServerlessAppRoute:
+  # Private route table for Lambda subnets
+  ServerlessAppPrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref ServerlessAppVPC
+      Tags:
+        - Key: Name
+          Value: ServerlessAppPrivateRouteTable
+
+  # Public route - Internet Gateway
+  ServerlessAppPublicRoute:
     Type: AWS::EC2::Route
     Properties:
-      RouteTableId: !Ref ServerlessAppRouteTable
+      RouteTableId: !Ref ServerlessAppPublicRouteTable
       DestinationCidrBlock: 0.0.0.0/0
       GatewayId: !Ref ServerlessAppInternetGateway
 
+  # Private route - NAT Gateway
+  ServerlessAppPrivateRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref ServerlessAppPrivateRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref ServerlessAppNATGateway
+
+  # Associate public subnet with public route table
+  ServerlessAppPublicSubnetRouteTableAssoc:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref ServerlessAppPublicSubnet
+      RouteTableId: !Ref ServerlessAppPublicRouteTable
+
+  # Associate private subnets with private route table
   ServerlessAppSubnetRouteTableAssocAZ1:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       SubnetId: !Ref ServerlessAppSubnetAZ1
-      RouteTableId: !Ref ServerlessAppRouteTable
+      RouteTableId: !Ref ServerlessAppPrivateRouteTable
 
   ServerlessAppSubnetRouteTableAssocAZ2:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       SubnetId: !Ref ServerlessAppSubnetAZ2
-      RouteTableId: !Ref ServerlessAppRouteTable
+      RouteTableId: !Ref ServerlessAppPrivateRouteTable
 
   # Security Group to allow Lambda outbound access
   ServerlessAppLambdaSecurityGroup:
@@ -186,7 +248,7 @@ Resources:
                 Action:
                   - s3:GetObject
                 Resource: !Sub arn:aws:s3:::${S3BucketName}/*
-              # VPC permissions for Lambda network interface management
+              # VPC permissions for Lambda network interface management (least privilege)
               - Effect: Allow
                 Action:
                   - ec2:CreateNetworkInterface
@@ -194,7 +256,11 @@ Resources:
                   - ec2:DeleteNetworkInterface
                   - ec2:AttachNetworkInterface
                   - ec2:DetachNetworkInterface
-                Resource: '*'
+                Resource: 
+                  - !Sub 'arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:network-interface/*'
+                  - !Sub 'arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:subnet/${ServerlessAppSubnetAZ1}'
+                  - !Sub 'arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:subnet/${ServerlessAppSubnetAZ2}'
+                  - !Sub 'arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:security-group/${ServerlessAppLambdaSecurityGroup}'
       Path: '/'
       Tags:
         - Key: Name
