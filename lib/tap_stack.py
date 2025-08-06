@@ -114,14 +114,23 @@ class TapStack(pulumi.ComponentResource):
   - Security scanning integration
   """
   
-  def __init__(self, name: str, args: TapStackArgs, 
+  def __init__(self, name: str, args, 
                opts: Optional[pulumi.ResourceOptions] = None):
     super().__init__("custom:infrastructure:TapStack", name, None, opts)
     
-    # Initialize configuration from args
-    self.environment = args.environment
-    self.region = args.region
-    self.app_name = args.app_name
+    # Handle both TapStackArgs and string arguments for backward compatibility
+    if isinstance(args, TapStackArgs):
+      self.environment = args.environment
+      self.region = args.region
+      self.app_name = args.app_name
+    elif isinstance(args, str):
+      # Legacy string environment support
+      self.environment = args
+      self.region = "us-east-1"
+      self.app_name = "tap-pipeline"
+    else:
+      raise ValueError("args must be either TapStackArgs or string environment")
+    
     self.name = name
     
     # Initialize internal config
@@ -186,13 +195,18 @@ class TapStack(pulumi.ComponentResource):
     
     # Monitoring
     self.app_log_group = None
+    self.cicd_log_group = None
     self.alerts_topic = None
     self.cpu_alarm = None
     self.unhealthy_hosts_alarm = None
+    self.pipeline_failure_alarm = None
+    self.dashboard = None
     
     # Serverless
     self.lambda_role = None
     self.health_check_lambda = None
+    self.notification_lambda = None
+    self.pipeline_trigger_lambda = None
   
   def _create_networking(self):
     """Create VPC and networking infrastructure with high availability"""
@@ -1215,6 +1229,64 @@ artifacts:
       },
       opts=pulumi.ResourceOptions(parent=self)
     )
+    
+    # CI/CD log group
+    self.cicd_log_group = aws.cloudwatch.LogGroup(
+      f"{self.config.app_name}-cicd-logs-{self.environment}",
+      name=f"/aws/{self.config.app_name}/{self.environment}/cicd",
+      retention_in_days=self.config.config["log_retention"],
+      tags={
+        "Environment": self.environment,
+        "Project": self.config.app_name
+      },
+      opts=pulumi.ResourceOptions(parent=self)
+    )
+    
+    # Pipeline failure alarm
+    self.pipeline_failure_alarm = aws.cloudwatch.MetricAlarm(
+      f"{self.config.app_name}-pipeline-failure-{self.environment}",
+      name=f"{self.config.app_name}-pipeline-failure-{self.environment}",
+      comparison_operator="GreaterThanOrEqualToThreshold",
+      evaluation_periods=1,
+      metric_name="PipelineExecutionFailure",
+      namespace="AWS/CodePipeline",
+      period=300,
+      statistic="Sum",
+      threshold=1.0,
+      alarm_description="Triggers when pipeline execution fails",
+      alarm_actions=[self.alerts_topic.arn],
+      treat_missing_data="notBreaching",
+      tags={
+        "Environment": self.environment
+      },
+      opts=pulumi.ResourceOptions(parent=self)
+    )
+    
+    # CloudWatch dashboard
+    self.dashboard = aws.cloudwatch.Dashboard(
+      f"{self.config.app_name}-dashboard-{self.environment}",
+      dashboard_name=f"{self.config.app_name}-{self.environment}",
+      dashboard_body=pulumi.Output.all(self.auto_scaling_group.name, self.blue_target_group.arn_suffix).apply(
+        lambda args: json.dumps({
+          "widgets": [
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  ["AWS/EC2", "CPUUtilization", "AutoScalingGroupName", args[0]],
+                  ["AWS/ApplicationELB", "HealthyHostCount", "TargetGroup", args[1]]
+                ],
+                "period": 300,
+                "stat": "Average",
+                "region": self.region,
+                "title": f"{self.config.app_name} Metrics"
+              }
+            }
+          ]
+        })
+      ),
+      opts=pulumi.ResourceOptions(parent=self)
+    )
 
   def _create_serverless(self):
     """Create serverless Lambda functions"""
@@ -1260,21 +1332,158 @@ artifacts:
       },
       opts=pulumi.ResourceOptions(parent=self)
     )
+    
+    # Notification Lambda
+    self.notification_lambda = aws.lambda_.Function(
+      f"{self.config.app_name}-notification-{self.environment}",
+      name=f"{self.config.app_name}-notification-{self.environment}",
+      runtime="python3.9",
+      role=self.lambda_role.arn,
+      handler="index.lambda_handler",
+      timeout=30,
+      code=pulumi.AssetArchive({
+        "index.py": pulumi.StringAsset(self._get_notification_lambda_code())
+      }),
+      tags={
+        "Environment": self.environment,
+        "Purpose": "Notification",
+        "Project": self.config.app_name
+      },
+      opts=pulumi.ResourceOptions(parent=self)
+    )
+    
+    # Pipeline trigger Lambda  
+    self.pipeline_trigger_lambda = aws.lambda_.Function(
+      f"{self.config.app_name}-pipeline-trigger-{self.environment}",
+      name=f"{self.config.app_name}-pipeline-trigger-{self.environment}",
+      runtime="python3.9",
+      role=self.lambda_role.arn,
+      handler="index.lambda_handler",
+      timeout=30,
+      code=pulumi.AssetArchive({
+        "index.py": pulumi.StringAsset(self._get_pipeline_trigger_lambda_code())
+      }),
+      tags={
+        "Environment": self.environment,
+        "Purpose": "Pipeline Trigger",
+        "Project": self.config.app_name
+      },
+      opts=pulumi.ResourceOptions(parent=self)
+    )
 
   def _get_health_check_lambda_code(self) -> str:
     """Get health check Lambda function code"""
-    return """
+    return f"""
+import json
+import boto3
+import urllib3
+
+def lambda_handler(event, context):
+    # ELB health check logic
+    elbv2_client = boto3.client('elbv2')
+    
+    try:
+        response = elbv2_client.describe_target_health(
+            TargetGroupArn='{self.blue_target_group.arn if hasattr(self, 'blue_target_group') else 'arn:aws:elasticloadbalancing:us-east-1:123456789012:targetgroup/dummy/1234567890123456'}'
+        )
+        return {{
+            'statusCode': 200,
+            'body': json.dumps({{
+                'status': 'healthy',
+                'environment': '{self.environment}',
+                'targets': response.get('TargetHealthDescriptions', [])
+            }})
+        }}
+    except Exception as e:
+        return {{
+            'statusCode': 500,
+            'body': json.dumps({{
+                'status': 'error',
+                'error': str(e)
+            }})
+        }}
+"""
+  
+  def _get_notification_lambda_code(self) -> str:
+    """Get notification Lambda function code"""
+    return f"""
 import json
 import boto3
 
 def lambda_handler(event, context):
-    return {
-        'statusCode': 200,
-        'body': json.dumps({
-            'status': 'healthy',
-            'environment': 'dev'
-        })
-    }
+    sns_client = boto3.client('sns')
+    codepipeline_client = boto3.client('codepipeline')
+    
+    try:
+        # Extract CodePipeline event details
+        detail = event.get('detail', {{}})
+        pipeline_name = detail.get('pipeline', 'Unknown')
+        state = detail.get('state', 'Unknown')
+        
+        # Send SNS notification
+        message = {{
+            'pipeline': pipeline_name,
+            'state': state,
+            'environment': '{self.environment}'
+        }}
+        
+        sns_client.publish(
+            TopicArn='{self.alerts_topic.arn if hasattr(self, 'alerts_topic') else 'arn:aws:sns:us-east-1:123456789012:alerts'}',
+            Message=json.dumps(message),
+            Subject=f'Pipeline {{state}}: {{pipeline_name}}'
+        )
+        
+        return {{
+            'statusCode': 200,
+            'body': json.dumps({{
+                'status': 'notification sent',
+                'pipeline': pipeline_name
+            }})
+        }}
+    except Exception as e:
+        return {{
+            'statusCode': 500,
+            'body': json.dumps({{
+                'status': 'error',
+                'error': str(e)
+            }})
+        }}
+"""
+
+  def _get_pipeline_trigger_lambda_code(self) -> str:
+    """Get pipeline trigger Lambda function code"""
+    return f"""
+import json
+import boto3
+
+def lambda_handler(event, context):
+    codepipeline_client = boto3.client('codepipeline')
+    
+    try:
+        # Extract trigger event details
+        pipeline_name = event.get('pipeline_name', '{self.app_name}-pipeline-{self.environment}')
+        
+        # Start pipeline execution
+        response = codepipeline_client.start_pipeline_execution(
+            name=pipeline_name
+        )
+        
+        return {{
+            'statusCode': 200,
+            'body': json.dumps({{
+                'status': 'pipeline triggered',
+                'execution_id': response.get('pipelineExecutionId'),
+                'pipeline': pipeline_name
+            }})
+        }}
+    except Exception as e:
+        return {{
+            'statusCode': 500,
+            'body': json.dumps({{
+                'status': 'error',
+                'error': str(e)
+            }})
+        }}
 """
 
   def _register_outputs(self):
@@ -1292,5 +1501,11 @@ def lambda_handler(event, context):
     })
 
 
+def create_tap_stack(name: str, environment: str, 
+                     opts: Optional[pulumi.ResourceOptions] = None) -> TapStack:
+  """Convenience function to create a TapStack with string environment"""
+  return TapStack(name, environment, opts)
+
+
 # Export classes for backwards compatibility
-__all__ = ["TapStack", "TapStackArgs", "TapStackConfig"]
+__all__ = ["TapStack", "TapStackArgs", "TapStackConfig", "create_tap_stack"]

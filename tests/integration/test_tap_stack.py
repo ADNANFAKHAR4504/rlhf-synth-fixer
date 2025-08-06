@@ -27,11 +27,7 @@ from unittest.mock import patch
 
 import pytest
 import pulumi
-from moto import (
-  mock_ec2, mock_elbv2, mock_autoscaling, mock_iam, mock_s3, 
-  mock_secretsmanager, mock_codepipeline, mock_codebuild, 
-  mock_codedeploy, mock_cloudwatch, mock_lambda, mock_sns
-)
+from moto import mock_aws
 
 
 class IntegrationTestProvider:
@@ -161,10 +157,7 @@ class TestTapStackIntegration:
   @pytest.fixture
   def mock_aws_services(self):
     """Setup mock AWS services"""
-    with mock_ec2(), mock_elbv2(), mock_autoscaling(), mock_iam(), \
-        mock_s3(), mock_secretsmanager(), mock_codepipeline(), \
-        mock_codebuild(), mock_codedeploy(), mock_cloudwatch(), \
-        mock_lambda(), mock_sns():
+    with mock_aws():
       yield
 
   def test_complete_stack_deployment_simulation(self, mock_aws_services):
