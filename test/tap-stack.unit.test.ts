@@ -8,7 +8,7 @@ describe('Expert-Level Secure CloudFormation Template', () => {
 
   beforeAll(() => {
     // Load the JSON template that was converted from YAML
-    const templatePath = path.join(__dirname, '../template.json');
+    const templatePath = path.join(__dirname, '../lib/TapStack.json');
     const templateContent = fs.readFileSync(templatePath, 'utf8');
     template = JSON.parse(templateContent);
   });
