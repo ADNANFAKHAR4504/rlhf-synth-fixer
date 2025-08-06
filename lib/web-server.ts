@@ -257,13 +257,12 @@ export class WebServerStack extends cdk.Stack {
         ? cdk.Duration.days(backupRetentionDays)
         : cdk.Duration.days(0),
       storageEncrypted: true,
-      enablePerformanceInsights: enableMonitoring,
-      performanceInsightRetention: enableMonitoring
-        ? cdk.aws_rds.PerformanceInsightRetention.DEFAULT
-        : undefined,
-      // CloudWatch logging
+      // Performance Insights is not supported on t3.micro instances
+      // Only enable if monitoring is enabled and we're not using micro instance
+      enablePerformanceInsights: false, // Disabled for t3.micro compatibility
+      // CloudWatch logging (basic logs supported on t3.micro)
       cloudwatchLogsExports: enableMonitoring
-        ? ['error', 'general', 'slow-query']
+        ? ['error', 'general']
         : undefined,
       cloudwatchLogsRetention: enableMonitoring
         ? logs.RetentionDays.ONE_WEEK
