@@ -5,15 +5,19 @@ Parameters:
   BatchName:
     Type: String
     Description: Batch name for tagging
+    Default: "1056"
   ProjectId:
     Type: String
     Description: Project ID for tagging
+    Default: "166"
   ProjectName:
     Type: String
     Description: Project name for tagging
+    Default: "IaC - AWS Nova Model Breaking"
   ProblemID:
     Type: String
     Description: Problem ID for tagging
+    Default: "Cloud_Environment_Setup_CloudFormation_YAML_9kfhjsre9e3f"
   AllowedIPAddress:
     Type: String
     Description: IP address allowed for SSH access
@@ -231,12 +235,17 @@ Resources:
           import boto3
           import cfnresponse
           import json
+          import traceback
           
           def lambda_handler(event, context):
+              print(f"Received event: {json.dumps(event)}")
+              
               try:
                   ssm = boto3.client('ssm')
                   
                   if event['RequestType'] == 'Create' or event['RequestType'] == 'Update':
+                      print(f"Creating/Updating parameter: {event['ResourceProperties']['Name']}")
+                      
                       response = ssm.put_parameter(
                           Name=event['ResourceProperties']['Name'],
                           Value=event['ResourceProperties']['Value'],
@@ -245,18 +254,27 @@ Resources:
                           Description=event['ResourceProperties']['Description'],
                           Overwrite=True
                       )
+                      
+                      print(f"Parameter created successfully: {response}")
                       cfnresponse.send(event, context, cfnresponse.SUCCESS, {'ParameterName': event['ResourceProperties']['Name']})
                   
                   elif event['RequestType'] == 'Delete':
+                      print(f"Deleting parameter: {event['ResourceProperties']['Name']}")
                       try:
                           ssm.delete_parameter(Name=event['ResourceProperties']['Name'])
+                          print("Parameter deleted successfully")
                       except ssm.exceptions.ParameterNotFound:
-                          pass  # Parameter already deleted
+                          print("Parameter not found, skipping deletion")
+                      except Exception as delete_error:
+                          print(f"Error deleting parameter: {str(delete_error)}")
+                          # Don't fail the stack deletion for parameter cleanup issues
+                      
                       cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
                       
               except Exception as e:
-                  print(f"Error: {str(e)}")
-                  cfnresponse.send(event, context, cfnresponse.FAILED, {'Error': str(e)})
+                  error_message = f"Error: {str(e)}\nTraceback: {traceback.format_exc()}"
+                  print(error_message)
+                  cfnresponse.send(event, context, cfnresponse.FAILED, {'Error': error_message})
       Tags:
         - Key: Name
           Value: SecureParameterFunction

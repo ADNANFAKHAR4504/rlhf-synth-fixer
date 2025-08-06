@@ -4,19 +4,23 @@
     "Parameters": {
         "BatchName": {
             "Type": "String",
-            "Description": "Batch name for tagging"
+            "Description": "Batch name for tagging",
+            "Default": "1056"
         },
         "ProjectId": {
             "Type": "String",
-            "Description": "Project ID for tagging"
+            "Description": "Project ID for tagging",
+            "Default": "166"
         },
         "ProjectName": {
             "Type": "String",
-            "Description": "Project name for tagging"
+            "Description": "Project name for tagging",
+            "Default": "IaC - AWS Nova Model Breaking"
         },
         "ProblemID": {
             "Type": "String",
-            "Description": "Problem ID for tagging"
+            "Description": "Problem ID for tagging",
+            "Default": "Cloud_Environment_Setup_CloudFormation_YAML_9kfhjsre9e3f"
         },
         "AllowedIPAddress": {
             "Type": "String",
@@ -440,7 +444,7 @@
                 },
                 "Timeout": 60,
                 "Code": {
-                    "ZipFile": "import boto3\nimport cfnresponse\nimport json\n\ndef lambda_handler(event, context):\n    try:\n        ssm = boto3.client('ssm')\n        \n        if event['RequestType'] == 'Create' or event['RequestType'] == 'Update':\n            response = ssm.put_parameter(\n                Name=event['ResourceProperties']['Name'],\n                Value=event['ResourceProperties']['Value'],\n                Type='SecureString',\n                KeyId=event['ResourceProperties']['KeyId'],\n                Description=event['ResourceProperties']['Description'],\n                Overwrite=True\n            )\n            cfnresponse.send(event, context, cfnresponse.SUCCESS, {'ParameterName': event['ResourceProperties']['Name']})\n        \n        elif event['RequestType'] == 'Delete':\n            try:\n                ssm.delete_parameter(Name=event['ResourceProperties']['Name'])\n            except ssm.exceptions.ParameterNotFound:\n                pass  # Parameter already deleted\n            cfnresponse.send(event, context, cfnresponse.SUCCESS, {})\n            \n    except Exception as e:\n        print(f\"Error: {str(e)}\")\n        cfnresponse.send(event, context, cfnresponse.FAILED, {'Error': str(e)})\n"
+                    "ZipFile": "import boto3\nimport cfnresponse\nimport json\nimport traceback\n\ndef lambda_handler(event, context):\n    print(f\"Received event: {json.dumps(event)}\")\n    \n    try:\n        ssm = boto3.client('ssm')\n        \n        if event['RequestType'] == 'Create' or event['RequestType'] == 'Update':\n            print(f\"Creating/Updating parameter: {event['ResourceProperties']['Name']}\")\n            \n            response = ssm.put_parameter(\n                Name=event['ResourceProperties']['Name'],\n                Value=event['ResourceProperties']['Value'],\n                Type='SecureString',\n                KeyId=event['ResourceProperties']['KeyId'],\n                Description=event['ResourceProperties']['Description'],\n                Overwrite=True\n            )\n            \n            print(f\"Parameter created successfully: {response}\")\n            cfnresponse.send(event, context, cfnresponse.SUCCESS, {'ParameterName': event['ResourceProperties']['Name']})\n        \n        elif event['RequestType'] == 'Delete':\n            print(f\"Deleting parameter: {event['ResourceProperties']['Name']}\")\n            try:\n                ssm.delete_parameter(Name=event['ResourceProperties']['Name'])\n                print(\"Parameter deleted successfully\")\n            except ssm.exceptions.ParameterNotFound:\n                print(\"Parameter not found, skipping deletion\")\n            except Exception as delete_error:\n                print(f\"Error deleting parameter: {str(delete_error)}\")\n                # Don't fail the stack deletion for parameter cleanup issues\n            \n            cfnresponse.send(event, context, cfnresponse.SUCCESS, {})\n            \n    except Exception as e:\n        error_message = f\"Error: {str(e)}\\nTraceback: {traceback.format_exc()}\"\n        print(error_message)\n        cfnresponse.send(event, context, cfnresponse.FAILED, {'Error': error_message})\n"
                 },
                 "Tags": [
                     {
