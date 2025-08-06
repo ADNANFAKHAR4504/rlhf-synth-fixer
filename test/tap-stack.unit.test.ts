@@ -13,8 +13,8 @@ describe('TapStack Unit Tests', () => {
       environmentSuffix: 'prod',
       awsRegion: 'us-east-1',
       defaultTags: {
-        Environment: 'Test'
-      }
+        Environment: 'Test',
+      },
     });
     const synthesizedString = Testing.synth(stack);
     synthesized = JSON.parse(synthesizedString);
@@ -38,7 +38,7 @@ describe('TapStack Unit Tests', () => {
     test('should handle partial props configuration', () => {
       const partialApp = new App();
       const partialStack = new TapStack(partialApp, 'TestTapStackPartial', {
-        awsRegion: 'eu-west-1'
+        awsRegion: 'eu-west-1',
       });
       const partialSynthesized = JSON.parse(Testing.synth(partialStack));
 
@@ -51,7 +51,7 @@ describe('TapStack Unit Tests', () => {
     test('should create AWS provider with correct configuration', () => {
       const providers = Object.keys(synthesized.provider);
       expect(providers).toContain('aws');
-      
+
       const awsProvider = synthesized.provider.aws;
       expect(awsProvider).toBeDefined();
       expect(awsProvider[0].region).toBe('us-east-1');
@@ -65,9 +65,9 @@ describe('TapStack Unit Tests', () => {
     test('should create S3 bucket for Lambda packages', () => {
       const s3Buckets = synthesized.resource.aws_s3_bucket;
       expect(s3Buckets).toBeDefined();
-      
-      const lambdaBuckets = Object.values(s3Buckets).filter((bucket: any) => 
-        bucket.tags?.Purpose === 'Lambda deployment packages'
+
+      const lambdaBuckets = Object.values(s3Buckets).filter(
+        (bucket: any) => bucket.tags?.Purpose === 'Lambda deployment packages'
       );
       expect(lambdaBuckets).toHaveLength(1);
     });
@@ -75,11 +75,11 @@ describe('TapStack Unit Tests', () => {
     test('should create DynamoDB user table with correct configuration', () => {
       const dynamoTables = synthesized.resource.aws_dynamodb_table;
       expect(dynamoTables).toBeDefined();
-      
-      const userTable = Object.values(dynamoTables).find((table: any) => 
-        table.name === 'prod-service-users'
+
+      const userTable = Object.values(dynamoTables).find(
+        (table: any) => table.name === 'prod-service-users'
       );
-      
+
       expect(userTable).toBeDefined();
       expect((userTable as any).billing_mode).toBe('ON_DEMAND');
       expect((userTable as any).hash_key).toBe('userId');
@@ -89,10 +89,10 @@ describe('TapStack Unit Tests', () => {
 
     test('should create DynamoDB session table with TTL configuration', () => {
       const dynamoTables = synthesized.resource.aws_dynamodb_table;
-      const sessionTable = Object.values(dynamoTables).find((table: any) => 
-        table.name === 'prod-service-sessions'
+      const sessionTable = Object.values(dynamoTables).find(
+        (table: any) => table.name === 'prod-service-sessions'
       );
-      
+
       expect(sessionTable).toBeDefined();
       expect((sessionTable as any).ttl.attribute_name).toBe('expiresAt');
       expect((sessionTable as any).ttl.enabled).toBe(true);
@@ -101,51 +101,60 @@ describe('TapStack Unit Tests', () => {
     test('should create IAM role for Lambda execution', () => {
       const iamRoles = synthesized.resource.aws_iam_role;
       expect(iamRoles).toBeDefined();
-      
-      const lambdaRole = Object.values(iamRoles).find((role: any) => 
-        role.name === 'prod-service-lambda-execution-role'
+
+      const lambdaRole = Object.values(iamRoles).find(
+        (role: any) => role.name === 'prod-service-lambda-execution-role'
       );
-      
+
       expect(lambdaRole).toBeDefined();
-      expect((lambdaRole as any).assume_role_policy).toContain('lambda.amazonaws.com');
+      expect((lambdaRole as any).assume_role_policy).toContain(
+        'lambda.amazonaws.com'
+      );
     });
 
     test('should create DynamoDB access policy for Lambda', () => {
       const iamPolicies = synthesized.resource.aws_iam_policy;
       expect(iamPolicies).toBeDefined();
-      
-      const dynamoPolicy = Object.values(iamPolicies).find((policy: any) => 
-        policy.name === 'prod-service-lambda-dynamodb-policy'
+
+      const dynamoPolicy = Object.values(iamPolicies).find(
+        (policy: any) => policy.name === 'prod-service-lambda-dynamodb-policy'
       );
-      
+
       expect(dynamoPolicy).toBeDefined();
-      expect((dynamoPolicy as any).description).toBe('DynamoDB access policy for Lambda functions');
+      expect((dynamoPolicy as any).description).toBe(
+        'DynamoDB access policy for Lambda functions'
+      );
     });
 
     test('should attach basic execution policy to Lambda role', () => {
-      const policyAttachments = synthesized.resource.aws_iam_role_policy_attachment;
+      const policyAttachments =
+        synthesized.resource.aws_iam_role_policy_attachment;
       expect(policyAttachments).toBeDefined();
-      
-      const basicPolicyAttachment = Object.values(policyAttachments).find((attachment: any) => 
-        attachment.policy_arn === 'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
+
+      const basicPolicyAttachment = Object.values(policyAttachments).find(
+        (attachment: any) =>
+          attachment.policy_arn ===
+          'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
       );
-      
+
       expect(basicPolicyAttachment).toBeDefined();
     });
 
     test('should create CloudWatch log groups for all services', () => {
       const logGroups = synthesized.resource.aws_cloudwatch_log_group;
       expect(logGroups).toBeDefined();
-      
+
       const expectedLogGroups = [
         '/aws/apigateway/prod-service-api',
         '/aws/lambda/prod-service-user-handler',
         '/aws/lambda/prod-service-session-handler',
-        '/aws/lambda/prod-service-health-check'
+        '/aws/lambda/prod-service-health-check',
       ];
-      
+
       expectedLogGroups.forEach(expectedName => {
-        const logGroup = Object.values(logGroups).find((lg: any) => lg.name === expectedName);
+        const logGroup = Object.values(logGroups).find(
+          (lg: any) => lg.name === expectedName
+        );
         expect(logGroup).toBeDefined();
       });
     });
@@ -153,18 +162,18 @@ describe('TapStack Unit Tests', () => {
     test('should create Lambda functions with correct configuration', () => {
       const lambdaFunctions = synthesized.resource.aws_lambda_function;
       expect(lambdaFunctions).toBeDefined();
-      
+
       const expectedFunctions = [
         { name: 'prod-service-user-handler', timeout: 30, memory: 256 },
         { name: 'prod-service-session-handler', timeout: 15, memory: 128 },
-        { name: 'prod-service-health-check', timeout: 10, memory: 128 }
+        { name: 'prod-service-health-check', timeout: 10, memory: 128 },
       ];
-      
+
       expectedFunctions.forEach(expectedFunc => {
-        const lambdaFunc = Object.values(lambdaFunctions).find((func: any) => 
-          func.function_name === expectedFunc.name
+        const lambdaFunc = Object.values(lambdaFunctions).find(
+          (func: any) => func.function_name === expectedFunc.name
         );
-        
+
         expect(lambdaFunc).toBeDefined();
         expect((lambdaFunc as any).handler).toBe('index.handler');
         expect((lambdaFunc as any).runtime).toBe('nodejs18.x');
@@ -176,25 +185,35 @@ describe('TapStack Unit Tests', () => {
     test('should create API Gateway REST API', () => {
       const apiGateways = synthesized.resource.aws_api_gateway_rest_api;
       expect(apiGateways).toBeDefined();
-      
-      const restApi = Object.values(apiGateways).find((api: any) => 
-        api.name === 'prod-service-api'
+
+      const restApi = Object.values(apiGateways).find(
+        (api: any) => api.name === 'prod-service-api'
       );
-      
+
       expect(restApi).toBeDefined();
-      expect((restApi as any).description).toBe('Serverless Web Application API');
-      expect((restApi as any).endpoint_configuration.types).toEqual(['REGIONAL']);
+      expect((restApi as any).description).toBe(
+        'Serverless Web Application API'
+      );
+      expect((restApi as any).endpoint_configuration.types).toEqual([
+        'REGIONAL',
+      ]);
     });
 
     test('should create API Gateway resources for all endpoints', () => {
       const apiResources = synthesized.resource.aws_api_gateway_resource;
       expect(apiResources).toBeDefined();
-      
-      const expectedPathParts = ['users', 'sessions', 'health', '{userId}', '{sessionId}'];
-      
+
+      const expectedPathParts = [
+        'users',
+        'sessions',
+        'health',
+        '{userId}',
+        '{sessionId}',
+      ];
+
       expectedPathParts.forEach(pathPart => {
-        const resource = Object.values(apiResources).find((res: any) => 
-          res.path_part === pathPart
+        const resource = Object.values(apiResources).find(
+          (res: any) => res.path_part === pathPart
         );
         expect(resource).toBeDefined();
       });
@@ -203,12 +222,12 @@ describe('TapStack Unit Tests', () => {
     test('should create API Gateway methods for all endpoints', () => {
       const apiMethods = synthesized.resource.aws_api_gateway_method;
       expect(apiMethods).toBeDefined();
-      
+
       const httpMethods = ['GET', 'POST', 'PUT', 'DELETE'];
-      
+
       httpMethods.forEach(method => {
-        const methodResource = Object.values(apiMethods).find((m: any) => 
-          m.http_method === method
+        const methodResource = Object.values(apiMethods).find(
+          (m: any) => m.http_method === method
         );
         expect(methodResource).toBeDefined();
       });
@@ -217,7 +236,7 @@ describe('TapStack Unit Tests', () => {
     test('should create API Gateway integrations with Lambda functions', () => {
       const integrations = synthesized.resource.aws_api_gateway_integration;
       expect(integrations).toBeDefined();
-      
+
       const integrationList = Object.values(integrations);
       integrationList.forEach((integration: any) => {
         expect(integration.integration_http_method).toBe('POST');
@@ -228,12 +247,12 @@ describe('TapStack Unit Tests', () => {
     test('should create API Gateway deployment and stage', () => {
       const deployments = synthesized.resource.aws_api_gateway_deployment;
       expect(deployments).toBeDefined();
-      
+
       const stages = synthesized.resource.aws_api_gateway_stage;
       expect(stages).toBeDefined();
-      
-      const prodStage = Object.values(stages).find((stage: any) => 
-        stage.stage_name === 'prod'
+
+      const prodStage = Object.values(stages).find(
+        (stage: any) => stage.stage_name === 'prod'
       );
       expect(prodStage).toBeDefined();
     });
@@ -241,7 +260,7 @@ describe('TapStack Unit Tests', () => {
     test('should create Lambda permissions for API Gateway', () => {
       const permissions = synthesized.resource.aws_lambda_permission;
       expect(permissions).toBeDefined();
-      
+
       const permissionList = Object.values(permissions);
       permissionList.forEach((permission: any) => {
         expect(permission.statement_id).toBe('AllowExecutionFromAPIGateway');
@@ -253,7 +272,7 @@ describe('TapStack Unit Tests', () => {
     test('should create all required archive files', () => {
       const archiveFiles = synthesized.data.archive_file;
       expect(archiveFiles).toBeDefined();
-      
+
       const archiveList = Object.values(archiveFiles);
       archiveList.forEach((archive: any) => {
         expect(archive.type).toBe('zip');
@@ -263,11 +282,17 @@ describe('TapStack Unit Tests', () => {
     test('should upload Lambda packages to S3', () => {
       const s3Objects = synthesized.resource.aws_s3_object;
       expect(s3Objects).toBeDefined();
-      
-      const expectedKeys = ['user-handler.zip', 'session-handler.zip', 'health-check.zip'];
-      
+
+      const expectedKeys = [
+        'user-handler.zip',
+        'session-handler.zip',
+        'health-check.zip',
+      ];
+
       expectedKeys.forEach(key => {
-        const s3Object = Object.values(s3Objects).find((obj: any) => obj.key === key);
+        const s3Object = Object.values(s3Objects).find(
+          (obj: any) => obj.key === key
+        );
         expect(s3Object).toBeDefined();
       });
     });
@@ -275,9 +300,10 @@ describe('TapStack Unit Tests', () => {
 
   describe('Resource Configuration Validation', () => {
     test('should configure API Gateway method settings with throttling', () => {
-      const methodSettings = synthesized.resource.aws_api_gateway_method_settings;
+      const methodSettings =
+        synthesized.resource.aws_api_gateway_method_settings;
       expect(methodSettings).toBeDefined();
-      
+
       const settings = Object.values(methodSettings)[0] as any;
       expect(settings.method_path).toBe('*/*');
       expect(settings.settings.metrics_enabled).toBe(true);
@@ -290,19 +316,23 @@ describe('TapStack Unit Tests', () => {
     test('should configure access logging for API Gateway stage', () => {
       const stages = synthesized.resource.aws_api_gateway_stage;
       const stage = Object.values(stages)[0] as any;
-      
+
       expect(stage.access_log_settings).toBeDefined();
       expect(stage.access_log_settings.format).toBeDefined();
     });
 
     test('should set appropriate environment variables for Lambda functions', () => {
       const lambdaFunctions = synthesized.resource.aws_lambda_function;
-      
+
       Object.values(lambdaFunctions).forEach((lambda: any) => {
         expect(lambda.environment).toBeDefined();
         expect(lambda.environment.variables.AWS_REGION).toBe('us-east-1');
-        expect(lambda.environment.variables.USER_TABLE_NAME).toContain('aws_dynamodb_table.prod-service-user-table.name');
-        expect(lambda.environment.variables.SESSION_TABLE_NAME).toContain('aws_dynamodb_table.prod-service-session-table.name');
+        expect(lambda.environment.variables.USER_TABLE_NAME).toContain(
+          'aws_dynamodb_table.prod-service-user-table.name'
+        );
+        expect(lambda.environment.variables.SESSION_TABLE_NAME).toContain(
+          'aws_dynamodb_table.prod-service-session-table.name'
+        );
       });
     });
 
@@ -314,7 +344,7 @@ describe('TapStack Unit Tests', () => {
         'aws_iam_policy',
         'aws_cloudwatch_log_group',
         'aws_lambda_function',
-        'aws_api_gateway_rest_api'
+        'aws_api_gateway_rest_api',
       ];
 
       resourceTypes.forEach(resourceType => {
@@ -337,7 +367,7 @@ describe('TapStack Unit Tests', () => {
         'user_table_name',
         'session_table_name',
         'lambda_function_names',
-        'health_check_url'
+        'health_check_url',
       ];
 
       expectedOutputs.forEach(outputName => {
@@ -347,12 +377,22 @@ describe('TapStack Unit Tests', () => {
 
     test('should have proper output descriptions', () => {
       const outputs = synthesized.output;
-      
-      expect(outputs.api_gateway_url.description).toBe('API Gateway endpoint URL');
-      expect(outputs.user_table_name.description).toBe('DynamoDB Users table name');
-      expect(outputs.session_table_name.description).toBe('DynamoDB Sessions table name');
-      expect(outputs.lambda_function_names.description).toBe('Lambda function names');
-      expect(outputs.health_check_url.description).toBe('Health check endpoint for deployment validation');
+
+      expect(outputs.api_gateway_url.description).toBe(
+        'API Gateway endpoint URL'
+      );
+      expect(outputs.user_table_name.description).toBe(
+        'DynamoDB Users table name'
+      );
+      expect(outputs.session_table_name.description).toBe(
+        'DynamoDB Sessions table name'
+      );
+      expect(outputs.lambda_function_names.description).toBe(
+        'Lambda function names'
+      );
+      expect(outputs.health_check_url.description).toBe(
+        'Health check endpoint for deployment validation'
+      );
     });
   });
 
@@ -366,7 +406,7 @@ describe('TapStack Unit Tests', () => {
 
     test('user handler code should contain proper error handling', () => {
       const userHandlerCode = (stack as any).getUserHandlerCode();
-      
+
       expect(userHandlerCode).toContain('try {');
       expect(userHandlerCode).toContain('catch (error)');
       expect(userHandlerCode).toContain('console.error');
@@ -375,14 +415,14 @@ describe('TapStack Unit Tests', () => {
 
     test('session handler code should contain TTL logic', () => {
       const sessionHandlerCode = (stack as any).getSessionHandlerCode();
-      
+
       expect(sessionHandlerCode).toContain('expiresAt');
       expect(sessionHandlerCode).toContain('24 * 60 * 60'); // 24 hours
     });
 
     test('health check code should test DynamoDB connectivity', () => {
       const healthCheckCode = (stack as any).getHealthCheckCode();
-      
+
       expect(healthCheckCode).toContain('describeTable');
       expect(healthCheckCode).toContain('writeTest');
       expect(healthCheckCode).toContain('readTest');
@@ -394,7 +434,7 @@ describe('TapStack Unit Tests', () => {
       const codes = [
         (stack as any).getUserHandlerCode(),
         (stack as any).getSessionHandlerCode(),
-        (stack as any).getHealthCheckCode()
+        (stack as any).getHealthCheckCode(),
       ];
 
       codes.forEach(code => {
@@ -409,7 +449,7 @@ describe('TapStack Unit Tests', () => {
   describe('Resource Dependencies', () => {
     test('Lambda functions should depend on log groups', () => {
       const lambdaFunctions = synthesized.resource.aws_lambda_function;
-      
+
       Object.values(lambdaFunctions).forEach((lambda: any) => {
         expect(lambda.depends_on).toBeDefined();
         expect(Array.isArray(lambda.depends_on)).toBe(true);
@@ -419,7 +459,7 @@ describe('TapStack Unit Tests', () => {
 
     test('API Gateway deployment should depend on methods', () => {
       const deployments = synthesized.resource.aws_api_gateway_deployment;
-      
+
       Object.values(deployments).forEach((deployment: any) => {
         expect(deployment.depends_on).toBeDefined();
         expect(Array.isArray(deployment.depends_on)).toBe(true);
@@ -429,7 +469,7 @@ describe('TapStack Unit Tests', () => {
 
     test('IAM role policy attachments should reference correct role', () => {
       const attachments = synthesized.resource.aws_iam_role_policy_attachment;
-      
+
       Object.values(attachments).forEach((attachment: any) => {
         expect(attachment.role).toBeDefined();
       });
@@ -453,17 +493,19 @@ describe('TapStack Unit Tests', () => {
         aws_api_gateway_stage: 1,
         aws_lambda_permission: 3,
         archive_file: 3,
-        aws_s3_object: 3
+        aws_s3_object: 3,
       };
 
-      Object.entries(expectedCounts).forEach(([resourceType, expectedCount]) => {
-        const resources = resourceType.startsWith('archive_') 
-          ? synthesized.data[resourceType] 
-          : synthesized.resource[resourceType];
-        
-        const actualCount = resources ? Object.keys(resources).length : 0;
-        expect(actualCount).toBe(expectedCount);
-      });
+      Object.entries(expectedCounts).forEach(
+        ([resourceType, expectedCount]) => {
+          const resources = resourceType.startsWith('archive_')
+            ? synthesized.data[resourceType]
+            : synthesized.resource[resourceType];
+
+          const actualCount = resources ? Object.keys(resources).length : 0;
+          expect(actualCount).toBe(expectedCount);
+        }
+      );
     });
   });
 });

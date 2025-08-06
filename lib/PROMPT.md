@@ -60,4 +60,3 @@ Includes CloudWatch monitoring, secure IAM roles, and performance-optimized reso
 Successfully passes cdktf synth and cdktf deploy.
 
 Validates deployment via successful API calls and DynamoDB data persistence.
-

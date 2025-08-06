@@ -21,11 +21,11 @@ import { DataArchiveFile } from "@cdktf/provider-archive/lib/data-archive-file";
 import { ArchiveProvider } from "@cdktf/provider-archive/lib/provider";
 
 class ServerlessWebAppStack extends TerraformStack {
-  private readonly resourcePrefix = "prod-service";
-  private readonly region = "us-east-1";
+private readonly resourcePrefix = "prod-service";
+private readonly region = "us-east-1";
 
-  constructor(scope: Construct, id: string) {
-    super(scope, id);
+constructor(scope: Construct, id: string) {
+super(scope, id);
 
     // Providers
     new AwsProvider(this, "AWS", {
@@ -62,129 +62,130 @@ class ServerlessWebAppStack extends TerraformStack {
 
     // Outputs
     this.createOutputs(apiGateway, userTable, sessionTable);
-  }
 
-  private createLambdaBucket(): S3Bucket {
-    return new S3Bucket(this, `${this.resourcePrefix}-lambda-bucket`, {
-      bucket: `${this.resourcePrefix}-lambda-deployments-${Date.now()}`,
-      versioning: {
-        enabled: true,
-      },
-      serverSideEncryptionConfiguration: {
-        rule: {
-          applyServerSideEncryptionByDefault: {
-            sseAlgorithm: "AES256",
-          },
-        },
-      },
-      tags: {
-        Name: `${this.resourcePrefix}-lambda-bucket`,
-        Environment: "production",
-        Project: "IaC-AWS-Nova-Model-Breaking",
-      },
-    });
-  }
+}
 
-  private createUserTable(): DynamodbTable {
-    return new DynamodbTable(this, `${this.resourcePrefix}-user-table`, {
-      name: `${this.resourcePrefix}-users`,
-      billingMode: "PAY_PER_REQUEST",
-      hashKey: "userId",
-      attribute: [
-        {
-          name: "userId",
-          type: "S",
-        },
-        {
-          name: "email",
-          type: "S",
-        },
-      ],
-      globalSecondaryIndex: [
-        {
-          name: "EmailIndex",
-          hashKey: "email",
-          projectionType: "ALL",
-        },
-      ],
-      serverSideEncryption: {
-        enabled: true,
-      },
-      pointInTimeRecovery: {
-        enabled: true,
-      },
-      tags: {
-        Name: `${this.resourcePrefix}-user-table`,
-        Environment: "production",
-        Project: "IaC-AWS-Nova-Model-Breaking",
-      },
-    });
-  }
+private createLambdaBucket(): S3Bucket {
+return new S3Bucket(this, `${this.resourcePrefix}-lambda-bucket`, {
+bucket: `${this.resourcePrefix}-lambda-deployments-${Date.now()}`,
+versioning: {
+enabled: true,
+},
+serverSideEncryptionConfiguration: {
+rule: {
+applyServerSideEncryptionByDefault: {
+sseAlgorithm: "AES256",
+},
+},
+},
+tags: {
+Name: `${this.resourcePrefix}-lambda-bucket`,
+Environment: "production",
+Project: "IaC-AWS-Nova-Model-Breaking",
+},
+});
+}
 
-  private createSessionTable(): DynamodbTable {
-    return new DynamodbTable(this, `${this.resourcePrefix}-session-table`, {
-      name: `${this.resourcePrefix}-sessions`,
-      billingMode: "PAY_PER_REQUEST",
-      hashKey: "sessionId",
-      attribute: [
-        {
-          name: "sessionId",
-          type: "S",
-        },
-        {
-          name: "userId",
-          type: "S",
-        },
-      ],
-      globalSecondaryIndex: [
-        {
-          name: "UserIndex",
-          hashKey: "userId",
-          projectionType: "ALL",
-        },
-      ],
-      ttl: {
-        attributeName: "expiresAt",
-        enabled: true,
-      },
-      serverSideEncryption: {
-        enabled: true,
-      },
-      pointInTimeRecovery: {
-        enabled: true,
-      },
-      tags: {
-        Name: `${this.resourcePrefix}-session-table`,
-        Environment: "production",
-        Project: "IaC-AWS-Nova-Model-Breaking",
-      },
-    });
-  }
+private createUserTable(): DynamodbTable {
+return new DynamodbTable(this, `${this.resourcePrefix}-user-table`, {
+name: `${this.resourcePrefix}-users`,
+billingMode: "PAY_PER_REQUEST",
+hashKey: "userId",
+attribute: [
+{
+name: "userId",
+type: "S",
+},
+{
+name: "email",
+type: "S",
+},
+],
+globalSecondaryIndex: [
+{
+name: "EmailIndex",
+hashKey: "email",
+projectionType: "ALL",
+},
+],
+serverSideEncryption: {
+enabled: true,
+},
+pointInTimeRecovery: {
+enabled: true,
+},
+tags: {
+Name: `${this.resourcePrefix}-user-table`,
+Environment: "production",
+Project: "IaC-AWS-Nova-Model-Breaking",
+},
+});
+}
 
-  private createLambdaExecutionRole(
-    userTable: DynamodbTable,
-    sessionTable: DynamodbTable
-  ): IamRole {
-    const role = new IamRole(this, `${this.resourcePrefix}-lambda-role`, {
-      name: `${this.resourcePrefix}-lambda-execution-role`,
-      assumeRolePolicy: JSON.stringify({
-        Version: "2012-10-17",
-        Statement: [
-          {
-            Action: "sts:AssumeRole",
-            Effect: "Allow",
-            Principal: {
-              Service: "lambda.amazonaws.com",
-            },
-          },
-        ],
-      }),
-      tags: {
-        Name: `${this.resourcePrefix}-lambda-role`,
-        Environment: "production",
-        Project: "IaC-AWS-Nova-Model-Breaking",
-      },
-    });
+private createSessionTable(): DynamodbTable {
+return new DynamodbTable(this, `${this.resourcePrefix}-session-table`, {
+name: `${this.resourcePrefix}-sessions`,
+billingMode: "PAY_PER_REQUEST",
+hashKey: "sessionId",
+attribute: [
+{
+name: "sessionId",
+type: "S",
+},
+{
+name: "userId",
+type: "S",
+},
+],
+globalSecondaryIndex: [
+{
+name: "UserIndex",
+hashKey: "userId",
+projectionType: "ALL",
+},
+],
+ttl: {
+attributeName: "expiresAt",
+enabled: true,
+},
+serverSideEncryption: {
+enabled: true,
+},
+pointInTimeRecovery: {
+enabled: true,
+},
+tags: {
+Name: `${this.resourcePrefix}-session-table`,
+Environment: "production",
+Project: "IaC-AWS-Nova-Model-Breaking",
+},
+});
+}
+
+private createLambdaExecutionRole(
+userTable: DynamodbTable,
+sessionTable: DynamodbTable
+): IamRole {
+const role = new IamRole(this, `${this.resourcePrefix}-lambda-role`, {
+name: `${this.resourcePrefix}-lambda-execution-role`,
+assumeRolePolicy: JSON.stringify({
+Version: "2012-10-17",
+Statement: [
+{
+Action: "sts:AssumeRole",
+Effect: "Allow",
+Principal: {
+Service: "lambda.amazonaws.com",
+},
+},
+],
+}),
+tags: {
+Name: `${this.resourcePrefix}-lambda-role`,
+Environment: "production",
+Project: "IaC-AWS-Nova-Model-Breaking",
+},
+});
 
     // Attach basic Lambda execution policy
     new IamRolePolicyAttachment(this, `${this.resourcePrefix}-lambda-basic-policy`, {
@@ -226,23 +227,24 @@ class ServerlessWebAppStack extends TerraformStack {
     });
 
     return role;
-  }
 
-  private createApiLogGroup(): CloudwatchLogGroup {
-    return new CloudwatchLogGroup(this, `${this.resourcePrefix}-api-logs`, {
-      name: `/aws/apigateway/${this.resourcePrefix}-api`,
-      retentionInDays: 14,
-      tags: {
-        Name: `${this.resourcePrefix}-api-logs`,
-        Environment: "production",
-        Project: "IaC-AWS-Nova-Model-Breaking",
-      },
-    });
-  }
+}
 
-  private createLambdaLogGroups(): Record<string, CloudwatchLogGroup> {
-    const functions = ["auth", "users", "health"];
-    const logGroups: Record<string, CloudwatchLogGroup> = {};
+private createApiLogGroup(): CloudwatchLogGroup {
+return new CloudwatchLogGroup(this, `${this.resourcePrefix}-api-logs`, {
+name: `/aws/apigateway/${this.resourcePrefix}-api`,
+retentionInDays: 14,
+tags: {
+Name: `${this.resourcePrefix}-api-logs`,
+Environment: "production",
+Project: "IaC-AWS-Nova-Model-Breaking",
+},
+});
+}
+
+private createLambdaLogGroups(): Record<string, CloudwatchLogGroup> {
+const functions = ["auth", "users", "health"];
+const logGroups: Record<string, CloudwatchLogGroup> = {};
 
     functions.forEach((func) => {
       logGroups[func] = new CloudwatchLogGroup(this, `${this.resourcePrefix}-${func}-logs`, {
@@ -257,16 +259,17 @@ class ServerlessWebAppStack extends TerraformStack {
     });
 
     return logGroups;
-  }
 
-  private createLambdaFunctions(
-    role: IamRole,
-    bucket: S3Bucket,
-    userTable: DynamodbTable,
-    sessionTable: DynamodbTable,
-    logGroups: Record<string, CloudwatchLogGroup>
-  ): Record<string, LambdaFunction> {
-    const functions: Record<string, LambdaFunction> = {};
+}
+
+private createLambdaFunctions(
+role: IamRole,
+bucket: S3Bucket,
+userTable: DynamodbTable,
+sessionTable: DynamodbTable,
+logGroups: Record<string, CloudwatchLogGroup>
+): Record<string, LambdaFunction> {
+const functions: Record<string, LambdaFunction> = {};
 
     // Auth Lambda Function
     const authCode = this.createAuthLambdaCode();
@@ -404,25 +407,26 @@ class ServerlessWebAppStack extends TerraformStack {
     });
 
     return functions;
-  }
 
-  private createApiGateway(
-    lambdaFunctions: Record<string, LambdaFunction>,
-    logGroup: CloudwatchLogGroup
-  ): ApiGatewayRestApi {
-    // REST API
-    const api = new ApiGatewayRestApi(this, `${this.resourcePrefix}-api`, {
-      name: `${this.resourcePrefix}-api`,
-      description: "Serverless Web Application API",
-      endpointConfiguration: {
-        types: ["REGIONAL"],
-      },
-      tags: {
-        Name: `${this.resourcePrefix}-api`,
-        Environment: "production",
-        Project: "IaC-AWS-Nova-Model-Breaking",
-      },
-    });
+}
+
+private createApiGateway(
+lambdaFunctions: Record<string, LambdaFunction>,
+logGroup: CloudwatchLogGroup
+): ApiGatewayRestApi {
+// REST API
+const api = new ApiGatewayRestApi(this, `${this.resourcePrefix}-api`, {
+name: `${this.resourcePrefix}-api`,
+description: "Serverless Web Application API",
+endpointConfiguration: {
+types: ["REGIONAL"],
+},
+tags: {
+Name: `${this.resourcePrefix}-api`,
+Environment: "production",
+Project: "IaC-AWS-Nova-Model-Breaking",
+},
+});
 
     // Resources
     const authResource = new ApiGatewayResource(this, `${this.resourcePrefix}-auth-resource`, {
@@ -503,25 +507,26 @@ class ServerlessWebAppStack extends TerraformStack {
     });
 
     return api;
-  }
 
-  private createApiMethod(
-    api: ApiGatewayRestApi,
-    resource: ApiGatewayResource,
-    httpMethod: string,
-    lambdaFunction: LambdaFunction,
-    functionName: string
-  ): void {
-    // Method
-    const method = new ApiGatewayMethod(this, `${this.resourcePrefix}-${functionName}-${httpMethod.toLowerCase()}-method`, {
-      restApiId: api.id,
-      resourceId: resource.id,
-      httpMethod: httpMethod,
-      authorization: "NONE",
-      requestParameters: {
-        "method.request.header.Content-Type": false,
-      },
-    });
+}
+
+private createApiMethod(
+api: ApiGatewayRestApi,
+resource: ApiGatewayResource,
+httpMethod: string,
+lambdaFunction: LambdaFunction,
+functionName: string
+): void {
+// Method
+const method = new ApiGatewayMethod(this, `${this.resourcePrefix}-${functionName}-${httpMethod.toLowerCase()}-method`, {
+restApiId: api.id,
+resourceId: resource.id,
+httpMethod: httpMethod,
+authorization: "NONE",
+requestParameters: {
+"method.request.header.Content-Type": false,
+},
+});
 
     // Integration
     new ApiGatewayIntegration(this, `${this.resourcePrefix}-${functionName}-${httpMethod.toLowerCase()}-integration`, {
@@ -541,25 +546,26 @@ class ServerlessWebAppStack extends TerraformStack {
       principal: "apigateway.amazonaws.com",
       sourceArn: `${api.executionArn}/*/*`,
     });
-  }
 
-  private createAuthLambdaCode(): string {
-    return `
+}
+
+private createAuthLambdaCode(): string {
+return `
 const AWS = require('aws-sdk');
 const { v4: uuidv4 } = require('uuid');
 
 const dynamodb = new AWS.DynamoDB.DocumentClient();
 
 exports.handler = async (event) => {
-    console.log('Auth Lambda invoked:', JSON.stringify(event, null, 2));
-    
+console.log('Auth Lambda invoked:', JSON.stringify(event, null, 2));
+
     const headers = {
         'Content-Type': 'application/json',
         'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Headers': 'Content-Type',
         'Access-Control-Allow-Methods': 'POST, OPTIONS'
     };
-    
+
     try {
         if (event.httpMethod === 'OPTIONS') {
             return {
@@ -568,10 +574,10 @@ exports.handler = async (event) => {
                 body: JSON.stringify({ message: 'CORS preflight' })
             };
         }
-        
+
         const body = JSON.parse(event.body || '{}');
         const { email, password } = body;
-        
+
         if (!email || !password) {
             return {
                 statusCode: 400,
@@ -579,12 +585,12 @@ exports.handler = async (event) => {
                 body: JSON.stringify({ error: 'Email and password are required' })
             };
         }
-        
+
         // Simulate authentication (in real app, verify password hash)
         const userId = uuidv4();
         const sessionId = uuidv4();
         const expiresAt = Math.floor(Date.now() / 1000) + 3600; // 1 hour
-        
+
         // Store user
         await dynamodb.put({
             TableName: process.env.USER_TABLE,
@@ -595,7 +601,7 @@ exports.handler = async (event) => {
                 lastLogin: new Date().toISOString()
             }
         }).promise();
-        
+
         // Store session
         await dynamodb.put({
             TableName: process.env.SESSION_TABLE,
@@ -606,7 +612,7 @@ exports.handler = async (event) => {
                 createdAt: new Date().toISOString()
             }
         }).promise();
-        
+
         return {
             statusCode: 200,
             headers,
@@ -617,7 +623,7 @@ exports.handler = async (event) => {
                 expiresAt
             })
         };
-        
+
     } catch (error) {
         console.error('Auth error:', error);
         return {
@@ -626,27 +632,28 @@ exports.handler = async (event) => {
             body: JSON.stringify({ error: 'Internal server error' })
         };
     }
+
 };
 `;
-  }
+}
 
-  private createUsersLambdaCode(): string {
-    return `
+private createUsersLambdaCode(): string {
+return `
 const AWS = require('aws-sdk');
 const { v4: uuidv4 } = require('uuid');
 
 const dynamodb = new AWS.DynamoDB.DocumentClient();
 
 exports.handler = async (event) => {
-    console.log('Users Lambda invoked:', JSON.stringify(event, null, 2));
-    
+console.log('Users Lambda invoked:', JSON.stringify(event, null, 2));
+
     const headers = {
         'Content-Type': 'application/json',
         'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Headers': 'Content-Type',
         'Access-Control-Allow-Methods': 'GET, POST, OPTIONS'
     };
-    
+
     try {
         if (event.httpMethod === 'OPTIONS') {
             return {
@@ -655,14 +662,14 @@ exports.handler = async (event) => {
                 body: JSON.stringify({ message: 'CORS preflight' })
             };
         }
-        
+
         if (event.httpMethod === 'GET') {
             // Get all users
             const result = await dynamodb.scan({
                 TableName: process.env.USER_TABLE,
                 ProjectionExpression: 'userId, email, createdAt, lastLogin'
             }).promise();
-            
+
             return {
                 statusCode: 200,
                 headers,
@@ -672,12 +679,12 @@ exports.handler = async (event) => {
                 })
             };
         }
-        
+
         if (event.httpMethod === 'POST') {
             // Create new user
             const body = JSON.parse(event.body || '{}');
             const { email, name } = body;
-            
+
             if (!email || !name) {
                 return {
                     statusCode: 400,
@@ -685,7 +692,7 @@ exports.handler = async (event) => {
                     body: JSON.stringify({ error: 'Email and name are required' })
                 };
             }
-            
+
             const userId = uuidv4();
             const user = {
                 userId,
@@ -694,13 +701,13 @@ exports.handler = async (event) => {
                 createdAt: new Date().toISOString(),
                 lastLogin: null
             };
-            
+
             await dynamodb.put({
                 TableName: process.env.USER_TABLE,
                 Item: user,
                 ConditionExpression: 'attribute_not_exists(email)'
             }).promise();
-            
+
             return {
                 statusCode: 201,
                 headers,
@@ -710,16 +717,16 @@ exports.handler = async (event) => {
                 })
             };
         }
-        
+
         return {
             statusCode: 405,
             headers,
             body: JSON.stringify({ error: 'Method not allowed' })
         };
-        
+
     } catch (error) {
         console.error('Users error:', error);
-        
+
         if (error.code === 'ConditionalCheckFailedException') {
             return {
                 statusCode: 409,
@@ -727,33 +734,34 @@ exports.handler = async (event) => {
                 body: JSON.stringify({ error: 'User with this email already exists' })
             };
         }
-        
+
         return {
             statusCode: 500,
             headers,
             body: JSON.stringify({ error: 'Internal server error' })
         };
     }
+
 };
 `;
-  }
+}
 
-  private createHealthLambdaCode(): string {
-    return `
+private createHealthLambdaCode(): string {
+return `
 const AWS = require('aws-sdk');
 
 const dynamodb = new AWS.DynamoDB.DocumentClient();
 
 exports.handler = async (event) => {
-    console.log('Health Lambda invoked:', JSON.stringify(event, null, 2));
-    
+console.log('Health Lambda invoked:', JSON.stringify(event, null, 2));
+
     const headers = {
         'Content-Type': 'application/json',
         'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Headers': 'Content-Type',
         'Access-Control-Allow-Methods': 'GET, OPTIONS'
     };
-    
+
     try {
         if (event.httpMethod === 'OPTIONS') {
             return {
@@ -762,18 +770,18 @@ exports.handler = async (event) => {
                 body: JSON.stringify({ message: 'CORS preflight' })
             };
         }
-        
+
         // Check DynamoDB connectivity
         const userTableHealth = await dynamodb.scan({
             TableName: process.env.USER_TABLE,
             Limit: 1
         }).promise();
-        
+
         const sessionTableHealth = await dynamodb.scan({
             TableName: process.env.SESSION_TABLE,
             Limit: 1
         }).promise();
-        
+
         return {
             statusCode: 200,
             headers,
@@ -792,7 +800,7 @@ exports.handler = async (event) => {
                 region: process.env.AWS_REGION
             })
         };
-        
+
     } catch (error) {
         console.error('Health check error:', error);
         return {
@@ -805,19 +813,20 @@ exports.handler = async (event) => {
             })
         };
     }
+
 };
 `;
-  }
+}
 
-  private createOutputs(
-    api: ApiGatewayRestApi,
-    userTable: DynamodbTable,
-    sessionTable: DynamodbTable
-  ): void {
-    new TerraformOutput(this, "api_gateway_url", {
-      description: "API Gateway URL",
-      value: `https://${api.id}.execute-api.${this.region}.amazonaws.com/prod`,
-    });
+private createOutputs(
+api: ApiGatewayRestApi,
+userTable: DynamodbTable,
+sessionTable: DynamodbTable
+): void {
+new TerraformOutput(this, "api_gateway_url", {
+description: "API Gateway URL",
+value: `https://${api.id}.execute-api.${this.region}.amazonaws.com/prod`,
+});
 
     new TerraformOutput(this, "api_gateway_id", {
       description: "API Gateway ID",
@@ -848,7 +857,8 @@ exports.handler = async (event) => {
       description: "Users Endpoint",
       value: `https://${api.id}.execute-api.${this.region}.amazonaws.com/prod/users`,
     });
-  }
+
+}
 }
 
 const app = new App();
