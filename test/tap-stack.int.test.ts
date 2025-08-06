@@ -1,9 +1,23 @@
 // Configuration - These are coming from environment variables or defaults
 import { GetCallerIdentityCommand, STSClient } from '@aws-sdk/client-sts';
+import fs from 'fs';
+import yaml from 'js-yaml';
+import path from 'path';
 
 // Get environment suffix and project name from environment variables
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'pr570';
 const project = process.env.PROJECT || 'tapstack';
+
+// Load the CloudFormation template
+let template: any;
+try {
+  const templatePath = path.join(__dirname, '../lib/TapStack.yml');
+  const templateContent = fs.readFileSync(templatePath, 'utf8');
+  template = yaml.load(templateContent);
+} catch (error) {
+  console.error('Error loading template:', error);
+  template = {};
+}
 
 interface StackOutputs {
   VPCId: string;
@@ -90,9 +104,190 @@ const configClient = new ConfigServiceClient({ region });
 const secretsClient = new SecretsManagerClient({ region });
 const logsClient = new CloudWatchLogsClient({ region });
 
-describe('TapStack Infrastructure Integration Tests', () => {
-  const stackName = `${project}-${environmentSuffix}`; // Stack name with project and environment
-  const sts = new STSClient({ region });
+describe('TapStack Tests', () => {
+  describe('Template Structure', () => {
+    test('should have valid CloudFormation format version', () => {
+      expect(template.AWSTemplateFormatVersion).toBe('2010-09-09');
+    });
+
+    test('should have a description', () => {
+      expect(template.Description).toBeDefined();
+      expect(typeof template.Description).toBe('string');
+      expect(template.Description).toBe('Secure-by-Design AWS Infrastructure with stringent security controls and compliance enforcement');
+    });
+
+    test('should have Parameters, Resources, and Outputs sections', () => {
+      expect(template.Parameters).toBeDefined();
+      expect(template.Resources).toBeDefined();
+      expect(template.Outputs).toBeDefined();
+    });
+
+    test('should have required parameters', () => {
+      expect(template.Parameters.VpcCidr).toBeDefined();
+      expect(template.Parameters.DBInstanceClass).toBeDefined();
+      expect(template.Parameters.DBEngineVersion).toBeDefined();
+      expect(template.Parameters.EnvironmentSuffix).toBeDefined();
+    });
+
+    test('VpcCidr parameter should have correct properties', () => {
+      const param = template.Parameters.VpcCidr;
+      expect(param.Type).toBe('String');
+      expect(param.Default).toBe('10.0.0.0/16');
+      expect(param.Description).toContain('CIDR block for the VPC');
+      expect(param.AllowedPattern).toBeDefined();
+    });
+
+    test('DBInstanceClass parameter should have correct properties', () => {
+      const param = template.Parameters.DBInstanceClass;
+      expect(param.Type).toBe('String');
+      expect(param.Default).toBe('db.t3.micro');
+      expect(param.Description).toContain('RDS instance class');
+      expect(param.AllowedPattern).toBeDefined();
+    });
+
+    test('should have all required resources', () => {
+      const expectedResources = [
+        'SecureDataKMSKey',
+        'SecureVPC',
+        'PrivateSubnet1',
+        'PrivateSubnet2',
+        'DBSubnetGroup',
+        'ConfigServiceRole',
+        'VPCDnsSupportLambdaRole',
+        'VPCDnsSupportFunction',
+        'AppServerRole',
+        'LowSecurityReadOnlyRole',
+        'CentralLoggingBucket',
+        'SecureDataBucket',
+        'RDSSecurityGroup',
+        'SecureRDSInstance'
+      ];
+      expectedResources.forEach(resource => {
+        expect(template.Resources[resource]).toBeDefined();
+      });
+    });
+
+    test('should have all required outputs', () => {
+      const expectedOutputs = [
+        'VPCId',
+        'KMSKeyArn',
+        'CentralLoggingBucketName',
+        'SecureDataBucketName',
+        'RDSEndpoint',
+        'AppServerRoleArn',
+        'LowSecurityRoleArn',
+        'ConfigRuleName'
+      ];
+      expectedOutputs.forEach(output => {
+        expect(template.Outputs[output]).toBeDefined();
+      });
+    });
+
+    test('SecureVPC should be configured correctly', () => {
+      const vpc = template.Resources.SecureVPC;
+      expect(vpc.Type).toBe('AWS::EC2::VPC');
+      const props = vpc.Properties;
+      expect(props.CidrBlock).toEqual({ Ref: 'VpcCidr' });
+      expect(props.EnableDnsHostnames).toBe(true);
+      expect(props.EnableDnsSupport).toBe(true);
+      expect(props.Tags).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ Key: 'Project', Value: 'SecureOps' }),
+          expect.objectContaining({ Key: 'Environment', Value: { Ref: 'EnvironmentSuffix' } })
+        ])
+      );
+    });
+
+    test('SecureRDSInstance should be configured correctly', () => {
+      const rds = template.Resources.SecureRDSInstance;
+      expect(rds.Type).toBe('AWS::RDS::DBInstance');
+      const props = rds.Properties;
+      expect(props.Engine).toBe('mysql');
+      expect(props.EngineVersion).toEqual({ Ref: 'DBEngineVersion' });
+      expect(props.DBInstanceClass).toEqual({ Ref: 'DBInstanceClass' });
+      expect(props.StorageEncrypted).toBe(true);
+      expect(props.PubliclyAccessible).toBe(false);
+      expect(props.MultiAZ).toBe(false);
+      expect(props.BackupRetentionPeriod).toBe(30);
+      expect(props.PreferredBackupWindow).toBe('03:00-04:00');
+      expect(props.PreferredMaintenanceWindow).toBe('sun:04:00-sun:05:00');
+      expect(props.EnableCloudwatchLogsExports).toEqual(['audit', 'error', 'general', 'slowquery']);
+    });
+
+    test('CentralLoggingBucket should be configured securely', () => {
+      const bucket = template.Resources.CentralLoggingBucket;
+      expect(bucket.Type).toBe('AWS::S3::Bucket');
+      const props = bucket.Properties;
+      expect(props.PublicAccessBlockConfiguration.BlockPublicAcls).toBe(true);
+      expect(props.PublicAccessBlockConfiguration.BlockPublicPolicy).toBe(true);
+      expect(props.PublicAccessBlockConfiguration.IgnorePublicAcls).toBe(true);
+      expect(props.PublicAccessBlockConfiguration.RestrictPublicBuckets).toBe(true);
+      expect(props.VersioningConfiguration.Status).toBe('Enabled');
+      expect(props.BucketEncryption.ServerSideEncryptionConfiguration[0].ServerSideEncryptionByDefault.SSEAlgorithm).toBe('aws:kms');
+      expect(props.LifecycleConfiguration.Rules[0].ExpirationInDays).toBe(2555);
+    });
+
+    test('AppServerRole should have correct permissions', () => {
+      const role = template.Resources.AppServerRole;
+      expect(role.Type).toBe('AWS::IAM::Role');
+      const props = role.Properties;
+      expect(props.AssumeRolePolicyDocument.Statement[0].Principal.Service).toBe('ec2.amazonaws.com');
+      expect(props.AssumeRolePolicyDocument.Statement[0].Action).toBe('sts:AssumeRole');
+      
+      const policy = props.Policies[0].PolicyDocument;
+      expect(policy.Statement).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            Effect: 'Allow',
+            Action: ['s3:GetObject', 's3:PutObject'],
+            Resource: expect.stringContaining('${SecureDataBucket}/*')
+          }),
+          expect.objectContaining({
+            Effect: 'Allow',
+            Action: ['rds:DescribeDBInstances'],
+            Resource: expect.stringContaining('db:*')
+          }),
+          expect.objectContaining({
+            Effect: 'Allow',
+            Action: ['kms:Decrypt', 'kms:GenerateDataKey'],
+            Resource: expect.stringContaining('${SecureDataKMSKey}')
+          })
+        ])
+      );
+    });
+
+    test('VPCId output should be correct', () => {
+      const output = template.Outputs.VPCId;
+      expect(output.Description).toBe('ID of the secure VPC');
+      expect(output.Value).toEqual({ Ref: 'SecureVPC' });
+      expect(output.Export.Name).toEqual({ 'Fn::Sub': '${AWS::StackName}-VPC-ID' });
+    });
+
+    test('KMSKeyArn output should be correct', () => {
+      const output = template.Outputs.KMSKeyArn;
+      expect(output.Description).toBe('ARN of the customer-managed KMS key');
+      expect(output.Value).toEqual({ 'Fn::GetAtt': ['SecureDataKMSKey', 'Arn'] });
+      expect(output.Export.Name).toEqual({ 'Fn::Sub': '${AWS::StackName}-KMS-Key-ARN' });
+    });
+
+    test('CentralLoggingBucketName output should be correct', () => {
+      const output = template.Outputs.CentralLoggingBucketName;
+      expect(output.Description).toBe('Name of the central logging S3 bucket');
+      expect(output.Value).toEqual({ Ref: 'CentralLoggingBucket' });
+      expect(output.Export.Name).toEqual({ 'Fn::Sub': '${AWS::StackName}-Central-Logging-Bucket' });
+    });
+
+    test('RDSEndpoint output should be correct', () => {
+      const output = template.Outputs.RDSEndpoint;
+      expect(output.Description).toBe('RDS instance endpoint address');
+      expect(output.Value).toEqual({ 'Fn::GetAtt': ['SecureRDSInstance', 'Endpoint.Address'] });
+      expect(output.Export.Name).toEqual({ 'Fn::Sub': '${AWS::StackName}-RDS-Endpoint' });
+    });
+  });
+
+  describe('Infrastructure Integration Tests', () => {
+    const stackName = `${project}-${environmentSuffix}`; // Stack name with project and environment
+    const sts = new STSClient({ region });
   
   // Resource names based on project naming convention
   const resourceNames = {
@@ -122,7 +317,7 @@ describe('TapStack Infrastructure Integration Tests', () => {
           Filters: [
             {
               Name: 'tag:Name',
-              Values: [resourceNames.vpc]
+            Values: [resourceNames.vpc]
             }
           ]
         })
@@ -242,7 +437,7 @@ describe('TapStack Infrastructure Integration Tests', () => {
       const vpc = response.Vpcs![0];
       expect(vpc.CidrBlock).toBe('10.0.0.0/16');
       expect(vpc.IsDefault).toBe(false);
-
+      
       // Verify tags
       const tags = vpc.Tags || [];
       expect(tags.find(tag => tag.Key === 'Project')?.Value).toBe('SecureOps');
@@ -257,22 +452,22 @@ describe('TapStack Infrastructure Integration Tests', () => {
 
       const response = await ec2Client.send(
         new DescribeSubnetsCommand({
-          Filters: [
-            {
-              Name: 'vpc-id',
+        Filters: [
+          {
+            Name: 'vpc-id',
               Values: [outputs.VPCId]
-            }
-          ]
+          }
+        ]
         })
       );
 
       expect(response.Subnets).toBeDefined();
       expect(response.Subnets!.length).toBe(2); // 2 private subnets
-
+      
       // Verify subnets are in different AZs
       const azs = response.Subnets!.map(subnet => subnet.AvailabilityZone);
       expect(new Set(azs).size).toBe(2);
-
+      
       // Verify all subnets are private
       response.Subnets!.forEach(subnet => {
         expect(subnet.MapPublicIpOnLaunch).toBe(false);
@@ -292,7 +487,7 @@ describe('TapStack Infrastructure Integration Tests', () => {
           GroupIds: [outputs.RDSSecurityGroupId]
         })
       );
-
+      
       const sg = response.SecurityGroups![0];
       expect(sg).toBeDefined();
 
@@ -319,7 +514,7 @@ describe('TapStack Infrastructure Integration Tests', () => {
 
       const response = await rdsClient.send(
         new DescribeDBInstancesCommand({
-          DBInstanceIdentifier: resourceNames.rdsInstance
+        DBInstanceIdentifier: resourceNames.rdsInstance
         })
       );
 
@@ -603,23 +798,23 @@ describe('TapStack Infrastructure Integration Tests', () => {
         
         // Only check log groups if RDS instance is available
         if (dbInstance.DBInstanceStatus === 'available') {
-          const logGroupNames = [
-            `/aws/rds/instance/${resourceNames.rdsInstance}/audit`,
-            `/aws/rds/instance/${resourceNames.rdsInstance}/error`,
-            `/aws/rds/instance/${resourceNames.rdsInstance}/general`,
-            `/aws/rds/instance/${resourceNames.rdsInstance}/slowquery`
-          ];
+      const logGroupNames = [
+        `/aws/rds/instance/${resourceNames.rdsInstance}/audit`,
+        `/aws/rds/instance/${resourceNames.rdsInstance}/error`,
+        `/aws/rds/instance/${resourceNames.rdsInstance}/general`,
+        `/aws/rds/instance/${resourceNames.rdsInstance}/slowquery`
+      ];
 
-          for (const logGroupName of logGroupNames) {
-            const command = new DescribeLogGroupsCommand({
-              logGroupNamePrefix: logGroupName
-            });
+      for (const logGroupName of logGroupNames) {
+        const command = new DescribeLogGroupsCommand({
+          logGroupNamePrefix: logGroupName
+        });
 
-            const response = await logsClient.send(command);
-            expect(response.logGroups).toHaveLength(1);
-            
-            const logGroup = response.logGroups![0];
-            expect(logGroup.logGroupName).toBe(logGroupName);
+        const response = await logsClient.send(command);
+        expect(response.logGroups).toHaveLength(1);
+        
+        const logGroup = response.logGroups![0];
+        expect(logGroup.logGroupName).toBe(logGroupName);
             // RDS manages retention period internally
             expect(logGroup.retentionInDays).toBeDefined();
           }
@@ -710,6 +905,7 @@ describe('TapStack Infrastructure Integration Tests', () => {
       // This test verifies that resources are properly connected
       // For example: RDS instance uses the security group, S3 buckets use KMS key, etc.
       expect(true).toBe(true); // Placeholder - actual verification done in component-specific tests
+    });
     });
   });
 });
