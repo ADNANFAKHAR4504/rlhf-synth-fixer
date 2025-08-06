@@ -1,4 +1,3 @@
-# lib/tap_stack.py
 import base64
 import json
 from typing import Dict, Optional
@@ -11,13 +10,12 @@ class TapStackArgs:
     """Arguments for TapStack component"""
     
     def __init__(self, config: Dict = None, environment_suffix: str = None):
-        if config:  # This checks for both None and empty dict
+        if config:  # Checks for both None and empty dict
             self.config = config
             self.environment = config.get("environment", "dev")
             self.region = config.get("region", "us-east-1")
             self.app_name = config.get("app_name", "tap-app")
         elif environment_suffix:
-            # Use environment_suffix from tap.py
             self.config = {
                 "environment": environment_suffix,
                 "region": "us-east-1",
@@ -27,7 +25,6 @@ class TapStackArgs:
             self.region = "us-east-1"
             self.app_name = "tap-app"
         else:
-            # Default fallback
             self.config = {
                 "environment": "dev",
                 "region": "us-east-1", 
@@ -36,7 +33,6 @@ class TapStackArgs:
             self.environment = "dev"
             self.region = "us-east-1"
             self.app_name = "tap-app"
-
 
 
 class TapStack(pulumi.ComponentResource):
@@ -68,9 +64,9 @@ class TapStack(pulumi.ComponentResource):
         })
     
     def _create_networking(self):
-        """Create VPC, subnets, and networking components with proper dependencies"""
+        """Create VPC, subnets, and networking components with FIXED dependencies"""
         
-        # VPC
+        # Step 1: Create VPC
         self.vpc = aws.ec2.Vpc(
             f"{self.app_name}-vpc-{self.environment}",
             cidr_block="10.0.0.0/16",
@@ -83,7 +79,7 @@ class TapStack(pulumi.ComponentResource):
             opts=pulumi.ResourceOptions(parent=self)
         )
         
-        # Internet Gateway
+        # Step 2: Create Internet Gateway (must exist before EIPs)
         self.igw = aws.ec2.InternetGateway(
             f"{self.app_name}-igw-{self.environment}",
             vpc_id=self.vpc.id,
@@ -94,10 +90,10 @@ class TapStack(pulumi.ComponentResource):
             opts=pulumi.ResourceOptions(parent=self, depends_on=[self.vpc])
         )
         
-        # Availability Zones
+        # Step 3: Get Availability Zones
         self.azs = aws.get_availability_zones(state="available")
         
-        # Public Subnets (Multi-AZ)
+        # Step 4: Create Subnets
         self.public_subnets = []
         for i, az in enumerate(self.azs.names[:2]):
             subnet = aws.ec2.Subnet(
@@ -115,7 +111,6 @@ class TapStack(pulumi.ComponentResource):
             )
             self.public_subnets.append(subnet)
         
-        # Private Subnets (Multi-AZ)
         self.private_subnets = []
         for i, az in enumerate(self.azs.names[:2]):
             subnet = aws.ec2.Subnet(
@@ -132,7 +127,7 @@ class TapStack(pulumi.ComponentResource):
             )
             self.private_subnets.append(subnet)
         
-        # Create EIPs FIRST with proper dependencies
+        # Step 5: Create EIPs FIRST with explicit IGW dependency
         self.eips = []
         for i, subnet in enumerate(self.public_subnets):
             eip = aws.ec2.Eip(
@@ -142,26 +137,29 @@ class TapStack(pulumi.ComponentResource):
                     "Name": f"{self.app_name}-eip-{i+1}-{self.environment}",
                     "Environment": self.environment
                 },
+                # CRITICAL FIX: EIP depends on IGW
                 opts=pulumi.ResourceOptions(parent=self, depends_on=[self.igw])
             )
             self.eips.append(eip)
         
-        # Create NAT Gateways AFTER EIPs with explicit dependencies
+        # Step 6: Create NAT Gateways AFTER EIPs with explicit dependencies
         self.nat_gateways = []
         for i, (subnet, eip) in enumerate(zip(self.public_subnets, self.eips)):
+            # CRITICAL FIX: Use apply() to ensure EIP allocation_id is ready
             nat_gw = aws.ec2.NatGateway(
                 f"{self.app_name}-nat-{i+1}-{self.environment}",
-                allocation_id=eip.id,
+                allocation_id=eip.allocation_id,  # Use allocation_id instead of id
                 subnet_id=subnet.id,
                 tags={
                     "Name": f"{self.app_name}-nat-{i+1}-{self.environment}",
                     "Environment": self.environment
                 },
+                # CRITICAL FIX: Explicit dependency chain
                 opts=pulumi.ResourceOptions(parent=self, depends_on=[eip, subnet, self.igw])
             )
             self.nat_gateways.append(nat_gw)
         
-        # Route Tables
+        # Step 7: Route Tables
         self.public_rt = aws.ec2.RouteTable(
             f"{self.app_name}-public-rt-{self.environment}",
             vpc_id=self.vpc.id,
