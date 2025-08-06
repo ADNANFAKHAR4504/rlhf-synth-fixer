@@ -166,7 +166,7 @@ class TapStack(ComponentResource):
     # Data processing bucket for input/output files
     data_bucket = aws.s3.Bucket(
       f"{self.resource_prefix}-data-bucket",
-      bucket=f"{self.resource_prefix}-data-{pulumi.get_stack()}",
+      bucket=f"{self.resource_prefix}-data",
       tags=self.tags,
       opts=ResourceOptions(parent=self)
     )
@@ -235,7 +235,7 @@ class TapStack(ComponentResource):
     # Logs bucket for storing access logs
     logs_bucket = aws.s3.Bucket(
       f"{self.resource_prefix}-logs-bucket",
-      bucket=f"{self.resource_prefix}-logs-{pulumi.get_stack()}",
+      bucket=f"{self.resource_prefix}-logs",
       tags=self.tags,
       opts=ResourceOptions(parent=self)
     )
@@ -588,7 +588,7 @@ def lambda_handler(event: Dict[str, Any], context) -> Dict[str, Any]:
       protocol_type="HTTP",
       description="Nova Model Breaking API Gateway",
       cors_configuration=aws.apigatewayv2.ApiCorsConfigurationArgs(
-        allow_credentials=True,
+        allow_credentials=False,
         allow_headers=["content-type", "x-amz-date", "authorization", "x-api-key"],
         allow_methods=["*"],
         allow_origins=["*"],
