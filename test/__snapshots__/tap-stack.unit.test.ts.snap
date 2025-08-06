@@ -35,10 +35,10 @@ exports[`TapStack Unit Tests Stack Structure and Configuration TapStack should i
     "backend": {
       "s3": {
         "bucket": "my-custom-state-bucket",
-        "dynamodb_table": "terraform-lock-my-custom-state-bucket",
         "encrypt": true,
         "key": "prod/TestTapStackWithProps.tfstate",
-        "region": "us-west-2"
+        "region": "us-west-2",
+        "use_lockfile": true
       }
     },
     "required_providers": {
@@ -71,13 +71,6 @@ exports[`TapStack Unit Tests Stack Structure and Configuration TapStack should u
     "aws": [
       {
         "default_tags": [
-          {
-            "tags": {
-              "Environment": "dev",
-              "ManagedBy": "CDKTF",
-              "Project": "SecureFoundation"
-            }
-          }
         ],
         "region": "us-east-1"
       }
@@ -87,10 +80,10 @@ exports[`TapStack Unit Tests Stack Structure and Configuration TapStack should u
     "backend": {
       "s3": {
         "bucket": "iac-rlhf-tf-states",
-        "dynamodb_table": "terraform-lock-iac-rlhf-tf-states",
         "encrypt": true,
         "key": "dev/TestTapStackDefault.tfstate",
-        "region": "us-east-1"
+        "region": "us-east-1",
+        "use_lockfile": true
       }
     },
     "required_providers": {

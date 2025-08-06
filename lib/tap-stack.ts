@@ -13,6 +13,7 @@ import { Construct } from 'constructs';
 
 // ? Import your stacks here
 import { VpcNetwork, BastionHost, RdsDatabase } from './modules';
+// import { MyStack } from './my-stack';
 
 interface TapStackProps {
   environmentSuffix?: string;
@@ -24,6 +25,7 @@ interface TapStackProps {
 
 // If you need to override the AWS Region for the terraform provider for any particular task,
 // you can set it here. Otherwise, it will default to 'us-east-1'.
+
 const AWS_REGION_OVERRIDE = '';
 
 export class TapStack extends TerraformStack {
@@ -36,21 +38,9 @@ export class TapStack extends TerraformStack {
       : props?.awsRegion || 'us-east-1';
     const stateBucketRegion = props?.stateBucketRegion || 'us-east-1';
     const stateBucket = props?.stateBucket || 'iac-rlhf-tf-states';
+    const defaultTags = props?.defaultTags ? [props.defaultTags] : [];
 
-    // --- Define Default Tags ---
-    const defaultTags = props?.defaultTags
-      ? [props.defaultTags]
-      : [
-          {
-            tags: {
-              Environment: environmentSuffix,
-              Project: 'SecureFoundation',
-              ManagedBy: 'CDKTF',
-            },
-          },
-        ];
-
-    // Configure AWS Provider
+    // Configure AWS Provider - this expects AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY to be set in the environment
     new AwsProvider(this, 'aws', {
       region: awsRegion,
       defaultTags: defaultTags,
@@ -61,10 +51,13 @@ export class TapStack extends TerraformStack {
       bucket: stateBucket,
       key: `${environmentSuffix}/${id}.tfstate`,
       region: stateBucketRegion,
-      dynamodbTable: `terraform-lock-${stateBucket}`,
       encrypt: true,
     });
+    // Using an escape hatch instead of S3Backend construct - CDKTF still does not support S3 state locking natively
+    // ref - https://developer.hashicorp.com/terraform/cdktf/concepts/resources#escape-hatch
+    this.addOverride('terraform.backend.s3.use_lockfile', true);
 
+    // ? Add your stack instantiations here
     // --- Define Input Variables ---
     const myIp = new TerraformVariable(this, 'my_ip', {
       type: 'string',
@@ -110,7 +103,7 @@ export class TapStack extends TerraformStack {
       description:
         'Command to SSH into the Bastion Host (provide your own key)',
     });
-
-    // Removed the output for the Secrets Manager ARN
+    // ! Do NOT create resources directly in this stack.
+    // ! Instead, create separate stacks for each resource type.
   }
 }
