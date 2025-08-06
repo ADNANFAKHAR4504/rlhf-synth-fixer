@@ -18,15 +18,15 @@
     },
     "S3BucketName": {
       "Type": "String",
-      "Default": "serverlessapp-bucket-284210",
+      "Default": "serverlessapp-bucket-284210-1",
       "Description": "Unique S3 bucket name for object triggers."
     }
   },
   "Mappings": {
     "RegionMap": {
-      "us-east-1": {
-        "AZ1": "us-east-1a",
-        "AZ2": "us-east-1b"
+      "us-west-2": {
+        "AZ1": "us-west-2a",
+        "AZ2": "us-west-2b"
       }
     }
   },
@@ -112,7 +112,7 @@
         "AvailabilityZone": {
           "Fn::FindInMap": [
             "RegionMap",
-            "us-east-1",
+            "us-west-2",
             "AZ1"
           ]
         },
@@ -134,7 +134,7 @@
         "AvailabilityZone": {
           "Fn::FindInMap": [
             "RegionMap",
-            "us-east-1",
+            "us-west-2",
             "AZ2"
           ]
         },
@@ -142,6 +142,62 @@
           {
             "Key": "Name",
             "Value": "ServerlessAppSubnetAZ2"
+          }
+        ]
+      }
+    },
+    "ServerlessAppPublicSubnet": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "ServerlessAppVPC"
+        },
+        "CidrBlock": "10.0.0.128/26",
+        "AvailabilityZone": {
+          "Fn::FindInMap": [
+            "RegionMap",
+            "us-west-2",
+            "AZ1"
+          ]
+        },
+        "MapPublicIpOnLaunch": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "ServerlessAppPublicSubnet"
+          }
+        ]
+      }
+    },
+    "ServerlessAppNATEIP": {
+      "Type": "AWS::EC2::EIP",
+      "DependsOn": "ServerlessAppVPCGatewayAttachment",
+      "Properties": {
+        "Domain": "vpc",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "ServerlessAppNATEIP"
+          }
+        ]
+      }
+    },
+    "ServerlessAppNATGateway": {
+      "Type": "AWS::EC2::NatGateway",
+      "Properties": {
+        "AllocationId": {
+          "Fn::GetAtt": [
+            "ServerlessAppNATEIP",
+            "AllocationId"
+          ]
+        },
+        "SubnetId": {
+          "Ref": "ServerlessAppPublicSubnet"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "ServerlessAppNATGateway"
           }
         ]
       }
@@ -168,23 +224,66 @@
         }
       }
     },
-    "ServerlessAppRouteTable": {
+    "ServerlessAppPublicRouteTable": {
       "Type": "AWS::EC2::RouteTable",
       "Properties": {
         "VpcId": {
           "Ref": "ServerlessAppVPC"
-        }
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "ServerlessAppPublicRouteTable"
+          }
+        ]
       }
     },
-    "ServerlessAppRoute": {
+    "ServerlessAppPrivateRouteTable": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": {
+          "Ref": "ServerlessAppVPC"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "ServerlessAppPrivateRouteTable"
+          }
+        ]
+      }
+    },
+    "ServerlessAppPublicRoute": {
       "Type": "AWS::EC2::Route",
       "Properties": {
         "RouteTableId": {
-          "Ref": "ServerlessAppRouteTable"
+          "Ref": "ServerlessAppPublicRouteTable"
         },
         "DestinationCidrBlock": "0.0.0.0/0",
         "GatewayId": {
           "Ref": "ServerlessAppInternetGateway"
+        }
+      }
+    },
+    "ServerlessAppPrivateRoute": {
+      "Type": "AWS::EC2::Route",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "ServerlessAppPrivateRouteTable"
+        },
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "NatGatewayId": {
+          "Ref": "ServerlessAppNATGateway"
+        }
+      }
+    },
+    "ServerlessAppPublicSubnetRouteTableAssoc": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "ServerlessAppPublicSubnet"
+        },
+        "RouteTableId": {
+          "Ref": "ServerlessAppPublicRouteTable"
         }
       }
     },
@@ -195,7 +294,7 @@
           "Ref": "ServerlessAppSubnetAZ1"
         },
         "RouteTableId": {
-          "Ref": "ServerlessAppRouteTable"
+          "Ref": "ServerlessAppPrivateRouteTable"
         }
       }
     },
@@ -206,7 +305,7 @@
           "Ref": "ServerlessAppSubnetAZ2"
         },
         "RouteTableId": {
-          "Ref": "ServerlessAppRouteTable"
+          "Ref": "ServerlessAppPrivateRouteTable"
         }
       }
     },
@@ -308,7 +407,20 @@
                     "ec2:AttachNetworkInterface",
                     "ec2:DetachNetworkInterface"
                   ],
-                  "Resource": "*"
+                  "Resource": [
+                    {
+                      "Fn::Sub": "arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:network-interface/*"
+                    },
+                    {
+                      "Fn::Sub": "arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:subnet/${ServerlessAppSubnetAZ1}"
+                    },
+                    {
+                      "Fn::Sub": "arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:subnet/${ServerlessAppSubnetAZ2}"
+                    },
+                    {
+                      "Fn::Sub": "arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:security-group/${ServerlessAppLambdaSecurityGroup}"
+                    }
+                  ]
                 }
               ]
             }
@@ -343,7 +455,7 @@
         "Timeout": 60,
         "MemorySize": 256,
         "Code": {
-          "ZipFile": "import boto3\nimport os\nimport json\ndef lambda_handler(event, context):\n    secret_name = os.environ['SERVERLESSAPP_SECRET_ARN']\n    # Get secret value\n    session = boto3.session.Session()\n    client = session.client(service_name='secretsmanager')\n    get_secret_value_response = client.get_secret_value(SecretId=secret_name)\n    secret = json.loads(get_secret_value_response['SecretString'])\n    # Process S3 event (get bucket and key)\n    for record in event['Records']:\n        s3 = boto3.client('s3')\n        bucket = record['s3']['bucket']['name']\n        key = record['s3']['object']['key']\n        # For example: read file\n        obj = s3.get_object(Bucket=bucket, Key=key)\n        data = obj['Body'].read()\n        # ... further processing ...\n    return {'statusCode': 200, 'body': 'Processed.'}\n"
+          "ZipFile": "import boto3\n"
         },
         "Environment": {
           "Variables": {

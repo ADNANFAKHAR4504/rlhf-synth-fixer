@@ -271,18 +271,28 @@ describe('CloudFormation Template Tests', () => {
 
     test('should have Internet Gateway and routing', () => {
       const igw = template.Resources.ServerlessAppInternetGateway;
-      const route = template.Resources.ServerlessAppRoute;
-      const routeTable = template.Resources.ServerlessAppRouteTable;
+      const publicRouteTable = template.Resources.ServerlessAppPublicRouteTable;
+      const privateRouteTable = template.Resources.ServerlessAppPrivateRouteTable;
 
       expect(igw).toBeDefined();
       expect(igw.Type).toBe('AWS::EC2::InternetGateway');
 
-      expect(route).toBeDefined();
-      expect(route.Type).toBe('AWS::EC2::Route');
-      expect(route.Properties.DestinationCidrBlock).toBe('0.0.0.0/0');
+      // Check for public route (Internet Gateway)
+      const publicRoute = template.Resources.ServerlessAppPublicRoute;
+      expect(publicRoute).toBeDefined();
+      expect(publicRoute.Type).toBe('AWS::EC2::Route');
+      expect(publicRoute.Properties.DestinationCidrBlock).toBe('0.0.0.0/0');
 
-      expect(routeTable).toBeDefined();
-      expect(routeTable.Type).toBe('AWS::EC2::RouteTable');
+      // Check for private route (NAT Gateway)
+      const privateRoute = template.Resources.ServerlessAppPrivateRoute;
+      expect(privateRoute).toBeDefined();
+      expect(privateRoute.Type).toBe('AWS::EC2::Route');
+      expect(privateRoute.Properties.DestinationCidrBlock).toBe('0.0.0.0/0');
+
+      expect(publicRouteTable).toBeDefined();
+      expect(publicRouteTable.Type).toBe('AWS::EC2::RouteTable');
+      expect(privateRouteTable).toBeDefined();
+      expect(privateRouteTable.Type).toBe('AWS::EC2::RouteTable');
     });
 
     test('should have security group for Lambda', () => {
