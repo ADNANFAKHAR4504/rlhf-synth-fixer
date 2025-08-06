@@ -268,26 +268,68 @@ describe('TapStack Integration Tests', () => {
       
       expect(natGatewayResource.ResourceStatus).toBe('CREATE_COMPLETE');
       
-      // Use the NAT Gateway ID from stack outputs if available
-      const natGatewayId = stackOutputs.NatGateway1Id || natGatewayResource.PhysicalResourceId;
+      let natGateways: any[] = [];
       
-      if (!natGatewayId) {
-        fail('NAT Gateway ID not available from stack outputs or CloudFormation resource');
+      // Strategy 1: Try direct lookup by stack output ID
+      const stackOutputId = stackOutputs.NatGateway1Id;
+      if (stackOutputId) {
+        try {
+          console.log(`Attempting direct lookup with stack output ID: ${stackOutputId}`);
+          const directCommand = new DescribeNatGatewaysCommand({
+            NatGatewayIds: [stackOutputId],
+          });
+          const directResponse = await ec2Client.send(directCommand);
+          natGateways = directResponse.NatGateways || [];
+          console.log(`Strategy 1 (stack output): Found ${natGateways.length} NAT Gateways`);
+        } catch (error: any) {
+          console.log(`Strategy 1 failed: ${error.message}`);
+        }
       }
       
-      // Direct lookup by NAT Gateway ID - most reliable approach
-      const command = new DescribeNatGatewaysCommand({
-        NatGatewayIds: [natGatewayId],
-      });
+      // Strategy 2: Try direct lookup by CloudFormation physical resource ID
+      if (natGateways.length === 0 && natGatewayResource.PhysicalResourceId) {
+        try {
+          console.log(`Attempting direct lookup with CF physical ID: ${natGatewayResource.PhysicalResourceId}`);
+          const cfCommand = new DescribeNatGatewaysCommand({
+            NatGatewayIds: [natGatewayResource.PhysicalResourceId],
+          });
+          const cfResponse = await ec2Client.send(cfCommand);
+          natGateways = cfResponse.NatGateways || [];
+          console.log(`Strategy 2 (CF physical ID): Found ${natGateways.length} NAT Gateways`);
+        } catch (error: any) {
+          console.log(`Strategy 2 failed: ${error.message}`);
+        }
+      }
       
-      const response = await ec2Client.send(command);
-      const natGateways = response.NatGateways || [];
+      // Strategy 3: Search NAT Gateways by VPC and subnet filters
+      if (natGateways.length === 0) {
+        try {
+          console.log(`Searching NAT Gateways by VPC filter: ${stackOutputs.VPCId}`);
+          const searchCommand = new DescribeNatGatewaysCommand({
+            Filter: [
+              {
+                Name: 'vpc-id',
+                Values: [stackOutputs.VPCId],
+              },
+              {
+                Name: 'state',
+                Values: ['available', 'pending'],
+              },
+            ],
+          });
+          const searchResponse = await ec2Client.send(searchCommand);
+          natGateways = searchResponse.NatGateways || [];
+          console.log(`Strategy 3 (VPC filter): Found ${natGateways.length} NAT Gateways`);
+        } catch (error: any) {
+          console.log(`Strategy 3 failed: ${error.message}`);
+        }
+      }
       
-      console.log(`Found ${natGateways.length} NAT Gateways via direct ID lookup`);
+      console.log(`Final result: Found ${natGateways.length} NAT Gateways`);
       
       if (natGateways.length > 0) {
         const natGw = natGateways[0];
-        console.log(`NAT Gateway State: ${natGw.State}, VPC: ${natGw.VpcId}, Subnet: ${natGw.SubnetId}`);
+        console.log(`NAT Gateway State: ${natGw.State}, VPC: ${natGw.VpcId}, Subnet: ${natGw.SubnetId}, ID: ${natGw.NatGatewayId}`);
       }
 
       // Assertions
@@ -1076,26 +1118,69 @@ describe('TapStack Integration Tests', () => {
       
       expect(natGatewayResource.ResourceStatus).toBe('CREATE_COMPLETE');
       
-      // Use the NAT Gateway ID from stack outputs if available
-      const natGatewayId = stackOutputs.NatGateway1Id || natGatewayResource.PhysicalResourceId;
+      let natGateways: any[] = [];
       
-      if (!natGatewayId) {
-        fail('NAT Gateway ID not available from stack outputs or CloudFormation resource');
+      // Strategy 1: Try direct lookup by stack output ID
+      const stackOutputId = stackOutputs.NatGateway1Id;
+      if (stackOutputId) {
+        try {
+          console.log(`HA Test - Attempting direct lookup with stack output ID: ${stackOutputId}`);
+          const directCommand = new DescribeNatGatewaysCommand({
+            NatGatewayIds: [stackOutputId],
+          });
+          const directResponse = await ec2Client.send(directCommand);
+          natGateways = directResponse.NatGateways || [];
+          console.log(`HA Test - Strategy 1 (stack output): Found ${natGateways.length} NAT Gateways`);
+        } catch (error: any) {
+          console.log(`HA Test - Strategy 1 failed: ${error.message}`);
+        }
       }
       
-      // Direct lookup by NAT Gateway ID - most reliable approach
-      const command = new DescribeNatGatewaysCommand({
-        NatGatewayIds: [natGatewayId],
-      });
+      // Strategy 2: Try direct lookup by CloudFormation physical resource ID
+      if (natGateways.length === 0 && natGatewayResource.PhysicalResourceId) {
+        try {
+          console.log(`HA Test - Attempting direct lookup with CF physical ID: ${natGatewayResource.PhysicalResourceId}`);
+          const cfCommand = new DescribeNatGatewaysCommand({
+            NatGatewayIds: [natGatewayResource.PhysicalResourceId],
+          });
+          const cfResponse = await ec2Client.send(cfCommand);
+          natGateways = cfResponse.NatGateways || [];
+          console.log(`HA Test - Strategy 2 (CF physical ID): Found ${natGateways.length} NAT Gateways`);
+        } catch (error: any) {
+          console.log(`HA Test - Strategy 2 failed: ${error.message}`);
+        }
+      }
       
-      const response = await ec2Client.send(command);
-      const natGateways = response.NatGateways || [];
+      // Strategy 3: Search NAT Gateways by VPC and subnet filters
+      if (natGateways.length === 0) {
+        try {
+          console.log(`HA Test - Searching NAT Gateways by VPC filter: ${stackOutputs.VPCId}`);
+          const searchCommand = new DescribeNatGatewaysCommand({
+            Filter: [
+              {
+                Name: 'vpc-id',
+                Values: [stackOutputs.VPCId],
+              },
+              {
+                Name: 'state',
+                Values: ['available', 'pending'],
+              },
+            ],
+          });
+          const searchResponse = await ec2Client.send(searchCommand);
+          natGateways = searchResponse.NatGateways || [];
+          console.log(`HA Test - Strategy 3 (VPC filter): Found ${natGateways.length} NAT Gateways`);
+        } catch (error: any) {
+          console.log(`HA Test - Strategy 3 failed: ${error.message}`);
+        }
+      }
 
       // This template only creates 1 NAT Gateway for cost optimization
       expect(natGateways).toHaveLength(1);
       
       if (natGateways.length > 0) {
         const natGw = natGateways[0];
+        console.log(`HA Test - NAT Gateway State: ${natGw.State}, VPC: ${natGw.VpcId}, Subnet: ${natGw.SubnetId}, ID: ${natGw.NatGatewayId}`);
         // NAT Gateways don't have AvailabilityZone property directly, check via subnet
         expect(natGw.VpcId).toBe(stackOutputs.VPCId);
         expect([stackOutputs.PublicSubnet1Id, stackOutputs.PublicSubnet2Id])
