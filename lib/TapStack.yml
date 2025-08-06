@@ -352,7 +352,6 @@ Resources:
             Condition:
               Bool:
                 aws:SecureTransport: false
-
           - Sid: AllowCloudFormationLogging
             Effect: Allow
             Principal:
