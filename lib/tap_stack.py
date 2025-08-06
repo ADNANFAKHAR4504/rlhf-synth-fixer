@@ -883,7 +883,7 @@ artifacts:
             app_name=self.codedeploy_app.name,
             deployment_group_name=f"{self.app_name}-deployment-group-{self.environment}",
             service_role_arn=self.codedeploy_role.arn,
-            deployment_config_name="CodeDeployDefault.AllAtOneTime",
+            deployment_config_name="CodeDeployDefault.AllAtOnce",
             ec2_tag_filters=[
                 aws.codedeploy.DeploymentGroupEc2TagFilterArgs(
                     key="Name",
