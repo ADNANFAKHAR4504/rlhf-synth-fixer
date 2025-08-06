@@ -3,9 +3,6 @@
 import { Cloudtrail } from '@cdktf/provider-aws/lib/cloudtrail';
 import { CloudwatchLogGroup } from '@cdktf/provider-aws/lib/cloudwatch-log-group';
 import { CloudwatchMetricAlarm } from '@cdktf/provider-aws/lib/cloudwatch-metric-alarm';
-import { ConfigConfigRule } from '@cdktf/provider-aws/lib/config-config-rule';
-import { ConfigConfigurationRecorder } from '@cdktf/provider-aws/lib/config-configuration-recorder';
-import { ConfigDeliveryChannel } from '@cdktf/provider-aws/lib/config-delivery-channel';
 import { DataAwsAvailabilityZones } from '@cdktf/provider-aws/lib/data-aws-availability-zones';
 import { DataAwsCallerIdentity } from '@cdktf/provider-aws/lib/data-aws-caller-identity';
 import { Eip } from '@cdktf/provider-aws/lib/eip';
@@ -528,7 +525,7 @@ export class TapStack extends TerraformStack {
     );
 
     const s3AppDataPolicy = new IamPolicy(this, 'prod-sec-s3-app-data-policy', {
-      name: 'prod-sec-s3-app-data-policy',
+      name: `prod-sec-s3-app-data-policy-${uniqueSuffix}`,
       description: 'Access to application data S3 bucket',
       policy: JSON.stringify({
         Version: '2012-10-17',
@@ -753,123 +750,6 @@ export class TapStack extends TerraformStack {
       tags: commonTags,
     });
 
-    // AWS Config - CORRECTED dependencies
-    const configRole = new IamRole(this, 'prod-sec-config-role', {
-      name: `prod-sec-config-role-${uniqueSuffix}`,
-      assumeRolePolicy: JSON.stringify({
-        Version: '2012-10-17',
-        Statement: [
-          {
-            Action: 'sts:AssumeRole',
-            Effect: 'Allow',
-            Principal: {
-              Service: 'config.amazonaws.com',
-            },
-          },
-        ],
-      }),
-      tags: commonTags,
-    });
-
-    // Attach AWS managed policy for Config role
-    new IamRolePolicyAttachment(this, 'prod-sec-config-role-aws-policy', {
-      role: configRole.name,
-      policyArn: 'arn:aws:iam::aws:policy/service-role/AWS_ConfigRole',
-    });
-
-    const configBucketPolicy = new IamPolicy(
-      this,
-      'prod-sec-config-bucket-policy',
-      {
-        name: `prod-sec-config-bucket-policy-${uniqueSuffix}`,
-        policy: JSON.stringify({
-          Version: '2012-10-17',
-          Statement: [
-            {
-              Effect: 'Allow',
-              Action: ['s3:GetBucketAcl', 's3:ListBucket'],
-              Resource: logsBucket.arn,
-            },
-            {
-              Effect: 'Allow',
-              Action: 's3:PutObject',
-              Resource: `${logsBucket.arn}/config-logs/*`,
-              Condition: {
-                StringEquals: {
-                  's3:x-amz-acl': 'bucket-owner-full-control',
-                },
-              },
-            },
-          ],
-        }),
-      }
-    );
-
-    new IamRolePolicyAttachment(this, 'prod-sec-config-role-bucket-policy', {
-      role: configRole.name,
-      policyArn: configBucketPolicy.arn,
-    });
-
-    const configRecorder = new ConfigConfigurationRecorder(
-      this,
-      'prod-sec-config-recorder',
-      {
-        name: 'prod-sec-config-recorder',
-        roleArn: configRole.arn,
-        recordingGroup: {
-          allSupported: true,
-          includeGlobalResourceTypes: true,
-        },
-      }
-    );
-
-    // FIXED: Added dependency for delivery channel
-    const configDeliveryChannel = new ConfigDeliveryChannel(
-      this,
-      'prod-sec-config-delivery-channel',
-      {
-        name: 'prod-sec-config-delivery-channel',
-        s3BucketName: logsBucket.id,
-        s3KeyPrefix: 'config-logs/',
-        dependsOn: [configRecorder],
-      }
-    );
-
-    // Config Rules
-    new ConfigConfigRule(this, 'prod-sec-s3-bucket-public-access-prohibited', {
-      name: 's3-bucket-public-access-prohibited',
-      source: {
-        owner: 'AWS',
-        sourceIdentifier: 'S3_BUCKET_PUBLIC_ACCESS_PROHIBITED',
-      },
-      dependsOn: [configRecorder],
-    });
-
-    new ConfigConfigRule(this, 'prod-sec-encrypted-volumes', {
-      name: 'encrypted-volumes',
-      source: {
-        owner: 'AWS',
-        sourceIdentifier: 'ENCRYPTED_VOLUMES',
-      },
-      dependsOn: [configRecorder],
-    });
-
-    new ConfigConfigRule(this, 'prod-sec-iam-password-policy', {
-      name: 'iam-password-policy',
-      source: {
-        owner: 'AWS',
-        sourceIdentifier: 'IAM_PASSWORD_POLICY',
-      },
-      inputParameters: JSON.stringify({
-        RequireUppercaseCharacters: 'true',
-        RequireLowercaseCharacters: 'true',
-        RequireSymbols: 'true',
-        RequireNumbers: 'true',
-        MinimumPasswordLength: '14',
-      }),
-      dependsOn: [configRecorder],
-    });
-
     // GuardDuty - Commented out as detector already exists in account
     // Note: If GuardDuty detector doesn't exist, uncomment the following:
     // new GuarddutyDetector(this, 'prod-sec-guardduty', {
@@ -877,6 +757,10 @@ export class TapStack extends TerraformStack {
     //   findingPublishingFrequency: 'FIFTEEN_MINUTES',
     //   tags: commonTags,
     // });
+
+    // AWS Config - Removed due to configuration recorder limit exceeded
+    // Note: AWS accounts have a limit of 1 configuration recorder per region
+    // If you need Config service, remove the existing configuration recorder first
 
     // Outputs
     new TerraformOutput(this, 'vpc_id', {
