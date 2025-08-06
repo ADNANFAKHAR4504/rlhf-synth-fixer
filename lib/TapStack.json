@@ -59,6 +59,21 @@
                 "kms:DescribeKey"
               ],
               "Resource": "*"
+            },
+            {
+              "Sid": "Allow EC2 to use KMS for EBS",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "ec2.amazonaws.com"
+              },
+              "Action": [
+                "kms:Encrypt",
+                "kms:Decrypt",
+                "kms:ReEncrypt*",
+                "kms:GenerateDataKey*",
+                "kms:DescribeKey"
+              ],
+              "Resource": "*"
             }
           ]
         },
