@@ -101,14 +101,14 @@ class TestTapStackIntegration(unittest.TestCase):
         Payload=json.dumps(payload)
       )
       response_payload_dict = json.loads(response["Payload"].read())
-
       self.assertEqual(response["StatusCode"], 200)
 
       body_string = response_payload_dict.get("body")
       self.assertIsNotNone(body_string)
 
       parsed_body = json.loads(body_string)
-      self.assertEqual(parsed_body.get("statusCode"), 200)
+      self.assertEqual(parsed_body.get("message"), "Successfully processed S3 event")
+      self.assertEqual(parsed_body.get("status"), "success")
 
     except (ClientError, BotoCoreError, json.JSONDecodeError) as ex:
       self.fail(f"Lambda test failed: {ex}")
