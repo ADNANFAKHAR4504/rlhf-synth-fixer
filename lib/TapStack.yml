@@ -281,6 +281,7 @@ Resources:
           PredefinedMetricType: DynamoDBWriteCapacityUtilization
 
   # CloudWatch Alarm for Lambda Error Rate
+  # CloudWatch Alarm for Lambda Error Rate
   LambdaErrorAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
@@ -288,7 +289,7 @@ Resources:
       AlarmDescription: 'Alarm when Lambda function error rate exceeds 5% for 5 consecutive minutes'
       Metrics:
         - Id: e1
-          ReturnData: true
+          ReturnData: false # Corrected: Set to false
           MetricStat:
             Metric:
               MetricName: Errors
@@ -311,7 +312,7 @@ Resources:
             Stat: Sum
         - Id: errorRate
           Expression: '(e1/i1)*100'
-          ReturnData: true
+          ReturnData: true # This is the only metric returning data for evaluation
       Threshold: 5
       ComparisonOperator: GreaterThanThreshold
       EvaluationPeriods: 1
