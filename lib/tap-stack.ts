@@ -30,22 +30,27 @@ interface TapStackProps {
 }
 
 export class TapStack extends TerraformStack {
-  private readonly resourcePrefix = 'prod-service';
-  private readonly region = 'us-east-1';
+  private readonly resourcePrefix: string;
+  private readonly region: string;
 
   constructor(scope: Construct, id: string, props?: TapStackProps) {
     super(scope, id);
 
+    // Initialize properties
+    this.resourcePrefix = `${props?.environmentSuffix || 'prod'}-service`;
+    this.region = props?.awsRegion || 'us-east-1';
+
     // Providers
     new AwsProvider(this, 'aws', {
-      region: this.region,
+      region: props?.awsRegion || this.region,
       defaultTags: [
         {
           tags: {
-            Environment: 'Production',
+            Environment: props?.environmentSuffix || 'Production',
             Project: 'IaC-AWS-Nova-Model-Breaking',
             ManagedBy: 'CDKTF',
             Architecture: 'Serverless',
+            ...props?.defaultTags,
           },
         },
       ],

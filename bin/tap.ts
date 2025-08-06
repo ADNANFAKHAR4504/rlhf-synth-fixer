@@ -18,18 +18,14 @@ const stackName = `TapStack${environmentSuffix}`;
 
 // defautlTags is structured in adherence to the AwsProviderDefaultTags interface
 const defaultTags = {
-  tags: {
-    Environment: environmentSuffix,
-    Repository: repositoryName,
-    CommitAuthor: commitAuthor,
-  },
+  Environment: environmentSuffix,
+  Repository: repositoryName,
+  CommitAuthor: commitAuthor,
 };
 
 // Create the TapStack with the calculated properties
 new TapStack(app, stackName, {
   environmentSuffix: environmentSuffix,
-  stateBucket: stateBucket,
-  stateBucketRegion: stateBucketRegion,
   awsRegion: awsRegion,
   defaultTags: defaultTags,
 });
