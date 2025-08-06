@@ -51,7 +51,7 @@ Resources:
     Properties:
       VpcId: !Ref ProdVpc
       CidrBlock: '10.0.1.0/24'
-      AvailabilityZone: !Select [1, !GetAZs '']
+      AvailabilityZone: !Select [0, !GetAZs '']
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -64,7 +64,7 @@ Resources:
     Properties:
       VpcId: !Ref ProdVpc
       CidrBlock: '10.0.2.0/24'
-      AvailabilityZone: !Select [2, !GetAZs '']
+      AvailabilityZone: !Select [1, !GetAZs '']
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name

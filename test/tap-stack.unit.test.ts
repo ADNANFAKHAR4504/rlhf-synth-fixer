@@ -125,8 +125,8 @@ describe('TapStack CloudFormation Template', () => {
       expect(subnet2.Properties.MapPublicIpOnLaunch).toBe(true);
       
       // Different AZ indices
-      expect(subnet1.Properties.AvailabilityZone).toEqual({ 'Fn::Select': [1, { 'Fn::GetAZs': '' }] });
-      expect(subnet2.Properties.AvailabilityZone).toEqual({ 'Fn::Select': [2, { 'Fn::GetAZs': '' }] });
+      expect(subnet1.Properties.AvailabilityZone).toEqual({ 'Fn::Select': [0, { 'Fn::GetAZs': '' }] });
+      expect(subnet2.Properties.AvailabilityZone).toEqual({ 'Fn::Select': [1, { 'Fn::GetAZs': '' }] });
     });
 
     test('private subnets are configured correctly', () => {
