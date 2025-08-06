@@ -50,7 +50,11 @@ export class TapStack extends TerraformStack {
       );
     }
     const config = environments[actualEnvironment];
-    this.naming = new NamingConvention(environmentSuffix);
+    this.naming = new NamingConvention(
+      environmentSuffix,
+      'cdktf-infra',
+      awsRegion
+    );
 
     // Configure AWS Provider - this expects AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY to be set in the environment
     new AwsProvider(this, 'aws', {
