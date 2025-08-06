@@ -182,7 +182,13 @@ describe('TapStack Integration Tests - Simplified DynamoDB Multi-Region Deployme
       ) || [];
 
       if (tapStacks.length > 0) {
-        const stackName = tapStacks[0].StackName!;
+        // Find the specific TapStack for the current environment
+        const targetStackName = `TapStack${environmentSuffix}`;
+        const targetStack = tapStacks.find(stack => stack.StackName === targetStackName);
+        const stackName = targetStack?.StackName || tapStacks[0].StackName!;
+        
+        console.log(`Using stack: ${stackName} (target was: ${targetStackName})`);
+        
         const stackResponse = await cloudformation.send(
           new DescribeStacksCommand({ StackName: stackName })
         );
