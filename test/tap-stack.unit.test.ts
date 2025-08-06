@@ -20,8 +20,8 @@ describe('TapStack Unit Tests', () => {
       stack = new TapStack(app, 'TestTapStackWithProps', {
         environmentSuffix: 'prod',
         stateBucket: 'custom-state-bucket',
-        stateBucketRegion: 'us-west-2',
-        awsRegion: 'us-west-2',
+        stateBucketRegion: 'eu-west-1',
+        awsRegion: 'eu-west-1',
       });
       synthesized = Testing.synth(stack);
 
@@ -154,7 +154,7 @@ describe('TapStack Unit Tests', () => {
     test('should respect AWS_REGION_OVERRIDE when set', () => {
       app = new App();
       stack = new TapStack(app, 'TestTapStackOverride', {
-        awsRegion: 'us-west-1',
+        awsRegion: 'eu-west-1',
       });
 
       expect(stack).toBeDefined();
