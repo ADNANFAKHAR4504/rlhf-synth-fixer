@@ -79,7 +79,7 @@ aws_lambda.Function = Mock()
 aws_lambda.Permission = Mock()
 sys.modules["pulumi_aws"].lambda_ = aws_lambda
 
-# Improved MockOutput implementation
+# Improved MockOutput implementation with proper subscriptability
 
 
 class MockOutput:
@@ -101,13 +101,17 @@ class MockOutput:
   def __iter__(self):
     if isinstance(self.value, (list, tuple)):
       for x in self.value:
-        yield MockOutput(x)
+        yield MockOutput(x) if not isinstance(x, MockOutput) else x
     elif self.value is not None:
       # Handle single values
       yield MockOutput(self.value)
     else:
       # Return empty iterator for None values
       return iter([])
+
+  def __class_getitem__(cls, item):
+    """Handle MockOutput[type] syntax for type hints"""
+    return cls
 
   @staticmethod
   def all(*args):
@@ -120,6 +124,13 @@ class MockOutput:
   def __str__(self):
     return str(self.value)
 
+  def __repr__(self):
+    return f"MockOutput({self.value})"
+
+
+# Make MockOutput subscriptable at the class level
+MockOutput.__class_getitem__ = classmethod(lambda cls, item: cls)
+
 # Enhanced MockComponentResource that inherits from MockResource
 
 
@@ -127,8 +138,8 @@ class MockResource:
   """Base mock resource class that Pulumi resources should inherit from"""
 
   def __init__(self, *args, **kwargs):
-    self.id = "mock-resource-id"
-    self.urn = "mock-resource-urn"
+    self.id = MockOutput("mock-resource-id")
+    self.urn = MockOutput("mock-resource-urn")
     self.name = args[1] if len(args) > 1 else "mock-resource"
 
 
@@ -311,7 +322,8 @@ class TestTapStackComponents(unittest.TestCase):
   def test_database_component_initialization(self, mock_zipfile, mock_walk, mock_exists):
     mock_exists.return_value = True
     compute_mock = MockComponentResource()
-    compute_mock.db_sg = MagicMock(id="sg-123")
+    compute_mock.db_sg = MagicMock()
+    compute_mock.db_sg.id = MockOutput("sg-123")
     compute_mock.private_subnet_ids = MockOutput(["subnet-123"])
 
     db = DatabaseComponent(
@@ -319,7 +331,7 @@ class TestTapStackComponents(unittest.TestCase):
         environment="test",
         db_security_group_id=compute_mock.db_sg.id,
         username="admin",
-        password="passw0rd",
+        password=MockOutput("passw0rd"),
         private_subnet_ids=compute_mock.private_subnet_ids,
         opts=pulumi.ResourceOptions(),
     )
@@ -339,14 +351,17 @@ class TestTapStackComponents(unittest.TestCase):
     mock_zipfile.return_value.__enter__.return_value = mock_zipfile_instance
 
     iam_mock = MockComponentResource()
-    iam_mock.lambda_role = MagicMock(arn="arn:aws:iam::123:role/test")
+    iam_mock.lambda_role = MagicMock()
+    iam_mock.lambda_role.arn = MockOutput("arn:aws:iam::123:role/test")
 
     compute_mock = MockComponentResource()
     compute_mock.private_subnet_ids = MockOutput(["subnet-123"])
-    compute_mock.lambda_sg = MagicMock(id="sg-123")
+    compute_mock.lambda_sg = MagicMock()
+    compute_mock.lambda_sg.id = MockOutput("sg-123")
 
     db_mock = MockComponentResource()
-    db_mock.rds_instance = MagicMock(endpoint="db-endpoint")
+    db_mock.rds_instance = MagicMock()
+    db_mock.rds_instance.endpoint = MockOutput("db-endpoint")
 
     # Create a proper mock resource that will pass the isinstance check
     mock_depends_resource = MockComponentResource()
@@ -358,9 +373,9 @@ class TestTapStackComponents(unittest.TestCase):
         private_subnet_ids=compute_mock.private_subnet_ids,
         lambda_security_group_id=compute_mock.lambda_sg.id,
         rds_endpoint=db_mock.rds_instance.endpoint,
-        db_name="tapdb",
+        db_name=MockOutput("tapdb"),
         db_username="admin",
-        db_password="passw0rd",
+        db_password=MockOutput("passw0rd"),
         opts=pulumi.ResourceOptions(depends_on=[mock_depends_resource]),
     )
     self.assertTrue(hasattr(serverless, "lambda_function"))
