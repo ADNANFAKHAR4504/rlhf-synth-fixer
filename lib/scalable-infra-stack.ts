@@ -1,4 +1,3 @@
-import { AutoscalingGroup } from '@cdktf/provider-aws/lib/autoscaling-group';
 import { CloudwatchLogGroup } from '@cdktf/provider-aws/lib/cloudwatch-log-group';
 import { DataAwsAmi } from '@cdktf/provider-aws/lib/data-aws-ami';
 import { DataAwsAvailabilityZones } from '@cdktf/provider-aws/lib/data-aws-availability-zones';
@@ -6,16 +5,12 @@ import { DbInstance } from '@cdktf/provider-aws/lib/db-instance';
 import { DbSubnetGroup } from '@cdktf/provider-aws/lib/db-subnet-group';
 import { DynamodbTable } from '@cdktf/provider-aws/lib/dynamodb-table';
 import { Eip } from '@cdktf/provider-aws/lib/eip';
-import { FlowLog } from '@cdktf/provider-aws/lib/flow-log';
 import { IamInstanceProfile } from '@cdktf/provider-aws/lib/iam-instance-profile';
 import { IamPolicy } from '@cdktf/provider-aws/lib/iam-policy';
 import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
 import { IamRolePolicyAttachment } from '@cdktf/provider-aws/lib/iam-role-policy-attachment';
 import { InternetGateway } from '@cdktf/provider-aws/lib/internet-gateway';
-import { LaunchTemplate } from '@cdktf/provider-aws/lib/launch-template';
 import { Lb } from '@cdktf/provider-aws/lib/lb';
-import { LbListener } from '@cdktf/provider-aws/lib/lb-listener';
-import { LbTargetGroup } from '@cdktf/provider-aws/lib/lb-target-group';
 import { NatGateway } from '@cdktf/provider-aws/lib/nat-gateway';
 import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
 import { Route } from '@cdktf/provider-aws/lib/route';
@@ -451,19 +446,15 @@ export class ScalableInfrastructure extends Construct {
     });
 
     // Instance profile for EC2 instances
-    const instanceProfile = new IamInstanceProfile(
-      this,
-      'ec2-instance-profile',
-      {
-        provider: props.provider,
-        name: `${id}-ec2-instance-profile`,
-        role: ec2Role.name,
-        tags: {
-          Name: `${id}-ec2-instance-profile`,
-          Environment: 'production',
-        },
-      }
-    );
+    new IamInstanceProfile(this, 'ec2-instance-profile', {
+      provider: props.provider,
+      name: `${id}-ec2-instance-profile`,
+      role: ec2Role.name,
+      tags: {
+        Name: `${id}-ec2-instance-profile`,
+        Environment: 'production',
+      },
+    });
 
     // S3 Bucket Policy - restrict access to EC2 role only
     new S3BucketPolicy(this, 'bucket-policy', {
@@ -495,9 +486,9 @@ export class ScalableInfrastructure extends Construct {
     });
 
     // CloudWatch Log Group for VPC Flow Logs
-    const vpcLogGroup = new CloudwatchLogGroup(this, 'vpc-flow-logs', {
+    new CloudwatchLogGroup(this, 'vpc-flow-logs', {
       provider: props.provider,
-      name: `/aws/vpc/flowlogs/${id}`,
+      name: `/aws/vpc/flowlogs/${id.replace(/\s+/g, '-')}`,
       retentionInDays: 14,
       tags: {
         Name: `${id}-vpc-flow-logs`,
@@ -506,9 +497,9 @@ export class ScalableInfrastructure extends Construct {
     });
 
     // IAM Role for VPC Flow Logs
-    const flowLogRole = new IamRole(this, 'flow-log-role', {
+    new IamRole(this, 'flow-log-role', {
       provider: props.provider,
-      name: `${id}-flow-log-role`,
+      name: `${id.replace(/\s+/g, '-')}-flow-log-role`,
       assumeRolePolicy: JSON.stringify({
         Version: '2012-10-17',
         Statement: [
@@ -528,9 +519,9 @@ export class ScalableInfrastructure extends Construct {
     });
 
     // IAM Policy for VPC Flow Logs
-    const flowLogPolicy = new IamPolicy(this, 'flow-log-policy', {
+    new IamPolicy(this, 'flow-log-policy', {
       provider: props.provider,
-      name: `${id}-flow-log-policy`,
+      name: `${id.replace(/\s+/g, '-')}-flow-log-policy`,
       policy: JSON.stringify({
         Version: '2012-10-17',
         Statement: [
@@ -553,58 +544,39 @@ export class ScalableInfrastructure extends Construct {
       },
     });
 
-    new IamRolePolicyAttachment(this, 'flow-log-policy-attachment', {
+    // RDS Subnet Group for multi-AZ deployment
+    const dbSubnetGroup = new DbSubnetGroup(this, 'db-subnet-group', {
       provider: props.provider,
-      role: flowLogRole.name,
-      policyArn: flowLogPolicy.arn,
-    });
-
-    // VPC Flow Logs to capture all IP traffic
-    new FlowLog(this, 'vpc-flow-log', {
-      provider: props.provider,
-      iamRoleArn: flowLogRole.arn,
-      logDestination: vpcLogGroup.arn,
-      vpcId: vpc.id,
-      trafficType: 'ALL',
+      name: `${id.replace(/\s+/g, '-')}-db-subnet-group`,
+      subnetIds: privateSubnets.map(subnet => subnet.id),
       tags: {
-        Name: `${id}-vpc-flow-log`,
+        Name: `${id}-db-subnet-group`,
         Environment: 'production',
       },
     });
 
-    // Launch Template for Auto Scaling Group
-    const launchTemplate = new LaunchTemplate(this, 'launch-template', {
+    // RDS MySQL Instance with Multi-AZ and encryption, using the secret for master password
+    const rdsInstance = new DbInstance(this, 'rds-mysql', {
       provider: props.provider,
-      name: `${id}-launch-template`,
-      imageId: amazonLinuxAmi.id,
-      instanceType: 't3.micro',
-      vpcSecurityGroupIds: [ec2SecurityGroup.id],
-      iamInstanceProfile: {
-        name: instanceProfile.name,
-      },
-      userData: Buffer.from(
-        `#!/bin/bash
-yum update -y
-yum install -y httpd
-systemctl start httpd
-systemctl enable httpd
-echo "<h1>Hello from $(hostname -f)</h1>" > /var/www/html/index.html
-# Install CloudWatch agent
-yum install -y amazon-cloudwatch-agent
-/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -s -c default
-`
-      ).toString('base64'),
-      tagSpecifications: [
-        {
-          resourceType: 'instance',
-          tags: {
-            Name: `${id}-instance`,
-            Environment: 'production',
-          },
-        },
-      ],
+      identifier: `${id}-mysql`,
+      engine: 'mysql',
+      engineVersion: '8.0',
+      instanceClass: 'db.t3.micro',
+      allocatedStorage: 20,
+      storageType: 'gp2',
+      storageEncrypted: true,
+      dbName: 'appdb',
+      username: props.dbUsername,
+      manageMasterUserPassword: true,
+      vpcSecurityGroupIds: [rdsSecurityGroup.id],
+      dbSubnetGroupName: dbSubnetGroup.name,
+      multiAz: true,
+      backupRetentionPeriod: 7,
+      backupWindow: '03:00-04:00',
+      maintenanceWindow: 'sun:04:00-sun:05:00',
+      skipFinalSnapshot: true,
       tags: {
-        Name: `${id}-launch-template`,
+        Name: `${id}-rds-mysql`,
         Environment: 'production',
       },
     });
@@ -618,119 +590,6 @@ yum install -y amazon-cloudwatch-agent
       securityGroups: [albSecurityGroup.id],
       tags: {
         Name: `${id}-alb`,
-        Environment: 'production',
-      },
-    });
-
-    // ALB Target Group
-    const targetGroup = new LbTargetGroup(this, 'tg', {
-      provider: props.provider,
-      name: `${id}-tg`,
-      port: 80,
-      protocol: 'HTTP',
-      vpcId: vpc.id,
-      healthCheck: {
-        enabled: true,
-        healthyThreshold: 2,
-        interval: 30,
-        matcher: '200',
-        path: '/',
-        port: 'traffic-port',
-        protocol: 'HTTP',
-        timeout: 5,
-        unhealthyThreshold: 2,
-      },
-      tags: {
-        Name: `${id}-tg`,
-        Environment: 'production',
-      },
-    });
-
-    // ALB Listener
-    new LbListener(this, 'alb-listener', {
-      provider: props.provider,
-      loadBalancerArn: alb.arn,
-      port: 80,
-      protocol: 'HTTP',
-      defaultAction: [
-        {
-          type: 'forward',
-          targetGroupArn: targetGroup.arn,
-        },
-      ],
-      tags: {
-        Name: `${id}-alb-listener`,
-        Environment: 'production',
-      },
-    });
-
-    // Auto Scaling Group with minimum 3 instances across AZs
-    new AutoscalingGroup(this, 'asg', {
-      provider: props.provider,
-      name: `${id}-asg`,
-      vpcZoneIdentifier: privateSubnets.map(subnet => subnet.id),
-      targetGroupArns: [targetGroup.arn],
-      healthCheckType: 'ELB',
-      healthCheckGracePeriod: 300,
-      minSize: 3,
-      maxSize: 9,
-      desiredCapacity: 3,
-      launchTemplate: {
-        id: launchTemplate.id,
-        version: '$Latest',
-      },
-      tag: [
-        {
-          key: 'Name',
-          value: `${id}-asg-instance`,
-          propagateAtLaunch: true,
-        },
-        {
-          key: 'Environment',
-          value: 'Production',
-          propagateAtLaunch: true,
-        },
-        {
-          key: 'ManagedBy',
-          value: 'Terraform-CDK',
-          propagateAtLaunch: true,
-        },
-      ],
-    });
-
-    // RDS Subnet Group for multi-AZ deployment
-    const dbSubnetGroup = new DbSubnetGroup(this, 'db-subnet-group', {
-      provider: props.provider,
-      name: `${id}-db-subnet-group`,
-      subnetIds: privateSubnets.map(subnet => subnet.id),
-      tags: {
-        Name: `${id}-db-subnet-group`,
-        Environment: 'production',
-      },
-    });
-
-    // RDS MySQL Instance with Multi-AZ and encryption
-    const rdsInstance = new DbInstance(this, 'rds-mysql', {
-      provider: props.provider,
-      identifier: `${id}-mysql`,
-      engine: 'mysql',
-      engineVersion: '8.0',
-      instanceClass: 'db.t3.micro',
-      allocatedStorage: 20,
-      storageType: 'gp2',
-      storageEncrypted: true,
-      dbName: 'appdb',
-      username: props.dbUsername,
-      // password omitted to let RDS auto-generate it
-      vpcSecurityGroupIds: [rdsSecurityGroup.id],
-      dbSubnetGroupName: dbSubnetGroup.name,
-      multiAz: true,
-      backupRetentionPeriod: 7,
-      backupWindow: '03:00-04:00',
-      maintenanceWindow: 'sun:04:00-sun:05:00',
-      skipFinalSnapshot: true,
-      tags: {
-        Name: `${id}-rds-mysql`,
         Environment: 'production',
       },
     });
@@ -759,6 +618,16 @@ yum install -y amazon-cloudwatch-agent
     new TerraformOutput(this, 'rds-endpoint', {
       value: rdsInstance.endpoint,
       description: 'RDS MySQL endpoint',
+    });
+
+    new TerraformOutput(this, 'rds-username', {
+      value: props.dbUsername,
+      description: 'RDS MySQL username',
+    });
+    new TerraformOutput(this, 'rds-master-password-secret', {
+      value: rdsInstance.masterUserSecret,
+      description: 'RDS MySQL master password',
+      sensitive: true,
     });
   }
 }
