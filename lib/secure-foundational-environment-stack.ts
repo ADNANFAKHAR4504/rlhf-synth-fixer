@@ -126,14 +126,27 @@ export class SecureFoundationalEnvironmentStack extends cdk.Stack {
     });
 
     // 3. VPC Flow Logs for network monitoring
+    // Fixed code with inline policy:
     const vpcFlowLogsRole = new iam.Role(this, 'VPCFlowLogsRole', {
       roleName: `vpc-flow-logs-role-${environmentSuffix}`,
       assumedBy: new iam.ServicePrincipal('vpc-flow-logs.amazonaws.com'),
-      managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName(
-          'service-role/VPCFlowLogsDeliveryRolePolicy'
-        ),
-      ],
+      inlinePolicies: {
+        VPCFlowLogsDeliveryRolePolicy: new iam.PolicyDocument({
+          statements: [
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: [
+                'logs:CreateLogGroup',
+                'logs:CreateLogStream',
+                'logs:PutLogEvents',
+                'logs:DescribeLogGroups',
+                'logs:DescribeLogStreams',
+              ],
+              resources: ['*'],
+            }),
+          ],
+        }),
+      },
     });
 
     const vpcFlowLogsGroup = new logs.LogGroup(this, 'VPCFlowLogsGroup', {
