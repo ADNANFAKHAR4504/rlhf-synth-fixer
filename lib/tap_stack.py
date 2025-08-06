@@ -155,7 +155,7 @@ class TapStack(pulumi.ComponentResource):
                     "Name": f"{self.app_name}-nat-{i+1}-{self.environment}",
                     "Environment": self.environment
                 },
-                opts=pulumi.ResourceOptions(parent=self)
+                opts=pulumi.ResourceOptions(parent=self, depends_on=[eip])
             )
             self.nat_gateways.append(nat_gw)
         
