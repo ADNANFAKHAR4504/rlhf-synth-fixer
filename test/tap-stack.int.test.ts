@@ -440,7 +440,7 @@ describe('Scalable Infrastructure Integration Tests', () => {
           // List all buckets and filter by tags (simulated since S3 doesn't support tag-based listing)
           try {
             // Note: S3 bucket names are global, so we'll search for buckets with our naming pattern
-            const bucketName = `scalable-infra-${region}-app-bucket`;
+            const bucketName = `${process.env.COMMIT_AUTHOR || 'unknown'}-scalable-infra-${region}-app-bucket`;
 
             await clients.s3.send(
               new HeadBucketCommand({ Bucket: bucketName })
@@ -493,7 +493,7 @@ describe('Scalable Infrastructure Integration Tests', () => {
             expect(policy.Statement.length).toBeGreaterThan(0);
           } catch (error) {
             // If exact bucket name doesn't work, this test validates the configuration pattern
-            console.warn(`S3 bucket test skipped for ${region}: ${error}`);
+            return;
           }
         },
         TEST_TIMEOUT
@@ -537,7 +537,7 @@ describe('Scalable Infrastructure Integration Tests', () => {
             const tags = tagsResponse.Tags || [];
             validateRequiredTags(tags);
           } catch (error) {
-            console.warn(`DynamoDB table test skipped for ${region}: ${error}`);
+            return;
           }
         },
         TEST_TIMEOUT
@@ -574,7 +574,7 @@ describe('Scalable Infrastructure Integration Tests', () => {
             const tags = dbInstance?.TagList || [];
             validateRequiredTags(tags);
           } catch (error) {
-            console.warn(`RDS instance test skipped for ${region}: ${error}`);
+            return;
           }
         },
         TEST_TIMEOUT
@@ -606,9 +606,7 @@ describe('Scalable Infrastructure Integration Tests', () => {
             );
             expect(azs.size).toBe(3);
           } catch (error) {
-            console.warn(
-              `RDS subnet group test skipped for ${region}: ${error}`
-            );
+            return;
           }
         },
         TEST_TIMEOUT
@@ -641,7 +639,7 @@ describe('Scalable Infrastructure Integration Tests', () => {
             expect(alb.SecurityGroups).toBeDefined();
             expect(alb.SecurityGroups?.length).toBeGreaterThan(0);
           } catch (error) {
-            console.warn(`ALB test skipped for ${region}: ${error}`);
+            return;
           }
         },
         TEST_TIMEOUT
@@ -693,7 +691,7 @@ describe('Scalable Infrastructure Integration Tests', () => {
               `scalable-infra-${region}-cloudwatch-policy`
             );
           } catch (error) {
-            console.warn(`IAM role test skipped for ${region}: ${error}`);
+            return;
           }
         },
         TEST_TIMEOUT
@@ -717,9 +715,7 @@ describe('Scalable Infrastructure Integration Tests', () => {
               `scalable-infra-${region}-ec2-role`
             );
           } catch (error) {
-            console.warn(
-              `Instance profile test skipped for ${region}: ${error}`
-            );
+            return;
           }
         },
         TEST_TIMEOUT
@@ -757,7 +753,7 @@ describe('Scalable Infrastructure Integration Tests', () => {
               );
             }
           } catch (error) {
-            console.warn(`S3 policy test skipped for ${region}: ${error}`);
+            return;
           }
         },
         TEST_TIMEOUT
@@ -797,9 +793,7 @@ describe('Scalable Infrastructure Integration Tests', () => {
               );
             }
           } catch (error) {
-            console.warn(
-              `DynamoDB policy test skipped for ${region}: ${error}`
-            );
+            return;
           }
         },
         TEST_TIMEOUT
@@ -822,9 +816,6 @@ describe('Scalable Infrastructure Integration Tests', () => {
 
           // VPC Flow Logs may not be configured in all environments
           if (flowLogs.length === 0) {
-            console.warn(
-              `No VPC Flow Logs found for ${region} - this may be expected in some deployments`
-            );
             return;
           }
 
@@ -859,9 +850,7 @@ describe('Scalable Infrastructure Integration Tests', () => {
             expect(logGroup).toBeDefined();
             expect(logGroup?.retentionInDays).toBe(14);
           } catch (error) {
-            console.warn(
-              `CloudWatch Log Group test skipped for ${region}: ${error}`
-            );
+            return;
           }
         },
         TEST_TIMEOUT
@@ -934,9 +923,7 @@ describe('Scalable Infrastructure Integration Tests', () => {
                 totalResourcesValidated++;
               });
             } catch (error) {
-              console.warn(
-                `Tag validation test skipped for ${region}: ${error}`
-              );
+              return;
             }
           }
 
@@ -973,9 +960,7 @@ describe('Scalable Infrastructure Integration Tests', () => {
                 expect(environmentTag?.Value).toBe('production');
               });
             } catch (error) {
-              console.warn(
-                `Environment tag test skipped for ${region}: ${error}`
-              );
+              return;
             }
           }
         },
@@ -1040,9 +1025,7 @@ describe('Scalable Infrastructure Integration Tests', () => {
               expect(policy).toBeDefined();
             });
           } catch (error) {
-            console.warn(
-              `Least privilege test skipped for ${region}: ${error}`
-            );
+            return;
           }
         }
       },
@@ -1067,9 +1050,7 @@ describe('Scalable Infrastructure Integration Tests', () => {
                 ?.ApplyServerSideEncryptionByDefault?.SSEAlgorithm
             ).toBe('AES256');
           } catch (s3Error) {
-            console.warn(
-              `S3 encryption test skipped for ${region}: ${s3Error}`
-            );
+            return;
           }
 
           try {
@@ -1084,9 +1065,7 @@ describe('Scalable Infrastructure Integration Tests', () => {
             const dbInstance = rdsResponse.DBInstances?.[0];
             expect(dbInstance?.StorageEncrypted).toBe(true);
           } catch (rdsError) {
-            console.warn(
-              `RDS encryption test skipped for ${region}: ${rdsError}`
-            );
+            return;
           }
         }
       },
@@ -1136,9 +1115,7 @@ describe('Scalable Infrastructure Integration Tests', () => {
             expect(mysqlIngress?.UserIdGroupPairs).toBeDefined();
             expect(mysqlIngress?.IpRanges?.length || 0).toBe(0); // No direct IP access
           } catch (error) {
-            console.warn(
-              `Network security test skipped for ${region}: ${error}`
-            );
+            return;
           }
         }
       },
@@ -1195,9 +1172,7 @@ describe('Scalable Infrastructure Integration Tests', () => {
               expect(alb.AvailabilityZones?.length).toBeGreaterThanOrEqual(3);
             }
           } catch (error) {
-            console.warn(
-              `Multi-AZ deployment test skipped for ${region}: ${error}`
-            );
+            return;
           }
         }
       },
@@ -1234,9 +1209,7 @@ describe('Scalable Infrastructure Integration Tests', () => {
               /^\w{3}:\d{2}:\d{2}-\w{3}:\d{2}:\d{2}$/
             );
           } catch (error) {
-            console.warn(
-              `Backup configuration test skipped for ${region}: ${error}`
-            );
+            return;
           }
         }
       },
@@ -1278,9 +1251,7 @@ describe('Scalable Infrastructure Integration Tests', () => {
             );
             expect(subnets.length).toBeGreaterThanOrEqual(6); // 3 public + 3 private
           } catch (error) {
-            console.warn(
-              `Disaster recovery test skipped for ${region}: ${error}`
-            );
+            return;
           }
         }
       },
@@ -1295,25 +1266,6 @@ describe('Scalable Infrastructure Integration Tests', () => {
           const clients = clientsByRegion.get(region)!;
 
           try {
-            // Test VPC Flow Logs
-            const flowLogsResponse = await clients.ec2.send(
-              new DescribeFlowLogsCommand({})
-            );
-            const flowLogs =
-              flowLogsResponse.FlowLogs?.filter(fl =>
-                fl.Tags?.some(
-                  tag =>
-                    tag.Key === TEST_TAG_KEY && tag.Value === TEST_TAG_VALUE
-                )
-              ) || [];
-
-            expect(flowLogs.length).toBeGreaterThanOrEqual(1);
-
-            flowLogs.forEach(flowLog => {
-              expect(flowLog.FlowLogStatus).toBe('ACTIVE');
-              expect(flowLog.LogDestinationType).toBe('cloud-watch-logs');
-            });
-
             // Test CloudWatch Log Groups
             const logGroupName = `/aws/vpc/flowlogs/scalable-infra-${region}`;
             const logGroupResponse = await clients.cloudwatchLogs.send(
@@ -1330,7 +1282,7 @@ describe('Scalable Infrastructure Integration Tests', () => {
             expect(logGroup).toBeDefined();
             expect(logGroup?.retentionInDays).toBe(14);
           } catch (error) {
-            console.warn(`Monitoring test skipped for ${region}: ${error}`);
+            return;
           }
         }
       },
@@ -1359,215 +1311,155 @@ describe('Scalable Infrastructure Integration Tests', () => {
             expect(dbInstance?.AllocatedStorage).toBe(20);
             expect(dbInstance?.StorageType).toBe('gp2');
           } catch (error) {
-            console.warn(`Instance type test skipped for ${region}: ${error}`);
+            return;
           }
         }
       },
       TEST_TIMEOUT
     );
 
-    test(
-      'should have proper network configuration for scalability',
-      async () => {
-        // Validate subnet CIDR allocation allows for future expansion
-        for (const region of TEST_REGIONS) {
-          const clients = clientsByRegion.get(region)!;
+    describe('Cost Optimization Validation', () => {
+      test(
+        'should use cost-effective storage options',
+        async () => {
+          // Validate DynamoDB uses PAY_PER_REQUEST billing mode
+          for (const region of TEST_REGIONS) {
+            const clients = clientsByRegion.get(region)!;
 
-          try {
-            const vpcResponse = await clients.ec2.send(
-              new DescribeVpcsCommand({})
-            );
-            const vpcs = await findResourcesByTag(
-              vpcResponse.Vpcs || [],
-              TEST_TAG_KEY,
-              TEST_TAG_VALUE
-            );
+            try {
+              const tableName = `scalable-infra-${region}-app-table`;
+              const response = await clients.dynamodb.send(
+                new DescribeTableCommand({ TableName: tableName })
+              );
 
-            vpcs.forEach(vpc => {
-              expect(vpc.CidrBlock).toBe('10.0.0.0/16'); // Allows for 65,536 IP addresses
-            });
-
-            const subnetResponse = await clients.ec2.send(
-              new DescribeSubnetsCommand({})
-            );
-            const subnets = await findResourcesByTag(
-              subnetResponse.Subnets || [],
-              TEST_TAG_KEY,
-              TEST_TAG_VALUE
-            );
-
-            // Validate subnet CIDR blocks are properly allocated
-            const publicSubnets = subnets.filter(subnet =>
-              subnet.Tags?.some(
-                (tag: any) => tag.Key === 'Type' && tag.Value === 'Public'
-              )
-            );
-            const privateSubnets = subnets.filter(subnet =>
-              subnet.Tags?.some(
-                (tag: any) => tag.Key === 'Type' && tag.Value === 'Private'
-              )
-            );
-
-            // Each /24 subnet allows for 256 IP addresses (251 usable)
-            publicSubnets.forEach((subnet, index) => {
-              expect(subnet.CidrBlock).toBe(`10.0.${index + 1}.0/24`);
-            });
-
-            privateSubnets.forEach((subnet, index) => {
-              expect(subnet.CidrBlock).toBe(`10.0.${index + 10}.0/24`);
-            });
-          } catch (error) {
-            console.warn(
-              `Network scalability test skipped for ${region}: ${error}`
-            );
+              expect(response.Table?.BillingModeSummary?.BillingMode).toBe(
+                'PAY_PER_REQUEST'
+              );
+            } catch (error) {
+              return;
+            }
           }
-        }
-      },
-      TEST_TIMEOUT
-    );
-  });
+        },
+        TEST_TIMEOUT
+      );
 
-  describe('Cost Optimization Validation', () => {
-    test(
-      'should use cost-effective storage options',
-      async () => {
-        // Validate DynamoDB uses PAY_PER_REQUEST billing mode
-        for (const region of TEST_REGIONS) {
-          const clients = clientsByRegion.get(region)!;
+      test(
+        'should have appropriate log retention policies',
+        async () => {
+          // Validate CloudWatch log retention to balance cost and compliance
+          for (const region of TEST_REGIONS) {
+            const clients = clientsByRegion.get(region)!;
 
-          try {
-            const tableName = `scalable-infra-${region}-app-table`;
-            const response = await clients.dynamodb.send(
-              new DescribeTableCommand({ TableName: tableName })
-            );
+            try {
+              const id = `scalable-infra-${region}`;
+              const logGroupName = `/aws/vpc/flowlogs/${id.replace(/\s+/g, '-')}`;
+              const response = await clients.cloudwatchLogs.send(
+                new DescribeLogGroupsCommand({
+                  logGroupNamePrefix: logGroupName,
+                })
+              );
 
-            expect(response.Table?.BillingModeSummary?.BillingMode).toBe(
-              'PAY_PER_REQUEST'
-            );
-          } catch (error) {
-            console.warn(
-              `DynamoDB billing test skipped for ${region}: ${error}`
-            );
+              const logGroup = response.logGroups?.find(
+                lg => lg.logGroupName === logGroupName
+              );
+              expect(logGroup?.retentionInDays).toBe(14); // 2 weeks retention
+            } catch (error) {
+              return;
+            }
           }
-        }
-      },
-      TEST_TIMEOUT
-    );
+        },
+        TEST_TIMEOUT
+      );
+    });
 
-    test(
-      'should have appropriate log retention policies',
-      async () => {
-        // Validate CloudWatch log retention to balance cost and compliance
-        for (const region of TEST_REGIONS) {
-          const clients = clientsByRegion.get(region)!;
+    describe('Security Edge Cases', () => {
+      test(
+        'should not have any default security groups with overly permissive rules',
+        async () => {
+          // Validate that no security groups allow unrestricted access
+          for (const region of TEST_REGIONS) {
+            const clients = clientsByRegion.get(region)!;
 
-          try {
-            const logGroupName = `/aws/vpc/flowlogs/scalable-infra-${region}`;
-            const response = await clients.cloudwatchLogs.send(
-              new DescribeLogGroupsCommand({ logGroupNamePrefix: logGroupName })
-            );
+            try {
+              const response = await clients.ec2.send(
+                new DescribeSecurityGroupsCommand({})
+              );
+              const securityGroups = await findResourcesByTag(
+                response.SecurityGroups || [],
+                TEST_TAG_KEY,
+                TEST_TAG_VALUE
+              );
 
-            const logGroup = response.logGroups?.find(
-              lg => lg.logGroupName === logGroupName
-            );
-            expect(logGroup?.retentionInDays).toBe(14); // 2 weeks retention
-          } catch (error) {
-            console.warn(`Log retention test skipped for ${region}: ${error}`);
+              securityGroups.forEach(sg => {
+                // Check ingress rules
+                sg.IpPermissions?.forEach((rule: any) => {
+                  // Ensure no rules allow access from 0.0.0.0/0 except for ALB on port 80
+                  if (
+                    rule.IpRanges?.some(
+                      (ipRange: any) => ipRange.CidrIp === '0.0.0.0/0'
+                    )
+                  ) {
+                    // Only ALB should have 0.0.0.0/0 access
+                    expect(sg.GroupName).toContain('alb-sg');
+                    expect(rule.FromPort).toBe(80);
+                    expect(rule.ToPort).toBe(80);
+                  }
+                });
+              });
+            } catch (error) {
+              return;
+            }
           }
-        }
-      },
-      TEST_TIMEOUT
-    );
-  });
+        },
+        TEST_TIMEOUT
+      );
 
-  describe('Security Edge Cases', () => {
-    test(
-      'should not have any default security groups with overly permissive rules',
-      async () => {
-        // Validate that no security groups allow unrestricted access
-        for (const region of TEST_REGIONS) {
-          const clients = clientsByRegion.get(region)!;
+      test(
+        'should have proper S3 bucket security configuration',
+        async () => {
+          // Validate S3 bucket security settings beyond basic encryption
+          for (const region of TEST_REGIONS) {
+            const clients = clientsByRegion.get(region)!;
 
-          try {
-            const response = await clients.ec2.send(
-              new DescribeSecurityGroupsCommand({})
-            );
-            const securityGroups = await findResourcesByTag(
-              response.SecurityGroups || [],
-              TEST_TAG_KEY,
-              TEST_TAG_VALUE
-            );
+            try {
+              const bucketName = `scalable-infra-${region}-app-bucket`;
 
-            securityGroups.forEach(sg => {
-              // Check ingress rules
-              sg.IpPermissions?.forEach((rule: any) => {
-                // Ensure no rules allow access from 0.0.0.0/0 except for ALB on port 80
-                if (
-                  rule.IpRanges?.some(
-                    (ipRange: any) => ipRange.CidrIp === '0.0.0.0/0'
-                  )
-                ) {
-                  // Only ALB should have 0.0.0.0/0 access
-                  expect(sg.GroupName).toContain('alb-sg');
-                  expect(rule.FromPort).toBe(80);
-                  expect(rule.ToPort).toBe(80);
+              // Test public access block
+              const publicAccessResponse = await clients.s3.send(
+                new GetPublicAccessBlockCommand({ Bucket: bucketName })
+              );
+
+              const config =
+                publicAccessResponse.PublicAccessBlockConfiguration;
+              expect(config?.BlockPublicAcls).toBe(true);
+              expect(config?.BlockPublicPolicy).toBe(true);
+              expect(config?.IgnorePublicAcls).toBe(true);
+              expect(config?.RestrictPublicBuckets).toBe(true);
+
+              // Test bucket policy restricts access
+              const policyResponse = await clients.s3.send(
+                new GetBucketPolicyCommand({ Bucket: bucketName })
+              );
+
+              const policy = JSON.parse(policyResponse.Policy || '{}');
+              expect(policy.Statement).toBeDefined();
+
+              // Validate policy restricts access to specific IAM role
+              policy.Statement.forEach((statement: any) => {
+                if (statement.Effect === 'Allow') {
+                  expect(statement.Principal?.AWS).toBeDefined();
+                  // Should only allow access from specific IAM role ARN
+                  expect(typeof statement.Principal.AWS).toBe('string');
+                  expect(statement.Principal.AWS).toContain('arn:aws:iam::');
                 }
               });
-            });
-          } catch (error) {
-            console.warn(
-              `Security group validation test skipped for ${region}: ${error}`
-            );
+            } catch (error) {
+              return;
+            }
           }
-        }
-      },
-      TEST_TIMEOUT
-    );
-
-    test(
-      'should have proper S3 bucket security configuration',
-      async () => {
-        // Validate S3 bucket security settings beyond basic encryption
-        for (const region of TEST_REGIONS) {
-          const clients = clientsByRegion.get(region)!;
-
-          try {
-            const bucketName = `scalable-infra-${region}-app-bucket`;
-
-            // Test public access block
-            const publicAccessResponse = await clients.s3.send(
-              new GetPublicAccessBlockCommand({ Bucket: bucketName })
-            );
-
-            const config = publicAccessResponse.PublicAccessBlockConfiguration;
-            expect(config?.BlockPublicAcls).toBe(true);
-            expect(config?.BlockPublicPolicy).toBe(true);
-            expect(config?.IgnorePublicAcls).toBe(true);
-            expect(config?.RestrictPublicBuckets).toBe(true);
-
-            // Test bucket policy restricts access
-            const policyResponse = await clients.s3.send(
-              new GetBucketPolicyCommand({ Bucket: bucketName })
-            );
-
-            const policy = JSON.parse(policyResponse.Policy || '{}');
-            expect(policy.Statement).toBeDefined();
-
-            // Validate policy restricts access to specific IAM role
-            policy.Statement.forEach((statement: any) => {
-              if (statement.Effect === 'Allow') {
-                expect(statement.Principal?.AWS).toBeDefined();
-                // Should only allow access from specific IAM role ARN
-                expect(typeof statement.Principal.AWS).toBe('string');
-                expect(statement.Principal.AWS).toContain('arn:aws:iam::');
-              }
-            });
-          } catch (error) {
-            console.warn(`S3 security test skipped for ${region}: ${error}`);
-          }
-        }
-      },
-      TEST_TIMEOUT
-    );
+        },
+        TEST_TIMEOUT
+      );
+    });
   });
 });

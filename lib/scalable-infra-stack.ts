@@ -270,7 +270,7 @@ export class ScalableInfrastructure extends Construct {
     // S3 Bucket with server-side encryption
     const s3Bucket = new S3Bucket(this, 'app-bucket', {
       provider: props.provider,
-      bucketPrefix: `${id}-app-bucket`,
+      bucketPrefix: `${process.env.COMMIT_AUTHOR || 'unknown'}-${id}-app-bucket`,
       tags: {
         Name: `${id}-app-bucket`,
         Environment: 'production',
