@@ -385,7 +385,7 @@ def create_load_balancer(
     port=80,
     protocol="HTTP",
     vpc_id=vpc_id,
-    target_type="instance",
+    target_type="ip",
     health_check=aws.lb.TargetGroupHealthCheckArgs(
       enabled=True,
       healthy_threshold=2,
@@ -403,7 +403,7 @@ def create_load_balancer(
     aws.lb.TargetGroupAttachment(
       f"{project_name}-tg-attachment-{idx+1}",
       target_group_arn=target_group.arn,
-      target_id=instance.id,
+      target_id=instance.private_ip,
       port=80
     )
   listener = aws.lb.Listener(
