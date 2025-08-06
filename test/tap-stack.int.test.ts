@@ -35,7 +35,9 @@ try {
     fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
   );
 } catch (error) {
-  console.warn('No cfn-outputs/flat-outputs.json found - skipping integration tests');
+  console.warn(
+    'No cfn-outputs/flat-outputs.json found - skipping integration tests'
+  );
 }
 
 // Get environment suffix from environment variable (set by CI/CD pipeline)
@@ -51,17 +53,17 @@ const cloudTrailClient = new CloudTrailClient({ region: 'us-east-1' });
 describe('Secure Foundational Environment Integration Tests', () => {
   // Skip all tests if outputs are not available
   const hasOutputs = Object.keys(outputs).length > 0;
-  
+
   describe('S3 Bucket Security Validation', () => {
     test('S3 bucket should exist and be accessible', async () => {
       if (!hasOutputs) {
         console.log('Skipping test - no deployment outputs available');
         return;
       }
-      
+
       const bucketName = outputs.S3BucketName;
       expect(bucketName).toBeDefined();
-      
+
       const response = await s3Client.send(
         new HeadBucketCommand({ Bucket: bucketName })
       );
@@ -73,16 +75,20 @@ describe('Secure Foundational Environment Integration Tests', () => {
         console.log('Skipping test - no deployment outputs available');
         return;
       }
-      
+
       const bucketName = outputs.S3BucketName;
       const response = await s3Client.send(
         new GetBucketEncryptionCommand({ Bucket: bucketName })
       );
-      
+
       expect(response.ServerSideEncryptionConfiguration?.Rules).toBeDefined();
       const rule = response.ServerSideEncryptionConfiguration!.Rules![0];
-      expect(rule.ApplyServerSideEncryptionByDefault?.SSEAlgorithm).toBe('aws:kms');
-      expect(rule.ApplyServerSideEncryptionByDefault?.KMSMasterKeyID).toBeDefined();
+      expect(rule.ApplyServerSideEncryptionByDefault?.SSEAlgorithm).toBe(
+        'aws:kms'
+      );
+      expect(
+        rule.ApplyServerSideEncryptionByDefault?.KMSMasterKeyID
+      ).toBeDefined();
     }, 30000);
 
     test('S3 bucket should have versioning enabled', async () => {
@@ -90,12 +96,12 @@ describe('Secure Foundational Environment Integration Tests', () => {
         console.log('Skipping test - no deployment outputs available');
         return;
       }
-      
+
       const bucketName = outputs.S3BucketName;
       const response = await s3Client.send(
         new GetBucketVersioningCommand({ Bucket: bucketName })
       );
-      
+
       expect(response.Status).toBe('Enabled');
     }, 30000);
 
@@ -104,18 +110,21 @@ describe('Secure Foundational Environment Integration Tests', () => {
         console.log('Skipping test - no deployment outputs available');
         return;
       }
-      
+
       const bucketName = outputs.S3BucketName;
       const response = await s3Client.send(
         new GetBucketTaggingCommand({ Bucket: bucketName })
       );
-      
+
       const tags = response.TagSet || [];
-      const tagMap = tags.reduce((acc, tag) => {
-        acc[tag.Key!] = tag.Value!;
-        return acc;
-      }, {} as Record<string, string>);
-      
+      const tagMap = tags.reduce(
+        (acc, tag) => {
+          acc[tag.Key!] = tag.Value!;
+          return acc;
+        },
+        {} as Record<string, string>
+      );
+
       expect(tagMap.Environment).toBe(environmentSuffix);
       expect(tagMap.Project).toBe('IaC-AWS-Nova-Model-Breaking');
       expect(tagMap.ManagedBy).toBe('AWS-CDK');
@@ -128,14 +137,14 @@ describe('Secure Foundational Environment Integration Tests', () => {
         console.log('Skipping test - no deployment outputs available');
         return;
       }
-      
+
       const vpcId = outputs.VPCId;
       expect(vpcId).toBeDefined();
-      
+
       const response = await ec2Client.send(
         new DescribeVpcsCommand({ VpcIds: [vpcId] })
       );
-      
+
       expect(response.Vpcs).toHaveLength(1);
       const vpc = response.Vpcs![0];
       expect(vpc.CidrBlock).toBe('10.0.0.0/16');
@@ -147,7 +156,7 @@ describe('Secure Foundational Environment Integration Tests', () => {
         console.log('Skipping test - no deployment outputs available');
         return;
       }
-      
+
       const vpcId = outputs.VPCId;
       const response = await ec2Client.send(
         new DescribeFlowLogsCommand({
@@ -159,7 +168,7 @@ describe('Secure Foundational Environment Integration Tests', () => {
           ],
         })
       );
-      
+
       expect(response.FlowLogs).toBeDefined();
       expect(response.FlowLogs!.length).toBeGreaterThan(0);
       const flowLog = response.FlowLogs![0];
@@ -174,14 +183,14 @@ describe('Secure Foundational Environment Integration Tests', () => {
         console.log('Skipping test - no deployment outputs available');
         return;
       }
-      
+
       const instanceId = outputs.EC2InstanceId;
       expect(instanceId).toBeDefined();
-      
+
       const response = await ec2Client.send(
         new DescribeInstancesCommand({ InstanceIds: [instanceId] })
       );
-      
+
       expect(response.Reservations).toHaveLength(1);
       const instance = response.Reservations![0].Instances![0];
       expect(instance.State?.Name).toBe('running');
@@ -193,23 +202,23 @@ describe('Secure Foundational Environment Integration Tests', () => {
         console.log('Skipping test - no deployment outputs available');
         return;
       }
-      
+
       const instanceId = outputs.EC2InstanceId;
       const instanceResponse = await ec2Client.send(
         new DescribeInstancesCommand({ InstanceIds: [instanceId] })
       );
-      
+
       const instance = instanceResponse.Reservations![0].Instances![0];
       const securityGroupIds = instance.SecurityGroups!.map(sg => sg.GroupId!);
-      
+
       const sgResponse = await ec2Client.send(
         new DescribeSecurityGroupsCommand({ GroupIds: securityGroupIds })
       );
-      
-      const secureGroup = sgResponse.SecurityGroups!.find(sg => 
+
+      const secureGroup = sgResponse.SecurityGroups!.find(sg =>
         sg.Description?.includes('Secure security group')
       );
-      
+
       expect(secureGroup).toBeDefined();
       
       // Check egress rules (should only allow HTTPS outbound to VPC CIDR)
@@ -228,22 +237,24 @@ describe('Secure Foundational Environment Integration Tests', () => {
         console.log('Skipping test - no deployment outputs available');
         return;
       }
-      
+
       const keyId = outputs.KMSKeyId;
       expect(keyId).toBeDefined();
-      
+
       const keyResponse = await kmsClient.send(
         new DescribeKeyCommand({ KeyId: keyId })
       );
-      
+
       const rotationResponse = await kmsClient.send(
         new GetKeyRotationStatusCommand({ KeyId: keyId })
       );
-      
+
       expect(keyResponse.KeyMetadata).toBeDefined();
       expect(keyResponse.KeyMetadata!.KeyState).toBe('Enabled');
       expect(rotationResponse.KeyRotationEnabled).toBe(true);
-      expect(keyResponse.KeyMetadata!.Description).toContain('Customer-managed KMS key');
+      expect(keyResponse.KeyMetadata!.Description).toContain(
+        'Customer-managed KMS key'
+      );
     }, 30000);
   });
 
@@ -253,16 +264,16 @@ describe('Secure Foundational Environment Integration Tests', () => {
         console.log('Skipping test - no deployment outputs available');
         return;
       }
-      
+
       const response = await cloudWatchClient.send(
         new ListDashboardsCommand({
           DashboardNamePrefix: `secure-foundation-dashboard-${environmentSuffix}`,
         })
       );
-      
+
       expect(response.DashboardEntries).toBeDefined();
       expect(response.DashboardEntries!.length).toBeGreaterThan(0);
-      
+
       const dashboard = response.DashboardEntries![0];
       expect(dashboard.DashboardName).toContain(`secure-foundation-dashboard-${environmentSuffix}`);
     }, 30000);
@@ -293,7 +304,7 @@ describe('Secure Foundational Environment Integration Tests', () => {
       const statusResponse = await cloudTrailClient.send(
         new GetTrailStatusCommand({ Name: ourTrail!.TrailARN })
       );
-      
+
       expect(statusResponse.IsLogging).toBe(true);
     }, 30000);
   });
@@ -304,16 +315,21 @@ describe('Secure Foundational Environment Integration Tests', () => {
         console.log('Skipping test - no deployment outputs available');
         return;
       }
-      
+
       // This test validates that all components are properly integrated
-      const requiredOutputs = ['VPCId', 'KMSKeyId', 'S3BucketName', 'EC2InstanceId'];
-      
+      const requiredOutputs = [
+        'VPCId',
+        'KMSKeyId',
+        'S3BucketName',
+        'EC2InstanceId',
+      ];
+
       for (const output of requiredOutputs) {
         expect(outputs[output]).toBeDefined();
         expect(typeof outputs[output]).toBe('string');
         expect(outputs[output].length).toBeGreaterThan(0);
       }
-      
+
       // Validate that resources use the same environment suffix
       expect(outputs.S3BucketName).toContain(environmentSuffix);
     }, 30000);
