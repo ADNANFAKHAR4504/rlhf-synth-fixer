@@ -88,6 +88,16 @@ def deployment_outputs():
   if not outputs:
     pytest.skip("No deployment outputs found in flat-outputs.json.")
   
+  # Handle nested CDKTF outputs structure
+  # CDKTF outputs are typically nested under stack names
+  if isinstance(outputs, dict):
+    # Check if outputs are nested under a stack name
+    stack_keys = [key for key in outputs.keys() if isinstance(outputs[key], dict)]
+    if stack_keys:
+      # Use the first stack's outputs (typically there's only one)
+      stack_name = stack_keys[0]
+      return outputs[stack_name]
+  
   return outputs
 
 
