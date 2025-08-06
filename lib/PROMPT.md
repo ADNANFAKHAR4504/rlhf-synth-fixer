@@ -1,4 +1,4 @@
-> Act as a **Solution Architect**. Design and implement security configuration for a microservice-based AWS infrastructure using **AWS CDK in Python**. The application architecture includes **API Gateway**, **Lambda functions**, **S3**, and **DynamoDB**, all deployed in the `us-east-1` region. Apply the following security practices:
+> Act as a **Solution Architect**. Design and implement security configuration for a microservice-based AWS infrastructure using **AWS CDK in Python**. The application architecture includes **API Gateway**, **Lambda functions**, **S3**, and **DynamoDB**. Apply the following security practices:
 >
 > 1. Create **IAM roles and policies** with **least privilege access** for each component (Lambda, API Gateway, etc.).
 > 2. Use **environment variables** to inject and manage **secret access keys** for AWS resources (e.g., DB credentials, API keys), avoiding hard-coded credentials.
