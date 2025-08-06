@@ -81,7 +81,7 @@ describe('TapStack Unit Tests', () => {
       );
 
       expect(userTable).toBeDefined();
-      expect((userTable as any).billing_mode).toBe('ON_DEMAND');
+      expect((userTable as any).billing_mode).toBe('PAY_PER_REQUEST');
       expect((userTable as any).hash_key).toBe('userId');
       expect((userTable as any).server_side_encryption.enabled).toBe(true);
       expect((userTable as any).point_in_time_recovery.enabled).toBe(true);
