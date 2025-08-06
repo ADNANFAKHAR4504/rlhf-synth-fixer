@@ -66,7 +66,6 @@ Resources:
   EC2Role:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${CompanyName}-${Environment}-EC2Role'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -182,7 +181,6 @@ Resources:
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
-      InstanceProfileName: !Sub '${CompanyName}-${Environment}-EC2InstanceProfile'
       Roles:
         - !Ref EC2Role
 
@@ -191,7 +189,6 @@ Resources:
     Type: AWS::IAM::Role
     Condition: DeployEC2AndRDS
     Properties:
-      RoleName: !Sub '${CompanyName}-${Environment}-RDSEnhancedMonitoringRole'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:

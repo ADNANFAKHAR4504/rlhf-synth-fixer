@@ -129,9 +129,6 @@
         "EC2Role": {
             "Type": "AWS::IAM::Role",
             "Properties": {
-                "RoleName": {
-                    "Fn::Sub": "${CompanyName}-${Environment}-EC2Role"
-                },
                 "AssumeRolePolicyDocument": {
                     "Version": "2012-10-17",
                     "Statement": [
@@ -338,9 +335,6 @@
         "EC2InstanceProfile": {
             "Type": "AWS::IAM::InstanceProfile",
             "Properties": {
-                "InstanceProfileName": {
-                    "Fn::Sub": "${CompanyName}-${Environment}-EC2InstanceProfile"
-                },
                 "Roles": [
                     {
                         "Ref": "EC2Role"
@@ -352,9 +346,6 @@
             "Type": "AWS::IAM::Role",
             "Condition": "DeployEC2AndRDS",
             "Properties": {
-                "RoleName": {
-                    "Fn::Sub": "${CompanyName}-${Environment}-RDSEnhancedMonitoringRole"
-                },
                 "AssumeRolePolicyDocument": {
                     "Version": "2012-10-17",
                     "Statement": [
