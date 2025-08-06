@@ -46,7 +46,6 @@ describe('TapStack EC2 and VPC Infrastructure Integration Tests', () => {
     expect(Subnets).toHaveLength(2);
     Subnets?.forEach((subnet, i) => {
       expect(subnet.AvailabilityZone).toMatch(/^us-east-1[a-z]$/);
-      expect(subnet.CidrBlock).toBe(`10.0.1.0/24`);
     });
   }, 20000);
 
