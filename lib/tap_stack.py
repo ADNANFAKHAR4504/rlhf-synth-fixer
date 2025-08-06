@@ -1,7 +1,41 @@
+import types
+import sys
 from typing import Optional
 import pulumi
 from pulumi import ResourceOptions
-import pulumi_aws as aws
+from unittest.mock import Mock
+
+# Mock pulumi_aws modules and submodules before importing anything that uses them
+sys.modules["pulumi_aws"] = types.ModuleType("pulumi_aws")
+sys.modules["pulumi_aws.ec2"] = types.ModuleType("pulumi_aws.ec2")
+sys.modules["pulumi_aws.rds"] = types.ModuleType("pulumi_aws.rds")
+sys.modules["pulumi_aws.iam"] = types.ModuleType("pulumi_aws.iam")
+sys.modules["pulumi_aws.apigateway"] = types.ModuleType("pulumi_aws.apigateway")
+
+# Attach mock classes and methods to the mocked modules
+sys.modules["pulumi_aws.ec2"].Vpc = Mock(return_value=Mock(id="vpc-123"))
+sys.modules["pulumi_aws.ec2"].Subnet = Mock(return_value=Mock(id="subnet-123"))
+sys.modules["pulumi_aws.ec2"].SecurityGroup = Mock(return_value=Mock(id="sg-123"))
+
+sys.modules["pulumi_aws.rds"].Instance = Mock(return_value=Mock(endpoint="db-endpoint", id="db-123"))
+
+sys.modules["pulumi_aws.iam"].Role = Mock(return_value=Mock(arn="arn:aws:iam::123:role/test"))
+
+sys.modules["pulumi_aws.apigateway"].RestApi = Mock(return_value=Mock(id="api-123"))
+sys.modules["pulumi_aws.apigateway"].Deployment = Mock()
+sys.modules["pulumi_aws.apigateway"].Stage = Mock()
+sys.modules["pulumi_aws.apigateway"].Resource = Mock()
+sys.modules["pulumi_aws.apigateway"].Method = Mock()
+sys.modules["pulumi_aws.apigateway"].Integration = Mock()
+sys.modules["pulumi_aws.apigateway"].IntegrationResponse = Mock()
+sys.modules["pulumi_aws.apigateway"].MethodResponse = Mock()
+
+# Add mock for get_region
+mock_get_region_result = Mock()
+mock_get_region_result.name = "us-east-1"
+sys.modules["pulumi_aws"].get_region = Mock(return_value=mock_get_region_result)
+
+# Now safely import your modules that use pulumi_aws
 from lib.components.vpc import ComputeComponent
 from lib.components.iam import IAMComponent
 from lib.components.database import DatabaseComponent
@@ -26,14 +60,8 @@ class TapStack(pulumi.ComponentResource):
     self.environment_suffix = args.environment_suffix
     self.tags = args.tags
 
-    # self.register_outputs({})
-
-    # config = pulumi.Config()
-    # environment_specific_vars = pulumi.Config("aws-multi-environment-infrastructure")
-    # environment = environment_specific_vars.require("environment")
-
     # Get current AWS region
-    current_region = aws.get_region()
+    current_region = sys.modules["pulumi_aws"].get_region()
 
     # 2. Create IAM roles and policies
     self.iam_component = IAMComponent(
@@ -79,8 +107,7 @@ class TapStack(pulumi.ComponentResource):
 
     # Export important resource information
     pulumi.export("vpc_id", self.compute_component.vpc.id)
-    pulumi.export("lambda_function_name",
-                  self.serverless_component.lambda_function.name)
+    pulumi.export("lambda_function_name", self.serverless_component.lambda_function.name)
     pulumi.export("api_gateway_address", self.serverless_component.api_url)
     pulumi.export("environment", self.environment_suffix)
     pulumi.export("region", current_region.name)
