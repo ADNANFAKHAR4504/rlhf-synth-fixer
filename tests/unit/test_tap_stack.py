@@ -116,35 +116,28 @@ class MockComponentResource:
     self.outputs = {}
     self._childResources = []
     self.id = "mock-resource-id"  # Add id attribute for depends_on
+    self.urn = "mock-resource-urn"  # Add urn attribute for Pulumi resources
 
   def register_outputs(self, outputs):
     self.outputs.update(outputs)
 
-# Create a proper mock Resource class
 
-
-class MockResource:
-  def __init__(self, *args, **kwargs):
-    self.id = "mock-resource-id"
-    self.urn = "mock-resource-urn"
-
-
-# Patch isinstance to handle MockOutput checks
+# Patch isinstance to handle MockOutput checks without recursion
 original_isinstance = builtins.isinstance
 
 
 def patched_isinstance(obj, cls):
-  if cls == pulumi.Output and hasattr(obj, '_is_output'):
+  # First check for MockOutput without recursion
+  if cls is pulumi.Output and hasattr(obj, '_is_output'):
     return True
-  if isinstance(cls, (type, tuple)):
-    return original_isinstance(obj, cls)
-  return False
+
+  # Use original isinstance for everything else
+  return original_isinstance(obj, cls)
 
 
 # Apply patches
 pulumi.Output = MockOutput
 pulumi.ComponentResource = MockComponentResource
-pulumi.Resource = MockResource
 pulumi.ResourceOptions = pulumi.ResourceOptions
 pulumi.AssetArchive = MagicMock()
 pulumi.StringAsset = MagicMock()
@@ -152,7 +145,7 @@ pulumi.get_stack = MagicMock(return_value="test")
 pulumi.Config = MagicMock()
 pulumi.export = MagicMock()
 
-# Monkey patch isinstance
+# Monkey patch isinstance carefully
 builtins.isinstance = patched_isinstance
 
 # Set environment variable for Pulumi testing
