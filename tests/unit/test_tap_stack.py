@@ -1,13 +1,43 @@
+import pulumi
+from lib.tap_stack import TapStackArgs, TapStack
+from lib.components.iam import IAMComponent
+from lib.components.vpc import ComputeComponent
+from lib.components.database import DatabaseComponent
+from lib.components.serverless import ServerlessComponent
 import os
 import sys
 import unittest
 from unittest.mock import Mock
-from lib.components.serverless import ServerlessComponent
-from lib.components.database import DatabaseComponent
-from lib.components.vpc import ComputeComponent
-from lib.components.iam import IAMComponent
-from lib.tap_stack import TapStackArgs, TapStack
-import pulumi
+import types
+
+sys.modules["pulumi_aws"] = types.ModuleType("pulumi_aws")
+sys.modules["pulumi_aws.ec2"] = types.ModuleType("pulumi_aws.ec2")
+sys.modules["pulumi_aws.rds"] = types.ModuleType("pulumi_aws.rds")
+sys.modules["pulumi_aws.iam"] = types.ModuleType("pulumi_aws.iam")
+sys.modules["pulumi_aws.apigateway"] = types.ModuleType(
+    "pulumi_aws.apigateway")
+
+# Attach mocked classes/functions
+sys.modules["pulumi_aws.ec2"].Vpc = Mock(return_value=Mock(id="vpc-123"))
+sys.modules["pulumi_aws.ec2"].Subnet = Mock(return_value=Mock(id="subnet-123"))
+sys.modules["pulumi_aws.ec2"].SecurityGroup = Mock(
+    return_value=Mock(id="sg-123"))
+
+sys.modules["pulumi_aws.rds"].Instance = Mock(
+    return_value=Mock(endpoint="db-endpoint", id="db-123"))
+sys.modules["pulumi_aws.iam"].Role = Mock(
+    return_value=Mock(arn="arn:aws:iam::123:role/test"))
+
+sys.modules["pulumi_aws.apigateway"].RestApi = Mock(
+    return_value=Mock(id="api-123"))
+sys.modules["pulumi_aws.apigateway"].Deployment = Mock()
+sys.modules["pulumi_aws.apigateway"].Stage = Mock()
+sys.modules["pulumi_aws.apigateway"].Resource = Mock()
+sys.modules["pulumi_aws.apigateway"].Method = Mock()
+sys.modules["pulumi_aws.apigateway"].Integration = Mock()
+sys.modules["pulumi_aws.apigateway"].IntegrationResponse = Mock()
+sys.modules["pulumi_aws.apigateway"].MethodResponse = Mock()
+
 
 # Set environment variable for Pulumi testing
 os.environ["PULUMI_TEST_MODE"] = "true"
@@ -37,7 +67,9 @@ class MockOutput:
 
   @staticmethod
   def concat(*args):
-    return Mock()
+    mock_output = Mock()
+    mock_output.apply = Mock()
+    return mock_output
 
 
 class FakeResourceOptions:
@@ -62,7 +94,7 @@ mock_aws.get_availability_zones.return_value = Mock(
     names=["us-east-1a", "us-east-1b"]
 )
 
-sys.modules["pulumi_aws"] = mock_aws
+# sys.modules["pulumi_aws"] = mock_aws
 
 
 # ✅ Add mocked submodules to match how your components import them
