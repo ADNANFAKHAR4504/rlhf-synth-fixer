@@ -544,6 +544,31 @@ def lambda_handler(event: Dict[str, Any], context) -> Dict[str, Any]:
       opts=ResourceOptions(parent=self)
     )
     
+    
+    
+    # Lambda permission for S3 to invoke the function
+    self.lambda_permission = aws.lambda_.Permission(
+      f"{self.resource_prefix}-s3-invoke-permission",
+      statement_id="AllowExecutionFromS3Bucket",
+      action="lambda:InvokeFunction",
+      function=data_processor_lambda.name,
+      principal="s3.amazonaws.com",
+      source_arn=self.s3_buckets["data"].arn,
+      opts=ResourceOptions(parent=self)
+    )
+    
+
+
+    self.lambda_functions = {
+      "data_processor": data_processor_lambda,
+      "api_handler": api_handler_lambda
+    }
+    
+    self.iam_roles = {
+      "data_processor": data_processor_role,
+      "api_handler": api_handler_role
+    }
+
     # S3 bucket notification for data processor
     aws.s3.BucketNotification(
       f"{self.resource_prefix}-s3-notification",
@@ -554,29 +579,8 @@ def lambda_handler(event: Dict[str, Any], context) -> Dict[str, Any]:
         filter_prefix="input/",
         filter_suffix=".json"
       )],
-      opts=ResourceOptions(parent=self, depends_on=[data_processor_lambda])
+      opts=ResourceOptions(parent=self, depends_on=[self.lambda_permission])
     )
-    
-    # Lambda permission for S3 to invoke the function
-    aws.lambda_.Permission(
-      f"{self.resource_prefix}-s3-invoke-permission",
-      statement_id="AllowExecutionFromS3Bucket",
-      action="lambda:InvokeFunction",
-      function=data_processor_lambda.name,
-      principal="s3.amazonaws.com",
-      source_arn=self.s3_buckets["data"].arn,
-      opts=ResourceOptions(parent=self)
-    )
-    
-    self.lambda_functions = {
-      "data_processor": data_processor_lambda,
-      "api_handler": api_handler_lambda
-    }
-    
-    self.iam_roles = {
-      "data_processor": data_processor_role,
-      "api_handler": api_handler_role
-    }
   
   def _create_api_gateway(self):
     """Create API Gateway with Lambda integrations and custom authorizers"""
