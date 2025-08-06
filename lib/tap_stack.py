@@ -1,6 +1,6 @@
 """TAP Stack module for CDKTF Python infrastructure."""
 
-from cdktf import TerraformStack, S3Backend
+from cdktf import TerraformStack, S3Backend, TerraformOutput
 from constructs import Construct
 from cdktf_cdktf_provider_aws.provider import AwsProvider
 from cdktf_cdktf_provider_aws.s3_bucket import S3Bucket
@@ -49,10 +49,13 @@ class TapStack(TerraformStack):
 
     # Extract configuration from kwargs
     environment_suffix = kwargs.get("environment_suffix", "dev")
-    aws_region = kwargs.get("aws_region", "us-east-1")
+    aws_region = kwargs.get("aws_region", "us-west-2")  # Use us-west-2 as per requirements
     state_bucket_region = kwargs.get("state_bucket_region", "us-east-1")
     state_bucket = kwargs.get("state_bucket", "iac-rlhf-tf-states")
     default_tags = kwargs.get("default_tags", {})
+    
+    # Store region for use in other methods
+    self.region = aws_region
 
     # Configure AWS Provider
     AwsProvider(
@@ -370,9 +373,9 @@ class TapStack(TerraformStack):
         hash_key="id",
         attribute=[{"name": "id", "type": "S"}],
         # Enable encryption at rest
-        server_side_encryption=[{"enabled": True}],
+        server_side_encryption={"enabled": True},
         # Enable point-in-time recovery
-        point_in_time_recovery=[{"enabled": True}],
+        point_in_time_recovery={"enabled": True},
         tags={"Name": "tap-serverless-table"},
     )
 
@@ -436,22 +439,18 @@ def lambda_handler(event, context):
         timeout=30,
         memory_size=256,
         # VPC configuration for private subnet deployment
-        vpc_config=[
-            {
-                "subnet_ids": [subnet.id for subnet in self.private_subnets],
-                "security_group_ids": [self.lambda_sg.id],
+        vpc_config={
+            "subnet_ids": [subnet.id for subnet in self.private_subnets],
+            "security_group_ids": [self.lambda_sg.id],
+        },
+        environment={
+            "variables": {
+                "DYNAMODB_TABLE": self.dynamodb_table.name,
+                "_X_AMZN_TRACE_ID": "Root=1-00000000-000000000000000000000000",
             }
-        ],
-        environment=[
-            {
-                "variables": {
-                    "DYNAMODB_TABLE": self.dynamodb_table.name,
-                    "_X_AMZN_TRACE_ID": "Root=1-00000000-000000000000000000000000",
-                }
-            }
-        ],
+        },
         # Enable X-Ray tracing
-        tracing_config=[{"mode": "Active"}],
+        tracing_config={"mode": "Active"},
         tags={"Name": "tap-serverless-function"},
     )
 
@@ -465,8 +464,6 @@ def lambda_handler(event, context):
         "main_api",
         name="tap-serverless-api",
         description="Serverless API for tap application",
-        # Enable X-Ray tracing
-        tracing_config=[{"tracing_enabled": True}],
         tags={"Name": "tap-serverless-api"},
     )
 
