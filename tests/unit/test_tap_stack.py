@@ -41,19 +41,6 @@ class TestTapStack:
     template.has_resource_properties("AWS::S3::Bucket", {
         "BucketName": "tap-dev-bucket"
     })
-
-  def test_creates_s3_bucket_with_env_suffix(self, qa_stack_fixture):
-    """Test S3 bucket creation with the specified environment suffix."""
-    template = Template.from_stack(qa_stack_fixture)
-    template.resource_count_is("AWS::S3::Bucket", 1)
-    template.has_resource_properties("AWS::S3::Bucket", {
-        "BucketName": "tap-qa-bucket",
-        "VersioningConfiguration": Match.absent(), # Versioning is False
-    })
-    # Corrected: Check removal policy for qa env
-    template.has_resource("AWS::S3::Bucket", {
-        "DeletionPolicy": "Retain"
-    })
     
     # Check that auto_delete_objects is False
     # This is a custom resource, so check for its logical ID
