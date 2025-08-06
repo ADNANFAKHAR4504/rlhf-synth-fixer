@@ -1,4 +1,3 @@
-import zipfile
 import builtins
 from lib.components.serverless import ServerlessComponent
 from lib.components.database import DatabaseComponent
@@ -11,6 +10,7 @@ import sys
 import unittest
 from unittest.mock import Mock, MagicMock, patch
 import types
+import zipfile
 
 # Helper to create mock packages
 
@@ -18,7 +18,7 @@ import types
 def create_mock_package(name):
   mod = types.ModuleType(name)
   mod.__path__ = []  # makes it a package
-  return mod 
+  return mod
 
 
 # Setup mock modules before importing your components
@@ -39,6 +39,11 @@ aws_ec2.Vpc = Mock(return_value=MagicMock(id="vpc-123"))
 aws_ec2.Subnet = Mock(return_value=MagicMock(id="subnet-123"))
 aws_ec2.SecurityGroup = Mock(return_value=MagicMock(id="sg-123"))
 aws_ec2.SecurityGroupRule = Mock()
+aws_ec2.Eip = Mock()
+aws_ec2.NatGateway = Mock()
+aws_ec2.InternetGateway = Mock()
+aws_ec2.RouteTable = Mock()
+aws_ec2.RouteTableAssociation = Mock()
 aws_ec2._enums = create_mock_package("pulumi_aws.ec2._enums")
 sys.modules["pulumi_aws"].ec2 = aws_ec2
 
@@ -73,12 +78,6 @@ aws_lambda = create_mock_package("pulumi_aws.lambda_")
 aws_lambda.Function = Mock()
 aws_lambda.Permission = Mock()
 sys.modules["pulumi_aws"].lambda_ = aws_lambda
-
-aws_ec2.Eip = Mock()
-aws_ec2.NatGateway = Mock()
-aws_ec2.InternetGateway = Mock()
-aws_ec2.RouteTable = Mock()
-aws_ec2.RouteTableAssociation = Mock()
 
 # Improved MockOutput implementation
 
@@ -266,81 +265,10 @@ sys.modules["pulumi"].Invoke = MagicMock(return_value=MagicMock())
 # Monkey patch isinstance
 builtins.isinstance = patched_isinstance
 
-# Mock zipfile operations for ServerlessComponent
-original_zipfile_init = zipfile.ZipFile.__init__
-original_zipfile_write = zipfile.ZipFile.write
-
-
-def mock_zipfile_init(self, file, mode="r", compression=zipfile.ZIP_STORED, allowZip64=True, compresslevel=None, *, strict_timestamps=True):
-  # Just create a mock zipfile that doesn't actually write anything
-  self.filename = file
-  self.mode = mode
-  self._filelist = []
-
-
-def mock_zipfile_write(self, filename, arcname=None, compress_type=None, compresslevel=None):
-  # Mock the write operation
-  pass
-
-
-def mock_zipfile_enter(self):
-  return self
-
-
-def mock_zipfile_exit(self, exc_type, exc_val, exc_tb):
-  pass
-
-
-# Patch zipfile operations
-zipfile.ZipFile.__init__ = mock_zipfile_init
-zipfile.ZipFile.write = mock_zipfile_write
-zipfile.ZipFile.__enter__ = mock_zipfile_enter
-zipfile.ZipFile.__exit__ = mock_zipfile_exit
-
 # Set environment variable for Pulumi testing
 os.environ["PULUMI_TEST_MODE"] = "true"
 
-# Mock file operations for lambda packaging
-original_exists = os.path.exists
-original_walk = os.walk
-
-
-def mock_exists(path):
-  # Handle the lambda.zip file and lambda_files directory
-  if 'lambda.zip' in path:
-    return True
-  if 'lambda_files' in path:
-    return True
-  # Handle specific files that ServerlessComponent looks for
-  if path.endswith('handler.py') or path.endswith('requirements.txt'):
-    return True
-  if 'lib/components/lambda_files' in path:
-    return True
-  return original_exists(path)
-
-
-def mock_walk(path):
-  # Mock the directory walk for lambda_files
-  if 'lambda_files' in path:
-    return [
-        (path, [], ['handler.py', 'requirements.txt'])
-    ]
-  return original_walk(path)
-
-
-# Patch os.path methods
-os.path.exists = mock_exists
-os.walk = mock_walk
-
-# Also mock os.getcwd to return a predictable path
-original_getcwd = os.getcwd
-
-
-def mock_getcwd():
-  return '/mock/project/path'
-
-
-os.getcwd = mock_getcwd
+# Use patch decorator approach for file operations to avoid pytest conflicts
 
 
 class TestTapStackComponents(unittest.TestCase):
@@ -350,7 +278,11 @@ class TestTapStackComponents(unittest.TestCase):
         tags={"Environment": "test", "Project": "tap-stack"}
     )
 
-  def test_iam_component_initialization(self):
+  @patch('os.path.exists')
+  @patch('os.walk')
+  @patch('zipfile.ZipFile')
+  def test_iam_component_initialization(self, mock_zipfile, mock_walk, mock_exists):
+    mock_exists.return_value = True
     iam = IAMComponent(
         name="test-iam",
         environment="test",
@@ -358,7 +290,11 @@ class TestTapStackComponents(unittest.TestCase):
     )
     self.assertTrue(hasattr(iam, "lambda_role"))
 
-  def test_compute_component_initialization(self):
+  @patch('os.path.exists')
+  @patch('os.walk')
+  @patch('zipfile.ZipFile')
+  def test_compute_component_initialization(self, mock_zipfile, mock_walk, mock_exists):
+    mock_exists.return_value = True
     compute = ComputeComponent(
         name="test-compute",
         cidr_block="10.3.0.0/16",
@@ -369,7 +305,11 @@ class TestTapStackComponents(unittest.TestCase):
     self.assertTrue(hasattr(compute, "private_subnet_ids"))
     self.assertTrue(hasattr(compute, "lambda_sg"))
 
-  def test_database_component_initialization(self):
+  @patch('os.path.exists')
+  @patch('os.walk')
+  @patch('zipfile.ZipFile')
+  def test_database_component_initialization(self, mock_zipfile, mock_walk, mock_exists):
+    mock_exists.return_value = True
     compute_mock = MockComponentResource()
     compute_mock.db_sg = MagicMock(id="sg-123")
     compute_mock.private_subnet_ids = MockOutput(["subnet-123"])
@@ -385,7 +325,19 @@ class TestTapStackComponents(unittest.TestCase):
     )
     self.assertTrue(hasattr(db, "rds_instance"))
 
-  def test_serverless_component_initialization(self):
+  @patch('os.path.exists')
+  @patch('os.walk')
+  @patch('zipfile.ZipFile')
+  def test_serverless_component_initialization(self, mock_zipfile, mock_walk, mock_exists):
+    # Setup file operation mocks
+    mock_exists.return_value = True
+    mock_walk.return_value = [
+        ('lambda_files', [], ['handler.py', 'requirements.txt'])]
+
+    # Setup zipfile mock
+    mock_zipfile_instance = MagicMock()
+    mock_zipfile.return_value.__enter__.return_value = mock_zipfile_instance
+
     iam_mock = MockComponentResource()
     iam_mock.lambda_role = MagicMock(arn="arn:aws:iam::123:role/test")
 
@@ -414,7 +366,19 @@ class TestTapStackComponents(unittest.TestCase):
     self.assertTrue(hasattr(serverless, "lambda_function"))
     self.assertTrue(hasattr(serverless, "api"))
 
-  def test_tap_stack_initialization(self):
+  @patch('os.path.exists')
+  @patch('os.walk')
+  @patch('zipfile.ZipFile')
+  def test_tap_stack_initialization(self, mock_zipfile, mock_walk, mock_exists):
+    # Setup file operation mocks
+    mock_exists.return_value = True
+    mock_walk.return_value = [
+        ('lambda_files', [], ['handler.py', 'requirements.txt'])]
+
+    # Setup zipfile mock
+    mock_zipfile_instance = MagicMock()
+    mock_zipfile.return_value.__enter__.return_value = mock_zipfile_instance
+
     stack = TapStack(
         name="tap-test",
         args=self.test_args,
