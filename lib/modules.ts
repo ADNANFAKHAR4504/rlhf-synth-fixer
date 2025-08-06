@@ -270,6 +270,7 @@ export class RdsDatabase extends Construct {
       publiclyAccessible: false,
       skipFinalSnapshot: true,
       tags: { Name: `${envPrefix}-postgres-db` },
+      dependsOn: [dbSecretVersion], // Add this line
     });
 
     this.rdsEndpoint = dbInstance.endpoint;
