@@ -64,6 +64,34 @@ mock_aws.get_availability_zones.return_value = Mock(
 
 sys.modules["pulumi_aws"] = mock_aws
 
+# Mocking specific pulumi_aws classes
+mock_aws_ec2 = Mock()
+mock_aws_ec2.Vpc.return_value = Mock(id="vpc-123")
+mock_aws_ec2.Subnet.return_value = Mock(id="subnet-123")
+mock_aws_ec2.SecurityGroup.return_value = Mock(id="sg-123")
+
+mock_aws_rds = Mock()
+mock_aws_rds.Instance.return_value = Mock(endpoint="db-endpoint", id="db-123")
+
+mock_aws_iam = Mock()
+mock_aws_iam.Role.return_value = Mock(arn="arn:aws:iam::123:role/test")
+
+mock_aws_apigateway = Mock()
+mock_aws_apigateway.RestApi.return_value = Mock(id="api-123")
+mock_aws_apigateway.Deployment.return_value = Mock()
+mock_aws_apigateway.Stage.return_value = Mock()
+mock_aws_apigateway.Resource.return_value = Mock()
+mock_aws_apigateway.Method.return_value = Mock()
+mock_aws_apigateway.Integration.return_value = Mock()
+mock_aws_apigateway.IntegrationResponse.return_value = Mock()
+mock_aws_apigateway.MethodResponse.return_value = Mock()
+
+# Patch submodules into sys.modules
+sys.modules["pulumi_aws.ec2"] = mock_aws_ec2
+sys.modules["pulumi_aws.rds"] = mock_aws_rds
+sys.modules["pulumi_aws.iam"] = mock_aws_iam
+sys.modules["pulumi_aws.apigateway"] = mock_aws_apigateway
+
 
 class TestTapStackComponents(unittest.TestCase):
   def setUp(self):
