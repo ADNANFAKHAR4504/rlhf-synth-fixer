@@ -2,20 +2,28 @@ import os
 import sys
 import unittest
 from unittest.mock import Mock
+# Import components after mock injection
+from lib.tap_stack import TapStackArgs
+from lib.components.iam import IAMComponent
+from lib.components.vpc import ComputeComponent
+from lib.components.database import DatabaseComponent
+from lib.components.serverless import ServerlessComponent
+
 
 # Set environment variable for Pulumi testing
 os.environ["PULUMI_TEST_MODE"] = "true"
 
 
 class MockComponentResource:
-  def __init__(self, type_name, name, props=None, opts=None):
-    self.type_name = type_name
-    self.name = name
-    self.props = props or {}
-    self.opts = opts
+  def __init__(self, *args, **kwargs):
+    self.type_name = args[0] if len(args) > 0 else None
+    self.name = args[1] if len(args) > 1 else None
+    self.props = kwargs.get("props", {})
+    self.opts = kwargs.get("opts", None)
+    self.outputs = None
 
   def register_outputs(self, outputs):
-    self.outputs = True
+    self.outputs = outputs
 
 
 class MockOutput:
@@ -64,13 +72,6 @@ class TestTapStackComponents(unittest.TestCase):
     for module in modules_to_clear:
       if module in sys.modules:
         del sys.modules[module]
-
-    # Import components after mock injection
-    from lib.tap_stack import TapStackArgs
-    from lib.components.iam import IAMComponent
-    from lib.components.vpc import ComputeComponent
-    from lib.components.database import DatabaseComponent
-    from lib.components.serverless import ServerlessComponent
 
     self.TapStackArgs = TapStackArgs
     self.IAMComponent = IAMComponent
