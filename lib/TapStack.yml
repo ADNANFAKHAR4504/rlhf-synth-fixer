@@ -16,7 +16,7 @@ Parameters:
     Description: The handler for the Lambda function executable.
   S3BucketName:
     Type: String
-    Default: serverlessapp-bucket-284210
+    Default: serverlessapp-bucket-284210-1
     Description: Unique S3 bucket name for object triggers.
 
 Mappings:
@@ -26,6 +26,16 @@ Mappings:
       AZ2: us-east-1b
 
 Resources:
+  # S3 Bucket Policy to allow Lambda invocation
+  ServerlessAppBucketInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref ServerlessAppLambda
+      Principal: s3.amazonaws.com
+      SourceArn: !Sub arn:aws:s3:::${S3BucketName}
+      SourceAccount: !Ref AWS::AccountId
+
   # S3 Bucket for File Uploads (Secured)
   ServerlessAppBucket:
     Type: AWS::S3::Bucket
@@ -48,16 +58,6 @@ Resources:
       Tags:
         - Key: Name
           Value: ServerlessAppBucket
-
-  # S3 Bucket Policy to allow Lambda invocation
-  ServerlessAppBucketInvokePermission:
-    Type: AWS::Lambda::Permission
-    Properties:
-      Action: lambda:InvokeFunction
-      FunctionName: !Ref ServerlessAppLambda
-      Principal: s3.amazonaws.com
-      SourceArn: !GetAtt ServerlessAppBucket.Arn
-      SourceAccount: !Ref AWS::AccountId
 
   # VPC for Lambda isolation (Multi-AZ)
   ServerlessAppVPC:
