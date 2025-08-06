@@ -45,15 +45,30 @@ describe('TapStack Integration Tests - Live Environment', () => {
     jest.setTimeout(5 * 60 * 1000);
 
     // Read CloudFormation outputs from deployed stack
-    const outputsPath = path.join(
-      __dirname,
-      'cfn-outputs',
-      'flat-outputs.json'
-    );
+    // Try multiple possible paths for different environments
+    const possiblePaths = [
+      // Local development - relative to test directory
+      path.join(__dirname, '..', 'cfn-outputs', 'flat-outputs.json'),
+      // CI environment - from project root
+      path.join(process.cwd(), 'cfn-outputs', 'flat-outputs.json'),
+      // Legacy path - in case it's still in test subdirectory
+      path.join(__dirname, 'cfn-outputs', 'flat-outputs.json'),
+    ];
 
-    if (!fs.existsSync(outputsPath)) {
+    let outputsPath: string | null = null;
+    for (const possiblePath of possiblePaths) {
+      console.log(`Checking for outputs file at: ${possiblePath}`);
+      if (fs.existsSync(possiblePath)) {
+        outputsPath = possiblePath;
+        console.log(`Found outputs file at: ${outputsPath}`);
+        break;
+      }
+    }
+
+    if (!outputsPath) {
+      const pathsList = possiblePaths.map(p => `  - ${p}`).join('\n');
       throw new Error(
-        `CloudFormation outputs file not found at: ${outputsPath}. Please deploy the stack first and export outputs.`
+        `CloudFormation outputs file not found. Checked the following paths:\n${pathsList}\nPlease deploy the stack first and export outputs.`
       );
     }
 
