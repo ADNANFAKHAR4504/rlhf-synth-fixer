@@ -87,25 +87,6 @@
         }
     },
     "Rules": {
-        "ValidateEnvironmentSuffix": {
-            "Assertions": [
-                {
-                    "Assert": {
-                        "Fn::Contains": [
-                            [
-                                "dev",
-                                "staging",
-                                "prod"
-                            ],
-                            {
-                                "Ref": "EnvironmentSuffix"
-                            }
-                        ]
-                    },
-                    "AssertDescription": "EnvironmentSuffix must be one of dev, staging, or prod"
-                }
-            ]
-        },
         "ValidateArtifactBucket": {
             "Assertions": [
                 {
