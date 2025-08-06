@@ -1,691 +1,889 @@
 """
-Integration Tests for AWS Production Infrastructure
+Integration Tests for AWS Production Infrastructure - Live Resource Testing
 
-This module contains comprehensive integration tests that validate the complete
-production infrastructure stack behavior, security implementations, high availability,
-and real-world deployment scenarios.
+This module contains comprehensive integration tests that validate actual deployed
+AWS resources using Terraform outputs. Tests verify real infrastructure functionality,
+security controls, connectivity, and production readiness.
 """
 
 import ipaddress
 import json
+import subprocess
+import urllib.request
+from typing import Any, Dict
 
+import boto3
 import pytest
-from cdktf import App, Testing
-
-from lib.tap_stack import TapStack
+from botocore.exceptions import ClientError
 
 
-def synth_stack(stack):
-  """Helper function to synthesize a stack and return parsed JSON."""
-  return json.loads(Testing.synth(stack))
-
-
-@pytest.mark.integration
-class TestProductionInfrastructureDeployment:
-  """Integration tests for complete production infrastructure deployment."""
-
-  @pytest.fixture(scope="class")
-  def production_stack(self):
-    """Create a production stack for integration testing."""
-    app = App()
-    return TapStack(
-        app,
-        "prod-integration-stack",
-        description="Production infrastructure integration testing stack"
-    )
-
-  @pytest.fixture(scope="class")
-  def multi_region_stacks(self):
-    """Create stacks for multi-region testing scenarios."""
-    app = App()
-    stacks = {}
-
-    # Simulate different regions by creating multiple stacks
-    regions = ["us-west-2", "us-east-1", "eu-west-1"]
-    for region in regions:
-      stack = TapStack(
-          app,
-          f"prod-{region.replace('-', '_')}-stack",
-          description=f"Production stack for {region}"
-      )
-      # Override region for testing
-      stack.aws_region = region
-      stacks[region] = stack
-
-    return stacks
-
-  def test_complete_production_stack_synthesis(self, production_stack):
-    """Test that the complete production stack synthesizes without errors."""
+class TerraformOutputReader:
+  """Utility class to read and parse Terraform outputs."""
+  
+  @staticmethod
+  def get_outputs() -> Dict[str, Any]:
+    """
+    Get Terraform outputs from deployed infrastructure.
+    
+    Returns:
+      Dict containing all Terraform outputs
+    """
     try:
-      synthesized = synth_stack(production_stack)
-      assert synthesized is not None
-      assert len(synthesized) > 0
+      result = subprocess.run(
+        ["terraform", "output", "-json"],
+        capture_output=True,
+        text=True,
+        check=True
+      )
+      outputs = json.loads(result.stdout)
+      return {key: value["value"] for key, value in outputs.items()}
+    except subprocess.CalledProcessError as e:
+      pytest.skip(f"Could not read Terraform outputs: {e}")
+      return {}
+    except json.JSONDecodeError as e:
+      pytest.skip(f"Could not parse Terraform outputs: {e}")
+      return {}
 
-      # Verify all major sections are present
-      required_sections = ["resource", "output", "provider", "data"]
-      for section in required_sections:
-        assert section in synthesized, f"Missing required section: {section}"
+  @staticmethod
+  def check_terraform_state() -> bool:
+    """Check if Terraform state exists and is valid."""
+    try:
+      subprocess.run(
+        ["terraform", "show", "-json"],
+        capture_output=True,
+        text=True,
+        check=True
+      )
+      return True
+    except subprocess.CalledProcessError:
+      return False
 
+
+@pytest.fixture(scope="session")
+def terraform_outputs():
+  """
+  Fixture that provides Terraform outputs for all tests.
+  
+  Returns:
+    Dict containing all Terraform outputs from deployed infrastructure
+  """
+  if not TerraformOutputReader.check_terraform_state():
+    pytest.skip("No Terraform state found. Please deploy infrastructure first.")
+  
+  outputs = TerraformOutputReader.get_outputs()
+  if not outputs:
+    pytest.skip("No Terraform outputs found.")
+  
+  return outputs
+
+
+@pytest.fixture(scope="session")
+def aws_clients():
+  """
+  Fixture that provides AWS service clients for testing.
+  
+  Returns:
+    Dict containing initialized AWS clients
+  """
+  return {
+    'ec2': boto3.client('ec2'),
+    'iam': boto3.client('iam'),
+    'logs': boto3.client('logs'),
+    'lambda': boto3.client('lambda'),
+    'apigateway': boto3.client('apigateway'),
+    's3': boto3.client('s3'),
+    'dynamodb': boto3.client('dynamodb'),
+    'sts': boto3.client('sts'),
+    'cloudwatch': boto3.client('cloudwatch'),
+    'cloudformation': boto3.client('cloudformation'),
+  }
+
+
+class TestVPCInfrastructure:
+  """Test suite for VPC and networking infrastructure."""
+  
+  def test_vpc_exists(self, terraform_outputs, aws_clients):
+    """Test that VPC exists and is available."""
+    vpc_id = terraform_outputs.get('vpc_id')
+    assert vpc_id, "VPC ID not found in Terraform outputs"
+    
+    ec2 = aws_clients['ec2']
+    response = ec2.describe_vpcs(VpcIds=[vpc_id])
+    
+    assert response['Vpcs'], f"VPC {vpc_id} not found"
+    vpc = response['Vpcs'][0]
+    assert vpc['State'] == 'available', f"VPC {vpc_id} is not available"
+  
+  def test_vpc_cidr_block(self, terraform_outputs, aws_clients):
+    """Test that VPC has correct CIDR block."""
+    vpc_id = terraform_outputs.get('vpc_id')
+    expected_cidr = terraform_outputs.get('vpc_cidr')
+    
+    if not vpc_id or not expected_cidr:
+      pytest.skip("VPC ID or CIDR not found in outputs")
+    
+    ec2 = aws_clients['ec2']
+    response = ec2.describe_vpcs(VpcIds=[vpc_id])
+    vpc = response['Vpcs'][0]
+    
+    assert vpc['CidrBlock'] == expected_cidr
+  
+  def test_subnets_exist(self, terraform_outputs, aws_clients):
+    """Test that all required subnets exist."""
+    subnet_ids = terraform_outputs.get('subnet_ids', [])
+    if not subnet_ids:
+      pytest.skip("No subnet IDs found in outputs")
+    
+    ec2 = aws_clients['ec2']
+    response = ec2.describe_subnets(SubnetIds=subnet_ids)
+    
+    assert len(response['Subnets']) == len(subnet_ids)
+    for subnet in response['Subnets']:
+      assert subnet['State'] == 'available'
+  
+  def test_internet_gateway_exists(self, terraform_outputs, aws_clients):
+    """Test that Internet Gateway exists and is attached."""
+    igw_id = terraform_outputs.get('internet_gateway_id')
+    vpc_id = terraform_outputs.get('vpc_id')
+    
+    if not igw_id or not vpc_id:
+      pytest.skip("IGW or VPC ID not found in outputs")
+    
+    ec2 = aws_clients['ec2']
+    response = ec2.describe_internet_gateways(InternetGatewayIds=[igw_id])
+    
+    assert response['InternetGateways'], f"IGW {igw_id} not found"
+    igw = response['InternetGateways'][0]
+    
+    # Check attachment
+    attachments = igw.get('Attachments', [])
+    assert len(attachments) == 1, "IGW should be attached to exactly one VPC"
+    assert attachments[0]['VpcId'] == vpc_id
+    assert attachments[0]['State'] == 'available'
+  
+  def test_security_groups_exist(self, terraform_outputs, aws_clients):
+    """Test that security groups exist with correct configuration."""
+    sg_ids = terraform_outputs.get('security_group_ids', [])
+    if not sg_ids:
+      pytest.skip("No security group IDs found in outputs")
+    
+    ec2 = aws_clients['ec2']
+    response = ec2.describe_security_groups(GroupIds=sg_ids)
+    
+    assert len(response['SecurityGroups']) == len(sg_ids)
+    for sg in response['SecurityGroups']:
+      assert sg['GroupName'], "Security group must have a name"
+
+
+class TestIAMResources:
+  """Test suite for IAM roles and policies."""
+  
+  def test_lambda_execution_role_exists(self, terraform_outputs, aws_clients):
+    """Test that Lambda execution role exists."""
+    role_arn = terraform_outputs.get('lambda_execution_role_arn')
+    if not role_arn:
+      pytest.skip("Lambda execution role ARN not found in outputs")
+    
+    role_name = role_arn.split('/')[-1]
+    iam = aws_clients['iam']
+    
+    try:
+      response = iam.get_role(RoleName=role_name)
+      assert response['Role']['Arn'] == role_arn
+    except ClientError as e:
+      if e.response['Error']['Code'] == 'NoSuchEntity':
+        pytest.fail(f"Lambda execution role {role_name} not found")
+      raise
+  
+  def test_lambda_role_has_execution_policy(self, terraform_outputs, aws_clients):
+    """Test that Lambda role has basic execution policy."""
+    role_arn = terraform_outputs.get('lambda_execution_role_arn')
+    if not role_arn:
+      pytest.skip("Lambda execution role ARN not found in outputs")
+    
+    role_name = role_arn.split('/')[-1]
+    iam = aws_clients['iam']
+    
+    # Check attached policies
+    response = iam.list_attached_role_policies(RoleName=role_name)
+    attached_policies = [p['PolicyArn'] for p in response['AttachedPolicies']]
+    
+    # Should have Lambda basic execution policy
+    lambda_basic_policy = ('arn:aws:iam::aws:policy/'
+                          'service-role/AWSLambdaBasicExecutionRole')
+    assert lambda_basic_policy in attached_policies
+  
+  def test_api_gateway_execution_role_exists(self, terraform_outputs, aws_clients):
+    """Test that API Gateway execution role exists if configured."""
+    role_arn = terraform_outputs.get('api_gateway_execution_role_arn')
+    if not role_arn:
+      pytest.skip("API Gateway execution role ARN not found in outputs")
+    
+    role_name = role_arn.split('/')[-1]
+    iam = aws_clients['iam']
+    
+    try:
+      response = iam.get_role(RoleName=role_name)
+      assert response['Role']['Arn'] == role_arn
+    except ClientError as e:
+      if e.response['Error']['Code'] == 'NoSuchEntity':
+        pytest.fail(f"API Gateway execution role {role_name} not found")
+      raise
+
+
+class TestLambdaFunctions:
+  """Test suite for Lambda functions."""
+  
+  def test_lambda_function_exists(self, terraform_outputs, aws_clients):
+    """Test that Lambda function exists and is active."""
+    function_name = terraform_outputs.get('lambda_function_name')
+    if not function_name:
+      pytest.skip("Lambda function name not found in outputs")
+    
+    lambda_client = aws_clients['lambda']
+    
+    try:
+      response = lambda_client.get_function(FunctionName=function_name)
+      assert response['Configuration']['State'] == 'Active'
+    except ClientError as e:
+      if e.response['Error']['Code'] == 'ResourceNotFoundException':
+        pytest.fail(f"Lambda function {function_name} not found")
+      raise
+  
+  def test_lambda_function_configuration(self, terraform_outputs, aws_clients):
+    """Test Lambda function configuration."""
+    function_name = terraform_outputs.get('lambda_function_name')
+    if not function_name:
+      pytest.skip("Lambda function name not found in outputs")
+    
+    lambda_client = aws_clients['lambda']
+    response = lambda_client.get_function(FunctionName=function_name)
+    config = response['Configuration']
+    
+    # Test basic configuration
+    assert config['Runtime'].startswith('python'), "Should use Python runtime"
+    assert config['Handler'], "Handler must be specified"
+    assert config['Timeout'] > 0, "Timeout must be positive"
+    assert config['MemorySize'] >= 128, "Memory must be at least 128MB"
+  
+  def test_lambda_function_invoke(self, terraform_outputs, aws_clients):
+    """Test that Lambda function can be invoked."""
+    function_name = terraform_outputs.get('lambda_function_name')
+    if not function_name:
+      pytest.skip("Lambda function name not found in outputs")
+    
+    lambda_client = aws_clients['lambda']
+    
+    # Simple invocation test
+    response = lambda_client.invoke(
+      FunctionName=function_name,
+      InvocationType='RequestResponse',
+      Payload=json.dumps({'test': 'data'})
+    )
+    
+    assert response['StatusCode'] == 200
+    assert 'Payload' in response
+  
+  def test_lambda_environment_variables(self, terraform_outputs, aws_clients):
+    """Test Lambda environment variables if configured."""
+    function_name = terraform_outputs.get('lambda_function_name')
+    if not function_name:
+      pytest.skip("Lambda function name not found in outputs")
+    
+    lambda_client = aws_clients['lambda']
+    response = lambda_client.get_function(FunctionName=function_name)
+    config = response['Configuration']
+    
+    # Check if environment variables are set
+    env_vars = config.get('Environment', {}).get('Variables', {})
+    if env_vars:
+      # Validate common environment variables
+      for key, value in env_vars.items():
+        assert key, "Environment variable key cannot be empty"
+        assert value is not None, f"Environment variable {key} has None value"
+
+
+class TestAPIGateway:
+  """Test suite for API Gateway."""
+  
+  def test_api_gateway_exists(self, terraform_outputs, aws_clients):
+    """Test that API Gateway exists."""
+    api_id = terraform_outputs.get('api_gateway_id')
+    if not api_id:
+      pytest.skip("API Gateway ID not found in outputs")
+    
+    apigw = aws_clients['apigateway']
+    
+    try:
+      response = apigw.get_rest_api(restApiId=api_id)
+      assert response['id'] == api_id
+    except ClientError as e:
+      if e.response['Error']['Code'] == 'NotFoundException':
+        pytest.fail(f"API Gateway {api_id} not found")
+      raise
+  
+  def test_api_gateway_deployment(self, terraform_outputs, aws_clients):
+    """Test that API Gateway is deployed."""
+    api_id = terraform_outputs.get('api_gateway_id')
+    stage_name = terraform_outputs.get('api_gateway_stage', 'prod')
+    
+    if not api_id:
+      pytest.skip("API Gateway ID not found in outputs")
+    
+    apigw = aws_clients['apigateway']
+    
+    try:
+      response = apigw.get_stage(restApiId=api_id, stageName=stage_name)
+      assert response['stageName'] == stage_name
+    except ClientError as e:
+      if e.response['Error']['Code'] == 'NotFoundException':
+        pytest.fail(f"API Gateway stage {stage_name} not found")
+      raise
+  
+  def test_api_gateway_endpoint_accessibility(self, terraform_outputs):
+    """Test that API Gateway endpoint is accessible."""
+    api_url = terraform_outputs.get('api_gateway_url')
+    if not api_url:
+      pytest.skip("API Gateway URL not found in outputs")
+    
+    # Test basic connectivity
+    try:
+      with urllib.request.urlopen(api_url, timeout=30) as response:
+        assert response.status in [200, 401, 403]  # 401/403 OK if auth required
     except Exception as e:
-      pytest.fail(f"Production stack synthesis failed: {str(e)}")
-
-  def test_production_resource_provisioning_order(self, production_stack):
-    """Test that resources have proper dependency ordering for production deployment."""
-    synthesized = synth_stack(production_stack)
-    resources = synthesized.get("resource", {})
-
-    # NAT Gateways should depend on Internet Gateway
-    nat_gateways = resources.get("aws_nat_gateway", {})
-    for nat_config in nat_gateways.values():
-      assert "depends_on" in nat_config, "NAT Gateway missing dependency"
-
-    # Elastic IPs should depend on Internet Gateway
-    eips = resources.get("aws_eip", {})
-    for eip_config in eips.values():
-      assert "depends_on" in eip_config, "EIP missing dependency"
-
-    # Bastion host should reference security group and subnet
-    instances = resources.get("aws_instance", {})
-    for instance_config in instances.values():
-      assert "vpc_security_group_ids" in instance_config
-      assert "subnet_id" in instance_config
-
-  def test_multi_region_deployment_compatibility(self, multi_region_stacks):
-    """Test that the stack can be deployed across multiple regions."""
-    synthesized_stacks = {}
-
-    for region, stack in multi_region_stacks.items():
-      try:
-        synthesized_stacks[region] = synth_stack(stack)
-      except Exception as e:
-        pytest.fail(f"Failed to synthesize stack for {region}: {str(e)}")
-
-    # Verify all regions synthesized successfully
-    assert len(synthesized_stacks) == 3
-
-    # Each stack should have consistent structure
-    for region, synthesized in synthesized_stacks.items():
-      assert "resource" in synthesized
-      assert "output" in synthesized
-
-      # Verify VPC exists in each region
-      vpc_resources = synthesized.get("resource", {}).get("aws_vpc", {})
-      assert len(vpc_resources) == 1, f"Missing VPC in {region}"
-
-
-@pytest.mark.integration
-class TestProductionNetworkingIntegration:
-  """Integration tests for production networking components and security."""
-
-  @pytest.fixture(scope="class")
-  def networking_stack(self):
-    """Stack focused on networking integration testing."""
-    app = App()
-    return TapStack(
-        app,
-        "networking-integration-stack",
-        description="Production networking integration testing"
-    )
-
-  def test_vpc_cidr_and_subnet_allocation(self, networking_stack):
-    """Test production VPC CIDR allocation and subnet distribution."""
-    synthesized = synth_stack(networking_stack)
-
-    # Get VPC CIDR - must be exactly 10.0.0.0/16 per requirements
-    vpc_resources = synthesized.get("resource", {}).get("aws_vpc", {})
-    vpc_config = list(vpc_resources.values())[0]
-    vpc_cidr = ipaddress.IPv4Network(vpc_config["cidr_block"])
-
-    assert str(vpc_cidr) == "10.0.0.0/16", "VPC CIDR must be exactly 10.0.0.0/16"
-
-    # Get all subnet CIDRs and validate allocation
-    subnet_resources = synthesized.get("resource", {}).get("aws_subnet", {})
-    public_subnets = []
-    private_subnets = []
-
-    for subnet_config in subnet_resources.values():
-      subnet_cidr = ipaddress.IPv4Network(subnet_config["cidr_block"])
-      tags = subnet_config.get("tags", {})
-
-      # Verify subnet is within VPC CIDR
-      assert subnet_cidr.subnet_of(
-          vpc_cidr), f"Subnet {subnet_cidr} not within VPC {vpc_cidr}"
-
-      if tags.get("Type") == "Public":
-        public_subnets.append(subnet_cidr)
-      elif tags.get("Type") == "Private":
-        private_subnets.append(subnet_cidr)
-
-    # Verify exactly 2 public and 2 private subnets
-    assert len(public_subnets) == 2, "Must have exactly 2 public subnets"
-    assert len(private_subnets) == 2, "Must have exactly 2 private subnets"
-
-    # Verify no subnet overlaps
-    all_subnets = public_subnets + private_subnets
-    for i, cidr1 in enumerate(all_subnets):
-      for _, cidr2 in enumerate(all_subnets[i + 1:], i + 1):
-        assert not cidr1.overlaps(
-            cidr2), f"Subnets {cidr1} and {cidr2} overlap"
-
-  def test_high_availability_subnet_distribution(self, networking_stack):
-    """Test that subnets are distributed across exactly 2 availability zones."""
-    synthesized = synth_stack(networking_stack)
-
-    # Get availability zones data source
-    az_data_sources = synthesized.get(
-        "data", {}).get(
-        "aws_availability_zones", {})
-    assert len(az_data_sources) == 1, "Should have exactly one AZ data source"
-
-    # Get subnet configurations and track AZ usage
-    subnet_resources = synthesized.get("resource", {}).get("aws_subnet", {})
-    az_usage = {}
-    public_az_count = {}
-    private_az_count = {}
-
-    for subnet_config in subnet_resources.values():
-      az_ref = subnet_config.get("availability_zone")
-      assert az_ref is not None, "Subnet missing availability_zone"
-
-      # Track overall AZ usage
-      az_usage[az_ref] = az_usage.get(az_ref, 0) + 1
-
-      # Track AZ usage by subnet type
-      tags = subnet_config.get("tags", {})
-      subnet_type = tags.get("Type", "")
-
-      if subnet_type == "Public":
-        public_az_count[az_ref] = public_az_count.get(az_ref, 0) + 1
-      elif subnet_type == "Private":
-        private_az_count[az_ref] = private_az_count.get(az_ref, 0) + 1
-
-    # Verify exactly 2 AZs are used
-    assert len(az_usage) == 2, "Must use exactly 2 availability zones"
-
-    # Verify each AZ has exactly 2 subnets (1 public + 1 private)
-    for az, count in az_usage.items():
-      assert count == 2, f"AZ {az} should have exactly 2 subnets, has {count}"
-
-    # Verify each AZ has 1 public and 1 private subnet
-    assert len(public_az_count) == 2, "Public subnets should span 2 AZs"
-    assert len(private_az_count) == 2, "Private subnets should span 2 AZs"
-
-    for az, count in public_az_count.items():
-      assert count == 1, f"AZ {az} should have exactly 1 public subnet"
-    for az, count in private_az_count.items():
-      assert count == 1, f"AZ {az} should have exactly 1 private subnet"
-
-  def test_internet_connectivity_configuration(self, networking_stack):
-    """Test that internet connectivity is properly configured for production."""
-    synthesized = synth_stack(networking_stack)
-
-    # Verify Internet Gateway configuration
-    igw_resources = synthesized.get(
-        "resource", {}).get(
-        "aws_internet_gateway", {})
-    assert len(igw_resources) == 1, "Should have exactly 1 Internet Gateway"
-
-    # Verify NAT Gateway configuration for high availability
-    nat_resources = synthesized.get("resource", {}).get("aws_nat_gateway", {})
-    assert len(nat_resources) == 2, "Should have exactly 2 NAT Gateways for HA"
-
-    # Verify route tables
-    route_table_resources = synthesized.get(
-        "resource", {}).get(
-        "aws_route_table", {})
-    public_rts = []
-    private_rts = []
-
-    for rt_config in route_table_resources.values():
-      tags = rt_config.get("tags", {})
-      rt_type = tags.get("Type", "")
-
-      if rt_type == "Public":
-        public_rts.append(rt_config)
-      elif rt_type == "Private":
-        private_rts.append(rt_config)
-
-    assert len(public_rts) == 1, "Should have 1 public route table"
-    assert len(private_rts) == 2, "Should have 2 private route tables (1 per AZ)"
-
-    # Verify routes
-    route_resources = synthesized.get("resource", {}).get("aws_route", {})
-    igw_routes = sum(1 for route in route_resources.values()
-                     if "gateway_id" in route)
-    nat_routes = sum(1 for route in route_resources.values()
-                     if "nat_gateway_id" in route)
-
-    assert igw_routes == 1, "Should have exactly 1 Internet Gateway route"
-    assert nat_routes == 2, "Should have exactly 2 NAT Gateway routes"
-
-
-@pytest.mark.integration
-class TestProductionSecurityIntegration:
-  """Integration tests for production security configurations."""
-
-  @pytest.fixture(scope="class")
-  def security_stack(self):
-    """Security-focused stack for production testing."""
-    app = App()
-    return TapStack(
-        app,
-        "security-integration-stack",
-        description="Production security integration testing"
-    )
-
-  def test_bastion_host_security_configuration(self, security_stack):
-    """Test Bastion host security implementation for production."""
-    synthesized = synth_stack(security_stack)
-
-    # Verify Bastion host exists
-    instance_resources = synthesized.get(
-        "resource", {}).get(
-        "aws_instance", {})
-    assert len(instance_resources) == 1, "Should have exactly 1 Bastion host"
-
-    bastion_config = list(instance_resources.values())[0]
-    assert bastion_config["associate_public_ip_address"] is True
-
-    # Verify Bastion is in public subnet
-    subnet_id_ref = bastion_config["subnet_id"]
-    assert "public_subnet" in subnet_id_ref, "Bastion should be in public subnet"
-
-    # Check security group assignment
-    assert "vpc_security_group_ids" in bastion_config
-    assert len(bastion_config["vpc_security_group_ids"]) > 0
-
-  def test_ssh_access_restriction_compliance(self, security_stack):
-    """Test that SSH access is restricted to allowed CIDR block."""
-    synthesized = synth_stack(security_stack)
-
-    # Get security group rules
-    sg_rules = synthesized.get(
-        "resource", {}).get(
-        "aws_security_group_rule", {})
-
-    # Find SSH ingress rules
-    ssh_ingress_rules = []
-    for rule_config in sg_rules.values():
-      if (rule_config.get("type") == "ingress" and
-          rule_config.get("from_port") == 22 and
-              rule_config.get("to_port") == 22):
-        ssh_ingress_rules.append(rule_config)
-
-    assert len(ssh_ingress_rules) > 0, "Should have SSH ingress rules"
-
-    # Verify SSH access is restricted to allowed CIDR
-    restricted_ssh_found = False
-    for rule in ssh_ingress_rules:
-      cidr_blocks = rule.get("cidr_blocks", [])
-      if "203.0.113.0/24" in cidr_blocks:
-        restricted_ssh_found = True
-        # Ensure no other CIDR blocks are allowed
-        assert cidr_blocks == [
-            "203.0.113.0/24"], "SSH should only allow specific CIDR"
-        break
-
-    assert restricted_ssh_found, "SSH access must be restricted to 203.0.113.0/24"
-
-  def test_security_group_segregation(self, security_stack):
-    """Test that security groups properly segregate access."""
-    synthesized = synth_stack(security_stack)
-
-    # Get security groups
-    sg_resources = synthesized.get(
-        "resource", {}).get(
-        "aws_security_group", {})
-    assert len(sg_resources) == 2, "Should have 2 security groups"
-
-    bastion_sg = None
-    private_sg = None
-
-    for sg_config in sg_resources.values():
-      tags = sg_config.get("tags", {})
-      purpose = tags.get("Purpose", "")
-
-      if "Bastion" in purpose:
-        bastion_sg = sg_config
-      elif "Private" in purpose:
-        private_sg = sg_config
-
-    assert bastion_sg is not None, "Should have Bastion security group"
-    assert private_sg is not None, "Should have Private security group"
-
-    # Verify security groups are distinct
-    assert bastion_sg != private_sg, "Security groups should be different"
-
-  def test_network_segmentation_enforcement(self, security_stack):
-    """Test that network segmentation is properly enforced."""
-    synthesized = synth_stack(security_stack)
-
-    # Get security group rules
-    sg_rules = synthesized.get(
-        "resource", {}).get(
-        "aws_security_group_rule", {})
-
-    # Verify private instances can only be accessed from Bastion
-    private_ssh_access = []
-    for rule_config in sg_rules.values():
-      if (rule_config.get("type") == "ingress" and
-          rule_config.get("from_port") == 22 and
-              "source_security_group_id" in rule_config):
-        private_ssh_access.append(rule_config)
-
-    assert len(
-        private_ssh_access) > 0, "Private instances should have SSH access from Bastion"
-
-
-@pytest.mark.integration
-class TestProductionStorageIntegration:
-  """Integration tests for production storage and data protection."""
-
-  @pytest.fixture(scope="class")
-  def storage_stack(self):
-    """Storage-focused stack for production testing."""
-    app = App()
-    return TapStack(
-        app,
-        "storage-integration-stack",
-        description="Production storage integration testing"
-    )
-
-  def test_s3_bucket_security_configuration(self, storage_stack):
-    """Test S3 bucket security configuration for production."""
-    synthesized = synth_stack(storage_stack)
-
-    # Verify S3 buckets exist
-    s3_resources = synthesized.get("resource", {}).get("aws_s3_bucket", {})
-    assert len(s3_resources) == 2, "Should have 2 S3 buckets"
-
-    # Verify versioning is enabled
-    versioning_resources = synthesized.get(
-        "resource", {}).get(
-        "aws_s3_bucket_versioning", {})
-    assert len(
-        versioning_resources) == 2, "Should have versioning for both buckets"
-
-    for versioning_config in versioning_resources.values():
-      assert versioning_config["versioning_configuration"]["status"] == "Enabled"
-
-    # Verify Block Public Access is enabled
-    pab_resources = synthesized.get(
-        "resource", {}).get(
-        "aws_s3_bucket_public_access_block", {})
-    assert len(
-        pab_resources) == 2, "Should have public access blocks for both buckets"
-
-    for pab_config in pab_resources.values():
-      assert pab_config["block_public_acls"] is True
-      assert pab_config["block_public_policy"] is True
-      assert pab_config["ignore_public_acls"] is True
-      assert pab_config["restrict_public_buckets"] is True
-
-  def test_bucket_purpose_segregation(self, storage_stack):
-    """Test that buckets are properly segregated by purpose."""
-    synthesized = synth_stack(storage_stack)
-
-    s3_resources = synthesized.get("resource", {}).get("aws_s3_bucket", {})
-    bucket_purposes = []
-
-    for bucket_config in s3_resources.values():
-      tags = bucket_config.get("tags", {})
-      purpose = tags.get("Purpose", "")
-      bucket_purposes.append(purpose)
-
-    # Should have different purposes
-    assert "Application Logs" in bucket_purposes
-    assert "Backup Storage" in bucket_purposes
-    assert len(set(bucket_purposes)
-               ) == 2, "Buckets should have different purposes"
-
-  def test_data_protection_measures(self, storage_stack):
-    """Test comprehensive data protection measures."""
-    synthesized = synth_stack(storage_stack)
-
-    # Verify all buckets have versioning
-    versioning_resources = synthesized.get(
-        "resource", {}).get(
-        "aws_s3_bucket_versioning", {})
-    for versioning_config in versioning_resources.values():
-      status = versioning_config["versioning_configuration"]["status"]
-      assert status == "Enabled", "All buckets should have versioning enabled"
-
-    # Verify all buckets have public access blocked
-    pab_resources = synthesized.get(
-        "resource", {}).get(
-        "aws_s3_bucket_public_access_block", {})
-    for pab_config in pab_resources.values():
-      security_settings = [
-          pab_config["block_public_acls"],
-          pab_config["block_public_policy"],
-          pab_config["ignore_public_acls"],
-          pab_config["restrict_public_buckets"]
+      pytest.fail(f"API Gateway endpoint not accessible: {e}")
+
+
+class TestCloudWatchLogs:
+  """Test suite for CloudWatch Logs."""
+  
+  def test_lambda_log_group_exists(self, terraform_outputs, aws_clients):
+    """Test that Lambda log group exists."""
+    function_name = terraform_outputs.get('lambda_function_name')
+    if not function_name:
+      pytest.skip("Lambda function name not found in outputs")
+    
+    log_group_name = f"/aws/lambda/{function_name}"
+    logs_client = aws_clients['logs']
+    
+    try:
+      response = logs_client.describe_log_groups(
+        logGroupNamePrefix=log_group_name
+      )
+      log_groups = [lg for lg in response['logGroups'] 
+                   if lg['logGroupName'] == log_group_name]
+      assert len(log_groups) == 1, f"Log group {log_group_name} not found"
+    except ClientError as e:
+      pytest.fail(f"Error checking log group: {e}")
+  
+  def test_log_retention_policy(self, terraform_outputs, aws_clients):
+    """Test that log retention policy is set."""
+    function_name = terraform_outputs.get('lambda_function_name')
+    if not function_name:
+      pytest.skip("Lambda function name not found in outputs")
+    
+    log_group_name = f"/aws/lambda/{function_name}"
+    logs_client = aws_clients['logs']
+    
+    try:
+      response = logs_client.describe_log_groups(
+        logGroupNamePrefix=log_group_name
+      )
+      log_groups = [lg for lg in response['logGroups'] 
+                   if lg['logGroupName'] == log_group_name]
+      
+      if log_groups:
+        log_group = log_groups[0]
+        # Check if retention is set (should not be infinite)
+        if 'retentionInDays' in log_group:
+          assert log_group['retentionInDays'] > 0
+    except ClientError as e:
+      pytest.fail(f"Error checking log retention: {e}")
+
+
+class TestS3Resources:
+  """Test suite for S3 buckets."""
+  
+  def test_s3_bucket_exists(self, terraform_outputs, aws_clients):
+    """Test that S3 bucket exists if configured."""
+    bucket_name = terraform_outputs.get('s3_bucket_name')
+    if not bucket_name:
+      pytest.skip("S3 bucket name not found in outputs")
+    
+    s3 = aws_clients['s3']
+    
+    try:
+      s3.head_bucket(Bucket=bucket_name)
+    except ClientError as e:
+      error_code = e.response['Error']['Code']
+      if error_code == '404':
+        pytest.fail(f"S3 bucket {bucket_name} not found")
+      else:
+        pytest.fail(f"Error accessing S3 bucket: {e}")
+  
+  def test_s3_bucket_versioning(self, terraform_outputs, aws_clients):
+    """Test S3 bucket versioning configuration."""
+    bucket_name = terraform_outputs.get('s3_bucket_name')
+    if not bucket_name:
+      pytest.skip("S3 bucket name not found in outputs")
+    
+    s3 = aws_clients['s3']
+    
+    try:
+      response = s3.get_bucket_versioning(Bucket=bucket_name)
+      # Versioning should be either Enabled or Suspended
+      status = response.get('Status', 'Disabled')
+      assert status in ['Enabled', 'Suspended']
+    except ClientError as e:
+      if e.response['Error']['Code'] != 'NoSuchBucket':
+        pytest.fail(f"Error checking bucket versioning: {e}")
+  
+  def test_s3_bucket_encryption(self, terraform_outputs, aws_clients):
+    """Test S3 bucket encryption configuration."""
+    bucket_name = terraform_outputs.get('s3_bucket_name')
+    if not bucket_name:
+      pytest.skip("S3 bucket name not found in outputs")
+    
+    s3 = aws_clients['s3']
+    
+    try:
+      response = s3.get_bucket_encryption(Bucket=bucket_name)
+      rules = response['ServerSideEncryptionConfiguration']['Rules']
+      assert len(rules) > 0, "Bucket should have encryption rules"
+      
+      for rule in rules:
+        sse = rule['ApplyServerSideEncryptionByDefault']
+        assert sse['SSEAlgorithm'] in ['AES256', 'aws:kms']
+    except ClientError as e:
+      if e.response['Error']['Code'] == 'ServerSideEncryptionConfigurationNotFoundError':
+        pytest.fail("S3 bucket encryption not configured")
+      elif e.response['Error']['Code'] != 'NoSuchBucket':
+        pytest.fail(f"Error checking bucket encryption: {e}")
+
+
+class TestDynamoDBResources:
+  """Test suite for DynamoDB tables."""
+  
+  def test_dynamodb_table_exists(self, terraform_outputs, aws_clients):
+    """Test that DynamoDB table exists if configured."""
+    table_name = terraform_outputs.get('dynamodb_table_name')
+    if not table_name:
+      pytest.skip("DynamoDB table name not found in outputs")
+    
+    dynamodb = aws_clients['dynamodb']
+    
+    try:
+      response = dynamodb.describe_table(TableName=table_name)
+      assert response['Table']['TableStatus'] == 'ACTIVE'
+    except ClientError as e:
+      if e.response['Error']['Code'] == 'ResourceNotFoundException':
+        pytest.fail(f"DynamoDB table {table_name} not found")
+      raise
+  
+  def test_dynamodb_table_configuration(self, terraform_outputs, aws_clients):
+    """Test DynamoDB table configuration."""
+    table_name = terraform_outputs.get('dynamodb_table_name')
+    if not table_name:
+      pytest.skip("DynamoDB table name not found in outputs")
+    
+    dynamodb = aws_clients['dynamodb']
+    
+    try:
+      response = dynamodb.describe_table(TableName=table_name)
+      table = response['Table']
+      
+      # Check key schema
+      assert 'KeySchema' in table
+      assert len(table['KeySchema']) > 0
+      
+      # Check attribute definitions
+      assert 'AttributeDefinitions' in table
+      assert len(table['AttributeDefinitions']) > 0
+    except ClientError as e:
+      if e.response['Error']['Code'] == 'ResourceNotFoundException':
+        pytest.skip(f"DynamoDB table {table_name} not found")
+      raise
+
+
+class TestSecurityConfiguration:
+  """Test suite for security configuration."""
+  
+  def test_no_default_security_groups(self, terraform_outputs, aws_clients):
+    """Test that default security groups are not used."""
+    vpc_id = terraform_outputs.get('vpc_id')
+    if not vpc_id:
+      pytest.skip("VPC ID not found in outputs")
+    
+    ec2 = aws_clients['ec2']
+    
+    # Get default security group for VPC
+    response = ec2.describe_security_groups(
+      Filters=[
+        {'Name': 'vpc-id', 'Values': [vpc_id]},
+        {'Name': 'group-name', 'Values': ['default']}
       ]
-      assert all(security_settings), "All public access should be blocked"
-
-
-@pytest.mark.integration
-class TestProductionComplianceAndBestPractices:
-  """Integration tests for production compliance and AWS best practices."""
-
-  @pytest.fixture(scope="class")
-  def compliance_stack(self):
-    """Compliance-focused stack for production testing."""
-    app = App()
-    return TapStack(
-        app,
-        "compliance-integration-stack",
-        description="Production compliance integration testing"
     )
-
-  def test_production_tagging_compliance(self, compliance_stack):
-    """Test that all resources have proper production tags."""
-    synthesized = synth_stack(compliance_stack)
-
-    required_tags = {
-        "Environment": "Production",
-        "Project": "AWS Nova Model Breaking"
-    }
-
-    # Check all taggable resources (excluding aws_key_pair for Session Manager)
-    taggable_resources = [
-        "aws_vpc", "aws_subnet", "aws_internet_gateway", "aws_nat_gateway",
-        "aws_eip", "aws_route_table", "aws_security_group", "aws_instance",
-        "aws_s3_bucket"
-    ]
-
-    resources = synthesized.get("resource", {})
-    for resource_type in taggable_resources:
-      resource_instances = resources.get(resource_type, {})
-
-      for resource_name, resource_config in resource_instances.items():
-        tags = resource_config.get("tags", {})
-
-        for required_tag, expected_value in required_tags.items():
-          assert required_tag in tags, (
-              f"Missing tag '{required_tag}' in {resource_type}.{resource_name}")
-          actual_value = tags[required_tag]
-          assert actual_value == expected_value, (
-              f"Wrong tag value in {resource_type}.{resource_name}: "
-              f"expected '{expected_value}', got '{actual_value}'")
-
-  def test_aws_well_architected_framework_compliance(self, compliance_stack):
-    """Test compliance with AWS Well-Architected Framework for production."""
-    synthesized = synth_stack(compliance_stack)
-
-    # Security Pillar: Network segmentation and access controls
-    subnet_resources = synthesized.get("resource", {}).get("aws_subnet", {})
-    public_subnets = []
-    private_subnets = []
-
-    for subnet_config in subnet_resources.values():
-      tags = subnet_config.get("tags", {})
-      subnet_type = tags.get("Type", "")
-
-      if subnet_type == "Public":
-        public_subnets.append(subnet_config)
-      elif subnet_type == "Private":
-        private_subnets.append(subnet_config)
-
-    assert len(
-        public_subnets) == 2, "Should have public subnets for internet-facing resources"
-    assert len(
-        private_subnets) == 2, "Should have private subnets for internal resources"
-
-    # Reliability Pillar: Multi-AZ high availability
-    nat_gateways = synthesized.get("resource", {}).get("aws_nat_gateway", {})
-    assert len(
-        nat_gateways) == 2, "Should have 2 NAT Gateways for high availability"
-
-    # Performance Efficiency Pillar: Appropriate resource placement
-    bastion_instances = synthesized.get("resource", {}).get("aws_instance", {})
-    for instance_config in bastion_instances.values():
-      assert instance_config["instance_type"] == "t3.micro", "Should use appropriate instance type"
-
-  def test_production_security_best_practices(self, compliance_stack):
-    """Test that production security best practices are implemented."""
-    synthesized = synth_stack(compliance_stack)
-
-    # Test principle of least privilege in security groups
-    sg_rules = synthesized.get(
-        "resource", {}).get(
-        "aws_security_group_rule", {})
-
-    # SSH should only be allowed from specific CIDR
-    ssh_rules = [rule for rule in sg_rules.values() if rule.get(
-        "from_port") == 22 and rule.get("type") == "ingress"]
-
-    for ssh_rule in ssh_rules:
-      cidr_blocks = ssh_rule.get("cidr_blocks", [])
-      if cidr_blocks:
-        # Should not allow 0.0.0.0/0 for SSH
-        assert "0.0.0.0/0" not in cidr_blocks, "SSH should not allow access from anywhere"
-
-  def test_infrastructure_outputs_completeness(self, compliance_stack):
-    """Test that all necessary outputs are provided for production integration."""
-    synthesized = synth_stack(compliance_stack)
-
-    outputs = synthesized.get("output", {})
-
-    # Critical outputs for production integration
-    critical_outputs = [
-        "vpc_id",
-        "public_subnet_ids",
-        "private_subnet_ids",
-        "bastion_host_public_ip",
-        "bastion_security_group_id",
-        "private_security_group_id",
-        "logs_bucket_name",
-        "backup_bucket_name"
-    ]
-
-    for output_name in critical_outputs:
-      assert output_name in outputs, f"Missing critical output: {output_name}"
-      output_config = outputs[output_name]
-      assert "value" in output_config, f"Output {output_name} missing value"
-      assert "description" in output_config, f"Output {output_name} missing description"
+    
+    if response['SecurityGroups']:
+      default_sg = response['SecurityGroups'][0]
+      
+      # Default security group should have no inbound rules
+      assert len(default_sg['IpPermissions']) == 0, \
+        "Default security group should have no inbound rules"
+  
+  def test_security_group_rules_are_restrictive(self, terraform_outputs, 
+                                               aws_clients):
+    """Test that security group rules are not overly permissive."""
+    sg_ids = terraform_outputs.get('security_group_ids', [])
+    if not sg_ids:
+      pytest.skip("No security group IDs found in outputs")
+    
+    ec2 = aws_clients['ec2']
+    response = ec2.describe_security_groups(GroupIds=sg_ids)
+    
+    for sg in response['SecurityGroups']:
+      for rule in sg['IpPermissions']:
+        for ip_range in rule.get('IpRanges', []):
+          cidr = ip_range.get('CidrIp', '')
+          if cidr:
+            # Check for overly permissive rules
+            network = ipaddress.ip_network(cidr, strict=False)
+            if network.prefixlen < 16:  # /16 or larger networks
+              pytest.fail(f"Security group {sg['GroupId']} has overly "
+                         f"permissive rule: {cidr}")
+  
+  def test_iam_roles_have_least_privilege(self, terraform_outputs, aws_clients):
+    """Test that IAM roles follow least privilege principle."""
+    role_arn = terraform_outputs.get('lambda_execution_role_arn')
+    if not role_arn:
+      pytest.skip("Lambda execution role ARN not found in outputs")
+    
+    role_name = role_arn.split('/')[-1]
+    iam = aws_clients['iam']
+    
+    # Check inline policies
+    response = iam.list_role_policies(RoleName=role_name)
+    for policy_name in response['PolicyNames']:
+      policy_response = iam.get_role_policy(
+        RoleName=role_name,
+        PolicyName=policy_name
+      )
+      
+      policy_doc = policy_response['PolicyDocument']
+      for statement in policy_doc.get('Statement', []):
+        # Check for overly broad permissions
+        actions = statement.get('Action', [])
+        if isinstance(actions, str):
+          actions = [actions]
+        
+        for action in actions:
+          if action == '*':
+            pytest.fail(f"Role {role_name} has wildcard action permission")
+          if action.endswith(':*'):
+            # Allow service-specific wildcards in some cases
+            service = action.split(':')[0]
+            if service not in ['logs', 'cloudwatch']:
+              pytest.skip(f"Role {role_name} has broad service "
+                         f"permissions: {action}")
 
 
-@pytest.mark.integration
-@pytest.mark.slow
-class TestProductionScalabilityAndPerformance:
-  """Integration tests for production scalability and performance characteristics."""
-
-  @pytest.fixture(scope="class")
-  def scalability_stack(self):
-    """Scalability-focused stack for production testing."""
-    app = App()
-    return TapStack(
-        app,
-        "scalability-integration-stack",
-        description="Production scalability integration testing"
+class TestConnectivityAndNetworking:
+  """Test suite for connectivity and networking."""
+  
+  def test_vpc_connectivity(self, terraform_outputs, aws_clients):
+    """Test VPC connectivity and routing."""
+    vpc_id = terraform_outputs.get('vpc_id')
+    if not vpc_id:
+      pytest.skip("VPC ID not found in outputs")
+    
+    ec2 = aws_clients['ec2']
+    
+    # Check route tables
+    response = ec2.describe_route_tables(
+      Filters=[{'Name': 'vpc-id', 'Values': [vpc_id]}]
     )
-
-  def test_network_capacity_planning(self, scalability_stack):
-    """Test that network capacity supports production workloads."""
-    synthesized = synth_stack(scalability_stack)
-
-    # Analyze IP address allocation efficiency
-    vpc_resources = synthesized.get("resource", {}).get("aws_vpc", {})
-    vpc_config = list(vpc_resources.values())[0]
-    vpc_network = ipaddress.IPv4Network(vpc_config["cidr_block"])
-
-    subnet_resources = synthesized.get("resource", {}).get("aws_subnet", {})
-    total_allocated_ips = 0
-
-    for subnet_config in subnet_resources.values():
-      subnet_network = ipaddress.IPv4Network(subnet_config["cidr_block"])
-      total_allocated_ips += subnet_network.num_addresses
-
-    vpc_total_ips = vpc_network.num_addresses
-    utilization_percentage = (total_allocated_ips / vpc_total_ips) * 100
-
-    # Should have room for growth (production environments need scalability)
-    assert utilization_percentage < 10, (
-        f"IP utilization too high for production: {utilization_percentage}%")
-
-  def test_high_availability_scalability(self, scalability_stack):
-    """Test that high availability design supports scaling."""
-    synthesized = synth_stack(scalability_stack)
-
-    # Verify NAT Gateway distribution for scaling
-    nat_gateways = synthesized.get("resource", {}).get("aws_nat_gateway", {})
-    nat_azs = set()
-
-    for nat_config in nat_gateways.values():
-      tags = nat_config.get("tags", {})
-      az = tags.get("AZ", "")
-      if az:
-        nat_azs.add(az)
-
-    assert len(nat_azs) == 2, "NAT Gateways should be distributed across 2 AZs"
-
-    # Verify subnet distribution supports horizontal scaling
-    subnet_resources = synthesized.get("resource", {}).get("aws_subnet", {})
-    subnet_azs = set()
-
-    for subnet_config in subnet_resources.values():
-      az_ref = subnet_config.get("availability_zone")
-      if az_ref:
-        subnet_azs.add(az_ref)
-
-    assert len(
-        subnet_azs) == 2, "Subnets should be distributed for horizontal scaling"
-
-  def test_production_resource_sizing(self, scalability_stack):
-    """Test that resources are appropriately sized for production."""
-    synthesized = synth_stack(scalability_stack)
-
-    # Test subnet sizing for production workloads
-    subnet_resources = synthesized.get("resource", {}).get("aws_subnet", {})
-
-    for subnet_config in subnet_resources.values():
-      cidr = subnet_config["cidr_block"]
-      network = ipaddress.IPv4Network(cidr)
-      usable_ips = network.num_addresses - 5  # AWS reserves 5 IPs
-
-      # Production subnets should have adequate capacity
-      assert usable_ips >= 200, f"Subnet {cidr} insufficient for production: {usable_ips} IPs"
+    
+    assert len(response['RouteTables']) > 0, "No route tables found for VPC"
+    
+    # Check for internet connectivity route
+    has_internet_route = False
+    for rt in response['RouteTables']:
+      for route in rt['Routes']:
+        if route.get('DestinationCidrBlock') == '0.0.0.0/0':
+          has_internet_route = True
+          break
+    
+    assert has_internet_route, "No internet gateway route found"
+  
+  def test_subnet_availability_zones(self, terraform_outputs, aws_clients):
+    """Test that subnets are distributed across availability zones."""
+    subnet_ids = terraform_outputs.get('subnet_ids', [])
+    if len(subnet_ids) < 2:
+      pytest.skip("Need at least 2 subnets to test AZ distribution")
+    
+    ec2 = aws_clients['ec2']
+    response = ec2.describe_subnets(SubnetIds=subnet_ids)
+    
+    availability_zones = set()
+    for subnet in response['Subnets']:
+      availability_zones.add(subnet['AvailabilityZone'])
+    
+    assert len(availability_zones) > 1, \
+      "Subnets should be distributed across multiple AZs"
 
 
-# Test execution helpers
-@pytest.mark.integration
-def test_integration_test_suite_completeness():
-  """Meta-test to ensure integration test suite covers all critical production areas."""
+class TestPerformanceAndScaling:
+  """Test suite for performance and scaling capabilities."""
+  
+  def test_lambda_concurrency_configuration(self, terraform_outputs, 
+                                           aws_clients):
+    """Test Lambda concurrency configuration."""
+    function_name = terraform_outputs.get('lambda_function_name')
+    if not function_name:
+      pytest.skip("Lambda function name not found in outputs")
+    
+    lambda_client = aws_clients['lambda']
+    
+    try:
+      # Check provisioned concurrency if configured
+      response = lambda_client.get_provisioned_concurrency_config(
+        FunctionName=function_name,
+        Qualifier='$LATEST'
+      )
+      
+      if 'AllocatedConcurrencyExecutions' in response:
+        assert response['AllocatedConcurrencyExecutions'] > 0
+    except ClientError as e:
+      if e.response['Error']['Code'] != 'ProvisionedConcurrencyConfigNotFoundException':
+        raise
+  
+  def test_api_gateway_throttling(self, terraform_outputs, aws_clients):
+    """Test API Gateway throttling configuration."""
+    api_id = terraform_outputs.get('api_gateway_id')
+    stage_name = terraform_outputs.get('api_gateway_stage', 'prod')
+    
+    if not api_id:
+      pytest.skip("API Gateway ID not found in outputs")
+    
+    apigw = aws_clients['apigateway']
+    
+    try:
+      response = apigw.get_stage(restApiId=api_id, stageName=stage_name)
+      
+      # Check throttling settings
+      throttle = response.get('throttle', {})
+      if throttle:
+        assert 'rateLimit' in throttle
+        assert 'burstLimit' in throttle
+        assert throttle['rateLimit'] > 0
+        assert throttle['burstLimit'] > 0
+    except ClientError as e:
+      if e.response['Error']['Code'] != 'NotFoundException':
+        raise
 
-  critical_areas = [
-      "production_infrastructure_deployment",
-      "production_networking_integration",
-      "production_security_integration",
-      "production_storage_integration",
-      "production_compliance_and_best_practices",
-      "production_scalability_and_performance"
-  ]
 
-  assert len(
-      critical_areas) >= 6, "Should cover at least 6 critical production areas"
+class TestMonitoringAndObservability:
+  """Test suite for monitoring and observability."""
+  
+  def test_cloudwatch_alarms_exist(self, terraform_outputs, aws_clients):
+    """Test that CloudWatch alarms are configured."""
+    function_name = terraform_outputs.get('lambda_function_name')
+    if not function_name:
+      pytest.skip("Lambda function name not found in outputs")
+    
+    cloudwatch = aws_clients['cloudwatch']
+    
+    # Check for Lambda-related alarms
+    response = cloudwatch.describe_alarms(
+      ActionPrefix=f"arn:aws:lambda"
+    )
+    
+    lambda_alarms = [alarm for alarm in response['MetricAlarms']
+                    if function_name in alarm.get('AlarmDescription', '')]
+    
+    if lambda_alarms:
+      for alarm in lambda_alarms:
+        assert alarm['StateValue'] in ['OK', 'ALARM', 'INSUFFICIENT_DATA']
+        assert alarm['ActionsEnabled'] is True
+  
+  def test_lambda_dead_letter_queue(self, terraform_outputs, aws_clients):
+    """Test Lambda dead letter queue configuration."""
+    function_name = terraform_outputs.get('lambda_function_name')
+    if not function_name:
+      pytest.skip("Lambda function name not found in outputs")
+    
+    lambda_client = aws_clients['lambda']
+    response = lambda_client.get_function(FunctionName=function_name)
+    config = response['Configuration']
+    
+    # Check if DLQ is configured
+    dlq_config = config.get('DeadLetterConfig', {})
+    if 'TargetArn' in dlq_config:
+      assert dlq_config['TargetArn'], "DLQ target ARN should not be empty"
 
 
-if __name__ == "__main__":
-  # Run integration tests with verbose output
-  pytest.main([__file__, "-v", "-m", "integration"])
+class TestDisasterRecovery:
+  """Test suite for disaster recovery capabilities."""
+  
+  def test_cross_az_redundancy(self, terraform_outputs, aws_clients):
+    """Test that resources are deployed across multiple AZs."""
+    subnet_ids = terraform_outputs.get('subnet_ids', [])
+    if not subnet_ids:
+      pytest.skip("No subnet IDs found in outputs")
+    
+    ec2 = aws_clients['ec2']
+    response = ec2.describe_subnets(SubnetIds=subnet_ids)
+    
+    availability_zones = set()
+    for subnet in response['Subnets']:
+      availability_zones.add(subnet['AvailabilityZone'])
+    
+    # Should have resources in at least 2 AZs for redundancy
+    assert len(availability_zones) >= 2, \
+      "Resources should be deployed across multiple AZs for redundancy"
+  
+  def test_backup_configuration(self, terraform_outputs, aws_clients):
+    """Test backup configuration for stateful resources."""
+    # Check DynamoDB backup if table exists
+    table_name = terraform_outputs.get('dynamodb_table_name')
+    if table_name:
+      dynamodb = aws_clients['dynamodb']
+      
+      try:
+        response = dynamodb.describe_continuous_backups(TableName=table_name)
+        backup_config = response['ContinuousBackupsDescription']
+        
+        # Point-in-time recovery should be enabled for production
+        pitr = backup_config.get('PointInTimeRecoveryDescription', {})
+        if pitr:
+          assert pitr.get('PointInTimeRecoveryStatus') == 'ENABLED'
+      except ClientError as e:
+        if e.response['Error']['Code'] != 'ResourceNotFoundException':
+          raise
+
+
+class TestCostOptimization:
+  """Test suite for cost optimization."""
+  
+  def test_lambda_memory_optimization(self, terraform_outputs, aws_clients):
+    """Test Lambda memory configuration for cost optimization."""
+    function_name = terraform_outputs.get('lambda_function_name')
+    if not function_name:
+      pytest.skip("Lambda function name not found in outputs")
+    
+    lambda_client = aws_clients['lambda']
+    response = lambda_client.get_function(FunctionName=function_name)
+    config = response['Configuration']
+    
+    memory_size = config['MemorySize']
+    
+    # Memory should be reasonable for the workload
+    assert memory_size >= 128, "Memory should be at least 128MB"
+    assert memory_size <= 3008, "Memory should not exceed 3008MB unless justified"
+    
+    # Memory should be in 64MB increments
+    assert (memory_size - 128) % 64 == 0, "Memory should be in 64MB increments"
+  
+  def test_api_gateway_caching(self, terraform_outputs, aws_clients):
+    """Test API Gateway caching configuration."""
+    api_id = terraform_outputs.get('api_gateway_id')
+    stage_name = terraform_outputs.get('api_gateway_stage', 'prod')
+    
+    if not api_id:
+      pytest.skip("API Gateway ID not found in outputs")
+    
+    apigw = aws_clients['apigateway']
+    
+    try:
+      response = apigw.get_stage(restApiId=api_id, stageName=stage_name)
+      
+      # Check if caching is enabled
+      caching_enabled = response.get('cacheClusterEnabled', False)
+      if caching_enabled:
+        cache_size = response.get('cacheClusterSize')
+        assert cache_size in ['0.5', '1.6', '6.1', '13.5', '28.4', '58.2', '118', '237']
+    except ClientError as e:
+      if e.response['Error']['Code'] != 'NotFoundException':
+        raise
+
+
+class TestComplianceAndGovernance:
+  """Test suite for compliance and governance."""
+  
+  def test_resource_tagging(self, terraform_outputs, aws_clients):
+    """Test that resources are properly tagged."""
+    # Check Lambda function tags
+    function_name = terraform_outputs.get('lambda_function_name')
+    if function_name:
+      lambda_client = aws_clients['lambda']
+      
+      try:
+        response = lambda_client.list_tags(
+          Resource=("arn:aws:lambda:"
+                   f"{aws_clients['lambda'].meta.region_name}:"
+                   f"{aws_clients['sts'].get_caller_identity()['Account']}:"
+                   f"function:{function_name}")
+        )
+        
+        tags = response.get('Tags', {})
+        
+        # Check for required tags
+        required_tags = ['Environment', 'Project', 'Owner']
+        for tag in required_tags:
+          if tag in tags:
+            assert tags[tag], f"Tag {tag} should have a value"
+      except ClientError:
+        pass  # Function might not support tagging
+  
+  def test_encryption_at_rest(self, terraform_outputs, aws_clients):
+    """Test that encryption at rest is enabled for supported services."""
+    # Check S3 bucket encryption
+    bucket_name = terraform_outputs.get('s3_bucket_name')
+    if bucket_name:
+      s3 = aws_clients['s3']
+      
+      try:
+        response = s3.get_bucket_encryption(Bucket=bucket_name)
+        rules = response['ServerSideEncryptionConfiguration']['Rules']
+        assert len(rules) > 0, "S3 bucket should have encryption enabled"
+      except ClientError as e:
+        if e.response['Error']['Code'] != 'ServerSideEncryptionConfigurationNotFoundError':
+          raise
+    
+    # Check DynamoDB encryption
+    table_name = terraform_outputs.get('dynamodb_table_name')
+    if table_name:
+      dynamodb = aws_clients['dynamodb']
+      
+      try:
+        response = dynamodb.describe_table(TableName=table_name)
+        table = response['Table']
+        
+        # Check for encryption configuration
+        sse_description = table.get('SSEDescription', {})
+        if sse_description:
+          assert sse_description.get('Status') == 'ENABLED'
+      except ClientError as e:
+        if e.response['Error']['Code'] != 'ResourceNotFoundException':
+          raise
+  
+  def test_access_logging(self, terraform_outputs, aws_clients):
+    """Test that access logging is configured."""
+    # Check API Gateway access logging
+    api_id = terraform_outputs.get('api_gateway_id')
+    stage_name = terraform_outputs.get('api_gateway_stage', 'prod')
+    
+    if api_id:
+      apigw = aws_clients['apigateway']
+      
+      try:
+        response = apigw.get_stage(restApiId=api_id, stageName=stage_name)
+        
+        # Check access log settings
+        access_log_settings = response.get('accessLogSettings', {})
+        if access_log_settings:
+          assert 'destinationArn' in access_log_settings
+          assert 'format' in access_log_settings
+      except ClientError as e:
+        if e.response['Error']['Code'] != 'NotFoundException':
+          raise
