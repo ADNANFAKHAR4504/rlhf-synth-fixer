@@ -1,3 +1,4 @@
+import builtins
 from lib.components.serverless import ServerlessComponent
 from lib.components.database import DatabaseComponent
 from lib.components.vpc import ComputeComponent
@@ -66,27 +67,42 @@ aws_lambda.Function = Mock()
 aws_lambda.Permission = Mock()
 sys.modules["pulumi_aws"].lambda_ = aws_lambda
 
-# Mock Pulumi functionality
+# Improved MockOutput implementation
 
 
 class MockOutput:
   def __init__(self, value=None):
     self.value = value
-    self._is_output = True  # To pass isinstance checks
+    self._is_output = True
 
   def apply(self, func):
-    return MockOutput(func(self.value)) if self.value else MockOutput()
+    if self.value is not None:
+      result = func(self.value)
+      return MockOutput(result) if not isinstance(result, MockOutput) else result
+    return MockOutput()
 
   def __getitem__(self, key):
-    return self.value[key] if self.value else MockOutput()
+    if isinstance(self.value, (list, dict)):
+      return MockOutput(self.value[key])
+    return MockOutput()
+
+  def __iter__(self):
+    if isinstance(self.value, (list, tuple)):
+      return iter([MockOutput(x) for x in self.value])
+    return iter([])
 
   @staticmethod
   def all(*args):
-    return MockOutput(args)
+    return MockOutput([arg.value if isinstance(arg, MockOutput) else arg for arg in args])
 
   @staticmethod
   def concat(*args):
-    return MockOutput("".join(str(arg) for arg in args))
+    return MockOutput("".join(str(arg.value if isinstance(arg, MockOutput) else arg) for arg in args))
+
+  def __str__(self):
+    return str(self.value)
+
+# Enhanced MockComponentResource
 
 
 class MockComponentResource:
@@ -102,15 +118,28 @@ class MockComponentResource:
     self.outputs.update(outputs)
 
 
-# Replace the mocks in sys.modules
-sys.modules["pulumi"].Output = MockOutput
-sys.modules["pulumi"].ComponentResource = MockComponentResource
-sys.modules["pulumi"].ResourceOptions = pulumi.ResourceOptions
-sys.modules["pulumi"].AssetArchive = MagicMock()
-sys.modules["pulumi"].StringAsset = MagicMock()
-sys.modules["pulumi"].get_stack = MagicMock(return_value="test")
-sys.modules["pulumi"].Config = MagicMock()
-sys.modules["pulumi"].export = MagicMock()
+# Patch isinstance to handle MockOutput checks
+original_isinstance = isinstance
+
+
+def patched_isinstance(obj, cls):
+  if cls == pulumi.Output and hasattr(obj, '_is_output'):
+    return True
+  return original_isinstance(obj, cls)
+
+
+# Apply patches
+pulumi.Output = MockOutput
+pulumi.ComponentResource = MockComponentResource
+pulumi.ResourceOptions = pulumi.ResourceOptions
+pulumi.AssetArchive = MagicMock()
+pulumi.StringAsset = MagicMock()
+pulumi.get_stack = MagicMock(return_value="test")
+pulumi.Config = MagicMock()
+pulumi.export = MagicMock()
+
+# Monkey patch isinstance
+builtins.isinstance = patched_isinstance
 
 # Set environment variable for Pulumi testing
 os.environ["PULUMI_TEST_MODE"] = "true"
@@ -143,7 +172,6 @@ class TestTapStackComponents(unittest.TestCase):
     self.assertTrue(hasattr(compute, "lambda_sg"))
 
   def test_database_component_initialization(self):
-    # Mock the compute component outputs
     compute_mock = MagicMock()
     compute_mock.db_sg = MagicMock(id="sg-123")
     compute_mock.private_subnet_ids = MockOutput(["subnet-123"])
@@ -160,7 +188,6 @@ class TestTapStackComponents(unittest.TestCase):
     self.assertTrue(hasattr(db, "rds_instance"))
 
   def test_serverless_component_initialization(self):
-    # Mock the required components
     iam_mock = MagicMock()
     iam_mock.lambda_role = MagicMock(arn="arn:aws:iam::123:role/test")
 
