@@ -1,9 +1,9 @@
-import pytest
 import subprocess
 import json
 import os
 import urllib.request
 import urllib.error
+import pytest
 
 PULUMI_STACK_NAME = os.environ.get("PULUMI_STACK_NAME", "TapStackpr558")
 
