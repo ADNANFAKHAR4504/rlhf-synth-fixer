@@ -147,12 +147,13 @@ describe('TapStack Unit Tests', () => {
   });
 
   describe('Parameters Validation', () => {
-    it('should have Environment parameter with allowed values', () => {
-      const envParam = template.Parameters?.['Environment'];
+    it('should have EnvironmentSuffix parameter with validation', () => {
+      const envParam = template.Parameters?.['EnvironmentSuffix'];
       expect(envParam).toBeDefined();
       expect(envParam?.Type).toBe('String');
-      expect(envParam?.AllowedValues).toEqual(['dev', 'staging', 'prod']);
       expect(envParam?.Default).toBe('dev');
+      expect(envParam?.MinLength).toBe(3);
+      expect(envParam?.MaxLength).toBe(20);
     });
 
     it('should have BucketNameSuffix parameter with validation', () => {
@@ -173,14 +174,6 @@ describe('TapStack Unit Tests', () => {
       expect(retentionParam?.MinValue).toBe(365); // Minimum 1 year
       expect(retentionParam?.MaxValue).toBe(3650); // Maximum 10 years
     });
-
-    it('should have EnableMfaDelete parameter', () => {
-      const mfaParam = template.Parameters?.['EnableMfaDelete'];
-      expect(mfaParam).toBeDefined();
-      expect(mfaParam?.Type).toBe('String');
-      expect(mfaParam?.AllowedValues).toEqual(['true', 'false']);
-      expect(mfaParam?.Default).toBe('true');
-    });
   });
 
   describe('Conditions Validation', () => {
@@ -188,17 +181,8 @@ describe('TapStack Unit Tests', () => {
       const isProduction = template.Conditions?.['IsProduction'];
       expect(isProduction).toBeDefined();
       expect(isProduction['Fn::Equals']).toEqual([
-        { Ref: 'Environment' },
+        { Ref: 'EnvironmentSuffix' },
         'prod',
-      ]);
-    });
-
-    it('should define EnableMfa condition', () => {
-      const enableMfa = template.Conditions?.['EnableMfa'];
-      expect(enableMfa).toBeDefined();
-      expect(enableMfa['Fn::Equals']).toEqual([
-        { Ref: 'EnableMfaDelete' },
-        'true',
       ]);
     });
   });

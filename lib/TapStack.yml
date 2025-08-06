@@ -7,40 +7,38 @@ Metadata:
       - Label:
           default: "Environment Configuration"
         Parameters:
-          - Environment
+          - EnvironmentSuffix
           - BucketNameSuffix
       - Label:
           default: "Security Configuration"
         Parameters:
           - RetentionDays
-          - EnableMfaDelete
     ParameterLabels:
-      Environment:
-        default: "Deployment Environment"
+      EnvironmentSuffix:
+        default: "Environment Suffix"
       BucketNameSuffix:
         default: "Unique Bucket Suffix"
       RetentionDays:
         default: "Document Retention Period (Days)"
-      EnableMfaDelete:
-        default: "Enable MFA Delete Protection"
   SecurityCompliance:
     Standards: ['PCI-DSS', 'SOX', 'GDPR']
     LastReview: '2025-08-07'
     ReviewedBy: 'Security Engineering Team'
 
 Parameters:
-  Environment:
+  EnvironmentSuffix:
     Type: String
-    Description: 'Deployment environment for resource tagging and naming'
-    AllowedValues: 
-      - dev
-      - staging
-      - prod
-    Default: dev
+    Description: 'Environment suffix for resource naming and tagging'
+    Default: 'dev'
+    MinLength: 3
+    MaxLength: 20
+    AllowedPattern: '^[a-z0-9-]*$'
+    ConstraintDescription: 'Must contain only lowercase letters, numbers, and hyphens'
     
   BucketNameSuffix:
     Type: String
     Description: 'Unique suffix for S3 bucket naming to avoid conflicts'
+    Default: 'dev'
     MinLength: 3
     MaxLength: 20
     AllowedPattern: '^[a-z0-9-]*$'
@@ -52,18 +50,9 @@ Parameters:
     Default: 2557  # 7 years
     MinValue: 365
     MaxValue: 3650
-    
-  EnableMfaDelete:
-    Type: String
-    Description: 'Enable MFA requirement for object deletion (recommended for production)'
-    AllowedValues: 
-      - 'true'
-      - 'false'
-    Default: 'true'
 
 Conditions:
-  IsProduction: !Equals [!Ref Environment, 'prod']
-  EnableMfa: !Equals [!Ref EnableMfaDelete, 'true']
+  IsProduction: !Equals [!Ref EnvironmentSuffix, 'prod']
 
 Resources:
 
@@ -113,7 +102,7 @@ Resources:
       # Resource Tagging for Governance
       Tags:
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Application
           Value: FinApp
         - Key: DataClassification
@@ -180,7 +169,7 @@ Resources:
   FinAppS3AccessRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub 'FinApp-S3Access-${Environment}-${AWS::Region}'
+      RoleName: !Sub 'FinApp-S3Access-${EnvironmentSuffix}-${AWS::Region}'
       Description: 'Least-privilege role for FinApp S3 document access'
       
       # Trust Policy - Allow EC2 instances to assume this role
@@ -214,7 +203,7 @@ Resources:
                 Resource: !Ref FinAppSecureDocuments
                 Condition:
                   StringEquals:
-                    's3:ExistingObjectTag/Environment': !Ref Environment
+                    's3:ExistingObjectTag/Environment': !Ref EnvironmentSuffix
               
               # Allow object operations on financial documents
               - Sid: AllowObjectOperations
@@ -255,7 +244,7 @@ Resources:
       # Resource Tags
       Tags:
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Application
           Value: FinApp
         - Key: Purpose
@@ -267,7 +256,7 @@ Resources:
   FinAppInstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
-      InstanceProfileName: !Sub 'FinApp-InstanceProfile-${Environment}'
+      InstanceProfileName: !Sub 'FinApp-InstanceProfile-${EnvironmentSuffix}'
       Roles:
         - !Ref FinAppS3AccessRole
 
@@ -276,7 +265,7 @@ Resources:
     Type: AWS::CloudTrail::Trail
     Condition: IsProduction
     Properties:
-      TrailName: !Sub 'FinApp-AuditTrail-${Environment}'
+      TrailName: !Sub 'FinApp-AuditTrail-${EnvironmentSuffix}'
       S3BucketName: !Ref FinAppAuditLogsBucket
       IncludeGlobalServiceEvents: true
       IsLogging: true
@@ -294,7 +283,7 @@ Resources:
       
       Tags:
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Application
           Value: FinApp
         - Key: Purpose
@@ -326,7 +315,7 @@ Resources:
             
       Tags:
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Application
           Value: FinApp
         - Key: Purpose
