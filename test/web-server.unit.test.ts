@@ -106,7 +106,7 @@ describe('WebServerStack', () => {
 
   test('creates IAM role with S3 and RDS policies', () => {
     template.hasResourceProperties('AWS::IAM::Role', {
-      ManagedPolicyArns: [
+      ManagedPolicyArns: Match.arrayWith([
         {
           'Fn::Join': [
             '',
@@ -117,7 +117,7 @@ describe('WebServerStack', () => {
             ],
           ],
         },
-      ],
+      ]),
     });
   });
 
@@ -139,9 +139,14 @@ describe('WebServerStack', () => {
     expect(ec2Props.UserData).toHaveProperty('Fn::Base64');
     const userDataScript = ec2Props.UserData['Fn::Base64'];
 
-    expect(typeof userDataScript).toBe('string');
-    expect(userDataScript).toContain('yum install -y httpd');
-    expect(userDataScript).toContain('systemctl enable httpd');
+    expect(typeof userDataScript).toBe('object');
+    expect(userDataScript).toHaveProperty('Fn::Join');
+    expect(userDataScript['Fn::Join'][1].join('')).toContain(
+      'yum install -y httpd'
+    );
+    expect(userDataScript['Fn::Join'][1].join('')).toContain(
+      'systemctl enable httpd'
+    );
   });
 
   test('S3 bucket is versioned and secured', () => {
