@@ -25,6 +25,7 @@ import { RouteTable } from '@cdktf/provider-aws/lib/route-table';
 import { RouteTableAssociation } from '@cdktf/provider-aws/lib/route-table-association';
 import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
 import { S3BucketLoggingA } from '@cdktf/provider-aws/lib/s3-bucket-logging';
+import { S3BucketPolicy } from '@cdktf/provider-aws/lib/s3-bucket-policy';
 import { S3BucketPublicAccessBlock } from '@cdktf/provider-aws/lib/s3-bucket-public-access-block';
 import { S3BucketServerSideEncryptionConfigurationA } from '@cdktf/provider-aws/lib/s3-bucket-server-side-encryption-configuration';
 import { S3BucketVersioningA } from '@cdktf/provider-aws/lib/s3-bucket-versioning';
@@ -48,6 +49,9 @@ interface TapStackProps {
 export class TapStack extends TerraformStack {
   constructor(scope: Construct, id: string, props?: TapStackProps) {
     super(scope, id);
+
+    // Generate unique suffix for all resources to avoid naming conflicts
+    const uniqueSuffix = Math.random().toString(36).substring(2, 8);
 
     // Common tags for all resources - AWS compliant tag values
     const commonTags = {
@@ -119,7 +123,7 @@ export class TapStack extends TerraformStack {
     });
 
     new KmsAlias(this, 'prod-sec-main-kms-alias', {
-      name: 'alias/prod-sec-main-key',
+      name: `alias/prod-sec-main-key-${uniqueSuffix}`,
       targetKeyId: mainKmsKey.keyId,
     });
 
@@ -330,12 +334,9 @@ export class TapStack extends TerraformStack {
       tags: { ...commonTags, Name: 'prod-sec-db-sg', Tier: 'Database' },
     });
 
-    // Generate random suffix for unique bucket names
-    const randomSuffix = Math.random().toString(36).substring(2, 8);
-
     // S3 Buckets with security configurations
     const logsBucket = new S3Bucket(this, 'prod-sec-logs-bucket', {
-      bucket: `prod-sec-logs-${current.accountId}-${randomSuffix}`,
+      bucket: `prod-sec-logs-${current.accountId}-${uniqueSuffix}`,
       tags: { ...commonTags, Name: 'prod-sec-logs-bucket', Purpose: 'Logging' },
     });
 
@@ -371,8 +372,47 @@ export class TapStack extends TerraformStack {
       },
     });
 
+    // S3 Bucket Policy for CloudTrail
+    new S3BucketPolicy(this, 'prod-sec-logs-bucket-policy', {
+      bucket: logsBucket.id,
+      policy: JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Sid: 'AWSCloudTrailAclCheck',
+            Effect: 'Allow',
+            Principal: {
+              Service: 'cloudtrail.amazonaws.com',
+            },
+            Action: 's3:GetBucketAcl',
+            Resource: logsBucket.arn,
+            Condition: {
+              StringEquals: {
+                'AWS:SourceArn': `arn:aws:cloudtrail:us-east-1:${current.accountId}:trail/prod-sec-cloudtrail-${uniqueSuffix}`,
+              },
+            },
+          },
+          {
+            Sid: 'AWSCloudTrailWrite',
+            Effect: 'Allow',
+            Principal: {
+              Service: 'cloudtrail.amazonaws.com',
+            },
+            Action: 's3:PutObject',
+            Resource: `${logsBucket.arn}/cloudtrail-logs/*`,
+            Condition: {
+              StringEquals: {
+                's3:x-amz-acl': 'bucket-owner-full-control',
+                'AWS:SourceArn': `arn:aws:cloudtrail:us-east-1:${current.accountId}:trail/prod-sec-cloudtrail-${uniqueSuffix}`,
+              },
+            },
+          },
+        ],
+      }),
+    });
+
     const appDataBucket = new S3Bucket(this, 'prod-sec-app-data-bucket', {
-      bucket: `prod-sec-app-data-${current.accountId}-${randomSuffix}`,
+      bucket: `prod-sec-app-data-${current.accountId}-${uniqueSuffix}`,
       tags: {
         ...commonTags,
         Name: 'prod-sec-app-data-bucket',
@@ -431,12 +471,12 @@ export class TapStack extends TerraformStack {
       hardExpiry: false,
     });
 
-    // MFA Enforcement Policy - ADDED to address missing MFA requirement
+    // MFA Enforcement Policy - using unique name to avoid conflicts
     const mfaEnforcementPolicy = new IamPolicy(
       this,
       'prod-sec-mfa-enforcement-policy',
       {
-        name: 'prod-sec-mfa-enforcement-policy',
+        name: `prod-sec-mfa-enforcement-policy-${uniqueSuffix}`,
         description: 'Enforce MFA for critical operations',
         policy: JSON.stringify({
           Version: '2012-10-17',
@@ -471,7 +511,7 @@ export class TapStack extends TerraformStack {
       this,
       'prod-sec-ec2-readonly-policy',
       {
-        name: 'prod-sec-ec2-readonly-policy',
+        name: `prod-sec-ec2-readonly-policy-${uniqueSuffix}`,
         description: 'Read-only access to EC2 resources',
         policy: JSON.stringify({
           Version: '2012-10-17',
@@ -515,7 +555,7 @@ export class TapStack extends TerraformStack {
 
     // IAM Roles
     const appRole = new IamRole(this, 'prod-sec-app-role', {
-      name: 'prod-sec-app-role',
+      name: `prod-sec-app-role-${uniqueSuffix}`,
       description: 'Role for application instances',
       assumeRolePolicy: JSON.stringify({
         Version: '2012-10-17',
@@ -537,9 +577,9 @@ export class TapStack extends TerraformStack {
       policyArn: s3AppDataPolicy.arn,
     });
 
-    // CloudTrail IAM Role - ADDED to fix missing IAM role issue
+    // CloudTrail IAM Role - using unique name to avoid conflicts
     const cloudtrailRole = new IamRole(this, 'prod-sec-cloudtrail-role', {
-      name: 'prod-sec-cloudtrail-role',
+      name: `prod-sec-cloudtrail-role-${uniqueSuffix}`,
       description: 'Role for CloudTrail CloudWatch Logs delivery',
       assumeRolePolicy: JSON.stringify({
         Version: '2012-10-17',
@@ -560,7 +600,7 @@ export class TapStack extends TerraformStack {
       this,
       'prod-sec-cloudtrail-log-policy',
       {
-        name: 'prod-sec-cloudtrail-log-policy',
+        name: `prod-sec-cloudtrail-log-policy-${uniqueSuffix}`,
         description: 'CloudTrail CloudWatch Logs delivery policy',
         policy: JSON.stringify({
           Version: '2012-10-17',
@@ -587,13 +627,13 @@ export class TapStack extends TerraformStack {
 
     // IAM Users with least privilege
     const devUser = new IamUser(this, 'prod-sec-dev-user', {
-      name: 'prod-sec-dev-user',
+      name: `prod-sec-dev-user-${uniqueSuffix}`,
       path: '/developers/',
       tags: { ...commonTags, UserType: 'Developer' },
     });
 
     const opsUser = new IamUser(this, 'prod-sec-ops-user', {
-      name: 'prod-sec-ops-user',
+      name: `prod-sec-ops-user-${uniqueSuffix}`,
       path: '/operations/',
       tags: { ...commonTags, UserType: 'Operations' },
     });
@@ -615,7 +655,7 @@ export class TapStack extends TerraformStack {
 
     // Secrets Manager
     const dbSecret = new SecretsmanagerSecret(this, 'prod-sec-db-credentials', {
-      name: 'prod-sec/database/credentials',
+      name: `prod-sec/database/credentials-${uniqueSuffix}`,
       description: 'Database credentials for prod-sec environment',
       kmsKeyId: mainKmsKey.arn,
       tags: commonTags,
@@ -623,7 +663,7 @@ export class TapStack extends TerraformStack {
 
     // SSM Parameters
     new SsmParameter(this, 'prod-sec-app-config', {
-      name: '/prod-sec/app/config',
+      name: `/prod-sec/app/config-${uniqueSuffix}`,
       type: 'SecureString',
       value: JSON.stringify({
         environment: 'production',
@@ -635,9 +675,9 @@ export class TapStack extends TerraformStack {
       tags: commonTags,
     });
 
-    // CloudWatch Log Groups - CORRECTED CloudTrail log group
+    // CloudWatch Log Groups - using unique names to avoid conflicts
     const appLogGroup = new CloudwatchLogGroup(this, 'prod-sec-app-logs', {
-      name: '/aws/ec2/prod-sec-app',
+      name: `/aws/ec2/prod-sec-app-${uniqueSuffix}`,
       retentionInDays: 90,
       kmsKeyId: mainKmsKey.arn,
       tags: commonTags,
@@ -647,7 +687,7 @@ export class TapStack extends TerraformStack {
       this,
       'prod-sec-cloudtrail-logs',
       {
-        name: '/aws/cloudtrail/prod-sec-cloudtrail',
+        name: `/aws/cloudtrail/prod-sec-cloudtrail-${uniqueSuffix}`,
         retentionInDays: 365,
         kmsKeyId: mainKmsKey.arn,
         tags: commonTags,
@@ -658,7 +698,7 @@ export class TapStack extends TerraformStack {
       this,
       'prod-sec-vpc-flow-logs',
       {
-        name: '/aws/vpc/prod-sec-flowlogs',
+        name: `/aws/vpc/prod-sec-flowlogs-${uniqueSuffix}`,
         retentionInDays: 30,
         kmsKeyId: mainKmsKey.arn,
         tags: commonTags,
@@ -667,7 +707,7 @@ export class TapStack extends TerraformStack {
 
     // SNS Topic for alerts
     const alertsTopic = new SnsTopic(this, 'prod-sec-security-alerts', {
-      name: 'prod-sec-security-alerts',
+      name: `prod-sec-security-alerts-${uniqueSuffix}`,
       tags: commonTags,
     });
 
@@ -700,9 +740,9 @@ export class TapStack extends TerraformStack {
       tags: commonTags,
     });
 
-    // CloudTrail - Using S3 logging only (CloudWatch integration has construct issues)
+    // CloudTrail - Using S3 logging with unique naming
     const cloudtrail = new Cloudtrail(this, 'prod-sec-cloudtrail', {
-      name: 'prod-sec-cloudtrail',
+      name: `prod-sec-cloudtrail-${uniqueSuffix}`,
       s3BucketName: logsBucket.id,
       s3KeyPrefix: 'cloudtrail-logs/',
       includeGlobalServiceEvents: true,
@@ -715,7 +755,7 @@ export class TapStack extends TerraformStack {
 
     // AWS Config - CORRECTED dependencies
     const configRole = new IamRole(this, 'prod-sec-config-role', {
-      name: 'prod-sec-config-role',
+      name: `prod-sec-config-role-${uniqueSuffix}`,
       assumeRolePolicy: JSON.stringify({
         Version: '2012-10-17',
         Statement: [
@@ -728,17 +768,20 @@ export class TapStack extends TerraformStack {
           },
         ],
       }),
-      managedPolicyArns: [
-        'arn:aws:iam::aws:policy/service-role/AWS_ConfigRole',
-      ],
       tags: commonTags,
+    });
+
+    // Attach AWS managed policy for Config role
+    new IamRolePolicyAttachment(this, 'prod-sec-config-role-aws-policy', {
+      role: configRole.name,
+      policyArn: 'arn:aws:iam::aws:policy/service-role/AWS_ConfigRole',
     });
 
     const configBucketPolicy = new IamPolicy(
       this,
       'prod-sec-config-bucket-policy',
       {
-        name: 'prod-sec-config-bucket-policy',
+        name: `prod-sec-config-bucket-policy-${uniqueSuffix}`,
         policy: JSON.stringify({
           Version: '2012-10-17',
           Statement: [
