@@ -61,6 +61,7 @@ export class TapStack extends TerraformStack {
     // --- Define Input Variables ---
     const myIp = new TerraformVariable(this, 'my_ip', {
       type: 'string',
+      default: '192.168.1.1/32',
       description:
         'Your local IP for SSH access, in CIDR format (e.g., 1.2.3.4/32)',
     });
