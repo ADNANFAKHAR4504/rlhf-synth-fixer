@@ -39,10 +39,10 @@ describe('SecureFoundationalEnvironmentStack', () => {
           'Fn::Join': [
             '',
             [
-              'alias/secure-foundation-',
-              environmentSuffix,
-              '-',
-              Match.anyValue(),
+              `alias/secure-foundation-${environmentSuffix}-`,
+              {
+                'Ref': 'AWS::AccountId',
+              },
             ],
           ],
         },
@@ -132,10 +132,10 @@ describe('SecureFoundationalEnvironmentStack', () => {
           'Fn::Join': [
             '',
             [
-              'security-audit-trail-',
-              environmentSuffix,
-              '-',
-              Match.anyValue(),
+              `security-audit-trail-${environmentSuffix}-`,
+              {
+                'Ref': 'AWS::AccountId',
+              },
             ],
           ],
         },
@@ -163,10 +163,10 @@ describe('SecureFoundationalEnvironmentStack', () => {
           'Fn::Join': [
             '',
             [
-              '/aws/vpc/flowlogs/',
-              environmentSuffix,
-              '-',
-              Match.anyValue(),
+              `/aws/vpc/flowlogs/${environmentSuffix}-`,
+              {
+                'Ref': 'AWS::AccountId',
+              },
             ],
           ],
         },
@@ -179,10 +179,10 @@ describe('SecureFoundationalEnvironmentStack', () => {
           'Fn::Join': [
             '',
             [
-              '/aws/application/',
-              environmentSuffix,
-              '-',
-              Match.anyValue(),
+              `/aws/application/${environmentSuffix}-`,
+              {
+                'Ref': 'AWS::AccountId',
+              },
             ],
           ],
         },
@@ -195,10 +195,10 @@ describe('SecureFoundationalEnvironmentStack', () => {
           'Fn::Join': [
             '',
             [
-              '/aws/ec2/system-logs/',
-              environmentSuffix,
-              '-',
-              Match.anyValue(),
+              `/aws/ec2/system-logs/${environmentSuffix}-`,
+              {
+                'Ref': 'AWS::AccountId',
+              },
             ],
           ],
         },
