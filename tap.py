@@ -1,9 +1,11 @@
 #!/usr/bin/env python
-import sys
 import os
+import sys
+
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from cdktf import App
+
 from lib.tap_stack import TapStack
 
 # Get environment variables from the environment or use defaults
@@ -35,7 +37,7 @@ TapStack(
     environment_suffix=environment_suffix,
     state_bucket=state_bucket,
     state_bucket_region=state_bucket_region,
-    aws_region=aws_region,
+    aws_region='us-west-2',
     default_tags=default_tags,
 )
 
