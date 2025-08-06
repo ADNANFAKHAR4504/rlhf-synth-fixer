@@ -342,7 +342,7 @@ Resources:
       PolicyDocument:
         Version: '2012-10-17'
         Statement:
-          - Sid: DenyAllAccess
+          - Sid: DenyPublicAccess
             Effect: Deny
             Principal: '*'
             Action: 's3:*'
@@ -350,8 +350,8 @@ Resources:
               - !GetAtt BackupDataBucket.Arn
               - !Sub 'arn:aws:s3:::backup-data-${EnvironmentSuffix}-${UniqueId}-${StackNameLower}/*'
             Condition:
-              StringNotEquals:
-                'aws:PrincipalServiceName': 'cloudformation.amazonaws.com'
+              Bool:
+                aws:SecureTransport: false
           - Sid: AllowCloudFormationLogging
             Effect: Allow
             Principal:
