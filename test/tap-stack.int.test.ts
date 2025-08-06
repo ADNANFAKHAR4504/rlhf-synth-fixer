@@ -45,9 +45,16 @@ const kmsClient = new KMSClient({ region });
 const networkFirewallClient = new NetworkFirewallClient({ region });
 
 describe('TapStack Integration Tests', () => {
-  const vpcId = outputs.find((o: any) => o.OutputKey === 'VPCId')?.OutputValue;
-  const bucketName = outputs.find((o: any) => o.OutputKey === 'LogBucketName')?.OutputValue;
-  const kmsKeyId = outputs.find((o: any) => o.OutputKey === 'KMSKeyId')?.OutputValue;
+  // Read values directly from flat JSON structure
+  const vpcId = outputs.VPCId;
+  const bucketName = outputs.LogBucketName;
+  const kmsKeyId = outputs.KMSKeyId;
+
+  // Skip tests if outputs are not available
+  if (!vpcId || !bucketName || !kmsKeyId) {
+    console.warn('Warning: Some outputs are missing. VPCId:', vpcId, 'LogBucketName:', bucketName, 'KMSKeyId:', kmsKeyId);
+    console.warn('Make sure the stack is deployed and outputs are generated.');
+  }
 
   describe('VPC Infrastructure', () => {
     test('VPC exists and is configured correctly', async () => {
