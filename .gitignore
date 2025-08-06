@@ -3,8 +3,6 @@
 /lib/*.js
 /test/*.js
 /cli/*.js
-/archive/*.js
-/templates/*.js
 *.d.ts
 !/test/setup.js
 
