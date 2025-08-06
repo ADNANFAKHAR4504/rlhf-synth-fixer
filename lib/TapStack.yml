@@ -228,7 +228,7 @@ Resources:
               Service: application-autoscaling.amazonaws.com
             Action: sts:AssumeRole
       ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AmazonDynamoDBAutoscaleRole # Corrected policy ARN
+        - arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess # Correct policy ARN for DynamoDB auto scaling permissions
 
   # DynamoDB Auto Scaling Target - Read Capacity
   ReadCapacityScalableTarget:
