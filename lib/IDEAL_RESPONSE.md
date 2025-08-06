@@ -24,10 +24,10 @@ Parameters:
     Default: '8.0.42'
     Description: 'MySQL engine version'
 
-  Environment:
+  EnvironmentSuffix:
     Type: String
     Default: 'dev'
-    Description: 'Environment name - used for resource naming and tagging'
+    Description: 'Environment suffix - used for resource naming and tagging'
     MinLength: 1
     MaxLength: 64
     AllowedPattern: '^[a-zA-Z0-9-_]+$'
@@ -70,13 +70,13 @@ Resources:
         - Key: Project
           Value: SecureOps
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
 
   # KMS Key Alias for easier reference
   SecureDataKMSKeyAlias:
     Type: AWS::KMS::Alias
     Properties:
-      AliasName: !Sub 'alias/${AWS::StackName}-${Environment}-key'
+      AliasName: !Sub 'alias/${AWS::StackName}-${EnvironmentSuffix}-key'
       TargetKeyId: !Ref SecureDataKMSKey
 
   # ------------------------------------------------------------------------------
@@ -90,11 +90,11 @@ Resources:
       EnableDnsSupport: true  # Required by AWS Config rule
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-VPC-${Environment}'
+          Value: !Sub '${AWS::StackName}-VPC-${EnvironmentSuffix}'
         - Key: Project
           Value: SecureOps
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
 
   # Private Subnet for RDS
   PrivateSubnet1:
@@ -105,7 +105,7 @@ Resources:
       AvailabilityZone: !Select [0, !GetAZs '']
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-Private-Subnet-1-${Environment}'
+          Value: !Sub '${AWS::StackName}-Private-Subnet-1-${EnvironmentSuffix}'
         - Key: Project
           Value: SecureOps
 
@@ -117,7 +117,7 @@ Resources:
       AvailabilityZone: !Select [1, !GetAZs '']
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-Private-Subnet-2-${Environment}'
+          Value: !Sub '${AWS::StackName}-Private-Subnet-2-${EnvironmentSuffix}'
         - Key: Project
           Value: SecureOps
 
@@ -131,7 +131,7 @@ Resources:
         - !Ref PrivateSubnet2
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-DB-SubnetGroup-${Environment}'
+          Value: !Sub '${AWS::StackName}-DB-SubnetGroup-${EnvironmentSuffix}'
         - Key: Project
           Value: SecureOps
 
@@ -187,7 +187,7 @@ Resources:
   ConfigurationRecorder:
     Type: AWS::Config::ConfigurationRecorder
     Properties:
-      Name: !Sub '${AWS::StackName}-ConfigRecorder-${Environment}'
+      Name: !Sub '${AWS::StackName}-ConfigRecorder-${EnvironmentSuffix}'
       RoleARN: !GetAtt ConfigServiceRole.Arn
       RecordingGroup:
         AllSupported: true
@@ -198,11 +198,14 @@ Resources:
     Type: AWS::Config::ConfigRule
     DependsOn: ConfigurationRecorder
     Properties:
-      ConfigRuleName: !Sub 'vpc-dns-support-enabled-${Environment}'
+      ConfigRuleName: !Sub 'vpc-dns-support-enabled-${EnvironmentSuffix}'
       Description: 'Validates that VPC has enableDnsSupport set to true'
       Source:
         Owner: CUSTOM_LAMBDA
         SourceIdentifier: !GetAtt VPCDnsSupportFunction.Arn
+        SourceDetails:
+          - EventSource: aws.config
+            MessageType: ConfigurationItemChangeNotification
       Scope:
         ComplianceResourceTypes:
           - AWS::EC2::VPC
@@ -215,7 +218,7 @@ Resources:
   VPCDnsSupportLambdaRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${AWS::StackName}-VPCDnsSupportLambdaRole-${Environment}'
+      RoleName: !Sub '${AWS::StackName}-VPCDnsSupportLambdaRole-${EnvironmentSuffix}'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -243,7 +246,7 @@ Resources:
   VPCDnsSupportFunction:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: !Sub '${AWS::StackName}-vpc-dns-support-check-${Environment}'
+      FunctionName: !Sub '${AWS::StackName}-vpc-dns-support-check-${EnvironmentSuffix}'
       Runtime: python3.9
       Handler: index.handler
       Role: !GetAtt VPCDnsSupportLambdaRole.Arn
@@ -284,20 +287,27 @@ Resources:
                   config.put_evaluations(Evaluations=[evaluation])
                   
                   logger.info('VPC %s DNS support: %s', vpc_id, enable_dns_support)
-                  return evaluation
+                  
+                  return {
+                      'statusCode': 200,
+                      'body': json.dumps('Evaluation completed successfully')
+                  }
                   
               except Exception as e:
-                  logger.error('Error evaluating VPC %s: %s', vpc_id, str(e))
-                  evaluation = {
-                      'ComplianceType': 'NOT_APPLICABLE',
-                      'OrderingTimestamp': event['notificationCreationTime'],
-                      'ResultToken': event.get('resultToken')
+                  logger.error('Error evaluating VPC DNS support: %s', str(e))
+                  return {
+                      'statusCode': 500,
+                      'body': json.dumps(f'Error: {str(e)}')
                   }
-                  config.put_evaluations(Evaluations=[evaluation])
-                  return evaluation
-      Tags:
-        - Key: Project
-          Value: SecureOps
+
+  # Lambda Permission for AWS Config to invoke the function
+  VPCDnsSupportLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref VPCDnsSupportFunction
+      Action: lambda:InvokeFunction
+      Principal: config.amazonaws.com
+      SourceAccount: !Ref AWS::AccountId
 
   # ------------------------------------------------------------------------------
   # IAM ROLES - Least Privilege Implementation
@@ -307,7 +317,7 @@ Resources:
   AppServerRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${AWS::StackName}-AppServerRole-${Environment}'
+      RoleName: !Sub '${AWS::StackName}-AppServerRole-${EnvironmentSuffix}'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -325,11 +335,11 @@ Resources:
                 Action:
                   - s3:GetObject
                   - s3:PutObject
-                Resource: !Sub '${SecureDataBucket}/*'
+                Resource: !Sub 'arn:aws:s3:::${SecureDataBucket}/*'
               - Effect: Allow
                 Action:
                   - rds:DescribeDBInstances
-                Resource: !Sub 'arn:aws:rds:${AWS::Region}:${AWS::AccountId}:db:${SecureRDSInstance}'
+                Resource: !Sub 'arn:aws:rds:${AWS::Region}:${AWS::AccountId}:db:*'
               - Effect: Allow
                 Action:
                   - kms:Decrypt
@@ -345,7 +355,7 @@ Resources:
   LowSecurityReadOnlyRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${AWS::StackName}-LowSecurityReadOnlyRole-${Environment}'
+      RoleName: !Sub '${AWS::StackName}-LowSecurityReadOnlyRole-${EnvironmentSuffix}'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -362,7 +372,7 @@ Resources:
               - Effect: Allow
                 Action:
                   - s3:ListBucket
-                Resource: !GetAtt CentralLoggingBucket.Arn
+                Resource: !Sub 'arn:aws:s3:::${CentralLoggingBucket}'
               - Effect: Allow
                 Action:
                   - s3:GetObject
@@ -380,8 +390,9 @@ Resources:
   # Central Logging Bucket for RDS and other service logs
   CentralLoggingBucket:
     Type: AWS::S3::Bucket
+    DeletionPolicy: Delete
     Properties:
-      BucketName: !Sub '${AWS::StackName}-central-logging-${AWS::AccountId}-${Environment}'
+      BucketName: !Sub 'tapstack-${EnvironmentSuffix}-central-logging-${AWS::AccountId}'
       # Deny all public access
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
@@ -414,8 +425,9 @@ Resources:
   # Secure Data Bucket with conditional access policy
   SecureDataBucket:
     Type: AWS::S3::Bucket
+    DeletionPolicy: Delete
     Properties:
-      BucketName: !Sub '${AWS::StackName}-secure-data-${AWS::AccountId}-${Environment}'
+      BucketName: !Sub 'tapstack-${EnvironmentSuffix}-secure-data-${AWS::AccountId}'
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -449,8 +461,8 @@ Resources:
             Principal: '*'
             Action: 's3:*'
             Resource:
-              - !GetAtt SecureDataBucket.Arn
-              - !Sub '${SecureDataBucket}/*'
+              - !Sub 'arn:aws:s3:::${SecureDataBucket}'
+              - !Sub 'arn:aws:s3:::${SecureDataBucket}/*'
             Condition:
               StringEquals:
                 'aws:PrincipalTag/SecurityLevel': 'Low'
@@ -463,7 +475,7 @@ Resources:
               - s3:GetObject
               - s3:PutObject
               - s3:DeleteObject
-            Resource: !Sub '${SecureDataBucket}/*'
+            Resource: !Sub 'arn:aws:s3:::${SecureDataBucket}/*'
 
   # ------------------------------------------------------------------------------
   # RDS DATABASE - Encrypted with Audit Logging
@@ -481,7 +493,7 @@ Resources:
           CidrIp: 0.0.0.0/0
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-RDS-SG-${Environment}'
+          Value: !Sub '${AWS::StackName}-RDS-SG-${EnvironmentSuffix}'
         - Key: Project
           Value: SecureOps
 
@@ -491,7 +503,7 @@ Resources:
     DeletionPolicy: Snapshot
     UpdateReplacePolicy: Snapshot
     Properties:
-      DBInstanceIdentifier: !Sub '${AWS::StackName}-db-${Environment}'
+      DBInstanceIdentifier: !Sub '${AWS::StackName}-db-${EnvironmentSuffix}'
       DBInstanceClass: !Ref DBInstanceClass
       Engine: mysql
       EngineVersion: !Ref DBEngineVersion
@@ -522,38 +534,12 @@ Resources:
       PubliclyAccessible: false
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-RDS-${Environment}'
+          Value: !Sub '${AWS::StackName}-RDS-${EnvironmentSuffix}'
         - Key: Project
           Value: SecureOps
 
-  # CloudWatch Log Groups for RDS logs (will be exported to S3)
-  RDSAuditLogGroup:
-    Type: AWS::Logs::LogGroup
-    Properties:
-      LogGroupName: !Sub '/aws/rds/instance/${SecureRDSInstance}/audit'
-      RetentionInDays: 365
-      KmsKeyId: !GetAtt SecureDataKMSKey.Arn
-
-  RDSErrorLogGroup:
-    Type: AWS::Logs::LogGroup
-    Properties:
-      LogGroupName: !Sub '/aws/rds/instance/${SecureRDSInstance}/error'
-      RetentionInDays: 365
-      KmsKeyId: !GetAtt SecureDataKMSKey.Arn
-
-  RDSGeneralLogGroup:
-    Type: AWS::Logs::LogGroup
-    Properties:
-      LogGroupName: !Sub '/aws/rds/instance/${SecureRDSInstance}/general'
-      RetentionInDays: 365
-      KmsKeyId: !GetAtt SecureDataKMSKey.Arn
-
-  RDSSlowQueryLogGroup:
-    Type: AWS::Logs::LogGroup
-    Properties:
-      LogGroupName: !Sub '/aws/rds/instance/${SecureRDSInstance}/slowquery'
-      RetentionInDays: 365
-      KmsKeyId: !GetAtt SecureDataKMSKey.Arn
+  # Note: RDS automatically creates CloudWatch Log Groups when EnableCloudwatchLogsExports is configured
+  # No need to explicitly create them as it causes conflicts
 
 # ==============================================================================
 # OUTPUTS SECTION

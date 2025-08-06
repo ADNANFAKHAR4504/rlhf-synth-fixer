@@ -39,7 +39,7 @@ describe('TapStack CloudFormation Template', () => {
         'VpcCidr',
         'DBInstanceClass',
         'DBEngineVersion',
-        'Environment'
+        'EnvironmentSuffix'
       ];
 
       expectedParameters.forEach(paramName => {
@@ -72,11 +72,11 @@ describe('TapStack CloudFormation Template', () => {
       expect(param.Description).toBe('MySQL engine version');
     });
 
-    test('Environment parameter should have correct properties', () => {
-      const param = template.Parameters.Environment;
+    test('EnvironmentSuffix parameter should have correct properties', () => {
+      const param = template.Parameters.EnvironmentSuffix;
       expect(param.Type).toBe('String');
       expect(param.Default).toBe('dev');
-      expect(param.Description).toBe('Environment name - used for resource naming and tagging');
+      expect(param.Description).toBe('Environment suffix - used for resource naming and tagging');
       expect(param.MinLength).toBe(1);
       expect(param.MaxLength).toBe(64);
       expect(param.AllowedPattern).toBe('^[a-zA-Z0-9-_]+$');
@@ -90,13 +90,26 @@ describe('TapStack CloudFormation Template', () => {
       expect(key.Type).toBe('AWS::KMS::Key');
     });
 
-    test('SecureDataKMSKey should have correct properties', () => {
+    test('SecureDataKMSKey should have correct properties and service permissions', () => {
       const key = template.Resources.SecureDataKMSKey;
       const properties = key.Properties;
       
       expect(properties.Description).toBe('Customer-managed KMS key for encrypting S3 and RDS data at rest');
       expect(properties.KeyPolicy).toBeDefined();
       expect(properties.Tags).toBeDefined();
+
+      // Verify service permissions in key policy
+      const serviceStatement = properties.KeyPolicy.Statement.find((s: any) => 
+        s.Sid === 'Allow use of the key for S3 and RDS'
+      );
+      expect(serviceStatement).toBeDefined();
+      expect(serviceStatement.Principal.Service).toContain('s3.amazonaws.com');
+      expect(serviceStatement.Principal.Service).toContain('rds.amazonaws.com');
+      expect(serviceStatement.Action).toContain('kms:Decrypt');
+      expect(serviceStatement.Action).toContain('kms:GenerateDataKey');
+      expect(serviceStatement.Action).toContain('kms:ReEncrypt*');
+      expect(serviceStatement.Action).toContain('kms:CreateGrant');
+      expect(serviceStatement.Action).toContain('kms:DescribeKey');
     });
 
     test('SecureDataKMSKey should have correct tags', () => {
@@ -109,7 +122,7 @@ describe('TapStack CloudFormation Template', () => {
       });
       expect(tags).toContainEqual({
         Key: 'Environment',
-        Value: { Ref: 'Environment' }
+        Value: { Ref: 'EnvironmentSuffix' }
       });
     });
 
@@ -123,7 +136,7 @@ describe('TapStack CloudFormation Template', () => {
       const alias = template.Resources.SecureDataKMSKeyAlias;
       expect(alias.Properties.TargetKeyId).toEqual({ Ref: 'SecureDataKMSKey' });
       expect(alias.Properties.AliasName).toEqual({
-        'Fn::Sub': 'alias/${AWS::StackName}-${Environment}-key'
+        'Fn::Sub': 'alias/${AWS::StackName}-${EnvironmentSuffix}-key'
       });
     });
   });
@@ -150,7 +163,7 @@ describe('TapStack CloudFormation Template', () => {
       
       expect(tags).toContainEqual({
         Key: 'Name',
-        Value: { 'Fn::Sub': '${AWS::StackName}-VPC-${Environment}' }
+        Value: { 'Fn::Sub': '${AWS::StackName}-VPC-${EnvironmentSuffix}' }
       });
       expect(tags).toContainEqual({
         Key: 'Project',
@@ -158,7 +171,7 @@ describe('TapStack CloudFormation Template', () => {
       });
       expect(tags).toContainEqual({
         Key: 'Environment',
-        Value: { Ref: 'Environment' }
+        Value: { Ref: 'EnvironmentSuffix' }
       });
     });
 
@@ -279,7 +292,7 @@ describe('TapStack CloudFormation Template', () => {
     test('AppServerRole should have correct properties', () => {
       const role = template.Resources.AppServerRole;
       expect(role.Properties.RoleName).toEqual({
-        'Fn::Sub': '${AWS::StackName}-AppServerRole-${Environment}'
+        'Fn::Sub': '${AWS::StackName}-AppServerRole-${EnvironmentSuffix}'
       });
       expect(role.Properties.Policies).toBeDefined();
     });
@@ -314,7 +327,7 @@ describe('TapStack CloudFormation Template', () => {
       const properties = bucket.Properties;
       
       expect(properties.BucketName).toEqual({
-        'Fn::Sub': 'tapstack-${Environment}-central-logging-${AWS::AccountId}'
+        'Fn::Sub': 'tapstack-${EnvironmentSuffix}-central-logging-${AWS::AccountId}'
       });
       expect(properties.PublicAccessBlockConfiguration).toBeDefined();
       expect(properties.VersioningConfiguration).toBeDefined();
@@ -329,13 +342,14 @@ describe('TapStack CloudFormation Template', () => {
       expect(bucket.DeletionPolicy).toBe('Delete');
     });
 
-    test('SecureDataBucket should have correct bucket name', () => {
+    test('SecureDataBucket should have correct bucket name and versioning', () => {
       const bucket = template.Resources.SecureDataBucket;
       const properties = bucket.Properties;
       
       expect(properties.BucketName).toEqual({
-        'Fn::Sub': 'tapstack-${Environment}-secure-data-${AWS::AccountId}'
+        'Fn::Sub': 'tapstack-${EnvironmentSuffix}-secure-data-${AWS::AccountId}'
       });
+      expect(properties.VersioningConfiguration.Status).toBe('Enabled');
     });
 
     test('should have SecureDataBucketPolicy resource', () => {
@@ -378,12 +392,12 @@ describe('TapStack CloudFormation Template', () => {
       expect(rds.UpdateReplacePolicy).toBe('Snapshot');
     });
 
-    test('SecureRDSInstance should have correct properties', () => {
+    test('SecureRDSInstance should have correct properties and backup configuration', () => {
       const rds = template.Resources.SecureRDSInstance;
       const properties = rds.Properties;
       
       expect(properties.DBInstanceIdentifier).toEqual({
-        'Fn::Sub': '${AWS::StackName}-db-${Environment}'
+        'Fn::Sub': '${AWS::StackName}-db-${EnvironmentSuffix}'
       });
       expect(properties.DBInstanceClass).toEqual({ Ref: 'DBInstanceClass' });
       expect(properties.Engine).toBe('mysql');
@@ -391,6 +405,15 @@ describe('TapStack CloudFormation Template', () => {
       expect(properties.StorageEncrypted).toBe(true);
       expect(properties.DeletionProtection).toBe(false);
       expect(properties.PubliclyAccessible).toBe(false);
+      
+      // Backup configuration
+      expect(properties.BackupRetentionPeriod).toBe(30);
+      expect(properties.PreferredBackupWindow).toBe('03:00-04:00');
+      expect(properties.PreferredMaintenanceWindow).toBe('sun:04:00-sun:05:00');
+      
+      // Storage configuration
+      expect(properties.AllocatedStorage).toBe(20);
+      expect(properties.MaxAllocatedStorage).toBe(100);
     });
 
     test('SecureRDSInstance should use Secrets Manager for credentials', () => {
@@ -415,18 +438,7 @@ describe('TapStack CloudFormation Template', () => {
       expect(logExports).toContain('slowquery');
     });
 
-    test('should have CloudWatch Log Groups for RDS logs', () => {
-      expect(template.Resources.RDSAuditLogGroup).toBeDefined();
-      expect(template.Resources.RDSErrorLogGroup).toBeDefined();
-      expect(template.Resources.RDSGeneralLogGroup).toBeDefined();
-      expect(template.Resources.RDSSlowQueryLogGroup).toBeDefined();
-      
-      // Verify deletion policies
-      expect(template.Resources.RDSAuditLogGroup.DeletionPolicy).toBe('Delete');
-      expect(template.Resources.RDSErrorLogGroup.DeletionPolicy).toBe('Delete');
-      expect(template.Resources.RDSGeneralLogGroup.DeletionPolicy).toBe('Delete');
-      expect(template.Resources.RDSSlowQueryLogGroup.DeletionPolicy).toBe('Delete');
-    });
+
   });
 
   describe('Outputs', () => {
@@ -554,16 +566,16 @@ describe('TapStack CloudFormation Template', () => {
       
       expect(tags).toContainEqual({
         Key: 'Name',
-        Value: { 'Fn::Sub': '${AWS::StackName}-VPC-${Environment}' }
+        Value: { 'Fn::Sub': '${AWS::StackName}-VPC-${EnvironmentSuffix}' }
       });
       expect(tags).toContainEqual({
         Key: 'Project',
         Value: 'SecureOps'
       });
-      expect(tags).toContainEqual({
-        Key: 'Environment',
-        Value: { Ref: 'Environment' }
-      });
+              expect(tags).toContainEqual({
+          Key: 'Environment',
+          Value: { Ref: 'EnvironmentSuffix' }
+        });
     });
   });
 
@@ -617,10 +629,10 @@ describe('TapStack CloudFormation Template', () => {
   describe('Resource Naming Convention', () => {
     test('resources should follow stack-based naming convention', () => {
       const resourcesWithNames = [
-        { resource: 'SecureVPC', property: 'Tags[0].Value', expected: '${AWS::StackName}-VPC-${Environment}' },
-        { resource: 'SecureRDSInstance', property: 'DBInstanceIdentifier', expected: '${AWS::StackName}-db-${Environment}' },
-        { resource: 'AppServerRole', property: 'RoleName', expected: '${AWS::StackName}-AppServerRole-${Environment}' },
-        { resource: 'LowSecurityReadOnlyRole', property: 'RoleName', expected: '${AWS::StackName}-LowSecurityReadOnlyRole-${Environment}' }
+              { resource: 'SecureVPC', property: 'Tags[0].Value', expected: '${AWS::StackName}-VPC-${EnvironmentSuffix}' },
+      { resource: 'SecureRDSInstance', property: 'DBInstanceIdentifier', expected: '${AWS::StackName}-db-${EnvironmentSuffix}' },
+      { resource: 'AppServerRole', property: 'RoleName', expected: '${AWS::StackName}-AppServerRole-${EnvironmentSuffix}' },
+      { resource: 'LowSecurityReadOnlyRole', property: 'RoleName', expected: '${AWS::StackName}-LowSecurityReadOnlyRole-${EnvironmentSuffix}' }
       ];
 
       resourcesWithNames.forEach(({ resource, property, expected }) => {

@@ -91,9 +91,9 @@ describe('TapStack CloudFormation Integration Tests', () => {
   describe('VPC Infrastructure', () => {
     test('should have VPC with correct configuration', async () => {
       const command = new DescribeVpcsCommand({
-        Filters: [
-          {
-            Name: 'tag:Name',
+          Filters: [
+            {
+              Name: 'tag:Name',
             Values: [resourceNames.vpc]
           },
           {
@@ -147,8 +147,8 @@ describe('TapStack CloudFormation Integration Tests', () => {
 
     test('should have RDS security group with correct configuration', async () => {
       const command = new DescribeSecurityGroupsCommand({
-        Filters: [
-          {
+          Filters: [
+            {
             Name: 'tag:Name',
             Values: [`${stackName}-RDS-SG-${environmentSuffix}`]
           },
@@ -187,6 +187,10 @@ describe('TapStack CloudFormation Integration Tests', () => {
       expect(dbInstance.PubliclyAccessible).toBe(false);
       expect(dbInstance.MultiAZ).toBe(false);
       expect(dbInstance.BackupRetentionPeriod).toBe(30);
+      expect(dbInstance.PreferredBackupWindow).toBe('03:00-04:00');
+      expect(dbInstance.PreferredMaintenanceWindow).toBe('sun:04:00-sun:05:00');
+      expect(dbInstance.AllocatedStorage).toBe(20);
+      expect(dbInstance.MaxAllocatedStorage).toBe(100);
       
       // Verify log exports
       const logExports = dbInstance.EnabledCloudwatchLogsExports || [];
@@ -243,6 +247,13 @@ describe('TapStack CloudFormation Integration Tests', () => {
       });
       const versioningResponse = await s3Client.send(versioningCommand);
       expect(versioningResponse.Status).toBe('Enabled');
+
+      // Test versioning for secure data bucket
+      const secureDataVersioningCommand = new GetBucketVersioningCommand({
+        Bucket: resourceNames.secureDataBucket
+      });
+      const secureDataVersioningResponse = await s3Client.send(secureDataVersioningCommand);
+      expect(secureDataVersioningResponse.Status).toBe('Enabled');
       
       // Test lifecycle configuration
       const lifecycleCommand = new GetBucketLifecycleConfigurationCommand({
