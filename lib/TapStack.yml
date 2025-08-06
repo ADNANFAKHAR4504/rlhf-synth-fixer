@@ -82,8 +82,8 @@ Resources:
                   - s3:GetObjectVersion
                   - s3:DeleteObjectVersion
                 Resource:
-                  - !Sub "${ApplicationBucket}/*"
-                  - !Sub "${ApplicationLogBucket}/*"
+                  - !Sub "${ApplicationBucket.Arn}/*"
+                  - !Sub "${ApplicationLogBucket.Arn}/*"
               - Effect: Allow
                 Action:
                   - s3:ListBucket
@@ -92,8 +92,8 @@ Resources:
                   - s3:GetBucketAcl
                   - s3:GetBucketLogging
                 Resource:
-                  - !Ref ApplicationBucket
-                  - !Ref ApplicationLogBucket
+                  - !GetAtt ApplicationBucket.Arn
+                  - !GetAtt ApplicationLogBucket.Arn
               # DynamoDB permissions - restricted to specific table
               - Effect: Allow
                 Action:
