@@ -39,7 +39,7 @@ Mappings:
   # These should be updated to the latest Amazon Linux 2 AMI for the target region.
   RegionMap:
     us-west-2:
-      AMI: ami-0a709bebf4fa9203a # Amazon Linux 2 AMI (HVM) - us-west-2
+      AMI: ami-0e2a4b535ec045ef9 # Amazon Linux 2 AMI (HVM) - us-west-2
 
 Resources:
   #
