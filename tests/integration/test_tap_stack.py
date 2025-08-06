@@ -27,11 +27,14 @@ def test_integration():
   Deploys the stack, checks the ALB endpoint, and destroys the stack.
   """
   try:
+    print("--- Selecting Pulumi Stack ---")
+    run_command(f"pulumi stack select {STACK_NAME} --create")
+
     print("--- Deploying Infrastructure ---")
     run_command("pulumi up --yes --skip-preview")
 
     print("--- Fetching ALB DNS Name ---")
-    alb_dns_json = run_command(f"pulumi stack output alb_dns_name --json")
+    alb_dns_json = run_command("pulumi stack output alb_dns_name --json")
     alb_dns = json.loads(alb_dns_json)
     url = f"http://{alb_dns}"
     
