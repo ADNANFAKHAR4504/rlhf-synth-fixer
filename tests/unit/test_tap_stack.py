@@ -18,7 +18,7 @@ import types
 def create_mock_package(name):
   mod = types.ModuleType(name)
   mod.__path__ = []  # makes it a package
-  return mod
+  return mod 
 
 
 # Setup mock modules before importing your components
