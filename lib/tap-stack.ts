@@ -76,14 +76,15 @@ export class TapStack extends TerraformStack {
     // ref - https://developer.hashicorp.com/terraform/cdktf/concepts/resources#escape-hatch
     this.addOverride('terraform.backend.s3.use_lockfile', true);
 
-    // VPC Infrastructure
-    this.vpc = new VpcConstruct(this, 'vpc', {
+    // VPC Infrastructure - include region in construct ID to force recreation
+    const regionSuffix = awsRegion.replace('-', '');
+    this.vpc = new VpcConstruct(this, `vpc-${regionSuffix}`, {
       config: config.network,
       naming: this.naming,
     });
 
-    // Security Infrastructure
-    this.security = new SecurityConstruct(this, 'security', {
+    // Security Infrastructure - include region in construct ID to force recreation
+    this.security = new SecurityConstruct(this, `security-${regionSuffix}`, {
       vpcId: this.vpc.vpc.id,
       environment: environmentSuffix,
       naming: this.naming,
