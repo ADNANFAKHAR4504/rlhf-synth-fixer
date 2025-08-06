@@ -105,14 +105,14 @@ export class SecureFoundationalEnvironmentStack extends cdk.Stack {
       }),
     });
 
-    // 2. VPC with Multi-AZ Configuration (With NAT Gateway for private subnet egress)
+    // 2. VPC with Multi-AZ Configuration (No NAT Gateway - Cost Optimized)
     this.vpc = new ec2.Vpc(this, 'SecureFoundationVPC', {
       vpcName: `secure-foundation-vpc-${environmentSuffix}`,
       ipAddresses: ec2.IpAddresses.cidr('10.0.0.0/16'),
-      maxAzs: 2, // Use 2 AZs for high availability
+      maxAzs: 2, // Use 2 AZs for high availability without NAT Gateway limits
       enableDnsHostnames: true,
       enableDnsSupport: true,
-      natGateways: 2, // Provide 1 NAT Gateway per AZ for high availability
+      natGateways: 0, // No NAT Gateways to avoid limit issues
       subnetConfiguration: [
         {
           cidrMask: 24,
@@ -121,8 +121,8 @@ export class SecureFoundationalEnvironmentStack extends cdk.Stack {
         },
         {
           cidrMask: 28,
-          name: `private-subnet-${environmentSuffix}`,
-          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+          name: `isolated-subnet-${environmentSuffix}`,
+          subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
         },
       ],
       gatewayEndpoints: {
@@ -193,27 +193,6 @@ export class SecureFoundationalEnvironmentStack extends cdk.Stack {
       ec2.Peer.ipv4(this.vpc.vpcCidrBlock),
       ec2.Port.tcp(443),
       'HTTPS to VPC endpoints for AWS services'
-    );
-
-    // Also allow HTTP for package downloads and updates
-    this.ec2SecurityGroup.addEgressRule(
-      ec2.Peer.ipv4(this.vpc.vpcCidrBlock),
-      ec2.Port.tcp(80),
-      'HTTP to VPC endpoints for AWS services'
-    );
-
-    // Allow outbound HTTP for package downloads and updates from internet
-    this.ec2SecurityGroup.addEgressRule(
-      ec2.Peer.anyIpv4(),
-      ec2.Port.tcp(80),
-      'HTTP for package downloads and updates'
-    );
-
-    // Allow outbound HTTPS for secure package downloads from internet
-    this.ec2SecurityGroup.addEgressRule(
-      ec2.Peer.anyIpv4(),
-      ec2.Port.tcp(443),
-      'HTTPS for secure downloads and AWS API calls'
     );
 
     // Internal VPC communication only
@@ -301,8 +280,6 @@ export class SecureFoundationalEnvironmentStack extends cdk.Stack {
           ),
         ],
       }),
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
-      autoDeleteObjects: true,
     });
 
     // Add bucket policy for CloudTrail
@@ -394,7 +371,7 @@ export class SecureFoundationalEnvironmentStack extends cdk.Stack {
       instanceName: `secure-instance-${environmentSuffix}`,
       vpc: this.vpc,
       vpcSubnets: {
-        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+        subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
       },
       instanceType: ec2.InstanceType.of(
         ec2.InstanceClass.T3,
