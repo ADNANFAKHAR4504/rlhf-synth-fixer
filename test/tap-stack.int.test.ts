@@ -96,15 +96,15 @@ async function getVpcInfo() {
 async function getLoadBalancerInfo() {
   const command = new DescribeLoadBalancersCommand({});
   const response = await elbv2Client.send(command);
-  return response.LoadBalancers!.find(lb => lb.DNSName === LOAD_BALANCER_DNS);
+  return response.LoadBalancers!.find((lb: any) => lb.DNSName === LOAD_BALANCER_DNS);
 }
 
 async function getRdsInfo() {
   const command = new DescribeDBInstancesCommand({});
   const response = await rdsClient.send(command);
-  return response.DBInstances!.find(db => 
+  return response.DBInstances!.find((db: any) => 
     db.Endpoint?.Address === RDS_ENDPOINT ||
-    db.Tags?.some(tag => 
+    (db as any).Tags?.some((tag: any) => 
       tag.Key === 'aws:cloudformation:stack-name' && 
       tag.Value === stackName
     )
@@ -160,8 +160,8 @@ describe('TapStack Integration Tests', () => {
       const stack = await getStackInfo();
       
       expect(stack.Tags).toBeDefined();
-      const repositoryTag = stack.Tags!.find(tag => tag.Key === 'Repository');
-      const authorTag = stack.Tags!.find(tag => tag.Key === 'CommitAuthor');
+      const repositoryTag = stack.Tags!.find((tag: any) => tag.Key === 'Repository');
+      const authorTag = stack.Tags!.find((tag: any) => tag.Key === 'CommitAuthor');
       
       if (repositoryTag) {
         expect(repositoryTag.Value).toContain('iac-test-automations');
@@ -178,8 +178,8 @@ describe('TapStack Integration Tests', () => {
 
       expect(vpc.State).toBe('available');
       expect(vpc.CidrBlock).toBe('10.0.0.0/16');
-      expect(vpc.EnableDnsHostnames).toBe(true);
-      expect(vpc.EnableDnsSupport).toBe(true);
+      expect((vpc as any).EnableDnsHostnames).toBe(true);
+      expect((vpc as any).EnableDnsSupport).toBe(true);
       expect(vpc.DhcpOptionsId).toBeDefined();
       
       console.log(`✅ VPC ${VPC_ID} is available with CIDR 10.0.0.0/16`);
@@ -197,14 +197,14 @@ describe('TapStack Integration Tests', () => {
 
       expect(publicSubnets.length).toBe(2);
       
-      publicSubnets.forEach(subnet => {
+      publicSubnets.forEach((subnet: any) => {
         expect(subnet.State).toBe('available');
         expect(subnet.MapPublicIpOnLaunch).toBe(true);
         expect(['10.0.1.0/24', '10.0.2.0/24']).toContain(subnet.CidrBlock);
       });
 
       // Verify AZ distribution
-      const azs = [...new Set(publicSubnets.map(s => s.AvailabilityZone))];
+      const azs = [...new Set(publicSubnets.map((s: any) => s.AvailabilityZone))];
       expect(azs.length).toBe(2);
       
       console.log(`✅ Found ${publicSubnets.length} public subnets across ${azs.length} AZs`);
@@ -222,7 +222,7 @@ describe('TapStack Integration Tests', () => {
 
       expect(privateSubnets.length).toBe(2);
       
-      privateSubnets.forEach(subnet => {
+      privateSubnets.forEach((subnet: any) => {
         expect(subnet.State).toBe('available');
         expect(subnet.MapPublicIpOnLaunch).toBe(false);
         expect(['10.0.3.0/24', '10.0.4.0/24']).toContain(subnet.CidrBlock);
@@ -233,21 +233,21 @@ describe('TapStack Integration Tests', () => {
 
     test('should have functioning NAT Gateways', async () => {
       const command = new DescribeNatGatewaysCommand({
-        Filters: [{ Name: 'vpc-id', Values: [VPC_ID] }]
+        Filter: [{ Name: 'vpc-id', Values: [VPC_ID] }]
       });
       const response = await ec2Client.send(command);
-      const natGateways = response.NatGateways!.filter(nat => nat.State !== 'deleted');
+      const natGateways = response.NatGateways!.filter((nat: any) => nat.State !== 'deleted');
 
       expect(natGateways.length).toBe(2);
       
-      natGateways.forEach(nat => {
+      natGateways.forEach((nat: any) => {
         expect(nat.State).toBe('available');
         expect(nat.NatGatewayAddresses![0].AllocationId).toBeDefined();
         expect(nat.NatGatewayAddresses![0].PublicIp).toBeDefined();
         expect(nat.VpcId).toBe(VPC_ID);
       });
       
-      console.log(`✅ NAT Gateways are healthy with public IPs: ${natGateways.map(nat => nat.NatGatewayAddresses![0].PublicIp).join(', ')}`);
+      console.log(`✅ NAT Gateways are healthy with public IPs: ${natGateways.map((nat: any) => nat.NatGatewayAddresses![0].PublicIp).join(', ')}`);
     });
 
     test('should have Internet Gateway attached', async () => {
@@ -296,7 +296,7 @@ describe('TapStack Integration Tests', () => {
     test('should have properly configured target group', async () => {
       const command = new DescribeTargetGroupsCommand({});
       const response = await elbv2Client.send(command);
-      const stackTG = response.TargetGroups!.find(tg => tg.VpcId === VPC_ID);
+      const stackTG = response.TargetGroups!.find((tg: any) => tg.VpcId === VPC_ID);
 
       expect(stackTG).toBeDefined();
       expect(stackTG!.Protocol).toBe('HTTP');
@@ -315,8 +315,8 @@ describe('TapStack Integration Tests', () => {
       const command = new DescribeAutoScalingGroupsCommand({});
       const response = await autoScalingClient.send(command);
       
-      const stackASGs = response.AutoScalingGroups!.filter(asg =>
-        asg.Tags?.some(tag => 
+      const stackASGs = response.AutoScalingGroups!.filter((asg: any) =>
+        asg.Tags?.some((tag: any) => 
           tag.Key === 'aws:cloudformation:stack-name' && 
           tag.Value === stackName
         )
@@ -338,8 +338,8 @@ describe('TapStack Integration Tests', () => {
       const asgCommand = new DescribeAutoScalingGroupsCommand({});
       const asgResponse = await autoScalingClient.send(asgCommand);
       
-      const stackASGs = asgResponse.AutoScalingGroups!.filter(asg =>
-        asg.Tags?.some(tag => 
+      const stackASGs = asgResponse.AutoScalingGroups!.filter((asg: any) =>
+        asg.Tags?.some((tag: any) => 
           tag.Key === 'aws:cloudformation:stack-name' && 
           tag.Value === stackName
         )
@@ -348,18 +348,18 @@ describe('TapStack Integration Tests', () => {
       const asg = stackASGs[0];
       
       if (asg.Instances && asg.Instances.length > 0) {
-        const instanceIds = asg.Instances.map(i => i.InstanceId!);
+        const instanceIds = asg.Instances.map((i: any) => i.InstanceId!);
         
         const ec2Command = new DescribeInstancesCommand({ InstanceIds: instanceIds });
         const ec2Response = await ec2Client.send(ec2Command);
 
         let runningInstances = 0;
-        ec2Response.Reservations!.forEach(reservation => {
-          reservation.Instances!.forEach(instance => {
+        ec2Response.Reservations!.forEach((reservation: any) => {
+          reservation.Instances!.forEach((instance: any) => {
             expect(['running', 'pending']).toContain(instance.State!.Name);
             expect(instance.InstanceType).toBe('t3.micro');
             
-            const nameTag = instance.Tags!.find(tag => tag.Key === 'Name');
+            const nameTag = instance.Tags!.find((tag: any) => tag.Key === 'Name');
             expect(nameTag?.Value).toBe('prod-web-server');
             
             if (instance.State!.Name === 'running') runningInstances++;
@@ -396,11 +396,11 @@ describe('TapStack Integration Tests', () => {
       expect(subnetGroup.VpcId).toBe(VPC_ID);
       expect(subnetGroup.Subnets!.length).toBe(2);
 
-      const subnetIds = subnetGroup.Subnets!.map(s => s.SubnetIdentifier!);
+      const subnetIds = subnetGroup.Subnets!.map((s: any) => s.SubnetIdentifier!);
       const command = new DescribeSubnetsCommand({ SubnetIds: subnetIds });
       const response = await ec2Client.send(command);
 
-      response.Subnets!.forEach(subnet => {
+      response.Subnets!.forEach((subnet: any) => {
         expect(subnet.MapPublicIpOnLaunch).toBe(false);
       });
       
@@ -483,7 +483,7 @@ describe('TapStack Integration Tests', () => {
         await s3Client.send(deleteCommand);
         
         console.log(`✅ S3 object operations successful for ${testKey}`);
-      } catch (error) {
+      } catch (error: any) {
         // Ensure cleanup on error
         try {
           const deleteCommand = new DeleteObjectCommand({
@@ -529,9 +529,9 @@ describe('TapStack Integration Tests', () => {
       const command = new DescribeAlarmsCommand({ MaxRecords: 100 });
       const response = await cloudWatchClient.send(command);
       
-      const stackAlarms = response.MetricAlarms!.filter(alarm => 
+      const stackAlarms = response.MetricAlarms!.filter((alarm: any) => 
         alarm.AlarmArn!.includes(stackName) ||
-        alarm.Tags?.some(tag => 
+        (alarm as any).Tags?.some((tag: any) => 
           tag.Key === 'aws:cloudformation:stack-name' && 
           tag.Value === stackName
         )
@@ -539,7 +539,7 @@ describe('TapStack Integration Tests', () => {
 
       expect(stackAlarms.length).toBeGreaterThanOrEqual(3);
       
-      const cpuAlarms = stackAlarms.filter(alarm => alarm.MetricName === 'CPUUtilization');
+      const cpuAlarms = stackAlarms.filter((alarm: any) => alarm.MetricName === 'CPUUtilization');
       expect(cpuAlarms.length).toBeGreaterThanOrEqual(2); // High and low CPU alarms
       
       console.log(`✅ Found ${stackAlarms.length} CloudWatch alarms (${cpuAlarms.length} CPU-based)`);
@@ -549,8 +549,8 @@ describe('TapStack Integration Tests', () => {
       const command = new DescribePoliciesCommand({});
       const response = await autoScalingClient.send(command);
       
-      const stackPolicies = response.ScalingPolicies!.filter(policy =>
-        policy.Tags?.some(tag => 
+      const stackPolicies = response.ScalingPolicies!.filter((policy: any) =>
+        (policy as any).Tags?.some((tag: any) => 
           tag.Key === 'aws:cloudformation:stack-name' && 
           tag.Value === stackName
         )
@@ -558,8 +558,8 @@ describe('TapStack Integration Tests', () => {
 
       expect(stackPolicies.length).toBe(2);
 
-      const scaleUpPolicy = stackPolicies.find(p => p.ScalingAdjustment! > 0);
-      const scaleDownPolicy = stackPolicies.find(p => p.ScalingAdjustment! < 0);
+      const scaleUpPolicy = stackPolicies.find((p: any) => p.ScalingAdjustment! > 0);
+      const scaleDownPolicy = stackPolicies.find((p: any) => p.ScalingAdjustment! < 0);
 
       expect(scaleUpPolicy).toBeDefined();
       expect(scaleDownPolicy).toBeDefined();
@@ -577,9 +577,9 @@ describe('TapStack Integration Tests', () => {
       });
       const response = await ec2Client.send(command);
 
-      const stackSGs = response.SecurityGroups!.filter(sg => 
+      const stackSGs = response.SecurityGroups!.filter((sg: any) => 
         sg.GroupName !== 'default' &&
-        sg.Tags?.some(tag => 
+        sg.Tags?.some((tag: any) => 
           tag.Key === 'aws:cloudformation:stack-name' && 
           tag.Value === stackName
         )
@@ -588,17 +588,17 @@ describe('TapStack Integration Tests', () => {
       expect(stackSGs.length).toBeGreaterThanOrEqual(3);
       
       // Find ALB security group
-      const albSG = stackSGs.find(sg => 
+      const albSG = stackSGs.find((sg: any) => 
         sg.Description?.includes('Application Load Balancer')
       );
       
       if (albSG) {
-        const httpRule = albSG.IpPermissions!.find(rule => rule.FromPort === 80);
-        const httpsRule = albSG.IpPermissions!.find(rule => rule.FromPort === 443);
+        const httpRule = albSG.IpPermissions!.find((rule: any) => rule.FromPort === 80);
+        const httpsRule = albSG.IpPermissions!.find((rule: any) => rule.FromPort === 443);
         
         expect(httpRule).toBeDefined();
         expect(httpsRule).toBeDefined();
-        expect(httpRule!.IpRanges!.some(range => range.CidrIp === '0.0.0.0/0')).toBe(true);
+        expect(httpRule!.IpRanges!.some((range: any) => range.CidrIp === '0.0.0.0/0')).toBe(true);
       }
       
       console.log(`✅ Security groups properly configured: ${stackSGs.length} found`);
@@ -608,14 +608,14 @@ describe('TapStack Integration Tests', () => {
       const command = new ListRolesCommand({});
       const response = await iamClient.send(command);
       
-      const stackRoles = response.Roles!.filter(role =>
+      const stackRoles = response.Roles!.filter((role: any) =>
         role.RoleName!.includes(stackName)
       );
 
       expect(stackRoles.length).toBeGreaterThanOrEqual(2);
       
       // Check EC2 role
-      const ec2Role = stackRoles.find(role =>
+      const ec2Role = stackRoles.find((role: any) =>
         role.AssumeRolePolicyDocument!.includes('ec2.amazonaws.com')
       );
       
@@ -625,7 +625,7 @@ describe('TapStack Integration Tests', () => {
         });
         const policiesResponse = await iamClient.send(policiesCommand);
         
-        const cloudWatchPolicy = policiesResponse.AttachedPolicies!.find(policy =>
+        const cloudWatchPolicy = policiesResponse.AttachedPolicies!.find((policy: any) =>
           policy.PolicyArn === 'arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy'
         );
         expect(cloudWatchPolicy).toBeDefined();
@@ -642,11 +642,11 @@ describe('TapStack Integration Tests', () => {
       expect(alb!.VpcId).toBe(VPC_ID);
 
       // Verify ALB subnets are public
-      const subnetIds = alb!.AvailabilityZones!.map(az => az.SubnetId!);
+      const subnetIds = alb!.AvailabilityZones!.map((az: any) => az.SubnetId!);
       const command = new DescribeSubnetsCommand({ SubnetIds: subnetIds });
       const response = await ec2Client.send(command);
 
-      response.Subnets!.forEach(subnet => {
+      response.Subnets!.forEach((subnet: any) => {
         expect(subnet.VpcId).toBe(VPC_ID);
         expect(subnet.MapPublicIpOnLaunch).toBe(true);
       });
@@ -663,11 +663,11 @@ describe('TapStack Integration Tests', () => {
         getRdsInfo()
       ]);
 
-      const failedChecks = healthChecks.filter(result => result.status === 'rejected');
+      const failedChecks = healthChecks.filter((result: any) => result.status === 'rejected');
       
       if (failedChecks.length > 0) {
         console.warn(`⚠️ Some health checks failed: ${failedChecks.length}/${healthChecks.length}`);
-        failedChecks.forEach((check, index) => {
+        failedChecks.forEach((check: any, index: number) => {
           if (check.status === 'rejected') {
             console.error(`❌ Health check ${index} failed:`, check.reason);
           }

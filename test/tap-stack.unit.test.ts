@@ -27,7 +27,7 @@ describe('TapStack CloudFormation Template', () => {
     try {
       const raw = fs.readFileSync(templatePath, 'utf8');
       template = JSON.parse(raw);
-    } catch (error) {
+    } catch (error: any) {
       throw new Error(`Failed to parse template JSON: ${error.message}`);
     }
   });
