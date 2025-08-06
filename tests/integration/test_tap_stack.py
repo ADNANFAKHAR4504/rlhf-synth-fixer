@@ -48,21 +48,27 @@ class TestTapStackIntegration(unittest.TestCase):
     content = b"hello from integration test"
 
     try:
-      s3_client.put_object(Bucket=S3_BUCKET_NAME, Key=test_key, Body=content)
-      result = s3_client.get_object(Bucket=S3_BUCKET_NAME, Key=test_key)
+      s3_client.put_object(
+        Bucket=S3_BUCKET_NAME, Key=test_key, Body=content
+      )
+      result = s3_client.get_object(
+        Bucket=S3_BUCKET_NAME, Key=test_key
+      )
       self.assertEqual(result["Body"].read(), content)
     except (ClientError, BotoCoreError) as ex:
       self.fail(f"S3 test failed: {ex}")
     finally:
       try:
-        s3_client.delete_object(Bucket=S3_BUCKET_NAME, Key=test_key)
+        s3_client.delete_object(
+          Bucket=S3_BUCKET_NAME, Key=test_key
+        )
       except (ClientError, BotoCoreError) as ex:
         print(f"Warning: Failed to delete test object: {ex}")
 
   @mark.it("invokes the Lambda function successfully")
   def test_lambda_invocation(self):
     """Test invoking the Lambda function returns expected results."""
-    payload = {"test": "value"}
+    payload = {"Records": [{"eventSource": "aws:s3", "test": "value"}]}
 
     try:
       response = lambda_client.invoke(
@@ -70,8 +76,14 @@ class TestTapStackIntegration(unittest.TestCase):
         InvocationType="RequestResponse",
         Payload=json.dumps(payload)
       )
-      body = json.loads(response["Payload"].read())
+      response_payload_dict = json.loads(response["Payload"].read())
+
       self.assertEqual(response["StatusCode"], 200)
-      self.assertEqual(body.get("statusCode"), 200)
+
+      body_string = response_payload_dict.get("body")
+      parsed_body = json.loads(body_string)
+
+      self.assertEqual(parsed_body.get("statusCode"), 200)
+
     except (ClientError, BotoCoreError, json.JSONDecodeError) as ex:
       self.fail(f"Lambda test failed: {ex}")
