@@ -9,12 +9,11 @@ and manages environment-specific configurations.
 """
 
 import json
-import os
 from typing import Optional
 
 import pulumi
 from pulumi import ResourceOptions
-from pulumi_aws import s3, iam, lambda_, apigateway, cloudwatch
+from pulumi_aws import iam, lambda_, apigateway, cloudwatch
 
 # Import your nested stacks here
 # from .dynamodb_stack import DynamoDBStack
@@ -25,13 +24,15 @@ class TapStackArgs:
   TapStackArgs defines the input arguments for the TapStack Pulumi component.
 
   Args:
-    environment_suffix (Optional[str]): An optional suffix for identifying the deployment environment (e.g., 'dev', 'prod').
+    environment_suffix (Optional[str]): An optional suffix for identifying
+      the deployment environment (e.g., 'dev', 'prod').
     tags (Optional[dict]): Optional default tags to apply to resources.
     region (Optional[str]): AWS region for deployment.
   """
 
-  def __init__(self, environment_suffix: Optional[str] = None, tags: Optional[dict] = None, region: Optional[str] = None):
-    self.environment_suffix = environment_suffix or 'dev'
+  def __init__(self, environment_suffix: Optional[str] = None,
+               tags: Optional[dict] = None, region: Optional[str] = None):
+    self.environment_suffix = environment_suffix or 'Production'
     self.tags = tags or {}
     self.region = region or 'us-west-2'
 
@@ -67,7 +68,7 @@ class TapStack(pulumi.ComponentResource):
 
         # Common tags for all resources
         common_tags = {
-            "Environment": self.environment_suffix,
+            "Environment": "Production",
             "Project": "TAP",
             "ManagedBy": "Pulumi",
             "Region": self.region,
@@ -239,7 +240,7 @@ class TapStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self)
         )
 
-        cors_integration = apigateway.Integration(
+        self.cors_integration = apigateway.Integration(
             f"cors-integration-{self.environment_suffix}",
             rest_api=api_gateway.id,
             resource_id=api_resource.id,
@@ -272,8 +273,12 @@ class TapStack(pulumi.ComponentResource):
             http_method=cors_method.http_method,
             status_code=cors_method_response.status_code,
             response_parameters={
-                "method.response.header.Access-Control-Allow-Headers": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'",
-                "method.response.header.Access-Control-Allow-Methods": "'GET,POST,PUT,DELETE,OPTIONS'",
+                "method.response.header.Access-Control-Allow-Headers": (
+                    "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+                ),
+                "method.response.header.Access-Control-Allow-Methods": (
+                    "'GET,POST,PUT,DELETE,OPTIONS'"
+                ),
                 "method.response.header.Access-Control-Allow-Origin": "'*'"
             },
             opts=ResourceOptions(parent=self)
@@ -291,7 +296,7 @@ class TapStack(pulumi.ComponentResource):
         )
 
         # Deploy the API Gateway
-        api_deployment = apigateway.Deployment(
+        self.api_deployment = apigateway.Deployment(
             f"api-deployment-{self.environment_suffix}",
             rest_api=api_gateway.id,
             stage_name=self.environment_suffix,
@@ -305,7 +310,7 @@ class TapStack(pulumi.ComponentResource):
         )
 
         # Create CloudWatch alarms for monitoring
-        error_alarm = cloudwatch.MetricAlarm(
+        self.error_alarm = cloudwatch.MetricAlarm(
             f"lambda-error-alarm-{self.environment_suffix}",
             comparison_operator="GreaterThanThreshold",
             evaluation_periods=2,
@@ -322,7 +327,7 @@ class TapStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self)
         )
 
-        duration_alarm = cloudwatch.MetricAlarm(
+        self.duration_alarm = cloudwatch.MetricAlarm(
             f"lambda-duration-alarm-{self.environment_suffix}",
             comparison_operator="GreaterThanThreshold",
             evaluation_periods=2,
@@ -340,7 +345,7 @@ class TapStack(pulumi.ComponentResource):
         )
 
         # Create CloudWatch dashboard for monitoring
-        dashboard = cloudwatch.Dashboard(
+        self.dashboard = cloudwatch.Dashboard(
             f"tap-api-dashboard-{self.environment_suffix}",
             dashboard_name=f"TAP-API-{self.environment_suffix.capitalize()}",
             dashboard_body=pulumi.Output.all(lambda_function.name).apply(
@@ -372,7 +377,12 @@ class TapStack(pulumi.ComponentResource):
                             "height": 6,
                             "properties": {
                                 "metrics": [
-                                    ["AWS/ApiGateway", "Count", "ApiName", f"tap-api-{self.environment_suffix}"],
+                                    [
+                                        "AWS/ApiGateway",
+                                        "Count",
+                                        "ApiName",
+                                        f"tap-api-{self.environment_suffix}"
+                                    ],
                                     [".", "Latency", ".", "."],
                                     [".", "4XXError", ".", "."],
                                     [".", "5XXError", ".", "."]
@@ -407,7 +417,8 @@ class TapStack(pulumi.ComponentResource):
         # Register outputs
         self.register_outputs({
             "api_gateway_url": pulumi.Output.concat(
-                "https://", api_gateway.id, ".execute-api.", self.region, ".amazonaws.com/", self.environment_suffix
+                "https://", api_gateway.id, ".execute-api.", self.region,
+                ".amazonaws.com/", self.environment_suffix
             ),
             "lambda_function_name": lambda_function.name,
             "lambda_function_arn": lambda_function.arn,

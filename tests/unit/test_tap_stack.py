@@ -6,28 +6,36 @@ and Pulumi's testing utilities.
 """
 
 import unittest
-from unittest.mock import patch, MagicMock
 import pulumi
 from pulumi import ResourceOptions
 
-# Import the classes we're testing
 from lib.tap_stack import TapStack, TapStackArgs
 
 
-"""
-Here you define the classes for Unit tests for the TapStack Pulumi component and Pulumi's testing utilities.
+class TestTapStackArgs(unittest.TestCase):
+    """Test cases for TapStackArgs configuration class."""
 
-Write your end-to-end unit testing below. Examples is given, do not use this as
+    def test_tap_stack_args_default_values(self):
+        """Test TapStackArgs with default values."""
+        args = TapStackArgs()
 
-it may not fit the stack you're deploying.
-"""
+        self.assertEqual(args.environment_suffix, 'Production')
+        self.assertEqual(args.tags, {})
+        self.assertEqual(args.region, 'us-west-2')
 
-# class TestTapStackArgs(unittest.TestCase):
-#   """Test cases for TapStackArgs configuration class."""
+    def test_tap_stack_args_custom_values(self):
+        """Test TapStackArgs with custom values."""
+        custom_tags = {"CustomTag": "CustomValue"}
+        args = TapStackArgs(
+            environment_suffix="test",
+            tags=custom_tags,
+            region="us-east-1"
+        )
 
-#   def test_tap_stack_args_default_values(self):
-#     """Test TapStackArgs with default values."""
-#     args = TapStackArgs()
-    
-#     self.assertEqual(args.environment_suffix, 'dev')
-#     self.assertIsNone(args.tags)
+        self.assertEqual(args.environment_suffix, "test")
+        self.assertEqual(args.tags, custom_tags)
+        self.assertEqual(args.region, "us-east-1")
+
+
+if __name__ == "__main__":
+    unittest.main()

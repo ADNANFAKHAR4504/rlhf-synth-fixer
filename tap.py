@@ -10,6 +10,8 @@ The stack created by this module uses environment suffixes to distinguish betwee
 different deployment environments (development, staging, production, etc.).
 """
 import os
+import sys
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 import pulumi
 from pulumi import Config, ResourceOptions
 from lib.tap_stack import TapStack, TapStackArgs
@@ -17,8 +19,8 @@ from lib.tap_stack import TapStack, TapStackArgs
 # Initialize Pulumi configuration
 config = Config()
 
-# Get environment suffix from config or fallback to 'dev'
-environment_suffix = config.get('env') or 'dev'
+# Get environment suffix from environment variable or config, fallback to 'Production'
+environment_suffix = os.environ.get('ENVIRONMENT_SUFFIX') or config.get('env') or 'Production'
 STACK_NAME = f"TapStack{environment_suffix}"
 
 repository_name = os.getenv('REPOSITORY', 'unknown')
@@ -33,5 +35,9 @@ default_tags = {
 
 stack = TapStack(
     name="pulumi-infra",
-    args=TapStackArgs(environment_suffix=environment_suffix),
+    args=TapStackArgs(
+        environment_suffix=environment_suffix,
+        tags=default_tags,
+        region="us-west-2"
+    ),
 )
