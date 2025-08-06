@@ -51,7 +51,8 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
 
     test('should have KeyName parameter', () => {
       expect(templateContent).toMatch(/KeyName:/);
-      expect(templateContent).toMatch(/Type:\s*AWS::EC2::KeyPair::KeyName/);
+      expect(templateContent).toMatch(/Type:\s*String/);
+      expect(templateContent).toMatch(/Default:\s*""/);
     });
 
     test('should have NotificationEmail parameter', () => {

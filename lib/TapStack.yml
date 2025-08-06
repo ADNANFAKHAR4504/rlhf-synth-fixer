@@ -26,10 +26,11 @@ Parameters:
     AllowedValues: [t3.micro, t3.small, t3.medium, t2.micro, t2.small, t2.medium]
   
   KeyName:
-    Description: EC2 Key Pair for SSH access
-    Type: AWS::EC2::KeyPair::KeyName
-    Default: default-key
-    ConstraintDescription: Must be the name of an existing EC2 KeyPair
+    Description: EC2 Key Pair for SSH access (leave empty to create a new one)
+    Type: String
+    Default: ""
+    AllowedPattern: "^$|^[a-zA-Z0-9][a-zA-Z0-9_-]*$"
+    ConstraintDescription: Must be empty or a valid EC2 KeyPair name
   
   NotificationEmail:
     Description: Email address for CloudWatch alarm notifications
@@ -38,7 +39,22 @@ Parameters:
     AllowedPattern: ^[^\s@]+@[^\s@]+\.[^\s@]+$
     ConstraintDescription: Must be a valid email address
 
+Conditions:
+  CreateNewKeyPair: !Equals [!Ref KeyName, ""]
+
 Resources:
+  # EC2 Key Pair
+  NewKeyPair:
+    Type: AWS::EC2::KeyPair
+    Condition: CreateNewKeyPair
+    Properties:
+      KeyName: !Sub ${EnvironmentName}-KeyPair
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-KeyPair
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
   # VPC and Networking
   VPC:
     Type: AWS::EC2::VPC
@@ -179,8 +195,8 @@ Resources:
                   - s3:GetObject
                   - s3:ListBucket
                 Resource:
-                  - !Sub "${StaticContentBucket}/*"
-                  - !Ref StaticContentBucket
+                  - !Sub "arn:aws:s3:::${StaticContentBucket}/*"
+                  - !Sub "arn:aws:s3:::${StaticContentBucket}"
 
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
@@ -196,7 +212,7 @@ Resources:
       LaunchTemplateData:
         ImageId: ami-0c02fb55956c7d316  # Amazon Linux 2 AMI in us-east-1
         InstanceType: !Ref InstanceType
-        KeyName: !Ref KeyName
+        KeyName: !If [CreateNewKeyPair, !Ref NewKeyPair, !Ref KeyName]
         IamInstanceProfile:
           Arn: !GetAtt EC2InstanceProfile.Arn
         SecurityGroupIds:
@@ -390,7 +406,7 @@ Resources:
             Effect: Allow
             Principal: '*'
             Action: s3:GetObject
-            Resource: !Sub "${StaticContentBucket}/*"
+            Resource: !Sub "arn:aws:s3:::${StaticContentBucket}/*"
 
   # SNS Topic for Notifications
   NotificationTopic:
@@ -476,3 +492,9 @@ Outputs:
     Value: !Ref AutoScalingGroup
     Export:
       Name: !Sub ${EnvironmentName}-ASG-Name
+
+  NewKeyPairName:
+    Description: Name of the newly created EC2 Key Pair
+    Value: !If [CreateNewKeyPair, !Ref NewKeyPair, "No new key pair created"]
+    Export:
+      Name: !Sub ${EnvironmentName}-NewKeyPairName
