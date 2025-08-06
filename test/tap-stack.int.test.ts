@@ -42,9 +42,13 @@ describe('TapStack Integration Tests - Simplified DynamoDB Multi-Region Deployme
         const stackName = tapStacks[0].StackName!;
         console.log(`Found stack: ${stackName} in region: ${deploymentRegion}`);
         
+        console.log(`Attempting to describe stack: ${stackName}`);
         const stackResponse = await cloudformation.send(
           new DescribeStacksCommand({ StackName: stackName })
         );
+
+        console.log(`Stack response received:`, stackResponse.Stacks ? 'Stacks found' : 'No stacks');
+        console.log(`Stack response details:`, JSON.stringify(stackResponse, null, 2));
 
         if (stackResponse.Stacks && stackResponse.Stacks[0].Outputs) {
           stackExists = true;
@@ -63,6 +67,12 @@ describe('TapStack Integration Tests - Simplified DynamoDB Multi-Region Deployme
           actualRoleArn = stackOutputs['IAMRoleArn'];
           
           console.log(`Stack outputs object:`, stackOutputs);
+        } else {
+          console.log(`No outputs found in stack response`);
+          console.log(`Stacks array:`, stackResponse.Stacks);
+          if (stackResponse.Stacks && stackResponse.Stacks[0]) {
+            console.log(`First stack outputs:`, stackResponse.Stacks[0].Outputs);
+          }
         }
       }
     } catch (error) {
