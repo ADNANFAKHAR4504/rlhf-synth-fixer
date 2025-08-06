@@ -32,11 +32,14 @@ interface TapStackProps {
 export class TapStack extends TerraformStack {
   private readonly resourcePrefix: string;
   private readonly region: string;
+  private readonly uniqueSuffix: string;
 
   constructor(scope: Construct, id: string, props?: TapStackProps) {
     super(scope, id);
 
-    // Initialize properties
+    // Initialize properties with unique suffix
+    const timestamp = Date.now();
+    this.uniqueSuffix = `${timestamp}`;
     this.resourcePrefix = `${props?.environmentSuffix || 'prod'}-service`;
     this.region = props?.awsRegion || 'us-east-1';
 
@@ -111,7 +114,7 @@ export class TapStack extends TerraformStack {
 
   private createUserTable(): DynamodbTable {
     return new DynamodbTable(this, `${this.resourcePrefix}-user-table`, {
-      name: `${this.resourcePrefix}-users`,
+      name: `${this.resourcePrefix}-users-${this.uniqueSuffix}`,
       billingMode: 'PAY_PER_REQUEST',
       hashKey: 'userId',
       attribute: [
@@ -146,7 +149,7 @@ export class TapStack extends TerraformStack {
 
   private createSessionTable(): DynamodbTable {
     return new DynamodbTable(this, `${this.resourcePrefix}-session-table`, {
-      name: `${this.resourcePrefix}-sessions`,
+      name: `${this.resourcePrefix}-sessions-${this.uniqueSuffix}`,
       billingMode: 'PAY_PER_REQUEST',
       hashKey: 'sessionId',
       attribute: [
@@ -186,7 +189,7 @@ export class TapStack extends TerraformStack {
   ): IamRole {
     // Lambda execution role
     const lambdaRole = new IamRole(this, `${this.resourcePrefix}-lambda-role`, {
-      name: `${this.resourcePrefix}-lambda-execution-role`,
+      name: `${this.resourcePrefix}-lambda-execution-role-${this.uniqueSuffix}`,
       assumeRolePolicy: JSON.stringify({
         Version: '2012-10-17',
         Statement: [
@@ -221,7 +224,7 @@ export class TapStack extends TerraformStack {
       this,
       `${this.resourcePrefix}-dynamodb-policy`,
       {
-        name: `${this.resourcePrefix}-lambda-dynamodb-policy`,
+        name: `${this.resourcePrefix}-lambda-dynamodb-policy-${this.uniqueSuffix}`,
         description: 'DynamoDB access policy for Lambda functions',
         policy: JSON.stringify({
           Version: '2012-10-17',
@@ -266,7 +269,7 @@ export class TapStack extends TerraformStack {
 
   private createApiLogGroup(): CloudwatchLogGroup {
     return new CloudwatchLogGroup(this, `${this.resourcePrefix}-api-logs`, {
-      name: `/aws/apigateway/${this.resourcePrefix}-api`,
+      name: `/aws/apigateway/${this.resourcePrefix}-api-${this.uniqueSuffix}`,
       retentionInDays: 14,
       tags: {
         Name: `${this.resourcePrefix}-api-logs`,
@@ -285,7 +288,7 @@ export class TapStack extends TerraformStack {
         this,
         `${this.resourcePrefix}-user-handler-logs`,
         {
-          name: `/aws/lambda/${this.resourcePrefix}-user-handler`,
+          name: `/aws/lambda/${this.resourcePrefix}-user-handler-${this.uniqueSuffix}`,
           retentionInDays: 14,
           tags: {
             Name: `${this.resourcePrefix}-user-handler-logs`,
@@ -297,7 +300,7 @@ export class TapStack extends TerraformStack {
         this,
         `${this.resourcePrefix}-session-handler-logs`,
         {
-          name: `/aws/lambda/${this.resourcePrefix}-session-handler`,
+          name: `/aws/lambda/${this.resourcePrefix}-session-handler-${this.uniqueSuffix}`,
           retentionInDays: 14,
           tags: {
             Name: `${this.resourcePrefix}-session-handler-logs`,
@@ -309,7 +312,7 @@ export class TapStack extends TerraformStack {
         this,
         `${this.resourcePrefix}-health-check-logs`,
         {
-          name: `/aws/lambda/${this.resourcePrefix}-health-check`,
+          name: `/aws/lambda/${this.resourcePrefix}-health-check-${this.uniqueSuffix}`,
           retentionInDays: 7,
           tags: {
             Name: `${this.resourcePrefix}-health-check-logs`,
@@ -417,7 +420,7 @@ export class TapStack extends TerraformStack {
       this,
       `${this.resourcePrefix}-user-handler`,
       {
-        functionName: `${this.resourcePrefix}-user-handler`,
+        functionName: `${this.resourcePrefix}-user-handler-${this.uniqueSuffix}`,
         role: lambdaRole.arn,
         handler: 'index.handler',
         runtime: 'nodejs18.x',
@@ -443,7 +446,7 @@ export class TapStack extends TerraformStack {
       this,
       `${this.resourcePrefix}-session-handler`,
       {
-        functionName: `${this.resourcePrefix}-session-handler`,
+        functionName: `${this.resourcePrefix}-session-handler-${this.uniqueSuffix}`,
         role: lambdaRole.arn,
         handler: 'index.handler',
         runtime: 'nodejs18.x',
@@ -469,7 +472,7 @@ export class TapStack extends TerraformStack {
       this,
       `${this.resourcePrefix}-health-check`,
       {
-        functionName: `${this.resourcePrefix}-health-check`,
+        functionName: `${this.resourcePrefix}-health-check-${this.uniqueSuffix}`,
         role: lambdaRole.arn,
         handler: 'index.handler',
         runtime: 'nodejs18.x',
@@ -496,7 +499,7 @@ export class TapStack extends TerraformStack {
 
   private createApiGateway(logGroup: CloudwatchLogGroup): ApiGatewayRestApi {
     return new ApiGatewayRestApi(this, `${this.resourcePrefix}-api`, {
-      name: `${this.resourcePrefix}-api`,
+      name: `${this.resourcePrefix}-api-${this.uniqueSuffix}`,
       description: 'Serverless Web Application API',
       endpointConfiguration: {
         types: ['REGIONAL'],
