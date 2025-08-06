@@ -356,12 +356,13 @@ Resources:
             Port: '443'
             StatusCode: HTTP_301
 
+  # Replace the existing Route53Record resource with this one
   Route53Record:
     Type: AWS::Route53::RecordSet
     Properties:
+      HostedZoneName: 'meerio.com.'
       Name: !Ref pHostedZoneName
       Type: A
-      HostedZoneName: !Ref pHostedZoneName
       AliasTarget:
         HostedZoneId: !GetAtt ApplicationLoadBalancer.CanonicalHostedZoneID
         DNSName: !GetAtt ApplicationLoadBalancer.DNSName
