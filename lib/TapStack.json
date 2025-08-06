@@ -545,9 +545,6 @@
         "WebServerRole": {
             "Type": "AWS::IAM::Role",
             "Properties": {
-                "RoleName": {
-                    "Fn::Sub": "${AppName}-${Environment}-WebServer-Role"
-                },
                 "AssumeRolePolicyDocument": {
                     "Version": "2012-10-17",
                     "Statement": [
@@ -582,9 +579,6 @@
         "WebServerInstanceProfile": {
             "Type": "AWS::IAM::InstanceProfile",
             "Properties": {
-                "InstanceProfileName": {
-                    "Fn::Sub": "${AppName}-${Environment}-WebServer-Profile"
-                },
                 "Roles": [
                     {
                         "Ref": "WebServerRole"
@@ -776,9 +770,14 @@
                 "MinSize": 2,
                 "MaxSize": 4,
                 "DesiredCapacity": 2,
-                "VPCZoneIdentifier": {
-                    "Ref": "SubnetIds"
-                },
+                "VPCZoneIdentifier": [
+                    {
+                        "Ref": "PublicSubnet1"
+                    },
+                    {
+                        "Ref": "PublicSubnet2"
+                    }
+                ],
                 "TargetGroupARNs": [
                     {
                         "Ref": "WebServerTargetGroup"
@@ -945,9 +944,14 @@
                     "Fn::Sub": "${AppName}-${Environment}-db-subnet-group"
                 },
                 "DBSubnetGroupDescription": "Subnet group for RDS database",
-                "SubnetIds": {
-                    "Ref": "DBSubnetIds"
-                },
+                "SubnetIds": [
+                    {
+                        "Ref": "PrivateSubnet1"
+                    },
+                    {
+                        "Ref": "PrivateSubnet2"
+                    }
+                ],
                 "Tags": [
                     {
                         "Key": "Name",
