@@ -579,6 +579,9 @@ export class ScalableInfrastructure extends Construct {
         Name: `${id}-rds-mysql`,
         Environment: 'production',
       },
+      lifecycle: {
+        ignoreChanges: ['username'], // Ignore changes to master username
+      },
     });
 
     // Application Load Balancer

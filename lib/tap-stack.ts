@@ -63,10 +63,7 @@ export class TapStack extends TerraformStack {
       }
       const localIp = getLocalIp();
 
-      const dbUsername = Math.random()
-        .toString(36)
-        .substring(2, 10)
-        .replace(/[^a-z]/g, ''); // Generates an 8-char random string with only lowercase letters
+      const dbUsername = 'ozzyosbourne'; // Fixed username for demonstration
 
       new ScalableInfrastructure(this, `scalable-infra-${region}`, {
         provider: awsProvider,
