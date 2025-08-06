@@ -80,16 +80,23 @@ describe('TAP Stack AWS Infrastructure Integration Tests', () => {
 
   // RDS Instance Tests
   describe('RDS PostgreSQL Instance', () => {
-    test(`should exist and be available`, async () => {
-      const { DBInstances } = await rdsClient.send(new DescribeDBInstancesCommand({}));
-      const db = DBInstances?.find(d => d.Endpoint?.Address === rdsEndpoint);
+  test(`should exist and be available`, async () => {
+    const { DBInstances } = await rdsClient.send(new DescribeDBInstancesCommand({}));
 
-      expect(db).toBeDefined();
-      expect(db?.Engine).toBe('postgres');
-      expect(db?.DBInstanceStatus).toBe('available');
-      expect(db?.PubliclyAccessible).toBe(false);
-    }, 20000);
-  });
+    const db = DBInstances?.find(d =>
+      d.Endpoint?.Address?.includes(rdsEndpoint)
+    );
+
+    // 🔍 Debug logs (optional)
+    console.log('Expected RDS endpoint (partial):', rdsEndpoint);
+    console.log('Found RDS endpoints:', DBInstances?.map(d => d.Endpoint?.Address));
+
+    expect(db).toBeDefined();
+    expect(db?.Engine).toBe('postgres');
+    expect(db?.DBInstanceStatus).toBe('available');
+    expect(db?.PubliclyAccessible).toBe(false);
+  }, 20000);
+});
 
   // Secrets Manager Tests
   describe('Secrets Manager Secret', () => {
