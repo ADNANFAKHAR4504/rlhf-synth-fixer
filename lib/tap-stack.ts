@@ -84,12 +84,12 @@ export class TapStack extends TerraformStack {
     // API Gateway
     const api = this.createApiGateway(apiLogGroup);
     const apiResources = this.createApiResources(api);
-    const apiMethods = this.createApiMethods(
+    const { methods, integrations } = this.createApiMethodsAndIntegrations(
       api,
       apiResources,
       lambdaFunctions
     );
-    const deployment = this.createApiDeployment(api, apiMethods);
+    const deployment = this.createApiDeployment(api, methods, integrations);
     const stage = this.createApiStage(api, deployment, apiLogGroup);
 
     // Lambda Permissions for API Gateway
@@ -429,7 +429,6 @@ export class TapStack extends TerraformStack {
           variables: {
             USER_TABLE_NAME: userTable.name,
             SESSION_TABLE_NAME: sessionTable.name,
-            AWS_REGION: this.region,
           },
         },
         dependsOn: [logGroups.userHandler],
@@ -456,7 +455,6 @@ export class TapStack extends TerraformStack {
           variables: {
             USER_TABLE_NAME: userTable.name,
             SESSION_TABLE_NAME: sessionTable.name,
-            AWS_REGION: this.region,
           },
         },
         dependsOn: [logGroups.sessionHandler],
@@ -483,7 +481,6 @@ export class TapStack extends TerraformStack {
           variables: {
             USER_TABLE_NAME: userTable.name,
             SESSION_TABLE_NAME: sessionTable.name,
-            AWS_REGION: this.region,
           },
         },
         dependsOn: [logGroups.healthCheck],
@@ -571,7 +568,7 @@ export class TapStack extends TerraformStack {
     return { users, userById, sessions, sessionById, health };
   }
 
-  private createApiMethods(
+  private createApiMethodsAndIntegrations(
     api: ApiGatewayRestApi,
     resources: {
       users: ApiGatewayResource;
@@ -585,100 +582,126 @@ export class TapStack extends TerraformStack {
       sessionHandler: LambdaFunction;
       healthCheck: LambdaFunction;
     }
-  ): ApiGatewayMethod[] {
+  ): { methods: ApiGatewayMethod[]; integrations: ApiGatewayIntegration[] } {
     const methods: ApiGatewayMethod[] = [];
+    const integrations: ApiGatewayIntegration[] = [];
 
     // Users endpoints
-    const createUser = this.createApiMethod(
-      api,
-      resources.users,
-      'POST',
-      lambdaFunctions.userHandler,
-      `${this.resourcePrefix}-create-user`
-    );
-    const getUsers = this.createApiMethod(
-      api,
-      resources.users,
-      'GET',
-      lambdaFunctions.userHandler,
-      `${this.resourcePrefix}-get-users`
-    );
-    const getUser = this.createApiMethod(
-      api,
-      resources.userById,
-      'GET',
-      lambdaFunctions.userHandler,
-      `${this.resourcePrefix}-get-user`
-    );
-    const updateUser = this.createApiMethod(
-      api,
-      resources.userById,
-      'PUT',
-      lambdaFunctions.userHandler,
-      `${this.resourcePrefix}-update-user`
-    );
-    const deleteUser = this.createApiMethod(
-      api,
-      resources.userById,
-      'DELETE',
-      lambdaFunctions.userHandler,
-      `${this.resourcePrefix}-delete-user`
-    );
+    const { method: createUserMethod, integration: createUserIntegration } =
+      this.createApiMethodWithIntegration(
+        api,
+        resources.users,
+        'POST',
+        lambdaFunctions.userHandler,
+        `${this.resourcePrefix}-create-user`
+      );
+    methods.push(createUserMethod);
+    integrations.push(createUserIntegration);
+
+    const { method: getUsersMethod, integration: getUsersIntegration } =
+      this.createApiMethodWithIntegration(
+        api,
+        resources.users,
+        'GET',
+        lambdaFunctions.userHandler,
+        `${this.resourcePrefix}-get-users`
+      );
+    methods.push(getUsersMethod);
+    integrations.push(getUsersIntegration);
+
+    const { method: getUserMethod, integration: getUserIntegration } =
+      this.createApiMethodWithIntegration(
+        api,
+        resources.userById,
+        'GET',
+        lambdaFunctions.userHandler,
+        `${this.resourcePrefix}-get-user`
+      );
+    methods.push(getUserMethod);
+    integrations.push(getUserIntegration);
+
+    const { method: updateUserMethod, integration: updateUserIntegration } =
+      this.createApiMethodWithIntegration(
+        api,
+        resources.userById,
+        'PUT',
+        lambdaFunctions.userHandler,
+        `${this.resourcePrefix}-update-user`
+      );
+    methods.push(updateUserMethod);
+    integrations.push(updateUserIntegration);
+
+    const { method: deleteUserMethod, integration: deleteUserIntegration } =
+      this.createApiMethodWithIntegration(
+        api,
+        resources.userById,
+        'DELETE',
+        lambdaFunctions.userHandler,
+        `${this.resourcePrefix}-delete-user`
+      );
+    methods.push(deleteUserMethod);
+    integrations.push(deleteUserIntegration);
 
     // Sessions endpoints
-    const createSession = this.createApiMethod(
+    const {
+      method: createSessionMethod,
+      integration: createSessionIntegration,
+    } = this.createApiMethodWithIntegration(
       api,
       resources.sessions,
       'POST',
       lambdaFunctions.sessionHandler,
       `${this.resourcePrefix}-create-session`
     );
-    const getSession = this.createApiMethod(
-      api,
-      resources.sessionById,
-      'GET',
-      lambdaFunctions.sessionHandler,
-      `${this.resourcePrefix}-get-session`
-    );
-    const deleteSession = this.createApiMethod(
+    methods.push(createSessionMethod);
+    integrations.push(createSessionIntegration);
+
+    const { method: getSessionMethod, integration: getSessionIntegration } =
+      this.createApiMethodWithIntegration(
+        api,
+        resources.sessionById,
+        'GET',
+        lambdaFunctions.sessionHandler,
+        `${this.resourcePrefix}-get-session`
+      );
+    methods.push(getSessionMethod);
+    integrations.push(getSessionIntegration);
+
+    const {
+      method: deleteSessionMethod,
+      integration: deleteSessionIntegration,
+    } = this.createApiMethodWithIntegration(
       api,
       resources.sessionById,
       'DELETE',
       lambdaFunctions.sessionHandler,
       `${this.resourcePrefix}-delete-session`
     );
+    methods.push(deleteSessionMethod);
+    integrations.push(deleteSessionIntegration);
 
     // Health check endpoint
-    const healthCheck = this.createApiMethod(
-      api,
-      resources.health,
-      'GET',
-      lambdaFunctions.healthCheck,
-      `${this.resourcePrefix}-health-check`
-    );
+    const { method: healthCheckMethod, integration: healthCheckIntegration } =
+      this.createApiMethodWithIntegration(
+        api,
+        resources.health,
+        'GET',
+        lambdaFunctions.healthCheck,
+        `${this.resourcePrefix}-health-check`
+      );
+    methods.push(healthCheckMethod);
+    integrations.push(healthCheckIntegration);
 
-    methods.push(
-      createUser,
-      getUsers,
-      getUser,
-      updateUser,
-      deleteUser,
-      createSession,
-      getSession,
-      deleteSession,
-      healthCheck
-    );
-
-    return methods;
+    return { methods, integrations };
   }
 
-  private createApiMethod(
+  private createApiMethodWithIntegration(
     api: ApiGatewayRestApi,
     resource: ApiGatewayResource,
     httpMethod: string,
     lambdaFunction: LambdaFunction,
     id: string
-  ): ApiGatewayMethod {
+  ): { method: ApiGatewayMethod; integration: ApiGatewayIntegration } {
     const method = new ApiGatewayMethod(this, `${id}-method`, {
       restApiId: api.id,
       resourceId: resource.id,
@@ -689,7 +712,7 @@ export class TapStack extends TerraformStack {
       },
     });
 
-    new ApiGatewayIntegration(this, `${id}-integration`, {
+    const integration = new ApiGatewayIntegration(this, `${id}-integration`, {
       restApiId: api.id,
       resourceId: resource.id,
       httpMethod: method.httpMethod,
@@ -701,19 +724,20 @@ export class TapStack extends TerraformStack {
       },
     });
 
-    return method;
+    return { method, integration };
   }
 
   private createApiDeployment(
     api: ApiGatewayRestApi,
-    methods: ApiGatewayMethod[]
+    methods: ApiGatewayMethod[],
+    integrations: ApiGatewayIntegration[]
   ): ApiGatewayDeployment {
     return new ApiGatewayDeployment(
       this,
       `${this.resourcePrefix}-api-deployment`,
       {
         restApiId: api.id,
-        dependsOn: methods,
+        dependsOn: [...methods, ...integrations],
         lifecycle: {
           createBeforeDestroy: true,
         },

@@ -326,13 +326,14 @@ describe('TapStack Unit Tests', () => {
 
       Object.values(lambdaFunctions).forEach((lambda: any) => {
         expect(lambda.environment).toBeDefined();
-        expect(lambda.environment.variables.AWS_REGION).toBe('us-east-1');
         expect(lambda.environment.variables.USER_TABLE_NAME).toContain(
           'aws_dynamodb_table.prod-service-user-table.name'
         );
         expect(lambda.environment.variables.SESSION_TABLE_NAME).toContain(
           'aws_dynamodb_table.prod-service-session-table.name'
         );
+        // Note: AWS_REGION is automatically provided by AWS Lambda runtime
+        expect(lambda.environment.variables.AWS_REGION).toBeUndefined();
       });
     });
 
