@@ -327,47 +327,6 @@
                 }
             }
         },
-        "S3BucketNotification": {
-            "Type": "AWS::S3::Bucket",
-            "DependsOn": "S3InvokeLambdaPermission",
-            "Properties": {
-                "BucketName": {
-                    "Fn::Sub": "${ProjectName}-${Environment}-s3bucket-primary-with-notifications"
-                },
-                "PublicAccessBlockConfiguration": {
-                    "BlockPublicAcls": true,
-                    "BlockPublicPolicy": true,
-                    "IgnorePublicAcls": true,
-                    "RestrictPublicBuckets": true
-                },
-                "VersioningConfiguration": {
-                    "Status": "Enabled"
-                },
-                "BucketEncryption": {
-                    "ServerSideEncryptionConfiguration": [
-                        {
-                            "ServerSideEncryptionByDefault": {
-                                "SSEAlgorithm": "AES256"
-                            },
-                            "BucketKeyEnabled": true
-                        }
-                    ]
-                },
-                "NotificationConfiguration": {
-                    "LambdaConfigurations": [
-                        {
-                            "Event": "s3:ObjectCreated:*",
-                            "Function": {
-                                "Fn::GetAtt": [
-                                    "DataProcessorLambda",
-                                    "Arn"
-                                ]
-                            }
-                        }
-                    ]
-                }
-            }
-        },
         "S3InvokeLambdaPermission": {
             "Type": "AWS::Lambda::Permission",
             "Properties": {

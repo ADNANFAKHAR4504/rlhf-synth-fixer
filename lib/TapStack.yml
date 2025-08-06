@@ -21,6 +21,7 @@ Parameters:
       - 'prod'
     Description: 'Environment for deployment (dev, staging, prod)'
     
+ 
 
 Resources:
   # ===========================================
@@ -350,32 +351,6 @@ Resources:
                           'timestamp': datetime.utcnow().isoformat()
                       })
                   }
-
-  # ===========================================
-  # S3 BUCKET NOTIFICATION CONFIGURATION
-  # Configure S3 to trigger Lambda on object creation
-  # ===========================================
-  S3BucketNotification:
-    Type: AWS::S3::Bucket
-    DependsOn: S3InvokeLambdaPermission
-    Properties:
-      BucketName: !Sub '${ProjectName}-${Environment}-s3bucket-primary-with-notifications'
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-      VersioningConfiguration:
-        Status: Enabled
-      BucketEncryption:
-        ServerSideEncryptionConfiguration:
-          - ServerSideEncryptionByDefault:
-              SSEAlgorithm: AES256
-            BucketKeyEnabled: true
-      NotificationConfiguration:
-        LambdaConfigurations:
-          - Event: 's3:ObjectCreated:*'
-            Function: !GetAtt DataProcessorLambda.Arn
 
   # ===========================================
   # S3 BUCKET PERMISSIONS FOR LAMBDA
