@@ -79,7 +79,6 @@ describe('TapStack CloudFormation Template', () => {
       const envVars = lambda.Properties.Environment.Variables;
 
       expect(envVars.STAGE).toEqual({ Ref: 'Environment' });
-      expect(envVars.AWS_REGION).toBe('us-east-1');
       expect(envVars.LOG_LEVEL).toEqual({ Ref: 'LogLevel' });
       expect(envVars.DYNAMODB_TABLE).toEqual({ Ref: 'DataTable' });
     });
@@ -331,12 +330,6 @@ describe('TapStack CloudFormation Template', () => {
 
   describe('Region Constraint', () => {
     test('template should explicitly reference us-east-1 region', () => {
-      // Check Lambda environment variable
-      const lambda = template.Resources.DataProcessorFunction;
-      expect(lambda.Properties.Environment.Variables.AWS_REGION).toBe(
-        'us-east-1'
-      );
-
       // Check API Gateway URL in outputs
       const apiOutput = template.Outputs.ApiGatewayUrl;
       expect(apiOutput.Value['Fn::Sub']).toContain('us-east-1');

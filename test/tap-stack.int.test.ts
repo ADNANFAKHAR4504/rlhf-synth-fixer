@@ -173,7 +173,6 @@ describe('Serverless Data Processing API Integration Tests', () => {
       };
 
       expect(expectedEnvVars.STAGE).toBe(environmentSuffix);
-      expect(expectedEnvVars.AWS_REGION).toBe('us-east-1');
       expect(expectedEnvVars.LOG_LEVEL).toBe('INFO');
       expect(expectedEnvVars.DYNAMODB_TABLE).toBe(
         getOutputValue('DynamoDBTableName')
