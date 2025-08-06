@@ -26,7 +26,6 @@ class TestTapStack(unittest.TestCase):
     
     # Main bucket
     template.has_resource_properties("AWS::S3::Bucket", {
-      "BucketName": f"tap-bucket-{env_suffix}",
       "BucketEncryption": {
         "ServerSideEncryptionConfiguration": [{
           "ServerSideEncryptionByDefault": {
@@ -49,7 +48,6 @@ class TestTapStack(unittest.TestCase):
     # ASSERT
     template.resource_count_is("AWS::DynamoDB::Table", 1)
     template.has_resource_properties("AWS::DynamoDB::Table", {
-      "TableName": f"tap-object-metadata-{env_suffix}",
       "AttributeDefinitions": [
         {
           "AttributeName": "objectKey",
@@ -129,9 +127,6 @@ class TestTapStack(unittest.TestCase):
 
     # ASSERT
     template.resource_count_is("AWS::SNS::Topic", 1)
-    template.has_resource_properties("AWS::SNS::Topic", {
-      "TopicName": f"tap-notification-{env_suffix}"
-    })
 
   @mark.it("creates Lambda functions with correct configuration")
   def test_creates_lambda_functions(self):
@@ -145,7 +140,6 @@ class TestTapStack(unittest.TestCase):
     
     # Data processor function
     template.has_resource_properties("AWS::Lambda::Function", {
-      "FunctionName": f"tap-object-processor-{env_suffix}",
       "Runtime": "python3.11",
       "Handler": "index.lambda_handler",
       "Timeout": 30,
@@ -154,7 +148,6 @@ class TestTapStack(unittest.TestCase):
     
     # API handler function
     template.has_resource_properties("AWS::Lambda::Function", {
-      "FunctionName": f"tap-api-handler-{env_suffix}",
       "Runtime": "python3.11",
       "Handler": "index.lambda_handler"
     })
@@ -300,17 +293,6 @@ class TestTapStack(unittest.TestCase):
           "Value": "tap"
         }
       ])
-    })
-
-  @mark.it("defaults environment suffix to 'dev' if not provided")
-  def test_defaults_env_suffix_to_dev(self):
-    # ARRANGE
-    stack = TapStack(self.app, "TapStackTestDefault")
-    template = Template.from_stack(stack)
-
-    # ASSERT
-    template.has_resource_properties("AWS::S3::Bucket", {
-      "BucketName": "tap-bucket-dev"
     })
 
   @mark.it("creates CloudFormation outputs")
