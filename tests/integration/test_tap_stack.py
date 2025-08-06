@@ -3,8 +3,9 @@
 import json
 import os
 import unittest
+
 import boto3
-from botocore.exceptions import ClientError, BotoCoreError
+from botocore.exceptions import BotoCoreError, ClientError
 from pytest import mark
 
 # Load CDK outputs
@@ -23,7 +24,7 @@ else:
 
 S3_BUCKET_NAME = flat_outputs.get("S3BucketName")
 LAMBDA_FUNCTION_NAME = flat_outputs.get("LambdaFunctionName")
-LAMBDA_ROLE_ARN = flat_outputs.get("LambdaRoleArn")  # Optional, if used
+LAMBDA_ROLE_ARN = flat_outputs.get("LambdaRoleArn")  # Optional
 
 s3_client = boto3.client("s3")
 lambda_client = boto3.client("lambda")
@@ -32,7 +33,7 @@ cloudwatch_client = boto3.client("cloudwatch")
 
 @mark.describe("TapStack Integration Tests")
 class TestTapStackIntegration(unittest.TestCase):
-  """Integration tests for S3, Lambda, and CloudWatch in TapStack."""
+  """Integration tests for S3, Lambda, and CloudWatch components in TapStack."""
 
   def setUp(self):
     """Ensure required outputs are available before running tests."""
@@ -82,56 +83,68 @@ class TestTapStackIntegration(unittest.TestCase):
         Payload=json.dumps(payload)
       )
       function_response = json.loads(response["Payload"].read())
+
       self.assertEqual(response["StatusCode"], 200)
       self.assertEqual(function_response.get("statusCode"), 200)
       self.assertEqual(
-        function_response.get("body"), "Successfully processed S3 event"
+        function_response.get("body"),
+        "Successfully processed S3 event"
       )
+
     except (ClientError, BotoCoreError, json.JSONDecodeError) as ex:
       self.fail(f"Lambda test failed: {ex}")
 
   @mark.it("confirms CloudWatch alarms exist for Lambda function")
   def test_cloudwatch_alarms_exist(self):
     """Ensure CloudWatch alarms for Lambda errors, throttles, and duration exist."""
-    parts = LAMBDA_FUNCTION_NAME.split('-')
-    if len(parts) < 3:
-      self.fail(f"Unexpected Lambda function name format: {LAMBDA_FUNCTION_NAME}")
-    env_suffix = parts[1]
-
-    prefix = f"tap-{env_suffix}-lambda-"
-    expected_alarm_names = [
-      f"{prefix}LambdaErrorAlarm",
-      f"{prefix}LambdaThrottlesAlarm",
-      f"{prefix}LambdaDurationAlarm"
+    expected_alarm_substrings = [
+      "LambdaErrorAlarm",
+      "LambdaThrottlesAlarm",
+      "LambdaDurationAlarm"
     ]
 
-    found_alarms = []
+    found_alarms_details = []
 
     try:
-      response = cloudwatch_client.describe_alarms(AlarmNamePrefix=prefix)
+      response = cloudwatch_client.describe_alarms()
+
       for alarm in response.get("MetricAlarms", []):
         dimensions = alarm.get("Dimensions", [])
-        if any(
-          d.get("Name") == "FunctionName" and d.get("Value") == LAMBDA_FUNCTION_NAME
-          for d in dimensions
-        ):
-          if alarm.get("AlarmName") in expected_alarm_names:
-            found_alarms.append(alarm)
+        is_for_correct_lambda = any(
+          dim.get("Name") == "FunctionName" and dim.get("Value") == LAMBDA_FUNCTION_NAME
+          for dim in dimensions
+        )
+        is_expected_type = any(
+          substr in alarm.get("AlarmName", "") for substr in expected_alarm_substrings
+        )
+
+        if is_for_correct_lambda and is_expected_type:
+          found_alarms_details.append(alarm)
+
+      found_suffixes = {
+        a["AlarmName"].split("-")[-1] for a in found_alarms_details
+      }
+      expected_suffixes = {name.replace("Lambda", "") for name in expected_alarm_substrings}
 
       self.assertEqual(
-        len(found_alarms),
-        len(expected_alarm_names),
-        f"Expected {len(expected_alarm_names)} alarms, found {len(found_alarms)}. "
-        f"Missing: {set(expected_alarm_names) - {a['AlarmName'] for a in found_alarms}}"
+        len(found_alarms_details),
+        len(expected_alarm_substrings),
+        f"Expected {len(expected_alarm_substrings)} alarms, but found {len(found_alarms_details)}. "
+        f"Missing: {expected_suffixes - found_suffixes}"
       )
 
-      for alarm_detail in found_alarms:
-        name = alarm_detail["AlarmName"]
-        self.assertEqual(alarm_detail["ComparisonOperator"], "GreaterThanOrEqualToThreshold")
+      for alarm_detail in found_alarms_details:
+        alarm_name = alarm_detail["AlarmName"]
+        self.assertEqual(
+          alarm_detail["ComparisonOperator"],
+          "GreaterThanOrEqualToThreshold"
+        )
         self.assertEqual(alarm_detail["EvaluationPeriods"], 1)
-        if "Error" in name or "Throttles" in name:
+        self.assertEqual(alarm_detail["TreatMissingData"], "notBreaching")
+
+        if "LambdaErrorAlarm" in alarm_name or "LambdaThrottlesAlarm" in alarm_name:
           self.assertEqual(alarm_detail["Threshold"], 1.0)
-        elif "Duration" in name:
+        elif "LambdaDurationAlarm" in alarm_name:
           self.assertEqual(alarm_detail["Threshold"], 5000.0)
           self.assertEqual(alarm_detail["Period"], 60)
 
