@@ -28,13 +28,13 @@ describe('TapStack CloudFormation Template', () => {
 
   describe('Parameters', () => {
     test('should have required parameters', () => {
-      expect(template.Parameters.EnvironmentName).toBeDefined();
+      expect(template.Parameters.EnvironmentSuffix).toBeDefined();
       expect(template.Parameters.ArtifactBucketName).toBeDefined();
       expect(template.Parameters.ArtifactS3Key).toBeDefined();
     });
 
-    test('EnvironmentName should have correct constraints', () => {
-      const envParam = template.Parameters.EnvironmentName;
+    test('EnvironmentSuffix should have correct constraints', () => {
+      const envParam = template.Parameters.EnvironmentSuffix;
       expect(envParam.Type).toBe('String');
       expect(envParam.AllowedValues).toEqual(['dev', 'staging', 'prod']);
       expect(envParam.Default).toBe('dev');
