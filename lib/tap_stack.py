@@ -134,8 +134,8 @@ class TapStack(pulumi.ComponentResource):
             )
             self.private_subnets.append(subnet)
         
-        # NAT Gateways for private subnets
-        self.nat_gateways = []
+        # Create EIPs first, then NAT Gateways for private subnets
+        self.eips = []
         for i, subnet in enumerate(self.public_subnets):
             eip = aws.ec2.Eip(
                 f"{self.app_name}-eip-{i+1}-{self.environment}",
@@ -144,9 +144,13 @@ class TapStack(pulumi.ComponentResource):
                     "Name": f"{self.app_name}-eip-{i+1}-{self.environment}",
                     "Environment": self.environment
                 },
-                opts=pulumi.ResourceOptions(parent=self)
+                opts=pulumi.ResourceOptions(parent=self, depends_on=[self.igw])
             )
-            
+            self.eips.append(eip)
+        
+        # NAT Gateways using the pre-created EIPs
+        self.nat_gateways = []
+        for i, (subnet, eip) in enumerate(zip(self.public_subnets, self.eips)):
             nat_gw = aws.ec2.NatGateway(
                 f"{self.app_name}-nat-{i+1}-{self.environment}",
                 allocation_id=eip.id,
@@ -155,7 +159,7 @@ class TapStack(pulumi.ComponentResource):
                     "Name": f"{self.app_name}-nat-{i+1}-{self.environment}",
                     "Environment": self.environment
                 },
-                opts=pulumi.ResourceOptions(parent=self, depends_on=[eip])
+                opts=pulumi.ResourceOptions(parent=self, depends_on=[eip, subnet, self.igw])
             )
             self.nat_gateways.append(nat_gw)
         
@@ -185,7 +189,7 @@ class TapStack(pulumi.ComponentResource):
                 opts=pulumi.ResourceOptions(parent=self)
             )
         
-        # Private route tables
+        # Private route tables - ensure proper dependency handling
         self.private_rts = []
         for i, (subnet, nat_gw) in enumerate(zip(self.private_subnets, self.nat_gateways)):
             route_table = aws.ec2.RouteTable(
@@ -201,7 +205,7 @@ class TapStack(pulumi.ComponentResource):
                     "Name": f"{self.app_name}-private-rt-{i+1}-{self.environment}",
                     "Environment": self.environment
                 },
-                opts=pulumi.ResourceOptions(parent=self)
+                opts=pulumi.ResourceOptions(parent=self, depends_on=[nat_gw])
             )
             self.private_rts.append(route_table)
             
@@ -209,7 +213,7 @@ class TapStack(pulumi.ComponentResource):
                 f"{self.app_name}-private-rta-{i+1}-{self.environment}",
                 subnet_id=subnet.id,
                 route_table_id=route_table.id,
-                opts=pulumi.ResourceOptions(parent=self)
+                opts=pulumi.ResourceOptions(parent=self, depends_on=[route_table, subnet])
             )
     
     def _create_security(self):
@@ -382,7 +386,7 @@ class TapStack(pulumi.ComponentResource):
     def _create_application_infrastructure(self):
         """Create application infrastructure with blue-green deployment support"""
         
-        # Application Load Balancer
+        # Application Load Balancer with enhanced configuration
         self.alb = aws.lb.LoadBalancer(
             f"{self.app_name}-alb-{self.environment}",
             name=f"{self.app_name}-alb-{self.environment}",
@@ -390,11 +394,14 @@ class TapStack(pulumi.ComponentResource):
             subnets=[subnet.id for subnet in self.public_subnets],
             security_groups=[self.alb_sg.id],
             enable_deletion_protection=self.environment == "prod",
+            enable_cross_zone_load_balancing=True,
+            idle_timeout=60,
+            # Access logs configuration removed as it requires additional S3 bucket policy setup
             tags={
                 "Name": f"{self.app_name}-alb-{self.environment}",
                 "Environment": self.environment
             },
-            opts=pulumi.ResourceOptions(parent=self)
+            opts=pulumi.ResourceOptions(parent=self, depends_on=self.public_subnets + [self.alb_sg])
         )
         
         # Blue Target Group
@@ -491,7 +498,7 @@ class TapStack(pulumi.ComponentResource):
             opts=pulumi.ResourceOptions(parent=self)
         )
         
-        # Auto Scaling Group
+        # Auto Scaling Group with enhanced configuration
         self.asg = aws.autoscaling.Group(
             f"{self.app_name}-asg-{self.environment}",
             name=f"{self.app_name}-asg-{self.environment}",
@@ -502,6 +509,8 @@ class TapStack(pulumi.ComponentResource):
             min_size=1 if self.environment != "prod" else 2,
             max_size=3 if self.environment != "prod" else 6,
             desired_capacity=1 if self.environment != "prod" else 2,
+            default_cooldown=300,
+            termination_policies=["OldestInstance"],
             launch_template=aws.autoscaling.GroupLaunchTemplateArgs(
                 id=self.launch_template.id,
                 version="$Latest"
@@ -516,9 +525,14 @@ class TapStack(pulumi.ComponentResource):
                     key="Environment",
                     value=self.environment,
                     propagate_at_launch=True
+                ),
+                aws.autoscaling.GroupTagArgs(
+                    key="Application",
+                    value=self.app_name,
+                    propagate_at_launch=True
                 )
             ],
-            opts=pulumi.ResourceOptions(parent=self)
+            opts=pulumi.ResourceOptions(parent=self, depends_on=[self.launch_template] + self.private_subnets + [self.blue_target_group])
         )
     
     def _generate_user_data_script(self):
@@ -600,7 +614,7 @@ systemctl start app-health
     def _create_cicd_pipeline(self):
         """Create CI/CD pipeline with CodePipeline, CodeBuild, and CodeDeploy"""
         
-        # S3 bucket for artifacts
+        # S3 bucket for artifacts with enhanced security and lifecycle management
         # Generate a valid bucket name (lowercase, no underscores, 3-63 chars)
         stack_name = pulumi.get_stack().lower().replace('_', '-').replace(' ', '-')[:10]
         bucket_name = f"{self.app_name}-artifacts-{self.environment}-{stack_name}".lower()
@@ -613,7 +627,8 @@ systemctl start app-health
                 rule=aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
                     apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
                         sse_algorithm="AES256"
-                    )
+                    ),
+                    bucket_key_enabled=True
                 )
             ),
             tags={
@@ -621,6 +636,36 @@ systemctl start app-health
                 "Purpose": "CI/CD Artifacts"
             },
             opts=pulumi.ResourceOptions(parent=self)
+        )
+        
+        # Block public access to artifacts bucket
+        self.artifacts_bucket_public_access_block = aws.s3.BucketPublicAccessBlock(
+            f"{self.app_name}-artifacts-pab-{self.environment}",
+            bucket=self.artifacts_bucket.id,
+            block_public_acls=True,
+            block_public_policy=True,
+            ignore_public_acls=True,
+            restrict_public_buckets=True,
+            opts=pulumi.ResourceOptions(parent=self)
+        )
+        
+        # Lifecycle configuration for artifact cleanup
+        self.artifacts_bucket_lifecycle = aws.s3.BucketLifecycleConfigurationV2(
+            f"{self.app_name}-artifacts-lifecycle-{self.environment}",
+            bucket=self.artifacts_bucket.id,
+            rules=[
+                aws.s3.BucketLifecycleConfigurationV2RuleArgs(
+                    id="cleanup_old_versions",
+                    status="Enabled",
+                    noncurrent_version_expiration=aws.s3.BucketLifecycleConfigurationV2RuleNoncurrentVersionExpirationArgs(
+                        noncurrent_days=30
+                    ),
+                    abort_incomplete_multipart_upload=aws.s3.BucketLifecycleConfigurationV2RuleAbortIncompleteMultipartUploadArgs(
+                        days_after_initiation=7
+                    )
+                )
+            ],
+            opts=pulumi.ResourceOptions(parent=self, depends_on=[self.artifacts_bucket])
         )
         
         # Create CI/CD roles
@@ -690,7 +735,7 @@ systemctl start app-health
             opts=pulumi.ResourceOptions(parent=self)
         )
         
-        # CodeBuild policy
+        # CodeBuild policy - with enhanced permissions and error handling
         self.codebuild_policy = aws.iam.Policy(
             f"{self.app_name}-codebuild-policy-{self.environment}",
             policy=pulumi.Output.all(
@@ -711,20 +756,34 @@ systemctl start app-health
                     {
                         "Effect": "Allow",
                         "Action": [
+                            "s3:GetBucketLocation",
+                            "s3:GetBucketVersioning",
                             "s3:GetObject",
                             "s3:GetObjectVersion",
-                            "s3:PutObject"
+                            "s3:PutObject",
+                            "s3:ListBucket"
                         ],
                         "Resource": [
+                            f"{args[0]}",
                             f"{args[0]}/*"
                         ]
                     },
                     {
                         "Effect": "Allow",
                         "Action": [
-                            "secretsmanager:GetSecretValue"
+                            "secretsmanager:GetSecretValue",
+                            "secretsmanager:DescribeSecret"
                         ],
                         "Resource": args[1]
+                    },
+                    {
+                        "Effect": "Allow",
+                        "Action": [
+                            "ssm:GetParameters",
+                            "ssm:GetParameter",
+                            "ssm:GetParametersByPath"
+                        ],
+                        "Resource": f"arn:aws:ssm:{self.region}:*:parameter/{self.app_name}-*"
                     }
                 ]
             })),
@@ -781,22 +840,23 @@ systemctl start app-health
             opts=pulumi.ResourceOptions(parent=self)
         )
         
-        # CodePipeline policy
+        # CodePipeline policy - enhanced with proper resource scoping
         self.codepipeline_policy = aws.iam.Policy(
             f"{self.app_name}-codepipeline-policy-{self.environment}",
             policy=pulumi.Output.all(
-                self.artifacts_bucket.arn,
-                self.codebuild_project.arn if hasattr(self, 'codebuild_project') else "",
+                self.artifacts_bucket.arn
             ).apply(lambda args: json.dumps({
                 "Version": "2012-10-17",
                 "Statement": [
                     {
                         "Effect": "Allow",
                         "Action": [
+                            "s3:GetBucketLocation",
                             "s3:GetBucketVersioning",
                             "s3:GetObject",
                             "s3:GetObjectVersion",
-                            "s3:PutObject"
+                            "s3:PutObject",
+                            "s3:ListBucket"
                         ],
                         "Resource": [
                             args[0],
@@ -807,7 +867,13 @@ systemctl start app-health
                         "Effect": "Allow",
                         "Action": [
                             "codebuild:BatchGetBuilds",
-                            "codebuild:StartBuild",
+                            "codebuild:StartBuild"
+                        ],
+                        "Resource": f"arn:aws:codebuild:{self.region}:*:project/{self.app_name}-*"
+                    },
+                    {
+                        "Effect": "Allow",
+                        "Action": [
                             "codedeploy:CreateDeployment",
                             "codedeploy:GetApplication",
                             "codedeploy:GetApplicationRevision",
@@ -815,7 +881,11 @@ systemctl start app-health
                             "codedeploy:GetDeploymentConfig",
                             "codedeploy:RegisterApplicationRevision"
                         ],
-                        "Resource": "*"
+                        "Resource": [
+                            f"arn:aws:codedeploy:{self.region}:*:application/{self.app_name}-*",
+                            f"arn:aws:codedeploy:{self.region}:*:deploymentgroup:{self.app_name}-*",
+                            f"arn:aws:codedeploy:{self.region}:*:deploymentconfig/*"
+                        ]
                     }
                 ]
             })),
@@ -917,8 +987,7 @@ artifacts:
             role_arn=self.codepipeline_role.arn,
             artifact_stores=[aws.codepipeline.PipelineArtifactStoreArgs(
                 location=self.artifacts_bucket.bucket,
-                type="S3",
-                region=self.region
+                type="S3"
             )],
             stages=[
                 aws.codepipeline.PipelineStageArgs(
