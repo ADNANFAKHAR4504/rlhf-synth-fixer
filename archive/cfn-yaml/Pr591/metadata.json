@@ -10,5 +10,6 @@
     "lines": 100,
     "branches": 100
   },
-  "author": "jpoola-turing"
+  "author": "jpoola-turing",
+  "dockerS3Location": ""
 }
