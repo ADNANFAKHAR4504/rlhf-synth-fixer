@@ -121,56 +121,54 @@ class TestTapStack:
 
     assert lambda_role_logical_id_in_template, "Could not extract logical ID of Lambda role from template."
 
-    # Now use this extracted logical ID for the assertion
-    lambda_role_ref_dict = {"Ref": lambda_role_logical_id_in_template}
+    # Now, find the specific IAM Policy resource associated with this role
+    # We look for a policy that has this exact role logical ID in its 'Roles' array
+    app_lambda_policy_resources = template.find_resources("AWS::IAM::Policy", {
+        "Properties": {
+            "Roles": Match.array_with([{"Ref": lambda_role_logical_id_in_template}]),
+            "PolicyName": Match.string_like_regexp("AppLambdaServiceRoleDefaultPolicy.*")
+        }
+    })
+    assert len(app_lambda_policy_resources) == 1, f"Expected exactly one IAM Policy for role {lambda_role_logical_id_in_template}"
+    app_lambda_policy_logical_id = list(app_lambda_policy_resources.keys())[0]
+    policy_document = template.to_json()["Resources"][app_lambda_policy_logical_id]["Properties"]["PolicyDocument"]
 
 
     # Check for DynamoDB read/write permissions
-    template.has_resource_properties("AWS::IAM::Policy", {
-        "PolicyDocument": {
-            "Statement": Match.array_with([
-                Match.object_like({
-                    "Action": Match.array_with(["dynamodb:BatchGetItem", "dynamodb:GetRecords", "dynamodb:GetShardIterator", "dynamodb:Query", "dynamodb:GetItem", "dynamodb:Scan", "dynamodb:BatchWriteItem", "dynamodb:PutItem", "dynamodb:UpdateItem", "dynamodb:DeleteItem"]),
-                    "Effect": "Allow",
-                    "Resource": Match.array_with([
-                        Match.object_like({"Fn::GetAtt": [Match.string_like_regexp("AppTable.*"), "Arn"]}), # Table ARN
-                        # Removed the /index/* part as no indexes are defined in the stack
-                    ])
-                })
+    assert Match.array_with([
+        Match.object_like({
+            "Action": Match.array_with(["dynamodb:BatchGetItem", "dynamodb:GetRecords", "dynamodb:GetShardIterator", "dynamodb:Query", "dynamodb:GetItem", "dynamodb:Scan", "dynamodb:BatchWriteItem", "dynamodb:PutItem", "dynamodb:UpdateItem", "dynamodb:DeleteItem"]),
+            "Effect": "Allow",
+            "Resource": Match.array_with([
+                Match.object_like({"Fn::GetAtt": [Match.string_like_regexp("AppTable.*"), "Arn"]}), # Table ARN
+                # Removed the /index/* part as no indexes are defined in the stack
             ])
-        },
-        "PolicyName": Match.string_like_regexp("AppLambdaServiceRoleDefaultPolicy.*"),
-        "Roles": Match.array_with([lambda_role_ref_dict]) # Ensure this policy is attached to the AppLambda's role
-    })
+        })
+    ]).test(policy_document["Statement"]), "DynamoDB permissions mismatch"
 
     # Check for S3 read/write permissions
-    template.has_resource_properties("AWS::IAM::Policy", {
-        "PolicyDocument": {
-            "Statement": Match.array_with([
-                Match.object_like({
-                    "Action": Match.array_with([
-                        "s3:GetObject*",
-                        "s3:GetBucket*",
-                        "s3:List*",
-                        "s3:DeleteObject*",
-                        "s3:PutObject", # Specific action
-                        "s3:PutObjectLegalHold",
-                        "s3:PutObjectRetention",
-                        "s3:PutObjectTagging",
-                        "s3:PutObjectVersionTagging",
-                        "s3:AbortMultipartUpload" # Specific action
-                    ]),
-                    "Effect": "Allow",
-                    "Resource": Match.array_with([
-                        Match.object_like({"Fn::GetAtt": [Match.string_like_regexp("AppBucket.*"), "Arn"]}), # Bucket ARN
-                        Match.object_like({"Fn::Join": ["", [Match.object_like({"Fn::GetAtt": [Match.string_like_regexp("AppBucket.*"), "Arn"]}), "/*"]]}) # Objects ARN
-                    ])
-                })
+    assert Match.array_with([
+        Match.object_like({
+            "Action": Match.array_with([
+                Match.string_like_regexp("s3:GetObject.*"),
+                Match.string_like_regexp("s3:GetBucket.*"),
+                Match.string_like_regexp("s3:List.*"),
+                Match.string_like_regexp("s3:DeleteObject.*"),
+                "s3:PutObject", # Specific action
+                "s3:PutObjectLegalHold",
+                "s3:PutObjectRetention",
+                "s3:PutObjectTagging",
+                "s3:PutObjectVersionTagging",
+                "s3:AbortMultipartUpload" # Specific action
+            ]),
+            "Effect": "Allow",
+            "Resource": Match.array_with([
+                Match.object_like({"Fn::GetAtt": [Match.string_like_regexp("AppBucket.*"), "Arn"]}), # Bucket ARN
+                Match.object_like({"Fn::Join": ["", [Match.object_like({"Fn::GetAtt": [Match.string_like_regexp("AppBucket.*"), "Arn"]}), "/*"]]}) # Objects ARN
             ])
-        },
-        "PolicyName": Match.string_like_regexp("AppLambdaServiceRoleDefaultPolicy.*"),
-        "Roles": Match.array_with([lambda_role_ref_dict]) # Ensure this policy is attached to the AppLambda's role
-    })
+        })
+    ]).test(policy_document["Statement"]), "S3 permissions mismatch"
+
 
   def test_s3_event_source_mapping(self, default_stack):
     """
