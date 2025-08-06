@@ -40,10 +40,15 @@ class MockOutput:
     return Mock()
 
 
+class FakeResourceOptions:
+  def __init__(self, *args, **kwargs):
+    pass
+
+
 # Inject Pulumi and AWS mocks before importing actual components
 mock_pulumi = Mock()
 mock_pulumi.ComponentResource = MockComponentResource
-mock_pulumi.ResourceOptions = Mock
+mock_pulumi.ResourceOptions = FakeResourceOptions
 mock_pulumi.Output = MockOutput
 mock_pulumi.Output.concat = MockOutput.concat
 mock_pulumi.Output.all = MockOutput.all
