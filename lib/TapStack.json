@@ -30,7 +30,13 @@
                   "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
                 }
               },
-              "Action": "kms:*",
+              "Action": [
+                "kms:Encrypt",
+                "kms:Decrypt",
+                "kms:ReEncrypt*",
+                "kms:GenerateDataKey*",
+                "kms:DescribeKey"
+              ],
               "Resource": "*"
             },
             {
