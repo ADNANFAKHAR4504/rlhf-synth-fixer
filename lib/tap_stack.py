@@ -325,6 +325,8 @@ def create_ec2_instances(
   )
   user_data = f"""#!/bin/bash
 yum update -y
+systemctl stop firewalld
+systemctl disable firewalld
 yum install -y nginx
 systemctl start nginx
 systemctl enable nginx
