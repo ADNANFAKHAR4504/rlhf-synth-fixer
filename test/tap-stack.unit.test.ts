@@ -64,7 +64,9 @@ describe('Serverless Application CloudFormation Template', () => {
       expect(template.Resources.DynamoDBEncryptionKeyAlias).toBeDefined();
       const keyAlias = template.Resources.DynamoDBEncryptionKeyAlias;
       expect(keyAlias.Type).toBe('AWS::KMS::Alias');
-      expect(keyAlias.Properties.TargetKeyId).toEqual({ Ref: 'DynamoDBEncryptionKey' });
+      expect(keyAlias.Properties.TargetKeyId).toEqual({
+        Ref: 'DynamoDBEncryptionKey',
+      });
     });
   });
 
@@ -73,16 +75,16 @@ describe('Serverless Application CloudFormation Template', () => {
       expect(template.Resources.DataTable).toBeDefined();
       const table = template.Resources.DataTable;
       expect(table.Type).toBe('AWS::DynamoDB::Table');
-      
+
       // Check key schema
       expect(table.Properties.KeySchema).toHaveLength(2);
       expect(table.Properties.KeySchema[0]).toEqual({
         AttributeName: 'id',
-        KeyType: 'HASH'
+        KeyType: 'HASH',
       });
       expect(table.Properties.KeySchema[1]).toEqual({
         AttributeName: 'timestamp',
-        KeyType: 'RANGE'
+        KeyType: 'RANGE',
       });
 
       // Check encryption
@@ -94,7 +96,7 @@ describe('Serverless Application CloudFormation Template', () => {
       const table = template.Resources.DataTable;
       expect(table.Properties.ProvisionedThroughput).toEqual({
         ReadCapacityUnits: 5,
-        WriteCapacityUnits: 5
+        WriteCapacityUnits: 5,
       });
     });
   });
@@ -104,14 +106,18 @@ describe('Serverless Application CloudFormation Template', () => {
       expect(template.Resources.LambdaExecutionRole).toBeDefined();
       const role = template.Resources.LambdaExecutionRole;
       expect(role.Type).toBe('AWS::IAM::Role');
-      expect(role.Properties.Policies).toHaveLength(2);
-      
+      expect(role.Properties.Policies).toHaveLength(3);
+
       // Check CloudWatch policy
-      const cloudWatchPolicy = role.Properties.Policies.find((p: any) => p.PolicyName === 'CloudWatchLogsPolicy');
+      const cloudWatchPolicy = role.Properties.Policies.find(
+        (p: any) => p.PolicyName === 'CloudWatchLogsPolicy'
+      );
       expect(cloudWatchPolicy).toBeDefined();
-      
-      // Check DynamoDB policy  
-      const dynamoPolicy = role.Properties.Policies.find((p: any) => p.PolicyName === 'DynamoDBPutItemPolicy');
+
+      // Check DynamoDB policy
+      const dynamoPolicy = role.Properties.Policies.find(
+        (p: any) => p.PolicyName === 'DynamoDBPutItemPolicy'
+      );
       expect(dynamoPolicy).toBeDefined();
     });
 
@@ -121,8 +127,12 @@ describe('Serverless Application CloudFormation Template', () => {
       expect(lambda.Type).toBe('AWS::Lambda::Function');
       expect(lambda.Properties.Runtime).toBe('python3.9');
       expect(lambda.Properties.Handler).toBe('index.lambda_handler');
-      expect(lambda.Properties.Environment.Variables.STAGE).toEqual({ Ref: 'Environment' });
-      expect(lambda.Properties.Environment.Variables.DYNAMODB_TABLE_NAME).toEqual({ Ref: 'DataTable' });
+      expect(lambda.Properties.Environment.Variables.STAGE).toEqual({
+        Ref: 'Environment',
+      });
+      expect(
+        lambda.Properties.Environment.Variables.DYNAMODB_TABLE_NAME
+      ).toEqual({ Ref: 'DataTable' });
     });
 
     test('should have Lambda permission for API Gateway', () => {
@@ -160,7 +170,7 @@ describe('Serverless Application CloudFormation Template', () => {
     test('should have API deployment and stage', () => {
       expect(template.Resources.ApiDeployment).toBeDefined();
       expect(template.Resources.ApiStage).toBeDefined();
-      
+
       const stage = template.Resources.ApiStage;
       expect(stage.Properties.MethodSettings[0].ThrottlingRateLimit).toBe(100);
       expect(stage.Properties.MethodSettings[0].ThrottlingBurstLimit).toBe(50);
@@ -171,7 +181,7 @@ describe('Serverless Application CloudFormation Template', () => {
     test('should have log groups for Lambda and API Gateway', () => {
       expect(template.Resources.LambdaLogGroup).toBeDefined();
       expect(template.Resources.ApiGatewayLogGroup).toBeDefined();
-      
+
       const lambdaLogGroup = template.Resources.LambdaLogGroup;
       expect(lambdaLogGroup.Type).toBe('AWS::Logs::LogGroup');
       expect(lambdaLogGroup.Properties.RetentionInDays).toBe(14);
@@ -191,7 +201,7 @@ describe('Serverless Application CloudFormation Template', () => {
     test('should have SNS topic and subscription', () => {
       expect(template.Resources.AlarmNotificationTopic).toBeDefined();
       expect(template.Resources.AlarmNotificationSubscription).toBeDefined();
-      
+
       const subscription = template.Resources.AlarmNotificationSubscription;
       expect(subscription.Properties.Protocol).toBe('email');
       expect(subscription.Properties.Endpoint).toEqual({ Ref: 'SNSEmail' });
@@ -202,11 +212,11 @@ describe('Serverless Application CloudFormation Template', () => {
     test('should have all required outputs', () => {
       const expectedOutputs = [
         'ApiGatewayUrl',
-        'LambdaFunctionArn', 
+        'LambdaFunctionArn',
         'DynamoDBTableName',
         'CloudWatchAlarmName',
         'KMSKeyId',
-        'SNSTopicArn'
+        'SNSTopicArn',
       ];
 
       expectedOutputs.forEach(outputName => {
@@ -217,7 +227,9 @@ describe('Serverless Application CloudFormation Template', () => {
     test('ApiGatewayUrl output should be correct', () => {
       const output = template.Outputs.ApiGatewayUrl;
       expect(output.Description).toBe('API Gateway endpoint URL');
-      expect(output.Value['Fn::Sub']).toContain('${DataApi}.execute-api.us-east-1.amazonaws.com');
+      expect(output.Value['Fn::Sub']).toContain(
+        '${DataApi}.execute-api.us-east-1.amazonaws.com'
+      );
     });
 
     test('outputs should have export names', () => {
@@ -232,10 +244,14 @@ describe('Serverless Application CloudFormation Template', () => {
   describe('Security Validation', () => {
     test('Lambda function should have least privilege IAM policies', () => {
       const role = template.Resources.LambdaExecutionRole;
-      const dynamoPolicy = role.Properties.Policies.find((p: any) => p.PolicyName === 'DynamoDBPutItemPolicy');
-      
+      const dynamoPolicy = role.Properties.Policies.find(
+        (p: any) => p.PolicyName === 'DynamoDBPutItemPolicy'
+      );
+
       // Should only have PutItem permission, not broader permissions
-      expect(dynamoPolicy.PolicyDocument.Statement[0].Action).toEqual(['dynamodb:PutItem']);
+      expect(dynamoPolicy.PolicyDocument.Statement[0].Action).toEqual([
+        'dynamodb:PutItem',
+      ]);
     });
 
     test('DynamoDB table should use KMS encryption', () => {
@@ -247,12 +263,14 @@ describe('Serverless Application CloudFormation Template', () => {
     test('KMS key should have proper key policy', () => {
       const kmsKey = template.Resources.DynamoDBEncryptionKey;
       const keyPolicy = kmsKey.Properties.KeyPolicy;
-      
+
       expect(keyPolicy.Statement).toHaveLength(2);
       // Root account permissions
       expect(keyPolicy.Statement[0].Principal.AWS['Fn::Sub']).toContain('root');
       // DynamoDB service permissions
-      expect(keyPolicy.Statement[1].Principal.Service).toBe('dynamodb.amazonaws.com');
+      expect(keyPolicy.Statement[1].Principal.Service).toBe(
+        'dynamodb.amazonaws.com'
+      );
     });
   });
 
