@@ -19,7 +19,6 @@ import {
   InvokeCommand,
   GetFunctionCommand,
 } from '@aws-sdk/client-lambda';
-import { KMSClient, DescribeKeyCommand } from '@aws-sdk/client-kms';
 import axios from 'axios';
 
 const outputs = JSON.parse(
@@ -27,23 +26,17 @@ const outputs = JSON.parse(
 );
 
 // Extract outputs
-const apiGatewayUrl = outputs.find((o: any) => o.OutputKey === 'APIGatewayURL')
-  ?.OutputValue;
-const cloudFrontDomain = outputs.find(
-  (o: any) => o.OutputKey === 'CloudFrontDomainName'
-)?.OutputValue;
-const dynamoTableName = outputs.find(
-  (o: any) => o.OutputKey === 'DynamoDBTableName'
-)?.OutputValue;
+const apiGatewayUrl = outputs.APIGatewayURL || outputs.ServerlessAppAPIEndpoint46EEF2F8;
+const cloudFrontDomain = outputs.CloudFrontDomainName;
+const dynamoTableName = outputs.DynamoDBTableName;
 
-// Get environment suffix from environment variable (set by CI/CD pipeline)
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'synth285';
+// Extract environment suffix from the table name
+const environmentSuffix = dynamoTableName.split('serverlessApp-table-')[1] || 'dev';
 
 // AWS clients
 const dynamoClient = new DynamoDBClient({ region: 'us-east-1' });
 const lambdaClient = new LambdaClient({ region: 'us-east-1' });
 const cloudFrontClient = new CloudFrontClient({ region: 'us-east-1' });
-const kmsClient = new KMSClient({ region: 'us-east-1' });
 
 describe('Serverless Infrastructure Integration Tests', () => {
   describe('DynamoDB Table', () => {
@@ -206,7 +199,6 @@ describe('Serverless Infrastructure Integration Tests', () => {
   });
 
   describe('End-to-End API Workflow', () => {
-    let createdItemId: string;
 
     test('Complete CRUD workflow through API Gateway', async () => {
       // 1. Create an item
@@ -223,7 +215,6 @@ describe('Serverless Infrastructure Integration Tests', () => {
       );
       expect(createResponse.status).toBe(201);
       expect(createResponse.data).toHaveProperty('id');
-      createdItemId = createResponse.data.id;
 
       // 2. List items (should include our created item)
       const listResponse = await axios.get(`${apiGatewayUrl}items`, {
