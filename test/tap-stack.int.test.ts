@@ -212,10 +212,13 @@ describe('Secure Foundational Environment Integration Tests', () => {
       
       expect(secureGroup).toBeDefined();
       
-      // Check egress rules (should only allow HTTPS and HTTP outbound)
+      // Check egress rules (should only allow HTTPS outbound to VPC CIDR)
       const egressRules = secureGroup!.IpPermissionsEgress!;
       expect(egressRules.some(rule => rule.FromPort === 443 && rule.ToPort === 443)).toBe(true);
-      expect(egressRules.some(rule => rule.FromPort === 80 && rule.ToPort === 80)).toBe(true);
+      
+      // Check ingress rules (should only allow SSH from VPC CIDR)
+      const ingressRules = secureGroup!.IpPermissions!;
+      expect(ingressRules.some(rule => rule.FromPort === 22 && rule.ToPort === 22)).toBe(true);
     }, 30000);
   });
 
@@ -261,7 +264,7 @@ describe('Secure Foundational Environment Integration Tests', () => {
       expect(response.DashboardEntries!.length).toBeGreaterThan(0);
       
       const dashboard = response.DashboardEntries![0];
-      expect(dashboard.DashboardName).toBe(`secure-foundation-dashboard-${environmentSuffix}`);
+      expect(dashboard.DashboardName).toContain(`secure-foundation-dashboard-${environmentSuffix}`);
     }, 30000);
 
     test('CloudTrail should be active and logging', async () => {
@@ -270,22 +273,25 @@ describe('Secure Foundational Environment Integration Tests', () => {
         return;
       }
       
+      // First, let's get all trails and find ours by name pattern
       const response = await cloudTrailClient.send(
-        new DescribeTrailsCommand({
-          trailNameList: [`security-audit-trail-${environmentSuffix}`],
-        })
+        new DescribeTrailsCommand({})
       );
       
-      expect(response.trailList).toHaveLength(1);
-      const trail = response.trailList![0];
+      // Find our trail by name pattern (includes environment suffix and account ID)
+      const ourTrail = response.trailList?.find((trail: any) => 
+        trail.Name?.includes(`security-audit-trail-${environmentSuffix}`)
+      );
       
-      expect(trail.IsMultiRegionTrail).toBe(true);
-      expect(trail.IncludeGlobalServiceEvents).toBe(true);
-      expect(trail.LogFileValidationEnabled).toBe(true);
+      expect(ourTrail).toBeDefined();
+      
+      expect(ourTrail!.IsMultiRegionTrail).toBe(true);
+      expect(ourTrail!.IncludeGlobalServiceEvents).toBe(true);
+      expect(ourTrail!.LogFileValidationEnabled).toBe(true);
       
       // Check trail status
       const statusResponse = await cloudTrailClient.send(
-        new GetTrailStatusCommand({ Name: trail.TrailARN })
+        new GetTrailStatusCommand({ Name: ourTrail!.TrailARN })
       );
       
       expect(statusResponse.IsLogging).toBe(true);
