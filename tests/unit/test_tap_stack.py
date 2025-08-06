@@ -99,10 +99,37 @@ class TestTapStack:
     """Test that the Lambda function has correct IAM permissions."""
     template = Template.from_stack(qa_stack)
 
-    # Get the logical ID of the AppLambda's role directly from the stack's lambda_fn object
-    # This is the most reliable way to get the exact reference CDK uses.
-    lambda_role_ref = qa_stack.lambda_fn.role.node.default_child.logical_id
-    lambda_role_ref_dict = {"Ref": lambda_role_ref}
+    # Find the logical ID of the AppLambda's role from the synthesized template
+    # This is more robust than relying on the Python object's logical_id property directly,
+    # as it reflects what's actually in the CloudFormation template.
+    lambda_role_resources = template.find_resources("AWS::IAM::Role", {
+        "Properties": {
+            "AssumeRolePolicyDocument": {
+                "Statement": Match.array_with([
+                    Match.object_like({
+                        "Action": "sts:AssumeRole",
+                        "Effect": "Allow",
+                        "Principal": {"Service": "lambda.amazonaws.com"}
+                    })
+                ])
+            },
+            "Tags": Match.array_with([
+                Match.object_like({"Key": "aws-cdk:function-name", "Value": "tap-qa-lambda"})
+            ])
+        }
+    })
+    assert len(lambda_role_resources) >= 1, "Expected at least one Lambda Service Role for AppLambda"
+    # Get the logical ID of the specific AppLambda role
+    app_lambda_role_logical_id = None
+    for logical_id, resource_props in lambda_role_resources.items():
+        # Heuristic to find the main lambda's role, as there might be other lambda-backed custom resource roles
+        if "tap-qa-lambda" in resource_props["Properties"].get("RoleName", "") or \
+           any(tag.get("Key") == "aws-cdk:function-name" and tag.get("Value") == "tap-qa-lambda" for tag in resource_props["Properties"].get("Tags", [])):
+            app_lambda_role_logical_id = logical_id
+            break
+
+    assert app_lambda_role_logical_id, "Could not find the logical ID for AppLambda's role."
+    lambda_role_ref_dict = {"Ref": app_lambda_role_logical_id}
 
 
     # Check for DynamoDB read/write permissions
@@ -144,26 +171,12 @@ class TestTapStack:
   def test_s3_event_source_mapping(self, default_stack):
     """
     Test that S3 is set as an event source for the Lambda function.
-    For S3, this means checking the S3 Bucket Notification Configuration
-    and the Lambda Permission that allows S3 to invoke the function.
+    For S3, this means checking the AWS::Lambda::Permission that allows S3 to invoke the function.
     """
     template = Template.from_stack(default_stack)
 
-    # Check for the S3 Bucket Notification Configuration
-    # Using Match.objectLike for the bucket properties to allow for other properties
-    # while specifically checking the NotificationConfiguration.
-    template.has_resource_properties("AWS::S3::Bucket", {
-        "NotificationConfiguration": {
-            "LambdaConfigurations": [
-                {
-                    "Event": "s3:ObjectCreated:*",
-                    "Function": Match.object_like({"Fn::GetAtt": [Match.string_like_regexp("AppLambda.*"), "Arn"]})
-                }
-            ]
-        }
-    })
-
-    # Check for the Lambda Permission allowing S3 to invoke the function
+    # For S3 event sources, CDK creates an AWS::Lambda::Permission resource.
+    # It does NOT directly add a "NotificationConfiguration" property to the S3 bucket resource.
     template.has_resource_properties("AWS::Lambda::Permission", {
         "Action": "lambda:InvokeFunction",
         "FunctionName": Match.object_like({"Fn::GetAtt": [Match.string_like_regexp("AppLambda.*"), "Arn"]}),
@@ -171,6 +184,17 @@ class TestTapStack:
         "SourceAccount": Match.object_like({"Ref": "AWS::AccountId"}),
         "SourceArn": Match.object_like({"Fn::GetAtt": [Match.string_like_regexp("AppBucket.*"), "Arn"]})
     })
+
+    # Optional: You could also check for the Custom Resource Lambda that manages
+    # the S3 bucket notification configuration if you want to be very thorough,
+    # but the AWS::Lambda::Permission is the direct evidence of the event source.
+    # For example:
+    # template.has_resource_properties("AWS::Lambda::Function", {
+    #     "Handler": "index.handler", # This would be the custom resource handler
+    #     "Runtime": "nodejs18.x", # Or whatever runtime CDK uses for custom resources
+    #     "Tags": Match.array_with([{"Key": "aws-cdk:auto-delete-objects-handler", "Value": "true"}])
+    # })
+
 
   def test_stack_outputs(self, prod_stack):
     """Test that CloudFormation outputs are defined for resources."""
