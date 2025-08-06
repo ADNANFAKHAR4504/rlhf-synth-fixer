@@ -134,14 +134,32 @@ trail.addS3EventSelector([{
 
 ## Security Issues
 
-### 1. Missing IAM Role Assignment
+### 1. ECS Task Role Trust Relationship Error
+**Issue**: ECS service failed to launch tasks with error "ECS was unable to assume the role"
+**Root Cause**: Using EC2 instance role (`ec2.amazonaws.com` trust) for ECS tasks instead of ECS task role (`ecs-tasks.amazonaws.com` trust)
+**Solution**:
+```typescript
+// Create proper ECS task role with correct trust relationship
+const ecsTaskRole = new iam.Role(this, 'ECSTaskRole', {
+  assumedBy: new iam.ServicePrincipal('ecs-tasks.amazonaws.com'),
+  description: 'IAM role for ECS tasks with least privilege access',
+});
+
+const taskDefinition = new ecs.FargateTaskDefinition(this, 'TaskDef', {
+  memoryLimitMiB: 512,
+  cpu: 256,
+  taskRole: ecsTaskRole, // Assign proper ECS task role to tasks
+});
+```
+
+### 2. Missing IAM Role Assignment
 **Issue**: ECS tasks not assigned IAM roles
 **Solution**:
 ```typescript
 const taskDefinition = new ecs.FargateTaskDefinition(this, 'TaskDef', {
   memoryLimitMiB: 512,
   cpu: 256,
-  taskRole: ec2Role, // Assign IAM role to tasks
+  taskRole: ecsTaskRole, // Assign IAM role to tasks
 });
 ```
 
@@ -203,3 +221,5 @@ new cdk.CfnOutput(this, 'RDSInstanceId', {
 6. **Use CDK Aspects** for cross-cutting concerns like validation
 7. **Implement proper error handling** and validation
 8. **Ensure proper resource sizing** for production environments
+9. **Use correct IAM trust relationships** - EC2 roles for EC2 instances, ECS task roles for ECS tasks
+10. **Validate IAM role assignments** match the service that will assume them

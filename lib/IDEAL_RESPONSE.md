@@ -114,10 +114,16 @@ export class TapStack extends cdk.Stack {
     // Apply RDS instance type validation using CDK Aspects
     Aspects.of(this).add(new RdsInstanceTypeValidator());
 
-    // 5. COMPUTE & ACCESS MANAGEMENT - IAM Role for EC2 (no static access keys)
+    // 5. COMPUTE & ACCESS MANAGEMENT - IAM Roles with proper trust relationships
     const ec2Role = new iam.Role(this, 'EC2InstanceRole', {
       assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
       description: 'IAM role for EC2 instances with least privilege access',
+    });
+
+    // IAM Role for ECS Tasks with proper trust relationship
+    const ecsTaskRole = new iam.Role(this, 'ECSTaskRole', {
+      assumedBy: new iam.ServicePrincipal('ecs-tasks.amazonaws.com'),
+      description: 'IAM role for ECS tasks with least privilege access',
     });
 
     // ECS Cluster with Container Insights
@@ -130,7 +136,7 @@ export class TapStack extends cdk.Stack {
     const taskDefinition = new ecs.FargateTaskDefinition(this, 'TaskDef', {
       memoryLimitMiB: 512, // Optimized resource allocation
       cpu: 256,
-      taskRole: ec2Role, // Assign IAM role to tasks
+      taskRole: ecsTaskRole, // Assign proper ECS task role to tasks
     });
     
     taskDefinition.addContainer('web', {
