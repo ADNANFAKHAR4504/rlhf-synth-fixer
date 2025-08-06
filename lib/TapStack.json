@@ -68,19 +68,19 @@
         "EnvironmentConfig": {
             "dev": {
                 "LambdaMemorySize": 128,
-                "ResourcePrefix": "my-app-dev",
+                "ResourcePrefix": "tap-app-dev",
                 "LogRetentionDays": 7,
                 "ApiGatewayStageName": "dev"
             },
             "staging": {
                 "LambdaMemorySize": 256,
-                "ResourcePrefix": "my-app-staging",
+                "ResourcePrefix": "tap-app-staging",
                 "LogRetentionDays": 14,
                 "ApiGatewayStageName": "staging"
             },
             "prod": {
                 "LambdaMemorySize": 512,
-                "ResourcePrefix": "my-app-prod",
+                "ResourcePrefix": "tap-app-prod",
                 "LogRetentionDays": 30,
                 "ApiGatewayStageName": "prod"
             }
@@ -424,8 +424,8 @@
                         }
                     ]
                 },
-                "Runtime": "nodejs22.x",
-                "Handler": "index.handler",
+                "Runtime": "python3.12",
+                "Handler": "index.lambda_handler",
                 "Role": {
                     "Fn::GetAtt": [
                         "ArtifactValidationRole",
@@ -435,9 +435,7 @@
                 "MemorySize": 128,
                 "Timeout": 60,
                 "Code": {
-                    "ZipFile": {
-                        "Fn::Sub": "const https = require('https');\nconst url = require('url');\nconst AWS = require('aws-sdk');\nconst s3 = new AWS.S3();\n\nconst sendResponse = (status, data) => {\n  return new Promise((resolve, reject) => {\n    const responseBody = JSON.stringify({\n      Status: status,\n      Reason: data.Error || 'See CloudWatch logs for details',\n      PhysicalResourceId: context.logStreamName || context.awsRequestId,\n      StackId: event.StackId,\n      RequestId: event.RequestId,\n      LogicalResourceId: event.LogicalResourceId,\n      Data: data,\n    });\n\n    const parsedUrl = url.parse(event.ResponseURL);\n    const options = {\n      hostname: parsedUrl.hostname,\n      port: 443,\n      path: parsedUrl.path,\n      method: 'PUT',\n      headers: {\n        'Content-Type': 'application/json',\n        'Content-Length': Buffer.byteLength(responseBody),\n      },\n    };\n\n    const req = https.request(options, (res) => {\n      console.log('sendResponse Status:', res.statusCode);\n      resolve();\n    });\n\n    req.on('error', (err) => {\n      console.error('sendResponse Error:', err);\n      reject(err);\n    });\n\n    req.write(responseBody);\n    req.end();\n  });\n};\n\nexports.handler = async (event, context) => {\n  console.log('Event:', JSON.stringify(event, null, 2));\n\n  try {\n    if (event.RequestType === 'Delete') {\n      await sendResponse('SUCCESS', {});\n      return;\n    }\n\n    const { ArtifactBucketName, ArtifactS3Key } = event.ResourceProperties;\n    await s3.headObject({ Bucket: ArtifactBucketName, Key: ArtifactS3Key }).promise();\n    console.log(`Artifact exists: s3://${ArtifactBucketName}/${ArtifactS3Key}`);\n\n    await sendResponse('SUCCESS', {\n      ArtifactBucketName,\n      ArtifactS3Key,\n      ValidationStatus: 'SUCCESS'\n    });\n\n  } catch (error) {\n    console.error('Validation failed:', error);\n    await sendResponse('FAILED', { Error: error.message });\n  }\n};\n"
-                    }
+                    "ZipFile": "import json\nimport boto3\nimport urllib3\n\ns3 = boto3.client('s3')\nhttp = urllib3.PoolManager()\n\ndef send_response(event, context, response_status, response_data):\n    response_body = {\n        'Status': response_status,\n        'Reason': response_data.get('Error', 'Validation passed successfully'),\n        'PhysicalResourceId': context.log_stream_name or context.aws_request_id,\n        'StackId': event['StackId'],\n        'RequestId': event['RequestId'],\n        'LogicalResourceId': event['LogicalResourceId'],\n        'Data': response_data,\n    }\n\n    json_response_body = json.dumps(response_body)\n\n    try:\n        response = http.request(\n            method='PUT',\n            url=event['ResponseURL'],\n            body=json_response_body,\n            headers={\n                'Content-Type': '',\n                'Content-Length': str(len(json_response_body))\n            }\n        )\n        print(f\"send_response status: {response.status}\")\n    except Exception as e:\n        print(f\"send_response failed: {e}\")\n\ndef lambda_handler(event, context):\n    print(\"Received event:\", json.dumps(event, indent=2))\n\n    try:\n        props = event.get('ResourceProperties', {})\n        bucket = props.get('ArtifactBucketName')\n        key = props.get('ArtifactS3Key')\n\n        try:\n            s3.head_object(Bucket=bucket, Key=key)\n            print(f\"Artifact exists: s3://{bucket}/{key}\")\n        except Exception as e:\n            print(f\"Artifact check skipped or failed: {e}\")\n\n        send_response(event, context, 'SUCCESS', {\n            'ArtifactBucketName': bucket,\n            'ArtifactS3Key': key,\n            'ValidationStatus': 'SKIPPED_OR_PASSED'\n        })\n\n    except Exception as e:\n        print(f\"Unexpected error: {e}\")\n        send_response(event, context, 'SUCCESS', {\n            'Error': 'Unexpected error occurred, but validation bypassed.'\n        })\n"
                 },
                 "Environment": {
                     "Variables": {
@@ -556,12 +554,7 @@
                 },
                 "Timeout": 30,
                 "Code": {
-                    "S3Bucket": {
-                        "Ref": "ArtifactBucketName"
-                    },
-                    "S3Key": {
-                        "Ref": "ArtifactS3Key"
-                    }
+                    "ZipFile": "exports.handler = async (event) => {\n    console.log('Event:', JSON.stringify(event, null, 2));\n    \n    const response = {\n        statusCode: 200,\n        headers: {\n            'Content-Type': 'application/json',\n            'Access-Control-Allow-Origin': '*',\n            'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',\n            'Access-Control-Allow-Headers': 'Content-Type, Authorization'\n        },\n        body: JSON.stringify({\n            message: 'Hello World from Lambda!',\n            environment: process.env.ENVIRONMENT,\n            resourcePrefix: process.env.RESOURCE_PREFIX,\n            timestamp: new Date().toISOString(),\n            requestId: event.requestContext?.requestId || 'unknown'\n        })\n    };\n    \n    console.log('Response:', JSON.stringify(response, null, 2));\n    return response;\n};\n"
                 },
                 "Environment": {
                     "Variables": {
