@@ -37,11 +37,16 @@ Resources:
       KeyPolicy:
         Version: '2012-10-17'
         Statement:
-          - Sid: Enable IAM User Permissions
+          - Sid: AllowRootUseOfKMSKey
             Effect: Allow
             Principal:
               AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
-            Action: 'kms:*'
+            Action:
+              - kms:Encrypt
+              - kms:Decrypt
+              - kms:ReEncrypt*
+              - kms:GenerateDataKey*
+              - kms:DescribeKey
             Resource: '*'
           - Sid: AllowCloudFormation
             Effect: Allow
@@ -350,7 +355,7 @@ Resources:
           - Sid: AllowCloudFormationLogging
             Effect: Allow
             Principal:
-              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:user/iac-deployment-runner'
+              Service: cloudformation.amazonaws.com
             Action: 's3:PutBucketLogging'
             Resource: !GetAtt BackupDataBucket.Arn
 
