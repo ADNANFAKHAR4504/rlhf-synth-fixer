@@ -150,7 +150,7 @@ Resources:
       FunctionName: !Ref DataProcessorFunction
       Action: lambda:InvokeFunction
       Principal: apigateway.amazonaws.com
-      SourceArn: !Sub '${DataApi}/*/*'
+      SourceArn: !Sub 'arn:aws:execute-api:us-east-1:${AWS::AccountId}:${DataApi}/*/*'
 
   # API Gateway REST API
   DataApi:
@@ -228,7 +228,7 @@ Resources:
               Service: application-autoscaling.amazonaws.com
             Action: sts:AssumeRole
       ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/DynamoDBAutoscaleRole
+        - arn:aws:iam::aws:policy/service-role/AmazonDynamoDBAutoscaleRole # Corrected policy ARN
 
   # DynamoDB Auto Scaling Target - Read Capacity
   ReadCapacityScalableTarget:
@@ -285,25 +285,6 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName: !Sub '${AWS::StackName}-lambda-error-rate-alarm'
-      AlarmDescription: 'Alarm when Lambda function error rate exceeds 5% for 5 consecutive minutes'
-      MetricName: Errors
-      Namespace: AWS/Lambda
-      Statistic: Sum
-      Period: 60
-      EvaluationPeriods: 5
-      Threshold: 0
-      ComparisonOperator: GreaterThanThreshold
-      Dimensions:
-        - Name: FunctionName
-          Value: !Ref DataProcessorFunction
-      TreatMissingData: notBreaching
-      AlarmActions: []
-
-  # CloudWatch Alarm for Lambda Error Rate Percentage
-  LambdaErrorRateAlarm:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName: !Sub '${AWS::StackName}-lambda-error-rate-percentage-alarm'
       AlarmDescription: 'Alarm when Lambda function error rate exceeds 5% for 5 consecutive minutes'
       Metrics:
         - Id: e1
