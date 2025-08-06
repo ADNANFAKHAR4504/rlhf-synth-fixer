@@ -2,9 +2,13 @@ import pytest
 import subprocess
 import json
 import os
-import requests
+import urllib.request
+import urllib.error
 
 PULUMI_STACK_NAME = os.environ.get("PULUMI_STACK_NAME", "TapStackpr558")
+
+# Define your deployment stage explicitly (e.g., "dev", "staging", etc.)
+API_STAGE = os.environ.get("API_STAGE", "dev")  # default to "dev"
 
 
 @pytest.fixture(scope="session")
@@ -25,16 +29,23 @@ def pulumi_outputs():
 
 def test_api_gateway_response_contains_jane_doe(pulumi_outputs):
   """Checks if Jane Doe is present in the API Gateway response"""
-  api_url = pulumi_outputs.get("api_gateway_address")
-  assert api_url, "Missing 'api_gateway_address' in Pulumi outputs."
+  base_url = pulumi_outputs.get("api_gateway_address")
+  assert base_url, "Missing 'api_gateway_address' in Pulumi outputs."
 
-  # Optional: append /users/<id> or /health if needed
-  full_url = f"{api_url}/users"
+  # Construct full URL manually with /<stage>/users
+  full_url = f"{base_url.rstrip('/')}/dev/users"
 
-  response = requests.get(full_url)
-  assert response.status_code == 200, f"Expected 200 OK but got {response.status_code}"
-
-  json_data = response.json()
+  try:
+    with urllib.request.urlopen(full_url) as response:
+      assert response.status == 200, f"Expected 200 OK but got {response.status}"
+      body = response.read().decode("utf-8")
+      json_data = json.loads(body)
+  except urllib.error.HTTPError as e:
+    pytest.fail(f"HTTP error occurred: {e.code} - {e.reason}")
+  except urllib.error.URLError as e:
+    pytest.fail(f"URL error occurred: {e.reason}")
+  except json.JSONDecodeError:
+    pytest.fail("Response body is not valid JSON")
 
   assert "data" in json_data, "Missing 'data' in response."
   assert json_data["data"].get(

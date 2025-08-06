@@ -371,14 +371,21 @@ class ServerlessComponent(pulumi.ComponentResource):
         stage_name=environment
     )
 
+    # self.api_url = pulumi.Output.concat(
+    #     "https://",
+    #     self.api.id,
+    #     ".execute-api.",
+    #     aws.get_region().name,
+    #     ".amazonaws.com/",
+    #     self.stage.stage_name,
+    #     "/users"
+    # )
     self.api_url = pulumi.Output.concat(
         "https://",
         self.api.id,
         ".execute-api.",
         aws.get_region().name,
-        ".amazonaws.com/",
-        self.stage.stage_name,
-        "/users"
+        ".amazonaws.com"
     )
 
     # Register outputs
