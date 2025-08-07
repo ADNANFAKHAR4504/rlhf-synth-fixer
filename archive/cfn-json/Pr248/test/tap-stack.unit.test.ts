@@ -54,7 +54,7 @@ describe('TapStack CloudFormation Template', () => {
         'SSHLocation',
         'DBName',
         'DBUsername',
-        'LatestAmiId',
+        'LatestAmiId'
       ];
 
       expectedParameters.forEach(paramName => {
@@ -81,7 +81,7 @@ describe('TapStack CloudFormation Template', () => {
         'PublicSubnet1Cidr',
         'PublicSubnet2Cidr',
         'PrivateSubnet1Cidr',
-        'PrivateSubnet2Cidr',
+        'PrivateSubnet2Cidr'
       ];
 
       cidrParams.forEach(paramName => {
@@ -100,7 +100,7 @@ describe('TapStack CloudFormation Template', () => {
         't3.micro',
         't3.small',
         't3.medium',
-        't3.large',
+        't3.large'
       ]);
     });
 
@@ -112,18 +112,14 @@ describe('TapStack CloudFormation Template', () => {
         'db.t3.micro',
         'db.t3.small',
         'db.t3.medium',
-        'db.t3.large',
+        'db.t3.large'
       ]);
     });
 
     test('LatestAmiId should use SSM parameter', () => {
       const amiParam = template.Parameters.LatestAmiId;
-      expect(amiParam.Type).toBe(
-        'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
-      );
-      expect(amiParam.Default).toBe(
-        '/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2'
-      );
+      expect(amiParam.Type).toBe('AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>');
+      expect(amiParam.Default).toBe('/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2');
     });
   });
 
@@ -176,10 +172,10 @@ describe('TapStack CloudFormation Template', () => {
     test('should have NAT Gateway and EIP', () => {
       const natGateway = template.Resources.NatGateway1;
       const natEIP = template.Resources.NatGateway1EIP;
-
+      
       expect(natGateway).toBeDefined();
       expect(natGateway.Type).toBe('AWS::EC2::NatGateway');
-
+      
       expect(natEIP).toBeDefined();
       expect(natEIP.Type).toBe('AWS::EC2::EIP');
       expect(natEIP.Properties.Domain).toBe('vpc');
@@ -188,26 +184,18 @@ describe('TapStack CloudFormation Template', () => {
     test('should have route tables and associations', () => {
       const publicRouteTable = template.Resources.PublicRouteTable;
       const privateRouteTable = template.Resources.PrivateRouteTable1;
-
+      
       expect(publicRouteTable).toBeDefined();
       expect(publicRouteTable.Type).toBe('AWS::EC2::RouteTable');
-
+      
       expect(privateRouteTable).toBeDefined();
       expect(privateRouteTable.Type).toBe('AWS::EC2::RouteTable');
 
       // Check route table associations
-      expect(
-        template.Resources.PublicSubnet1RouteTableAssociation
-      ).toBeDefined();
-      expect(
-        template.Resources.PublicSubnet2RouteTableAssociation
-      ).toBeDefined();
-      expect(
-        template.Resources.PrivateSubnet1RouteTableAssociation
-      ).toBeDefined();
-      expect(
-        template.Resources.PrivateSubnet2RouteTableAssociation
-      ).toBeDefined();
+      expect(template.Resources.PublicSubnet1RouteTableAssociation).toBeDefined();
+      expect(template.Resources.PublicSubnet2RouteTableAssociation).toBeDefined();
+      expect(template.Resources.PrivateSubnet1RouteTableAssociation).toBeDefined();
+      expect(template.Resources.PrivateSubnet2RouteTableAssociation).toBeDefined();
     });
   });
 
@@ -216,22 +204,18 @@ describe('TapStack CloudFormation Template', () => {
       const webServerSG = template.Resources.WebServerSecurityGroup;
       expect(webServerSG).toBeDefined();
       expect(webServerSG.Type).toBe('AWS::EC2::SecurityGroup');
-
+      
       const ingress = webServerSG.Properties.SecurityGroupIngress;
       expect(ingress).toHaveLength(2);
-
+      
       // Check HTTP rule
-      const httpRule = ingress.find(
-        (rule: { FromPort: number }) => rule.FromPort === 80
-      );
+      const httpRule = ingress.find((rule: { FromPort: number; }) => rule.FromPort === 80);
       expect(httpRule).toBeDefined();
       expect(httpRule.ToPort).toBe(80);
       expect(httpRule.IpProtocol).toBe('tcp');
-
+      
       // Check HTTPS rule
-      const httpsRule = ingress.find(
-        (rule: { FromPort: number }) => rule.FromPort === 443
-      );
+      const httpsRule = ingress.find((rule: { FromPort: number; }) => rule.FromPort === 443);
       expect(httpsRule).toBeDefined();
       expect(httpsRule.ToPort).toBe(443);
       expect(httpsRule.IpProtocol).toBe('tcp');
@@ -241,7 +225,7 @@ describe('TapStack CloudFormation Template', () => {
       const dbSG = template.Resources.DatabaseSecurityGroup;
       expect(dbSG).toBeDefined();
       expect(dbSG.Type).toBe('AWS::EC2::SecurityGroup');
-
+      
       const ingress = dbSG.Properties.SecurityGroupIngress;
       expect(ingress).toHaveLength(1);
       expect(ingress[0].FromPort).toBe(3306);
@@ -264,14 +248,10 @@ describe('TapStack CloudFormation Template', () => {
       const ec2Role = template.Resources.EC2Role;
       expect(ec2Role).toBeDefined();
       expect(ec2Role.Type).toBe('AWS::IAM::Role');
-
+      
       const managedPolicies = ec2Role.Properties.ManagedPolicyArns;
-      expect(managedPolicies).toContain(
-        'arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy'
-      );
-      expect(managedPolicies).toContain(
-        'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore'
-      );
+      expect(managedPolicies).toContain('arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy');
+      expect(managedPolicies).toContain('arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore');
     });
 
     test('should have EC2 instance profile', () => {
@@ -285,7 +265,7 @@ describe('TapStack CloudFormation Template', () => {
       const policies = ec2Role.Properties.Policies;
       expect(policies).toHaveLength(1);
       expect(policies[0].PolicyName).toBe('SecretsManagerAccess');
-
+      
       const statements = policies[0].PolicyDocument.Statement;
       expect(statements[0].Action).toContain('secretsmanager:GetSecretValue');
     });
@@ -346,7 +326,7 @@ describe('TapStack CloudFormation Template', () => {
       expect(dbInstance).toBeDefined();
       expect(dbInstance.Type).toBe('AWS::RDS::DBInstance');
       expect(dbInstance.Properties.Engine).toBe('mysql');
-      expect(dbInstance.Properties.EngineVersion).toBe('8.0.37');
+      expect(dbInstance.Properties.EngineVersion).toBe('8.0.35');
       expect(dbInstance.Properties.MultiAZ).toBe(true);
       expect(dbInstance.Properties.StorageEncrypted).toBe(true);
       expect(dbInstance.Properties.DeletionProtection).toBe(true);
@@ -357,7 +337,7 @@ describe('TapStack CloudFormation Template', () => {
       const dbSecret = template.Resources.DatabaseSecret;
       expect(dbSecret).toBeDefined();
       expect(dbSecret.Type).toBe('AWS::SecretsManager::Secret');
-
+      
       const generateConfig = dbSecret.Properties.GenerateSecretString;
       expect(generateConfig.GenerateStringKey).toBe('password');
       expect(generateConfig.PasswordLength).toBe(32);
@@ -370,22 +350,18 @@ describe('TapStack CloudFormation Template', () => {
       expect(s3Bucket).toBeDefined();
       expect(s3Bucket.Type).toBe('AWS::S3::Bucket');
       expect(s3Bucket.DeletionPolicy).toBe('Retain');
-
+      
       const properties = s3Bucket.Properties;
-      expect(properties.PublicAccessBlockConfiguration.BlockPublicAcls).toBe(
-        true
-      );
+      expect(properties.PublicAccessBlockConfiguration.BlockPublicAcls).toBe(true);
       expect(properties.VersioningConfiguration.Status).toBe('Enabled');
-      expect(properties.LifecycleConfiguration.Rules[0].ExpirationInDays).toBe(
-        90
-      );
+      expect(properties.LifecycleConfiguration.Rules[0].ExpirationInDays).toBe(90);
     });
 
     test('should have S3 bucket policy', () => {
       const bucketPolicy = template.Resources.VPCFlowLogsBucketPolicy;
       expect(bucketPolicy).toBeDefined();
       expect(bucketPolicy.Type).toBe('AWS::S3::BucketPolicy');
-
+      
       const statements = bucketPolicy.Properties.PolicyDocument.Statement;
       expect(statements).toHaveLength(2);
       expect(statements[0].Sid).toBe('AWSLogDeliveryWrite');
@@ -432,7 +408,7 @@ describe('TapStack CloudFormation Template', () => {
         'RDSEndpoint',
         'RDSPort',
         'DatabaseCredentialsSecret',
-        'S3BucketName',
+        'S3BucketName'
       ];
 
       expectedOutputs.forEach(outputName => {
@@ -443,14 +419,14 @@ describe('TapStack CloudFormation Template', () => {
     test('outputs should have correct export names', () => {
       Object.keys(template.Outputs).forEach(outputKey => {
         const output = template.Outputs[outputKey];
-
+        
         // Check that export exists
         expect(output.Export).toBeDefined();
         expect(output.Export.Name).toBeDefined();
-
+        
         // Check that export name follows the pattern ${AWS::StackName}-*
         expect(output.Export.Name['Fn::Sub']).toMatch(/^\${AWS::StackName}-.+/);
-
+        
         // Check that export name contains stack name reference
         expect(output.Export.Name['Fn::Sub']).toContain('${AWS::StackName}');
       });
@@ -479,14 +455,12 @@ describe('TapStack CloudFormation Template', () => {
         'WebServerSecurityGroup',
         'DatabaseSecurityGroup',
         'WebServerInstance',
-        'DatabaseInstance',
+        'DatabaseInstance'
       ];
 
       resourcesWithEnvSuffix.forEach(resourceName => {
         const resource = template.Resources[resourceName];
-        const nameTag = resource.Properties.Tags?.find(
-          (tag: { Key: string }) => tag.Key === 'Name'
-        );
+        const nameTag = resource.Properties.Tags?.find((tag: { Key: string; }) => tag.Key === 'Name');
         if (nameTag) {
           expect(nameTag.Value['Fn::Sub']).toContain('${EnvironmentSuffix}');
         }
@@ -494,17 +468,13 @@ describe('TapStack CloudFormation Template', () => {
     });
 
     test('all resources should have Environment tag', () => {
-      const taggedResources = Object.keys(template.Resources).filter(
-        resourceName => {
-          return template.Resources[resourceName].Properties?.Tags;
-        }
-      );
+      const taggedResources = Object.keys(template.Resources).filter(resourceName => {
+        return template.Resources[resourceName].Properties?.Tags;
+      });
 
       taggedResources.forEach(resourceName => {
         const resource = template.Resources[resourceName];
-        const envTag = resource.Properties.Tags.find(
-          (tag: { Key: string }) => tag.Key === 'Environment'
-        );
+        const envTag = resource.Properties.Tags.find((tag: { Key: string; }) => tag.Key === 'Environment');
         expect(envTag).toBeDefined();
         expect(envTag.Value).toEqual({ Ref: 'EnvironmentSuffix' });
       });
@@ -546,17 +516,16 @@ describe('TapStack CloudFormation Template', () => {
     test('RDS should be in private subnets', () => {
       const dbSubnetGroup = template.Resources.DatabaseSubnetGroup;
       const subnetIds = dbSubnetGroup.Properties.SubnetIds;
-
-      subnetIds.forEach((subnetRef: { Ref: any }) => {
+      
+      subnetIds.forEach((subnetRef: { Ref: any; }) => {
         expect(subnetRef.Ref).toMatch(/PrivateSubnet/);
       });
     });
 
     test('S3 bucket should block public access', () => {
       const s3Bucket = template.Resources.VPCFlowLogsS3Bucket;
-      const publicAccessBlock =
-        s3Bucket.Properties.PublicAccessBlockConfiguration;
-
+      const publicAccessBlock = s3Bucket.Properties.PublicAccessBlockConfiguration;
+      
       expect(publicAccessBlock.BlockPublicAcls).toBe(true);
       expect(publicAccessBlock.BlockPublicPolicy).toBe(true);
       expect(publicAccessBlock.IgnorePublicAcls).toBe(true);
@@ -572,9 +541,7 @@ describe('TapStack CloudFormation Template', () => {
     test('database access should be restricted to web servers only', () => {
       const dbSG = template.Resources.DatabaseSecurityGroup;
       const ingress = dbSG.Properties.SecurityGroupIngress[0];
-      expect(ingress.SourceSecurityGroupId).toEqual({
-        Ref: 'WebServerSecurityGroup',
-      });
+      expect(ingress.SourceSecurityGroupId).toEqual({ Ref: 'WebServerSecurityGroup' });
     });
   });
 
@@ -587,13 +554,9 @@ describe('TapStack CloudFormation Template', () => {
     test('should have subnets in different AZs', () => {
       const publicSubnet1 = template.Resources.PublicSubnet1;
       const publicSubnet2 = template.Resources.PublicSubnet2;
-
-      expect(publicSubnet1.Properties.AvailabilityZone['Fn::Select'][0]).toBe(
-        0
-      );
-      expect(publicSubnet2.Properties.AvailabilityZone['Fn::Select'][0]).toBe(
-        1
-      );
+      
+      expect(publicSubnet1.Properties.AvailabilityZone['Fn::Select'][0]).toBe(0);
+      expect(publicSubnet2.Properties.AvailabilityZone['Fn::Select'][0]).toBe(1);
     });
 
     test('should have backup retention configured', () => {
