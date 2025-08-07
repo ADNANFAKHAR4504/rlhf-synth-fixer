@@ -155,9 +155,14 @@
                                         "logs:PutLogEvents",
                                         "logs:DescribeLogStreams"
                                     ],
-                                    "Resource": {
-                                        "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/ec2/${CompanyName}-${Environment}*"
-                                    }
+                                    "Resource": [
+                                        {
+                                            "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/ec2/${CompanyName}-${Environment}-*"
+                                        },
+                                        {
+                                            "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/ec2/${CompanyName}-${Environment}-*:log-stream:*"
+                                        }
+                                    ]
                                 }
                             ]
                         }
@@ -426,8 +431,10 @@
                         "IpProtocol": "tcp",
                         "FromPort": 3306,
                         "ToPort": 3306,
-                        "CidrIp": "0.0.0.0/0",
-                        "Description": "MySQL to RDS"
+                        "DestinationSecurityGroupId": {
+                            "Ref": "RDSSecurityGroup"
+                        },
+                        "Description": "MySQL to RDS security group only"
                     }
                 ],
                 "Tags": [

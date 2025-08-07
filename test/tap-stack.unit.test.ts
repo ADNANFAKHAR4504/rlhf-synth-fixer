@@ -183,8 +183,19 @@ describe('TapStack CloudFormation Template', () => {
       const cwStatement = cwLogsPolicy.PolicyDocument.Statement[0];
       expect(cwStatement.Resource).toBeInstanceOf(Array);
       expect(cwStatement.Resource.length).toBeGreaterThanOrEqual(2);
-      expect(cwStatement.Resource[0]).toContain('/aws/ec2/');
-      expect(cwStatement.Resource[1]).toContain(':log-stream:');
+
+      // Fixed tests to handle CloudFormation Fn::Sub intrinsic function
+      if (cwStatement.Resource[0]['Fn::Sub']) {
+        expect(cwStatement.Resource[0]['Fn::Sub']).toContain('/aws/ec2/');
+      } else {
+        expect(cwStatement.Resource[0]).toContain('/aws/ec2/');
+      }
+
+      if (cwStatement.Resource[1]['Fn::Sub']) {
+        expect(cwStatement.Resource[1]['Fn::Sub']).toContain(':log-stream:');
+      } else {
+        expect(cwStatement.Resource[1]).toContain(':log-stream:');
+      }
     });
 
     test('RDS monitoring role should use managed policy', () => {
