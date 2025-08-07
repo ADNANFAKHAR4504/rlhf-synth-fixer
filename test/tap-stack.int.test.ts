@@ -20,21 +20,23 @@ try {
 // Get environment suffix from environment variable (set by CI/CD pipeline)
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
+// Helper functions to check if resources are deployed
+const hasOutput = (key: string): boolean => !!outputs[key];
+const hasRequiredS3Outputs = () =>
+  hasOutput('S3BucketName') && hasOutput('KMSKeyArn');
+const hasRequiredDynamoDBOutputs = () => hasOutput('TurnAroundPromptTableName');
+const hasRequiredEC2Outputs = () => hasOutput('EC2InstanceId');
+const hasRequiredRDSOutputs = () => hasOutput('RDSInstanceEndpoint');
+
 // Determine which resources are deployed based on outputs
 const getDeploymentType = () => {
-  const hasCore = hasOutput('S3BucketName') && hasOutput('KMSKeyArn');
-  const hasEC2RDS = hasOutput('EC2InstanceId') && hasOutput('RDSInstanceEndpoint');
+  const hasCore = hasRequiredS3Outputs();
+  const hasEC2RDS = hasRequiredEC2Outputs() && hasRequiredRDSOutputs();
 
   if (hasCore && hasEC2RDS) return 'FULL';
   if (hasCore) return 'CORE_ONLY';
   return 'UNKNOWN';
 };
-
-// Helper functions to check if resources are deployed
-const hasOutput = (key: string): boolean => !!outputs[key];
-const hasRequiredS3Outputs = () => hasOutput('S3BucketName') && hasOutput('KMSKeyArn');
-const hasRequiredEC2Outputs = () => hasOutput('EC2InstanceId');
-const hasRequiredRDSOutputs = () => hasOutput('RDSInstanceEndpoint');
 
 describe('TapStack Infrastructure Integration Tests', () => {
   // Set timeout higher for CLI operations
@@ -99,10 +101,18 @@ describe('TapStack Infrastructure Integration Tests', () => {
       );
 
       const publicAccessBlock = JSON.parse(stdout);
-      expect(publicAccessBlock.PublicAccessBlockConfiguration.BlockPublicAcls).toBe(true);
-      expect(publicAccessBlock.PublicAccessBlockConfiguration.BlockPublicPolicy).toBe(true);
-      expect(publicAccessBlock.PublicAccessBlockConfiguration.IgnorePublicAcls).toBe(true);
-      expect(publicAccessBlock.PublicAccessBlockConfiguration.RestrictPublicBuckets).toBe(true);
+      expect(
+        publicAccessBlock.PublicAccessBlockConfiguration.BlockPublicAcls
+      ).toBe(true);
+      expect(
+        publicAccessBlock.PublicAccessBlockConfiguration.BlockPublicPolicy
+      ).toBe(true);
+      expect(
+        publicAccessBlock.PublicAccessBlockConfiguration.IgnorePublicAcls
+      ).toBe(true);
+      expect(
+        publicAccessBlock.PublicAccessBlockConfiguration.RestrictPublicBuckets
+      ).toBe(true);
     });
 
     test('should verify KMS key is properly configured', async () => {
@@ -264,10 +274,12 @@ describe('TapStack Infrastructure Integration Tests', () => {
     });
 
     test('should verify EC2 to RDS connectivity if both deployed', async () => {
-      if (skipIfMissingOutputs(
-        () => hasRequiredEC2Outputs() && hasRequiredRDSOutputs(),
-        'EC2-RDS Connectivity'
-      )) {
+      if (
+        skipIfMissingOutputs(
+          () => hasRequiredEC2Outputs() && hasRequiredRDSOutputs(),
+          'EC2-RDS Connectivity'
+        )
+      ) {
         return;
       }
 
@@ -282,7 +294,8 @@ describe('TapStack Infrastructure Integration Tests', () => {
       );
 
       const ec2Data = JSON.parse(ec2Output);
-      const securityGroups = ec2Data.Reservations[0].Instances[0].SecurityGroups;
+      const securityGroups =
+        ec2Data.Reservations[0].Instances[0].SecurityGroups;
 
       expect(securityGroups.length).toBeGreaterThan(0);
 
@@ -290,45 +303,6 @@ describe('TapStack Infrastructure Integration Tests', () => {
       // A real test would use SSM to verify actual connectivity
       expect(instanceId).toBeDefined();
       expect(rdsEndpoint).toBeDefined();
-    });
-  });
-});
-      );
-
-      const routeTables = JSON.parse(rtOutput);
-
-      // Check if there's any route to an internet gateway (which would make it public)
-      const routes = routeTables.RouteTables[0].Routes || [];
-      const hasIgwRoute = routes.some(
-        (route: any) => route.GatewayId && route.GatewayId.startsWith('igw-')
-      );
-
-      expect(hasIgwRoute).toBe(false);
-    });
-
-    test('should verify RDS instance is properly configured', async () => {
-      if (skipIfMissingOutputs(hasRequiredRDSOutputs, 'RDS Instance')) {
-        return;
-      }
-
-      const endpoint = outputs.RDSInstanceEndpoint;
-      const dbInstanceId = endpoint.split('.')[0];
-
-      const { stdout } = await execAsync(
-        `aws rds describe-db-instances --db-instance-identifier ${dbInstanceId}`
-      );
-
-      const dbInstances = JSON.parse(stdout);
-      const instance = dbInstances.DBInstances[0];
-
-      expect(instance).toBeDefined();
-      expect(instance.Engine).toBe('mysql');
-      expect(instance.StorageEncrypted).toBe(true);
-      expect(instance.PubliclyAccessible).toBe(false);
-      expect(instance.EnabledCloudwatchLogsExports).toContain('error');
-      expect(instance.EnabledCloudwatchLogsExports).toContain('general');
-      expect(instance.EnabledCloudwatchLogsExports).toContain('slow-query');
-      expect(instance.MonitoringInterval).toBe(60);
     });
   });
 
@@ -406,7 +380,6 @@ describe('TapStack Infrastructure Integration Tests', () => {
       }
     });
 
-    // This test only runs if EC2 and RDS are deployed
     test('should verify complete E2E data flow including EC2 and RDS', async () => {
       if (
         skipIfMissingOutputs(
