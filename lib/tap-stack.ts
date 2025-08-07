@@ -356,7 +356,7 @@ exports.handler = async (event) => {
     }));
 
     // Perform write test
-    const testId = \`health-check-\${Date.now()}\`;
+    const testId = \`health-check-$${Date.now()}\`;
     await client.send(new PutItemCommand({
       TableName: process.env.USER_TABLE_NAME,
       Item: {
@@ -998,7 +998,7 @@ exports.handler = async (event) => {
     }));
 
     // Perform write test
-    const testId = \`health-check-\${Date.now()}\`;
+    const testId = \`health-check-$${Date.now()}\`;
     await client.send(new PutItemCommand({
       TableName: process.env.USER_TABLE_NAME,
       Item: {
