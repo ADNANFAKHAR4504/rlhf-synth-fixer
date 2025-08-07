@@ -236,7 +236,8 @@ export class SecurityStack extends Construct {
 
     new cdk.CfnOutput(stack, 'SecurityNote', {
       description: 'Security services configuration',
-      value: 'GuardDuty and Security Hub should be enabled at the organization level for comprehensive security monitoring',
+      value:
+        'GuardDuty and Security Hub should be enabled at the organization level for comprehensive security monitoring',
       exportName: `TapStack${environmentSuffix}-SecurityNote`,
     });
   }

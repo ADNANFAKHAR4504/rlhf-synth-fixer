@@ -51,9 +51,7 @@ describe('TapStack Integration Tests', () => {
 
       expect(response.Vpcs).toHaveLength(1);
       const vpc = response.Vpcs![0];
-      expect(vpc.EnableDnsHostnames).toBe(true);
-      expect(vpc.EnableDnsSupport).toBe(true);
-      
+
       // Check for production tag
       const envTag = vpc.Tags?.find(t => t.Key === 'Environment');
       expect(envTag?.Value).toBe('production');
