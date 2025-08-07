@@ -459,7 +459,7 @@ def lambda_handler(event, context):
         environment={
             "variables": {
                 "DYNAMODB_TABLE": self.dynamodb_table.name,
-                "_X_AMZN_TRACE_ID": "Root=1-00000000-000000000000000000000000",
+                #"_X_AMZN_TRACE_ID": "Root=1-00000000-000000000000000000000000",
             }
         },
         # Enable X-Ray tracing
@@ -555,7 +555,7 @@ def lambda_handler(event, context):
         name=f"/aws/lambda/{self.lambda_function.function_name}",
         retention_in_days=14,
         # Encrypt logs at rest
-        kms_key_id="alias/aws/logs",
+        #kms_key_id="alias/aws/logs",
         tags={"Name": "tap-lambda-logs"},
     )
 
@@ -565,7 +565,7 @@ def lambda_handler(event, context):
         "api_log_group",
         name=f"API-Gateway-Execution-Logs_{self.api_gateway.id}/prod",
         retention_in_days=14,
-        kms_key_id="alias/aws/logs",
+        #kms_key_id="alias/aws/logs",
         tags={"Name": "tap-api-logs"},
     )
 
