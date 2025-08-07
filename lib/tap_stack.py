@@ -265,23 +265,23 @@ class TapStack(pulumi.ComponentResource):
             "kms:DescribeKey"
           ],
           "Resource": "*"
-        },
-        {
-          "Sid": "AuditAccess",
-          "Effect": "Allow",
-          "Principal": {"AWS": audit_role_arn},
-          "Action": [
-            "kms:DescribeKey",
-            "kms:GetKeyPolicy"
-          ],
-          "Resource": "*"
-        },
-        {
-          "Sid": "BreakGlassAccess",
-          "Effect": "Allow",
-          "Principal": {"AWS": break_glass_arn},
-          "Action": ["kms:Decrypt"],
-          "Resource": "*"
         }
+        # {
+        #   "Sid": "AuditAccess",
+        #   "Effect": "Allow",
+        #   "Principal": {"AWS": audit_role_arn},
+        #   "Action": [
+        #     "kms:DescribeKey",
+        #     "kms:GetKeyPolicy"
+        #   ],
+        #   "Resource": "*"
+        # },
+        # {
+        #   "Sid": "BreakGlassAccess",
+        #   "Effect": "Allow",
+        #   "Principal": {"AWS": break_glass_arn},
+        #   "Action": ["kms:Decrypt"],
+        #   "Resource": "*"
+        # }
       ]
     }, indent=2)
