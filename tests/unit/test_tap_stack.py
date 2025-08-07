@@ -1,5 +1,6 @@
 import pulumi
 from moto import mock_aws
+import pulumi_aws as aws
 
 from lib import tap_stack
 
