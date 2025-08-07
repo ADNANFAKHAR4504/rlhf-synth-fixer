@@ -56,7 +56,7 @@ class TapStack(pulumi.ComponentResource):
         for cidr in cidrs
       ]
 
-    def egress_rules(ips: List[str], ports: List[int]) -> List[Dict[str, Any]]:
+    def egress_rules(ips: List[str], ports: List[int], prefix_list_id: Optional[str] = None) -> List[Dict[str, Any]]:
       rules = [
         {
           "protocol": "tcp",
@@ -68,6 +68,14 @@ class TapStack(pulumi.ComponentResource):
         for port in ports
         for ip in ips
       ]
+      if prefix_list_id:
+        rules.append({
+          "protocol": "tcp",
+          "from_port": 443,
+          "to_port": 443,
+          "prefix_list_ids": [prefix_list_id],
+          "description": "Egress 443 to S3 (via prefix list)"
+        })
       rules.append({
         "protocol": "udp",
         "from_port": 53,
@@ -77,13 +85,14 @@ class TapStack(pulumi.ComponentResource):
       })
       return rules
 
+
     sg = aws.ec2.SecurityGroup(
       f"secure-web-sg-{env}",
       name=f"secure-web-sg-{env}",
       description="Security group for secure web app",
       vpc_id=vpc.id,
       ingress=ingress_rules(allowed_cidrs),
-      egress=egress_rules(trusted_ips, [80, 443]),
+      egress=egress_rules(trusted_ips, [80, 443], prefix_list.id),
       tags={**tags, "Name": f"secure-web-sg-{env}"}
     )
 
