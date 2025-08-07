@@ -10,7 +10,7 @@ import {
   routeTable,
   routeTableAssociation,
   subnet,
-  vpc
+  vpc,
 } from '@cdktf/provider-aws';
 import { Fn, TerraformOutput, TerraformStack } from 'cdktf';
 import { Construct } from 'constructs';
@@ -36,6 +36,10 @@ export class VpcStack extends TerraformStack {
 
   constructor(scope: Construct, id: string, config: VpcStackConfig) {
     super(scope, id);
+
+    new AwsProvider.AwsProvider(this, 'aws', {
+      region: process.env.AWS_REGION || 'us-west-2',
+    });
 
     new dataAwsRegion.DataAwsRegion(this, 'current');
 

@@ -1,4 +1,4 @@
-import * as aws from "@cdktf/provider-aws";
+import * as aws from '@cdktf/provider-aws';
 import { App, Fn, TerraformStack } from 'cdktf';
 import { Construct } from 'constructs';
 import { CloudwatchStack } from './cloudwatch-stack';
@@ -24,9 +24,9 @@ interface TapStackProps {
 class TapStack extends TerraformStack {
   constructor(scope: Construct, name: string, props?: TapStackProps) {
     super(scope, name);
-  
-  new aws.provider.AwsProvider(this, "aws", {
-      region: process.env.AWS_REGION || props?.awsRegion || "us-west-2",
+
+    new aws.provider.AwsProvider(this, 'aws', {
+      region: process.env.AWS_REGION || props?.awsRegion || 'us-west-2',
     });
 
     const environment =

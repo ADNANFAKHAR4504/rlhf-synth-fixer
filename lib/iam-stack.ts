@@ -20,6 +20,10 @@ export class IamStack extends TerraformStack {
   constructor(scope: Construct, id: string, config: IamStackConfig) {
     super(scope, id);
 
+    new AwsProvider.AwsProvider(this, 'aws', {
+      region: process.env.AWS_REGION || 'us-west-2',
+    });
+
     const ec2Role = new iamRole.IamRole(this, 'Ec2Role', {
       name: `${config.environment}-ec2-role`,
       assumeRolePolicy: JSON.stringify({

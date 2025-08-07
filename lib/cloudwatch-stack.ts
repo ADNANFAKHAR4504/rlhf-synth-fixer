@@ -20,6 +20,10 @@ export class CloudwatchStack extends TerraformStack {
   constructor(scope: Construct, id: string, config: CloudwatchStackConfig) {
     super(scope, id);
 
+    new AwsProvider.AwsProvider(this, 'aws', {
+      region: process.env.AWS_REGION || 'us-west-2',
+    });
+
     const topic = new snsTopic.SnsTopic(this, 'AlertsTopic', {
       name: `${config.environment}-infrastructure-alerts`,
       tags: config.commonTags,

@@ -27,6 +27,10 @@ export class Ec2Stack extends TerraformStack {
   constructor(scope: Construct, id: string, config: Ec2StackConfig) {
     super(scope, id);
 
+    new AwsProvider.AwsProvider(this, 'aws', {
+      region: process.env.AWS_REGION || 'us-west-2',
+    });
+
     const ami = new dataAwsAmi.DataAwsAmi(this, 'AmazonLinuxAmi', {
       mostRecent: true,
       owners: ['amazon'],

@@ -26,6 +26,10 @@ export class S3Stack extends TerraformStack {
   constructor(scope: Construct, id: string, config: S3StackConfig) {
     super(scope, id);
 
+    new AwsProvider.AwsProvider(this, 'aws', {
+      region: process.env.AWS_REGION || 'us-west-2',
+    });
+
     const mainBucket = new aws.s3Bucket.S3Bucket(this, 'MainBucket', {
       bucket: config.bucketName,
       tags: {
