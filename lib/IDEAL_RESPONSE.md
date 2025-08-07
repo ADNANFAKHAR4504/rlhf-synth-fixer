@@ -13,7 +13,7 @@ Resources:
   UserDataTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: "UserData"
+      TableName: !Sub "UserData-${EnvironmentSuffix}"
       AttributeDefinitions:
         - AttributeName: userId
           AttributeType: S

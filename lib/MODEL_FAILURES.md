@@ -14,10 +14,10 @@
 
 ## 2. **Resource Naming and Tagging Issues**
 
-### ❌ **Issue: Inconsistent Resource Naming Convention**
-- **Model Response**: DynamoDB table name uses complex environment-based naming
-- **Ideal Response**: Uses simple `"UserData"` name without environment suffix for consistency
-- **Impact**: Simpler resource management but requires manual environment isolation
+### ❌ **Issue: Incomplete Resource Naming Convention**
+- **Model Response**: DynamoDB table name is just `UserData` without environment suffix
+- **Ideal Response**: Uses `!Sub "UserData-${EnvironmentSuffix}"` for proper environment isolation with hyphen separator
+- **Impact**: Potential resource conflicts across environments without proper naming convention
 
 ### ❌ **Issue: Excessive Tagging**
 - **Model Response**: Adds unnecessary `Project: 'IaC-AWS-Nova-Model-Breaking'` tags
@@ -92,10 +92,10 @@
 - **Ideal Response**: Full API key protection with usage plans and throttling
 - **Impact**: Critical security vulnerability - API accessible without authentication
 
-### ❌ **Issue: Excessive IAM Policy Scope**
-- **Model Response**: IAM policy includes `dynamodb:Query` and `dynamodb:Scan` operations plus other unnecessary permissions
-- **Ideal Response**: Focuses only on essential operations `PutItem` and `GetItem` for minimal required access
-- **Impact**: Model response grants excessive permissions beyond actual Lambda function requirements
+### ❌ **Issue: Inadequate IAM Policy Scope**
+- **Model Response**: IAM policy includes `dynamodb:Query` and `dynamodb:Scan` operations but lacks other essential permissions
+- **Ideal Response**: Focuses on essential operations `PutItem` and `GetItem` for minimal required access
+- **Impact**: Model response has some unnecessary permissions while potentially missing others for full CRUD operations
 
 ## 7. **Resource Dependencies and Deployment Issues**
 

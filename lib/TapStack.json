@@ -12,7 +12,9 @@
     "UserDataTable": {
       "Type": "AWS::DynamoDB::Table",
       "Properties": {
-        "TableName": "UserData",
+        "TableName": {
+          "Fn::Sub": "UserData-${EnvironmentSuffix}"
+        },
         "AttributeDefinitions": [
           {
             "AttributeName": "userId",
