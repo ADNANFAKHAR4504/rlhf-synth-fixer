@@ -224,7 +224,6 @@ Resources:
   CreateItemRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${EnvironmentSuffixName}-create-item-role'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
