@@ -72,7 +72,7 @@ class TapStack(ComponentResource):
         )
 
     # ------------------------------------------------------------------ #
-    #  KMS - FIXED: Added CloudWatch Logs permissions
+    #  KMS - FIXED: Added CloudTrail permissions
     # ------------------------------------------------------------------ #
     def _create_kms_keys(self) -> None:
         self.kms_keys = {}
@@ -82,7 +82,7 @@ class TapStack(ComponentResource):
                 f"provider-{region}", region=region, opts=ResourceOptions(parent=self)
             )
 
-            # FIXED: KMS policy now includes CloudWatch Logs permissions
+            # FIXED: KMS policy now includes CloudTrail permissions
             key = aws.kms.Key(
                 f"PROD-kms-{region}-{self.environment_suffix}",
                 description=f"KMS key for {region}",
@@ -118,6 +118,36 @@ class TapStack(ComponentResource):
                                 "Condition": {
                                     "ArnEquals": {
                                         "kms:EncryptionContext:aws:logs:arn": f"arn:aws:logs:{region}:{aws.get_caller_identity().account_id}:log-group:*"
+                                    }
+                                }
+                            },
+                            # ADDED: CloudTrail permissions
+                            {
+                                "Sid": "Allow CloudTrail to encrypt logs",
+                                "Effect": "Allow",
+                                "Principal": {
+                                    "Service": "cloudtrail.amazonaws.com"
+                                },
+                                "Action": [
+                                    "kms:GenerateDataKey*",
+                                    "kms:DescribeKey",
+                                    "kms:Encrypt",
+                                    "kms:ReEncrypt*"
+                                ],
+                                "Resource": "*"
+                            },
+                            {
+                                "Sid": "Allow principals to decrypt CloudTrail logs",
+                                "Effect": "Allow",
+                                "Principal": {"AWS": "*"},
+                                "Action": [
+                                    "kms:Decrypt",
+                                    "kms:ReEncryptFrom"
+                                ],
+                                "Resource": "*",
+                                "Condition": {
+                                    "StringEquals": {
+                                        "kms:CallerAccount": f"{aws.get_caller_identity().account_id}"
                                     }
                                 }
                             }
@@ -323,7 +353,6 @@ class TapStack(ComponentResource):
           tags=self.standard_tags,
           opts=ResourceOptions(parent=self, depends_on=[cloudtrail_policy]),
       )
-
 
     # ------------------------------------------------------------------ #
     #  VPC  (IPv4-only) - FIXED VPC Flow Logs Policy
@@ -817,4 +846,3 @@ echo 'MinProtocol = TLSv1.2' >> /etc/ssl/openssl.cnf
                 tags=self.standard_tags,
                 opts=ResourceOptions(parent=self, provider=provider, depends_on=[recorder]),
             )
-
