@@ -31,6 +31,7 @@ class TapStack(pulumi.ComponentResource):
     env = args.environment_suffix
     tags = args.tags
     region = os.getenv("AWS_REGION", "us-west-1")
+    prefix_list = aws.ec2.get_prefix_list_output(name="com.amazonaws." + region + ".s3")
     created_on = datetime.utcnow().strftime("%Y-%m-%d")
     max_key_age_days = 90
 
@@ -100,18 +101,17 @@ class TapStack(pulumi.ComponentResource):
     )
 
     if not os.getenv("SKIP_PREFIX_LIST_RULE"):
-      s3_prefix_list = aws.ec2.get_prefix_list_output(name=f"com.amazonaws.{region}.s3")
-
       aws.ec2.SecurityGroupRule(
-        f"s3-egress-{env}",
+        f"{name}-egress-prefixlist",
         type="egress",
         from_port=443,
         to_port=443,
         protocol="tcp",
-        prefix_list_id=s3_prefix_list.id,
+        prefix_list_id=prefix_list.id,
         security_group_id=sg.id,
-        description="Egress to AWS S3 service via prefix list"
+        opts=ResourceOptions(parent=sg)
       )
+
 
 
     # --------------------------------------------------------
