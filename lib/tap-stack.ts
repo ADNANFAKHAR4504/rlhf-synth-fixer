@@ -1,0 +1,216 @@
+import * as cdk from 'aws-cdk-lib';
+import * as autoscaling from 'aws-cdk-lib/aws-autoscaling';
+import * as ec2 from 'aws-cdk-lib/aws-ec2';
+import * as iam from 'aws-cdk-lib/aws-iam';
+import { Construct } from 'constructs';
+
+/**
+ * ProjectX Infrastructure Stack
+ *
+ * This stack creates a highly available, scalable infrastructure with:
+ * - VPC with public subnets across multiple AZs
+ * - Auto Scaling Group with EC2 instances distributed across AZs
+ * - Internet Gateway for public access
+ * - Security Groups following AWS best practices
+ *
+ * All resources follow the naming convention: projectX-<component>
+ */
+export class ProjectXInfrastructureStack extends cdk.Stack {
+  constructor(scope: Construct, id: string, props?: cdk.StackProps) {
+    super(scope, id, {
+      ...props,
+      env: {
+        region: 'us-west-2', // Explicitly set region as required
+        account: props?.env?.account,
+      },
+    });
+
+    // 1. VPC Configuration
+    // Create VPC with public subnets in multiple AZs for high availability
+    const vpc = new ec2.Vpc(this, 'ProjectXVpc', {
+      vpcName: 'projectX-vpc',
+      ipAddresses: ec2.IpAddresses.cidr('10.0.0.0/16'),
+      maxAzs: 3, // Use up to 3 AZs for maximum availability
+      natGateways: 0, // No NAT gateways needed for public subnets only
+      subnetConfiguration: [
+        {
+          cidrMask: 24,
+          name: 'projectX-public-subnet',
+          subnetType: ec2.SubnetType.PUBLIC,
+        },
+      ],
+      // Enable DNS hostname and resolution for proper EC2 connectivity
+      enableDnsHostnames: true,
+      enableDnsSupport: true,
+    });
+
+    // Tag the VPC for better resource management
+    cdk.Tags.of(vpc).add('Name', 'projectX-vpc');
+    cdk.Tags.of(vpc).add('Project', 'ProjectX');
+    cdk.Tags.of(vpc).add('Environment', 'Production');
+
+    // 2. Security Group Configuration
+    // Create security group for EC2 instances with HTTP/HTTPS access
+    const webServerSecurityGroup = new ec2.SecurityGroup(
+      this,
+      'ProjectXWebServerSG',
+      {
+        vpc,
+        securityGroupName: 'projectX-web-server-sg',
+        description:
+          'Security group for ProjectX web servers allowing HTTP/HTTPS traffic',
+        allowAllOutbound: true, // Allow outbound traffic for updates and external API calls
+      }
+    );
+
+    // Allow HTTP traffic (port 80) from anywhere
+    webServerSecurityGroup.addIngressRule(
+      ec2.Peer.anyIpv4(),
+      ec2.Port.tcp(80),
+      'Allow HTTP traffic from internet'
+    );
+
+    // Allow HTTPS traffic (port 443) from anywhere
+    webServerSecurityGroup.addIngressRule(
+      ec2.Peer.anyIpv4(),
+      ec2.Port.tcp(443),
+      'Allow HTTPS traffic from internet'
+    );
+
+    // Allow SSH access for administration (restrict to specific IP ranges in production)
+    webServerSecurityGroup.addIngressRule(
+      ec2.Peer.anyIpv4(),
+      ec2.Port.tcp(22),
+      'Allow SSH access for administration'
+    );
+
+    // Tag the security group
+    cdk.Tags.of(webServerSecurityGroup).add('Name', 'projectX-web-server-sg');
+
+    // 3. IAM Role for EC2 Instances
+    // Create IAM role with necessary permissions for EC2 instances
+    const ec2Role = new iam.Role(this, 'ProjectXEC2Role', {
+      roleName: 'projectX-ec2-role',
+      assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
+      description: 'IAM role for ProjectX EC2 instances',
+      managedPolicies: [
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'AmazonSSMManagedInstanceCore'
+        ), // For Systems Manager
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'CloudWatchAgentServerPolicy'
+        ), // For CloudWatch monitoring
+      ],
+    });
+
+    // Create instance profile for the role (used by launch template)
+    new iam.CfnInstanceProfile(this, 'ProjectXInstanceProfile', {
+      instanceProfileName: 'projectX-instance-profile',
+      roles: [ec2Role.roleName],
+    });
+
+    // 4. Launch Template Configuration
+    // Create launch template for consistent EC2 instance configuration
+    const launchTemplate = new ec2.LaunchTemplate(
+      this,
+      'ProjectXLaunchTemplate',
+      {
+        launchTemplateName: 'projectX-launch-template',
+        instanceType: ec2.InstanceType.of(
+          ec2.InstanceClass.T3,
+          ec2.InstanceSize.MICRO
+        ),
+        machineImage: ec2.MachineImage.latestAmazonLinux2(),
+        securityGroup: webServerSecurityGroup,
+        role: ec2Role,
+        userData: ec2.UserData.forLinux(),
+        // Enable detailed monitoring for better scaling decisions
+        detailedMonitoring: true,
+      }
+    );
+
+    // Add user data script to install and configure web server
+    launchTemplate.userData!.addCommands(
+      '#!/bin/bash',
+      'yum update -y',
+      'yum install -y httpd',
+      'systemctl start httpd',
+      'systemctl enable httpd',
+      'echo "<h1>ProjectX Web Server - Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</h1>" > /var/www/html/index.html',
+      'echo "<p>Availability Zone: $(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)</p>" >> /var/www/html/index.html',
+      'echo "<p>Region: us-east-1</p>" >> /var/www/html/index.html'
+    );
+
+    // 5. Auto Scaling Group Configuration
+    // Create Auto Scaling Group with instances distributed across multiple AZs
+    const autoScalingGroup = new autoscaling.AutoScalingGroup(
+      this,
+      'ProjectXAutoScalingGroup',
+      {
+        autoScalingGroupName: 'projectX-asg',
+        vpc,
+        launchTemplate,
+        minCapacity: 2, // Minimum 2 instances as required
+        maxCapacity: 6, // Allow scaling up to 6 instances
+        desiredCapacity: 2, // Start with 2 instances
+        // Distribute instances across all available subnets (AZs)
+        vpcSubnets: {
+          subnetType: ec2.SubnetType.PUBLIC,
+        },
+        // Health check configuration using newer API
+        healthChecks: autoscaling.HealthChecks.ec2(),
+        updatePolicy: autoscaling.UpdatePolicy.rollingUpdate({
+          maxBatchSize: 1,
+          minInstancesInService: 1,
+        }),
+      }
+    );
+
+    // Add scaling policies for dynamic scaling based on CPU utilization
+    autoScalingGroup.scaleOnCpuUtilization('ProjectXScaleUp', {
+      targetUtilizationPercent: 70,
+    });
+
+    // Tag the Auto Scaling Group
+    cdk.Tags.of(autoScalingGroup).add('Name', 'projectX-asg');
+    cdk.Tags.of(autoScalingGroup).add('Project', 'ProjectX');
+
+    // 6. Outputs
+    // Provide useful outputs for reference and integration
+    new cdk.CfnOutput(this, 'VpcId', {
+      value: vpc.vpcId,
+      description: 'VPC ID for ProjectX infrastructure',
+      exportName: 'ProjectX-VpcId',
+    });
+
+    new cdk.CfnOutput(this, 'VpcCidr', {
+      value: vpc.vpcCidrBlock,
+      description: 'VPC CIDR block',
+      exportName: 'ProjectX-VpcCidr',
+    });
+
+    new cdk.CfnOutput(this, 'PublicSubnetIds', {
+      value: vpc.publicSubnets.map(subnet => subnet.subnetId).join(','),
+      description: 'Public subnet IDs across multiple AZs',
+      exportName: 'ProjectX-PublicSubnetIds',
+    });
+
+    new cdk.CfnOutput(this, 'SecurityGroupId', {
+      value: webServerSecurityGroup.securityGroupId,
+      description: 'Security Group ID for web servers',
+      exportName: 'ProjectX-SecurityGroupId',
+    });
+
+    new cdk.CfnOutput(this, 'AutoScalingGroupName', {
+      value: autoScalingGroup.autoScalingGroupName,
+      description: 'Auto Scaling Group name',
+      exportName: 'ProjectX-AutoScalingGroupName',
+    });
+
+    new cdk.CfnOutput(this, 'AvailabilityZones', {
+      value: vpc.availabilityZones.join(','),
+      description: 'Availability Zones used by the infrastructure',
+      exportName: 'ProjectX-AvailabilityZones',
+    });
+  }
+}
