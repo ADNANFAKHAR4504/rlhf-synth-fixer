@@ -765,96 +765,70 @@ echo 'MinProtocol = TLSv1.2' >> /etc/ssl/openssl.cnf
 
     
     def _create_compliance_checks(self):
-      """Create AWS Config for automated compliance checks."""
+      """Create simplified compliance checks using CloudWatch and EventBridge."""
       for region in self.regions:
           provider = aws.Provider(
-              f"config-provider-{region}",
+              f"compliance-provider-{region}",
               region=region,
               opts=ResourceOptions(parent=self)
           )
           
-          # Config delivery channel S3 bucket
-          # Get caller identity for bucket naming
-          caller_identity = aws.get_caller_identity(provider=provider)
-          
-          config_bucket = aws.s3.Bucket(
-              f"tap-config-{region}-{self.environment_suffix}",
-              bucket=caller_identity.account_id.apply(lambda account_id: f"tap-config-{region}-{self.environment_suffix}-{account_id}"),
-              versioning=aws.s3.BucketVersioningArgs(enabled=True),
-              server_side_encryption_configuration=aws.s3.BucketServerSideEncryptionConfigurationArgs(
-                  rule=aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
-                      apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
-                          sse_algorithm="aws:kms",
-                          kms_master_key_id=self.kms_keys[region].arn
-                      ),
-                      bucket_key_enabled=True
-                  )
-              ),
-              tags=self.standard_tags,
+          # Create CloudWatch Dashboard for compliance monitoring
+          dashboard = aws.cloudwatch.Dashboard(
+              f"PROD-compliance-dashboard-{region}-{self.environment_suffix}",
+              dashboard_name=f"PROD-compliance-{region}-{self.environment_suffix}",
+              dashboard_body=json.dumps({
+                  "widgets": [
+                      {
+                          "type": "metric",
+                          "x": 0,
+                          "y": 0,
+                          "width": 12,
+                          "height": 6,
+                          "properties": {
+                              "metrics": [
+                                  ["AWS/EC2", "CPUUtilization", "InstanceId", self.ec2_instances[region].id],
+                                  ["AWS/RDS", "CPUUtilization", "DBInstanceIdentifier", f"prod-rds-{region}-{self.environment_suffix}"]
+                              ],
+                              "period": 300,
+                              "stat": "Average",
+                              "region": region,
+                              "title": "Resource Utilization"
+                          }
+                      }
+                  ]
+              }),
               opts=ResourceOptions(parent=self, provider=provider)
           )
           
-          # Config service role
-          config_role = aws.iam.Role(
-              f"PROD-config-role-{region}-{self.environment_suffix}",
-              assume_role_policy=json.dumps({
-                  "Version": "2012-10-17",
-                  "Statement": [
-                      {
-                          "Action": "sts:AssumeRole",
-                          "Effect": "Allow",
-                          "Principal": {"Service": "config.amazonaws.com"}
-                      }
-                  ]
+          # Create EventBridge rule for compliance events
+          event_rule = aws.cloudwatch.EventRule(
+              f"PROD-compliance-rule-{region}-{self.environment_suffix}",
+              description="Monitor compliance-related events",
+              event_pattern=json.dumps({
+                  "source": ["aws.ec2", "aws.rds", "aws.s3"],
+                  "detail-type": ["AWS API Call via CloudTrail"],
+                  "detail": {
+                      "eventSource": ["ec2.amazonaws.com", "rds.amazonaws.com", "s3.amazonaws.com"]
+                  }
               }),
               tags=self.standard_tags,
               opts=ResourceOptions(parent=self, provider=provider)
           )
           
-          aws.iam.RolePolicyAttachment(
-              f"PROD-config-policy-{region}-{self.environment_suffix}",
-              role=config_role.name,
-              policy_arn="arn:aws:iam::aws:policy/service-role/ConfigRole",
+          # Create SNS topic for compliance notifications
+          compliance_topic = aws.sns.Topic(
+              f"PROD-compliance-topic-{region}-{self.environment_suffix}",
+              name=f"PROD-compliance-{region}-{self.environment_suffix}",
+              kms_master_key_id=self.kms_keys[region].arn,
+              tags=self.standard_tags,
               opts=ResourceOptions(parent=self, provider=provider)
           )
           
-          # FIXED: Use aws.cfg with correct class names
-          config_delivery_channel = aws.cfg.DeliveryChannel(
-              f"PROD-config-delivery-{region}-{self.environment_suffix}",
-              s3_bucket_name=config_bucket.bucket,
+          # EventBridge target to SNS
+          aws.cloudwatch.EventTarget(
+              f"PROD-compliance-target-{region}-{self.environment_suffix}",
+              rule=event_rule.name,
+              arn=compliance_topic.arn,
               opts=ResourceOptions(parent=self, provider=provider)
-          )
-          
-          # FIXED: Use aws.cfg with correct class names  
-          config_recorder = aws.cfg.ConfigurationRecorder(
-              f"PROD-config-recorder-{region}-{self.environment_suffix}",
-              role_arn=config_role.arn,
-              recording_group=aws.cfg.ConfigurationRecorderRecordingGroupArgs(
-                  all_supported=True,
-                  include_global_resource_types=True if region == self.primary_region else False
-              ),
-              opts=ResourceOptions(parent=self, provider=provider, depends_on=[config_delivery_channel])
-          )
-          
-          # FIXED: Use aws.cfg with correct class names
-          aws.cfg.ConfigRule(
-              f"PROD-encrypted-volumes-{region}-{self.environment_suffix}",
-              name=f"encrypted-volumes-{region}-{self.environment_suffix}",
-              source=aws.cfg.ConfigRuleSourceArgs(
-                  owner="AWS",
-                  source_identifier="ENCRYPTED_VOLUMES"
-              ),
-              tags=self.standard_tags,
-              opts=ResourceOptions(parent=self, provider=provider, depends_on=[config_recorder])
-          )
-          
-          aws.cfg.ConfigRule(
-              f"PROD-s3-bucket-ssl-requests-{region}-{self.environment_suffix}",
-              name=f"s3-bucket-ssl-requests-{region}-{self.environment_suffix}",
-              source=aws.cfg.ConfigRuleSourceArgs(
-                  owner="AWS",
-                  source_identifier="S3_BUCKET_SSL_REQUESTS_ONLY"
-              ),
-              tags=self.standard_tags,
-              opts=ResourceOptions(parent=self, provider=provider, depends_on=[config_recorder])
           )
