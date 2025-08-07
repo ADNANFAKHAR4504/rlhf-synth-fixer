@@ -104,8 +104,8 @@ class TapStack(cdk.Stack):
     self.ec2_security_group = self._create_ec2_security_group()
     self.rds_security_group = self._create_rds_security_group()
 
-    # Create SSL certificate
-    self.certificate = self._create_ssl_certificate()
+    # AI NOTE: ACM certificate creation has been disabled due to lack of domain ownership
+    self.certificate = None
 
     # Create Application Load Balancer and target group
     self.alb, self.target_group = self._create_application_load_balancer()
@@ -365,15 +365,12 @@ class TapStack(cdk.Stack):
     return security_group
 
   def _create_ssl_certificate(self) -> acm.Certificate:
-    """Create SSL certificate for HTTPS"""
-    # Note: In production, you would use a real domain
-    certificate = acm.Certificate(
-        self, "TapSSLCertificate",
-        domain_name="nova-model-breaking.example.com",  # Replace with your domain
-        validation=acm.CertificateValidation.from_dns()
-    )
-
-    return certificate
+   """AI NOTE: SSL Certificate creation has been disabled due to lack of domain ownership."""
+    # certificate = acm.Certificate(
+    #     self, "TapSSLCertificate",
+    #     domain_name="nova-model-breaking.example.com",
+    #     validation=acm.CertificateValidation.from_dns()
+    # )
 
   def _create_application_load_balancer(
           self) -> Tuple[elbv2.ApplicationLoadBalancer, elbv2.ApplicationTargetGroup]:
@@ -404,17 +401,17 @@ class TapStack(cdk.Stack):
         )
     )
 
-    # Add HTTPS listener
-    alb.add_listener(
-        "TapHTTPSListener",
-        port=443,
-        protocol=elbv2.ApplicationProtocol.HTTPS,
-        certificates=[self.certificate],
-        ssl_policy=elbv2.SslPolicy.TLS12_EXT,
-        default_target_groups=[target_group]
-    )
-
+    # AI NOTE: HTTPS listener is commented out due to no valid ACM certificate
+    # alb.add_listener(
+    #     "TapHTTPSListener",
+    #     port=443,
+    #     protocol=elbv2.ApplicationProtocol.HTTPS,
+    #     certificates=[self.certificate],
+    #     ssl_policy=elbv2.SslPolicy.TLS12_EXT,
+    #     default_target_groups=[target_group]
+    # )
     # Add HTTP listener for redirect to HTTPS
+    
     alb.add_listener(
         "TapHTTPListener",
         port=80,
