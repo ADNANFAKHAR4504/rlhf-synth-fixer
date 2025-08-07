@@ -49,7 +49,7 @@ describe('Secure Infrastructure CloudFormation Template', () => {
       );
       expect(['203.0.113.0/32', undefined]).toContain(param.Default);
       expect(param.AllowedPattern).toBe(
-        '^([0-9]{1,3}\\.){3}[0-9]{1,3}/[0-9]{1,2}$'
+        '^([0-9]{1,3}\\.){3}[0-9]{1,3}/(3[0-2]|[1-2]?[0-9])$'
       );
     });
 
