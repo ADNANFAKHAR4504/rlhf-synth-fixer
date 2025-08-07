@@ -7,11 +7,6 @@ import { IamStack } from './iam-stack';
 import { S3Stack } from './s3-stack';
 import { VpcStack } from './vpc-stack';
 
-new aws.provider.AwsProvider(this, "aws", {
-  region: process.env.AWS_REGION || "us-west-2",
-});
-
-
 interface TapStackProps {
   environmentSuffix?: string;
   stateBucket?: string;
@@ -29,6 +24,10 @@ interface TapStackProps {
 class TapStack extends TerraformStack {
   constructor(scope: Construct, name: string, props?: TapStackProps) {
     super(scope, name);
+  
+  new aws.provider.AwsProvider(this, "aws", {
+      region: process.env.AWS_REGION || props?.awsRegion || "us-west-2",
+    });
 
     const environment =
       process.env.ENVIRONMENT || props?.environmentSuffix || 'development';
