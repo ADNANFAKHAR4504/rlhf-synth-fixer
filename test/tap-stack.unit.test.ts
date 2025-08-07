@@ -33,6 +33,43 @@ describe('TapStack', () => {
       expect(stack).toBeDefined();
       expect(stack.stackName).toContain('TestTapStack');
     });
+
+    test('should default to dev environment when no suffix provided', () => {
+      // Test default behavior with no environmentSuffix
+      const defaultApp = new cdk.App();
+      const defaultStack = new TapStack(defaultApp, 'DefaultTestStack', {
+        env: {
+          account: '123456789012',
+          region: 'us-east-1',
+        },
+      });
+      const defaultTemplate = Template.fromStack(defaultStack);
+
+      // Should still have alias with default suffix
+      defaultTemplate.hasResourceProperties('AWS::KMS::Alias', {
+        AliasName: 'alias/production-encryption-key-dev',
+      });
+    });
+
+    test('should use context environment suffix when props not provided', () => {
+      // Test context fallback
+      const contextApp = new cdk.App({
+        context: {
+          environmentSuffix: 'context-test',
+        },
+      });
+      const contextStack = new TapStack(contextApp, 'ContextTestStack', {
+        env: {
+          account: '123456789012',
+          region: 'us-east-1',
+        },
+      });
+      const contextTemplate = Template.fromStack(contextStack);
+
+      contextTemplate.hasResourceProperties('AWS::KMS::Alias', {
+        AliasName: 'alias/production-encryption-key-context-test',
+      });
+    });
   });
 
   describe('Security Infrastructure', () => {
@@ -327,6 +364,31 @@ describe('TapStack', () => {
             }),
           ]),
         }),
+      });
+    });
+
+    test('should handle SecurityStack with default environment suffix', () => {
+      // Test SecurityStack directly with undefined environmentSuffix
+      const testApp = new cdk.App();
+      const testStack = new cdk.Stack(testApp, 'TestSecurityStack', {
+        env: {
+          account: '123456789012',
+          region: 'us-east-1',
+        },
+      });
+      
+      // Import SecurityStack to test it directly
+      const { SecurityStack } = require('../lib/security-stack');
+      const securityStack = new SecurityStack(testStack, 'SecurityConstruct');
+      const testTemplate = Template.fromStack(testStack);
+
+      // Should default to 'dev' suffix
+      testTemplate.hasResourceProperties('AWS::KMS::Alias', {
+        AliasName: 'alias/production-encryption-key-dev',
+      });
+
+      testTemplate.hasResourceProperties('AWS::IAM::Role', {
+        RoleName: 'ProductionSecureRole-dev',
       });
     });
   });

@@ -255,7 +255,7 @@ describe('TapStack Integration Tests', () => {
     });
   });
 
-  describe('Security Compliance', () => {
+  skipIfNoOutputs('Security Compliance', () => {
     test('should have all encryption keys properly configured', () => {
       // Check KMS key ARN is present
       expect(outputs.KMSKeyArn).toBeDefined();
