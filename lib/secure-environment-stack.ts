@@ -109,9 +109,9 @@ export class SecureEnvironmentStack extends cdk.Stack {
       'Allow SSH from specific IP range'
     );
 
-    // Create EC2 Key Pair
+    // Create EC2 Key Pair with unique name to avoid replacement issues
     const keyPair = new ec2.CfnKeyPair(this, 'OrgKeyPair', {
-      keyName: `org-keypair-${environmentSuffix}`,
+      keyName: `org-keypair-${environmentSuffix}-${cdk.Aws.STACK_NAME}`,
     });
 
     // Store key pair name in SSM Parameter
