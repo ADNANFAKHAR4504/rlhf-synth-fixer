@@ -1,4 +1,4 @@
-import * as aws from "@cdktf/provider-aws";
+import * as aws from '@cdktf/provider-aws';
 import {
   cloudwatchLogGroup,
   dataAwsRegion,
@@ -13,9 +13,9 @@ import {
   routeTableAssociation,
   subnet,
   vpc,
-} from "@cdktf/provider-aws";
-import { Fn, TerraformOutput, TerraformStack } from "cdktf";
-import { Construct } from "constructs";
+} from '@cdktf/provider-aws';
+import { Fn, TerraformOutput, TerraformStack } from 'cdktf';
+import { Construct } from 'constructs';
 
 interface VpcStackConfig {
   environment: string;
@@ -39,17 +39,17 @@ export class VpcStack extends TerraformStack {
   constructor(scope: Construct, id: string, config: VpcStackConfig) {
     super(scope, id);
 
-    new aws.provider.AwsProvider(this, "aws", {
-      region: process.env.AWS_REGION || "us-west-2",
+    new aws.provider.AwsProvider(this, 'aws', {
+      region: process.env.AWS_REGION || 'us-west-2',
     });
 
-    new provider.AwsProvider(this, "aws", {
+    new provider.AwsProvider(this, 'aws', {
       region: config.region,
     });
 
-    new dataAwsRegion.DataAwsRegion(this, "current");
+    new dataAwsRegion.DataAwsRegion(this, 'current');
 
-    const mainVpc = new vpc.Vpc(this, "MainVpc", {
+    const mainVpc = new vpc.Vpc(this, 'MainVpc', {
       cidrBlock: config.vpcCidr,
       enableDnsSupport: true,
       enableDnsHostnames: true,
@@ -59,7 +59,7 @@ export class VpcStack extends TerraformStack {
       },
     });
 
-    const igw = new internetGateway.InternetGateway(this, "IGW", {
+    const igw = new internetGateway.InternetGateway(this, 'IGW', {
       vpcId: mainVpc.id,
       tags: {
         ...config.commonTags,
@@ -106,7 +106,7 @@ export class VpcStack extends TerraformStack {
 
     const eips = privateSubnets.map((_, i) => {
       return new eip.Eip(this, `NatEip${i}`, {
-        domain: "vpc",
+        domain: 'vpc',
         tags: {
           ...config.commonTags,
           Name: `${config.environment}-nat-eip-${i + 1}`,
@@ -125,11 +125,11 @@ export class VpcStack extends TerraformStack {
       });
     });
 
-    const publicRT = new routeTable.RouteTable(this, "PublicRT", {
+    const publicRT = new routeTable.RouteTable(this, 'PublicRT', {
       vpcId: mainVpc.id,
       route: [
         {
-          cidrBlock: "0.0.0.0/0",
+          cidrBlock: '0.0.0.0/0',
           gatewayId: igw.id,
         },
       ],
@@ -151,7 +151,7 @@ export class VpcStack extends TerraformStack {
         vpcId: mainVpc.id,
         route: [
           {
-            cidrBlock: "0.0.0.0/0",
+            cidrBlock: '0.0.0.0/0',
             natGatewayId: natGateways[i].id,
           },
         ],
@@ -167,7 +167,7 @@ export class VpcStack extends TerraformStack {
       });
     });
 
-    const dbRT = new routeTable.RouteTable(this, "DatabaseRT", {
+    const dbRT = new routeTable.RouteTable(this, 'DatabaseRT', {
       vpcId: mainVpc.id,
       tags: {
         ...config.commonTags,
@@ -182,22 +182,26 @@ export class VpcStack extends TerraformStack {
       });
     });
 
-    const logGroup = new cloudwatchLogGroup.CloudwatchLogGroup(this, "VpcFlowLogGroup", {
-      name: `/aws/vpc/flowlogs/${config.environment}`,
-      retentionInDays: config.environment === "production" ? 365 : 30,
-      tags: config.commonTags,
-    });
+    const logGroup = new cloudwatchLogGroup.CloudwatchLogGroup(
+      this,
+      'VpcFlowLogGroup',
+      {
+        name: `/aws/vpc/flowlogs/${config.environment}`,
+        retentionInDays: config.environment === 'production' ? 365 : 30,
+        tags: config.commonTags,
+      }
+    );
 
-    const flowLogRole = new iamRole.IamRole(this, "VpcFlowLogRole", {
+    const flowLogRole = new iamRole.IamRole(this, 'VpcFlowLogRole', {
       name: `${config.environment}-vpc-flow-log-role`,
       assumeRolePolicy: JSON.stringify({
-        Version: "2012-10-17",
+        Version: '2012-10-17',
         Statement: [
           {
-            Action: "sts:AssumeRole",
-            Effect: "Allow",
+            Action: 'sts:AssumeRole',
+            Effect: 'Allow',
             Principal: {
-              Service: "vpc-flow-logs.amazonaws.com",
+              Service: 'vpc-flow-logs.amazonaws.com',
             },
           },
         ],
@@ -205,31 +209,31 @@ export class VpcStack extends TerraformStack {
       tags: config.commonTags,
     });
 
-    new iamRolePolicy.IamRolePolicy(this, "VpcFlowLogPolicy", {
+    new iamRolePolicy.IamRolePolicy(this, 'VpcFlowLogPolicy', {
       name: `${config.environment}-vpc-flow-log-policy`,
       role: flowLogRole.id,
       policy: JSON.stringify({
-        Version: "2012-10-17",
+        Version: '2012-10-17',
         Statement: [
           {
-            Effect: "Allow",
+            Effect: 'Allow',
             Action: [
-              "logs:CreateLogGroup",
-              "logs:CreateLogStream",
-              "logs:PutLogEvents",
-              "logs:DescribeLogGroups",
-              "logs:DescribeLogStreams",
+              'logs:CreateLogGroup',
+              'logs:CreateLogStream',
+              'logs:PutLogEvents',
+              'logs:DescribeLogGroups',
+              'logs:DescribeLogStreams',
             ],
-            Resource: "*",
+            Resource: '*',
           },
         ],
       }),
     });
 
-    new flowLog.FlowLog(this, "VpcFlowLog", {
+    new flowLog.FlowLog(this, 'VpcFlowLog', {
       iamRoleArn: flowLogRole.arn,
       logDestination: logGroup.arn,
-      trafficType: "ALL",
+      trafficType: 'ALL',
       vpcId: mainVpc.id,
     });
 
@@ -240,11 +244,19 @@ export class VpcStack extends TerraformStack {
     this.internetGatewayId = igw.id;
     this.natGatewayIds = natGateways.map(n => n.id);
 
-    new TerraformOutput(this, "vpc_id", { value: this.vpcId });
-    new TerraformOutput(this, "public_subnet_ids", { value: this.publicSubnets });
-    new TerraformOutput(this, "private_subnet_ids", { value: this.privateSubnets });
-    new TerraformOutput(this, "database_subnet_ids", { value: this.databaseSubnets });
-    new TerraformOutput(this, "internet_gateway_id", { value: this.internetGatewayId });
-    new TerraformOutput(this, "nat_gateway_ids", { value: this.natGatewayIds });
+    new TerraformOutput(this, 'vpc_id', { value: this.vpcId });
+    new TerraformOutput(this, 'public_subnet_ids', {
+      value: this.publicSubnets,
+    });
+    new TerraformOutput(this, 'private_subnet_ids', {
+      value: this.privateSubnets,
+    });
+    new TerraformOutput(this, 'database_subnet_ids', {
+      value: this.databaseSubnets,
+    });
+    new TerraformOutput(this, 'internet_gateway_id', {
+      value: this.internetGatewayId,
+    });
+    new TerraformOutput(this, 'nat_gateway_ids', { value: this.natGatewayIds });
   }
 }

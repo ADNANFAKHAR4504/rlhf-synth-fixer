@@ -1,11 +1,11 @@
-import * as aws from "@cdktf/provider-aws";
+import * as aws from '@cdktf/provider-aws';
 import {
   iamInstanceProfile,
   iamRole,
   iamRolePolicy,
-} from "@cdktf/provider-aws";
-import { TerraformOutput, TerraformStack } from "cdktf";
-import { Construct } from "constructs";
+} from '@cdktf/provider-aws';
+import { TerraformOutput, TerraformStack } from 'cdktf';
+import { Construct } from 'constructs';
 
 interface IamStackConfig {
   environment: string;
@@ -21,84 +21,88 @@ export class IamStack extends TerraformStack {
   constructor(scope: Construct, id: string, config: IamStackConfig) {
     super(scope, id);
 
-    new aws.provider.AwsProvider(this, "aws", {
-      region: process.env.AWS_REGION || "us-west-2",
+    new aws.provider.AwsProvider(this, 'aws', {
+      region: process.env.AWS_REGION || 'us-west-2',
     });
 
-    const ec2Role = new iamRole.IamRole(this, "Ec2Role", {
+    const ec2Role = new iamRole.IamRole(this, 'Ec2Role', {
       name: `${config.environment}-ec2-role`,
       assumeRolePolicy: JSON.stringify({
-        Version: "2012-10-17",
+        Version: '2012-10-17',
         Statement: [
           {
-            Effect: "Allow",
-            Principal: { Service: "ec2.amazonaws.com" },
-            Action: "sts:AssumeRole",
+            Effect: 'Allow',
+            Principal: { Service: 'ec2.amazonaws.com' },
+            Action: 'sts:AssumeRole',
           },
         ],
       }),
       tags: config.commonTags,
     });
 
-    const ec2Profile = new iamInstanceProfile.IamInstanceProfile(this, "Ec2Profile", {
-      name: `${config.environment}-ec2-profile`,
-      role: ec2Role.name,
-      tags: config.commonTags,
-    });
+    const ec2Profile = new iamInstanceProfile.IamInstanceProfile(
+      this,
+      'Ec2Profile',
+      {
+        name: `${config.environment}-ec2-profile`,
+        role: ec2Role.name,
+        tags: config.commonTags,
+      }
+    );
 
-    new iamRolePolicy.IamRolePolicy(this, "Ec2Policy", {
+    new iamRolePolicy.IamRolePolicy(this, 'Ec2Policy', {
       name: `${config.environment}-ec2-policy`,
       role: ec2Role.id,
       policy: JSON.stringify({
-        Version: "2012-10-17",
+        Version: '2012-10-17',
         Statement: [
           {
-            Effect: "Allow",
+            Effect: 'Allow',
             Action: [
-              "cloudwatch:PutMetricData",
-              "ec2:DescribeVolumes",
-              "ec2:DescribeTags",
-              "logs:PutLogEvents",
-              "logs:CreateLogGroup",
-              "logs:CreateLogStream",
-              "logs:DescribeLogStreams",
-              "logs:DescribeLogGroups",
+              'cloudwatch:PutMetricData',
+              'ec2:DescribeVolumes',
+              'ec2:DescribeTags',
+              'logs:PutLogEvents',
+              'logs:CreateLogGroup',
+              'logs:CreateLogStream',
+              'logs:DescribeLogStreams',
+              'logs:DescribeLogGroups',
             ],
-            Resource: "*",
+            Resource: '*',
           },
           {
-            Effect: "Allow",
-            Action: ["s3:GetObject", "s3:PutObject"],
+            Effect: 'Allow',
+            Action: ['s3:GetObject', 's3:PutObject'],
             Resource: `arn:aws:s3:::${config.environment}-*/*`,
           },
         ],
       }),
     });
 
-    const s3ServiceRole = new iamRole.IamRole(this, "S3ServiceRole", {
+    const s3ServiceRole = new iamRole.IamRole(this, 'S3ServiceRole', {
       name: `${config.environment}-s3-service-role`,
       assumeRolePolicy: JSON.stringify({
-        Version: "2012-10-17",
+        Version: '2012-10-17',
         Statement: [
           {
-            Effect: "Allow",
-            Principal: { Service: "s3.amazonaws.com" },
-            Action: "sts:AssumeRole",
+            Effect: 'Allow',
+            Principal: { Service: 's3.amazonaws.com' },
+            Action: 'sts:AssumeRole',
           },
         ],
       }),
       tags: config.commonTags,
     });
 
-    const cloudwatchRole = new iamRole.IamRole(this, "CloudWatchRole", {
+    const cloudwatchRole = new iamRole.IamRole(this, 'CloudWatchRole', {
       name: `${config.environment}-cloudwatch-role`,
       assumeRolePolicy: JSON.stringify({
-        Version: "2012-10-17",
+        Version: '2012-10-17',
         Statement: [
           {
-            Effect: "Allow",
-            Principal: { Service: "logs.amazonaws.com" },
-            Action: "sts:AssumeRole",
+            Effect: 'Allow',
+            Principal: { Service: 'logs.amazonaws.com' },
+            Action: 'sts:AssumeRole',
           },
         ],
       }),
@@ -110,19 +114,19 @@ export class IamStack extends TerraformStack {
     this.s3ServiceRoleArn = s3ServiceRole.arn;
     this.cloudwatchRoleArn = cloudwatchRole.arn;
 
-    new TerraformOutput(this, "ec2_role_arn", {
+    new TerraformOutput(this, 'ec2_role_arn', {
       value: this.ec2RoleArn,
     });
 
-    new TerraformOutput(this, "ec2_instance_profile_name", {
+    new TerraformOutput(this, 'ec2_instance_profile_name', {
       value: this.ec2ProfileName,
     });
 
-    new TerraformOutput(this, "s3_service_role_arn", {
+    new TerraformOutput(this, 's3_service_role_arn', {
       value: this.s3ServiceRoleArn,
     });
 
-    new TerraformOutput(this, "cloudwatch_role_arn", {
+    new TerraformOutput(this, 'cloudwatch_role_arn', {
       value: this.cloudwatchRoleArn,
     });
   }
