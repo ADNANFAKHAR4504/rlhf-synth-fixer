@@ -5,6 +5,7 @@ import { DbInstance } from '@cdktf/provider-aws/lib/db-instance';
 import { DbSubnetGroup } from '@cdktf/provider-aws/lib/db-subnet-group';
 import { DynamodbTable } from '@cdktf/provider-aws/lib/dynamodb-table';
 import { Eip } from '@cdktf/provider-aws/lib/eip';
+import { FlowLog } from '@cdktf/provider-aws/lib/flow-log';
 import { IamInstanceProfile } from '@cdktf/provider-aws/lib/iam-instance-profile';
 import { IamPolicy } from '@cdktf/provider-aws/lib/iam-policy';
 import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
@@ -270,7 +271,7 @@ export class ScalableInfrastructure extends Construct {
     // S3 Bucket with server-side encryption
     const s3Bucket = new S3Bucket(this, 'app-bucket', {
       provider: props.provider,
-      bucketPrefix: `${process.env.COMMIT_AUTHOR || 'unknown'}-${id}-app-bucket`,
+      bucketPrefix: `${process.env.COMMIT_AUTHOR || 'unknown'}-app-bucket`,
       tags: {
         Name: `${id}-app-bucket`,
         Environment: 'production',
@@ -486,7 +487,7 @@ export class ScalableInfrastructure extends Construct {
     });
 
     // CloudWatch Log Group for VPC Flow Logs
-    new CloudwatchLogGroup(this, 'vpc-flow-logs', {
+    const vpcFlowLogGroup = new CloudwatchLogGroup(this, 'vpc-flow-logs', {
       provider: props.provider,
       name: `/aws/vpc/flowlogs/${id.replace(/\s+/g, '-')}`,
       retentionInDays: 14,
@@ -497,7 +498,7 @@ export class ScalableInfrastructure extends Construct {
     });
 
     // IAM Role for VPC Flow Logs
-    new IamRole(this, 'flow-log-role', {
+    const vpcFlowLogRole = new IamRole(this, 'flow-log-role', {
       provider: props.provider,
       name: `${id.replace(/\s+/g, '-')}-flow-log-role`,
       assumeRolePolicy: JSON.stringify({
@@ -519,7 +520,7 @@ export class ScalableInfrastructure extends Construct {
     });
 
     // IAM Policy for VPC Flow Logs
-    new IamPolicy(this, 'flow-log-policy', {
+    const vpcFlowLogPolicy = new IamPolicy(this, 'flow-log-policy', {
       provider: props.provider,
       name: `${id.replace(/\s+/g, '-')}-flow-log-policy`,
       policy: JSON.stringify({
@@ -540,6 +541,26 @@ export class ScalableInfrastructure extends Construct {
       }),
       tags: {
         Name: `${id}-flow-log-policy`,
+        Environment: 'production',
+      },
+    });
+
+    // Attach policy to VPC Flow Log Role
+    new IamRolePolicyAttachment(this, 'flow-log-role-policy-attachment', {
+      provider: props.provider,
+      role: vpcFlowLogRole.name,
+      policyArn: vpcFlowLogPolicy.arn,
+    });
+
+    // Enable VPC Flow Logs
+    new FlowLog(this, 'vpc-flow-log', {
+      provider: props.provider,
+      vpcId: vpc.id,
+      logDestination: vpcFlowLogGroup.arn,
+      iamRoleArn: vpcFlowLogRole.arn,
+      trafficType: 'ALL',
+      tags: {
+        Name: `${id}-vpc-flow-log`,
         Environment: 'production',
       },
     });

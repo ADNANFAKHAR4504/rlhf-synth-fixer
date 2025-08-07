@@ -440,7 +440,7 @@ describe('Scalable Infrastructure Integration Tests', () => {
           // List all buckets and filter by tags (simulated since S3 doesn't support tag-based listing)
           try {
             // Note: S3 bucket names are global, so we'll search for buckets with our naming pattern
-            const bucketName = `${process.env.COMMIT_AUTHOR || 'unknown'}-scalable-infra-${region}-app-bucket`;
+            const bucketName = `${process.env.COMMIT_AUTHOR || 'unknown'}-app-bucket`;
 
             await clients.s3.send(
               new HeadBucketCommand({ Bucket: bucketName })
