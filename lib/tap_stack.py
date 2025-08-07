@@ -276,6 +276,7 @@ def main():
 
   pulumi.export("alb_dns_name", load_balancer["alb"].dns_name)
   pulumi.export("vpc_id", network["vpc"].id)
+  pulumi.export("target_group_arn", load_balancer["target_group"].arn)
 
 
 if __name__ == "__main__":
