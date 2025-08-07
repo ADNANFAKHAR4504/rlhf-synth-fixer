@@ -19,7 +19,7 @@ def mock_aws_credentials():
       'AWS_SECRET_ACCESS_KEY': 'testing',
       'AWS_SECURITY_TOKEN': 'testing',
       'AWS_SESSION_TOKEN': 'testing',
-      'AWS_DEFAULT_REGION': 'us-west-2'
+      'AWS_DEFAULT_REGION': 'us-east-1'
   }):
     yield
 
@@ -56,7 +56,7 @@ def sample_lambda_context():
   context = Mock()
   context.function_name = 'test-function'
   context.function_version = '$LATEST'
-  context.invoked_function_arn = 'arn:aws:lambda:us-west-2:123456789012:function:test-function'
+  context.invoked_function_arn = 'arn:aws:lambda:us-east-1:123456789012:function:test-function'
   context.memory_limit_in_mb = '512'
   context.remaining_time_in_millis = lambda: 30000
   context.log_group_name = '/aws/lambda/test-function'
@@ -72,7 +72,7 @@ def sample_tap_stack_args():
     from lib.tap_stack import TapStackArgs  # pylint: disable=import-outside-toplevel
     return TapStackArgs(
       environment_suffix="test",
-      region="us-west-2",
+      region="us-east-1",
       tags={"TestTag": "TestValue"}
     )
   except ImportError:
@@ -93,14 +93,14 @@ def mock_pulumi_output():
 def sample_deployment_outputs():
   """Sample deployment outputs for integration testing."""
   return {
-    'api_gateway_url': 'https://test-api-id.execute-api.us-west-2.amazonaws.com/test',
+    'api_gateway_url': 'https://test-api-id.execute-api.us-east-1.amazonaws.com/test',
     'lambda_function_name': 'tap-api-handler-test',
-    'lambda_function_arn': 'arn:aws:lambda:us-west-2:123456789012:function:tap-api-handler-test',
+    'lambda_function_arn': 'arn:aws:lambda:us-east-1:123456789012:function:tap-api-handler-test',
     'api_gateway_id': 'test-api-id',
     'cloudwatch_log_group': '/aws/lambda/tap-api-handler-test',
     'environment_suffix': 'test',
     'lambda_role_arn': 'arn:aws:iam::123456789012:role/lambda-execution-role-test',
-    'region': 'us-west-2',
+    'region': 'us-east-1',
     'memory_size': 512,
     'timeout': 60,
     'runtime': 'python3.12'
@@ -111,14 +111,14 @@ def sample_deployment_outputs():
 def temp_outputs_file(tmp_path):
   """Create temporary outputs file for integration testing."""
   sample_outputs = {
-    'api_gateway_url': 'https://test-api-id.execute-api.us-west-2.amazonaws.com/test',
+    'api_gateway_url': 'https://test-api-id.execute-api.us-east-1.amazonaws.com/test',
     'lambda_function_name': 'tap-api-handler-test',
-    'lambda_function_arn': 'arn:aws:lambda:us-west-2:123456789012:function:tap-api-handler-test',
+    'lambda_function_arn': 'arn:aws:lambda:us-east-1:123456789012:function:tap-api-handler-test',
     'api_gateway_id': 'test-api-id',
     'cloudwatch_log_group': '/aws/lambda/tap-api-handler-test',
     'environment_suffix': 'test',
     'lambda_role_arn': 'arn:aws:iam::123456789012:role/lambda-execution-role-test',
-    'region': 'us-west-2',
+    'region': 'us-east-1',
     'memory_size': 512,
     'timeout': 60,
     'runtime': 'python3.12'

@@ -15,7 +15,7 @@ class MockPulumiResource:
   def __init__(self, name: str, resource_type: str, **kwargs):
     self.name = name
     self.resource_type = resource_type
-    self.arn = f"arn:aws:{resource_type}:us-west-2:123456789012:{resource_type}/{name}"
+    self.arn = f"arn:aws:{resource_type}:us-east-1:123456789012:{resource_type}/{name}"
     self.id = f"{name}-id"
 
     # Set any additional attributes
@@ -102,7 +102,7 @@ class TestDataFactory:
         'EvaluationPeriods': 2,
         'Period': 300,
         'Statistic': 'Sum',
-        'AlarmArn': f'arn:aws:cloudwatch:us-west-2:123456789012:alarm:{alarm_name}'
+        'AlarmArn': f'arn:aws:cloudwatch:us-east-1:123456789012:alarm:{alarm_name}'
       }]
     }
 
@@ -131,7 +131,7 @@ def create_mock_lambda_function(function_name: str, runtime: str = "python3.12")
   """Create a mock Lambda function configuration."""
   return {
     'FunctionName': function_name,
-    'FunctionArn': f'arn:aws:lambda:us-west-2:123456789012:function:{function_name}',
+    'FunctionArn': f'arn:aws:lambda:us-east-1:123456789012:function:{function_name}',
     'Runtime': runtime,
     'Role': f'arn:aws:iam::123456789012:role/{function_name}-role',
     'Handler': 'handler.lambda_handler',
@@ -146,7 +146,7 @@ def create_mock_lambda_function(function_name: str, runtime: str = "python3.12")
       'Variables': {
         'ENVIRONMENT': 'test',
         'LOG_LEVEL': 'INFO',
-        'REGION': 'us-west-2',
+        'REGION': 'us-east-1',
         'FUNCTION_NAME': function_name
       }
     },
@@ -184,7 +184,7 @@ def create_mock_log_group(log_group_name: str, retention_days: int = 14) -> Dict
     'creationTime': 1640995200000,  # 2022-01-01
     'retentionInDays': retention_days,
     'metricFilterCount': 0,
-    'arn': f'arn:aws:logs:us-west-2:123456789012:log-group:{log_group_name}',
+    'arn': f'arn:aws:logs:us-east-1:123456789012:log-group:{log_group_name}',
     'storedBytes': 0
   }
 

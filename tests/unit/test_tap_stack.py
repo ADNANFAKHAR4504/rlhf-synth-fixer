@@ -33,7 +33,7 @@ class TestTapStackArgs:
 
     assert args.environment_suffix == 'dev'
     assert args.tags == {}
-    assert args.region == 'us-west-2'
+    assert args.region == 'us-east-1'
 
   def test_tap_stack_args_custom_values(self):
     """Test TapStackArgs with custom values."""
@@ -60,7 +60,7 @@ class TestTapStackArgs:
 
     assert args.environment_suffix == "staging"
     assert args.tags == {}
-    assert args.region == "us-west-2"
+    assert args.region == "us-east-1"
 
 
 class TestLambdaHandler:
@@ -85,7 +85,7 @@ class TestLambdaHandler:
     with patch.dict('os.environ', {
       'ENVIRONMENT': 'test',
       'LOG_LEVEL': 'INFO',
-      'REGION': 'us-west-2',
+      'REGION': 'us-east-1',
       'FUNCTION_NAME': 'test-function'
     }):
       response = self.lambda_handler_module.lambda_handler(event, context)
@@ -206,7 +206,7 @@ class TestTapStackResources:
       class MockResource:
         def __init__(self, name, **kwargs):
           self.name = name
-          self.arn = f"arn:aws:test:us-west-2:123456789012:{name}"
+          self.arn = f"arn:aws:test:us-east-1:123456789012:{name}"
           self.id = f"{name}-id"
           for key, value in kwargs.items():
             setattr(self, key, value)
@@ -230,10 +230,10 @@ class TestTapStackResources:
 
       mock_lambda_instance = MockResource("tap-api-handler-test")
       mock_lambda_instance.name = "tap-api-handler-test"
-      mock_lambda_instance.arn = "arn:aws:lambda:us-west-2:123456789012:function:tap-api-handler-test"
+      mock_lambda_instance.arn = "arn:aws:lambda:us-east-1:123456789012:function:tap-api-handler-test"
       mock_lambda_instance.invoke_arn = (
-        "arn:aws:apigateway:us-west-2:lambda:path/2015-03-31/functions/"
-        "arn:aws:lambda:us-west-2:123456789012:function:tap-api-handler-test/invocations"
+        "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/"
+        "arn:aws:lambda:us-east-1:123456789012:function:tap-api-handler-test/invocations"
       )
       mock_lambda_instance.memory_size = 512
       mock_lambda_instance.timeout = 60
@@ -243,7 +243,7 @@ class TestTapStackResources:
       mock_api_instance = MockResource("tap-api-test")
       mock_api_instance.id = "test-api-id"
       mock_api_instance.root_resource_id = "root-resource-id"
-      mock_api_instance.execution_arn = "arn:aws:execute-api:us-west-2:123456789012:test-api-id"
+      mock_api_instance.execution_arn = "arn:aws:execute-api:us-east-1:123456789012:test-api-id"
       mock_api.return_value = mock_api_instance
 
       # Mock ResourceOptions to handle depends_on properly
@@ -312,7 +312,7 @@ class TestTapStackResources:
     if not self.pulumi_available:
       pytest.skip("Pulumi dependencies not available")
 
-    args = self.TapStackArgs(environment_suffix="test", region="us-west-2")
+    args = self.TapStackArgs(environment_suffix="test", region="us-east-1")
 
     # Test the configuration logic directly
     expected_role_name = f"lambda-execution-role-{args.environment_suffix}"
@@ -337,7 +337,7 @@ class TestTapStackResources:
     if not self.pulumi_available:
       pytest.skip("Pulumi dependencies not available")
 
-    args = self.TapStackArgs(environment_suffix="dev", region="us-west-2")
+    args = self.TapStackArgs(environment_suffix="dev", region="us-east-1")
 
     # Test the configuration logic directly
     expected_function_name = f"tap-api-handler-{args.environment_suffix}"
@@ -362,7 +362,7 @@ class TestTapStackResources:
     }
 
     assert expected_env_vars['ENVIRONMENT'] == "dev"
-    assert expected_env_vars['REGION'] == "us-west-2"
+    assert expected_env_vars['REGION'] == "us-east-1"
     assert expected_env_vars['LOG_LEVEL'] == "INFO"
     assert expected_env_vars['FUNCTION_NAME'] == "tap-api-handler-dev"
 
@@ -411,7 +411,7 @@ class TestTapStackResources:
     args = self.TapStackArgs(
       environment_suffix="test",
       tags=custom_tags,
-      region="us-west-2"
+      region="us-east-1"
     )
 
     # Test the configuration logic directly
@@ -428,7 +428,7 @@ class TestTapStackResources:
     assert expected_tags['Environment'] == "Test"  # Capitalized
     assert expected_tags['Project'] == "TAP"
     assert expected_tags['ManagedBy'] == "Pulumi"
-    assert expected_tags['Region'] == "us-west-2"
+    assert expected_tags['Region'] == "us-east-1"
     assert expected_tags['CostCenter'] == "TAP-API"
     assert expected_tags['Owner'] == "TestTeam"  # Custom tag
     assert expected_tags['Custom'] == "Value"  # Custom tag
@@ -494,7 +494,7 @@ class TestTapStackConfiguration:
   def test_tag_generation(self):
     """Test tag generation logic."""
     environment_suffix = "test"
-    region = "us-west-2"
+    region = "us-east-1"
     custom_tags = {"Owner": "TestTeam"}
     
     # Simulate tag generation logic
@@ -511,7 +511,7 @@ class TestTapStackConfiguration:
     assert common_tags["Environment"] == "Test"
     assert common_tags["Project"] == "TAP"
     assert common_tags["ManagedBy"] == "Pulumi"
-    assert common_tags["Region"] == "us-west-2"
+    assert common_tags["Region"] == "us-east-1"
     assert common_tags["CostCenter"] == "TAP-API"
     assert common_tags["Owner"] == "TestTeam"
 
@@ -528,7 +528,7 @@ class TestTapStackConfiguration:
       'environment_variables': {
         'ENVIRONMENT': environment_suffix,
         'LOG_LEVEL': "INFO",
-        'REGION': "us-west-2",
+        'REGION': "us-east-1",
         'FUNCTION_NAME': f"tap-api-handler-{environment_suffix}"
       }
     }

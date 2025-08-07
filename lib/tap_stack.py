@@ -34,7 +34,7 @@ class TapStackArgs:
                tags: Optional[dict] = None, region: Optional[str] = None):
     self.environment_suffix = environment_suffix or 'dev'
     self.tags = tags or {}
-    self.region = region or 'us-west-2'
+    self.region = region or 'us-east-1'
 
 
 class TapStack(pulumi.ComponentResource):  # pylint: disable=too-many-instance-attributes
