@@ -1,0 +1,1014 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Serverless RESTful API for CRUD operations with DynamoDB",
+    "Parameters": {
+        "Environment": {
+            "Type": "String",
+            "Default": "prod",
+            "Description": "Environment name for resource tagging and naming",
+            "AllowedValues": [
+                "dev",
+                "staging",
+                "prod"
+            ]
+        }
+    },
+    "Resources": {
+        "MyVPC": {
+            "Type": "AWS::EC2::VPC",
+            "Properties": {
+                "CidrBlock": "10.0.0.0/16",
+                "EnableDnsHostnames": true,
+                "EnableDnsSupport": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${Environment}-vpc"
+                        }
+                    }
+                ]
+            }
+        },
+        "MyInternetGateway": {
+            "Type": "AWS::EC2::InternetGateway",
+            "Properties": {
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${Environment}-igw"
+                        }
+                    }
+                ]
+            }
+        },
+        "AttachGateway": {
+            "Type": "AWS::EC2::VPCGatewayAttachment",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "MyVPC"
+                },
+                "InternetGatewayId": {
+                    "Ref": "MyInternetGateway"
+                }
+            }
+        },
+        "PublicSubnet": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "MyVPC"
+                },
+                "CidrBlock": "10.0.1.0/24",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "MapPublicIpOnLaunch": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${Environment}-public-subnet"
+                        }
+                    }
+                ]
+            }
+        },
+        "PrivateSubnet": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "MyVPC"
+                },
+                "CidrBlock": "10.0.2.0/24",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${Environment}-private-subnet"
+                        }
+                    }
+                ]
+            }
+        },
+        "NATGatewayEIP": {
+            "Type": "AWS::EC2::EIP",
+            "DependsOn": "AttachGateway",
+            "Properties": {
+                "Domain": "vpc"
+            }
+        },
+        "NATGateway": {
+            "Type": "AWS::EC2::NatGateway",
+            "Properties": {
+                "AllocationId": {
+                    "Fn::GetAtt": [
+                        "NATGatewayEIP",
+                        "AllocationId"
+                    ]
+                },
+                "SubnetId": {
+                    "Ref": "PublicSubnet"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${Environment}-nat-gateway"
+                        }
+                    }
+                ]
+            }
+        },
+        "PublicRouteTable": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "MyVPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${Environment}-public-rt"
+                        }
+                    }
+                ]
+            }
+        },
+        "PrivateRouteTable": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "MyVPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${Environment}-private-rt"
+                        }
+                    }
+                ]
+            }
+        },
+        "PublicRoute": {
+            "Type": "AWS::EC2::Route",
+            "DependsOn": "AttachGateway",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "GatewayId": {
+                    "Ref": "MyInternetGateway"
+                }
+            }
+        },
+        "PrivateRoute": {
+            "Type": "AWS::EC2::Route",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTable"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "NatGatewayId": {
+                    "Ref": "NATGateway"
+                }
+            }
+        },
+        "PublicSubnetRouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "PublicSubnet"
+                },
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                }
+            }
+        },
+        "PrivateSubnetRouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "PrivateSubnet"
+                },
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTable"
+                }
+            }
+        },
+        "LambdaSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "Security group for Lambda functions",
+                "VpcId": {
+                    "Ref": "MyVPC"
+                },
+                "SecurityGroupEgress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 443,
+                        "ToPort": 443,
+                        "CidrIp": "0.0.0.0/0"
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 80,
+                        "ToPort": 80,
+                        "CidrIp": "0.0.0.0/0"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${Environment}-lambda-sg"
+                        }
+                    }
+                ]
+            }
+        },
+        "MyCrudTable": {
+            "Type": "AWS::DynamoDB::Table",
+            "Properties": {
+                "TableName": {
+                    "Fn::Sub": "MyCrudTable${Environment}"
+                },
+                "AttributeDefinitions": [
+                    {
+                        "AttributeName": "id",
+                        "AttributeType": "S"
+                    }
+                ],
+                "KeySchema": [
+                    {
+                        "AttributeName": "id",
+                        "KeyType": "HASH"
+                    }
+                ],
+                "BillingMode": "ON_DEMAND",
+                "DeletionProtectionEnabled": false,
+                "PointInTimeRecoverySpecification": {
+                    "PointInTimeRecoveryEnabled": true
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
+                ]
+            }
+        },
+        "CreateItemRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "DynamoDBCreatePolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "dynamodb:PutItem"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "MyCrudTable",
+                                            "Arn"
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "GetItemRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "DynamoDBGetPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "dynamodb:GetItem"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "MyCrudTable",
+                                            "Arn"
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "UpdateItemRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "DynamoDBUpdatePolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "dynamodb:UpdateItem"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "MyCrudTable",
+                                            "Arn"
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "DeleteItemRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "DynamoDBDeletePolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "dynamodb:DeleteItem"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "MyCrudTable",
+                                            "Arn"
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "CreateItemFunction": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "${Environment}-create-item"
+                },
+                "Runtime": "python3.11",
+                "Handler": "index.lambda_handler",
+                "Timeout": 30,
+                "MemorySize": 256,
+                "Role": {
+                    "Fn::GetAtt": [
+                        "CreateItemRole",
+                        "Arn"
+                    ]
+                },
+                "VpcConfig": {
+                    "SecurityGroupIds": [
+                        {
+                            "Ref": "LambdaSecurityGroup"
+                        }
+                    ],
+                    "SubnetIds": [
+                        {
+                            "Ref": "PrivateSubnet"
+                        }
+                    ]
+                },
+                "Environment": {
+                    "Variables": {
+                        "TABLE_NAME": {
+                            "Ref": "MyCrudTable"
+                        },
+                        "ENVIRONMENT": {
+                            "Ref": "Environment"
+                        }
+                    }
+                },
+                "Code": {
+                    "ZipFile": "import json\nimport boto3\nimport os\nfrom datetime import datetime\nfrom botocore.exceptions import ClientError\n\ndynamodb = boto3.resource('dynamodb')\ntable = dynamodb.Table(os.environ['TABLE_NAME'])\n\ndef lambda_handler(event, context):\n    try:\n        # Parse request body\n        body = json.loads(event['body']) if event.get('body') else {}\n        \n        # Validate required fields\n        if 'id' not in body:\n            return {\n                'statusCode': 400,\n                'headers': {\n                    'Access-Control-Allow-Origin': '*',\n                    'Access-Control-Allow-Methods': 'POST',\n                    'Access-Control-Allow-Headers': 'Content-Type'\n                },\n                'body': json.dumps({'error': 'Missing required field: id'})\n            }\n        \n        # Add created_at timestamp\n        body['created_at'] = datetime.utcnow().isoformat()\n        \n        # Create item in DynamoDB\n        response = table.put_item(Item=body)\n        \n        return {\n            'statusCode': 201,\n            'headers': {\n                'Access-Control-Allow-Origin': '*',\n                'Access-Control-Allow-Methods': 'POST',\n                'Access-Control-Allow-Headers': 'Content-Type'\n            },\n            'body': json.dumps({'message': 'Item created successfully', 'item': body})\n        }\n    \n    except ClientError as e:\n        return {\n            'statusCode': 500,\n            'headers': {\n                'Access-Control-Allow-Origin': '*',\n                'Access-Control-Allow-Methods': 'POST',\n                'Access-Control-Allow-Headers': 'Content-Type'\n            },\n            'body': json.dumps({'error': str(e)})\n        }\n    except Exception as e:\n        return {\n            'statusCode': 500,\n            'headers': {\n                'Access-Control-Allow-Origin': '*',\n                'Access-Control-Allow-Methods': 'POST',\n                'Access-Control-Allow-Headers': 'Content-Type'\n            },\n            'body': json.dumps({'error': str(e)})\n        }\n"
+                }
+            }
+        },
+        "GetItemFunction": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "${Environment}-get-item"
+                },
+                "Runtime": "python3.11",
+                "Handler": "index.lambda_handler",
+                "Timeout": 30,
+                "MemorySize": 256,
+                "Role": {
+                    "Fn::GetAtt": [
+                        "GetItemRole",
+                        "Arn"
+                    ]
+                },
+                "VpcConfig": {
+                    "SecurityGroupIds": [
+                        {
+                            "Ref": "LambdaSecurityGroup"
+                        }
+                    ],
+                    "SubnetIds": [
+                        {
+                            "Ref": "PrivateSubnet"
+                        }
+                    ]
+                },
+                "Environment": {
+                    "Variables": {
+                        "TABLE_NAME": {
+                            "Ref": "MyCrudTable"
+                        },
+                        "ENVIRONMENT": {
+                            "Ref": "Environment"
+                        }
+                    }
+                },
+                "Code": {
+                    "ZipFile": "import json\nimport boto3\nimport os\nfrom botocore.exceptions import ClientError\n\ndynamodb = boto3.resource('dynamodb')\ntable = dynamodb.Table(os.environ['TABLE_NAME'])\n\ndef lambda_handler(event, context):\n    try:\n        # Get item ID from path parameters\n        item_id = event['pathParameters']['id']\n        \n        # Get item from DynamoDB\n        response = table.get_item(Key={'id': item_id})\n        \n        if 'Item' not in response:\n            return {\n                'statusCode': 404,\n                'headers': {\n                    'Access-Control-Allow-Origin': '*',\n                    'Access-Control-Allow-Methods': 'GET',\n                    'Access-Control-Allow-Headers': 'Content-Type'\n                },\n                'body': json.dumps({'error': 'Item not found'})\n            }\n        \n        return {\n            'statusCode': 200,\n            'headers': {\n                'Access-Control-Allow-Origin': '*',\n                'Access-Control-Allow-Methods': 'GET',\n                'Access-Control-Allow-Headers': 'Content-Type'\n            },\n            'body': json.dumps(response['Item'], default=str)\n        }\n    \n    except ClientError as e:\n        return {\n            'statusCode': 500,\n            'headers': {\n                'Access-Control-Allow-Origin': '*',\n                'Access-Control-Allow-Methods': 'GET',\n                'Access-Control-Allow-Headers': 'Content-Type'\n            },\n            'body': json.dumps({'error': str(e)})\n        }\n    except Exception as e:\n        return {\n            'statusCode': 500,\n            'headers': {\n                'Access-Control-Allow-Origin': '*',\n                'Access-Control-Allow-Methods': 'GET',\n                'Access-Control-Allow-Headers': 'Content-Type'\n            },\n            'body': json.dumps({'error': str(e)})\n        }\n"
+                }
+            }
+        },
+        "UpdateItemFunction": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "${Environment}-update-item"
+                },
+                "Runtime": "python3.11",
+                "Handler": "index.lambda_handler",
+                "Timeout": 30,
+                "MemorySize": 256,
+                "Role": {
+                    "Fn::GetAtt": [
+                        "UpdateItemRole",
+                        "Arn"
+                    ]
+                },
+                "VpcConfig": {
+                    "SecurityGroupIds": [
+                        {
+                            "Ref": "LambdaSecurityGroup"
+                        }
+                    ],
+                    "SubnetIds": [
+                        {
+                            "Ref": "PrivateSubnet"
+                        }
+                    ]
+                },
+                "Environment": {
+                    "Variables": {
+                        "TABLE_NAME": {
+                            "Ref": "MyCrudTable"
+                        },
+                        "ENVIRONMENT": {
+                            "Ref": "Environment"
+                        }
+                    }
+                },
+                "Code": {
+                    "ZipFile": "import json\nimport boto3\nimport os\nfrom datetime import datetime\nfrom botocore.exceptions import ClientError\n\ndynamodb = boto3.resource('dynamodb')\ntable = dynamodb.Table(os.environ['TABLE_NAME'])\n\ndef lambda_handler(event, context):\n    try:\n        # Get item ID from path parameters\n        item_id = event['pathParameters']['id']\n        \n        # Parse request body\n        body = json.loads(event['body']) if event.get('body') else {}\n        \n        # Add updated_at timestamp\n        body['updated_at'] = datetime.utcnow().isoformat()\n        \n        # Build update expression\n        update_expression = \"SET \"\n        expression_attribute_values = {}\n        expression_attribute_names = {}\n        \n        for key, value in body.items():\n            if key != 'id':  # Don't update the primary key\n                update_expression += f\"#{key} = :{key}, \"\n                expression_attribute_names[f\"#{key}\"] = key\n                expression_attribute_values[f\":{key}\"] = value\n        \n        # Remove trailing comma and space\n        update_expression = update_expression.rstrip(', ')\n        \n        if not expression_attribute_values:\n            return {\n                'statusCode': 400,\n                'headers': {\n                    'Access-Control-Allow-Origin': '*',\n                    'Access-Control-Allow-Methods': 'PUT',\n                    'Access-Control-Allow-Headers': 'Content-Type'\n                },\n                'body': json.dumps({'error': 'No valid fields to update'})\n            }\n        \n        # Update item in DynamoDB\n        response = table.update_item(\n            Key={'id': item_id},\n            UpdateExpression=update_expression,\n            ExpressionAttributeNames=expression_attribute_names,\n            ExpressionAttributeValues=expression_attribute_values,\n            ReturnValues='ALL_NEW'\n        )\n        \n        return {\n            'statusCode': 200,\n            'headers': {\n                'Access-Control-Allow-Origin': '*',\n                'Access-Control-Allow-Methods': 'PUT',\n                'Access-Control-Allow-Headers': 'Content-Type'\n            },\n            'body': json.dumps({'message': 'Item updated successfully', 'item': response['Attributes']}, default=str)\n        }\n    \n    except ClientError as e:\n        return {\n            'statusCode': 500,\n            'headers': {\n                'Access-Control-Allow-Origin': '*',\n                'Access-Control-Allow-Methods': 'PUT',\n                'Access-Control-Allow-Headers': 'Content-Type'\n            },\n            'body': json.dumps({'error': str(e)})\n        }\n    except Exception as e:\n        return {\n            'statusCode': 500,\n            'headers': {\n                'Access-Control-Allow-Origin': '*',\n                'Access-Control-Allow-Methods': 'PUT',\n                'Access-Control-Allow-Headers': 'Content-Type'\n            },\n            'body': json.dumps({'error': str(e)})\n        }\n"
+                }
+            }
+        },
+        "DeleteItemFunction": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "${Environment}-delete-item"
+                },
+                "Runtime": "python3.11",
+                "Handler": "index.lambda_handler",
+                "Timeout": 30,
+                "MemorySize": 256,
+                "Role": {
+                    "Fn::GetAtt": [
+                        "DeleteItemRole",
+                        "Arn"
+                    ]
+                },
+                "VpcConfig": {
+                    "SecurityGroupIds": [
+                        {
+                            "Ref": "LambdaSecurityGroup"
+                        }
+                    ],
+                    "SubnetIds": [
+                        {
+                            "Ref": "PrivateSubnet"
+                        }
+                    ]
+                },
+                "Environment": {
+                    "Variables": {
+                        "TABLE_NAME": {
+                            "Ref": "MyCrudTable"
+                        },
+                        "ENVIRONMENT": {
+                            "Ref": "Environment"
+                        }
+                    }
+                },
+                "Code": {
+                    "ZipFile": "import json\nimport boto3\nimport os\nfrom botocore.exceptions import ClientError\n\ndynamodb = boto3.resource('dynamodb')\ntable = dynamodb.Table(os.environ['TABLE_NAME'])\n\ndef lambda_handler(event, context):\n    try:\n        # Get item ID from path parameters\n        item_id = event['pathParameters']['id']\n        \n        # Delete item from DynamoDB\n        response = table.delete_item(\n            Key={'id': item_id},\n            ReturnValues='ALL_OLD'\n        )\n        \n        if 'Attributes' not in response:\n            return {\n                'statusCode': 404,\n                'headers': {\n                    'Access-Control-Allow-Origin': '*',\n                    'Access-Control-Allow-Methods': 'DELETE',\n                    'Access-Control-Allow-Headers': 'Content-Type'\n                },\n                'body': json.dumps({'error': 'Item not found'})\n            }\n        \n        return {\n            'statusCode': 200,\n            'headers': {\n                'Access-Control-Allow-Origin': '*',\n                'Access-Control-Allow-Methods': 'DELETE',\n                'Access-Control-Allow-Headers': 'Content-Type'\n            },\n            'body': json.dumps({'message': 'Item deleted successfully', 'deleted_item': response['Attributes']}, default=str)\n        }\n    \n    except ClientError as e:\n        return {\n            'statusCode': 500,\n            'headers': {\n                'Access-Control-Allow-Origin': '*',\n                'Access-Control-Allow-Methods': 'DELETE',\n                'Access-Control-Allow-Headers': 'Content-Type'\n            },\n            'body': json.dumps({'error': str(e)})\n        }\n    except Exception as e:\n        return {\n            'statusCode': 500,\n            'headers': {\n                'Access-Control-Allow-Origin': '*',\n                'Access-Control-Allow-Methods': 'DELETE',\n                'Access-Control-Allow-Headers': 'Content-Type'\n            },\n            'body': json.dumps({'error': str(e)})\n        }\n"
+                }
+            }
+        },
+        "MyRestApi": {
+            "Type": "AWS::ApiGateway::RestApi",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${Environment}-crud-api"
+                },
+                "Description": "RESTful API for CRUD operations",
+                "EndpointConfiguration": {
+                    "Types": [
+                        "REGIONAL"
+                    ]
+                }
+            }
+        },
+        "ItemsResource": {
+            "Type": "AWS::ApiGateway::Resource",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "MyRestApi"
+                },
+                "ParentId": {
+                    "Fn::GetAtt": [
+                        "MyRestApi",
+                        "RootResourceId"
+                    ]
+                },
+                "PathPart": "items"
+            }
+        },
+        "ItemResource": {
+            "Type": "AWS::ApiGateway::Resource",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "MyRestApi"
+                },
+                "ParentId": {
+                    "Ref": "ItemsResource"
+                },
+                "PathPart": "{id}"
+            }
+        },
+        "CreateItemMethod": {
+            "Type": "AWS::ApiGateway::Method",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "MyRestApi"
+                },
+                "ResourceId": {
+                    "Ref": "ItemsResource"
+                },
+                "HttpMethod": "POST",
+                "AuthorizationType": "NONE",
+                "Integration": {
+                    "Type": "AWS_PROXY",
+                    "IntegrationHttpMethod": "POST",
+                    "Uri": {
+                        "Fn::Sub": "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${CreateItemFunction.Arn}/invocations"
+                    }
+                },
+                "MethodResponses": [
+                    {
+                        "StatusCode": 200
+                    },
+                    {
+                        "StatusCode": 400
+                    },
+                    {
+                        "StatusCode": 500
+                    }
+                ]
+            }
+        },
+        "GetItemMethod": {
+            "Type": "AWS::ApiGateway::Method",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "MyRestApi"
+                },
+                "ResourceId": {
+                    "Ref": "ItemResource"
+                },
+                "HttpMethod": "GET",
+                "AuthorizationType": "NONE",
+                "Integration": {
+                    "Type": "AWS_PROXY",
+                    "IntegrationHttpMethod": "POST",
+                    "Uri": {
+                        "Fn::Sub": "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${GetItemFunction.Arn}/invocations"
+                    }
+                },
+                "MethodResponses": [
+                    {
+                        "StatusCode": 200
+                    },
+                    {
+                        "StatusCode": 404
+                    },
+                    {
+                        "StatusCode": 500
+                    }
+                ]
+            }
+        },
+        "UpdateItemMethod": {
+            "Type": "AWS::ApiGateway::Method",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "MyRestApi"
+                },
+                "ResourceId": {
+                    "Ref": "ItemResource"
+                },
+                "HttpMethod": "PUT",
+                "AuthorizationType": "NONE",
+                "Integration": {
+                    "Type": "AWS_PROXY",
+                    "IntegrationHttpMethod": "POST",
+                    "Uri": {
+                        "Fn::Sub": "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UpdateItemFunction.Arn}/invocations"
+                    }
+                },
+                "MethodResponses": [
+                    {
+                        "StatusCode": 200
+                    },
+                    {
+                        "StatusCode": 400
+                    },
+                    {
+                        "StatusCode": 500
+                    }
+                ]
+            }
+        },
+        "DeleteItemMethod": {
+            "Type": "AWS::ApiGateway::Method",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "MyRestApi"
+                },
+                "ResourceId": {
+                    "Ref": "ItemResource"
+                },
+                "HttpMethod": "DELETE",
+                "AuthorizationType": "NONE",
+                "Integration": {
+                    "Type": "AWS_PROXY",
+                    "IntegrationHttpMethod": "POST",
+                    "Uri": {
+                        "Fn::Sub": "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${DeleteItemFunction.Arn}/invocations"
+                    }
+                },
+                "MethodResponses": [
+                    {
+                        "StatusCode": 200
+                    },
+                    {
+                        "StatusCode": 404
+                    },
+                    {
+                        "StatusCode": 500
+                    }
+                ]
+            }
+        },
+        "ItemsOptionsMethod": {
+            "Type": "AWS::ApiGateway::Method",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "MyRestApi"
+                },
+                "ResourceId": {
+                    "Ref": "ItemsResource"
+                },
+                "HttpMethod": "OPTIONS",
+                "AuthorizationType": "NONE",
+                "Integration": {
+                    "Type": "MOCK",
+                    "IntegrationResponses": [
+                        {
+                            "StatusCode": 200,
+                            "ResponseParameters": {
+                                "method.response.header.Access-Control-Allow-Headers": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'",
+                                "method.response.header.Access-Control-Allow-Methods": "'POST,OPTIONS'",
+                                "method.response.header.Access-Control-Allow-Origin": "'*'"
+                            }
+                        }
+                    ],
+                    "RequestTemplates": {
+                        "application/json": "{\"statusCode\": 200}"
+                    }
+                },
+                "MethodResponses": [
+                    {
+                        "StatusCode": 200,
+                        "ResponseParameters": {
+                            "method.response.header.Access-Control-Allow-Headers": true,
+                            "method.response.header.Access-Control-Allow-Methods": true,
+                            "method.response.header.Access-Control-Allow-Origin": true
+                        }
+                    }
+                ]
+            }
+        },
+        "ItemOptionsMethod": {
+            "Type": "AWS::ApiGateway::Method",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "MyRestApi"
+                },
+                "ResourceId": {
+                    "Ref": "ItemResource"
+                },
+                "HttpMethod": "OPTIONS",
+                "AuthorizationType": "NONE",
+                "Integration": {
+                    "Type": "MOCK",
+                    "IntegrationResponses": [
+                        {
+                            "StatusCode": 200,
+                            "ResponseParameters": {
+                                "method.response.header.Access-Control-Allow-Headers": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'",
+                                "method.response.header.Access-Control-Allow-Methods": "'GET,PUT,DELETE,OPTIONS'",
+                                "method.response.header.Access-Control-Allow-Origin": "'*'"
+                            }
+                        }
+                    ],
+                    "RequestTemplates": {
+                        "application/json": "{\"statusCode\": 200}"
+                    }
+                },
+                "MethodResponses": [
+                    {
+                        "StatusCode": 200,
+                        "ResponseParameters": {
+                            "method.response.header.Access-Control-Allow-Headers": true,
+                            "method.response.header.Access-Control-Allow-Methods": true,
+                            "method.response.header.Access-Control-Allow-Origin": true
+                        }
+                    }
+                ]
+            }
+        },
+        "CreateItemPermission": {
+            "Type": "AWS::Lambda::Permission",
+            "Properties": {
+                "FunctionName": {
+                    "Ref": "CreateItemFunction"
+                },
+                "Action": "lambda:InvokeFunction",
+                "Principal": "apigateway.amazonaws.com",
+                "SourceArn": {
+                    "Fn::Sub": "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${MyRestApi}/*/*"
+                }
+            }
+        },
+        "GetItemPermission": {
+            "Type": "AWS::Lambda::Permission",
+            "Properties": {
+                "FunctionName": {
+                    "Ref": "GetItemFunction"
+                },
+                "Action": "lambda:InvokeFunction",
+                "Principal": "apigateway.amazonaws.com",
+                "SourceArn": {
+                    "Fn::Sub": "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${MyRestApi}/*/*"
+                }
+            }
+        },
+        "UpdateItemPermission": {
+            "Type": "AWS::Lambda::Permission",
+            "Properties": {
+                "FunctionName": {
+                    "Ref": "UpdateItemFunction"
+                },
+                "Action": "lambda:InvokeFunction",
+                "Principal": "apigateway.amazonaws.com",
+                "SourceArn": {
+                    "Fn::Sub": "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${MyRestApi}/*/*"
+                }
+            }
+        },
+        "DeleteItemPermission": {
+            "Type": "AWS::Lambda::Permission",
+            "Properties": {
+                "FunctionName": {
+                    "Ref": "DeleteItemFunction"
+                },
+                "Action": "lambda:InvokeFunction",
+                "Principal": "apigateway.amazonaws.com",
+                "SourceArn": {
+                    "Fn::Sub": "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${MyRestApi}/*/*"
+                }
+            }
+        },
+        "ApiDeployment": {
+            "Type": "AWS::ApiGateway::Deployment",
+            "DependsOn": [
+                "CreateItemMethod",
+                "GetItemMethod",
+                "UpdateItemMethod",
+                "DeleteItemMethod",
+                "ItemsOptionsMethod",
+                "ItemOptionsMethod"
+            ],
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "MyRestApi"
+                }
+            }
+        },
+        "ApiStage": {
+            "Type": "AWS::ApiGateway::Stage",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "MyRestApi"
+                },
+                "DeploymentId": {
+                    "Ref": "ApiDeployment"
+                },
+                "StageName": {
+                    "Ref": "Environment"
+                }
+            }
+        }
+    },
+    "Outputs": {
+        "ApiGatewayInvokeURL": {
+            "Description": "URL for the deployed REST API",
+            "Value": {
+                "Fn::Sub": "https://${MyRestApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ApiGatewayURL"
+                }
+            }
+        },
+        "DynamoDBTableName": {
+            "Description": "Name of the DynamoDB table",
+            "Value": {
+                "Ref": "MyCrudTable"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-DynamoDBTable"
+                }
+            }
+        },
+        "VPCId": {
+            "Description": "VPC ID",
+            "Value": {
+                "Ref": "MyVPC"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-VPC"
+                }
+            }
+        },
+        "PrivateSubnetId": {
+            "Description": "Private Subnet ID",
+            "Value": {
+                "Ref": "PrivateSubnet"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-PrivateSubnet"
+                }
+            }
+        },
+        "PublicSubnetId": {
+            "Description": "Public Subnet ID",
+            "Value": {
+                "Ref": "PublicSubnet"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-PublicSubnet"
+                }
+            }
+        },
+        "LambdaSecurityGroupId": {
+            "Description": "Lambda Security Group ID",
+            "Value": {
+                "Ref": "LambdaSecurityGroup"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-LambdaSecurityGroup"
+                }
+            }
+        }
+    }
+}

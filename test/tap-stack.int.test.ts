@@ -383,8 +383,8 @@ describe('Serverless CRUD API Integration Tests', () => {
     });
 
     test('should handle concurrent requests', async () => {
-      const promises = [];
-      const testIds = [];
+      const promises: Promise<any>[] = [];
+      const testIds: string[] = [];
 
       // Create 5 items concurrently
       for (let i = 0; i < 5; i++) {
