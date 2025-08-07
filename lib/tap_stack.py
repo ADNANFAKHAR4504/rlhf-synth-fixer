@@ -293,7 +293,7 @@ class TapStack(ComponentResource):
         )
 
     # ------------------------------------------------------------------ #
-    #  VPC  (IPv4-only)
+    #  VPC  (IPv4-only) - FIXED VPC Flow Logs Policy
     # ------------------------------------------------------------------ #
     def _create_vpc_infrastructure(self) -> None:
         self.vpcs, self.subnets = {}, {}
@@ -375,7 +375,7 @@ class TapStack(ComponentResource):
                     opts=ResourceOptions(parent=self, provider=provider),
                 )
 
-            # Flow logs
+            # FIXED: Flow logs with inline policy instead of managed policy
             flow_role = aws.iam.Role(
                 f"PROD-flowlog-role-{region}-{self.environment_suffix}",
                 assume_role_policy=json.dumps(
@@ -394,10 +394,26 @@ class TapStack(ComponentResource):
                 opts=ResourceOptions(parent=self, provider=provider),
             )
 
-            aws.iam.RolePolicyAttachment(
-                f"PROD-flowlog-policy-{region}-{self.environment_suffix}",
-                role=flow_role.name,
-                policy_arn="arn:aws:iam::aws:policy/service-role/VPCFlowLogsDeliveryRolePolicy",
+            # FIXED: Create inline policy instead of using managed policy
+            aws.iam.RolePolicy(
+                f"PROD-flowlog-inline-policy-{region}-{self.environment_suffix}",
+                role=flow_role.id,
+                policy=json.dumps({
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Action": [
+                                "logs:CreateLogGroup",
+                                "logs:CreateLogStream",
+                                "logs:PutLogEvents",
+                                "logs:DescribeLogGroups",
+                                "logs:DescribeLogStreams"
+                            ],
+                            "Resource": "*"
+                        }
+                    ]
+                }),
                 opts=ResourceOptions(parent=self, provider=provider),
             )
 
@@ -686,7 +702,7 @@ echo 'MinProtocol = TLSv1.2' >> /etc/ssl/openssl.cnf
             self.log_groups[region] = lg
 
     # ------------------------------------------------------------------ #
-    #  AWS Config - FIXED: Use correct class names
+    #  AWS Config
     # ------------------------------------------------------------------ #
     def _create_compliance_checks(self) -> None:
         for region in self.regions:
@@ -740,7 +756,6 @@ echo 'MinProtocol = TLSv1.2' >> /etc/ssl/openssl.cnf
                 opts=ResourceOptions(parent=self, provider=provider),
             )
 
-            # FIXED: Use aws.cfg.Recorder (not ConfigurationRecorder)
             recorder = aws.cfg.Recorder(
                 f"PROD-config-recorder-{region}-{self.environment_suffix}",
                 role_arn=config_role.arn,
@@ -751,7 +766,6 @@ echo 'MinProtocol = TLSv1.2' >> /etc/ssl/openssl.cnf
                 opts=ResourceOptions(parent=self, provider=provider, depends_on=[delivery]),
             )
 
-            # FIXED: Use aws.cfg.Rule (not ConfigRule)
             aws.cfg.Rule(
                 f"PROD-encrypted-volumes-{region}-{self.environment_suffix}",
                 name=f"encrypted-volumes-{region}-{self.environment_suffix}",
@@ -762,7 +776,6 @@ echo 'MinProtocol = TLSv1.2' >> /etc/ssl/openssl.cnf
                 opts=ResourceOptions(parent=self, provider=provider, depends_on=[recorder]),
             )
 
-            # FIXED: Use aws.cfg.Rule (not ConfigRule)
             aws.cfg.Rule(
                 f"PROD-s3-bucket-ssl-requests-{region}-{self.environment_suffix}",
                 name=f"s3-bucket-ssl-requests-{region}-{self.environment_suffix}",
