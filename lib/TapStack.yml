@@ -10,7 +10,7 @@ Parameters:
       - prod
     Default: dev
     Description: 'Environment name'
-    
+
   LogLevel:
     Type: String
     AllowedValues:
@@ -137,7 +137,6 @@ Resources:
       Environment:
         Variables:
           STAGE: !Ref Environment
-          AWS_REGION: us-east-1
           LOG_LEVEL: !Ref LogLevel
           TABLE_NAME: !Ref DataTable
       Timeout: 30
@@ -226,7 +225,7 @@ Resources:
               Service: application-autoscaling.amazonaws.com
             Action: sts:AssumeRole
       ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/DynamoDBAutoscaleRole
+        - arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess
 
   # DynamoDB Auto Scaling Target for Read Capacity
   ReadCapacityScalableTarget:
