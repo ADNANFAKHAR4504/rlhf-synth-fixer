@@ -378,3 +378,4 @@ def handler(event, context):
   @property
   def lambda_name(self):
     return self.lambda_function.name
+
