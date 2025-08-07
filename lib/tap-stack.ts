@@ -23,9 +23,10 @@ export class TapStack extends cdk.Stack {
     // Create a single domain name for the entire multi-region setup
     const domainName = `${environmentSuffix}.tap-us-east-1.turing229221.com`;
     // Use environment variable or CDK context for hosted zone ID
-    const zoneId = this.node.tryGetContext('hostedZoneId') || 
-                   process.env.HOSTED_ZONE_ID || 
-                   'Z0457876OLTG958Q3IXN'; // Fallback for backward compatibility
+    const zoneId =
+      this.node.tryGetContext('hostedZoneId') ||
+      process.env.HOSTED_ZONE_ID ||
+      'Z0457876OLTG958Q3IXN'; // Fallback for backward compatibility
     const currentRegion = this.region;
     const isPrimary = currentRegion === REGIONS.PRIMARY;
 
