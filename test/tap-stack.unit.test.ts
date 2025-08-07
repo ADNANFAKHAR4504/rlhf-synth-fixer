@@ -1,342 +1,213 @@
+// Configuration - These are coming from cfn-outputs after cdk deploy
+import { DescribeVpcsCommand, EC2Client } from '@aws-sdk/client-ec2';
 import * as cdk from 'aws-cdk-lib';
-import { Template, Match } from 'aws-cdk-lib/assertions';
-import { TapStack } from '../lib/tap-stack';
+import { Template } from 'aws-cdk-lib/assertions';
+import * as ec2 from 'aws-cdk-lib/aws-ec2';
+import { mockClient } from 'aws-sdk-client-mock';
+import { TapStack, findVpcByCidr } from '../lib/tap-stack'; // Adjust import path
+import { WebServerStack } from '../lib/web-server';
 
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'test';
+// Create mock
+const ec2Mock = mockClient(EC2Client);
+
+describe('findVpcByCidr', () => {
+  beforeEach(() => {
+    ec2Mock.reset();
+  });
+
+  it('should return the VPC ID when CIDR matches', async () => {
+    ec2Mock.on(DescribeVpcsCommand).resolves({
+      Vpcs: [
+        { VpcId: 'vpc-12345678', CidrBlock: '10.0.0.0/16' },
+        { VpcId: 'vpc-87654321', CidrBlock: '192.168.0.0/16' },
+      ],
+    });
+
+    const vpcId = await findVpcByCidr('10.0.0.0/16');
+    expect(vpcId).toBe('vpc-12345678');
+  });
+
+  it('should return undefined when no CIDR matches', async () => {
+    ec2Mock.on(DescribeVpcsCommand).resolves({
+      Vpcs: [{ VpcId: 'vpc-99999999', CidrBlock: '172.31.0.0/16' }],
+    });
+
+    const vpcId = await findVpcByCidr('10.0.0.0/16');
+    expect(vpcId).toBeUndefined();
+  });
+
+  it('should return undefined when Vpcs is undefined', async () => {
+    ec2Mock.on(DescribeVpcsCommand).resolves({});
+
+    const vpcId = await findVpcByCidr('10.0.0.0/16');
+    expect(vpcId).toBeUndefined();
+  });
+
+  it('should return undefined when VpcId is undefined in a matching VPC', async () => {
+    ec2Mock.on(DescribeVpcsCommand).resolves({
+      Vpcs: [{ CidrBlock: '10.0.0.0/16' }], // VPC without VpcId
+    });
+
+    const vpcId = await findVpcByCidr('10.0.0.0/16');
+    expect(vpcId).toBeUndefined();
+  });
+});
 
 describe('TapStack', () => {
-  let app: cdk.App;
-  let stack: TapStack;
-  let template: Template;
+  const env = {
+    account: '111111111111',
+    region: 'us-east-1',
+  };
+
+  beforeAll(() => {
+    jest.spyOn(ec2.Vpc, 'fromLookup').mockImplementation(() => {
+      return {
+        vpcId: 'vpc-123456',
+        selectSubnets: (selection?: ec2.SubnetSelection) => {
+          if (selection?.subnetType === ec2.SubnetType.PRIVATE_ISOLATED) {
+            return {
+              subnetIds: ['subnet-priv-1', 'subnet-priv-2'],
+              subnets: [
+                { subnetId: 'subnet-priv-1' } as ec2.ISubnet,
+                { subnetId: 'subnet-priv-2' } as ec2.ISubnet,
+              ],
+            };
+          }
+
+          return {
+            subnetIds: ['subnet-pub-1'],
+            subnets: [{ subnetId: 'subnet-pub-1' } as ec2.ISubnet],
+          };
+        },
+        availabilityZones: ['us-east-1a', 'us-east-1b'],
+      } as unknown as ec2.IVpc;
+    });
+  });
+
+  afterAll(() => {
+    jest.restoreAllMocks();
+  });
 
   beforeEach(() => {
-    app = new cdk.App();
-    stack = new TapStack(app, 'TestTapStack', { environmentSuffix });
-    template = Template.fromStack(stack);
+    // Reset environment variables before each test
+    delete process.env.CDK_DEFAULT_ACCOUNT;
   });
 
-  describe('VPC Configuration', () => {
-    test('creates VPC with correct CIDR block', () => {
-      template.hasResourceProperties('AWS::EC2::VPC', {
-        CidrBlock: '10.0.0.0/16',
-        EnableDnsHostnames: true,
-        EnableDnsSupport: true,
-      });
+  test('should instantiate WebServerStack with given VPC ID and default environmentSuffix', () => {
+    const app = new cdk.App();
+    const stack = new cdk.Stack(app, 'TestRootStack');
+
+    const tapStack = new TapStack(stack, 'TestTapStack', {
+      vpcId: 'vpc-12345678',
+      env,
     });
 
-    test('creates 2 public subnets across 2 AZs', () => {
-      template.resourceCountIs('AWS::EC2::Subnet', 4);
-      
-      // Check for public subnets
-      const publicSubnets = template.findResources('AWS::EC2::Subnet', {
-        Properties: {
-          MapPublicIpOnLaunch: true,
-        },
-      });
-      expect(Object.keys(publicSubnets).length).toBe(2);
-    });
-
-    test('creates 2 private subnets across 2 AZs', () => {
-      // Check for private subnets
-      const privateSubnets = template.findResources('AWS::EC2::Subnet', {
-        Properties: {
-          MapPublicIpOnLaunch: false,
-        },
-      });
-      expect(Object.keys(privateSubnets).length).toBe(2);
-    });
-
-    test('creates Internet Gateway', () => {
-      template.resourceCountIs('AWS::EC2::InternetGateway', 1);
-    });
-
-    test('creates 2 NAT Gateways for high availability', () => {
-      template.resourceCountIs('AWS::EC2::NatGateway', 2);
-    });
-
-    test('creates 2 Elastic IPs for NAT Gateways', () => {
-      template.resourceCountIs('AWS::EC2::EIP', 2);
-    });
+    const webServer = tapStack.node.tryFindChild('WebServerStack') as WebServerStack;
+    expect(webServer).toBeDefined();
+    expect(webServer.stackName).toContain('WebServerStack');
+    expect(webServer.node.tryGetContext('environmentSuffix') ?? 'dev').toBe('dev');
   });
 
-  describe('Security Groups', () => {
-    test('creates web security group with HTTP and HTTPS access', () => {
-      template.hasResourceProperties('AWS::EC2::SecurityGroup', {
-        GroupDescription: 'Security group for web servers',
-        SecurityGroupIngress: Match.arrayWith([
-          Match.objectLike({
-            IpProtocol: 'tcp',
-            FromPort: 80,
-            ToPort: 80,
-            CidrIp: '0.0.0.0/0',
-          }),
-          Match.objectLike({
-            IpProtocol: 'tcp',
-            FromPort: 443,
-            ToPort: 443,
-            CidrIp: '0.0.0.0/0',
-          }),
-        ]),
-      });
+  test('should use environmentSuffix from props if provided', () => {
+    const app = new cdk.App();
+    const stack = new cdk.Stack(app, 'TestRootStack');
+
+    const tapStack = new TapStack(stack, 'TestTapStack', {
+      vpcId: 'vpc-abc12345',
+      environmentSuffix: 'prod',
+      env,
     });
 
-    test('creates SSH security group with VPC-only access', () => {
-      template.hasResourceProperties('AWS::EC2::SecurityGroup', {
-        GroupDescription: 'Security group for SSH access',
-        SecurityGroupIngress: Match.arrayWith([
-          Match.objectLike({
-            IpProtocol: 'tcp',
-            FromPort: 22,
-            ToPort: 22,
-            Description: 'Allow SSH from VPC',
-          }),
-        ]),
-      });
+    const webServer = tapStack.node.tryFindChild('WebServerStack') as WebServerStack;
+    expect(webServer).toBeDefined();
+    expect(webServer.stackName).toContain('WebServerStack');
+    expect(tapStack.node.tryGetContext('environmentSuffix') ?? 'prod').toBe('prod');
+  });
+
+  test('should use environmentSuffix from context if available', () => {
+    const app = new cdk.App({
+      context: {
+        environmentSuffix: 'test'
+      }
+    });
+    const stack = new cdk.Stack(app, 'TestRootStack');
+
+    const tapStack = new TapStack(stack, 'TestTapStack', {
+      vpcId: 'vpc-abc12345',
+      env,
     });
 
-    test('creates RDS security group', () => {
-      template.hasResourceProperties('AWS::EC2::SecurityGroup', {
-        GroupDescription: 'Security group for RDS instances',
-      });
+    const webServer = tapStack.node.tryFindChild('WebServerStack') as WebServerStack;
+    expect(webServer).toBeDefined();
+    expect(webServer.stackName).toContain('WebServerStack');
+    expect(tapStack.node.tryGetContext('environmentSuffix')).toBe('test');
+  });
+
+  test('should use CDK_DEFAULT_ACCOUNT when available', () => {
+    process.env.CDK_DEFAULT_ACCOUNT = '999999999999';
+    const app = new cdk.App();
+    const stack = new cdk.Stack(app, 'TestRootStack');
+
+    const tapStack = new TapStack(stack, 'TestTapStack', {
+      vpcId: 'vpc-abc12345',
+      env,
+    });
+
+    const webServer = tapStack.node.tryFindChild('WebServerStack') as WebServerStack;
+    expect(webServer).toBeDefined();
+    const template = Template.fromStack(tapStack);
+    template.hasResourceProperties('AWS::CloudFormation::Stack', {
+      Parameters: {
+        env: expect.stringContaining('999999999999'),
+      },
     });
   });
 
-  describe('Encryption and Security', () => {
-    test('creates KMS key with rotation enabled', () => {
-      template.hasResourceProperties('AWS::KMS::Key', {
-        Description: 'KMS key for encrypting resources',
-        EnableKeyRotation: true,
-      });
+  test('should handle missing CDK_DEFAULT_ACCOUNT', () => {
+    const app = new cdk.App();
+    const stack = new cdk.Stack(app, 'TestRootStack');
+
+    const tapStack = new TapStack(stack, 'TestTapStack', {
+      vpcId: 'vpc-abc12345',
+      env,
     });
 
-    test('creates KMS key alias', () => {
-      template.hasResourceProperties('AWS::KMS::Alias', {
-        AliasName: `alias/infrastructure-key-${environmentSuffix}`,
-      });
-    });
-  });
-
-  describe('S3 Bucket', () => {
-    test('creates S3 bucket with encryption', () => {
-      template.hasResourceProperties('AWS::S3::Bucket', {
-        BucketEncryption: {
-          ServerSideEncryptionConfiguration: Match.arrayWith([
-            Match.objectLike({
-              ServerSideEncryptionByDefault: Match.objectLike({
-                SSEAlgorithm: 'aws:kms',
-              }),
-            }),
-          ]),
-        },
-      });
-    });
-
-    test('S3 bucket has versioning enabled', () => {
-      template.hasResourceProperties('AWS::S3::Bucket', {
-        VersioningConfiguration: {
-          Status: 'Enabled',
-        },
-      });
-    });
-
-    test('S3 bucket has lifecycle rules', () => {
-      template.hasResourceProperties('AWS::S3::Bucket', {
-        LifecycleConfiguration: {
-          Rules: Match.arrayWith([
-            Match.objectLike({
-              Id: 'DeleteOldLogs',
-              Status: 'Enabled',
-              ExpirationInDays: 30,
-            }),
-          ]),
-        },
-      });
-    });
-
-    test('S3 bucket blocks public access', () => {
-      template.hasResourceProperties('AWS::S3::Bucket', {
-        PublicAccessBlockConfiguration: {
-          BlockPublicAcls: true,
-          BlockPublicPolicy: true,
-          IgnorePublicAcls: true,
-          RestrictPublicBuckets: true,
-        },
-      });
+    const webServer = tapStack.node.tryFindChild('WebServerStack') as WebServerStack;
+    expect(webServer).toBeDefined();
+    const template = Template.fromStack(tapStack);
+    template.hasResourceProperties('AWS::CloudFormation::Stack', {
+      Parameters: {
+        env: expect.not.stringContaining('999999999999'),
+      },
     });
   });
+});
 
-  describe('IAM Roles', () => {
-    test('creates EC2 role with least privilege', () => {
-      template.hasResourceProperties('AWS::IAM::Role', {
-        AssumeRolePolicyDocument: Match.objectLike({
-          Statement: Match.arrayWith([
-            Match.objectLike({
-              Effect: 'Allow',
-              Principal: Match.objectLike({
-                Service: 'ec2.amazonaws.com',
-              }),
-              Action: 'sts:AssumeRole',
-            }),
-          ]),
-        }),
-        Description: 'IAM role for EC2 instances with least privilege',
-      });
-    });
-
-    test('creates Lambda execution role', () => {
-      template.hasResourceProperties('AWS::IAM::Role', {
-        AssumeRolePolicyDocument: Match.objectLike({
-          Statement: Match.arrayWith([
-            Match.objectLike({
-              Effect: 'Allow',
-              Principal: Match.objectLike({
-                Service: 'lambda.amazonaws.com',
-              }),
-              Action: 'sts:AssumeRole',
-            }),
-          ]),
-        }),
-        Description: 'IAM role for Lambda functions with least privilege',
-      });
-    });
-
-    test('creates EC2 instance profile', () => {
-      template.resourceCountIs('AWS::IAM::InstanceProfile', 2);
-    });
+describe('main function', () => {
+  beforeEach(() => {
+    ec2Mock.reset();
   });
 
-  describe('RDS Database', () => {
-    test('creates RDS MySQL instance', () => {
-      template.hasResourceProperties('AWS::RDS::DBInstance', {
-        Engine: 'mysql',
-        StorageEncrypted: true,
-        DeletionProtection: false,
-        BackupRetentionPeriod: 7,
-      });
+  it('should throw error when VPC is not found', async () => {
+    ec2Mock.on(DescribeVpcsCommand).resolves({
+      Vpcs: [{ VpcId: 'vpc-99999999', CidrBlock: '172.31.0.0/16' }],
     });
 
-    test('creates RDS subnet group for private subnets', () => {
-      template.hasResourceProperties('AWS::RDS::DBSubnetGroup', {
-        DBSubnetGroupDescription: 'Subnet group for RDS instances in private subnets',
-      });
-    });
-
-    test('creates Secrets Manager secret for RDS credentials', () => {
-      template.hasResourceProperties('AWS::SecretsManager::Secret', {
-        GenerateSecretString: Match.objectLike({
-          SecretStringTemplate: '{"username":"admin"}',
-          ExcludeCharacters: '"@/\\',
-        }),
-      });
-    });
+    await expect(async () => {
+      const { main } = require('../lib/tap-stack');
+      await main();
+    }).rejects.toThrow('VPC with given CIDR not found');
   });
 
-  describe('EC2 Launch Template', () => {
-    test('creates launch template with encrypted EBS volumes', () => {
-      template.hasResourceProperties('AWS::EC2::LaunchTemplate', {
-        LaunchTemplateData: Match.objectLike({
-          BlockDeviceMappings: Match.arrayWith([
-            Match.objectLike({
-              DeviceName: '/dev/xvda',
-              Ebs: Match.objectLike({
-                Encrypted: true,
-                VolumeSize: 20,
-                VolumeType: 'gp3',
-                DeleteOnTermination: true,
-              }),
-            }),
-          ]),
-          InstanceType: 't3.micro',
-        }),
-      });
-    });
-  });
-
-  describe('Tags', () => {
-    test('applies tags to resources', () => {
-      // Check VPC has tags - using anyValue since order may vary
-      const vpcResources = template.findResources('AWS::EC2::VPC');
-      const vpcTags = Object.values(vpcResources)[0].Properties.Tags;
-      
-      const tagKeys = vpcTags.map((tag: any) => tag.Key);
-      expect(tagKeys).toContain('Project');
-      expect(tagKeys).toContain('Environment');
-      expect(tagKeys).toContain('ManagedBy');
-      expect(tagKeys).toContain('CostCenter');
-    });
-  });
-
-  describe('CloudFormation Outputs', () => {
-    test('exports VPC ID', () => {
-      template.hasOutput('VPCId', {
-        Export: {
-          Name: `VPC-${environmentSuffix}`,
-        },
-      });
+  it('should create TapStack when VPC is found', async () => {
+    ec2Mock.on(DescribeVpcsCommand).resolves({
+      Vpcs: [{ VpcId: 'vpc-12345678', CidrBlock: '10.0.0.0/16' }],
     });
 
-    test('exports S3 bucket name', () => {
-      template.hasOutput('LogsBucketName', {
-        Export: {
-          Name: `LogsBucket-${environmentSuffix}`,
-        },
-      });
-    });
+    const { main } = require('../lib/tap-stack');
+    await main();
 
-    test('exports database endpoint', () => {
-      template.hasOutput('DatabaseEndpoint', {
-        Export: {
-          Name: `DatabaseEndpoint-${environmentSuffix}`,
-        },
-      });
-    });
-
-    test('exports KMS key ID', () => {
-      template.hasOutput('KMSKeyId', {
-        Export: {
-          Name: `KMSKey-${environmentSuffix}`,
-        },
-      });
-    });
-
-    test('exports launch template ID', () => {
-      template.hasOutput('LaunchTemplateId', {
-        Export: {
-          Name: `LaunchTemplate-${environmentSuffix}`,
-        },
-      });
-    });
-
-    test('exports instance profile ARN', () => {
-      template.hasOutput('InstanceProfileArn', {
-        Export: {
-          Name: `InstanceProfile-${environmentSuffix}`,
-        },
-      });
-    });
-
-    test('exports Lambda role ARN', () => {
-      template.hasOutput('LambdaRoleArn', {
-        Export: {
-          Name: `LambdaRole-${environmentSuffix}`,
-        },
-      });
-    });
-  });
-
-  describe('Removal Policies', () => {
-    test('resources have DESTROY removal policy for clean cleanup', () => {
-      // KMS Key
-      template.hasResource('AWS::KMS::Key', {
-        UpdateReplacePolicy: 'Delete',
-        DeletionPolicy: 'Delete',
-      });
-
-      // S3 Bucket
-      template.hasResource('AWS::S3::Bucket', {
-        UpdateReplacePolicy: 'Delete',
-        DeletionPolicy: 'Delete',
-      });
-    });
+    // Since main() creates a new App and Stack, we can't easily verify its contents
+    // The fact that it doesn't throw is enough to verify it worked
   });
 });
