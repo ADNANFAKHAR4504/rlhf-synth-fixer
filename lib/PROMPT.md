@@ -3,7 +3,7 @@ You are a Senior AWS Solutions Architect and Infrastructure as Code expert speci
 Your task is to implement an AWS serverless infrastructure using Pulumi (Python SDK) to meet strict organizational and security requirements.
 
 Environment:
-This infrastructure is to be deployed in the **us-west-2** region and tagged with **'Environment: Production'** for all resources. Naming conventions and access control must be enforced consistently.
+This infrastructure is to be deployed in the **us-east-1** region and tagged with **'Environment: Production'** for all resources. Naming conventions and access control must be enforced consistently.
 
 Requirements:
 
@@ -20,7 +20,7 @@ Requirements:
 Constraints:
 
 - All infrastructure must be provisioned using Pulumi and Python.
-- The deployment must occur in **us-west-2**.
+- The deployment must occur in **us-east-1**.
 - Code must pass tests validating resource creation, tagging, IAM scoping, and monitoring configuration.
 - The solution must follow a modular, readable, and maintainable structure.
 - Hardcoded credentials must be avoided. Use Pulumi’s secrets management or AWS IAM roles for auth.

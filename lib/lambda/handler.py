@@ -11,7 +11,7 @@ import json
 import logging
 import os
 from typing import Dict, Any, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 
 # Configure logging
 logger = logging.getLogger()
@@ -70,21 +70,21 @@ def handle_get_request(path: str, environment: str) -> Dict[str, Any]:
         return create_response(200, {
             'message': 'TAP API is running',
             'environment': environment,
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).isoformat(),
             'status': 'healthy'
         })
     elif path == '/health':
         return create_response(200, {
             'status': 'healthy',
             'environment': environment,
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).isoformat()
         })
     elif path == '/info':
         return create_response(200, {
             'service': 'TAP API',
             'version': '1.0.0',
             'environment': environment,
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).isoformat()
         })
     else:
         return create_response(404, {'error': 'Endpoint not found'})
@@ -93,44 +93,90 @@ def handle_post_request(event: Dict[str, Any], environment: str) -> Dict[str, An
     """Handle POST requests."""
     try:
         body = event.get('body', '{}')
+        is_base64_encoded = event.get('isBase64Encoded', False)
+        
+        # Handle different body formats from API Gateway
         if isinstance(body, str):
-            body = json.loads(body)
+            if is_base64_encoded:
+                import base64
+                body = base64.b64decode(body).decode('utf-8')
+            
+            if body.strip():
+                try:
+                    body = json.loads(body)
+                except json.JSONDecodeError:
+                    # If it's not valid JSON, treat it as plain text
+                    body = {"raw_body": body}
+            else:
+                body = {}
+        elif isinstance(body, dict):
+            # Body is already a dict
+            pass
+        else:
+            body = {}
         
         logger.info(f"POST request body: {body}")
         
         return create_response(200, {
             'message': 'POST request processed successfully',
             'environment': environment,
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).isoformat(),
             'received_data': body
         })
-    except json.JSONDecodeError:
+    except json.JSONDecodeError as e:
+        logger.error(f"JSON decode error: {e}")
         return create_response(400, {'error': 'Invalid JSON in request body'})
+    except Exception as e:
+        logger.error(f"Error processing POST request: {e}")
+        return create_response(500, {'error': 'Internal server error'})
 
 def handle_put_request(event: Dict[str, Any], environment: str) -> Dict[str, Any]:
     """Handle PUT requests."""
     try:
         body = event.get('body', '{}')
+        is_base64_encoded = event.get('isBase64Encoded', False)
+        
+        # Handle different body formats from API Gateway
         if isinstance(body, str):
-            body = json.loads(body)
+            if is_base64_encoded:
+                import base64
+                body = base64.b64decode(body).decode('utf-8')
+            
+            if body.strip():
+                try:
+                    body = json.loads(body)
+                except json.JSONDecodeError:
+                    # If it's not valid JSON, treat it as plain text
+                    body = {"raw_body": body}
+            else:
+                body = {}
+        elif isinstance(body, dict):
+            # Body is already a dict
+            pass
+        else:
+            body = {}
         
         logger.info(f"PUT request body: {body}")
         
         return create_response(200, {
             'message': 'PUT request processed successfully',
             'environment': environment,
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).isoformat(),
             'received_data': body
         })
-    except json.JSONDecodeError:
+    except json.JSONDecodeError as e:
+        logger.error(f"JSON decode error: {e}")
         return create_response(400, {'error': 'Invalid JSON in request body'})
+    except Exception as e:
+        logger.error(f"Error processing PUT request: {e}")
+        return create_response(500, {'error': 'Internal server error'})
 
 def handle_delete_request(path: str, environment: str) -> Dict[str, Any]:
     """Handle DELETE requests."""
     return create_response(200, {
         'message': 'DELETE request processed successfully',
         'environment': environment,
-        'timestamp': datetime.utcnow().isoformat(),
+        'timestamp': datetime.now(timezone.utc).isoformat(),
         'path': path
     })
 
