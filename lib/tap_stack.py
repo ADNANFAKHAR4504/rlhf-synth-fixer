@@ -128,11 +128,9 @@ def create_vpc_and_networking() -> Dict[str, Any]:
 
 
 def create_security_groups(
-    vpc_id: pulumi.Output[str]
+  vpc_id: pulumi.Output[str],
+  public_subnets: List[aws.ec2.Subnet]
 ) -> Dict[str, aws.ec2.SecurityGroup]:
-  """
-  Create security groups for ALB and EC2 instances.
-  """
   alb_sg = aws.ec2.SecurityGroup(
     f"{project_name}-alb-sg",
     name=f"{project_name}-alb-sg",
@@ -140,48 +138,23 @@ def create_security_groups(
     vpc_id=vpc_id,
     ingress=[
       aws.ec2.SecurityGroupIngressArgs(
-        protocol="tcp",
-        from_port=80,
-        to_port=80,
+        protocol="tcp", from_port=80, to_port=80,
         cidr_blocks=["0.0.0.0/0"],
-        description="HTTP from internet (IPv4)"
-      ),
-      aws.ec2.SecurityGroupIngressArgs(
-        protocol="tcp",
-        from_port=80,
-        to_port=80,
         ipv6_cidr_blocks=["::/0"],
-        description="HTTP from internet (IPv6)"
-      ),
-      aws.ec2.SecurityGroupIngressArgs(
-        protocol="tcp",
-        from_port=443,
-        to_port=443,
-        cidr_blocks=["0.0.0.0/0"],
-        description="HTTPS from internet (IPv4)"
-      ),
-      aws.ec2.SecurityGroupIngressArgs(
-        protocol="tcp",
-        from_port=443,
-        to_port=443,
-        ipv6_cidr_blocks=["::/0"],
-        description="HTTPS from internet (IPv6)"
+        description="HTTP from internet"
       )
     ],
     egress=[
       aws.ec2.SecurityGroupEgressArgs(
         protocol="-1", from_port=0, to_port=0,
         cidr_blocks=["0.0.0.0/0"],
-        description="All outbound traffic (IPv4)"
-      ),
-      aws.ec2.SecurityGroupEgressArgs(
-        protocol="-1", from_port=0, to_port=0,
         ipv6_cidr_blocks=["::/0"],
-        description="All outbound traffic (IPv6)"
+        description="All outbound traffic"
       )
     ],
     tags={**common_tags, "Name": f"{project_name}-alb-sg"}
   )
+  
   ec2_sg = aws.ec2.SecurityGroup(
     f"{project_name}-ec2-sg",
     name=f"{project_name}-ec2-sg",
@@ -192,13 +165,11 @@ def create_security_groups(
         protocol="tcp",
         from_port=80,
         to_port=80,
-        security_groups=[alb_sg.id],
-        description="HTTP from ALB"
+        cidr_blocks=[subnet.cidr_block for subnet in public_subnets],
+        description="Allow HTTP from within the public subnets (for ALB)"
       ),
       aws.ec2.SecurityGroupIngressArgs(
-        protocol="tcp",
-        from_port=22,
-        to_port=22,
+        protocol="tcp", from_port=22, to_port=22,
         cidr_blocks=["0.0.0.0/0"],
         description="SSH access"
       )
@@ -207,12 +178,8 @@ def create_security_groups(
       aws.ec2.SecurityGroupEgressArgs(
         protocol="-1", from_port=0, to_port=0,
         cidr_blocks=["0.0.0.0/0"],
-        description="All outbound traffic (IPv4)"
-      ),
-      aws.ec2.SecurityGroupEgressArgs(
-        protocol="-1", from_port=0, to_port=0,
         ipv6_cidr_blocks=["::/0"],
-        description="All outbound traffic (IPv6)"
+        description="All outbound traffic"
       )
     ],
     tags={**common_tags, "Name": f"{project_name}-ec2-sg"}
@@ -488,7 +455,10 @@ def main():
   """Main function to provision the infrastructure."""
   network = create_vpc_and_networking()
   create_network_acls(network["vpc"].id, network["public_subnets"])
-  security_groups = create_security_groups(network["vpc"].id)
+  security_groups = create_security_groups(
+    network["vpc"].id,
+    network["public_subnets"]
+  )
   _, instance_profile = create_iam_role()
   instances = create_ec2_instances(
     network["public_subnets"],
