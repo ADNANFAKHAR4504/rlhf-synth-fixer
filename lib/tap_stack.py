@@ -40,7 +40,7 @@ class TapStack(TerraformStack):
     state_bucket_region = os.getenv("TERRAFORM_STATE_BUCKET_REGION", "us-east-1")
     state_bucket = kwargs.get('state_bucket', 'iac-rlhf-tf-states')
     default_tags = kwargs.get('default_tags', {})
-    bucket_prefix = kwargs.get('bucket_prefix', 'secure-data')
+    bucket_prefix = kwargs.get('bucket_prefix', 'terraform-cdkft-1-secure-data')
 
     # Configure AWS Provider
     provider_config = {
