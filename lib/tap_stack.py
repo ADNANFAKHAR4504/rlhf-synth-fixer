@@ -581,7 +581,7 @@ class TapStack(ComponentResource):
             rds = aws.rds.Instance(
                 f"PROD-rds-{region}-{self.environment_suffix}",
                 engine="postgres",
-                engine_version="15.4",
+                engine_version="15.13",
                 instance_class="db.t3.micro",
                 identifier=f"prod-rds-{region}-{self.environment_suffix}",
                 allocated_storage=20,
