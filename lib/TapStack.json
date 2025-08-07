@@ -28,11 +28,12 @@
     },
     "DBMasterUsername": {
       "Type": "String",
-      "Default": "admin",
-      "Description": "Master username for RDS instance",
+      "Default": "dbadmin",
+      "Description": "Master username for RDS instance (stored in Secrets Manager)",
       "MinLength": 1,
       "MaxLength": 16,
-      "AllowedPattern": "^[a-zA-Z][a-zA-Z0-9]*$"
+      "AllowedPattern": "^[a-zA-Z][a-zA-Z0-9]*$",
+      "NoEcho": true
     }
   },
   "Mappings": {
@@ -576,6 +577,45 @@
                 }
               ]
             }
+          },
+          {
+            "PolicyName": "SecretsManagerAccessPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "secretsmanager:GetSecretValue",
+                    "secretsmanager:DescribeSecret"
+                  ],
+                  "Resource": {
+                    "Ref": "DBSecret"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "PolicyName": "SSMParameterAccessPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "ssm:GetParameter",
+                    "ssm:GetParameters",
+                    "ssm:GetParametersByPath"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/webapp/${EnvironmentSuffix}/*"
+                    }
+                  ]
+                }
+              ]
+            }
           }
         ],
         "Tags": [
@@ -792,12 +832,14 @@
         "Name": {
           "Fn::Sub": "WebApp-DB-Secret-${EnvironmentSuffix}"
         },
-        "Description": "Database master password for RDS instance",
+        "Description": "Database credentials for RDS instance",
         "GenerateSecretString": {
-          "SecretStringTemplate": "{\"username\": \"admin\"}",
+          "SecretStringTemplate": {
+            "Fn::Sub": "{\"username\": \"${DBMasterUsername}\"}"
+          },
           "GenerateStringKey": "password",
-          "PasswordLength": 16,
-          "ExcludeCharacters": "\"@/\\"
+          "PasswordLength": 32,
+          "ExcludeCharacters": "\"@/\\'"
         },
         "Tags": [
           {
@@ -813,6 +855,42 @@
         ]
       }
     },
+    "DBConfigParameter": {
+      "Type": "AWS::SSM::Parameter",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "/webapp/${EnvironmentSuffix}/database/config"
+        },
+        "Type": "String",
+        "Value": {
+          "Fn::Sub": "{\"engine\": \"mysql\", \"version\": \"8.0.35\", \"instanceClass\": \"db.t3.medium\", \"allocatedStorage\": 100, \"multiAZ\": true, \"backupRetentionPeriod\": 7}"
+        },
+        "Description": "Database configuration parameters",
+        "Tags": {
+          "Environment": "Production"
+        }
+      }
+    },
+    "DBEndpointParameter": {
+      "Type": "AWS::SSM::Parameter",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "/webapp/${EnvironmentSuffix}/database/endpoint"
+        },
+        "Type": "SecureString",
+        "Value": {
+          "Fn::GetAtt": [
+            "RDSInstance",
+            "Endpoint.Address"
+          ]
+        },
+        "Description": "Database endpoint (encrypted)",
+        "Tags": {
+          "Environment": "Production"
+        }
+      },
+      "DependsOn": "RDSInstance"
+    },
     "RDSInstance": {
       "Type": "AWS::RDS::DBInstance",
       "DeletionPolicy": "Snapshot",
@@ -825,7 +903,7 @@
         "Engine": "mysql",
         "EngineVersion": "8.0.35",
         "MasterUsername": {
-          "Ref": "DBMasterUsername"
+          "Fn::Sub": "{{resolve:secretsmanager:WebApp-DB-Secret-${EnvironmentSuffix}:SecretString:username}}"
         },
         "MasterUserPassword": {
           "Fn::Sub": "{{resolve:secretsmanager:WebApp-DB-Secret-${EnvironmentSuffix}:SecretString:password}}"
@@ -1368,6 +1446,39 @@
       "Export": {
         "Name": {
           "Fn::Sub": "${AWS::StackName}-EnvironmentSuffix"
+        }
+      }
+    },
+    "DBSecretArn": {
+      "Description": "ARN of the database credentials secret",
+      "Value": {
+        "Ref": "DBSecret"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-DB-Secret-ARN"
+        }
+      }
+    },
+    "DBConfigParameterName": {
+      "Description": "SSM Parameter name for database configuration",
+      "Value": {
+        "Ref": "DBConfigParameter"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-DB-Config-Parameter"
+        }
+      }
+    },
+    "DBEndpointParameterName": {
+      "Description": "SSM Parameter name for database endpoint (encrypted)",
+      "Value": {
+        "Ref": "DBEndpointParameter"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-DB-Endpoint-Parameter"
         }
       }
     }

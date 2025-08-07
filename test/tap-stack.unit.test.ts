@@ -285,9 +285,26 @@ describe('TapStack CloudFormation Template', () => {
       const role = template.Resources.EC2Role;
       const policies = role.Properties.Policies;
 
-      expect(policies).toHaveLength(1);
-      expect(policies[0].PolicyName).toBe('S3AccessPolicy');
-      expect(policies[0].PolicyDocument.Statement).toHaveLength(2);
+      expect(policies).toHaveLength(3);
+
+      // Check S3 access policy
+      const s3Policy = policies.find(
+        (p: any) => p.PolicyName === 'S3AccessPolicy'
+      );
+      expect(s3Policy).toBeDefined();
+      expect(s3Policy.PolicyDocument.Statement).toHaveLength(2);
+
+      // Check Secrets Manager access policy
+      const secretsPolicy = policies.find(
+        (p: any) => p.PolicyName === 'SecretsManagerAccessPolicy'
+      );
+      expect(secretsPolicy).toBeDefined();
+
+      // Check SSM Parameter access policy
+      const ssmPolicy = policies.find(
+        (p: any) => p.PolicyName === 'SSMParameterAccessPolicy'
+      );
+      expect(ssmPolicy).toBeDefined();
     });
 
     test('should have EC2 instance profile', () => {
@@ -387,10 +404,10 @@ describe('TapStack CloudFormation Template', () => {
         'WebApp-DB-Secret-${EnvironmentSuffix}'
       );
       expect(secret.Properties.Description).toBe(
-        'Database master password for RDS instance'
+        'Database credentials for RDS instance'
       );
       expect(secret.Properties.GenerateSecretString).toBeDefined();
-      expect(secret.Properties.GenerateSecretString.PasswordLength).toBe(16);
+      expect(secret.Properties.GenerateSecretString.PasswordLength).toBe(32);
     });
 
     test('should have DB subnet group', () => {
@@ -665,6 +682,9 @@ describe('TapStack CloudFormation Template', () => {
       'AutoScalingGroupName',
       'NATGatewayEIP',
       'EnvironmentSuffix',
+      'DBSecretArn',
+      'DBConfigParameterName',
+      'DBEndpointParameterName',
     ];
 
     test('should have all required outputs', () => {
@@ -744,7 +764,7 @@ describe('TapStack CloudFormation Template', () => {
   describe('Template Completeness', () => {
     test('should have correct total number of resources', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(45); // Count of all resources in the template
+      expect(resourceCount).toBe(47); // Count of all resources in the template (45 + 2 new SSM parameters)
     });
 
     test('all resources with names should use EnvironmentSuffix', () => {
@@ -791,9 +811,20 @@ describe('TapStack CloudFormation Template', () => {
       taggableResources.forEach(resourceKey => {
         const resource = template.Resources[resourceKey];
         const tags = resource.Properties.Tags;
-        const envTag = tags.find((tag: any) => tag.Key === 'Environment');
-        expect(envTag).toBeDefined();
-        expect(envTag.Value).toBe('Production');
+
+        // Handle both array and object format for tags
+        if (Array.isArray(tags)) {
+          const envTag = tags.find((tag: any) => tag.Key === 'Environment');
+          expect(envTag).toBeDefined();
+          expect(envTag.Value).toBe('Production');
+        } else if (typeof tags === 'object' && tags.Environment) {
+          expect(tags.Environment).toBe('Production');
+        } else {
+          // If neither format is found, the test should fail
+          fail(
+            `Resource ${resourceKey} has tags but Environment tag not found in expected format`
+          );
+        }
       });
     });
   });
