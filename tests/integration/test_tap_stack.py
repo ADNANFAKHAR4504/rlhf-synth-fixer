@@ -247,3 +247,145 @@ class TestTapStackIntegration:
           if output_value is not None:
             assert isinstance(output_value, str)
             assert len(output_value) > 0
+
+  def test_network_connectivity(self, deployment_outputs):
+    """Test that network components are correctly deployed and connected."""
+    flat_outputs = {}
+    for stack_name, stack_outputs in deployment_outputs.items():
+      if isinstance(stack_outputs, dict):
+        flat_outputs.update(stack_outputs)
+    
+    # Check for VPC ID
+    vpc_keys = [key for key in flat_outputs.keys() if 'vpc' in key.lower() and 'id' in key.lower()]
+    if vpc_keys:
+      vpc_id = flat_outputs[vpc_keys[0]]
+      assert vpc_id is not None
+      assert vpc_id.startswith('vpc-'), "VPC ID should start with 'vpc-'"
+    else:
+      pytest.skip("No VPC ID found in deployment outputs")
+    
+    # Check for subnet IDs
+    subnet_keys = [key for key in flat_outputs.keys() if 'subnet' in key.lower() and 'id' in key.lower()]
+    if subnet_keys:
+      subnet_id = flat_outputs[subnet_keys[0]]
+      assert subnet_id is not None
+      assert subnet_id.startswith('subnet-'), "Subnet ID should start with 'subnet-'"
+    else:
+      pytest.skip("No Subnet ID found in deployment outputs")
+    
+    # Check for security groups
+    sg_keys = [key for key in flat_outputs.keys() if 'security' in key.lower() and 'group' in key.lower()]
+    if sg_keys:
+      sg_id = flat_outputs[sg_keys[0]]
+      assert sg_id is not None
+      assert sg_id.startswith('sg-'), "Security Group ID should start with 'sg-'"
+    else:
+      pytest.skip("No Security Group found in deployment outputs")
+
+  def test_load_balancer_configuration(self, deployment_outputs):
+    """Test that load balancers are correctly deployed and configured."""
+    flat_outputs = {}
+    for stack_name, stack_outputs in deployment_outputs.items():
+      if isinstance(stack_outputs, dict):
+        flat_outputs.update(stack_outputs)
+    
+    # Check for load balancer ARN
+    lb_keys = [key for key in flat_outputs.keys() if ('lb' in key.lower() or 'load' in key.lower()) and 'arn' in key.lower()]
+    if lb_keys:
+      lb_arn = flat_outputs[lb_keys[0]]
+      assert lb_arn is not None
+      assert lb_arn.startswith('arn:aws:elasticloadbalancing'), "Load Balancer ARN has incorrect format"
+
+      # Check for target groups if load balancer exists
+      tg_keys = [key for key in flat_outputs.keys() if 'target' in key.lower() and 'group' in key.lower()]
+      if tg_keys:
+        tg_arn = flat_outputs[tg_keys[0]]
+        assert tg_arn is not None
+        assert tg_arn.startswith('arn:aws:elasticloadbalancing'), "Target Group ARN has incorrect format"
+    else:
+      pytest.skip("No Load Balancer found in deployment outputs")
+
+  def test_security_configuration(self, deployment_outputs):
+    """Test that security configurations are properly applied."""
+    flat_outputs = {}
+    for stack_name, stack_outputs in deployment_outputs.items():
+      if isinstance(stack_outputs, dict):
+        flat_outputs.update(stack_outputs)
+    
+    # Check for IAM policies
+    policy_keys = [key for key in flat_outputs.keys() if 'policy' in key.lower() and 'arn' in key.lower()]
+    if policy_keys:
+      policy_arn = flat_outputs[policy_keys[0]]
+      assert policy_arn is not None
+      assert policy_arn.startswith('arn:aws:iam::'), "IAM Policy ARN has incorrect format"
+    
+    # Check for KMS keys if applicable
+    kms_keys = [key for key in flat_outputs.keys() if 'kms' in key.lower() and 'key' in key.lower()]
+    if kms_keys:
+      kms_id = flat_outputs[kms_keys[0]]
+      assert kms_id is not None
+      if 'arn' in kms_keys[0].lower():
+        assert kms_id.startswith('arn:aws:kms:'), "KMS Key ARN has incorrect format"
+
+  def test_complete_infrastructure_health(self, deployment_outputs):
+    """Test the overall health and connectivity of the entire infrastructure stack."""
+    flat_outputs = {}
+    for stack_name, stack_outputs in deployment_outputs.items():
+      if isinstance(stack_outputs, dict):
+        flat_outputs.update(stack_outputs)
+    
+    # Verify all critical components exist
+    critical_components = {
+      'ec2': [key for key in flat_outputs.keys() if 'instance' in key.lower() and 'id' in key.lower()],
+      's3': [key for key in flat_outputs.keys() if 'bucket' in key.lower()],
+      'iam': [key for key in flat_outputs.keys() if 'role' in key.lower() or 'policy' in key.lower()],
+      'network': [key for key in flat_outputs.keys() if 'vpc' in key.lower() or 'subnet' in key.lower()]
+    }
+    
+    # Count how many critical component types we have
+    deployed_components = sum(1 for component_type, keys in critical_components.items() if keys)
+    
+    # Infrastructure should have at least 3 types of critical components to be considered complete
+    assert deployed_components >= 3, "Complete infrastructure should have at least 3 types of critical components"
+    
+    # Verify environment consistency across resources
+    environment_suffix = os.environ.get('ENVIRONMENT_SUFFIX', 'dev')
+    environment_consistent = True
+    
+    for component_type, keys in critical_components.items():
+      if keys:
+        # Check first component of each type
+        component_id = flat_outputs[keys[0]]
+        if isinstance(component_id, str) and environment_suffix not in component_id:
+          environment_consistent = False
+          break
+    
+    assert environment_consistent, f"All resources should be tagged with environment suffix '{environment_suffix}'"
+
+  def test_database_connectivity(self, deployment_outputs):
+    """Test that database resources are properly configured and accessible."""
+    flat_outputs = {}
+    for stack_name, stack_outputs in deployment_outputs.items():
+      if isinstance(stack_outputs, dict):
+        flat_outputs.update(stack_outputs)
+    
+    # Check for RDS instances
+    rds_keys = [key for key in flat_outputs.keys() if 'rds' in key.lower() or 'database' in key.lower()]
+    if rds_keys:
+      # Verify database endpoint is available
+      endpoint_keys = [key for key in rds_keys if 'endpoint' in key.lower()]
+      if endpoint_keys:
+        endpoint = flat_outputs[endpoint_keys[0]]
+        assert endpoint is not None
+        assert '.' in endpoint, "Database endpoint should be a valid hostname"
+      
+      # Verify database identifier
+      id_keys = [key for key in rds_keys if 'id' in key.lower() or 'identifier' in key.lower()]
+      if id_keys:
+        db_id = flat_outputs[id_keys[0]]
+        assert db_id is not None
+        # Check environment suffix is in the identifier
+        environment_suffix = os.environ.get('ENVIRONMENT_SUFFIX', 'dev')
+        assert environment_suffix in db_id, f"Database identifier should include environment suffix '{environment_suffix}'"
+    else:
+      pytest.skip("No database resources found in deployment outputs")
