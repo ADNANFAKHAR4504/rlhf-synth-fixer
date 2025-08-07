@@ -209,7 +209,7 @@ export class RdsDatabase extends Construct {
     const dbPassword = new Password(this, 'db-password', {
       length: 16,
       special: true,
-      overrideSpecial: "!#$%^&*()-_=+[]{}<>?~",
+      overrideSpecial: '!#$%^&*()-_=+[]{}<>?~',
     });
 
     // --- Step 3: Create a Secret in AWS Secrets Manager ---
