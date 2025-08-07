@@ -1,13 +1,12 @@
-import * as aws from '@cdktf/provider-aws';
-import { Fn, TerraformStack } from 'cdktf';
+import { TerraformOutput, TerraformStack } from 'cdktf';
 import { Construct } from 'constructs';
-import { CloudwatchStack } from './cloudwatch-stack';
-import { Ec2Stack } from './ec2-stack';
-import { IamStack } from './iam-stack';
-import { S3Stack } from './s3-stack';
-import { VpcStack } from './vpc-stack';
+import { CloudwatchConstruct } from './cloudwatch-construct';
+import { Ec2Construct } from './ec2-construct';
+import { IamConstruct } from './iam-construct';
+import { S3Construct } from './s3-construct';
+import { VpcConstruct } from './vpc-construct';
 
-interface TapStackProps {
+export interface TapStackProps {
   environmentSuffix?: string;
   stateBucket?: string;
   stateBucketRegion?: string;
@@ -21,13 +20,9 @@ interface TapStackProps {
   };
 }
 
-class TapStack extends TerraformStack {
+export class TapStack extends TerraformStack {
   constructor(scope: Construct, name: string, props?: TapStackProps) {
     super(scope, name);
-
-    new aws.provider.AwsProvider(this, 'aws', {
-      region: process.env.AWS_REGION || props?.awsRegion || 'us-west-2',
-    });
 
     const environment =
       process.env.ENVIRONMENT || props?.environmentSuffix || 'development';
@@ -45,7 +40,7 @@ class TapStack extends TerraformStack {
     const azs = [`${region}a`, `${region}b`, `${region}c`];
     const vpcCidr = '10.0.0.0/16';
 
-    const vpcStack = new VpcStack(this, 'VpcStack', {
+    const vpc = new VpcConstruct(this, 'Vpc', {
       environment,
       region,
       vpcCidr,
@@ -56,23 +51,23 @@ class TapStack extends TerraformStack {
       commonTags,
     });
 
-    const iamStack = new IamStack(this, 'IamStack', {
+    const iam = new IamConstruct(this, 'Iam', {
       environment,
       commonTags,
     });
 
-    const ec2Stack = new Ec2Stack(this, 'Ec2Stack', {
+    const ec2 = new Ec2Construct(this, 'Ec2', {
       environment,
-      vpcId: vpcStack.vpcId,
-      subnetId: Fn.element(vpcStack.publicSubnets, 0),
+      vpcId: vpc.vpcId,
+      subnetId: vpc.publicSubnets[0],
       instanceType: 't3.micro',
       keyName: process.env.EC2_KEY_NAME || '',
-      iamInstanceProfile: iamStack.ec2ProfileName,
+      iamInstanceProfile: iam.ec2ProfileName,
       allowedCidrBlocks: ['0.0.0.0/0'],
       commonTags,
     });
 
-    new S3Stack(this, 'S3Stack', {
+    new S3Construct(this, 'S3', {
       environment,
       bucketName: `${environment}-assets-bucket`,
       enableVersioning: true,
@@ -90,12 +85,14 @@ class TapStack extends TerraformStack {
       commonTags,
     });
 
-    new CloudwatchStack(this, 'CloudwatchStack', {
+    new CloudwatchConstruct(this, 'Cloudwatch', {
       environment,
-      instanceId: ec2Stack.instanceId,
+      instanceId: ec2.instanceId,
       commonTags,
     });
+
+    // Optionally output important values
+    new TerraformOutput(this, 'vpc_id', { value: vpc.vpcId });
+    new TerraformOutput(this, 'instance_id', { value: ec2.instanceId });
   }
 }
-
-export { TapStack };

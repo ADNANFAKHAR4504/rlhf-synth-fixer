@@ -1,18 +1,17 @@
-import * as aws from '@cdktf/provider-aws';
-import { TerraformOutput, TerraformStack } from 'cdktf';
 import { Construct } from 'constructs';
+import * as aws from '@cdktf/provider-aws';
 
-interface CloudwatchStackConfig {
+export interface CloudwatchConstructProps {
   environment: string;
   instanceId: string;
   commonTags: { [key: string]: string };
 }
 
-export class CloudwatchStack extends TerraformStack {
+export class CloudwatchConstruct extends Construct {
   public readonly dashboardUrl: string;
   public readonly snsTopicArn: string;
 
-  constructor(scope: Construct, id: string, config: CloudwatchStackConfig) {
+  constructor(scope: Construct, id: string, config: CloudwatchConstructProps) {
     super(scope, id);
 
     new aws.provider.AwsProvider(this, 'aws', {
@@ -97,13 +96,5 @@ export class CloudwatchStack extends TerraformStack {
 
     this.dashboardUrl = `https://console.aws.amazon.com/cloudwatch/home?region=us-west-2#dashboards:name=${config.environment}-infrastructure-dashboard`;
     this.snsTopicArn = topic.arn;
-
-    new TerraformOutput(this, 'dashboard_url', {
-      value: this.dashboardUrl,
-    });
-
-    new TerraformOutput(this, 'sns_topic_arn', {
-      value: this.snsTopicArn,
-    });
   }
 }

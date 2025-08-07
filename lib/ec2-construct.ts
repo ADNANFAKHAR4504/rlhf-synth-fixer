@@ -1,8 +1,8 @@
-import * as aws from '@cdktf/provider-aws';
-import { Fn, TerraformOutput, TerraformStack } from 'cdktf';
 import { Construct } from 'constructs';
+import * as aws from '@cdktf/provider-aws';
+import { Fn } from 'cdktf';
 
-interface Ec2StackConfig {
+export interface Ec2ConstructProps {
   environment: string;
   vpcId: string;
   subnetId: string;
@@ -13,13 +13,13 @@ interface Ec2StackConfig {
   commonTags: { [key: string]: string };
 }
 
-export class Ec2Stack extends TerraformStack {
+export class Ec2Construct extends Construct {
   public readonly instanceId: string;
   public readonly privateIp: string;
   public readonly publicIp: string;
   public readonly securityGroupId: string;
 
-  constructor(scope: Construct, id: string, config: Ec2StackConfig) {
+  constructor(scope: Construct, id: string, config: Ec2ConstructProps) {
     super(scope, id);
 
     new aws.provider.AwsProvider(this, 'aws', {
@@ -83,11 +83,11 @@ export class Ec2Stack extends TerraformStack {
       iamInstanceProfile: config.iamInstanceProfile,
       userData: Fn.base64encode(
         Fn.rawString(`#!/bin/bash
-      yum update -y
-      yum install -y amazon-cloudwatch-agent httpd
-      systemctl start httpd
-      systemctl enable httpd
-      echo "<h1>${config.environment} server</h1>" > /var/www/html/index.html`)
+        yum update -y
+        yum install -y amazon-cloudwatch-agent httpd
+        systemctl start httpd
+        systemctl enable httpd
+        echo "<h1>${config.environment} server</h1>" > /var/www/html/index.html`)
       ),
       rootBlockDevice: {
         volumeType: 'gp3',
@@ -112,12 +112,5 @@ export class Ec2Stack extends TerraformStack {
     this.privateIp = ec2.privateIp;
     this.publicIp = ec2.publicIp;
     this.securityGroupId = sg.id;
-
-    new TerraformOutput(this, 'instance_id', { value: this.instanceId });
-    new TerraformOutput(this, 'instance_private_ip', { value: this.privateIp });
-    new TerraformOutput(this, 'instance_public_ip', { value: this.publicIp });
-    new TerraformOutput(this, 'security_group_id', {
-      value: this.securityGroupId,
-    });
   }
 }

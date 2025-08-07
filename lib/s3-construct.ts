@@ -1,6 +1,5 @@
-import * as aws from '@cdktf/provider-aws';
-import { TerraformOutput, TerraformStack } from 'cdktf';
 import { Construct } from 'constructs';
+import * as aws from '@cdktf/provider-aws';
 
 interface LifecycleRule {
   id: string;
@@ -9,7 +8,7 @@ interface LifecycleRule {
   noncurrent_version_expiration: { noncurrent_days: number };
 }
 
-interface S3StackConfig {
+export interface S3ConstructProps {
   environment: string;
   bucketName: string;
   enableVersioning?: boolean;
@@ -17,13 +16,13 @@ interface S3StackConfig {
   commonTags: { [key: string]: string };
 }
 
-export class S3Stack extends TerraformStack {
+export class S3Construct extends Construct {
   public readonly bucketId: string;
   public readonly bucketArn: string;
   public readonly bucketDomainName: string;
   public readonly accessLogsBucketId: string;
 
-  constructor(scope: Construct, id: string, config: S3StackConfig) {
+  constructor(scope: Construct, id: string, config: S3ConstructProps) {
     super(scope, id);
 
     new aws.provider.AwsProvider(this, 'aws', {
@@ -146,14 +145,5 @@ export class S3Stack extends TerraformStack {
     this.bucketArn = mainBucket.arn;
     this.bucketDomainName = mainBucket.bucketDomainName;
     this.accessLogsBucketId = accessLogBucket.id;
-
-    new TerraformOutput(this, 'bucket_id', { value: this.bucketId });
-    new TerraformOutput(this, 'bucket_arn', { value: this.bucketArn });
-    new TerraformOutput(this, 'bucket_domain_name', {
-      value: this.bucketDomainName,
-    });
-    new TerraformOutput(this, 'access_logs_bucket_id', {
-      value: this.accessLogsBucketId,
-    });
   }
 }

@@ -1,19 +1,18 @@
-import * as aws from '@cdktf/provider-aws';
-import { TerraformOutput, TerraformStack } from 'cdktf';
 import { Construct } from 'constructs';
+import * as aws from '@cdktf/provider-aws';
 
-interface IamStackConfig {
+export interface IamConstructProps {
   environment: string;
   commonTags: { [key: string]: string };
 }
 
-export class IamStack extends TerraformStack {
+export class IamConstruct extends Construct {
   public readonly ec2RoleArn: string;
   public readonly ec2ProfileName: string;
   public readonly s3ServiceRoleArn: string;
   public readonly cloudwatchRoleArn: string;
 
-  constructor(scope: Construct, id: string, config: IamStackConfig) {
+  constructor(scope: Construct, id: string, config: IamConstructProps) {
     super(scope, id);
 
     new aws.provider.AwsProvider(this, 'aws', {
@@ -108,21 +107,5 @@ export class IamStack extends TerraformStack {
     this.ec2ProfileName = ec2Profile.name;
     this.s3ServiceRoleArn = s3ServiceRole.arn;
     this.cloudwatchRoleArn = cloudwatchRole.arn;
-
-    new TerraformOutput(this, 'ec2_role_arn', {
-      value: this.ec2RoleArn,
-    });
-
-    new TerraformOutput(this, 'ec2_instance_profile_name', {
-      value: this.ec2ProfileName,
-    });
-
-    new TerraformOutput(this, 's3_service_role_arn', {
-      value: this.s3ServiceRoleArn,
-    });
-
-    new TerraformOutput(this, 'cloudwatch_role_arn', {
-      value: this.cloudwatchRoleArn,
-    });
   }
 }
