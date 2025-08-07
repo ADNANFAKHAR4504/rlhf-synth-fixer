@@ -98,13 +98,26 @@ aws_lambda.Function = Mock()
 aws_lambda.Permission = Mock()
 sys.modules["pulumi_aws"].lambda_ = aws_lambda
 
-# FIXED: Improved MockOutput implementation with proper iterator
+# FIXED: Improved MockOutput implementation with flexible constructor
 
 
 class MockOutput:
-  def __init__(self, value=None):
-    self.value = value
+  def __init__(self, *args, **kwargs):
+    # Handle various ways Pulumi might instantiate Output
+    if len(args) == 0:
+      self.value = None
+    elif len(args) == 1:
+      self.value = args[0]
+    else:
+      # Pulumi might pass multiple args - just use the first meaningful one
+      self.value = args[0] if args[0] is not None else (
+          args[1] if len(args) > 1 else None)
+
     self._is_output = True
+
+    # Store any additional kwargs that Pulumi might pass
+    for key, val in kwargs.items():
+      setattr(self, key, val)
 
   def apply(self, func):
     if self.value is not None:
@@ -303,10 +316,25 @@ def patched_isinstance(obj, cls):
     return False
 
 
+# Monkey patch isinstance
+builtins.isinstance = patched_isinstance
+
+# CRITICAL: Define MockOutputFactory at module level before using it
+
+
+def MockOutputFactory(*args, **kwargs):
+  """Factory function that creates MockOutput instances"""
+  return MockOutput(*args, **kwargs)
+
+
 # Apply patches - ensure pulumi module has all necessary attributes
 # Import pulumi to get actual reference, then patch it
 
-pulumi.Output = MockOutput
+# CRITICAL: Don't replace pulumi.Output directly, instead create wrapper
+original_pulumi_output = getattr(pulumi, 'Output', None)
+
+# Set up all the mocks on the pulumi module
+pulumi.Output = MockOutputFactory
 pulumi.ComponentResource = MockComponentResource
 pulumi.ResourceOptions = MockResourceOptions
 pulumi.AssetArchive = MagicMock()
@@ -335,11 +363,11 @@ sys.modules["pulumi"] = pulumi
 required_attrs = ['Invoke', 'Output', 'ComponentResource', 'ResourceOptions',
                   'get_region', 'export', 'Config', 'get_stack', 'Resource']
 for attr in required_attrs:
-  if not hasattr(pulumi, attr):
-    setattr(pulumi, attr, MagicMock())
-
-# Monkey patch isinstance
-builtins.isinstance = patched_isinstance
+  if not hasattr(pulumi, attr) or getattr(pulumi, attr) is None:
+    if attr == 'Output':
+      setattr(pulumi, attr, MockOutputFactory)
+    else:
+      setattr(pulumi, attr, MagicMock())
 
 # Now import the actual components after all mocking is set up
 
@@ -351,17 +379,26 @@ class TestTapStackComponents(unittest.TestCase):
         tags={"Environment": "test", "Project": "tap-stack"}
     )
 
-    # CRITICAL: Verify and fix mocks if needed
+    # CRITICAL: Verify and fix mocks if needed at runtime
     if not hasattr(sys.modules["pulumi"], 'Invoke') or sys.modules["pulumi"].Invoke is None:
       sys.modules["pulumi"].Invoke = MagicMock(return_value=MagicMock())
+      print("Fixed missing sys.modules['pulumi'].Invoke")
 
     if not hasattr(pulumi, 'Invoke') or pulumi.Invoke is None:
       pulumi.Invoke = MagicMock(return_value=MagicMock())
+      print("Fixed missing pulumi.Invoke")
+
+    # Ensure Output factory is available
+    if not hasattr(pulumi, 'Output') or pulumi.Output is None:
+      pulumi.Output = MockOutputFactory
+      sys.modules["pulumi"].Output = MockOutputFactory
+      print("Fixed missing pulumi.Output")
 
     # Verify critical mocks are in place
     self.assertIsNotNone(
         sys.modules["pulumi"].Invoke, "Pulumi Invoke mock missing")
     self.assertIsNotNone(pulumi.Invoke, "Direct pulumi.Invoke missing")
+    self.assertIsNotNone(pulumi.Output, "Direct pulumi.Output missing")
 
   def debug_mock_state(self, mock_obj, name):
     """Debug helper to check mock state"""
