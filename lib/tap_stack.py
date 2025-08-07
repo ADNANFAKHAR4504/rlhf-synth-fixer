@@ -9,6 +9,7 @@ and manages environment-specific configurations.
 """
 
 import json
+import os
 from typing import Optional
 
 import pulumi
@@ -163,6 +164,14 @@ class TapStack(pulumi.ComponentResource):  # pylint: disable=too-many-instance-a
       opts=ResourceOptions(parent=self)
     )
 
+    # Validate Lambda code directory exists
+    lambda_code_path = "./lib/lambda"
+    if not os.path.exists(lambda_code_path):
+      raise ValueError(f"Lambda code directory not found at {lambda_code_path}")
+    
+    if not os.path.exists(os.path.join(lambda_code_path, "handler.py")):
+      raise ValueError(f"Lambda handler file not found at {lambda_code_path}/handler.py")
+
     # Create Lambda function with improved configuration
     lambda_function = lambda_.Function(
       f"tap-api-handler-{self.environment_suffix}",
@@ -170,7 +179,7 @@ class TapStack(pulumi.ComponentResource):  # pylint: disable=too-many-instance-a
       handler="handler.lambda_handler",
       role=lambda_role.arn,
       code=pulumi.AssetArchive({
-        ".": pulumi.FileArchive("./lib/lambda")
+        ".": pulumi.FileArchive(lambda_code_path)
       }),
       timeout=60,  # Increased timeout for better reliability
       memory_size=512,  # Increased memory for better performance
