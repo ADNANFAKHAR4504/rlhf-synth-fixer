@@ -30,6 +30,9 @@ import {
 } from '@aws-sdk/client-wafv2';
 import axios from 'axios';
 
+// Get environment suffix from environment variable (set by CI/CD pipeline)
+const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
+
 // Base stack name from environment
 const baseStackName = `TapStack${environmentSuffix}`;
 
@@ -56,9 +59,6 @@ const outputs = {
   InstanceIdPrimary: undefined,
   InstanceIdSecondary: undefined
 };
-
-// Get environment suffix from environment variable (set by CI/CD pipeline)
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
 // AWS SDK clients for both regions
 const ec2ClientWest = new EC2Client({ region: 'us-west-1' });
