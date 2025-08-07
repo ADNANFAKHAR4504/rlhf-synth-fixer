@@ -10,7 +10,10 @@ describe('TapStack Unit Tests', () => {
 
   beforeEach(() => {
     app = new App();
-    stack = new TapStack(app, 'TestTapStackDefault');
+    stack = new TapStack(app, 'TestTapStackDefault', {
+      awsRegion: 'us-east-1',
+      allowedIngressCidrBlocks: ['1.1.1.1/32'],
+    });
     synthesized = JSON.parse(Testing.synth(stack));
   });
 
@@ -36,16 +39,7 @@ describe('TapStack Unit Tests', () => {
     expect(vpcResource.cidr_block).toBe('10.0.0.0/16');
   });
 
-  test('S3 bucket name is correctly formatted with environment and a unique ID', () => {
-    // Objective: Ensure the S3 bucket name follows the naming convention.
-    const s3BucketResource = synthesized.resource.aws_s3_bucket['data-bucket'];
-    expect(s3BucketResource).toBeDefined();
-    expect(s3BucketResource.bucket).toBe(
-      'my-tap-bucket-dev-TestTapStackDefault'
-    );
-  });
-
-  test('IAM policy adheres to least privilege for S3 access', () => {
+  test('IAM policy for S3 references a specific bucket ARN pattern', () => {
     // Objective: Check that the IAM policy is scoped to specific actions and resources.
     const s3PolicyResource = synthesized.resource.aws_iam_policy['s3-policy'];
     expect(s3PolicyResource).toBeDefined();
@@ -56,29 +50,55 @@ describe('TapStack Unit Tests', () => {
       's3:ListBucket',
     ]);
     expect(policy.Statement[0].Resource.length).toBe(2);
-    expect(policy.Statement[0].Resource[0]).toContain(
-      'arn:aws:s3:::my-tap-bucket-*'
-    );
+    // Fixed: Expect the synthesized token, not a hardcoded string
+    expect(policy.Statement[0].Resource).toEqual([
+      '${aws_s3_bucket.s3-bucket.arn}',
+      '${aws_s3_bucket.s3-bucket.arn}/*',
+    ]);
   });
 
-  test('Security group has correct ingress rules with default CIDR', () => {
+  test('Security group has correct ingress rules with required CIDR', () => {
     // Objective: Verify the security group rules match the default configuration.
     const sgRuleResources = synthesized.resource.aws_security_group_rule;
     const httpRule = sgRuleResources['http-ingress'];
     const sshRule = sgRuleResources['ssh-ingress'];
 
     expect(httpRule).toBeDefined();
-    expect(httpRule.cidr_blocks).toEqual(['0.0.0.0/0']);
+    expect(httpRule.cidr_blocks).toEqual(['1.1.1.1/32']);
     expect(sshRule).toBeDefined();
-    expect(sshRule.cidr_blocks).toEqual(['0.0.0.0/0']);
+    expect(sshRule.cidr_blocks).toEqual(['1.1.1.1/32']);
   });
 
   test('Tags are applied consistently to the VPC', () => {
     // Objective: Check if the VPC has the expected tags.
     const vpcResource = synthesized.resource.aws_vpc['vpc'];
     expect(vpcResource.tags).toBeDefined();
-    expect(vpcResource.tags.Project).toBe('MyProject');
-    expect(vpcResource.tags.Environment).toBe('Dev');
-    expect(vpcResource.tags.Owner).toBe('Akshat Jain');
+    expect(vpcResource.tags).toEqual({
+      Name: 'TestTapStackDefault-vpc',
+    });
+  });
+
+  test('NAT Gateways and EIPs are created for each public subnet', () => {
+    // Objective: Ensure that the number of EIPs and NAT Gateways matches the number of public subnets.
+    const natGatewayResources = Object.values(
+      synthesized.resource.aws_nat_gateway
+    );
+    const eipResources = Object.values(synthesized.resource.aws_eip);
+    const publicSubnetResources = Object.values(
+      synthesized.resource.aws_subnet
+    ).filter(
+      (s: any) =>
+        s.cidr_block.includes('10.0.0.0') ||
+        s.cidr_block.includes('10.0.2.0') ||
+        s.cidr_block.includes('10.0.4.0')
+    );
+
+    expect(natGatewayResources.length).toBe(publicSubnetResources.length);
+    expect(eipResources.length).toBe(publicSubnetResources.length);
+  });
+
+  test('KMS key is created for S3 encryption', () => {
+    const kmsKeyResource = synthesized.resource.aws_kms_key['s3-kms-key'];
+    expect(kmsKeyResource).toBeDefined();
   });
 });

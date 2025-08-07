@@ -1,77 +1,264 @@
 // lib/tap-stack.ts
-// This file now contains the full stack definition and its instantiation.
+// This file defines a complete, highly available AWS infrastructure stack using CDKTF.
 
-import { AutoscalingGroup } from '@cdktf/provider-aws/lib/autoscaling-group';
-import { CloudwatchLogGroup } from '@cdktf/provider-aws/lib/cloudwatch-log-group';
-import { DataAwsAmi } from '@cdktf/provider-aws/lib/data-aws-ami';
-import { DataAwsAvailabilityZones } from '@cdktf/provider-aws/lib/data-aws-availability-zones';
-import { Eip } from '@cdktf/provider-aws/lib/eip';
-import { IamInstanceProfile } from '@cdktf/provider-aws/lib/iam-instance-profile';
-import { IamPolicy } from '@cdktf/provider-aws/lib/iam-policy';
-import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
-import { IamRolePolicyAttachment } from '@cdktf/provider-aws/lib/iam-role-policy-attachment';
-import { InternetGateway } from '@cdktf/provider-aws/lib/internet-gateway';
-import { LaunchTemplate } from '@cdktf/provider-aws/lib/launch-template';
-import { NatGateway } from '@cdktf/provider-aws/lib/nat-gateway';
+import { Construct } from 'constructs';
+import { TerraformStack, TerraformOutput, Fn } from 'cdktf';
 import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
-import { Route } from '@cdktf/provider-aws/lib/route';
+import { Vpc } from '@cdktf/provider-aws/lib/vpc';
+import { Subnet } from '@cdktf/provider-aws/lib/subnet';
+import { InternetGateway } from '@cdktf/provider-aws/lib/internet-gateway';
+import { Eip } from '@cdktf/provider-aws/lib/eip';
+import { NatGateway } from '@cdktf/provider-aws/lib/nat-gateway';
 import { RouteTable } from '@cdktf/provider-aws/lib/route-table';
 import { RouteTableAssociation } from '@cdktf/provider-aws/lib/route-table-association';
-import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
-import { S3BucketLifecycleConfiguration } from '@cdktf/provider-aws/lib/s3-bucket-lifecycle-configuration';
-import { S3BucketServerSideEncryptionConfigurationA } from '@cdktf/provider-aws/lib/s3-bucket-server-side-encryption-configuration';
+import { Route } from '@cdktf/provider-aws/lib/route'; // Corrected: Added missing import
 import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
 import { SecurityGroupRule } from '@cdktf/provider-aws/lib/security-group-rule';
-import { Subnet } from '@cdktf/provider-aws/lib/subnet';
-import { Vpc } from '@cdktf/provider-aws/lib/vpc';
-import { Fn, TerraformOutput, TerraformStack } from 'cdktf';
-import { Construct } from 'constructs';
+import { DataAwsAvailabilityZones } from '@cdktf/provider-aws/lib/data-aws-availability-zones';
+import { DataAwsAmi } from '@cdktf/provider-aws/lib/data-aws-ami';
+import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
+import { IamRolePolicyAttachment } from '@cdktf/provider-aws/lib/iam-role-policy-attachment';
+import { IamPolicy } from '@cdktf/provider-aws/lib/iam-policy';
+import { IamInstanceProfile } from '@cdktf/provider-aws/lib/iam-instance-profile';
+import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
+import { LaunchTemplate } from '@cdktf/provider-aws/lib/launch-template';
+import { AutoscalingGroup } from '@cdktf/provider-aws/lib/autoscaling-group';
+import { CloudwatchLogGroup } from '@cdktf/provider-aws/lib/cloudwatch-log-group';
+import { CloudwatchMetricAlarm } from '@cdktf/provider-aws/lib/cloudwatch-metric-alarm';
+import { KmsKey } from '@cdktf/provider-aws/lib/kms-key';
 
-/**
- * Interface for stack properties to make it configurable and testable.
- */
+// Define the properties for the stack, now requiring allowedIngressCidrBlocks
 export interface TapStackProps {
-  /** The AWS region to deploy to. */
-  awsRegion?: string;
-  /** The CIDR block for the VPC. */
+  awsRegion: string;
   vpcCidr?: string;
-  /** Common tags to apply to all resources. */
+  allowedIngressCidrBlocks: string[];
   tags?: { [key: string]: string };
-  /** A list of CIDR blocks to allow for ingress traffic (e.g., HTTP, SSH). */
-  allowedIngressCidrBlocks?: string[];
 }
 
-/**
- * TapStack is a comprehensive CDKTF stack that provisions a complete AWS
- * infrastructure, including networking, security, IAM, storage, and compute.
- */
 export class TapStack extends TerraformStack {
-  constructor(scope: Construct, id: string, props: TapStackProps = {}) {
+  constructor(scope: Construct, id: string, props: TapStackProps) {
     super(scope, id);
 
-    // Apply default values if not provided.
-    const awsRegion = props.awsRegion || 'us-east-1';
-    const vpcCidr = props.vpcCidr || '10.0.0.0/16';
-    const tags = {
-      Project: 'MyProject',
-      Environment: 'Dev',
-      Owner: 'Akshat Jain',
-      ...props.tags,
-    };
-    const allowedIngressCidrBlocks = props.allowedIngressCidrBlocks || [
-      '0.0.0.0/0',
-    ];
+    const {
+      awsRegion,
+      vpcCidr = '10.0.0.0/16',
+      allowedIngressCidrBlocks,
+      tags = {},
+    } = props;
 
-    // 1. Provider and Data Sources
+    // 1. AWS Provider
     new AwsProvider(this, 'aws', {
       region: awsRegion,
-      defaultTags: [{ tags }],
     });
 
-    const azs = new DataAwsAvailabilityZones(this, 'available-azs', {
-      state: 'available',
+    // 2. VPC and Subnets
+    const vpc = new Vpc(this, 'vpc', {
+      cidrBlock: vpcCidr,
+      tags: { Name: `${id}-vpc`, ...tags },
     });
 
+    const availabilityZones = new DataAwsAvailabilityZones(
+      this,
+      'available-zones',
+      {
+        state: 'available',
+      }
+    );
+
+    const publicSubnets: Subnet[] = [];
+    const privateSubnets: Subnet[] = [];
+
+    // Fixed: Use Fn.element to correctly access the token list
+    for (let index = 0; index < 2; index++) {
+      const zone = Fn.element(availabilityZones.names, index);
+      publicSubnets.push(
+        new Subnet(this, `public-subnet-${index}`, {
+          vpcId: vpc.id,
+          cidrBlock: `10.0.${index * 2}.0/24`,
+          mapPublicIpOnLaunch: true,
+          availabilityZone: zone,
+          tags: { Name: `${id}-public-subnet-${index}`, ...tags },
+        })
+      );
+
+      privateSubnets.push(
+        new Subnet(this, `private-subnet-${index}`, {
+          vpcId: vpc.id,
+          cidrBlock: `10.0.${index * 2 + 1}.0/24`,
+          availabilityZone: zone,
+          tags: { Name: `${id}-private-subnet-${index}`, ...tags },
+        })
+      );
+    }
+
+    // 3. Internet Gateway and NAT Gateways for high availability
+    const internetGateway = new InternetGateway(this, 'igw', {
+      vpcId: vpc.id,
+      tags: { Name: `${id}-igw`, ...tags },
+    });
+
+    const natGateways: NatGateway[] = [];
+    publicSubnets.forEach((subnet, index) => {
+      const natGatewayEip = new Eip(this, `nat-gateway-eip-${index}`, {
+        tags: { Name: `${id}-nat-gateway-eip-${index}`, ...tags },
+      });
+
+      natGateways.push(
+        new NatGateway(this, `nat-gateway-${index}`, {
+          allocationId: natGatewayEip.id,
+          subnetId: subnet.id,
+          tags: { Name: `${id}-nat-gateway-${index}`, ...tags },
+        })
+      );
+    });
+
+    // 4. Route Tables
+    const publicRouteTable = new RouteTable(this, 'public-route-table', {
+      vpcId: vpc.id,
+      tags: { Name: `${id}-public-route-table`, ...tags },
+    });
+
+    publicSubnets.forEach((subnet, index) => {
+      new RouteTableAssociation(
+        this,
+        `public-route-table-association-${index}`,
+        {
+          subnetId: subnet.id,
+          routeTableId: publicRouteTable.id,
+        }
+      );
+    });
+
+    new Route(this, 'public-internet-route', {
+      routeTableId: publicRouteTable.id,
+      destinationCidrBlock: '0.0.0.0/0',
+      gatewayId: internetGateway.id,
+    });
+
+    privateSubnets.forEach((subnet, index) => {
+      const privateRouteTable = new RouteTable(
+        this,
+        `private-route-table-${index}`,
+        {
+          vpcId: vpc.id,
+          tags: { Name: `${id}-private-route-table-${index}`, ...tags },
+        }
+      );
+      new RouteTableAssociation(
+        this,
+        `private-route-table-association-${index}`,
+        {
+          subnetId: subnet.id,
+          routeTableId: privateRouteTable.id,
+        }
+      );
+
+      new Route(this, `private-internet-route-${index}`, {
+        routeTableId: privateRouteTable.id,
+        destinationCidrBlock: '0.0.0.0/0',
+        natGatewayId: natGateways[index].id,
+      });
+    });
+
+    // 5. Security Group for web servers (requires explicit CIDR)
+    const securityGroup = new SecurityGroup(this, 'web-sg', {
+      vpcId: vpc.id,
+      name: `${id}-web-sg`,
+      description: 'Security group for web instances',
+      tags: { Name: `${id}-web-sg`, ...tags },
+    });
+
+    new SecurityGroupRule(this, 'http-ingress', {
+      type: 'ingress',
+      fromPort: 80,
+      toPort: 80,
+      protocol: 'tcp',
+      cidrBlocks: allowedIngressCidrBlocks, // Now explicitly required
+      securityGroupId: securityGroup.id,
+    });
+
+    new SecurityGroupRule(this, 'ssh-ingress', {
+      type: 'ingress',
+      fromPort: 22,
+      toPort: 22,
+      protocol: 'tcp',
+      cidrBlocks: allowedIngressCidrBlocks, // Now explicitly required
+      securityGroupId: securityGroup.id,
+    });
+
+    new SecurityGroupRule(this, 'all-egress', {
+      type: 'egress',
+      fromPort: 0,
+      toPort: 0,
+      protocol: '-1', // All protocols
+      cidrBlocks: ['0.0.0.0/0'],
+      securityGroupId: securityGroup.id,
+    });
+
+    // 6. S3 Encryption with a Customer-Managed KMS Key
+    const kmsKey = new KmsKey(this, 's3-kms-key', {
+      description: `KMS key for S3 bucket ${id}`,
+      enableKeyRotation: true,
+      tags: { Name: `${id}-s3-kms-key`, ...tags },
+    });
+
+    const s3Bucket = new S3Bucket(this, 's3-bucket', {
+      bucket: `${id}-my-web-bucket`,
+      serverSideEncryptionConfiguration: {
+        rule: {
+          applyServerSideEncryptionByDefault: {
+            kmsMasterKeyId: kmsKey.arn,
+            sseAlgorithm: 'aws:kms',
+          },
+        },
+      },
+      tags: { Name: `${id}-s3-bucket`, ...tags },
+    });
+
+    // 7. IAM Role, Policy, and Instance Profile
+    const iamRole = new IamRole(this, 'iam-role', {
+      name: `${id}-iam-role`,
+      assumeRolePolicy: JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Action: 'sts:AssumeRole',
+            Effect: 'Allow',
+            Principal: {
+              Service: 'ec2.amazonaws.com',
+            },
+          },
+        ],
+      }),
+      tags: { Name: `${id}-iam-role`, ...tags },
+    });
+
+    const s3Policy = new IamPolicy(this, 's3-policy', {
+      name: `${id}-s3-policy`,
+      policy: JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Action: ['s3:GetObject', 's3:ListBucket'],
+            Effect: 'Allow',
+            Resource: [s3Bucket.arn, `${s3Bucket.arn}/*`],
+          },
+        ],
+      }),
+      tags: { Name: `${id}-s3-policy`, ...tags },
+    });
+
+    new IamRolePolicyAttachment(this, 's3-policy-attachment', {
+      role: iamRole.name,
+      policyArn: s3Policy.arn,
+    });
+
+    const instanceProfile = new IamInstanceProfile(this, 'instance-profile', {
+      name: `${id}-instance-profile`,
+      role: iamRole.name,
+    });
+
+    // 8. Launch Template and Auto Scaling Group
     const ami = new DataAwsAmi(this, 'ami', {
       mostRecent: true,
       owners: ['amazon'],
@@ -83,214 +270,6 @@ export class TapStack extends TerraformStack {
       ],
     });
 
-    // 2. Networking
-    const vpc = new Vpc(this, 'vpc', {
-      cidrBlock: vpcCidr,
-      tags: { Name: `${id}-vpc`, ...tags }, // Explicitly apply tags
-    });
-
-    const internetGateway = new InternetGateway(this, 'igw', {
-      vpcId: vpc.id,
-      tags: { Name: `${id}-igw`, ...tags },
-    });
-
-    const publicSubnetIds: string[] = [];
-    const privateSubnetIds: string[] = [];
-
-    // Create subnets and their route tables
-    for (let i = 0; i < 3; i++) {
-      const publicSubnet = new Subnet(this, `public-subnet-${i}`, {
-        vpcId: vpc.id,
-        cidrBlock: Fn.cidrsubnet(vpc.cidrBlock, 8, i),
-        availabilityZone: Fn.element(azs.names, i),
-        mapPublicIpOnLaunch: true,
-        tags: { Name: `${id}-public-subnet-${i}`, ...tags },
-      });
-      publicSubnetIds.push(publicSubnet.id);
-
-      const privateSubnet = new Subnet(this, `private-subnet-${i}`, {
-        vpcId: vpc.id,
-        cidrBlock: Fn.cidrsubnet(vpc.cidrBlock, 8, i + 10),
-        availabilityZone: Fn.element(azs.names, i),
-        tags: { Name: `${id}-private-subnet-${i}`, ...tags },
-      });
-      privateSubnetIds.push(privateSubnet.id);
-
-      const publicRouteTable = new RouteTable(this, `public-rt-${i}`, {
-        vpcId: vpc.id,
-        tags: { Name: `${id}-public-rt-${i}`, ...tags },
-      });
-
-      new Route(this, `public-route-${i}`, {
-        routeTableId: publicRouteTable.id,
-        destinationCidrBlock: '0.0.0.0/0',
-        gatewayId: internetGateway.id,
-      });
-
-      new RouteTableAssociation(this, `public-rta-${i}`, {
-        subnetId: publicSubnet.id,
-        routeTableId: publicRouteTable.id,
-      });
-    }
-
-    const natEip = new Eip(this, 'nat-eip', {
-      tags: { Name: `${id}-nat-eip`, ...tags },
-    });
-
-    const natGateway = new NatGateway(this, 'nat-gateway', {
-      allocationId: natEip.id,
-      subnetId: publicSubnetIds[0],
-      tags: { Name: `${id}-nat-gateway`, ...tags },
-    });
-
-    // Private route tables depend on the NAT Gateway
-    for (let i = 0; i < 3; i++) {
-      const privateRouteTable = new RouteTable(this, `private-rt-${i}`, {
-        vpcId: vpc.id,
-        tags: { Name: `${id}-private-rt-${i}`, ...tags },
-      });
-
-      new Route(this, `private-route-${i}`, {
-        routeTableId: privateRouteTable.id,
-        destinationCidrBlock: '0.0.0.0/0',
-        natGatewayId: natGateway.id,
-      });
-
-      new RouteTableAssociation(this, `private-rta-${i}`, {
-        subnetId: privateSubnetIds[i],
-        routeTableId: privateRouteTable.id,
-      });
-    }
-
-    // 3. Security
-    const securityGroup = new SecurityGroup(this, 'web-sg', {
-      name: `${id}-web-sg`,
-      vpcId: vpc.id,
-      tags: { Name: `${id}-web-sg`, ...tags },
-      ingress: [],
-      egress: [
-        {
-          fromPort: 0,
-          toPort: 0,
-          protocol: '-1',
-          cidrBlocks: ['0.0.0.0/0'],
-        },
-      ],
-    });
-
-    new SecurityGroupRule(this, 'http-ingress', {
-      type: 'ingress',
-      fromPort: 80,
-      toPort: 80,
-      protocol: 'tcp',
-      cidrBlocks: allowedIngressCidrBlocks,
-      securityGroupId: securityGroup.id,
-    });
-
-    new SecurityGroupRule(this, 'ssh-ingress', {
-      type: 'ingress',
-      fromPort: 22,
-      toPort: 22,
-      protocol: 'tcp',
-      cidrBlocks: allowedIngressCidrBlocks,
-      securityGroupId: securityGroup.id,
-    });
-
-    // 4. IAM - Using template literals for JSON to avoid linting issues
-    const ec2Role = new IamRole(this, 'ec2-role', {
-      name: `${id}-ec2-role`,
-      assumeRolePolicy: `{
-        "Version": "2012-10-17",
-        "Statement": [
-          {
-            "Action": "sts:AssumeRole",
-            "Effect": "Allow",
-            "Principal": { "Service": "ec2.amazonaws.com" }
-          }
-        ]
-      }`,
-      tags: { Name: `${id}-ec2-role`, ...tags },
-    });
-
-    const s3Policy = new IamPolicy(this, 's3-policy', {
-      name: `${id}-s3-policy`,
-      policy: `{
-        "Version": "2012-10-17",
-        "Statement": [
-          {
-            "Effect": "Allow",
-            "Action": ["s3:GetObject", "s3:ListBucket"],
-            "Resource": [
-              "arn:aws:s3:::my-tap-bucket-*",
-              "arn:aws:s3:::my-tap-bucket-*/*"
-            ]
-          }
-        ]
-      }`,
-      tags: { Name: `${id}-s3-policy`, ...tags },
-    });
-
-    new IamRolePolicyAttachment(this, 's3-policy-attachment', {
-      role: ec2Role.name,
-      policyArn: s3Policy.arn,
-    });
-
-    const instanceProfile = new IamInstanceProfile(
-      this,
-      'ec2-instance-profile',
-      {
-        name: `${id}-ec2-instance-profile`,
-        role: ec2Role.name,
-        tags: { Name: `${id}-ec2-instance-profile`, ...tags },
-      }
-    );
-
-    // 5. Storage
-    const s3Bucket = new S3Bucket(this, 'data-bucket', {
-      bucket: `my-tap-bucket-${tags.Environment.toLowerCase()}-${id}`,
-      tags: { Name: `${id}-data-bucket`, ...tags },
-    });
-
-    new S3BucketServerSideEncryptionConfigurationA(this, 's3-encryption', {
-      bucket: s3Bucket.id,
-      rule: [
-        {
-          applyServerSideEncryptionByDefault: {
-            sseAlgorithm: 'aws:kms',
-          },
-        },
-      ],
-    });
-
-    new S3BucketLifecycleConfiguration(this, 's3-lifecycle', {
-      bucket: s3Bucket.id,
-      rule: [
-        {
-          id: 'glacier-transition-and-expiration',
-          status: 'Enabled',
-          // Added filter to explicitly apply the rule to all objects
-          filter: [{}],
-          noncurrentVersionTransition: [
-            {
-              storageClass: 'GLACIER',
-              noncurrentDays: 90,
-            },
-          ],
-          noncurrentVersionExpiration: [
-            {
-              noncurrentDays: 365,
-            },
-          ],
-          expiration: [
-            {
-              days: 365,
-            },
-          ],
-        },
-      ],
-    });
-
-    // 6. Compute
     const launchTemplate = new LaunchTemplate(this, 'launch-template', {
       name: `${id}-launch-template`,
       imageId: ami.id,
@@ -300,13 +279,13 @@ export class TapStack extends TerraformStack {
       tags: { Name: `${id}-launch-template`, ...tags },
     });
 
-    new AutoscalingGroup(this, 'web-asg', {
+    const webAsg = new AutoscalingGroup(this, 'web-asg', {
       name: `${id}-web-asg`,
       launchTemplate: {
         id: launchTemplate.id,
         version: `${launchTemplate.latestVersion}`,
       },
-      vpcZoneIdentifier: privateSubnetIds,
+      vpcZoneIdentifier: privateSubnets.map(subnet => subnet.id),
       minSize: 1,
       maxSize: 3,
       desiredCapacity: 1,
@@ -319,32 +298,66 @@ export class TapStack extends TerraformStack {
       ],
     });
 
-    // 7. Monitoring
+    // 9. Monitoring
     new CloudwatchLogGroup(this, 'log-group', {
       name: `/${id}/web-server`,
       retentionInDays: 7,
       tags: { Name: `${id}-log-group`, ...tags },
     });
 
-    // 8. Outputs
+    // CloudWatch alarm for ASG CPU Utilization
+    new CloudwatchMetricAlarm(this, 'asg-cpu-alarm', {
+      alarmName: `${id}-asg-cpu-utilization`,
+      comparisonOperator: 'GreaterThanOrEqualToThreshold',
+      evaluationPeriods: 2,
+      metricName: 'CPUUtilization',
+      namespace: 'AWS/EC2',
+      period: 300,
+      statistic: 'Average',
+      threshold: 80,
+      dimensions: {
+        AutoScalingGroupName: webAsg.name,
+      },
+      alarmDescription: 'Alarms when ASG CPU utilization is high',
+    });
+
+    // CloudWatch alarms for NAT Gateway port allocation errors
+    natGateways.forEach((nat, index) => {
+      new CloudwatchMetricAlarm(this, `nat-gateway-error-alarm-${index}`, {
+        alarmName: `${id}-nat-gateway-error-alarm-${index}`,
+        comparisonOperator: 'GreaterThanOrEqualToThreshold',
+        evaluationPeriods: 1,
+        metricName: 'ErrorPortAllocation',
+        namespace: 'AWS/NATGateway',
+        period: 60,
+        statistic: 'Sum',
+        threshold: 1,
+        dimensions: {
+          NatGatewayId: nat.id,
+        },
+        alarmDescription: `Alarms when NAT Gateway ${index} has port allocation errors`,
+      });
+    });
+
+    // 10. Outputs
     new TerraformOutput(this, 'vpc_id_output', {
       value: vpc.id,
       description: 'The ID of the created VPC',
     });
 
     new TerraformOutput(this, 'private_subnet_ids_output', {
-      value: privateSubnetIds,
+      value: privateSubnets.map(s => s.id),
       description: 'IDs of the private subnets',
     });
 
     new TerraformOutput(this, 'public_subnet_ids_output', {
-      value: publicSubnetIds,
+      value: publicSubnets.map(s => s.id),
       description: 'IDs of the public subnets',
     });
 
-    new TerraformOutput(this, 'ec2_instance_profile_arn_output', {
-      value: instanceProfile.arn,
-      description: 'ARN of the EC2 instance profile for S3 access',
+    new TerraformOutput(this, 'security_group_id', {
+      value: securityGroup.id,
+      description: 'The ID of the web security group',
     });
   }
 }

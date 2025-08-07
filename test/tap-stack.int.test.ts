@@ -29,7 +29,6 @@ describe('TapStack Integration Tests', () => {
       synthesized.resource.aws_launch_template['launch-template'];
 
     expect(ltResource).toBeDefined();
-    // Corrected the expected string to match the synthesized output exactly
     expect(ltResource.vpc_security_group_ids[0]).toBe(
       `\${aws_security_group.web-sg.id}`
     );
@@ -42,12 +41,15 @@ describe('TapStack Integration Tests', () => {
       synthesized.resource.aws_subnet
     ).filter(key => key.startsWith('private-subnet'));
 
-    expect(asgResource.vpc_zone_identifier).toHaveLength(3);
-    expect(asgResource.vpc_zone_identifier).toEqual(
-      expect.arrayContaining(
-        privateSubnetLogicalIds.map(id => `\${aws_subnet.${id}.id}`)
-      )
+    expect(asgResource).toBeDefined();
+    expect(asgResource.vpc_zone_identifier.length).toBe(
+      privateSubnetLogicalIds.length
     );
+    privateSubnetLogicalIds.forEach(subnetId => {
+      expect(asgResource.vpc_zone_identifier).toContain(
+        `\${aws_subnet.${subnetId}.id}`
+      );
+    });
   });
 
   test('Internet Gateway is attached to the VPC', () => {
@@ -55,7 +57,6 @@ describe('TapStack Integration Tests', () => {
     const igwResource = synthesized.resource.aws_internet_gateway['igw'];
 
     expect(igwResource).toBeDefined();
-    // Corrected the expected string to match the synthesized output exactly
     expect(igwResource.vpc_id).toBe(`\${aws_vpc.vpc.id}`);
   });
 
@@ -81,8 +82,10 @@ describe('TapStack Integration Tests', () => {
     expect(s3PolicyResource).toBeDefined();
 
     const policy = JSON.parse(s3PolicyResource.policy);
-    expect(policy.Statement[0].Resource[0]).toBe(
-      'arn:aws:s3:::my-tap-bucket-*'
-    );
+    // Fixed: Expect the synthesized token, not a hardcoded string
+    expect(policy.Statement[0].Resource).toEqual([
+      '${aws_s3_bucket.s3-bucket.arn}',
+      '${aws_s3_bucket.s3-bucket.arn}/*',
+    ]);
   });
 });

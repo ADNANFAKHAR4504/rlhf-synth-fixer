@@ -8,14 +8,14 @@ import { TapStack } from '../lib/tap-stack'; // Import the TapStack class
 
 const app = new App();
 
-new TapStack(app, 'tap-stack-dev-new', {
+new TapStack(app, 'tap-stack-dev-v2', {
   awsRegion: 'us-east-1',
-  vpcCidr: '10.0.0.0/16',
   tags: {
     Project: 'TapProject',
     Environment: 'dev',
     Owner: 'Akshat Jain',
   },
+  // The ingress CIDR is now a required parameter and must be explicitly set.
   allowedIngressCidrBlocks: ['192.168.1.0/24'],
 });
 
