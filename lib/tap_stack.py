@@ -5,13 +5,12 @@ AWS Dual-Stack Infrastructure with Pulumi
 This module provisions a highly available, scalable, and secure AWS infrastructure
 using an Auto Scaling Group in public subnets to work around EIP limits.
 """
-
+import base64
 import json
 from typing import List, Dict, Any
 
 import pulumi
 import pulumi_aws as aws
-
 
 config = pulumi.Config()
 project_name = "prod-web-app-final"
@@ -176,6 +175,8 @@ systemctl start httpd
 systemctl enable httpd
 echo "<h1>Hello from $(hostname -f)</h1>" > /var/www/html/index.html
 """
+  encoded_user_data = base64.b64encode(
+    user_data.encode("ascii")).decode("ascii")
 
   launch_template = aws.ec2.LaunchTemplate(
     f"{project_name}-lt",
@@ -185,7 +186,7 @@ echo "<h1>Hello from $(hostname -f)</h1>" > /var/www/html/index.html
     iam_instance_profile=aws.ec2.LaunchTemplateIamInstanceProfileArgs(
       arn=instance_profile.arn
     ),
-    user_data=pulumi.StringAsset(user_data).base64,
+    user_data=encoded_user_data,
     network_interfaces=[aws.ec2.LaunchTemplateNetworkInterfaceArgs(
       associate_public_ip_address=True
     )],
