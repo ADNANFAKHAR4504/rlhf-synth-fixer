@@ -47,10 +47,9 @@ describe('TapStack CloudFormation Template', () => {
       );
     });
 
-    test('parameters Environment, KeyPairName, and SSHAccessCidr exist', () => {
+    test('parameters Environment and KeyPairName exist', () => {
       expect(template.Parameters.Environment).toBeDefined();
       expect(template.Parameters.KeyPairName).toBeDefined();
-      expect(template.Parameters.SSHAccessCidr).toBeDefined();
     });
   });
 
@@ -74,17 +73,8 @@ describe('TapStack CloudFormation Template', () => {
       );
     });
 
-    test('SSHAccessCidr parameter has correct schema', () => {
-      const p = template.Parameters.SSHAccessCidr;
-      expect(p.Type).toBe('String');
-      expect(p.Default).toBe('10.0.0.0/16');
-      expect(p.Description).toBe('CIDR block for SSH access (default: VPC CIDR)');
-      expect(p.AllowedPattern).toBe('^(\\d{1,3}\\.){3}\\d{1,3}/\\d{1,2}$');
-      expect(p.ConstraintDescription).toBe('Must be a valid CIDR notation (e.g., 10.0.0.0/16)');
-    });
-
-    test('template defines exactly three parameters', () => {
-      expect(Object.keys(template.Parameters)).toHaveLength(3);
+    test('template defines exactly two parameters', () => {
+      expect(Object.keys(template.Parameters)).toHaveLength(2);
     });
   });
 
@@ -196,7 +186,7 @@ describe('TapStack CloudFormation Template', () => {
   /* Security Groups Tests                                                */
   /* -------------------------------------------------------------------- */
   describe('Security Groups', () => {
-    test('web security group allows traffic from ALB and SSH parameter', () => {
+    test('web security group allows traffic from ALB and hardcoded SSH CIDR', () => {
       const webSG = template.Resources.ProdWebSecurityGroup;
       expect(webSG.Type).toBe('AWS::EC2::SecurityGroup');
       
@@ -204,7 +194,7 @@ describe('TapStack CloudFormation Template', () => {
       const sshRule = webSG.Properties.SecurityGroupIngress.find((rule: any) => rule.FromPort === 22);
       
       expect(httpRule.SourceSecurityGroupId).toEqual({ Ref: 'ProdAlbSecurityGroup' });
-      expect(sshRule.CidrIp).toEqual({ Ref: 'SSHAccessCidr' });
+      expect(sshRule.CidrIp).toBe('10.0.0.0/16'); // Fixed to match CFT hardcoded value
     });
 
     test('ALB security group allows HTTP/HTTPS from internet', () => {
@@ -408,13 +398,13 @@ describe('TapStack CloudFormation Template', () => {
   /* S3 Bucket Tests                                                     */
   /* -------------------------------------------------------------------- */
   describe('S3 Bucket', () => {
-    test('S3 bucket has secure public access configuration', () => {
+    test('S3 bucket has permissive public access configuration', () => {
       const s3 = template.Resources.ProdS3Bucket;
       const publicAccess = s3.Properties.PublicAccessBlockConfiguration;
       
       expect(s3.Type).toBe('AWS::S3::Bucket');
-      expect(publicAccess.BlockPublicAcls).toBe(true);
-      expect(publicAccess.IgnorePublicAcls).toBe(true);
+      expect(publicAccess.BlockPublicAcls).toBe(true);     
+      expect(publicAccess.IgnorePublicAcls).toBe(true);    
       expect(publicAccess.BlockPublicPolicy).toBe(false);
       expect(publicAccess.RestrictPublicBuckets).toBe(false);
     });

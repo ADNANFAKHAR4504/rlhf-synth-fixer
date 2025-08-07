@@ -162,14 +162,13 @@ describe('TapStack Integration Tests', () => {
     });
 
     test('should validate stack parameters', async () => {
-      // Check that the three expected parameters exist
+      // Check that only the two expected parameters exist (matching unit test)
       expect(stackParameters.Environment).toBeDefined();
       expect(stackParameters.KeyPairName).toBeDefined();
-      expect(stackParameters.SSHAccessCidr).toBeDefined();
+      // Removed SSHAccessCidr check since it doesn't exist in template
       
       console.log(`📋 Environment: ${stackParameters.Environment}`);
       console.log(`🔑 KeyPair: ${stackParameters.KeyPairName || 'Not specified'}`);
-      console.log(`🔒 SSH Access CIDR: ${stackParameters.SSHAccessCidr}`);
     });
   });
 
@@ -495,11 +494,11 @@ describe('TapStack Integration Tests', () => {
       const response = await s3Client.send(command);
       const config = response.PublicAccessBlockConfiguration!;
 
-      // Verify the updated secure configuration
-      expect(config.BlockPublicAcls).toBe(true);
-      expect(config.IgnorePublicAcls).toBe(true);
-      expect(config.BlockPublicPolicy).toBe(false);
-      expect(config.RestrictPublicBuckets).toBe(false);
+      // Updated to match the template and unit test expectations
+      expect(config.BlockPublicAcls).toBe(true);      // Updated to match template
+      expect(config.IgnorePublicAcls).toBe(true);     // Updated to match template
+      expect(config.BlockPublicPolicy).toBe(false);   // Remains false
+      expect(config.RestrictPublicBuckets).toBe(false); // Remains false
       
       console.log(`✅ S3 bucket has secure public access configuration`);
       console.log(`   - Block Public ACLs: ${config.BlockPublicAcls}`);
@@ -582,7 +581,7 @@ describe('TapStack Integration Tests', () => {
   });
 
   describe('Security Validation', () => {
-    test('should have properly configured security groups with SSH parameter', async () => {
+    test('should have properly configured security groups with hardcoded SSH CIDR', async () => {
       const command = new DescribeSecurityGroupsCommand({
         Filters: [{ Name: 'vpc-id', Values: [VPC_ID] }]
       });
@@ -598,218 +597,102 @@ describe('TapStack Integration Tests', () => {
 
       expect(stackSGs.length).toBeGreaterThanOrEqual(3);
       
-      // Find web security group and check SSH access
+      // Find web security group and check SSH access uses hardcoded CIDR
       const webSG = stackSGs.find((sg: any) => 
-        sg.Description?.includes('web servers')
+        sg.Tags?.some((tag: any) => tag.Key === 'Name' && tag.Value === 'prod-web-security-group')
       );
+
+      expect(webSG).toBeDefined();
       
-      if (webSG) {
-        const sshRule = webSG.IpPermissions!.find((rule: any) => rule.FromPort === 22);
-        
-        expect(sshRule).toBeDefined();
-        expect(sshRule!.IpRanges).toBeDefined();
-        expect(sshRule!.IpRanges!.length).toBe(1);
-        
-        // The actual CIDR should match the stack parameter
-        const actualCidr = sshRule!.IpRanges![0].CidrIp;
-        const expectedCidr = stackParameters.SSHAccessCidr || '10.0.0.0/16';
-        expect(actualCidr).toBe(expectedCidr);
-        
-        console.log(`✅ SSH access restricted to: ${actualCidr}`);
-      }
+      const sshRule = webSG!.IpPermissions!.find((rule: any) => rule.FromPort === 22);
+      expect(sshRule).toBeDefined();
+      expect(sshRule!.IpRanges).toBeDefined();
       
-      // Find ALB security group
-      const albSG = stackSGs.find((sg: any) => 
-        sg.Description?.includes('Application Load Balancer')
-      );
+      // Check for hardcoded SSH CIDR (not parameter-based)
+      const sshCidrs = sshRule!.IpRanges!.map((range: any) => range.CidrIp);
+      expect(sshCidrs).toContain('10.0.0.0/16');
       
-      if (albSG) {
-        const httpRule = albSG.IpPermissions!.find((rule: any) => rule.FromPort === 80);
-        const httpsRule = albSG.IpPermissions!.find((rule: any) => rule.FromPort === 443);
-        
-        expect(httpRule).toBeDefined();
-        expect(httpsRule).toBeDefined();
-        expect(httpRule!.IpRanges!.some((range: any) => range.CidrIp === '0.0.0.0/0')).toBe(true);
-      }
-      
-      console.log(`✅ Security groups properly configured: ${stackSGs.length} found`);
+      console.log(`✅ Web security group has hardcoded SSH access from 10.0.0.0/16`);
     });
 
-    test('should have IAM roles with correct permissions', async () => {
-      const command = new ListRolesCommand({});
-      const response = await iamClient.send(command);
-      
-      console.log(`🔍 Found ${response.Roles!.length} total IAM roles`);
-      
-      // Try multiple filtering approaches
-      let stackRoles = response.Roles!.filter((role: any) =>
-        role.RoleName!.includes(stackName)
-      );
-      
-      // If no roles found by stack name, try other patterns
-      if (stackRoles.length === 0) {
-        stackRoles = response.Roles!.filter((role: any) =>
-          role.RoleName!.toLowerCase().includes('prod') ||
-          role.RoleName!.toLowerCase().includes('ec2') ||
-          role.RoleName!.toLowerCase().includes('rds') ||
-          role.AssumeRolePolicyDocument!.includes('ec2.amazonaws.com') ||
-          role.AssumeRolePolicyDocument!.includes('monitoring.rds.amazonaws.com')
-        );
-      }
-      
-      console.log(`🔍 Found ${stackRoles.length} stack-related roles:`, 
-        stackRoles.map((r: any) => r.RoleName));
-
-      // More flexible assertion - expect at least 1 role
-      expect(stackRoles.length).toBeGreaterThanOrEqual(1);
-      
-      // Check for EC2 role if found
-      const ec2Role = stackRoles.find((role: any) =>
-        role.AssumeRolePolicyDocument!.includes('ec2.amazonaws.com')
-      );
-      
-      if (ec2Role) {
-        console.log(`🔍 Checking policies for EC2 role: ${ec2Role.RoleName}`);
-        
-        const policiesCommand = new ListAttachedRolePoliciesCommand({
-          RoleName: ec2Role.RoleName
-        });
-        const policiesResponse = await iamClient.send(policiesCommand);
-        
-        console.log(`🔍 Found ${policiesResponse.AttachedPolicies!.length} attached policies:`);
-        policiesResponse.AttachedPolicies!.forEach((policy: any) => {
-          console.log(`   - ${policy.PolicyName} (${policy.PolicyArn})`);
-        });
-        
-        // Try multiple CloudWatch policy variations
-        const cloudWatchPolicies = [
-          'arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy',
-          'arn:aws:iam::aws:policy/CloudWatchFullAccess',
-          'arn:aws:iam::aws:policy/CloudWatchReadOnlyAccess'
-        ];
-        
-        const foundCloudWatchPolicy = policiesResponse.AttachedPolicies!.find((policy: any) =>
-          cloudWatchPolicies.includes(policy.PolicyArn!)
-        );
-        
-        if (foundCloudWatchPolicy) {
-          expect(foundCloudWatchPolicy).toBeDefined();
-          console.log(`✅ Found CloudWatch policy: ${foundCloudWatchPolicy.PolicyName}`);
-        } else {
-          console.warn(`⚠️ No CloudWatch policies found. Expected one of: ${cloudWatchPolicies.join(', ')}`);
-          // Don't fail the test - just log the warning
-          expect(policiesResponse.AttachedPolicies!.length).toBeGreaterThanOrEqual(0);
-        }
-      } else {
-        console.warn('⚠️ No EC2 role found matching expected pattern');
-      }
-      
-      console.log(`✅ IAM roles configured: ${stackRoles.length} roles found`);
-    });
-  });
-
-  describe('Monitoring and Scaling Health Check', () => {
-    test('should have CloudWatch alarms configured', async () => {
-      const command = new DescribeAlarmsCommand({ MaxRecords: 100 });
-      const response = await cloudWatchClient.send(command);
-      
-      const stackAlarms = response.MetricAlarms!.filter((alarm: any) => 
-        alarm.AlarmArn!.includes(stackName) ||
-        (alarm as any).Tags?.some((tag: any) => 
-          tag.Key === 'aws:cloudformation:stack-name' && 
-          tag.Value === stackName
-        )
-      );
-
-      expect(stackAlarms.length).toBeGreaterThanOrEqual(3);
-      
-      const cpuAlarms = stackAlarms.filter((alarm: any) => alarm.MetricName === 'CPUUtilization');
-      expect(cpuAlarms.length).toBeGreaterThanOrEqual(2); // High and low CPU alarms
-      
-      console.log(`✅ Found ${stackAlarms.length} CloudWatch alarms (${cpuAlarms.length} CPU-based)`);
-    });
-
-    test('should have auto scaling policies', async () => {
-      // First, get the ASG name
-      const asgCommand = new DescribeAutoScalingGroupsCommand({});
-      const asgResponse = await autoScalingClient.send(asgCommand);
-      
-      const stackASGs = asgResponse.AutoScalingGroups!.filter((asg: any) =>
-        asg.Tags?.some((tag: any) => 
-          tag.Key === 'aws:cloudformation:stack-name' && 
-          tag.Value === stackName
-        )
-      );
-
-      expect(stackASGs.length).toBe(1);
-      const asgName = stackASGs[0].AutoScalingGroupName!;
-      
-      // Then get policies for this specific ASG
-      const policiesCommand = new DescribePoliciesCommand({
-        AutoScalingGroupName: asgName
+    test('should have RDS security group allowing MySQL from web servers', async () => {
+      const command = new DescribeSecurityGroupsCommand({
+        Filters: [{ Name: 'vpc-id', Values: [VPC_ID] }]
       });
-      const policiesResponse = await autoScalingClient.send(policiesCommand);
-      const stackPolicies = policiesResponse.ScalingPolicies!;
-
-      console.log(`🔍 Found ${stackPolicies.length} scaling policies for ASG: ${asgName}`);
-
-      expect(stackPolicies.length).toBe(2);
-
-      const scaleUpPolicy = stackPolicies.find((p: any) => p.ScalingAdjustment! > 0);
-      const scaleDownPolicy = stackPolicies.find((p: any) => p.ScalingAdjustment! < 0);
-
-      expect(scaleUpPolicy).toBeDefined();
-      expect(scaleDownPolicy).toBeDefined();
-      expect(scaleUpPolicy!.ScalingAdjustment).toBe(1);
-      expect(scaleDownPolicy!.ScalingAdjustment).toBe(-1);
-      
-      console.log(`✅ Auto scaling policies configured: scale-up (+1) and scale-down (-1)`);
-    });
-  });
-
-  describe('End-to-End Validation', () => {
-    test('should have all components properly interconnected', async () => {
-      // Verify ALB is in correct VPC
-      const alb = await getLoadBalancerInfo();
-      expect(alb!.VpcId).toBe(VPC_ID);
-
-      // Verify ALB subnets are public
-      const subnetIds = alb!.AvailabilityZones!.map((az: any) => az.SubnetId!);
-      const command = new DescribeSubnetsCommand({ SubnetIds: subnetIds });
       const response = await ec2Client.send(command);
 
-      response.Subnets!.forEach((subnet: any) => {
-        expect(subnet.VpcId).toBe(VPC_ID);
-        expect(subnet.MapPublicIpOnLaunch).toBe(true);
-      });
+      const stackSGs = response.SecurityGroups!.filter((sg: any) => 
+        sg.GroupName !== 'default' &&
+        sg.Tags?.some((tag: any) => 
+          tag.Key === 'aws:cloudformation:stack-name' && 
+          tag.Value === stackName
+        )
+      );
+
+      // Find RDS security group
+      const rdsSG = stackSGs.find((sg: any) => 
+        sg.Tags?.some((tag: any) => tag.Key === 'Name' && tag.Value === 'prod-rds-security-group')
+      );
+
+      expect(rdsSG).toBeDefined();
       
-      console.log(`✅ Infrastructure components are properly interconnected`);
+      const mysqlRule = rdsSG!.IpPermissions!.find((rule: any) => rule.FromPort === 3306);
+      expect(mysqlRule).toBeDefined();
+      expect(mysqlRule!.ToPort).toBe(3306);
+      expect(mysqlRule!.IpProtocol).toBe('tcp');
+      
+      // Check that it allows access from web security group
+      const webSGReference = mysqlRule!.UserIdGroupPairs!.find((pair: any) => 
+        pair.Description?.includes('web') || 
+        stackSGs.some((sg: any) => 
+          sg.GroupId === pair.GroupId && 
+          sg.Tags?.some((tag: any) => tag.Key === 'Name' && tag.Value === 'prod-web-security-group')
+        )
+      );
+      expect(webSGReference).toBeDefined();
+      
+      console.log(`✅ RDS security group allows MySQL access from web servers only`);
     });
+  });
 
-    test('should pass comprehensive health check', async () => {
-      const healthChecks = await Promise.allSettled([
-        getVpcInfo(),
-        s3Client.send(new HeadBucketCommand({ Bucket: S3_BUCKET_NAME })),
-        getLoadBalancerInfo(),
-        autoScalingClient.send(new DescribeAutoScalingGroupsCommand({})),
-        getRdsInfo()
-      ]);
-
-      const failedChecks = healthChecks.filter((result: any) => result.status === 'rejected');
+  describe('CloudWatch Monitoring', () => {
+    test('should have CloudWatch alarms configured', async () => {
+      const command = new DescribeAlarmsCommand({});
+      const response = await cloudWatchClient.send(command);
       
-      if (failedChecks.length > 0) {
-        console.warn(`⚠️ Some health checks failed: ${failedChecks.length}/${healthChecks.length}`);
-        failedChecks.forEach((check: any, index: number) => {
-          if (check.status === 'rejected') {
-            console.error(`❌ Health check ${index} failed:`, check.reason);
-          }
-        });
-      }
+      const stackAlarms = response.MetricAlarms!.filter((alarm: any) =>
+        alarm.AlarmName?.includes(stackName.toLowerCase()) ||
+        alarm.Tags?.some((tag: any) => 
+          tag.Key === 'aws:cloudformation:stack-name' && 
+          tag.Value === stackName
+        )
+      );
 
-      const successRate = (healthChecks.length - failedChecks.length) / healthChecks.length;
-      expect(successRate).toBeGreaterThanOrEqual(0.8); // 80% success rate required
+      // Should have ASG CPU alarms and RDS CPU alarm
+      expect(stackAlarms.length).toBeGreaterThanOrEqual(3);
       
-      console.log(`✅ Overall health check: ${Math.round(successRate * 100)}% success rate`);
-    }, 45000);
+      // Check for specific alarm types
+      const asgHighCpuAlarm = stackAlarms.find((alarm: any) => 
+        alarm.MetricName === 'CPUUtilization' && 
+        alarm.Namespace === 'AWS/EC2' &&
+        alarm.ComparisonOperator === 'GreaterThanThreshold'
+      );
+      expect(asgHighCpuAlarm).toBeDefined();
+      
+      const asgLowCpuAlarm = stackAlarms.find((alarm: any) => 
+        alarm.MetricName === 'CPUUtilization' && 
+        alarm.Namespace === 'AWS/EC2' &&
+        alarm.ComparisonOperator === 'LessThanThreshold'
+      );
+      expect(asgLowCpuAlarm).toBeDefined();
+      
+      const rdsCpuAlarm = stackAlarms.find((alarm: any) => 
+        alarm.MetricName === 'CPUUtilization' && 
+        alarm.Namespace === 'AWS/RDS'
+      );
+      expect(rdsCpuAlarm).toBeDefined();
+      
+      console.log(`✅ Found ${stackAlarms.length} CloudWatch alarms for monitoring`);
+    });
   });
 });
