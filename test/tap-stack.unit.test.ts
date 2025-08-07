@@ -45,7 +45,11 @@ describe('TapStack CloudFormation Template - Secure Web Application Infrastructu
       expect(template.Parameters.Environment).toBeDefined();
       expect(template.Parameters.Environment.Type).toBe('String');
       expect(template.Parameters.Environment.Default).toBe('Dev');
-      expect(template.Parameters.Environment.AllowedValues).toEqual(['Dev', 'Test', 'Prod']);
+      expect(template.Parameters.Environment.AllowedValues).toEqual([
+        'Dev',
+        'Test',
+        'Prod',
+      ]);
     });
 
     test('should have Owner parameter', () => {
@@ -63,7 +67,9 @@ describe('TapStack CloudFormation Template - Secure Web Application Infrastructu
 
     test('should have Internet Gateway', () => {
       expect(template.Resources.InternetGateway).toBeDefined();
-      expect(template.Resources.InternetGateway.Type).toBe('AWS::EC2::InternetGateway');
+      expect(template.Resources.InternetGateway.Type).toBe(
+        'AWS::EC2::InternetGateway'
+      );
     });
 
     test('should have public and private subnets', () => {
@@ -90,12 +96,16 @@ describe('TapStack CloudFormation Template - Secure Web Application Infrastructu
   describe('Security Groups', () => {
     test('should have WebApplicationSecurityGroup', () => {
       expect(template.Resources.WebApplicationSecurityGroup).toBeDefined();
-      expect(template.Resources.WebApplicationSecurityGroup.Type).toBe('AWS::EC2::SecurityGroup');
+      expect(template.Resources.WebApplicationSecurityGroup.Type).toBe(
+        'AWS::EC2::SecurityGroup'
+      );
     });
 
     test('should have LambdaSecurityGroup', () => {
       expect(template.Resources.LambdaSecurityGroup).toBeDefined();
-      expect(template.Resources.LambdaSecurityGroup.Type).toBe('AWS::EC2::SecurityGroup');
+      expect(template.Resources.LambdaSecurityGroup.Type).toBe(
+        'AWS::EC2::SecurityGroup'
+      );
     });
 
     test('WebApp security group should allow HTTP and HTTPS', () => {
@@ -106,14 +116,14 @@ describe('TapStack CloudFormation Template - Secure Web Application Infrastructu
         FromPort: 80,
         ToPort: 80,
         CidrIp: '0.0.0.0/0',
-        Description: 'Allow HTTP traffic from anywhere'
+        Description: 'Allow HTTP traffic from anywhere',
       });
       expect(ingress).toContainEqual({
         IpProtocol: 'tcp',
         FromPort: 443,
         ToPort: 443,
         CidrIp: '0.0.0.0/0',
-        Description: 'Allow HTTPS traffic from anywhere'
+        Description: 'Allow HTTPS traffic from anywhere',
       });
     });
   });
@@ -127,7 +137,10 @@ describe('TapStack CloudFormation Template - Secure Web Application Infrastructu
     test('S3 bucket should have encryption enabled', () => {
       const bucket = template.Resources.SecureS3Bucket;
       expect(bucket.Properties.BucketEncryption).toBeDefined();
-      expect(bucket.Properties.BucketEncryption.ServerSideEncryptionConfiguration[0].ServerSideEncryptionByDefault.SSEAlgorithm).toBe('AES256');
+      expect(
+        bucket.Properties.BucketEncryption.ServerSideEncryptionConfiguration[0]
+          .ServerSideEncryptionByDefault.SSEAlgorithm
+      ).toBe('AES256');
     });
 
     test('S3 bucket should have versioning enabled', () => {
@@ -146,14 +159,18 @@ describe('TapStack CloudFormation Template - Secure Web Application Infrastructu
 
     test('should have S3 bucket policy', () => {
       expect(template.Resources.S3BucketPolicy).toBeDefined();
-      expect(template.Resources.S3BucketPolicy.Type).toBe('AWS::S3::BucketPolicy');
+      expect(template.Resources.S3BucketPolicy.Type).toBe(
+        'AWS::S3::BucketPolicy'
+      );
     });
   });
 
   describe('IAM Resources', () => {
     test('should have Lambda execution role', () => {
       expect(template.Resources.LambdaExecutionRole).toBeDefined();
-      expect(template.Resources.LambdaExecutionRole.Type).toBe('AWS::IAM::Role');
+      expect(template.Resources.LambdaExecutionRole.Type).toBe(
+        'AWS::IAM::Role'
+      );
     });
 
     test('Lambda role should have proper S3 permissions', () => {
@@ -161,15 +178,21 @@ describe('TapStack CloudFormation Template - Secure Web Application Infrastructu
       const policies = role.Properties.Policies;
       const s3Policy = policies.find(p => p.PolicyName === 'S3AccessPolicy');
       expect(s3Policy).toBeDefined();
-      expect(s3Policy.PolicyDocument.Statement[0].Action).toContain('s3:GetObject');
-      expect(s3Policy.PolicyDocument.Statement[0].Action).toContain('s3:PutObject');
+      expect(s3Policy.PolicyDocument.Statement[0].Action).toContain(
+        's3:GetObject'
+      );
+      expect(s3Policy.PolicyDocument.Statement[0].Action).toContain(
+        's3:PutObject'
+      );
     });
   });
 
   describe('Lambda Resources', () => {
     test('should have SecureLambdaFunction', () => {
       expect(template.Resources.SecureLambdaFunction).toBeDefined();
-      expect(template.Resources.SecureLambdaFunction.Type).toBe('AWS::Lambda::Function');
+      expect(template.Resources.SecureLambdaFunction.Type).toBe(
+        'AWS::Lambda::Function'
+      );
     });
 
     test('Lambda function should be in VPC', () => {
@@ -181,7 +204,9 @@ describe('TapStack CloudFormation Template - Secure Web Application Infrastructu
 
     test('Lambda function should have environment variables', () => {
       const lambda = template.Resources.SecureLambdaFunction;
-      expect(lambda.Properties.Environment.Variables.S3_BUCKET_NAME).toBeDefined();
+      expect(
+        lambda.Properties.Environment.Variables.S3_BUCKET_NAME
+      ).toBeDefined();
       expect(lambda.Properties.Environment.Variables.ENVIRONMENT).toBeDefined();
     });
   });
@@ -189,7 +214,9 @@ describe('TapStack CloudFormation Template - Secure Web Application Infrastructu
   describe('CloudWatch Resources', () => {
     test('should have Lambda log group', () => {
       expect(template.Resources.LambdaLogGroup).toBeDefined();
-      expect(template.Resources.LambdaLogGroup.Type).toBe('AWS::Logs::LogGroup');
+      expect(template.Resources.LambdaLogGroup.Type).toBe(
+        'AWS::Logs::LogGroup'
+      );
     });
 
     test('should have VPC Flow Logs', () => {
@@ -213,7 +240,7 @@ describe('TapStack CloudFormation Template - Secure Web Application Infrastructu
         'S3BucketName',
         'LambdaFunctionArn',
         'WebApplicationSecurityGroupId',
-        'LambdaSecurityGroupId'
+        'LambdaSecurityGroupId',
       ];
 
       expectedOutputs.forEach(outputName => {
@@ -236,7 +263,9 @@ describe('TapStack CloudFormation Template - Secure Web Application Infrastructu
     test('LambdaFunctionArn output should be correct', () => {
       const output = template.Outputs.LambdaFunctionArn;
       expect(output.Description).toBe('ARN of the Lambda function');
-      expect(output.Value).toEqual({ 'Fn::GetAtt': ['SecureLambdaFunction', 'Arn'] });
+      expect(output.Value).toEqual({
+        'Fn::GetAtt': ['SecureLambdaFunction', 'Arn'],
+      });
     });
   });
 
@@ -274,13 +303,13 @@ describe('TapStack CloudFormation Template - Secure Web Application Infrastructu
     test('all resources should have consistent tagging', () => {
       const taggedResources = [
         'SecureVPC',
-        'InternetGateway', 
+        'InternetGateway',
         'PublicSubnetAZ1',
         'SecureS3Bucket',
         'SecureLambdaFunction',
-        'LambdaExecutionRole'
+        'LambdaExecutionRole',
       ];
-      
+
       taggedResources.forEach(resourceName => {
         const resource = template.Resources[resourceName];
         if (resource && resource.Properties && resource.Properties.Tags) {
@@ -288,7 +317,7 @@ describe('TapStack CloudFormation Template - Secure Web Application Infrastructu
           const projectTag = tags.find(tag => tag.Key === 'Project');
           const envTag = tags.find(tag => tag.Key === 'Environment');
           const ownerTag = tags.find(tag => tag.Key === 'Owner');
-          
+
           expect(projectTag).toBeDefined();
           expect(envTag).toBeDefined();
           expect(ownerTag).toBeDefined();
@@ -301,7 +330,7 @@ describe('TapStack CloudFormation Template - Secure Web Application Infrastructu
     test('IAM roles should follow least privilege principle', () => {
       const lambdaRole = template.Resources.LambdaExecutionRole;
       const policies = lambdaRole.Properties.Policies;
-      
+
       // Should have specific S3 permissions, not broad access
       const s3Policy = policies.find(p => p.PolicyName === 'S3AccessPolicy');
       expect(s3Policy).toBeDefined();

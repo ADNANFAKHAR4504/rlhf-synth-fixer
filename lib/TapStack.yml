@@ -394,8 +394,8 @@ Resources:
             Principal: '*'
             Action: 's3:*'
             Resource:
-              - !Sub '${SecureS3Bucket}/*'
-              - !Ref SecureS3Bucket
+              - !Sub 'arn:aws:s3:::${SecureS3Bucket}/*'
+              - !Sub 'arn:aws:s3:::${SecureS3Bucket}'
             Condition:
               Bool:
                 'aws:SecureTransport': 'false'
@@ -407,13 +407,13 @@ Resources:
               - 's3:GetObject'
               - 's3:PutObject'
               - 's3:DeleteObject'
-            Resource: !Sub '${SecureS3Bucket}/*'
+            Resource: !Sub 'arn:aws:s3:::${SecureS3Bucket}/*'
           - Sid: AllowLambdaListBucket
             Effect: Allow
             Principal:
               AWS: !GetAtt LambdaExecutionRole.Arn
             Action: 's3:ListBucket'
-            Resource: !Ref SecureS3Bucket
+            Resource: !Sub 'arn:aws:s3:::${SecureS3Bucket}'
 
   # =====================================================
   # IAM Role and Policies
@@ -442,11 +442,11 @@ Resources:
                   - 's3:GetObject'
                   - 's3:PutObject'
                   - 's3:DeleteObject'
-                Resource: !Sub '${SecureS3Bucket}/*'
+                Resource: !Sub 'arn:aws:s3:::${SecureS3Bucket}/*'
               - Effect: Allow
                 Action:
                   - 's3:ListBucket'
-                Resource: !Ref SecureS3Bucket
+                Resource: !Sub 'arn:aws:s3:::${SecureS3Bucket}'
         - PolicyName: CloudWatchLogsPolicy
           PolicyDocument:
             Version: '2012-10-17'
