@@ -89,6 +89,7 @@
     "@typescript-eslint/eslint-plugin": "^7.18.0",
     "@typescript-eslint/parser": "^7.18.0",
     "aws-cdk": "2.1020.2",
+    "aws-sdk": "^2.1692.0",
     "aws-sdk-client-mock": "^4.1.0",
     "aws4": "^1.13.2",
     "axios": "^1.10.0",
