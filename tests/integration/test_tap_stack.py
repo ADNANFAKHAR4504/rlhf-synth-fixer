@@ -47,14 +47,16 @@ def test_integration():
         health_check_output_json = run_command(
           f"aws elbv2 describe-target-health --target-group-arn {tg_arn}"
         )
-        health_descriptions = json.loads(health_check_output_json)["TargetHealthDescriptions"]
+        health_descriptions = json.loads(
+          health_check_output_json
+        )["TargetHealthDescriptions"]
 
         healthy_targets = [
           target for target in health_descriptions
           if target["TargetHealth"]["State"] == "healthy"
         ]
 
-        print(f"Found {len(healthy_targets)} healthy targets out of {len(health_descriptions)}.")
+        print(f"Found {len(healthy_targets)} healthy targets.")
 
         if len(healthy_targets) == 2:
           health_check_passed = True

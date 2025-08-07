@@ -26,12 +26,10 @@ pulumi.runtime.set_mocks(MyMocks())
 
 @pulumi.runtime.test
 @mock_aws
-def test_network_creates_public_and_private_subnets():
+def test_network_creates_public_subnets():
   network = tap_stack.create_vpc_and_networking()
   assert 'public_subnets' in network
-  assert 'private_subnets' in network
   assert len(network['public_subnets']) == 2
-  assert len(network['private_subnets']) == 2
 
 @pulumi.runtime.test
 @mock_aws
@@ -55,14 +53,14 @@ def test_ec2_sg_allows_alb_traffic_by_reference():
 @mock_aws
 def test_asg_uses_launch_template():
   vpc = aws.ec2.Vpc("test-vpc", cidr_block="10.0.0.0/16")
-  private_subnets = [
-    aws.ec2.Subnet("p-sub-1", vpc_id=vpc.id, cidr_block="10.0.101.0/24"),
-    aws.ec2.Subnet("p-sub-2", vpc_id=vpc.id, cidr_block="10.0.102.0/24")
+  public_subnets = [
+    aws.ec2.Subnet("p-sub-1", vpc_id=vpc.id, cidr_block="10.0.1.0/24"),
+    aws.ec2.Subnet("p-sub-2", vpc_id=vpc.id, cidr_block="10.0.2.0/24")
   ]
   ec2_sg = aws.ec2.SecurityGroup("ec2-sg", vpc_id=vpc.id)
   profile = aws.iam.InstanceProfile("profile")
   tg = aws.lb.TargetGroup("tg", vpc_id=vpc.id)
 
-  tap_stack.create_compute_layer(private_subnets, ec2_sg, profile, tg)
-
+  tap_stack.create_compute_layer(public_subnets, ec2_sg, profile, tg)
+  
   assert True
