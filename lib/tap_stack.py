@@ -182,13 +182,14 @@ echo "<h1>Hello from $(hostname -f)</h1>" > /var/www/html/index.html
     f"{project_name}-lt",
     image_id=ami.id,
     instance_type="t3.micro",
-    vpc_security_group_ids=[ec2_sg.id],
     iam_instance_profile=aws.ec2.LaunchTemplateIamInstanceProfileArgs(
       arn=instance_profile.arn
     ),
     user_data=encoded_user_data,
+    # vpc_security_group_ids line yahan se hatayein
     network_interfaces=[aws.ec2.LaunchTemplateNetworkInterfaceArgs(
-      associate_public_ip_address=True
+      associate_public_ip_address=True,
+      security_groups=[ec2_sg.id], # Security group ko yahan add karein
     )],
     tags=common_tags
   )
