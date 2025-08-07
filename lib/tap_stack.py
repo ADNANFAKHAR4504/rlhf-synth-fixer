@@ -754,92 +754,92 @@ echo 'MinProtocol = TLSv1.2' >> /etc/ssl/openssl.cnf
 
     
     def _create_compliance_checks(self):
-        """Create AWS Config for automated compliance checks."""
-        for region in self.regions:
-            provider = aws.Provider(
-                f"config-provider-{region}",
-                region=region,
-                opts=ResourceOptions(parent=self)
-            )
-            
-            # Config delivery channel S3 bucket
-            config_bucket = aws.s3.Bucket(
-                f"prod-config-{region}-{self.environment_suffix}-{aws.get_caller_identity().account_id}",
-                versioning=aws.s3.BucketVersioningArgs(enabled=True),
-                server_side_encryption_configuration=aws.s3.BucketServerSideEncryptionConfigurationArgs(
-                    rule=aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
-                        apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
-                            sse_algorithm="aws:kms",
-                            kms_master_key_id=self.kms_keys[region].arn
-                        ),
-                        bucket_key_enabled=True
-                    )
-                ),
-                tags=self.standard_tags,
-                opts=ResourceOptions(parent=self, provider=provider)
-            )
-            
-            # Config service role
-            config_role = aws.iam.Role(
-                f"PROD-config-role-{region}-{self.environment_suffix}",
-                assume_role_policy=json.dumps({
-                    "Version": "2012-10-17",
-                    "Statement": [
-                        {
-                            "Action": "sts:AssumeRole",
-                            "Effect": "Allow",
-                            "Principal": {"Service": "config.amazonaws.com"}
-                        }
-                    ]
-                }),
-                tags=self.standard_tags,
-                opts=ResourceOptions(parent=self, provider=provider)
-            )
-            
-            aws.iam.RolePolicyAttachment(
-                f"PROD-config-policy-{region}-{self.environment_suffix}",
-                role=config_role.name,
-                policy_arn="arn:aws:iam::aws:policy/service-role/ConfigRole",
-                opts=ResourceOptions(parent=self, provider=provider)
-            )
-            
-            # Config delivery channel
-            config_delivery_channel = aws.cfg.DeliveryChannel(
-                f"PROD-config-delivery-{region}-{self.environment_suffix}",
-                s3_bucket_name=config_bucket.bucket,
-                opts=ResourceOptions(parent=self, provider=provider)
-            )
-            
-            # Config configuration recorder
-            config_recorder = aws.cfg.ConfigurationRecorder(
-                f"PROD-config-recorder-{region}-{self.environment_suffix}",
-                role_arn=config_role.arn,
-                recording_group=aws.cfg.ConfigurationRecorderRecordingGroupArgs(
-                    all_supported=True,
-                    include_global_resource_types=True if region == self.primary_region else False
-                ),
-                opts=ResourceOptions(parent=self, provider=provider, depends_on=[config_delivery_channel])
-            )
-            
-            # Config rules for compliance checks
-            aws.cfg.ConfigRule(
-                f"PROD-encrypted-volumes-{region}-{self.environment_suffix}",
-                name=f"encrypted-volumes-{region}-{self.environment_suffix}",
-                source=aws.cfg.ConfigRuleSourceArgs(
-                    owner="AWS",
-                    source_identifier="ENCRYPTED_VOLUMES"
-                ),
-                tags=self.standard_tags,
-                opts=ResourceOptions(parent=self, provider=provider, depends_on=[config_recorder])
-            )
-            
-            aws.cfg.ConfigRule(
-                f"PROD-s3-bucket-ssl-requests-{region}-{self.environment_suffix}",
-                name=f"s3-bucket-ssl-requests-{region}-{self.environment_suffix}",
-                source=aws.cfg.ConfigRuleSourceArgs(
-                    owner="AWS",
-                    source_identifier="S3_BUCKET_SSL_REQUESTS_ONLY"
-                ),
-                tags=self.standard_tags,
-                opts=ResourceOptions(parent=self, provider=provider, depends_on=[config_recorder])
-            )
+      """Create AWS Config for automated compliance checks."""
+      for region in self.regions:
+          provider = aws.Provider(
+              f"config-provider-{region}",
+              region=region,
+              opts=ResourceOptions(parent=self)
+          )
+          
+          # Config delivery channel S3 bucket
+          config_bucket = aws.s3.Bucket(
+              f"prod-config-{region}-{self.environment_suffix}-{aws.get_caller_identity().account_id}",
+              versioning=aws.s3.BucketVersioningArgs(enabled=True),
+              server_side_encryption_configuration=aws.s3.BucketServerSideEncryptionConfigurationArgs(
+                  rule=aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
+                      apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
+                          sse_algorithm="aws:kms",
+                          kms_master_key_id=self.kms_keys[region].arn
+                      ),
+                      bucket_key_enabled=True
+                  )
+              ),
+              tags=self.standard_tags,
+              opts=ResourceOptions(parent=self, provider=provider)
+          )
+          
+          # Config service role
+          config_role = aws.iam.Role(
+              f"PROD-config-role-{region}-{self.environment_suffix}",
+              assume_role_policy=json.dumps({
+                  "Version": "2012-10-17",
+                  "Statement": [
+                      {
+                          "Action": "sts:AssumeRole",
+                          "Effect": "Allow",
+                          "Principal": {"Service": "config.amazonaws.com"}
+                      }
+                  ]
+              }),
+              tags=self.standard_tags,
+              opts=ResourceOptions(parent=self, provider=provider)
+          )
+          
+          aws.iam.RolePolicyAttachment(
+              f"PROD-config-policy-{region}-{self.environment_suffix}",
+              role=config_role.name,
+              policy_arn="arn:aws:iam::aws:policy/service-role/ConfigRole",
+              opts=ResourceOptions(parent=self, provider=provider)
+          )
+          
+          # Config delivery channel - FIXED: aws.config instead of aws.cfg
+          config_delivery_channel = aws.config.DeliveryChannel(
+              f"PROD-config-delivery-{region}-{self.environment_suffix}",
+              s3_bucket_name=config_bucket.bucket,
+              opts=ResourceOptions(parent=self, provider=provider)
+          )
+          
+          # Config configuration recorder - FIXED: aws.config instead of aws.cfg
+          config_recorder = aws.config.ConfigurationRecorder(
+              f"PROD-config-recorder-{region}-{self.environment_suffix}",
+              role_arn=config_role.arn,
+              recording_group=aws.config.ConfigurationRecorderRecordingGroupArgs(
+                  all_supported=True,
+                  include_global_resource_types=True if region == self.primary_region else False
+              ),
+              opts=ResourceOptions(parent=self, provider=provider, depends_on=[config_delivery_channel])
+          )
+          
+          # Config rules for compliance checks - FIXED: aws.config instead of aws.cfg
+          aws.config.ConfigRule(
+              f"PROD-encrypted-volumes-{region}-{self.environment_suffix}",
+              name=f"encrypted-volumes-{region}-{self.environment_suffix}",
+              source=aws.config.ConfigRuleSourceArgs(
+                  owner="AWS",
+                  source_identifier="ENCRYPTED_VOLUMES"
+              ),
+              tags=self.standard_tags,
+              opts=ResourceOptions(parent=self, provider=provider, depends_on=[config_recorder])
+          )
+          
+          aws.config.ConfigRule(
+              f"PROD-s3-bucket-ssl-requests-{region}-{self.environment_suffix}",
+              name=f"s3-bucket-ssl-requests-{region}-{self.environment_suffix}",
+              source=aws.config.ConfigRuleSourceArgs(
+                  owner="AWS",
+                  source_identifier="S3_BUCKET_SSL_REQUESTS_ONLY"
+              ),
+              tags=self.standard_tags,
+              opts=ResourceOptions(parent=self, provider=provider, depends_on=[config_recorder])
+          )
