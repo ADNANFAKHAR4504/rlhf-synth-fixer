@@ -14,6 +14,7 @@ that complies with enterprise-grade security requirements, including:
 """
 
 import json
+import os
 from typing import Optional
 
 import pulumi
@@ -35,7 +36,8 @@ class TapStack(ComponentResource):
         super().__init__("pkg:index:TapStack", name, {}, opts)
 
         self.environment_suffix = args.environment_suffix
-        self.regions = ["us-east-1", "us-west-2", "us-east-2"]  # FIXED: Changed ap-south-1 to us-east-2
+        # FIXED: Explicitly changed ap-south-1 to us-east-2 to avoid VPC limit
+        self.regions = ["us-east-1", "us-west-2", "us-east-2"]
         self.primary_region = "us-east-1"
 
         # Tags attached to every resource
@@ -62,6 +64,7 @@ class TapStack(ComponentResource):
 
         self.register_outputs(
             {
+                "regions": self.regions,
                 "primary_vpc_id": self.primary_vpc.id,
                 "kms_key_arn": self.kms_key.arn,
                 "secrets_manager_arn": self.secrets_manager.arn,
@@ -814,3 +817,4 @@ echo 'MinProtocol = TLSv1.2' >> /etc/ssl/openssl.cnf
                 tags=self.standard_tags,
                 opts=ResourceOptions(parent=self, provider=provider, depends_on=[recorder]),
             )
+
