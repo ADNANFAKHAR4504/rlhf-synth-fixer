@@ -21,7 +21,7 @@ class TestTapStackLiveIntegration:
     # Initialize instance variables
     self.skip_tests = True
     self.outputs = {}
-    self.region = 'us-west-2'
+    self.region = 'us-east-1'
     self.lambda_client = None
     self.api_client = None
     self.logs_client = None
@@ -36,7 +36,7 @@ class TestTapStackLiveIntegration:
       self.outputs = json.load(f)
 
     self.skip_tests = False
-    self.region = self.outputs.get('region', 'us-west-2')
+    self.region = self.outputs.get('region', 'us-east-1')
 
     # Initialize AWS clients
     self.lambda_client = boto3.client('lambda', region_name=self.region)
