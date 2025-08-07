@@ -139,7 +139,7 @@ class DatabaseInfrastructure(pulumi.ComponentResource):
       f"{name}-postgres",
       identifier=f"{name}-postgres",
       engine="postgres",
-      engine_version="15.4",
+      engine_version="15.13",
       instance_class="db.t3.micro",
       allocated_storage=20,
       max_allocated_storage=100,
