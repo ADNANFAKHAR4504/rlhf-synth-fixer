@@ -37,6 +37,9 @@ export class TapStack extends TerraformStack {
   constructor(scope: Construct, id: string, props?: TapStackProps) {
     super(scope, id);
 
+    // Environment suffix for resource naming
+    const envSuffix = props?.environmentSuffix || 'default';
+
     // Common tags for all resources
     const commonTags = {
       Environment: 'Production',
@@ -58,7 +61,7 @@ export class TapStack extends TerraformStack {
 
     // S3 Bucket for Lambda deployment packages
     const lambdaBucket = new S3Bucket(this, 'lambda-deployment-bucket', {
-      bucket: `lambda-deployments-${current.accountId}`,
+      bucket: `lambda-deployments-${current.accountId}-${envSuffix}`,
       tags: { ...commonTags, Purpose: 'Lambda deployment packages' },
     });
 
@@ -87,7 +90,7 @@ export class TapStack extends TerraformStack {
 
     // DynamoDB Tables
     const userTable = new DynamodbTable(this, 'prod-service-user-table', {
-      name: 'prod-service-users',
+      name: `prod-service-users-${envSuffix}`,
       hashKey: 'userId',
       billingMode: 'PAY_PER_REQUEST',
       serverSideEncryption: {
@@ -102,11 +105,11 @@ export class TapStack extends TerraformStack {
           type: 'S',
         },
       ],
-      tags: { ...commonTags, Name: 'prod-service-users' },
+      tags: { ...commonTags, Name: `prod-service-users-${envSuffix}` },
     });
 
     const sessionTable = new DynamodbTable(this, 'prod-service-session-table', {
-      name: 'prod-service-sessions',
+      name: `prod-service-sessions-${envSuffix}`,
       hashKey: 'sessionId',
       billingMode: 'PAY_PER_REQUEST',
       serverSideEncryption: {
@@ -125,12 +128,12 @@ export class TapStack extends TerraformStack {
           type: 'S',
         },
       ],
-      tags: { ...commonTags, Name: 'prod-service-sessions' },
+      tags: { ...commonTags, Name: `prod-service-sessions-${envSuffix}` },
     });
 
     // IAM Role for Lambda execution
     const lambdaRole = new IamRole(this, 'lambda-execution-role', {
-      name: 'prod-service-lambda-execution-role',
+      name: `prod-service-lambda-execution-role-${envSuffix}`,
       assumeRolePolicy: JSON.stringify({
         Version: '2012-10-17',
         Statement: [
@@ -148,7 +151,7 @@ export class TapStack extends TerraformStack {
 
     // DynamoDB access policy for Lambda
     const dynamoPolicy = new IamPolicy(this, 'lambda-dynamodb-policy', {
-      name: 'prod-service-lambda-dynamodb-policy',
+      name: `prod-service-lambda-dynamodb-policy-${envSuffix}`,
       description: 'DynamoDB access policy for Lambda functions',
       policy: JSON.stringify({
         Version: '2012-10-17',
@@ -189,25 +192,25 @@ export class TapStack extends TerraformStack {
 
     // CloudWatch Log Groups
     new CloudwatchLogGroup(this, 'api-gateway-log-group', {
-      name: '/aws/apigateway/prod-service-api',
+      name: `/aws/apigateway/prod-service-api-${envSuffix}`,
       retentionInDays: 14,
       tags: commonTags,
     });
 
     new CloudwatchLogGroup(this, 'user-handler-log-group', {
-      name: '/aws/lambda/prod-service-user-handler',
+      name: `/aws/lambda/prod-service-user-handler-${envSuffix}`,
       retentionInDays: 14,
       tags: commonTags,
     });
 
     new CloudwatchLogGroup(this, 'session-handler-log-group', {
-      name: '/aws/lambda/prod-service-session-handler',
+      name: `/aws/lambda/prod-service-session-handler-${envSuffix}`,
       retentionInDays: 14,
       tags: commonTags,
     });
 
     new CloudwatchLogGroup(this, 'health-check-log-group', {
-      name: '/aws/lambda/prod-service-health-check',
+      name: `/aws/lambda/prod-service-health-check-${envSuffix}`,
       retentionInDays: 14,
       tags: commonTags,
     });
@@ -427,7 +430,7 @@ exports.handler = async (event) => {
       this,
       'user-handler-function',
       {
-        functionName: 'prod-service-user-handler',
+        functionName: `prod-service-user-handler-${envSuffix}`,
         s3Bucket: lambdaBucket.id,
         s3Key: 'user-handler.zip',
         handler: 'index.handler',
@@ -450,7 +453,7 @@ exports.handler = async (event) => {
       this,
       'session-handler-function',
       {
-        functionName: 'prod-service-session-handler',
+        functionName: `prod-service-session-handler-${envSuffix}`,
         s3Bucket: lambdaBucket.id,
         s3Key: 'session-handler.zip',
         handler: 'index.handler',
@@ -473,7 +476,7 @@ exports.handler = async (event) => {
       this,
       'health-check-function',
       {
-        functionName: 'prod-service-health-check',
+        functionName: `prod-service-health-check-${envSuffix}`,
         s3Bucket: lambdaBucket.id,
         s3Key: 'health-check.zip',
         handler: 'index.handler',
@@ -494,7 +497,7 @@ exports.handler = async (event) => {
 
     // API Gateway REST API
     const restApi = new ApiGatewayRestApi(this, 'service-api', {
-      name: 'prod-service-api',
+      name: `prod-service-api-${envSuffix}`,
       description: 'Serverless Web Application API',
       endpointConfiguration: {
         types: ['REGIONAL'],
@@ -799,7 +802,7 @@ exports.handler = async (event) => {
       deploymentId: deployment.id,
       stageName: 'prod',
       accessLogSettings: {
-        destinationArn: `arn:aws:logs:${props?.awsRegion || 'us-east-1'}:${current.accountId}:log-group:/aws/apigateway/prod-service-api`,
+        destinationArn: `arn:aws:logs:${props?.awsRegion || 'us-east-1'}:${current.accountId}:log-group:/aws/apigateway/prod-service-api-${envSuffix}`,
         format: JSON.stringify({
           requestId: '$context.requestId',
           ip: '$context.identity.sourceIp',
