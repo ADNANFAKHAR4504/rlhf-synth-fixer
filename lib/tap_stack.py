@@ -172,9 +172,9 @@ class TapStack(pulumi.ComponentResource):
     # --------------------------------------------------------
     # Pulumi Encrypted Secret using KMS
     # --------------------------------------------------------
-    secret_value = config.require_secret("app_secret")
+    secret_value = config.get_secret("app_secret") or "default-secret-value"
 
-    encrypted_secret = secret_value.apply(
+    encrypted_secret = pulumi.Output.from_input(secret_value).apply(
       lambda val: aws.kms.get_cipher_text(
         key_id=key.key_id,
         plaintext=val
