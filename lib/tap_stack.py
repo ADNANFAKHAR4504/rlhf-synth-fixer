@@ -163,14 +163,16 @@ class TapStack(pulumi.ComponentResource):
       target_key_id=key.key_id
     )
 
+    caller_identity = aws.get_caller_identity_output()
+
     aws.kms.KeyPolicy(
       f"secure-key-policy-{env}",
       key_id=key.key_id,
-      policy=pulumi.Output.all(user.arn, aws.get_caller_identity()).apply(
-        lambda args: self.build_key_policy(user_arn=args[0], account_id=args[1].account_id)
+      policy=pulumi.Output.all(user.arn, caller_identity.account_id).apply(
+        lambda args: self.build_key_policy(user_arn=args[0], account_id=args[1])
       )
-
     )
+
 
     # --------------------------------------------------------
     # Pulumi Encrypted Secret using KMS
