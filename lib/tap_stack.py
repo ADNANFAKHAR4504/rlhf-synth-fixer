@@ -16,7 +16,7 @@ import pulumi_aws as aws
 import pulumi_random as random
 
 config = pulumi.Config()
-project_name = "prod-web-app-final"
+project_name = "dualstackapp-pulumi"
 domain_name = config.get("domain_name")
 environment = config.get("environment") or "prod"
 aws_region = config.get("aws:region") or "us-east-1"
