@@ -894,6 +894,7 @@ jobs:
           aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
 
       - name: Run integration tests against live environment
+        if: ${{ !(needs.lint.outputs.platform == 'tf' && needs.lint.outputs.language == 'hcl') }}
         run: |
           if [ "${{ needs.lint.outputs.language }}" = "py" ]; then
             echo "✅ CDK project detected, running integration tests..."
