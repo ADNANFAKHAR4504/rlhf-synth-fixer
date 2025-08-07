@@ -1,0 +1,16 @@
+{
+  "stacks": {
+    "TapStackdev": {
+      "annotations": [
+      ],
+      "constructPath": "TapStackdev",
+      "dependencies": [
+      ],
+      "name": "TapStackdev",
+      "stackMetadataPath": "stacks\\TapStackdev\\metadata.json",
+      "synthesizedStackPath": "stacks\\TapStackdev\\cdk.tf.json",
+      "workingDirectory": "stacks\\TapStackdev"
+    }
+  },
+  "version": "0.21.0"
+}
