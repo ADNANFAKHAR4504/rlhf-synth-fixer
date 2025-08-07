@@ -419,7 +419,7 @@ describe('TapStack Integration Tests', () => {
       expect(['available', 'creating', 'modifying']).toContain(dbInstance!.DBInstanceStatus!);
       expect(dbInstance!.DBInstanceClass).toBe('db.t3.small');
       expect(dbInstance!.Engine).toBe('mysql');
-      expect(dbInstance!.EngineVersion).toBe('8.0.35');
+      expect(dbInstance!.EngineVersion).toBe('8.0.42');
       expect(dbInstance!.MultiAZ).toBe(true);
       expect(dbInstance!.StorageEncrypted).toBe(true);
       expect(dbInstance!.BackupRetentionPeriod).toBe(7);

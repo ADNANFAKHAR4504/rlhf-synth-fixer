@@ -20,6 +20,7 @@ Description: 'Highly available, scalable web-application stack'
 #==============================================================================
 # PARAMETERS - Template input parameters for customization
 #==============================================================================
+
 Parameters:
   Environment:
     Type: String
@@ -30,13 +31,6 @@ Parameters:
     Type: String
     Default: ''
     Description: 'Name of an existing EC2 KeyPair to enable SSH access to instances (leave empty to disable SSH access)'
-
-  SSHAccessCidr:
-    Type: String
-    Default: '10.0.0.0/16'
-    Description: 'CIDR block for SSH access (default: VPC CIDR)'
-    AllowedPattern: '^(\d{1,3}\.){3}\d{1,3}/\d{1,2}$'
-    ConstraintDescription: 'Must be a valid CIDR notation (e.g., 10.0.0.0/16)'
 
 Conditions:
   HasKeyPair: !Not [!Equals [!Ref KeyPairName, '']]
@@ -71,7 +65,7 @@ Resources:
       VpcId: !Ref ProdVpc
       InternetGatewayId: !Ref ProdInternetGateway
 
-  # Public Subnets in two AZs - FIXED AZ selection
+  # Public Subnets in two AZs
   ProdPublicSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
@@ -98,7 +92,7 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
-  # Private Subnets in two AZs - FIXED AZ selection
+  # Private Subnets in two AZs
   ProdPrivateSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
@@ -246,7 +240,7 @@ Resources:
       SubnetId: !Ref ProdPrivateSubnet2
       RouteTableId: !Ref ProdPrivateRouteTable2
 
-  # Security Groups - FIXED SSH access with parameter
+  # Security Groups
   ProdWebSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -260,7 +254,7 @@ Resources:
         - IpProtocol: tcp
           FromPort: 22
           ToPort: 22
-          CidrIp: !Ref SSHAccessCidr
+          CidrIp: '10.0.0.0/16'
       SecurityGroupEgress:
         - IpProtocol: -1
           CidrIp: '0.0.0.0/0'
@@ -524,7 +518,7 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
-  # S3 Bucket for Static Assets - FIXED public access configuration
+  # S3 Bucket for Static Assets
   ProdS3Bucket:
     Type: AWS::S3::Bucket
     Properties:

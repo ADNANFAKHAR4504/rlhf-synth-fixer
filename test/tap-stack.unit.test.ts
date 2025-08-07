@@ -355,7 +355,7 @@ describe('TapStack CloudFormation Template', () => {
       expect(rds.Type).toBe('AWS::RDS::DBInstance');
       expect(rds.Properties.DBInstanceClass).toBe('db.t3.small');
       expect(rds.Properties.Engine).toBe('mysql');
-      expect(rds.Properties.EngineVersion).toBe('8.0.35');
+      expect(rds.Properties.EngineVersion).toBe('8.0.42');
       expect(rds.Properties.MultiAZ).toBe(true);
       expect(rds.Properties.StorageEncrypted).toBe(true);
       expect(rds.Properties.BackupRetentionPeriod).toBe(7);
