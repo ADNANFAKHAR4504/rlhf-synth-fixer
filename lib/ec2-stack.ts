@@ -1,4 +1,3 @@
-import * as aws from '@cdktf/provider-aws';
 import {
   cloudwatchLogGroup,
   dataAwsAmi,
@@ -27,10 +26,6 @@ export class Ec2Stack extends TerraformStack {
 
   constructor(scope: Construct, id: string, config: Ec2StackConfig) {
     super(scope, id);
-
-    new aws.provider.AwsProvider(this, 'aws', {
-      region: process.env.AWS_REGION || 'us-west-2',
-    });
 
     const ami = new dataAwsAmi.DataAwsAmi(this, 'AmazonLinuxAmi', {
       mostRecent: true,

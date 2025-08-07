@@ -1,3 +1,4 @@
+import * as aws from "@cdktf/provider-aws";
 import { App, Fn, TerraformStack } from 'cdktf';
 import { Construct } from 'constructs';
 import { CloudwatchStack } from './cloudwatch-stack';
@@ -5,6 +6,11 @@ import { Ec2Stack } from './ec2-stack';
 import { IamStack } from './iam-stack';
 import { S3Stack } from './s3-stack';
 import { VpcStack } from './vpc-stack';
+
+new aws.provider.AwsProvider(this, "aws", {
+  region: process.env.AWS_REGION || "us-west-2",
+});
+
 
 interface TapStackProps {
   environmentSuffix?: string;

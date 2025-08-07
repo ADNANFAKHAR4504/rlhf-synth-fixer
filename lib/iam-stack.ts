@@ -1,4 +1,3 @@
-import * as aws from '@cdktf/provider-aws';
 import {
   iamInstanceProfile,
   iamRole,
@@ -20,10 +19,6 @@ export class IamStack extends TerraformStack {
 
   constructor(scope: Construct, id: string, config: IamStackConfig) {
     super(scope, id);
-
-    new aws.provider.AwsProvider(this, 'aws', {
-      region: process.env.AWS_REGION || 'us-west-2',
-    });
 
     const ec2Role = new iamRole.IamRole(this, 'Ec2Role', {
       name: `${config.environment}-ec2-role`,

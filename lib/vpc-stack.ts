@@ -1,4 +1,3 @@
-import * as aws from '@cdktf/provider-aws';
 import {
   cloudwatchLogGroup,
   dataAwsRegion,
@@ -8,11 +7,10 @@ import {
   iamRolePolicy,
   internetGateway,
   natGateway,
-  provider,
   routeTable,
   routeTableAssociation,
   subnet,
-  vpc,
+  vpc
 } from '@cdktf/provider-aws';
 import { Fn, TerraformOutput, TerraformStack } from 'cdktf';
 import { Construct } from 'constructs';
@@ -38,14 +36,6 @@ export class VpcStack extends TerraformStack {
 
   constructor(scope: Construct, id: string, config: VpcStackConfig) {
     super(scope, id);
-
-    new aws.provider.AwsProvider(this, 'aws', {
-      region: process.env.AWS_REGION || 'us-west-2',
-    });
-
-    new provider.AwsProvider(this, 'aws', {
-      region: config.region,
-    });
 
     new dataAwsRegion.DataAwsRegion(this, 'current');
 
