@@ -36,6 +36,14 @@
                 },
                 {
                     "Label": {
+                        "default": "Environment Configuration"
+                    },
+                    "Parameters": [
+                        "EnvironmentSuffix"
+                    ]
+                },
+                {
+                    "Label": {
                         "default": "Monitoring Configuration"
                     },
                     "Parameters": [
@@ -70,6 +78,9 @@
                 },
                 "PrivateSubnet2CIDR": {
                     "default": "Private Subnet 2 CIDR"
+                },
+                "EnvironmentSuffix": {
+                    "default": "Environment Suffix"
                 },
                 "AlertEmail": {
                     "default": "Alert Email Address"
@@ -136,6 +147,13 @@
             "Type": "String",
             "Default": "10.0.4.0/24",
             "Description": "CIDR block for private subnet 2"
+        },
+        "EnvironmentSuffix": {
+            "Type": "String",
+            "Default": "dev",
+            "Description": "Environment suffix for resource naming (e.g., dev, staging, prod)",
+            "AllowedPattern": "^[a-z0-9]+$",
+            "ConstraintDescription": "Must contain only lowercase alphanumeric characters"
         },
         "AlertEmail": {
             "Type": "String",
@@ -572,7 +590,7 @@
             "Type": "AWS::S3::Bucket",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "${AWS::StackName}-app-data-${AWS::AccountId}"
+                    "Fn::Sub": "tapstack-${EnvironmentSuffix}-app-data-${AWS::AccountId}"
                 },
                 "BucketEncryption": {
                     "ServerSideEncryptionConfiguration": [
@@ -634,7 +652,7 @@
                                     ],
                                     "Resource": [
                                         {
-                                            "Fn::Sub": "${ApplicationS3Bucket}/*"
+                                            "Fn::Sub": "arn:aws:s3:::${ApplicationS3Bucket}/*"
                                         },
                                         {
                                             "Fn::GetAtt": [

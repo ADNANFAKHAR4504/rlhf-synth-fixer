@@ -23,6 +23,10 @@ Metadata:
           - PrivateSubnet1CIDR
           - PrivateSubnet2CIDR
       - Label:
+          default: "Environment Configuration"
+        Parameters:
+          - EnvironmentSuffix
+      - Label:
           default: "Monitoring Configuration"
         Parameters:
           - AlertEmail
@@ -46,6 +50,8 @@ Metadata:
         default: "Private Subnet 1 CIDR"
       PrivateSubnet2CIDR:
         default: "Private Subnet 2 CIDR"
+      EnvironmentSuffix:
+        default: "Environment Suffix"
       AlertEmail:
         default: "Alert Email Address"
 
@@ -112,6 +118,14 @@ Parameters:
     Default: 10.0.4.0/24
     Description: CIDR block for private subnet 2
   
+  # Environment Configuration
+  EnvironmentSuffix:
+    Type: String
+    Default: dev
+    Description: Environment suffix for resource naming (e.g., dev, staging, prod)
+    AllowedPattern: '^[a-z0-9]+$'
+    ConstraintDescription: Must contain only lowercase alphanumeric characters
+
   # Monitoring Configuration
   AlertEmail:
     Type: String
@@ -347,7 +361,7 @@ Resources:
   ApplicationS3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${AWS::StackName}-app-data-${AWS::AccountId}'
+      BucketName: !Sub 'tapstack-${EnvironmentSuffix}-app-data-${AWS::AccountId}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -386,7 +400,7 @@ Resources:
                   - s3:GetObject
                   - s3:ListBucket
                 Resource:
-                  - !Sub '${ApplicationS3Bucket}/*'
+                  - !Sub 'arn:aws:s3:::${ApplicationS3Bucket}/*'
                   - !GetAtt ApplicationS3Bucket.Arn
       Tags:
         - Key: Name
@@ -587,9 +601,8 @@ Resources:
       DBInstanceIdentifier: !Sub '${AWS::StackName}-database'
       DBInstanceClass: !Ref DBInstanceClass
       Engine: mysql
-      EngineVersion: '8.0.35'
+      EngineVersion: '8.0.42'
       MasterUsername: !Ref DBUsername
-      MasterUserPassword: !Sub '{{resolve:secretsmanager:${AWS::StackName}-db-password:SecretString:password}}'
       AllocatedStorage: 20
       StorageType: gp3
       StorageEncrypted: true

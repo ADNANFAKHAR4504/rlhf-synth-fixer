@@ -51,6 +51,7 @@ describe('TapStack CloudFormation Template', () => {
         'PublicSubnet2CIDR',
         'PrivateSubnet1CIDR',
         'PrivateSubnet2CIDR',
+        'EnvironmentSuffix',
         'AlertEmail'
       ];
 
@@ -74,6 +75,14 @@ describe('TapStack CloudFormation Template', () => {
       expect(param.Type).toBe('String');
       expect(param.Default).toBe('');
       expect(param.Description).toContain('leave empty to create a new one');
+    });
+
+    test('EnvironmentSuffix parameter should have correct properties', () => {
+      const param = template.Parameters.EnvironmentSuffix;
+      expect(param.Type).toBe('String');
+      expect(param.Default).toBe('dev');
+      expect(param.AllowedPattern).toBe('^[a-z0-9]+$');
+      expect(param.Description).toContain('Environment suffix');
     });
 
     test('DBPassword parameter should be removed in favor of Secrets Manager', () => {
@@ -247,6 +256,21 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Resources.EC2InstanceProfile).toBeDefined();
       expect(template.Resources.EC2InstanceProfile.Type).toBe('AWS::IAM::InstanceProfile');
     });
+
+    test('IAM role should have proper S3 ARN format in policy', () => {
+      const role = template.Resources.EC2InstanceRole;
+      const policies = role.Properties.Policies;
+      const s3Policy = policies.find((p: any) => p.PolicyName === 'S3ReadOnlyAccess');
+      expect(s3Policy).toBeDefined();
+      
+      const resources = s3Policy.PolicyDocument.Statement[0].Resource;
+      expect(resources).toContainEqual({
+        'Fn::Sub': 'arn:aws:s3:::${ApplicationS3Bucket}/*'
+      });
+      expect(resources).toContainEqual({
+        'Fn::GetAtt': ['ApplicationS3Bucket', 'Arn']
+      });
+    });
   });
 
   describe('S3 Resources', () => {
@@ -258,6 +282,16 @@ describe('TapStack CloudFormation Template', () => {
     test('S3 bucket should be encrypted', () => {
       const bucket = template.Resources.ApplicationS3Bucket;
       expect(bucket.Properties.BucketEncryption).toBeDefined();
+    });
+
+    test('S3 bucket name should use lowercase pattern', () => {
+      const bucket = template.Resources.ApplicationS3Bucket;
+      const bucketName = bucket.Properties.BucketName;
+      expect(bucketName).toBeDefined();
+      // The bucket name should use EnvironmentSuffix which is constrained to lowercase
+      expect(bucketName).toEqual({
+        'Fn::Sub': 'tapstack-${EnvironmentSuffix}-app-data-${AWS::AccountId}'
+      });
     });
   });
 
