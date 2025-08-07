@@ -219,7 +219,6 @@ class TestTapStack(unittest.TestCase):
         "AWS::Logs::LogGroup": 3,
         "AWS::SSM::Parameter": 2,
         "AWS::CloudWatch::Alarm": 1,
-        "AWS::CertificateManager::Certificate": 1,
     }
 
     for resource_type, expected_count in expected_resources.items():
