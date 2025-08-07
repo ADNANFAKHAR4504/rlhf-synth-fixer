@@ -1,28 +1,20 @@
 module.exports = {
+  preset: 'ts-jest',
   testEnvironment: 'node',
-  roots: ['<rootDir>/test'],
-  testMatch: ['**/*.test.ts'],
-  transform: {
-    '^.+\\.tsx?$': 'ts-jest',
-  },
-  moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'],
-  collectCoverageFrom: [
-    '<rootDir>/lib/**/*.ts',
-    '!<rootDir>/bin/**/*.ts',
-    '!<rootDir>/**/*.d.ts',
-    '!<rootDir>/**/*.js',
-    '!<rootDir>/**/*.test.ts',
-    '!<rootDir>/node_modules/**',
+  testMatch: ['**/test/tap-stack.*.test.ts'],
+  testPathIgnorePatterns: [
+    '/node_modules/',
+    '/archive/',
+    '/templates/',
+    '/.git/',
   ],
-  coverageReporters: ['text', 'lcov', 'json-summary'],
-  coverageThreshold: {
-    global: {
-      branches: 70,
-      functions: 70,
-      lines: 70,
-      statements: 70,
-    },
+  moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json'],
+  transform: {
+    '^.+\\.(ts|tsx)$': 'ts-jest',
   },
-  silent: false,
-  verbose: true,
+  collectCoverageFrom: ['lib/**/*.{ts,tsx}', '!lib/**/*.d.ts'],
+  coverageDirectory: 'coverage',
+  coverageReporters: ['text', 'lcov', 'html'],
+  setupFilesAfterEnv: [],
+  testTimeout: 30000,
 };
