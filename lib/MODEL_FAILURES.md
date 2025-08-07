@@ -1,3 +1,0 @@
-Incorrectly tries to use the Output<string> from dynamoTable.name directly in the Lambda's environment variables, which is a plain string map. This would cause a type error at runtime because an Output is not a string.
-
-Attempts to construct the DynamoDB table ARN manually for the IAM policy. It fails to account for the fact that the table name is a Pulumi Output and also gets the ARN format slightly wrong, leading to a policy that would be invalid or would not grant the intended permissions.
