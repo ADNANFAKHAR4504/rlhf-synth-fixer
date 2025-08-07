@@ -2,9 +2,15 @@
 Main infrastructure stack implementation for the TAP (Test Automation Platform).
 
 This module implements a comprehensive, security-first infrastructure framework
-that complies with enterprise-grade security requirements including multi-region
-redundancy, TLS enforcement, IAM least-privilege, comprehensive logging, and
-automated compliance checks.
+that complies with enterprise-grade security requirements, including:
+
+• Multi-region redundancy
+• TLS 1.2+ enforcement
+• IAM least-privilege
+• Comprehensive logging & monitoring
+• Automated secrets management
+• IPv4 networking (IPv6 can be added later)
+• Automated compliance checks (AWS Config)
 """
 
 import json
@@ -16,25 +22,13 @@ from pulumi import ComponentResource, ResourceOptions
 
 
 class TapStackArgs:
-    """Arguments for the TapStack component."""
+    """Constructor-time arguments."""
     def __init__(self, environment_suffix: str):
         self.environment_suffix = environment_suffix
 
 
 class TapStack(ComponentResource):
-    """
-    Main infrastructure stack implementing security-first cloud architecture.
-
-    Features
-    --------
-    • Multi-region redundancy  
-    • TLS 1.2+ enforcement  
-    • IAM least-privilege  
-    • Comprehensive logging & monitoring  
-    • Automated secrets management  
-    • IPv4 networking (IPv6 can be added later)  
-    • Automated compliance checks (AWS Config)
-    """
+    """Security-first, multi-region AWS infrastructure stack."""
 
     def __init__(self, name: str, args: TapStackArgs,
                  opts: Optional[ResourceOptions] = None) -> None:
@@ -44,7 +38,7 @@ class TapStack(ComponentResource):
         self.regions = ["us-east-1", "us-west-2", "ap-south-1"]
         self.primary_region = "us-east-1"
 
-        # Standard tags applied to every resource
+        # Tags attached to every resource
         self.standard_tags = {
             "Environment": self.environment_suffix,
             "Owner": "DevOps-Team",
@@ -53,20 +47,19 @@ class TapStack(ComponentResource):
             "ManagedBy": "Pulumi",
         }
 
-        # Build the stack
+        # Build all resources
         self._create_kms_keys()
         self._create_secrets_manager()
         self._create_iam_roles()
         self._create_cloudtrail()
-        self._create_vpc_infrastructure()   # IPv4-only
+        self._create_vpc_infrastructure()
         self._create_s3_buckets()
         self._create_rds_instances()
         self._create_lambda_functions()
         self._create_ec2_instances()
         self._create_monitoring()
-        self._create_compliance_checks()    # uses aws.cfg.Recorder
+        self._create_compliance_checks()
 
-        # Stack outputs
         self.register_outputs(
             {
                 "primary_vpc_id": self.primary_vpc.id,
@@ -79,7 +72,6 @@ class TapStack(ComponentResource):
     #  KMS
     # ------------------------------------------------------------------ #
     def _create_kms_keys(self) -> None:
-        """Create one KMS CMK per region (with alias)."""
         self.kms_keys = {}
 
         for region in self.regions:
@@ -127,7 +119,6 @@ class TapStack(ComponentResource):
     #  Secrets Manager
     # ------------------------------------------------------------------ #
     def _create_secrets_manager(self) -> None:
-        """Primary secret plus regional replicas."""
         self.secrets_manager = aws.secretsmanager.Secret(
             f"PROD-secrets-{self.environment_suffix}",
             description="Primary TAP secrets",
@@ -184,7 +175,6 @@ class TapStack(ComponentResource):
     #  IAM
     # ------------------------------------------------------------------ #
     def _create_iam_roles(self) -> None:
-        """EC2 & Lambda roles, plus an EC2 instance profile."""
         self.ec2_role = aws.iam.Role(
             f"PROD-ec2-role-{self.environment_suffix}",
             assume_role_policy=json.dumps(
@@ -245,7 +235,6 @@ class TapStack(ComponentResource):
     #  CloudTrail
     # ------------------------------------------------------------------ #
     def _create_cloudtrail(self) -> None:
-        """Organization-wide CloudTrail (multi-region)."""
         self.cloudtrail_bucket = aws.s3.Bucket(
             f"prod-cloudtrail-{self.environment_suffix}-{aws.get_caller_identity().account_id}",
             versioning=aws.s3.BucketVersioningArgs(enabled=True),
@@ -304,7 +293,7 @@ class TapStack(ComponentResource):
         )
 
     # ------------------------------------------------------------------ #
-    #  VPC  (IPv4-only – simpler & error-free)
+    #  VPC  (IPv4-only)
     # ------------------------------------------------------------------ #
     def _create_vpc_infrastructure(self) -> None:
         self.vpcs, self.subnets = {}, {}
@@ -335,7 +324,7 @@ class TapStack(ComponentResource):
                 state="available", opts=pulumi.InvokeOptions(provider=provider)
             )
 
-            for i, az in enumerate(azs.names[:2]):  # first 2 AZs
+            for i, az in enumerate(azs.names[:2]):
                 public_subnet = aws.ec2.Subnet(
                     f"PROD-public-subnet-{region}-{i+1}-{self.environment_suffix}",
                     vpc_id=vpc.id,
@@ -438,7 +427,7 @@ class TapStack(ComponentResource):
         self.primary_vpc = self.vpcs[self.primary_region]
 
     # ------------------------------------------------------------------ #
-    #  S3 Buckets
+    #  S3
     # ------------------------------------------------------------------ #
     def _create_s3_buckets(self) -> None:
         self.s3_buckets = {}
@@ -486,12 +475,15 @@ class TapStack(ComponentResource):
                 f"rds-provider-{region}", region=region, opts=ResourceOptions(parent=self)
             )
 
+            # ----- FIX: subnet group 'name' must be lowercase -------------
             subnet_group = aws.rds.SubnetGroup(
                 f"PROD-rds-subnet-group-{region}-{self.environment_suffix}",
+                name=f"prod-rds-subnet-{region}-{self.environment_suffix}".lower(),
                 subnet_ids=[s.id for s in self.subnets[region]["private"]],
                 tags=self.standard_tags,
                 opts=ResourceOptions(parent=self, provider=provider),
             )
+            # --------------------------------------------------------------
 
             rds_sg = aws.ec2.SecurityGroup(
                 f"PROD-rds-sg-{region}-{self.environment_suffix}",
@@ -659,7 +651,7 @@ echo 'MinProtocol = TLSv1.2' >> /etc/ssl/openssl.cnf
             self.ec2_instances[region] = instance
 
     # ------------------------------------------------------------------ #
-    #  CloudWatch Logs & Alarms
+    #  CloudWatch
     # ------------------------------------------------------------------ #
     def _create_monitoring(self) -> None:
         self.log_groups = {}
@@ -696,7 +688,7 @@ echo 'MinProtocol = TLSv1.2' >> /etc/ssl/openssl.cnf
             self.log_groups[region] = lg
 
     # ------------------------------------------------------------------ #
-    #  AWS Config  (FIXED – uses aws.cfg.Recorder)
+    #  AWS Config
     # ------------------------------------------------------------------ #
     def _create_compliance_checks(self) -> None:
         for region in self.regions:
