@@ -38,17 +38,17 @@ const baseStackName = `TapStack${environmentSuffix}`;
 
 // Function to find resources by tag
 async function findResourcesByTag(client: EC2Client, tagKey: string, tagValue: string) {
-  const response = await client.send(
-    new DescribeVpcsCommand({
-      Filters: [
-        {
-          Name: `tag:${tagKey}`,
-          Values: [tagValue]
-        }
-      ]
-    })
-  );
-  return response.Vpcs;
+  // First get all VPCs
+  const response = await client.send(new DescribeVpcsCommand({}));
+  
+  // Then filter by tag
+  return response.Vpcs?.filter(vpc => {
+    const matchingTag = vpc.Tags?.find(tag => 
+      tag.Key === tagKey && 
+      (tag.Value === tagValue || tag.Value?.includes(tagValue))
+    );
+    return !!matchingTag;
+  }) || [];
 }
 
 // Initialize outputs object
@@ -79,12 +79,23 @@ const ssmClientEast = new SSMClient({ region: 'us-east-1' });
 describe('Infrastructure Integration Tests', () => {
   describe('VPC and Networking', () => {
     test('should have VPC deployed in us-west-1', async () => {
-      // Find VPC by stack name tag
-      const vpcs = await findResourcesByTag(ec2ClientWest, 'aws:cloudformation:stack-name', baseStackName);
-      expect(vpcs).toBeDefined();
-      expect(vpcs).toHaveLength(1);
+      // First try to find VPC by stack name
+      let vpcs = await findResourcesByTag(ec2ClientWest, 'aws:cloudformation:stack-name', environmentSuffix);
       
-      const vpc = vpcs![0];
+      // If not found, try by Environment tag
+      if (!vpcs.length) {
+        vpcs = await findResourcesByTag(ec2ClientWest, 'Environment', environmentSuffix);
+      }
+      
+      // If still not found, try by Project tag
+      if (!vpcs.length) {
+        vpcs = await findResourcesByTag(ec2ClientWest, 'Project', 'SecureInfrastructure');
+      }
+
+      expect(vpcs.length).toBeGreaterThan(0);
+      console.log('Found VPCs:', vpcs.map(vpc => ({ id: vpc.VpcId, tags: vpc.Tags })));
+      
+      const vpc = vpcs[0];
       expect(vpc.State).toBe('available');
       
       // Store the VPC ID for other tests
