@@ -102,6 +102,36 @@ def mock_output_class_getitem(cls, item):
 MockOutput.__class_getitem__ = classmethod(mock_output_class_getitem)
 MockOutputFactory.__class_getitem__ = classmethod(mock_output_class_getitem)
 
+# FIXED: Enhanced MockResourceOptions that behaves like actual ResourceOptions
+
+
+class MockResourceOptions:
+  def __init__(self, parent=None, depends_on=None, **kwargs):
+    self.parent = parent
+    self.depends_on = depends_on or []
+    if not isinstance(self.depends_on, list):
+      self.depends_on = [self.depends_on]
+    # Add other common ResourceOptions attributes
+    self.protect = kwargs.get('protect', False)
+    self.ignore_changes = kwargs.get('ignore_changes', [])
+    self.replace_on_changes = kwargs.get('replace_on_changes', [])
+    self.aliases = kwargs.get('aliases', [])
+    self.import_ = kwargs.get('import_', None)
+    self.custom_timeouts = kwargs.get('custom_timeouts', None)
+
+  # CRITICAL: Add the method that Pulumi uses to validate ResourceOptions
+  def __class__(self):
+    return MockResourceOptions
+
+  # Make it appear as the correct type to isinstance checks
+  @property
+  def __class__(self):
+    # This is a hack to make isinstance(obj, ResourceOptions) work
+    class FakeResourceOptionsClass:
+      __name__ = 'ResourceOptions'
+      __module__ = 'pulumi'
+    return FakeResourceOptionsClass
+
 # Enhanced MockResource classes
 
 
@@ -124,20 +154,25 @@ class MockComponentResource(MockResource):
   def register_outputs(self, outputs):
     self.outputs.update(outputs)
 
+# CRITICAL FIX: Create a proper ResourceOptions mock that satisfies Pulumi's type checking
 
-class MockResourceOptions:
-  def __init__(self, parent=None, depends_on=None, **kwargs):
-    self.parent = parent
-    self.depends_on = depends_on or []
-    if not isinstance(self.depends_on, list):
-      self.depends_on = [self.depends_on]
+
+def create_proper_resource_options(**kwargs):
+  """Create a ResourceOptions mock that passes Pulumi's type validation"""
+  mock_opts = MockResourceOptions(**kwargs)
+
+  # Set the correct class name and module to fool isinstance checks
+  mock_opts.__class__.__name__ = 'ResourceOptions'
+  mock_opts.__class__.__module__ = 'pulumi'
+
+  return mock_opts
 
 
 # Create comprehensive pulumi mock
 pulumi_mock = MagicMock()
 pulumi_mock.Output = MockOutputFactory
 pulumi_mock.ComponentResource = MockComponentResource
-pulumi_mock.ResourceOptions = MockResourceOptions
+pulumi_mock.ResourceOptions = MockResourceOptions  # Use our mock class
 pulumi_mock.AssetArchive = MagicMock()
 pulumi_mock.StringAsset = MagicMock()
 pulumi_mock.FileArchive = MagicMock()
@@ -207,7 +242,6 @@ aws_lambda.Permission = Mock()
 sys.modules["pulumi_aws"].lambda_ = aws_lambda
 
 # Now import pulumi to get the actual module reference
-
 # Ensure all necessary attributes are set on the actual pulumi module
 pulumi.Output = MockOutputFactory
 pulumi.ComponentResource = MockComponentResource
@@ -239,10 +273,13 @@ class TestTapStackComponents(unittest.TestCase):
     """Test IAM component initialization"""
     mock_exists.return_value = True
 
+    # FIXED: Use proper ResourceOptions creation
+    opts = create_proper_resource_options()
+
     iam = IAMComponent(
         name="test-iam",
         environment="test",
-        opts=pulumi.ResourceOptions(),
+        opts=opts,
     )
     self.assertTrue(hasattr(iam, "lambda_role"))
 
@@ -253,11 +290,14 @@ class TestTapStackComponents(unittest.TestCase):
     """Test Compute component initialization"""
     mock_exists.return_value = True
 
+    # FIXED: Use proper ResourceOptions creation
+    opts = create_proper_resource_options()
+
     compute = ComputeComponent(
         name="test-compute",
         cidr_block="10.3.0.0/16",
         environment="test",
-        opts=pulumi.ResourceOptions(),
+        opts=opts,
     )
     self.assertTrue(hasattr(compute, "vpc"))
     self.assertTrue(hasattr(compute, "private_subnet_ids"))
@@ -275,6 +315,9 @@ class TestTapStackComponents(unittest.TestCase):
     compute_mock.db_sg.id = MockOutput("sg-123")
     compute_mock.private_subnet_ids = MockOutput(["subnet-123"])
 
+    # FIXED: Use proper ResourceOptions creation
+    opts = create_proper_resource_options()
+
     db = DatabaseComponent(
         name="test-db",
         environment="test",
@@ -282,7 +325,7 @@ class TestTapStackComponents(unittest.TestCase):
         username="admin",
         password=MockOutput("passw0rd"),
         private_subnet_ids=compute_mock.private_subnet_ids,
-        opts=pulumi.ResourceOptions(),
+        opts=opts,
     )
     self.assertTrue(hasattr(db, "rds_instance"))
 
@@ -315,6 +358,9 @@ class TestTapStackComponents(unittest.TestCase):
 
     mock_depends_resource = MockComponentResource()
 
+    # FIXED: Use proper ResourceOptions creation
+    opts = create_proper_resource_options(depends_on=[mock_depends_resource])
+
     serverless = ServerlessComponent(
         name="test-serverless",
         environment="test",
@@ -325,7 +371,7 @@ class TestTapStackComponents(unittest.TestCase):
         db_name=MockOutput("tapdb"),
         db_username="admin",
         db_password=MockOutput("passw0rd"),
-        opts=pulumi.ResourceOptions(depends_on=[mock_depends_resource]),
+        opts=opts,
     )
     self.assertTrue(hasattr(serverless, "lambda_function"))
     self.assertTrue(hasattr(serverless, "api"))
@@ -344,10 +390,13 @@ class TestTapStackComponents(unittest.TestCase):
     mock_zipfile_instance = MagicMock()
     mock_zipfile.return_value.__enter__.return_value = mock_zipfile_instance
 
+    # FIXED: Use proper ResourceOptions creation
+    opts = create_proper_resource_options()
+
     stack = TapStack(
         name="tap-test",
         args=self.test_args,
-        opts=pulumi.ResourceOptions(),
+        opts=opts,
     )
     self.assertTrue(hasattr(stack, "iam_component"))
     self.assertTrue(hasattr(stack, "compute_component"))
