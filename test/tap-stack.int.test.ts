@@ -88,4 +88,69 @@ describe('TapStack Integration Tests', () => {
       '${aws_s3_bucket.s3-bucket.arn}/*',
     ]);
   });
+
+  test('S3 bucket is configured with KMS server-side encryption', () => {
+    // Objective: Verify that the S3 bucket has the server-side encryption configuration and references the KMS key.
+    const s3BucketResource = synthesized.resource.aws_s3_bucket['s3-bucket'];
+    expect(s3BucketResource).toBeDefined();
+    expect(s3BucketResource.server_side_encryption_configuration).toBeDefined();
+    // Fixed: The assertion was updated to match the corrected JSON structure.
+    const encryptionConfig =
+      s3BucketResource.server_side_encryption_configuration;
+    expect(
+      encryptionConfig.rule.apply_server_side_encryption_by_default
+        .kms_master_key_id
+    ).toBe('${aws_kms_key.s3-kms-key.arn}');
+    expect(
+      encryptionConfig.rule.apply_server_side_encryption_by_default
+        .sse_algorithm
+    ).toBe('aws:kms');
+  });
+
+  test('CloudWatch alarm for ASG CPU utilization is created', () => {
+    // Objective: Verify that the CloudWatch alarm for ASG CPU utilization is created with the correct properties.
+    const asgCpuAlarmResource =
+      synthesized.resource.aws_cloudwatch_metric_alarm['asg-cpu-alarm'];
+    expect(asgCpuAlarmResource).toBeDefined();
+    expect(asgCpuAlarmResource.metric_name).toBe('CPUUtilization');
+    expect(asgCpuAlarmResource.namespace).toBe('AWS/EC2');
+    expect(asgCpuAlarmResource.threshold).toBe(80);
+    expect(asgCpuAlarmResource.dimensions.AutoScalingGroupName).toBe(
+      '${aws_autoscaling_group.web-asg.name}'
+    );
+  });
+
+  test('CloudWatch alarms for NAT Gateway port allocation errors are created', () => {
+    // Objective: Verify that a CloudWatch alarm is created for each NAT Gateway to monitor port allocation errors.
+    const natGatewayAlarmResources = Object.values(
+      synthesized.resource.aws_cloudwatch_metric_alarm
+    ).filter((resource: any) =>
+      resource.alarm_name.includes('nat-gateway-error-alarm')
+    );
+    const natGatewayResources = Object.values(
+      synthesized.resource.aws_nat_gateway
+    );
+
+    expect(natGatewayAlarmResources.length).toBe(natGatewayResources.length);
+    natGatewayAlarmResources.forEach((alarm: any) => {
+      expect(alarm.metric_name).toBe('ErrorPortAllocation');
+      expect(alarm.namespace).toBe('AWS/NATGateway');
+      expect(alarm.threshold).toBe(1);
+    });
+  });
+
+  test('CloudWatch dashboard is created with the correct widgets', () => {
+    // Objective: Verify that a CloudWatch dashboard is created and contains the expected widgets.
+    const dashboardResource =
+      synthesized.resource.aws_cloudwatch_dashboard['dashboard'];
+    expect(dashboardResource).toBeDefined();
+    const dashboardBody = JSON.parse(dashboardResource.dashboard_body);
+    expect(dashboardBody.widgets.length).toBe(3); // 1 for CPU + 2 for NAT Gateways
+    expect(dashboardBody.widgets[0].properties.title).toBe(
+      'ASG CPU Utilization'
+    );
+    expect(dashboardBody.widgets[1].properties.title).toContain(
+      'NAT Gateway 0 Port Allocation Errors'
+    );
+  });
 });

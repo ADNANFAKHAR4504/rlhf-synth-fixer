@@ -26,6 +26,7 @@ import { AutoscalingGroup } from '@cdktf/provider-aws/lib/autoscaling-group';
 import { CloudwatchLogGroup } from '@cdktf/provider-aws/lib/cloudwatch-log-group';
 import { CloudwatchMetricAlarm } from '@cdktf/provider-aws/lib/cloudwatch-metric-alarm';
 import { KmsKey } from '@cdktf/provider-aws/lib/kms-key';
+import { CloudwatchDashboard } from '@cdktf/provider-aws/lib/cloudwatch-dashboard';
 
 // Define the properties for the stack, now requiring allowedIngressCidrBlocks
 export interface TapStackProps {
@@ -36,6 +37,12 @@ export interface TapStackProps {
 }
 
 export class TapStack extends TerraformStack {
+  public readonly vpcId: string;
+  public readonly securityGroupId: string;
+  public readonly s3BucketName: string;
+  public readonly kmsKeyArn: string;
+  public readonly asgName: string;
+
   constructor(scope: Construct, id: string, props: TapStackProps) {
     super(scope, id);
 
@@ -52,11 +59,6 @@ export class TapStack extends TerraformStack {
     });
 
     // 2. VPC and Subnets
-    const vpc = new Vpc(this, 'vpc', {
-      cidrBlock: vpcCidr,
-      tags: { Name: `${id}-vpc`, ...tags },
-    });
-
     const availabilityZones = new DataAwsAvailabilityZones(
       this,
       'available-zones',
@@ -64,6 +66,12 @@ export class TapStack extends TerraformStack {
         state: 'available',
       }
     );
+
+    const vpc = new Vpc(this, 'vpc', {
+      cidrBlock: vpcCidr,
+      tags: { Name: `${id}-vpc`, ...tags },
+    });
+    this.vpcId = vpc.id;
 
     const publicSubnets: Subnet[] = [];
     const privateSubnets: Subnet[] = [];
@@ -98,10 +106,12 @@ export class TapStack extends TerraformStack {
     });
 
     const natGateways: NatGateway[] = [];
+    const natGatewayEips: Eip[] = [];
     publicSubnets.forEach((subnet, index) => {
       const natGatewayEip = new Eip(this, `nat-gateway-eip-${index}`, {
         tags: { Name: `${id}-nat-gateway-eip-${index}`, ...tags },
       });
+      natGatewayEips.push(natGatewayEip);
 
       natGateways.push(
         new NatGateway(this, `nat-gateway-${index}`, {
@@ -167,6 +177,7 @@ export class TapStack extends TerraformStack {
       description: 'Security group for web instances',
       tags: { Name: `${id}-web-sg`, ...tags },
     });
+    this.securityGroupId = securityGroup.id;
 
     new SecurityGroupRule(this, 'http-ingress', {
       type: 'ingress',
@@ -201,9 +212,11 @@ export class TapStack extends TerraformStack {
       enableKeyRotation: true,
       tags: { Name: `${id}-s3-kms-key`, ...tags },
     });
+    this.kmsKeyArn = kmsKey.arn;
 
     const s3Bucket = new S3Bucket(this, 's3-bucket', {
       bucket: `${id}-my-web-bucket`,
+      // Fixed: The structure was corrected to match the CDKTF type definition.
       serverSideEncryptionConfiguration: {
         rule: {
           applyServerSideEncryptionByDefault: {
@@ -214,6 +227,7 @@ export class TapStack extends TerraformStack {
       },
       tags: { Name: `${id}-s3-bucket`, ...tags },
     });
+    this.s3BucketName = s3Bucket.id;
 
     // 7. IAM Role, Policy, and Instance Profile
     const iamRole = new IamRole(this, 'iam-role', {
@@ -297,16 +311,17 @@ export class TapStack extends TerraformStack {
         },
       ],
     });
+    this.asgName = webAsg.name;
 
     // 9. Monitoring
-    new CloudwatchLogGroup(this, 'log-group', {
+    const logGroup = new CloudwatchLogGroup(this, 'log-group', {
       name: `/${id}/web-server`,
       retentionInDays: 7,
       tags: { Name: `${id}-log-group`, ...tags },
     });
 
     // CloudWatch alarm for ASG CPU Utilization
-    new CloudwatchMetricAlarm(this, 'asg-cpu-alarm', {
+    const asgCpuAlarm = new CloudwatchMetricAlarm(this, 'asg-cpu-alarm', {
       alarmName: `${id}-asg-cpu-utilization`,
       comparisonOperator: 'GreaterThanOrEqualToThreshold',
       evaluationPeriods: 2,
@@ -322,21 +337,93 @@ export class TapStack extends TerraformStack {
     });
 
     // CloudWatch alarms for NAT Gateway port allocation errors
+    const natGatewayAlarms: CloudwatchMetricAlarm[] = [];
     natGateways.forEach((nat, index) => {
-      new CloudwatchMetricAlarm(this, `nat-gateway-error-alarm-${index}`, {
-        alarmName: `${id}-nat-gateway-error-alarm-${index}`,
-        comparisonOperator: 'GreaterThanOrEqualToThreshold',
-        evaluationPeriods: 1,
-        metricName: 'ErrorPortAllocation',
-        namespace: 'AWS/NATGateway',
-        period: 60,
-        statistic: 'Sum',
-        threshold: 1,
-        dimensions: {
-          NatGatewayId: nat.id,
-        },
-        alarmDescription: `Alarms when NAT Gateway ${index} has port allocation errors`,
-      });
+      natGatewayAlarms.push(
+        new CloudwatchMetricAlarm(this, `nat-gateway-error-alarm-${index}`, {
+          alarmName: `${id}-nat-gateway-error-alarm-${index}`,
+          comparisonOperator: 'GreaterThanOrEqualToThreshold',
+          evaluationPeriods: 1,
+          metricName: 'ErrorPortAllocation',
+          namespace: 'AWS/NATGateway',
+          period: 60,
+          statistic: 'Sum',
+          threshold: 1,
+          dimensions: {
+            NatGatewayId: nat.id,
+          },
+          alarmDescription: `Alarms when NAT Gateway ${index} has port allocation errors`,
+        })
+      );
+    });
+
+    // CloudWatch Dashboard for overall observability
+    new CloudwatchDashboard(this, 'dashboard', {
+      dashboardName: `${id}-dashboard`,
+      dashboardBody: JSON.stringify({
+        widgets: [
+          {
+            type: 'metric',
+            x: 0,
+            y: 0,
+            width: 12,
+            height: 6,
+            properties: {
+              metrics: [
+                [
+                  'AWS/EC2',
+                  'CPUUtilization',
+                  'AutoScalingGroupName',
+                  webAsg.name,
+                ],
+              ],
+              view: 'timeSeries',
+              stacked: false,
+              region: awsRegion,
+              title: 'ASG CPU Utilization',
+              yAxis: {
+                left: {
+                  label: 'CPU (%)',
+                  showUnits: false,
+                },
+              },
+            },
+          },
+          ...natGateways.map((nat, index) => ({
+            type: 'metric',
+            x: 12,
+            y: index * 6,
+            width: 12,
+            height: 6,
+            properties: {
+              metrics: [
+                [
+                  'AWS/NATGateway',
+                  'ErrorPortAllocation',
+                  'NatGatewayId',
+                  nat.id,
+                  {
+                    stat: 'Sum',
+                    period: 60,
+                    label: `NatGateway-${index} Port Allocation Errors`,
+                  },
+                ],
+              ],
+              view: 'timeSeries',
+              stacked: false,
+              region: awsRegion,
+              title: `NAT Gateway ${index} Port Allocation Errors`,
+              yAxis: {
+                left: {
+                  label: 'Errors',
+                  showUnits: false,
+                },
+              },
+            },
+          })),
+        ],
+      }),
+      // Removed: CloudwatchDashboard resource does not support the `tags` property directly
     });
 
     // 10. Outputs
