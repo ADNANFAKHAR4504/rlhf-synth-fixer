@@ -1,42 +1,49 @@
 // Configuration - These are coming from cfn-outputs after cdk deploy
-import fs from 'fs';
 import {
-  EC2Client,
+  APIGatewayClient
+} from '@aws-sdk/client-api-gateway';
+import {
   DescribeInstancesCommand,
   DescribeSecurityGroupsCommand,
   DescribeVpcsCommand,
+  EC2Client,
 } from '@aws-sdk/client-ec2';
 import {
-  RDSClient,
-  DescribeDBInstancesCommand,
-} from '@aws-sdk/client-rds';
-import {
-  S3Client,
-  GetBucketVersioningCommand,
-  GetBucketEncryptionCommand,
-  GetBucketLoggingCommand,
-} from '@aws-sdk/client-s3';
-import {
-  APIGatewayClient,
-  GetRestApisCommand,
-} from '@aws-sdk/client-api-gateway';
-import {
-  WAFV2Client,
-  GetWebACLCommand,
-} from '@aws-sdk/client-wafv2';
-import {
-  KMSClient,
-  DescribeKeyCommand,
+  KMSClient
 } from '@aws-sdk/client-kms';
 import {
-  SSMClient,
+  DescribeDBInstancesCommand,
+  RDSClient,
+} from '@aws-sdk/client-rds';
+import {
+  GetBucketEncryptionCommand,
+  GetBucketLoggingCommand,
+  GetBucketVersioningCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
+import {
   GetParameterCommand,
+  SSMClient,
 } from '@aws-sdk/client-ssm';
+import {
+  WAFV2Client
+} from '@aws-sdk/client-wafv2';
 import axios from 'axios';
+import fs from 'fs';
 
-const outputs = JSON.parse(
+const rawOutputs = JSON.parse(
   fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
 );
+
+// Map the outputs to match our test expectations
+const outputs = {};
+Object.entries(rawOutputs).forEach(([key, value]) => {
+  // Remove the stack name prefix and keep just the output key
+  const cleanKey = key.replace(/^TapStack-(Primary|Secondary)-[^-]+-/, '');
+  // Add Primary/Secondary suffix based on the stack name
+  const suffix = key.includes('-Primary-') ? 'Primary' : 'Secondary';
+  outputs[`${cleanKey}${suffix}`] = value;
+});
 
 // Get environment suffix from environment variable (set by CI/CD pipeline)
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';

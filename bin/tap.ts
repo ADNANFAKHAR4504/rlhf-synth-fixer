@@ -18,8 +18,8 @@ Tags.of(app).add('Repository', repositoryName);
 Tags.of(app).add('Author', commitAuthor);
 
 // Deploy to primary region (us-west-1)
-new TapStack(app, `TapStack${environmentSuffix}`, {
-  stackName: `TapStack${environmentSuffix}`,
+new TapStack(app, `TapStack-Primary-${environmentSuffix}`, {
+  stackName: `TapStack-Primary-${environmentSuffix}`,
   environmentSuffix: environmentSuffix,
   isPrimaryRegion: true,
   env: {
@@ -29,8 +29,8 @@ new TapStack(app, `TapStack${environmentSuffix}`, {
 });
 
 // Deploy to secondary region (us-east-1)
-new TapStack(app, `TapStack${environmentSuffix}-Secondary`, {
-  stackName: `TapStack${environmentSuffix}-Secondary`,
+new TapStack(app, `TapStack-Secondary-${environmentSuffix}`, {
+  stackName: `TapStack-Secondary-${environmentSuffix}`,
   environmentSuffix: environmentSuffix,
   isPrimaryRegion: false,
   env: {
