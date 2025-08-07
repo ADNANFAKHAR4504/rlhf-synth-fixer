@@ -14,6 +14,7 @@ class TapStackArgs:
     self.tags = tags
 
 
+
 class TapStack(pulumi.ComponentResource):
   def __init__(
       self,
