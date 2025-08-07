@@ -24,7 +24,7 @@ import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
 import { SecurityGroupRule } from '@cdktf/provider-aws/lib/security-group-rule';
 import { Subnet } from '@cdktf/provider-aws/lib/subnet';
 import { Vpc } from '@cdktf/provider-aws/lib/vpc';
-import { App, Fn, TerraformOutput, TerraformStack } from 'cdktf';
+import { Fn, TerraformOutput, TerraformStack } from 'cdktf';
 import { Construct } from 'constructs';
 
 /**
@@ -346,8 +346,3 @@ export class TapStack extends TerraformStack {
     });
   }
 }
-
-// Create a single instance of the stack.
-const app = new App();
-new TapStack(app, 'tap-stack-dev');
-app.synth();
