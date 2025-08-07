@@ -322,10 +322,10 @@ EOF
 
 
 def create_load_balancer(
-  subnets: List[aws.ec2.Subnet],
-  security_group: aws.ec2.SecurityGroup,
-  instances: List[aws.ec2.Instance],
-  vpc_id: pulumi.Output[str]
+    subnets: List[aws.ec2.Subnet],
+    security_group: aws.ec2.SecurityGroup,
+    instances: List[aws.ec2.Instance],
+    vpc_id: pulumi.Output[str]
 ) -> Dict[str, Any]:
   alb = aws.lb.LoadBalancer(
     f"{project_name}-alb",
@@ -347,10 +347,12 @@ def create_load_balancer(
     vpc_id=vpc_id,
     target_type="ip",
     ip_address_type="ipv4",
+    protocol_version="HTTP1",
+    health_check_grace_period_seconds=180,
     health_check=aws.lb.TargetGroupHealthCheckArgs(
       enabled=True,
       healthy_threshold=2,
-      unhealthy_threshold=5,
+      unhealthy_threshold=3,
       timeout=15,
       interval=30,
       path="/",
