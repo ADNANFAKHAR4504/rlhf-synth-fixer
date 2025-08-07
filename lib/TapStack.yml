@@ -1,11 +1,27 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'Serverless RESTful API for CRUD operations with DynamoDB'
+Description: 'Comprehensive serverless RESTful API for CRUD operations with DynamoDB, VPC, and API Gateway'
 
 Parameters:
-  Environment:
+  EnvironmentSuffix:
     Type: String
     Default: dev
-    Description: Environment name for resource naming
+    Description: Environment suffix for resource naming and tagging
+    AllowedValues:
+      - dev
+      - staging
+      - prod
+
+Mappings:
+  EnvironmentConfig:
+    dev:
+      LambdaMemorySize: 256
+      LambdaTimeout: 30
+    staging:
+      LambdaMemorySize: 256
+      LambdaTimeout: 30
+    prod:
+      LambdaMemorySize: 512
+      LambdaTimeout: 30
 
 Resources:
   # VPC Configuration
@@ -17,7 +33,11 @@ Resources:
       EnableDnsSupport: true
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-vpc'
+          Value: !Sub '${EnvironmentSuffix}-serverless-api-vpc'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: 'ServerlessAPI'
 
   # Internet Gateway
   MyInternetGateway:
@@ -25,7 +45,11 @@ Resources:
     Properties:
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-igw'
+          Value: !Sub '${EnvironmentSuffix}-serverless-api-igw'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: 'ServerlessAPI'
 
   AttachGateway:
     Type: AWS::EC2::VPCGatewayAttachment
@@ -43,7 +67,13 @@ Resources:
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-public-subnet'
+          Value: !Sub '${EnvironmentSuffix}-public-subnet-1a'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: 'ServerlessAPI'
+        - Key: Type
+          Value: 'Public'
 
   # Private Subnet
   PrivateSubnet:
@@ -54,7 +84,13 @@ Resources:
       AvailabilityZone: !Select [1, !GetAZs '']
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-private-subnet'
+          Value: !Sub '${EnvironmentSuffix}-private-subnet-1b'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: 'ServerlessAPI'
+        - Key: Type
+          Value: 'Private'
 
   # NAT Gateway for private subnet internet access
   NATGatewayEIP:
@@ -62,6 +98,13 @@ Resources:
     DependsOn: AttachGateway
     Properties:
       Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentSuffix}-nat-gateway-eip'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: 'ServerlessAPI'
 
   NATGateway:
     Type: AWS::EC2::NatGateway
@@ -70,7 +113,11 @@ Resources:
       SubnetId: !Ref PublicSubnet
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-nat-gateway'
+          Value: !Sub '${EnvironmentSuffix}-nat-gateway'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: 'ServerlessAPI'
 
   # Route Tables
   PublicRouteTable:
@@ -79,7 +126,11 @@ Resources:
       VpcId: !Ref MyVPC
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-public-rt'
+          Value: !Sub '${EnvironmentSuffix}-public-route-table'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: 'ServerlessAPI'
 
   PrivateRouteTable:
     Type: AWS::EC2::RouteTable
@@ -87,7 +138,11 @@ Resources:
       VpcId: !Ref MyVPC
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-private-rt'
+          Value: !Sub '${EnvironmentSuffix}-private-route-table'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: 'ServerlessAPI'
 
   PublicRoute:
     Type: AWS::EC2::Route
@@ -120,44 +175,56 @@ Resources:
   LambdaSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Security group for Lambda functions
+      GroupDescription: Security group for Lambda functions with least privilege access
       VpcId: !Ref MyVPC
       SecurityGroupEgress:
         - IpProtocol: tcp
           FromPort: 443
           ToPort: 443
           CidrIp: 0.0.0.0/0
+          Description: 'HTTPS outbound for AWS API calls'
         - IpProtocol: tcp
           FromPort: 80
           ToPort: 80
           CidrIp: 0.0.0.0/0
+          Description: 'HTTP outbound for package downloads'
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-lambda-sg'
+          Value: !Sub '${EnvironmentSuffix}-lambda-security-group'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: 'ServerlessAPI'
 
-  # DynamoDB Table
-  MyCrudTable:
+  # DynamoDB Table with ON_DEMAND billing and point-in-time recovery
+  ItemsTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: MyCrudTable
+      TableName: !Sub '${EnvironmentSuffix}-items-table'
       AttributeDefinitions:
         - AttributeName: id
           AttributeType: S
       KeySchema:
         - AttributeName: id
           KeyType: HASH
-      BillingMode: PROVISIONED
-      ProvisionedThroughput:
-        ReadCapacityUnits: 5
-        WriteCapacityUnits: 5
+      BillingMode: ON_DEMAND
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
       Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentSuffix}-items-table'
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: 'ServerlessAPI'
+        - Key: Purpose
+          Value: 'Data storage for RESTful API entities'
 
-  # IAM Roles for Lambda Functions
+  # IAM Roles for Lambda Functions with least privilege
   CreateItemRole:
     Type: AWS::IAM::Role
     Properties:
+      RoleName: !Sub '${EnvironmentSuffix}-create-item-role'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -175,11 +242,19 @@ Resources:
               - Effect: Allow
                 Action:
                   - dynamodb:PutItem
-                Resource: !GetAtt MyCrudTable.Arn
+                Resource: !GetAtt ItemsTable.Arn
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: 'ServerlessAPI'
+        - Key: Function
+          Value: 'CreateItem'
 
   GetItemRole:
     Type: AWS::IAM::Role
     Properties:
+      RoleName: !Sub '${EnvironmentSuffix}-get-item-role'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -197,11 +272,19 @@ Resources:
               - Effect: Allow
                 Action:
                   - dynamodb:GetItem
-                Resource: !GetAtt MyCrudTable.Arn
+                Resource: !GetAtt ItemsTable.Arn
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: 'ServerlessAPI'
+        - Key: Function
+          Value: 'GetItem'
 
   UpdateItemRole:
     Type: AWS::IAM::Role
     Properties:
+      RoleName: !Sub '${EnvironmentSuffix}-update-item-role'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -219,11 +302,20 @@ Resources:
               - Effect: Allow
                 Action:
                   - dynamodb:UpdateItem
-                Resource: !GetAtt MyCrudTable.Arn
+                  - dynamodb:GetItem
+                Resource: !GetAtt ItemsTable.Arn
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: 'ServerlessAPI'
+        - Key: Function
+          Value: 'UpdateItem'
 
   DeleteItemRole:
     Type: AWS::IAM::Role
     Properties:
+      RoleName: !Sub '${EnvironmentSuffix}-delete-item-role'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -241,16 +333,25 @@ Resources:
               - Effect: Allow
                 Action:
                   - dynamodb:DeleteItem
-                Resource: !GetAtt MyCrudTable.Arn
+                Resource: !GetAtt ItemsTable.Arn
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: 'ServerlessAPI'
+        - Key: Function
+          Value: 'DeleteItem'
 
   # Lambda Functions
   CreateItemFunction:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: !Sub '${Environment}-create-item'
-      Runtime: python3.9
+      FunctionName: !Sub '${EnvironmentSuffix}-create-item'
+      Runtime: python3.11
       Handler: index.lambda_handler
       Role: !GetAtt CreateItemRole.Arn
+      MemorySize: !FindInMap [EnvironmentConfig, !Ref EnvironmentSuffix, LambdaMemorySize]
+      Timeout: !FindInMap [EnvironmentConfig, !Ref EnvironmentSuffix, LambdaTimeout]
       VpcConfig:
         SecurityGroupIds:
           - !Ref LambdaSecurityGroup
@@ -258,21 +359,48 @@ Resources:
           - !Ref PrivateSubnet
       Environment:
         Variables:
-          TABLE_NAME: !Ref MyCrudTable
+          TABLE_NAME: !Ref ItemsTable
+          LOG_LEVEL: INFO
       Code:
         ZipFile: |
           import json
           import boto3
           import os
+          import logging
           from botocore.exceptions import ClientError
+          from decimal import Decimal
+
+          # Configure logging
+          logger = logging.getLogger()
+          logger.setLevel(os.environ.get('LOG_LEVEL', 'INFO'))
 
           dynamodb = boto3.resource('dynamodb')
           table = dynamodb.Table(os.environ['TABLE_NAME'])
 
+          def decimal_default(obj):
+              if isinstance(obj, Decimal):
+                  return float(obj)
+              raise TypeError
+
           def lambda_handler(event, context):
+              logger.info(f"Received event: {json.dumps(event)}")
+              
               try:
                   # Parse request body
-                  body = json.loads(event['body']) if event.get('body') else {}
+                  if not event.get('body'):
+                      return {
+                          'statusCode': 400,
+                          'headers': {
+                              'Access-Control-Allow-Origin': '*',
+                              'Access-Control-Allow-Methods': 'POST, OPTIONS',
+                              'Access-Control-Allow-Headers': 'Content-Type, X-Amz-Date, Authorization, X-Api-Key, X-Amz-Security-Token',
+                              'Content-Type': 'application/json'
+                          },
+                          'body': json.dumps({'error': 'Request body is required'})
+                      }
+                  
+                  body = json.loads(event['body'])
+                  logger.info(f"Parsed body: {body}")
                   
                   # Validate required fields
                   if 'id' not in body:
@@ -280,53 +408,101 @@ Resources:
                           'statusCode': 400,
                           'headers': {
                               'Access-Control-Allow-Origin': '*',
-                              'Access-Control-Allow-Methods': 'POST',
-                              'Access-Control-Allow-Headers': 'Content-Type'
+                              'Access-Control-Allow-Methods': 'POST, OPTIONS',
+                              'Access-Control-Allow-Headers': 'Content-Type, X-Amz-Date, Authorization, X-Api-Key, X-Amz-Security-Token',
+                              'Content-Type': 'application/json'
                           },
                           'body': json.dumps({'error': 'Missing required field: id'})
                       }
                   
+                  # Check if item already exists
+                  try:
+                      existing_item = table.get_item(Key={'id': body['id']})
+                      if 'Item' in existing_item:
+                          return {
+                              'statusCode': 409,
+                              'headers': {
+                                  'Access-Control-Allow-Origin': '*',
+                                  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+                                  'Access-Control-Allow-Headers': 'Content-Type, X-Amz-Date, Authorization, X-Api-Key, X-Amz-Security-Token',
+                                  'Content-Type': 'application/json'
+                              },
+                              'body': json.dumps({'error': 'Item with this id already exists'})
+                          }
+                  except ClientError as e:
+                      logger.error(f"Error checking existing item: {str(e)}")
+                  
                   # Create item in DynamoDB
                   response = table.put_item(Item=body)
+                  logger.info(f"Item created successfully: {body['id']}")
                   
                   return {
                       'statusCode': 201,
                       'headers': {
                           'Access-Control-Allow-Origin': '*',
-                          'Access-Control-Allow-Methods': 'POST',
-                          'Access-Control-Allow-Headers': 'Content-Type'
+                          'Access-Control-Allow-Methods': 'POST, OPTIONS',
+                          'Access-Control-Allow-Headers': 'Content-Type, X-Amz-Date, Authorization, X-Api-Key, X-Amz-Security-Token',
+                          'Content-Type': 'application/json'
                       },
-                      'body': json.dumps({'message': 'Item created successfully', 'item': body})
+                      'body': json.dumps({
+                          'message': 'Item created successfully', 
+                          'item': body
+                      }, default=decimal_default)
                   }
               
+              except json.JSONDecodeError:
+                  logger.error("Invalid JSON in request body")
+                  return {
+                      'statusCode': 400,
+                      'headers': {
+                          'Access-Control-Allow-Origin': '*',
+                          'Access-Control-Allow-Methods': 'POST, OPTIONS',
+                          'Access-Control-Allow-Headers': 'Content-Type, X-Amz-Date, Authorization, X-Api-Key, X-Amz-Security-Token',
+                          'Content-Type': 'application/json'
+                      },
+                      'body': json.dumps({'error': 'Invalid JSON format in request body'})
+                  }
               except ClientError as e:
+                  logger.error(f"DynamoDB error: {str(e)}")
                   return {
                       'statusCode': 500,
                       'headers': {
                           'Access-Control-Allow-Origin': '*',
-                          'Access-Control-Allow-Methods': 'POST',
-                          'Access-Control-Allow-Headers': 'Content-Type'
+                          'Access-Control-Allow-Methods': 'POST, OPTIONS',
+                          'Access-Control-Allow-Headers': 'Content-Type, X-Amz-Date, Authorization, X-Api-Key, X-Amz-Security-Token',
+                          'Content-Type': 'application/json'
                       },
-                      'body': json.dumps({'error': str(e)})
+                      'body': json.dumps({'error': 'Database error occurred'})
                   }
               except Exception as e:
+                  logger.error(f"Unexpected error: {str(e)}")
                   return {
                       'statusCode': 500,
                       'headers': {
                           'Access-Control-Allow-Origin': '*',
-                          'Access-Control-Allow-Methods': 'POST',
-                          'Access-Control-Allow-Headers': 'Content-Type'
+                          'Access-Control-Allow-Methods': 'POST, OPTIONS',
+                          'Access-Control-Allow-Headers': 'Content-Type, X-Amz-Date, Authorization, X-Api-Key, X-Amz-Security-Token',
+                          'Content-Type': 'application/json'
                       },
-                      'body': json.dumps({'error': str(e)})
+                      'body': json.dumps({'error': 'Internal server error'})
                   }
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: 'ServerlessAPI'
+        - Key: Function
+          Value: 'CreateItem'
 
   GetItemFunction:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: !Sub '${Environment}-get-item'
-      Runtime: python3.9
+      FunctionName: !Sub '${EnvironmentSuffix}-get-item'
+      Runtime: python3.11
       Handler: index.lambda_handler
       Role: !GetAtt GetItemRole.Arn
+      MemorySize: !FindInMap [EnvironmentConfig, !Ref EnvironmentSuffix, LambdaMemorySize]
+      Timeout: !FindInMap [EnvironmentConfig, !Ref EnvironmentSuffix, LambdaTimeout]
       VpcConfig:
         SecurityGroupIds:
           - !Ref LambdaSecurityGroup
@@ -334,74 +510,118 @@ Resources:
           - !Ref PrivateSubnet
       Environment:
         Variables:
-          TABLE_NAME: !Ref MyCrudTable
+          TABLE_NAME: !Ref ItemsTable
+          LOG_LEVEL: INFO
       Code:
         ZipFile: |
           import json
           import boto3
           import os
+          import logging
           from botocore.exceptions import ClientError
+          from decimal import Decimal
+
+          # Configure logging
+          logger = logging.getLogger()
+          logger.setLevel(os.environ.get('LOG_LEVEL', 'INFO'))
 
           dynamodb = boto3.resource('dynamodb')
           table = dynamodb.Table(os.environ['TABLE_NAME'])
 
+          def decimal_default(obj):
+              if isinstance(obj, Decimal):
+                  return float(obj)
+              raise TypeError
+
           def lambda_handler(event, context):
+              logger.info(f"Received event: {json.dumps(event)}")
+              
               try:
                   # Get item ID from path parameters
+                  if not event.get('pathParameters') or not event['pathParameters'].get('id'):
+                      return {
+                          'statusCode': 400,
+                          'headers': {
+                              'Access-Control-Allow-Origin': '*',
+                              'Access-Control-Allow-Methods': 'GET, OPTIONS',
+                              'Access-Control-Allow-Headers': 'Content-Type, X-Amz-Date, Authorization, X-Api-Key, X-Amz-Security-Token',
+                              'Content-Type': 'application/json'
+                          },
+                          'body': json.dumps({'error': 'Missing required path parameter: id'})
+                      }
+                  
                   item_id = event['pathParameters']['id']
+                  logger.info(f"Getting item with id: {item_id}")
                   
                   # Get item from DynamoDB
                   response = table.get_item(Key={'id': item_id})
                   
                   if 'Item' not in response:
+                      logger.info(f"Item not found: {item_id}")
                       return {
                           'statusCode': 404,
                           'headers': {
                               'Access-Control-Allow-Origin': '*',
-                              'Access-Control-Allow-Methods': 'GET',
-                              'Access-Control-Allow-Headers': 'Content-Type'
+                              'Access-Control-Allow-Methods': 'GET, OPTIONS',
+                              'Access-Control-Allow-Headers': 'Content-Type, X-Amz-Date, Authorization, X-Api-Key, X-Amz-Security-Token',
+                              'Content-Type': 'application/json'
                           },
                           'body': json.dumps({'error': 'Item not found'})
                       }
                   
+                  logger.info(f"Item retrieved successfully: {item_id}")
                   return {
                       'statusCode': 200,
                       'headers': {
                           'Access-Control-Allow-Origin': '*',
-                          'Access-Control-Allow-Methods': 'GET',
-                          'Access-Control-Allow-Headers': 'Content-Type'
+                          'Access-Control-Allow-Methods': 'GET, OPTIONS',
+                          'Access-Control-Allow-Headers': 'Content-Type, X-Amz-Date, Authorization, X-Api-Key, X-Amz-Security-Token',
+                          'Content-Type': 'application/json'
                       },
-                      'body': json.dumps(response['Item'], default=str)
+                      'body': json.dumps(response['Item'], default=decimal_default)
                   }
               
               except ClientError as e:
+                  logger.error(f"DynamoDB error: {str(e)}")
                   return {
                       'statusCode': 500,
                       'headers': {
                           'Access-Control-Allow-Origin': '*',
-                          'Access-Control-Allow-Methods': 'GET',
-                          'Access-Control-Allow-Headers': 'Content-Type'
+                          'Access-Control-Allow-Methods': 'GET, OPTIONS',
+                          'Access-Control-Allow-Headers': 'Content-Type, X-Amz-Date, Authorization, X-Api-Key, X-Amz-Security-Token',
+                          'Content-Type': 'application/json'
                       },
-                      'body': json.dumps({'error': str(e)})
+                      'body': json.dumps({'error': 'Database error occurred'})
                   }
               except Exception as e:
+                  logger.error(f"Unexpected error: {str(e)}")
                   return {
                       'statusCode': 500,
                       'headers': {
                           'Access-Control-Allow-Origin': '*',
-                          'Access-Control-Allow-Methods': 'GET',
-                          'Access-Control-Allow-Headers': 'Content-Type'
+                          'Access-Control-Allow-Methods': 'GET, OPTIONS',
+                          'Access-Control-Allow-Headers': 'Content-Type, X-Amz-Date, Authorization, X-Api-Key, X-Amz-Security-Token',
+                          'Content-Type': 'application/json'
                       },
-                      'body': json.dumps({'error': str(e)})
+                      'body': json.dumps({'error': 'Internal server error'})
                   }
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: 'ServerlessAPI'
+        - Key: Function
+          Value: 'GetItem'
 
   UpdateItemFunction:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: !Sub '${Environment}-update-item'
-      Runtime: python3.9
+      FunctionName: !Sub '${EnvironmentSuffix}-update-item'
+      Runtime: python3.11
       Handler: index.lambda_handler
       Role: !GetAtt UpdateItemRole.Arn
+      MemorySize: !FindInMap [EnvironmentConfig, !Ref EnvironmentSuffix, LambdaMemorySize]
+      Timeout: !FindInMap [EnvironmentConfig, !Ref EnvironmentSuffix, LambdaTimeout]
       VpcConfig:
         SecurityGroupIds:
           - !Ref LambdaSecurityGroup
@@ -409,24 +629,80 @@ Resources:
           - !Ref PrivateSubnet
       Environment:
         Variables:
-          TABLE_NAME: !Ref MyCrudTable
+          TABLE_NAME: !Ref ItemsTable
+          LOG_LEVEL: INFO
       Code:
         ZipFile: |
           import json
           import boto3
           import os
+          import logging
           from botocore.exceptions import ClientError
+          from decimal import Decimal
+
+          # Configure logging
+          logger = logging.getLogger()
+          logger.setLevel(os.environ.get('LOG_LEVEL', 'INFO'))
 
           dynamodb = boto3.resource('dynamodb')
           table = dynamodb.Table(os.environ['TABLE_NAME'])
 
+          def decimal_default(obj):
+              if isinstance(obj, Decimal):
+                  return float(obj)
+              raise TypeError
+
           def lambda_handler(event, context):
+              logger.info(f"Received event: {json.dumps(event)}")
+              
               try:
                   # Get item ID from path parameters
+                  if not event.get('pathParameters') or not event['pathParameters'].get('id'):
+                      return {
+                          'statusCode': 400,
+                          'headers': {
+                              'Access-Control-Allow-Origin': '*',
+                              'Access-Control-Allow-Methods': 'PUT, OPTIONS',
+                              'Access-Control-Allow-Headers': 'Content-Type, X-Amz-Date, Authorization, X-Api-Key, X-Amz-Security-Token',
+                              'Content-Type': 'application/json'
+                          },
+                          'body': json.dumps({'error': 'Missing required path parameter: id'})
+                      }
+                  
                   item_id = event['pathParameters']['id']
                   
                   # Parse request body
-                  body = json.loads(event['body']) if event.get('body') else {}
+                  if not event.get('body'):
+                      return {
+                          'statusCode': 400,
+                          'headers': {
+                              'Access-Control-Allow-Origin': '*',
+                              'Access-Control-Allow-Methods': 'PUT, OPTIONS',
+                              'Access-Control-Allow-Headers': 'Content-Type, X-Amz-Date, Authorization, X-Api-Key, X-Amz-Security-Token',
+                              'Content-Type': 'application/json'
+                          },
+                          'body': json.dumps({'error': 'Request body is required'})
+                      }
+                  
+                  body = json.loads(event['body'])
+                  logger.info(f"Updating item {item_id} with data: {body}")
+                  
+                  # Check if item exists first
+                  try:
+                      existing_item = table.get_item(Key={'id': item_id})
+                      if 'Item' not in existing_item:
+                          return {
+                              'statusCode': 404,
+                              'headers': {
+                                  'Access-Control-Allow-Origin': '*',
+                                  'Access-Control-Allow-Methods': 'PUT, OPTIONS',
+                                  'Access-Control-Allow-Headers': 'Content-Type, X-Amz-Date, Authorization, X-Api-Key, X-Amz-Security-Token',
+                                  'Content-Type': 'application/json'
+                              },
+                              'body': json.dumps({'error': 'Item not found'})
+                          }
+                  except ClientError as e:
+                      logger.error(f"Error checking existing item: {str(e)}")
                   
                   # Build update expression
                   update_expression = "SET "
@@ -447,8 +723,9 @@ Resources:
                           'statusCode': 400,
                           'headers': {
                               'Access-Control-Allow-Origin': '*',
-                              'Access-Control-Allow-Methods': 'PUT',
-                              'Access-Control-Allow-Headers': 'Content-Type'
+                              'Access-Control-Allow-Methods': 'PUT, OPTIONS',
+                              'Access-Control-Allow-Headers': 'Content-Type, X-Amz-Date, Authorization, X-Api-Key, X-Amz-Security-Token',
+                              'Content-Type': 'application/json'
                           },
                           'body': json.dumps({'error': 'No valid fields to update'})
                       }
@@ -462,44 +739,74 @@ Resources:
                       ReturnValues='ALL_NEW'
                   )
                   
+                  logger.info(f"Item updated successfully: {item_id}")
                   return {
                       'statusCode': 200,
                       'headers': {
                           'Access-Control-Allow-Origin': '*',
-                          'Access-Control-Allow-Methods': 'PUT',
-                          'Access-Control-Allow-Headers': 'Content-Type'
+                          'Access-Control-Allow-Methods': 'PUT, OPTIONS',
+                          'Access-Control-Allow-Headers': 'Content-Type, X-Amz-Date, Authorization, X-Api-Key, X-Amz-Security-Token',
+                          'Content-Type': 'application/json'
                       },
-                      'body': json.dumps({'message': 'Item updated successfully', 'item': response['Attributes']}, default=str)
+                      'body': json.dumps({
+                          'message': 'Item updated successfully', 
+                          'item': response['Attributes']
+                      }, default=decimal_default)
                   }
               
+              except json.JSONDecodeError:
+                  logger.error("Invalid JSON in request body")
+                  return {
+                      'statusCode': 400,
+                      'headers': {
+                          'Access-Control-Allow-Origin': '*',
+                          'Access-Control-Allow-Methods': 'PUT, OPTIONS',
+                          'Access-Control-Allow-Headers': 'Content-Type, X-Amz-Date, Authorization, X-Api-Key, X-Amz-Security-Token',
+                          'Content-Type': 'application/json'
+                      },
+                      'body': json.dumps({'error': 'Invalid JSON format in request body'})
+                  }
               except ClientError as e:
+                  logger.error(f"DynamoDB error: {str(e)}")
                   return {
                       'statusCode': 500,
                       'headers': {
                           'Access-Control-Allow-Origin': '*',
-                          'Access-Control-Allow-Methods': 'PUT',
-                          'Access-Control-Allow-Headers': 'Content-Type'
+                          'Access-Control-Allow-Methods': 'PUT, OPTIONS',
+                          'Access-Control-Allow-Headers': 'Content-Type, X-Amz-Date, Authorization, X-Api-Key, X-Amz-Security-Token',
+                          'Content-Type': 'application/json'
                       },
-                      'body': json.dumps({'error': str(e)})
+                      'body': json.dumps({'error': 'Database error occurred'})
                   }
               except Exception as e:
+                  logger.error(f"Unexpected error: {str(e)}")
                   return {
                       'statusCode': 500,
                       'headers': {
                           'Access-Control-Allow-Origin': '*',
-                          'Access-Control-Allow-Methods': 'PUT',
-                          'Access-Control-Allow-Headers': 'Content-Type'
+                          'Access-Control-Allow-Methods': 'PUT, OPTIONS',
+                          'Access-Control-Allow-Headers': 'Content-Type, X-Amz-Date, Authorization, X-Api-Key, X-Amz-Security-Token',
+                          'Content-Type': 'application/json'
                       },
-                      'body': json.dumps({'error': str(e)})
+                      'body': json.dumps({'error': 'Internal server error'})
                   }
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: 'ServerlessAPI'
+        - Key: Function
+          Value: 'UpdateItem'
 
   DeleteItemFunction:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: !Sub '${Environment}-delete-item'
-      Runtime: python3.9
+      FunctionName: !Sub '${EnvironmentSuffix}-delete-item'
+      Runtime: python3.11
       Handler: index.lambda_handler
       Role: !GetAtt DeleteItemRole.Arn
+      MemorySize: !FindInMap [EnvironmentConfig, !Ref EnvironmentSuffix, LambdaMemorySize]
+      Timeout: !FindInMap [EnvironmentConfig, !Ref EnvironmentSuffix, LambdaTimeout]
       VpcConfig:
         SecurityGroupIds:
           - !Ref LambdaSecurityGroup
@@ -507,21 +814,48 @@ Resources:
           - !Ref PrivateSubnet
       Environment:
         Variables:
-          TABLE_NAME: !Ref MyCrudTable
+          TABLE_NAME: !Ref ItemsTable
+          LOG_LEVEL: INFO
       Code:
         ZipFile: |
           import json
           import boto3
           import os
+          import logging
           from botocore.exceptions import ClientError
+          from decimal import Decimal
+
+          # Configure logging
+          logger = logging.getLogger()
+          logger.setLevel(os.environ.get('LOG_LEVEL', 'INFO'))
 
           dynamodb = boto3.resource('dynamodb')
           table = dynamodb.Table(os.environ['TABLE_NAME'])
 
+          def decimal_default(obj):
+              if isinstance(obj, Decimal):
+                  return float(obj)
+              raise TypeError
+
           def lambda_handler(event, context):
+              logger.info(f"Received event: {json.dumps(event)}")
+              
               try:
                   # Get item ID from path parameters
+                  if not event.get('pathParameters') or not event['pathParameters'].get('id'):
+                      return {
+                          'statusCode': 400,
+                          'headers': {
+                              'Access-Control-Allow-Origin': '*',
+                              'Access-Control-Allow-Methods': 'DELETE, OPTIONS',
+                              'Access-Control-Allow-Headers': 'Content-Type, X-Amz-Date, Authorization, X-Api-Key, X-Amz-Security-Token',
+                              'Content-Type': 'application/json'
+                          },
+                          'body': json.dumps({'error': 'Missing required path parameter: id'})
+                      }
+                  
                   item_id = event['pathParameters']['id']
+                  logger.info(f"Deleting item with id: {item_id}")
                   
                   # Delete item from DynamoDB
                   response = table.delete_item(
@@ -530,69 +864,92 @@ Resources:
                   )
                   
                   if 'Attributes' not in response:
+                      logger.info(f"Item not found: {item_id}")
                       return {
                           'statusCode': 404,
                           'headers': {
                               'Access-Control-Allow-Origin': '*',
-                              'Access-Control-Allow-Methods': 'DELETE',
-                              'Access-Control-Allow-Headers': 'Content-Type'
+                              'Access-Control-Allow-Methods': 'DELETE, OPTIONS',
+                              'Access-Control-Allow-Headers': 'Content-Type, X-Amz-Date, Authorization, X-Api-Key, X-Amz-Security-Token',
+                              'Content-Type': 'application/json'
                           },
                           'body': json.dumps({'error': 'Item not found'})
                       }
                   
+                  logger.info(f"Item deleted successfully: {item_id}")
                   return {
                       'statusCode': 200,
                       'headers': {
                           'Access-Control-Allow-Origin': '*',
-                          'Access-Control-Allow-Methods': 'DELETE',
-                          'Access-Control-Allow-Headers': 'Content-Type'
+                          'Access-Control-Allow-Methods': 'DELETE, OPTIONS',
+                          'Access-Control-Allow-Headers': 'Content-Type, X-Amz-Date, Authorization, X-Api-Key, X-Amz-Security-Token',
+                          'Content-Type': 'application/json'
                       },
-                      'body': json.dumps({'message': 'Item deleted successfully'})
+                      'body': json.dumps({
+                          'message': 'Item deleted successfully',
+                          'deletedItem': response['Attributes']
+                      }, default=decimal_default)
                   }
               
               except ClientError as e:
+                  logger.error(f"DynamoDB error: {str(e)}")
                   return {
                       'statusCode': 500,
                       'headers': {
                           'Access-Control-Allow-Origin': '*',
-                          'Access-Control-Allow-Methods': 'DELETE',
-                          'Access-Control-Allow-Headers': 'Content-Type'
+                          'Access-Control-Allow-Methods': 'DELETE, OPTIONS',
+                          'Access-Control-Allow-Headers': 'Content-Type, X-Amz-Date, Authorization, X-Api-Key, X-Amz-Security-Token',
+                          'Content-Type': 'application/json'
                       },
-                      'body': json.dumps({'error': str(e)})
+                      'body': json.dumps({'error': 'Database error occurred'})
                   }
               except Exception as e:
+                  logger.error(f"Unexpected error: {str(e)}")
                   return {
                       'statusCode': 500,
                       'headers': {
                           'Access-Control-Allow-Origin': '*',
-                          'Access-Control-Allow-Methods': 'DELETE',
-                          'Access-Control-Allow-Headers': 'Content-Type'
+                          'Access-Control-Allow-Methods': 'DELETE, OPTIONS',
+                          'Access-Control-Allow-Headers': 'Content-Type, X-Amz-Date, Authorization, X-Api-Key, X-Amz-Security-Token',
+                          'Content-Type': 'application/json'
                       },
-                      'body': json.dumps({'error': str(e)})
+                      'body': json.dumps({'error': 'Internal server error'})
                   }
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: 'ServerlessAPI'
+        - Key: Function
+          Value: 'DeleteItem'
 
   # API Gateway
-  MyRestApi:
+  ItemsRestApi:
     Type: AWS::ApiGateway::RestApi
     Properties:
-      Name: !Sub '${Environment}-crud-api'
-      Description: RESTful API for CRUD operations
+      Name: !Sub '${EnvironmentSuffix}-items-api'
+      Description: 'Serverless RESTful API for managing data entities with full CRUD operations'
       EndpointConfiguration:
         Types:
           - REGIONAL
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: 'ServerlessAPI'
 
   # API Gateway Resources
   ItemsResource:
     Type: AWS::ApiGateway::Resource
     Properties:
-      RestApiId: !Ref MyRestApi
-      ParentId: !GetAtt MyRestApi.RootResourceId
+      RestApiId: !Ref ItemsRestApi
+      ParentId: !GetAtt ItemsRestApi.RootResourceId
       PathPart: items
 
   ItemResource:
     Type: AWS::ApiGateway::Resource
     Properties:
-      RestApiId: !Ref MyRestApi
+      RestApiId: !Ref ItemsRestApi
       ParentId: !Ref ItemsResource
       PathPart: '{id}'
 
@@ -600,7 +957,7 @@ Resources:
   CreateItemMethod:
     Type: AWS::ApiGateway::Method
     Properties:
-      RestApiId: !Ref MyRestApi
+      RestApiId: !Ref ItemsRestApi
       ResourceId: !Ref ItemsResource
       HttpMethod: POST
       AuthorizationType: NONE
@@ -609,15 +966,15 @@ Resources:
         IntegrationHttpMethod: POST
         Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${CreateItemFunction.Arn}/invocations'
       MethodResponses:
-        - StatusCode: 200
-          # Removed ResponseHeaders, Lambda handles CORS headers for proxy integration
+        - StatusCode: 201
         - StatusCode: 400
+        - StatusCode: 409
         - StatusCode: 500
 
   GetItemMethod:
     Type: AWS::ApiGateway::Method
     Properties:
-      RestApiId: !Ref MyRestApi
+      RestApiId: !Ref ItemsRestApi
       ResourceId: !Ref ItemResource
       HttpMethod: GET
       AuthorizationType: NONE
@@ -627,14 +984,13 @@ Resources:
         Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${GetItemFunction.Arn}/invocations'
       MethodResponses:
         - StatusCode: 200
-          # Removed ResponseHeaders, Lambda handles CORS headers for proxy integration
         - StatusCode: 404
         - StatusCode: 500
 
   UpdateItemMethod:
     Type: AWS::ApiGateway::Method
     Properties:
-      RestApiId: !Ref MyRestApi
+      RestApiId: !Ref ItemsRestApi
       ResourceId: !Ref ItemResource
       HttpMethod: PUT
       AuthorizationType: NONE
@@ -644,14 +1000,14 @@ Resources:
         Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UpdateItemFunction.Arn}/invocations'
       MethodResponses:
         - StatusCode: 200
-          # Removed ResponseHeaders, Lambda handles CORS headers for proxy integration
         - StatusCode: 400
+        - StatusCode: 404
         - StatusCode: 500
 
   DeleteItemMethod:
     Type: AWS::ApiGateway::Method
     Properties:
-      RestApiId: !Ref MyRestApi
+      RestApiId: !Ref ItemsRestApi
       ResourceId: !Ref ItemResource
       HttpMethod: DELETE
       AuthorizationType: NONE
@@ -661,7 +1017,6 @@ Resources:
         Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${DeleteItemFunction.Arn}/invocations'
       MethodResponses:
         - StatusCode: 200
-          # Removed ResponseHeaders, Lambda handles CORS headers for proxy integration
         - StatusCode: 404
         - StatusCode: 500
 
@@ -669,7 +1024,7 @@ Resources:
   ItemsOptionsMethod:
     Type: AWS::ApiGateway::Method
     Properties:
-      RestApiId: !Ref MyRestApi
+      RestApiId: !Ref ItemsRestApi
       ResourceId: !Ref ItemsResource
       HttpMethod: OPTIONS
       AuthorizationType: NONE
@@ -685,7 +1040,7 @@ Resources:
           application/json: '{"statusCode": 200}'
       MethodResponses:
         - StatusCode: 200
-          ResponseParameters: # Corrected: Use ResponseParameters for schema definition
+          ResponseParameters:
             method.response.header.Access-Control-Allow-Headers: true
             method.response.header.Access-Control-Allow-Methods: true
             method.response.header.Access-Control-Allow-Origin: true
@@ -693,7 +1048,7 @@ Resources:
   ItemOptionsMethod:
     Type: AWS::ApiGateway::Method
     Properties:
-      RestApiId: !Ref MyRestApi
+      RestApiId: !Ref ItemsRestApi
       ResourceId: !Ref ItemResource
       HttpMethod: OPTIONS
       AuthorizationType: NONE
@@ -709,7 +1064,7 @@ Resources:
           application/json: '{"statusCode": 200}'
       MethodResponses:
         - StatusCode: 200
-          ResponseParameters: # Corrected: Use ResponseParameters for schema definition
+          ResponseParameters:
             method.response.header.Access-Control-Allow-Headers: true
             method.response.header.Access-Control-Allow-Methods: true
             method.response.header.Access-Control-Allow-Origin: true
@@ -721,7 +1076,7 @@ Resources:
       FunctionName: !Ref CreateItemFunction
       Action: lambda:InvokeFunction
       Principal: apigateway.amazonaws.com
-      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${MyRestApi}/*/*'
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ItemsRestApi}/*/*'
 
   GetItemPermission:
     Type: AWS::Lambda::Permission
@@ -729,7 +1084,7 @@ Resources:
       FunctionName: !Ref GetItemFunction
       Action: lambda:InvokeFunction
       Principal: apigateway.amazonaws.com
-      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${MyRestApi}/*/*'
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ItemsRestApi}/*/*'
 
   UpdateItemPermission:
     Type: AWS::Lambda::Permission
@@ -737,7 +1092,7 @@ Resources:
       FunctionName: !Ref UpdateItemFunction
       Action: lambda:InvokeFunction
       Principal: apigateway.amazonaws.com
-      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${MyRestApi}/*/*'
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ItemsRestApi}/*/*'
 
   DeleteItemPermission:
     Type: AWS::Lambda::Permission
@@ -745,7 +1100,7 @@ Resources:
       FunctionName: !Ref DeleteItemFunction
       Action: lambda:InvokeFunction
       Principal: apigateway.amazonaws.com
-      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${MyRestApi}/*/*'
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ItemsRestApi}/*/*'
 
   # API Gateway Deployment
   ApiDeployment:
@@ -758,36 +1113,54 @@ Resources:
       - ItemsOptionsMethod
       - ItemOptionsMethod
     Properties:
-      RestApiId: !Ref MyRestApi
-      StageName: !Ref Environment
+      RestApiId: !Ref ItemsRestApi
+      StageName: !Ref EnvironmentSuffix
 
 Outputs:
   ApiGatewayInvokeURL:
     Description: URL for the deployed REST API
-    Value: !Sub 'https://${MyRestApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}'
+    Value: !Sub 'https://${ItemsRestApi}.execute-api.${AWS::Region}.amazonaws.com/${EnvironmentSuffix}'
     Export:
       Name: !Sub '${AWS::StackName}-ApiGatewayURL'
 
   DynamoDBTableName:
     Description: Name of the DynamoDB table
-    Value: !Ref MyCrudTable
+    Value: !Ref ItemsTable
     Export:
       Name: !Sub '${AWS::StackName}-DynamoDBTable'
 
+  DynamoDBTableArn:
+    Description: ARN of the DynamoDB table
+    Value: !GetAtt ItemsTable.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-DynamoDBTableArn'
+
   VPCId:
-    Description: VPC ID
+    Description: VPC ID for the serverless infrastructure
     Value: !Ref MyVPC
     Export:
       Name: !Sub '${AWS::StackName}-VPC'
 
   PrivateSubnetId:
-    Description: Private Subnet ID
+    Description: Private Subnet ID where Lambda functions are deployed
     Value: !Ref PrivateSubnet
     Export:
       Name: !Sub '${AWS::StackName}-PrivateSubnet'
 
   PublicSubnetId:
-    Description: Public Subnet ID
+    Description: Public Subnet ID for NAT Gateway
     Value: !Ref PublicSubnet
     Export:
       Name: !Sub '${AWS::StackName}-PublicSubnet'
+
+  LambdaSecurityGroupId:
+    Description: Security Group ID for Lambda functions
+    Value: !Ref LambdaSecurityGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-LambdaSecurityGroup'
+
+  Environment:
+    Description: Environment name used for this deployment
+    Value: !Ref EnvironmentSuffix
+    Export:
+      Name: !Sub '${AWS::StackName}-Environment'
