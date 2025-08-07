@@ -68,7 +68,7 @@ describe('TapStack CloudFormation Template', () => {
     test('ExistingVPCId parameter should have correct properties', () => {
       const param = template.Parameters.ExistingVPCId;
       expect(param.Type).toBe('String');
-      expect(param.Default).toBe('vpc-123abcde');
+      expect(param.Default).toBe('vpc-02b425133fe06ed63');
       expect(param.Description).toBe(
         'Existing VPC ID where resources will be deployed'
       );
