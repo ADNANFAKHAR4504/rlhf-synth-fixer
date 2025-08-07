@@ -30,11 +30,14 @@ The infrastructure is designed to pass CI/CD pipeline validation and includes
 comprehensive error handling and resource dependencies.
 """
 
-from typing import Optional, List, Dict, Any
+# 1. Standard library imports
+import json
+from typing import Any, Dict, List, Optional
+
+# 2. Third-party library imports
 import pulumi
 import pulumi_aws as aws
 from pulumi import ResourceOptions
-import json
 
 
 class TapStackArgs:
