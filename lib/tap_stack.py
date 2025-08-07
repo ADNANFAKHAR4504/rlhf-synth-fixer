@@ -269,7 +269,7 @@ def create_ec2_instances(
     instance_profile: aws.iam.InstanceProfile
 ) -> List[aws.ec2.Instance]:
   """
-  Create EC2 instances with Nginx web server.
+  Create EC2 instances with a simple Python web server for debugging.
   """
   ami = aws.ec2.get_ami(
     most_recent=True,
@@ -282,12 +282,14 @@ def create_ec2_instances(
     ]
   )
   
-  # user_data ko is simple version se replace karein
+  # Replace the Nginx user_data with a simple Python HTTP server
   user_data = f"""#!/bin/bash
-yum install -y nginx
-systemctl start nginx
-systemctl enable nginx
-cat > /var/www/html/index.html << EOF
+# Create a directory for the web server and navigate into it
+mkdir -p /var/www/html
+cd /var/www/html
+
+# Create the same simple index.html file
+cat > index.html << EOF
 <!DOCTYPE html>
 <html>
 <head>
@@ -298,6 +300,9 @@ cat > /var/www/html/index.html << EOF
 </body>
 </html>
 EOF
+
+# Run Python's built-in web server on port 80 in the background
+nohup python3 -m http.server 80 &
 """
 
   instances = []
