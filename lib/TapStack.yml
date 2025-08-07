@@ -242,7 +242,7 @@ Resources:
                 Action:
                   - s3:GetObject
                 Resource: !Sub arn:aws:s3:::${S3BucketName}/*
-              # VPC permissions for Lambda network interface management (least privilege)
+              # VPC permissions for Lambda network interface management
               - Effect: Allow
                 Action:
                   - ec2:CreateNetworkInterface
@@ -250,11 +250,7 @@ Resources:
                   - ec2:DeleteNetworkInterface
                   - ec2:AttachNetworkInterface
                   - ec2:DetachNetworkInterface
-                Resource:
-                  - !Sub 'arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:network-interface/*'
-                  - !Sub 'arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:subnet/${ServerlessAppSubnetAZ1}'
-                  - !Sub 'arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:subnet/${ServerlessAppSubnetAZ2}'
-                  - !Sub 'arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:security-group/${ServerlessAppLambdaSecurityGroup}'
+                Resource: '*'
       Path: '/'
       Tags:
         - Key: Name
