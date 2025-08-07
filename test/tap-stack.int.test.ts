@@ -1,48 +1,38 @@
 // Configuration - These are coming from cfn-outputs after cdk deploy
-import fs from 'fs';
-import {
-  S3Client,
-  ListBucketsCommand,
-  GetBucketTaggingCommand,
-  PutObjectCommand,
-  GetObjectCommand,
-  DeleteObjectCommand,
-  PutObjectTaggingCommand
-} from '@aws-sdk/client-s3';
-import {
-  EC2Client,
-  DescribeVpcsCommand,
-  DescribeSubnetsCommand,
-  DescribeSecurityGroupsCommand,
-  DescribeInstancesCommand
-} from '@aws-sdk/client-ec2';
-import {
-  IAMClient,
-  GetRoleCommand,
-  GetRolePolicyCommand,
-  ListRolePoliciesCommand
-} from '@aws-sdk/client-iam';
 import {
   AutoScalingClient,
   DescribeAutoScalingGroupsCommand
 } from '@aws-sdk/client-auto-scaling';
 import {
-  SFNClient,
-  DescribeStateMachineCommand,
-  ListStateMachinesCommand
-} from '@aws-sdk/client-sfn';
-import {
   CloudFormationClient,
   DescribeStacksCommand,
   ListStackResourcesCommand
 } from '@aws-sdk/client-cloudformation';
-
-const outputs = JSON.parse(
-  fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
-);
+import {
+  DescribeVpcsCommand,
+  EC2Client
+} from '@aws-sdk/client-ec2';
+import {
+  GetRoleCommand,
+  IAMClient,
+  ListRolePoliciesCommand
+} from '@aws-sdk/client-iam';
+import {
+  DeleteObjectCommand,
+  GetBucketTaggingCommand,
+  GetObjectCommand,
+  ListBucketsCommand,
+  PutObjectCommand,
+  S3Client
+} from '@aws-sdk/client-s3';
+import {
+  DescribeStateMachineCommand,
+  ListStateMachinesCommand,
+  SFNClient
+} from '@aws-sdk/client-sfn';
 
 // Get environment suffix from environment variable
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'synth295';
+const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'pr567';
 
 describe('Multi-Region Application Infrastructure Integration Tests', () => {
   const usEast1Client = {
@@ -67,7 +57,7 @@ describe('Multi-Region Application Infrastructure Integration Tests', () => {
     test('Stack is successfully deployed', async () => {
       const response = await usEast1Client.cloudformation.send(
         new DescribeStacksCommand({
-          StackName: outputs['us-east-1'].stackName
+          StackName: `GlobalApp-USEast1-${environmentSuffix}`
         })
       );
       
@@ -78,7 +68,7 @@ describe('Multi-Region Application Infrastructure Integration Tests', () => {
     test('VPC exists with correct configuration', async () => {
       const resources = await usEast1Client.cloudformation.send(
         new ListStackResourcesCommand({
-          StackName: outputs['us-east-1'].stackName
+          StackName: `GlobalApp-USEast1-${environmentSuffix}`
         })
       );
       
@@ -127,7 +117,7 @@ describe('Multi-Region Application Infrastructure Integration Tests', () => {
     test('Auto Scaling Group is configured correctly', async () => {
       const resources = await usEast1Client.cloudformation.send(
         new ListStackResourcesCommand({
-          StackName: outputs['us-east-1'].stackName
+          StackName: `GlobalApp-USEast1-${environmentSuffix}`
         })
       );
       
@@ -176,7 +166,7 @@ describe('Multi-Region Application Infrastructure Integration Tests', () => {
     test('IAM role has tag-based S3 access policy', async () => {
       const resources = await usEast1Client.cloudformation.send(
         new ListStackResourcesCommand({
-          StackName: outputs['us-east-1'].stackName
+          StackName: `GlobalApp-USEast1-${environmentSuffix}`
         })
       );
       
@@ -207,7 +197,7 @@ describe('Multi-Region Application Infrastructure Integration Tests', () => {
     test('Stack is successfully deployed', async () => {
       const response = await euWest1Client.cloudformation.send(
         new DescribeStacksCommand({
-          StackName: outputs['eu-west-1'].stackName
+          StackName: `GlobalApp-EUWest1-${environmentSuffix}`
         })
       );
       
@@ -218,7 +208,7 @@ describe('Multi-Region Application Infrastructure Integration Tests', () => {
     test('VPC exists with different CIDR block', async () => {
       const resources = await euWest1Client.cloudformation.send(
         new ListStackResourcesCommand({
-          StackName: outputs['eu-west-1'].stackName
+          StackName: `GlobalApp-EUWest1-${environmentSuffix}`
         })
       );
       
@@ -327,7 +317,7 @@ describe('Multi-Region Application Infrastructure Integration Tests', () => {
       // Check US East 1 stack tags
       const usEast1Stack = await usEast1Client.cloudformation.send(
         new DescribeStacksCommand({
-          StackName: outputs['us-east-1'].stackName
+          StackName: `GlobalApp-USEast1-${environmentSuffix}`
         })
       );
       
@@ -343,7 +333,7 @@ describe('Multi-Region Application Infrastructure Integration Tests', () => {
       // Check EU West 1 stack tags
       const euWest1Stack = await euWest1Client.cloudformation.send(
         new DescribeStacksCommand({
-          StackName: outputs['eu-west-1'].stackName
+          StackName: `GlobalApp-EUWest1-${environmentSuffix}`
         })
       );
       
