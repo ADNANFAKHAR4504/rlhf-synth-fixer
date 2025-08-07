@@ -2,6 +2,7 @@
 
 from cdktf import TerraformStack, S3Backend, TerraformOutput, TerraformAsset, AssetType
 from constructs import Construct
+from pathlib import Path
 from cdktf_cdktf_provider_aws.provider import AwsProvider
 from cdktf_cdktf_provider_aws.s3_bucket import S3Bucket
 from cdktf_cdktf_provider_aws.vpc import Vpc
@@ -391,16 +392,10 @@ class TapStack(TerraformStack):
 import json
 import boto3
 import os
-from aws_xray_sdk.core import xray_recorder
-from aws_xray_sdk.core import patch_all
-
-# Patch AWS SDK calls for X-Ray tracing
-patch_all()
 
 dynamodb = boto3.resource('dynamodb')
 table = dynamodb.Table(os.environ['DYNAMODB_TABLE'])
 
-@xray_recorder.capture('lambda_handler')
 def lambda_handler(event, context):
     try:
         # Sample logic - echo the request with timestamp
@@ -427,15 +422,20 @@ def lambda_handler(event, context):
             },
             'body': json.dumps({'error': str(e)})
         }
-"""
+""".strip() + "\n"
+    repo_root = Path(__file__).resolve().parents[1]
+    lambda_src_dir = repo_root / "lambda_src"
+    lambda_src_dir.mkdir(parents=True, exist_ok=True)
+
+    # Write the handler file every synth (idempotent)
+    (lambda_src_dir / "lambda_function.py").write_text(lambda_code, encoding="utf-8")
+
     # Write Lambda code asset
     lambda_asset = TerraformAsset(
         self,
         "lambda_asset",
-        path=os.path.join(
-            os.getcwd(), "lambda_function.py"
-        ),  # path to your .py file
-        type=AssetType.ARCHIVE,  # Auto-zips it!
+        path=str(lambda_src_dir),
+        type=AssetType.ARCHIVE,
     )
 
     # Create Lambda function
