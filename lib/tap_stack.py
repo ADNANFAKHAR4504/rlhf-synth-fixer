@@ -153,4 +153,4 @@ class TapStack(pulumi.ComponentResource):
         dashboard_name=self.regional_monitoring[region].dashboard_name,
       )
     
-    pulumi.export("all_regions_data", all_regions_data_outputs)
+    pulumi.export("all_regions_data", pulumi.Output.all(all_regions_data_outputs))

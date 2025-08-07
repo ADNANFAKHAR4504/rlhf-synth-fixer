@@ -74,15 +74,25 @@ class MyMocks(unittest.TestCase):
     self.pulumi_mock.Output = MagicMock()
     self.pulumi_mock.Output.from_input = lambda x: x
     
-    # Corrected mock for Output.all to return a structured dictionary of mocks
-    def mock_output_all(**kwargs):
-      mock_output_dict = {}
-      for k, v in kwargs.items():
-        mock_output = MagicMock()
-        mock_output.apply.return_value = f"mocked_value_for_{k}"
-        mock_output_dict[k] = mock_output
-      return mock_output_dict
-    
+    # Corrected mock for Output.all to accept keyword arguments (like the original code)
+    # The call for `all_regions_data` passes a dictionary as a single positional argument,
+    # but the calls inside the `for` loop pass keyword arguments. This mock must handle both cases.
+    def mock_output_all(*args, **kwargs):
+        if kwargs:
+            # Handle the case where the call is `pulumi.Output.all(vpc_id=..., instance_ids=...)`
+            mock_output_dict = {}
+            for k, v in kwargs.items():
+                mock_output = MagicMock()
+                mock_output.apply.return_value = f"mocked_value_for_{k}"
+                mock_output_dict[k] = mock_output
+            return mock_output_dict
+        elif args and isinstance(args[0], dict):
+            # Handle the case where the call is `pulumi.Output.all(a_dictionary)`
+            return args[0]
+        else:
+            # Fallback for other cases
+            return MagicMock()
+
     self.pulumi_mock.Output.all.side_effect = mock_output_all
     
     def mock_apply(func):
@@ -150,14 +160,14 @@ class TestTapStack(MyMocks):
     )
     test_stack_name = "test-stack-exports"
     
-    mock_networking_east = MagicMock(vpc_id="test-vpc-east")
-    mock_networking_west = MagicMock(vpc_id="test-vpc-west")
-    mock_compute_east = MagicMock(instance_ids="test-instance-east")
-    mock_compute_west = MagicMock(instance_ids="test-instance-west")
-    mock_security_east = MagicMock(web_server_sg_id="test-sg-east")
-    mock_security_west = MagicMock(web_server_sg_id="test-sg-west")
-    mock_monitoring_east = MagicMock(dashboard_name="test-dashboard-east")
-    mock_monitoring_west = MagicMock(dashboard_name="test-dashboard-west")
+    mock_networking_east = MagicMock(vpc_id=MagicMock())
+    mock_networking_west = MagicMock(vpc_id=MagicMock())
+    mock_compute_east = MagicMock(instance_ids=MagicMock())
+    mock_compute_west = MagicMock(instance_ids=MagicMock())
+    mock_security_east = MagicMock(web_server_sg_id=MagicMock())
+    mock_security_west = MagicMock(web_server_sg_id=MagicMock())
+    mock_monitoring_east = MagicMock(dashboard_name=MagicMock())
+    mock_monitoring_west = MagicMock(dashboard_name=MagicMock())
 
     self.networking_infrastructure_mock.side_effect = [
       mock_networking_east, 
@@ -204,7 +214,6 @@ class TestTapStack(MyMocks):
     for expected_call in expected_calls:
       self.assertIn(expected_call, export_calls)
 
-    # Fixed: Use a safer approach to find the all_regions_data_call
     all_regions_data_calls = [c for c in export_calls if c.args[0] == "all_regions_data"]
     self.assertTrue(len(all_regions_data_calls) > 0, "all_regions_data call not found")
     all_regions_data_call = all_regions_data_calls[0]
