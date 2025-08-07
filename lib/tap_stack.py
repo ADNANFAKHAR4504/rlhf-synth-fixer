@@ -84,19 +84,22 @@ class TapStack(ComponentResource):
                 opts=ResourceOptions(parent=self)
             )
             
+            # Get caller identity for this provider
+            caller_identity = aws.get_caller_identity(opts=pulumi.InvokeOptions(provider=provider))
+            
             key = aws.kms.Key(
                 f"PROD-kms-{region}-{self.environment_suffix}",
                 description=f"KMS key for {region} region encryption",
                 deletion_window_in_days=7,
                 enable_key_rotation=True,
-                policy=aws.get_caller_identity().apply(
-                    lambda caller: json.dumps({
+                policy=pulumi.Output.all(caller_identity).apply(
+                    lambda args: json.dumps({
                         "Version": "2012-10-17",
                         "Statement": [
                             {
                                 "Sid": "Enable IAM User Permissions",
                                 "Effect": "Allow",
-                                "Principal": {"AWS": f"arn:aws:iam::{caller.account_id}:root"},
+                                "Principal": {"AWS": f"arn:aws:iam::{args[0].account_id}:root"},
                                 "Action": "kms:*",
                                 "Resource": "*"
                             }
@@ -237,11 +240,14 @@ class TapStack(ComponentResource):
     
     def _create_cloudtrail(self):
         """Create CloudTrail for comprehensive logging."""
+        # Get caller identity for CloudTrail bucket
+        caller_identity = aws.get_caller_identity()
+        
         # S3 bucket for CloudTrail logs
         self.cloudtrail_bucket = aws.s3.Bucket(
             f"prod-cloudtrail-{self.environment_suffix}",
-            bucket=aws.get_caller_identity().apply(
-                lambda caller: f"prod-cloudtrail-{self.environment_suffix}-{caller.account_id}"
+            bucket=pulumi.Output.all(caller_identity).apply(
+                lambda args: f"prod-cloudtrail-{self.environment_suffix}-{args[0].account_id}"
             ),
             versioning=aws.s3.BucketVersioningArgs(enabled=True),
             server_side_encryption_configuration=aws.s3.BucketServerSideEncryptionConfigurationArgs(
@@ -261,7 +267,7 @@ class TapStack(ComponentResource):
         cloudtrail_policy = aws.s3.BucketPolicy(
             f"PROD-cloudtrail-policy-{self.environment_suffix}",
             bucket=self.cloudtrail_bucket.id,
-            policy=Output.all(self.cloudtrail_bucket.arn, aws.get_caller_identity().account_id).apply(
+            policy=pulumi.Output.all(self.cloudtrail_bucket.arn, caller_identity).apply(
                 lambda args: json.dumps({
                     "Version": "2012-10-17",
                     "Statement": [
@@ -342,7 +348,7 @@ class TapStack(ComponentResource):
                     f"PROD-public-subnet-{region}-{i+1}-{self.environment_suffix}",
                     vpc_id=vpc.id,
                     cidr_block=f"10.0.{i+1}.0/24",
-                    ipv6_cidr_block=Output.all(vpc.ipv6_cidr_block).apply(
+                    ipv6_cidr_block=pulumi.Output.all(vpc.ipv6_cidr_block).apply(
                         lambda cidr: cidr[0].replace('/56', f'/{i+1:02x}::/64') if cidr[0] else None
                     ),
                     availability_zone=az,
@@ -358,7 +364,7 @@ class TapStack(ComponentResource):
                     f"PROD-private-subnet-{region}-{i+1}-{self.environment_suffix}",
                     vpc_id=vpc.id,
                     cidr_block=f"10.0.{i+10}.0/24",
-                    ipv6_cidr_block=Output.all(vpc.ipv6_cidr_block).apply(
+                    ipv6_cidr_block=pulumi.Output.all(vpc.ipv6_cidr_block).apply(
                         lambda cidr: cidr[0].replace('/56', f'/{i+10:02x}::/64') if cidr[0] else None
                     ),
                     availability_zone=az,
@@ -467,8 +473,11 @@ class TapStack(ComponentResource):
                 opts=ResourceOptions(parent=self)
             )
             
-            bucket_name = aws.get_caller_identity().apply(
-                lambda caller: f"prod-storage-{region}-{self.environment_suffix}-{caller.account_id}"
+            # Get caller identity for this provider
+            caller_identity = aws.get_caller_identity(opts=pulumi.InvokeOptions(provider=provider))
+            
+            bucket_name = pulumi.Output.all(caller_identity).apply(
+                lambda args: f"prod-storage-{region}-{self.environment_suffix}-{args[0].account_id}"
             )
             
             bucket = aws.s3.Bucket(
