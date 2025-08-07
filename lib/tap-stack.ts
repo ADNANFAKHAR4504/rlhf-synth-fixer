@@ -1,4 +1,5 @@
 // lib/tap-stack.ts
+// This file now contains the full stack definition and its instantiation.
 
 import { Construct } from 'constructs';
 import { TerraformStack, TerraformOutput, Fn, App } from 'cdktf';
@@ -18,6 +19,7 @@ import { IamRolePolicyAttachment } from '@cdktf/provider-aws/lib/iam-role-policy
 import { IamInstanceProfile } from '@cdktf/provider-aws/lib/iam-instance-profile';
 import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
 import { S3BucketServerSideEncryptionConfigurationA } from '@cdktf/provider-aws/lib/s3-bucket-server-side-encryption-configuration';
+import { S3BucketLifecycleConfiguration } from '@cdktf/provider-aws/lib/s3-bucket-lifecycle-configuration';
 import { DataAwsAvailabilityZones } from '@cdktf/provider-aws/lib/data-aws-availability-zones';
 import { AutoscalingGroup } from '@cdktf/provider-aws/lib/autoscaling-group';
 import { LaunchTemplate } from '@cdktf/provider-aws/lib/launch-template';
@@ -262,6 +264,32 @@ export class TapStack extends TerraformStack {
       ],
     });
 
+    new S3BucketLifecycleConfiguration(this, 's3-lifecycle', {
+      bucket: s3Bucket.id,
+      rule: [
+        {
+          id: 'glacier-transition-and-expiration',
+          status: 'Enabled',
+          noncurrentVersionTransition: [
+            {
+              storageClass: 'GLACIER',
+              noncurrentDays: 90,
+            },
+          ],
+          noncurrentVersionExpiration: [
+            {
+              noncurrentDays: 365,
+            },
+          ],
+          expiration: [
+            {
+              days: 365,
+            },
+          ],
+        },
+      ],
+    });
+
     // 6. Compute
     const launchTemplate = new LaunchTemplate(this, 'launch-template', {
       name: `${id}-launch-template`,
@@ -298,5 +326,31 @@ export class TapStack extends TerraformStack {
       retentionInDays: 7,
       tags: { Name: `${id}-log-group`, ...tags },
     });
+
+    // 8. Outputs
+    new TerraformOutput(this, 'vpc_id_output', {
+      value: vpc.id,
+      description: 'The ID of the created VPC',
+    });
+
+    new TerraformOutput(this, 'private_subnet_ids_output', {
+      value: privateSubnetIds,
+      description: 'IDs of the private subnets',
+    });
+
+    new TerraformOutput(this, 'public_subnet_ids_output', {
+      value: publicSubnetIds,
+      description: 'IDs of the public subnets',
+    });
+
+    new TerraformOutput(this, 'ec2_instance_profile_arn_output', {
+      value: instanceProfile.arn,
+      description: 'ARN of the EC2 instance profile for S3 access',
+    });
   }
 }
+
+// Create a single instance of the stack.
+const app = new App();
+new TapStack(app, 'tap-stack-dev');
+app.synth();
