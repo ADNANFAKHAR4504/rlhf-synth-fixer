@@ -599,16 +599,13 @@ Resources:
   VPCFlowLogsGroup:
     Type: AWS::Logs::LogGroup
     DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       LogGroupName: !Sub '/aws/vpc/flowlogs/${ProjectName}-${Environment}-${AWS::StackName}'
       RetentionInDays: 30
 
   VPCFlowLogs:
     Type: AWS::EC2::FlowLog
-    DependsOn: 
-      - SecureVPC
-      - VPCFlowLogsGroup
-      - VPCFlowLogsRole
     Properties:
       ResourceType: VPC
       ResourceId: !Ref SecureVPC
