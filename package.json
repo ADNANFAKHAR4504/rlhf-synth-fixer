@@ -12,7 +12,7 @@
   "scripts": {
     "check-node": "node -e \"const v=process.version; const req='>=v20.0.0'; const curr=v.slice(1).split('.').map(n=>parseInt(n)); const reqMin=[20,0,0]; if(curr[0]<reqMin[0]||(curr[0]===reqMin[0]&&curr[1]<reqMin[1])||(curr[0]===reqMin[0]&&curr[1]===reqMin[1]&&curr[2]<reqMin[2])){console.error('❌ Node.js version too old! Required:',req,'Current:',v); process.exit(1);} console.log('✅ Node.js version is compatible:',v);\"",
     "check-python": "python -c \"import sys; req='3.12.11'; curr=f'{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}'; print(f'❌ Python version mismatch! Required: {req}, Current: {curr}') or exit(1) if curr != req else print(f'✅ Python version is correct: {curr}');\"",
-    "check-pipenv": "bash -c \"req='2025.0.4'; curr=$(pipenv --version 2>/dev/null | grep -oE '[0-9]+\\.[0-9]+\\.[0-9]+' || echo 'not installed'); if [ \\\"$curr\\\" != \\\"$req\\\" ]; then echo \\\"❌ Pipenv version mismatch! Required: $req, Current: $curr\\\"; exit 1; fi; echo \\\"✅ Pipenv version is correct: $curr\\\"\"",
+    "check-pipenv": "bash -c \"req='2025.0.4'; curr=$(pipenv --version 2>/dev/null | grep -oE '[0-9]+\\.[0-9]+\\.[0-9]+' || echo 'not installed'); if [ \\\"\\$curr\\\" != \\\"\\$req\\\" ]; then echo \\\"❌ Pipenv version mismatch! Required: \\$req, Current: \\$curr\\\"; exit 1; fi; echo \\\"✅ Pipenv version is correct: \\$curr\\\"\"",
     "check-versions": "npm run check-node && npm run check-python && npm run check-pipenv",
     "preinstall": "echo 'Skipping version checks for CI'",
     "build": "tsc",
@@ -128,15 +128,12 @@
     "@aws-sdk/client-wafv2": "^3.848.0",
     "@cdktf/provider-archive": "^11.0.0",
     "@cdktf/provider-aws": "21.3.0",
-    "@pulumi/aws": "^7.1.0",
-    "@pulumi/pulumi": "^3.186.0",
     "@cdktf/provider-random": "^12.0.0",
     "@types/archiver": "^6.0.3",
     "archiver": "^7.0.1",
     "aws-cdk-lib": "2.204.0",
     "cdktf": "^0.21.0",
     "cdktf-cli": "0.21.0",
-    "constructs": "10.4.2",
-    "source-map-support": "^0.5.21"
+    "constructs": "10.4.2"
   }
 }
