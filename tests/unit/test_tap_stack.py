@@ -1,3 +1,7 @@
+"""
+Unit tests for the TapStack Pulumi component using moto for AWS mocking
+and Pulumi's testing utilities.
+"""
 import pulumi
 from moto import mock_aws
 import pulumi_aws as aws
@@ -14,6 +18,8 @@ class MyMocks(pulumi.runtime.Mocks):
       outputs['arn'] = f"arn:aws:iam::123456789012:role/{args.name}"
     if args.typ == "aws:iam/instanceProfile:InstanceProfile":
       outputs['arn'] = f"arn:aws:iam::123456789012:instance-profile/{args.name}"
+    if args.typ == "random:index/randomInteger:RandomInteger":
+      outputs['result'] = 150
     return [f"{args.name}_id", outputs]
 
   def call(self, args: pulumi.runtime.MockCallArgs):
