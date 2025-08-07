@@ -707,8 +707,7 @@ export class ServerlessStack extends cdk.Stack {
     new codedeploy.LambdaDeploymentGroup(this, 'UserDeploymentGroup', {
       application: codeDeployApp,
       alias: userFunctionAlias,
-      deploymentConfig:
-        codedeploy.LambdaDeploymentConfig.ALL_AT_ONCE,
+      deploymentConfig: codedeploy.LambdaDeploymentConfig.ALL_AT_ONCE,
       alarms: [userFunctionErrorAlarm, userProcessingErrorsAlarm],
       autoRollback: {
         failedDeployment: true,
@@ -721,8 +720,7 @@ export class ServerlessStack extends cdk.Stack {
     new codedeploy.LambdaDeploymentGroup(this, 'OrderDeploymentGroup', {
       application: codeDeployApp,
       alias: orderFunctionAlias,
-      deploymentConfig:
-        codedeploy.LambdaDeploymentConfig.ALL_AT_ONCE,
+      deploymentConfig: codedeploy.LambdaDeploymentConfig.ALL_AT_ONCE,
       alarms: [orderFunctionErrorAlarm],
       autoRollback: {
         failedDeployment: true,
@@ -735,8 +733,7 @@ export class ServerlessStack extends cdk.Stack {
     new codedeploy.LambdaDeploymentGroup(this, 'ScheduledDeploymentGroup', {
       application: codeDeployApp,
       alias: scheduledFunctionAlias,
-      deploymentConfig:
-        codedeploy.LambdaDeploymentConfig.ALL_AT_ONCE,
+      deploymentConfig: codedeploy.LambdaDeploymentConfig.ALL_AT_ONCE,
       alarms: [scheduledFunctionErrorAlarm],
       autoRollback: {
         failedDeployment: true,
