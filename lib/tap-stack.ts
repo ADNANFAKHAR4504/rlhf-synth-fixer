@@ -268,6 +268,8 @@ export class TapStack extends TerraformStack {
         {
           id: 'glacier-transition-and-expiration',
           status: 'Enabled',
+          // Added filter to explicitly apply the rule to all objects
+          filter: [{}],
           noncurrentVersionTransition: [
             {
               storageClass: 'GLACIER',
