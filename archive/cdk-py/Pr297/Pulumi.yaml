@@ -1,5 +1,5 @@
 name: pulumi-infra
 runtime:
-  name: nodejs
+  name: python
 description: Pulumi infrastructure for TAP
-main: bin/
+main: tap.py
