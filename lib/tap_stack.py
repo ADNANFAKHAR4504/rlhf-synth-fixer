@@ -15,7 +15,7 @@ class TapStackArgs:
     self.tags = tags or {}
 
 
-class TapStack(ComponentResource):
+class TapStack(ComponentResource):  # pylint: disable=too-many-instance-attributes
   def __init__(self, name: str, args: TapStackArgs, opts: ResourceOptions = None):
     super().__init__("custom:TapStack", name, None, opts)
 
@@ -33,6 +33,10 @@ class TapStack(ComponentResource):
       region=self.region,
       opts=ResourceOptions(parent=self)
     )
+
+    # Initialize route tables that will be defined in _create_route_tables()
+    self.public_rt = None
+    self.private_rt = None
 
     self._create_networking()
     self._create_storage()
