@@ -173,6 +173,18 @@ describe('TapStack CloudFormation Template', () => {
           }
         });
       });
+
+      // Add additional test for granular CloudWatch logs permissions
+      const cwLogsPolicy = policies.find(
+        (p: any) => p.PolicyName === 'CloudWatchLogsPolicy'
+      );
+      expect(cwLogsPolicy).toBeDefined();
+
+      const cwStatement = cwLogsPolicy.PolicyDocument.Statement[0];
+      expect(cwStatement.Resource).toBeInstanceOf(Array);
+      expect(cwStatement.Resource.length).toBeGreaterThanOrEqual(2);
+      expect(cwStatement.Resource[0]).toContain('/aws/ec2/');
+      expect(cwStatement.Resource[1]).toContain(':log-stream:');
     });
 
     test('RDS monitoring role should use managed policy', () => {
@@ -257,6 +269,21 @@ describe('TapStack CloudFormation Template', () => {
       expect(rdsIngress.Properties.SourceSecurityGroupId).toEqual({
         Ref: 'EC2SecurityGroup',
       });
+    });
+
+    test('EC2 security group should restrict MySQL traffic to RDS security group', () => {
+      const ec2SG = template.Resources.EC2SecurityGroup;
+      expect(ec2SG).toBeDefined();
+
+      const mysqlEgress = ec2SG.Properties.SecurityGroupEgress.find(
+        (rule: any) => rule.FromPort === 3306 && rule.ToPort === 3306
+      );
+
+      expect(mysqlEgress).toBeDefined();
+      expect(mysqlEgress.DestinationSecurityGroupId).toEqual({
+        Ref: 'RDSSecurityGroup',
+      });
+      expect(mysqlEgress.CidrIp).toBeUndefined();
     });
   });
 
