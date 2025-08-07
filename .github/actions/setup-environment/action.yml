@@ -9,24 +9,39 @@ inputs:
     description: "Whether to download build artifacts"
     required: false
     default: "true"
-  download-cdk-artifacts:
-    description: "Whether to download CDK artifacts"
-    required: false
-    default: "false"
   terraform-version:
     description: "Terraform version to use"
     required: false
     default: "1.12.2"
+  pulumi-version:
+    description: "Pulumi version to use"
+    required: false
+    default: "3.109.0"
+  upload-artifacts:
+    description: "Whether to upload build artifacts (only for build job)"
+    required: false
+    default: "false"
+  platform:
+    description: "The platform type (cdk, cdktf, cfn, pulumi, terraform)"
+    required: false
+    default: ""
 
 runs:
   using: "composite"
   steps:
     - name: Download build artifacts
       if: inputs.download-artifacts == 'true'
+      id: download-artifacts
       uses: actions/download-artifact@v4
       with:
         name: build-artifacts
+      continue-on-error: true
 
+    - name: Set artifact status
+      if: inputs.download-artifacts == 'true'
+      shell: bash
+      run: echo "ARTIFACTS_FOUND=${{ steps.download-artifacts.outcome == 'success' && 'true' || 'false' }}" >> $GITHUB_ENV
+        
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
@@ -38,46 +53,79 @@ runs:
       with:
         python-version: "3.12.11"
         check-latest: true
-    
-    - name: Install Pulumi CLI
-      uses: pulumi/actions@v5
-      with:
-        pulumi-version: 3.109.0
 
     - name: Setup Terraform
+      if: ${{ inputs.platform == 'cdktf' || inputs.platform == 'tf' || inputs.platform == '' }}
       uses: hashicorp/setup-terraform@v3
       with:
         terraform_version: ${{ inputs.terraform-version }}
 
+    - name: Install Pulumi CLI
+      if: ${{ inputs.platform == 'pulumi' || inputs.platform == '' }}
+      uses: pulumi/actions@v5
+      with:
+        pulumi-version: ${{ inputs.pulumi-version }}
+
     - name: Install pipenv
       shell: bash
       run: |
-        python -m pip install --upgrade pip
-        pip install pipenv==2025.0.4
+        pip install --upgrade pip pipenv==2025.0.4
+        echo "PIPENV_VENV_IN_PROJECT=1" >> $GITHUB_ENV
+
+    - name: Cache Python virtual environment
+      uses: actions/cache@v4
+      with:
+        path: .venv
+        key: ${{ runner.os }}-python-${{ hashFiles('Pipfile.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-python-
 
     - name: Install dependencies
       shell: bash
-      run: npm ci
+      run: |  
+        # Node dependencies (cached by setup-node)
+        npm ci
+        
+        # Python dependencies (cached by actions/cache)
+        pipenv install --dev --ignore-pipfile
 
-    - name: Install Python dependencies
+    - name: Verify environment
       shell: bash
       run: |
-        if [ -f "Pipfile" ]; then
-          echo "Installing Python dependencies from Pipfile..."
-          pipenv install --dev
-        else
-          echo "No Pipfile found, skipping Python dependencies"
-        fi
+        echo "=== Environment Verification ==="
+        echo "Node.js: $(node --version)"
+        echo "Python: $(python --version)"
+        echo "Pipenv: $(pipenv --version)"
+        echo "Terraform: $(terraform version -json 2>/dev/null | jq -r '.terraform_version' || echo 'Not installed')"
+        echo "Terraform location: $(which terraform 2>/dev/null || echo 'Not found in PATH')"
+        echo "Pulumi: $(pulumi version 2>/dev/null || echo 'Not installed')"
+        echo "Pulumi location: $(which pulumi 2>/dev/null || echo 'Not found in PATH')"
+        echo "=============================="
 
-    - name: Download CDK artifacts
-      if: inputs.download-cdk-artifacts == 'true'
-      uses: actions/download-artifact@v4
+    - name: Setup PATH
+      shell: bash
+      run: |
+        # Add binaries to PATH
+        [ -d "node_modules/.bin" ] && echo "${{ github.workspace }}/node_modules/.bin" >> $GITHUB_PATH
+        [ -d ".venv/bin" ] && echo "${{ github.workspace }}/.venv/bin" >> $GITHUB_PATH
+
+
+
+    - name: Upload build artifacts
+      if: inputs.upload-artifacts == 'true'
+      uses: actions/upload-artifact@v4
       with:
-        name: cdk-artifacts
-        path: cdk.out/
+        name: build-artifacts
+        include-hidden-files: true
+        path: |
+          bin/
+          lib/
+          package*.json
+          Pipfile
+          Pipfile.lock
+          tsconfig.json
+          cdk.json
+          metadata.json
+          lambda/
 
-    - name: Restore executable permissions and setup PATH
-      shell: bash
-      run: |
-        chmod +x node_modules/.bin/* 2>/dev/null || true
-        echo "${{ github.workspace }}/node_modules/.bin" >> $GITHUB_PATH
+
