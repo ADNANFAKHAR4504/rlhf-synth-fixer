@@ -1,7 +1,7 @@
-✅ Refined CloudFormation Prompt
+ Refined CloudFormation Prompt
 You are tasked with designing an AWS CloudFormation YAML template to provision a secure, scalable, and highly available web application architecture. This infrastructure will be deployed into an existing VPC and must comply with AWS best practices for security, availability, and operational excellence.
 
-✅ Core Requirements
+Core Requirements
 VPC & Subnet Configuration
 
 Use existing VPC: vpc-123abcde.
@@ -70,7 +70,7 @@ Tagging
 
 Tag all resources with Environment: Production.
 
-✅ Constraints & Compliance
+Constraints & Compliance
 Use only t3.medium for EC2 and RDS.
 
 Use Amazon Linux 2 AMI.

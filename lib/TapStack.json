@@ -11,7 +11,7 @@
     },
     "ExistingVPCId": {
       "Type": "String",
-      "Default": "vpc-123abcde",
+      "Default": "vpc-02b425133fe06ed63",
       "Description": "Existing VPC ID where resources will be deployed"
     },
     "SSHAccessCIDR": {
@@ -862,9 +862,7 @@
           "Fn::Sub": "/webapp/${EnvironmentSuffix}/database/config"
         },
         "Type": "String",
-        "Value": {
-          "Fn::Sub": "{\"engine\": \"mysql\", \"version\": \"8.0.35\", \"instanceClass\": \"db.t3.medium\", \"allocatedStorage\": 100, \"multiAZ\": true, \"backupRetentionPeriod\": 7}"
-        },
+        "Value": "{\"engine\": \"mysql\", \"version\": \"8.0.35\", \"instanceClass\": \"db.t3.medium\", \"allocatedStorage\": 100, \"multiAZ\": true, \"backupRetentionPeriod\": 7}",
         "Description": "Database configuration parameters",
         "Tags": {
           "Environment": "Production"
@@ -877,7 +875,7 @@
         "Name": {
           "Fn::Sub": "/webapp/${EnvironmentSuffix}/database/endpoint"
         },
-        "Type": "SecureString",
+        "Type": "String",
         "Value": {
           "Fn::GetAtt": [
             "RDSInstance",
@@ -888,8 +886,7 @@
         "Tags": {
           "Environment": "Production"
         }
-      },
-      "DependsOn": "RDSInstance"
+      }
     },
     "RDSInstance": {
       "Type": "AWS::RDS::DBInstance",
