@@ -705,43 +705,55 @@ export class ServerlessStack extends cdk.Stack {
     );
 
     // Create deployment group for user function canary deployments
-    const userDeploymentGroup = new codedeploy.LambdaDeploymentGroup(this, 'UserDeploymentGroup', {
-      application: codeDeployApp,
-      alias: userFunctionAlias,
-      deploymentConfig: codedeploy.LambdaDeploymentConfig.ALL_AT_ONCE,
-      alarms: [userFunctionErrorAlarm, userProcessingErrorsAlarm],
-      autoRollback: {
-        failedDeployment: true,
-        stoppedDeployment: true,
-        deploymentInAlarm: false,
-      },
-    });
+    const userDeploymentGroup = new codedeploy.LambdaDeploymentGroup(
+      this,
+      'UserDeploymentGroup',
+      {
+        application: codeDeployApp,
+        alias: userFunctionAlias,
+        deploymentConfig: codedeploy.LambdaDeploymentConfig.ALL_AT_ONCE,
+        alarms: [userFunctionErrorAlarm, userProcessingErrorsAlarm],
+        autoRollback: {
+          failedDeployment: true,
+          stoppedDeployment: true,
+          deploymentInAlarm: false,
+        },
+      }
+    );
 
     // Create deployment group for order function canary deployments
-    const orderDeploymentGroup = new codedeploy.LambdaDeploymentGroup(this, 'OrderDeploymentGroup', {
-      application: codeDeployApp,
-      alias: orderFunctionAlias,
-      deploymentConfig: codedeploy.LambdaDeploymentConfig.ALL_AT_ONCE,
-      alarms: [orderFunctionErrorAlarm],
-      autoRollback: {
-        failedDeployment: true,
-        stoppedDeployment: true,
-        deploymentInAlarm: false,
-      },
-    });
+    const orderDeploymentGroup = new codedeploy.LambdaDeploymentGroup(
+      this,
+      'OrderDeploymentGroup',
+      {
+        application: codeDeployApp,
+        alias: orderFunctionAlias,
+        deploymentConfig: codedeploy.LambdaDeploymentConfig.ALL_AT_ONCE,
+        alarms: [orderFunctionErrorAlarm],
+        autoRollback: {
+          failedDeployment: true,
+          stoppedDeployment: true,
+          deploymentInAlarm: false,
+        },
+      }
+    );
 
     // Create deployment group for scheduled function canary deployments
-    const scheduledDeploymentGroup = new codedeploy.LambdaDeploymentGroup(this, 'ScheduledDeploymentGroup', {
-      application: codeDeployApp,
-      alias: scheduledFunctionAlias,
-      deploymentConfig: codedeploy.LambdaDeploymentConfig.ALL_AT_ONCE,
-      alarms: [scheduledFunctionErrorAlarm],
-      autoRollback: {
-        failedDeployment: true,
-        stoppedDeployment: true,
-        deploymentInAlarm: false,
-      },
-    });
+    const scheduledDeploymentGroup = new codedeploy.LambdaDeploymentGroup(
+      this,
+      'ScheduledDeploymentGroup',
+      {
+        application: codeDeployApp,
+        alias: scheduledFunctionAlias,
+        deploymentConfig: codedeploy.LambdaDeploymentConfig.ALL_AT_ONCE,
+        alarms: [scheduledFunctionErrorAlarm],
+        autoRollback: {
+          failedDeployment: true,
+          stoppedDeployment: true,
+          deploymentInAlarm: false,
+        },
+      }
+    );
 
     // Add EventBridge as target for the order processing rule
     orderProcessingRule.addTarget(
