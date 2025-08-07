@@ -1,0 +1,31 @@
+[
+    {
+        "OutputKey": "ApiUrl",
+        "OutputValue": "https://3v0iyh6jye.execute-api.us-east-1.amazonaws.com/prod/",
+        "Description": "API Gateway URL"
+    },
+    {
+        "OutputKey": "VpcId",
+        "OutputValue": "vpc-0548171d74fb8f15b",
+        "Description": "VPC ID"
+    },
+    {
+        "OutputKey": "WAFWebACLArn",
+        "OutputValue": "arn:aws:wafv2:us-east-1:718240086340:regional/webacl/WebACL-Of73Ht8EazUS/396b236f-926a-4d34-a081-bdce5373b8fb",
+        "Description": "WAF Web ACL ARN"
+    },
+    {
+        "OutputKey": "InstanceId",
+        "OutputValue": "i-0940a1b291fb36681",
+        "Description": "EC2 Instance ID"
+    },
+    {
+        "OutputKey": "SecureApiEndpoint40385271",
+        "OutputValue": "https://3v0iyh6jye.execute-api.us-east-1.amazonaws.com/prod/"
+    },
+    {
+        "OutputKey": "DatabaseEndpoint",
+        "OutputValue": "tapstack-secondary-synth310-securedatabase70a5c54b-iormveehsbjv.c43eiskmcd0s.us-east-1.rds.amazonaws.com",
+        "Description": "RDS Database Endpoint"
+    }
+]
