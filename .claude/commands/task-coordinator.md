@@ -18,6 +18,11 @@ Execute these phases in sequence to deliver production-ready IaC:
 
 **Agent**: `iac-code-reviewer`
 
+- If the MODEL_FAILURES reported by this agent are minimal (not big deployment
+issues deploying the MODEL_RESPONSE), then request iac-infra-generator but to add 2 more recent AWS
+Features or services to increase the complexity of the task. Then go to phase2 and give it
+another round.
+
 ## Task Selection
 
 ### Option 1: CSV Task Selection
@@ -25,11 +30,12 @@ Execute these phases in sequence to deliver production-ready IaC:
 If `tasks.csv` is present in the repository:
 
 1. Read and display available tasks from the CSV file
-2. Ask the user to select which task to work on by number or ID. Check if the user has already given the
-ID in the initial prompt and ask for confirmation.
+2. Ask the user to select which task to work on by number or ID, unless the user has already
+given the ID in the initial prompt, then dont ask for confirmation.
 3. Create a new git worktree inside worktree folder. Call the branch IAC-synth-{TaskId}.
-4. All the work you and the sub-agents need to do from this monent will be inside the worktree folder.
-5. If `metadata.json` is not present, extract platform and language from the selected task and mimic the actions from `cli/create-task.ts`:
+4. If its a multi-cloud task, notify the user and stop every execution. This project is only for AWS tasks.
+5. All the work you and the sub-agents need to do from this monent will be inside the worktree folder.
+6. If `metadata.json` is not present, extract platform and language from the selected task and mimic the actions from `cli/create-task.ts`:
    - Determine platform (cdk, cdktf, cfn, pulumi) from task description
    - Determine language (ts, py, yaml, json) from task description  
    - Set complexity from CSV difficulty field
@@ -40,8 +46,9 @@ ID in the initial prompt and ask for confirmation.
    - Generate `metadata.json` with extracted information
    - If the deployment needs to be done in a specific region, create the file `lib/AWS_REGION` with the
    region name. e.g: `echo "us-east-1" > lib/AWS_REGION`
-6. Use the selected task description for the workflow.
-7. Once the entire workflow is completed. Raise a Pull Request to main branch and remove the task form tasks.csv
+7. Install inside the worktree. `pipenv install --dev --ignore-pipfile` if language is py, `npm ci` if its not.
+8. Use the selected task description for the workflow.
+9. Once the entire workflow is completed. Raise a Pull Request to main branch and remove the task form tasks.csv
 
 Important: Do not generate the `/lib/PROMPT.md` code, delegate that to the sub-agent. Just send the task information
 to the generator agent
@@ -59,6 +66,8 @@ If `tasks.csv` is not present:
 3. Proceed with the workflow once requirements are properly defined
 
 ## Status Reporting Requirements
+
+You must always report in each log, the taskId youre working on and the region specified for deployment (default is us-east-1).
 
 All sub-agents MUST report their execution status to the coordinator using the following format:
 
@@ -111,6 +120,7 @@ Each sub-agent must provide status updates at these key points:
 - Report test coverage analysis completion with coverage percentage
 - Report blocking conditions if critical compliance failures prevent approval
 - Report final readiness recommendation with specific issues to resolve
+- Report the final `lib/MODEL_FAILURES.md` content.
 
 ## Usage
 
