@@ -6,18 +6,18 @@ You are building the infrastructure for a global website that must automatically
 
 The end-to-end architecture will function as follows:
 
-1.  **Content Management**: An administrator uploads website content to a primary S3 bucket in `us-east-1`. **S3 Cross-Region Replication (CRR)** instantly copies this content to a secondary bucket in `us-east-2`.
+1.  **Content Management**: An administrator uploads website content to a primary S3 bucket in `us-west-2`. **S3 Cross-Region Replication (CRR)** instantly copies this content to a secondary bucket in `us-east-2`.
 2.  **Web Serving via S3 Mountpoint**: In each region, an **Auto Scaling Group (ASG)** manages EC2 instances. When a new instance launches, it automatically:
     a. Installs the AWS S3 Mountpoint client.
     b. Mounts the local region's S3 bucket to its web server root directory (e.g., `/var/www/html`).
     c. Runs a web server (e.g., Nginx) that serves content directly from this mount point.
 3.  **Load Balancing & Scaling**: An **Application Load Balancer (ALB)** in each region distributes traffic to the EC2 instances. If CPU usage on an instance gets too high, the ASG will automatically launch a new instance to handle the load.
-4.  **Global Failover**: **Route 53** monitors the health of the ALB in each region. If the primary ALB in `us-east-1` becomes unhealthy, all traffic is automatically re-routed to the healthy ALB in `us-east-2`.
+4.  **Global Failover**: **Route 53** monitors the health of the ALB in each region. If the primary ALB in `us-west-2` becomes unhealthy, all traffic is automatically re-routed to the healthy ALB in `us-east-2`.
 
 ## Constraints
 
 - **IaC Tool**: AWS CDK with TypeScript.
-- **Regions**: `us-east-1` (Primary) and `us-east-2` (Secondary).
+- **Regions**: `us-west-2` (Primary) and `us-east-2` (Secondary).
 - **Core Pattern**: EC2 instances must use **S3 Mountpoint** to serve web content live from S3.
 - **Networking**: A new VPC with two public and two private subnets must be created in each region, with a single NAT Gateway for the private subnets.
 - **Scaling**: The ASG in each region should have a `max_capacity` of 1 initially, but must include a CPU utilization scaling policy.

@@ -5,7 +5,7 @@ Let me analyze this complex architecture and break down the components:
 
 ### Core Components:
 
-1. **S3 Cross-Region Replication**: Primary bucket in us-east-1 with CRR to us-east-2
+1. **S3 Cross-Region Replication**: Primary bucket in us-west-2 with CRR to us-east-2
 2. **VPC Infrastructure**: New VPCs in both regions with public/private subnets and NAT Gateway
 3. **EC2 Auto Scaling**: ASG with Launch Template that mounts S3 as filesystem
 4. **Load Balancing**: ALB in each region distributing traffic to EC2 instances
@@ -621,7 +621,7 @@ export class GlobalWebAppStack extends cdk.Stack {
         domainName: props.domainName,
         primaryAlb: compute.alb,
         secondaryAlb: props.secondaryAlb,
-        primaryRegion: 'us-east-1',
+        primaryRegion: 'us-west-2',
         secondaryRegion: 'us-east-2',
       });
 
@@ -689,16 +689,16 @@ export class GlobalWebAppApp extends cdk.App {
       }
     );
 
-    // Deploy primary region (us-east-1) with references to secondary
+    // Deploy primary region (us-west-2) with references to secondary
     const primaryStack = new GlobalWebAppStack(this, 'GlobalWebApp-Primary', {
       isPrimary: true,
-      region: 'us-east-1',
+      region: 'us-west-2',
       domainName: domainName,
       sshKeyName: sshKeyName,
       secondaryRegionBucket: secondaryStack.bucket,
       secondaryAlb: secondaryStack.alb,
       env: {
-        region: 'us-east-1',
+        region: 'us-west-2',
         account: process.env.CDK_DEFAULT_ACCOUNT,
       },
     });
@@ -797,5 +797,5 @@ new GlobalWebAppApp();
 
 ### 🏗️ **Architecture Components**
 
-- **Multi-Region VPC**: Custom VPCs in us-east-1 and us-east-2 with public/private subnets
+- **Multi-Region VPC**: Custom VPCs in us-west-2 and us-east-2 with public/private subnets
 - **S3 Cross-Region Replication**: Automatic content sync between regions

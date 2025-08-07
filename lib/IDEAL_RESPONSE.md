@@ -5,7 +5,7 @@ Let me analyze this complex architecture and break down the components:
 
 ### Core Components:
 
-1. **S3 Cross-Region Replication**: Primary bucket in us-east-1 with CRR to us-east-2
+1. **S3 Cross-Region Replication**: Primary bucket in us-west-2 with CRR to us-east-2
 2. **VPC Infrastructure**: New VPCs in both regions with public/private subnets and NAT Gateway
 3. **EC2 Auto Scaling**: ASG with Launch Template that mounts S3 as filesystem
 4. **Load Balancing**: ALB in each region distributing traffic to EC2 instances
@@ -53,8 +53,8 @@ import { RegionalResourcesStack } from './stacks/regional-resources-stack';
 import { S3CRRStack } from './stacks/s3-crr-stack';
 
 const REGIONS = {
-  PRIMARY: 'us-east-1',
-  SECONDARY: 'us-west-2',
+  PRIMARY: 'us-west-2',
+  SECONDARY: 'us-east-2',
 } as const;
 
 interface TapStackProps extends cdk.StackProps {
@@ -81,7 +81,7 @@ export class TapStack extends cdk.Stack {
       const s3CRRStack = new S3CRRStack(this, 'S3CRR', {
         env: {
           account: this.account,
-          region: REGIONS.PRIMARY, // us-east-1
+          region: REGIONS.PRIMARY, // us-west-2
         },
         sourceBucketName: `globalmountpoint-content-${REGIONS.PRIMARY}-${environmentSuffix}`,
         destinationBucketName: `globalmountpoint-content-${REGIONS.SECONDARY}-${environmentSuffix}`,

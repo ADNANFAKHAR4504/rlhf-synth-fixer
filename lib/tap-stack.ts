@@ -4,8 +4,8 @@ import { RegionalResourcesStack } from './stacks/regional-resources-stack';
 import { S3CRRStack } from './stacks/s3-crr-stack';
 
 const REGIONS = {
-  PRIMARY: 'us-east-1',
-  SECONDARY: 'us-west-2',
+  PRIMARY: 'us-west-2',
+  SECONDARY: 'us-east-2',
 } as const;
 
 interface TapStackProps extends cdk.StackProps {
@@ -32,7 +32,7 @@ export class TapStack extends cdk.Stack {
       const s3CRRStack = new S3CRRStack(this, 'S3CRR', {
         env: {
           account: this.account,
-          region: REGIONS.PRIMARY, // us-east-1
+          region: REGIONS.PRIMARY, // us-west-2
         },
         sourceBucketName: `globalmountpoint-content-${REGIONS.PRIMARY}-${environmentSuffix}`,
         destinationBucketName: `globalmountpoint-content-${REGIONS.SECONDARY}-${environmentSuffix}`,
