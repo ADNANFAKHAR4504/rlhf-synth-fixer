@@ -463,20 +463,44 @@ class TapStack(pulumi.ComponentResource):
     self.log_group = log_group
     self.lambda_role = lambda_role
 
+    # Create output properties for external access
+    self.api_gateway_url = pulumi.Output.concat(
+      "https://", api_gateway.id, ".execute-api.", self.region,
+      ".amazonaws.com/", self.environment_suffix
+    )
+    self.lambda_function_name = lambda_function.name
+    self.lambda_function_arn = lambda_function.arn
+    self.api_gateway_id = api_gateway.id
+    self.cloudwatch_log_group = log_group.name
+    self.lambda_role_arn = lambda_role.arn
+    self.memory_size = lambda_function.memory_size
+    self.timeout = lambda_function.timeout
+    self.runtime = lambda_function.runtime
+
     # Register comprehensive outputs
     self.register_outputs({
-      "api_gateway_url": pulumi.Output.concat(
-        "https://", api_gateway.id, ".execute-api.", self.region,
-        ".amazonaws.com/", self.environment_suffix
-      ),
-      "lambda_function_name": lambda_function.name,
-      "lambda_function_arn": lambda_function.arn,
-      "api_gateway_id": api_gateway.id,
-      "cloudwatch_log_group": log_group.name,
+      "api_gateway_url": self.api_gateway_url,
+      "lambda_function_name": self.lambda_function_name,
+      "lambda_function_arn": self.lambda_function_arn,
+      "api_gateway_id": self.api_gateway_id,
+      "cloudwatch_log_group": self.cloudwatch_log_group,
       "environment_suffix": self.environment_suffix,
-      "lambda_role_arn": lambda_role.arn,
+      "lambda_role_arn": self.lambda_role_arn,
       "region": self.region,
-      "memory_size": lambda_function.memory_size,
-      "timeout": lambda_function.timeout,
-      "runtime": lambda_function.runtime
+      "memory_size": self.memory_size,
+      "timeout": self.timeout,
+      "runtime": self.runtime
     })
+
+    # Export outputs at the stack level
+    pulumi.export("api_gateway_url", self.api_gateway_url)
+    pulumi.export("lambda_function_name", self.lambda_function_name)
+    pulumi.export("lambda_function_arn", self.lambda_function_arn)
+    pulumi.export("api_gateway_id", self.api_gateway_id)
+    pulumi.export("cloudwatch_log_group", self.cloudwatch_log_group)
+    pulumi.export("environment_suffix", self.environment_suffix)
+    pulumi.export("lambda_role_arn", self.lambda_role_arn)
+    pulumi.export("region", self.region)
+    pulumi.export("memory_size", self.memory_size)
+    pulumi.export("timeout", self.timeout)
+    pulumi.export("runtime", self.runtime)

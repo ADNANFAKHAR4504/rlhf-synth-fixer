@@ -9,22 +9,23 @@ import json
 import os
 import boto3
 import requests
+import pytest
+from typing import Dict, Any, Optional
 
 
 class TestTapStackLiveIntegration:
   """Integration tests against live deployed Pulumi stack."""
 
-  def __init__(self):
-    """Initialize test class."""
+  def setup_method(self):
+    """Set up integration test with live stack."""
+    # Initialize instance variables
     self.skip_tests = True
     self.outputs = {}
     self.region = 'us-west-2'
     self.lambda_client = None
     self.api_client = None
     self.logs_client = None
-
-  def setup_method(self):
-    """Set up integration test with live stack."""
+    
     # Load outputs from deployment
     outputs_file = 'cfn-outputs/flat-outputs.json'
     if not os.path.exists(outputs_file):
@@ -45,7 +46,7 @@ class TestTapStackLiveIntegration:
   def test_lambda_function_exists_and_configured(self):
     """Test that Lambda function exists with correct configuration."""
     if self.skip_tests:
-      return
+      pytest.skip("No deployment outputs found")
         
     function_name = self.outputs.get('lambda_function_name')
     assert function_name, "Lambda function name not found in outputs"
@@ -53,15 +54,23 @@ class TestTapStackLiveIntegration:
     response = self.lambda_client.get_function(FunctionName=function_name)
     function_config = response['Configuration']
     
-    assert function_config['Runtime'] == 'python3.9'
+    # Test updated configuration values
+    assert function_config['Runtime'] == 'python3.12'
     assert function_config['Handler'] == 'handler.lambda_handler'
-    assert function_config['Timeout'] == 30
-    assert function_config['MemorySize'] == 128
+    assert function_config['Timeout'] == 60
+    assert function_config['MemorySize'] == 512
+    
+    # Test environment variables
+    env_vars = function_config.get('Environment', {}).get('Variables', {})
+    assert 'ENVIRONMENT' in env_vars
+    assert 'LOG_LEVEL' in env_vars
+    assert 'REGION' in env_vars
+    assert 'FUNCTION_NAME' in env_vars
 
   def test_api_gateway_endpoint_responds(self):
     """Test that API Gateway endpoint is accessible and responds."""
     if self.skip_tests:
-      return
+      pytest.skip("No deployment outputs found")
         
     api_url = self.outputs.get('api_gateway_url')
     assert api_url, "API Gateway URL not found in outputs"
@@ -71,12 +80,77 @@ class TestTapStackLiveIntegration:
       # Should get a response (even if it's an error response)
       assert response.status_code in [200, 404, 500]
     except requests.RequestException as e:
-      assert False, f"Failed to reach API Gateway endpoint: {e}"
+      pytest.fail(f"Failed to reach API Gateway endpoint: {e}")
+
+  def test_api_gateway_health_endpoint(self):
+    """Test API Gateway health endpoint."""
+    if self.skip_tests:
+      pytest.skip("No deployment outputs found")
+        
+    api_url = self.outputs.get('api_gateway_url')
+    assert api_url, "API Gateway URL not found in outputs"
+    
+    health_url = f"{api_url.rstrip('/')}/health"
+    try:
+      response = requests.get(health_url, timeout=30)
+      assert response.status_code == 200
+      
+      data = response.json()
+      assert data.get('status') == 'healthy'
+      assert 'environment' in data
+      assert 'timestamp' in data
+    except requests.RequestException as e:
+      pytest.fail(f"Health endpoint failed: {e}")
+
+  def test_api_gateway_info_endpoint(self):
+    """Test API Gateway info endpoint."""
+    if self.skip_tests:
+      pytest.skip("No deployment outputs found")
+        
+    api_url = self.outputs.get('api_gateway_url')
+    assert api_url, "API Gateway URL not found in outputs"
+    
+    info_url = f"{api_url.rstrip('/')}/info"
+    try:
+      response = requests.get(info_url, timeout=30)
+      assert response.status_code == 200
+      
+      data = response.json()
+      assert data.get('service') == 'TAP API'
+      assert data.get('version') == '1.0.0'
+      assert 'environment' in data
+    except requests.RequestException as e:
+      pytest.fail(f"Info endpoint failed: {e}")
+
+  def test_api_gateway_post_endpoint(self):
+    """Test API Gateway POST endpoint."""
+    if self.skip_tests:
+      pytest.skip("No deployment outputs found")
+        
+    api_url = self.outputs.get('api_gateway_url')
+    assert api_url, "API Gateway URL not found in outputs"
+    
+    test_data = {"test": "data", "timestamp": "2024-01-01T00:00:00Z"}
+    try:
+      response = requests.post(
+        api_url, 
+        json=test_data, 
+        timeout=30,
+        headers={'Content-Type': 'application/json'}
+      )
+      assert response.status_code == 200
+      
+      data = response.json()
+      assert data.get('message') == 'POST request processed successfully'
+      assert 'received_data' in data
+      assert data['received_data'] == test_data
+    except requests.RequestException as e:
+      pytest.fail(f"POST endpoint failed: {e}")
 
   def test_cloudwatch_log_group_exists(self):
     """Test that CloudWatch log group exists for Lambda function."""
     if self.skip_tests:
-      return
+      pytest.skip("No deployment outputs found")
         
     log_group_name = self.outputs.get('cloudwatch_log_group')
     assert log_group_name, "CloudWatch log group name not found in outputs"
@@ -91,4 +165,70 @@ class TestTapStackLiveIntegration:
     assert len(matching_groups) == 1, f"Log group {log_group_name} not found"
     
     log_group = matching_groups[0]
-    assert log_group['retentionInDays'] == 14
+    # Test updated retention policy
+    environment = self.outputs.get('environment_suffix', 'dev')
+    expected_retention = 30 if environment == 'prod' else 14
+    assert log_group.get('retentionInDays') == expected_retention
+
+  def test_lambda_function_invocation(self):
+    """Test direct Lambda function invocation."""
+    if self.skip_tests:
+      pytest.skip("No deployment outputs found")
+        
+    function_name = self.outputs.get('lambda_function_name')
+    assert function_name, "Lambda function name not found in outputs"
+    
+    # Test direct invocation
+    test_event = {
+      "httpMethod": "GET",
+      "path": "/health",
+      "headers": {},
+      "queryStringParameters": None,
+      "body": None
+    }
+    
+    response = self.lambda_client.invoke(
+      FunctionName=function_name,
+      Payload=json.dumps(test_event)
+    )
+    
+    assert response['StatusCode'] == 200
+    
+    payload = json.loads(response['Payload'].read().decode('utf-8'))
+    assert payload['statusCode'] == 200
+    
+    body = json.loads(payload['body'])
+    assert body['status'] == 'healthy'
+
+  def test_cloudwatch_alarms_exist(self):
+    """Test that CloudWatch alarms are created."""
+    if self.skip_tests:
+      pytest.skip("No deployment outputs found")
+        
+    function_name = self.outputs.get('lambda_function_name')
+    environment = self.outputs.get('environment_suffix', 'dev')
+    
+    cloudwatch = boto3.client('cloudwatch', region_name=self.region)
+    
+    # Test error alarm
+    error_alarm_name = f"lambda-error-alarm-{environment}"
+    alarms = cloudwatch.describe_alarms(AlarmNames=[error_alarm_name])
+    assert len(alarms['MetricAlarms']) == 1
+    
+    error_alarm = alarms['MetricAlarms'][0]
+    expected_threshold = 3 if environment == 'prod' else 5
+    assert error_alarm['Threshold'] == expected_threshold
+    
+    # Test duration alarm
+    duration_alarm_name = f"lambda-duration-alarm-{environment}"
+    alarms = cloudwatch.describe_alarms(AlarmNames=[duration_alarm_name])
+    assert len(alarms['MetricAlarms']) == 1
+    
+    duration_alarm = alarms['MetricAlarms'][0]
+    expected_threshold = 45000 if environment == 'prod' else 25000
+    assert duration_alarm['Threshold'] == expected_threshold
+    
+    # Test throttles alarm
+    throttles_alarm_name = f"lambda-throttles-alarm-{environment}"
+    alarms = cloudwatch.describe_alarms(AlarmNames=[throttles_alarm_name])
+    assert len(alarms['MetricAlarms']) == 1
