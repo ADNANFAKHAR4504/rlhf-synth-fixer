@@ -38,6 +38,7 @@ from cdktf_cdktf_provider_aws.data_aws_iam_policy_document import (
     DataAwsIamPolicyDocument,
 )
 import json
+import os
 
 
 class TapStack(TerraformStack):
