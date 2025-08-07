@@ -68,12 +68,14 @@ class TapStack(pulumi.ComponentResource):
     self.tags = args.tags
     self.region = args.region
 
-    # Common tags for all resources
+    # Enhanced common tags for all resources
     common_tags = {
-      "Environment": "Production",
+      "Environment": self.environment_suffix.capitalize(),
       "Project": "TAP",
       "ManagedBy": "Pulumi",
       "Region": self.region,
+      "DeploymentDate": pulumi.Output.from_input(pulumi.get_stack()).apply(lambda _: str(pulumi.get_stack())),
+      "CostCenter": "TAP-API",
       **self.tags
     }
 
@@ -104,17 +106,21 @@ class TapStack(pulumi.ComponentResource):
       opts=ResourceOptions(parent=self)
     )
 
-    # Create custom policy for CloudWatch metrics
+    # Create enhanced custom policy for CloudWatch metrics and logging
     cloudwatch_policy = iam.Policy(
       f"lambda-cloudwatch-policy-{self.environment_suffix}",
-      description="Allow Lambda to write custom metrics to CloudWatch",
+      description="Allow Lambda to write custom metrics and logs to CloudWatch",
       policy=json.dumps({
         "Version": "2012-10-17",
         "Statement": [
           {
             "Effect": "Allow",
             "Action": [
-              "cloudwatch:PutMetricData"
+              "cloudwatch:PutMetricData",
+              "logs:CreateLogGroup",
+              "logs:CreateLogStream",
+              "logs:PutLogEvents",
+              "logs:DescribeLogStreams"
             ],
             "Resource": "*",
             "Condition": {
@@ -122,6 +128,14 @@ class TapStack(pulumi.ComponentResource):
                 "cloudwatch:namespace": "AWS/Lambda/Custom"
               }
             }
+          },
+          {
+            "Effect": "Allow",
+            "Action": [
+              "xray:PutTraceSegments",
+              "xray:PutTelemetryRecords"
+            ],
+            "Resource": "*"
           }
         ]
       }),
@@ -137,45 +151,51 @@ class TapStack(pulumi.ComponentResource):
       opts=ResourceOptions(parent=self)
     )
 
-    # Create CloudWatch Log Group for Lambda function
+    # Create CloudWatch Log Group for Lambda function with improved retention
+    log_retention_days = 30 if self.environment_suffix == 'prod' else 14
     log_group = cloudwatch.LogGroup(
       f"lambda-log-group-{self.environment_suffix}",
       name=f"/aws/lambda/tap-api-handler-{self.environment_suffix}",
-      retention_in_days=14,
+      retention_in_days=log_retention_days,
       tags=common_tags,
       opts=ResourceOptions(parent=self)
     )
 
-    # Create Lambda function
+    # Create Lambda function with improved configuration
     lambda_function = lambda_.Function(
       f"tap-api-handler-{self.environment_suffix}",
-      runtime="python3.9",
+      runtime="python3.12",  # Upgraded to latest stable Python runtime
       handler="handler.lambda_handler",
       role=lambda_role.arn,
       code=pulumi.AssetArchive({
         ".": pulumi.FileArchive("./lambda_function")
       }),
-      timeout=30,
-      memory_size=128,
+      timeout=60,  # Increased timeout for better reliability
+      memory_size=512,  # Increased memory for better performance
       environment={
         "variables": {
           "ENVIRONMENT": self.environment_suffix,
-          "LOG_LEVEL": "INFO"
+          "LOG_LEVEL": "INFO",
+          "REGION": self.region,
+          "FUNCTION_NAME": f"tap-api-handler-{self.environment_suffix}"
         }
       },
-      depends_on=[lambda_policy_attachment, cloudwatch_policy_attachment,
-                  log_group],
       tags=common_tags,
-      opts=ResourceOptions(parent=self)
+      opts=ResourceOptions(
+        parent=self,
+        depends_on=[lambda_policy_attachment, cloudwatch_policy_attachment, log_group]
+      )
     )
 
-    # Create API Gateway REST API
+    # Create API Gateway REST API with enhanced configuration
     api_gateway = apigateway.RestApi(
       f"tap-api-{self.environment_suffix}",
       description=f"TAP API Gateway for Lambda - {self.environment_suffix}",
       endpoint_configuration={
         "types": "REGIONAL"
       },
+      minimum_compression_size=1024,  # Enable compression for responses > 1KB
+      binary_media_types=["*/*"],  # Support binary responses
       tags=common_tags,
       opts=ResourceOptions(parent=self)
     )
@@ -301,16 +321,21 @@ class TapStack(pulumi.ComponentResource):
       f"api-deployment-{self.environment_suffix}",
       rest_api=api_gateway.id,
       stage_name=self.environment_suffix,
-      depends_on=[
-        api_integration,
-        root_integration,
-        cors_integration_response,
-        lambda_permission
-      ],
-      opts=ResourceOptions(parent=self)
+      opts=ResourceOptions(
+        parent=self,
+        depends_on=[
+          api_integration,
+          root_integration,
+          cors_integration_response,
+          lambda_permission
+        ]
+      )
     )
 
-    # Create CloudWatch alarms for monitoring
+    # Create enhanced CloudWatch alarms for monitoring
+    error_threshold = 3 if self.environment_suffix == 'prod' else 5
+    duration_threshold = 45000 if self.environment_suffix == 'prod' else 25000  # 45s for prod, 25s for others
+    
     cloudwatch.MetricAlarm(
       f"lambda-error-alarm-{self.environment_suffix}",
       comparison_operator="GreaterThanThreshold",
@@ -319,8 +344,8 @@ class TapStack(pulumi.ComponentResource):
       namespace="AWS/Lambda",
       period=300,
       statistic="Sum",
-      threshold=5,
-      alarm_description="Lambda function error rate is too high",
+      threshold=error_threshold,
+      alarm_description=f"Lambda function error rate is too high for {self.environment_suffix}",
       dimensions={
         "FunctionName": lambda_function.name
       },
@@ -336,8 +361,8 @@ class TapStack(pulumi.ComponentResource):
       namespace="AWS/Lambda",
       period=300,
       statistic="Average",
-      threshold=25000,  # 25 seconds
-      alarm_description="Lambda function duration is too high",
+      threshold=duration_threshold,
+      alarm_description=f"Lambda function duration is too high for {self.environment_suffix}",
       dimensions={
         "FunctionName": lambda_function.name
       },
@@ -345,7 +370,25 @@ class TapStack(pulumi.ComponentResource):
       opts=ResourceOptions(parent=self)
     )
 
-    # Create CloudWatch dashboard for monitoring
+    # Add throttling alarm for better monitoring
+    cloudwatch.MetricAlarm(
+      f"lambda-throttles-alarm-{self.environment_suffix}",
+      comparison_operator="GreaterThanThreshold",
+      evaluation_periods=2,
+      metric_name="Throttles",
+      namespace="AWS/Lambda",
+      period=300,
+      statistic="Sum",
+      threshold=1,
+      alarm_description=f"Lambda function is being throttled for {self.environment_suffix}",
+      dimensions={
+        "FunctionName": lambda_function.name
+      },
+      tags=common_tags,
+      opts=ResourceOptions(parent=self)
+    )
+
+    # Create enhanced CloudWatch dashboard for monitoring
     cloudwatch.Dashboard(
       f"tap-api-dashboard-{self.environment_suffix}",
       dashboard_name=f"TAP-API-{self.environment_suffix.capitalize()}",
@@ -362,12 +405,13 @@ class TapStack(pulumi.ComponentResource):
                 "metrics": [
                   ["AWS/Lambda", "Duration", "FunctionName", args[0]],
                   [".", "Errors", ".", "."],
-                  [".", "Invocations", ".", "."]
+                  [".", "Invocations", ".", "."],
+                  [".", "Throttles", ".", "."]
                 ],
                 "period": 300,
                 "stat": "Average",
                 "region": self.region,
-                "title": "Lambda Function Metrics"
+                "title": f"Lambda Function Metrics - {self.environment_suffix.capitalize()}"
               }
             },
             {
@@ -387,7 +431,24 @@ class TapStack(pulumi.ComponentResource):
                 "period": 300,
                 "stat": "Sum",
                 "region": self.region,
-                "title": "API Gateway Metrics"
+                "title": f"API Gateway Metrics - {self.environment_suffix.capitalize()}"
+              }
+            },
+            {
+              "type": "metric",
+              "x": 0,
+              "y": 12,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "metrics": [
+                  ["AWS/Lambda", "Concurrency", "FunctionName", args[0]],
+                  [".", "UnreservedConcurrency", ".", "."]
+                ],
+                "period": 300,
+                "stat": "Average",
+                "region": self.region,
+                "title": f"Lambda Concurrency - {self.environment_suffix.capitalize()}"
               }
             }
           ]
@@ -402,7 +463,7 @@ class TapStack(pulumi.ComponentResource):
     self.log_group = log_group
     self.lambda_role = lambda_role
 
-    # Register outputs
+    # Register comprehensive outputs
     self.register_outputs({
       "api_gateway_url": pulumi.Output.concat(
         "https://", api_gateway.id, ".execute-api.", self.region,
@@ -412,5 +473,10 @@ class TapStack(pulumi.ComponentResource):
       "lambda_function_arn": lambda_function.arn,
       "api_gateway_id": api_gateway.id,
       "cloudwatch_log_group": log_group.name,
-      "environment_suffix": self.environment_suffix
+      "environment_suffix": self.environment_suffix,
+      "lambda_role_arn": lambda_role.arn,
+      "region": self.region,
+      "memory_size": lambda_function.memory_size,
+      "timeout": lambda_function.timeout,
+      "runtime": lambda_function.runtime
     })
