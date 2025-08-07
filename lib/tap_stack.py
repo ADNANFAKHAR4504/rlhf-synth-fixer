@@ -244,7 +244,7 @@ class TapStack(pulumi.ComponentResource):
       "Version": "2012-10-17",
       "Statement": [
         {
-          "Sid": "AllowKeyRotationOperations",
+          "Sid": "AllowKeyManagement",
           "Effect": "Allow",
           "Action": [
             "iam:CreateAccessKey",
@@ -255,19 +255,18 @@ class TapStack(pulumi.ComponentResource):
           "Resource": "*"
         },
         {
-          "Sid": "DenyIfUserTagExpired",
+          "Sid": "DenyIfRotationExpired",
           "Effect": "Deny",
           "Action": "*",
           "Resource": "*",
           "Condition": {
             "DateGreaterThan": {
-              "aws:PrincipalTag/RotationExpiry": "${aws:CurrentTime}"
+              "aws:CurrentTime": "${aws:PrincipalTag/RotationExpiry}"
             }
           }
         }
       ]
     }, indent=2)
-
 
 
   @staticmethod
