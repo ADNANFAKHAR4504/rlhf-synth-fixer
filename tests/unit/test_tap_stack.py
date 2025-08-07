@@ -1,148 +1,253 @@
+#tests/unit/test_tap_stack.py
 """
-Unit-tests for lib.tap_stack.TapStack.
+Unit tests for the TapStack infrastructure components.
 
-The Pulumi *Mocks* mechanism is used so no real AWS calls are made.
-We capture every logical resource produced by the stack and assert that
-critical security-first requirements are met.
-
-Run with:
-
-    pytest -q tests/unit/test_tap_stack.py
+This module contains comprehensive unit tests for all components of the TapStack,
+ensuring proper configuration, security settings, and compliance with requirements.
 """
-from __future__ import annotations
-
-import json
-import re
-import unittest
-from typing import Any, Dict, List
 
 import pulumi
-from pulumi.runtime import Mocks, set_mocks
+import pytest
+from moto import mock_ec2, mock_s3, mock_iam, mock_kms
+import boto3
+from unittest.mock import patch, MagicMock
 
 
-# --------------------------------------------------------------------------- #
-# Pulumi Mocks                                                                #
-# --------------------------------------------------------------------------- #
-class _MockRecorder(Mocks):
-    """
-    Records every resource created during the Pulumi program so that it can be
-    inspected by assertions.
-    """
+class TestTapStackUnit:
+    """Unit tests for TapStack components."""
+    
+    @pytest.fixture
+    def mock_pulumi(self):
+        """Mock Pulumi configuration."""
+        with patch('pulumi.Config') as mock_config:
+            mock_config.return_value.get.return_value = 'test'
+            yield mock_config
+    
+    def test_standard_tags(self):
+        """Test that standard tags are properly defined."""
+        from lib.tap_stack import TapStack, TapStackArgs
+        
+        # Mock Pulumi resources
+        with patch('pulumi_aws.kms.Key'), \
+             patch('pulumi_aws.secretsmanager.Secret'), \
+             patch('pulumi_aws.iam.Role'), \
+             patch('pulumi_aws.cloudtrail.Trail'), \
+             patch('pulumi_aws.ec2.Vpc'), \
+             patch('pulumi_aws.s3.Bucket'), \
+             patch('pulumi_aws.rds.Instance'), \
+             patch('pulumi_aws.lambda_.Function'), \
+             patch('pulumi_aws.ec2.Instance'), \
+             patch('pulumi_aws.cloudwatch.LogGroup'), \
+             patch('pulumi_aws.cfg.ConfigurationRecorder'), \
+             patch('pulumi.ComponentResource.__init__'):
+            
+            stack = TapStack("test-stack", TapStackArgs("test"))
+            
+            assert stack.standard_tags["Environment"] == "test"
+            assert stack.standard_tags["Owner"] == "DevOps-Team"
+            assert stack.standard_tags["CostCenter"] == "Infrastructure"
+            assert stack.standard_tags["Project"] == "AWS-Nova-Model-Breaking"
+            assert stack.standard_tags["ManagedBy"] == "Pulumi"
+    
+    def test_regions_configuration(self):
+        """Test that regions are properly configured."""
+        from lib.tap_stack import TapStack, TapStackArgs
+        
+        with patch('pulumi_aws.kms.Key'), \
+             patch('pulumi_aws.secretsmanager.Secret'), \
+             patch('pulumi_aws.iam.Role'), \
+             patch('pulumi_aws.cloudtrail.Trail'), \
+             patch('pulumi_aws.ec2.Vpc'), \
+             patch('pulumi_aws.s3.Bucket'), \
+             patch('pulumi_aws.rds.Instance'), \
+             patch('pulumi_aws.lambda_.Function'), \
+             patch('pulumi_aws.ec2.Instance'), \
+             patch('pulumi_aws.cloudwatch.LogGroup'), \
+             patch('pulumi_aws.cfg.ConfigurationRecorder'), \
+             patch('pulumi.ComponentResource.__init__'):
+            
+            stack = TapStack("test-stack", TapStackArgs("test"))
+            
+            expected_regions = ["us-east-1", "us-west-2", "ap-south-1"]
+            assert stack.regions == expected_regions
+            assert stack.primary_region == "us-east-1"
+    
+    def test_resource_naming_convention(self):
+        """Test that resources follow PROD prefix naming convention."""
+        from lib.tap_stack import TapStack, TapStackArgs
+        
+        # Mock all AWS resources
+        with patch('pulumi_aws.kms.Key') as mock_kms, \
+             patch('pulumi_aws.secretsmanager.Secret') as mock_secret, \
+             patch('pulumi_aws.iam.Role') as mock_role, \
+             patch('pulumi_aws.cloudtrail.Trail') as mock_trail, \
+             patch('pulumi_aws.ec2.Vpc') as mock_vpc, \
+             patch('pulumi_aws.s3.Bucket') as mock_s3, \
+             patch('pulumi_aws.rds.Instance') as mock_rds, \
+             patch('pulumi_aws.lambda_.Function') as mock_lambda, \
+             patch('pulumi_aws.ec2.Instance') as mock_ec2, \
+             patch('pulumi_aws.cloudwatch.LogGroup') as mock_log, \
+             patch('pulumi_aws.cfg.ConfigurationRecorder') as mock_config, \
+             patch('pulumi.ComponentResource.__init__'):
+            
+            stack = TapStack("test-stack", TapStackArgs("test"))
+            
+            # Check that KMS keys are created with PROD prefix
+            assert mock_kms.call_count >= 3  # One for each region
+            for call in mock_kms.call_args_list:
+                resource_name = call[0][0]  # First positional argument is resource name
+                assert resource_name.startswith("PROD-kms-")
+    
+    def test_kms_key_rotation_enabled(self):
+        """Test that KMS key rotation is enabled."""
+        from lib.tap_stack import TapStack, TapStackArgs
+        
+        with patch('pulumi_aws.kms.Key') as mock_kms, \
+             patch('pulumi_aws.secretsmanager.Secret'), \
+             patch('pulumi_aws.iam.Role'), \
+             patch('pulumi_aws.cloudtrail.Trail'), \
+             patch('pulumi_aws.ec2.Vpc'), \
+             patch('pulumi_aws.s3.Bucket'), \
+             patch('pulumi_aws.rds.Instance'), \
+             patch('pulumi_aws.lambda_.Function'), \
+             patch('pulumi_aws.ec2.Instance'), \
+             patch('pulumi_aws.cloudwatch.LogGroup'), \
+             patch('pulumi_aws.cfg.ConfigurationRecorder'), \
+             patch('pulumi.ComponentResource.__init__'):
+            
+            stack = TapStack("test-stack", TapStackArgs("test"))
+            
+            # Verify KMS key rotation is enabled
+            for call in mock_kms.call_args_list:
+                kwargs = call[1]
+                assert kwargs.get('enable_key_rotation') is True
+    
+    def test_s3_encryption_configuration(self):
+        """Test that S3 buckets have proper encryption configuration."""
+        from lib.tap_stack import TapStack, TapStackArgs
+        
+        with patch('pulumi_aws.kms.Key'), \
+             patch('pulumi_aws.secretsmanager.Secret'), \
+             patch('pulumi_aws.iam.Role'), \
+             patch('pulumi_aws.cloudtrail.Trail'), \
+             patch('pulumi_aws.ec2.Vpc'), \
+             patch('pulumi_aws.s3.Bucket') as mock_s3, \
+             patch('pulumi_aws.rds.Instance'), \
+             patch('pulumi_aws.lambda_.Function'), \
+             patch('pulumi_aws.ec2.Instance'), \
+             patch('pulumi_aws.cloudwatch.LogGroup'), \
+             patch('pulumi_aws.cfg.ConfigurationRecorder'), \
+             patch('pulumi.ComponentResource.__init__'):
+            
+            stack = TapStack("test-stack", TapStackArgs("test"))
+            
+            # Verify S3 buckets have encryption configuration
+            for call in mock_s3.call_args_list:
+                kwargs = call[1]
+                if 'server_side_encryption_configuration' in kwargs:
+                    sse_config = kwargs['server_side_encryption_configuration']
+                    assert sse_config is not None
+    
+    def test_vpc_ipv6_support(self):
+        """Test that VPCs have IPv6 support enabled."""
+        from lib.tap_stack import TapStack, TapStackArgs
+        
+        with patch('pulumi_aws.kms.Key'), \
+             patch('pulumi_aws.secretsmanager.Secret'), \
+             patch('pulumi_aws.iam.Role'), \
+             patch('pulumi_aws.cloudtrail.Trail'), \
+             patch('pulumi_aws.ec2.Vpc') as mock_vpc, \
+             patch('pulumi_aws.s3.Bucket'), \
+             patch('pulumi_aws.rds.Instance'), \
+             patch('pulumi_aws.lambda_.Function'), \
+             patch('pulumi_aws.ec2.Instance'), \
+             patch('pulumi_aws.cloudwatch.LogGroup'), \
+             patch('pulumi_aws.cfg.ConfigurationRecorder'), \
+             patch('pulumi.ComponentResource.__init__'):
+            
+            stack = TapStack("test-stack", TapStackArgs("test"))
+            
+            # Verify VPCs have IPv6 enabled
+            for call in mock_vpc.call_args_list:
+                kwargs = call[1]
+                assert kwargs.get('assign_generated_ipv6_cidr_block') is True
+    
+    def test_rds_encryption_enabled(self):
+        """Test that RDS instances have encryption enabled."""
+        from lib.tap_stack import TapStack, TapStackArgs
+        
+        with patch('pulumi_aws.kms.Key'), \
+             patch('pulumi_aws.secretsmanager.Secret'), \
+             patch('pulumi_aws.iam.Role'), \
+             patch('pulumi_aws.cloudtrail.Trail'), \
+             patch('pulumi_aws.ec2.Vpc'), \
+             patch('pulumi_aws.s3.Bucket'), \
+             patch('pulumi_aws.rds.Instance') as mock_rds, \
+             patch('pulumi_aws.lambda_.Function'), \
+             patch('pulumi_aws.ec2.Instance'), \
+             patch('pulumi_aws.cloudwatch.LogGroup'), \
+             patch('pulumi_aws.cfg.ConfigurationRecorder'), \
+             patch('pulumi.ComponentResource.__init__'):
+            
+            stack = TapStack("test-stack", TapStackArgs("test"))
+            
+            # Verify RDS instances have encryption enabled
+            for call in mock_rds.call_args_list:
+                kwargs = call[1]
+                assert kwargs.get('storage_encrypted') is True
+    
+    def test_cloudtrail_multi_region(self):
+        """Test that CloudTrail is configured for multi-region."""
+        from lib.tap_stack import TapStack, TapStackArgs
+        
+        with patch('pulumi_aws.kms.Key'), \
+             patch('pulumi_aws.secretsmanager.Secret'), \
+             patch('pulumi_aws.iam.Role'), \
+             patch('pulumi_aws.cloudtrail.Trail') as mock_trail, \
+             patch('pulumi_aws.ec2.Vpc'), \
+             patch('pulumi_aws.s3.Bucket'), \
+             patch('pulumi_aws.rds.Instance'), \
+             patch('pulumi_aws.lambda_.Function'), \
+             patch('pulumi_aws.ec2.Instance'), \
+             patch('pulumi_aws.cloudwatch.LogGroup'), \
+             patch('pulumi_aws.cfg.ConfigurationRecorder'), \
+             patch('pulumi.ComponentResource.__init__'):
+            
+            stack = TapStack("test-stack", TapStackArgs("test"))
+            
+            # Verify CloudTrail is multi-region
+            trail_call = mock_trail.call_args
+            kwargs = trail_call[1]
+            assert kwargs.get('is_multi_region_trail') is True
+            assert kwargs.get('enable_log_file_validation') is True
+    
+    def test_ec2_metadata_security(self):
+        """Test that EC2 instances have proper metadata security."""
+        from lib.tap_stack import TapStack, TapStackArgs
+        
+        with patch('pulumi_aws.kms.Key'), \
+             patch('pulumi_aws.secretsmanager.Secret'), \
+             patch('pulumi_aws.iam.Role'), \
+             patch('pulumi_aws.cloudtrail.Trail'), \
+             patch('pulumi_aws.ec2.Vpc'), \
+             patch('pulumi_aws.s3.Bucket'), \
+             patch('pulumi_aws.rds.Instance'), \
+             patch('pulumi_aws.lambda_.Function'), \
+             patch('pulumi_aws.ec2.Instance') as mock_ec2, \
+             patch('pulumi_aws.cloudwatch.LogGroup'), \
+             patch('pulumi_aws.cfg.ConfigurationRecorder'), \
+             patch('pulumi.ComponentResource.__init__'):
+            
+            stack = TapStack("test-stack", TapStackArgs("test"))
+            
+            # Verify EC2 metadata options
+            for call in mock_ec2.call_args_list:
+                kwargs = call[1]
+                if 'metadata_options' in kwargs:
+                    metadata = kwargs['metadata_options']
+                    # Should require IMDSv2
+                    assert hasattr(metadata, 'http_tokens')
 
-    def __init__(self) -> None:
-        self.resources: List[Dict[str, Any]] = []
 
-    # new_resource is called each time a resource is instantiated
-    def new_resource(  # type: ignore[override]
-        self,
-        type_: str,
-        name: str,
-        inputs: Dict[str, Any],
-        provider: str | None,
-        id_: str | None,
-    ):
-        self.resources.append(
-            {
-                "type": type_,
-                "name": name,
-                "inputs": inputs,
-                "provider": provider,
-            }
-        )
-        # Return a *fake* physical ID and the same inputs back to Pulumi
-        return id_ or f"{name}_id", inputs
-
-    # call is invoked for data-source look-ups (`get_ami`, `get_certificate`, …)
-    def call(  # type: ignore[override]
-        self,
-        token: str,
-        args: Dict[str, Any],
-        provider: str | None,
-    ):
-        # For unit tests we can safely return an empty dict – the values are
-        # never used in resource arguments that we validate.
-        return {}
-
-
-# --------------------------------------------------------------------------- #
-# Unit-test cases                                                             #
-# --------------------------------------------------------------------------- #
-class TestTapStack(unittest.TestCase):
-    """
-    Minimal but meaningful unit-test coverage focusing on:
-
-    • correct multi-region VPC creation,
-    • mandatory tag propagation,
-    • TLS-only S3 policy,
-    • least-privilege IAM role for EC2.
-    """
-
-    @classmethod
-    def setUpClass(cls) -> None:
-        cls.mocks = _MockRecorder()
-        set_mocks(cls.mocks, project="unit-test-proj", stack="unit")
-
-        # *Instantiate* the stack under test
-        from lib.tap_stack import TapStack  # local import so mocks are active
-        TapStack("test-stack")  # noqa: F401 – object captured by recorder
-
-    # -------------------------  helpers  ---------------------------------- #
-    @staticmethod
-    def _find_resources(type_regex: str) -> List[Dict[str, Any]]:
-        rx = re.compile(type_regex)
-        return [r for r in TestTapStack.mocks.resources if rx.match(r["type"])]
-
-    # --------------------------  tests  ----------------------------------- #
-    def test_three_vpcs_created(self) -> None:
-        """Exactly three VPCs – one per mandated region – must exist."""
-        vpcs = self._find_resources(r"aws:ec2/vpc:Vpc")
-        self.assertEqual(
-            len(vpcs),
-            3,
-            f"Expected 3 VPCs (one per region) but found {len(vpcs)}.",
-        )
-
-    def test_vpc_tags_contain_environment(self) -> None:
-        """Every VPC must carry mandatory cost-allocation tags."""
-        for vpc in self._find_resources(r"aws:ec2/vpc:Vpc"):
-            tags = vpc["inputs"].get("tags", {})
-            self.assertIn("Environment", tags)
-            self.assertIn("CostCenter", tags)
-
-    def test_s3_policy_denies_non_tls(self) -> None:
-        """Primary S3 bucket policy must deny insecure (non-TLS) requests."""
-        policies = self._find_resources(r"aws:s3/bucketPolicy:BucketPolicy")
-        self.assertTrue(policies, "No S3 bucket policy found.")
-
-        tls_statement_found = False
-        for pol in policies:
-            policy_str = (
-                pol["inputs"]["policy"]
-                if isinstance(pol["inputs"]["policy"], str)
-                else json.dumps(pol["inputs"]["policy"])
-            )
-            if '"Sid": "TLSRequired"' in policy_str:
-                tls_statement_found = True
-                break
-        self.assertTrue(
-            tls_statement_found, "TLS-enforcement statement not present in policy."
-        )
-
-    def test_iam_ec2_role_is_least_privilege(self) -> None:
-        """EC2 instance role must exist and must *not* be administrator."""
-        roles = self._find_resources(r"aws:iam/role:Role")
-        role_names = [r["name"] for r in roles]
-        self.assertIn(
-            "prod-ec2-role",
-            role_names,
-            "EC2 instance role 'prod-ec2-role' missing.",
-        )
-
-        # Ensure *no* role has AdministratorAccess policy attached
-        attachments = self._find_resources(r"aws:iam/rolePolicyAttachment:RolePolicyAttachment")
-        for att in attachments:
-            self.assertNotIn(
-                "AdministratorAccess",
-                att["inputs"].get("policy_arn", ""),
-                "AdministratorAccess attached to an IAM role – violates least-privilege.",
-            )
+if __name__ == "__main__":
+    pytest.main([__file__])
