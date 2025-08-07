@@ -53,9 +53,12 @@ elif [ "$PLATFORM" = "cfn" ] && [ "$LANGUAGE" = "yaml" ]; then
 elif [ "$PLATFORM" = "cfn" ] && [ "$LANGUAGE" = "json" ]; then
   echo "✅ CloudFormation JSON project detected, deploying with AWS CLI..."
   npm run cfn:deploy-json
+elif [ "$PLATFORM" = "pulumi" ]; then
+  echo "✅ Pulumi project detected, running Pulumi deploy..."
+  pulumi up --yes
 else
   echo "ℹ️ Unknown deployment method for platform: $PLATFORM, language: $LANGUAGE"
-  echo "💡 Supported combinations: cdk+typescript, cdk+python, cfn+yaml, cfn+json, cdktf+typescript, cdktf+python"
+  echo "💡 Supported combinations: cdk+typescript, cdk+python, cfn+yaml, cfn+json, cdktf+typescript, cdktf+python, pulumi+python, pulumi+typescript"
   exit 1
 fi
 
@@ -132,8 +135,33 @@ if [ "$PLATFORM" = "cdk" ]; then
     cat cfn-outputs/all-outputs.json || echo "No consolidated outputs"
     echo "Flat outputs:"
     cat cfn-outputs/flat-outputs.json || echo "No flat outputs"
+  elif [ "$PLATFORM" = "pulumi" ]; then
+    echo "✅ Pulumi project detected, getting Pulumi outputs..."
+    mkdir -p cfn-outputs
+    echo "{}" > cfn-outputs/all-outputs.json
+    echo "{}" > cfn-outputs/flat-outputs.json
+    
+    # Get Pulumi stack outputs
+    if command -v pulumi >/dev/null 2>&1; then
+      echo "Getting Pulumi stack outputs..."
+      pulumi stack output --json > cfn-outputs/pulumi-raw-outputs.json 2>/dev/null || echo "No Pulumi outputs found"
+      
+      # Convert Pulumi outputs to flat format for consistency with other platforms
+      if [ -f cfn-outputs/pulumi-raw-outputs.json ] && [ -s cfn-outputs/pulumi-raw-outputs.json ]; then
+        cp cfn-outputs/pulumi-raw-outputs.json cfn-outputs/all-outputs.json
+        cp cfn-outputs/pulumi-raw-outputs.json cfn-outputs/flat-outputs.json
+        echo "Pulumi outputs saved successfully"
+      else
+        echo "No Pulumi outputs to process"
+      fi
+    else
+      echo "Pulumi CLI not found, cannot retrieve outputs"
+    fi
+    
+    echo "Pulumi outputs:"
+    cat cfn-outputs/flat-outputs.json || echo "No Pulumi outputs"
   else
-    echo "ℹ️ Not a CDK TypeScript or CloudFormation project, creating empty outputs for consistency"
+    echo "ℹ️ Not a CDK TypeScript, CloudFormation, or Pulumi project, creating empty outputs for consistency"
     mkdir -p cfn-outputs
     echo "{}" > cfn-outputs/all-outputs.json
     echo "{}" > cfn-outputs/flat-outputs.json
