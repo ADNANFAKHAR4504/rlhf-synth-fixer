@@ -1,5 +1,5 @@
 import * as aws from '@cdktf/provider-aws';
-import { App, Fn, TerraformStack } from 'cdktf';
+import { Fn, TerraformStack } from 'cdktf';
 import { Construct } from 'constructs';
 import { CloudwatchStack } from './cloudwatch-stack';
 import { Ec2Stack } from './ec2-stack';
@@ -97,9 +97,5 @@ class TapStack extends TerraformStack {
     });
   }
 }
-
-const app = new App();
-new TapStack(app, 'iac-291687');
-app.synth();
 
 export { TapStack };
