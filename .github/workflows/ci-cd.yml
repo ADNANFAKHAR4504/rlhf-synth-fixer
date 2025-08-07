@@ -17,7 +17,7 @@ permissions:
 
 env:
   NODE_VERSION: '22.17.0'
-  # Use PR number for resource isolation, fallback to 'main' for main branch
+  # Use PR number for resource isolation, fallback to 'dev' for main branch
   # Prefix with 'pr' to ensure AWS resource names start with a letter
   ENVIRONMENT_SUFFIX: ${{ github.event.number && format('pr{0}', github.event.number) || 'dev' }}
   S3_RELEASE_BUCKET_NAME: 'iac-rlhf-aws-release'
@@ -78,7 +78,7 @@ jobs:
           fi
 
           if [ ! -f "lib/MODEL_RESPONSE.md" ]; then
-            echo "❌ lib/PROMPT.md not found, exiting with failure"
+            echo "❌ lib/MODEL_RESPONSE.md not found, exiting with failure"
             exit 1
           fi
 
@@ -124,7 +124,7 @@ jobs:
     outputs:
       platform: ${{ needs.detect-metadata.outputs.platform }}
       language: ${{ needs.detect-metadata.outputs.language }}
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -193,7 +193,7 @@ jobs:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
-        
+
       # Terraform State Management Setup
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@v3
@@ -202,11 +202,11 @@ jobs:
         if: ${{ needs.synth.outputs.platform == 'tf' }}
         run: |
           echo "Setting up Terraform state infrastructure for PR-based environments..."
-          
+
           # Create PR-specific DynamoDB table for state locking
           DYNAMODB_TABLE_NAME="terraform-state-lock-pr${{ env.ENVIRONMENT_SUFFIX }}"
           echo "Creating DynamoDB table: $DYNAMODB_TABLE_NAME"
-          
+
           # Check if DynamoDB table exists
           if aws dynamodb describe-table --table-name "$DYNAMODB_TABLE_NAME" --region "${{ env.TERRAFORM_STATE_BUCKET_REGION }}" >/dev/null 2>&1; then
             echo "DynamoDB table $DYNAMODB_TABLE_NAME already exists"
@@ -225,7 +225,7 @@ jobs:
             aws dynamodb wait table-exists --table-name "$DYNAMODB_TABLE_NAME" --region "${{ env.TERRAFORM_STATE_BUCKET_REGION }}"
             echo "DynamoDB table $DYNAMODB_TABLE_NAME is now active"
           fi
-          
+
           # Verify S3 bucket exists and is accessible
           echo "Verifying Terraform state bucket accessibility..."
           if aws s3 ls "s3://${{ env.TERRAFORM_STATE_BUCKET }}/" >/dev/null 2>&1; then
@@ -413,7 +413,7 @@ jobs:
             echo "✅ Pulumi project detected, running Pulumi deploy..."
             echo "Using environment suffix: $ENVIRONMENT_SUFFIX"
             echo "Selecting or creating Pulumi stack Using ENVIRONMENT_SUFFIX=$ENVIRONMENT_SUFFIX"
-            export PYTHONPATH=.
+            export PYTHONPATH=.:bin
             pipenv run pulumi-create-stack
             echo "Deploying infrastructure ..."
             pipenv run pulumi-deploy
@@ -433,7 +433,6 @@ jobs:
           AWS_DEFAULT_REGION: ${{ env.AWS_DEFAULT_REGION }}
           PULUMI_ORG: ${{ env.PULUMI_ORG }}
 
-      
       - name: Get Deployment Outputs
         run: |
           PLATFORM="${{ needs.synth.outputs.platform }}"
@@ -689,7 +688,6 @@ jobs:
         )
       }}
     environment: qa
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -771,7 +769,6 @@ jobs:
         )
       }}
     # if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4

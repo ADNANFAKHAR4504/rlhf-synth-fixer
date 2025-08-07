@@ -86,6 +86,7 @@ function getLanguageChoices(platform: string) {
 
   if (platform === 'pulumi') {
     return [
+      { name: 'TypeScript', value: 'ts' },
       { name: 'Python', value: 'py' }, // Pulumi Python
     ];
   }
