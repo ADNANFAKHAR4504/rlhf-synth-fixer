@@ -34,7 +34,8 @@ describe('TapStack Unit Tests', () => {
   describe('VPC Configuration', () => {
     test('should create VPC with correct subnet configuration', () => {
       const app = new cdk.App();
-      const stack = new TapStack(app, 'TestStack', {
+      const stack = new TapStack(app, `TapStack${environmentSuffix}-Primary`, {
+        stackName: `TapStack${environmentSuffix}-Primary`,
         environmentSuffix,
         isPrimaryRegion: true,
         env: { account: '123456789012', region: 'us-west-1' },
@@ -51,7 +52,8 @@ describe('TapStack Unit Tests', () => {
   describe('Security Groups', () => {
     test('should create EC2 security group with restricted SSH access', () => {
       const app = new cdk.App();
-      const stack = new TapStack(app, 'TestStack', {
+      const stack = new TapStack(app, `TapStack${environmentSuffix}-Primary`, {
+        stackName: `TapStack${environmentSuffix}-Primary`,
         environmentSuffix,
         isPrimaryRegion: true,
         env: { account: '123456789012', region: 'us-west-1' },
@@ -74,7 +76,8 @@ describe('TapStack Unit Tests', () => {
 
     test('should not allow unrestricted SSH access', () => {
       const app = new cdk.App();
-      const stack = new TapStack(app, 'TestStack', {
+      const stack = new TapStack(app, `TapStack${environmentSuffix}-Primary`, {
+        stackName: `TapStack${environmentSuffix}-Primary`,
         environmentSuffix,
         isPrimaryRegion: true,
         env: { account: '123456789012', region: 'us-west-1' },
@@ -97,7 +100,8 @@ describe('TapStack Unit Tests', () => {
   describe('IAM Roles', () => {
     test('should create EC2 role with least privilege', () => {
       const app = new cdk.App();
-      const stack = new TapStack(app, 'TestStack', {
+      const stack = new TapStack(app, `TapStack${environmentSuffix}-Primary`, {
+        stackName: `TapStack${environmentSuffix}-Primary`,
         environmentSuffix,
         isPrimaryRegion: true,
         env: { account: '123456789012', region: 'us-west-1' },
@@ -119,7 +123,8 @@ describe('TapStack Unit Tests', () => {
 
     test('should create Lambda role with minimal permissions', () => {
       const app = new cdk.App();
-      const stack = new TapStack(app, 'TestStack', {
+      const stack = new TapStack(app, `TapStack${environmentSuffix}-Primary`, {
+        stackName: `TapStack${environmentSuffix}-Primary`,
         environmentSuffix,
         isPrimaryRegion: true,
         env: { account: '123456789012', region: 'us-west-1' },
@@ -143,7 +148,8 @@ describe('TapStack Unit Tests', () => {
   describe('RDS Database', () => {
     test('should create encrypted RDS instance', () => {
       const app = new cdk.App();
-      const stack = new TapStack(app, 'TestStack', {
+      const stack = new TapStack(app, `TapStack${environmentSuffix}-Primary`, {
+        stackName: `TapStack${environmentSuffix}-Primary`,
         environmentSuffix,
         isPrimaryRegion: true,
         env: { account: '123456789012', region: 'us-west-1' },
@@ -162,7 +168,8 @@ describe('TapStack Unit Tests', () => {
   describe('S3 Buckets', () => {
     test('should create S3 buckets with encryption and versioning', () => {
       const app = new cdk.App();
-      const stack = new TapStack(app, 'TestStack', {
+      const stack = new TapStack(app, `TapStack${environmentSuffix}-Primary`, {
+        stackName: `TapStack${environmentSuffix}-Primary`,
         environmentSuffix,
         isPrimaryRegion: true,
         env: { account: '123456789012', region: 'us-west-1' },
@@ -184,7 +191,8 @@ describe('TapStack Unit Tests', () => {
 
     test('should have deletion policy set for cleanup', () => {
       const app = new cdk.App();
-      const stack = new TapStack(app, 'TestStack', {
+      const stack = new TapStack(app, `TapStack${environmentSuffix}-Primary`, {
+        stackName: `TapStack${environmentSuffix}-Primary`,
         environmentSuffix,
         isPrimaryRegion: true,
         env: { account: '123456789012', region: 'us-west-1' },
@@ -201,7 +209,8 @@ describe('TapStack Unit Tests', () => {
   describe('API Gateway', () => {
     test('should create REST API', () => {
       const app = new cdk.App();
-      const stack = new TapStack(app, 'TestStack', {
+      const stack = new TapStack(app, `TapStack${environmentSuffix}-Primary`, {
+        stackName: `TapStack${environmentSuffix}-Primary`,
         environmentSuffix,
         isPrimaryRegion: true,
         env: { account: '123456789012', region: 'us-west-1' },
@@ -215,7 +224,8 @@ describe('TapStack Unit Tests', () => {
 
     test('should have Lambda integration', () => {
       const app = new cdk.App();
-      const stack = new TapStack(app, 'TestStack', {
+      const stack = new TapStack(app, `TapStack${environmentSuffix}-Primary`, {
+        stackName: `TapStack${environmentSuffix}-Primary`,
         environmentSuffix,
         isPrimaryRegion: true,
         env: { account: '123456789012', region: 'us-west-1' },
@@ -234,7 +244,8 @@ describe('TapStack Unit Tests', () => {
   describe('Lambda Function', () => {
     test('should create Lambda function', () => {
       const app = new cdk.App();
-      const stack = new TapStack(app, 'TestStack', {
+      const stack = new TapStack(app, `TapStack${environmentSuffix}-Primary`, {
+        stackName: `TapStack${environmentSuffix}-Primary`,
         environmentSuffix,
         isPrimaryRegion: true,
         env: { account: '123456789012', region: 'us-west-1' },
@@ -251,7 +262,8 @@ describe('TapStack Unit Tests', () => {
   describe('WAF Configuration', () => {
     test('should create WAF WebACL with SQL injection protection', () => {
       const app = new cdk.App();
-      const stack = new TapStack(app, 'TestStack', {
+      const stack = new TapStack(app, `TapStack${environmentSuffix}-Primary`, {
+        stackName: `TapStack${environmentSuffix}-Primary`,
         environmentSuffix,
         isPrimaryRegion: true,
         env: { account: '123456789012', region: 'us-west-1' },
@@ -277,7 +289,8 @@ describe('TapStack Unit Tests', () => {
 
     test('should include AWS managed rule sets', () => {
       const app = new cdk.App();
-      const stack = new TapStack(app, 'TestStack', {
+      const stack = new TapStack(app, `TapStack${environmentSuffix}-Primary`, {
+        stackName: `TapStack${environmentSuffix}-Primary`,
         environmentSuffix,
         isPrimaryRegion: true,
         env: { account: '123456789012', region: 'us-west-1' },
@@ -301,7 +314,8 @@ describe('TapStack Unit Tests', () => {
 
     test('should associate WAF with API Gateway', () => {
       const app = new cdk.App();
-      const stack = new TapStack(app, 'TestStack', {
+      const stack = new TapStack(app, `TapStack${environmentSuffix}-Primary`, {
+        stackName: `TapStack${environmentSuffix}-Primary`,
         environmentSuffix,
         isPrimaryRegion: true,
         env: { account: '123456789012', region: 'us-west-1' },
@@ -343,7 +357,8 @@ describe('TapStack Unit Tests', () => {
   describe('SSM Parameters', () => {
     test('should store configuration in SSM', () => {
       const app = new cdk.App();
-      const stack = new TapStack(app, 'TestStack', {
+      const stack = new TapStack(app, `TapStack${environmentSuffix}-Primary`, {
+        stackName: `TapStack${environmentSuffix}-Primary`,
         environmentSuffix,
         isPrimaryRegion: true,
         env: { account: '123456789012', region: 'us-west-1' },
@@ -365,12 +380,14 @@ describe('TapStack Unit Tests', () => {
   describe('Cross-Region Deployment', () => {
     test('primary and secondary stacks should have different configurations', () => {
       const app = new cdk.App();
-      const primaryStack = new TapStack(app, 'TestPrimaryStack', {
+      const primaryStack = new TapStack(app, `TapStack${environmentSuffix}-Primary`, {
+        stackName: `TapStack${environmentSuffix}-Primary`,
         environmentSuffix,
         isPrimaryRegion: true,
         env: { account: '123456789012', region: 'us-west-1' },
       });
-      const secondaryStack = new TapStack(app, 'TestSecondaryStack', {
+      const secondaryStack = new TapStack(app, `TapStack${environmentSuffix}-Secondary`, {
+        stackName: `TapStack${environmentSuffix}-Secondary`,
         environmentSuffix,
         isPrimaryRegion: false,
         env: { account: '123456789012', region: 'us-east-1' },
@@ -391,7 +408,8 @@ describe('TapStack Unit Tests', () => {
   describe('Outputs', () => {
     test('should export required outputs for primary region', () => {
       const app = new cdk.App();
-      const stack = new TapStack(app, 'TestStack', {
+      const stack = new TapStack(app, `TapStack${environmentSuffix}-Primary`, {
+        stackName: `TapStack${environmentSuffix}-Primary`,
         environmentSuffix,
         isPrimaryRegion: true,
         env: { account: '123456789012', region: 'us-west-1' },
