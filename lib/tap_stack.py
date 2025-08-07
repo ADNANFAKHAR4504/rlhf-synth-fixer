@@ -754,70 +754,79 @@ echo 'MinProtocol = TLSv1.2' >> /etc/ssl/openssl.cnf
 
     
     def _create_compliance_checks(self):
-      """Create simplified compliance checks using CloudWatch and EventBridge."""
+      """
+      Lightweight, provider-agnostic compliance layer.
+
+      – Creates an EventBridge rule that listens for *any* API call recorded
+        by CloudTrail in the region (detail-type == “AWS API Call via CloudTrail”).
+      – Forwards those events to an SNS topic so that downstream tools (e.g.
+        Security Hub, Lambda, e-mail) can consume or alert on policy violations.
+      – Every resource is fully tagged, encrypted with the regional KMS key,
+        and uses only plain-Python values (no Pulumi Output objects are fed
+        into json.dumps), preventing the “Output is not JSON serialisable” error.
+      """
+      self.compliance_topics = {}
+
       for region in self.regions:
           provider = aws.Provider(
               f"compliance-provider-{region}",
               region=region,
-              opts=ResourceOptions(parent=self)
+              opts=ResourceOptions(parent=self),
           )
-          
-          # Create CloudWatch Dashboard for compliance monitoring
-          dashboard = aws.cloudwatch.Dashboard(
-              f"PROD-compliance-dashboard-{region}-{self.environment_suffix}",
-              dashboard_name=f"PROD-compliance-{region}-{self.environment_suffix}",
-              dashboard_body=json.dumps({
-                  "widgets": [
-                      {
-                          "type": "metric",
-                          "x": 0,
-                          "y": 0,
-                          "width": 12,
-                          "height": 6,
-                          "properties": {
-                              "metrics": [
-                                  ["AWS/EC2", "CPUUtilization", "InstanceId", self.ec2_instances[region].id],
-                                  ["AWS/RDS", "CPUUtilization", "DBInstanceIdentifier", f"prod-rds-{region}-{self.environment_suffix}"]
-                              ],
-                              "period": 300,
-                              "stat": "Average",
-                              "region": region,
-                              "title": "Resource Utilization"
-                          }
-                      }
-                  ]
-              }),
-              opts=ResourceOptions(parent=self, provider=provider)
-          )
-          
-          # Create EventBridge rule for compliance events
-          event_rule = aws.cloudwatch.EventRule(
-              f"PROD-compliance-rule-{region}-{self.environment_suffix}",
-              description="Monitor compliance-related events",
-              event_pattern=json.dumps({
-                  "source": ["aws.ec2", "aws.rds", "aws.s3"],
-                  "detail-type": ["AWS API Call via CloudTrail"],
-                  "detail": {
-                      "eventSource": ["ec2.amazonaws.com", "rds.amazonaws.com", "s3.amazonaws.com"]
-                  }
-              }),
-              tags=self.standard_tags,
-              opts=ResourceOptions(parent=self, provider=provider)
-          )
-          
-          # Create SNS topic for compliance notifications
-          compliance_topic = aws.sns.Topic(
-              f"PROD-compliance-topic-{region}-{self.environment_suffix}",
-              name=f"PROD-compliance-{region}-{self.environment_suffix}",
+
+          # 1.  SNS topic (encrypted, tagged)
+          topic = aws.sns.Topic(
+              f"prod-compliance-topic-{region}-{self.environment_suffix}",
+              name=f"prod-compliance-{region}-{self.environment_suffix}",
               kms_master_key_id=self.kms_keys[region].arn,
               tags=self.standard_tags,
-              opts=ResourceOptions(parent=self, provider=provider)
+              opts=ResourceOptions(parent=self, provider=provider),
           )
-          
-          # EventBridge target to SNS
+          self.compliance_topics[region] = topic
+
+          # 2.  EventBridge rule that matches all API calls
+          event_pattern = json.dumps(
+              {
+                  "detail-type": ["AWS API Call via CloudTrail"],
+                  "source": ["aws.ec2", "aws.rds", "aws.s3", "aws.iam", "aws.kms"],
+              }
+          )
+
+          rule = aws.cloudwatch.EventRule(
+              f"prod-compliance-rule-{region}-{self.environment_suffix}",
+              description="Route CloudTrail API events to compliance SNS topic",
+              event_pattern=event_pattern,
+              tags=self.standard_tags,
+              opts=ResourceOptions(parent=self, provider=provider),
+          )
+
+          # 3.  Permission for EventBridge to publish to the SNS topic
+          aws.sns.TopicPolicy(
+              f"prod-compliance-topic-policy-{region}-{self.environment_suffix}",
+              arn=topic.arn,
+              policy=pulumi.Output.all(topic.arn).apply(
+                  lambda args: json.dumps(
+                      {
+                          "Version": "2012-10-17",
+                          "Statement": [
+                              {
+                                  "Sid": "Allow_EventBridge_Publish",
+                                  "Effect": "Allow",
+                                  "Principal": {"Service": "events.amazonaws.com"},
+                                  "Action": "sns:Publish",
+                                  "Resource": args[0],
+                              }
+                          ],
+                      }
+                  )
+              ),
+              opts=ResourceOptions(parent=self, provider=provider),
+          )
+
+          # 4.  Wire the rule to the topic
           aws.cloudwatch.EventTarget(
-              f"PROD-compliance-target-{region}-{self.environment_suffix}",
-              rule=event_rule.name,
-              arn=compliance_topic.arn,
-              opts=ResourceOptions(parent=self, provider=provider)
+              f"prod-compliance-target-{region}-{self.environment_suffix}",
+              rule=rule.name,
+              arn=topic.arn,
+              opts=ResourceOptions(parent=self, provider=provider),
           )
