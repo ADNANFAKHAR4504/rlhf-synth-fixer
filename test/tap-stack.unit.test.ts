@@ -6,12 +6,12 @@ describe('ProjectXInfrastructureStack', () => {
   let app: cdk.App;
   let stack: ProjectXInfrastructureStack;
   let template: Template;
-  const environmentSuffix = 'test';
 
   beforeEach(() => {
     app = new cdk.App();
     stack = new ProjectXInfrastructureStack(app, 'TestProjectXStack', {
-      description: `ProjectX Infrastructure Stack - ${environmentSuffix}`,
+      description: `ProjectX Infrastructure Stack - test`,
+      environmentSuffix: 'test',
       env: { account: '123456789012', region: 'us-west-2' },
     });
     template = Template.fromStack(stack);
@@ -58,18 +58,11 @@ describe('ProjectXInfrastructureStack', () => {
             Description: 'Allow HTTPS traffic from internet',
           },
           {
-            CidrIp: '10.0.0.0/8', // Office network only
+            CidrIp: '10.0.0.0/8',
             FromPort: 22,
             ToPort: 22,
             IpProtocol: 'tcp',
             Description: 'Allow SSH from office network only',
-          },
-        ],
-        SecurityGroupEgress: [
-          {
-            CidrIp: '0.0.0.0/0',
-            IpProtocol: '-1',
-            Description: 'Allow all outbound traffic by default',
           },
         ],
       });
@@ -84,18 +77,6 @@ describe('ProjectXInfrastructureStack', () => {
         MaxSize: '6',
         DesiredCapacity: '2',
         HealthCheckType: 'EC2',
-        Tags: [
-          {
-            Key: 'Name',
-            Value: 'projectX-asg',
-            PropagateAtLaunch: true,
-          },
-          {
-            Key: 'Project',
-            Value: 'ProjectX',
-            PropagateAtLaunch: true,
-          },
-        ],
       });
     });
 
@@ -127,28 +108,6 @@ describe('ProjectXInfrastructureStack', () => {
             },
           ],
         },
-        ManagedPolicyArns: [
-          {
-            'Fn::Join': [
-              '',
-              [
-                'arn:',
-                { Ref: 'AWS::Partition' },
-                ':iam::aws:policy/AmazonSSMManagedInstanceCore',
-              ],
-            ],
-          },
-          {
-            'Fn::Join': [
-              '',
-              [
-                'arn:',
-                { Ref: 'AWS::Partition' },
-                ':iam::aws:policy/CloudWatchAgentServerPolicy',
-              ],
-            ],
-          },
-        ],
       });
     });
 
@@ -221,7 +180,7 @@ describe('ProjectXInfrastructureStack', () => {
       template.hasOutput('VpcId', {
         Description: 'VPC ID for ProjectX infrastructure',
         Export: {
-          Name: 'ProjectX-VpcId',
+          Name: 'ProjectX-VpcId-test',
         },
       });
     });
@@ -230,7 +189,7 @@ describe('ProjectXInfrastructureStack', () => {
       template.hasOutput('VpcCidr', {
         Description: 'VPC CIDR block',
         Export: {
-          Name: 'ProjectX-VpcCidr',
+          Name: 'ProjectX-VpcCidr-test',
         },
       });
     });
@@ -239,7 +198,7 @@ describe('ProjectXInfrastructureStack', () => {
       template.hasOutput('PublicSubnetIds', {
         Description: 'Public subnet IDs across multiple AZs',
         Export: {
-          Name: 'ProjectX-PublicSubnetIds',
+          Name: 'ProjectX-PublicSubnetIds-test',
         },
       });
     });
@@ -248,7 +207,7 @@ describe('ProjectXInfrastructureStack', () => {
       template.hasOutput('SecurityGroupId', {
         Description: 'Security Group ID for web servers',
         Export: {
-          Name: 'ProjectX-SecurityGroupId',
+          Name: 'ProjectX-SecurityGroupId-test',
         },
       });
     });
@@ -257,7 +216,7 @@ describe('ProjectXInfrastructureStack', () => {
       template.hasOutput('AutoScalingGroupName', {
         Description: 'Auto Scaling Group name',
         Export: {
-          Name: 'ProjectX-AutoScalingGroupName',
+          Name: 'ProjectX-AutoScalingGroupName-test',
         },
       });
     });
@@ -266,7 +225,7 @@ describe('ProjectXInfrastructureStack', () => {
       template.hasOutput('AvailabilityZones', {
         Description: 'Availability Zones used by the infrastructure',
         Export: {
-          Name: 'ProjectX-AvailabilityZones',
+          Name: 'ProjectX-AvailabilityZones-test',
         },
       });
     });

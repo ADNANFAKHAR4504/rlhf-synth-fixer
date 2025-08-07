@@ -19,6 +19,7 @@ Tags.of(app).add('Author', commitAuthor);
 
 new ProjectXInfrastructureStack(app, stackName, {
   description: `ProjectX Infrastructure Stack - ${environmentSuffix}`,
+  environmentSuffix: environmentSuffix,
   env: {
     account: process.env.CDK_DEFAULT_ACCOUNT,
     region: process.env.CDK_DEFAULT_REGION,

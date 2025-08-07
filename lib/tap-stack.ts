@@ -5,6 +5,10 @@ import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import { Construct } from 'constructs';
 
+interface ProjectXInfrastructureStackProps extends cdk.StackProps {
+  environmentSuffix?: string;
+}
+
 /**
  * ProjectX Infrastructure Stack
  *
@@ -17,7 +21,11 @@ import { Construct } from 'constructs';
  * All resources follow the naming convention: projectX-<component>
  */
 export class ProjectXInfrastructureStack extends cdk.Stack {
-  constructor(scope: Construct, id: string, props?: cdk.StackProps) {
+  constructor(
+    scope: Construct,
+    id: string,
+    props?: ProjectXInfrastructureStackProps
+  ) {
     super(scope, id, {
       ...props,
       env: {
@@ -25,6 +33,12 @@ export class ProjectXInfrastructureStack extends cdk.Stack {
         account: props?.env?.account,
       },
     });
+
+    // Get environment suffix from props, context, or use 'dev' as default
+    const environmentSuffix =
+      props?.environmentSuffix ||
+      this.node.tryGetContext('environmentSuffix') ||
+      'dev';
 
     // 1. VPC Configuration
     // Create VPC with public subnets in multiple AZs for high availability
@@ -48,7 +62,8 @@ export class ProjectXInfrastructureStack extends cdk.Stack {
     // Tag the VPC for better resource management
     cdk.Tags.of(vpc).add('Name', 'projectX-vpc');
     cdk.Tags.of(vpc).add('Project', 'ProjectX');
-    cdk.Tags.of(vpc).add('Environment', 'Production');
+    cdk.Tags.of(vpc).add('Environment', environmentSuffix);
+    cdk.Tags.of(vpc).add('ManagedBy', 'CDK');
 
     // 2. Security Group Configuration
     // Create security group for EC2 instances with HTTP/HTTPS access
@@ -87,13 +102,16 @@ export class ProjectXInfrastructureStack extends cdk.Stack {
 
     // Tag the security group
     cdk.Tags.of(webServerSecurityGroup).add('Name', 'projectX-web-server-sg');
+    cdk.Tags.of(webServerSecurityGroup).add('Project', 'ProjectX');
+    cdk.Tags.of(webServerSecurityGroup).add('Environment', environmentSuffix);
 
     // 3. IAM Role for EC2 Instances
     // Create IAM role with necessary permissions for EC2 instances
     const ec2Role = new iam.Role(this, 'ProjectXEC2Role', {
       roleName: 'projectX-ec2-role',
       assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
-      description: 'IAM role for ProjectX EC2 instances',
+      description:
+        'IAM role for ProjectX EC2 instances with least privilege access',
       managedPolicies: [
         iam.ManagedPolicy.fromAwsManagedPolicyName(
           'AmazonSSMManagedInstanceCore'
@@ -233,43 +251,44 @@ export class ProjectXInfrastructureStack extends cdk.Stack {
     // Tag the Auto Scaling Group
     cdk.Tags.of(autoScalingGroup).add('Name', 'projectX-asg');
     cdk.Tags.of(autoScalingGroup).add('Project', 'ProjectX');
+    cdk.Tags.of(autoScalingGroup).add('Environment', environmentSuffix);
 
-    // 6. Outputs
+    // 7. Outputs
     // Provide useful outputs for reference and integration
     new cdk.CfnOutput(this, 'VpcId', {
       value: vpc.vpcId,
       description: 'VPC ID for ProjectX infrastructure',
-      exportName: 'ProjectX-VpcId',
+      exportName: `ProjectX-VpcId-${environmentSuffix}`,
     });
 
     new cdk.CfnOutput(this, 'VpcCidr', {
       value: vpc.vpcCidrBlock,
       description: 'VPC CIDR block',
-      exportName: 'ProjectX-VpcCidr',
+      exportName: `ProjectX-VpcCidr-${environmentSuffix}`,
     });
 
     new cdk.CfnOutput(this, 'PublicSubnetIds', {
       value: vpc.publicSubnets.map(subnet => subnet.subnetId).join(','),
       description: 'Public subnet IDs across multiple AZs',
-      exportName: 'ProjectX-PublicSubnetIds',
+      exportName: `ProjectX-PublicSubnetIds-${environmentSuffix}`,
     });
 
     new cdk.CfnOutput(this, 'SecurityGroupId', {
       value: webServerSecurityGroup.securityGroupId,
       description: 'Security Group ID for web servers',
-      exportName: 'ProjectX-SecurityGroupId',
+      exportName: `ProjectX-SecurityGroupId-${environmentSuffix}`,
     });
 
     new cdk.CfnOutput(this, 'AutoScalingGroupName', {
       value: autoScalingGroup.autoScalingGroupName,
       description: 'Auto Scaling Group name',
-      exportName: 'ProjectX-AutoScalingGroupName',
+      exportName: `ProjectX-AutoScalingGroupName-${environmentSuffix}`,
     });
 
     new cdk.CfnOutput(this, 'AvailabilityZones', {
       value: vpc.availabilityZones.join(','),
       description: 'Availability Zones used by the infrastructure',
-      exportName: 'ProjectX-AvailabilityZones',
+      exportName: `ProjectX-AvailabilityZones-${environmentSuffix}`,
     });
   }
 }
