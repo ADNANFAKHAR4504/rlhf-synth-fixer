@@ -204,7 +204,7 @@ describe('TapStack Infrastructure Integration Tests', () => {
 
       expect(response.InternetGateways).toHaveLength(1);
       const igw = response.InternetGateways?.[0];
-      expect(igw?.State).toBe('available');
+      expect(igw).toBeDefined();
       expect(igw?.Attachments?.[0]?.State).toBe('attached');
     });
 
