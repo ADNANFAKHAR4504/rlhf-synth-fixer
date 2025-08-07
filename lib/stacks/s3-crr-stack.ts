@@ -5,7 +5,6 @@ import {
   StackProps,
   Tags,
   aws_iam as iam,
-  aws_s3 as s3,
 } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 
@@ -47,19 +46,9 @@ export class S3CRRStack extends Stack {
       })
     );
 
-    const sourceBucket = s3.Bucket.fromBucketName(
-      this,
-      'SourceBucket',
-      sourceBucketName
-    );
-
-    sourceBucket.addToResourcePolicy(
-      new iam.PolicyStatement({
-        principals: [this.replicationRole],
-        actions: ['s3:ReplicateObject', 's3:ReplicateDelete'],
-        resources: [`arn:aws:s3:::${destinationBucketName}/*`],
-      })
-    );
+    // Note: Bucket policy and replication configuration are applied directly
+    // in the RegionalResourcesStack where the actual bucket resources are created.
+    // This stack only creates the IAM replication role.
 
     // S3 Cross-Region Replication configuration
     // Since sourceBucket is imported via fromBucketName, we can't access its CfnBucket

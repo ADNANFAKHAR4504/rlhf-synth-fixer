@@ -213,11 +213,13 @@ describe('RegionalResourcesStack', () => {
         GroupDescription: 'Security group for EC2 instances',
         SecurityGroupIngress: Match.arrayWith([
           {
-            CidrIp: '10.0.0.0/8',
+            CidrIp: {
+              'Fn::GetAtt': ['VPCB9E5F0B4', 'CidrBlock']
+            },
             FromPort: 22,
             IpProtocol: 'tcp',
             ToPort: 22,
-            Description: 'Allow SSH from private networks',
+            Description: 'Allow SSH from VPC CIDR only',
           },
         ]),
       });

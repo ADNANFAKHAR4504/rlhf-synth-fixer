@@ -100,11 +100,13 @@ export class RegionalResourcesStack extends cdk.Stack {
           statements: [
             new iam.PolicyStatement({
               effect: iam.Effect.ALLOW,
-              actions: ['s3:GetObject', 's3:ListBucket'],
-              resources: [
-                'arn:aws:s3:::globalmountpoint-content-*',
-                'arn:aws:s3:::globalmountpoint-content-*/*',
-              ],
+              actions: ['s3:ListBucket'],
+              resources: [this.contentBucket.bucketArn],
+            }),
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: ['s3:GetObject'],
+              resources: [`${this.contentBucket.bucketArn}/*`],
             }),
           ],
         }),
@@ -144,36 +146,45 @@ export class RegionalResourcesStack extends cdk.Stack {
       'Allow HTTP traffic from ALB'
     );
 
+    // Restrict SSH access to VPC CIDR only (more secure than 10.0.0.0/8)
     ec2SecurityGroup.addIngressRule(
-      ec2.Peer.ipv4('10.0.0.0/8'),
+      ec2.Peer.ipv4(this.vpc.vpcCidrBlock),
       ec2.Port.tcp(22),
-      'Allow SSH from private networks'
+      'Allow SSH from VPC CIDR only'
     );
 
     // User data script for EC2 instances
     const userData = ec2.UserData.forLinux();
     userData.addCommands(
       '#!/bin/bash',
+      'set -e',
+      'exec > >(tee /var/log/user-data.log) 2>&1',
+      '',
+      '# Update system packages',
       'yum update -y',
       '',
-      '# Install Nginx',
-      'yum install -y nginx',
-      'amazon-linux-extras install nginx1',
+      '# Install required packages',
+      'yum install -y nginx fuse awscli',
       'systemctl enable nginx',
       '',
-      '# Install AWS CLI and required tools',
-      'yum install -y awscli fuse',
-      '',
       '# Install S3 Mountpoint',
-      'wget https://s3.amazonaws.com/mountpoint-s3-release/latest/x86_64/mount-s3.rpm',
-      'yum install -y ./mount-s3.rpm',
+      'wget https://s3.amazonaws.com/mountpoint-s3-release/latest/x86_64/mount-s3.rpm -O /tmp/mount-s3.rpm',
+      'yum install -y /tmp/mount-s3.rpm',
+      'rm -f /tmp/mount-s3.rpm',
       '',
       '# Create mountpoint directory',
       'mkdir -p /var/www/html',
       'chown nginx:nginx /var/www/html',
       '',
-      '# Mount S3 bucket using S3 Mountpoint',
-      `mount-s3 ${this.contentBucket.bucketName} /var/www/html --allow-other --uid=$(id -u nginx) --gid=$(id -g nginx)`,
+      '# Validate S3 bucket exists before mounting',
+      `aws s3 ls s3://${this.contentBucket.bucketName}/ || echo "Warning: S3 bucket may not exist yet"`,
+      '',
+      '# Mount S3 bucket using S3 Mountpoint with error handling',
+      `mount-s3 ${this.contentBucket.bucketName} /var/www/html --allow-other --uid=$(id -u nginx) --gid=$(id -g nginx) || {`,
+      '  echo "Failed to mount S3 bucket, creating fallback content"',
+      '  echo "<h1>Service Starting</h1><p>Content loading...</p>" > /var/www/html/index.html',
+      '  chown nginx:nginx /var/www/html/index.html',
+      '}',
       '',
       '# Configure Nginx',
       'cat > /etc/nginx/nginx.conf << EOF',
@@ -283,7 +294,6 @@ export class RegionalResourcesStack extends cdk.Stack {
 
     // Health check for this region's ALB using proper configuration
     this.healthCheck = new route53.CfnHealthCheck(this, 'HealthCheck', {
-      type: 'HTTP',
       healthCheckConfig: {
         type: 'HTTP',
         resourcePath: '/health',
@@ -291,7 +301,7 @@ export class RegionalResourcesStack extends cdk.Stack {
         requestInterval: 30,
         failureThreshold: 3,
       },
-    } as any);
+    });
 
     if (props.isPrimary) {
       // Primary DNS record with failover routing
