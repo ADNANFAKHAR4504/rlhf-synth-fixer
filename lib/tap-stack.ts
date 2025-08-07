@@ -168,7 +168,7 @@ export class ProjectXInfrastructureStack extends cdk.Stack {
       'systemctl enable httpd',
       'echo "<h1>ProjectX Web Server - Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</h1>" > /var/www/html/index.html',
       'echo "<p>Availability Zone: $(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)</p>" >> /var/www/html/index.html',
-      'echo "<p>Region: us-west-2</p>" >> /var/www/html/index.html'
+      'echo "<p>Region: us-east-1</p>" >> /var/www/html/index.html'
     );
 
     // 5. Auto Scaling Group Configuration
