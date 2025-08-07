@@ -36,9 +36,6 @@ terraform {
 
 provider "aws" {
   region = var.aws_region
-  * default_tags {
-    * tags = var.default_tags
-  * }
 }
 module "vpc" {
   source = "../lib/modules/vpc"
