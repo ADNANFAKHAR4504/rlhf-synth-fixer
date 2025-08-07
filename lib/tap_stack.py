@@ -333,12 +333,13 @@ class TapStack(ComponentResource):
             
             for i, az in enumerate(azs.names[:2]):  # Use first 2 AZs
                 # Public subnet
+                # FIXED (correct IPv6 CIDR calculation):
                 public_subnet = aws.ec2.Subnet(
                     f"PROD-public-subnet-{region}-{i+1}-{self.environment_suffix}",
                     vpc_id=vpc.id,
                     cidr_block=f"10.0.{i+1}.0/24",
-                    ipv6_cidr_block=Output.all(vpc.ipv6_cidr_block).apply(
-                        lambda cidr: f"{cidr[0][:-2]}{i+1:02x}::/64"
+                    ipv6_cidr_block=vpc.ipv6_cidr_block.apply(
+                        lambda cidr_block: f"{cidr_block[:-2]}{i+1:02x}::/64" if cidr_block else None
                     ),
                     availability_zone=az,
                     map_public_ip_on_launch=True,
@@ -346,6 +347,21 @@ class TapStack(ComponentResource):
                     tags={**self.standard_tags, "Name": f"PROD-public-subnet-{region}-{i+1}-{self.environment_suffix}"},
                     opts=ResourceOptions(parent=self, provider=provider)
                 )
+
+                # Apply the same fix to private subnets:
+                private_subnet = aws.ec2.Subnet(
+                    f"PROD-private-subnet-{region}-{i+1}-{self.environment_suffix}",
+                    vpc_id=vpc.id,
+                    cidr_block=f"10.0.{i+10}.0/24",
+                    ipv6_cidr_block=vpc.ipv6_cidr_block.apply(
+                        lambda cidr_block: f"{cidr_block[:-2]}{i+10:02x}::/64" if cidr_block else None
+                    ),
+                    availability_zone=az,
+                    assign_ipv6_address_on_creation=True,
+                    tags={**self.standard_tags, "Name": f"PROD-private-subnet-{region}-{i+1}-{self.environment_suffix}"},
+                    opts=ResourceOptions(parent=self, provider=provider)
+                )
+
                 public_subnets.append(public_subnet)
                 
                 # Private subnet
