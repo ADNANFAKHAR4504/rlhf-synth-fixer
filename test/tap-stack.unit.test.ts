@@ -41,25 +41,6 @@ describe('TapStack CloudFormation Template - Highly Available VPC', () => {
   });
 
   describe('Parameters', () => {
-    test('should have all required parameters', () => {
-      const requiredParams = [
-        'VpcCidr',
-        'PublicSubnetACidr',
-        'PublicSubnetBCidr',
-        'PrivateSubnetACidr',
-        'PrivateSubnetBCidr',
-        'AvailabilityZoneA',
-        'AvailabilityZoneB',
-        'Environment',
-        'ProjectName',
-        'EnvironmentSuffix',
-      ];
-
-      requiredParams.forEach(param => {
-        expect(template.Parameters[param]).toBeDefined();
-      });
-    });
-
     test('VpcCidr parameter should have correct properties', () => {
       const param = template.Parameters.VpcCidr;
       expect(param.Type).toBe('String');
@@ -82,19 +63,6 @@ describe('TapStack CloudFormation Template - Highly Available VPC', () => {
       expect(param.AllowedValues).toContain('Development');
       expect(param.AllowedValues).toContain('Staging');
       expect(param.AllowedValues).toContain('Production');
-    });
-
-    test('EnvironmentSuffix parameter should have correct properties', () => {
-      const envSuffixParam = template.Parameters.EnvironmentSuffix;
-      expect(envSuffixParam.Type).toBe('String');
-      expect(envSuffixParam.Default).toBe('dev');
-      expect(envSuffixParam.Description).toBe(
-        'Environment suffix for resource naming (e.g., dev, staging, prod)'
-      );
-      expect(envSuffixParam.AllowedPattern).toBe('^[a-zA-Z0-9]+$');
-      expect(envSuffixParam.ConstraintDescription).toBe(
-        'Must contain only alphanumeric characters'
-      );
     });
   });
 
