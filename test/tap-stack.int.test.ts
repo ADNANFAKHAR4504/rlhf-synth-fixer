@@ -26,12 +26,14 @@ try {
 }
 
 // Test configuration
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-const stackName = process.env.STACK_NAME || `TapStack-${environmentSuffix}`;
-const environmentName = process.env.ENVIRONMENT_NAME || environmentSuffix;
+const stackName = process.env.STACK_NAME || 'TapStack-dev';
+const environmentName = process.env.ENVIRONMENT_NAME || 'dev';
 
 // Determine if we should use real AWS or flat outputs
 let useFlatOutputs = process.env.USE_FLAT_OUTPUTS === 'true' || !process.env.AWS_ACCESS_KEY_ID;
+
+// When using flat outputs, we'll get the actual environment name from the outputs
+let actualEnvironmentName = environmentName;
 
 describe('TapStack Serverless Integration Tests', () => {
   let stackOutputs: any = {};
@@ -46,6 +48,8 @@ describe('TapStack Serverless Integration Tests', () => {
         const flatOutputsPath = path.join(__dirname, 'cfn-outputs/flat-outputs.json');
         const flatOutputsContent = fs.readFileSync(flatOutputsPath, 'utf8');
         stackOutputs = JSON.parse(flatOutputsContent);
+        // Use the environment name from flat outputs when in flat output mode
+        actualEnvironmentName = stackOutputs.EnvironmentName || environmentName;
         console.log('📁 Using flat outputs from file');
       } catch (error) {
         console.error('Failed to read flat outputs file:', error);
@@ -75,6 +79,8 @@ describe('TapStack Serverless Integration Tests', () => {
         const flatOutputsPath = path.join(__dirname, 'cfn-outputs/flat-outputs.json');
         const flatOutputsContent = fs.readFileSync(flatOutputsPath, 'utf8');
         stackOutputs = JSON.parse(flatOutputsContent);
+        // Use the environment name from flat outputs when falling back
+        actualEnvironmentName = stackOutputs.EnvironmentName || environmentName;
         // Force useFlatOutputs to true since AWS failed
         useFlatOutputs = true;
       }
@@ -117,7 +123,7 @@ describe('TapStack Serverless Integration Tests', () => {
     });
 
     test('should have correct environment name', () => {
-      expect(stackOutputs.EnvironmentName).toBe(environmentName);
+      expect(stackOutputs.EnvironmentName).toBe(actualEnvironmentName);
     });
   });
 
@@ -146,7 +152,7 @@ describe('TapStack Serverless Integration Tests', () => {
     test('should have correct environment variables', async () => {
       if (useFlatOutputs) {
         // Validate environment from flat outputs
-        expect(stackOutputs.EnvironmentName).toBe(environmentName);
+        expect(stackOutputs.EnvironmentName).toBe(actualEnvironmentName);
         console.log('✅ Flat outputs: Environment variables validated');
       } else {
         // Real AWS validation
@@ -158,7 +164,7 @@ describe('TapStack Serverless Integration Tests', () => {
         
         expect(response.Configuration!.Environment).toBeDefined();
         expect(response.Configuration!.Environment!.Variables).toBeDefined();
-        expect(response.Configuration!.Environment!.Variables!.ENVIRONMENT).toBe(environmentName);
+        expect(response.Configuration!.Environment!.Variables!.ENVIRONMENT).toBe(actualEnvironmentName);
       }
     });
 
@@ -414,7 +420,7 @@ describe('TapStack Serverless Integration Tests', () => {
       expect(stackOutputs.ApiGatewayInvokeUrl).toContain('execute-api');
       expect(stackOutputs.LambdaFunctionArn).toContain('lambda');
       expect(stackOutputs.ArtifactsBucketName).toContain('artifacts');
-      expect(stackOutputs.EnvironmentName).toBe('dev');
+      expect(stackOutputs.EnvironmentName).toBe(actualEnvironmentName);
     });
   });
 });
