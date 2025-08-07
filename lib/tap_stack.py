@@ -255,18 +255,19 @@ class TapStack(pulumi.ComponentResource):
           "Resource": "*"
         },
         {
-          "Sid": "DenyAfterTagBasedExpiration",
+          "Sid": "DenyIfUserTagExpired",
           "Effect": "Deny",
           "Action": "*",
           "Resource": "*",
           "Condition": {
             "DateGreaterThan": {
-              "aws:CurrentTime": "aws:ResourceTag/RotationExpiry"
+              "aws:PrincipalTag/RotationExpiry": "${aws:CurrentTime}"
             }
           }
         }
       ]
     }, indent=2)
+
 
 
   @staticmethod
