@@ -53,14 +53,12 @@ Parameters:
     AllowedPattern: '^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/([0-9]|[1-2][0-9]|3[0-2]))$'
 
   AvailabilityZoneA:
-    Type: String
+    Type: AWS::EC2::AvailabilityZone::Name
     Description: 'First Availability Zone for high availability deployment'
-    Default: 'us-west-2a'
 
   AvailabilityZoneB:
-    Type: String
+    Type: AWS::EC2::AvailabilityZone::Name
     Description: 'Second Availability Zone for high availability deployment'
-    Default: 'us-west-2b'
 
   Environment:
     Type: String
@@ -75,6 +73,13 @@ Parameters:
     Type: String
     Default: 'HighAvailabilityVPC'
     Description: 'Project name for resource tagging'
+
+  EnvironmentSuffix:
+    Type: String
+    Default: 'dev'
+    Description: 'Environment suffix for resource naming (e.g., dev, staging, prod)'
+    AllowedPattern: '^[a-zA-Z0-9]+$'
+    ConstraintDescription: 'Must contain only alphanumeric characters'
 
 Resources:
   # VPC Definition - Main network container
