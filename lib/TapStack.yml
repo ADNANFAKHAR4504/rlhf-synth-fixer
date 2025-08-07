@@ -4,12 +4,8 @@ Description: 'Serverless RESTful API for CRUD operations with DynamoDB'
 Parameters:
   Environment:
     Type: String
-    Default: prod
-    Description: Environment name for resource tagging and naming
-    AllowedValues:
-      - dev
-      - staging
-      - prod
+    Default: dev
+    Description: Environment name for resource naming
 
 Resources:
   # VPC Configuration
@@ -143,17 +139,17 @@ Resources:
   MyCrudTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: !Sub 'MyCrudTable${Environment}'
+      TableName: MyCrudTable
       AttributeDefinitions:
         - AttributeName: id
           AttributeType: S
       KeySchema:
         - AttributeName: id
           KeyType: HASH
-      BillingMode: ON_DEMAND
-      DeletionProtectionEnabled: false
-      PointInTimeRecoverySpecification:
-        PointInTimeRecoveryEnabled: true
+      BillingMode: PROVISIONED
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
       Tags:
         - Key: Environment
           Value: !Ref Environment
@@ -252,10 +248,8 @@ Resources:
     Type: AWS::Lambda::Function
     Properties:
       FunctionName: !Sub '${Environment}-create-item'
-      Runtime: python3.11
+      Runtime: python3.9
       Handler: index.lambda_handler
-      Timeout: 30
-      MemorySize: 256
       Role: !GetAtt CreateItemRole.Arn
       VpcConfig:
         SecurityGroupIds:
@@ -265,13 +259,11 @@ Resources:
       Environment:
         Variables:
           TABLE_NAME: !Ref MyCrudTable
-          ENVIRONMENT: !Ref Environment
       Code:
         ZipFile: |
           import json
           import boto3
           import os
-          from datetime import datetime
           from botocore.exceptions import ClientError
 
           dynamodb = boto3.resource('dynamodb')
@@ -293,9 +285,6 @@ Resources:
                           },
                           'body': json.dumps({'error': 'Missing required field: id'})
                       }
-                  
-                  # Add created_at timestamp
-                  body['created_at'] = datetime.utcnow().isoformat()
                   
                   # Create item in DynamoDB
                   response = table.put_item(Item=body)
@@ -335,10 +324,8 @@ Resources:
     Type: AWS::Lambda::Function
     Properties:
       FunctionName: !Sub '${Environment}-get-item'
-      Runtime: python3.11
+      Runtime: python3.9
       Handler: index.lambda_handler
-      Timeout: 30
-      MemorySize: 256
       Role: !GetAtt GetItemRole.Arn
       VpcConfig:
         SecurityGroupIds:
@@ -348,7 +335,6 @@ Resources:
       Environment:
         Variables:
           TABLE_NAME: !Ref MyCrudTable
-          ENVIRONMENT: !Ref Environment
       Code:
         ZipFile: |
           import json
@@ -413,10 +399,8 @@ Resources:
     Type: AWS::Lambda::Function
     Properties:
       FunctionName: !Sub '${Environment}-update-item'
-      Runtime: python3.11
+      Runtime: python3.9
       Handler: index.lambda_handler
-      Timeout: 30
-      MemorySize: 256
       Role: !GetAtt UpdateItemRole.Arn
       VpcConfig:
         SecurityGroupIds:
@@ -426,13 +410,11 @@ Resources:
       Environment:
         Variables:
           TABLE_NAME: !Ref MyCrudTable
-          ENVIRONMENT: !Ref Environment
       Code:
         ZipFile: |
           import json
           import boto3
           import os
-          from datetime import datetime
           from botocore.exceptions import ClientError
 
           dynamodb = boto3.resource('dynamodb')
@@ -445,9 +427,6 @@ Resources:
                   
                   # Parse request body
                   body = json.loads(event['body']) if event.get('body') else {}
-                  
-                  # Add updated_at timestamp
-                  body['updated_at'] = datetime.utcnow().isoformat()
                   
                   # Build update expression
                   update_expression = "SET "
@@ -518,10 +497,8 @@ Resources:
     Type: AWS::Lambda::Function
     Properties:
       FunctionName: !Sub '${Environment}-delete-item'
-      Runtime: python3.11
+      Runtime: python3.9
       Handler: index.lambda_handler
-      Timeout: 30
-      MemorySize: 256
       Role: !GetAtt DeleteItemRole.Arn
       VpcConfig:
         SecurityGroupIds:
@@ -531,7 +508,6 @@ Resources:
       Environment:
         Variables:
           TABLE_NAME: !Ref MyCrudTable
-          ENVIRONMENT: !Ref Environment
       Code:
         ZipFile: |
           import json
@@ -571,7 +547,7 @@ Resources:
                           'Access-Control-Allow-Methods': 'DELETE',
                           'Access-Control-Allow-Headers': 'Content-Type'
                       },
-                      'body': json.dumps({'message': 'Item deleted successfully', 'deleted_item': response['Attributes']}, default=str)
+                      'body': json.dumps({'message': 'Item deleted successfully'})
                   }
               
               except ClientError as e:
@@ -783,13 +759,6 @@ Resources:
       - ItemOptionsMethod
     Properties:
       RestApiId: !Ref MyRestApi
-
-  # API Gateway Stage
-  ApiStage:
-    Type: AWS::ApiGateway::Stage
-    Properties:
-      RestApiId: !Ref MyRestApi
-      DeploymentId: !Ref ApiDeployment
       StageName: !Ref Environment
 
 Outputs:
@@ -822,9 +791,3 @@ Outputs:
     Value: !Ref PublicSubnet
     Export:
       Name: !Sub '${AWS::StackName}-PublicSubnet'
-
-  LambdaSecurityGroupId:
-    Description: Lambda Security Group ID
-    Value: !Ref LambdaSecurityGroup
-    Export:
-      Name: !Sub '${AWS::StackName}-LambdaSecurityGroup'
