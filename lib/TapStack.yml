@@ -253,7 +253,6 @@ Resources:
   GetItemRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${EnvironmentSuffixName}-get-item-role'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
