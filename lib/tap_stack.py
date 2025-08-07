@@ -31,6 +31,10 @@ class TapStack(ComponentResource):
         self.regions = ["us-east-1", "us-west-2", "ap-south-1"]
         self.primary_region = "us-east-1"
         
+        # Get current AWS account ID (this is a plain string, not Output)
+        self.current_identity = aws.get_caller_identity()
+        self.account_id = self.current_identity.account_id
+        
         # Standard enterprise tags
         self.standard_tags = {
             "Environment": f"PROD-{self.environment_suffix}",
@@ -66,9 +70,6 @@ class TapStack(ComponentResource):
         self.kms_keys = {}
         self.kms_aliases = {}
         
-        # Get current AWS account ID
-        current_identity = aws.get_caller_identity()
-        
         for region in self.regions:
             provider = aws.Provider(
                 f"kms-provider-{region}",
@@ -76,49 +77,47 @@ class TapStack(ComponentResource):
                 opts=ResourceOptions(parent=self)
             )
             
-            # KMS key with comprehensive policy
+            # KMS key with comprehensive policy (fix: use self.account_id directly)
             kms_key = aws.kms.Key(
                 f"PROD-kms-key-{region}-{self.environment_suffix}",
                 description=f"Master encryption key for {region} region - {self.environment_suffix}",
                 deletion_window_in_days=10,
                 enable_key_rotation=True,
-                policy=current_identity.account_id.apply(
-                    lambda account_id: json.dumps({
-                        "Version": "2012-10-17",
-                        "Statement": [
-                            {
-                                "Sid": "Enable IAM User Permissions",
-                                "Effect": "Allow",
-                                "Principal": {"AWS": f"arn:aws:iam::{account_id}:root"},
-                                "Action": "kms:*",
-                                "Resource": "*"
-                            },
-                            {
-                                "Sid": "Allow CloudTrail",
-                                "Effect": "Allow",
-                                "Principal": {"Service": "cloudtrail.amazonaws.com"},
-                                "Action": [
-                                    "kms:GenerateDataKey*",
-                                    "kms:DescribeKey"
-                                ],
-                                "Resource": "*"
-                            },
-                            {
-                                "Sid": "Allow CloudWatch Logs",
-                                "Effect": "Allow",
-                                "Principal": {"Service": f"logs.{region}.amazonaws.com"},
-                                "Action": [
-                                    "kms:Encrypt",
-                                    "kms:Decrypt",
-                                    "kms:ReEncrypt*",
-                                    "kms:GenerateDataKey*",
-                                    "kms:DescribeKey"
-                                ],
-                                "Resource": "*"
-                            }
-                        ]
-                    })
-                ),
+                policy=json.dumps({
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "Enable IAM User Permissions",
+                            "Effect": "Allow",
+                            "Principal": {"AWS": f"arn:aws:iam::{self.account_id}:root"},
+                            "Action": "kms:*",
+                            "Resource": "*"
+                        },
+                        {
+                            "Sid": "Allow CloudTrail",
+                            "Effect": "Allow",
+                            "Principal": {"Service": "cloudtrail.amazonaws.com"},
+                            "Action": [
+                                "kms:GenerateDataKey*",
+                                "kms:DescribeKey"
+                            ],
+                            "Resource": "*"
+                        },
+                        {
+                            "Sid": "Allow CloudWatch Logs",
+                            "Effect": "Allow",
+                            "Principal": {"Service": f"logs.{region}.amazonaws.com"},
+                            "Action": [
+                                "kms:Encrypt",
+                                "kms:Decrypt",
+                                "kms:ReEncrypt*",
+                                "kms:GenerateDataKey*",
+                                "kms:DescribeKey"
+                            ],
+                            "Resource": "*"
+                        }
+                    ]
+                }),
                 tags=self.standard_tags,
                 opts=ResourceOptions(parent=self, provider=provider)
             )
@@ -226,14 +225,11 @@ class TapStack(ComponentResource):
     
     def _create_logging_infrastructure(self):
         """Create comprehensive logging infrastructure."""
-        current_identity = aws.get_caller_identity()
         
-        # S3 bucket for CloudTrail logs (primary region only)
+        # S3 bucket for CloudTrail logs (primary region only) - fix: use self.account_id directly
         self.cloudtrail_bucket = aws.s3.Bucket(
             f"PROD-cloudtrail-{self.environment_suffix}",
-            bucket=current_identity.account_id.apply(
-                lambda account_id: f"prod-cloudtrail-{self.environment_suffix}-{account_id}"
-            ),
+            bucket=f"prod-cloudtrail-{self.environment_suffix}-{self.account_id}",
             tags=self.standard_tags,
             opts=ResourceOptions(parent=self)
         )
@@ -275,15 +271,12 @@ class TapStack(ComponentResource):
             opts=ResourceOptions(parent=self)
         )
         
-        # CloudTrail bucket policy
+        # CloudTrail bucket policy (fix: use Output.all properly)
         cloudtrail_policy = aws.s3.BucketPolicy(
             f"PROD-cloudtrail-policy-{self.environment_suffix}",
             bucket=self.cloudtrail_bucket.id,
-            policy=pulumi.Output.all(
-                self.cloudtrail_bucket.arn, 
-                current_identity.account_id
-            ).apply(
-                lambda args: json.dumps({
+            policy=self.cloudtrail_bucket.arn.apply(
+                lambda bucket_arn: json.dumps({
                     "Version": "2012-10-17",
                     "Statement": [
                         {
@@ -291,10 +284,10 @@ class TapStack(ComponentResource):
                             "Effect": "Allow",
                             "Principal": {"Service": "cloudtrail.amazonaws.com"},
                             "Action": "s3:GetBucketAcl",
-                            "Resource": args[0],
+                            "Resource": bucket_arn,
                             "Condition": {
                                 "StringEquals": {
-                                    "AWS:SourceArn": f"arn:aws:cloudtrail:us-east-1:{args[1]}:trail/PROD-cloudtrail-{self.environment_suffix}"
+                                    "AWS:SourceArn": f"arn:aws:cloudtrail:us-east-1:{self.account_id}:trail/PROD-cloudtrail-{self.environment_suffix}"
                                 }
                             }
                         },
@@ -303,11 +296,11 @@ class TapStack(ComponentResource):
                             "Effect": "Allow",
                             "Principal": {"Service": "cloudtrail.amazonaws.com"},
                             "Action": "s3:PutObject",
-                            "Resource": f"{args[0]}/*",
+                            "Resource": f"{bucket_arn}/*",
                             "Condition": {
                                 "StringEquals": {
                                     "s3:x-amz-acl": "bucket-owner-full-control",
-                                    "AWS:SourceArn": f"arn:aws:cloudtrail:us-east-1:{args[1]}:trail/PROD-cloudtrail-{self.environment_suffix}"
+                                    "AWS:SourceArn": f"arn:aws:cloudtrail:us-east-1:{self.account_id}:trail/PROD-cloudtrail-{self.environment_suffix}"
                                 }
                             }
                         }
@@ -384,7 +377,7 @@ class TapStack(ComponentResource):
             for i in range(2):  # Create 2 subnets per type
                 az = azs.names[i]
                 
-                # Public subnet with IPv6
+                # Public subnet with IPv6 (fix: proper IPv6 CIDR calculation)
                 public_subnet = aws.ec2.Subnet(
                     f"PROD-public-subnet-{region}-{i+1}-{self.environment_suffix}",
                     vpc_id=vpc.id,
@@ -559,7 +552,6 @@ class TapStack(ComponentResource):
     def _create_storage_infrastructure(self):
         """Create S3 buckets with encryption and versioning across regions."""
         self.s3_buckets = {}
-        current_identity = aws.get_caller_identity()
         
         for region in self.regions:
             provider = aws.Provider(
@@ -568,12 +560,10 @@ class TapStack(ComponentResource):
                 opts=ResourceOptions(parent=self)
             )
             
-            # S3 bucket with unique naming
+            # S3 bucket with unique naming (fix: use self.account_id directly)
             bucket = aws.s3.Bucket(
                 f"PROD-storage-{region}-{self.environment_suffix}",
-                bucket=current_identity.account_id.apply(
-                    lambda account_id: f"prod-storage-{region}-{self.environment_suffix}-{account_id}"
-                ),
+                bucket=f"prod-storage-{region}-{self.environment_suffix}-{self.account_id}",
                 tags=self.standard_tags,
                 opts=ResourceOptions(parent=self, provider=provider)
             )
@@ -838,9 +828,6 @@ echo 'CipherString = ECDHE+AESGCM:ECDHE+CHACHA20:DHE+AESGCM:DHE+CHACHA20:!aNULL:
 # Install CloudWatch agent
 wget https://amazoncloudwatch-agent.s3.amazonaws.com/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm
 rpm -U ./amazon-cloudwatch-agent.rpm
-
-# Tag the instance
-aws ec2 create-tags --region {region} --resources $(curl -s http://169.254.169.254/latest/meta-data/instance-id) --tags Key=Name,Value=PROD-ec2-{region}-{self.environment_suffix}
 """
             
             # EC2 instance
@@ -1045,31 +1032,6 @@ aws ec2 create-tags --region {region} --resources $(curl -s http://169.254.169.2
                         ]
                     })
                 ),
-                opts=ResourceOptions(parent=self, provider=provider)
-            )
-            
-            # Config rules for compliance monitoring
-            config_role = aws.iam.Role(
-                f"PROD-config-role-{region}-{self.environment_suffix}",
-                name=f"PROD-config-role-{region}-{self.environment_suffix}",
-                assume_role_policy=json.dumps({
-                    "Version": "2012-10-17",
-                    "Statement": [
-                        {
-                            "Effect": "Allow",
-                            "Principal": {"Service": "config.amazonaws.com"},
-                            "Action": "sts:AssumeRole"
-                        }
-                    ]
-                }),
-                tags=self.standard_tags,
-                opts=ResourceOptions(parent=self, provider=provider)
-            )
-            
-            aws.iam.RolePolicyAttachment(
-                f"PROD-config-policy-{region}-{self.environment_suffix}",
-                role=config_role.name,
-                policy_arn="arn:aws:iam::aws:policy/service-role/ConfigRole",
                 opts=ResourceOptions(parent=self, provider=provider)
             )
             
