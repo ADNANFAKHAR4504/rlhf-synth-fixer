@@ -712,46 +712,46 @@ echo 'MinProtocol = TLSv1.2' >> /etc/ssl/openssl.cnf
             self.ec2_instances[region] = ec2_instance
     
     def _create_monitoring(self):
-        """Create CloudWatch monitoring and alarms."""
-        # CloudWatch Log Groups
-        self.log_groups = {}
-        
-        for region in self.regions:
-            provider = aws.Provider(
-                f"monitoring-provider-{region}",
-                region=region,
-                opts=ResourceOptions(parent=self)
-            )
-            
-            log_group = aws.cloudwatch.LogGroup(
-                f"PROD-app-logs-{region}-{self.environment_suffix}",
-                name=f"/aws/application/tap-{region}-{self.environment_suffix}",
-                retention_in_days=30,
-                kms_key_id=self.kms_keys[region].arn,
-                tags=self.standard_tags,
-                opts=ResourceOptions(parent=self, provider=provider)
-            )
-            
-            # CloudWatch Alarms
-            aws.cloudwatch.MetricAlarm(
-                f"PROD-high-cpu-{region}-{self.environment_suffix}",
-                alarm_name=f"PROD-high-cpu-{region}-{self.environment_suffix}",
-                comparison_operator="GreaterThanThreshold",
-                evaluation_periods=2,
-                metric_name="CPUUtilization",
-                namespace="AWS/EC2",
-                period=300,
-                statistic="Average",
-                threshold=80,
-                alarm_description="This metric monitors ec2 cpu utilization",
-                dimensions={
-                    "InstanceId": self.ec2_instances[region].id
-                },
-                tags=self.standard_tags,
-                opts=ResourceOptions(parent=self, provider=provider)
-            )
-            
-            self.log_groups[region] = log_group
+      """Create CloudWatch monitoring and alarms."""
+      # CloudWatch Log Groups
+      self.log_groups = {}
+      
+      for region in self.regions:
+          provider = aws.Provider(
+              f"monitoring-provider-{region}",
+              region=region,
+              opts=ResourceOptions(parent=self)
+          )
+          
+          log_group = aws.cloudwatch.LogGroup(
+              f"PROD-app-logs-{region}-{self.environment_suffix}",
+              name=f"/aws/application/tap-{region}-{self.environment_suffix}",
+              retention_in_days=30,
+              kms_key_id=self.kms_keys[region].arn,
+              tags=self.standard_tags,
+              opts=ResourceOptions(parent=self, provider=provider)
+          )
+          
+          # CloudWatch Alarms - FIXED: Removed alarm_name parameter
+          aws.cloudwatch.MetricAlarm(
+              f"PROD-high-cpu-{region}-{self.environment_suffix}",
+              comparison_operator="GreaterThanThreshold",
+              evaluation_periods=2,
+              metric_name="CPUUtilization",
+              namespace="AWS/EC2",
+              period=300,
+              statistic="Average",
+              threshold=80,
+              alarm_description="This metric monitors ec2 cpu utilization",
+              dimensions={
+                  "InstanceId": self.ec2_instances[region].id
+              },
+              tags=self.standard_tags,
+              opts=ResourceOptions(parent=self, provider=provider)
+          )
+          
+          self.log_groups[region] = log_group
+
     
     def _create_compliance_checks(self):
         """Create AWS Config for automated compliance checks."""
