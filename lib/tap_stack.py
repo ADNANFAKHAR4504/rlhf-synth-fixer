@@ -209,14 +209,13 @@ def create_compute_layer(
     ec2_sg: aws.ec2.SecurityGroup,
     instance_profile: aws.iam.InstanceProfile,
     target_group: aws.lb.TargetGroup
-):
+) -> aws.autoscaling.Group:
   ami = aws.ec2.get_ami(
     most_recent=True, owners=["amazon"],
     filters=[{"name": "name", "values": ["amzn2-ami-hvm-*-x86_64-gp2"]}]
   )
 
   user_data = """#!/bin/bash
-yum update -y
 yum install -y nginx
 systemctl start nginx
 systemctl enable nginx
@@ -241,7 +240,7 @@ echo "<h1>Hello from $(hostname -f)</h1>" > /var/www/html/index.html
     tags=common_tags
   )
 
-  aws.autoscaling.Group(
+  asg = aws.autoscaling.Group(
     f"{project_name}-asg",
     vpc_zone_identifiers=[subnet.id for subnet in private_subnets],
     desired_capacity=2,
@@ -257,6 +256,8 @@ echo "<h1>Hello from $(hostname -f)</h1>" > /var/www/html/index.html
       ) for k, v in common_tags.items()
     ]
   )
+  
+  return asg
 
 
 def create_load_balancer(
