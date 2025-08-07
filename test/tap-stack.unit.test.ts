@@ -227,7 +227,7 @@ describe('CloudFormation Template Unit Tests', () => {
     test('should have items table', () => {
       const table = template.Resources.ItemsTable;
       expect(table.Type).toBe('AWS::DynamoDB::Table');
-      expect(table.Properties.BillingMode).toBe('PROVISIONED');
+      expect(table.Properties.BillingMode).toBe('PAY_PER_REQUEST');
     });
 
     test('should have correct key schema', () => {
