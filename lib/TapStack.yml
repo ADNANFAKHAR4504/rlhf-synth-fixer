@@ -207,7 +207,7 @@ Resources:
       KeySchema:
         - AttributeName: id
           KeyType: HASH
-      BillingMode: ON_DEMAND
+      BillingMode: PROVISIONED
       PointInTimeRecoverySpecification:
         PointInTimeRecoveryEnabled: true
       Tags:
