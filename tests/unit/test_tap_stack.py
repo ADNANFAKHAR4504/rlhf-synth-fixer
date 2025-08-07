@@ -1,6 +1,11 @@
+from lib.components.serverless import ServerlessComponent
+from lib.components.database import DatabaseComponent
+from lib.components.vpc import ComputeComponent
+from lib.components.iam import IAMComponent
+from lib.tap_stack import TapStackArgs, TapStack
+import pulumi
 import os
 import sys
-import pulumi
 import unittest
 from unittest.mock import Mock, MagicMock, patch
 import types
@@ -201,6 +206,8 @@ aws_lambda.Function = Mock()
 aws_lambda.Permission = Mock()
 sys.modules["pulumi_aws"].lambda_ = aws_lambda
 
+# Now import pulumi to get the actual module reference
+
 # Ensure all necessary attributes are set on the actual pulumi module
 pulumi.Output = MockOutputFactory
 pulumi.ComponentResource = MockComponentResource
@@ -216,12 +223,7 @@ pulumi.invoke = MagicMock(return_value=MagicMock())  # Fixed: lowercase invoke
 pulumi.get_region = Mock(return_value=mock_region)
 
 # Import the components after mocking is complete
-# Now import pulumi to get the actual module reference
-from lib.components.serverless import ServerlessComponent
-from lib.components.database import DatabaseComponent
-from lib.components.vpc import ComputeComponent
-from lib.components.iam import IAMComponent
-from lib.tap_stack import TapStackArgs, TapStack
+
 
 class TestTapStackComponents(unittest.TestCase):
   def setUp(self):
