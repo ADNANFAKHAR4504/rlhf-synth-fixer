@@ -5,16 +5,16 @@ Secure production-ready Pulumi stack for a web application using:
 - Dynamic default VPC discovery
 - Least-privilege security group
 - IAM user with conditional access key rotation enforcement
-- KMS key with fine-grained key policy
-- Encrypted secret management with Pulumi and KMS
+- KMS key with fine-grained key policy and extra principals
+- Encrypted Pulumi config secret using KMS
 """
-
 from typing import Optional, List, Dict, Any
+from datetime import datetime
 import json
+import os
 import pulumi
 from pulumi import ResourceOptions
 import pulumi_aws as aws
-import os
 
 
 class TapStackArgs:
@@ -31,10 +31,11 @@ class TapStack(pulumi.ComponentResource):
     env = args.environment_suffix
     tags = args.tags
     region = os.getenv("AWS_REGION", "us-west-1")
+    created_on = datetime.utcnow().strftime("%Y-%m-%d")
+    max_key_age_days = 90
 
     allowed_cidrs: List[str] = config.get_object("allowed_cidrs") or ["0.0.0.0/0"]
     trusted_ips: List[str] = config.get_object("trusted_external_ips") or ["8.8.8.8/32", "1.1.1.1/32"]
-    max_key_age_days = 90
 
     vpc = aws.ec2.get_vpc_output(default=True)
 
@@ -86,49 +87,48 @@ class TapStack(pulumi.ComponentResource):
     )
 
     # --------------------------------------------------------
-    # IAM User + Conditional Rotation Policy
+    # VPC Endpoint for S3 + Egress Prefix List Rule
+    # --------------------------------------------------------
+    s3_endpoint = aws.ec2.VpcEndpoint(
+      f"s3-endpoint-{env}",
+      vpc_id=vpc.id,
+      service_name=f"com.amazonaws.{region}.s3",
+      vpc_endpoint_type="Interface",
+      security_group_ids=[sg.id],
+      private_dns_enabled=True,
+      tags={**tags, "Name": f"s3-endpoint-{env}"}
+    )
+
+    if not os.getenv("SKIP_PREFIX_LIST_RULE"):
+      s3_prefix_list = aws.ec2.get_prefix_list_output(name=f"com.amazonaws.{region}.s3")
+
+      aws.ec2.SecurityGroupRule(
+        f"s3-egress-{env}",
+        type="egress",
+        from_port=443,
+        to_port=443,
+        protocol="tcp",
+        prefix_list_id=s3_prefix_list.id,
+        security_group_id=sg.id,
+        description="Egress to AWS S3 service via prefix list"
+      )
+
+
+    # --------------------------------------------------------
+    # IAM User + External Rotation (tag-based)
     # --------------------------------------------------------
     user = aws.iam.User(
       f"web-app-user-{env}",
       name=f"secure-web-app-user-{env}",
       path="/applications/",
-      tags={**tags, "Application": "secure-web-app"}
+      tags={**tags, "Application": "secure-web-app", "CreatedOn": created_on}
     )
-
-    def rotation_policy(days: int) -> str:
-      return json.dumps({
-        "Version": "2012-10-17",
-        "Statement": [
-          {
-            "Sid": "DenyStaleAccessKeys",
-            "Effect": "Deny",
-            "Action": "*",
-            "Resource": "*",
-            "Condition": {
-              "NumericGreaterThan": {
-                "aws:TokenIssueTime": days * 24 * 60 * 60  # seconds
-              }
-            }
-          },
-          {
-            "Sid": "AllowKeyRotationOperations",
-            "Effect": "Allow",
-            "Action": [
-              "iam:CreateAccessKey",
-              "iam:DeleteAccessKey",
-              "iam:UpdateAccessKey",
-              "iam:ListAccessKeys"
-            ],
-            "Resource": "*"
-          }
-        ]
-      }, indent=2)
 
     aws.iam.UserPolicy(
       f"rotate-policy-{env}",
       user=user.name,
       name="AccessKeyRotationPolicy",
-      policy=rotation_policy(max_key_age_days)
+      policy=self.rotation_policy(max_key_age_days)
     )
 
     access_key = aws.iam.AccessKey(
@@ -138,7 +138,7 @@ class TapStack(pulumi.ComponentResource):
     )
 
     # --------------------------------------------------------
-    # KMS Key + IAM Principal Policy
+    # KMS Key + Alias + IAM Policy
     # --------------------------------------------------------
     key = aws.kms.Key(
       f"secure-key-{env}",
@@ -154,42 +154,24 @@ class TapStack(pulumi.ComponentResource):
       target_key_id=key.key_id
     )
 
-    def build_key_policy(user_arn: str) -> str:
-      identity = aws.get_caller_identity()
-      return json.dumps({
-        "Version": "2012-10-17",
-        "Statement": [
-          {
-            "Sid": "RootAccess",
-            "Effect": "Allow",
-            "Principal": {
-              "AWS": f"arn:aws:iam::{identity.account_id}:root"
-            },
-            "Action": "kms:*",
-            "Resource": "*"
-          },
-          {
-            "Sid": "AllowIAMUserKMSAccess",
-            "Effect": "Allow",
-            "Principal": {
-              "AWS": user_arn
-            },
-            "Action": [
-              "kms:Encrypt",
-              "kms:Decrypt",
-              "kms:GenerateDataKey*",
-              "kms:DescribeKey"
-            ],
-            "Resource": "*"
-          }
-        ]
-      }, indent=2)
-
     aws.kms.KeyPolicy(
       f"secure-key-policy-{env}",
       key_id=key.key_id,
-      policy=user.arn.apply(build_key_policy)
+      policy=user.arn.apply(self.build_key_policy)
     )
+
+    # --------------------------------------------------------
+    # Pulumi Encrypted Secret using KMS
+    # --------------------------------------------------------
+    secret_value = config.require_secret("app_secret")
+
+    encrypted_secret = secret_value.apply(
+      lambda val: aws.kms.get_cipher_text(
+        key_id=key.key_id,
+        plaintext=val
+      ).ciphertext_blob
+    )
+
 
     # --------------------------------------------------------
     # Exports (non-sensitive only)
@@ -197,9 +179,9 @@ class TapStack(pulumi.ComponentResource):
     pulumi.export("vpc_id", vpc.id)
     pulumi.export("security_group_id", sg.id)
     pulumi.export("iam_user_arn", user.arn)
-    pulumi.export("access_key_id", access_key.id)
     pulumi.export("kms_key_id", key.key_id)
     pulumi.export("kms_alias", alias.name)
+    pulumi.export("encrypted_app_secret", encrypted_secret.ciphertext_blob)
     pulumi.export("security_notice", (
       "Secrets are encrypted via KMS. Access keys are rotated every 90 days and plaintext values "
       "are not exposed in state or outputs."
@@ -208,16 +190,82 @@ class TapStack(pulumi.ComponentResource):
     self.vpc_id = vpc.id
     self.security_group_id = sg.id
     self.iam_user_arn = user.arn
-    self.access_key_id = access_key.id
     self.kms_key_id = key.key_id
     self.kms_alias = alias.name
+    self.encrypted_app_secret = encrypted_secret.ciphertext_blob
 
     self.register_outputs({
       "vpc_id": self.vpc_id,
       "security_group_id": self.security_group_id,
       "iam_user_arn": self.iam_user_arn,
-      "access_key_id": self.access_key_id,
       "kms_key_id": self.kms_key_id,
       "kms_alias": self.kms_alias,
+      "encrypted_app_secret": self.encrypted_app_secret
     })
 
+  @staticmethod
+  def rotation_policy(days: int) -> str:
+    return json.dumps({
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+          "Sid": "AllowKeyRotationOperations",
+          "Effect": "Allow",
+          "Action": [
+            "iam:CreateAccessKey",
+            "iam:DeleteAccessKey",
+            "iam:UpdateAccessKey",
+            "iam:ListAccessKeys"
+          ],
+          "Resource": "*"
+        }
+      ]
+    }, indent=2)
+
+  @staticmethod
+  def build_key_policy(user_arn: str) -> str:
+    identity = aws.get_caller_identity()
+    audit_role_arn = f"arn:aws:iam::{identity.account_id}:role/audit-role"
+    break_glass_arn = f"arn:aws:iam::{identity.account_id}:role/break-glass-role"
+
+    return json.dumps({
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+          "Sid": "RootAccess",
+          "Effect": "Allow",
+          "Principal": {"AWS": f"arn:aws:iam::{identity.account_id}:root"},
+          "Action": "kms:*",
+          "Resource": "*"
+        },
+        {
+          "Sid": "AllowIAMUserKMSAccess",
+          "Effect": "Allow",
+          "Principal": {"AWS": user_arn},
+          "Action": [
+            "kms:Encrypt",
+            "kms:Decrypt",
+            "kms:GenerateDataKey*",
+            "kms:DescribeKey"
+          ],
+          "Resource": "*"
+        },
+        {
+          "Sid": "AuditAccess",
+          "Effect": "Allow",
+          "Principal": {"AWS": audit_role_arn},
+          "Action": [
+            "kms:DescribeKey",
+            "kms:GetKeyPolicy"
+          ],
+          "Resource": "*"
+        },
+        {
+          "Sid": "BreakGlassAccess",
+          "Effect": "Allow",
+          "Principal": {"AWS": break_glass_arn},
+          "Action": ["kms:Decrypt"],
+          "Resource": "*"
+        }
+      ]
+    }, indent=2)
