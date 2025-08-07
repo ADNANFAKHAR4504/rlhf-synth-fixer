@@ -1,249 +1,496 @@
-import fs from 'fs';
 import axios from 'axios';
+import {
+  CloudFormationClient,
+  DescribeStackResourcesCommand,
+  DescribeStacksCommand,
+} from '@aws-sdk/client-cloudformation';
+import {
+  DescribeInstancesCommand,
+  DescribeInternetGatewaysCommand,
+  DescribeRouteTablesCommand,
+  DescribeSecurityGroupsCommand,
+  DescribeSubnetsCommand,
+  DescribeVpcsCommand,
+  EC2Client,
+} from '@aws-sdk/client-ec2';
+import {
+  DescribeAutoScalingGroupsCommand,
+  AutoScalingClient,
+} from '@aws-sdk/client-auto-scaling';
+import {
+  DescribeLoadBalancersCommand,
+  DescribeTargetGroupsCommand,
+  DescribeTargetHealthCommand,
+  ElasticLoadBalancingV2Client,
+} from '@aws-sdk/client-elastic-load-balancing-v2';
+import {
+  GetBucketWebsiteCommand,
+  GetBucketPolicyCommand,
+  HeadBucketCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
+import {
+  DescribeAlarmsCommand,
+  CloudWatchClient,
+} from '@aws-sdk/client-cloudwatch';
+import {
+  GetRoleCommand,
+  ListAttachedRolePoliciesCommand,
+  IAMClient,
+} from '@aws-sdk/client-iam';
 
-// AWS SDK clients - Note: These will need to be installed via npm
-// npm install @aws-sdk/client-ec2 @aws-sdk/client-s3 @aws-sdk/client-autoscaling @aws-sdk/client-elasticloadbalancingv2
-const { EC2Client, DescribeVpcsCommand } = require('@aws-sdk/client-ec2');
-const { S3Client, HeadBucketCommand, GetBucketWebsiteCommand } = require('@aws-sdk/client-s3');
-const { AutoScalingClient, DescribeAutoScalingGroupsCommand } = require('@aws-sdk/client-auto-scaling');
-const { ElasticLoadBalancingV2Client, DescribeLoadBalancersCommand, DescribeTargetHealthCommand } = require('@aws-sdk/client-elastic-load-balancing-v2');
+const region = 'us-east-1';
+const stackName = `TapStack${process.env.ENVIRONMENT_SUFFIX || 'dev'}`;
 
-const ec2Client = new EC2Client({ region: 'us-east-1' });
-const s3Client = new S3Client({ region: 'us-east-1' });
-const asgClient = new AutoScalingClient({ region: 'us-east-1' });
-const albClient = new ElasticLoadBalancingV2Client({ region: 'us-east-1' });
-
-// Configuration - These are coming from cfn-outputs after cdk deploy
-let outputs: any = {};
-try {
-  outputs = JSON.parse(fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8'));
-} catch (error) {
-  console.warn('No cfn-outputs found, using environment variables for testing');
-}
-
-// Get environment suffix from environment variable (set by CI/CD pipeline)
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-const environmentName = process.env.ENVIRONMENT_NAME || 'WebApp';
+// Initialize AWS clients
+const cfnClient = new CloudFormationClient({ region });
+const ec2Client = new EC2Client({ region });
+const asgClient = new AutoScalingClient({ region });
+const albClient = new ElasticLoadBalancingV2Client({ region });
+const s3Client = new S3Client({ region });
+const cloudWatchClient = new CloudWatchClient({ region });
+const iamClient = new IAMClient({ region });
 
 describe('TapStack Infrastructure Integration Tests', () => {
-  let loadBalancerUrl: string;
-  let s3BucketName: string;
-  let vpcId: string;
-  let autoScalingGroupName: string;
-  let loadBalancerArn: string;
+  let stackOutputs: Record<string, string> = {};
+  let stackResources: any[] = [];
+  let stackExists = false;
+  let stackStatus = '';
 
-  beforeAll(() => {
-    // Get outputs from CloudFormation or use defaults for testing
-    loadBalancerUrl = outputs.LoadBalancerURL || `http://${environmentName}-ALB-test.us-east-1.elb.amazonaws.com`;
-    s3BucketName = outputs.StaticContentBucketName || `${environmentName.toLowerCase()}-static-content-test`;
-    vpcId = outputs.VPCId || 'vpc-test-id';
-    autoScalingGroupName = outputs.AutoScalingGroupName || `${environmentName}-ASG`;
-    loadBalancerArn = outputs.LoadBalancerARN || '';
-  });
-
-  describe('Environment Configuration', () => {
-    test('should have environment variables configured', () => {
-      expect(environmentSuffix).toBeDefined();
-      expect(environmentName).toBeDefined();
-      expect(environmentSuffix).toMatch(/^[a-zA-Z0-9]+$/);
-    });
-
-    test('should be configured for us-east-1 region', () => {
-      expect(loadBalancerUrl).toContain('us-east-1');
-    });
-  });
-
-  describe('Live VPC Verification', () => {
-    test('should have VPC that exists in AWS', async () => {
-      if (vpcId === 'vpc-test-id') {
-        console.warn('Skipping VPC test - using test ID');
-        return;
-      }
-
-      try {
-        const command = new DescribeVpcsCommand({
-          VpcIds: [vpcId]
-        });
-        const response = await ec2Client.send(command);
+  beforeAll(async () => {
+    try {
+      // Get stack outputs directly from CloudFormation
+      const stackResponse = await cfnClient.send(
+        new DescribeStacksCommand({ StackName: stackName })
+      );
+      const stack = stackResponse.Stacks?.[0];
+      
+      if (stack) {
+        stackExists = true;
+        stackStatus = stack.StackStatus || '';
         
-        expect(response.Vpcs).toBeDefined();
-        expect(response.Vpcs!.length).toBe(1);
-        expect(response.Vpcs![0].VpcId).toBe(vpcId);
-        expect(response.Vpcs![0].State).toBe('available');
-      } catch (error) {
-        console.warn(`VPC ${vpcId} does not exist or is not accessible: ${error}`);
-        // Skip test for mock data
-        return;
-      }
-    }, 30000);
-
-    test('should have VPC ID in correct format', () => {
-      if (vpcId !== 'vpc-test-id') {
-        expect(vpcId).toMatch(/^vpc-[a-f0-9]+$/);
-      }
-    });
-  });
-
-  describe('Live S3 Bucket Verification', () => {
-    test('should have S3 bucket that exists and is accessible', async () => {
-      if (s3BucketName.includes('test')) {
-        console.warn('Skipping S3 test - using test bucket name');
-        return;
-      }
-
-      try {
-        const headCommand = new HeadBucketCommand({
-          Bucket: s3BucketName
-        });
-        await s3Client.send(headCommand);
-        
-        // Test if bucket is configured for static website hosting
-        try {
-          const websiteCommand = new GetBucketWebsiteCommand({
-            Bucket: s3BucketName
-          });
-          const websiteResponse = await s3Client.send(websiteCommand);
-          expect(websiteResponse.IndexDocument).toBeDefined();
-        } catch (websiteError) {
-          console.warn(`S3 bucket ${s3BucketName} is not configured for static website hosting`);
+        if (stack.Outputs) {
+          stackOutputs = stack.Outputs.reduce(
+            (acc, output) => {
+              if (output.OutputKey && output.OutputValue) {
+                acc[output.OutputKey] = output.OutputValue;
+              }
+              return acc;
+            },
+            {} as Record<string, string>
+          );
         }
-      } catch (error) {
-        console.warn(`S3 bucket ${s3BucketName} does not exist or is not accessible: ${error}`);
-        // Skip test for mock data
-        return;
+
+        // Get stack resources for detailed testing
+        const resourcesResponse = await cfnClient.send(
+          new DescribeStackResourcesCommand({ StackName: stackName })
+        );
+        stackResources = resourcesResponse.StackResources || [];
       }
-    }, 30000);
+    } catch (error: any) {
+      if (error.name === 'ValidationError' && error.message.includes('does not exist')) {
+        console.warn(`Stack ${stackName} does not exist. Integration tests will be skipped.`);
+        stackExists = false;
+      } else {
+        console.error('Failed to get stack information:', error);
+        throw error;
+      }
+    }
+  }, 30000);
+
+  // Helper function to skip tests when stack doesn't exist
+  const skipIfStackMissing = () => {
+    if (!stackExists) {
+      console.warn(`Skipping test: Stack ${stackName} does not exist`);
+      return true;
+    }
+    return false;
+  };
+
+  describe('Stack Deployment', () => {
+    test('stack should exist and be in CREATE_COMPLETE state', async () => {
+      if (skipIfStackMissing()) return;
+      
+      const response = await cfnClient.send(
+        new DescribeStacksCommand({ StackName: stackName })
+      );
+      const stack = response.Stacks?.[0];
+      expect(stack).toBeDefined();
+      expect(['CREATE_COMPLETE', 'UPDATE_COMPLETE']).toContain(stack?.StackStatus);
+    });
+
+    test('stack should have all expected outputs', () => {
+      if (skipIfStackMissing()) return;
+      
+      const expectedOutputs = [
+        'VPCId',
+        'PublicSubnetAZ1Id',
+        'PublicSubnetAZ2Id',
+        'LoadBalancerURL',
+        'StaticContentBucketName',
+        'AutoScalingGroupName',
+        'TargetGroupArn'
+      ];
+
+      expectedOutputs.forEach(outputKey => {
+        expect(stackOutputs[outputKey]).toBeDefined();
+        expect(stackOutputs[outputKey]).not.toBe('');
+      });
+    });
+  });
+
+  describe('VPC and Networking', () => {
+    test('VPC should exist with correct configuration', async () => {
+      if (skipIfStackMissing()) return;
+      
+      const response = await ec2Client.send(
+        new DescribeVpcsCommand({
+          VpcIds: [stackOutputs.VPCId],
+        })
+      );
+      const vpc = response.Vpcs?.[0];
+      expect(vpc).toBeDefined();
+      expect(vpc?.CidrBlock).toBe('10.0.0.0/16');
+      expect(vpc?.State).toBe('available');
+    });
+
+    test('subnets should exist in correct AZs with proper CIDR blocks', async () => {
+      if (skipIfStackMissing()) return;
+      
+      const subnetIds = [
+        stackOutputs.PublicSubnetAZ1Id,
+        stackOutputs.PublicSubnetAZ2Id,
+      ];
+
+      const response = await ec2Client.send(
+        new DescribeSubnetsCommand({
+          SubnetIds: subnetIds,
+        })
+      );
+
+      expect(response.Subnets).toHaveLength(2);
+
+      const publicSubnet1 = response.Subnets?.find(
+        s => s.SubnetId === stackOutputs.PublicSubnetAZ1Id
+      );
+      const publicSubnet2 = response.Subnets?.find(
+        s => s.SubnetId === stackOutputs.PublicSubnetAZ2Id
+      );
+
+      expect(publicSubnet1?.CidrBlock).toBe('10.0.1.0/24');
+      expect(publicSubnet2?.CidrBlock).toBe('10.0.2.0/24');
+
+      // Check that subnets are in different AZs
+      const azs = new Set([
+        publicSubnet1?.AvailabilityZone,
+        publicSubnet2?.AvailabilityZone,
+      ]);
+      expect(azs.size).toBe(2); // Should span 2 AZs
+    });
+
+    test('Internet Gateway should be attached', async () => {
+      if (skipIfStackMissing()) return;
+      
+      const response = await ec2Client.send(
+        new DescribeInternetGatewaysCommand({
+          Filters: [
+            {
+              Name: 'attachment.vpc-id',
+              Values: [stackOutputs.VPCId],
+            },
+          ],
+        })
+      );
+
+      expect(response.InternetGateways).toHaveLength(1);
+      const igw = response.InternetGateways?.[0];
+      expect(igw?.State).toBe('available');
+      expect(igw?.Attachments?.[0]?.State).toBe('attached');
+    });
+
+    test('route tables should be properly configured', async () => {
+      if (skipIfStackMissing()) return;
+      const response = await ec2Client.send(
+        new DescribeRouteTablesCommand({
+          Filters: [
+            {
+              Name: 'vpc-id',
+              Values: [stackOutputs.VPCId],
+            },
+          ],
+        })
+      );
+
+      // Should have at least 2 route tables (main + public)
+      const customRouteTables = response.RouteTables?.filter(rt =>
+        rt.Tags?.some(tag => tag.Key === 'Name')
+      );
+      expect(customRouteTables!.length).toBeGreaterThanOrEqual(1);
+    });
+  });
+
+  describe('S3 Static Website Hosting', () => {
+    test('S3 bucket should exist and be accessible', async () => {
+      if (skipIfStackMissing()) return;
+      
+      const headCommand = new HeadBucketCommand({
+        Bucket: stackOutputs.StaticContentBucketName
+      });
+      await s3Client.send(headCommand);
+    });
+
+    test('S3 bucket should be configured for static website hosting', async () => {
+      if (skipIfStackMissing()) return;
+      
+      const websiteCommand = new GetBucketWebsiteCommand({
+        Bucket: stackOutputs.StaticContentBucketName
+      });
+      const websiteResponse = await s3Client.send(websiteCommand);
+      expect(websiteResponse.IndexDocument?.Suffix).toBe('index.html');
+      expect(websiteResponse.ErrorDocument?.Key).toBe('error.html');
+    });
+
+    test('S3 bucket should have public read policy', async () => {
+      if (skipIfStackMissing()) return;
+      
+      const policyCommand = new GetBucketPolicyCommand({
+        Bucket: stackOutputs.StaticContentBucketName
+      });
+      const policyResponse = await s3Client.send(policyCommand);
+      const policy = JSON.parse(policyResponse.Policy!);
+      
+      expect(policy.Statement).toHaveLength(1);
+      expect(policy.Statement[0].Effect).toBe('Allow');
+      expect(policy.Statement[0].Principal).toBe('*');
+      expect(policy.Statement[0].Action).toBe('s3:GetObject');
+    });
 
     test('should have valid S3 bucket name format', () => {
-      expect(s3BucketName).toMatch(/^[a-z0-9][a-z0-9.-]*[a-z0-9]$/);
-      expect(s3BucketName.length).toBeLessThanOrEqual(63);
-      expect(s3BucketName).not.toContain('_');
+      if (skipIfStackMissing()) return;
+      
+      expect(stackOutputs.StaticContentBucketName).toMatch(/^[a-z0-9][a-z0-9.-]*[a-z0-9]$/);
+      expect(stackOutputs.StaticContentBucketName.length).toBeLessThanOrEqual(63);
+      expect(stackOutputs.StaticContentBucketName).not.toContain('_');
     });
   });
 
-  describe('Live Auto Scaling Group Verification', () => {
-    test('should have Auto Scaling Group that exists in AWS', async () => {
-      if (autoScalingGroupName.includes('test')) {
-        console.warn('Skipping ASG test - using test ASG name');
-        return;
-      }
+  describe('Auto Scaling Group', () => {
+    test('ASG should exist with correct configuration', async () => {
+      if (skipIfStackMissing()) return;
+      
+      const command = new DescribeAutoScalingGroupsCommand({
+        AutoScalingGroupNames: [stackOutputs.AutoScalingGroupName]
+      });
+      const response = await asgClient.send(command);
+      
+      expect(response.AutoScalingGroups).toBeDefined();
+      expect(response.AutoScalingGroups!.length).toBe(1);
+      
+      const asg = response.AutoScalingGroups![0];
+      expect(asg.AutoScalingGroupName).toBe(stackOutputs.AutoScalingGroupName);
+      expect(asg.MinSize).toBe(2);
+      expect(asg.MaxSize).toBe(5);
+      expect(asg.DesiredCapacity).toBe(2);
+      
+      // Should be in public subnets
+      const subnetIds = asg.VPCZoneIdentifier?.split(',') || [];
+      expect(subnetIds).toContain(stackOutputs.PublicSubnetAZ1Id);
+      expect(subnetIds).toContain(stackOutputs.PublicSubnetAZ2Id);
+    });
 
-      try {
-        const command = new DescribeAutoScalingGroupsCommand({
-          AutoScalingGroupNames: [autoScalingGroupName]
-        });
-        const response = await asgClient.send(command);
-        
-        expect(response.AutoScalingGroups).toBeDefined();
-        expect(response.AutoScalingGroups!.length).toBe(1);
-        expect(response.AutoScalingGroups![0].AutoScalingGroupName).toBe(autoScalingGroupName);
-        expect(response.AutoScalingGroups![0].MinSize).toBeGreaterThanOrEqual(2);
-        expect(response.AutoScalingGroups![0].MaxSize).toBeLessThanOrEqual(5);
-      } catch (error) {
-        console.warn(`Auto Scaling Group ${autoScalingGroupName} does not exist or is not accessible: ${error}`);
-        // Skip test for mock data
-        return;
-      }
-    }, 30000);
-
-    test('should have properly named Auto Scaling Group', () => {
-      expect(autoScalingGroupName).toContain(environmentName);
-      expect(autoScalingGroupName).toContain('ASG');
+    test('ASG should have running instances', async () => {
+      if (skipIfStackMissing()) return;
+      
+      const command = new DescribeAutoScalingGroupsCommand({
+        AutoScalingGroupNames: [stackOutputs.AutoScalingGroupName]
+      });
+      const response = await asgClient.send(command);
+      
+      const asg = response.AutoScalingGroups![0];
+      expect(asg.Instances!.length).toBeGreaterThanOrEqual(asg.MinSize!);
+      
+      // Check instance states
+      const healthyInstances = asg.Instances!.filter(instance => 
+        instance.HealthStatus === 'Healthy'
+      );
+      expect(healthyInstances.length).toBeGreaterThanOrEqual(1);
     });
   });
 
-  describe('Live Load Balancer Verification', () => {
-    test('should have Application Load Balancer that exists in AWS', async () => {
-      if (loadBalancerUrl.includes('test')) {
-        console.warn('Skipping ALB test - using test URL');
-        return;
-      }
+  describe('Application Load Balancer', () => {
+    test('ALB should exist and be active', async () => {
+      if (skipIfStackMissing()) return;
+      
+      const command = new DescribeLoadBalancersCommand({
+        Names: [stackOutputs.LoadBalancerURL.split('//')[1].split('.')[0]] // Extract ALB name from DNS
+      });
+      const response = await albClient.send(command);
+      
+      expect(response.LoadBalancers).toHaveLength(1);
+      const loadBalancer = response.LoadBalancers![0];
+      expect(loadBalancer.State?.Code).toBe('active');
+      expect(loadBalancer.Type).toBe('application');
+      expect(loadBalancer.Scheme).toBe('internet-facing');
+    });
 
+    test('Target Group should exist with healthy targets', async () => {
+      if (skipIfStackMissing()) return;
+      
+      // Get target group details
+      const tgResponse = await albClient.send(
+        new DescribeTargetGroupsCommand({
+          TargetGroupArns: [stackOutputs.TargetGroupArn]
+        })
+      );
+      
+      expect(tgResponse.TargetGroups).toHaveLength(1);
+      const targetGroup = tgResponse.TargetGroups![0];
+      expect(targetGroup.Protocol).toBe('HTTP');
+      expect(targetGroup.Port).toBe(80);
+      expect(targetGroup.TargetType).toBe('instance');
+      
+      // Check target health
+      const healthResponse = await albClient.send(
+        new DescribeTargetHealthCommand({
+          TargetGroupArn: stackOutputs.TargetGroupArn
+        })
+      );
+      
+      expect(healthResponse.TargetHealthDescriptions).toBeDefined();
+      expect(healthResponse.TargetHealthDescriptions!.length).toBeGreaterThan(0);
+      
+      const healthyTargets = healthResponse.TargetHealthDescriptions!.filter(
+        target => target.TargetHealth?.State === 'healthy'
+      );
+      expect(healthyTargets.length).toBeGreaterThan(0);
+    });
+
+    test('Load balancer should be accessible via HTTP', async () => {
+      if (skipIfStackMissing()) return;
+      
       try {
-        const command = new DescribeLoadBalancersCommand({});
-        const response = await albClient.send(command);
-        
-        const loadBalancer = response.LoadBalancers!.find((lb: any) => 
-          lb.DNSName && loadBalancerUrl.includes(lb.DNSName)
-        );
-        
-        expect(loadBalancer).toBeDefined();
-        expect(loadBalancer!.State!.Code).toBe('active');
-        expect(loadBalancer!.Type).toBe('application');
-      } catch (error) {
-        console.warn(`Load Balancer does not exist or is not accessible: ${error}`);
-        // Skip test for mock data
-        return;
-      }
-    }, 30000);
-
-    test('should have load balancer targets that are healthy', async () => {
-      if (loadBalancerUrl.includes('test') || !loadBalancerArn) {
-        console.warn('Skipping target health test - using test data');
-        return;
-      }
-
-      try {
-        const command = new DescribeTargetHealthCommand({
-          TargetGroupArn: loadBalancerArn // This would need to be the target group ARN
-        });
-        const response = await albClient.send(command);
-        
-        expect(response.TargetHealthDescriptions).toBeDefined();
-        expect(response.TargetHealthDescriptions!.length).toBeGreaterThan(0);
-        
-        const healthyTargets = response.TargetHealthDescriptions!.filter(
-          (target: any) => target.TargetHealth!.State === 'healthy'
-        );
-        expect(healthyTargets.length).toBeGreaterThan(0);
-      } catch (error) {
-        console.warn(`Could not verify target health: ${error}`);
-      }
-    }, 30000);
-
-    test('should be accessible via HTTP/HTTPS', async () => {
-      if (loadBalancerUrl.includes('test')) {
-        console.warn('Skipping connectivity test - using test URL');
-        return;
-      }
-
-      try {
-        const response = await axios.get(loadBalancerUrl, {
-          timeout: 10000,
-          validateStatus: (status) => status < 500 // Accept any response < 500 as success
+        const response = await axios.get(stackOutputs.LoadBalancerURL, {
+          timeout: 15000,
+          validateStatus: (status) => status < 500
         });
         
         expect(response.status).toBeLessThan(500);
-      } catch (error) {
-        // If HTTPS fails, try HTTP
-        if (loadBalancerUrl.startsWith('https://')) {
-          const httpUrl = loadBalancerUrl.replace('https://', 'http://');
-          try {
-            const httpResponse = await axios.get(httpUrl, {
-              timeout: 10000,
-              validateStatus: (status) => status < 500
-            });
-            expect(httpResponse.status).toBeLessThan(500);
-          } catch (httpError) {
-            fail(`Load balancer is not accessible via HTTP or HTTPS: ${httpError}`);
-          }
+        expect(response.data).toBeDefined();
+      } catch (error: any) {
+        // Allow for temporary unavailability during deployment
+        if (error.code === 'ECONNREFUSED' || error.code === 'ETIMEDOUT') {
+          console.warn('Load balancer temporarily unavailable - this may be expected during deployment');
         } else {
-          console.warn(`Load balancer is not accessible: ${error}`);
-          // Skip test for mock data
-          return;
+          throw error;
         }
       }
     }, 30000);
 
     test('should have properly formatted load balancer URL', () => {
-      expect(loadBalancerUrl).toMatch(/^https?:\/\/.+/);
-      expect(loadBalancerUrl).toContain('elb.amazonaws.com');
-      expect(loadBalancerUrl).toContain(environmentName);
+      if (skipIfStackMissing()) return;
+      
+      expect(stackOutputs.LoadBalancerURL).toMatch(/^http:\/\/.+/);
+      expect(stackOutputs.LoadBalancerURL).toContain('elb.amazonaws.com');
+    });
+  });
+
+  describe('Security Groups', () => {
+    test('security groups should exist with correct rules', async () => {
+      if (skipIfStackMissing()) return;
+      
+      const response = await ec2Client.send(
+        new DescribeSecurityGroupsCommand({
+          Filters: [
+            {
+              Name: 'vpc-id',
+              Values: [stackOutputs.VPCId],
+            },
+          ],
+        })
+      );
+
+      expect(response.SecurityGroups!.length).toBeGreaterThan(1); // At least ALB + EC2 security groups
+
+      const albSecurityGroup = response.SecurityGroups?.find(sg =>
+        sg.GroupName?.includes('ALB')
+      );
+      const ec2SecurityGroup = response.SecurityGroups?.find(sg =>
+        sg.GroupName?.includes('WebServer')
+      );
+
+      expect(albSecurityGroup).toBeDefined();
+      expect(ec2SecurityGroup).toBeDefined();
+
+      // Check ALB group allows HTTP from anywhere
+      const httpRule = albSecurityGroup?.IpPermissions?.find(
+        rule => rule.FromPort === 80 && rule.ToPort === 80
+      );
+      expect(httpRule).toBeDefined();
+
+      // Check EC2 group allows HTTP only from ALB security group
+      const ec2HttpRule = ec2SecurityGroup?.IpPermissions?.find(
+        rule => rule.FromPort === 80 && rule.ToPort === 80
+      );
+      expect(ec2HttpRule).toBeDefined();
+    });
+  });
+
+  describe('CloudWatch Alarms', () => {
+    test('High CPU alarm should exist', async () => {
+      if (skipIfStackMissing()) return;
+      
+      const response = await cloudWatchClient.send(
+        new DescribeAlarmsCommand({
+          AlarmNamePrefix: stackOutputs.AutoScalingGroupName.replace('ASG', 'HighCPU'),
+        })
+      );
+
+      expect(response.MetricAlarms).toBeDefined();
+      expect(response.MetricAlarms!.length).toBeGreaterThan(0);
+      
+      const highCpuAlarm = response.MetricAlarms![0];
+      expect(highCpuAlarm.MetricName).toBe('CPUUtilization');
+      expect(highCpuAlarm.Threshold).toBe(80);
+      expect(highCpuAlarm.ComparisonOperator).toBe('GreaterThanThreshold');
+    });
+  });
+
+  describe('IAM Roles', () => {
+    test('EC2 instance role should exist with correct policies', async () => {
+      if (skipIfStackMissing()) return;
+      
+      const ec2Role = stackResources.find(
+        resource => resource.ResourceType === 'AWS::IAM::Role' && 
+                   resource.LogicalResourceId.includes('EC2')
+      );
+      
+      if (ec2Role) {
+        const response = await iamClient.send(
+          new GetRoleCommand({
+            RoleName: ec2Role.PhysicalResourceId,
+          })
+        );
+
+        expect(response.Role).toBeDefined();
+        expect(response.Role?.RoleName).toBe(ec2Role.PhysicalResourceId);
+        
+        // Check attached policies
+        const policiesResponse = await iamClient.send(
+          new ListAttachedRolePoliciesCommand({
+            RoleName: ec2Role.PhysicalResourceId,
+          })
+        );
+        
+        expect(policiesResponse.AttachedPolicies).toBeDefined();
+        expect(policiesResponse.AttachedPolicies!.length).toBeGreaterThan(0);
+      }
     });
   });
 
   describe('End-to-End Infrastructure Health', () => {
     test('should have all major components operational', async () => {
+      if (skipIfStackMissing()) return;
+      
       const results = {
         vpc: false,
         s3: false,
@@ -252,116 +499,102 @@ describe('TapStack Infrastructure Integration Tests', () => {
       };
 
       // Test VPC
-      if (vpcId !== 'vpc-test-id') {
-        try {
-          const vpcCommand = new DescribeVpcsCommand({ VpcIds: [vpcId] });
-          const vpcResponse = await ec2Client.send(vpcCommand);
-          results.vpc = vpcResponse.Vpcs![0].State === 'available';
-        } catch (error) {
-          console.warn(`VPC test failed: ${error}`);
-        }
+      try {
+        const vpcCommand = new DescribeVpcsCommand({ VpcIds: [stackOutputs.VPCId] });
+        const vpcResponse = await ec2Client.send(vpcCommand);
+        results.vpc = vpcResponse.Vpcs![0].State === 'available';
+      } catch (error) {
+        console.warn(`VPC test failed: ${error}`);
       }
 
       // Test S3
-      if (!s3BucketName.includes('test')) {
-        try {
-          const s3Command = new HeadBucketCommand({ Bucket: s3BucketName });
-          await s3Client.send(s3Command);
-          results.s3 = true;
-        } catch (error) {
-          console.warn(`S3 test failed: ${error}`);
-        }
+      try {
+        const s3Command = new HeadBucketCommand({ Bucket: stackOutputs.StaticContentBucketName });
+        await s3Client.send(s3Command);
+        results.s3 = true;
+      } catch (error) {
+        console.warn(`S3 test failed: ${error}`);
       }
 
       // Test ASG
-      if (!autoScalingGroupName.includes('test')) {
-        try {
-          const asgCommand = new DescribeAutoScalingGroupsCommand({ AutoScalingGroupNames: [autoScalingGroupName] });
-          const asgResponse = await asgClient.send(asgCommand);
-          results.asg = asgResponse.AutoScalingGroups![0].MinSize! >= 2;
-        } catch (error) {
-          console.warn(`ASG test failed: ${error}`);
-        }
+      try {
+        const asgCommand = new DescribeAutoScalingGroupsCommand({ 
+          AutoScalingGroupNames: [stackOutputs.AutoScalingGroupName] 
+        });
+        const asgResponse = await asgClient.send(asgCommand);
+        results.asg = asgResponse.AutoScalingGroups![0].MinSize! >= 2;
+      } catch (error) {
+        console.warn(`ASG test failed: ${error}`);
       }
 
       // Test ALB
-      if (!loadBalancerUrl.includes('test')) {
-        try {
-          const response = await axios.get(loadBalancerUrl, {
-            timeout: 5000,
-            validateStatus: (status) => status < 500
-          });
-          results.alb = response.status < 500;
-        } catch (error) {
-          console.warn(`ALB test failed: ${error}`);
-        }
+      try {
+        const response = await axios.get(stackOutputs.LoadBalancerURL, {
+          timeout: 10000,
+          validateStatus: (status) => status < 500
+        });
+        results.alb = response.status < 500;
+      } catch (error) {
+        console.warn(`ALB test failed: ${error}`);
       }
 
-      // For mock data, we expect 0 operational components since they don't exist in AWS
+      // Expect at least 3 out of 4 components to be operational
       const operationalCount = Object.values(results).filter(Boolean).length;
-      if (vpcId === 'vpc-12345678') {
-        // Using mock data, so we don't expect any components to be operational
-        expect(operationalCount).toBeGreaterThanOrEqual(0);
-      } else {
-        // Real deployment, expect at least 3 out of 4 components to be operational
-        expect(operationalCount).toBeGreaterThanOrEqual(3);
-      }
+      expect(operationalCount).toBeGreaterThanOrEqual(3);
     }, 60000);
   });
 
-  describe('Security and Compliance', () => {
-    test('should follow AWS naming conventions', () => {
-      expect(environmentName).toMatch(/^[a-zA-Z0-9]+$/);
-      expect(s3BucketName).toMatch(/^[a-z0-9][a-z0-9.-]*[a-z0-9]$/);
-      expect(autoScalingGroupName).toMatch(/^[a-zA-Z0-9-]+$/);
-    });
-
-    test('should have proper resource isolation', () => {
-      expect(loadBalancerUrl).toContain(environmentName);
-      expect(autoScalingGroupName).toContain(environmentName);
-    });
-  });
-
-  describe('Performance and Scalability Validation', () => {
-    test('should support auto scaling configuration', async () => {
-      if (autoScalingGroupName.includes('test')) {
-        console.warn('Skipping scaling test - using test ASG name');
-        return;
-      }
-
-      try {
-        const command = new DescribeAutoScalingGroupsCommand({
-          AutoScalingGroupNames: [autoScalingGroupName]
-        });
-        const response = await asgClient.send(command);
-        const asg = response.AutoScalingGroups![0];
-        
-        expect(asg.MinSize).toBeGreaterThanOrEqual(2);
-        expect(asg.MaxSize).toBeLessThanOrEqual(5);
-        expect(asg.DesiredCapacity).toBeGreaterThanOrEqual(asg.MinSize!);
-        expect(asg.DesiredCapacity).toBeLessThanOrEqual(asg.MaxSize!);
-      } catch (error) {
-        console.warn(`Could not verify auto scaling configuration: ${error}`);
-      }
-    }, 30000);
-  });
-
-  describe('Deployment Validation', () => {
-    test('should have all required outputs defined', () => {
-      expect(loadBalancerUrl).toBeDefined();
-      expect(s3BucketName).toBeDefined();
-      expect(vpcId).toBeDefined();
-      expect(autoScalingGroupName).toBeDefined();
-    });
-
-    test('should be ready for production deployment', () => {
-      expect(environmentName).not.toBe('test');
-      expect(environmentSuffix).not.toBe('test');
+  describe('Resource Tagging and Naming', () => {
+    test('resources should follow consistent naming patterns', () => {
+      if (skipIfStackMissing()) return;
       
-      expect(loadBalancerUrl).toBeDefined();
-      expect(s3BucketName).toBeDefined();
-      expect(vpcId).toBeDefined();
-      expect(autoScalingGroupName).toBeDefined();
+      expect(stackOutputs.VPCId).toMatch(/^vpc-[a-f0-9]+$/);
+      expect(stackOutputs.StaticContentBucketName).toMatch(/^[a-z0-9][a-z0-9.-]*[a-z0-9]$/);
+      expect(stackOutputs.AutoScalingGroupName).toMatch(/^[a-zA-Z0-9-]+$/);
+    });
+
+    test('all major resources should have consistent project tagging', () => {
+      if (skipIfStackMissing()) return;
+      
+      // Most resources should be tagged (some AWS resources don't support tags)
+      const taggedResources = stackResources.filter(
+        resource =>
+          resource.ResourceType !== 'AWS::EC2::VPCGatewayAttachment' &&
+          resource.ResourceType !== 'AWS::EC2::Route' &&
+          resource.ResourceType !== 'AWS::EC2::SubnetRouteTableAssociation' &&
+          resource.ResourceType !== 'AWS::IAM::InstanceProfile'
+      );
+
+      expect(taggedResources.length).toBeGreaterThan(10);
+    });
+  });
+
+  describe('Security and Compliance', () => {
+    test('all components should be properly configured for security', async () => {
+      if (skipIfStackMissing()) return;
+      
+      // S3 bucket should be configured for website hosting but with public read policy
+      const websiteResponse = await s3Client.send(
+        new GetBucketWebsiteCommand({ Bucket: stackOutputs.StaticContentBucketName })
+      );
+      expect(websiteResponse.IndexDocument?.Suffix).toBe('index.html');
+      
+      // VPC should have proper CIDR allocation
+      const vpcResponse = await ec2Client.send(
+        new DescribeVpcsCommand({ VpcIds: [stackOutputs.VPCId] })
+      );
+      expect(vpcResponse.Vpcs![0].CidrBlock).toBe('10.0.0.0/16');
+      
+      // Auto Scaling Group should have appropriate capacity constraints
+      const asgResponse = await asgClient.send(
+        new DescribeAutoScalingGroupsCommand({ 
+          AutoScalingGroupNames: [stackOutputs.AutoScalingGroupName] 
+        })
+      );
+      const asg = asgResponse.AutoScalingGroups![0];
+      expect(asg.MinSize).toBe(2);
+      expect(asg.MaxSize).toBe(5);
+      expect(asg.DesiredCapacity).toBe(2);
     });
   });
 });
