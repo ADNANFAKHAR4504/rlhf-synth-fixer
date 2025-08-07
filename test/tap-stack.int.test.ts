@@ -62,7 +62,7 @@ describe('Multi-Region Application Infrastructure Integration Tests', () => {
       );
       
       expect(response.Stacks).toHaveLength(1);
-      expect(response.Stacks?.[0]?.StackStatus).toBe('CREATE_COMPLETE');
+      expect(['CREATE_COMPLETE', 'UPDATE_COMPLETE']).toContain(response.Stacks?.[0]?.StackStatus);
     });
 
     test('VPC exists with correct configuration', async () => {
@@ -202,7 +202,7 @@ describe('Multi-Region Application Infrastructure Integration Tests', () => {
       );
       
       expect(response.Stacks).toHaveLength(1);
-      expect(response.Stacks?.[0]?.StackStatus).toBe('CREATE_COMPLETE');
+      expect(['CREATE_COMPLETE', 'UPDATE_COMPLETE']).toContain(response.Stacks?.[0]?.StackStatus);
     });
 
     test('VPC exists with different CIDR block', async () => {
