@@ -87,7 +87,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: !Sub '${ApplicationName}-${Environment}-handler'
-      CodeUri: src/
+      CodeUri: s3://my-lambda-bucket/app.zip
       Handler: app.lambda_handler
       Role: !GetAtt AppLambdaExecutionRole.Arn
       Events:
