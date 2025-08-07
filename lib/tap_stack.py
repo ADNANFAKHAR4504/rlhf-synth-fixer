@@ -36,7 +36,6 @@ class TapStack(ComponentResource):
         super().__init__("pkg:index:TapStack", name, {}, opts)
 
         self.environment_suffix = args.environment_suffix
-        # FIXED: Explicitly changed ap-south-1 to us-east-2 to avoid VPC limit
         self.regions = ["us-east-1", "us-west-2", "us-east-2"]
         self.primary_region = "us-east-1"
 
@@ -71,9 +70,6 @@ class TapStack(ComponentResource):
             }
         )
 
-    # ------------------------------------------------------------------ #
-    #  KMS - FIXED: Added CloudTrail permissions
-    # ------------------------------------------------------------------ #
     def _create_kms_keys(self) -> None:
         self.kms_keys = {}
 
@@ -82,7 +78,6 @@ class TapStack(ComponentResource):
                 f"provider-{region}", region=region, opts=ResourceOptions(parent=self)
             )
 
-            # FIXED: KMS policy now includes CloudTrail permissions
             key = aws.kms.Key(
                 f"PROD-kms-{region}-{self.environment_suffix}",
                 description=f"KMS key for {region}",
@@ -121,7 +116,6 @@ class TapStack(ComponentResource):
                                     }
                                 }
                             },
-                            # ADDED: CloudTrail permissions
                             {
                                 "Sid": "Allow CloudTrail to encrypt logs",
                                 "Effect": "Allow",
@@ -169,9 +163,6 @@ class TapStack(ComponentResource):
 
         self.kms_key = self.kms_keys[self.primary_region]
 
-    # ------------------------------------------------------------------ #
-    #  Secrets Manager
-    # ------------------------------------------------------------------ #
     def _create_secrets_manager(self) -> None:
         self.secrets_manager = aws.secretsmanager.Secret(
             f"PROD-secrets-{self.environment_suffix}",
@@ -225,9 +216,6 @@ class TapStack(ComponentResource):
 
             self.secrets_replicas[region] = replica
 
-    # ------------------------------------------------------------------ #
-    #  IAM
-    # ------------------------------------------------------------------ #
     def _create_iam_roles(self) -> None:
         self.ec2_role = aws.iam.Role(
             f"PROD-ec2-role-{self.environment_suffix}",
@@ -285,78 +273,70 @@ class TapStack(ComponentResource):
             opts=ResourceOptions(parent=self),
         )
 
-    # ------------------------------------------------------------------ #
-    #  CloudTrail - FIXED: Correct S3 bucket policy format
-    # ------------------------------------------------------------------ #
     def _create_cloudtrail(self) -> None:
-      """Create CloudTrail for comprehensive logging."""
-      self.cloudtrail_bucket = aws.s3.Bucket(
-          f"prod-cloudtrail-{self.environment_suffix}-{aws.get_caller_identity().account_id}",
-          versioning=aws.s3.BucketVersioningArgs(enabled=True),
-          server_side_encryption_configuration=aws.s3.BucketServerSideEncryptionConfigurationArgs(
-              rule=aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
-                  apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
-                      sse_algorithm="aws:kms", kms_master_key_id=self.kms_key.arn
-                  ),
-                  bucket_key_enabled=True,
-              )
-          ),
-          tags=self.standard_tags,
-          opts=ResourceOptions(parent=self),
-      )
+        """Create CloudTrail for comprehensive logging."""
+        self.cloudtrail_bucket = aws.s3.Bucket(
+            f"prod-cloudtrail-{self.environment_suffix}-{aws.get_caller_identity().account_id}",
+            versioning=aws.s3.BucketVersioningArgs(enabled=True),
+            server_side_encryption_configuration=aws.s3.BucketServerSideEncryptionConfigurationArgs(
+                rule=aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
+                    apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
+                        sse_algorithm="aws:kms", kms_master_key_id=self.kms_key.arn
+                    ),
+                    bucket_key_enabled=True,
+                )
+            ),
+            tags=self.standard_tags,
+            opts=ResourceOptions(parent=self),
+        )
 
-      # FIXED: CloudTrail bucket policy exactly as per AWS documentation
-      cloudtrail_policy = aws.s3.BucketPolicy(
-          f"PROD-cloudtrail-policy-{self.environment_suffix}",
-          bucket=self.cloudtrail_bucket.id,
-          policy=pulumi.Output.all(
-              self.cloudtrail_bucket.bucket,  # Use bucket name, not ARN
-              aws.get_caller_identity().account_id
-          ).apply(
-              lambda args: json.dumps(
-                  {
-                      "Version": "2012-10-17",
-                      "Statement": [
-                          {
-                              "Sid": "AWSCloudTrailAclCheck",
-                              "Effect": "Allow",
-                              "Principal": {"Service": "cloudtrail.amazonaws.com"},
-                              "Action": "s3:GetBucketAcl",
-                              "Resource": f"arn:aws:s3:::{args[0]}"
-                          },
-                          {
-                              "Sid": "AWSCloudTrailWrite",
-                              "Effect": "Allow",
-                              "Principal": {"Service": "cloudtrail.amazonaws.com"},
-                              "Action": "s3:PutObject",
-                              "Resource": f"arn:aws:s3:::{args[0]}/AWSLogs/{args[1]}/*",
-                              "Condition": {
-                                  "StringEquals": {
-                                      "s3:x-amz-acl": "bucket-owner-full-control"
-                                  }
-                              }
-                          }
-                      ]
-                  }
-              )
-          ),
-          opts=ResourceOptions(parent=self),
-      )
+        cloudtrail_policy = aws.s3.BucketPolicy(
+            f"PROD-cloudtrail-policy-{self.environment_suffix}",
+            bucket=self.cloudtrail_bucket.id,
+            policy=pulumi.Output.all(
+                self.cloudtrail_bucket.bucket,
+                aws.get_caller_identity().account_id
+            ).apply(
+                lambda args: json.dumps(
+                    {
+                        "Version": "2012-10-17",
+                        "Statement": [
+                            {
+                                "Sid": "AWSCloudTrailAclCheck",
+                                "Effect": "Allow",
+                                "Principal": {"Service": "cloudtrail.amazonaws.com"},
+                                "Action": "s3:GetBucketAcl",
+                                "Resource": f"arn:aws:s3:::{args[0]}"
+                            },
+                            {
+                                "Sid": "AWSCloudTrailWrite",
+                                "Effect": "Allow",
+                                "Principal": {"Service": "cloudtrail.amazonaws.com"},
+                                "Action": "s3:PutObject",
+                                "Resource": f"arn:aws:s3:::{args[0]}/AWSLogs/{args[1]}/*",
+                                "Condition": {
+                                    "StringEquals": {
+                                        "s3:x-amz-acl": "bucket-owner-full-control"
+                                    }
+                                }
+                            }
+                        ]
+                    }
+                )
+            ),
+            opts=ResourceOptions(parent=self),
+        )
 
-      # CloudTrail creation - MUST come after bucket policy
-      aws.cloudtrail.Trail(
-          f"PROD-cloudtrail-{self.environment_suffix}",
-          s3_bucket_name=self.cloudtrail_bucket.bucket,  # Use bucket name
-          is_multi_region_trail=True,
-          enable_log_file_validation=True,
-          kms_key_id=self.kms_key.arn,
-          tags=self.standard_tags,
-          opts=ResourceOptions(parent=self, depends_on=[cloudtrail_policy]),
-      )
+        aws.cloudtrail.Trail(
+            f"PROD-cloudtrail-{self.environment_suffix}",
+            s3_bucket_name=self.cloudtrail_bucket.bucket,
+            is_multi_region_trail=True,
+            enable_log_file_validation=True,
+            kms_key_id=self.kms_key.arn,
+            tags=self.standard_tags,
+            opts=ResourceOptions(parent=self, depends_on=[cloudtrail_policy]),
+        )
 
-    # ------------------------------------------------------------------ #
-    #  VPC  (IPv4-only) - FIXED VPC Flow Logs Policy
-    # ------------------------------------------------------------------ #
     def _create_vpc_infrastructure(self) -> None:
         self.vpcs, self.subnets = {}, {}
 
@@ -503,9 +483,6 @@ class TapStack(ComponentResource):
 
         self.primary_vpc = self.vpcs[self.primary_region]
 
-    # ------------------------------------------------------------------ #
-    #  S3
-    # ------------------------------------------------------------------ #
     def _create_s3_buckets(self) -> None:
         self.s3_buckets = {}
 
@@ -541,9 +518,6 @@ class TapStack(ComponentResource):
 
             self.s3_buckets[region] = bucket
 
-    # ------------------------------------------------------------------ #
-    #  RDS
-    # ------------------------------------------------------------------ #
     def _create_rds_instances(self) -> None:
         self.rds_instances = {}
 
@@ -605,9 +579,6 @@ class TapStack(ComponentResource):
 
             self.rds_instances[region] = rds
 
-    # ------------------------------------------------------------------ #
-    #  Lambda
-    # ------------------------------------------------------------------ #
     def _create_lambda_functions(self) -> None:
         self.lambda_functions = {}
 
@@ -646,9 +617,6 @@ def lambda_handler(event, context):
 
             self.lambda_functions[region] = function
 
-    # ------------------------------------------------------------------ #
-    #  EC2
-    # ------------------------------------------------------------------ #
     def _create_ec2_instances(self) -> None:
         self.ec2_instances = {}
 
@@ -725,9 +693,6 @@ echo 'MinProtocol = TLSv1.2' >> /etc/ssl/openssl.cnf
 
             self.ec2_instances[region] = instance
 
-    # ------------------------------------------------------------------ #
-    #  CloudWatch
-    # ------------------------------------------------------------------ #
     def _create_monitoring(self) -> None:
         self.log_groups = {}
 
@@ -762,99 +727,126 @@ echo 'MinProtocol = TLSv1.2' >> /etc/ssl/openssl.cnf
 
             self.log_groups[region] = lg
 
-    # ------------------------------------------------------------------ #
-    #  AWS Config
-    # ------------------------------------------------------------------ #
     def _create_compliance_checks(self) -> None:
-      """Create AWS Config compliance checks - FIXED to handle delivery channel limits."""
-      
-      # FIXED: Only create Config in PRIMARY region to avoid delivery channel limits
-      # AWS Config can be multi-region but delivery channels are limited to 1 per region
-      provider = aws.Provider(
-          f"config-provider-{self.primary_region}", 
-          region=self.primary_region, 
-          opts=ResourceOptions(parent=self)
-      )
+        """Create AWS Config compliance checks with conditional creation to handle existing resources."""
+        
+        provider = aws.Provider(
+            f"config-provider-{self.primary_region}", 
+            region=self.primary_region, 
+            opts=ResourceOptions(parent=self)
+        )
 
-      # Create Config bucket in primary region only
-      config_bucket = aws.s3.Bucket(
-          f"prod-config-{self.primary_region}-{self.environment_suffix}-{aws.get_caller_identity().account_id}",
-          versioning=aws.s3.BucketVersioningArgs(enabled=True),
-          server_side_encryption_configuration=aws.s3.BucketServerSideEncryptionConfigurationArgs(
-              rule=aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
-                  apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
-                      sse_algorithm="aws:kms", 
-                      kms_master_key_id=self.kms_keys[self.primary_region].arn
-                  ),
-                  bucket_key_enabled=True,
-              )
-          ),
-          tags=self.standard_tags,
-          opts=ResourceOptions(parent=self, provider=provider),
-      )
+        def check_config_exists():
+            """Check if AWS Config is already set up in this region."""
+            try:
+                recorders = aws.cfg.get_configuration_recorders(
+                    opts=pulumi.InvokeOptions(provider=provider)
+                )
+                
+                channels = aws.cfg.get_delivery_channels(
+                    opts=pulumi.InvokeOptions(provider=provider)
+                )
+                
+                has_recorder = len(recorders.configuration_recorders) > 0
+                has_channel = len(channels.delivery_channels) > 0
+                
+                return {
+                    "has_recorder": has_recorder,
+                    "has_channel": has_channel,
+                    "recorder_count": len(recorders.configuration_recorders),
+                    "channel_count": len(channels.delivery_channels)
+                }
+            except Exception as e:
+                pulumi.log.info(f"Error checking AWS Config status: {e}")
+                return {
+                    "has_recorder": False,
+                    "has_channel": False,
+                    "recorder_count": 0,
+                    "channel_count": 0
+                }
 
-      # Create Config role in primary region only  
-      config_role = aws.iam.Role(
-          f"PROD-config-role-{self.primary_region}-{self.environment_suffix}",
-          assume_role_policy=json.dumps(
-              {
-                  "Version": "2012-10-17",
-                  "Statement": [
-                      {
-                          "Action": "sts:AssumeRole",
-                          "Effect": "Allow",
-                          "Principal": {"Service": "config.amazonaws.com"},
-                      }
-                  ],
-              }
-          ),
-          tags=self.standard_tags,
-          opts=ResourceOptions(parent=self, provider=provider),
-      )
+        config_status = check_config_exists()
+        pulumi.log.info(f"AWS Config Status: Recorders={config_status['recorder_count']}, Channels={config_status['channel_count']}")
 
-      # FIXED: Use correct AWS Config policy name
-      aws.iam.RolePolicyAttachment(
-          f"PROD-config-policy-{self.primary_region}-{self.environment_suffix}",
-          role=config_role.name,
-          policy_arn="arn:aws:iam::aws:policy/service-role/AWS_ConfigRole",  # FIXED: Correct policy name
-          opts=ResourceOptions(parent=self, provider=provider),
-      )
+        if not config_status["has_recorder"] and not config_status["has_channel"]:
+            pulumi.log.info("Creating new AWS Config setup")
+            
+            config_bucket = aws.s3.Bucket(
+                f"prod-config-{self.primary_region}-{self.environment_suffix}-{aws.get_caller_identity().account_id}",
+                versioning=aws.s3.BucketVersioningArgs(enabled=True),
+                server_side_encryption_configuration=aws.s3.BucketServerSideEncryptionConfigurationArgs(
+                    rule=aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
+                        apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
+                            sse_algorithm="aws:kms", 
+                            kms_master_key_id=self.kms_keys[self.primary_region].arn
+                        ),
+                        bucket_key_enabled=True,
+                    )
+                ),
+                tags=self.standard_tags,
+                opts=ResourceOptions(parent=self, provider=provider),
+            )
 
-      # FIXED: Create recorder BEFORE delivery channel
-      recorder = aws.cfg.Recorder(
-          f"PROD-config-recorder-{self.primary_region}-{self.environment_suffix}",
-          role_arn=config_role.arn,
-          recording_group=aws.cfg.RecorderRecordingGroupArgs(
-              all_supported=True,
-              include_global_resource_types=True,  # Primary region handles global resources
-          ),
-          opts=ResourceOptions(parent=self, provider=provider),
-      )
+            config_role = aws.iam.Role(
+                f"PROD-config-role-{self.primary_region}-{self.environment_suffix}",
+                assume_role_policy=json.dumps({
+                    "Version": "2012-10-17",
+                    "Statement": [{
+                        "Action": "sts:AssumeRole",
+                        "Effect": "Allow",
+                        "Principal": {"Service": "config.amazonaws.com"},
+                    }],
+                }),
+                tags=self.standard_tags,
+                opts=ResourceOptions(parent=self, provider=provider),
+            )
 
-      # FIXED: Create delivery channel AFTER recorder
-      delivery = aws.cfg.DeliveryChannel(
-          f"PROD-config-delivery-{self.primary_region}-{self.environment_suffix}",
-          s3_bucket_name=config_bucket.bucket,
-          opts=ResourceOptions(parent=self, provider=provider, depends_on=[recorder]),
-      )
+            aws.iam.RolePolicyAttachment(
+                f"PROD-config-policy-{self.primary_region}-{self.environment_suffix}",
+                role=config_role.name,
+                policy_arn="arn:aws:iam::aws:policy/service-role/AWS_ConfigRole",
+                opts=ResourceOptions(parent=self, provider=provider),
+            )
 
-      # Create Config rules (depends on recorder)
-      aws.cfg.Rule(
-          f"PROD-encrypted-volumes-{self.primary_region}-{self.environment_suffix}",
-          name=f"encrypted-volumes-{self.primary_region}-{self.environment_suffix}",
-          source=aws.cfg.RuleSourceArgs(
-              owner="AWS", source_identifier="ENCRYPTED_VOLUMES"
-          ),
-          tags=self.standard_tags,
-          opts=ResourceOptions(parent=self, provider=provider, depends_on=[recorder]),
-      )
+            recorder = aws.cfg.Recorder(
+                f"PROD-config-recorder-{self.primary_region}-{self.environment_suffix}",
+                role_arn=config_role.arn,
+                recording_group=aws.cfg.RecorderRecordingGroupArgs(
+                    all_supported=True,
+                    include_global_resource_types=True,
+                ),
+                opts=ResourceOptions(parent=self, provider=provider),
+            )
 
-      aws.cfg.Rule(
-          f"PROD-s3-bucket-ssl-requests-{self.primary_region}-{self.environment_suffix}",
-          name=f"s3-bucket-ssl-requests-{self.primary_region}-{self.environment_suffix}",
-          source=aws.cfg.RuleSourceArgs(
-              owner="AWS", source_identifier="S3_BUCKET_SSL_REQUESTS_ONLY"
-          ),
-          tags=self.standard_tags,
-          opts=ResourceOptions(parent=self, provider=provider, depends_on=[recorder]),
-      )
+            delivery = aws.cfg.DeliveryChannel(
+                f"PROD-config-delivery-{self.primary_region}-{self.environment_suffix}",
+                s3_bucket_name=config_bucket.bucket,
+                opts=ResourceOptions(parent=self, provider=provider, depends_on=[recorder]),
+            )
+
+            aws.cfg.Rule(
+                f"PROD-encrypted-volumes-{self.primary_region}-{self.environment_suffix}",
+                name=f"encrypted-volumes-{self.primary_region}-{self.environment_suffix}",
+                source=aws.cfg.RuleSourceArgs(
+                    owner="AWS", source_identifier="ENCRYPTED_VOLUMES"
+                ),
+                tags=self.standard_tags,
+                opts=ResourceOptions(parent=self, provider=provider, depends_on=[recorder]),
+            )
+
+            aws.cfg.Rule(
+                f"PROD-s3-bucket-ssl-requests-{self.primary_region}-{self.environment_suffix}",
+                name=f"s3-bucket-ssl-requests-{self.primary_region}-{self.environment_suffix}",
+                source=aws.cfg.RuleSourceArgs(
+                    owner="AWS", source_identifier="S3_BUCKET_SSL_REQUESTS_ONLY"
+                ),
+                tags=self.standard_tags,
+                opts=ResourceOptions(parent=self, provider=provider, depends_on=[recorder]),
+            )
+
+        else:
+            pulumi.log.info("AWS Config already exists - skipping creation of Config recorder and delivery channel")
+            if config_status["has_recorder"]:
+                pulumi.log.info(f"Found {config_status['recorder_count']} configuration recorder(s)")
+            if config_status["has_channel"]:
+                pulumi.log.info(f"Found {config_status['channel_count']} delivery channel(s)")
