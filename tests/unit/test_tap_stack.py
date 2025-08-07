@@ -192,7 +192,15 @@ class TestTapStackResources:
          patch('lib.tap_stack.cloudwatch.LogGroup') as mock_log_group, \
          patch('lib.tap_stack.lambda_.Function') as mock_lambda, \
          patch('lib.tap_stack.apigateway.RestApi') as mock_api, \
-         patch('pulumi.export') as mock_export:
+         patch('pulumi.export') as mock_export, \
+         patch('pulumi.ResourceOptions') as mock_resource_options, \
+         patch('pulumi.Output') as mock_output, \
+         patch('pulumi.Output.concat') as mock_output_concat, \
+         patch('pulumi.Output.all') as mock_output_all, \
+         patch('pulumi.Output.from_input') as mock_output_from_input, \
+         patch('pulumi.AssetArchive') as mock_asset_archive, \
+         patch('pulumi.FileArchive') as mock_file_archive, \
+         patch('pulumi.get_stack') as mock_get_stack:
 
       # Configure mocks with necessary attributes
       mock_role_instance = Mock()
@@ -202,6 +210,10 @@ class TestTapStackResources:
       mock_policy_instance = Mock()
       mock_policy_instance.arn = "arn:aws:iam::123456789012:policy/test-policy"
       mock_policy.return_value = mock_policy_instance
+
+      mock_attachment_instance = Mock()
+      mock_attachment_instance.arn = "arn:aws:iam::123456789012:role/test-role"
+      mock_attachment.return_value = mock_attachment_instance
 
       mock_log_group_instance = Mock()
       mock_log_group_instance.name = "/aws/lambda/test-function"
@@ -225,6 +237,24 @@ class TestTapStackResources:
       mock_api_instance.execution_arn = "arn:aws:execute-api:us-west-2:123456789012:test-api-id"
       mock_api.return_value = mock_api_instance
 
+      # Mock ResourceOptions to handle depends_on properly
+      mock_resource_options.return_value = Mock()
+
+      # Mock Pulumi Output constructs
+      mock_output_instance = Mock()
+      mock_output_instance.apply = Mock(return_value=Mock())
+      mock_output.return_value = mock_output_instance
+      mock_output_concat.return_value = mock_output_instance
+      mock_output_all.return_value = mock_output_instance
+      mock_output_from_input.return_value = mock_output_instance
+
+      # Mock Pulumi Asset constructs
+      mock_asset_archive.return_value = Mock()
+      mock_file_archive.return_value = Mock()
+
+      # Mock get_stack
+      mock_get_stack.return_value = "test-stack"
+
       yield {
         'role': mock_role,
         'policy': mock_policy,
@@ -232,7 +262,15 @@ class TestTapStackResources:
         'log_group': mock_log_group,
         'lambda': mock_lambda,
         'api': mock_api,
-        'export': mock_export
+        'export': mock_export,
+        'resource_options': mock_resource_options,
+        'output': mock_output,
+        'output_concat': mock_output_concat,
+        'output_all': mock_output_all,
+        'output_from_input': mock_output_from_input,
+        'asset_archive': mock_asset_archive,
+        'file_archive': mock_file_archive,
+        'get_stack': mock_get_stack
       }
 
   def test_iam_role_creation(self, mock_pulumi_resources):
