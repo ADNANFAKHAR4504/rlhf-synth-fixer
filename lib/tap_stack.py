@@ -1,9 +1,10 @@
 """Main Pulumi program for CI/CD pipeline infrastructure."""
 
-import pulumi
-import pulumi_aws as aws
 import json
 import uuid
+
+import pulumi
+import pulumi_aws as aws
 
 # Get configuration
 config = pulumi.Config()
@@ -46,27 +47,27 @@ public_subnets = []
 availability_zones = ["us-east-1a", "us-east-1b"]
 
 for i, az in enumerate(availability_zones):
-    subnet = aws.ec2.Subnet(
-        f"{project_name_unique}-public-subnet-{i+1}",
-        vpc_id=vpc.id,
-        cidr_block=f"10.0.{i+1}.0/24",
-        availability_zone=az,
-        map_public_ip_on_launch=True,
-        tags={**common_tags, "Name": f"{project_name_unique}-public-subnet-{i+1}"}
-    )
-    public_subnets.append(subnet)
+  subnet = aws.ec2.Subnet(
+    f"{project_name_unique}-public-subnet-{i+1}",
+    vpc_id=vpc.id,
+    cidr_block=f"10.0.{i+1}.0/24",
+    availability_zone=az,
+    map_public_ip_on_launch=True,
+    tags={**common_tags, "Name": f"{project_name_unique}-public-subnet-{i+1}"}
+  )
+  public_subnets.append(subnet)
 
 # Private subnets
 private_subnets = []
 for i, az in enumerate(availability_zones):
-    subnet = aws.ec2.Subnet(
-        f"{project_name_unique}-private-subnet-{i+1}",
-        vpc_id=vpc.id,
-        cidr_block=f"10.0.{i+10}.0/24",
-        availability_zone=az,
-        tags={**common_tags, "Name": f"{project_name_unique}-private-subnet-{i+1}"}
-    )
-    private_subnets.append(subnet)
+  subnet = aws.ec2.Subnet(
+    f"{project_name_unique}-private-subnet-{i+1}",
+    vpc_id=vpc.id,
+    cidr_block=f"10.0.{i+10}.0/24",
+    availability_zone=az,
+    tags={**common_tags, "Name": f"{project_name_unique}-private-subnet-{i+1}"}
+  )
+  private_subnets.append(subnet)
 
 print("Creating S3 storage...")
 # S3 bucket with versioning
@@ -76,10 +77,10 @@ artifact_bucket = aws.s3.Bucket(
     tags={**common_tags, "Name": f"{project_name_unique}-artifacts"}
 )
 
-aws.s3.BucketVersioning(
+aws.s3.BucketVersioningV2(
     f"{project_name_unique}-artifacts-versioning",
     bucket=artifact_bucket.id,
-    versioning_configuration=aws.s3.BucketVersioningVersioningConfigurationArgs(
+    versioning_configuration=aws.s3.BucketVersioningV2VersioningConfigurationArgs(
         status="Enabled"
     )
 )
@@ -102,24 +103,105 @@ codebuild_sg = aws.ec2.SecurityGroup(
 )
 
 print("Creating IAM roles and policies...")
-# IAM Role for CodeBuild - This will fail due to complex policy requirements
+# IAM Role for CodeBuild with proper assume role policy
+codebuild_assume_role_policy = json.dumps({
+    "Version": "2012-10-17",
+    "Statement": [{
+        "Effect": "Allow",
+        "Principal": {
+            "Service": "codebuild.amazonaws.com"
+        },
+        "Action": "sts:AssumeRole"
+    }]
+})
+
 codebuild_role = aws.iam.Role(
     f"{project_name_unique}-codebuild-role",
-    assume_role_policy=pulumi.Config().require_secret("github-token"),  # This line is broken - wrong usage
+    assume_role_policy=codebuild_assume_role_policy,
     tags={**common_tags, "Name": f"{project_name_unique}-codebuild-role"}
 )
 
-# Missing IAM policies and incomplete setup that will cause failures
-print("Creating CodeBuild projects...")
-# This will fail due to missing dependencies and imports
-from networking import NetworkingInfrastructure  # This import doesn't exist
-from storage import S3Storage  # This import doesn't exist  
-from iam import IAMPolicies  # This import doesn't exist
+# Attach policy to CodeBuild role
+codebuild_policy = aws.iam.RolePolicy(
+    f"{project_name_unique}-codebuild-policy",
+    role=codebuild_role.id,
+    policy=artifact_bucket.arn.apply(lambda arn: json.dumps({
+        "Version": "2012-10-17",
+        "Statement": [
+            {
+                "Effect": "Allow",
+                "Action": [
+                    "logs:CreateLogGroup",
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents"
+                ],
+                "Resource": "arn:aws:logs:*:*:*"
+            },
+            {
+                "Effect": "Allow",
+                "Action": [
+                    "s3:GetObject",
+                    "s3:PutObject",
+                    "s3:GetBucketLocation",
+                    "s3:ListBucket"
+                ],
+                "Resource": [
+                    arn,
+                    f"{arn}/*"
+                ]
+            },
+            {
+                "Effect": "Allow",
+                "Action": [
+                    "ec2:CreateNetworkInterface",
+                    "ec2:DescribeNetworkInterfaces",
+                    "ec2:DeleteNetworkInterface",
+                    "ec2:DescribeSubnets",
+                    "ec2:DescribeSecurityGroups",
+                    "ec2:DescribeDhcpOptions",
+                    "ec2:DescribeVpcs",
+                    "ec2:CreateNetworkInterfacePermission"
+                ],
+                "Resource": "*"
+            }
+        ]
+    }))
+)
 
-# This code is intentionally broken to demonstrate AI failures
-networking = NetworkingInfrastructure(project_name, environment)  # Will fail
-storage = S3Storage(project_name, environment)  # Will fail
+print("Creating CodeBuild project...")
+# CodeBuild project
+codebuild_project = aws.codebuild.Project(
+    f"{project_name_unique}-build",
+    name=f"{project_name_unique}-build",
+    description="Build project for CI/CD pipeline",
+    service_role=codebuild_role.arn,
+    artifacts=aws.codebuild.ProjectArtifactsArgs(
+        type="S3",
+        location=artifact_bucket.bucket,
+        packaging="ZIP",
+        name="build-artifacts"
+    ),
+    environment=aws.codebuild.ProjectEnvironmentArgs(
+        compute_type="BUILD_GENERAL1_SMALL",
+        image="aws/codebuild/standard:7.0",
+        type="LINUX_CONTAINER",
+        image_pull_credentials_type="CODEBUILD"
+    ),
+    source=aws.codebuild.ProjectSourceArgs(
+        type="GITHUB",
+        location=github_repo,
+        git_clone_depth=1,
+        buildspec="buildspec.yml"
+    ),
+    vpc_config=aws.codebuild.ProjectVpcConfigArgs(
+        vpc_id=vpc.id,
+        subnets=pulumi.Output.all(*[subnet.id for subnet in private_subnets]),
+        security_group_ids=[codebuild_sg.id]
+    ),
+    tags={**common_tags, "Name": f"{project_name_unique}-build"}
+)
 
 # Export important values
 pulumi.export("vpc_id", vpc.id)
 pulumi.export("artifact_bucket_name", artifact_bucket.bucket)
+pulumi.export("codebuild_project_name", codebuild_project.name)
