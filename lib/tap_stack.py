@@ -3,10 +3,7 @@ AWS Dual-Stack Infrastructure with Pulumi
 =========================================
 
 This module provisions a highly available, scalable, and secure AWS infrastructure
-following best practices, including public/private subnets, a NAT Gateway, and
-an Auto Scaling Group.
-
-Author: Senior DevOps Engineer
+using an Auto Scaling Group in public subnets to work around EIP limits.
 """
 
 import json
@@ -16,12 +13,14 @@ from typing import List, Dict, Any
 import pulumi
 import pulumi_aws as aws
 
+# Configuration
 config = pulumi.Config()
-project_name = "prod-web-app"
+project_name = "prod-web-app-final" # New name to avoid any old conflicts
 domain_name = config.get("domain_name")
 environment = config.get("environment") or "prod"
 aws_region = config.get("aws:region") or "us-east-1"
 
+# Tags for all resources
 common_tags = {
   "Environment": environment,
   "Project": project_name,
@@ -32,14 +31,13 @@ common_tags = {
 
 def create_vpc_and_networking() -> Dict[str, Any]:
   """
-  Creates a VPC with public/private subnets and a NAT Gateway.
+  Creates a VPC with public subnets.
   """
   vpc = aws.ec2.Vpc(
     f"{project_name}-vpc",
     cidr_block="10.0.0.0/16",
     enable_dns_hostnames=True,
     enable_dns_support=True,
-    assign_generated_ipv6_cidr_block=True,
     tags={**common_tags, "Name": f"{project_name}-vpc"}
   )
 
@@ -50,7 +48,6 @@ def create_vpc_and_networking() -> Dict[str, Any]:
     tags={**common_tags, "Name": f"{project_name}-igw"}
   )
 
-  # Public Subnets for ALB
   public_subnets = []
   for i, az in enumerate(azs):
     subnet = aws.ec2.Subnet(
@@ -75,46 +72,9 @@ def create_vpc_and_networking() -> Dict[str, Any]:
       subnet_id=subnet.id, route_table_id=public_rt.id
     )
 
-  # Private Subnets for EC2 Instances with NAT Gateway
-  eip = aws.ec2.Eip(f"{project_name}-nat-eip", tags=common_tags)
-  nat_gw = aws.ec2.NatGateway(
-    f"{project_name}-nat-gw",
-    subnet_id=public_subnets[0].id,
-    allocation_id=eip.id,
-    tags={**common_tags, "Name": f"{project_name}-nat-gw"},
-    opts=pulumi.ResourceOptions(depends_on=[igw])
-  )
-
-  private_subnets = []
-  for i, az in enumerate(azs):
-    subnet = aws.ec2.Subnet(
-      f"{project_name}-private-subnet-{i+1}", vpc_id=vpc.id,
-      availability_zone=az, cidr_block=f"10.0.{100+i+1}.0/24",
-      ipv6_cidr_block=vpc.ipv6_cidr_block.apply(
-          lambda cidr: str(list(ipaddress.IPv6Network(cidr).subnets(new_prefix=64))[i])),
-      assign_ipv6_address_on_creation=True,
-      tags={**common_tags, "Name": f"{project_name}-private-{i+1}"}
-    )
-    private_subnets.append(subnet)
-
-  private_rt = aws.ec2.RouteTable(
-    f"{project_name}-private-rt", vpc_id=vpc.id,
-    routes=[aws.ec2.RouteTableRouteArgs(
-      cidr_block="0.0.0.0/0", nat_gateway_id=nat_gw.id
-    )],
-    tags={**common_tags, "Name": f"{project_name}-private-rt"}
-  )
-
-  for i, subnet in enumerate(private_subnets):
-    aws.ec2.RouteTableAssociation(
-      f"{project_name}-private-rta-{i+1}",
-      subnet_id=subnet.id, route_table_id=private_rt.id
-    )
-
   return {
     "vpc": vpc,
     "public_subnets": public_subnets,
-    "private_subnets": private_subnets
   }
 
 
@@ -130,13 +90,13 @@ def create_security_groups(
     ingress=[
       aws.ec2.SecurityGroupIngressArgs(
         protocol="tcp", from_port=80, to_port=80,
-        cidr_blocks=["0.0.0.0/0"], ipv6_cidr_blocks=["::/0"]
+        cidr_blocks=["0.0.0.0/0"]
       )
     ],
     egress=[
       aws.ec2.SecurityGroupEgressArgs(
         protocol="-1", from_port=0, to_port=0,
-        cidr_blocks=["0.0.0.0/0"], ipv6_cidr_blocks=["::/0"]
+        cidr_blocks=["0.0.0.0/0"]
       )
     ],
     tags={**common_tags, "Name": f"{project_name}-alb-sg"}
@@ -148,15 +108,14 @@ def create_security_groups(
     ingress=[
       aws.ec2.SecurityGroupIngressArgs(
         protocol="tcp", from_port=80, to_port=80,
-        security_groups=[alb_sg.id], # BEST PRACTICE: Reference ALB SG
+        security_groups=[alb_sg.id],
         description="Allow HTTP from ALB"
       )
     ],
     egress=[
       aws.ec2.SecurityGroupEgressArgs(
         protocol="-1", from_port=0, to_port=0,
-        cidr_blocks=["0.0.0.0/0"],
-        description="Allow all outbound traffic for updates"
+        cidr_blocks=["0.0.0.0/0"]
       )
     ],
     tags={**common_tags, "Name": f"{project_name}-ec2-sg"}
@@ -170,37 +129,25 @@ def create_iam_role() -> aws.iam.InstanceProfile:
   """
   trust_policy = json.dumps({
     "Version": "2012-10-17",
-    "Statement": [{
-      "Effect": "Allow",
-      "Principal": {"Service": "ec2.amazonaws.com"},
-      "Action": "sts:AssumeRole"
-    }]
+    "Statement": [{"Effect": "Allow", "Principal": {"Service": "ec2.amazonaws.com"}, "Action": "sts:AssumeRole"}]
   })
-  ec2_role = aws.iam.Role(
-    f"{project_name}-ec2-role",
-    assume_role_policy=trust_policy,
-    tags=common_tags
-  )
+  ec2_role = aws.iam.Role(f"{project_name}-ec2-role", assume_role_policy=trust_policy, tags=common_tags)
   aws.iam.RolePolicyAttachment(
     f"{project_name}-ssm-policy",
     role=ec2_role.name,
     policy_arn="arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
   )
-  return aws.iam.InstanceProfile(
-    f"{project_name}-ec2-profile",
-    role=ec2_role.name,
-    tags=common_tags
-  )
+  return aws.iam.InstanceProfile(f"{project_name}-ec2-profile", role=ec2_role.name, tags=common_tags)
 
 
 def create_compute_layer(
-    private_subnets: List[aws.ec2.Subnet],
+    public_subnets: List[aws.ec2.Subnet],
     ec2_sg: aws.ec2.SecurityGroup,
     instance_profile: aws.iam.InstanceProfile,
     target_group: aws.lb.TargetGroup
 ):
   """
-  Creates a Launch Template and an Auto Scaling Group for EC2 instances.
+  Creates a Launch Template and an Auto Scaling Group in public subnets.
   """
   ami = aws.ec2.get_ami(
     most_recent=True, owners=["amazon"],
@@ -219,29 +166,23 @@ echo "<h1>Hello from $(hostname -f)</h1>" > /var/www/html/index.html
     image_id=ami.id,
     instance_type="t3.micro",
     vpc_security_group_ids=[ec2_sg.id],
-    iam_instance_profile=aws.ec2.LaunchTemplateIamInstanceProfileArgs(
-      arn=instance_profile.arn
-    ),
-    user_data=pulumi.Output.secret(user_data).apply(
-      lambda ud: ud.encode('utf-8').decode('ascii')
-    ),
+    iam_instance_profile=aws.ec2.LaunchTemplateIamInstanceProfileArgs(arn=instance_profile.arn),
+    user_data=pulumi.Output.secret(user_data).apply(lambda ud: ud.encode('utf-8').decode('ascii')),
+    network_interfaces=[aws.ec2.LaunchTemplateNetworkInterfaceArgs(
+      associate_public_ip_address=True
+    )],
     tags=common_tags
   )
 
   aws.autoscaling.Group(
     f"{project_name}-asg",
-    vpc_zone_identifiers=[subnet.id for subnet in private_subnets],
+    vpc_zone_identifiers=[subnet.id for subnet in public_subnets],
     desired_capacity=2,
     min_size=2,
     max_size=3,
-    launch_template=aws.autoscaling.GroupLaunchTemplateArgs(
-      id=launch_template.id,
-      version="$Latest"
-    ),
+    launch_template=aws.autoscaling.GroupLaunchTemplateArgs(id=launch_template.id, version="$Latest"),
     target_group_arns=[target_group.arn],
-    tags=[aws.autoscaling.GroupTagArgs(
-        key=k, value=v, propagate_at_launch=True
-    ) for k, v in common_tags.items()]
+    tags=[aws.autoscaling.GroupTagArgs(key=k, value=v, propagate_at_launch=True) for k, v in common_tags.items()]
   )
 
 
@@ -259,7 +200,6 @@ def create_load_balancer(
     load_balancer_type="application",
     security_groups=[alb_sg.id],
     subnets=[subnet.id for subnet in public_subnets],
-    ip_address_type="dualstack",
     tags={**common_tags, "Name": f"{project_name}-alb"}
   )
 
@@ -269,9 +209,7 @@ def create_load_balancer(
     protocol="HTTP",
     vpc_id=vpc_id,
     target_type="instance",
-    health_check=aws.lb.TargetGroupHealthCheckArgs(
-      path="/", healthy_threshold=2, unhealthy_threshold=2, timeout=5, interval=30
-    ),
+    health_check=aws.lb.TargetGroupHealthCheckArgs(path="/", healthy_threshold=2, unhealthy_threshold=2, timeout=5, interval=30),
     tags={**common_tags, "Name": f"{project_name}-tg"}
   )
 
@@ -280,40 +218,10 @@ def create_load_balancer(
     load_balancer_arn=alb.arn,
     port=80,
     protocol="HTTP",
-    default_actions=[aws.lb.ListenerDefaultActionArgs(
-      type="forward",
-      target_group_arn=target_group.arn
-    )]
+    default_actions=[aws.lb.ListenerDefaultActionArgs(type="forward", target_group_arn=target_group.arn)]
   )
 
-  return {"alb": alb, "target_group": target_group, "listener": listener}
-
-
-def create_route53_records(alb: aws.lb.LoadBalancer):
-  """
-  Creates A and AAAA alias records pointing to the ALB.
-  """
-  if not domain_name:
-    pulumi.log.warn("domain_name not set, skipping Route 53 record creation.")
-    return
-
-  zone = aws.route53.get_zone(name=domain_name)
-  
-  aws.route53.Record(
-    f"{project_name}-a-record",
-    zone_id=zone.zone_id, name=domain_name, type="A",
-    aliases=[aws.route53.RecordAliasArgs(
-      name=alb.dns_name, zone_id=alb.zone_id, evaluate_target_health=True
-    )]
-  )
-  
-  aws.route53.Record(
-    f"{project_name}-aaaa-record",
-    zone_id=zone.zone_id, name=domain_name, type="AAAA",
-    aliases=[aws.route53.RecordAliasArgs(
-      name=alb.dns_name, zone_id=alb.zone_id, evaluate_target_health=True
-    )]
-  )
+  return {"alb": alb, "target_group": target_group}
 
 
 def main():
@@ -329,16 +237,15 @@ def main():
   )
   
   create_compute_layer(
-    network["private_subnets"],
+    network["public_subnets"],
     security_groups["ec2_sg"],
     instance_profile,
     load_balancer["target_group"]
   )
   
-  create_route53_records(load_balancer["alb"])
-
   pulumi.export("alb_dns_name", load_balancer["alb"].dns_name)
   pulumi.export("vpc_id", network["vpc"].id)
+
 
 if __name__ == "__main__":
   main()
