@@ -58,7 +58,7 @@ describe('Failure Recovery and High Availability Stack Unit Tests', () => {
 
     test('should define all required parameters with correct types', () => {
       const params = template.Parameters;
-      expect(Object.keys(params).length).toBe(3);
+      expect(Object.keys(params).length).toBe(4);
       expect(params.pInstanceType).toBeDefined();
       expect(params.pHostedZoneName).toBeDefined();
       expect(params.pAcmCertificateArn).toBeDefined();

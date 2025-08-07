@@ -33,6 +33,13 @@ Parameters:
     ConstraintDescription: Must be a valid ACM Certificate ARN.
     Default: 'arn:aws:acm:us-west-2:718240086340:certificate/c43e41ee-5b6c-4d2c-80e9-82c1db57289e'
 
+  pApexDomainName:
+    Type: String
+    Description: The apex domain's public hosted zone name (e.g., meerio.com.).
+    AllowedPattern: '^[a-zA-Z0-9.-]+\.$'
+    ConstraintDescription: Must be a valid domain name ending with a dot.
+    Default: 'meerio.com.'
+
 Mappings:
   # Using a mapping for AMIs allows for easy updates and region portability.
   # These should be updated to the latest Amazon Linux 2 AMI for the target region.
@@ -359,7 +366,7 @@ Resources:
   Route53Record:
     Type: AWS::Route53::RecordSet
     Properties:
-      HostedZoneName: 'meerio.com.'
+      HostedZoneName: !Ref pApexDomainName
       Name: !Ref pHostedZoneName
       Type: A
       AliasTarget:
