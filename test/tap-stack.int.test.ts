@@ -26,11 +26,12 @@ try {
 }
 
 // Test configuration
-const stackName = process.env.STACK_NAME || 'TapStack-dev';
-const environmentName = process.env.ENVIRONMENT_NAME || 'dev';
+const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
+const stackName = process.env.STACK_NAME || `TapStack-${environmentSuffix}`;
+const environmentName = process.env.ENVIRONMENT_NAME || environmentSuffix;
 
 // Determine if we should use real AWS or flat outputs
-const useFlatOutputs = process.env.USE_FLAT_OUTPUTS === 'true' || !process.env.AWS_ACCESS_KEY_ID;
+let useFlatOutputs = process.env.USE_FLAT_OUTPUTS === 'true' || !process.env.AWS_ACCESS_KEY_ID;
 
 describe('TapStack Serverless Integration Tests', () => {
   let stackOutputs: any = {};
@@ -74,6 +75,8 @@ describe('TapStack Serverless Integration Tests', () => {
         const flatOutputsPath = path.join(__dirname, 'cfn-outputs/flat-outputs.json');
         const flatOutputsContent = fs.readFileSync(flatOutputsPath, 'utf8');
         stackOutputs = JSON.parse(flatOutputsContent);
+        // Force useFlatOutputs to true since AWS failed
+        useFlatOutputs = true;
       }
     }
 
