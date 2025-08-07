@@ -97,8 +97,20 @@ class TapStack(pulumi.ComponentResource):
     )
 
     # --------------------------------------------------------
-    # VPC Endpoint for S3 + Egress Prefix List Rule
+    # VPC Endpoints for S3 (Gateway required for private DNS)
     # --------------------------------------------------------
+
+    # Create Gateway VPC Endpoint (required for private DNS with Interface endpoint)
+    s3_gateway_endpoint = aws.ec2.VpcEndpoint(
+      f"s3-gateway-endpoint-{env}",
+      vpc_id=vpc.id,
+      service_name=f"com.amazonaws.{region}.s3",
+      vpc_endpoint_type="Gateway",
+      route_table_ids=[],  # Optional: populate this if required
+      tags={**tags, "Name": f"s3-gateway-endpoint-{env}"}
+    )
+
+    # Create Interface VPC Endpoint for S3 (depends on Gateway endpoint)
     s3_endpoint = aws.ec2.VpcEndpoint(
       f"s3-endpoint-{env}",
       vpc_id=vpc.id,
@@ -106,21 +118,9 @@ class TapStack(pulumi.ComponentResource):
       vpc_endpoint_type="Interface",
       security_group_ids=[sg.id],
       private_dns_enabled=True,
+      opts=ResourceOptions(depends_on=[s3_gateway_endpoint]),
       tags={**tags, "Name": f"s3-endpoint-{env}"}
     )
-
-    if not os.getenv("SKIP_PREFIX_LIST_RULE"):
-      aws.ec2.SecurityGroupRule(
-        f"{name}-egress-prefixlist",
-        type="egress",
-        from_port=443,
-        to_port=443,
-        protocol="tcp",
-        prefix_list_ids=[prefix_list.id],  # Fixed: changed to prefix_list_ids (plural) and made it a list
-        security_group_id=sg.id,
-        opts=ResourceOptions(parent=sg)
-      )
-
 
 
     # --------------------------------------------------------
@@ -166,7 +166,10 @@ class TapStack(pulumi.ComponentResource):
     aws.kms.KeyPolicy(
       f"secure-key-policy-{env}",
       key_id=key.key_id,
-      policy=user.arn.apply(self.build_key_policy)
+      policy=pulumi.Output.all(user.arn, aws.get_caller_identity()).apply(
+        lambda args: self.build_key_policy(user_arn=args[0], account_id=args[1].account_id)
+      )
+
     )
 
     # --------------------------------------------------------
@@ -232,10 +235,9 @@ class TapStack(pulumi.ComponentResource):
     }, indent=2)
 
   @staticmethod
-  def build_key_policy(user_arn: str) -> str:
-    identity = aws.get_caller_identity()
-    audit_role_arn = f"arn:aws:iam::{identity.account_id}:role/audit-role"
-    break_glass_arn = f"arn:aws:iam::{identity.account_id}:role/break-glass-role"
+  def build_key_policy(user_arn: str, account_id: str) -> str:
+    audit_role_arn = f"arn:aws:iam::{account_id}:role/audit-role"
+    break_glass_arn = f"arn:aws:iam::{account_id}:role/break-glass-role"
 
     return json.dumps({
       "Version": "2012-10-17",
@@ -243,7 +245,7 @@ class TapStack(pulumi.ComponentResource):
         {
           "Sid": "RootAccess",
           "Effect": "Allow",
-          "Principal": {"AWS": f"arn:aws:iam::{identity.account_id}:root"},
+          "Principal": {"AWS": f"arn:aws:iam::{account_id}:root"},
           "Action": "kms:*",
           "Resource": "*"
         },
