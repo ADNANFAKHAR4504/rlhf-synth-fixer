@@ -413,14 +413,14 @@ class TapStack(ComponentResource):
                 tags=self.standard_tags,
                 opts=ResourceOptions(parent=self, provider=provider)
             )
-            
+
             aws.iam.RolePolicyAttachment(
                 f"PROD-flowlog-policy-{region}-{self.environment_suffix}",
                 role=flow_log_role.name,
                 policy_arn="arn:aws:iam::aws:policy/service-role/VPCFlowLogsDeliveryRolePolicy",
                 opts=ResourceOptions(parent=self, provider=provider)
             )
-            
+
             log_group = aws.cloudwatch.LogGroup(
                 f"PROD-flowlog-group-{region}-{self.environment_suffix}",
                 name=f"/aws/vpc/flowlogs-{region}-{self.environment_suffix}",
@@ -429,18 +429,18 @@ class TapStack(ComponentResource):
                 tags=self.standard_tags,
                 opts=ResourceOptions(parent=self, provider=provider)
             )
-            
+
             aws.ec2.FlowLog(
                 f"PROD-vpc-flowlog-{region}-{self.environment_suffix}",
                 iam_role_arn=flow_log_role.arn,
                 log_destination=log_group.arn,
                 log_destination_type="cloud-watch-logs",
-                resource_id=vpc.id,
-                resource_type="VPC",
+                vpc_id=vpc.id,  # Correct parameter name
                 traffic_type="ALL",
                 tags=self.standard_tags,
                 opts=ResourceOptions(parent=self, provider=provider)
             )
+
             
             self.vpcs[region] = vpc
             self.subnets[region] = {
