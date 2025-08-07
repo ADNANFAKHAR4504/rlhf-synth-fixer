@@ -943,7 +943,7 @@
                     "Ref": "DBInstanceClass"
                 },
                 "Engine": "mysql",
-                "EngineVersion": "8.0.35",
+                "EngineVersion": "8.0.42",
                 "MasterUsername": {
                     "Ref": "DBUsername"
                 },

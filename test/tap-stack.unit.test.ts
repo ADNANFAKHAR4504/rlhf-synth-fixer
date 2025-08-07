@@ -244,6 +244,19 @@ describe('TapStack CloudFormation Template', () => {
       const db = template.Resources.DatabaseInstance;
       expect(db.Properties.PubliclyAccessible).toBe(false);
     });
+
+    test('database should have correct engine and version', () => {
+      const db = template.Resources.DatabaseInstance;
+      expect(db.Properties.Engine).toBe('mysql');
+      expect(db.Properties.EngineVersion).toBe('8.0.42');
+    });
+
+    test('database should use Secrets Manager for password', () => {
+      const db = template.Resources.DatabaseInstance;
+      expect(db.Properties.MasterUserPassword).toEqual({
+        'Fn::Sub': '{{resolve:secretsmanager:${AWS::StackName}-db-password:SecretString:password}}'
+      });
+    });
   });
 
   describe('IAM Resources', () => {

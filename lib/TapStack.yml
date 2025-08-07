@@ -603,6 +603,7 @@ Resources:
       Engine: mysql
       EngineVersion: '8.0.42'
       MasterUsername: !Ref DBUsername
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${AWS::StackName}-db-password:SecretString:password}}'
       AllocatedStorage: 20
       StorageType: gp3
       StorageEncrypted: true
