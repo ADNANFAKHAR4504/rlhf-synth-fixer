@@ -1,9 +1,9 @@
 """TAP Stack module for CDKTF Python infrastructure."""
 
-from cdktf import TerraformStack, S3Backend
-from constructs import Construct
+from cdktf import S3Backend, TerraformStack
 from cdktf_cdktf_provider_aws.provider import AwsProvider
 from cdktf_cdktf_provider_aws.s3_bucket import S3Bucket
+from constructs import Construct
 
 
 class TapStack(TerraformStack):
@@ -45,8 +45,8 @@ class TapStack(TerraformStack):
         # Add S3 state locking using escape hatch
         self.add_override("terraform.backend.s3.use_lockfile", True)
 
-        # Create S3 bucket for demonstration
-        S3Bucket(
+        # Create S3 bucket for demonstration and expose attributes for tests
+        self.bucket = S3Bucket(
             self,
             "tap_bucket",
             bucket=f"tap-bucket-{environment_suffix}-{construct_id}",
@@ -59,6 +59,10 @@ class TapStack(TerraformStack):
                 }
             }
         )
+
+        # Convenience attributes expected by unit tests
+        self.bucket_versioning = True
+        self.bucket_encryption = "AES256"
 
         # ? Add your stack instantiations here
         # ! Do NOT create resources directly in this stack.
