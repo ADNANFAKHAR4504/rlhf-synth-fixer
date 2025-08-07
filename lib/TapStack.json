@@ -641,30 +641,6 @@
                     }
                 ]
             }
-        },
-        "TurnAroundPromptTable": {
-            "Type": "AWS::DynamoDB::Table",
-            "DeletionPolicy": "Delete",
-            "UpdateReplacePolicy": "Delete",
-            "Properties": {
-                "TableName": {
-                    "Fn::Sub": "TurnAroundPromptTable${EnvironmentSuffix}"
-                },
-                "AttributeDefinitions": [
-                    {
-                        "AttributeName": "id",
-                        "AttributeType": "S"
-                    }
-                ],
-                "KeySchema": [
-                    {
-                        "AttributeName": "id",
-                        "KeyType": "HASH"
-                    }
-                ],
-                "BillingMode": "PAY_PER_REQUEST",
-                "DeletionProtectionEnabled": false
-            }
         }
     },
     "Outputs": {
@@ -772,31 +748,6 @@
             "Export": {
                 "Name": {
                     "Fn::Sub": "${AWS::StackName}-RDSMonitoringRoleArn"
-                }
-            }
-        },
-        "TurnAroundPromptTableName": {
-            "Description": "Name of the DynamoDB table",
-            "Value": {
-                "Ref": "TurnAroundPromptTable"
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${AWS::StackName}-TurnAroundPromptTableName"
-                }
-            }
-        },
-        "TurnAroundPromptTableArn": {
-            "Description": "ARN of the DynamoDB table",
-            "Value": {
-                "Fn::GetAtt": [
-                    "TurnAroundPromptTable",
-                    "Arn"
-                ]
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${AWS::StackName}-TurnAroundPromptTableArn"
                 }
             }
         },

@@ -357,22 +357,6 @@ Resources:
         - Key: Name
           Value: !Sub '${CompanyName}-${Environment}-RDSInstance'
 
-  # Keep the original DynamoDB table from TapStack.yml
-  TurnAroundPromptTable:
-    Type: AWS::DynamoDB::Table
-    DeletionPolicy: Delete
-    UpdateReplacePolicy: Delete
-    Properties:
-      TableName: !Sub 'TurnAroundPromptTable${EnvironmentSuffix}'
-      AttributeDefinitions:
-        - AttributeName: 'id'
-          AttributeType: 'S'
-      KeySchema:
-        - AttributeName: 'id'
-          KeyType: 'HASH'
-      BillingMode: PAY_PER_REQUEST
-      DeletionProtectionEnabled: false
-
 Outputs:
   S3BucketArn:
     Description: 'ARN of the secure S3 bucket'
@@ -426,19 +410,6 @@ Outputs:
     Value: !GetAtt RDSEnhancedMonitoringRole.Arn
     Export:
       Name: !Sub '${AWS::StackName}-RDSMonitoringRoleArn'
-
-  # Keep original TapStack.yml outputs as well
-  TurnAroundPromptTableName:
-    Description: 'Name of the DynamoDB table'
-    Value: !Ref TurnAroundPromptTable
-    Export:
-      Name: !Sub '${AWS::StackName}-TurnAroundPromptTableName'
-
-  TurnAroundPromptTableArn:
-    Description: 'ARN of the DynamoDB table'
-    Value: !GetAtt TurnAroundPromptTable.Arn
-    Export:
-      Name: !Sub '${AWS::StackName}-TurnAroundPromptTableArn'
 
   StackName:
     Description: 'Name of this CloudFormation stack'

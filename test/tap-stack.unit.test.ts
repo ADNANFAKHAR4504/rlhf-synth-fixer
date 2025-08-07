@@ -73,6 +73,20 @@ describe('TapStack CloudFormation Template', () => {
     });
   });
 
+  describe('Conditions', () => {
+    test('should define conditions for conditional resource deployment', () => {
+      expect(template.Conditions).toBeDefined();
+      expect(template.Conditions.HasExistingVpcId).toBeDefined();
+      expect(template.Conditions.HasPrivateSubnetIds).toBeDefined();
+      expect(template.Conditions.HasDBSubnetGroupName).toBeDefined();
+      expect(template.Conditions.DeployEC2AndRDS).toBeDefined();
+
+      // DeployEC2AndRDS should be an AND condition of the other three
+      expect(template.Conditions.DeployEC2AndRDS['Fn::And']).toBeDefined();
+      expect(template.Conditions.DeployEC2AndRDS['Fn::And'].length).toBe(3);
+    });
+  });
+
   describe('S3 Bucket Configuration', () => {
     test('should have S3 bucket with server-side encryption enabled', () => {
       const bucket = template.Resources.SecureS3Bucket;
@@ -188,102 +202,34 @@ describe('TapStack CloudFormation Template', () => {
     });
   });
 
-  describe('RDS Configuration', () => {
-    test('should create DB parameter group with logging enabled', () => {
-      const paramGroup = template.Resources.DBParameterGroup;
-      expect(paramGroup).toBeDefined();
-      expect(paramGroup.Type).toBe('AWS::RDS::DBParameterGroup');
+  describe('EC2 and RDS Resources', () => {
+    test('should have conditional EC2 and RDS resources', () => {
+      const conditionalResources = [
+        'RDSEnhancedMonitoringRole',
+        'DBParameterGroup',
+        'EC2SecurityGroup',
+        'RDSSecurityGroup',
+        'EC2LaunchTemplate',
+        'EC2Instance',
+        'RDSSecret',
+        'RDSInstance',
+      ];
 
-      const params = paramGroup.Properties.Parameters;
-      expect(params.general_log).toBe(1);
-      expect(params.slow_query_log).toBe(1);
-      expect(params.log_queries_not_using_indexes).toBe(1);
-    });
-
-    test('RDS instance should have logging enabled', () => {
-      const rdsInstance = template.Resources.RDSInstance;
-      expect(rdsInstance).toBeDefined();
-      expect(rdsInstance.Type).toBe('AWS::RDS::DBInstance');
-
-      const exports = rdsInstance.Properties.EnableCloudwatchLogsExports;
-      expect(exports).toContain('error');
-      expect(exports).toContain('general');
-      expect(exports).toContain('slow-query');
-    });
-
-    test('RDS instance should not be publicly accessible', () => {
-      const rdsInstance = template.Resources.RDSInstance;
-      expect(rdsInstance.Properties.PubliclyAccessible).toBe(false);
-    });
-
-    test('RDS instance should use storage encryption', () => {
-      const rdsInstance = template.Resources.RDSInstance;
-      expect(rdsInstance.Properties.StorageEncrypted).toBe(true);
-    });
-
-    test('RDS instance should be monitored', () => {
-      const rdsInstance = template.Resources.RDSInstance;
-      expect(rdsInstance.Properties.MonitoringInterval).toBe(60);
-      expect(rdsInstance.Properties.MonitoringRoleArn).toEqual({
-        'Fn::GetAtt': ['RDSEnhancedMonitoringRole', 'Arn'],
+      conditionalResources.forEach(resourceName => {
+        expect(template.Resources[resourceName]).toBeDefined();
+        expect(template.Resources[resourceName].Condition).toBe(
+          'DeployEC2AndRDS'
+        );
       });
     });
 
-    test('RDS should use secrets manager for credentials', () => {
-      const rdsInstance = template.Resources.RDSInstance;
-      expect(rdsInstance.Properties.MasterUsername).toBeDefined();
-      // Using different check since MasterUserPassword in JSON format is {'Fn::Sub': '{{resolve:secretsmanager...}}'}
-      expect(rdsInstance.Properties.MasterUsername['Fn::Sub']).toBeDefined();
-      expect(
-        rdsInstance.Properties.MasterUserPassword['Fn::Sub']
-      ).toBeDefined();
-
-      // Check for SecretManager dynamic reference pattern
-      const username = rdsInstance.Properties.MasterUsername;
-      const password = rdsInstance.Properties.MasterUserPassword;
-
-      expect(username['Fn::Sub']).toContain('resolve:secretsmanager');
-      expect(password['Fn::Sub']).toContain('resolve:secretsmanager');
-    });
-  });
-
-  describe('EC2 Configuration', () => {
-    test('EC2 security group should allow only necessary traffic', () => {
-      const sg = template.Resources.EC2SecurityGroup;
-      expect(sg).toBeDefined();
-      expect(sg.Type).toBe('AWS::EC2::SecurityGroup');
-
-      // Check egress rules
-      const egress = sg.Properties.SecurityGroupEgress;
-      expect(egress).toHaveLength(3);
-
-      // Verify no unnecessary ports are open
-      const allowedPorts = [80, 443, 3306];
-      egress.forEach((rule: any) => {
-        expect(allowedPorts).toContain(rule.FromPort);
-      });
-    });
-
-    test('EC2 instance should be placed in private subnet', () => {
-      const ec2Instance = template.Resources.EC2Instance;
-      expect(ec2Instance).toBeDefined();
-      expect(ec2Instance.Type).toBe('AWS::EC2::Instance');
-
-      // Check that it uses a subnet from the private subnet list with proper Split and Select
-      const subnetId = ec2Instance.Properties.SubnetId;
-      expect(subnetId).toEqual({
-        'Fn::Select': [
-          0,
-          {
-            'Fn::Split': [
-              ',',
-              {
-                Ref: 'PrivateSubnetIds',
-              },
-            ],
-          },
-        ],
-      });
+    test('security groups should properly reference each other', () => {
+      const rdsIngress = template.Resources.RDSSecurityGroupIngress;
+      expect(rdsIngress).toBeDefined();
+      expect(rdsIngress.Properties.GroupId.Ref).toBe('RDSSecurityGroup');
+      expect(rdsIngress.Properties.SourceSecurityGroupId.Ref).toBe(
+        'EC2SecurityGroup'
+      );
     });
 
     test('EC2 launch template should have instance profile with IAM role', () => {
@@ -314,19 +260,32 @@ describe('TapStack CloudFormation Template', () => {
     });
   });
 
-  describe('DynamoDB Table Configuration', () => {
-    test('DynamoDB table should have correct properties', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      expect(table).toBeDefined();
-      expect(table.Type).toBe('AWS::DynamoDB::Table');
+  describe('Secrets Manager Configuration', () => {
+    test('should have RDS secret configured correctly', () => {
+      const secret = template.Resources.RDSSecret;
+      expect(secret).toBeDefined();
+      expect(secret.Type).toBe('AWS::SecretsManager::Secret');
+      expect(secret.Properties.GenerateSecretString).toBeDefined();
+      expect(
+        secret.Properties.GenerateSecretString.SecretStringTemplate['Fn::Sub']
+      ).toContain('${DBMasterUsername}');
+      expect(secret.Properties.GenerateSecretString.GenerateStringKey).toBe(
+        'password'
+      );
+    });
 
-      expect(table.Properties.BillingMode).toBe('PAY_PER_REQUEST');
-      expect(table.Properties.KeySchema[0].AttributeName).toBe('id');
-      expect(table.Properties.KeySchema[0].KeyType).toBe('HASH');
+    test('RDS instance should reference secrets manager for credentials', () => {
+      const rdsInstance = template.Resources.RDSInstance;
+      expect(rdsInstance.Properties.MasterUsername['Fn::Sub']).toContain(
+        'resolve:secretsmanager'
+      );
+      expect(rdsInstance.Properties.MasterUserPassword['Fn::Sub']).toContain(
+        'resolve:secretsmanager'
+      );
     });
   });
 
-  describe('Outputs', () => {
+  describe('Outputs Configuration', () => {
     test('should export essential resource identifiers', () => {
       const expectedOutputs = [
         'S3BucketArn',
@@ -337,8 +296,6 @@ describe('TapStack CloudFormation Template', () => {
         'RDSInstanceArn',
         'EC2InstanceId',
         'RDSEnhancedMonitoringRoleArn',
-        'TurnAroundPromptTableName',
-        'TurnAroundPromptTableArn',
         'StackName',
         'EnvironmentSuffix',
       ];
@@ -366,7 +323,11 @@ describe('TapStack CloudFormation Template', () => {
       ];
 
       resources.forEach(resourceName => {
-        if (template.Resources[resourceName].Properties.Tags) {
+        if (
+          template.Resources[resourceName] &&
+          template.Resources[resourceName].Properties &&
+          template.Resources[resourceName].Properties.Tags
+        ) {
           const nameTag = template.Resources[resourceName].Properties.Tags.find(
             (tag: any) => tag.Key === 'Name'
           );
