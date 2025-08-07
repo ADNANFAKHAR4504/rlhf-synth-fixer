@@ -154,7 +154,9 @@ class TestTapStackLiveIntegration:
         print("Could not decode response body")
       
       # Accept 200, 201, 400, 404 as valid responses
-      assert response.status_code in [200, 201, 400, 404], f"Unexpected status code: {response.status_code}"
+      assert response.status_code in [200, 201, 400, 404], (
+        f"Unexpected status code: {response.status_code}"
+      )
       
       # If we get a 200, verify the expected structure
       if response.status_code == 200:

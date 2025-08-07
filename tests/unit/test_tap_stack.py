@@ -31,7 +31,7 @@ class TestTapStackArgs:
 
     args = self.TapStackArgs()
 
-    assert args.environment_suffix == 'dev'
+    assert args.environment_suffix == 'Production'
     assert args.tags == {}
     assert args.region == 'us-east-1'
 
@@ -233,7 +233,8 @@ class TestTapStackResources:
       mock_lambda_instance.arn = "arn:aws:lambda:us-east-1:123456789012:function:tap-api-handler-test"
       mock_lambda_instance.invoke_arn = (
         "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/"
-        "arn:aws:lambda:us-east-1:123456789012:function:tap-api-handler-test/invocations"
+        "arn:aws:lambda:us-east-1:123456789012:function:tap-api-handler-test/"
+        "invocations"
       )
       mock_lambda_instance.memory_size = 512
       mock_lambda_instance.timeout = 60
@@ -330,7 +331,9 @@ class TestTapStackResources:
     assert expected_assume_role_policy["Version"] == "2012-10-17"
     assert expected_assume_role_policy["Statement"][0]["Action"] == "sts:AssumeRole"
     assert expected_assume_role_policy["Statement"][0]["Effect"] == "Allow"
-    assert expected_assume_role_policy["Statement"][0]["Principal"]["Service"] == "lambda.amazonaws.com"
+    assert expected_assume_role_policy["Statement"][0]["Principal"]["Service"] == (
+      "lambda.amazonaws.com"
+    )
 
   def test_lambda_function_configuration(self, mock_pulumi_resources):
     """Test Lambda function configuration."""

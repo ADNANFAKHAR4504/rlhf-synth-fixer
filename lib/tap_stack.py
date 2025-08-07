@@ -32,7 +32,7 @@ class TapStackArgs:
 
   def __init__(self, environment_suffix: Optional[str] = None,
                tags: Optional[dict] = None, region: Optional[str] = None):
-    self.environment_suffix = environment_suffix or 'dev'
+    self.environment_suffix = environment_suffix or 'Production'
     self.tags = tags or {}
     self.region = region or 'us-east-1'
 
@@ -70,7 +70,7 @@ class TapStack(pulumi.ComponentResource):  # pylint: disable=too-many-instance-a
 
     # Enhanced common tags for all resources
     common_tags = {
-      "Environment": self.environment_suffix.capitalize(),
+      "Environment": "Production",
       "Project": "TAP",
       "ManagedBy": "Pulumi",
       "Region": self.region,

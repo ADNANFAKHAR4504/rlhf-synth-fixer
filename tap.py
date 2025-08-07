@@ -17,16 +17,16 @@ from lib.tap_stack import TapStack, TapStackArgs
 # Initialize Pulumi configuration
 config = Config()
 
-# Get environment suffix from config or fallback to 'dev'
-environment_suffix = config.get('env') or 'dev'
+# Get environment suffix from config or fallback to 'Production' per PROMPT.md
+environment_suffix = config.get('env') or 'Production'
 STACK_NAME = f"TapStack{environment_suffix}"
 
 repository_name = os.getenv('REPOSITORY', 'unknown')
 commit_author = os.getenv('COMMIT_AUTHOR', 'unknown')
 
-# Create a resource options object with default tags
+# Create a resource options object with default tags per PROMPT.md requirements
 default_tags = {
-    'Environment': environment_suffix,
+    'Environment': 'Production',
     'Repository': repository_name,
     'Author': commit_author,
 }
