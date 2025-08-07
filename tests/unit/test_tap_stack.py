@@ -1,16 +1,14 @@
-import pulumi
-from lib.tap_stack import TapStackArgs, TapStack
-from lib.components.iam import IAMComponent
-from lib.components.vpc import ComputeComponent
-from lib.components.database import DatabaseComponent
 from lib.components.serverless import ServerlessComponent
-import builtins
+from lib.components.database import DatabaseComponent
+from lib.components.vpc import ComputeComponent
+from lib.components.iam import IAMComponent
+from lib.tap_stack import TapStackArgs, TapStack
+import pulumi
 import os
 import sys
 import unittest
 from unittest.mock import Mock, MagicMock, patch
 import types
-import zipfile
 
 # Set environment variable for Pulumi testing FIRST
 os.environ["PULUMI_TEST_MODE"] = "true"
@@ -23,101 +21,13 @@ def create_mock_package(name):
   mod.__path__ = []  # makes it a package
   return mod
 
-
-# Setup comprehensive pulumi mock before any imports
-pulumi_mock = MagicMock()
-# Critical: Mock ALL possible Pulumi functions that might be called
-pulumi_mock.Invoke = MagicMock(return_value=MagicMock())
-pulumi_mock.get_region = Mock(return_value=MagicMock(name="us-east-1"))
-pulumi_mock.export = MagicMock()
-pulumi_mock.Config = MagicMock()
-pulumi_mock.get_stack = MagicMock(return_value="test")
-pulumi_mock.Output = MagicMock()
-pulumi_mock.ComponentResource = MagicMock()
-pulumi_mock.ResourceOptions = MagicMock()
-pulumi_mock.AssetArchive = MagicMock()
-pulumi_mock.StringAsset = MagicMock()
-pulumi_mock.FileArchive = MagicMock()
-pulumi_mock.Resource = MagicMock()
-
-# Ensure the mock itself has all attributes before assignment
-sys.modules["pulumi"] = pulumi_mock
-
-sys.modules["pulumi_aws"] = create_mock_package("pulumi_aws")
-# Add get_region directly to pulumi_aws mock
-mock_region = MagicMock()
-mock_region.name = "us-east-1"
-sys.modules["pulumi_aws"].get_region = Mock(return_value=mock_region)
-sys.modules["pulumi_aws"].get_availability_zones = Mock(
-    return_value=MagicMock(names=["us-east-1a", "us-east-1b"])
-)
-
-# Create proper mock structure for AWS modules
-aws_ec2 = create_mock_package("pulumi_aws.ec2")
-aws_ec2.Vpc = Mock(return_value=MagicMock(id="vpc-123"))
-aws_ec2.Subnet = Mock(return_value=MagicMock(id="subnet-123"))
-aws_ec2.SecurityGroup = Mock(return_value=MagicMock(id="sg-123"))
-aws_ec2.SecurityGroupRule = Mock()
-aws_ec2.Eip = Mock()
-aws_ec2.NatGateway = Mock()
-aws_ec2.InternetGateway = Mock()
-aws_ec2.RouteTable = Mock()
-aws_ec2.RouteTableAssociation = Mock()
-aws_ec2._enums = create_mock_package("pulumi_aws.ec2._enums")
-sys.modules["pulumi_aws"].ec2 = aws_ec2
-
-aws_rds = create_mock_package("pulumi_aws.rds")
-aws_rds.Instance = Mock(return_value=MagicMock(
-    endpoint="db-endpoint", id="db-123"))
-aws_rds.SubnetGroup = Mock()
-aws_rds.ParameterGroup = Mock()
-sys.modules["pulumi_aws"].rds = aws_rds
-
-aws_iam = create_mock_package("pulumi_aws.iam")
-aws_iam.Role = Mock(return_value=MagicMock(arn="arn:aws:iam::123:role/test"))
-aws_iam.RolePolicy = Mock()
-aws_iam.RolePolicyAttachment = Mock()
-aws_iam.Policy = Mock()
-aws_iam._enums = create_mock_package("pulumi_aws.iam._enums")
-sys.modules["pulumi_aws"].iam = aws_iam
-
-aws_apigateway = create_mock_package("pulumi_aws.apigateway")
-aws_apigateway.RestApi = Mock(return_value=MagicMock(
-    id="api-123", execution_arn=MagicMock(), root_resource_id="root-123"))
-aws_apigateway.Deployment = Mock()
-aws_apigateway.Stage = Mock()
-aws_apigateway.Resource = Mock()
-aws_apigateway.Method = Mock()
-aws_apigateway.Integration = Mock()
-aws_apigateway.IntegrationResponse = Mock()
-aws_apigateway.MethodResponse = Mock()
-sys.modules["pulumi_aws"].apigateway = aws_apigateway
-
-aws_lambda = create_mock_package("pulumi_aws.lambda_")
-aws_lambda.Function = Mock()
-aws_lambda.Permission = Mock()
-sys.modules["pulumi_aws"].lambda_ = aws_lambda
-
-# FIXED: Improved MockOutput implementation with flexible constructor
+# FIXED: Create a proper MockOutput class that handles subscriptable operations
 
 
 class MockOutput:
-  def __init__(self, *args, **kwargs):
-    # Handle various ways Pulumi might instantiate Output
-    if len(args) == 0:
-      self.value = None
-    elif len(args) == 1:
-      self.value = args[0]
-    else:
-      # Pulumi might pass multiple args - just use the first meaningful one
-      self.value = args[0] if args[0] is not None else (
-          args[1] if len(args) > 1 else None)
-
+  def __init__(self, value=None):
+    self.value = value
     self._is_output = True
-
-    # Store any additional kwargs that Pulumi might pass
-    for key, val in kwargs.items():
-      setattr(self, key, val)
 
   def apply(self, func):
     if self.value is not None:
@@ -137,36 +47,16 @@ class MockOutput:
     return MockOutput()
 
   def __iter__(self):
-    """FIXED: Bulletproof iterator that handles all edge cases"""
-    try:
-      if isinstance(self.value, (list, tuple)):
-        # Return generator that yields MockOutput wrapped items
-        def list_generator():
-          for x in self.value:
-            yield MockOutput(x) if not isinstance(x, MockOutput) else x
-        return list_generator()
-      elif self.value is not None:
-        # Single item - return single-item generator
-        def single_generator():
-          yield self
-        return single_generator()
-      else:
-        # Empty case - return empty generator
-        def empty_generator():
-          return
-          yield  # unreachable, but makes it a generator
-        return empty_generator()
-    except Exception:
-      # Fallback: return empty iterator if anything goes wrong
+    if isinstance(self.value, (list, tuple)):
+      for x in self.value:
+        yield MockOutput(x) if not isinstance(x, MockOutput) else x
+    elif self.value is not None:
+      yield self
+    else:
       return iter([])
-
-  def __class_getitem__(cls, item):
-    """Handle MockOutput[type] syntax for type hints"""
-    return cls
 
   @staticmethod
   def all(*args):
-    """FIXED: Handle empty or None arguments gracefully"""
     values = []
     for arg in args:
       if arg is None:
@@ -180,7 +70,6 @@ class MockOutput:
 
   @staticmethod
   def concat(*args):
-    """FIXED: Safely concatenate values"""
     result = ""
     for arg in args:
       if arg is not None:
@@ -197,16 +86,26 @@ class MockOutput:
   def __repr__(self):
     return f"MockOutput({self.value})"
 
+# FIXED: Make MockOutput work with type subscripts
 
-# Make MockOutput subscriptable at the class level
-MockOutput.__class_getitem__ = classmethod(lambda cls, item: cls)
 
-# Enhanced MockComponentResource that inherits from MockResource
+def MockOutputFactory(*args, **kwargs):
+  return MockOutput(*args, **kwargs)
+
+# Add class method for subscript support
+
+
+def mock_output_class_getitem(cls, item):
+  return cls
+
+
+MockOutput.__class_getitem__ = classmethod(mock_output_class_getitem)
+MockOutputFactory.__class_getitem__ = classmethod(mock_output_class_getitem)
+
+# Enhanced MockResource classes
 
 
 class MockResource:
-  """Base mock resource class that Pulumi resources should inherit from"""
-
   def __init__(self, *args, **kwargs):
     self.id = MockOutput("mock-resource-id")
     self.urn = MockOutput("mock-resource-urn")
@@ -221,12 +120,9 @@ class MockComponentResource(MockResource):
     self.props = kwargs.get("props", {})
     self.opts = kwargs.get("opts", None)
     self.outputs = {}
-    self._childResources = []
 
   def register_outputs(self, outputs):
     self.outputs.update(outputs)
-
-# Create a proper mock ResourceOptions class that matches Pulumi's expected interface
 
 
 class MockResourceOptions:
@@ -236,104 +132,83 @@ class MockResourceOptions:
     if not isinstance(self.depends_on, list):
       self.depends_on = [self.depends_on]
 
-    # Add all the attributes that Pulumi ResourceOptions expects
-    self.transformations = kwargs.get('transformations', [])
-    self.aliases = kwargs.get('aliases', [])
-    self.additional_secret_outputs = kwargs.get(
-        'additional_secret_outputs', [])
-    self.custom_timeouts = kwargs.get('custom_timeouts', None)
-    self.delete_before_replace = kwargs.get('delete_before_replace', None)
-    self.ignore_changes = kwargs.get('ignore_changes', [])
-    self.import_ = kwargs.get('import_', None)
-    self.protect = kwargs.get('protect', None)
-    self.provider = kwargs.get('provider', None)
-    self.providers = kwargs.get('providers', None)
-    self.replace_on_changes = kwargs.get('replace_on_changes', [])
-    self.retain_on_delete = kwargs.get('retain_on_delete', None)
-    self.version = kwargs.get('version', None)
-    self.plugin_download_url = kwargs.get('plugin_download_url', None)
-    self.urn = kwargs.get('urn', None)
-    self.id = kwargs.get('id', None)
-    self.kwargs = kwargs
 
-  def _copy(self, **kwargs):
-    """Internal method that Pulumi uses to copy ResourceOptions with modifications"""
-    new_kwargs = self.kwargs.copy()
-    new_kwargs.update(kwargs)
+# Create comprehensive pulumi mock
+pulumi_mock = MagicMock()
+pulumi_mock.Output = MockOutputFactory
+pulumi_mock.ComponentResource = MockComponentResource
+pulumi_mock.ResourceOptions = MockResourceOptions
+pulumi_mock.AssetArchive = MagicMock()
+pulumi_mock.StringAsset = MagicMock()
+pulumi_mock.FileArchive = MagicMock()
+pulumi_mock.get_stack = MagicMock(return_value="test")
+pulumi_mock.Config = MagicMock()
+pulumi_mock.export = MagicMock()
+pulumi_mock.Resource = MockResource
 
-    return MockResourceOptions(
-        parent=kwargs.get('parent', self.parent),
-        depends_on=kwargs.get('depends_on', self.depends_on),
-        **new_kwargs
-    )
+# CRITICAL: Add invoke method to pulumi mock (lowercase!)
+pulumi_mock.invoke = MagicMock(return_value=MagicMock())
+pulumi_mock.get_region = Mock(return_value=MagicMock(name="us-east-1"))
 
-  def merge(self, other):
-    """Merge this ResourceOptions with another"""
-    if other is None:
-      return self
-    return self._copy()
+# Set up sys.modules with pulumi mock
+sys.modules["pulumi"] = pulumi_mock
 
-  @staticmethod
-  def merge_options(opts1, opts2):
-    """Static method to merge two ResourceOptions"""
-    if opts1 is None:
-      return opts2
-    if opts2 is None:
-      return opts1
-    return opts1._copy()
+# Create AWS mocks
+sys.modules["pulumi_aws"] = create_mock_package("pulumi_aws")
+mock_region = MagicMock()
+mock_region.name = "us-east-1"
+sys.modules["pulumi_aws"].get_region = Mock(return_value=mock_region)
+sys.modules["pulumi_aws"].get_availability_zones = Mock(
+    return_value=MagicMock(names=["us-east-1a", "us-east-1b"])
+)
 
+# Create AWS service mocks
+aws_ec2 = create_mock_package("pulumi_aws.ec2")
+aws_ec2.Vpc = Mock(return_value=MagicMock(id="vpc-123"))
+aws_ec2.Subnet = Mock(return_value=MagicMock(id="subnet-123"))
+aws_ec2.SecurityGroup = Mock(return_value=MagicMock(id="sg-123"))
+aws_ec2.SecurityGroupRule = Mock()
+aws_ec2.Eip = Mock()
+aws_ec2.NatGateway = Mock()
+aws_ec2.InternetGateway = Mock()
+aws_ec2.RouteTable = Mock()
+aws_ec2.RouteTableAssociation = Mock()
+sys.modules["pulumi_aws"].ec2 = aws_ec2
 
-# Patch isinstance to handle MockOutput and Resource checks
-original_isinstance = builtins.isinstance
+aws_rds = create_mock_package("pulumi_aws.rds")
+aws_rds.Instance = Mock(return_value=MagicMock(
+    endpoint="db-endpoint", id="db-123"))
+aws_rds.SubnetGroup = Mock()
+aws_rds.ParameterGroup = Mock()
+sys.modules["pulumi_aws"].rds = aws_rds
 
+aws_iam = create_mock_package("pulumi_aws.iam")
+aws_iam.Role = Mock(return_value=MagicMock(arn="arn:aws:iam::123:role/test"))
+aws_iam.RolePolicy = Mock()
+aws_iam.RolePolicyAttachment = Mock()
+aws_iam.Policy = Mock()
+sys.modules["pulumi_aws"].iam = aws_iam
 
-def patched_isinstance(obj, cls):
-  # Handle MockOutput checks
-  if hasattr(cls, '__name__') and cls.__name__ == 'Output' and hasattr(obj, '_is_output'):
-    return True
+aws_apigateway = create_mock_package("pulumi_aws.apigateway")
+aws_apigateway.RestApi = Mock(return_value=MagicMock(
+    id="api-123", execution_arn=MagicMock(), root_resource_id="root-123"))
+aws_apigateway.Deployment = Mock()
+aws_apigateway.Stage = Mock()
+aws_apigateway.Resource = Mock()
+aws_apigateway.Method = Mock()
+aws_apigateway.Integration = Mock()
+aws_apigateway.IntegrationResponse = Mock()
+aws_apigateway.MethodResponse = Mock()
+sys.modules["pulumi_aws"].apigateway = aws_apigateway
 
-  # Handle ResourceOptions checks
-  if hasattr(cls, '__name__') and cls.__name__ == 'ResourceOptions' and isinstance(obj, MockResourceOptions):
-    return True
+aws_lambda = create_mock_package("pulumi_aws.lambda_")
+aws_lambda.Function = Mock()
+aws_lambda.Permission = Mock()
+sys.modules["pulumi_aws"].lambda_ = aws_lambda
 
-  # Handle Resource checks - allow MockResource and its subclasses
-  if hasattr(cls, '__name__') and cls.__name__ == 'Resource':
-    return isinstance(obj, MockResource)
+# Now import pulumi to get the actual module reference
 
-  # Handle pulumi.Resource checks specifically
-  if str(cls).find('pulumi') != -1 and str(cls).find('Resource') != -1:
-    return isinstance(obj, MockResource)
-
-  # Handle pulumi.ResourceOptions checks specifically
-  if str(cls).find('pulumi') != -1 and str(cls).find('ResourceOptions') != -1:
-    return isinstance(obj, MockResourceOptions)
-
-  # Use original isinstance for everything else
-  try:
-    return original_isinstance(obj, cls)
-  except TypeError:
-    # If cls is not a proper type, return False
-    return False
-
-
-# Monkey patch isinstance
-builtins.isinstance = patched_isinstance
-
-# CRITICAL: Define MockOutputFactory at module level before using it
-
-
-def MockOutputFactory(*args, **kwargs):
-  """Factory function that creates MockOutput instances"""
-  return MockOutput(*args, **kwargs)
-
-
-# Apply patches - ensure pulumi module has all necessary attributes
-# Import pulumi to get actual reference, then patch it
-
-# CRITICAL: Don't replace pulumi.Output directly, instead create wrapper
-original_pulumi_output = getattr(pulumi, 'Output', None)
-
-# Set up all the mocks on the pulumi module
+# Ensure all necessary attributes are set on the actual pulumi module
 pulumi.Output = MockOutputFactory
 pulumi.ComponentResource = MockComponentResource
 pulumi.ResourceOptions = MockResourceOptions
@@ -343,33 +218,11 @@ pulumi.FileArchive = MagicMock()
 pulumi.get_stack = MagicMock(return_value="test")
 pulumi.Config = MagicMock()
 pulumi.export = MagicMock()
-# CRITICAL: Set Invoke on the actual pulumi module
-pulumi.Invoke = MagicMock(return_value=MagicMock())
-pulumi.get_region = Mock(return_value=MagicMock(name="us-east-1"))
+pulumi.Resource = MockResource
+pulumi.invoke = MagicMock(return_value=MagicMock())  # Fixed: lowercase invoke
+pulumi.get_region = Mock(return_value=mock_region)
 
-# Create a base Resource class for Pulumi
-
-
-class MockPulumiResource(MockResource):
-  pass
-
-
-pulumi.Resource = MockPulumiResource
-
-# CRITICAL: Update sys.modules with the patched pulumi module
-sys.modules["pulumi"] = pulumi
-
-# Double-check: Ensure all critical attributes are set
-required_attrs = ['Invoke', 'Output', 'ComponentResource', 'ResourceOptions',
-                  'get_region', 'export', 'Config', 'get_stack', 'Resource']
-for attr in required_attrs:
-  if not hasattr(pulumi, attr) or getattr(pulumi, attr) is None:
-    if attr == 'Output':
-      setattr(pulumi, attr, MockOutputFactory)
-    else:
-      setattr(pulumi, attr, MagicMock())
-
-# Now import the actual components after all mocking is set up
+# Import the components after mocking is complete
 
 
 class TestTapStackComponents(unittest.TestCase):
@@ -379,125 +232,65 @@ class TestTapStackComponents(unittest.TestCase):
         tags={"Environment": "test", "Project": "tap-stack"}
     )
 
-    # CRITICAL: Verify and fix mocks if needed at runtime
-    if not hasattr(sys.modules["pulumi"], 'Invoke') or sys.modules["pulumi"].Invoke is None:
-      sys.modules["pulumi"].Invoke = MagicMock(return_value=MagicMock())
-      print("Fixed missing sys.modules['pulumi'].Invoke")
-
-    if not hasattr(pulumi, 'Invoke') or pulumi.Invoke is None:
-      pulumi.Invoke = MagicMock(return_value=MagicMock())
-      print("Fixed missing pulumi.Invoke")
-
-    # Ensure Output factory is available
-    if not hasattr(pulumi, 'Output') or pulumi.Output is None:
-      pulumi.Output = MockOutputFactory
-      sys.modules["pulumi"].Output = MockOutputFactory
-      print("Fixed missing pulumi.Output")
-
-    # Verify critical mocks are in place
-    self.assertIsNotNone(
-        sys.modules["pulumi"].Invoke, "Pulumi Invoke mock missing")
-    self.assertIsNotNone(pulumi.Invoke, "Direct pulumi.Invoke missing")
-    self.assertIsNotNone(pulumi.Output, "Direct pulumi.Output missing")
-
-  def debug_mock_state(self, mock_obj, name):
-    """Debug helper to check mock state"""
-    print(f"\n=== Debugging {name} ===")
-    print(f"Type: {type(mock_obj)}")
-    print(f"Has Invoke: {hasattr(mock_obj, 'Invoke')}")
-    print(f"Invoke value: {getattr(mock_obj, 'Invoke', 'MISSING')}")
-    if hasattr(mock_obj, '__dict__'):
-      print(f"Attributes: {list(mock_obj.__dict__.keys())}")
-
   @patch('os.path.exists')
   @patch('os.walk')
   @patch('zipfile.ZipFile')
   def test_iam_component_initialization(self, mock_zipfile, mock_walk, mock_exists):
-    """FIXED: Test with enhanced error handling"""
+    """Test IAM component initialization"""
     mock_exists.return_value = True
 
-    try:
-      iam = IAMComponent(
-          name="test-iam",
-          environment="test",
-          opts=pulumi.ResourceOptions(),
-      )
-      self.assertTrue(hasattr(iam, "lambda_role"))
-
-    except Exception as e:
-      print(f"\nDetailed error info:")
-      print(f"Error type: {type(e)}")
-      print(f"Error message: {str(e)}")
-      # Debug mock state if there's an error
-      self.debug_mock_state(sys.modules["pulumi"], "pulumi module")
-      self.debug_mock_state(pulumi, "pulumi direct")
-      import traceback
-      traceback.print_exc()
-      raise
+    iam = IAMComponent(
+        name="test-iam",
+        environment="test",
+        opts=pulumi.ResourceOptions(),
+    )
+    self.assertTrue(hasattr(iam, "lambda_role"))
 
   @patch('os.path.exists')
   @patch('os.walk')
   @patch('zipfile.ZipFile')
   def test_compute_component_initialization(self, mock_zipfile, mock_walk, mock_exists):
-    """FIXED: Test with enhanced error handling"""
+    """Test Compute component initialization"""
     mock_exists.return_value = True
 
-    try:
-      compute = ComputeComponent(
-          name="test-compute",
-          cidr_block="10.3.0.0/16",
-          environment="test",
-          opts=pulumi.ResourceOptions(),
-      )
-      self.assertTrue(hasattr(compute, "vpc"))
-      self.assertTrue(hasattr(compute, "private_subnet_ids"))
-      self.assertTrue(hasattr(compute, "lambda_sg"))
-
-    except Exception as e:
-      print(f"\nDetailed error info:")
-      print(f"Error type: {type(e)}")
-      print(f"Error message: {str(e)}")
-      import traceback
-      traceback.print_exc()
-      raise
+    compute = ComputeComponent(
+        name="test-compute",
+        cidr_block="10.3.0.0/16",
+        environment="test",
+        opts=pulumi.ResourceOptions(),
+    )
+    self.assertTrue(hasattr(compute, "vpc"))
+    self.assertTrue(hasattr(compute, "private_subnet_ids"))
+    self.assertTrue(hasattr(compute, "lambda_sg"))
 
   @patch('os.path.exists')
   @patch('os.walk')
   @patch('zipfile.ZipFile')
   def test_database_component_initialization(self, mock_zipfile, mock_walk, mock_exists):
-    """FIXED: Test with enhanced error handling"""
+    """Test Database component initialization"""
     mock_exists.return_value = True
 
-    try:
-      compute_mock = MockComponentResource()
-      compute_mock.db_sg = MagicMock()
-      compute_mock.db_sg.id = MockOutput("sg-123")
-      compute_mock.private_subnet_ids = MockOutput(["subnet-123"])
+    compute_mock = MockComponentResource()
+    compute_mock.db_sg = MagicMock()
+    compute_mock.db_sg.id = MockOutput("sg-123")
+    compute_mock.private_subnet_ids = MockOutput(["subnet-123"])
 
-      db = DatabaseComponent(
-          name="test-db",
-          environment="test",
-          db_security_group_id=compute_mock.db_sg.id,
-          username="admin",
-          password=MockOutput("passw0rd"),
-          private_subnet_ids=compute_mock.private_subnet_ids,
-          opts=pulumi.ResourceOptions(),
-      )
-      self.assertTrue(hasattr(db, "rds_instance"))
-
-    except Exception as e:
-      print(f"\nDetailed error info:")
-      print(f"Error type: {type(e)}")
-      print(f"Error message: {str(e)}")
-      import traceback
-      traceback.print_exc()
-      raise
+    db = DatabaseComponent(
+        name="test-db",
+        environment="test",
+        db_security_group_id=compute_mock.db_sg.id,
+        username="admin",
+        password=MockOutput("passw0rd"),
+        private_subnet_ids=compute_mock.private_subnet_ids,
+        opts=pulumi.ResourceOptions(),
+    )
+    self.assertTrue(hasattr(db, "rds_instance"))
 
   @patch('os.path.exists')
   @patch('os.walk')
   @patch('zipfile.ZipFile')
   def test_serverless_component_initialization(self, mock_zipfile, mock_walk, mock_exists):
-    """FIXED: Test with enhanced error handling and improved mocking"""
+    """Test Serverless component initialization"""
     # Setup file operation mocks
     mock_exists.return_value = True
     mock_walk.return_value = [
@@ -507,51 +300,41 @@ class TestTapStackComponents(unittest.TestCase):
     mock_zipfile_instance = MagicMock()
     mock_zipfile.return_value.__enter__.return_value = mock_zipfile_instance
 
-    try:
-      iam_mock = MockComponentResource()
-      iam_mock.lambda_role = MagicMock()
-      iam_mock.lambda_role.arn = MockOutput("arn:aws:iam::123:role/test")
+    iam_mock = MockComponentResource()
+    iam_mock.lambda_role = MagicMock()
+    iam_mock.lambda_role.arn = MockOutput("arn:aws:iam::123:role/test")
 
-      compute_mock = MockComponentResource()
-      compute_mock.private_subnet_ids = MockOutput(["subnet-123"])
-      compute_mock.lambda_sg = MagicMock()
-      compute_mock.lambda_sg.id = MockOutput("sg-123")
+    compute_mock = MockComponentResource()
+    compute_mock.private_subnet_ids = MockOutput(["subnet-123"])
+    compute_mock.lambda_sg = MagicMock()
+    compute_mock.lambda_sg.id = MockOutput("sg-123")
 
-      db_mock = MockComponentResource()
-      db_mock.rds_instance = MagicMock()
-      db_mock.rds_instance.endpoint = MockOutput("db-endpoint")
+    db_mock = MockComponentResource()
+    db_mock.rds_instance = MagicMock()
+    db_mock.rds_instance.endpoint = MockOutput("db-endpoint")
 
-      # Create a proper mock resource that will pass the isinstance check
-      mock_depends_resource = MockComponentResource()
+    mock_depends_resource = MockComponentResource()
 
-      serverless = ServerlessComponent(
-          name="test-serverless",
-          environment="test",
-          lambda_role_arn=iam_mock.lambda_role.arn,
-          private_subnet_ids=compute_mock.private_subnet_ids,
-          lambda_security_group_id=compute_mock.lambda_sg.id,
-          rds_endpoint=db_mock.rds_instance.endpoint,
-          db_name=MockOutput("tapdb"),
-          db_username="admin",
-          db_password=MockOutput("passw0rd"),
-          opts=pulumi.ResourceOptions(depends_on=[mock_depends_resource]),
-      )
-      self.assertTrue(hasattr(serverless, "lambda_function"))
-      self.assertTrue(hasattr(serverless, "api"))
-
-    except Exception as e:
-      print(f"\nDetailed error info:")
-      print(f"Error type: {type(e)}")
-      print(f"Error message: {str(e)}")
-      import traceback
-      traceback.print_exc()
-      raise
+    serverless = ServerlessComponent(
+        name="test-serverless",
+        environment="test",
+        lambda_role_arn=iam_mock.lambda_role.arn,
+        private_subnet_ids=compute_mock.private_subnet_ids,
+        lambda_security_group_id=compute_mock.lambda_sg.id,
+        rds_endpoint=db_mock.rds_instance.endpoint,
+        db_name=MockOutput("tapdb"),
+        db_username="admin",
+        db_password=MockOutput("passw0rd"),
+        opts=pulumi.ResourceOptions(depends_on=[mock_depends_resource]),
+    )
+    self.assertTrue(hasattr(serverless, "lambda_function"))
+    self.assertTrue(hasattr(serverless, "api"))
 
   @patch('os.path.exists')
   @patch('os.walk')
   @patch('zipfile.ZipFile')
   def test_tap_stack_initialization(self, mock_zipfile, mock_walk, mock_exists):
-    """FIXED: Test with enhanced error handling"""
+    """Test TapStack initialization"""
     # Setup file operation mocks
     mock_exists.return_value = True
     mock_walk.return_value = [
@@ -561,25 +344,16 @@ class TestTapStackComponents(unittest.TestCase):
     mock_zipfile_instance = MagicMock()
     mock_zipfile.return_value.__enter__.return_value = mock_zipfile_instance
 
-    try:
-      stack = TapStack(
-          name="tap-test",
-          args=self.test_args,
-          opts=pulumi.ResourceOptions(),
-      )
-      self.assertTrue(hasattr(stack, "iam_component"))
-      self.assertTrue(hasattr(stack, "compute_component"))
-      self.assertTrue(hasattr(stack, "database_component"))
-      self.assertTrue(hasattr(stack, "serverless_component"))
-
-    except Exception as e:
-      print(f"\nDetailed error info:")
-      print(f"Error type: {type(e)}")
-      print(f"Error message: {str(e)}")
-      import traceback
-      traceback.print_exc()
-      raise
+    stack = TapStack(
+        name="tap-test",
+        args=self.test_args,
+        opts=pulumi.ResourceOptions(),
+    )
+    self.assertTrue(hasattr(stack, "iam_component"))
+    self.assertTrue(hasattr(stack, "compute_component"))
+    self.assertTrue(hasattr(stack, "database_component"))
+    self.assertTrue(hasattr(stack, "serverless_component"))
 
 
 if __name__ == "__main__":
-  unittest.main(verbosity=2, buffer=True)
+  unittest.main(verbosity=2)
