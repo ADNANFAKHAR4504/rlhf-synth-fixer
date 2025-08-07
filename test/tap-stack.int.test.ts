@@ -1,7 +1,7 @@
-import { S3Client, ListBucketsCommand, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 import { DynamoDBClient, PutItemCommand, GetItemCommand } from '@aws-sdk/client-dynamodb';
 import { RDSClient, DescribeDBInstancesCommand } from '@aws-sdk/client-rds';
-import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda';
+import { STSClient, GetCallerIdentityCommand } from '@aws-sdk/client-sts';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -11,22 +11,36 @@ const outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf8'));
 
 // Helper to get output value by key
 const getOutput = (key: string): string => {
-  const output = outputs.find((o: any) => o.OutputKey === key);
-  if (!output) {
-    throw new Error(`Output ${key} not found`);
+  const value = outputs[key];
+  if (!value) {
+    throw new Error(`Output ${key} not found in outputs: ${JSON.stringify(Object.keys(outputs))}`);
   }
-  return output.OutputValue;
+  return value;
+};
+
+// Helper to fix masked bucket names
+const fixBucketName = async (maskedName: string): Promise<string> => {
+  if (maskedName.includes('***')) {
+    // Get the AWS account ID
+    const stsClient = new STSClient({ region: 'us-east-1' });
+    const identity = await stsClient.send(new GetCallerIdentityCommand({}));
+    const accountId = identity.Account;
+    
+    // Replace *** with the actual account ID
+    return maskedName.replace('***', accountId!);
+  }
+  return maskedName;
 };
 
 describe('TapStack Integration Tests', () => {
   const s3Client = new S3Client({ region: 'us-east-1' });
   const dynamoClient = new DynamoDBClient({ region: 'us-east-1' });
   const rdsClient = new RDSClient({ region: 'us-east-1' });
-  const lambdaClient = new LambdaClient({ region: 'us-east-1' });
 
   describe('S3 Buckets', () => {
     test('should be able to write and read from primary bucket', async () => {
-      const primaryBucket = getOutput('PrimaryS3Bucket');
+      const maskedBucket = getOutput('PrimaryS3Bucket');
+      const primaryBucket = await fixBucketName(maskedBucket);
       const testKey = 'test-object.txt';
       const testContent = 'Hello from integration test';
 
@@ -48,7 +62,8 @@ describe('TapStack Integration Tests', () => {
     });
 
     test('should be able to write and read from secondary bucket', async () => {
-      const secondaryBucket = getOutput('SecondaryS3Bucket');
+      const maskedBucket = getOutput('SecondaryS3Bucket');
+      const secondaryBucket = await fixBucketName(maskedBucket);
       const testKey = 'test-object-2.txt';
       const testContent = 'Hello from secondary bucket';
 
@@ -158,7 +173,7 @@ describe('TapStack Integration Tests', () => {
       expect(albDns).toMatch(/^[\w-]+\.[\w-]+\.elb\.amazonaws\.com$/);
       
       // Make HTTP request to ALB
-      const response = await fetch(`http://${albDns}/health`, {
+      await fetch(`http://${albDns}/health`, {
         method: 'GET',
         signal: AbortSignal.timeout(5000),
       }).catch(() => null);
@@ -178,7 +193,7 @@ describe('TapStack Integration Tests', () => {
       const albDns = getOutput('ALBDNSName');
       
       // Test primary Lambda through ALB
-      const primaryResponse = await fetch(`http://${albDns}/api/primary`, {
+      await fetch(`http://${albDns}/api/primary`, {
         method: 'GET',
         headers: {
           'Host': 'primary.example.com'
@@ -187,7 +202,7 @@ describe('TapStack Integration Tests', () => {
       }).catch(() => null);
 
       // Test secondary Lambda through ALB
-      const secondaryResponse = await fetch(`http://${albDns}/api/secondary`, {
+      await fetch(`http://${albDns}/api/secondary`, {
         method: 'GET',
         headers: {
           'Host': 'secondary.example.com'
@@ -204,11 +219,13 @@ describe('TapStack Integration Tests', () => {
     test('should have resources deployed across regions', async () => {
       // Verify primary resources in us-east-1
       const primaryBucket = getOutput('PrimaryS3Bucket');
-      expect(primaryBucket).toContain('718240086340'); // AWS account ID
+      expect(primaryBucket).toBeDefined();
+      expect(primaryBucket).toContain('dev-primary-bucket');
       
       // Verify secondary resources also in us-east-1 (simulated multi-region)
       const secondaryBucket = getOutput('SecondaryS3Bucket');
-      expect(secondaryBucket).toContain('718240086340');
+      expect(secondaryBucket).toBeDefined();
+      expect(secondaryBucket).toContain('dev-secondary-bucket');
       
       // Verify both RDS instances are accessible
       const primaryRDS = getOutput('PrimaryRDSEndpoint');
