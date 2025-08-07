@@ -1,6 +1,7 @@
-Solution Overview
+## Solution Overview
 This solution provides a complete, production-ready multi-region DynamoDB deployment with proper CloudFormation best practices and extensive use of intrinsic functions for cross-stack references.
 
+```yaml
 AWSTemplateFormatVersion: "2010-09-09"
 Description: "Unified DynamoDB table deployment for multi-region with configurable capacity settings"
 
@@ -357,3 +358,4 @@ Metadata:
         - W1028 # Ignore unreachable Fn::If branch warnings - these are false positives
           # due to linter not understanding resource-level conditions vs intrinsic function conditions
       ignore_bad_template: false
+```
