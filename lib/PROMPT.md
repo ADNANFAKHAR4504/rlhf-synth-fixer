@@ -39,14 +39,16 @@ Create a CDK for Terraform (CDKTF) project using TypeScript or Python, implement
 
 ### Logging and Monitoring
 
-- Configure AWS Config rules to ensure compliance (e.g., S3 public access, KMS usage).
+- Configure CloudWatch logs and alarms for application monitoring.
 - Ensure S3 buckets are private by default and enable access logging.
+- Optionally configure AWS Config rules if no existing configuration recorder exists.
 
 ### Security Controls and Safeguards
 
 - Prevent unauthorized data exfiltration (e.g., restrict outbound internet access).
 - Enforce environment isolation using networking and IAM boundaries.
-- Include automated checks for security posture (e.g., Config, GuardDuty, CloudWatch alarms).
+- Include automated checks for security posture (e.g., GuardDuty, CloudWatch alarms).
+- Optionally include CloudTrail for audit logging if not managed externally.
 
 ## Infrastructure Implementation Style
 
@@ -62,5 +64,3 @@ A single file CDKTF script (main.ts or main.py) that:
 - Successfully runs with cdktf synth and cdktf deploy.
 - Passes manual review and automated compliance checks.
 - Uses CDKTF constructs and logic but keeps everything in one file for simplicity.
-
-
