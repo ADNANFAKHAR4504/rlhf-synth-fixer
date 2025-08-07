@@ -188,7 +188,6 @@ Resources:
   CreateItemRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${Environment}-CreateItemRole'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
