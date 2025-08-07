@@ -274,7 +274,7 @@ class TapStack(ComponentResource):
             opts=ResourceOptions(parent=self),
         )
 
-        # FIXED: Corrected bucket policy format
+        # FIXED: Corrected CloudTrail S3 bucket policy format
         cloudtrail_policy = aws.s3.BucketPolicy(
             f"PROD-cloudtrail-policy-{self.environment_suffix}",
             bucket=self.cloudtrail_bucket.id,
@@ -300,7 +300,7 @@ class TapStack(ComponentResource):
                                 "Effect": "Allow",
                                 "Principal": {"Service": "cloudtrail.amazonaws.com"},
                                 "Action": "s3:PutObject",
-                                "Resource": f"{args[0]}/*",
+                                "Resource": f"{args[0]}/AWSLogs/{args[1]}/*",  # FIXED: Added correct path
                                 "Condition": {
                                     "StringEquals": {
                                         "s3:x-amz-acl": "bucket-owner-full-control",
@@ -314,6 +314,7 @@ class TapStack(ComponentResource):
             ),
             opts=ResourceOptions(parent=self),
         )
+
 
         aws.cloudtrail.Trail(
             f"PROD-cloudtrail-{self.environment_suffix}",
