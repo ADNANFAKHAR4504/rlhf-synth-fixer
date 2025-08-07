@@ -38,6 +38,7 @@ from cdktf_cdktf_provider_aws.s3_bucket_public_access_block import S3BucketPubli
 from cdktf_cdktf_provider_aws.dynamodb_table import DynamodbTable
 from cdktf_cdktf_provider_aws.data_aws_availability_zones import DataAwsAvailabilityZones
 from cdktf_cdktf_provider_aws.data_aws_caller_identity import DataAwsCallerIdentity
+from cdktf_cdktf_provider_aws.data_aws_ami import DataAwsAmi
 
 
 class TapStack(TerraformStack):
@@ -49,10 +50,10 @@ class TapStack(TerraformStack):
 
     # Extract configuration from kwargs
     self.environment_suffix = kwargs.get('environment_suffix', 'prod')
-    self.aws_region = kwargs.get('aws_region', 'us-east-1')
-    self.state_bucket_region = kwargs.get('state_bucket_region', 'us-east-1')
+    self.aws_region = kwargs.get('aws_region', 'us-east-2')
+    self.state_bucket_region = kwargs.get('state_bucket_region', 'us-east-2')
     self.state_bucket = kwargs.get('state_bucket', 'iac-rlhf-tf-states')
-    self.default_tags = kwargs.get('default_tags', {})
+    self.default_tags = kwargs.get('default_tags', {}) or {}
 
     # Infrastructure configuration
     self.environment = "prod"
@@ -64,19 +65,19 @@ class TapStack(TerraformStack):
 
     # Common tags
     self.common_tags = {
-      "Environment": self.environment,
-      "ManagedBy": "terraform",
-      "Project": "production-infrastructure",
-      **self.default_tags
+        "Environment": self.environment,
+        "ManagedBy": "terraform",
+        "Project": "production-infrastructure",
+        **self.default_tags
     }
 
     # Configure AWS Provider
     AwsProvider(self, "aws",
-      region=self.aws_region,
-      default_tags=[{
-        "tags": self.common_tags
-      }]
-    )
+                region=self.aws_region,
+                default_tags=[{
+                    "tags": self.common_tags
+                }]
+                )
 
     # Get current AWS account and availability zones
     self.current = DataAwsCallerIdentity(self, "current")
@@ -152,12 +153,12 @@ class TapStack(TerraformStack):
     """Create VPC with multi-AZ subnets, Internet Gateway, and NAT Gateway"""
 
     # Create VPC
-    self.vpc = Vpc(self, "prod-vpc",
-      cidr_block=self.vpc_cidr,
-      enable_dns_hostnames=True,
-      enable_dns_support=True,
-      tags={**self.common_tags, "Name": "prod-vpc"}
-    )
+    self.vpc = Vpc(self, "prod-vpc-1",
+                   cidr_block=self.vpc_cidr,
+                   enable_dns_hostnames=True,
+                   enable_dns_support=True,
+                   tags={**self.common_tags, "Name": "prod-vpc-1"}
+                   )
 
     # Create public subnets in multiple AZs
     self.public_subnets = []
@@ -368,26 +369,40 @@ class TapStack(TerraformStack):
 
     # User data script for simple web server
     raw_user_data = """#!/bin/bash
-yum update -y
-yum install -y httpd
-systemctl start httpd
-systemctl enable httpd
-echo "<h1>Hello from $(hostname -f)</h1>" > /var/www/html/index.html
-"""
+    yum update -y
+    yum install -y httpd
+    systemctl start httpd
+    systemctl enable httpd
+    echo "<h1>Hello from $(hostname -f)</h1>" > /var/www/html/index.html
+    """
 
     user_data = base64.b64encode(raw_user_data.encode("utf-8")).decode("utf-8")
 
+    self.amazon_linux_ami = DataAwsAmi(self, "amazon-linux-2",
+                                       most_recent=True,
+                                       owners=["amazon"],
+                                       filter=[{
+                                           "name": "name",
+                                           "values": ["amzn2-ami-hvm-*-x86_64-gp2"]
+                                       }, {
+                                           "name": "virtualization-type",
+                                           "values": ["hvm"]
+                                       }]
+                                       )
+
     self.launch_template = LaunchTemplate(self, "launch-template",
-      name="asg-launch-template",
-      image_id="ami-0c02fb55956c7d316",  # Amazon Linux 2 AMI
-      instance_type=self.instance_type,
-      vpc_security_group_ids=[self.instance_security_group.id],
-      iam_instance_profile={
-        "name": self.instance_profile.name
-      },
-      user_data=user_data,
-      tags={**self.common_tags, "Name": "asg-launch-template"}
-    )
+                                          name="asg-launch-template",
+                                          image_id=self.amazon_linux_ami.id,  # Amazon Linux 2 AMI
+                                          instance_type=self.instance_type,
+                                          vpc_security_group_ids=[
+                                              self.instance_security_group.id],
+                                          iam_instance_profile={
+                                              "name": self.instance_profile.name
+                                          },
+                                          user_data=user_data,
+                                          tags={**self.common_tags,
+                                                "Name": "asg-launch-template"}
+                                          )
 
   def create_load_balancer(self):
     """Create Application Load Balancer with target group"""
@@ -518,6 +533,8 @@ This project implements a production-ready AWS infrastructure using CDK for Terr
 - **Auto Scaling**: Automatic scaling based on demand (2-4 instances)
 - **Health Checks**: Load balancer health checks with 30-second intervals
 - **Fault Tolerance**: Auto-recovery from instance failures
+- **Dynamic AMI Selection**: Automatically uses latest Amazon Linux 2 AMI
+- **Defensive Programming**: Robust handling of configuration parameters
 
 ## Deployment Instructions
 
@@ -561,7 +578,7 @@ The following variables can be modified in the stack:
 
 - `environment`: Environment name (default: "prod")
 - `vpc_cidr`: VPC CIDR block (default: "10.0.0.0/16")
-- `region`: AWS region (default: "us-east-1")
+- `region`: AWS region (default: "us-east-2")
 - `instance_type`: EC2 instance type (default: "t3.micro")
 - `min_size`: Minimum ASG size (default: 2)
 - `max_size`: Maximum ASG size (default: 4)
