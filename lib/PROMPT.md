@@ -1,68 +1,86 @@
-You are an expert in AWS infrastructure as code using CDK for Terraform (CDKTF) in Python.
+CDKTF Python Prompt: AWS Serverless Infrastructure Setup
 
-Your task is to create a secure, highly available serverless infrastructure in AWS using the Python CDKTF framework, organized in the following folder structure:
+You are an expert in AWS infrastructure as code using **CDK for Terraform (CDKTF)** in Python.
 
-cpp
-Copy
-Edit
+Your task is to create a secure, highly available serverless infrastructure in AWS using the **Python CDKTF framework**, organized in the following folder structure:
+
+
+
 root/
-├── tap.ts (entrypoint that synthesizes the CDK stack)
+├── tap.py # CDKTF entrypoint
 └── lib/
-    └── tapstack.ts (main stack definition)
-⚙️ Constraints & Requirements:
-Region & VPC:
+        └── tapstack.py # Main stack definition
 
-Deploy to us-west-2 region.
 
-All resources must reside within a VPC spread across multiple Availability Zones.
 
-Compute:
+---
 
-Use AWS Lambda for serverless compute.
+## Requirements & Constraints
 
-Lambdas must be attached to the VPC (i.e., inside private subnets).
+###  Region & Network
+- Deploy to **`us-west-2`**.
+- All resources must reside within a **VPC** distributed across **at least 2 Availability Zones**.
 
-API Integration:
+###  Serverless Compute
+- Use **AWS Lambda** for compute.
+- Attach Lambdas to **private subnets** in the VPC.
 
-Use API Gateway (REST) to expose Lambda functions.
+###  API Gateway
+- Use **REST API Gateway** to expose Lambda endpoints.
+- Enable **X-Ray tracing**.
 
-Enable X-Ray tracing for both API Gateway and Lambda functions.
+###  IAM & Permissions
+- Use **IAM roles** with **least privilege** access for Lambda functions.
+- Allow access to DynamoDB and VPC as needed.
 
-Security & Permissions:
+###  Database
+- Use **DynamoDB** for serverless persistence.
+- Must support **on-demand (PAY_PER_REQUEST)** mode.
+- Enable **encryption at rest** and **point-in-time recovery**.
 
-Use IAM roles to grant the least-privileged access to Lambda functions.
+### Observability
+- Enable **CloudWatch logs** for:
+  - Lambda
+  - API Gateway
+- Set up **CloudWatch alarms** for:
+  - Lambda errors
+  - API 4xx errors
+- Enable **X-Ray tracing** on Lambda & API Gateway.
 
-All data must be encrypted at rest (DynamoDB, logs, etc.).
+###  Deployment
+- Infrastructure must be written in **Python CDKTF**.
+- **Use no more than 5 files** in total to define the stack.
+- All state must be stored in an **S3 backend** (Terraform).
+- Use **Terraform 1.0+** compatible features only.
 
-Database:
+---
 
-Use DynamoDB as a serverless NoSQL database.
+##  Output Expectations
 
-Table must have provisioned or on-demand capacity and encryption.
+- CDKTF Python code that:
+  - Resides in the specified folder structure.
+  - Deploys the entire infrastructure as per above specs.
+- Includes:
+  - VPC, Subnets, Internet Gateway, NAT Gateways
+  - DynamoDB table
+  - Lambda function
+  - REST API Gateway
+  - Logging, Tracing, IAM, Monitoring
+- Uses inline comments explaining key logic.
 
-Monitoring:
+---
 
-Enable CloudWatch logs for both API Gateway and Lambda.
+## Security Best Practices
 
-Also include CloudWatch metrics and alarms where applicable.
+- All data must be **encrypted at rest**.
+- VPC-connected Lambdas only.
+- No public IPs on sensitive resources.
+- IAM follows **least privilege** model.
 
-Deployment Guidelines:
+---
 
-Use Terraform 1.0+ features only (ensure compatibility).
+##  Tip
 
-Entire setup should be in Python CDKTF.
+You may use `TerraformAsset` or external packaging to handle `.zip` files for Lambda code.
 
-Keep all configuration code within no more than 5 files total.
-
-🧾 Output Expected:
-CDKTF Python code for:
-
-tap.ts: Entry point that synthesizes the stack.
-
-lib/tapstack.ts: The actual stack definition (including resources like Lambda, API Gateway, IAM, VPC, DynamoDB).
-
-Ensure the architecture is highly available, secure, and fully serverless.
-
-Include inline comments explaining key decisions and CDK constructs used.
-
-Do not rename or restructure the files beyond what is specified.
+---
