@@ -17,14 +17,12 @@ import pulumi
 import pulumi_aws as aws
 import pulumi_random as random
 
-# Configuration
 config = pulumi.Config()
 project_name = "dualstack-web-app-v5"
 domain_name = config.get("domain_name") or "example.com"
 environment = config.get("environment") or "dev"
 aws_region = config.get("aws:region") or "us-east-1"
 
-# Tags for all resources
 common_tags = {
   "Environment": environment,
   "Project": project_name,
@@ -234,7 +232,6 @@ def create_network_acls(vpc_id: pulumi.Output[str], subnets: list):
     tags={**common_tags, "Name": f"{project_name}-nacl"}
   )
 
-  # Allow all outbound traffic
   aws.ec2.NetworkAclRule(
     f"{project_name}-nacl-egress",
     network_acl_id=nacl.id,
@@ -247,7 +244,6 @@ def create_network_acls(vpc_id: pulumi.Output[str], subnets: list):
     to_port=0
   )
 
-  # Allow all inbound traffic
   aws.ec2.NetworkAclRule(
     f"{project_name}-nacl-ingress",
     network_acl_id=nacl.id,
@@ -260,7 +256,6 @@ def create_network_acls(vpc_id: pulumi.Output[str], subnets: list):
     to_port=0
   )
 
-  # Associate the NACL with all public subnets
   for i, subnet in enumerate(subnets):
     aws.ec2.NetworkAclAssociation(
       f"{project_name}-nacl-assoc-{i}",
@@ -360,14 +355,11 @@ EOF
 
 
 def create_load_balancer(
-    subnets: List[aws.ec2.Subnet],
-    security_group: aws.ec2.SecurityGroup,
-    instances: List[aws.ec2.Instance],
-    vpc_id: pulumi.Output[str]
+  subnets: List[aws.ec2.Subnet],
+  security_group: aws.ec2.SecurityGroup,
+  instances: List[aws.ec2.Instance],
+  vpc_id: pulumi.Output[str]
 ) -> Dict[str, Any]:
-  """
-  Create Application Load Balancer with dual-stack configuration.
-  """
   alb = aws.lb.LoadBalancer(
     f"{project_name}-alb",
     name=f"{project_name}-alb",
@@ -379,6 +371,7 @@ def create_load_balancer(
     enable_deletion_protection=False,
     tags={**common_tags, "Name": f"{project_name}-alb"}
   )
+
   target_group = aws.lb.TargetGroup(
     f"{project_name}-tg",
     name=f"{project_name}-tg",
@@ -390,8 +383,8 @@ def create_load_balancer(
     health_check=aws.lb.TargetGroupHealthCheckArgs(
       enabled=True,
       healthy_threshold=2,
-      unhealthy_threshold=3,
-      timeout=10,
+      unhealthy_threshold=5,
+      timeout=15,
       interval=30,
       path="/",
       matcher="200",
@@ -402,27 +395,27 @@ def create_load_balancer(
   )
   for idx, instance in enumerate(instances):
     aws.lb.TargetGroupAttachment(
-      f"{project_name}-tg-attachment-{idx+1}",
-      target_group_arn=target_group.arn,
-      target_id=instance.private_ip,
-      port=80
+        f"{project_name}-tg-attachment-{idx+1}",
+        target_group_arn=target_group.arn,
+        target_id=instance.private_ip,
+        port=80
     )
   listener = aws.lb.Listener(
-    f"{project_name}-listener",
-    load_balancer_arn=alb.arn,
-    port="80",
-    protocol="HTTP",
-    default_actions=[
-      aws.lb.ListenerDefaultActionArgs(
-        type="forward",
-        target_group_arn=target_group.arn
-      )
-    ]
+      f"{project_name}-listener",
+      load_balancer_arn=alb.arn,
+      port="80",
+      protocol="HTTP",
+      default_actions=[
+          aws.lb.ListenerDefaultActionArgs(
+              type="forward",
+              target_group_arn=target_group.arn
+          )
+      ]
   )
   return {
-    "alb": alb,
-    "target_group": target_group,
-    "listener": listener
+      "alb": alb,
+      "target_group": target_group,
+      "listener": listener
   }
 
 

@@ -29,10 +29,13 @@ def test_integration():
     alb_dns_json = run_command("pulumi stack output alb_dns_name --json")
     alb_dns = json.loads(alb_dns_json)
     url = f"http://{alb_dns}"
-
+    
     print(f"--- Testing URL: {url} ---")
-
-    max_retries = 16
+    
+    print("Waiting 60 seconds for ALB and targets to initialize...")
+    time.sleep(60)
+    
+    max_retries = 12
     response = None
     for i in range(max_retries):
       try:
@@ -50,7 +53,7 @@ def test_integration():
     assert response is not None, "Failed to get any response from the server."
     assert response.status_code == 200
     assert "Dual-Stack Web App" in response.text
-
+    
     print("✅ Integration Test Passed!")
 
   finally:
