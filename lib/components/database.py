@@ -134,6 +134,11 @@ class DatabaseInfrastructure(pulumi.ComponentResource):
       opts=ResourceOptions(parent=self.db_password)
     )
 
+    # --- FIX START ---
+    # Create the monitoring role and get its ARN
+    self.monitoring_role = self._create_monitoring_role(name, tags)
+    # --- FIX END ---
+
     # Create RDS Instance
     self.rds_instance = aws.rds.Instance(
       f"{name}-postgres",
@@ -166,7 +171,10 @@ class DatabaseInfrastructure(pulumi.ComponentResource):
 
       # Monitoring and performance
       monitoring_interval=60,
-      # monitoring_role_arn=self._create_monitoring_role().arn,
+      # --- FIX START ---
+      # Uncomment and provide the ARN of the monitoring role
+      monitoring_role_arn=self.monitoring_role.arn,
+      # --- FIX END ---
       performance_insights_enabled=True,
       performance_insights_retention_period=7,
 
@@ -206,7 +214,10 @@ class DatabaseInfrastructure(pulumi.ComponentResource):
       "db_password_secret_arn": self.db_password.arn
     })
 
-  def _create_monitoring_role(self) -> aws.iam.Role:
+  # --- FIX START ---
+  # Modified _create_monitoring_role to accept name and tags
+  def _create_monitoring_role(self, name: str, tags: dict) -> aws.iam.Role:
+  # --- FIX END ---
     """Create IAM role for RDS Enhanced Monitoring"""
 
     # Trust policy for RDS monitoring
@@ -225,22 +236,25 @@ class DatabaseInfrastructure(pulumi.ComponentResource):
     }
 
     # Create monitoring role
+    # --- FIX START ---
+    # Use the passed 'name' and 'tags' for consistency
     monitoring_role = aws.iam.Role(
-      f"{self._name}-rds-monitoring-role",
-      name=f"{self._name}-rds-monitoring-role",
+      f"{name}-rds-monitoring-role",
+      name=f"{name}-rds-monitoring-role",
       assume_role_policy=pulumi.Output.from_input(trust_policy).apply(
         lambda policy: __import__('json').dumps(policy)
       ),
       tags={
-        **self.tags,
-        "Name": f"{self._name}-rds-monitoring-role"
+        **tags,
+        "Name": f"{name}-rds-monitoring-role"
       },
       opts=ResourceOptions(parent=self)
     )
+    # --- FIX END ---
 
     # Attach AWS managed policy for RDS Enhanced Monitoring
     monitoring_policy_attachment = aws.iam.RolePolicyAttachment(
-      f"{self._name}-rds-monitoring-policy",
+      f"{name}-rds-monitoring-policy", # Use 'name' for consistency
       role=monitoring_role.name,
       policy_arn="arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole",
       opts=ResourceOptions(parent=self)
