@@ -2,7 +2,7 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Comprehensive serverless RESTful API for CRUD operations with DynamoDB, VPC, and API Gateway'
 
 Parameters:
-  EnvironmentSuffix:
+  EnvironmentSuffixName:
     Type: String
     Default: dev
     Description: Environment suffix for resource naming and tagging
@@ -33,9 +33,9 @@ Resources:
       EnableDnsSupport: true
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentSuffix}-serverless-api-vpc'
+          Value: !Sub '${EnvironmentSuffixName}-serverless-api-vpc'
         - Key: Environment
-          Value: !Ref EnvironmentSuffix
+          Value: !Ref EnvironmentSuffixName
         - Key: Project
           Value: 'ServerlessAPI'
 
@@ -45,9 +45,9 @@ Resources:
     Properties:
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentSuffix}-serverless-api-igw'
+          Value: !Sub '${EnvironmentSuffixName}-serverless-api-igw'
         - Key: Environment
-          Value: !Ref EnvironmentSuffix
+          Value: !Ref EnvironmentSuffixName
         - Key: Project
           Value: 'ServerlessAPI'
 
@@ -67,9 +67,9 @@ Resources:
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentSuffix}-public-subnet-1a'
+          Value: !Sub '${EnvironmentSuffixName}-public-subnet-1a'
         - Key: Environment
-          Value: !Ref EnvironmentSuffix
+          Value: !Ref EnvironmentSuffixName
         - Key: Project
           Value: 'ServerlessAPI'
         - Key: Type
@@ -84,9 +84,9 @@ Resources:
       AvailabilityZone: !Select [1, !GetAZs '']
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentSuffix}-private-subnet-1b'
+          Value: !Sub '${EnvironmentSuffixName}-private-subnet-1b'
         - Key: Environment
-          Value: !Ref EnvironmentSuffix
+          Value: !Ref EnvironmentSuffixName
         - Key: Project
           Value: 'ServerlessAPI'
         - Key: Type
@@ -100,9 +100,9 @@ Resources:
       Domain: vpc
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentSuffix}-nat-gateway-eip'
+          Value: !Sub '${EnvironmentSuffixName}-nat-gateway-eip'
         - Key: Environment
-          Value: !Ref EnvironmentSuffix
+          Value: !Ref EnvironmentSuffixName
         - Key: Project
           Value: 'ServerlessAPI'
 
@@ -113,9 +113,9 @@ Resources:
       SubnetId: !Ref PublicSubnet
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentSuffix}-nat-gateway'
+          Value: !Sub '${EnvironmentSuffixName}-nat-gateway'
         - Key: Environment
-          Value: !Ref EnvironmentSuffix
+          Value: !Ref EnvironmentSuffixName
         - Key: Project
           Value: 'ServerlessAPI'
 
@@ -126,9 +126,9 @@ Resources:
       VpcId: !Ref MyVPC
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentSuffix}-public-route-table'
+          Value: !Sub '${EnvironmentSuffixName}-public-route-table'
         - Key: Environment
-          Value: !Ref EnvironmentSuffix
+          Value: !Ref EnvironmentSuffixName
         - Key: Project
           Value: 'ServerlessAPI'
 
@@ -138,9 +138,9 @@ Resources:
       VpcId: !Ref MyVPC
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentSuffix}-private-route-table'
+          Value: !Sub '${EnvironmentSuffixName}-private-route-table'
         - Key: Environment
-          Value: !Ref EnvironmentSuffix
+          Value: !Ref EnvironmentSuffixName
         - Key: Project
           Value: 'ServerlessAPI'
 
@@ -190,9 +190,9 @@ Resources:
           Description: 'HTTP outbound for package downloads'
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentSuffix}-lambda-security-group'
+          Value: !Sub '${EnvironmentSuffixName}-lambda-security-group'
         - Key: Environment
-          Value: !Ref EnvironmentSuffix
+          Value: !Ref EnvironmentSuffixName
         - Key: Project
           Value: 'ServerlessAPI'
 
@@ -200,7 +200,7 @@ Resources:
   ItemsTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: !Sub '${EnvironmentSuffix}-items-table'
+      TableName: !Sub '${EnvironmentSuffixName}-items-table'
       AttributeDefinitions:
         - AttributeName: id
           AttributeType: S
@@ -212,9 +212,9 @@ Resources:
         PointInTimeRecoveryEnabled: true
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentSuffix}-items-table'
+          Value: !Sub '${EnvironmentSuffixName}-items-table'
         - Key: Environment
-          Value: !Ref EnvironmentSuffix
+          Value: !Ref EnvironmentSuffixName
         - Key: Project
           Value: 'ServerlessAPI'
         - Key: Purpose
@@ -224,7 +224,7 @@ Resources:
   CreateItemRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${EnvironmentSuffix}-create-item-role'
+      RoleName: !Sub '${EnvironmentSuffixName}-create-item-role'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -245,7 +245,7 @@ Resources:
                 Resource: !GetAtt ItemsTable.Arn
       Tags:
         - Key: Environment
-          Value: !Ref EnvironmentSuffix
+          Value: !Ref EnvironmentSuffixName
         - Key: Project
           Value: 'ServerlessAPI'
         - Key: Function
@@ -254,7 +254,7 @@ Resources:
   GetItemRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${EnvironmentSuffix}-get-item-role'
+      RoleName: !Sub '${EnvironmentSuffixName}-get-item-role'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -275,7 +275,7 @@ Resources:
                 Resource: !GetAtt ItemsTable.Arn
       Tags:
         - Key: Environment
-          Value: !Ref EnvironmentSuffix
+          Value: !Ref EnvironmentSuffixName
         - Key: Project
           Value: 'ServerlessAPI'
         - Key: Function
@@ -284,7 +284,7 @@ Resources:
   UpdateItemRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${EnvironmentSuffix}-update-item-role'
+      RoleName: !Sub '${EnvironmentSuffixName}-update-item-role'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -306,7 +306,7 @@ Resources:
                 Resource: !GetAtt ItemsTable.Arn
       Tags:
         - Key: Environment
-          Value: !Ref EnvironmentSuffix
+          Value: !Ref EnvironmentSuffixName
         - Key: Project
           Value: 'ServerlessAPI'
         - Key: Function
@@ -315,7 +315,7 @@ Resources:
   DeleteItemRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${EnvironmentSuffix}-delete-item-role'
+      RoleName: !Sub '${EnvironmentSuffixName}-delete-item-role'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -336,7 +336,7 @@ Resources:
                 Resource: !GetAtt ItemsTable.Arn
       Tags:
         - Key: Environment
-          Value: !Ref EnvironmentSuffix
+          Value: !Ref EnvironmentSuffixName
         - Key: Project
           Value: 'ServerlessAPI'
         - Key: Function
@@ -346,12 +346,22 @@ Resources:
   CreateItemFunction:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: !Sub '${EnvironmentSuffix}-create-item'
+      FunctionName: !Sub '${EnvironmentSuffixName}-create-item'
       Runtime: python3.11
       Handler: index.lambda_handler
       Role: !GetAtt CreateItemRole.Arn
-      MemorySize: !FindInMap [EnvironmentConfig, !Ref EnvironmentSuffix, LambdaMemorySize]
-      Timeout: !FindInMap [EnvironmentConfig, !Ref EnvironmentSuffix, LambdaTimeout]
+      MemorySize:
+        !FindInMap [
+          EnvironmentConfig,
+          !Ref EnvironmentSuffixName,
+          LambdaMemorySize,
+        ]
+      Timeout:
+        !FindInMap [
+          EnvironmentConfig,
+          !Ref EnvironmentSuffixName,
+          LambdaTimeout,
+        ]
       VpcConfig:
         SecurityGroupIds:
           - !Ref LambdaSecurityGroup
@@ -488,7 +498,7 @@ Resources:
                   }
       Tags:
         - Key: Environment
-          Value: !Ref EnvironmentSuffix
+          Value: !Ref EnvironmentSuffixName
         - Key: Project
           Value: 'ServerlessAPI'
         - Key: Function
@@ -497,12 +507,22 @@ Resources:
   GetItemFunction:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: !Sub '${EnvironmentSuffix}-get-item'
+      FunctionName: !Sub '${EnvironmentSuffixName}-get-item'
       Runtime: python3.11
       Handler: index.lambda_handler
       Role: !GetAtt GetItemRole.Arn
-      MemorySize: !FindInMap [EnvironmentConfig, !Ref EnvironmentSuffix, LambdaMemorySize]
-      Timeout: !FindInMap [EnvironmentConfig, !Ref EnvironmentSuffix, LambdaTimeout]
+      MemorySize:
+        !FindInMap [
+          EnvironmentConfig,
+          !Ref EnvironmentSuffixName,
+          LambdaMemorySize,
+        ]
+      Timeout:
+        !FindInMap [
+          EnvironmentConfig,
+          !Ref EnvironmentSuffixName,
+          LambdaTimeout,
+        ]
       VpcConfig:
         SecurityGroupIds:
           - !Ref LambdaSecurityGroup
@@ -607,7 +627,7 @@ Resources:
                   }
       Tags:
         - Key: Environment
-          Value: !Ref EnvironmentSuffix
+          Value: !Ref EnvironmentSuffixName
         - Key: Project
           Value: 'ServerlessAPI'
         - Key: Function
@@ -616,12 +636,22 @@ Resources:
   UpdateItemFunction:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: !Sub '${EnvironmentSuffix}-update-item'
+      FunctionName: !Sub '${EnvironmentSuffixName}-update-item'
       Runtime: python3.11
       Handler: index.lambda_handler
       Role: !GetAtt UpdateItemRole.Arn
-      MemorySize: !FindInMap [EnvironmentConfig, !Ref EnvironmentSuffix, LambdaMemorySize]
-      Timeout: !FindInMap [EnvironmentConfig, !Ref EnvironmentSuffix, LambdaTimeout]
+      MemorySize:
+        !FindInMap [
+          EnvironmentConfig,
+          !Ref EnvironmentSuffixName,
+          LambdaMemorySize,
+        ]
+      Timeout:
+        !FindInMap [
+          EnvironmentConfig,
+          !Ref EnvironmentSuffixName,
+          LambdaTimeout,
+        ]
       VpcConfig:
         SecurityGroupIds:
           - !Ref LambdaSecurityGroup
@@ -792,7 +822,7 @@ Resources:
                   }
       Tags:
         - Key: Environment
-          Value: !Ref EnvironmentSuffix
+          Value: !Ref EnvironmentSuffixName
         - Key: Project
           Value: 'ServerlessAPI'
         - Key: Function
@@ -801,12 +831,22 @@ Resources:
   DeleteItemFunction:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: !Sub '${EnvironmentSuffix}-delete-item'
+      FunctionName: !Sub '${EnvironmentSuffixName}-delete-item'
       Runtime: python3.11
       Handler: index.lambda_handler
       Role: !GetAtt DeleteItemRole.Arn
-      MemorySize: !FindInMap [EnvironmentConfig, !Ref EnvironmentSuffix, LambdaMemorySize]
-      Timeout: !FindInMap [EnvironmentConfig, !Ref EnvironmentSuffix, LambdaTimeout]
+      MemorySize:
+        !FindInMap [
+          EnvironmentConfig,
+          !Ref EnvironmentSuffixName,
+          LambdaMemorySize,
+        ]
+      Timeout:
+        !FindInMap [
+          EnvironmentConfig,
+          !Ref EnvironmentSuffixName,
+          LambdaTimeout,
+        ]
       VpcConfig:
         SecurityGroupIds:
           - !Ref LambdaSecurityGroup
@@ -917,7 +957,7 @@ Resources:
                   }
       Tags:
         - Key: Environment
-          Value: !Ref EnvironmentSuffix
+          Value: !Ref EnvironmentSuffixName
         - Key: Project
           Value: 'ServerlessAPI'
         - Key: Function
@@ -927,14 +967,14 @@ Resources:
   ItemsRestApi:
     Type: AWS::ApiGateway::RestApi
     Properties:
-      Name: !Sub '${EnvironmentSuffix}-items-api'
+      Name: !Sub '${EnvironmentSuffixName}-items-api'
       Description: 'Serverless RESTful API for managing data entities with full CRUD operations'
       EndpointConfiguration:
         Types:
           - REGIONAL
       Tags:
         - Key: Environment
-          Value: !Ref EnvironmentSuffix
+          Value: !Ref EnvironmentSuffixName
         - Key: Project
           Value: 'ServerlessAPI'
 
@@ -1114,12 +1154,12 @@ Resources:
       - ItemOptionsMethod
     Properties:
       RestApiId: !Ref ItemsRestApi
-      StageName: !Ref EnvironmentSuffix
+      StageName: !Ref EnvironmentSuffixName
 
 Outputs:
   ApiGatewayInvokeURL:
     Description: URL for the deployed REST API
-    Value: !Sub 'https://${ItemsRestApi}.execute-api.${AWS::Region}.amazonaws.com/${EnvironmentSuffix}'
+    Value: !Sub 'https://${ItemsRestApi}.execute-api.${AWS::Region}.amazonaws.com/${EnvironmentSuffixName}'
     Export:
       Name: !Sub '${AWS::StackName}-ApiGatewayURL'
 
@@ -1161,6 +1201,6 @@ Outputs:
 
   Environment:
     Description: Environment name used for this deployment
-    Value: !Ref EnvironmentSuffix
+    Value: !Ref EnvironmentSuffixName
     Export:
       Name: !Sub '${AWS::StackName}-Environment'
