@@ -17,7 +17,7 @@ terraform {
  * - Consider using a DynamoDB table for state locking and consistency (especially in team environments).
  */
 
- # npm run tf:init -backend-config=backend.conf
+  # npm run tf:init -backend-config=backend.conf
   backend "s3" {
     use_lockfile = true
   }
@@ -26,6 +26,10 @@ terraform {
     aws = {
       source  = "hashicorp/aws"
       version = "~> 5.0"
+    }
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.0"
     }
   }
 }
@@ -38,6 +42,9 @@ provider "aws" {
 }
 
 module "s3" {
-  source      = "../lib/modules"
-  bucket_name = var.s3_bucket_name
+  source       = "../lib/modules"
+  bucket_name  = var.s3_bucket_name
+  environment  = var.environment_suffix
+  project_name = var.stack_name
+  tags         = var.default_tags
 }
