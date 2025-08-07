@@ -40,7 +40,8 @@
       "Description": "Master password for RDS instance",
       "MinLength": 8,
       "MaxLength": 41,
-      "AllowedPattern": "^[a-zA-Z0-9]*$"
+      "AllowedPattern": "^[a-zA-Z0-9!@#$%^&*()_+-=]*$",
+      "ConstraintDescription": "Must be 8-41 characters long and contain alphanumeric characters and symbols"
     }
   },
   "Mappings": {
@@ -797,6 +798,7 @@
     "RDSInstance": {
       "Type": "AWS::RDS::DBInstance",
       "DeletionPolicy": "Snapshot",
+      "UpdateReplacePolicy": "Snapshot",
       "Properties": {
         "DBInstanceIdentifier": {
           "Fn::Sub": "${AWS::StackName}-mysql-db-${EnvironmentSuffix}"
@@ -871,9 +873,7 @@
             }
           ],
           "UserData": {
-            "Fn::Base64": {
-              "Fn::Sub": "#!/bin/bash\nyum update -y\nyum install -y amazon-cloudwatch-agent\n\n# Install and configure CloudWatch agent\ncat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << 'EOF'\n{\n  \"agent\": {\n    \"metrics_collection_interval\": 60,\n    \"run_as_user\": \"cwagent\"\n  },\n  \"logs\": {\n    \"logs_collected\": {\n      \"files\": {\n        \"collect_list\": [\n          {\n            \"file_path\": \"/var/log/messages\",\n            \"log_group_name\": \"/aws/ec2/webapp\",\n            \"log_stream_name\": \"{instance_id}/messages\"\n          }\n        ]\n      }\n    }\n  },\n  \"metrics\": {\n    \"namespace\": \"WebApp/EC2\",\n    \"metrics_collected\": {\n      \"cpu\": {\n        \"measurement\": [\n          \"cpu_usage_idle\",\n          \"cpu_usage_iowait\",\n          \"cpu_usage_user\",\n          \"cpu_usage_system\"\n        ],\n        \"metrics_collection_interval\": 60\n      },\n      \"disk\": {\n        \"measurement\": [\n          \"used_percent\"\n        ],\n        \"metrics_collection_interval\": 60,\n        \"resources\": [\n          \"*\"\n        ]\n      },\n      \"mem\": {\n        \"measurement\": [\n          \"mem_used_percent\"\n        ],\n        \"metrics_collection_interval\": 60\n      }\n    }\n  }\n}\nEOF\n\n# Start CloudWatch agent\n/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s\n\n# Install web server (example)\nyum install -y httpd\nsystemctl start httpd\nsystemctl enable httpd\n\n# Create simple index page\necho \"<h1>Web Application Server</h1><p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p>\" > /var/www/html/index.html\n"
-            }
+            "Fn::Base64": "#!/bin/bash\nyum update -y\nyum install -y amazon-cloudwatch-agent\n\n# Install and configure CloudWatch agent\ncat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << 'EOF'\n{\n  \"agent\": {\n    \"metrics_collection_interval\": 60,\n    \"run_as_user\": \"cwagent\"\n  },\n  \"logs\": {\n    \"logs_collected\": {\n      \"files\": {\n        \"collect_list\": [\n          {\n            \"file_path\": \"/var/log/messages\",\n            \"log_group_name\": \"/aws/ec2/webapp\",\n            \"log_stream_name\": \"{instance_id}/messages\"\n          }\n        ]\n      }\n    }\n  },\n  \"metrics\": {\n    \"namespace\": \"WebApp/EC2\",\n    \"metrics_collected\": {\n      \"cpu\": {\n        \"measurement\": [\n          \"cpu_usage_idle\",\n          \"cpu_usage_iowait\",\n          \"cpu_usage_user\",\n          \"cpu_usage_system\"\n        ],\n        \"metrics_collection_interval\": 60\n      },\n      \"disk\": {\n        \"measurement\": [\n          \"used_percent\"\n        ],\n        \"metrics_collection_interval\": 60,\n        \"resources\": [\n          \"*\"\n        ]\n      },\n      \"mem\": {\n        \"measurement\": [\n          \"mem_used_percent\"\n        ],\n        \"metrics_collection_interval\": 60\n      }\n    }\n  }\n}\nEOF\n\n# Start CloudWatch agent\n/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s\n\n# Install web server (example)\nyum install -y httpd\nsystemctl start httpd\nsystemctl enable httpd\n\n# Create simple index page\necho \"<h1>Web Application Server</h1><p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p>\" > /var/www/html/index.html\n"
           },
           "TagSpecifications": [
             {
@@ -1241,6 +1241,7 @@
         },
         "IncludeGlobalServiceEvents": true,
         "IsMultiRegionTrail": true,
+        "IsLogging": true,
         "EnableLogFileValidation": true,
         "Tags": [
           {
