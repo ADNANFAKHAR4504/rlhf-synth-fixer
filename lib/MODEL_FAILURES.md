@@ -5,6 +5,7 @@ This document analyzes the specific failures and issues encountered when impleme
 ## Task Requirements Recap
 
 **Original Task**: Create a security group with:
+
 - Name: `WebOnlyIngressSG`
 - Inbound rule: HTTP (port 80) from CIDR `203.0.113.0/24`
 - Outbound rules: Block all outbound traffic
@@ -15,13 +16,16 @@ This document analyzes the specific failures and issues encountered when impleme
 ## Critical Failures Identified
 
 ### 1. **Incomplete Stack Structure**
+
 **Problem**: Models often provide isolated security group code without proper CDK stack structure
+
 - Missing proper stack class definition
 - No environment suffix handling
 - No resource naming conventions
 - Missing CDK app entry point
 
 **Actual Implementation**: Complete stack with environment support
+
 ```python
 class TapStack(cdk.Stack):
     def __init__(self, scope: Construct, construct_id: str, props: Optional[TapStackProps] = None, **kwargs):
@@ -30,12 +34,15 @@ class TapStack(cdk.Stack):
 ```
 
 ### 2. **Security Group Outbound Rule Misunderstanding**
+
 **Problem**: Models frequently misunderstand CDK's `allow_all_outbound=False` behavior
+
 - Expecting protocol `-1` for "all traffic"
 - Not understanding CDK creates `icmp` protocol with restrictive ports
 - Trying to add explicit egress rules when not needed
 
-**Actual CDK Behavior**: 
+**Actual CDK Behavior**:
+
 ```yaml
 # CDK creates this when allow_all_outbound=False
 SecurityGroupEgress:
@@ -45,19 +52,23 @@ SecurityGroupEgress:
 ```
 
 **Model Expectation** (Wrong):
+
 ```yaml
 # Models often expect this
 SecurityGroupEgress:
-  - IpProtocol: -1  # This is incorrect
+  - IpProtocol: -1 # This is incorrect
 ```
 
 ### 3. **VPC Creation Requirements**
+
 **Problem**: Models often assume VPC exists or create minimal VPC
+
 - Not creating complete VPC with subnets
 - Missing DNS settings and proper configuration
 - No environment-aware naming
 
 **Actual Implementation**: Complete VPC with subnets
+
 ```python
 self.vpc = ec2.Vpc(
     self, "VPC",
@@ -74,12 +85,15 @@ self.vpc = ec2.Vpc(
 ```
 
 ### 4. **Integration Test Failures**
+
 **Problem**: Models create tests that don't match actual AWS behavior
+
 - Expecting `EnableDnsHostnames` and `EnableDnsSupport` to always be present
 - Not accounting for AWS region differences
 - Expecting protocol `-1` instead of `icmp`
 
 **Actual Test Fixes**:
+
 ```python
 # Conditional check for DNS settings (not always present)
 if 'EnableDnsHostnames' in vpc:
@@ -90,12 +104,15 @@ self.assertEqual(outbound_rule['IpProtocol'], 'icmp')
 ```
 
 ### 5. **Environment Naming Issues**
+
 **Problem**: Models use hardcoded names instead of environment-aware naming
+
 - Static resource names cause conflicts
 - No support for multiple environments
 - Missing environment suffix handling
 
 **Actual Implementation**: Dynamic naming
+
 ```python
 def resource_name(resource: str) -> str:
     return f"tap-{self.environment_suffix}-{resource}"
@@ -104,12 +121,15 @@ def resource_name(resource: str) -> str:
 ```
 
 ### 6. **Missing Stack Outputs**
+
 **Problem**: Models don't provide outputs needed for integration tests
+
 - No VPC ID output
 - No Security Group ID output
 - Integration tests fail due to missing outputs
 
 **Actual Implementation**: Required outputs
+
 ```python
 cdk.CfnOutput(self, "VpcId", value=self.vpc.vpc_id, description="VPC ID for integration tests")
 cdk.CfnOutput(self, "SecurityGroupId", value=self.security_group.security_group_id, description="Security Group ID for integration tests")
@@ -120,6 +140,7 @@ cdk.CfnOutput(self, "SecurityGroupId", value=self.security_group.security_group_
 ### ❌ **Typical Model Response Issues**:
 
 1. **Basic Security Group Only**:
+
 ```python
 # Models often provide just this basic structure
 security_group = ec2.SecurityGroup(
@@ -130,6 +151,7 @@ security_group = ec2.SecurityGroup(
 ```
 
 2. **Incorrect Outbound Rule Expectations**:
+
 ```python
 # Models expect -1 protocol but CDK creates icmp
 def test_outbound_rules():
@@ -137,18 +159,21 @@ def test_outbound_rules():
 ```
 
 3. **Hardcoded Resource Names**:
+
 ```python
 # Models use static names
 security_group_name="WebOnlyIngressSG"  # No environment support
 ```
 
 4. **Missing VPC Creation**:
+
 ```python
 # Models assume VPC exists
 vpc = ec2.Vpc.from_lookup(self, "VPC", vpc_id="vpc-12345")
 ```
 
 5. **No Integration Test Support**:
+
 ```python
 # Models don't provide outputs needed for integration tests
 # Missing: cdk.CfnOutput for VPC and Security Group IDs
@@ -157,6 +182,7 @@ vpc = ec2.Vpc.from_lookup(self, "VPC", vpc_id="vpc-12345")
 ### ✅ **Actual Implementation Approach**:
 
 1. **Complete Stack Structure**:
+
 ```python
 class TapStack(cdk.Stack):
     def __init__(self, scope: Construct, construct_id: str, props: Optional[TapStackProps] = None, **kwargs):
@@ -165,6 +191,7 @@ class TapStack(cdk.Stack):
 ```
 
 2. **Correct Security Group Configuration**:
+
 ```python
 self.security_group = ec2.SecurityGroup(
     self, "WebOnlyIngressSG",
@@ -176,6 +203,7 @@ self.security_group = ec2.SecurityGroup(
 ```
 
 3. **Proper Test Expectations**:
+
 ```python
 def test_security_group_blocks_all_outbound_traffic(self, qa_stack_fixture):
     template = Template.from_stack(qa_stack_fixture)
@@ -192,21 +220,25 @@ def test_security_group_blocks_all_outbound_traffic(self, qa_stack_fixture):
 ## Key Issues Encountered and Fixed
 
 ### 1. **CDK Outbound Rule Behavior**
+
 - **Issue**: Expected protocol `-1` for "all traffic"
 - **Reality**: CDK creates `icmp` protocol with restrictive ports when `allow_all_outbound=False`
 - **Fix**: Updated tests to expect `icmp` protocol
 
 ### 2. **VPC DNS Settings**
+
 - **Issue**: Tests expected `EnableDnsHostnames` and `EnableDnsSupport` to always be present
 - **Reality**: These properties may not be present in all AWS regions
 - **Fix**: Added conditional checks in integration tests
 
 ### 3. **Environment Naming**
+
 - **Issue**: Hardcoded resource names caused conflicts
 - **Reality**: Need environment-aware naming for multi-environment support
 - **Fix**: Implemented `resource_name()` helper function
 
 ### 4. **Integration Test Dependencies**
+
 - **Issue**: Integration tests failed due to missing stack outputs
 - **Reality**: Tests need VPC and Security Group IDs from CDK outputs
 - **Fix**: Added required `CfnOutput` statements
