@@ -840,3 +840,4 @@ echo 'MinProtocol = TLSv1.2' >> /etc/ssl/openssl.cnf
               arn=topic.arn,
               opts=ResourceOptions(parent=self, provider=provider),
           )
+
