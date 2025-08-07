@@ -14,13 +14,16 @@
 """TAP Stack module for CDKTF Python infrastructure."""
 
 import json
+import os
 from typing import Dict
-from cdktf import TerraformStack, S3Backend, TerraformOutput
+from cdktf import TerraformStack, S3Backend, TerraformOutput, App
 from constructs import Construct
 from cdktf_cdktf_provider_aws.provider import AwsProvider, AwsProviderDefaultTags
 from cdktf_cdktf_provider_aws.s3_bucket import S3Bucket
 from cdktf_cdktf_provider_aws.s3_bucket_server_side_encryption_configuration import (
-    S3BucketServerSideEncryptionConfigurationA
+  S3BucketServerSideEncryptionConfigurationA,
+  S3BucketServerSideEncryptionConfigurationRuleA,
+  S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultA
 )
 from cdktf_cdktf_provider_aws.s3_bucket_versioning import S3BucketVersioningA
 from cdktf_cdktf_provider_aws.s3_bucket_policy import S3BucketPolicy
@@ -40,52 +43,54 @@ class TapStack(TerraformStack):
         **kwargs
     ):
         """Initialize the TAP stack with secure AWS infrastructure."""
-        super().__init__(scope, construct_id)
+    super().__init__(scope, construct_id)
 
-        # Extract configuration from kwargs
+    # Extract configuration from kwargs
         environment_suffix = kwargs.get('environment_suffix', 'dev')
-        aws_region = kwargs.get('aws_region', 'us-east-1')
-        state_bucket_region = kwargs.get('state_bucket_region', 'us-east-1')
+        # aws_region = kwargs.get('aws_region', 'us-east-1')
+        # state_bucket_region = kwargs.get('state_bucket_region', 'us-east-1')
+        aws_region = "eu-central-1"
+        state_bucket_region = os.getenv("TERRAFORM_STATE_BUCKET_REGION", "us-east-1")
         state_bucket = kwargs.get('state_bucket', 'iac-rlhf-tf-states')
         default_tags = kwargs.get('default_tags', {})
-        bucket_prefix = kwargs.get('bucket_prefix', 'secure-data')
+        bucket_prefix = kwargs.get('bucket_prefix', 'terraform-cdkft-1-secure-data')
 
-        # Configure AWS Provider - FIXED: proper default_tags shape
+        # Configure AWS Provider
         provider_config = {
-            "region": aws_region,
+          "region": aws_region,
         }
         if default_tags:
-            # Extract the actual tags from the nested structure
-            tags_dict = default_tags.get("tags", default_tags)
-            provider_config["default_tags"] = [AwsProviderDefaultTags(tags=tags_dict)]
+          # Extract the actual tags from the nested structure
+          tags_dict = default_tags.get("tags", default_tags)
+          provider_config["default_tags"] = [AwsProviderDefaultTags(tags=tags_dict)]
 
         AwsProvider(self, "aws", **provider_config)
 
         # Configure S3 Backend with native state locking
         S3Backend(
-            self,
-            bucket=state_bucket,
-            key=f"{environment_suffix}/{construct_id}.tfstate",
-            region=state_bucket_region,
-            encrypt=True,
+          self,
+          bucket=state_bucket,
+          key=f"{environment_suffix}/{construct_id}.tfstate",
+          region=state_bucket_region,
+          encrypt=True,
         )
 
         # S3 backend with encryption provides built-in state locking
 
         # Configuration for secure infrastructure
         self.bucket_names = {
-            "data": f"{bucket_prefix}-bucket",
-            "logs": f"{bucket_prefix}-logs-bucket"
+          "data": f"{bucket_prefix}-bucket",
+          "logs": f"{bucket_prefix}-logs-bucket"
         }
 
         # Common tags for all resources - aids in auditability and compliance
-        self.common_tags = {
-            "Environment": environment_suffix,
-            "Owner": "security-team",
-            "SecurityLevel": "high",
-            "ManagedBy": "cdktf",
-            "Purpose": "secure-s3-iam-infrastructure",
-            "ComplianceRequired": "true"
+    self.common_tags = {
+          "Environment": environment_suffix,
+          "Owner": "security-team",
+          "SecurityLevel": "high",
+          "ManagedBy": "cdktf",
+          "Purpose": "secure-s3-iam-infrastructure",
+          "ComplianceRequired": "true"
         }
 
         # Create secure S3 buckets with comprehensive security controls
@@ -104,66 +109,68 @@ class TapStack(TerraformStack):
         for bucket_type, bucket_name in self.bucket_names.items():
             # Create S3 bucket with security tags
             bucket = S3Bucket(
-                self, f"secure-bucket-{bucket_type}",
-                bucket=bucket_name,
-                tags={**self.common_tags, "BucketType": bucket_type}
+              self, f"terraform-cdkft-secure-bucket-1-{bucket_type}",
+              bucket=bucket_name,
+              tags={**self.common_tags, "BucketType": bucket_type}
             )
 
-            # Configure server-side encryption with AES-256 - FIXED: simplified to dictionary pattern
+            # Configure server-side encryption with AES-256
             S3BucketServerSideEncryptionConfigurationA(
-                self, f"bucket-encryption-{bucket_type}",
-                bucket=bucket.id,
-                rule=[{
-                    "apply_server_side_encryption_by_default": {
-                        "sse_algorithm": "AES256"
-                    },
-                    "bucket_key_enabled": False
-                }]
+              self, f"bucket-encryption-{bucket_type}",
+              bucket=bucket.id,
+              rule=[
+                S3BucketServerSideEncryptionConfigurationRuleA(
+                  apply_server_side_encryption_by_default=S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultA(
+                    sse_algorithm="AES256"
+                  ),
+                  bucket_key_enabled=False
+                )
+              ])
             )
 
             # Enable versioning for data recovery and compliance
             S3BucketVersioningA(
-                self, f"bucket-versioning-{bucket_type}",
-                bucket=bucket.id,
-                versioning_configuration={"status": "Enabled"}
+              self, f"bucket-versioning-{bucket_type}",
+              bucket=bucket.id,
+              versioning_configuration={"status": "Enabled"}
             )
 
             # Block all public access - defense in depth
             S3BucketPublicAccessBlock(
-                self, f"bucket-public-access-block-{bucket_type}",
-                bucket=bucket.id,
-                block_public_acls=True,
-                block_public_policy=True,
-                ignore_public_acls=True,
-                restrict_public_buckets=True
-            )
+              self, f"bucket-public-access-block-{bucket_type}",
+              bucket=bucket.id,
+      block_public_acls=True,
+      block_public_policy=True,
+      ignore_public_acls=True,
+      restrict_public_buckets=True
+    )
 
             # Create bucket policy enforcing security controls
             policy = {
-                "Version": "2012-10-17",
-                "Statement": [
-                    {
-                        "Sid": "DenyInsecureConnections",
-                        "Effect": "Deny",
-                        "Principal": "*",
-                        "Action": "s3:*",
-                        "Resource": [
-                            f"arn:aws:s3:::{bucket.bucket}",
-                            f"arn:aws:s3:::{bucket.bucket}/*"
-                        ],
-                        "Condition": {"Bool": {"aws:SecureTransport": "false"}}
-                    },
-                    {
-                        "Sid": "DenyUnencryptedObjectUploads",
-                        "Effect": "Deny",
-                        "Principal": "*",
-                        "Action": "s3:PutObject",
-                        "Resource": f"arn:aws:s3:::{bucket.bucket}/*",
-                        "Condition": {
-                            "StringNotEquals": {"s3:x-amz-server-side-encryption": "AES256"}
-                        }
-                    }
-                ]
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Sid": "DenyInsecureConnections",
+                  "Effect": "Deny",
+                  "Principal": "*",
+                  "Action": "s3:*",
+                  "Resource": [
+                    f"arn:aws:s3:::{bucket.bucket}",
+                    f"arn:aws:s3:::{bucket.bucket}/*"
+                  ],
+                  "Condition": {"Bool": {"aws:SecureTransport": "false"}}
+                },
+                {
+                  "Sid": "DenyUnencryptedObjectUploads",
+                  "Effect": "Deny",
+                  "Principal": "*",
+                  "Action": "s3:PutObject",
+                  "Resource": f"arn:aws:s3:::{bucket.bucket}/*",
+                  "Condition": {
+                    "StringNotEquals": {"s3:x-amz-server-side-encryption": "AES256"}
+                  }
+                }
+              ]
             }
 
             S3BucketPolicy(
@@ -294,14 +301,14 @@ class TapStack(TerraformStack):
         logs_role = IamRole(
             self, "logs-reader-role",
             name=f"logs-reader-role-{environment_suffix}",  # FIXED: namespaced with environment
-            assume_role_policy=json.dumps({
-                "Version": "2012-10-17",
-                "Statement": [{
-                    "Effect": "Allow",
-                    "Principal": {"Service": "ec2.amazonaws.com"},
+      assume_role_policy=json.dumps({
+        "Version": "2012-10-17",
+        "Statement": [{
+          "Effect": "Allow",
+          "Principal": {"Service": "ec2.amazonaws.com"},
                     "Action": "sts:AssumeRole"  # FIXED: removed SecureTransport condition
-                }]
-            }),
+        }]
+      }),
             tags={**self.common_tags, "RoleType": "logs-reader"}
         )
 
@@ -381,10 +388,46 @@ class TapStack(TerraformStack):
 
         # Compliance tags output
         TerraformOutput(
-            self, "compliance-tags",
-            value=json.dumps(self.common_tags),
-            description="Common tags applied to all resources for compliance"
+          self, "compliance-tags",
+          value=json.dumps(self.common_tags),
+          description="Common tags applied to all resources for compliance"
         )
+
+
+environment_suffix = os.getenv("ENVIRONMENT_SUFFIX", "dev")
+state_bucket = os.getenv("TERRAFORM_STATE_BUCKET", "iac-rlhf-tf-states")
+state_bucket_region = os.getenv("TERRAFORM_STATE_BUCKET_REGION", "us-east-1")
+aws_region = os.getenv("AWS_REGION", "us-east-1")
+repository_name = os.getenv("REPOSITORY", "unknown")
+commit_author = os.getenv("COMMIT_AUTHOR", "unknown")
+
+# Calculate the stack name
+stack_name = f"TapStack{environment_suffix}"
+
+# default_tags is structured in adherence to the AwsProvider default_tags interface
+default_tags = {
+    "tags": {
+        "Environment": environment_suffix,
+        "Repository": repository_name,
+        "Author": commit_author,
+    }
+}
+
+  app = App()
+
+# Create the TapStack with the calculated properties
+TapStack(
+    app,
+    stack_name,
+    environment_suffix=environment_suffix,
+    state_bucket=state_bucket,
+    state_bucket_region=state_bucket_region,
+    aws_region=aws_region,
+    default_tags=default_tags,
+)
+
+# Synthesize the app to generate the Terraform configuration
+  app.synth()
 ```
 
 ## Summary of All Fixes Applied
