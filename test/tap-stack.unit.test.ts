@@ -37,7 +37,7 @@ describe('TapStack CloudFormation Template', () => {
       const envParam = template.Parameters.EnvironmentSuffix;
       expect(envParam.Type).toBe('String');
       expect(envParam.Default).toBe('dev');
-      expect(envParam.ConstraintDescription).toBe('Must be one of dev, staging, or prod');
+      expect(envParam.ConstraintDescription).toBe('Must be one of dev, staging, prod, or pr followed by numbers (e.g., pr553)');
     });
   });
 

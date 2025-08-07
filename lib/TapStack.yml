@@ -29,8 +29,9 @@ Parameters:
   EnvironmentSuffix:
     Type: String
     Description: Environment suffix for resource naming and configuration
+    AllowedPattern: ^(dev|staging|prod|pr[0-9]+)$
     Default: dev
-    ConstraintDescription: Must be one of dev, staging, or prod
+    ConstraintDescription: Must be one of dev, staging, prod, or pr followed by numbers (e.g., pr553)
 
   ArtifactBucketName:
     Type: String
