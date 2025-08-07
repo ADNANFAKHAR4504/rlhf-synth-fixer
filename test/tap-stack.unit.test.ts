@@ -51,6 +51,10 @@ describe('CloudFormation Template Unit Tests', () => {
     const templatePath = path.join(__dirname, '..', 'lib', 'TapStack.yml');
     const templateContent = fs.readFileSync(templatePath, 'utf8');
     template = yaml.load(templateContent, { schema: CloudFormationSchema });
+    
+    // Validate template is properly loaded
+    expect(template).toBeDefined();
+    expect(typeof template).toBe('object');
   });
 
   describe('Template Structure', () => {
@@ -108,15 +112,22 @@ describe('CloudFormation Template Unit Tests', () => {
     test('should have correct Lambda configurations', () => {
       const envConfig = template.Mappings.EnvironmentConfig;
       
-      // Dev and staging should have same config
+      // Dev and staging should have same config (minimum recommended)
       expect(envConfig.dev.LambdaMemorySize).toBe(256);
       expect(envConfig.dev.LambdaTimeout).toBe(30);
       expect(envConfig.staging.LambdaMemorySize).toBe(256);
       expect(envConfig.staging.LambdaTimeout).toBe(30);
       
-      // Prod should have more memory
+      // Prod should have more memory for better performance
       expect(envConfig.prod.LambdaMemorySize).toBe(512);
       expect(envConfig.prod.LambdaTimeout).toBe(30);
+      
+      // Validate all environments have required properties
+      Object.keys(envConfig).forEach(env => {
+        expect(envConfig[env].LambdaMemorySize).toBeGreaterThanOrEqual(128);
+        expect(envConfig[env].LambdaTimeout).toBeGreaterThan(0);
+        expect(envConfig[env].LambdaTimeout).toBeLessThanOrEqual(900); // AWS Lambda max timeout
+      });
     });
   });
 
@@ -271,6 +282,10 @@ describe('CloudFormation Template Unit Tests', () => {
       expect(func.Type).toBe('AWS::Lambda::Function');
       expect(func.Properties.Runtime).toBe('python3.11');
       expect(func.Properties.Handler).toBe('index.lambda_handler');
+      
+      // Validate runtime meets minimum requirement (Python 3.9+)
+      const runtimeVersion = parseFloat(func.Properties.Runtime.replace('python', ''));
+      expect(runtimeVersion).toBeGreaterThanOrEqual(3.9);
     });
 
     test('should use environment-specific memory and timeout', () => {
@@ -302,22 +317,41 @@ describe('CloudFormation Template Unit Tests', () => {
       });
     });
 
-    test('should have inline Python code', () => {
+    test('should have inline Python code with proper structure', () => {
       expectedFunctions.forEach(functionName => {
         const func = template.Resources[functionName];
-        expect(func.Properties.Code.ZipFile).toBeDefined();
-        expect(func.Properties.Code.ZipFile).toContain('import json');
-        expect(func.Properties.Code.ZipFile).toContain('import boto3');
-        expect(func.Properties.Code.ZipFile).toContain('lambda_handler');
+        const code = func.Properties.Code.ZipFile;
+        
+        expect(code).toBeDefined();
+        expect(typeof code).toBe('string');
+        expect(code).toContain('import json');
+        expect(code).toContain('import boto3');
+        expect(code).toContain('lambda_handler');
+        
+        // Validate proper Python function signature
+        expect(code).toContain('def lambda_handler(event, context)');
+        
+        // Validate error handling is present
+        expect(code).toMatch(/try:|except|Exception/);
+        
+        // Validate logging is configured
+        expect(code).toMatch(/import logging|logger|print/);
       });
     });
   });
 
   describe('API Gateway', () => {
-    test('should have REST API', () => {
+    test('should have REST API with proper configuration', () => {
       const api = template.Resources.ItemsRestApi;
       expect(api.Type).toBe('AWS::ApiGateway::RestApi');
       expect(api.Properties.EndpointConfiguration.Types).toEqual(['REGIONAL']);
+      
+      // Validate API has a name and description
+      expect(api.Properties.Name).toBeDefined();
+      expect(api.Properties.Description).toBeDefined();
+      
+      // Validate regional endpoint is used (recommended for most use cases)
+      expect(api.Properties.EndpointConfiguration.Types).toContain('REGIONAL');
     });
 
     test('should have items resource', () => {
@@ -367,11 +401,21 @@ describe('CloudFormation Template Unit Tests', () => {
       });
     });
 
-    test('should have deployment', () => {
+    test('should have deployment with proper dependencies', () => {
       const deployment = template.Resources.ApiDeployment;
       expect(deployment.Type).toBe('AWS::ApiGateway::Deployment');
       expect(deployment.Properties.StageName).toEqual({ 'Ref': 'EnvironmentSuffix' });
-      expect(deployment.DependsOn).toHaveLength(6); // 4 methods + 2 options methods
+      expect(deployment.DependsOn).toHaveLength(6); // 4 CRUD methods + 2 OPTIONS methods
+      
+      // Validate all required methods are in dependencies
+      const requiredMethods = ['CreateItemMethod', 'GetItemMethod', 'UpdateItemMethod', 'DeleteItemMethod'];
+      requiredMethods.forEach(methodName => {
+        expect(deployment.DependsOn).toContain(methodName);
+      });
+      
+      // Validate OPTIONS methods are included for CORS
+      expect(deployment.DependsOn).toContain('ItemsOptionsMethod');
+      expect(deployment.DependsOn).toContain('ItemOptionsMethod');
     });
   });
 
@@ -450,6 +494,37 @@ describe('CloudFormation Template Unit Tests', () => {
         const resource = template.Resources[resourceKey];
         expect(resource.DeletionPolicy).not.toBe('Retain');
         expect(resource.UpdateReplacePolicy).not.toBe('Retain');
+      });
+    });
+
+    test('should have all required resource types', () => {
+      const expectedResourceTypes = {
+        'AWS::EC2::VPC': 1,
+        'AWS::EC2::InternetGateway': 1,
+        'AWS::EC2::Subnet': 2, // public and private
+        'AWS::EC2::NatGateway': 1,
+        'AWS::EC2::EIP': 1,
+        'AWS::EC2::RouteTable': 2, // public and private
+        'AWS::EC2::Route': 2, // public and private routes
+        'AWS::EC2::SecurityGroup': 1,
+        'AWS::DynamoDB::Table': 1,
+        'AWS::Lambda::Function': 4, // CRUD operations
+        'AWS::IAM::Role': 4, // one per Lambda
+        'AWS::ApiGateway::RestApi': 1,
+        'AWS::ApiGateway::Resource': 2, // /items and /items/{id}
+        'AWS::ApiGateway::Method': 6, // 4 CRUD + 2 OPTIONS
+        'AWS::Lambda::Permission': 4, // one per Lambda
+        'AWS::ApiGateway::Deployment': 1
+      };
+
+      const actualResourceTypes = {};
+      Object.values(template.Resources).forEach((resource: any) => {
+        const type = resource.Type;
+        actualResourceTypes[type] = (actualResourceTypes[type] || 0) + 1;
+      });
+
+      Object.entries(expectedResourceTypes).forEach(([type, count]) => {
+        expect(actualResourceTypes[type]).toBe(count);
       });
     });
 
