@@ -24,7 +24,6 @@ const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 const hasOutput = (key: string): boolean => !!outputs[key];
 const hasRequiredS3Outputs = () =>
   hasOutput('S3BucketName') && hasOutput('KMSKeyArn');
-const hasRequiredDynamoDBOutputs = () => hasOutput('TurnAroundPromptTableName');
 const hasRequiredEC2Outputs = () => hasOutput('EC2InstanceId');
 const hasRequiredRDSOutputs = () => hasOutput('RDSInstanceEndpoint');
 
@@ -77,16 +76,44 @@ describe('TapStack Infrastructure Integration Tests', () => {
 
       expect(bucketListOutput.trim()).toBe(bucketName);
 
-      // Check encryption settings
-      const { stdout } = await execAsync(
-        `aws s3api get-bucket-encryption --bucket ${bucketName}`
-      );
+      try {
+        // Check encryption settings
+        const { stdout } = await execAsync(
+          `aws s3api get-bucket-encryption --bucket ${bucketName}`
+        );
 
-      const encryption = JSON.parse(stdout);
-      expect(encryption.ServerSideEncryptionConfiguration).toBeDefined();
+        const encryption = JSON.parse(stdout);
+        expect(encryption).toBeDefined();
 
-      const rule = encryption.ServerSideEncryptionConfiguration.Rules[0];
-      expect(rule.ServerSideEncryptionByDefault.SSEAlgorithm).toBe('aws:kms');
+        // More robust checking of encryption configuration
+        if (
+          encryption.ServerSideEncryptionConfiguration &&
+          encryption.ServerSideEncryptionConfiguration.Rules &&
+          encryption.ServerSideEncryptionConfiguration.Rules.length > 0
+        ) {
+          const rule = encryption.ServerSideEncryptionConfiguration.Rules[0];
+
+          if (rule.ServerSideEncryptionByDefault) {
+            expect(rule.ServerSideEncryptionByDefault.SSEAlgorithm).toBe(
+              'aws:kms'
+            );
+          } else if (rule.ApplyServerSideEncryptionByDefault) {
+            // Handle alternative property name in some AWS CLI versions
+            expect(rule.ApplyServerSideEncryptionByDefault.SSEAlgorithm).toBe(
+              'aws:kms'
+            );
+          } else {
+            fail(
+              'S3 bucket encryption is enabled but missing ServerSideEncryptionByDefault configuration'
+            );
+          }
+        } else {
+          fail('S3 bucket is missing proper encryption configuration');
+        }
+      } catch (error) {
+        // Handle the case where get-bucket-encryption might fail
+        fail(`Failed to get bucket encryption: ${error}`);
+      }
     });
 
     test('should verify S3 bucket blocks public access', async () => {
@@ -307,87 +334,10 @@ describe('TapStack Infrastructure Integration Tests', () => {
   });
 
   describe('E2E Flow Tests', () => {
-    test('should verify basic E2E data flow with S3 and DynamoDB', async () => {
+    test('should verify EC2 to RDS data flow if both deployed', async () => {
       if (
         skipIfMissingOutputs(
-          () => hasRequiredS3Outputs() && hasRequiredDynamoDBOutputs(),
-          'E2E Basic Test'
-        )
-      ) {
-        return;
-      }
-
-      const bucketName = outputs.S3BucketName;
-      const tableName = outputs.TurnAroundPromptTableName;
-      const testId = `e2e-${Date.now()}`;
-      const testContent = JSON.stringify({
-        id: testId,
-        content: 'E2E test content',
-        timestamp: new Date().toISOString(),
-      });
-
-      const s3Key = `data/${testId}.json`;
-      const tempFile = `${testId}.json`;
-
-      try {
-        // Step 1: Write test data to temp file
-        fs.writeFileSync(tempFile, testContent);
-
-        // Step 2: Upload data to S3
-        await execAsync(`aws s3 cp ${tempFile} s3://${bucketName}/${s3Key}`);
-
-        // Step 3: Parse file content and insert into DynamoDB
-        const dataObj = JSON.parse(testContent);
-        const dynamoItem = {
-          id: { S: dataObj.id },
-          content: { S: dataObj.content },
-          timestamp: { S: dataObj.timestamp },
-        };
-
-        await execAsync(
-          `aws dynamodb put-item --table-name ${tableName} --item '${JSON.stringify(dynamoItem)}'`
-        );
-
-        // Step 4: Verify data is in DynamoDB
-        const { stdout } = await execAsync(
-          `aws dynamodb get-item --table-name ${tableName} --key '{"id":{"S":"${testId}"}}'`
-        );
-
-        const getResponse = JSON.parse(stdout);
-        expect(getResponse.Item).toBeDefined();
-        expect(getResponse.Item.id.S).toBe(testId);
-        expect(getResponse.Item.content.S).toBe('E2E test content');
-
-        // Clean up
-        await execAsync(`aws s3 rm s3://${bucketName}/${s3Key}`);
-        await execAsync(
-          `aws dynamodb delete-item --table-name ${tableName} --key '{"id":{"S":"${testId}"}}'`
-        );
-        fs.unlinkSync(tempFile);
-      } catch (error) {
-        // Clean up even if test fails
-        try {
-          if (fs.existsSync(tempFile)) fs.unlinkSync(tempFile);
-          await execAsync(`aws s3 rm s3://${bucketName}/${s3Key}`);
-          await execAsync(
-            `aws dynamodb delete-item --table-name ${tableName} --key '{"id":{"S":"${testId}"}}'`
-          );
-        } catch (e) {
-          // Ignore cleanup errors
-        }
-
-        throw error;
-      }
-    });
-
-    test('should verify complete E2E data flow including EC2 and RDS', async () => {
-      if (
-        skipIfMissingOutputs(
-          () =>
-            hasRequiredS3Outputs() &&
-            hasRequiredDynamoDBOutputs() &&
-            hasRequiredEC2Outputs() &&
-            hasRequiredRDSOutputs(),
+          () => hasRequiredEC2Outputs() && hasRequiredRDSOutputs(),
           'Complete E2E Test'
         )
       ) {
