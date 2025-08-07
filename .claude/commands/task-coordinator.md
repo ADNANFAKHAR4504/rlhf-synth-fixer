@@ -30,11 +30,12 @@ another round.
 If `tasks.csv` is present in the repository:
 
 1. Read and display available tasks from the CSV file
-2. Ask the user to select which task to work on by number or ID. Check if the user has already given the
-ID in the initial prompt and ask for confirmation.
+2. Ask the user to select which task to work on by number or ID, unless the user has already
+given the ID in the initial prompt, then dont ask for confirmation.
 3. Create a new git worktree inside worktree folder. Call the branch IAC-synth-{TaskId}.
-4. All the work you and the sub-agents need to do from this monent will be inside the worktree folder.
-5. If `metadata.json` is not present, extract platform and language from the selected task and mimic the actions from `cli/create-task.ts`:
+4. If its a multi-cloud task, notify the user and stop every execution. This project is only for AWS tasks.
+5. All the work you and the sub-agents need to do from this monent will be inside the worktree folder.
+6. If `metadata.json` is not present, extract platform and language from the selected task and mimic the actions from `cli/create-task.ts`:
    - Determine platform (cdk, cdktf, cfn, pulumi) from task description
    - Determine language (ts, py, yaml, json) from task description  
    - Set complexity from CSV difficulty field
@@ -45,9 +46,9 @@ ID in the initial prompt and ask for confirmation.
    - Generate `metadata.json` with extracted information
    - If the deployment needs to be done in a specific region, create the file `lib/AWS_REGION` with the
    region name. e.g: `echo "us-east-1" > lib/AWS_REGION`
-6. Install inside the worktree. `pipenv install --dev --ignore-pipfile` if language is py, `npm ci` if its not.
-7. Use the selected task description for the workflow.
-8. Once the entire workflow is completed. Raise a Pull Request to main branch and remove the task form tasks.csv
+7. Install inside the worktree. `pipenv install --dev --ignore-pipfile` if language is py, `npm ci` if its not.
+8. Use the selected task description for the workflow.
+9. Once the entire workflow is completed. Raise a Pull Request to main branch and remove the task form tasks.csv
 
 Important: Do not generate the `/lib/PROMPT.md` code, delegate that to the sub-agent. Just send the task information
 to the generator agent

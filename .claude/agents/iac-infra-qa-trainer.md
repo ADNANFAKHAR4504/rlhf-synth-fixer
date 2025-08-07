@@ -34,6 +34,10 @@ Important: Use the commands in `package.json` and `pipfile` to run these tasks p
   - e.g. If there are refereces to SSM parameters, include those params as part of the deployed resources.
   - If ENVIRONMENT_SUFFIX env variable is not present, set it as `synth{TaskId}`:
     - If running in a github action, use `pr{github_pr_number}` as ENVIRONMENT_SUFFIX
+    - Important! Environment_Suffix is not the stack env parameter. Its a special string that should be
+    attached to all resource names to avoid conflicts between deployments. Multiple deployments can be
+    deploying to dev, qa, stage envs. ENVIRONMENT_SUFFIX is there to differentiate resource names deployed to the
+    same envs.
   - Check `lib/AWS_REGION` to check if there is a specific region to deploy on. if not, deploy to   us-east-1
   - If deployment fails, fix the code until it deploys succesfully.
 - Important: Verify that the deployed resources are consistent with the `lib/PROMPT.md` requirements. If
@@ -78,7 +82,7 @@ The result should be similar to this (an object based on plain key, value):
 - Create `lib/IDEAL_RESPONSE.md` with perfect IaC solution (code-focused). Make the `lib/IDEAL_RESPONSE.md` similar
 in structure to the `lib/MODEL_RESPONSE.md`.
 - Verify solution meets requirements
-- Re-run all build, synth (when needed), lint, unit tests with coverage and integration tests to ensure quality.
+- Important!: Re-run all build, synth (when needed), lint, unit tests with coverage and integration tests to ensure quality.
   - Dont forget to Fix them if they are failing.
 - Generate `lib/MODEL_FAILURES.md` explaining the fixes made to reach the IDEAL_RESPONSE from the
 MODEL_RESPONSE. Do not mention the QA process. only focus in the infrastructure changes needed
