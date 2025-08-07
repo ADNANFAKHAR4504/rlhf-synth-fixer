@@ -1,14 +1,14 @@
 import * as cdk from 'aws-cdk-lib';
-import * as ec2 from 'aws-cdk-lib/aws-ec2';
-import * as rds from 'aws-cdk-lib/aws-rds';
-import * as s3 from 'aws-cdk-lib/aws-s3';
-import * as wafv2 from 'aws-cdk-lib/aws-wafv2';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
-import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as kms from 'aws-cdk-lib/aws-kms';
+import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as rds from 'aws-cdk-lib/aws-rds';
+import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as securityhub from 'aws-cdk-lib/aws-securityhub';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
+import * as wafv2 from 'aws-cdk-lib/aws-wafv2';
 import { Construct } from 'constructs';
 
 interface TapStackProps extends cdk.StackProps {
@@ -326,29 +326,31 @@ export class TapStack extends cdk.Stack {
     }
 
     // Outputs
-    new cdk.CfnOutput(this, 'VpcId', {
+    const outputSuffix = props.isPrimaryRegion ? 'Primary' : 'Secondary';
+
+    new cdk.CfnOutput(this, `VpcId${outputSuffix}`, {
       value: vpc.vpcId,
-      description: 'VPC ID',
+      description: `VPC ID (${outputSuffix})`,
     });
 
-    new cdk.CfnOutput(this, 'InstanceId', {
+    new cdk.CfnOutput(this, `InstanceId${outputSuffix}`, {
       value: instance.instanceId,
-      description: 'EC2 Instance ID',
+      description: `EC2 Instance ID (${outputSuffix})`,
     });
 
-    new cdk.CfnOutput(this, 'DatabaseEndpoint', {
+    new cdk.CfnOutput(this, `DatabaseEndpoint${outputSuffix}`, {
       value: database.instanceEndpoint.hostname,
-      description: 'RDS Database Endpoint',
+      description: `RDS Database Endpoint (${outputSuffix})`,
     });
 
-    new cdk.CfnOutput(this, 'ApiUrl', {
+    new cdk.CfnOutput(this, `ApiUrl${outputSuffix}`, {
       value: api.url,
-      description: 'API Gateway URL',
+      description: `API Gateway URL (${outputSuffix})`,
     });
 
-    new cdk.CfnOutput(this, 'WAFWebACLArn', {
+    new cdk.CfnOutput(this, `WAFWebACLArn${outputSuffix}`, {
       value: webAcl.attrArn,
-      description: 'WAF Web ACL ARN',
+      description: `WAF Web ACL ARN (${outputSuffix})`,
     });
   }
 }
