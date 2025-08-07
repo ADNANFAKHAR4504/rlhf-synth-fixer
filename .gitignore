@@ -90,6 +90,7 @@ cdktf.log
 
 __pycache__/
 .pulumi/
+Pulumi.*.yaml
 # CDK build output
 cdk.out/
 
@@ -97,4 +98,6 @@ tasks-status.md
 worktree/
 bin/.terraform.lock.hcl
 bin/tfplan
-Pulumi.*.yaml
+
+
+
