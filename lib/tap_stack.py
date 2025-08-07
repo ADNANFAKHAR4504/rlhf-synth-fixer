@@ -294,161 +294,158 @@ class TapStack(ComponentResource):
         )
     
     def _create_vpc_infrastructure(self):
-        """Create VPC infrastructure with IPv6 and dual-stack support."""
-        self.vpcs = {}
-        self.subnets = {}
-        
-        for region in self.regions:
-            provider = aws.Provider(
-                f"vpc-provider-{region}",
-                region=region,
-                opts=ResourceOptions(parent=self)
-            )
-            
-            # VPC with IPv6 support
-            vpc = aws.ec2.Vpc(
-                f"PROD-vpc-{region}-{self.environment_suffix}",
-                cidr_block="10.0.0.0/16",
-                assign_generated_ipv6_cidr_block=True,
-                enable_dns_hostnames=True,
-                enable_dns_support=True,
-                tags={**self.standard_tags, "Name": f"PROD-vpc-{region}-{self.environment_suffix}"},
-                opts=ResourceOptions(parent=self, provider=provider)
-            )
-            
-            # Internet Gateway
-            igw = aws.ec2.InternetGateway(
-                f"PROD-igw-{region}-{self.environment_suffix}",
-                vpc_id=vpc.id,
-                tags={**self.standard_tags, "Name": f"PROD-igw-{region}-{self.environment_suffix}"},
-                opts=ResourceOptions(parent=self, provider=provider)
-            )
-            
-            # Public subnets with dual-stack
-            public_subnets = []
-            private_subnets = []
-            
-            azs = aws.get_availability_zones(state="available", opts=pulumi.InvokeOptions(provider=provider))
-            
-            for i, az in enumerate(azs.names[:2]):  # Use first 2 AZs
-                # Public subnet - FIXED IPv6 CIDR calculation
-                public_subnet = aws.ec2.Subnet(
-                    f"PROD-public-subnet-{region}-{i+1}-{self.environment_suffix}",
-                    vpc_id=vpc.id,
-                    cidr_block=f"10.0.{i+1}.0/24",
-                    ipv6_cidr_block=vpc.ipv6_cidr_block.apply(
-                        lambda cidr: f"{cidr[:-2]}{i+1:02x}::/64" if cidr else None
-                    ),
-                    availability_zone=az,
-                    map_public_ip_on_launch=True,
-                    assign_ipv6_address_on_creation=True,
-                    tags={**self.standard_tags, "Name": f"PROD-public-subnet-{region}-{i+1}-{self.environment_suffix}"},
-                    opts=ResourceOptions(parent=self, provider=provider)
-                )
-                public_subnets.append(public_subnet)
-                
-                # Private subnet - FIXED IPv6 CIDR calculation
-                private_subnet = aws.ec2.Subnet(
-                    f"PROD-private-subnet-{region}-{i+1}-{self.environment_suffix}",
-                    vpc_id=vpc.id,
-                    cidr_block=f"10.0.{i+10}.0/24",
-                    ipv6_cidr_block=vpc.ipv6_cidr_block.apply(
-                        lambda cidr: f"{cidr[:-2]}{i+10:02x}::/64" if cidr else None
-                    ),
-                    availability_zone=az,
-                    assign_ipv6_address_on_creation=True,
-                    tags={**self.standard_tags, "Name": f"PROD-private-subnet-{region}-{i+1}-{self.environment_suffix}"},
-                    opts=ResourceOptions(parent=self, provider=provider)
-                )
-                private_subnets.append(private_subnet)
-            
-            # Route table for public subnets
-            public_rt = aws.ec2.RouteTable(
-                f"PROD-public-rt-{region}-{self.environment_suffix}",
-                vpc_id=vpc.id,
-                tags={**self.standard_tags, "Name": f"PROD-public-rt-{region}-{self.environment_suffix}"},
-                opts=ResourceOptions(parent=self, provider=provider)
-            )
-            
-            # Routes for IPv4 and IPv6
-            aws.ec2.Route(
-                f"PROD-public-route-ipv4-{region}-{self.environment_suffix}",
-                route_table_id=public_rt.id,
-                destination_cidr_block="0.0.0.0/0",
-                gateway_id=igw.id,
-                opts=ResourceOptions(parent=self, provider=provider)
-            )
-            
-            aws.ec2.Route(
-                f"PROD-public-route-ipv6-{region}-{self.environment_suffix}",
-                route_table_id=public_rt.id,
-                destination_ipv6_cidr_block="::/0",
-                gateway_id=igw.id,
-                opts=ResourceOptions(parent=self, provider=provider)
-            )
-            
-            # Associate public subnets with route table
-            for i, subnet in enumerate(public_subnets):
-                aws.ec2.RouteTableAssociation(
-                    f"PROD-public-rta-{region}-{i+1}-{self.environment_suffix}",
-                    subnet_id=subnet.id,
-                    route_table_id=public_rt.id,
-                    opts=ResourceOptions(parent=self, provider=provider)
-                )
-            
-            # VPC Flow Logs
-            flow_log_role = aws.iam.Role(
-                f"PROD-flowlog-role-{region}-{self.environment_suffix}",
-                assume_role_policy=json.dumps({
-                    "Version": "2012-10-17",
-                    "Statement": [
-                        {
-                            "Action": "sts:AssumeRole",
-                            "Effect": "Allow",
-                            "Principal": {"Service": "vpc-flow-logs.amazonaws.com"}
-                        }
-                    ]
-                }),
-                tags=self.standard_tags,
-                opts=ResourceOptions(parent=self, provider=provider)
-            )
+      """Create VPC infrastructure with IPv4 support."""
+      self.vpcs = {}
+      self.subnets = {}
+      
+      for region in self.regions:
+          provider = aws.Provider(
+              f"vpc-provider-{region}",
+              region=region,
+              opts=ResourceOptions(parent=self)
+          )
+          
+          # VPC without IPv6 support (simplified)
+          vpc = aws.ec2.Vpc(
+              f"PROD-vpc-{region}-{self.environment_suffix}",
+              cidr_block="10.0.0.0/16",
+              # assign_generated_ipv6_cidr_block=True,  # Commented out
+              enable_dns_hostnames=True,
+              enable_dns_support=True,
+              tags={**self.standard_tags, "Name": f"PROD-vpc-{region}-{self.environment_suffix}"},
+              opts=ResourceOptions(parent=self, provider=provider)
+          )
+          
+          # Internet Gateway
+          igw = aws.ec2.InternetGateway(
+              f"PROD-igw-{region}-{self.environment_suffix}",
+              vpc_id=vpc.id,
+              tags={**self.standard_tags, "Name": f"PROD-igw-{region}-{self.environment_suffix}"},
+              opts=ResourceOptions(parent=self, provider=provider)
+          )
+          
+          # Public subnets
+          public_subnets = []
+          private_subnets = []
+          
+          azs = aws.get_availability_zones(state="available", opts=pulumi.InvokeOptions(provider=provider))
+          
+          for i, az in enumerate(azs.names[:2]):  # Use first 2 AZs
+              # Public subnet - IPv4 only
+              public_subnet = aws.ec2.Subnet(
+                  f"PROD-public-subnet-{region}-{i+1}-{self.environment_suffix}",
+                  vpc_id=vpc.id,
+                  cidr_block=f"10.0.{i+1}.0/24",
+                  # ipv6_cidr_block removed
+                  availability_zone=az,
+                  map_public_ip_on_launch=True,
+                  # assign_ipv6_address_on_creation removed
+                  tags={**self.standard_tags, "Name": f"PROD-public-subnet-{region}-{i+1}-{self.environment_suffix}"},
+                  opts=ResourceOptions(parent=self, provider=provider)
+              )
+              public_subnets.append(public_subnet)
+              
+              # Private subnet - IPv4 only
+              private_subnet = aws.ec2.Subnet(
+                  f"PROD-private-subnet-{region}-{i+1}-{self.environment_suffix}",
+                  vpc_id=vpc.id,
+                  cidr_block=f"10.0.{i+10}.0/24",
+                  # ipv6_cidr_block removed
+                  availability_zone=az,
+                  # assign_ipv6_address_on_creation removed
+                  tags={**self.standard_tags, "Name": f"PROD-private-subnet-{region}-{i+1}-{self.environment_suffix}"},
+                  opts=ResourceOptions(parent=self, provider=provider)
+              )
+              private_subnets.append(private_subnet)
+          
+          # Route table for public subnets
+          public_rt = aws.ec2.RouteTable(
+              f"PROD-public-rt-{region}-{self.environment_suffix}",
+              vpc_id=vpc.id,
+              tags={**self.standard_tags, "Name": f"PROD-public-rt-{region}-{self.environment_suffix}"},
+              opts=ResourceOptions(parent=self, provider=provider)
+          )
+          
+          # Route for IPv4 only
+          aws.ec2.Route(
+              f"PROD-public-route-ipv4-{region}-{self.environment_suffix}",
+              route_table_id=public_rt.id,
+              destination_cidr_block="0.0.0.0/0",
+              gateway_id=igw.id,
+              opts=ResourceOptions(parent=self, provider=provider)
+          )
+          
+          # Remove IPv6 route
+          # aws.ec2.Route(
+          #     f"PROD-public-route-ipv6-{region}-{self.environment_suffix}",
+          #     route_table_id=public_rt.id,
+          #     destination_ipv6_cidr_block="::/0",
+          #     gateway_id=igw.id,
+          #     opts=ResourceOptions(parent=self, provider=provider)
+          # )
+          
+          # Associate public subnets with route table
+          for i, subnet in enumerate(public_subnets):
+              aws.ec2.RouteTableAssociation(
+                  f"PROD-public-rta-{region}-{i+1}-{self.environment_suffix}",
+                  subnet_id=subnet.id,
+                  route_table_id=public_rt.id,
+                  opts=ResourceOptions(parent=self, provider=provider)
+              )
+          
+          # VPC Flow Logs (rest remains the same)
+          flow_log_role = aws.iam.Role(
+              f"PROD-flowlog-role-{region}-{self.environment_suffix}",
+              assume_role_policy=json.dumps({
+                  "Version": "2012-10-17",
+                  "Statement": [
+                      {
+                          "Action": "sts:AssumeRole",
+                          "Effect": "Allow",
+                          "Principal": {"Service": "vpc-flow-logs.amazonaws.com"}
+                      }
+                  ]
+              }),
+              tags=self.standard_tags,
+              opts=ResourceOptions(parent=self, provider=provider)
+          )
 
-            aws.iam.RolePolicyAttachment(
-                f"PROD-flowlog-policy-{region}-{self.environment_suffix}",
-                role=flow_log_role.name,
-                policy_arn="arn:aws:iam::aws:policy/service-role/VPCFlowLogsDeliveryRolePolicy",
-                opts=ResourceOptions(parent=self, provider=provider)
-            )
+          aws.iam.RolePolicyAttachment(
+              f"PROD-flowlog-policy-{region}-{self.environment_suffix}",
+              role=flow_log_role.name,
+              policy_arn="arn:aws:iam::aws:policy/service-role/VPCFlowLogsDeliveryRolePolicy",
+              opts=ResourceOptions(parent=self, provider=provider)
+          )
 
-            log_group = aws.cloudwatch.LogGroup(
-                f"PROD-flowlog-group-{region}-{self.environment_suffix}",
-                name=f"/aws/vpc/flowlogs-{region}-{self.environment_suffix}",
-                retention_in_days=30,
-                kms_key_id=self.kms_keys[region].arn,
-                tags=self.standard_tags,
-                opts=ResourceOptions(parent=self, provider=provider)
-            )
+          log_group = aws.cloudwatch.LogGroup(
+              f"PROD-flowlog-group-{region}-{self.environment_suffix}",
+              name=f"/aws/vpc/flowlogs-{region}-{self.environment_suffix}",
+              retention_in_days=30,
+              kms_key_id=self.kms_keys[region].arn,
+              tags=self.standard_tags,
+              opts=ResourceOptions(parent=self, provider=provider)
+          )
 
-            aws.ec2.FlowLog(
-                f"PROD-vpc-flowlog-{region}-{self.environment_suffix}",
-                iam_role_arn=flow_log_role.arn,
-                log_destination=log_group.arn,
-                log_destination_type="cloud-watch-logs",
-                vpc_id=vpc.id,
-                traffic_type="ALL",
-                tags=self.standard_tags,
-                opts=ResourceOptions(parent=self, provider=provider)
-            )
+          aws.ec2.FlowLog(
+              f"PROD-vpc-flowlog-{region}-{self.environment_suffix}",
+              iam_role_arn=flow_log_role.arn,
+              log_destination=log_group.arn,
+              log_destination_type="cloud-watch-logs",
+              vpc_id=vpc.id,
+              traffic_type="ALL",
+              tags=self.standard_tags,
+              opts=ResourceOptions(parent=self, provider=provider)
+          )
+          
+          self.vpcs[region] = vpc
+          self.subnets[region] = {
+              "public": public_subnets,
+              "private": private_subnets
+          }
+      
+      # Primary VPC reference
+      self.primary_vpc = self.vpcs[self.primary_region]
 
-            
-            self.vpcs[region] = vpc
-            self.subnets[region] = {
-                "public": public_subnets,
-                "private": private_subnets
-            }
-        
-        # Primary VPC reference
-        self.primary_vpc = self.vpcs[self.primary_region]
     
     def _create_s3_buckets(self):
         """Create S3 buckets with encryption and versioning."""
