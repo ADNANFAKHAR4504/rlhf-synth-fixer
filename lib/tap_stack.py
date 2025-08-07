@@ -78,9 +78,11 @@ class TapStack(pulumi.ComponentResource):
         )
 
       print(f" Creating Networking Infrastructure for {region}...")
-      # Assume NetworkingInfrastructure takes these args
+      # FIX: Use pulumi.Output.all().apply() for dynamic resource names
       self.regional_networks[region] = NetworkingInfrastructure(
-        name=f"network-{region_suffix}-{self.environment_suffix}",
+        name=pulumi.Output.all(region_suffix, self.environment_suffix).apply(
+          lambda args: f"network-{args[0]}-{args[1]}"
+        ),
         environment=self.environment_suffix,
         region=region,
         tags=self.tags,
@@ -88,9 +90,11 @@ class TapStack(pulumi.ComponentResource):
       )
 
       print(f" Creating Security Infrastructure for {region}...")
-      # Assume SecurityInfrastructure depends on Networking for VPC ID
+      # FIX: Use pulumi.Output.all().apply() for dynamic resource names
       self.regional_security[region] = SecurityInfrastructure(
-        name=f"security-{region_suffix}-{self.environment_suffix}",
+        name=pulumi.Output.all(region_suffix, self.environment_suffix).apply(
+          lambda args: f"security-{args[0]}-{args[1]}"
+        ),
         vpc_id=self.regional_networks[region].vpc_id,
         environment=self.environment_suffix,
         tags=self.tags,
@@ -98,9 +102,11 @@ class TapStack(pulumi.ComponentResource):
       )
       
       print(f" Creating Compute Infrastructure for {region}...")
-      # Assume ComputeInfrastructure depends on Network & Security components
+      # FIX: Use pulumi.Output.all().apply() for dynamic resource names
       self.regional_compute[region] = ComputeInfrastructure(
-        name=f"compute-{region_suffix}-{self.environment_suffix}",
+        name=pulumi.Output.all(region_suffix, self.environment_suffix).apply(
+          lambda args: f"compute-{args[0]}-{args[1]}"
+        ),
         vpc_id=self.regional_networks[region].vpc_id,
         private_subnet_ids=self.regional_networks[region].private_subnet_ids,
         security_group_id=self.regional_security[region].web_server_sg_id, # Assumed output
@@ -113,9 +119,11 @@ class TapStack(pulumi.ComponentResource):
       )
 
       print(f" Creating Monitoring Infrastructure for {region}...")
-      # Assume MonitoringInfrastructure depends on all previous components
+      # FIX: Use pulumi.Output.all().apply() for dynamic resource names
       self.regional_monitoring[region] = MonitoringInfrastructure(
-        name=f"monitoring-{region_suffix}-{self.environment_suffix}",
+        name=pulumi.Output.all(region_suffix, self.environment_suffix).apply(
+          lambda args: f"monitoring-{args[0]}-{args[1]}"
+        ),
         instance_ids=self.regional_compute[region].instance_ids, # Assumed output
         environment=self.environment_suffix,
         tags=self.tags,
