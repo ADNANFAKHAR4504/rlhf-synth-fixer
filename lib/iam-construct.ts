@@ -1,5 +1,5 @@
-import { Construct } from 'constructs';
 import * as aws from '@cdktf/provider-aws';
+import { Construct } from 'constructs';
 
 export interface IamConstructProps {
   environment: string;
@@ -14,10 +14,6 @@ export class IamConstruct extends Construct {
 
   constructor(scope: Construct, id: string, config: IamConstructProps) {
     super(scope, id);
-
-    new aws.provider.AwsProvider(this, 'aws', {
-      region: process.env.AWS_REGION || 'us-west-2',
-    });
 
     const ec2Role = new aws.iamRole.IamRole(this, 'Ec2Role', {
       name: `${config.environment}-ec2-role`,

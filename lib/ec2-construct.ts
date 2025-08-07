@@ -1,6 +1,6 @@
-import { Construct } from 'constructs';
 import * as aws from '@cdktf/provider-aws';
 import { Fn } from 'cdktf';
+import { Construct } from 'constructs';
 
 export interface Ec2ConstructProps {
   environment: string;
@@ -21,10 +21,6 @@ export class Ec2Construct extends Construct {
 
   constructor(scope: Construct, id: string, config: Ec2ConstructProps) {
     super(scope, id);
-
-    new aws.provider.AwsProvider(this, 'aws', {
-      region: process.env.AWS_REGION || 'us-west-2',
-    });
 
     const ami = new aws.dataAwsAmi.DataAwsAmi(this, 'AmazonLinuxAmi', {
       mostRecent: true,

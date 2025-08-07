@@ -1,3 +1,4 @@
+import * as aws from '@cdktf/provider-aws';
 import { TerraformOutput, TerraformStack } from 'cdktf';
 import { Construct } from 'constructs';
 import { CloudwatchConstruct } from './cloudwatch-construct';
@@ -23,6 +24,9 @@ export interface TapStackProps {
 export class TapStack extends TerraformStack {
   constructor(scope: Construct, name: string, props?: TapStackProps) {
     super(scope, name);
+    new aws.provider.AwsProvider(this, 'aws', {
+      region: process.env.AWS_REGION || 'us-west-2',
+    });
 
     const environment =
       process.env.ENVIRONMENT || props?.environmentSuffix || 'development';

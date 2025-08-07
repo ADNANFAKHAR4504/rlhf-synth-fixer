@@ -1,5 +1,5 @@
-import { Construct } from 'constructs';
 import * as aws from '@cdktf/provider-aws';
+import { Construct } from 'constructs';
 
 interface LifecycleRule {
   id: string;
@@ -24,10 +24,6 @@ export class S3Construct extends Construct {
 
   constructor(scope: Construct, id: string, config: S3ConstructProps) {
     super(scope, id);
-
-    new aws.provider.AwsProvider(this, 'aws', {
-      region: process.env.AWS_REGION || 'us-west-2',
-    });
 
     const mainBucket = new aws.s3Bucket.S3Bucket(this, 'MainBucket', {
       bucket: config.bucketName,

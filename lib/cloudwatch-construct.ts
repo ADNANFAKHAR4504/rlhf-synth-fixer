@@ -1,5 +1,5 @@
-import { Construct } from 'constructs';
 import * as aws from '@cdktf/provider-aws';
+import { Construct } from 'constructs';
 
 export interface CloudwatchConstructProps {
   environment: string;
@@ -13,10 +13,6 @@ export class CloudwatchConstruct extends Construct {
 
   constructor(scope: Construct, id: string, config: CloudwatchConstructProps) {
     super(scope, id);
-
-    new aws.provider.AwsProvider(this, 'aws', {
-      region: process.env.AWS_REGION || 'us-west-2',
-    });
 
     const topic = new aws.snsTopic.SnsTopic(this, 'AlertsTopic', {
       name: `${config.environment}-infrastructure-alerts`,

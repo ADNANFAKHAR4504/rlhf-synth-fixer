@@ -1,5 +1,5 @@
-import { Construct } from 'constructs';
 import * as aws from '@cdktf/provider-aws';
+import { Construct } from 'constructs';
 
 export interface VpcConstructProps {
   environment: string;
@@ -22,10 +22,6 @@ export class VpcConstruct extends Construct {
 
   constructor(scope: Construct, id: string, config: VpcConstructProps) {
     super(scope, id);
-
-    new aws.provider.AwsProvider(this, 'aws', {
-      region: config.region,
-    });
 
     new aws.dataAwsRegion.DataAwsRegion(this, 'current');
 
