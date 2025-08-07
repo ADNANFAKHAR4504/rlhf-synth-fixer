@@ -581,4 +581,3 @@ describe('TapStack CloudFormation Template', () => {
     });
   });
 });
-
