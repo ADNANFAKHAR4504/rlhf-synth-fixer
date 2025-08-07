@@ -1,5 +1,5 @@
 import * as cdk from 'aws-cdk-lib';
-import { Template, Match } from 'aws-cdk-lib/assertions';
+import { Match, Template } from 'aws-cdk-lib/assertions';
 import { TapStack } from '../lib/tap-stack';
 
 const environmentSuffix = 'test';
@@ -11,14 +11,79 @@ describe('TapStack', () => {
 
   beforeEach(() => {
     app = new cdk.App();
-    stack = new TapStack(app, 'TestTapStack', { 
+    stack = new TapStack(app, 'TestTapStack', {
       environmentSuffix,
       env: {
         account: '123456789012',
-        region: 'us-west-2'
-      }
+        region: 'us-west-2',
+      },
     });
     template = Template.fromStack(stack);
+  });
+
+  describe('Environment Configuration', () => {
+    test('should use provided environmentSuffix', () => {
+      const testApp = new cdk.App();
+      const testStack = new TapStack(testApp, 'TestTapStackWithEnv', {
+        environmentSuffix: 'prod',
+        env: {
+          account: '123456789012',
+          region: 'us-west-2',
+        },
+      });
+      const testTemplate = Template.fromStack(testStack);
+
+      // Check that the VPC name uses the provided environment suffix
+      testTemplate.hasResourceProperties('AWS::EC2::VPC', {
+        Tags: Match.arrayWith([
+          Match.objectLike({
+            Key: 'Name',
+            Value: 'org-secure-vpc-prod',
+          }),
+        ]),
+      });
+    });
+
+    test('should use context environmentSuffix when props.environmentSuffix is undefined', () => {
+      const contextApp = new cdk.App({
+        context: {
+          environmentSuffix: 'staging',
+        },
+      });
+      const testStack = new TapStack(contextApp, 'TestTapStackWithContext', {
+        env: {
+          account: '123456789012',
+          region: 'us-west-2',
+        },
+      });
+      const testTemplate = Template.fromStack(testStack);
+
+      // Check that the VPC name uses the context environment suffix
+      testTemplate.hasResourceProperties('AWS::EC2::VPC', {
+        Tags: Match.arrayWith([
+          Match.objectLike({
+            Key: 'Name',
+            Value: 'org-secure-vpc-staging',
+          }),
+        ]),
+      });
+    });
+
+    test('should use default environmentSuffix when props and context are undefined', () => {
+      const testApp = new cdk.App();
+      const testStack = new TapStack(testApp, 'TestTapStackNoProps');
+      const testTemplate = Template.fromStack(testStack);
+
+      // Check that the VPC name uses the default 'dev' environment suffix
+      testTemplate.hasResourceProperties('AWS::EC2::VPC', {
+        Tags: Match.arrayWith([
+          Match.objectLike({
+            Key: 'Name',
+            Value: 'org-secure-vpc-dev',
+          }),
+        ]),
+      });
+    });
   });
 
   describe('Stack Configuration', () => {
@@ -44,8 +109,8 @@ describe('TapStack', () => {
         expect.arrayContaining([
           expect.objectContaining({
             Key: 'Environment',
-            Value: environmentSuffix
-          })
+            Value: environmentSuffix,
+          }),
         ])
       );
     });

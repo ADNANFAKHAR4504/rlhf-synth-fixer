@@ -1,5 +1,5 @@
 import * as cdk from 'aws-cdk-lib';
-import { Template, Match } from 'aws-cdk-lib/assertions';
+import { Match, Template } from 'aws-cdk-lib/assertions';
 import { SecureEnvironmentStack } from '../lib/secure-environment-stack';
 
 const environmentSuffix = 'test';
@@ -15,10 +15,79 @@ describe('SecureEnvironmentStack', () => {
       environmentSuffix,
       env: {
         account: '123456789012',
-        region: 'us-west-2'
-      }
+        region: 'us-west-2',
+      },
     });
     template = Template.fromStack(stack);
+  });
+
+  describe('Environment Configuration', () => {
+    test('should use provided environmentSuffix', () => {
+      const testApp = new cdk.App();
+      const testStack = new SecureEnvironmentStack(
+        testApp,
+        'TestStackWithEnv',
+        {
+          environmentSuffix: 'prod',
+          env: {
+            account: '123456789012',
+            region: 'us-west-2',
+          },
+        }
+      );
+      const testTemplate = Template.fromStack(testStack);
+
+      // Check that the VPC name uses the provided environment suffix
+      testTemplate.hasResourceProperties('AWS::EC2::VPC', {
+        Tags: Match.arrayWith([
+          Match.objectLike({
+            Key: 'Name',
+            Value: 'org-secure-vpc-prod',
+          }),
+        ]),
+      });
+    });
+
+    test('should use default environmentSuffix when props is undefined', () => {
+      const testApp = new cdk.App();
+      const testStack = new SecureEnvironmentStack(testApp, 'TestStackNoProps');
+      const testTemplate = Template.fromStack(testStack);
+
+      // Check that the VPC name uses the default 'dev' environment suffix
+      testTemplate.hasResourceProperties('AWS::EC2::VPC', {
+        Tags: Match.arrayWith([
+          Match.objectLike({
+            Key: 'Name',
+            Value: 'org-secure-vpc-dev',
+          }),
+        ]),
+      });
+    });
+
+    test('should use default environmentSuffix when props.environmentSuffix is undefined', () => {
+      const testApp = new cdk.App();
+      const testStack = new SecureEnvironmentStack(
+        testApp,
+        'TestStackNoEnvSuffix',
+        {
+          env: {
+            account: '123456789012',
+            region: 'us-west-2',
+          },
+        }
+      );
+      const testTemplate = Template.fromStack(testStack);
+
+      // Check that the VPC name uses the default 'dev' environment suffix
+      testTemplate.hasResourceProperties('AWS::EC2::VPC', {
+        Tags: Match.arrayWith([
+          Match.objectLike({
+            Key: 'Name',
+            Value: 'org-secure-vpc-dev',
+          }),
+        ]),
+      });
+    });
   });
 
   describe('VPC Configuration', () => {
@@ -30,9 +99,9 @@ describe('SecureEnvironmentStack', () => {
         Tags: Match.arrayWith([
           Match.objectLike({
             Key: 'Name',
-            Value: `org-secure-vpc-${environmentSuffix}`
-          })
-        ])
+            Value: `org-secure-vpc-${environmentSuffix}`,
+          }),
+        ]),
       });
     });
 
@@ -42,9 +111,9 @@ describe('SecureEnvironmentStack', () => {
         Tags: Match.arrayWith([
           Match.objectLike({
             Key: 'aws-cdk:subnet-type',
-            Value: 'Public'
-          })
-        ])
+            Value: 'Public',
+          }),
+        ]),
       });
     });
 
@@ -54,9 +123,9 @@ describe('SecureEnvironmentStack', () => {
         Tags: Match.arrayWith([
           Match.objectLike({
             Key: 'aws-cdk:subnet-type',
-            Value: 'Private'
-          })
-        ])
+            Value: 'Private',
+          }),
+        ]),
       });
     });
 
@@ -64,9 +133,9 @@ describe('SecureEnvironmentStack', () => {
       template.hasResourceProperties('AWS::EC2::InternetGateway', {
         Tags: Match.arrayWith([
           Match.objectLike({
-            Key: 'Name'
-          })
-        ])
+            Key: 'Name',
+          }),
+        ]),
       });
     });
 
@@ -74,9 +143,9 @@ describe('SecureEnvironmentStack', () => {
       template.hasResourceProperties('AWS::EC2::NatGateway', {
         Tags: Match.arrayWith([
           Match.objectLike({
-            Key: 'Name'
-          })
-        ])
+            Key: 'Name',
+          }),
+        ]),
       });
     });
   });
@@ -87,13 +156,13 @@ describe('SecureEnvironmentStack', () => {
         Description: `org-encryption-key-${environmentSuffix}`,
         EnableKeyRotation: true,
         KeyUsage: 'ENCRYPT_DECRYPT',
-        KeySpec: 'SYMMETRIC_DEFAULT'
+        KeySpec: 'SYMMETRIC_DEFAULT',
       });
     });
 
     test('should create KMS key alias', () => {
       template.hasResourceProperties('AWS::KMS::Alias', {
-        AliasName: `alias/org-encryption-key-${environmentSuffix}`
+        AliasName: `alias/org-encryption-key-${environmentSuffix}`,
       });
     });
   });
@@ -107,18 +176,18 @@ describe('SecureEnvironmentStack', () => {
             Match.objectLike({
               Effect: 'Allow',
               Principal: Match.objectLike({
-                Service: 'ec2.amazonaws.com'
-              })
-            })
-          ])
-        })
+                Service: 'ec2.amazonaws.com',
+              }),
+            }),
+          ]),
+        }),
       });
-      
-      // Check for managed policies separately 
+
+      // Check for managed policies separately
       const roles = template.findResources('AWS::IAM::Role', {
         Properties: {
-          RoleName: `org-ec2-instance-role-${environmentSuffix}`
-        }
+          RoleName: `org-ec2-instance-role-${environmentSuffix}`,
+        },
       });
       expect(Object.keys(roles).length).toBeGreaterThan(0);
     });
@@ -133,16 +202,16 @@ describe('SecureEnvironmentStack', () => {
                 'logs:CreateLogGroup',
                 'logs:CreateLogStream',
                 'logs:PutLogEvents',
-                'cloudwatch:PutMetricData'
+                'cloudwatch:PutMetricData',
               ]),
               Condition: Match.objectLike({
                 StringEquals: Match.objectLike({
-                  'aws:RequestedRegion': 'us-west-2'
-                })
-              })
-            })
-          ])
-        })
+                  'aws:RequestedRegion': 'us-west-2',
+                }),
+              }),
+            }),
+          ]),
+        }),
       });
     });
 
@@ -154,11 +223,11 @@ describe('SecureEnvironmentStack', () => {
             Match.objectLike({
               Effect: 'Allow',
               Principal: Match.objectLike({
-                Service: 's3.amazonaws.com'
-              })
-            })
-          ])
-        })
+                Service: 's3.amazonaws.com',
+              }),
+            }),
+          ]),
+        }),
       });
     });
 
@@ -171,23 +240,25 @@ describe('SecureEnvironmentStack', () => {
               Action: Match.arrayWith([
                 's3:GetObject',
                 's3:PutObject',
-                's3:DeleteObject'
+                's3:DeleteObject',
               ]),
               Condition: Match.objectLike({
                 StringEquals: Match.objectLike({
-                  's3:ExistingObjectTag/Environment': '${aws:PrincipalTag/Environment}',
-                  's3:ExistingObjectTag/Department': '${aws:PrincipalTag/Department}'
-                })
-              })
-            })
-          ])
-        })
+                  's3:ExistingObjectTag/Environment':
+                    '${aws:PrincipalTag/Environment}',
+                  's3:ExistingObjectTag/Department':
+                    '${aws:PrincipalTag/Department}',
+                }),
+              }),
+            }),
+          ]),
+        }),
       });
     });
 
     test('should create instance profile', () => {
       template.hasResourceProperties('AWS::IAM::InstanceProfile', {
-        InstanceProfileName: `org-instance-profile-${environmentSuffix}`
+        InstanceProfileName: `org-instance-profile-${environmentSuffix}`,
       });
     });
   });
@@ -196,15 +267,16 @@ describe('SecureEnvironmentStack', () => {
     test('should create SSH security group with restricted access', () => {
       template.hasResourceProperties('AWS::EC2::SecurityGroup', {
         GroupName: `org-ssh-sg-${environmentSuffix}`,
-        GroupDescription: 'Security group allowing SSH access from specific IP range',
+        GroupDescription:
+          'Security group allowing SSH access from specific IP range',
         SecurityGroupIngress: Match.arrayWith([
           Match.objectLike({
             IpProtocol: 'tcp',
             FromPort: 22,
             ToPort: 22,
-            CidrIp: '203.0.113.0/24'
-          })
-        ])
+            CidrIp: '203.0.113.0/24',
+          }),
+        ]),
       });
     });
 
@@ -214,9 +286,9 @@ describe('SecureEnvironmentStack', () => {
         SecurityGroupEgress: Match.arrayWith([
           Match.objectLike({
             IpProtocol: '-1',
-            CidrIp: '0.0.0.0/0'
-          })
-        ])
+            CidrIp: '0.0.0.0/0',
+          }),
+        ]),
       });
     });
   });
@@ -224,7 +296,7 @@ describe('SecureEnvironmentStack', () => {
   describe('EC2 Configuration', () => {
     test('should create EC2 key pair', () => {
       template.hasResourceProperties('AWS::EC2::KeyPair', {
-        KeyName: `org-keypair-${environmentSuffix}`
+        KeyName: `org-keypair-${environmentSuffix}`,
       });
     });
 
@@ -232,7 +304,7 @@ describe('SecureEnvironmentStack', () => {
       template.hasResourceProperties('AWS::SSM::Parameter', {
         Name: `/org/ec2/keypair/${environmentSuffix}`,
         Type: 'String',
-        Description: `EC2 Key Pair name for ${environmentSuffix} environment`
+        Description: `EC2 Key Pair name for ${environmentSuffix} environment`,
       });
     });
 
@@ -243,9 +315,9 @@ describe('SecureEnvironmentStack', () => {
         Tags: Match.arrayWith([
           Match.objectLike({
             Key: 'Name',
-            Value: `org-secure-instance-${environmentSuffix}`
-          })
-        ])
+            Value: `org-secure-instance-${environmentSuffix}`,
+          }),
+        ]),
       });
     });
 
@@ -256,10 +328,16 @@ describe('SecureEnvironmentStack', () => {
       const instance = Object.values(instances)[0];
       expect(instance).toBeDefined();
       // LaunchTemplate should have encrypted EBS configuration
-      const launchTemplates = template.findResources('AWS::EC2::LaunchTemplate');
+      const launchTemplates = template.findResources(
+        'AWS::EC2::LaunchTemplate'
+      );
       const launchTemplate = Object.values(launchTemplates)[0];
-      if (launchTemplate && launchTemplate.Properties.LaunchTemplateData.BlockDeviceMappings) {
-        const blockDevice = launchTemplate.Properties.LaunchTemplateData.BlockDeviceMappings[0];
+      if (
+        launchTemplate &&
+        launchTemplate.Properties.LaunchTemplateData.BlockDeviceMappings
+      ) {
+        const blockDevice =
+          launchTemplate.Properties.LaunchTemplateData.BlockDeviceMappings[0];
         expect(blockDevice.DeviceName).toBe('/dev/xvda');
         expect(blockDevice.Ebs.Encrypted).toBe(true);
         expect(blockDevice.Ebs.VolumeSize).toBe(20);
@@ -271,9 +349,9 @@ describe('SecureEnvironmentStack', () => {
       template.hasResourceProperties('AWS::EC2::LaunchTemplate', {
         LaunchTemplateData: Match.objectLike({
           MetadataOptions: Match.objectLike({
-            HttpTokens: 'required'
-          })
-        })
+            HttpTokens: 'required',
+          }),
+        }),
       });
     });
   });
@@ -285,14 +363,14 @@ describe('SecureEnvironmentStack', () => {
           ServerSideEncryptionConfiguration: Match.arrayWith([
             Match.objectLike({
               ServerSideEncryptionByDefault: Match.objectLike({
-                SSEAlgorithm: 'aws:kms'
-              })
-            })
-          ])
+                SSEAlgorithm: 'aws:kms',
+              }),
+            }),
+          ]),
         }),
         VersioningConfiguration: Match.objectLike({
-          Status: 'Enabled'
-        })
+          Status: 'Enabled',
+        }),
       });
     });
 
@@ -302,8 +380,8 @@ describe('SecureEnvironmentStack', () => {
           BlockPublicAcls: true,
           BlockPublicPolicy: true,
           IgnorePublicAcls: true,
-          RestrictPublicBuckets: true
-        })
+          RestrictPublicBuckets: true,
+        }),
       });
     });
 
@@ -316,12 +394,12 @@ describe('SecureEnvironmentStack', () => {
               Action: 's3:*',
               Condition: Match.objectLike({
                 Bool: Match.objectLike({
-                  'aws:SecureTransport': 'false'
-                })
-              })
-            })
-          ])
-        })
+                  'aws:SecureTransport': 'false',
+                }),
+              }),
+            }),
+          ]),
+        }),
       });
     });
 
@@ -333,27 +411,27 @@ describe('SecureEnvironmentStack', () => {
               Id: `org-lifecycle-rule-${environmentSuffix}`,
               Status: 'Enabled',
               NoncurrentVersionExpiration: Match.objectLike({
-                NoncurrentDays: 30
+                NoncurrentDays: 30,
               }),
               Transitions: Match.arrayWith([
                 Match.objectLike({
                   StorageClass: 'STANDARD_IA',
-                  TransitionInDays: 30
+                  TransitionInDays: 30,
                 }),
                 Match.objectLike({
                   StorageClass: 'GLACIER',
-                  TransitionInDays: 90
-                })
-              ])
-            })
-          ])
-        })
+                  TransitionInDays: 90,
+                }),
+              ]),
+            }),
+          ]),
+        }),
       });
     });
 
     test('should create S3 Access Point', () => {
       template.hasResourceProperties('AWS::S3::AccessPoint', {
-        Name: `org-access-point-${environmentSuffix}`
+        Name: `org-access-point-${environmentSuffix}`,
       });
     });
   });
@@ -363,8 +441,8 @@ describe('SecureEnvironmentStack', () => {
       template.hasOutput('VpcId', {
         Description: 'VPC ID',
         Export: Match.objectLike({
-          Name: `org-vpc-id-${environmentSuffix}`
-        })
+          Name: `org-vpc-id-${environmentSuffix}`,
+        }),
       });
     });
 
@@ -372,8 +450,8 @@ describe('SecureEnvironmentStack', () => {
       template.hasOutput('InstanceId', {
         Description: 'EC2 Instance ID',
         Export: Match.objectLike({
-          Name: `org-instance-id-${environmentSuffix}`
-        })
+          Name: `org-instance-id-${environmentSuffix}`,
+        }),
       });
     });
 
@@ -381,8 +459,8 @@ describe('SecureEnvironmentStack', () => {
       template.hasOutput('S3BucketName', {
         Description: 'S3 Bucket Name',
         Export: Match.objectLike({
-          Name: `org-s3-bucket-name-${environmentSuffix}`
-        })
+          Name: `org-s3-bucket-name-${environmentSuffix}`,
+        }),
       });
     });
 
@@ -390,8 +468,8 @@ describe('SecureEnvironmentStack', () => {
       template.hasOutput('S3AccessPointArn', {
         Description: 'S3 Access Point ARN',
         Export: Match.objectLike({
-          Name: `org-s3-access-point-arn-${environmentSuffix}`
-        })
+          Name: `org-s3-access-point-arn-${environmentSuffix}`,
+        }),
       });
     });
   });
@@ -404,8 +482,8 @@ describe('SecureEnvironmentStack', () => {
         expect.arrayContaining([
           expect.objectContaining({
             Key: 'Environment',
-            Value: environmentSuffix
-          })
+            Value: environmentSuffix,
+          }),
         ])
       );
     });
@@ -417,8 +495,8 @@ describe('SecureEnvironmentStack', () => {
         expect.arrayContaining([
           expect.objectContaining({
             Key: 'Department',
-            Value: 'security'
-          })
+            Value: 'security',
+          }),
         ])
       );
     });
@@ -430,8 +508,8 @@ describe('SecureEnvironmentStack', () => {
         expect.arrayContaining([
           expect.objectContaining({
             Key: 'Project',
-            Value: 'org-secure-environment'
-          })
+            Value: 'org-secure-environment',
+          }),
         ])
       );
     });
