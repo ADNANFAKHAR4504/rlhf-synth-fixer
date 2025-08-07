@@ -96,7 +96,7 @@ class TapStack(TerraformStack):
     for bucket_type, bucket_name in self.bucket_names.items():
       # Create S3 bucket with security tags
       bucket = S3Bucket(
-        self, f"secure-bucket-1-{bucket_type}",
+        self, f"terraform-cdkft-secure-bucket-1-{bucket_type}",
         bucket=bucket_name,
         tags={**self.common_tags, "BucketType": bucket_type}
       )
