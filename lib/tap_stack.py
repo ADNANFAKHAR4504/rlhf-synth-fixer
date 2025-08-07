@@ -312,7 +312,7 @@ class TapStack(cdk.Stack):
     # Allow HTTPS traffic from specific IP ranges (replace with your actual
     # IPs)
     security_group.add_ingress_rule(
-        peer=ec2.Peer.ipv4("0.0.0.0/0"),
+        peer=ec2.Peer.ipv4("10.0.0.0/8"),
         # Replace with specific IP ranges in production
         connection=ec2.Port.tcp(443),
         description="HTTPS traffic"
@@ -320,7 +320,7 @@ class TapStack(cdk.Stack):
 
     # Allow HTTP traffic (for redirect to HTTPS)
     security_group.add_ingress_rule(
-        peer=ec2.Peer.ipv4("0.0.0.0/0"),
+        peer=ec2.Peer.ipv4("10.0.0.0/8"),
         # Replace with specific IP ranges in production
         connection=ec2.Port.tcp(80),
         description="HTTP traffic for redirect"
