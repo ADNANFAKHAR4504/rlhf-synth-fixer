@@ -58,8 +58,8 @@ jobs:
           STARTED_AT=$(jq -r '.startedAt // "unknown"' metadata.json)
 
           # If team or started_at is unknown, fail the job
-          if [ "$TEAM" = "unknown" ] || [ "$STARTED_AT" = "unknown" ]; then
-            echo "❌ Team or started_at is unknown, exiting with failure"
+          if [ "$TEAM" == "unknown" ] || [ "$STARTED_AT" == "unknown" ]; then
+            echo "❌ Missing required metadata: team or started_at"
             exit 1
           fi
 
@@ -103,21 +103,12 @@ jobs:
 
       - name: Build
         run: npm run build
+
   synth:
     name: Synth
     runs-on: ubuntu-24.04
     needs: [detect-metadata, build]
-    if: >
-      ${{
-        github.event_name == 'pull_request' &&
-        github.event.action != 'closed' &&
-        !contains(github.event.head_commit.message, '[skip-jobs]') &&
-        !(
-          needs.detect-metadata.outputs.platform == 'tf' &&
-          needs.detect-metadata.outputs.language == 'hcl'
-        )
-      }}
-    # if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
+    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' }}
     environment: dev
     permissions:
       contents: read
@@ -138,6 +129,7 @@ jobs:
           platform: ${{ needs.detect-metadata.outputs.platform }}
 
       - name: Configure AWS
+        if: ${{ needs.detect-metadata.outputs.platform == 'cdk' || needs.detect-metadata.outputs.platform == 'cdktf' }}
         uses: ./.github/actions/configure-aws
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -204,7 +196,7 @@ jobs:
           echo "Setting up Terraform state infrastructure for PR-based environments..."
 
           # Create PR-specific DynamoDB table for state locking
-          DYNAMODB_TABLE_NAME="terraform-state-lock-pr${{ env.ENVIRONMENT_SUFFIX }}"
+          DYNAMODB_TABLE_NAME="terraform-state-lock-${{ env.ENVIRONMENT_SUFFIX }}"
           echo "Creating DynamoDB table: $DYNAMODB_TABLE_NAME"
 
           # Check if DynamoDB table exists
@@ -226,50 +218,12 @@ jobs:
             echo "DynamoDB table $DYNAMODB_TABLE_NAME is now active"
           fi
 
-          # Verify S3 bucket exists and is accessible
-          echo "Verifying Terraform state bucket accessibility..."
-          if aws s3 ls "s3://${{ env.TERRAFORM_STATE_BUCKET }}/" >/dev/null 2>&1; then
-            echo "Terraform state bucket ${{ env.TERRAFORM_STATE_BUCKET }} is accessible"
-          else
-            echo "Creating Terraform state bucket ${{ env.TERRAFORM_STATE_BUCKET }}..."
-            aws s3 mb "s3://${{ env.TERRAFORM_STATE_BUCKET }}" --region "${{ env.TERRAFORM_STATE_BUCKET_REGION }}"
-            
-            # Enable versioning
-            aws s3api put-bucket-versioning \
-              --bucket "${{ env.TERRAFORM_STATE_BUCKET }}" \
-              --versioning-configuration Status=Enabled
-            
-            # Enable server-side encryption
-            aws s3api put-bucket-encryption \
-              --bucket "${{ env.TERRAFORM_STATE_BUCKET }}" \
-              --server-side-encryption-configuration '{
-                  "Rules": [
-                      {
-                          "ApplyServerSideEncryptionByDefault": {
-                              "SSEAlgorithm": "AES256"
-                          }
-                      }
-                  ]
-              }'
-            
-            # Block public access
-            aws s3api put-public-access-block \
-              --bucket "${{ env.TERRAFORM_STATE_BUCKET }}" \
-              --public-access-block-configuration \
-              BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true
-            
-            echo "Terraform state bucket configured successfully"
-          fi
-
       - name: Bootstrap
         run: |
-          PLATFORM="${{ needs.synth.outputs.platform }}"
-          LANGUAGE="${{ needs.synth.outputs.language }}"
+          PLATFORM="${{ needs.detect-metadata.outputs.platform }}"
+          LANGUAGE="${{ needs.detect-metadata.outputs.language }}"
 
           if [ "$PLATFORM" = "cdk" ]; then
-            echo "Cleaning up cdk.out folder..."
-            echo "✅ CDK project detected, running CDK bootstrap..."
-            rm -rf cdk.out
             npm run cdk:bootstrap
 
           elif [ "$PLATFORM" = "pulumi" ]; then
@@ -282,7 +236,7 @@ jobs:
             echo "✅ Terraform project detected, setting up environment..."
             
             # Set up PR-specific state management
-            DYNAMODB_TABLE_NAME="terraform-state-lock-pr${{ env.ENVIRONMENT_SUFFIX }}"
+            DYNAMODB_TABLE_NAME="terraform-state-lock-${{ env.ENVIRONMENT_SUFFIX }}"
             STATE_KEY="prs/pr${{ env.ENVIRONMENT_SUFFIX }}/terraform.tfstate"
             
             echo "Using DynamoDB table: $DYNAMODB_TABLE_NAME"
@@ -369,8 +323,8 @@ jobs:
 
       - name: Deploy
         run: |
-          PLATFORM="${{ needs.synth.outputs.platform }}"
-          LANGUAGE="${{ needs.synth.outputs.language }}"
+          PLATFORM="${{ needs.detect-metadata.outputs.platform }}"
+          LANGUAGE="${{ needs.detect-metadata.outputs.language }}"
 
           if [ "$PLATFORM" = "cdk" ]; then
             echo "✅ CDK project detected, running CDK deploy..."
@@ -382,7 +336,7 @@ jobs:
             echo "✅ Terraform HCL project detected, running Terraform deploy..."
             
             # Set up PR-specific state management
-            DYNAMODB_TABLE_NAME="terraform-state-lock-pr${{ env.ENVIRONMENT_SUFFIX }}"
+            DYNAMODB_TABLE_NAME="terraform-state-lock-${{ env.ENVIRONMENT_SUFFIX }}"
             STATE_KEY="prs/pr${{ env.ENVIRONMENT_SUFFIX }}/terraform.tfstate"
             
             echo "Using DynamoDB table: $DYNAMODB_TABLE_NAME"
@@ -435,8 +389,8 @@ jobs:
 
       - name: Get Deployment Outputs
         run: |
-          PLATFORM="${{ needs.synth.outputs.platform }}"
-          LANGUAGE="${{ needs.synth.outputs.language }}"
+          PLATFORM="${{ needs.detect-metadata.outputs.platform }}"
+          LANGUAGE="${{ needs.detect-metadata.outputs.language }}"
 
           if [ "$PLATFORM" = "cdk" ]; then
             echo "✅ CDK project detected, getting CDK outputs..."
@@ -480,7 +434,7 @@ jobs:
             touch cfn-outputs/flat-outputs.json
             cdktf output --outputs-file cfn-outputs/flat-outputs.json
             cat cfn-outputs/flat-outputs.json || echo "No outputs found in cfn-outputs/flat-outputs.json"
-          elif [ "${{ needs.synth.outputs.platform }}" = "cfn" ]; then
+          elif [ "${{ needs.detect-metadata.outputs.platform }}" = "cfn" ]; then
             echo "✅ CloudFormation project detected, getting stack outputs..."
             mkdir -p cfn-outputs
             # Try to find the stack name (assuming TapStack<ENVIRONMENT_SUFFIX>)
@@ -532,31 +486,31 @@ jobs:
             rm -f temp-${STACK_NAME}-outputs.json temp-stack.json temp-merged.json temp-flat.json
 
           elif [ "$PLATFORM" = "tf" ]; then
-            echo "✅ Terraform project detected, writing outputs to tf-outputs..."
-            mkdir -p tf-outputs/
-            touch tf-outputs/flat-outputs.json
+            echo "✅ Terraform project detected, writing outputs to cfn-outputs..."
+            mkdir -p cfn-outputs/
+            touch cfn-outputs/flat-outputs.json
             
             # Change to bin directory where Terraform files are located
             cd bin
             
             # Get structured outputs (JSON)
-            terraform output -json > ../tf-outputs/all-outputs.json
+            terraform output -json > ../cfn-outputs/all-outputs.json
             
             # Create flat key=value version
-            echo "{}" > ../tf-outputs/flat-outputs.json
-            jq -r 'to_entries[] | "\(.key)=\(.value.value)"' ../tf-outputs/all-outputs.json | while IFS='=' read -r key value; do
-              jq --arg key "$key" --arg value "$value" '. + {($key): $value}' ../tf-outputs/flat-outputs.json > ../temp-flat.json
-              mv ../temp-flat.json ../tf-outputs/flat-outputs.json
+            echo "{}" > ../cfn-outputs/flat-outputs.json
+            jq -r 'to_entries[] | "\(.key)=\(.value.value)"' ../cfn-outputs/all-outputs.json | while IFS='=' read -r key value; do
+              jq --arg key "$key" --arg value "$value" '. + {($key): $value}' ../cfn-outputs/flat-outputs.json > ../temp-flat.json
+              mv ../temp-flat.json ../cfn-outputs/flat-outputs.json
             done
             
             # Go back to root directory
             cd ..
 
             echo "✅ Consolidated Terraform outputs:"
-            cat tf-outputs/all-outputs.json || echo "No structured outputs"
+            cat cfn-outputs/all-outputs.json || echo "No structured outputs"
 
             echo "✅ Flat outputs:"
-            cat tf-outputs/flat-outputs.json || echo "No flat outputs"    
+            cat cfn-outputs/flat-outputs.json || echo "No flat outputs"    
 
           else
             echo "ℹ️ Not a CDK TypeScript or CloudFormation project, creating empty outputs for consistency"
@@ -575,22 +529,11 @@ jobs:
           path: |
             cfn-outputs/
             cdk-stacks.json
-            tf-outputs/
   lint:
     name: Lint
     runs-on: ubuntu-24.04
     needs: [detect-metadata, build]
-    if: >
-      ${{
-        github.event_name == 'pull_request' &&
-        github.event.action != 'closed' &&
-        !contains(github.event.head_commit.message, '[skip-jobs]') &&
-        !(
-          needs.detect-metadata.outputs.platform == 'tf' &&
-          needs.detect-metadata.outputs.language == 'hcl'
-        )
-      }}
-    # if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
+    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
     environment: qa
     outputs:
       platform: ${{ needs.detect-metadata.outputs.platform }}
@@ -622,10 +565,6 @@ jobs:
             echo "✅ TypeScript project detected, running ESLint..."
             npm run lint
           elif [ "$LANGUAGE" = "py" ]; then
-            # --- NEW: Install Python dev dependencies within this step ---
-            echo "Installing Python dev dependencies via pipenv..."
-            pipenv install --dev --deploy --system || { echo "❌ pipenv install failed!"; exit 1; }
-            echo "Python dev dependencies installed."
             echo "Executing pipenv run lint..."
             LINT_OUTPUT=$(pipenv run lint 2>&1 || true)
             LINT_EXIT_CODE=$?
@@ -677,17 +616,9 @@ jobs:
     name: Unit Testing
     runs-on: ubuntu-24.04
     needs: [detect-metadata, lint]
-    if: >
-      ${{
-        github.event_name == 'pull_request' &&
-        github.event.action != 'closed' &&
-        !contains(github.event.head_commit.message, '[skip-jobs]') &&
-        !(
-          needs.lint.outputs.platform == 'tf' &&
-          needs.lint.outputs.language == 'hcl'
-        )
-      }}
+    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
     environment: qa
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -706,7 +637,6 @@ jobs:
           pipenv run cfn-flip-to-json > lib/TapStack.json
 
       - name: Run unit tests
-        if: ${{ !(needs.lint.outputs.platform == 'tf' && needs.lint.outputs.language == 'hcl') }}
         run: |
           if [ "${{ needs.lint.outputs.language }}" = "ts" ] && [ "${{ needs.lint.outputs.platform }}" = "cdktf" ]; then
             echo "✅ Terraform TypeScript project detected, running unit tests..."
@@ -758,17 +688,8 @@ jobs:
     runs-on: ubuntu-24.04
     needs: [detect-metadata, lint, unit-tests, deploy]
     environment: qa
-    if: >
-      ${{
-        github.event_name == 'pull_request' &&
-        github.event.action != 'closed' &&
-        !contains(github.event.head_commit.message, '[skip-jobs]') &&
-        !(
-          needs.lint.outputs.platform == 'tf' &&
-          needs.lint.outputs.language == 'hcl'
-        )
-      }}
-    # if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
+    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -794,7 +715,6 @@ jobs:
           aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
 
       - name: Run integration tests against live environment
-        if: ${{ !(needs.lint.outputs.platform == 'tf' && needs.lint.outputs.language == 'hcl') }}
         run: |
           if [ "${{ needs.lint.outputs.language }}" = "py" ]; then
             echo "✅ CDK project detected, running integration tests..."
