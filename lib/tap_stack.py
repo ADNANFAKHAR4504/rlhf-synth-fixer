@@ -69,7 +69,7 @@ class TapStack(ComponentResource):
         )
 
     # ------------------------------------------------------------------ #
-    #  KMS
+    #  KMS - FIXED: Added CloudWatch Logs permissions
     # ------------------------------------------------------------------ #
     def _create_kms_keys(self) -> None:
         self.kms_keys = {}
@@ -79,6 +79,7 @@ class TapStack(ComponentResource):
                 f"provider-{region}", region=region, opts=ResourceOptions(parent=self)
             )
 
+            # FIXED: KMS policy now includes CloudWatch Logs permissions
             key = aws.kms.Key(
                 f"PROD-kms-{region}-{self.environment_suffix}",
                 description=f"KMS key for {region}",
@@ -96,6 +97,26 @@ class TapStack(ComponentResource):
                                 },
                                 "Action": "kms:*",
                                 "Resource": "*",
+                            },
+                            {
+                                "Sid": "Allow CloudWatch Logs",
+                                "Effect": "Allow",
+                                "Principal": {
+                                    "Service": f"logs.{region}.amazonaws.com"
+                                },
+                                "Action": [
+                                    "kms:Encrypt",
+                                    "kms:Decrypt",
+                                    "kms:ReEncrypt*",
+                                    "kms:GenerateDataKey*",
+                                    "kms:DescribeKey"
+                                ],
+                                "Resource": "*",
+                                "Condition": {
+                                    "ArnEquals": {
+                                        "kms:EncryptionContext:aws:logs:arn": f"arn:aws:logs:{region}:{aws.get_caller_identity().account_id}:log-group:*"
+                                    }
+                                }
                             }
                         ],
                     }
@@ -232,7 +253,7 @@ class TapStack(ComponentResource):
         )
 
     # ------------------------------------------------------------------ #
-    #  CloudTrail
+    #  CloudTrail - FIXED: Correct S3 bucket policy format
     # ------------------------------------------------------------------ #
     def _create_cloudtrail(self) -> None:
         self.cloudtrail_bucket = aws.s3.Bucket(
@@ -250,11 +271,12 @@ class TapStack(ComponentResource):
             opts=ResourceOptions(parent=self),
         )
 
-        aws.s3.BucketPolicy(
+        # FIXED: Corrected bucket policy format
+        cloudtrail_policy = aws.s3.BucketPolicy(
             f"PROD-cloudtrail-policy-{self.environment_suffix}",
             bucket=self.cloudtrail_bucket.id,
-            policy=pulumi.Output.all(self.cloudtrail_bucket.arn).apply(
-                lambda arn: json.dumps(
+            policy=pulumi.Output.all(self.cloudtrail_bucket.arn, aws.get_caller_identity().account_id).apply(
+                lambda args: json.dumps(
                     {
                         "Version": "2012-10-17",
                         "Statement": [
@@ -263,17 +285,25 @@ class TapStack(ComponentResource):
                                 "Effect": "Allow",
                                 "Principal": {"Service": "cloudtrail.amazonaws.com"},
                                 "Action": "s3:GetBucketAcl",
-                                "Resource": arn,
+                                "Resource": args[0],
+                                "Condition": {
+                                    "StringEquals": {
+                                        "AWS:SourceArn": f"arn:aws:cloudtrail:{self.primary_region}:{args[1]}:trail/PROD-cloudtrail-{self.environment_suffix}"
+                                    }
+                                }
                             },
                             {
                                 "Sid": "AWSCloudTrailWrite",
                                 "Effect": "Allow",
                                 "Principal": {"Service": "cloudtrail.amazonaws.com"},
                                 "Action": "s3:PutObject",
-                                "Resource": f"{arn}/*",
+                                "Resource": f"{args[0]}/*",
                                 "Condition": {
-                                    "StringEquals": {"s3:x-amz-acl": "bucket-owner-full-control"}
-                                },
+                                    "StringEquals": {
+                                        "s3:x-amz-acl": "bucket-owner-full-control",
+                                        "AWS:SourceArn": f"arn:aws:cloudtrail:{self.primary_region}:{args[1]}:trail/PROD-cloudtrail-{self.environment_suffix}"
+                                    }
+                                }
                             },
                         ],
                     }
@@ -289,7 +319,7 @@ class TapStack(ComponentResource):
             enable_log_file_validation=True,
             kms_key_id=self.kms_key.arn,
             tags=self.standard_tags,
-            opts=ResourceOptions(parent=self),
+            opts=ResourceOptions(parent=self, depends_on=[cloudtrail_policy]),
         )
 
     # ------------------------------------------------------------------ #
@@ -375,7 +405,7 @@ class TapStack(ComponentResource):
                     opts=ResourceOptions(parent=self, provider=provider),
                 )
 
-            # FIXED: Flow logs with inline policy instead of managed policy
+            # Flow logs with inline policy
             flow_role = aws.iam.Role(
                 f"PROD-flowlog-role-{region}-{self.environment_suffix}",
                 assume_role_policy=json.dumps(
@@ -394,7 +424,6 @@ class TapStack(ComponentResource):
                 opts=ResourceOptions(parent=self, provider=provider),
             )
 
-            # FIXED: Create inline policy instead of using managed policy
             aws.iam.RolePolicy(
                 f"PROD-flowlog-inline-policy-{region}-{self.environment_suffix}",
                 role=flow_role.id,
