@@ -24,6 +24,24 @@ describe('MainStack Unit Tests', () => {
     template = Template.fromStack(stack);
   });
 
+  describe('Environment Suffix Handling', () => {
+    test('Stack uses default environmentSuffix when not provided in context', () => {
+      const appWithoutContext = new cdk.App();
+      const stackWithDefault = new MainStack(appWithoutContext, 'TapStack-default', {
+        env: {
+          account: '123456789012',
+          region: 'us-west-2',
+        },
+      });
+      const templateWithDefault = Template.fromStack(stackWithDefault);
+      
+      // Check that resources are created with 'dev' as default suffix
+      templateWithDefault.hasResourceProperties('AWS::S3::Bucket', {
+        BucketName: `tap-dev-logs-123456789012-us-west-2`,
+      });
+    });
+  });
+
   describe('Security Layer', () => {
     test('KMS Key is created with rotation enabled', () => {
       template.hasResourceProperties('AWS::KMS::Key', {

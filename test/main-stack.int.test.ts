@@ -159,8 +159,9 @@ describe('MainStack Integration Tests', () => {
         new DescribeTargetGroupsCommand({})
       );
 
+      const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
       const targetGroups = response.TargetGroups?.filter((tg) =>
-        tg.TargetGroupName?.includes('synth307')
+        tg.TargetGroupName?.includes(environmentSuffix)
       );
 
       if (targetGroups && targetGroups.length > 0) {
@@ -181,9 +182,10 @@ describe('MainStack Integration Tests', () => {
         return;
       }
 
+      const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
       const response = await rdsClient.send(
         new DescribeDBInstancesCommand({
-          DBInstanceIdentifier: 'tap-synth307-db',
+          DBInstanceIdentifier: `tap-${environmentSuffix}-db`,
         })
       );
 
@@ -329,9 +331,10 @@ describe('MainStack Integration Tests', () => {
 
       // Check if database is Multi-AZ
       if (outputs.DatabaseEndpoint) {
+        const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
         const dbResponse = await rdsClient.send(
           new DescribeDBInstancesCommand({
-            DBInstanceIdentifier: 'tap-synth307-db',
+            DBInstanceIdentifier: `tap-${environmentSuffix}-db`,
           })
         );
         
@@ -346,9 +349,10 @@ describe('MainStack Integration Tests', () => {
     test('All storage resources use encryption', async () => {
       // Check RDS encryption
       if (outputs.DatabaseEndpoint) {
+        const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
         const dbResponse = await rdsClient.send(
           new DescribeDBInstancesCommand({
-            DBInstanceIdentifier: 'tap-synth307-db',
+            DBInstanceIdentifier: `tap-${environmentSuffix}-db`,
           })
         );
         
@@ -376,14 +380,15 @@ describe('MainStack Integration Tests', () => {
 
     test('Secrets are managed through AWS Secrets Manager', async () => {
       // Check if database secret exists
+      const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
       try {
         const response = await secretsClient.send(
           new DescribeSecretCommand({
-            SecretId: 'tap-synth307-db-secret',
+            SecretId: `tap-${environmentSuffix}-db-secret`,
           })
         );
 
-        expect(response.Name).toBe('tap-synth307-db-secret');
+        expect(response.Name).toBe(`tap-${environmentSuffix}-db-secret`);
         expect(response.Description).toContain('RDS Database Credentials');
       } catch (error: any) {
         if (error.name === 'ResourceNotFoundException') {
