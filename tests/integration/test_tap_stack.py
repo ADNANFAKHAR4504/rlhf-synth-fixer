@@ -2,8 +2,10 @@ import json
 import subprocess
 import time
 import requests
+import os
 
-STACK_NAME = "TapStackpr430"
+ENVIRONMENT_SUFFIX = os.environ.get("ENVIRONMENT_SUFFIX", "dev")
+STACK_NAME = f"TapStack{ENVIRONMENT_SUFFIX}"
 
 def run_command(command):
   print(f"Running: {command}")
@@ -19,38 +21,53 @@ def run_command(command):
 
 def test_integration():
   try:
-    print("--- Selecting Pulumi Stack ---")
+    print(f"--- Selecting Pulumi Stack: {STACK_NAME} ---")
     run_command(f"pulumi stack select {STACK_NAME} --create")
 
     print("--- Deploying Infrastructure ---")
     run_command("pulumi up --yes --skip-preview")
 
-    print("--- Fetching ALB DNS Name ---")
+    print("--- Fetching Stack Outputs ---")
     alb_dns_json = run_command("pulumi stack output alb_dns_name --json")
     alb_dns = json.loads(alb_dns_json)
     url = f"http://{alb_dns}"
     
-    print(f"--- Testing URL: {url} ---")
+    tg_arn_json = run_command("pulumi stack output target_group_arn --json")
+    tg_arn = json.loads(tg_arn_json)
     
-    print("Waiting 60 seconds for ALB and targets to initialize...")
-    time.sleep(60)
+    print("--- Waiting for Targets to Become Healthy ---")
     
-    max_retries = 12
-    response = None
-    for i in range(max_retries):
+    max_health_retries = 12 
+    health_check_passed = False
+    for i in range(max_health_retries):
+      print(f"Health check attempt {i+1}/{max_health_retries}...")
       try:
-        response = requests.get(url, timeout=10)
-        print(f"Attempt {i+1}/{max_retries}: Got status code {response.status_code}")
-        if response.status_code == 200:
-          print("✅ Website is up and running!")
+        health_check_output_json = run_command(
+          f"aws elbv2 describe-target-health --target-group-arn {tg_arn}"
+        )
+        health_descriptions = json.loads(health_check_output_json)["TargetHealthDescriptions"]
+        
+        healthy_targets = [
+          target for target in health_descriptions 
+          if target["TargetHealth"]["State"] == "healthy"
+        ]
+        
+        print(f"Found {len(healthy_targets)} healthy targets out of {len(health_descriptions)}.")
+
+        if len(healthy_targets) == 2:
+          health_check_passed = True
+          print("✅ Both targets are healthy!")
           break
-      except requests.exceptions.RequestException as e:
-        print(f"Attempt {i+1}/{max_retries}: Website not ready yet ({e})...")
+      except Exception as e:
+        print(f"Health check command failed with error: {e}")
 
-      if i < max_retries - 1:
-        time.sleep(15)
+      if i < max_health_retries - 1:
+        time.sleep(30)
 
-    assert response is not None, "Failed to get any response from the server."
+    assert health_check_passed, "Targets did not become healthy in time."
+    
+    print(f"--- Testing URL: {url} ---")
+    response = requests.get(url, timeout=30)
     assert response.status_code == 200
     assert "Dual-Stack Web App" in response.text
     
@@ -59,6 +76,3 @@ def test_integration():
   finally:
     print("--- Destroying Infrastructure ---")
     run_command("pulumi destroy --yes --skip-preview")
-
-if __name__ == "__main__":
-  test_integration()
