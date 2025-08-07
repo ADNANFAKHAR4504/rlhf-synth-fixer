@@ -1,0 +1,162 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: 'Production-ready serverless application with API Gateway, Lambda, and DynamoDB'
+
+Parameters:
+  Environment:
+    Type: String
+    Default: 'prod'
+    AllowedValues: ['dev', 'staging', 'prod']
+    Description: 'Environment name for resource tagging'
+  
+  ApplicationName:
+    Type: String
+    Default: 'ServerlessApp'
+    Description: 'Application name for resource naming'
+
+Globals:
+  Function:
+    Timeout: 30
+    MemorySize: 256
+    Runtime: python3.9
+    Environment:
+      Variables:
+        DYNAMODB_TABLE: !Ref AppDynamoTable
+        LOG_LEVEL: INFO
+    Tags:
+      Environment: !Ref Environment
+      Application: !Ref ApplicationName
+
+Resources:
+  # DynamoDB Table
+  AppDynamoTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${ApplicationName}-${Environment}-data'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: 'id'
+          AttributeType: 'S'
+      KeySchema:
+        - AttributeName: 'id'
+          KeyType: 'HASH'
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      SSESpecification:
+        SSEEnabled: true
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: !Ref ApplicationName
+
+  # Lambda Execution Role
+  AppLambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${ApplicationName}-${Environment}-lambda-execution-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: DynamoDBAccessPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:DeleteItem
+                Resource: !GetAtt AppDynamoTable.Arn
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: !Ref ApplicationName
+
+  # Lambda Function
+  AppLambdaFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${ApplicationName}-${Environment}-handler'
+      CodeUri: src/
+      Handler: app.lambda_handler
+      Role: !GetAtt AppLambdaExecutionRole.Arn
+      Events:
+        ApiEvent:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref AppHttpApi
+            Path: /{proxy+}
+            Method: ANY
+      Tags:
+        Environment: !Ref Environment
+        Application: !Ref ApplicationName
+
+  # HTTP API Gateway
+  AppHttpApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      Name: !Sub '${ApplicationName}-${Environment}-api'
+      Description: 'HTTP API for serverless application'
+      CorsConfiguration:
+        AllowCredentials: false
+        AllowHeaders:
+          - Content-Type
+          - X-Amz-Date
+          - Authorization
+          - X-Api-Key
+        AllowMethods:
+          - GET
+          - POST
+          - PUT
+          - DELETE
+          - OPTIONS
+        AllowOrigins:
+          - '*'
+        MaxAge: 600
+      Tags:
+        Environment: !Ref Environment
+        Application: !Ref ApplicationName
+
+  # Lambda Permission for API Gateway (explicit permission)
+  ApiGatewayLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref AppLambdaFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub '${AppHttpApi}/*/ANY/{proxy+}'
+
+Outputs:
+  ApiEndpoint:
+    Description: 'HTTP API Gateway endpoint URL'
+    Value: !Sub 'https://${AppHttpApi}.execute-api.${AWS::Region}.amazonaws.com'
+    Export:
+      Name: !Sub '${AWS::StackName}-ApiEndpoint'
+
+  LambdaFunctionArn:
+    Description: 'Lambda function ARN'
+    Value: !GetAtt AppLambdaFunction.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-LambdaArn'
+
+  DynamoTableName:
+    Description: 'DynamoDB table name'
+    Value: !Ref AppDynamoTable
+    Export:
+      Name: !Sub '${AWS::StackName}-DynamoTableName'
+
+  DynamoTableArn:
+    Description: 'DynamoDB table ARN'
+    Value: !GetAtt AppDynamoTable.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-DynamoTableArn'
