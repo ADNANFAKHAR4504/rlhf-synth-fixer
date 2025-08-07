@@ -1,9 +1,4 @@
-import {
-  cloudwatchDashboard,
-  cloudwatchLogGroup,
-  cloudwatchMetricAlarm,
-  snsTopic,
-} from '@cdktf/provider-aws';
+import * as aws from '@cdktf/provider-aws';
 import { TerraformOutput, TerraformStack } from 'cdktf';
 import { Construct } from 'constructs';
 
@@ -20,16 +15,16 @@ export class CloudwatchStack extends TerraformStack {
   constructor(scope: Construct, id: string, config: CloudwatchStackConfig) {
     super(scope, id);
 
-    new AwsProvider.AwsProvider(this, 'aws', {
+    new aws.provider.AwsProvider(this, 'aws', {
       region: process.env.AWS_REGION || 'us-west-2',
     });
 
-    const topic = new snsTopic.SnsTopic(this, 'AlertsTopic', {
+    const topic = new aws.snsTopic.SnsTopic(this, 'AlertsTopic', {
       name: `${config.environment}-infrastructure-alerts`,
       tags: config.commonTags,
     });
 
-    new cloudwatchDashboard.CloudwatchDashboard(this, 'Dashboard', {
+    new aws.cloudwatchDashboard.CloudwatchDashboard(this, 'Dashboard', {
       dashboardName: `${config.environment}-infrastructure-dashboard`,
       dashboardBody: JSON.stringify({
         widgets: [
@@ -56,7 +51,7 @@ export class CloudwatchStack extends TerraformStack {
       }),
     });
 
-    new cloudwatchMetricAlarm.CloudwatchMetricAlarm(this, 'HighCpuAlarm', {
+    new aws.cloudwatchMetricAlarm.CloudwatchMetricAlarm(this, 'HighCpuAlarm', {
       alarmName: `${config.environment}-high-cpu-utilization`,
       comparisonOperator: 'GreaterThanThreshold',
       evaluationPeriods: 2,
@@ -73,7 +68,7 @@ export class CloudwatchStack extends TerraformStack {
       tags: config.commonTags,
     });
 
-    new cloudwatchMetricAlarm.CloudwatchMetricAlarm(
+    new aws.cloudwatchMetricAlarm.CloudwatchMetricAlarm(
       this,
       'InstanceHealthAlarm',
       {
@@ -94,7 +89,7 @@ export class CloudwatchStack extends TerraformStack {
       }
     );
 
-    new cloudwatchLogGroup.CloudwatchLogGroup(this, 'AppLogGroup', {
+    new aws.cloudwatchLogGroup.CloudwatchLogGroup(this, 'AppLogGroup', {
       name: `/aws/application/${config.environment}`,
       retentionInDays: config.environment === 'production' ? 365 : 30,
       tags: config.commonTags,

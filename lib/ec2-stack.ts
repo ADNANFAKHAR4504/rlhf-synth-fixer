@@ -1,9 +1,4 @@
-import {
-  cloudwatchLogGroup,
-  dataAwsAmi,
-  instance,
-  securityGroup,
-} from '@cdktf/provider-aws';
+import * as aws from '@cdktf/provider-aws';
 import { Fn, TerraformOutput, TerraformStack } from 'cdktf';
 import { Construct } from 'constructs';
 
@@ -27,11 +22,11 @@ export class Ec2Stack extends TerraformStack {
   constructor(scope: Construct, id: string, config: Ec2StackConfig) {
     super(scope, id);
 
-    new AwsProvider.AwsProvider(this, 'aws', {
+    new aws.provider.AwsProvider(this, 'aws', {
       region: process.env.AWS_REGION || 'us-west-2',
     });
 
-    const ami = new dataAwsAmi.DataAwsAmi(this, 'AmazonLinuxAmi', {
+    const ami = new aws.dataAwsAmi.DataAwsAmi(this, 'AmazonLinuxAmi', {
       mostRecent: true,
       owners: ['amazon'],
       filter: [
@@ -42,7 +37,7 @@ export class Ec2Stack extends TerraformStack {
       ],
     });
 
-    const sg = new securityGroup.SecurityGroup(this, 'Ec2SG', {
+    const sg = new aws.securityGroup.SecurityGroup(this, 'Ec2SG', {
       namePrefix: `${config.environment}-ec2-`,
       vpcId: config.vpcId,
       ingress: [
@@ -79,7 +74,7 @@ export class Ec2Stack extends TerraformStack {
       },
     });
 
-    const ec2 = new instance.Instance(this, 'WebServer', {
+    const ec2 = new aws.instance.Instance(this, 'WebServer', {
       ami: ami.id,
       instanceType: config.instanceType,
       subnetId: config.subnetId,
@@ -94,7 +89,6 @@ export class Ec2Stack extends TerraformStack {
       systemctl enable httpd
       echo "<h1>${config.environment} server</h1>" > /var/www/html/index.html`)
       ),
-
       rootBlockDevice: {
         volumeType: 'gp3',
         volumeSize: config.environment === 'production' ? 20 : 10,
@@ -108,7 +102,7 @@ export class Ec2Stack extends TerraformStack {
       },
     });
 
-    new cloudwatchLogGroup.CloudwatchLogGroup(this, 'Ec2LogGroup', {
+    new aws.cloudwatchLogGroup.CloudwatchLogGroup(this, 'Ec2LogGroup', {
       name: `/aws/ec2/${config.environment}`,
       retentionInDays: config.environment === 'production' ? 365 : 30,
       tags: config.commonTags,

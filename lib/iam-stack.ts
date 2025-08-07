@@ -1,8 +1,4 @@
-import {
-  iamInstanceProfile,
-  iamRole,
-  iamRolePolicy,
-} from '@cdktf/provider-aws';
+import * as aws from '@cdktf/provider-aws';
 import { TerraformOutput, TerraformStack } from 'cdktf';
 import { Construct } from 'constructs';
 
@@ -20,11 +16,11 @@ export class IamStack extends TerraformStack {
   constructor(scope: Construct, id: string, config: IamStackConfig) {
     super(scope, id);
 
-    new AwsProvider.AwsProvider(this, 'aws', {
+    new aws.provider.AwsProvider(this, 'aws', {
       region: process.env.AWS_REGION || 'us-west-2',
     });
 
-    const ec2Role = new iamRole.IamRole(this, 'Ec2Role', {
+    const ec2Role = new aws.iamRole.IamRole(this, 'Ec2Role', {
       name: `${config.environment}-ec2-role`,
       assumeRolePolicy: JSON.stringify({
         Version: '2012-10-17',
@@ -39,7 +35,7 @@ export class IamStack extends TerraformStack {
       tags: config.commonTags,
     });
 
-    const ec2Profile = new iamInstanceProfile.IamInstanceProfile(
+    const ec2Profile = new aws.iamInstanceProfile.IamInstanceProfile(
       this,
       'Ec2Profile',
       {
@@ -49,7 +45,7 @@ export class IamStack extends TerraformStack {
       }
     );
 
-    new iamRolePolicy.IamRolePolicy(this, 'Ec2Policy', {
+    new aws.iamRolePolicy.IamRolePolicy(this, 'Ec2Policy', {
       name: `${config.environment}-ec2-policy`,
       role: ec2Role.id,
       policy: JSON.stringify({
@@ -78,7 +74,7 @@ export class IamStack extends TerraformStack {
       }),
     });
 
-    const s3ServiceRole = new iamRole.IamRole(this, 'S3ServiceRole', {
+    const s3ServiceRole = new aws.iamRole.IamRole(this, 'S3ServiceRole', {
       name: `${config.environment}-s3-service-role`,
       assumeRolePolicy: JSON.stringify({
         Version: '2012-10-17',
@@ -93,7 +89,7 @@ export class IamStack extends TerraformStack {
       tags: config.commonTags,
     });
 
-    const cloudwatchRole = new iamRole.IamRole(this, 'CloudWatchRole', {
+    const cloudwatchRole = new aws.iamRole.IamRole(this, 'CloudWatchRole', {
       name: `${config.environment}-cloudwatch-role`,
       assumeRolePolicy: JSON.stringify({
         Version: '2012-10-17',

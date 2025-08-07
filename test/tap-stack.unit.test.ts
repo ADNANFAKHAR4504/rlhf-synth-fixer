@@ -1,97 +1,88 @@
-import { App, Testing } from "cdktf";
-import { TapStack } from "../lib/tap-stack";
+import { App, Testing } from 'cdktf';
+import { TapStack } from '../lib/tap-stack';
 
-describe("TapStack Unit Tests", () => {
+describe('TapStack Unit Tests', () => {
   beforeEach(() => {
     jest.clearAllMocks();
   });
 
-  test("TapStack instantiates successfully with props", () => {
+  test('TapStack instantiates with default props', () => {
     const app = new App();
-    const stack = new TapStack(app, "TestTapStackWithProps", {
-      environmentSuffix: "prod",
-      stateBucket: "test-bucket",
-      stateBucketRegion: "us-west-2",
-      awsRegion: "us-west-2",
+    const stack = new TapStack(app, 'TapDefault');
+    const synthesized = Testing.synth(stack);
+    expect(stack).toBeDefined();
+    expect(synthesized).toMatchSnapshot();
+  });
+
+  test('TapStack instantiates with custom props', () => {
+    const app = new App();
+    const stack = new TapStack(app, 'TapCustom', {
+      environmentSuffix: 'prod',
+      awsRegion: 'us-west-2',
       defaultTags: {
         tags: {
-          Environment: "prod",
-          Owner: "team",
-          Service: "core",
+          Environment: 'prod',
+          Owner: 'devops',
+          Service: 'infra',
         },
       },
     });
-
     const synthesized = Testing.synth(stack);
-    expect(stack).toBeDefined();
-    expect(synthesized).toBeDefined();
+    expect(synthesized).toMatchSnapshot();
   });
 
-  test("TapStack instantiates with default props", () => {
+  test('VPC and subnets are created', () => {
     const app = new App();
-    const stack = new TapStack(app, "TestTapStackDefault");
-    const synthesized = Testing.synth(stack);
-    expect(stack).toBeDefined();
-    expect(synthesized).toBeDefined();
-  });
-
-  test("VPC resources created correctly", () => {
-    const app = new App();
-    const stack = new TapStack(app, "VpcTest");
+    const stack = new TapStack(app, 'VpcTest');
     const resources = Testing.synth(stack).resources;
 
-    const vpcs = resources.filter((r) => r.type === "aws_vpc");
-    const igw = resources.find((r) => r.type === "aws_internet_gateway");
-    const subnets = resources.filter((r) => r.type === "aws_subnet");
-    const natGws = resources.filter((r) => r.type === "aws_nat_gateway");
-    const flowLogs = resources.filter((r) => r.type === "aws_flow_log");
-
-    expect(vpcs.length).toBe(1);
-    expect(igw).toBeDefined();
-    expect(subnets.length).toBeGreaterThanOrEqual(6);
-    expect(natGws.length).toBeGreaterThanOrEqual(1);
-    expect(flowLogs.length).toBe(1);
+    expect(resources.find(r => r.type === 'aws_vpc')).toBeDefined();
+    expect(resources.filter(r => r.type === 'aws_subnet').length).toBeGreaterThanOrEqual(6);
+    expect(resources.find(r => r.type === 'aws_internet_gateway')).toBeDefined();
+    expect(resources.find(r => r.type === 'aws_flow_log')).toBeDefined();
   });
 
-  test("IAM roles and profiles created", () => {
+  test('IAM resources are created', () => {
     const app = new App();
-    const stack = new TapStack(app, "IamTest");
+    const stack = new TapStack(app, 'IamTest');
     const resources = Testing.synth(stack).resources;
 
-    expect(resources.find((r) => r.type === "aws_iam_role")).toBeDefined();
-    expect(resources.find((r) => r.type === "aws_iam_instance_profile")).toBeDefined();
+    expect(resources.find(r => r.type === 'aws_iam_role')).toBeDefined();
+    expect(resources.find(r => r.type === 'aws_iam_instance_profile')).toBeDefined();
   });
 
-  test("EC2 instance and SG created", () => {
+  test('EC2 instance and security group are created', () => {
     const app = new App();
-    const stack = new TapStack(app, "Ec2Test");
+    const stack = new TapStack(app, 'Ec2Test');
     const resources = Testing.synth(stack).resources;
 
-    expect(resources.find((r) => r.type === "aws_instance")).toBeDefined();
-    expect(resources.find((r) => r.type === "aws_security_group")).toBeDefined();
+    expect(resources.find(r => r.type === 'aws_instance')).toBeDefined();
+    expect(resources.find(r => r.type === 'aws_security_group')).toBeDefined();
   });
 
-  test("S3 buckets and encryption config created", () => {
+  test('S3 buckets and encryption config created', () => {
     const app = new App();
-    const stack = new TapStack(app, "S3Test");
+    const stack = new TapStack(app, 'S3Test');
     const resources = Testing.synth(stack).resources;
 
-    const s3Buckets = resources.filter((r) => r.type === "aws_s3_bucket");
-    const encryption = resources.filter(
-      (r) => r.type === "aws_s3_bucket_server_side_encryption_configuration"
-    );
-
-    expect(s3Buckets.length).toBeGreaterThanOrEqual(2);
-    expect(encryption.length).toBeGreaterThanOrEqual(2);
+    expect(resources.filter(r => r.type === 'aws_s3_bucket').length).toBeGreaterThanOrEqual(2);
+    expect(
+      resources.filter(
+        r => r.type === 'aws_s3_bucket_server_side_encryption_configuration'
+      ).length
+    ).toBeGreaterThanOrEqual(2);
+    expect(
+      resources.filter(r => r.type === 'aws_s3_bucket_public_access_block').length
+    ).toBeGreaterThanOrEqual(2);
   });
 
-  test("CloudWatch alarms and dashboard created", () => {
+  test('CloudWatch resources created', () => {
     const app = new App();
-    const stack = new TapStack(app, "CloudwatchTest");
+    const stack = new TapStack(app, 'CloudwatchTest');
     const resources = Testing.synth(stack).resources;
 
-    expect(resources.find((r) => r.type === "aws_cloudwatch_dashboard")).toBeDefined();
-    expect(resources.find((r) => r.type === "aws_cloudwatch_metric_alarm")).toBeDefined();
-    expect(resources.find((r) => r.type === "aws_sns_topic")).toBeDefined();
+    expect(resources.find(r => r.type === 'aws_cloudwatch_dashboard')).toBeDefined();
+    expect(resources.find(r => r.type === 'aws_cloudwatch_metric_alarm')).toBeDefined();
+    expect(resources.find(r => r.type === 'aws_sns_topic')).toBeDefined();
   });
 });

@@ -1,17 +1,4 @@
-import {
-  cloudwatchLogGroup,
-  dataAwsRegion,
-  eip,
-  flowLog,
-  iamRole,
-  iamRolePolicy,
-  internetGateway,
-  natGateway,
-  routeTable,
-  routeTableAssociation,
-  subnet,
-  vpc,
-} from '@cdktf/provider-aws';
+import * as aws from '@cdktf/provider-aws';
 import { Fn, TerraformOutput, TerraformStack } from 'cdktf';
 import { Construct } from 'constructs';
 
@@ -37,13 +24,13 @@ export class VpcStack extends TerraformStack {
   constructor(scope: Construct, id: string, config: VpcStackConfig) {
     super(scope, id);
 
-    new AwsProvider.AwsProvider(this, 'aws', {
+    new aws.provider.AwsProvider(this, 'aws', {
       region: process.env.AWS_REGION || 'us-west-2',
     });
 
-    new dataAwsRegion.DataAwsRegion(this, 'current');
+    new aws.dataAwsRegion.DataAwsRegion(this, 'current');
 
-    const mainVpc = new vpc.Vpc(this, 'MainVpc', {
+    const mainVpc = new aws.vpc.Vpc(this, 'MainVpc', {
       cidrBlock: config.vpcCidr,
       enableDnsSupport: true,
       enableDnsHostnames: true,
@@ -53,7 +40,7 @@ export class VpcStack extends TerraformStack {
       },
     });
 
-    const igw = new internetGateway.InternetGateway(this, 'IGW', {
+    const igw = new aws.internetGateway.InternetGateway(this, 'IGW', {
       vpcId: mainVpc.id,
       tags: {
         ...config.commonTags,
@@ -61,65 +48,70 @@ export class VpcStack extends TerraformStack {
       },
     });
 
-    const publicSubnets = config.publicSubnetCidrs.map((cidr, i) => {
-      return new subnet.Subnet(this, `PublicSubnet${i}`, {
-        vpcId: mainVpc.id,
-        cidrBlock: cidr,
-        availabilityZone: Fn.element(config.azs, i),
-        mapPublicIpOnLaunch: true,
-        tags: {
-          ...config.commonTags,
-          Name: `${config.environment}-public-subnet-${i + 1}`,
-        },
-      });
-    });
+    const publicSubnets = config.publicSubnetCidrs.map(
+      (cidr, i) =>
+        new aws.subnet.Subnet(this, `PublicSubnet${i}`, {
+          vpcId: mainVpc.id,
+          cidrBlock: cidr,
+          availabilityZone: Fn.element(config.azs, i),
+          mapPublicIpOnLaunch: true,
+          tags: {
+            ...config.commonTags,
+            Name: `${config.environment}-public-subnet-${i + 1}`,
+          },
+        })
+    );
 
-    const privateSubnets = config.privateSubnetCidrs.map((cidr, i) => {
-      return new subnet.Subnet(this, `PrivateSubnet${i}`, {
-        vpcId: mainVpc.id,
-        cidrBlock: cidr,
-        availabilityZone: Fn.element(config.azs, i),
-        tags: {
-          ...config.commonTags,
-          Name: `${config.environment}-private-subnet-${i + 1}`,
-        },
-      });
-    });
+    const privateSubnets = config.privateSubnetCidrs.map(
+      (cidr, i) =>
+        new aws.subnet.Subnet(this, `PrivateSubnet${i}`, {
+          vpcId: mainVpc.id,
+          cidrBlock: cidr,
+          availabilityZone: Fn.element(config.azs, i),
+          tags: {
+            ...config.commonTags,
+            Name: `${config.environment}-private-subnet-${i + 1}`,
+          },
+        })
+    );
 
-    const databaseSubnets = config.databaseSubnetCidrs.map((cidr, i) => {
-      return new subnet.Subnet(this, `DatabaseSubnet${i}`, {
-        vpcId: mainVpc.id,
-        cidrBlock: cidr,
-        availabilityZone: Fn.element(config.azs, i),
-        tags: {
-          ...config.commonTags,
-          Name: `${config.environment}-database-subnet-${i + 1}`,
-        },
-      });
-    });
+    const databaseSubnets = config.databaseSubnetCidrs.map(
+      (cidr, i) =>
+        new aws.subnet.Subnet(this, `DatabaseSubnet${i}`, {
+          vpcId: mainVpc.id,
+          cidrBlock: cidr,
+          availabilityZone: Fn.element(config.azs, i),
+          tags: {
+            ...config.commonTags,
+            Name: `${config.environment}-database-subnet-${i + 1}`,
+          },
+        })
+    );
 
-    const eips = privateSubnets.map((_, i) => {
-      return new eip.Eip(this, `NatEip${i}`, {
-        domain: 'vpc',
-        tags: {
-          ...config.commonTags,
-          Name: `${config.environment}-nat-eip-${i + 1}`,
-        },
-      });
-    });
+    const eips = privateSubnets.map(
+      (_, i) =>
+        new aws.eip.Eip(this, `NatEip${i}`, {
+          domain: 'vpc',
+          tags: {
+            ...config.commonTags,
+            Name: `${config.environment}-nat-eip-${i + 1}`,
+          },
+        })
+    );
 
-    const natGateways = privateSubnets.map((_, i) => {
-      return new natGateway.NatGateway(this, `NatGateway${i}`, {
-        allocationId: eips[i].id,
-        subnetId: publicSubnets[i].id,
-        tags: {
-          ...config.commonTags,
-          Name: `${config.environment}-nat-gateway-${i + 1}`,
-        },
-      });
-    });
+    const natGateways = privateSubnets.map(
+      (_, i) =>
+        new aws.natGateway.NatGateway(this, `NatGateway${i}`, {
+          allocationId: eips[i].id,
+          subnetId: publicSubnets[i].id,
+          tags: {
+            ...config.commonTags,
+            Name: `${config.environment}-nat-gateway-${i + 1}`,
+          },
+        })
+    );
 
-    const publicRT = new routeTable.RouteTable(this, 'PublicRT', {
+    const publicRT = new aws.routeTable.RouteTable(this, 'PublicRT', {
       vpcId: mainVpc.id,
       route: [
         {
@@ -134,14 +126,18 @@ export class VpcStack extends TerraformStack {
     });
 
     publicSubnets.forEach((s, i) => {
-      new routeTableAssociation.RouteTableAssociation(this, `PublicRTA${i}`, {
-        subnetId: s.id,
-        routeTableId: publicRT.id,
-      });
+      new aws.routeTableAssociation.RouteTableAssociation(
+        this,
+        `PublicRTA${i}`,
+        {
+          subnetId: s.id,
+          routeTableId: publicRT.id,
+        }
+      );
     });
 
     privateSubnets.forEach((s, i) => {
-      const rt = new routeTable.RouteTable(this, `PrivateRT${i}`, {
+      const rt = new aws.routeTable.RouteTable(this, `PrivateRT${i}`, {
         vpcId: mainVpc.id,
         route: [
           {
@@ -155,13 +151,17 @@ export class VpcStack extends TerraformStack {
         },
       });
 
-      new routeTableAssociation.RouteTableAssociation(this, `PrivateRTA${i}`, {
-        subnetId: s.id,
-        routeTableId: rt.id,
-      });
+      new aws.routeTableAssociation.RouteTableAssociation(
+        this,
+        `PrivateRTA${i}`,
+        {
+          subnetId: s.id,
+          routeTableId: rt.id,
+        }
+      );
     });
 
-    const dbRT = new routeTable.RouteTable(this, 'DatabaseRT', {
+    const dbRT = new aws.routeTable.RouteTable(this, 'DatabaseRT', {
       vpcId: mainVpc.id,
       tags: {
         ...config.commonTags,
@@ -170,13 +170,17 @@ export class VpcStack extends TerraformStack {
     });
 
     databaseSubnets.forEach((s, i) => {
-      new routeTableAssociation.RouteTableAssociation(this, `DatabaseRTA${i}`, {
-        subnetId: s.id,
-        routeTableId: dbRT.id,
-      });
+      new aws.routeTableAssociation.RouteTableAssociation(
+        this,
+        `DatabaseRTA${i}`,
+        {
+          subnetId: s.id,
+          routeTableId: dbRT.id,
+        }
+      );
     });
 
-    const logGroup = new cloudwatchLogGroup.CloudwatchLogGroup(
+    const logGroup = new aws.cloudwatchLogGroup.CloudwatchLogGroup(
       this,
       'VpcFlowLogGroup',
       {
@@ -186,7 +190,7 @@ export class VpcStack extends TerraformStack {
       }
     );
 
-    const flowLogRole = new iamRole.IamRole(this, 'VpcFlowLogRole', {
+    const flowLogRole = new aws.iamRole.IamRole(this, 'VpcFlowLogRole', {
       name: `${config.environment}-vpc-flow-log-role`,
       assumeRolePolicy: JSON.stringify({
         Version: '2012-10-17',
@@ -203,7 +207,7 @@ export class VpcStack extends TerraformStack {
       tags: config.commonTags,
     });
 
-    new iamRolePolicy.IamRolePolicy(this, 'VpcFlowLogPolicy', {
+    new aws.iamRolePolicy.IamRolePolicy(this, 'VpcFlowLogPolicy', {
       name: `${config.environment}-vpc-flow-log-policy`,
       role: flowLogRole.id,
       policy: JSON.stringify({
@@ -224,7 +228,7 @@ export class VpcStack extends TerraformStack {
       }),
     });
 
-    new flowLog.FlowLog(this, 'VpcFlowLog', {
+    new aws.flowLog.FlowLog(this, 'VpcFlowLog', {
       iamRoleArn: flowLogRole.arn,
       logDestination: logGroup.arn,
       trafficType: 'ALL',

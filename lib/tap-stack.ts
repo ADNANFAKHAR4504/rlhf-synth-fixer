@@ -33,29 +33,26 @@ class TapStack extends TerraformStack {
       process.env.ENVIRONMENT || props?.environmentSuffix || 'development';
     const region = process.env.AWS_REGION || props?.awsRegion || 'us-west-2';
 
-    const commonTags = props?.defaultTags?.tags || {
+    const commonTags = {
       Environment: environment,
       Owner: 'team-infra',
       Service: 'core',
       CostCenter: '1234',
       ManagedBy: 'Terraform',
+      ...props?.defaultTags?.tags,
     };
 
     const azs = [`${region}a`, `${region}b`, `${region}c`];
-
     const vpcCidr = '10.0.0.0/16';
-    const publicSubnets = ['10.0.1.0/24', '10.0.2.0/24', '10.0.3.0/24'];
-    const privateSubnets = ['10.0.11.0/24', '10.0.12.0/24', '10.0.13.0/24'];
-    const databaseSubnets = ['10.0.21.0/24', '10.0.22.0/24', '10.0.23.0/24'];
 
     const vpcStack = new VpcStack(this, 'VpcStack', {
       environment,
       region,
       vpcCidr,
       azs,
-      publicSubnetCidrs: publicSubnets,
-      privateSubnetCidrs: privateSubnets,
-      databaseSubnetCidrs: databaseSubnets,
+      publicSubnetCidrs: ['10.0.1.0/24', '10.0.2.0/24', '10.0.3.0/24'],
+      privateSubnetCidrs: ['10.0.11.0/24', '10.0.12.0/24', '10.0.13.0/24'],
+      databaseSubnetCidrs: ['10.0.21.0/24', '10.0.22.0/24', '10.0.23.0/24'],
       commonTags,
     });
 
