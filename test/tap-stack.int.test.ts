@@ -29,21 +29,33 @@ import {
   WAFV2Client
 } from '@aws-sdk/client-wafv2';
 import axios from 'axios';
-import fs from 'fs';
 
-const rawOutputs = JSON.parse(
-  fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
-);
+// Base stack name from environment
+const baseStackName = `TapStack${environmentSuffix}`;
 
-// Map the outputs to match our test expectations
-const outputs = {};
-Object.entries(rawOutputs).forEach(([key, value]) => {
-  // Remove the stack name prefix and keep just the output key
-  const cleanKey = key.replace(/^TapStack-(Primary|Secondary)-[^-]+-/, '');
-  // Add Primary/Secondary suffix based on the stack name
-  const suffix = key.includes('-Primary-') ? 'Primary' : 'Secondary';
-  outputs[`${cleanKey}${suffix}`] = value;
-});
+// Function to find resources by tag
+async function findResourcesByTag(client: EC2Client, tagKey: string, tagValue: string) {
+  const response = await client.send(
+    new DescribeVpcsCommand({
+      Filters: [
+        {
+          Name: `tag:${tagKey}`,
+          Values: [tagValue]
+        }
+      ]
+    })
+  );
+  return response.Vpcs;
+}
+
+// Initialize outputs object
+const outputs = {
+  // We'll populate these as we find resources
+  VpcIdPrimary: undefined,
+  VpcIdSecondary: undefined,
+  InstanceIdPrimary: undefined,
+  InstanceIdSecondary: undefined
+};
 
 // Get environment suffix from environment variable (set by CI/CD pipeline)
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
@@ -67,15 +79,17 @@ const ssmClientEast = new SSMClient({ region: 'us-east-1' });
 describe('Infrastructure Integration Tests', () => {
   describe('VPC and Networking', () => {
     test('should have VPC deployed in us-west-1', async () => {
-      const vpcId = outputs.VpcIdPrimary;
-      expect(vpcId).toBeDefined();
-      expect(vpcId).toMatch(/^vpc-[a-f0-9]+$/);
-
-      const response = await ec2ClientWest.send(
-        new DescribeVpcsCommand({ VpcIds: [vpcId] })
-      );
-      expect(response.Vpcs).toHaveLength(1);
-      expect(response.Vpcs![0].State).toBe('available');
+      // Find VPC by stack name tag
+      const vpcs = await findResourcesByTag(ec2ClientWest, 'aws:cloudformation:stack-name', baseStackName);
+      expect(vpcs).toBeDefined();
+      expect(vpcs).toHaveLength(1);
+      
+      const vpc = vpcs![0];
+      expect(vpc.State).toBe('available');
+      
+      // Store the VPC ID for other tests
+      outputs.VpcIdPrimary = vpc.VpcId;
+      expect(outputs.VpcIdPrimary).toMatch(/^vpc-[a-f0-9]+$/);
     });
 
     test('should have VPC deployed in us-east-1', async () => {
