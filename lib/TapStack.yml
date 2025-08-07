@@ -5,28 +5,19 @@ Parameters:
   EnvironmentSuffix:
     Type: String
     Default: dev
-    Description: Environment Name for resource naming and tagging
+    Description: Environment suffix for resource naming and tagging
 
 Mappings:
   EnvironmentConfig:
-    dev:
-      LambdaMemorySize: 256
-      LambdaTimeout: 30
-    staging:
+    default:
       LambdaMemorySize: 256
       LambdaTimeout: 30
     prod:
       LambdaMemorySize: 512
-      LambdaTimeout: 30
-    default:
-      LambdaMemorySize: 255
-      LambdaTimeout: 30
+      LambdaTimeout: 60
 
 Conditions:
-  HasMapping: !Or
-    - !Equals [!Ref EnvironmentSuffix, 'dev']
-    - !Equals [!Ref EnvironmentSuffix, 'staging']
-    - !Equals [!Ref EnvironmentSuffix, 'prod']
+  IsProdEnvironment: !Equals [!Ref EnvironmentSuffix, prod]
 
 Resources:
   # VPC Configuration
@@ -229,7 +220,6 @@ Resources:
   CreateItemRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${EnvironmentSuffix}-create-item-role'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -259,7 +249,6 @@ Resources:
   GetItemRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${EnvironmentSuffix}-get-item-role'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -356,25 +345,13 @@ Resources:
       Handler: index.lambda_handler
       Role: !GetAtt CreateItemRole.Arn
       MemorySize: !If
-        - HasMapping
-        - !FindInMap
-          - EnvironmentConfig
-          - !Ref EnvironmentSuffix
-          - LambdaMemorySize
-        - !FindInMap
-          - EnvironmentConfig
-          - default
-          - LambdaMemorySize
+        - IsProdEnvironment
+        - !FindInMap [EnvironmentConfig, prod, LambdaMemorySize]
+        - !FindInMap [EnvironmentConfig, default, LambdaMemorySize]
       Timeout: !If
-        - HasMapping
-        - !FindInMap
-          - EnvironmentConfig
-          - !Ref EnvironmentSuffix
-          - LambdaTimeout
-        - !FindInMap
-          - EnvironmentConfig
-          - default
-          - LambdaTimeout
+        - IsProdEnvironment
+        - !FindInMap [EnvironmentConfig, prod, LambdaTimeout]
+        - !FindInMap [EnvironmentConfig, default, LambdaTimeout]
       VpcConfig:
         SecurityGroupIds:
           - !Ref LambdaSecurityGroup
@@ -525,25 +502,13 @@ Resources:
       Handler: index.lambda_handler
       Role: !GetAtt GetItemRole.Arn
       MemorySize: !If
-        - HasMapping
-        - !FindInMap
-          - EnvironmentConfig
-          - !Ref EnvironmentSuffix
-          - LambdaMemorySize
-        - !FindInMap
-          - EnvironmentConfig
-          - default
-          - LambdaMemorySize
+        - IsProdEnvironment
+        - !FindInMap [EnvironmentConfig, prod, LambdaMemorySize]
+        - !FindInMap [EnvironmentConfig, default, LambdaMemorySize]
       Timeout: !If
-        - HasMapping
-        - !FindInMap
-          - EnvironmentConfig
-          - !Ref EnvironmentSuffix
-          - LambdaTimeout
-        - !FindInMap
-          - EnvironmentConfig
-          - default
-          - LambdaTimeout
+        - IsProdEnvironment
+        - !FindInMap [EnvironmentConfig, prod, LambdaTimeout]
+        - !FindInMap [EnvironmentConfig, default, LambdaTimeout]
       VpcConfig:
         SecurityGroupIds:
           - !Ref LambdaSecurityGroup
@@ -662,25 +627,13 @@ Resources:
       Handler: index.lambda_handler
       Role: !GetAtt UpdateItemRole.Arn
       MemorySize: !If
-        - HasMapping
-        - !FindInMap
-          - EnvironmentConfig
-          - !Ref EnvironmentSuffix
-          - LambdaMemorySize
-        - !FindInMap
-          - EnvironmentConfig
-          - default
-          - LambdaMemorySize
+        - IsProdEnvironment
+        - !FindInMap [EnvironmentConfig, prod, LambdaMemorySize]
+        - !FindInMap [EnvironmentConfig, default, LambdaMemorySize]
       Timeout: !If
-        - HasMapping
-        - !FindInMap
-          - EnvironmentConfig
-          - !Ref EnvironmentSuffix
-          - LambdaTimeout
-        - !FindInMap
-          - EnvironmentConfig
-          - default
-          - LambdaTimeout
+        - IsProdEnvironment
+        - !FindInMap [EnvironmentConfig, prod, LambdaTimeout]
+        - !FindInMap [EnvironmentConfig, default, LambdaTimeout]
       VpcConfig:
         SecurityGroupIds:
           - !Ref LambdaSecurityGroup
@@ -865,25 +818,13 @@ Resources:
       Handler: index.lambda_handler
       Role: !GetAtt DeleteItemRole.Arn
       MemorySize: !If
-        - HasMapping
-        - !FindInMap
-          - EnvironmentConfig
-          - !Ref EnvironmentSuffix
-          - LambdaMemorySize
-        - !FindInMap
-          - EnvironmentConfig
-          - default
-          - LambdaMemorySize
+        - IsProdEnvironment
+        - !FindInMap [EnvironmentConfig, prod, LambdaMemorySize]
+        - !FindInMap [EnvironmentConfig, default, LambdaMemorySize]
       Timeout: !If
-        - HasMapping
-        - !FindInMap
-          - EnvironmentConfig
-          - !Ref EnvironmentSuffix
-          - LambdaTimeout
-        - !FindInMap
-          - EnvironmentConfig
-          - default
-          - LambdaTimeout
+        - IsProdEnvironment
+        - !FindInMap [EnvironmentConfig, prod, LambdaTimeout]
+        - !FindInMap [EnvironmentConfig, default, LambdaTimeout]
       VpcConfig:
         SecurityGroupIds:
           - !Ref LambdaSecurityGroup
