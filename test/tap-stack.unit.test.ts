@@ -17,6 +17,75 @@ describe('ProjectXInfrastructureStack', () => {
     template = Template.fromStack(stack);
   });
 
+  describe('Environment Configuration', () => {
+    test('should use environmentSuffix from props when provided', () => {
+      const testApp = new cdk.App();
+      const testStack = new ProjectXInfrastructureStack(testApp, 'TestStack', {
+        environmentSuffix: 'prod',
+        env: { account: '123456789012', region: 'us-west-2' },
+      });
+      const testTemplate = Template.fromStack(testStack);
+      
+      // Verify the stack uses the provided environment suffix
+      testTemplate.hasOutput('VpcId', {
+        Export: {
+          Name: 'ProjectX-VpcId-prod',
+        },
+      });
+    });
+
+    test('should use environmentSuffix from context when not in props', () => {
+      const contextApp = new cdk.App();
+      contextApp.node.setContext('environmentSuffix', 'staging');
+      
+      const contextStack = new ProjectXInfrastructureStack(contextApp, 'ContextStack', {
+        env: { account: '123456789012', region: 'us-west-2' },
+      });
+      const contextTemplate = Template.fromStack(contextStack);
+      
+      // Verify the stack uses the context environment suffix
+      contextTemplate.hasOutput('VpcId', {
+        Export: {
+          Name: 'ProjectX-VpcId-staging',
+        },
+      });
+    });
+
+    test('should use default environmentSuffix when not in props or context', () => {
+      const defaultApp = new cdk.App();
+      
+      const defaultStack = new ProjectXInfrastructureStack(defaultApp, 'DefaultStack', {
+        env: { account: '123456789012', region: 'us-west-2' },
+      });
+      const defaultTemplate = Template.fromStack(defaultStack);
+      
+      // Verify the stack uses the default environment suffix
+      defaultTemplate.hasOutput('VpcId', {
+        Export: {
+          Name: 'ProjectX-VpcId-dev',
+        },
+      });
+    });
+
+    test('should prioritize props over context for environmentSuffix', () => {
+      const priorityApp = new cdk.App();
+      priorityApp.node.setContext('environmentSuffix', 'staging');
+      
+      const priorityStack = new ProjectXInfrastructureStack(priorityApp, 'PriorityStack', {
+        environmentSuffix: 'prod', // This should take precedence
+        env: { account: '123456789012', region: 'us-west-2' },
+      });
+      const priorityTemplate = Template.fromStack(priorityStack);
+      
+      // Verify props take precedence over context
+      priorityTemplate.hasOutput('VpcId', {
+        Export: {
+          Name: 'ProjectX-VpcId-prod',
+        },
+      });
+    });
+  });
+
   describe('VPC Resources', () => {
     test('should create VPC with correct CIDR', () => {
       template.hasResourceProperties('AWS::EC2::VPC', {

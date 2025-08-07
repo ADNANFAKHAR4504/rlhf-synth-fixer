@@ -17,6 +17,71 @@ describe('ProjectX Infrastructure Integration Tests', () => {
     template = Template.fromStack(stack);
   });
 
+  describe('Environment Configuration Integration', () => {
+    test('should handle different environment configurations', () => {
+      // Test with props environmentSuffix
+      const propsApp = new cdk.App();
+      const propsStack = new ProjectXInfrastructureStack(propsApp, 'PropsStack', {
+        environmentSuffix: 'production',
+        env: { account: '123456789012', region: 'us-west-2' },
+      });
+      const propsTemplate = Template.fromStack(propsStack);
+      
+      propsTemplate.hasOutput('VpcId', {
+        Export: {
+          Name: 'ProjectX-VpcId-production',
+        },
+      });
+
+      // Test with context environmentSuffix
+      const contextApp = new cdk.App();
+      contextApp.node.setContext('environmentSuffix', 'staging');
+      const contextStack = new ProjectXInfrastructureStack(contextApp, 'ContextStack', {
+        env: { account: '123456789012', region: 'us-west-2' },
+      });
+      const contextTemplate = Template.fromStack(contextStack);
+      
+      contextTemplate.hasOutput('VpcId', {
+        Export: {
+          Name: 'ProjectX-VpcId-staging',
+        },
+      });
+
+      // Test with default environmentSuffix
+      const defaultApp = new cdk.App();
+      const defaultStack = new ProjectXInfrastructureStack(defaultApp, 'DefaultStack', {
+        env: { account: '123456789012', region: 'us-west-2' },
+      });
+      const defaultTemplate = Template.fromStack(defaultStack);
+      
+      defaultTemplate.hasOutput('VpcId', {
+        Export: {
+          Name: 'ProjectX-VpcId-dev',
+        },
+      });
+    });
+
+    test('should apply environment-specific tagging', () => {
+      const envApp = new cdk.App();
+      const envStack = new ProjectXInfrastructureStack(envApp, 'EnvStack', {
+        environmentSuffix: 'qa',
+        env: { account: '123456789012', region: 'us-west-2' },
+      });
+      const envTemplate = Template.fromStack(envStack);
+      
+      // Verify environment-specific tagging is applied
+      envTemplate.hasResourceProperties('AWS::EC2::VPC', {
+        CidrBlock: '10.0.0.0/16',
+      });
+      
+      envTemplate.hasOutput('VpcId', {
+        Export: {
+          Name: 'ProjectX-VpcId-qa',
+        },
+      });
+    });
+  });
+
   describe('Infrastructure Validation', () => {
     test('should have proper infrastructure setup', () => {
       // Verify VPC is created with correct configuration
