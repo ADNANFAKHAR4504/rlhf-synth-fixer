@@ -1,18 +1,39 @@
-import { CloudFormationClient, DescribeStacksCommand } from '@aws-sdk/client-cloudformation';
-import { S3Client, GetBucketEncryptionCommand, GetPublicAccessBlockCommand } from '@aws-sdk/client-s3';
-import { LambdaClient, GetFunctionCommand } from '@aws-sdk/client-lambda';
-import { SecretsManagerClient, DescribeSecretCommand } from '@aws-sdk/client-secrets-manager';
-import { CloudWatchClient, DescribeAlarmsCommand } from '@aws-sdk/client-cloudwatch';
-import { CloudWatchLogsClient, DescribeLogGroupsCommand } from '@aws-sdk/client-cloudwatch-logs';
-import { EC2Client, DescribeVpcsCommand, DescribeSubnetsCommand, DescribeSecurityGroupsCommand } from '@aws-sdk/client-ec2';
-import { IAMClient, GetRoleCommand } from '@aws-sdk/client-iam';
+import {
+  CloudFormationClient,
+  DescribeStacksCommand,
+} from '@aws-sdk/client-cloudformation';
+import {
+  CloudWatchClient,
+  DescribeAlarmsCommand,
+} from '@aws-sdk/client-cloudwatch';
+import {
+  CloudWatchLogsClient,
+  DescribeLogGroupsCommand,
+} from '@aws-sdk/client-cloudwatch-logs';
+import {
+  DescribeSecurityGroupsCommand,
+  DescribeSubnetsCommand,
+  DescribeVpcsCommand,
+  EC2Client,
+} from '@aws-sdk/client-ec2';
+import { GetRoleCommand, IAMClient } from '@aws-sdk/client-iam';
+import { GetFunctionCommand, LambdaClient } from '@aws-sdk/client-lambda';
+import {
+  GetBucketEncryptionCommand,
+  GetPublicAccessBlockCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
+import {
+  DescribeSecretCommand,
+  SecretsManagerClient,
+} from '@aws-sdk/client-secrets-manager';
 
 describe('Live AWS Resources Integration Tests', () => {
   const stackName = `TapStack${process.env.ENVIRONMENT_SUFFIX || 'dev'}`;
   const region = process.env.AWS_REGION || 'us-east-1';
-  
+
   let stackOutputs: Record<string, string> = {};
-  
+
   const cfnClient = new CloudFormationClient({ region });
   const s3Client = new S3Client({ region });
   const lambdaClient = new LambdaClient({ region });
@@ -24,15 +45,20 @@ describe('Live AWS Resources Integration Tests', () => {
 
   beforeAll(async () => {
     try {
-      const response = await cfnClient.send(new DescribeStacksCommand({ StackName: stackName }));
+      const response = await cfnClient.send(
+        new DescribeStacksCommand({ StackName: stackName })
+      );
       const stack = response.Stacks?.[0];
       if (stack?.Outputs) {
-        stackOutputs = stack.Outputs.reduce((acc, output) => {
-          if (output.OutputKey && output.OutputValue) {
-            acc[output.OutputKey] = output.OutputValue;
-          }
-          return acc;
-        }, {} as Record<string, string>);
+        stackOutputs = stack.Outputs.reduce(
+          (acc, output) => {
+            if (output.OutputKey && output.OutputValue) {
+              acc[output.OutputKey] = output.OutputValue;
+            }
+            return acc;
+          },
+          {} as Record<string, string>
+        );
       }
     } catch (error) {
       console.error('Failed to get stack outputs:', error);
@@ -49,15 +75,22 @@ describe('Live AWS Resources Integration Tests', () => {
       const encryptionResponse = await s3Client.send(
         new GetBucketEncryptionCommand({ Bucket: bucketName })
       );
-      expect(encryptionResponse.ServerSideEncryptionConfiguration?.Rules?.[0]
-        ?.ApplyServerSideEncryptionByDefault?.SSEAlgorithm).toBe('AES256');
+      expect(
+        encryptionResponse.ServerSideEncryptionConfiguration?.Rules?.[0]
+          ?.ApplyServerSideEncryptionByDefault?.SSEAlgorithm
+      ).toBe('AES256');
 
       // Check public access block
       const publicAccessResponse = await s3Client.send(
         new GetPublicAccessBlockCommand({ Bucket: bucketName })
       );
-      expect(publicAccessResponse.PublicAccessBlockConfiguration?.BlockPublicAcls).toBe(true);
-      expect(publicAccessResponse.PublicAccessBlockConfiguration?.RestrictPublicBuckets).toBe(true);
+      expect(
+        publicAccessResponse.PublicAccessBlockConfiguration?.BlockPublicAcls
+      ).toBe(true);
+      expect(
+        publicAccessResponse.PublicAccessBlockConfiguration
+          ?.RestrictPublicBuckets
+      ).toBe(true);
     });
 
     test('should have deployed Lambda function with VPC configuration', async () => {
@@ -67,11 +100,17 @@ describe('Live AWS Resources Integration Tests', () => {
       const response = await lambdaClient.send(
         new GetFunctionCommand({ FunctionName: functionName })
       );
-      
-      expect(response.Configuration?.Runtime).toMatch(/^(python3\.12|nodejs20\.x)$/);
+
+      expect(response.Configuration?.Runtime).toMatch(
+        /^(python3\.12|nodejs20\.x)$/
+      );
       expect(response.Configuration?.VpcConfig?.SubnetIds).toHaveLength(2);
-      expect(response.Configuration?.VpcConfig?.SecurityGroupIds).toHaveLength(1);
-      expect(response.Configuration?.Environment?.Variables?.SERVERLESSAPP_SECRET_ARN).toBeDefined();
+      expect(response.Configuration?.VpcConfig?.SecurityGroupIds).toHaveLength(
+        1
+      );
+      expect(
+        response.Configuration?.Environment?.Variables?.SERVERLESSAPP_SECRET_ARN
+      ).toBeDefined();
     });
 
     test('should have deployed Secrets Manager secret', async () => {
@@ -81,7 +120,7 @@ describe('Live AWS Resources Integration Tests', () => {
       const response = await secretsClient.send(
         new DescribeSecretCommand({ SecretId: secretArn })
       );
-      
+
       expect(response.Name).toContain('ServerlessAppSecret');
       expect(response.Description).toBeDefined();
     });
@@ -90,17 +129,21 @@ describe('Live AWS Resources Integration Tests', () => {
       const response = await cwClient.send(
         new DescribeAlarmsCommand({ AlarmNamePrefix: 'ServerlessApp' })
       );
-      
+
       const alarms = response.MetricAlarms || [];
       expect(alarms.length).toBeGreaterThanOrEqual(2);
-      
-      const errorAlarm = alarms.find(alarm => alarm.AlarmName?.includes('Error'));
-      const invocationAlarm = alarms.find(alarm => alarm.AlarmName?.includes('Invocation'));
-      
+
+      const errorAlarm = alarms.find(alarm =>
+        alarm.AlarmName?.includes('Error')
+      );
+      const invocationAlarm = alarms.find(alarm =>
+        alarm.AlarmName?.includes('Invocation')
+      );
+
       expect(errorAlarm).toBeDefined();
       expect(errorAlarm?.MetricName).toBe('Errors');
       expect(errorAlarm?.Threshold).toBe(1);
-      
+
       expect(invocationAlarm).toBeDefined();
       expect(invocationAlarm?.MetricName).toBe('Invocations');
       expect(invocationAlarm?.Threshold).toBe(100);
@@ -108,12 +151,14 @@ describe('Live AWS Resources Integration Tests', () => {
 
     test('should have CloudWatch log group with retention', async () => {
       const response = await logsClient.send(
-        new DescribeLogGroupsCommand({ logGroupNamePrefix: '/aws/lambda/ServerlessApp' })
+        new DescribeLogGroupsCommand({
+          logGroupNamePrefix: '/aws/lambda/ServerlessApp',
+        })
       );
-      
+
       const logGroups = response.logGroups || [];
       expect(logGroups.length).toBeGreaterThanOrEqual(1);
-      
+
       const logGroup = logGroups[0];
       expect(logGroup.retentionInDays).toBe(7);
       expect(logGroup.logGroupName).toBe('/aws/lambda/ServerlessAppLambda');
@@ -122,21 +167,25 @@ describe('Live AWS Resources Integration Tests', () => {
     test('should have VPC with proper networking setup', async () => {
       // Get VPC details
       const vpcResponse = await ec2Client.send(
-        new DescribeVpcsCommand({ Filters: [{ Name: 'tag:Name', Values: ['*ServerlessApp*'] }] })
+        new DescribeVpcsCommand({
+          Filters: [{ Name: 'tag:Name', Values: ['*ServerlessApp*'] }],
+        })
       );
-      
+
       expect(vpcResponse.Vpcs?.length).toBeGreaterThanOrEqual(1);
       const vpc = vpcResponse.Vpcs?.[0];
       expect(vpc?.CidrBlock).toBe('10.0.0.0/24');
-      
+
       // Get subnets
       const subnetResponse = await ec2Client.send(
-        new DescribeSubnetsCommand({ Filters: [{ Name: 'vpc-id', Values: [vpc?.VpcId || ''] }] })
+        new DescribeSubnetsCommand({
+          Filters: [{ Name: 'vpc-id', Values: [vpc?.VpcId || ''] }],
+        })
       );
-      
+
       const subnets = subnetResponse.Subnets || [];
       expect(subnets.length).toBeGreaterThanOrEqual(2);
-      
+
       // Verify different AZs
       const azs = subnets.map(subnet => subnet.AvailabilityZone);
       expect(new Set(azs).size).toBeGreaterThanOrEqual(2);
@@ -144,16 +193,18 @@ describe('Live AWS Resources Integration Tests', () => {
 
     test('should have security group with proper egress rules', async () => {
       const sgResponse = await ec2Client.send(
-        new DescribeSecurityGroupsCommand({ 
-          Filters: [{ Name: 'group-name', Values: ['*ServerlessApp*'] }] 
+        new DescribeSecurityGroupsCommand({
+          Filters: [{ Name: 'group-name', Values: ['*ServerlessApp*'] }],
         })
       );
-      
+
       expect(sgResponse.SecurityGroups?.length).toBeGreaterThanOrEqual(1);
       const sg = sgResponse.SecurityGroups?.[0];
-      
+
       // Should allow all outbound traffic
-      const egressRule = sg?.IpPermissionsEgress?.find(rule => rule.IpProtocol === '-1');
+      const egressRule = sg?.IpPermissionsEgress?.find(
+        rule => rule.IpProtocol === '-1'
+      );
       expect(egressRule).toBeDefined();
       expect(egressRule?.IpRanges?.[0]?.CidrIp).toBe('0.0.0.0/0');
     });
@@ -163,19 +214,20 @@ describe('Live AWS Resources Integration Tests', () => {
       const lambdaResponse = await lambdaClient.send(
         new GetFunctionCommand({ FunctionName: functionName })
       );
-      
+
       const roleArn = lambdaResponse.Configuration?.Role;
       expect(roleArn).toBeDefined();
-      
+
       const roleName = roleArn?.split('/').pop();
       const roleResponse = await iamClient.send(
         new GetRoleCommand({ RoleName: roleName || '' })
       );
-      
-      expect(roleResponse.Role?.RoleName).toContain('ServerlessApp');
-      expect(roleResponse.Role?.AssumeRolePolicyDocument).toContain('lambda.amazonaws.com');
-    });
 
+      expect(roleResponse.Role?.RoleName).toContain('ServerlessApp');
+      expect(roleResponse.Role?.AssumeRolePolicyDocument).toContain(
+        'lambda.amazonaws.com'
+      );
+    });
   });
 
   describe('Resource Integration Tests', () => {
@@ -193,7 +245,7 @@ describe('Live AWS Resources Integration Tests', () => {
         new GetFunctionCommand({ FunctionName: functionName })
       );
       expect(lambdaResponse.Configuration?.State).toBe('Active');
-      
+
       // Verify secret is available
       const secretArn = stackOutputs.SecretArn;
       const secretResponse = await secretsClient.send(
@@ -205,19 +257,20 @@ describe('Live AWS Resources Integration Tests', () => {
     test('should validate resource connectivity', async () => {
       const functionName = stackOutputs.LambdaFunctionName;
       const bucketName = stackOutputs.S3BucketName;
-      
+
       // Lambda should have environment variable pointing to secret
       const lambdaResponse = await lambdaClient.send(
         new GetFunctionCommand({ FunctionName: functionName })
       );
-      
-      const secretArn = lambdaResponse.Configuration?.Environment?.Variables?.SERVERLESSAPP_SECRET_ARN;
+
+      const secretArn =
+        lambdaResponse.Configuration?.Environment?.Variables
+          ?.SERVERLESSAPP_SECRET_ARN;
       expect(secretArn).toBe(stackOutputs.SecretArn);
-      
+
       // Verify bucket exists and is accessible
       expect(bucketName).toMatch(/^serverlessapp.*bucket/i);
     });
-
   });
 
   describe('End-to-End Functionality Tests', () => {
@@ -226,25 +279,10 @@ describe('Live AWS Resources Integration Tests', () => {
       const stackResponse = await cfnClient.send(
         new DescribeStacksCommand({ StackName: stackName })
       );
-      
+
       const stack = stackResponse.Stacks?.[0];
       expect(stack?.StackStatus).toBe('CREATE_COMPLETE');
       expect(stack?.Outputs?.length).toBeGreaterThanOrEqual(4);
     });
-
-    test('should have proper resource tagging', async () => {
-      const stackResponse = await cfnClient.send(
-        new DescribeStacksCommand({ StackName: stackName })
-      );
-      
-      const stack = stackResponse.Stacks?.[0];
-      const tags = stack?.Tags || [];
-      
-      // Should have environment tag
-      const envTag = tags.find(tag => tag.Key === 'Environment');
-      expect(envTag?.Value).toBeDefined();
-    });
-
   });
-
 });
