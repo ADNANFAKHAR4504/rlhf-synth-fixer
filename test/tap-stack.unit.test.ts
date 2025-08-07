@@ -201,9 +201,14 @@ describe('TapStack Unit Tests', () => {
           sg.Properties?.GroupName === `secure-company-${environmentSuffix}-sg`
       );
 
-      // Security group should either have no egress rules or empty array
+      // When allowAllOutbound is set to false, CDK adds a "disallow all traffic" rule
       if (customSg?.Properties?.SecurityGroupEgress) {
-        expect(customSg.Properties.SecurityGroupEgress).toEqual([]);
+        expect(customSg.Properties.SecurityGroupEgress).toHaveLength(1);
+        expect(customSg.Properties.SecurityGroupEgress[0]).toMatchObject({
+          CidrIp: '255.255.255.255/32',
+          Description: 'Disallow all traffic',
+          IpProtocol: 'icmp',
+        });
       }
     });
   });
