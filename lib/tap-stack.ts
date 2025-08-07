@@ -29,7 +29,7 @@ export class ProjectXInfrastructureStack extends cdk.Stack {
     super(scope, id, {
       ...props,
       env: {
-        region: 'us-west-2', // Explicitly set region as required
+        region: 'us-east-1', // Explicitly set region as required
         account: props?.env?.account,
       },
     });
