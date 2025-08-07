@@ -2,17 +2,18 @@
 """
 Pulumi application entry point for the TAP (Test Automation Platform) infrastructure.
 
-This module defines the core Pulumi stack and instantiates the TapStack with appropriate
-configuration based on the deployment environment. It handles environment-specific settings,
-tagging, and deployment configuration for AWS resources.
+This module serves as the entry point for the Pulumi program. It imports the main
+infrastructure defined in lib.tap_stack which contains all the AWS resources
+for the CI/CD pipeline infrastructure.
 
 The stack created by this module uses environment suffixes to distinguish between
 different deployment environments (development, staging, production, etc.).
 """
 import os
-import pulumi
-from pulumi import Config, ResourceOptions
-from lib.tap_stack import TapStack, TapStackArgs
+from pulumi import Config
+
+# Import the tap_stack module which contains all infrastructure definitions
+import lib.tap_stack  # noqa: F401 - imported for side effects (resource creation)
 
 # Initialize Pulumi configuration
 config = Config()
@@ -24,14 +25,7 @@ STACK_NAME = f"TapStack{environment_suffix}"
 repository_name = os.getenv('REPOSITORY', 'unknown')
 commit_author = os.getenv('COMMIT_AUTHOR', 'unknown')
 
-# Create a resource options object with default tags
-default_tags = {
-    'Environment': environment_suffix,
-    'Repository': repository_name,
-    'Author': commit_author,
-}
-
-stack = TapStack(
-    name="pulumi-infra",
-    args=TapStackArgs(environment_suffix=environment_suffix),
-)
+# The infrastructure is already defined and exported in lib.tap_stack
+# No additional instantiation needed since lib.tap_stack creates resources directly
+print(f"Pulumi stack initialized with environment suffix: {environment_suffix}")
+print(f"Repository: {repository_name}, Author: {commit_author}")
