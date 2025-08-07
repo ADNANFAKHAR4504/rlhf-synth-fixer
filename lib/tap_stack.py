@@ -147,7 +147,7 @@ class TapStack(pulumi.ComponentResource):
       restrict_public_buckets=True
     )
 
-    # Bucket policy to deny public access
+    # Bucket policy to deny public access and enforce HTTPS
     aws.s3.BucketPolicy(
       "bucket-policy",
       bucket=s3_bucket.id,
@@ -156,10 +156,17 @@ class TapStack(pulumi.ComponentResource):
       "Version": "2012-10-17",
       "Statement": [
         {
-          "Sid": "DenyPublicAccess",
+          "Sid": "DenyInsecureConnections",
           "Effect": "Deny",
           "Principal": "*",
-          "Action": "s3:*",
+          "Action": [
+            "s3:GetObject",
+            "s3:PutObject",
+            "s3:DeleteObject",
+            "s3:GetObjectVersion",
+            "s3:PutObjectAcl",
+            "s3:GetObjectAcl"
+          ],
           "Resource": [arn, f"{arn}/*"],
           "Condition": {
             "Bool": {
@@ -233,7 +240,10 @@ class TapStack(pulumi.ComponentResource):
             "logs:CreateLogStream",
             "logs:PutLogEvents"
           ],
-          "Resource": "arn:aws:logs:*:*:*"
+          "Resource": [
+            f"arn:aws:logs:{self.region}:*:log-group:/aws/lambda/{project_name}-{stack_name}-*",
+            f"arn:aws:logs:{self.region}:*:log-group:/aws/lambda/{project_name}-{stack_name}-*:*"
+          ]
         }
       ]
     })
@@ -541,14 +551,23 @@ class TapStack(pulumi.ComponentResource):
         uri=api_handler_lambda.invoke_arn
     )
 
-    # Lambda permissions for API Gateway
-    api_lambda_permission = aws.lambda_.Permission(
-        "api-lambda-permission",
-        statement_id="AllowExecutionFromAPIGateway",
+    # Lambda permissions for API Gateway (specific to health and process endpoints)
+    api_lambda_permission_health = aws.lambda_.Permission(
+        "api-lambda-permission-health",
+        statement_id="AllowExecutionFromAPIGatewayHealth",
         action="lambda:InvokeFunction",
         function=api_handler_lambda.name, 
         principal="apigateway.amazonaws.com",
-        source_arn=api_gateway.execution_arn
+        source_arn=Output.concat(api_gateway.execution_arn, "/*/GET/health")
+    )
+    
+    api_lambda_permission_process = aws.lambda_.Permission(
+        "api-lambda-permission-process",
+        statement_id="AllowExecutionFromAPIGatewayProcess",
+        action="lambda:InvokeFunction",
+        function=api_handler_lambda.name, 
+        principal="apigateway.amazonaws.com",
+        source_arn=Output.concat(api_gateway.execution_arn, "/*/POST/process")
     )
 
     # API Gateway deployment
@@ -559,7 +578,8 @@ class TapStack(pulumi.ComponentResource):
         opts=pulumi.ResourceOptions(depends_on=[
             health_integration,
             process_integration,
-            api_lambda_permission
+            api_lambda_permission_health,
+            api_lambda_permission_process
         ])
     )
 
@@ -671,7 +691,7 @@ class TapStack(pulumi.ComponentResource):
         threshold=300,  # 300ms threshold
         alarm_description="S3 Processor Lambda function duration exceeds 300ms",
         dimensions={
-            "FunctionName": s3_processor_lambda.name.apply(lambda n: f"/aws/lambda/{n}"),
+            "FunctionName": s3_processor_lambda.name,
         },
         alarm_actions=[alarm_topic.arn],
         tags=common_tags
