@@ -17,6 +17,45 @@ describe('TapStack Unit Tests', () => {
     template = Template.fromStack(stack);
   });
 
+  describe('Environment Suffix Configuration', () => {
+    test('should use environmentSuffix from props when provided', () => {
+      const testApp = new cdk.App();
+      const testStack = new TapStack(testApp, 'TestPropsStack', {
+        environmentSuffix: 'props-test',
+        env: { account: '123456789012', region: 'us-east-1' },
+      });
+      const testTemplate = Template.fromStack(testStack);
+
+      testTemplate.hasResourceProperties('AWS::KMS::Alias', {
+        AliasName: 'alias/secure-company-props-test-encryption-key',
+      });
+    });
+
+    test('should use environmentSuffix from context when props not provided', () => {
+      const testApp = new cdk.App({ context: { environmentSuffix: 'context-test' } });
+      const testStack = new TapStack(testApp, 'TestContextStack', {
+        env: { account: '123456789012', region: 'us-east-1' },
+      });
+      const testTemplate = Template.fromStack(testStack);
+
+      testTemplate.hasResourceProperties('AWS::KMS::Alias', {
+        AliasName: 'alias/secure-company-context-test-encryption-key',
+      });
+    });
+
+    test('should default to "dev" when neither props nor context provided', () => {
+      const testApp = new cdk.App();
+      const testStack = new TapStack(testApp, 'TestDefaultStack', {
+        env: { account: '123456789012', region: 'us-east-1' },
+      });
+      const testTemplate = Template.fromStack(testStack);
+
+      testTemplate.hasResourceProperties('AWS::KMS::Alias', {
+        AliasName: 'alias/secure-company-dev-encryption-key',
+      });
+    });
+  });
+
   describe('KMS Encryption', () => {
     test('should create KMS key with proper configuration', () => {
       template.hasResourceProperties('AWS::KMS::Key', {
