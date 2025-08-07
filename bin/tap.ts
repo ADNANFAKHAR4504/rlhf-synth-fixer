@@ -13,7 +13,7 @@ const repositoryName = process.env.REPOSITORY || 'unknown';
 const commitAuthor = process.env.COMMIT_AUTHOR || 'unknown';
 
 // Compose stack name
-const stackName = `TapStack${environmentSuffix}`;
+const stackName = 'TapStack';
 
 // Define default tags
 const defaultTags = {
