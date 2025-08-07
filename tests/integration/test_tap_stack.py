@@ -21,8 +21,11 @@ def run_command(command):
 
 def test_integration():
   try:
-    print(f"--- Selecting Pulumi Stack: {STACK_NAME} ---")
+    print("--- Selecting Pulumi Stack ---")
     run_command(f"pulumi stack select {STACK_NAME} --create")
+    
+    print("--- Attempting to cancel any stuck operations ---")
+    run_command(f"pulumi cancel --yes")
 
     print("--- Deploying Infrastructure ---")
     run_command("pulumi up --yes --skip-preview")
