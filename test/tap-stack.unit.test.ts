@@ -87,11 +87,11 @@ describe('CloudFormation Template Unit Tests', () => {
   });
 
   describe('Parameters', () => {
-    test('should have EnvironmentSuffixName parameter', () => {
-      expect(template.Parameters.EnvironmentSuffixName).toBeDefined();
-      expect(template.Parameters.EnvironmentSuffixName.Type).toBe('String');
-      expect(template.Parameters.EnvironmentSuffixName.Default).toBe('dev');
-      expect(template.Parameters.EnvironmentSuffixName.AllowedValues).toEqual([
+    test('should have EnvironmentSuffix parameter', () => {
+      expect(template.Parameters.EnvironmentSuffix).toBeDefined();
+      expect(template.Parameters.EnvironmentSuffix.Type).toBe('String');
+      expect(template.Parameters.EnvironmentSuffix.Default).toBe('dev');
+      expect(template.Parameters.EnvironmentSuffix.AllowedValues).toEqual([
         'dev',
         'staging',
         'prod',
@@ -99,7 +99,7 @@ describe('CloudFormation Template Unit Tests', () => {
     });
 
     test('should have proper parameter description', () => {
-      expect(template.Parameters.EnvironmentSuffixName.Description).toContain(
+      expect(template.Parameters.EnvironmentSuffix.Description).toContain(
         'Environment suffix'
       );
     });
@@ -329,14 +329,14 @@ describe('CloudFormation Template Unit Tests', () => {
         expect(func.Properties.MemorySize).toEqual({
           'Fn::FindInMap': [
             'EnvironmentConfig',
-            { Ref: 'EnvironmentSuffixName' },
+            { Ref: 'EnvironmentSuffix' },
             'LambdaMemorySize',
           ],
         });
         expect(func.Properties.Timeout).toEqual({
           'Fn::FindInMap': [
             'EnvironmentConfig',
-            { Ref: 'EnvironmentSuffixName' },
+            { Ref: 'EnvironmentSuffix' },
             'LambdaTimeout',
           ],
         });
@@ -462,7 +462,7 @@ describe('CloudFormation Template Unit Tests', () => {
       const deployment = template.Resources.ApiDeployment;
       expect(deployment.Type).toBe('AWS::ApiGateway::Deployment');
       expect(deployment.Properties.StageName).toEqual({
-        Ref: 'EnvironmentSuffixName',
+        Ref: 'EnvironmentSuffix',
       });
       expect(deployment.DependsOn).toHaveLength(6); // 4 CRUD methods + 2 OPTIONS methods
 
@@ -510,7 +510,7 @@ describe('CloudFormation Template Unit Tests', () => {
     test('should have environment output', () => {
       expect(template.Outputs.Environment).toBeDefined();
       expect(template.Outputs.Environment.Value).toEqual({
-        Ref: 'EnvironmentSuffixName',
+        Ref: 'EnvironmentSuffix',
       });
     });
   });
@@ -538,7 +538,7 @@ describe('CloudFormation Template Unit Tests', () => {
           );
           if (nameTag) {
             expect(nameTag.Value).toEqual({
-              'Fn::Sub': expect.stringContaining('${EnvironmentSuffixName}'),
+              'Fn::Sub': expect.stringContaining('${EnvironmentSuffix}'),
             });
           }
         }
@@ -569,7 +569,7 @@ describe('CloudFormation Template Unit Tests', () => {
             (tag: any) => tag.Key === 'Project'
           );
 
-          expect(envTag?.Value).toEqual({ Ref: 'EnvironmentSuffixName' });
+          expect(envTag?.Value).toEqual({ Ref: 'EnvironmentSuffix' });
           expect(projectTag?.Value).toBe('ServerlessAPI');
         }
       });
@@ -652,7 +652,7 @@ describe('CloudFormation Template Unit Tests', () => {
       // Check Sub usage in names
       expect(template.Outputs.ApiGatewayInvokeURL.Value).toEqual({
         'Fn::Sub':
-          'https://${ItemsRestApi}.execute-api.${AWS::Region}.amazonaws.com/${EnvironmentSuffixName}',
+          'https://${ItemsRestApi}.execute-api.${AWS::Region}.amazonaws.com/${EnvironmentSuffix}',
       });
     });
   });
