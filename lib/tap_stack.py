@@ -369,7 +369,7 @@ class TapStack(TerraformStack):
         self,
         "main_table",
         name="tap-serverless-table",
-        billing_mode="ON_DEMAND",  # Serverless pricing model
+        billing_mode="PAY_PER_REQUEST",  # Serverless pricing model
         hash_key="id",
         attribute=[{"name": "id", "type": "S"}],
         # Enable encryption at rest
