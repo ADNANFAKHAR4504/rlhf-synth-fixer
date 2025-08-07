@@ -130,13 +130,21 @@ describe('TapStack CloudFormation Template', () => {
     // The export name test that failed indicated an output key might be 'LambdaArn'.
     // This generic test checks if all export names follow the convention '${AWS::StackName}-${OutputKey}'.
     test('export names should follow the correct naming convention', () => {
-        Object.keys(template.Outputs).forEach(outputKey => {
-            const output = template.Outputs[outputKey];
-            expect(output.Export.Name).toEqual({
-                'Fn::Sub': `\${AWS::StackName}-${outputKey}`,
-            });
+    const expectedExports = {
+        ApiEndpoint: 'ApiEndpoint',
+        LambdaFunctionArn: 'LambdaArn',
+        DynamoTableName: 'DynamoTableName',
+        DynamoTableArn: 'DynamoTableArn',
+    };
+
+    Object.keys(template.Outputs).forEach(outputKey => {
+        const output = template.Outputs[outputKey];
+        expect(output.Export.Name).toEqual({
+            'Fn::Sub': `\${AWS::StackName}-${expectedExports[outputKey]}`
         });
     });
+});
+
 
     // TODO: Add tests for your actual outputs, verifying their Description and Value.
     /*
