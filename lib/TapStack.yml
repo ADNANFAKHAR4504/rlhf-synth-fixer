@@ -66,6 +66,9 @@ Resources:
         - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
         # Provides permissions to send metrics to CloudWatch
         - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-EC2-Instance-Role
 
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
@@ -85,6 +88,9 @@ Resources:
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForBackup
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-Backup-Role
 
   #
   # Networking Infrastructure (VPC, Subnets, Gateways, Routes)
@@ -553,6 +559,6 @@ Outputs:
 
   ApplicationURL:
     Description: The URL of the application.
-    Value: !Sub 'https://www.${pHostedZoneName}'
+    Value: !Sub 'https://${pHostedZoneName}'
     Export:
       Name: !Sub ${AWS::StackName}-App-URL
