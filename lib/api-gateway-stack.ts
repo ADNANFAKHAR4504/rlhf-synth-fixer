@@ -89,15 +89,6 @@ export class ProjectXApiGatewayStack extends cdk.Stack {
     const proxyResource = this.api.root.addResource('{proxy+}');
     proxyResource.addMethod('ANY', lambdaIntegration);
 
-    // Output API Gateway URL
-    new cdk.CfnOutput(this, 'ProjectXApiUrl', {
-      value: this.api.url,
-      description: 'ProjectX API Gateway URL',
-    });
-
-    new cdk.CfnOutput(this, 'ProjectXApiId', {
-      value: this.api.restApiId,
-      description: 'ProjectX API Gateway ID',
-    });
+    // Note: Outputs are created at the main stack level
   }
 }

@@ -126,10 +126,6 @@ export class ProjectXMonitoringStack extends cdk.Stack {
       evaluationPeriods: 3,
     });
 
-    // Output dashboard URL
-    new cdk.CfnOutput(this, 'ProjectXDashboardUrl', {
-      value: `https://console.aws.amazon.com/cloudwatch/home?region=${this.region}#dashboards:name=${dashboard.dashboardName}`,
-      description: 'ProjectX CloudWatch Dashboard URL',
-    });
+    // Note: Output is created at the main stack level
   }
 }

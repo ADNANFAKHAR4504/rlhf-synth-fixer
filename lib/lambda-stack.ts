@@ -56,10 +56,6 @@ export class ProjectXLambdaStack extends cdk.Stack {
       },
     });
 
-    // Output Lambda function ARN
-    new cdk.CfnOutput(this, 'ProjectXLambdaFunctionArn', {
-      value: this.lambdaFunction.functionArn,
-      description: 'ProjectX Lambda Function ARN',
-    });
+    // Note: Output is created at the main stack level
   }
 }

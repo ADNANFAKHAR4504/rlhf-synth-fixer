@@ -56,7 +56,36 @@ export class TapStack extends cdk.Stack {
     monitoringStack.addDependency(lambdaStack);
     monitoringStack.addDependency(apiGatewayStack);
 
-    // Output main API endpoint
+    // Create outputs at the main stack level to expose nested stack outputs
+    // Output for API Gateway URL (expected by integration tests)
+    new cdk.CfnOutput(this, 'ProjectXApiUrl', {
+      value: apiGatewayStack.api.url,
+      description: 'ProjectX API Gateway URL',
+      exportName: `projectX-api-url-${environmentSuffix}`,
+    });
+
+    // Output for Lambda Function ARN (expected by integration tests)
+    new cdk.CfnOutput(this, 'ProjectXLambdaFunctionArn', {
+      value: lambdaStack.lambdaFunction.functionArn,
+      description: 'ProjectX Lambda Function ARN',
+      exportName: `projectX-lambda-arn-${environmentSuffix}`,
+    });
+
+    // Output for API Gateway ID (expected by integration tests)
+    new cdk.CfnOutput(this, 'ProjectXApiId', {
+      value: apiGatewayStack.api.restApiId,
+      description: 'ProjectX API Gateway ID',
+      exportName: `projectX-api-id-${environmentSuffix}`,
+    });
+
+    // Output for CloudWatch Dashboard URL (expected by integration tests)
+    new cdk.CfnOutput(this, 'ProjectXDashboardUrl', {
+      value: `https://console.aws.amazon.com/cloudwatch/home?region=${this.region}#dashboards:name=projectX-monitoring-${environmentSuffix}`,
+      description: 'ProjectX CloudWatch Dashboard URL',
+      exportName: `projectX-dashboard-url-${environmentSuffix}`,
+    });
+
+    // Keep the original output for backward compatibility
     new cdk.CfnOutput(this, 'ProjectXMainApiEndpoint', {
       value: apiGatewayStack.api.url,
       description: 'Main API endpoint for ProjectX serverless service',

@@ -1,8 +1,18 @@
-import fs from 'fs';
+import {
+  APIGatewayClient,
+  GetRestApiCommand,
+} from '@aws-sdk/client-api-gateway';
+import {
+  CloudWatchClient,
+  DescribeAlarmsCommand,
+} from '@aws-sdk/client-cloudwatch';
+import {
+  GetFunctionCommand,
+  InvokeCommand,
+  LambdaClient,
+} from '@aws-sdk/client-lambda';
 import axios from 'axios';
-import { CloudWatchClient, DescribeAlarmsCommand } from '@aws-sdk/client-cloudwatch';
-import { LambdaClient, GetFunctionCommand, InvokeCommand } from '@aws-sdk/client-lambda';
-import { APIGatewayClient, GetRestApiCommand } from '@aws-sdk/client-api-gateway';
+import fs from 'fs';
 
 // Configuration - These are coming from cfn-outputs after cdk deploy
 const outputs = JSON.parse(
@@ -23,7 +33,9 @@ describe('ProjectX Serverless Infrastructure Integration Tests', () => {
 
     test('should have a valid API Gateway URL in outputs', () => {
       expect(apiUrl).toBeDefined();
-      expect(apiUrl).toMatch(/^https:\/\/[a-z0-9]+\.execute-api\.[a-z0-9-]+\.amazonaws\.com/);
+      expect(apiUrl).toMatch(
+        /^https:\/\/[a-z0-9]+\.execute-api\.[a-z0-9-]+\.amazonaws\.com/
+      );
     });
 
     test('GET / should return successful response', async () => {
@@ -35,7 +47,7 @@ describe('ProjectX Serverless Infrastructure Integration Tests', () => {
       expect(response.data).toHaveProperty('requestId');
       expect(response.data.path).toBe('/');
       expect(response.data.httpMethod).toBe('GET');
-    });
+    }, 30000);
 
     test('POST / should return successful response', async () => {
       const testData = { test: 'data', timestamp: new Date().toISOString() };
@@ -87,14 +99,16 @@ describe('ProjectX Serverless Infrastructure Integration Tests', () => {
 
     test('should have a valid Lambda function ARN in outputs', () => {
       expect(functionArn).toBeDefined();
-      expect(functionArn).toMatch(/^arn:aws:lambda:[a-z0-9-]+:[0-9]+:function:/);
+      expect(functionArn).toMatch(
+        /^arn:aws:lambda:[a-z0-9-]+:[0-9]+:function:/
+      );
     });
 
     test('Lambda function should exist and be active', async () => {
       const functionName = functionArn.split(':').pop();
       const command = new GetFunctionCommand({ FunctionName: functionName });
       const response = await lambdaClient.send(command);
-      
+
       expect(response.Configuration).toBeDefined();
       expect(response.Configuration?.State).toBe('Active');
       expect(response.Configuration?.Runtime).toBe('nodejs20.x');
@@ -107,10 +121,14 @@ describe('ProjectX Serverless Infrastructure Integration Tests', () => {
       const functionName = functionArn.split(':').pop();
       const command = new GetFunctionCommand({ FunctionName: functionName });
       const response = await lambdaClient.send(command);
-      
+
       expect(response.Configuration?.Environment?.Variables).toBeDefined();
-      expect(response.Configuration?.Environment?.Variables?.PROJECT_NAME).toBe('projectX');
-      expect(response.Configuration?.Environment?.Variables?.NODE_ENV).toBeDefined();
+      expect(response.Configuration?.Environment?.Variables?.PROJECT_NAME).toBe(
+        'projectX'
+      );
+      expect(
+        response.Configuration?.Environment?.Variables?.NODE_ENV
+      ).toBeDefined();
     });
 
     test('Lambda function can be invoked directly', async () => {
@@ -119,17 +137,17 @@ describe('ProjectX Serverless Infrastructure Integration Tests', () => {
         httpMethod: 'GET',
         path: '/test-direct',
         headers: {},
-        body: null
+        body: null,
       };
-      
+
       const command = new InvokeCommand({
         FunctionName: functionName,
-        Payload: JSON.stringify(event)
+        Payload: JSON.stringify(event),
       });
-      
+
       const response = await lambdaClient.send(command);
       const payload = JSON.parse(new TextDecoder().decode(response.Payload));
-      
+
       expect(response.StatusCode).toBe(200);
       expect(payload.statusCode).toBe(200);
       const body = JSON.parse(payload.body);
@@ -149,7 +167,7 @@ describe('ProjectX Serverless Infrastructure Integration Tests', () => {
     test('REST API should exist with correct configuration', async () => {
       const command = new GetRestApiCommand({ restApiId: apiId });
       const response = await apiGatewayClient.send(command);
-      
+
       expect(response.name).toContain('projectX-api');
       expect(response.description).toBe('ProjectX Serverless Web Service API');
       expect(response.endpointConfiguration?.types).toContain('EDGE');
@@ -167,10 +185,10 @@ describe('ProjectX Serverless Infrastructure Integration Tests', () => {
 
     test('Lambda error alarm should exist', async () => {
       const command = new DescribeAlarmsCommand({
-        AlarmNames: [`projectX-lambda-errors-${environmentSuffix}`]
+        AlarmNames: [`projectX-lambda-errors-${environmentSuffix}`],
       });
       const response = await cloudWatchClient.send(command);
-      
+
       expect(response.MetricAlarms).toHaveLength(1);
       const alarm = response.MetricAlarms![0];
       expect(alarm.MetricName).toBe('Errors');
@@ -181,10 +199,10 @@ describe('ProjectX Serverless Infrastructure Integration Tests', () => {
 
     test('API latency alarm should exist', async () => {
       const command = new DescribeAlarmsCommand({
-        AlarmNames: [`projectX-api-high-latency-${environmentSuffix}`]
+        AlarmNames: [`projectX-api-high-latency-${environmentSuffix}`],
       });
       const response = await cloudWatchClient.send(command);
-      
+
       expect(response.MetricAlarms).toHaveLength(1);
       const alarm = response.MetricAlarms![0];
       expect(alarm.MetricName).toBe('Latency');
@@ -201,16 +219,16 @@ describe('ProjectX Serverless Infrastructure Integration Tests', () => {
       // First request
       const response1 = await axios.get(`${apiUrl}health`);
       expect(response1.status).toBe(200);
-      
+
       // Second request with data
       const testData = { sequence: 1, test: true };
       const response2 = await axios.post(`${apiUrl}api/v1/data`, testData);
       expect(response2.status).toBe(200);
-      
+
       // Third request to proxy endpoint
       const response3 = await axios.get(`${apiUrl}custom/endpoint`);
       expect(response3.status).toBe(200);
-      
+
       // All responses should have consistent structure
       [response1, response2, response3].forEach(response => {
         expect(response.data).toHaveProperty('message');
@@ -224,11 +242,11 @@ describe('ProjectX Serverless Infrastructure Integration Tests', () => {
         axios.get(apiUrl),
         axios.get(`${apiUrl}health`),
         axios.post(`${apiUrl}api/v1/data`, { concurrent: true }),
-        axios.get(`${apiUrl}test/concurrent`)
+        axios.get(`${apiUrl}test/concurrent`),
       ];
-      
+
       const responses = await Promise.all(requests);
-      
+
       responses.forEach(response => {
         expect(response.status).toBe(200);
         expect(response.data).toHaveProperty('message');
@@ -239,10 +257,10 @@ describe('ProjectX Serverless Infrastructure Integration Tests', () => {
     test('API responses should have proper CORS headers', async () => {
       const response = await axios.get(apiUrl, {
         headers: {
-          'Origin': 'https://example.com'
-        }
+          Origin: 'https://example.com',
+        },
       });
-      
+
       expect(response.headers['access-control-allow-origin']).toBe('*');
     });
   });
@@ -255,7 +273,7 @@ describe('ProjectX Serverless Infrastructure Integration Tests', () => {
       const response = await axios.get(apiUrl);
       const endTime = Date.now();
       const responseTime = endTime - startTime;
-      
+
       expect(response.status).toBe(200);
       expect(responseTime).toBeLessThan(3000); // Should respond within 3 seconds
     });
@@ -264,7 +282,7 @@ describe('ProjectX Serverless Infrastructure Integration Tests', () => {
       // Test with empty POST body
       const response1 = await axios.post(apiUrl, null);
       expect(response1.status).toBe(200);
-      
+
       // Test with large payload
       const largeData = { data: 'x'.repeat(1000) };
       const response2 = await axios.post(`${apiUrl}api/v1/data`, largeData);

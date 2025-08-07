@@ -39,6 +39,42 @@ describe('TapStack', () => {
       });
     });
 
+    test('should have API URL output', () => {
+      template.hasOutput('ProjectXApiUrl', {
+        Description: 'ProjectX API Gateway URL',
+        Export: {
+          Name: `projectX-api-url-${environmentSuffix}`
+        }
+      });
+    });
+
+    test('should have Lambda function ARN output', () => {
+      template.hasOutput('ProjectXLambdaFunctionArn', {
+        Description: 'ProjectX Lambda Function ARN',
+        Export: {
+          Name: `projectX-lambda-arn-${environmentSuffix}`
+        }
+      });
+    });
+
+    test('should have API Gateway ID output', () => {
+      template.hasOutput('ProjectXApiId', {
+        Description: 'ProjectX API Gateway ID',
+        Export: {
+          Name: `projectX-api-id-${environmentSuffix}`
+        }
+      });
+    });
+
+    test('should have Dashboard URL output', () => {
+      template.hasOutput('ProjectXDashboardUrl', {
+        Description: 'ProjectX CloudWatch Dashboard URL',
+        Export: {
+          Name: `projectX-dashboard-url-${environmentSuffix}`
+        }
+      });
+    });
+
     test('should use provided environment suffix', () => {
       const customApp = new cdk.App();
       const customStack = new TapStack(customApp, 'CustomStack', {
@@ -142,13 +178,7 @@ describe('ProjectXLambdaStack', () => {
     });
   });
 
-  describe('Outputs', () => {
-    test('should output Lambda function ARN', () => {
-      template.hasOutput('ProjectXLambdaFunctionArn', {
-        Description: 'ProjectX Lambda Function ARN'
-      });
-    });
-  });
+  // Note: Outputs are now created at the main stack level, not in nested stacks
 });
 
 describe('ProjectXApiGatewayStack', () => {
@@ -263,19 +293,7 @@ describe('ProjectXApiGatewayStack', () => {
     });
   });
 
-  describe('Outputs', () => {
-    test('should output API Gateway URL', () => {
-      template.hasOutput('ProjectXApiUrl', {
-        Description: 'ProjectX API Gateway URL'
-      });
-    });
-
-    test('should output API Gateway ID', () => {
-      template.hasOutput('ProjectXApiId', {
-        Description: 'ProjectX API Gateway ID'
-      });
-    });
-  });
+  // Note: Outputs are now created at the main stack level, not in nested stacks
 });
 
 describe('ProjectXMonitoringStack', () => {
@@ -374,11 +392,5 @@ describe('ProjectXMonitoringStack', () => {
     });
   });
 
-  describe('Outputs', () => {
-    test('should output dashboard URL', () => {
-      template.hasOutput('ProjectXDashboardUrl', {
-        Description: 'ProjectX CloudWatch Dashboard URL'
-      });
-    });
-  });
+  // Note: Outputs are now created at the main stack level, not in nested stacks
 });
