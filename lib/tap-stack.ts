@@ -710,9 +710,6 @@ export class TapStack extends TerraformStack {
       resourceId: resource.id,
       httpMethod: httpMethod,
       authorization: 'NONE',
-      requestParameters: {
-        'method.request.header.Content-Type': false,
-      },
     });
 
     const integration = new ApiGatewayIntegration(this, `${id}-integration`, {
@@ -722,9 +719,7 @@ export class TapStack extends TerraformStack {
       integrationHttpMethod: 'POST',
       type: 'AWS_PROXY',
       uri: lambdaFunction.invokeArn,
-      requestTemplates: {
-        'application/json': '{"statusCode": 200}',
-      },
+      dependsOn: [method],
     });
 
     return { method, integration };
@@ -1232,9 +1227,9 @@ exports.handler = async (event) => {
                 }
             },
             environment: {
-                region: process.env.AWS_REGION,
-                functionName: process.env.AWS_LAMBDA_FUNCTION_NAME,
-                version: process.env.AWS_LAMBDA_FUNCTION_VERSION
+                region: process.env.AWS_REGION || 'us-east-1',
+                functionName: process.env.AWS_LAMBDA_FUNCTION_NAME || 'unknown',
+                version: process.env.AWS_LAMBDA_FUNCTION_VERSION || '1'
             }
         };
         
@@ -1258,9 +1253,9 @@ exports.handler = async (event) => {
                 code: error.code
             },
             environment: {
-                region: process.env.AWS_REGION,
-                functionName: process.env.AWS_LAMBDA_FUNCTION_NAME,
-                version: process.env.AWS_LAMBDA_FUNCTION_VERSION
+                region: process.env.AWS_REGION || 'us-east-1',
+                functionName: process.env.AWS_LAMBDA_FUNCTION_NAME || 'unknown',
+                version: process.env.AWS_LAMBDA_FUNCTION_VERSION || '1'
             }
         };
         
