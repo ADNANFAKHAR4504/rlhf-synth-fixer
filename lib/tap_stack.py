@@ -123,17 +123,44 @@ class TapStack(ComponentResource):
             f"PROD-secrets-{self.environment_suffix}",
             description="Automated secrets management for TAP infrastructure",
             kms_key_id=self.kms_key.arn,
-            replica_regions=[
-                aws.secretsmanager.SecretReplicaArgs(
-                    region=region,
-                    kms_key_id=self.kms_keys[region].arn
-                ) for region in self.regions[1:]  # Exclude primary region
-            ],
             tags=self.standard_tags,
             opts=ResourceOptions(parent=self)
         )
         
-        # Store sample secrets
+        # Create replica secrets in other regions separately
+        self.secrets_replicas = {}
+        for region in self.regions[1:]:  # Exclude primary region
+            provider = aws.Provider(
+                f"secrets-provider-{region}",
+                region=region,
+                opts=ResourceOptions(parent=self)
+            )
+            
+            replica_secret = aws.secretsmanager.Secret(
+                f"PROD-secrets-replica-{region}-{self.environment_suffix}",
+                description=f"Replica of secrets for {region} region",
+                kms_key_id=self.kms_keys[region].arn,
+                tags=self.standard_tags,
+                opts=ResourceOptions(parent=self, provider=provider)
+            )
+            
+            # Store replica secrets version
+            aws.secretsmanager.SecretVersion(
+                f"PROD-secrets-replica-version-{region}-{self.environment_suffix}",
+                secret_id=replica_secret.id,
+                secret_string=json.dumps({
+                    "database_password": "secure-auto-generated-password",
+                    "api_keys": {
+                        "service_a": "secure-api-key-a",
+                        "service_b": "secure-api-key-b"
+                    }
+                }),
+                opts=ResourceOptions(parent=self, provider=provider)
+            )
+            
+            self.secrets_replicas[region] = replica_secret
+        
+        # Store primary secrets version
         aws.secretsmanager.SecretVersion(
             f"PROD-secrets-version-{self.environment_suffix}",
             secret_id=self.secrets_manager.id,
@@ -146,6 +173,7 @@ class TapStack(ComponentResource):
             }),
             opts=ResourceOptions(parent=self)
         )
+
     
     def _create_iam_roles(self):
         """Create IAM roles following least privilege principles."""
