@@ -40,11 +40,18 @@ provider "aws" {
     tags = var.default_tags
   }
 }
-
-module "s3" {
-  source       = "../lib/modules"
-  bucket_name  = var.s3_bucket_name
-  environment  = var.environment_suffix
-  project_name = var.stack_name
-  tags         = var.default_tags
+module "vpc" {
+  source = "../lib/modules/vpc"
+  environment = var.environment
+  vpc_cidr = var.vpc_cidr
+  public_subnets = var.public_subnets
+  private_subnets = var.private_subnets
 }
+
+/** module "s3" {
+ * source       = "../lib/modules"
+  * bucket_name  = var.s3_bucket_name
+  * environment  = var.environment_suffix
+  * project_name = var.stack_name
+  * tags         = var.default_tags
+* } */

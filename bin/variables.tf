@@ -1,47 +1,30 @@
-# variable "secret_key" {}
-# variable "access_key" {}
-# variable "region" {}
-variable "environment_suffix" {
-  type        = string
-  default     = "dev"
-  description = "Environment suffix like dev/staging/prod"
-}
-
-variable "stack_name" {
-  type        = string
-  default     = "tap-stack"
-  description = "Stack name used for backend key"
-}
-
-variable "state_bucket" {
-  type        = string
-  default     = "iac-rlhf-tf-states"
-  description = "S3 bucket name for remote state"
-}
-
-variable "state_bucket_region" {
-  type        = string
-  default     = "us-east-1"
-  description = "Region of the S3 state bucket"
-}
 
 variable "aws_region" {
-  type        = string
-  default     = "us-east-1"
-  description = "AWS provider region"
+  type    = string
+  default = "us-east-1"
 }
 
-variable "default_tags" {
-  type = map(string)
-  default = {
-    Project = "MyApp"
-    Owner   = "DevOps"
-  }
-  description = "Default tags applied to all resources"
+variable "environment" {
+  type    = string
+  default = "dev"
 }
 
-variable "s3_bucket_name" {
-  type        = string
-  default     = null
-  description = "Custom S3 bucket name. If not provided, a unique name will be generated automatically"
+variable "vpc_cidr" {
+  type = string
+}
+
+variable "public_subnets" {
+  type = list(string)
+}
+
+variable "private_subnets" {
+  type = list(string)
+}
+
+variable "web_instance_type" {
+  type = string
+}
+
+variable "db_instance_type" {
+  type = string
 }

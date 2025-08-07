@@ -1,14 +1,16 @@
-output "bucket_id" {
-  value       = module.s3.bucket_id
-  description = "The name of the S3 bucket"
+
+output "vpc_id" {
+  value = module.vpc.vpc_id
 }
 
-output "bucket_arn" {
-  value       = module.s3.bucket_arn
-  description = "The ARN of the S3 bucket"
+output "web_instance_id" {
+  value = module.web_server.instance_id
 }
 
-output "bucket_region" {
-  value       = module.s3.bucket_region
-  description = "The AWS region this bucket resides in"
+output "db_instance_id" {
+  value = module.db_server.instance_id
+}
+
+output "cloudwatch_log_group" {
+  value = module.cloudwatch.log_group_name
 }
