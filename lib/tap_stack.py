@@ -116,7 +116,7 @@ class TapStack(pulumi.ComponentResource):
         from_port=443,
         to_port=443,
         protocol="tcp",
-        prefix_list_ids=[prefix_list.id],
+        prefix_list_ids=[prefix_list.id],  # Fixed: changed to prefix_list_ids (plural) and made it a list
         security_group_id=sg.id,
         opts=ResourceOptions(parent=sg)
       )
@@ -190,7 +190,7 @@ class TapStack(pulumi.ComponentResource):
     pulumi.export("iam_user_arn", user.arn)
     pulumi.export("kms_key_id", key.key_id)
     pulumi.export("kms_alias", alias.name)
-    pulumi.export("encrypted_app_secret", encrypted_secret.ciphertext_blob)
+    pulumi.export("encrypted_app_secret", encrypted_secret)
     pulumi.export("security_notice", (
       "Secrets are encrypted via KMS. Access keys are rotated every 90 days and plaintext values "
       "are not exposed in state or outputs."
@@ -201,7 +201,7 @@ class TapStack(pulumi.ComponentResource):
     self.iam_user_arn = user.arn
     self.kms_key_id = key.key_id
     self.kms_alias = alias.name
-    self.encrypted_app_secret = encrypted_secret.ciphertext_blob
+    self.encrypted_app_secret = encrypted_secret
 
     self.register_outputs({
       "vpc_id": self.vpc_id,
