@@ -27,6 +27,6 @@ Tests actual AWS resources created by the Pulumi stack.
 #     self.stack_name = "dev"  # Your live Pulumi stack name (just the env part)
 #     self.project_name = "tap-infra"  # Your Pulumi project name
 #     self.s3_client = boto3.client('s3')
-    
+
 #     # Configure Pulumi to use S3 backend (not Pulumi Cloud)
 #     self.pulumi_backend_url = os.getenv('PULUMI_BACKEND_URL', 's3://iac-rlhf-pulumi-states')
