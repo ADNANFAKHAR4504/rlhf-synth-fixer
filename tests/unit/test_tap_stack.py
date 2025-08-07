@@ -1,12 +1,11 @@
 """Unit tests for TAP Stack."""
+from lib.tap_stack import TapStack
+from cdktf import App, Testing
 import os
 import sys
 
-sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-
-from cdktf import App, Testing
-
-from lib.tap_stack import TapStack
+sys.path.append(os.path.dirname(os.path.dirname(
+    os.path.dirname(os.path.abspath(__file__)))))
 
 
 class TestStackStructure:
@@ -20,12 +19,12 @@ class TestStackStructure:
     """TapStack instantiates successfully via props."""
     app = App()
     stack = TapStack(
-      app,
-      "TestTapStackWithProps",
-      environment_suffix="prod",
-      state_bucket="custom-state-bucket",
-      state_bucket_region="us-west-2",
-      aws_region="us-west-2",
+        app,
+        "TestTapStackWithProps",
+        environment_suffix="prod",
+        state_bucket="custom-state-bucket",
+        state_bucket_region="us-west-2",
+        aws_region="us-west-2",
     )
 
     # Verify that TapStack instantiates without errors via props
