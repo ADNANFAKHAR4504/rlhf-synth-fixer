@@ -1,5 +1,5 @@
 import * as cdk from 'aws-cdk-lib';
-import { Template, Match } from 'aws-cdk-lib/assertions';
+import { Match, Template } from 'aws-cdk-lib/assertions';
 import { TapStack } from '../lib/tap-stack';
 
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
@@ -389,7 +389,7 @@ describe('TapStack Unit Tests', () => {
   });
 
   describe('Outputs', () => {
-    test('should export required outputs', () => {
+    test('should export required outputs for primary region', () => {
       const app = new cdk.App();
       const stack = new TapStack(app, 'TestStack', {
         environmentSuffix,
@@ -398,11 +398,29 @@ describe('TapStack Unit Tests', () => {
       });
       const template = Template.fromStack(stack);
       
-      template.hasOutput('VpcId', {});
-      template.hasOutput('ApiUrl', {});
-      template.hasOutput('DatabaseEndpoint', {});
-      template.hasOutput('WAFWebACLArn', {});
-      template.hasOutput('InstanceId', {});
+      // Primary region outputs
+      template.hasOutput('VpcIdPrimary', {});
+      template.hasOutput('ApiUrlPrimary', {});
+      template.hasOutput('DatabaseEndpointPrimary', {});
+      template.hasOutput('WAFWebACLArnPrimary', {});
+      template.hasOutput('InstanceIdPrimary', {});
+    });
+
+    test('should export required outputs for secondary region', () => {
+      const app = new cdk.App();
+      const stack = new TapStack(app, 'TestStack', {
+        environmentSuffix,
+        isPrimaryRegion: false,
+        env: { account: '123456789012', region: 'us-east-1' },
+      });
+      const template = Template.fromStack(stack);
+      
+      // Secondary region outputs
+      template.hasOutput('VpcIdSecondary', {});
+      template.hasOutput('ApiUrlSecondary', {});
+      template.hasOutput('DatabaseEndpointSecondary', {});
+      template.hasOutput('WAFWebACLArnSecondary', {});
+      template.hasOutput('InstanceIdSecondary', {});
     });
   });
 });
