@@ -168,7 +168,7 @@ class TapStack(pulumi.ComponentResource):
       handler="handler.lambda_handler",
       role=lambda_role.arn,
       code=pulumi.AssetArchive({
-        ".": pulumi.FileArchive("./lambda_function")
+        ".": pulumi.FileArchive("./lib/lambda")
       }),
       timeout=60,  # Increased timeout for better reliability
       memory_size=512,  # Increased memory for better performance
