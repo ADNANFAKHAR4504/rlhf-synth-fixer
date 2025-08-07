@@ -27,7 +27,7 @@ def pulumi_outputs():
 
 
 def test_api_gateway_response_contains_jane_doe(pulumi_outputs):
-  """
+  print("""
   Integration Test: API Gateway → Lambda → RDS End-to-End Flow
 
   This test validates the complete integration between all system components:
@@ -52,7 +52,7 @@ def test_api_gateway_response_contains_jane_doe(pulumi_outputs):
   - Lambda has proper permissions to connect to RDS
   - RDS database is accessible and functional
   - Complete data flow from API → Lambda → RDS → Lambda → API works correctly
-  """
+  """)
   # Get the API Gateway base URL from Pulumi deployment outputs
   base_url = pulumi_outputs.get("api_gateway_address")
   assert base_url, "Missing 'api_gateway_address' in Pulumi outputs."
