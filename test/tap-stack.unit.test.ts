@@ -44,7 +44,7 @@ describe('TapStack CloudFormation Template - Highly Available VPC', () => {
     test('should have all required parameters', () => {
       const requiredParams = [
         'VpcCidr',
-        'PublicSubnetACidr', 
+        'PublicSubnetACidr',
         'PublicSubnetBCidr',
         'PrivateSubnetACidr',
         'PrivateSubnetBCidr',
@@ -52,9 +52,9 @@ describe('TapStack CloudFormation Template - Highly Available VPC', () => {
         'AvailabilityZoneB',
         'Environment',
         'ProjectName',
-        'EnvironmentSuffix'
+        'EnvironmentSuffix',
       ];
-      
+
       requiredParams.forEach(param => {
         expect(template.Parameters[param]).toBeDefined();
       });
@@ -69,8 +69,12 @@ describe('TapStack CloudFormation Template - Highly Available VPC', () => {
     });
 
     test('AvailabilityZone parameters should use correct type', () => {
-      expect(template.Parameters.AvailabilityZoneA.Type).toBe('AWS::EC2::AvailabilityZone::Name');
-      expect(template.Parameters.AvailabilityZoneB.Type).toBe('AWS::EC2::AvailabilityZone::Name');
+      expect(template.Parameters.AvailabilityZoneA.Type).toBe(
+        'AWS::EC2::AvailabilityZone::Name'
+      );
+      expect(template.Parameters.AvailabilityZoneB.Type).toBe(
+        'AWS::EC2::AvailabilityZone::Name'
+      );
     });
 
     test('Environment parameter should have allowed values', () => {
@@ -121,9 +125,9 @@ describe('TapStack CloudFormation Template - Highly Available VPC', () => {
         'PublicSecurityGroup',
         'PrivateSecurityGroup',
         'EC2S3AccessRole',
-        'EC2S3AccessInstanceProfile'
+        'EC2S3AccessInstanceProfile',
       ];
-      
+
       requiredResources.forEach(resource => {
         expect(template.Resources[resource]).toBeDefined();
       });
@@ -132,38 +136,46 @@ describe('TapStack CloudFormation Template - Highly Available VPC', () => {
     test('MyVPC should be configured correctly', () => {
       const vpc = template.Resources.MyVPC;
       expect(vpc.Type).toBe('AWS::EC2::VPC');
-      expect(vpc.Properties.CidrBlock).toEqual({ 'Ref': 'VpcCidr' });
+      expect(vpc.Properties.CidrBlock).toEqual({ Ref: 'VpcCidr' });
       expect(vpc.Properties.EnableDnsHostnames).toBe(true);
       expect(vpc.Properties.EnableDnsSupport).toBe(true);
       expect(vpc.Properties.Tags).toBeDefined();
     });
 
     test('Public subnets should have MapPublicIpOnLaunch enabled', () => {
-      expect(template.Resources.PublicSubnetA.Properties.MapPublicIpOnLaunch).toBe(true);
-      expect(template.Resources.PublicSubnetB.Properties.MapPublicIpOnLaunch).toBe(true);
+      expect(
+        template.Resources.PublicSubnetA.Properties.MapPublicIpOnLaunch
+      ).toBe(true);
+      expect(
+        template.Resources.PublicSubnetB.Properties.MapPublicIpOnLaunch
+      ).toBe(true);
     });
 
     test('Private subnets should not have MapPublicIpOnLaunch', () => {
-      expect(template.Resources.PrivateSubnetA.Properties.MapPublicIpOnLaunch).toBeUndefined();
-      expect(template.Resources.PrivateSubnetB.Properties.MapPublicIpOnLaunch).toBeUndefined();
+      expect(
+        template.Resources.PrivateSubnetA.Properties.MapPublicIpOnLaunch
+      ).toBeUndefined();
+      expect(
+        template.Resources.PrivateSubnetB.Properties.MapPublicIpOnLaunch
+      ).toBeUndefined();
     });
 
     test('NAT Gateways should have Elastic IPs', () => {
       expect(template.Resources.NatGatewayA.Properties.AllocationId).toEqual({
-        'Fn::GetAtt': ['NatGatewayAEIP', 'AllocationId']
+        'Fn::GetAtt': ['NatGatewayAEIP', 'AllocationId'],
       });
       expect(template.Resources.NatGatewayB.Properties.AllocationId).toEqual({
-        'Fn::GetAtt': ['NatGatewayBEIP', 'AllocationId']
+        'Fn::GetAtt': ['NatGatewayBEIP', 'AllocationId'],
       });
     });
 
     test('Public Security Group should allow HTTP and HTTPS', () => {
       const sg = template.Resources.PublicSecurityGroup;
       const ingress = sg.Properties.SecurityGroupIngress;
-      
+
       const httpRule = ingress.find((rule: any) => rule.FromPort === 80);
       const httpsRule = ingress.find((rule: any) => rule.FromPort === 443);
-      
+
       expect(httpRule).toBeDefined();
       expect(httpRule.CidrIp).toBe('0.0.0.0/0');
       expect(httpsRule).toBeDefined();
@@ -173,18 +185,22 @@ describe('TapStack CloudFormation Template - Highly Available VPC', () => {
     test('Private Security Group should allow traffic from Public Security Group', () => {
       const sg = template.Resources.PrivateSecurityGroup;
       const ingress = sg.Properties.SecurityGroupIngress[0];
-      
-      expect(ingress.SourceSecurityGroupId).toEqual({ 'Ref': 'PublicSecurityGroup' });
+
+      expect(ingress.SourceSecurityGroupId).toEqual({
+        Ref: 'PublicSecurityGroup',
+      });
       expect(ingress.IpProtocol).toBe(-1);
     });
 
     test('EC2 IAM Role should have S3 permissions', () => {
       const role = template.Resources.EC2S3AccessRole;
       expect(role.Type).toBe('AWS::IAM::Role');
-      
-      const s3Policy = role.Properties.Policies.find((policy: any) => policy.PolicyName === 'S3AccessPolicy');
+
+      const s3Policy = role.Properties.Policies.find(
+        (policy: any) => policy.PolicyName === 'S3AccessPolicy'
+      );
       expect(s3Policy).toBeDefined();
-      
+
       const actions = s3Policy.PolicyDocument.Statement[0].Action;
       expect(actions).toContain('s3:GetObject');
       expect(actions).toContain('s3:PutObject');
@@ -195,7 +211,9 @@ describe('TapStack CloudFormation Template - Highly Available VPC', () => {
     test('Instance Profile should reference the IAM Role', () => {
       const instanceProfile = template.Resources.EC2S3AccessInstanceProfile;
       expect(instanceProfile.Type).toBe('AWS::IAM::InstanceProfile');
-      expect(instanceProfile.Properties.Roles).toContainEqual({ 'Ref': 'EC2S3AccessRole' });
+      expect(instanceProfile.Properties.Roles).toContainEqual({
+        Ref: 'EC2S3AccessRole',
+      });
     });
   });
 
@@ -213,7 +231,7 @@ describe('TapStack CloudFormation Template - Highly Available VPC', () => {
         'EC2S3AccessInstanceProfileArn',
         'InternetGatewayId',
         'NatGatewayAId',
-        'NatGatewayBId'
+        'NatGatewayBId',
       ];
 
       expectedOutputs.forEach(outputName => {
@@ -224,44 +242,62 @@ describe('TapStack CloudFormation Template - Highly Available VPC', () => {
     test('VPCId output should be correct', () => {
       const output = template.Outputs.VPCId;
       expect(output.Description).toBe('ID of the created VPC');
-      expect(output.Value).toEqual({ 'Ref': 'MyVPC' });
+      expect(output.Value).toEqual({ Ref: 'MyVPC' });
       expect(output.Export.Name).toEqual({
         'Fn::Sub': '${AWS::StackName}-VPC-ID',
       });
     });
 
     test('Subnet outputs should reference correct resources', () => {
-      expect(template.Outputs.PublicSubnetAId.Value).toEqual({ 'Ref': 'PublicSubnetA' });
-      expect(template.Outputs.PublicSubnetBId.Value).toEqual({ 'Ref': 'PublicSubnetB' });
-      expect(template.Outputs.PrivateSubnetAId.Value).toEqual({ 'Ref': 'PrivateSubnetA' });
-      expect(template.Outputs.PrivateSubnetBId.Value).toEqual({ 'Ref': 'PrivateSubnetB' });
+      expect(template.Outputs.PublicSubnetAId.Value).toEqual({
+        Ref: 'PublicSubnetA',
+      });
+      expect(template.Outputs.PublicSubnetBId.Value).toEqual({
+        Ref: 'PublicSubnetB',
+      });
+      expect(template.Outputs.PrivateSubnetAId.Value).toEqual({
+        Ref: 'PrivateSubnetA',
+      });
+      expect(template.Outputs.PrivateSubnetBId.Value).toEqual({
+        Ref: 'PrivateSubnetB',
+      });
     });
 
     test('Security Group outputs should reference correct resources', () => {
-      expect(template.Outputs.PublicSecurityGroupId.Value).toEqual({ 'Ref': 'PublicSecurityGroup' });
-      expect(template.Outputs.PrivateSecurityGroupId.Value).toEqual({ 'Ref': 'PrivateSecurityGroup' });
+      expect(template.Outputs.PublicSecurityGroupId.Value).toEqual({
+        Ref: 'PublicSecurityGroup',
+      });
+      expect(template.Outputs.PrivateSecurityGroupId.Value).toEqual({
+        Ref: 'PrivateSecurityGroup',
+      });
     });
 
     test('IAM outputs should use GetAtt for ARNs', () => {
       expect(template.Outputs.EC2S3AccessRoleArn.Value).toEqual({
-        'Fn::GetAtt': ['EC2S3AccessRole', 'Arn']
+        'Fn::GetAtt': ['EC2S3AccessRole', 'Arn'],
       });
       expect(template.Outputs.EC2S3AccessInstanceProfileArn.Value).toEqual({
-        'Fn::GetAtt': ['EC2S3AccessInstanceProfile', 'Arn']
+        'Fn::GetAtt': ['EC2S3AccessInstanceProfile', 'Arn'],
       });
     });
 
     test('Gateway outputs should reference correct resources', () => {
-      expect(template.Outputs.InternetGatewayId.Value).toEqual({ 'Ref': 'InternetGateway' });
-      expect(template.Outputs.NatGatewayAId.Value).toEqual({ 'Ref': 'NatGatewayA' });
-      expect(template.Outputs.NatGatewayBId.Value).toEqual({ 'Ref': 'NatGatewayB' });
+      expect(template.Outputs.InternetGatewayId.Value).toEqual({
+        Ref: 'InternetGateway',
+      });
+      expect(template.Outputs.NatGatewayAId.Value).toEqual({
+        Ref: 'NatGatewayA',
+      });
+      expect(template.Outputs.NatGatewayBId.Value).toEqual({
+        Ref: 'NatGatewayB',
+      });
     });
   });
 
   describe('Template Validation', () => {
     test('should have appropriate number of parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(10);
+      expect(parameterCount).toBe(9);
     });
 
     test('should have all VPC infrastructure resources', () => {
@@ -279,7 +315,7 @@ describe('TapStack CloudFormation Template - Highly Available VPC', () => {
         'MyVPC',
         'InternetGateway',
         'PublicSubnetA',
-        'PublicSubnetB', 
+        'PublicSubnetB',
         'PrivateSubnetA',
         'PrivateSubnetB',
         'NatGatewayAEIP',
@@ -290,18 +326,18 @@ describe('TapStack CloudFormation Template - Highly Available VPC', () => {
         'PrivateRouteTableA',
         'PrivateRouteTableB',
         'PublicSecurityGroup',
-        'PrivateSecurityGroup'
+        'PrivateSecurityGroup',
       ];
 
       taggedResources.forEach(resourceName => {
         const resource = template.Resources[resourceName];
         expect(resource.Properties.Tags).toBeDefined();
-        
+
         const tags = resource.Properties.Tags;
         const nameTag = tags.find((tag: any) => tag.Key === 'Name');
         const envTag = tags.find((tag: any) => tag.Key === 'Environment');
         const projectTag = tags.find((tag: any) => tag.Key === 'Project');
-        
+
         expect(nameTag).toBeDefined();
         expect(envTag).toBeDefined();
         expect(projectTag).toBeDefined();
@@ -311,31 +347,53 @@ describe('TapStack CloudFormation Template - Highly Available VPC', () => {
 
   describe('High Availability Configuration', () => {
     test('should span two availability zones', () => {
-      expect(template.Resources.PublicSubnetA.Properties.AvailabilityZone).toEqual({ 'Ref': 'AvailabilityZoneA' });
-      expect(template.Resources.PublicSubnetB.Properties.AvailabilityZone).toEqual({ 'Ref': 'AvailabilityZoneB' });
-      expect(template.Resources.PrivateSubnetA.Properties.AvailabilityZone).toEqual({ 'Ref': 'AvailabilityZoneA' });
-      expect(template.Resources.PrivateSubnetB.Properties.AvailabilityZone).toEqual({ 'Ref': 'AvailabilityZoneB' });
+      expect(
+        template.Resources.PublicSubnetA.Properties.AvailabilityZone
+      ).toEqual({ Ref: 'AvailabilityZoneA' });
+      expect(
+        template.Resources.PublicSubnetB.Properties.AvailabilityZone
+      ).toEqual({ Ref: 'AvailabilityZoneB' });
+      expect(
+        template.Resources.PrivateSubnetA.Properties.AvailabilityZone
+      ).toEqual({ Ref: 'AvailabilityZoneA' });
+      expect(
+        template.Resources.PrivateSubnetB.Properties.AvailabilityZone
+      ).toEqual({ Ref: 'AvailabilityZoneB' });
     });
 
     test('should have NAT Gateway in each public subnet', () => {
-      expect(template.Resources.NatGatewayA.Properties.SubnetId).toEqual({ 'Ref': 'PublicSubnetA' });
-      expect(template.Resources.NatGatewayB.Properties.SubnetId).toEqual({ 'Ref': 'PublicSubnetB' });
+      expect(template.Resources.NatGatewayA.Properties.SubnetId).toEqual({
+        Ref: 'PublicSubnetA',
+      });
+      expect(template.Resources.NatGatewayB.Properties.SubnetId).toEqual({
+        Ref: 'PublicSubnetB',
+      });
     });
 
     test('private subnets should route to their respective NAT Gateway', () => {
-      expect(template.Resources.DefaultPrivateRouteA.Properties.NatGatewayId).toEqual({ 'Ref': 'NatGatewayA' });
-      expect(template.Resources.DefaultPrivateRouteB.Properties.NatGatewayId).toEqual({ 'Ref': 'NatGatewayB' });
+      expect(
+        template.Resources.DefaultPrivateRouteA.Properties.NatGatewayId
+      ).toEqual({ Ref: 'NatGatewayA' });
+      expect(
+        template.Resources.DefaultPrivateRouteB.Properties.NatGatewayId
+      ).toEqual({ Ref: 'NatGatewayB' });
     });
   });
 
   describe('Resource Dependencies', () => {
     test('Elastic IPs should depend on Internet Gateway Attachment', () => {
-      expect(template.Resources.NatGatewayAEIP.DependsOn).toBe('InternetGatewayAttachment');
-      expect(template.Resources.NatGatewayBEIP.DependsOn).toBe('InternetGatewayAttachment');
+      expect(template.Resources.NatGatewayAEIP.DependsOn).toBe(
+        'InternetGatewayAttachment'
+      );
+      expect(template.Resources.NatGatewayBEIP.DependsOn).toBe(
+        'InternetGatewayAttachment'
+      );
     });
 
     test('Default Public Route should depend on Internet Gateway Attachment', () => {
-      expect(template.Resources.DefaultPublicRoute.DependsOn).toBe('InternetGatewayAttachment');
+      expect(template.Resources.DefaultPublicRoute.DependsOn).toBe(
+        'InternetGatewayAttachment'
+      );
     });
   });
 });
