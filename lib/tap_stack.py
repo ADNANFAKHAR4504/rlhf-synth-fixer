@@ -414,10 +414,26 @@ class TapStack(ComponentResource):
                 opts=ResourceOptions(parent=self, provider=provider)
             )
 
-            aws.iam.RolePolicyAttachment(
+            # FIXED: Use inline policy instead of non-existent managed policy
+            aws.iam.RolePolicy(
                 f"PROD-flowlog-policy-{region}-{self.environment_suffix}",
                 role=flow_log_role.name,
-                policy_arn="arn:aws:iam::aws:policy/service-role/VPCFlowLogsDeliveryRolePolicy",
+                policy=json.dumps({
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Action": [
+                                "logs:CreateLogGroup",
+                                "logs:CreateLogStream", 
+                                "logs:PutLogEvents",
+                                "logs:DescribeLogGroups",
+                                "logs:DescribeLogStreams"
+                            ],
+                            "Resource": "*"
+                        }
+                    ]
+                }),
                 opts=ResourceOptions(parent=self, provider=provider)
             )
 
@@ -435,11 +451,12 @@ class TapStack(ComponentResource):
                 iam_role_arn=flow_log_role.arn,
                 log_destination=log_group.arn,
                 log_destination_type="cloud-watch-logs",
-                vpc_id=vpc.id,  # Correct parameter name
+                vpc_id=vpc.id,
                 traffic_type="ALL",
                 tags=self.standard_tags,
                 opts=ResourceOptions(parent=self, provider=provider)
-            )
+)
+
 
             
             self.vpcs[region] = vpc
