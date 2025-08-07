@@ -16,6 +16,8 @@ import os
 import pulumi
 from pulumi import ResourceOptions
 import pulumi_aws as aws
+from datetime import datetime, timedelta
+
 
 
 class TapStackArgs:
@@ -33,8 +35,10 @@ class TapStack(pulumi.ComponentResource):
     tags = args.tags
     region = os.getenv("AWS_REGION", "us-west-2")
     prefix_list = aws.ec2.get_prefix_list_output(name="com.amazonaws." + region + ".s3")
-    created_on = datetime.utcnow().strftime("%Y-%m-%d")
+    created_on = datetime.utcnow()
     max_key_age_days = 90
+    rotation_expiry = (created_on + timedelta(days=max_key_age_days)).strftime("%Y-%m-%dT00:00:00Z")
+
 
     def validate_cidr_list(cidrs: List[str]) -> List[str]:
       for cidr in cidrs:
@@ -139,14 +143,19 @@ class TapStack(pulumi.ComponentResource):
       f"web-app-user-{env}",
       name=f"secure-web-app-user-{env}",
       path="/applications/",
-      tags={**tags, "Application": "secure-web-app", "CreatedOn": created_on}
+      tags={
+        **tags,
+        "Application": "secure-web-app",
+        "CreatedOn": created_on.strftime("%Y-%m-%d"),
+        "RotationExpiry": rotation_expiry
+      }
     )
 
     aws.iam.UserPolicy(
       f"rotate-policy-{env}",
       user=user.name,
       name="AccessKeyRotationPolicy",
-      policy=self.rotation_policy(max_key_age_days)
+      policy=self.rotation_policy()
     )
 
     access_key = aws.iam.AccessKey(
@@ -228,8 +237,9 @@ class TapStack(pulumi.ComponentResource):
       "encrypted_app_secret": self.encrypted_app_secret
     })
 
+
   @staticmethod
-  def rotation_policy(days: int) -> str:
+  def rotation_policy() -> str:
     return json.dumps({
       "Version": "2012-10-17",
       "Statement": [
@@ -245,13 +255,13 @@ class TapStack(pulumi.ComponentResource):
           "Resource": "*"
         },
         {
-          "Sid": "DenyAccessIfStale",
+          "Sid": "DenyAfterTagBasedExpiration",
           "Effect": "Deny",
           "Action": "*",
           "Resource": "*",
           "Condition": {
             "DateGreaterThan": {
-              "aws:CurrentTime": f"${{aws:UserCreationTime}} + {days} days"
+              "aws:CurrentTime": "aws:ResourceTag/RotationExpiry"
             }
           }
         }
@@ -286,22 +296,5 @@ class TapStack(pulumi.ComponentResource):
           ],
           "Resource": "*"
         }
-        # {
-        #   "Sid": "AuditAccess",
-        #   "Effect": "Allow",
-        #   "Principal": {"AWS": audit_role_arn},
-        #   "Action": [
-        #     "kms:DescribeKey",
-        #     "kms:GetKeyPolicy"
-        #   ],
-        #   "Resource": "*"
-        # },
-        # {
-        #   "Sid": "BreakGlassAccess",
-        #   "Effect": "Allow",
-        #   "Principal": {"AWS": break_glass_arn},
-        #   "Action": ["kms:Decrypt"],
-        #   "Resource": "*"
-        # }
       ]
     }, indent=2)
