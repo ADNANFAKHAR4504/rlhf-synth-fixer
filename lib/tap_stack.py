@@ -46,7 +46,7 @@ class TapStack(TerraformStack):
     self.aws_region = kwargs.get('aws_region', 'us-east-2')
     self.state_bucket_region = kwargs.get('state_bucket_region', 'us-east-2')
     self.state_bucket = kwargs.get('state_bucket', 'iac-rlhf-tf-states')
-    self.default_tags = kwargs.get('default_tags', {})
+    self.default_tags = kwargs.get('default_tags', {}) or {}
 
     # Infrastructure configuration
     self.environment = "prod"
