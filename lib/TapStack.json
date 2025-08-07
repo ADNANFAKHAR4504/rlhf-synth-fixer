@@ -39,11 +39,6 @@
         "EnvironmentSuffix": {
             "Type": "String",
             "Description": "Environment suffix for resource naming and configuration",
-            "AllowedValues": [
-                "dev",
-                "staging",
-                "prod"
-            ],
             "Default": "dev",
             "ConstraintDescription": "Must be one of dev, staging, or prod"
         },

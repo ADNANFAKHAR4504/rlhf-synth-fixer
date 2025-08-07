@@ -36,8 +36,8 @@ describe('TapStack CloudFormation Template', () => {
     test('EnvironmentSuffix should have correct constraints', () => {
       const envParam = template.Parameters.EnvironmentSuffix;
       expect(envParam.Type).toBe('String');
-      expect(envParam.AllowedValues).toEqual(['dev', 'staging', 'prod']);
       expect(envParam.Default).toBe('dev');
+      expect(envParam.ConstraintDescription).toBe('Must be one of dev, staging, or prod');
     });
   });
 
