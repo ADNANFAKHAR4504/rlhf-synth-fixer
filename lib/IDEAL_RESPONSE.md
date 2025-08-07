@@ -4,9 +4,10 @@ Description: 'Production-ready VPC with public/private subnets, NAT Gateway, and
 
 Parameters:
   KeyPairName:
-    Type: AWS::EC2::KeyPair::KeyName
-    Description: Name of an existing EC2 KeyPair for SSH access to the instance
-    ConstraintDescription: Must be the name of an existing EC2 KeyPair
+    Type: String
+    Default: ""
+    Description: Name of an existing EC2 KeyPair for SSH access to the instance (leave empty to disable SSH key)
+    ConstraintDescription: Must be the name of an existing EC2 KeyPair or empty string
   
   InstanceType:
     Type: String
@@ -17,6 +18,10 @@ Parameters:
       - t3.medium
     Description: EC2 instance type for the web server
     ConstraintDescription: Must be a valid EC2 instance type
+
+
+Conditions:
+  HasKeyPair: !Not [!Equals [!Ref KeyPairName, ""]]
 
 Resources:
   # VPC Configuration
@@ -201,7 +206,7 @@ Resources:
     Properties:
       ImageId: ami-0c02fb55956c7d316
       InstanceType: !Ref InstanceType
-      KeyName: !Ref KeyPairName
+      KeyName: !If [HasKeyPair, !Ref KeyPairName, !Ref "AWS::NoValue"]
       SubnetId: !Ref PublicSubnet1
       SecurityGroupIds:
         - !Ref WebServerSecurityGroup

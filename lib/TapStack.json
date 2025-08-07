@@ -3,9 +3,10 @@
     "Description": "Production-ready VPC with public/private subnets, NAT Gateway, and EC2 instance",
     "Parameters": {
         "KeyPairName": {
-            "Type": "AWS::EC2::KeyPair::KeyName",
-            "Description": "Name of an existing EC2 KeyPair for SSH access to the instance",
-            "ConstraintDescription": "Must be the name of an existing EC2 KeyPair"
+            "Type": "String",
+            "Default": "",
+            "Description": "Name of an existing EC2 KeyPair for SSH access to the instance (leave empty to disable SSH key)",
+            "ConstraintDescription": "Must be the name of an existing EC2 KeyPair or empty string"
         },
         "InstanceType": {
             "Type": "String",
@@ -17,6 +18,20 @@
             ],
             "Description": "EC2 instance type for the web server",
             "ConstraintDescription": "Must be a valid EC2 instance type"
+        }
+    },
+    "Conditions": {
+        "HasKeyPair": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "KeyPairName"
+                        },
+                        ""
+                    ]
+                }
+            ]
         }
     },
     "Resources": {
@@ -341,7 +356,15 @@
                     "Ref": "InstanceType"
                 },
                 "KeyName": {
-                    "Ref": "KeyPairName"
+                    "Fn::If": [
+                        "HasKeyPair",
+                        {
+                            "Ref": "KeyPairName"
+                        },
+                        {
+                            "Ref": "AWS::NoValue"
+                        }
+                    ]
                 },
                 "SubnetId": {
                     "Ref": "PublicSubnet1"

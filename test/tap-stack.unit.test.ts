@@ -59,9 +59,10 @@ describe('TapStack CloudFormation Template', () => {
   describe('Parameters', () => {
     test('KeyPairName parameter has correct schema', () => {
       const p = template.Parameters.KeyPairName;
-      expect(p.Type).toBe('AWS::EC2::KeyPair::KeyName');
-      expect(p.Description).toBe('Name of an existing EC2 KeyPair for SSH access to the instance');
-      expect(p.ConstraintDescription).toBe('Must be the name of an existing EC2 KeyPair');
+      expect(p.Type).toBe('String');
+      expect(p.Default).toBe('');
+      expect(p.Description).toBe('Name of an existing EC2 KeyPair for SSH access to the instance (leave empty to disable SSH key)');
+      expect(p.ConstraintDescription).toBe('Must be the name of an existing EC2 KeyPair or empty string');
     });
 
     test('InstanceType parameter has correct schema', () => {
@@ -221,7 +222,13 @@ describe('TapStack CloudFormation Template', () => {
       expect(instance.Type).toBe('AWS::EC2::Instance');
       expect(instance.Properties.ImageId).toBe('ami-0c02fb55956c7d316');
       expect(instance.Properties.InstanceType).toEqual({ Ref: 'InstanceType' });
-      expect(instance.Properties.KeyName).toEqual({ Ref: 'KeyPairName' });
+      expect(instance.Properties.KeyName).toEqual({
+        'Fn::If': [
+          'HasKeyPair',
+          { 'Ref': 'KeyPairName' },
+          { 'Ref': 'AWS::NoValue' }
+        ]
+      });
       expect(instance.Properties.SubnetId).toEqual({ Ref: 'PublicSubnet1' });
       expect(instance.Properties.SecurityGroupIds).toContainEqual({ Ref: 'WebServerSecurityGroup' });
     });
@@ -338,7 +345,7 @@ describe('TapStack CloudFormation Template', () => {
   /* -------------------------------------------------------------------- */
   describe('Template Structure', () => {
     test('required top-level sections exist', () => {
-      ['AWSTemplateFormatVersion', 'Description', 'Parameters', 'Resources', 'Outputs'].forEach(
+      ['AWSTemplateFormatVersion', 'Description', 'Parameters', 'Resources', 'Outputs', 'Conditions'].forEach(
         section => expect(template[section]).toBeDefined()
       );
     });
@@ -347,8 +354,18 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.AWSTemplateFormatVersion).toBe('2010-09-09');
     });
 
-    test('template does not have conditions section', () => {
-      expect(template.Conditions).toBeUndefined();
+    test('template has conditions section', () => {
+      expect(template.Conditions).toBeDefined();
+      expect(template.Conditions.HasKeyPair).toEqual({
+        'Fn::Not': [
+          {
+            'Fn::Equals': [
+              { 'Ref': 'KeyPairName' },
+              ''
+            ]
+          }
+        ]
+      });
     });
 
     test('all resources have proper tagging where applicable', () => {
