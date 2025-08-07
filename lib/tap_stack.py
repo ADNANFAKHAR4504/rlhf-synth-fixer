@@ -109,7 +109,7 @@ def create_security_groups(
     vpc_id: pulumi.Output[str]
 ) -> Dict[str, aws.ec2.SecurityGroup]:
   """
-  Creates security groups for ALB and EC2 with proper references.
+  Creates security groups for ALB and EC2 with consolidated rules.
   """
   alb_sg = aws.ec2.SecurityGroup(
     f"{project_name}-alb-sg",
@@ -117,14 +117,22 @@ def create_security_groups(
     description="Controls access to the ALB",
     ingress=[
       aws.ec2.SecurityGroupIngressArgs(
-        protocol="tcp", from_port=80, to_port=80,
-        cidr_blocks=["0.0.0.0/0"], ipv6_cidr_blocks=["::/0"]
+        protocol="tcp",
+        from_port=80,
+        to_port=80,
+        cidr_blocks=["0.0.0.0/0"],
+        ipv6_cidr_blocks=["::/0"],
+        description="Allow HTTP from anywhere"
       )
     ],
     egress=[
       aws.ec2.SecurityGroupEgressArgs(
-        protocol="-1", from_port=0, to_port=0,
-        cidr_blocks=["0.0.0.0/0"], ipv6_cidr_blocks=["::/0"]
+        protocol="-1",
+        from_port=0,
+        to_port=0,
+        cidr_blocks=["0.0.0.0/0"],
+        ipv6_cidr_blocks=["::/0"],
+        description="Allow all outbound traffic"
       )
     ],
     tags={**common_tags, "Name": f"{project_name}-alb-sg"}
@@ -136,15 +144,21 @@ def create_security_groups(
     description="Controls access to the EC2 instances",
     ingress=[
       aws.ec2.SecurityGroupIngressArgs(
-        protocol="tcp", from_port=80, to_port=80,
+        protocol="tcp",
+        from_port=80,
+        to_port=80,
         security_groups=[alb_sg.id],
         description="Allow HTTP from ALB"
       )
     ],
     egress=[
       aws.ec2.SecurityGroupEgressArgs(
-        protocol="-1", from_port=0, to_port=0,
-        cidr_blocks=["0.0.0.0/0"], ipv6_cidr_blocks=["::/0"]
+        protocol="-1",
+        from_port=0,
+        to_port=0,
+        cidr_blocks=["0.0.0.0/0"],
+        ipv6_cidr_blocks=["::/0"],
+        description="Allow all outbound traffic"
       )
     ],
     tags={**common_tags, "Name": f"{project_name}-ec2-sg"}
