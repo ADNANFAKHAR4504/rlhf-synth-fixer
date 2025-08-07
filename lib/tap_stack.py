@@ -8,6 +8,7 @@ Secure production-ready Pulumi stack for a web application using:
 - KMS key with fine-grained key policy and extra principals
 - Encrypted Pulumi config secret using KMS
 """
+import ipaddress
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 import json
@@ -30,12 +31,20 @@ class TapStack(pulumi.ComponentResource):
     config = pulumi.Config()
     env = args.environment_suffix
     tags = args.tags
-    region = os.getenv("AWS_REGION", "us-west-1")
+    region = os.getenv("AWS_REGION", "us-west-2")
     prefix_list = aws.ec2.get_prefix_list_output(name="com.amazonaws." + region + ".s3")
     created_on = datetime.utcnow().strftime("%Y-%m-%d")
     max_key_age_days = 90
 
-    allowed_cidrs: List[str] = config.get_object("allowed_cidrs") or ["0.0.0.0/0"]
+    def validate_cidr_list(cidrs: List[str]) -> List[str]:
+      for cidr in cidrs:
+        try:
+          ipaddress.IPv4Network(cidr)
+        except ValueError:
+          raise ValueError(f"Invalid CIDR block: {cidr}")
+      return cidrs
+
+    allowed_cidrs = validate_cidr_list(config.get_object("allowed_cidrs") or [])
     trusted_ips: List[str] = config.get_object("trusted_external_ips") or ["8.8.8.8/32", "1.1.1.1/32"]
 
     vpc = aws.ec2.get_vpc_output(default=True)
@@ -182,11 +191,10 @@ class TapStack(pulumi.ComponentResource):
     # --------------------------------------------------------
     secret_value = config.get_secret("app_secret") or "default-secret-value"
 
-    encrypted_secret = pulumi.Output.from_input(secret_value).apply(
-      lambda val: aws.kms.get_cipher_text(
-        key_id=key.key_id,
-        plaintext=val
-      ).ciphertext_blob
+    ciphertext = aws.kms.Ciphertext(
+      f"app-secret-ciphertext-{env}",
+      key_id=key.key_id,
+      plaintext=secret_value
     )
 
 
@@ -198,7 +206,7 @@ class TapStack(pulumi.ComponentResource):
     pulumi.export("iam_user_arn", user.arn)
     pulumi.export("kms_key_id", key.key_id)
     pulumi.export("kms_alias", alias.name)
-    pulumi.export("encrypted_app_secret", encrypted_secret)
+    pulumi.export("encrypted_app_secret", ciphertext.ciphertext_blob)
     pulumi.export("security_notice", (
       "Secrets are encrypted via KMS. Access keys are rotated every 90 days and plaintext values "
       "are not exposed in state or outputs."
@@ -209,7 +217,7 @@ class TapStack(pulumi.ComponentResource):
     self.iam_user_arn = user.arn
     self.kms_key_id = key.key_id
     self.kms_alias = alias.name
-    self.encrypted_app_secret = encrypted_secret
+    self.encrypted_app_secret = ciphertext.ciphertext_blob
 
     self.register_outputs({
       "vpc_id": self.vpc_id,
@@ -235,9 +243,21 @@ class TapStack(pulumi.ComponentResource):
             "iam:ListAccessKeys"
           ],
           "Resource": "*"
+        },
+        {
+          "Sid": "DenyAccessIfStale",
+          "Effect": "Deny",
+          "Action": "*",
+          "Resource": "*",
+          "Condition": {
+            "DateGreaterThan": {
+              "aws:CurrentTime": f"${{aws:UserCreationTime}} + {days} days"
+            }
+          }
         }
       ]
     }, indent=2)
+
 
   @staticmethod
   def build_key_policy(user_arn: str, account_id: str) -> str:
