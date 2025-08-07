@@ -1,31 +1,31 @@
 // lib/tap-stack.ts
 // This file now contains the full stack definition and its instantiation.
 
-import { Construct } from 'constructs';
-import { TerraformStack, TerraformOutput, Fn, App } from 'cdktf';
-import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
-import { Vpc } from '@cdktf/provider-aws/lib/vpc';
-import { Subnet } from '@cdktf/provider-aws/lib/subnet';
+import { AutoscalingGroup } from '@cdktf/provider-aws/lib/autoscaling-group';
+import { CloudwatchLogGroup } from '@cdktf/provider-aws/lib/cloudwatch-log-group';
+import { DataAwsAmi } from '@cdktf/provider-aws/lib/data-aws-ami';
+import { DataAwsAvailabilityZones } from '@cdktf/provider-aws/lib/data-aws-availability-zones';
+import { Eip } from '@cdktf/provider-aws/lib/eip';
+import { IamInstanceProfile } from '@cdktf/provider-aws/lib/iam-instance-profile';
+import { IamPolicy } from '@cdktf/provider-aws/lib/iam-policy';
+import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
+import { IamRolePolicyAttachment } from '@cdktf/provider-aws/lib/iam-role-policy-attachment';
 import { InternetGateway } from '@cdktf/provider-aws/lib/internet-gateway';
+import { LaunchTemplate } from '@cdktf/provider-aws/lib/launch-template';
+import { NatGateway } from '@cdktf/provider-aws/lib/nat-gateway';
+import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
+import { Route } from '@cdktf/provider-aws/lib/route';
 import { RouteTable } from '@cdktf/provider-aws/lib/route-table';
 import { RouteTableAssociation } from '@cdktf/provider-aws/lib/route-table-association';
-import { Eip } from '@cdktf/provider-aws/lib/eip';
-import { NatGateway } from '@cdktf/provider-aws/lib/nat-gateway';
+import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
+import { S3BucketLifecycleConfiguration } from '@cdktf/provider-aws/lib/s3-bucket-lifecycle-configuration';
+import { S3BucketServerSideEncryptionConfigurationA } from '@cdktf/provider-aws/lib/s3-bucket-server-side-encryption-configuration';
 import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
 import { SecurityGroupRule } from '@cdktf/provider-aws/lib/security-group-rule';
-import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
-import { IamPolicy } from '@cdktf/provider-aws/lib/iam-policy';
-import { IamRolePolicyAttachment } from '@cdktf/provider-aws/lib/iam-role-policy-attachment';
-import { IamInstanceProfile } from '@cdktf/provider-aws/lib/iam-instance-profile';
-import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
-import { S3BucketServerSideEncryptionConfigurationA } from '@cdktf/provider-aws/lib/s3-bucket-server-side-encryption-configuration';
-import { S3BucketLifecycleConfiguration } from '@cdktf/provider-aws/lib/s3-bucket-lifecycle-configuration';
-import { DataAwsAvailabilityZones } from '@cdktf/provider-aws/lib/data-aws-availability-zones';
-import { AutoscalingGroup } from '@cdktf/provider-aws/lib/autoscaling-group';
-import { LaunchTemplate } from '@cdktf/provider-aws/lib/launch-template';
-import { DataAwsAmi } from '@cdktf/provider-aws/lib/data-aws-ami';
-import { CloudwatchLogGroup } from '@cdktf/provider-aws/lib/cloudwatch-log-group';
-import { Route } from '@cdktf/provider-aws/lib/route';
+import { Subnet } from '@cdktf/provider-aws/lib/subnet';
+import { Vpc } from '@cdktf/provider-aws/lib/vpc';
+import { App, Fn, TerraformOutput, TerraformStack } from 'cdktf';
+import { Construct } from 'constructs';
 
 /**
  * Interface for stack properties to make it configurable and testable.
@@ -121,7 +121,6 @@ export class TapStack extends TerraformStack {
         tags: { Name: `${id}-public-rt-${i}`, ...tags },
       });
 
-      // Corrected: Use destination_cidr_block
       new Route(this, `public-route-${i}`, {
         routeTableId: publicRouteTable.id,
         destinationCidrBlock: '0.0.0.0/0',
@@ -151,7 +150,6 @@ export class TapStack extends TerraformStack {
         tags: { Name: `${id}-private-rt-${i}`, ...tags },
       });
 
-      // Corrected: Use destination_cidr_block
       new Route(this, `private-route-${i}`, {
         routeTableId: privateRouteTable.id,
         destinationCidrBlock: '0.0.0.0/0',
@@ -169,7 +167,7 @@ export class TapStack extends TerraformStack {
       name: `${id}-web-sg`,
       vpcId: vpc.id,
       tags: { Name: `${id}-web-sg`, ...tags },
-      ingress: [], // Rules will be added dynamically
+      ingress: [],
       egress: [
         {
           fromPort: 0,
@@ -198,37 +196,37 @@ export class TapStack extends TerraformStack {
       securityGroupId: securityGroup.id,
     });
 
-    // 4. IAM
+    // 4. IAM - Using template literals for JSON to avoid linting issues
     const ec2Role = new IamRole(this, 'ec2-role', {
       name: `${id}-ec2-role`,
-      assumeRolePolicy: JSON.stringify({
-        Version: '2012-10-17',
-        Statement: [
+      assumeRolePolicy: `{
+        "Version": "2012-10-17",
+        "Statement": [
           {
-            Action: 'sts:AssumeRole',
-            Effect: 'Allow',
-            Principal: { Service: 'ec2.amazonaws.com' },
-          },
-        ],
-      }),
+            "Action": "sts:AssumeRole",
+            "Effect": "Allow",
+            "Principal": { "Service": "ec2.amazonaws.com" }
+          }
+        ]
+      }`,
       tags: { Name: `${id}-ec2-role`, ...tags },
     });
 
     const s3Policy = new IamPolicy(this, 's3-policy', {
       name: `${id}-s3-policy`,
-      policy: JSON.stringify({
-        Version: '2012-10-17',
-        Statement: [
+      policy: `{
+        "Version": "2012-10-17",
+        "Statement": [
           {
-            Effect: 'Allow',
-            Action: ['s3:GetObject', 's3:ListBucket'],
-            Resource: [
-              `arn:aws:s3:::my-tap-bucket-*`,
-              `arn:aws:s3:::my-tap-bucket-*/*`,
-            ],
-          },
-        ],
-      }),
+            "Effect": "Allow",
+            "Action": ["s3:GetObject", "s3:ListBucket"],
+            "Resource": [
+              "arn:aws:s3:::my-tap-bucket-*",
+              "arn:aws:s3:::my-tap-bucket-*/*"
+            ]
+          }
+        ]
+      }`,
       tags: { Name: `${id}-s3-policy`, ...tags },
     });
 
@@ -310,7 +308,6 @@ export class TapStack extends TerraformStack {
       minSize: 1,
       maxSize: 3,
       desiredCapacity: 1,
-      // Corrected: use the `tag` property with an array of objects
       tag: [
         {
           key: 'Name',
