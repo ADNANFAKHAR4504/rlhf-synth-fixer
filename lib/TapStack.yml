@@ -393,8 +393,6 @@ Resources:
                   - 'arn:aws:s3:::*'
                   - 'arn:aws:s3:::*/*'
       Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-EC2-S3-Access-Role'
         - Key: Environment
           Value: !Ref Environment
         - Key: Project
