@@ -505,10 +505,15 @@ class TapStack(ComponentResource):
             
             subnet_group = aws.rds.SubnetGroup(
                 f"PROD-rds-subnet-group-{region}-{self.environment_suffix}",
+                name=f"prod-rds-subnet-group-{region}-{self.environment_suffix}",
                 subnet_ids=[subnet.id for subnet in self.subnets[region]["private"]],
-                tags={**self.standard_tags, "Name": f"PROD-rds-subnet-group-{region}-{self.environment_suffix}"},
+                tags={
+                    **self.standard_tags,
+                    "Name": f"PROD-rds-subnet-group-{region}-{self.environment_suffix}"
+                },
                 opts=ResourceOptions(parent=self, provider=provider)
             )
+
             
             # Security group for RDS
             rds_sg = aws.ec2.SecurityGroup(
