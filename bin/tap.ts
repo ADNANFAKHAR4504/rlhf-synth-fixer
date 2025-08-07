@@ -17,44 +17,44 @@ Tags.of(app).add('Author', commitAuthor);
 Tags.of(app).add('Service', 'MultiRegionFailover');
 Tags.of(app).add('DeploymentType', 'MultiRegion');
 
-// Create us-west-2 (secondary) stack first
-const westRegion = 'us-west-2';
-const westStack = new TapStack(
+// Create us-east-2 (secondary) stack first
+const secondaryRegion = 'us-east-2';
+const secondaryStack = new TapStack(
   app,
-  `TapStack-${environmentSuffix}-${westRegion}`,
+  `TapStack-${environmentSuffix}-${secondaryRegion}`,
   {
-    stackName: `TapStack-${environmentSuffix}-${westRegion}`,
+    stackName: `TapStack-${environmentSuffix}-${secondaryRegion}`,
     environmentSuffix,
     env: {
       account: process.env.CDK_DEFAULT_ACCOUNT,
-      region: westRegion,
+      region: secondaryRegion,
     },
-    description: `Multi-Region Failover Infrastructure for ${environmentSuffix} in ${westRegion}`,
+    description: `Multi-Region Failover Infrastructure for ${environmentSuffix} in ${secondaryRegion}`,
   }
 );
 
-// Create us-east-1 (primary) stack second, and make it depend on the west stack
-const eastRegion = 'us-east-1';
-const eastStack = new TapStack(
+// Create us-west-2 (primary) stack second, and make it depend on the secondary stack
+const primaryRegion = 'us-west-2';
+const primaryStack = new TapStack(
   app,
-  `TapStack-${environmentSuffix}-${eastRegion}`,
+  `TapStack-${environmentSuffix}-${primaryRegion}`,
   {
-    stackName: `TapStack-${environmentSuffix}-${eastRegion}`,
+    stackName: `TapStack-${environmentSuffix}-${primaryRegion}`,
     environmentSuffix,
     env: {
       account: process.env.CDK_DEFAULT_ACCOUNT,
-      region: eastRegion,
+      region: primaryRegion,
     },
-    description: `Multi-Region Failover Infrastructure for ${environmentSuffix} in ${eastRegion}`,
+    description: `Multi-Region Failover Infrastructure for ${environmentSuffix} in ${primaryRegion}`,
   }
 );
 
-eastStack.addDependency(westStack); // ⬅️ Enforce west deployed before east
+primaryStack.addDependency(secondaryStack); // ⬅️ Enforce secondary deployed before primary
 
 // Optional app metadata
 app.node.addMetadata(
   'description',
   `Multi-Region Failover Infrastructure - ${environmentSuffix} Environment`
 );
-app.node.addMetadata('regions', `${westRegion}, ${eastRegion}`);
+app.node.addMetadata('regions', `${primaryRegion}, ${secondaryRegion}`);
 app.node.addMetadata('deploymentTime', new Date().toISOString());
