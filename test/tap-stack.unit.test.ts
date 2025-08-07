@@ -181,6 +181,14 @@ describe('Failure Recovery and High Availability Stack Unit Tests', () => {
       expect(userData).toContain('socat TCP-LISTEN:8080');
     });
 
+    test('Launch Template should enforce EBS volume encryption', () => {
+      const lt = template.Resources.EC2LaunchTemplate;
+      const blockDeviceMapping =
+        lt.Properties.LaunchTemplateData.BlockDeviceMappings[0];
+      const encryptedFlag = blockDeviceMapping.Ebs.Encrypted;
+      expect(encryptedFlag).toBe(true);
+    });
+
     test('Auto Scaling Group should propagate tags to instances', () => {
       const asg = template.Resources.AutoScalingGroup;
       const backupTag = asg.Properties.Tags.find(

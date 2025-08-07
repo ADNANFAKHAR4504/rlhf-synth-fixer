@@ -6,7 +6,6 @@ Description: >
   and CloudWatch monitoring with SNS notifications.
   StackSets Readiness: This template is designed for deployment via AWS CloudFormation StackSets.
   It uses parameters for account/region specific inputs (e.g., Domain Name, Certificate)
-  and avoids hardcoded identifiers, making it portable across environments.
 
 Parameters:
   pInstanceType:
