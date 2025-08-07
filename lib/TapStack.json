@@ -33,15 +33,6 @@
       "MinLength": 1,
       "MaxLength": 16,
       "AllowedPattern": "^[a-zA-Z][a-zA-Z0-9]*$"
-    },
-    "DBMasterPassword": {
-      "Type": "String",
-      "NoEcho": true,
-      "Description": "Master password for RDS instance",
-      "MinLength": 8,
-      "MaxLength": 41,
-      "AllowedPattern": "^[a-zA-Z0-9!@#$%^&*()_+-=]*$",
-      "ConstraintDescription": "Must be 8-41 characters long and contain alphanumeric characters and symbols"
     }
   },
   "Mappings": {
@@ -795,6 +786,33 @@
         ]
       }
     },
+    "DBSecret": {
+      "Type": "AWS::SecretsManager::Secret",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "WebApp-DB-Secret-${EnvironmentSuffix}"
+        },
+        "Description": "Database master password for RDS instance",
+        "GenerateSecretString": {
+          "SecretStringTemplate": "{\"username\": \"admin\"}",
+          "GenerateStringKey": "password",
+          "PasswordLength": 16,
+          "ExcludeCharacters": "\"@/\\"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "WebApp-DB-Secret-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          }
+        ]
+      }
+    },
     "RDSInstance": {
       "Type": "AWS::RDS::DBInstance",
       "DeletionPolicy": "Snapshot",
@@ -810,7 +828,7 @@
           "Ref": "DBMasterUsername"
         },
         "MasterUserPassword": {
-          "Ref": "DBMasterPassword"
+          "Fn::Sub": "{{resolve:secretsmanager:WebApp-DB-Secret-${EnvironmentSuffix}:SecretString:password}}"
         },
         "AllocatedStorage": 100,
         "StorageType": "gp2",

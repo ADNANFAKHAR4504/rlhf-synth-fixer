@@ -44,7 +44,6 @@ describe('TapStack CloudFormation Template', () => {
       'SSHAccessCIDR',
       'S3AccessCIDR',
       'DBMasterUsername',
-      'DBMasterPassword',
     ];
 
     test('should have all required parameters', () => {
@@ -81,13 +80,6 @@ describe('TapStack CloudFormation Template', () => {
       expect(param.Default).toBe('203.0.113.0/24');
       expect(param.Description).toBe('CIDR block allowed for SSH access');
       expect(param.AllowedPattern).toBeDefined();
-    });
-
-    test('DBMasterPassword parameter should have NoEcho set to true', () => {
-      const param = template.Parameters.DBMasterPassword;
-      expect(param.NoEcho).toBe(true);
-      expect(param.MinLength).toBe(8);
-      expect(param.MaxLength).toBe(41);
     });
   });
 
@@ -382,6 +374,25 @@ describe('TapStack CloudFormation Template', () => {
   });
 
   describe('RDS Database', () => {
+    test('should have DB secret', () => {
+      expect(template.Resources.DBSecret).toBeDefined();
+      expect(template.Resources.DBSecret.Type).toBe(
+        'AWS::SecretsManager::Secret'
+      );
+    });
+
+    test('DB secret should have correct configuration', () => {
+      const secret = template.Resources.DBSecret;
+      expect(secret.Properties.Name['Fn::Sub']).toBe(
+        'WebApp-DB-Secret-${EnvironmentSuffix}'
+      );
+      expect(secret.Properties.Description).toBe(
+        'Database master password for RDS instance'
+      );
+      expect(secret.Properties.GenerateSecretString).toBeDefined();
+      expect(secret.Properties.GenerateSecretString.PasswordLength).toBe(16);
+    });
+
     test('should have DB subnet group', () => {
       expect(template.Resources.DBSubnetGroup).toBeDefined();
       expect(template.Resources.DBSubnetGroup.Type).toBe(
@@ -404,6 +415,13 @@ describe('TapStack CloudFormation Template', () => {
       expect(rds.Properties.MultiAZ).toBe(true);
       expect(rds.Properties.BackupRetentionPeriod).toBe(7);
       expect(rds.Properties.DeletionProtection).toBe(true);
+    });
+
+    test('RDS instance should use Secrets Manager for password', () => {
+      const rds = template.Resources.RDSInstance;
+      expect(rds.Properties.MasterUserPassword['Fn::Sub']).toBe(
+        '{{resolve:secretsmanager:WebApp-DB-Secret-${EnvironmentSuffix}:SecretString:password}}'
+      );
     });
 
     test('RDS instance name should include EnvironmentSuffix', () => {
@@ -726,7 +744,7 @@ describe('TapStack CloudFormation Template', () => {
   describe('Template Completeness', () => {
     test('should have correct total number of resources', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(44); // Count of all resources in the template
+      expect(resourceCount).toBe(45); // Count of all resources in the template
     });
 
     test('all resources with names should use EnvironmentSuffix', () => {
