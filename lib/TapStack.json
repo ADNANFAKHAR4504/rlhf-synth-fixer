@@ -9,7 +9,7 @@
                         "default": "Environment Configuration"
                     },
                     "Parameters": [
-                        "EnvironmentSuffix"
+                        "EnvironmentSuffixName"
                     ]
                 },
                 {
@@ -23,7 +23,7 @@
                 }
             ],
             "ParameterLabels": {
-                "EnvironmentSuffix": {
+                "EnvironmentSuffixName": {
                     "default": "Environment Suffix"
                 },
                 "ArtifactBucketName": {
@@ -36,7 +36,7 @@
         }
     },
     "Parameters": {
-        "EnvironmentSuffix": {
+        "EnvironmentSuffixName": {
             "Type": "String",
             "Description": "Environment suffix for resource naming and configuration",
             "AllowedPattern": "^(dev|staging|prod|pr[0-9]+)$",
@@ -126,7 +126,7 @@
         "IsProductionEnvironment": {
             "Fn::Equals": [
                 {
-                    "Ref": "EnvironmentSuffix"
+                    "Ref": "EnvironmentSuffixName"
                 },
                 "prod"
             ]
@@ -147,7 +147,7 @@
                                 "Fn::FindInMap": [
                                     "EnvironmentConfig",
                                     {
-                                        "Ref": "EnvironmentSuffix"
+                                        "Ref": "EnvironmentSuffixName"
                                     },
                                     "ResourcePrefix"
                                 ]
@@ -177,7 +177,7 @@
                     {
                         "Key": "Environment",
                         "Value": {
-                            "Ref": "EnvironmentSuffix"
+                            "Ref": "EnvironmentSuffixName"
                         }
                     },
                     {
@@ -199,7 +199,7 @@
                                 "Fn::FindInMap": [
                                     "EnvironmentConfig",
                                     {
-                                        "Ref": "EnvironmentSuffix"
+                                        "Ref": "EnvironmentSuffixName"
                                     },
                                     "ResourcePrefix"
                                 ]
@@ -226,7 +226,7 @@
                     {
                         "Key": "Environment",
                         "Value": {
-                            "Ref": "EnvironmentSuffix"
+                            "Ref": "EnvironmentSuffixName"
                         }
                     },
                     {
@@ -313,7 +313,7 @@
                     {
                         "Key": "Environment",
                         "Value": {
-                            "Ref": "EnvironmentSuffix"
+                            "Ref": "EnvironmentSuffixName"
                         }
                     },
                     {
@@ -334,7 +334,7 @@
                                 "Fn::FindInMap": [
                                     "EnvironmentConfig",
                                     {
-                                        "Ref": "EnvironmentSuffix"
+                                        "Ref": "EnvironmentSuffixName"
                                     },
                                     "ResourcePrefix"
                                 ]
@@ -346,7 +346,7 @@
                     "Fn::FindInMap": [
                         "EnvironmentConfig",
                         {
-                            "Ref": "EnvironmentSuffix"
+                            "Ref": "EnvironmentSuffixName"
                         },
                         "LogRetentionDays"
                     ]
@@ -355,7 +355,7 @@
                     {
                         "Key": "Environment",
                         "Value": {
-                            "Ref": "EnvironmentSuffix"
+                            "Ref": "EnvironmentSuffixName"
                         }
                     },
                     {
@@ -393,7 +393,7 @@
                                 "Fn::FindInMap": [
                                     "EnvironmentConfig",
                                     {
-                                        "Ref": "EnvironmentSuffix"
+                                        "Ref": "EnvironmentSuffixName"
                                     },
                                     "ResourcePrefix"
                                 ]
@@ -417,7 +417,7 @@
                 "Environment": {
                     "Variables": {
                         "ENVIRONMENT": {
-                            "Ref": "EnvironmentSuffix"
+                            "Ref": "EnvironmentSuffixName"
                         }
                     }
                 },
@@ -425,7 +425,7 @@
                     {
                         "Key": "Environment",
                         "Value": {
-                            "Ref": "EnvironmentSuffix"
+                            "Ref": "EnvironmentSuffixName"
                         }
                     },
                     {
@@ -478,7 +478,7 @@
                     {
                         "Key": "Environment",
                         "Value": {
-                            "Ref": "EnvironmentSuffix"
+                            "Ref": "EnvironmentSuffixName"
                         }
                     },
                     {
@@ -504,7 +504,7 @@
                                 "Fn::FindInMap": [
                                     "EnvironmentConfig",
                                     {
-                                        "Ref": "EnvironmentSuffix"
+                                        "Ref": "EnvironmentSuffixName"
                                     },
                                     "ResourcePrefix"
                                 ]
@@ -524,7 +524,7 @@
                     "Fn::FindInMap": [
                         "EnvironmentConfig",
                         {
-                            "Ref": "EnvironmentSuffix"
+                            "Ref": "EnvironmentSuffixName"
                         },
                         "LambdaMemorySize"
                     ]
@@ -536,13 +536,13 @@
                 "Environment": {
                     "Variables": {
                         "ENVIRONMENT": {
-                            "Ref": "EnvironmentSuffix"
+                            "Ref": "EnvironmentSuffixName"
                         },
                         "RESOURCE_PREFIX": {
                             "Fn::FindInMap": [
                                 "EnvironmentConfig",
                                 {
-                                    "Ref": "EnvironmentSuffix"
+                                    "Ref": "EnvironmentSuffixName"
                                 },
                                 "ResourcePrefix"
                             ]
@@ -560,7 +560,7 @@
                     {
                         "Key": "Environment",
                         "Value": {
-                            "Ref": "EnvironmentSuffix"
+                            "Ref": "EnvironmentSuffixName"
                         }
                     },
                     {
@@ -594,7 +594,7 @@
                                 "Fn::FindInMap": [
                                     "EnvironmentConfig",
                                     {
-                                        "Ref": "EnvironmentSuffix"
+                                        "Ref": "EnvironmentSuffixName"
                                     },
                                     "ResourcePrefix"
                                 ]
@@ -603,7 +603,7 @@
                     ]
                 },
                 "Description": {
-                    "Fn::Sub": "Hello World API for ${EnvironmentSuffix} environment"
+                    "Fn::Sub": "Hello World API for ${EnvironmentSuffixName} environment"
                 },
                 "EndpointConfiguration": {
                     "Types": [
@@ -614,7 +614,7 @@
                     {
                         "Key": "Environment",
                         "Value": {
-                            "Ref": "EnvironmentSuffix"
+                            "Ref": "EnvironmentSuffixName"
                         }
                     },
                     {
@@ -676,7 +676,7 @@
                     "Ref": "HelloWorldApi"
                 },
                 "Description": {
-                    "Fn::Sub": "Deployment for ${EnvironmentSuffix} environment"
+                    "Fn::Sub": "Deployment for ${EnvironmentSuffixName} environment"
                 }
             },
             "DependsOn": [
@@ -696,24 +696,24 @@
                     "Fn::FindInMap": [
                         "EnvironmentConfig",
                         {
-                            "Ref": "EnvironmentSuffix"
+                            "Ref": "EnvironmentSuffixName"
                         },
                         "ApiGatewayStageName"
                     ]
                 },
                 "Description": {
-                    "Fn::Sub": "Stage for ${EnvironmentSuffix} environment"
+                    "Fn::Sub": "Stage for ${EnvironmentSuffixName} environment"
                 },
                 "Variables": {
                     "Environment": {
-                        "Ref": "EnvironmentSuffix"
+                        "Ref": "EnvironmentSuffixName"
                     }
                 },
                 "Tags": [
                     {
                         "Key": "Environment",
                         "Value": {
-                            "Ref": "EnvironmentSuffix"
+                            "Ref": "EnvironmentSuffixName"
                         }
                     },
                     {
@@ -738,7 +738,7 @@
                             "Fn::FindInMap": [
                                 "EnvironmentConfig",
                                 {
-                                    "Ref": "EnvironmentSuffix"
+                                    "Ref": "EnvironmentSuffixName"
                                 },
                                 "ApiGatewayStageName"
                             ]
@@ -755,7 +755,7 @@
                                 "Fn::FindInMap": [
                                     "EnvironmentConfig",
                                     {
-                                        "Ref": "EnvironmentSuffix"
+                                        "Ref": "EnvironmentSuffixName"
                                     },
                                     "ResourcePrefix"
                                 ]
@@ -782,7 +782,7 @@
                                 "Fn::FindInMap": [
                                     "EnvironmentConfig",
                                     {
-                                        "Ref": "EnvironmentSuffix"
+                                        "Ref": "EnvironmentSuffixName"
                                     },
                                     "ResourcePrefix"
                                 ]
@@ -806,7 +806,7 @@
                                 "Fn::FindInMap": [
                                     "EnvironmentConfig",
                                     {
-                                        "Ref": "EnvironmentSuffix"
+                                        "Ref": "EnvironmentSuffixName"
                                     },
                                     "ResourcePrefix"
                                 ]
@@ -831,7 +831,7 @@
                                 "Fn::FindInMap": [
                                     "EnvironmentConfig",
                                     {
-                                        "Ref": "EnvironmentSuffix"
+                                        "Ref": "EnvironmentSuffixName"
                                     },
                                     "ResourcePrefix"
                                 ]
@@ -844,7 +844,7 @@
         "EnvironmentName": {
             "Description": "Environment name used for this deployment",
             "Value": {
-                "Ref": "EnvironmentSuffix"
+                "Ref": "EnvironmentSuffixName"
             },
             "Export": {
                 "Name": {
@@ -855,7 +855,7 @@
                                 "Fn::FindInMap": [
                                     "EnvironmentConfig",
                                     {
-                                        "Ref": "EnvironmentSuffix"
+                                        "Ref": "EnvironmentSuffixName"
                                     },
                                     "ResourcePrefix"
                                 ]

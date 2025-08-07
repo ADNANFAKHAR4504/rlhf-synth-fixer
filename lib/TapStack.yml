@@ -10,14 +10,14 @@ Metadata:
       - Label:
           default: "Environment Configuration"
         Parameters:
-          - EnvironmentSuffix
+          - EnvironmentSuffixName
       - Label:
           default: "Artifact Configuration"
         Parameters:
           - ArtifactBucketName
           - ArtifactS3Key
     ParameterLabels:
-      EnvironmentSuffix:
+      EnvironmentSuffixName:
         default: "Environment Suffix"
       ArtifactBucketName:
         default: "Artifact Bucket Name"
@@ -26,7 +26,7 @@ Metadata:
 
 # Parameters section for environment configuration
 Parameters:
-  EnvironmentSuffix:
+  EnvironmentSuffixName:
     Type: String
     Description: Environment suffix for resource naming and configuration
     AllowedPattern: ^(dev|staging|prod|pr[0-9]+)$
@@ -82,7 +82,7 @@ Rules:
 
 # Conditions for conditional resource creation
 Conditions:
-  IsProductionEnvironment: !Equals [!Ref EnvironmentSuffix, prod]
+  IsProductionEnvironment: !Equals [!Ref EnvironmentSuffixName, prod]
   CreateAccessLogsBucket: !Condition IsProductionEnvironment
 
 # Resources section
@@ -93,7 +93,7 @@ Resources:
     Properties:
       BucketName: !Sub
         - ${ResourcePrefix}-artifacts-${AWS::AccountId}-${AWS::Region}
-        - ResourcePrefix: !FindInMap [EnvironmentConfig, !Ref EnvironmentSuffix, ResourcePrefix]
+        - ResourcePrefix: !FindInMap [EnvironmentConfig, !Ref EnvironmentSuffixName, ResourcePrefix]
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -107,7 +107,7 @@ Resources:
         Status: Enabled
       Tags:
         - Key: Environment
-          Value: !Ref EnvironmentSuffix
+          Value: !Ref EnvironmentSuffixName
         - Key: Application
           Value: ServerlessApp
 
@@ -118,7 +118,7 @@ Resources:
     Properties:
       BucketName: !Sub
         - ${ResourcePrefix}-access-logs-${AWS::AccountId}-${AWS::Region}
-        - ResourcePrefix: !FindInMap [EnvironmentConfig, !Ref EnvironmentSuffix, ResourcePrefix]
+        - ResourcePrefix: !FindInMap [EnvironmentConfig, !Ref EnvironmentSuffixName, ResourcePrefix]
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -130,7 +130,7 @@ Resources:
         RestrictPublicBuckets: true
       Tags:
         - Key: Environment
-          Value: !Ref EnvironmentSuffix
+          Value: !Ref EnvironmentSuffixName
         - Key: Application
           Value: ServerlessApp
 
@@ -178,7 +178,7 @@ Resources:
                   - !Sub "arn:aws:s3:::${LambdaArtifactsBucket}/*"
       Tags:
         - Key: Environment
-          Value: !Ref EnvironmentSuffix
+          Value: !Ref EnvironmentSuffixName
         - Key: Application
           Value: ServerlessApp
 
@@ -188,11 +188,11 @@ Resources:
     Properties:
       LogGroupName: !Sub
         - /aws/lambda/${ResourcePrefix}-function-${AWS::StackName}
-        - ResourcePrefix: !FindInMap [EnvironmentConfig, !Ref EnvironmentSuffix, ResourcePrefix]
-      RetentionInDays: !FindInMap [EnvironmentConfig, !Ref EnvironmentSuffix, LogRetentionDays]
+        - ResourcePrefix: !FindInMap [EnvironmentConfig, !Ref EnvironmentSuffixName, ResourcePrefix]
+      RetentionInDays: !FindInMap [EnvironmentConfig, !Ref EnvironmentSuffixName, LogRetentionDays]
       Tags:
         - Key: Environment
-          Value: !Ref EnvironmentSuffix
+          Value: !Ref EnvironmentSuffixName
         - Key: Application
           Value: ServerlessApp
 
@@ -210,7 +210,7 @@ Resources:
     Properties:
       FunctionName: !Sub
         - ${ResourcePrefix}-artifact-validation-${AWS::StackName}
-        - ResourcePrefix: !FindInMap [EnvironmentConfig, !Ref EnvironmentSuffix, ResourcePrefix]
+        - ResourcePrefix: !FindInMap [EnvironmentConfig, !Ref EnvironmentSuffixName, ResourcePrefix]
       Runtime: python3.12
       Handler: index.lambda_handler
       Role: !GetAtt ArtifactValidationRole.Arn
@@ -279,10 +279,10 @@ Resources:
                   })
       Environment:
         Variables:
-          ENVIRONMENT: !Ref EnvironmentSuffix
+          ENVIRONMENT: !Ref EnvironmentSuffixName
       Tags:
         - Key: Environment
-          Value: !Ref EnvironmentSuffix
+          Value: !Ref EnvironmentSuffixName
         - Key: Application
           Value: ServerlessApp
 
@@ -311,7 +311,7 @@ Resources:
                   - !Sub "arn:aws:s3:::${ArtifactBucketName}/*"
       Tags:
         - Key: Environment
-          Value: !Ref EnvironmentSuffix
+          Value: !Ref EnvironmentSuffixName
         - Key: Application
           Value: ServerlessApp
 
@@ -325,11 +325,11 @@ Resources:
     Properties:
       FunctionName: !Sub
         - ${ResourcePrefix}-function-${AWS::StackName}
-        - ResourcePrefix: !FindInMap [EnvironmentConfig, !Ref EnvironmentSuffix, ResourcePrefix]
+        - ResourcePrefix: !FindInMap [EnvironmentConfig, !Ref EnvironmentSuffixName, ResourcePrefix]
       Runtime: nodejs22.x
       Handler: index.handler
       Role: !GetAtt LambdaExecutionRole.Arn
-      MemorySize: !FindInMap [EnvironmentConfig, !Ref EnvironmentSuffix, LambdaMemorySize]
+      MemorySize: !FindInMap [EnvironmentConfig, !Ref EnvironmentSuffixName, LambdaMemorySize]
       Timeout: 30
       Code:
         ZipFile: |
@@ -358,12 +358,12 @@ Resources:
           };
       Environment:
         Variables:
-          ENVIRONMENT: !Ref EnvironmentSuffix
-          RESOURCE_PREFIX: !FindInMap [EnvironmentConfig, !Ref EnvironmentSuffix, ResourcePrefix]
+          ENVIRONMENT: !Ref EnvironmentSuffixName
+          RESOURCE_PREFIX: !FindInMap [EnvironmentConfig, !Ref EnvironmentSuffixName, ResourcePrefix]
           LOG_LEVEL: !If [IsProductionEnvironment, WARN, DEBUG]
       Tags:
         - Key: Environment
-          Value: !Ref EnvironmentSuffix
+          Value: !Ref EnvironmentSuffixName
         - Key: Application
           Value: ServerlessApp
 
@@ -382,14 +382,14 @@ Resources:
     Properties:
       Name: !Sub
         - ${ResourcePrefix}-api-${AWS::StackName}
-        - ResourcePrefix: !FindInMap [EnvironmentConfig, !Ref EnvironmentSuffix, ResourcePrefix]
-      Description: !Sub "Hello World API for ${EnvironmentSuffix} environment"
+        - ResourcePrefix: !FindInMap [EnvironmentConfig, !Ref EnvironmentSuffixName, ResourcePrefix]
+      Description: !Sub "Hello World API for ${EnvironmentSuffixName} environment"
       EndpointConfiguration:
         Types:
           - REGIONAL
       Tags:
         - Key: Environment
-          Value: !Ref EnvironmentSuffix
+          Value: !Ref EnvironmentSuffixName
         - Key: Application
           Value: ServerlessApp
 
@@ -421,7 +421,7 @@ Resources:
     Type: AWS::ApiGateway::Deployment
     Properties:
       RestApiId: !Ref HelloWorldApi
-      Description: !Sub "Deployment for ${EnvironmentSuffix} environment"
+      Description: !Sub "Deployment for ${EnvironmentSuffixName} environment"
     DependsOn:
       - HelloMethod
 
@@ -431,13 +431,13 @@ Resources:
     Properties:
       RestApiId: !Ref HelloWorldApi
       DeploymentId: !Ref ApiDeployment
-      StageName: !FindInMap [EnvironmentConfig, !Ref EnvironmentSuffix, ApiGatewayStageName]
-      Description: !Sub "Stage for ${EnvironmentSuffix} environment"
+      StageName: !FindInMap [EnvironmentConfig, !Ref EnvironmentSuffixName, ApiGatewayStageName]
+      Description: !Sub "Stage for ${EnvironmentSuffixName} environment"
       Variables:
-        Environment: !Ref EnvironmentSuffix
+        Environment: !Ref EnvironmentSuffixName
       Tags:
         - Key: Environment
-          Value: !Ref EnvironmentSuffix
+          Value: !Ref EnvironmentSuffixName
         - Key: Application
           Value: ServerlessApp
 
@@ -448,11 +448,11 @@ Outputs:
     Value: !Sub
       - https://${ApiId}.execute-api.${AWS::Region}.amazonaws.com/${StageName}/hello
       - ApiId: !Ref HelloWorldApi
-        StageName: !FindInMap [EnvironmentConfig, !Ref EnvironmentSuffix, ApiGatewayStageName]
+        StageName: !FindInMap [EnvironmentConfig, !Ref EnvironmentSuffixName, ApiGatewayStageName]
     Export:
       Name: !Sub
         - ${ResourcePrefix}-api-url
-        - ResourcePrefix: !FindInMap [EnvironmentConfig, !Ref EnvironmentSuffix, ResourcePrefix]
+        - ResourcePrefix: !FindInMap [EnvironmentConfig, !Ref EnvironmentSuffixName, ResourcePrefix]
 
   LambdaFunctionArn:
     Description: ARN of the Lambda function
@@ -460,7 +460,7 @@ Outputs:
     Export:
       Name: !Sub
         - ${ResourcePrefix}-lambda-arn
-        - ResourcePrefix: !FindInMap [EnvironmentConfig, !Ref EnvironmentSuffix, ResourcePrefix]
+        - ResourcePrefix: !FindInMap [EnvironmentConfig, !Ref EnvironmentSuffixName, ResourcePrefix]
 
   ArtifactsBucketName:
     Description: Name of the S3 bucket for Lambda artifacts
@@ -468,7 +468,7 @@ Outputs:
     Export:
       Name: !Sub
         - ${ResourcePrefix}-artifacts-bucket
-        - ResourcePrefix: !FindInMap [EnvironmentConfig, !Ref EnvironmentSuffix, ResourcePrefix]
+        - ResourcePrefix: !FindInMap [EnvironmentConfig, !Ref EnvironmentSuffixName, ResourcePrefix]
 
   AccessLogsBucketName:
     Condition: CreateAccessLogsBucket
@@ -477,12 +477,12 @@ Outputs:
     Export:
       Name: !Sub
         - ${ResourcePrefix}-access-logs-bucket
-        - ResourcePrefix: !FindInMap [EnvironmentConfig, !Ref EnvironmentSuffix, ResourcePrefix]
+        - ResourcePrefix: !FindInMap [EnvironmentConfig, !Ref EnvironmentSuffixName, ResourcePrefix]
 
   EnvironmentName:
     Description: Environment name used for this deployment
-    Value: !Ref EnvironmentSuffix
+    Value: !Ref EnvironmentSuffixName
     Export:
       Name: !Sub
         - ${ResourcePrefix}-environment
-        - ResourcePrefix: !FindInMap [EnvironmentConfig, !Ref EnvironmentSuffix, ResourcePrefix]
+        - ResourcePrefix: !FindInMap [EnvironmentConfig, !Ref EnvironmentSuffixName, ResourcePrefix]
