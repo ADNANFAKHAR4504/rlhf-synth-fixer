@@ -475,7 +475,6 @@ class TapStack(ComponentResource):
                 f"rds-provider-{region}", region=region, opts=ResourceOptions(parent=self)
             )
 
-            # ----- FIX: subnet group 'name' must be lowercase -------------
             subnet_group = aws.rds.SubnetGroup(
                 f"PROD-rds-subnet-group-{region}-{self.environment_suffix}",
                 name=f"prod-rds-subnet-{region}-{self.environment_suffix}".lower(),
@@ -483,7 +482,6 @@ class TapStack(ComponentResource):
                 tags=self.standard_tags,
                 opts=ResourceOptions(parent=self, provider=provider),
             )
-            # --------------------------------------------------------------
 
             rds_sg = aws.ec2.SecurityGroup(
                 f"PROD-rds-sg-{region}-{self.environment_suffix}",
@@ -688,7 +686,7 @@ echo 'MinProtocol = TLSv1.2' >> /etc/ssl/openssl.cnf
             self.log_groups[region] = lg
 
     # ------------------------------------------------------------------ #
-    #  AWS Config
+    #  AWS Config - FIXED: Use correct class names
     # ------------------------------------------------------------------ #
     def _create_compliance_checks(self) -> None:
         for region in self.regions:
@@ -742,6 +740,7 @@ echo 'MinProtocol = TLSv1.2' >> /etc/ssl/openssl.cnf
                 opts=ResourceOptions(parent=self, provider=provider),
             )
 
+            # FIXED: Use aws.cfg.Recorder (not ConfigurationRecorder)
             recorder = aws.cfg.Recorder(
                 f"PROD-config-recorder-{region}-{self.environment_suffix}",
                 role_arn=config_role.arn,
@@ -752,20 +751,22 @@ echo 'MinProtocol = TLSv1.2' >> /etc/ssl/openssl.cnf
                 opts=ResourceOptions(parent=self, provider=provider, depends_on=[delivery]),
             )
 
-            aws.cfg.ConfigRule(
+            # FIXED: Use aws.cfg.Rule (not ConfigRule)
+            aws.cfg.Rule(
                 f"PROD-encrypted-volumes-{region}-{self.environment_suffix}",
                 name=f"encrypted-volumes-{region}-{self.environment_suffix}",
-                source=aws.cfg.ConfigRuleSourceArgs(
+                source=aws.cfg.RuleSourceArgs(
                     owner="AWS", source_identifier="ENCRYPTED_VOLUMES"
                 ),
                 tags=self.standard_tags,
                 opts=ResourceOptions(parent=self, provider=provider, depends_on=[recorder]),
             )
 
-            aws.cfg.ConfigRule(
+            # FIXED: Use aws.cfg.Rule (not ConfigRule)
+            aws.cfg.Rule(
                 f"PROD-s3-bucket-ssl-requests-{region}-{self.environment_suffix}",
                 name=f"s3-bucket-ssl-requests-{region}-{self.environment_suffix}",
-                source=aws.cfg.ConfigRuleSourceArgs(
+                source=aws.cfg.RuleSourceArgs(
                     owner="AWS", source_identifier="S3_BUCKET_SSL_REQUESTS_ONLY"
                 ),
                 tags=self.standard_tags,
