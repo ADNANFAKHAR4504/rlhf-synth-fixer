@@ -402,7 +402,6 @@ Resources:
   EC2S3AccessInstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
-      InstanceProfileName: !Sub '${ProjectName}-EC2-S3-Access-Instance-Profile'
       Roles:
         - !Ref EC2S3AccessRole
 
