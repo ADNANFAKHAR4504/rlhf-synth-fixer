@@ -1,6 +1,6 @@
 """TAP Stack module for CDKTF Python infrastructure."""
 
-from cdktf import TerraformStack, S3Backend, TerraformOutput
+from cdktf import TerraformStack, S3Backend, TerraformOutput, TerraformAsset, AssetType
 from constructs import Construct
 from cdktf_cdktf_provider_aws.provider import AwsProvider
 from cdktf_cdktf_provider_aws.s3_bucket import S3Bucket
@@ -425,6 +425,13 @@ def lambda_handler(event, context):
             'body': json.dumps({'error': str(e)})
         }
 """
+    # Write Lambda code asset
+    lambda_asset = TerraformAsset(
+        self,
+        "lambda_asset",
+        path=os.path.join(os.getcwd(), "lambda_function.py"),  # path to your .py file
+        type=AssetType.ARCHIVE  # Auto-zips it!
+    )
 
     # Create Lambda function
     self.lambda_function = LambdaFunction(
@@ -432,10 +439,10 @@ def lambda_handler(event, context):
         "main_lambda",
         function_name="tap-serverless-function",
         runtime="python3.9",
-        handler="index.lambda_handler",
+        handler="lambda_function.lambda_handler",  # change if your file/func name differs
         role=self.lambda_role.arn,
-        filename="lambda_function.zip",  # You'll need to create this zip file
-        source_code_hash='${filebase64sha256("lambda_function.zip")}',
+        filename=lambda_asset.path,  # CDKTF will zip & point to it
+        source_code_hash=lambda_asset.asset_hash,  # auto-calculated
         timeout=30,
         memory_size=256,
         # VPC configuration for private subnet deployment
