@@ -185,9 +185,7 @@ echo "<h1>Hello from $(hostname -f)</h1>" > /var/www/html/index.html
     iam_instance_profile=aws.ec2.LaunchTemplateIamInstanceProfileArgs(
       arn=instance_profile.arn
     ),
-    user_data=pulumi.Output.secret(user_data).apply(
-      lambda ud: ud.encode('utf-8').decode('ascii')
-    ),
+    user_data=pulumi.StringAsset(user_data).base64,
     network_interfaces=[aws.ec2.LaunchTemplateNetworkInterfaceArgs(
       associate_public_ip_address=True
     )],
