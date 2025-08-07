@@ -314,10 +314,9 @@ def create_ec2_instances(
       )
     ]
   )
+  
+  # user_data ko is simple version se replace karein
   user_data = f"""#!/bin/bash
-yum update -y
-systemctl stop firewalld
-systemctl disable firewalld
 yum install -y nginx
 systemctl start nginx
 systemctl enable nginx
@@ -333,6 +332,7 @@ cat > /var/www/html/index.html << EOF
 </html>
 EOF
 """
+
   instances = []
   for idx, subnet in enumerate(subnets):
     instance = aws.ec2.Instance(
