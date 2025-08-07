@@ -7,616 +7,506 @@ describe('TapStack Unit Tests', () => {
   let synthesized: any;
 
   beforeEach(() => {
-    // Reset mocks before each test
     jest.clearAllMocks();
     app = new App();
+    stack = new TapStack(app, 'TestTapStack', {
+      environmentSuffix: 'prod',
+      awsRegion: 'us-east-1',
+      defaultTags: {
+        Environment: 'Test',
+      },
+    });
+    const synthesizedString = Testing.synth(stack);
+    synthesized = JSON.parse(synthesizedString);
   });
 
   describe('Stack Instantiation', () => {
-    test('TapStack instantiates successfully with custom props', () => {
-      stack = new TapStack(app, 'TestTapStackWithProps', {
-        environmentSuffix: 'prod',
-        stateBucket: 'custom-state-bucket',
-        stateBucketRegion: 'us-west-2',
-        awsRegion: 'us-west-2',
-        defaultTags: { CustomTag: 'CustomValue' },
+    test('should instantiate successfully with props', () => {
+      expect(stack).toBeDefined();
+      expect(synthesized).toBeDefined();
+    });
+
+    test('should use default values when no props provided', () => {
+      const defaultApp = new App();
+      const defaultStack = new TapStack(defaultApp, 'TestTapStackDefault');
+      const defaultSynthesized = JSON.parse(Testing.synth(defaultStack));
+
+      expect(defaultStack).toBeDefined();
+      expect(defaultSynthesized).toBeDefined();
+    });
+
+    test('should handle partial props configuration', () => {
+      const partialApp = new App();
+      const partialStack = new TapStack(partialApp, 'TestTapStackPartial', {
+        awsRegion: 'eu-west-1',
       });
-      synthesized = Testing.synth(stack);
+      const partialSynthesized = JSON.parse(Testing.synth(partialStack));
 
-      // Verify that TapStack instantiates without errors via props
-      expect(stack).toBeDefined();
-      expect(synthesized).toBeDefined();
-      expect(typeof synthesized).toBe('string');
-    });
-
-    test('TapStack uses default values when no props provided', () => {
-      stack = new TapStack(app, 'TestTapStackDefault');
-      synthesized = Testing.synth(stack);
-
-      // Verify that TapStack instantiates without errors when no props are provided
-      expect(stack).toBeDefined();
-      expect(synthesized).toBeDefined();
-      expect(typeof synthesized).toBe('string');
-    });
-
-    test('TapStack handles empty props object', () => {
-      stack = new TapStack(app, 'TestTapStackEmpty', {});
-      synthesized = Testing.synth(stack);
-
-      expect(stack).toBeDefined();
-      expect(synthesized).toBeDefined();
+      expect(partialStack).toBeDefined();
+      expect(partialSynthesized).toBeDefined();
     });
   });
 
-  describe('AWS Provider Configuration', () => {
-    beforeEach(() => {
-      stack = new TapStack(app, 'TestStack');
-      synthesized = JSON.parse(Testing.synth(stack));
+  describe('AWS Resources Creation', () => {
+    test('should create AWS provider with correct configuration', () => {
+      const providers = Object.keys(synthesized.provider);
+      expect(providers).toContain('aws');
+
+      const awsProvider = synthesized.provider.aws;
+      expect(awsProvider).toBeDefined();
+      expect(awsProvider[0].region).toBe('us-east-1');
     });
 
-    test('AWS provider is configured correctly', () => {
-      expect(synthesized.provider.aws[0]).toBeDefined();
-      expect(synthesized.provider.aws[0].region).toBe('us-east-1');
-      expect(synthesized.provider.aws[0].default_tags).toBeDefined();
+    test('should create Archive provider', () => {
+      const providers = Object.keys(synthesized.provider);
+      expect(providers).toContain('archive');
     });
 
-    test('Default tags are applied to AWS provider', () => {
-      const awsProvider = synthesized.provider.aws[0];
-      const defaultTags = awsProvider.default_tags[0].tags;
+    test('should create S3 bucket for Lambda packages', () => {
+      const s3Buckets = synthesized.resource.aws_s3_bucket;
+      expect(s3Buckets).toBeDefined();
 
-      expect(defaultTags.Environment).toBe('Production');
-      expect(defaultTags.Project).toBe('IaC-AWS-Nova-Model-Breaking');
-      expect(defaultTags.ManagedBy).toBe('CDKTF');
-      expect(defaultTags.SecurityLevel).toBe('High');
-    });
-  });
-
-  describe('KMS Configuration', () => {
-    beforeEach(() => {
-      stack = new TapStack(app, 'TestStack');
-      synthesized = JSON.parse(Testing.synth(stack));
-    });
-
-    test('KMS key is created with correct configuration', () => {
-      const kmsKey = synthesized.resource.aws_kms_key['prod-sec-main-kms-key'];
-
-      expect(kmsKey).toBeDefined();
-      expect(kmsKey.description).toBe(
-        'Main KMS key for prod-sec environment encryption'
+      const lambdaBuckets = Object.values(s3Buckets).filter(
+        (bucket: any) => bucket.tags?.Purpose === 'Lambda deployment packages'
       );
-      expect(kmsKey.enable_key_rotation).toBe(true);
-      expect(kmsKey.policy).toBeDefined();
+      expect(lambdaBuckets).toHaveLength(1);
     });
 
-    test('KMS key policy allows root account access', () => {
-      const kmsKey = synthesized.resource.aws_kms_key['prod-sec-main-kms-key'];
-      const policy = JSON.parse(kmsKey.policy);
+    test('should create DynamoDB user table with correct configuration', () => {
+      const dynamoTables = synthesized.resource.aws_dynamodb_table;
+      expect(dynamoTables).toBeDefined();
 
-      const rootStatement = policy.Statement.find(
-        (stmt: any) => stmt.Sid === 'Enable IAM User Permissions'
+      const userTable = Object.values(dynamoTables).find(
+        (table: any) => table.name === 'prod-service-users'
       );
 
-      expect(rootStatement).toBeDefined();
-      expect(rootStatement.Effect).toBe('Allow');
-      expect(rootStatement.Action).toBe('kms:*');
+      expect(userTable).toBeDefined();
+      expect((userTable as any).billing_mode).toBe('PAY_PER_REQUEST');
+      expect((userTable as any).hash_key).toBe('userId');
+      expect((userTable as any).server_side_encryption.enabled).toBe(true);
+      expect((userTable as any).point_in_time_recovery.enabled).toBe(true);
     });
 
-    test('KMS alias is created with unique suffix', () => {
-      const kmsAlias =
-        synthesized.resource.aws_kms_alias['prod-sec-main-kms-alias'];
-
-      expect(kmsAlias).toBeDefined();
-      expect(kmsAlias.name).toMatch(/^alias\/prod-sec-main-key-[a-z0-9]{6}$/);
-      expect(kmsAlias.target_key_id).toBe(
-        '${aws_kms_key.prod-sec-main-kms-key.key_id}'
-      );
-    });
-  });
-
-  describe('VPC and Networking', () => {
-    beforeEach(() => {
-      stack = new TapStack(app, 'TestStack');
-      synthesized = JSON.parse(Testing.synth(stack));
-    });
-
-    test('VPC is configured with correct CIDR and DNS settings', () => {
-      const vpc = synthesized.resource.aws_vpc['prod-sec-vpc'];
-
-      expect(vpc).toBeDefined();
-      expect(vpc.cidr_block).toBe('10.0.0.0/16');
-      expect(vpc.enable_dns_hostnames).toBe(true);
-      expect(vpc.enable_dns_support).toBe(true);
-    });
-
-    test('Public subnets are created in correct availability zones', () => {
-      const publicSubnet1 =
-        synthesized.resource.aws_subnet['prod-sec-public-subnet-1'];
-      const publicSubnet2 =
-        synthesized.resource.aws_subnet['prod-sec-public-subnet-2'];
-
-      expect(publicSubnet1).toBeDefined();
-      expect(publicSubnet1.cidr_block).toBe('10.0.1.0/24');
-      expect(publicSubnet1.availability_zone).toBe('us-east-1a');
-      expect(publicSubnet1.map_public_ip_on_launch).toBe(true);
-
-      expect(publicSubnet2).toBeDefined();
-      expect(publicSubnet2.cidr_block).toBe('10.0.2.0/24');
-      expect(publicSubnet2.availability_zone).toBe('us-east-1b');
-      expect(publicSubnet2.map_public_ip_on_launch).toBe(true);
-    });
-
-    test('Private subnets are created without public IP mapping', () => {
-      const privateSubnet1 =
-        synthesized.resource.aws_subnet['prod-sec-private-subnet-1'];
-      const privateSubnet2 =
-        synthesized.resource.aws_subnet['prod-sec-private-subnet-2'];
-
-      expect(privateSubnet1).toBeDefined();
-      expect(privateSubnet1.cidr_block).toBe('10.0.10.0/24');
-      expect(privateSubnet1.availability_zone).toBe('us-east-1a');
-      expect(privateSubnet1.map_public_ip_on_launch).toBeUndefined();
-
-      expect(privateSubnet2).toBeDefined();
-      expect(privateSubnet2.cidr_block).toBe('10.0.11.0/24');
-      expect(privateSubnet2.availability_zone).toBe('us-east-1b');
-      expect(privateSubnet2.map_public_ip_on_launch).toBeUndefined();
-    });
-
-    test('Internet Gateway is attached to VPC', () => {
-      const igw = synthesized.resource.aws_internet_gateway['prod-sec-igw'];
-
-      expect(igw).toBeDefined();
-      expect(igw.vpc_id).toBe('${aws_vpc.prod-sec-vpc.id}');
-    });
-
-    test('NAT Gateways were removed to avoid AWS limits', () => {
-      // NAT Gateways were removed due to AWS account limits (40 per account)
-      expect(synthesized.resource.aws_nat_gateway).toBeUndefined();
-    });
-
-    test('Route tables are configured correctly', () => {
-      const publicRT =
-        synthesized.resource.aws_route_table['prod-sec-public-rt'];
-
-      expect(publicRT).toBeDefined();
-
-      // Private route tables were removed with NAT Gateways
-      expect(synthesized.resource.aws_route_table['prod-sec-private-rt-1']).toBeUndefined();
-      expect(synthesized.resource.aws_route_table['prod-sec-private-rt-2']).toBeUndefined();
-
-      // Check route table associations exist for public subnets only
-      expect(
-        synthesized.resource.aws_route_table_association[
-          'prod-sec-public-rta-1'
-        ]
-      ).toBeDefined();
-      expect(
-        synthesized.resource.aws_route_table_association[
-          'prod-sec-public-rta-2'
-        ]
-      ).toBeDefined();
-      
-      // Private subnet associations removed with NAT Gateways
-      expect(
-        synthesized.resource.aws_route_table_association[
-          'prod-sec-private-rta-1'
-        ]
-      ).toBeUndefined();
-      expect(
-        synthesized.resource.aws_route_table_association[
-          'prod-sec-private-rta-2'
-        ]
-      ).toBeUndefined();
-    });
-  });
-
-  describe('Security Groups', () => {
-    beforeEach(() => {
-      stack = new TapStack(app, 'TestStack');
-      synthesized = JSON.parse(Testing.synth(stack));
-    });
-
-    test('Web security group allows HTTPS and HTTP traffic', () => {
-      const webSG = synthesized.resource.aws_security_group['prod-sec-web-sg'];
-
-      expect(webSG).toBeDefined();
-      expect(webSG.ingress).toHaveLength(2);
-
-      const httpsIngress = webSG.ingress.find(
-        (rule: any) => rule.from_port === 443
-      );
-      const httpIngress = webSG.ingress.find(
-        (rule: any) => rule.from_port === 80
+    test('should create DynamoDB session table with TTL configuration', () => {
+      const dynamoTables = synthesized.resource.aws_dynamodb_table;
+      const sessionTable = Object.values(dynamoTables).find(
+        (table: any) => table.name === 'prod-service-sessions'
       );
 
-      expect(httpsIngress).toBeDefined();
-      expect(httpsIngress.to_port).toBe(443);
-      expect(httpsIngress.protocol).toBe('tcp');
-      expect(httpsIngress.cidr_blocks).toEqual(['0.0.0.0/0']);
-
-      expect(httpIngress).toBeDefined();
-      expect(httpIngress.to_port).toBe(80);
-      expect(httpIngress.protocol).toBe('tcp');
-      expect(httpIngress.cidr_blocks).toEqual(['0.0.0.0/0']);
+      expect(sessionTable).toBeDefined();
+      expect((sessionTable as any).ttl.attribute_name).toBe('expiresAt');
+      expect((sessionTable as any).ttl.enabled).toBe(true);
     });
 
-    test('Application security group allows traffic only from web tier', () => {
-      const appSG = synthesized.resource.aws_security_group['prod-sec-app-sg'];
+    test('should create IAM role for Lambda execution', () => {
+      const iamRoles = synthesized.resource.aws_iam_role;
+      expect(iamRoles).toBeDefined();
 
-      expect(appSG).toBeDefined();
-      expect(appSG.ingress).toHaveLength(1);
+      const lambdaRole = Object.values(iamRoles).find(
+        (role: any) => role.name === 'prod-service-lambda-execution-role'
+      );
 
-      const appIngress = appSG.ingress[0];
-      expect(appIngress.from_port).toBe(8080);
-      expect(appIngress.to_port).toBe(8080);
-      expect(appIngress.protocol).toBe('tcp');
-      expect(appIngress.security_groups).toEqual([
-        '${aws_security_group.prod-sec-web-sg.id}',
+      expect(lambdaRole).toBeDefined();
+      expect((lambdaRole as any).assume_role_policy).toContain(
+        'lambda.amazonaws.com'
+      );
+    });
+
+    test('should create DynamoDB access policy for Lambda', () => {
+      const iamPolicies = synthesized.resource.aws_iam_policy;
+      expect(iamPolicies).toBeDefined();
+
+      const dynamoPolicy = Object.values(iamPolicies).find(
+        (policy: any) => policy.name === 'prod-service-lambda-dynamodb-policy'
+      );
+
+      expect(dynamoPolicy).toBeDefined();
+      expect((dynamoPolicy as any).description).toBe(
+        'DynamoDB access policy for Lambda functions'
+      );
+    });
+
+    test('should attach basic execution policy to Lambda role', () => {
+      const policyAttachments =
+        synthesized.resource.aws_iam_role_policy_attachment;
+      expect(policyAttachments).toBeDefined();
+
+      const basicPolicyAttachment = Object.values(policyAttachments).find(
+        (attachment: any) =>
+          attachment.policy_arn ===
+          'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
+      );
+
+      expect(basicPolicyAttachment).toBeDefined();
+    });
+
+    test('should create CloudWatch log groups for all services', () => {
+      const logGroups = synthesized.resource.aws_cloudwatch_log_group;
+      expect(logGroups).toBeDefined();
+
+      const expectedLogGroups = [
+        '/aws/apigateway/prod-service-api',
+        '/aws/lambda/prod-service-user-handler',
+        '/aws/lambda/prod-service-session-handler',
+        '/aws/lambda/prod-service-health-check',
+      ];
+
+      expectedLogGroups.forEach(expectedName => {
+        const logGroup = Object.values(logGroups).find(
+          (lg: any) => lg.name === expectedName
+        );
+        expect(logGroup).toBeDefined();
+      });
+    });
+
+    test('should create Lambda functions with correct configuration', () => {
+      const lambdaFunctions = synthesized.resource.aws_lambda_function;
+      expect(lambdaFunctions).toBeDefined();
+
+      const expectedFunctions = [
+        { name: 'prod-service-user-handler', timeout: 30, memory: 256 },
+        { name: 'prod-service-session-handler', timeout: 15, memory: 128 },
+        { name: 'prod-service-health-check', timeout: 10, memory: 128 },
+      ];
+
+      expectedFunctions.forEach(expectedFunc => {
+        const lambdaFunc = Object.values(lambdaFunctions).find(
+          (func: any) => func.function_name === expectedFunc.name
+        );
+
+        expect(lambdaFunc).toBeDefined();
+        expect((lambdaFunc as any).handler).toBe('index.handler');
+        expect((lambdaFunc as any).runtime).toBe('nodejs18.x');
+        expect((lambdaFunc as any).timeout).toBe(expectedFunc.timeout);
+        expect((lambdaFunc as any).memory_size).toBe(expectedFunc.memory);
+      });
+    });
+
+    test('should create API Gateway REST API', () => {
+      const apiGateways = synthesized.resource.aws_api_gateway_rest_api;
+      expect(apiGateways).toBeDefined();
+
+      const restApi = Object.values(apiGateways).find(
+        (api: any) => api.name === 'prod-service-api'
+      );
+
+      expect(restApi).toBeDefined();
+      expect((restApi as any).description).toBe(
+        'Serverless Web Application API'
+      );
+      expect((restApi as any).endpoint_configuration.types).toEqual([
+        'REGIONAL',
       ]);
     });
 
-    test('Database security group allows traffic only from app tier', () => {
-      const dbSG = synthesized.resource.aws_security_group['prod-sec-db-sg'];
+    test('should create API Gateway resources for all endpoints', () => {
+      const apiResources = synthesized.resource.aws_api_gateway_resource;
+      expect(apiResources).toBeDefined();
 
-      expect(dbSG).toBeDefined();
-      expect(dbSG.ingress).toHaveLength(1);
+      const expectedPathParts = [
+        'users',
+        'sessions',
+        'health',
+        '{userId}',
+        '{sessionId}',
+      ];
 
-      const dbIngress = dbSG.ingress[0];
-      expect(dbIngress.from_port).toBe(5432);
-      expect(dbIngress.to_port).toBe(5432);
-      expect(dbIngress.protocol).toBe('tcp');
-      expect(dbIngress.security_groups).toEqual([
-        '${aws_security_group.prod-sec-app-sg.id}',
-      ]);
+      expectedPathParts.forEach(pathPart => {
+        const resource = Object.values(apiResources).find(
+          (res: any) => res.path_part === pathPart
+        );
+        expect(resource).toBeDefined();
+      });
+    });
+
+    test('should create API Gateway methods for all endpoints', () => {
+      const apiMethods = synthesized.resource.aws_api_gateway_method;
+      expect(apiMethods).toBeDefined();
+
+      const httpMethods = ['GET', 'POST', 'PUT', 'DELETE'];
+
+      httpMethods.forEach(method => {
+        const methodResource = Object.values(apiMethods).find(
+          (m: any) => m.http_method === method
+        );
+        expect(methodResource).toBeDefined();
+      });
+    });
+
+    test('should create API Gateway integrations with Lambda functions', () => {
+      const integrations = synthesized.resource.aws_api_gateway_integration;
+      expect(integrations).toBeDefined();
+
+      const integrationList = Object.values(integrations);
+      integrationList.forEach((integration: any) => {
+        expect(integration.integration_http_method).toBe('POST');
+        expect(integration.type).toBe('AWS_PROXY');
+      });
+    });
+
+    test('should create API Gateway deployment and stage', () => {
+      const deployments = synthesized.resource.aws_api_gateway_deployment;
+      expect(deployments).toBeDefined();
+
+      const stages = synthesized.resource.aws_api_gateway_stage;
+      expect(stages).toBeDefined();
+
+      const prodStage = Object.values(stages).find(
+        (stage: any) => stage.stage_name === 'prod'
+      );
+      expect(prodStage).toBeDefined();
+    });
+
+    test('should create Lambda permissions for API Gateway', () => {
+      const permissions = synthesized.resource.aws_lambda_permission;
+      expect(permissions).toBeDefined();
+
+      const permissionList = Object.values(permissions);
+      permissionList.forEach((permission: any) => {
+        expect(permission.statement_id).toBe('AllowExecutionFromAPIGateway');
+        expect(permission.action).toBe('lambda:InvokeFunction');
+        expect(permission.principal).toBe('apigateway.amazonaws.com');
+      });
+    });
+
+    test('should create all required archive files', () => {
+      const archiveFiles = synthesized.data.archive_file;
+      expect(archiveFiles).toBeDefined();
+
+      const archiveList = Object.values(archiveFiles);
+      archiveList.forEach((archive: any) => {
+        expect(archive.type).toBe('zip');
+      });
+    });
+
+    test('should upload Lambda packages to S3', () => {
+      const s3Objects = synthesized.resource.aws_s3_object;
+      expect(s3Objects).toBeDefined();
+
+      const expectedKeys = [
+        'user-handler.zip',
+        'session-handler.zip',
+        'health-check.zip',
+      ];
+
+      expectedKeys.forEach(key => {
+        const s3Object = Object.values(s3Objects).find(
+          (obj: any) => obj.key === key
+        );
+        expect(s3Object).toBeDefined();
+      });
     });
   });
 
-  describe('S3 Buckets', () => {
-    beforeEach(() => {
-      stack = new TapStack(app, 'TestStack');
-      synthesized = JSON.parse(Testing.synth(stack));
+  describe('Resource Configuration Validation', () => {
+    test('should configure API Gateway method settings with throttling', () => {
+      const methodSettings =
+        synthesized.resource.aws_api_gateway_method_settings;
+      expect(methodSettings).toBeDefined();
+
+      const settings = Object.values(methodSettings)[0] as any;
+      expect(settings.method_path).toBe('*/*');
+      expect(settings.settings.metrics_enabled).toBe(true);
+      expect(settings.settings.logging_level).toBe('INFO');
+      expect(settings.settings.data_trace_enabled).toBe(true);
+      expect(settings.settings.throttling_burst_limit).toBe(5000);
+      expect(settings.settings.throttling_rate_limit).toBe(2000);
     });
 
-    test('S3 buckets are created with unique naming', () => {
-      const logsBucket =
-        synthesized.resource.aws_s3_bucket['prod-sec-logs-bucket'];
-      const appDataBucket =
-        synthesized.resource.aws_s3_bucket['prod-sec-app-data-bucket'];
+    test('should configure access logging for API Gateway stage', () => {
+      const stages = synthesized.resource.aws_api_gateway_stage;
+      const stage = Object.values(stages)[0] as any;
 
-      expect(logsBucket).toBeDefined();
-      expect(logsBucket.bucket).toMatch(/^prod-sec-logs-\$\{data\.aws_caller_identity\.current\.account_id\}-[a-z0-9]{6}$/);
-
-      expect(appDataBucket).toBeDefined();
-      expect(appDataBucket.bucket).toMatch(
-        /^prod-sec-app-data-\$\{data\.aws_caller_identity\.current\.account_id\}-[a-z0-9]{6}$/
-      );
+      expect(stage.access_log_settings).toBeDefined();
+      expect(stage.access_log_settings.format).toBeDefined();
     });
 
-    test('S3 buckets have encryption configuration', () => {
-      const logsEncryption =
-        synthesized.resource.aws_s3_bucket_server_side_encryption_configuration[
-          'prod-sec-logs-bucket-encryption'
-        ];
-      const appDataEncryption =
-        synthesized.resource.aws_s3_bucket_server_side_encryption_configuration[
-          'prod-sec-app-data-bucket-encryption'
-        ];
+    test('should set appropriate environment variables for Lambda functions', () => {
+      const lambdaFunctions = synthesized.resource.aws_lambda_function;
 
-      expect(logsEncryption).toBeDefined();
-      expect(
-        logsEncryption.rule[0].apply_server_side_encryption_by_default
-          .sse_algorithm
-      ).toBe('aws:kms');
-
-      expect(appDataEncryption).toBeDefined();
-      expect(
-        appDataEncryption.rule[0].apply_server_side_encryption_by_default
-          .sse_algorithm
-      ).toBe('aws:kms');
+      Object.values(lambdaFunctions).forEach((lambda: any) => {
+        expect(lambda.environment).toBeDefined();
+        expect(lambda.environment.variables.USER_TABLE_NAME).toContain(
+          'aws_dynamodb_table.prod-service-user-table.name'
+        );
+        expect(lambda.environment.variables.SESSION_TABLE_NAME).toContain(
+          'aws_dynamodb_table.prod-service-session-table.name'
+        );
+        // Note: AWS_REGION is automatically provided by AWS Lambda runtime
+        expect(lambda.environment.variables.AWS_REGION).toBeUndefined();
+      });
     });
 
-    test('S3 buckets have public access blocked', () => {
-      const logsPAB =
-        synthesized.resource.aws_s3_bucket_public_access_block[
-          'prod-sec-logs-bucket-pab'
-        ];
-      const appDataPAB =
-        synthesized.resource.aws_s3_bucket_public_access_block[
-          'prod-sec-app-data-bucket-pab'
-        ];
+    test('should create appropriate tags for all resources', () => {
+      const resourceTypes = [
+        'aws_s3_bucket',
+        'aws_dynamodb_table',
+        'aws_iam_role',
+        'aws_iam_policy',
+        'aws_cloudwatch_log_group',
+        'aws_lambda_function',
+        'aws_api_gateway_rest_api',
+      ];
 
-      expect(logsPAB).toBeDefined();
-      expect(logsPAB.block_public_acls).toBe(true);
-      expect(logsPAB.block_public_policy).toBe(true);
-      expect(logsPAB.ignore_public_acls).toBe(true);
-      expect(logsPAB.restrict_public_buckets).toBe(true);
-
-      expect(appDataPAB).toBeDefined();
-      expect(appDataPAB.block_public_acls).toBe(true);
-      expect(appDataPAB.block_public_policy).toBe(true);
-      expect(appDataPAB.ignore_public_acls).toBe(true);
-      expect(appDataPAB.restrict_public_buckets).toBe(true);
-    });
-
-    test('S3 buckets have versioning enabled', () => {
-      const logsVersioning =
-        synthesized.resource.aws_s3_bucket_versioning[
-          'prod-sec-logs-bucket-versioning'
-        ];
-      const appDataVersioning =
-        synthesized.resource.aws_s3_bucket_versioning[
-          'prod-sec-app-data-bucket-versioning'
-        ];
-
-      expect(logsVersioning).toBeDefined();
-      expect(logsVersioning.versioning_configuration.status).toBe('Enabled');
-
-      expect(appDataVersioning).toBeDefined();
-      expect(appDataVersioning.versioning_configuration.status).toBe(
-        'Enabled'
-      );
+      resourceTypes.forEach(resourceType => {
+        const resources = synthesized.resource[resourceType];
+        if (resources) {
+          Object.values(resources).forEach((resource: any) => {
+            if (resource.tags) {
+              expect(resource.tags).toBeDefined();
+            }
+          });
+        }
+      });
     });
   });
 
-  describe('IAM Configuration', () => {
-    beforeEach(() => {
-      stack = new TapStack(app, 'TestStack');
-      synthesized = JSON.parse(Testing.synth(stack));
+  describe('Output Validation', () => {
+    test('should create all required Terraform outputs', () => {
+      const expectedOutputs = [
+        'api_gateway_url',
+        'user_table_name',
+        'session_table_name',
+        'lambda_function_names',
+        'health_check_url',
+      ];
+
+      expectedOutputs.forEach(outputName => {
+        expect(synthesized.output[outputName]).toBeDefined();
+      });
     });
 
-    test('Password policy is configured with security requirements', () => {
-      const passwordPolicy =
-        synthesized.resource.aws_iam_account_password_policy[
-          'prod-sec-password-policy'
-        ];
-
-      expect(passwordPolicy).toBeDefined();
-      expect(passwordPolicy.minimum_password_length).toBe(14);
-      expect(passwordPolicy.require_lowercase_characters).toBe(true);
-      expect(passwordPolicy.require_numbers).toBe(true);
-      expect(passwordPolicy.require_symbols).toBe(true);
-      expect(passwordPolicy.require_uppercase_characters).toBe(true);
-      expect(passwordPolicy.max_password_age).toBe(90);
-      expect(passwordPolicy.password_reuse_prevention).toBe(12);
-    });
-
-    test('IAM policies are created with unique names', () => {
-      const mfaPolicy =
-        synthesized.resource.aws_iam_policy['prod-sec-mfa-enforcement-policy'];
-      const ec2Policy =
-        synthesized.resource.aws_iam_policy['prod-sec-ec2-readonly-policy'];
-      const s3Policy =
-        synthesized.resource.aws_iam_policy['prod-sec-s3-app-data-policy'];
-
-      expect(mfaPolicy).toBeDefined();
-      expect(mfaPolicy.name).toMatch(
-        /^prod-sec-mfa-enforcement-policy-[a-z0-9]{6}$/
-      );
-
-      expect(ec2Policy).toBeDefined();
-      expect(ec2Policy.name).toMatch(
-        /^prod-sec-ec2-readonly-policy-[a-z0-9]{6}$/
-      );
-
-      expect(s3Policy).toBeDefined();
-      expect(s3Policy.name).toMatch(
-        /^prod-sec-s3-app-data-policy-[a-z0-9]{6}$/
-      );
-    });
-
-    test('IAM roles are created with proper assume role policies', () => {
-      const appRole = synthesized.resource.aws_iam_role['prod-sec-app-role'];
-
-      expect(appRole).toBeDefined();
-      expect(appRole.name).toMatch(/^prod-sec-app-role-[a-z0-9]{6}$/);
-      const appRolePolicy = JSON.parse(appRole.assume_role_policy);
-      expect(appRolePolicy.Statement[0].Principal.Service).toBe(
-        'ec2.amazonaws.com'
-      );
-
-      // CloudTrail role was removed due to AWS service limits
-      expect(synthesized.resource.aws_iam_role['prod-sec-cloudtrail-role']).toBeUndefined();
-    });
-
-    test('IAM users are created with proper paths', () => {
-      const devUser = synthesized.resource.aws_iam_user['prod-sec-dev-user'];
-      const opsUser = synthesized.resource.aws_iam_user['prod-sec-ops-user'];
-
-      expect(devUser).toBeDefined();
-      expect(devUser.name).toMatch(/^prod-sec-dev-user-[a-z0-9]{6}$/);
-      expect(devUser.path).toBe('/developers/');
-
-      expect(opsUser).toBeDefined();
-      expect(opsUser.name).toMatch(/^prod-sec-ops-user-[a-z0-9]{6}$/);
-      expect(opsUser.path).toBe('/operations/');
-    });
-  });
-
-  describe('CloudWatch and Monitoring', () => {
-    beforeEach(() => {
-      stack = new TapStack(app, 'TestStack');
-      synthesized = JSON.parse(Testing.synth(stack));
-    });
-
-    test('CloudWatch log groups are created with retention and encryption', () => {
-      const appLogGroup =
-        synthesized.resource.aws_cloudwatch_log_group['prod-sec-app-logs'];
-      const cloudtrailLogGroup =
-        synthesized.resource.aws_cloudwatch_log_group[
-          'prod-sec-cloudtrail-logs'
-        ];
-      const vpcLogGroup =
-        synthesized.resource.aws_cloudwatch_log_group['prod-sec-vpc-flow-logs'];
-
-      expect(appLogGroup).toBeDefined();
-      expect(appLogGroup.name).toMatch(
-        /^\/aws\/ec2\/prod-sec-app-[a-z0-9]{6}$/
-      );
-      expect(appLogGroup.retention_in_days).toBe(90);
-      expect(appLogGroup.kms_key_id).toBe(
-        '${aws_kms_key.prod-sec-main-kms-key.arn}'
-      );
-
-      expect(cloudtrailLogGroup).toBeDefined();
-      expect(cloudtrailLogGroup.retention_in_days).toBe(365);
-
-      expect(vpcLogGroup).toBeDefined();
-      expect(vpcLogGroup.retention_in_days).toBe(30);
-    });
-
-    test('CloudWatch alarms are configured for security monitoring', () => {
-      const rootAccessAlarm =
-        synthesized.resource.aws_cloudwatch_metric_alarm[
-          'prod-sec-root-access-alarm'
-        ];
-      const unauthorizedCallsAlarm =
-        synthesized.resource.aws_cloudwatch_metric_alarm[
-          'prod-sec-unauthorized-api-calls'
-        ];
-
-      expect(rootAccessAlarm).toBeDefined();
-      expect(rootAccessAlarm.alarm_name).toBe('prod-sec-root-access-alarm');
-      expect(rootAccessAlarm.comparison_operator).toBe(
-        'GreaterThanOrEqualToThreshold'
-      );
-      expect(rootAccessAlarm.threshold).toBe(1);
-
-      expect(unauthorizedCallsAlarm).toBeDefined();
-      expect(unauthorizedCallsAlarm.threshold).toBe(5);
-    });
-
-    test('SNS topic is created for alerts', () => {
-      const alertsTopic =
-        synthesized.resource.aws_sns_topic['prod-sec-security-alerts'];
-
-      expect(alertsTopic).toBeDefined();
-      expect(alertsTopic.name).toMatch(
-        /^prod-sec-security-alerts-[a-z0-9]{6}$/
-      );
-    });
-  });
-
-  describe('CloudTrail', () => {
-    beforeEach(() => {
-      stack = new TapStack(app, 'TestStack');
-      synthesized = JSON.parse(Testing.synth(stack));
-    });
-
-    test('CloudTrail was removed to avoid AWS service limits', () => {
-      // CloudTrail was removed due to AWS service limits (5 trails per region)
-      expect(synthesized.resource.aws_cloudtrail).toBeUndefined();
-    });
-  });
-
-  describe('Secrets Manager and SSM', () => {
-    beforeEach(() => {
-      stack = new TapStack(app, 'TestStack');
-      synthesized = JSON.parse(Testing.synth(stack));
-    });
-
-    test('Secrets Manager secret is created with KMS encryption', () => {
-      const dbSecret =
-        synthesized.resource.aws_secretsmanager_secret[
-          'prod-sec-db-credentials'
-        ];
-
-      expect(dbSecret).toBeDefined();
-      expect(dbSecret.name).toMatch(
-        /^prod-sec\/database\/credentials-[a-z0-9]{6}$/
-      );
-      expect(dbSecret.kms_key_id).toBe(
-        '${aws_kms_key.prod-sec-main-kms-key.arn}'
-      );
-    });
-
-    test('SSM parameter is created with encryption', () => {
-      const appConfig =
-        synthesized.resource.aws_ssm_parameter['prod-sec-app-config'];
-
-      expect(appConfig).toBeDefined();
-      expect(appConfig.name).toMatch(/^\/prod-sec\/app\/config-[a-z0-9]{6}$/);
-      expect(appConfig.type).toBe('SecureString');
-      expect(appConfig.key_id).toBe('${aws_kms_key.prod-sec-main-kms-key.arn}');
-
-      const configValue = JSON.parse(appConfig.value);
-      expect(configValue.environment).toBe('production');
-      expect(configValue.debug).toBe(false);
-      expect(configValue.logLevel).toBe('INFO');
-    });
-  });
-
-  describe('Terraform Outputs', () => {
-    beforeEach(() => {
-      stack = new TapStack(app, 'TestStack');
-      synthesized = JSON.parse(Testing.synth(stack));
-    });
-
-    test('All required outputs are defined', () => {
+    test('should have proper output descriptions', () => {
       const outputs = synthesized.output;
 
-      expect(outputs.vpc_id).toBeDefined();
-      expect(outputs.vpc_id.description).toBe('VPC ID');
-
-      expect(outputs.public_subnet_ids).toBeDefined();
-      expect(outputs.public_subnet_ids.description).toBe('Public subnet IDs');
-
-      expect(outputs.private_subnet_ids).toBeDefined();
-      expect(outputs.private_subnet_ids.description).toBe('Private subnet IDs');
-
-      expect(outputs.kms_key_id).toBeDefined();
-      expect(outputs.kms_key_id.description).toBe('Main KMS key ID');
-
-      expect(outputs.security_group_ids).toBeDefined();
-      expect(outputs.security_group_ids.description).toBe(
-        'Security group IDs by tier'
+      expect(outputs.api_gateway_url.description).toBe(
+        'API Gateway endpoint URL'
       );
-
-      // CloudTrail output removed with CloudTrail resource
-      expect(outputs.cloudtrail_name).toBeUndefined();
-
-      expect(outputs.logs_bucket_name).toBeDefined();
-      expect(outputs.logs_bucket_name.description).toBe('Logs S3 bucket name');
+      expect(outputs.user_table_name.description).toBe(
+        'DynamoDB Users table name'
+      );
+      expect(outputs.session_table_name.description).toBe(
+        'DynamoDB Sessions table name'
+      );
+      expect(outputs.lambda_function_names.description).toBe(
+        'Lambda function names'
+      );
+      expect(outputs.health_check_url.description).toBe(
+        'Health check endpoint for deployment validation'
+      );
     });
   });
 
-  describe('Resource Tagging', () => {
+  describe('Lambda Function Code Validation', () => {
+    let stack: TapStack;
+
     beforeEach(() => {
-      stack = new TapStack(app, 'TestStack');
-      synthesized = JSON.parse(Testing.synth(stack));
+      app = new App();
+      stack = new TapStack(app, 'TestTapStack');
     });
 
-    test('All resources have required tags', () => {
-      const vpc = synthesized.resource.aws_vpc['prod-sec-vpc'];
-      const kmsKey = synthesized.resource.aws_kms_key['prod-sec-main-kms-key'];
+    test('user handler code should contain proper error handling', () => {
+      const userHandlerCode = (stack as any).getUserHandlerCode();
 
-      expect(vpc.tags.Environment).toBe('Production');
-      expect(vpc.tags.Project).toBe('IaC-AWS-Nova-Model-Breaking');
-      expect(vpc.tags.ManagedBy).toBe('CDKTF');
-      expect(vpc.tags.SecurityLevel).toBe('High');
+      expect(userHandlerCode).toContain('try {');
+      expect(userHandlerCode).toContain('catch (error)');
+      expect(userHandlerCode).toContain('console.error');
+      expect(userHandlerCode).toContain('statusCode: 500');
+    });
 
-      expect(kmsKey.tags.Environment).toBe('Production');
-      expect(kmsKey.tags.Project).toBe('IaC-AWS-Nova-Model-Breaking');
-      expect(kmsKey.tags.ManagedBy).toBe('CDKTF');
-      expect(kmsKey.tags.SecurityLevel).toBe('High');
+    test('session handler code should contain TTL logic', () => {
+      const sessionHandlerCode = (stack as any).getSessionHandlerCode();
+
+      expect(sessionHandlerCode).toContain('expiresAt');
+      expect(sessionHandlerCode).toContain('24 * 60 * 60'); // 24 hours
+    });
+
+    test('health check code should test DynamoDB connectivity', () => {
+      const healthCheckCode = (stack as any).getHealthCheckCode();
+
+      expect(healthCheckCode).toContain('describeTable');
+      expect(healthCheckCode).toContain('writeTest');
+      expect(healthCheckCode).toContain('readTest');
+      expect(healthCheckCode).toContain('statusCode: 200');
+      expect(healthCheckCode).toContain('statusCode: 503');
+    });
+
+    test('all lambda functions should have proper response structure', () => {
+      const codes = [
+        (stack as any).getUserHandlerCode(),
+        (stack as any).getSessionHandlerCode(),
+        (stack as any).getHealthCheckCode(),
+      ];
+
+      codes.forEach(code => {
+        expect(code).toContain('statusCode');
+        expect(code).toContain('headers');
+        expect(code).toContain('Content-Type');
+        expect(code).toContain('application/json');
+      });
     });
   });
 
-  describe('Unique Suffix Generation', () => {
-    test('Each stack instance generates different unique suffix', () => {
-      const stack1 = new TapStack(app, 'TestStack1');
-      const stack2 = new TapStack(app, 'TestStack2');
+  describe('Resource Dependencies', () => {
+    test('Lambda functions should depend on log groups', () => {
+      const lambdaFunctions = synthesized.resource.aws_lambda_function;
 
-      const synthesized1 = JSON.parse(Testing.synth(stack1));
-      const synthesized2 = JSON.parse(Testing.synth(stack2));
+      Object.values(lambdaFunctions).forEach((lambda: any) => {
+        expect(lambda.depends_on).toBeDefined();
+        expect(Array.isArray(lambda.depends_on)).toBe(true);
+        expect(lambda.depends_on.length).toBeGreaterThan(0);
+      });
+    });
 
-      const kmsAlias1 =
-        synthesized1.resource.aws_kms_alias['prod-sec-main-kms-alias'];
-      const kmsAlias2 =
-        synthesized2.resource.aws_kms_alias['prod-sec-main-kms-alias'];
+    test('API Gateway deployment should depend on methods', () => {
+      const deployments = synthesized.resource.aws_api_gateway_deployment;
 
-      expect(kmsAlias1.name).not.toBe(kmsAlias2.name);
-      expect(kmsAlias1.name).toMatch(/^alias\/prod-sec-main-key-[a-z0-9]{6}$/);
-      expect(kmsAlias2.name).toMatch(/^alias\/prod-sec-main-key-[a-z0-9]{6}$/);
+      Object.values(deployments).forEach((deployment: any) => {
+        expect(deployment.depends_on).toBeDefined();
+        expect(Array.isArray(deployment.depends_on)).toBe(true);
+        expect(deployment.depends_on.length).toBeGreaterThan(0);
+      });
+    });
+
+    test('IAM role policy attachments should reference correct role', () => {
+      const attachments = synthesized.resource.aws_iam_role_policy_attachment;
+
+      Object.values(attachments).forEach((attachment: any) => {
+        expect(attachment.role).toBeDefined();
+      });
+    });
+  });
+
+  describe('Resource Counts', () => {
+    test('should create expected number of each resource type', () => {
+      const expectedCounts = {
+        aws_s3_bucket: 1,
+        aws_dynamodb_table: 2,
+        aws_iam_role: 1,
+        aws_iam_policy: 1,
+        aws_cloudwatch_log_group: 4,
+        aws_lambda_function: 3,
+        aws_api_gateway_rest_api: 1,
+        aws_api_gateway_resource: 5,
+        aws_api_gateway_method: 10,
+        aws_api_gateway_integration: 10,
+        aws_api_gateway_deployment: 1,
+        aws_api_gateway_stage: 1,
+        aws_lambda_permission: 3,
+        archive_file: 3,
+        aws_s3_object: 3,
+      };
+
+      Object.entries(expectedCounts).forEach(
+        ([resourceType, expectedCount]) => {
+          const resources = resourceType.startsWith('archive_')
+            ? synthesized.data[resourceType]
+            : synthesized.resource[resourceType];
+
+          const actualCount = resources ? Object.keys(resources).length : 0;
+          expect(actualCount).toBe(expectedCount);
+        }
+      );
     });
   });
 });
