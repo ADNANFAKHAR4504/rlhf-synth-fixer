@@ -39,7 +39,6 @@ describe('TapStack CloudFormation Template', () => {
   describe('Parameters', () => {
     test('should have all required parameters', () => {
       const requiredParams = [
-        'EnvironmentSuffix',
         'CompanyName',
         'Environment',
         'ExistingVpcId',
@@ -47,6 +46,7 @@ describe('TapStack CloudFormation Template', () => {
         'DBSubnetGroupName',
         'DBMasterUsername',
         'EC2InstanceType',
+        'EnvironmentSuffix',
       ];
 
       requiredParams.forEach(param => {
@@ -62,14 +62,16 @@ describe('TapStack CloudFormation Template', () => {
       expect(companyNameParam.ConstraintDescription).toContain('lowercase');
     });
 
-    test('VPC parameters should reference existing resources', () => {
-      // Updated to match actual types in template which are String with default empty value
-      expect(template.Parameters.ExistingVpcId.Type).toBe('String');
-      expect(template.Parameters.PrivateSubnetIds.Type).toBe('String');
+    test('VPC parameters should use proper AWS types', () => {
+      expect(template.Parameters.ExistingVpcId.Type).toBe('AWS::EC2::VPC::Id');
+      expect(template.Parameters.PrivateSubnetIds.Type).toBe(
+        'List<AWS::EC2::Subnet::Id>'
+      );
+    });
 
-      // Check they have default empty values
-      expect(template.Parameters.ExistingVpcId.Default).toBe('');
-      expect(template.Parameters.PrivateSubnetIds.Default).toBe('');
+    test('EnvironmentSuffix should be the last parameter', () => {
+      const paramKeys = Object.keys(template.Parameters);
+      expect(paramKeys[paramKeys.length - 1]).toBe('EnvironmentSuffix');
     });
   });
 
@@ -379,6 +381,29 @@ describe('TapStack CloudFormation Template', () => {
           }
         }
       });
+    });
+  });
+
+  describe('VPC Endpoint Configuration', () => {
+    test('should create VPC endpoint for S3 to avoid internet routing', () => {
+      const s3Endpoint = template.Resources.S3VPCEndpoint;
+      expect(s3Endpoint).toBeDefined();
+      expect(s3Endpoint.Type).toBe('AWS::EC2::VPCEndpoint');
+      expect(s3Endpoint.Properties.ServiceName['Fn::Sub']).toContain('s3');
+
+      // Verify policy allows access only to our S3 bucket
+      const policy = s3Endpoint.Properties.PolicyDocument;
+
+      // Update the test to match actual ARN format in the JSON
+      expect(policy.Statement[0].Resource[0]['Fn::Sub']).toContain(
+        'arn:aws:s3:::${SecureS3Bucket}'
+      );
+      expect(policy.Statement[0].Resource[1]['Fn::Sub']).toContain(
+        'arn:aws:s3:::${SecureS3Bucket}/*'
+      );
+
+      // Verify S3 endpoint is connected to the VPC
+      expect(s3Endpoint.Properties.VpcId).toEqual({ Ref: 'ExistingVpcId' });
     });
   });
 });

@@ -16,13 +16,6 @@
         }
     },
     "Parameters": {
-        "EnvironmentSuffix": {
-            "Type": "String",
-            "Default": "dev",
-            "Description": "Environment suffix for resource naming (e.g., dev, staging, prod)",
-            "AllowedPattern": "^[a-zA-Z0-9]+$",
-            "ConstraintDescription": "Must contain only alphanumeric characters"
-        },
         "CompanyName": {
             "Type": "String",
             "Default": "mycompany",
@@ -41,14 +34,12 @@
             "Description": "Environment for resource naming convention"
         },
         "ExistingVpcId": {
-            "Type": "String",
-            "Default": "",
+            "Type": "AWS::EC2::VPC::Id",
             "Description": "ID of existing VPC where resources will be deployed"
         },
         "PrivateSubnetIds": {
-            "Type": "String",
-            "Default": "",
-            "Description": "Comma-delimited list of private subnet IDs within the existing VPC"
+            "Type": "List<AWS::EC2::Subnet::Id>",
+            "Description": "List of private subnet IDs within the existing VPC"
         },
         "DBSubnetGroupName": {
             "Type": "String",
@@ -72,6 +63,13 @@
                 "t3.medium"
             ],
             "Description": "EC2 instance type for private instances"
+        },
+        "EnvironmentSuffix": {
+            "Type": "String",
+            "Default": "dev",
+            "Description": "Environment suffix for resource naming (e.g., dev, staging, prod)",
+            "AllowedPattern": "^[a-zA-Z0-9]+$",
+            "ConstraintDescription": "Must contain only alphanumeric characters"
         }
     },
     "Conditions": {
@@ -92,7 +90,12 @@
                 {
                     "Fn::Equals": [
                         {
-                            "Ref": "PrivateSubnetIds"
+                            "Fn::Join": [
+                                ",",
+                                {
+                                    "Ref": "PrivateSubnetIds"
+                                }
+                            ]
                         },
                         ""
                     ]
@@ -547,12 +550,7 @@
                     "Fn::Select": [
                         0,
                         {
-                            "Fn::Split": [
-                                ",",
-                                {
-                                    "Ref": "PrivateSubnetIds"
-                                }
-                            ]
+                            "Ref": "PrivateSubnetIds"
                         }
                     ]
                 },
@@ -644,6 +642,62 @@
                         "Key": "Name",
                         "Value": {
                             "Fn::Sub": "${CompanyName}-${Environment}-RDSInstance"
+                        }
+                    }
+                ]
+            }
+        },
+        "S3VPCEndpoint": {
+            "Type": "AWS::EC2::VPCEndpoint",
+            "Condition": "DeployEC2AndRDS",
+            "Properties": {
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": "*",
+                            "Action": [
+                                "s3:GetObject",
+                                "s3:PutObject",
+                                "s3:ListBucket"
+                            ],
+                            "Resource": [
+                                {
+                                    "Fn::Sub": "arn:aws:s3:::${SecureS3Bucket}"
+                                },
+                                {
+                                    "Fn::Sub": "arn:aws:s3:::${SecureS3Bucket}/*"
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "RouteTableIds": [
+                    {
+                        "Ref": "PrivateRouteTable"
+                    }
+                ],
+                "ServiceName": {
+                    "Fn::Sub": "com.amazonaws.${AWS::Region}.s3"
+                },
+                "VpcId": {
+                    "Ref": "ExistingVpcId"
+                }
+            }
+        },
+        "PrivateRouteTable": {
+            "Type": "AWS::EC2::RouteTable",
+            "Condition": "DeployEC2AndRDS",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "ExistingVpcId"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${CompanyName}-${Environment}-PrivateRouteTable"
                         }
                     }
                 ]

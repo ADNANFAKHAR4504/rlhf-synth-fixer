@@ -10,12 +10,6 @@ Metadata:
           - EnvironmentSuffix
 
 Parameters:
-  EnvironmentSuffix:
-    Type: String
-    Default: 'dev'
-    Description: 'Environment suffix for resource naming (e.g., dev, staging, prod)'
-    AllowedPattern: '^[a-zA-Z0-9]+$'
-    ConstraintDescription: 'Must contain only alphanumeric characters'
   CompanyName:
     Type: String
     Default: 'mycompany'
@@ -28,13 +22,11 @@ Parameters:
     AllowedValues: ['dev', 'staging', 'prod']
     Description: 'Environment for resource naming convention'
   ExistingVpcId:
-    Type: String
-    Default: ''
+    Type: AWS::EC2::VPC::Id
     Description: 'ID of existing VPC where resources will be deployed'
   PrivateSubnetIds:
-    Type: String
-    Default: ''
-    Description: 'Comma-delimited list of private subnet IDs within the existing VPC'
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: 'List of private subnet IDs within the existing VPC'
   DBSubnetGroupName:
     Type: String
     Default: ''
@@ -51,10 +43,16 @@ Parameters:
     Default: 't3.micro'
     AllowedValues: ['t3.micro', 't3.small', 't3.medium']
     Description: 'EC2 instance type for private instances'
+  EnvironmentSuffix:
+    Type: String
+    Default: 'dev'
+    Description: 'Environment suffix for resource naming (e.g., dev, staging, prod)'
+    AllowedPattern: '^[a-zA-Z0-9]+$'
+    ConstraintDescription: 'Must contain only alphanumeric characters'
 
 Conditions:
   HasExistingVpcId: !Not [!Equals [!Ref ExistingVpcId, '']]
-  HasPrivateSubnetIds: !Not [!Equals [!Ref PrivateSubnetIds, '']]
+  HasPrivateSubnetIds: !Not [!Equals [!Join [',', !Ref PrivateSubnetIds], '']]
   HasDBSubnetGroupName: !Not [!Equals [!Ref DBSubnetGroupName, '']]
   DeployEC2AndRDS: !And 
     - !Condition HasExistingVpcId
@@ -307,7 +305,7 @@ Resources:
       LaunchTemplate:
         LaunchTemplateId: !Ref EC2LaunchTemplate
         Version: !GetAtt EC2LaunchTemplate.LatestVersionNumber
-      SubnetId: !Select [0, !Split [',', !Ref PrivateSubnetIds]]
+      SubnetId: !Select [0, !Ref PrivateSubnetIds]
       Tags:
         - Key: Name
           Value: !Sub '${CompanyName}-${Environment}-EC2Instance'
@@ -358,6 +356,38 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub '${CompanyName}-${Environment}-RDSInstance'
+
+  # S3 VPC Endpoint for secure access without internet
+  S3VPCEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Condition: DeployEC2AndRDS
+    Properties:
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: '*'
+            Action:
+              - 's3:GetObject'
+              - 's3:PutObject'
+              - 's3:ListBucket'
+            Resource:
+              - !Sub 'arn:aws:s3:::${SecureS3Bucket}'
+              - !Sub 'arn:aws:s3:::${SecureS3Bucket}/*'
+      RouteTableIds:
+        - !Ref PrivateRouteTable
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.s3'
+      VpcId: !Ref ExistingVpcId
+
+  # Private Route Table reference for S3 VPC Endpoint
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Condition: DeployEC2AndRDS
+    Properties:
+      VpcId: !Ref ExistingVpcId
+      Tags:
+        - Key: Name
+          Value: !Sub '${CompanyName}-${Environment}-PrivateRouteTable'
 
 Outputs:
   S3BucketArn:
