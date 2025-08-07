@@ -35,7 +35,7 @@ class TapStack(ComponentResource):
         super().__init__("pkg:index:TapStack", name, {}, opts)
 
         self.environment_suffix = args.environment_suffix
-        self.regions = ["us-east-1", "us-west-2", "ap-south-1"]
+        self.regions = ["us-east-1", "us-west-2", "us-east-2"]  # FIXED: Changed ap-south-1 to us-east-2
         self.primary_region = "us-east-1"
 
         # Tags attached to every resource
