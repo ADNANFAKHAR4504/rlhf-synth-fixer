@@ -145,7 +145,7 @@ describe('TapStack Integration Tests', () => {
       synthesized.resource.aws_cloudwatch_dashboard['dashboard'];
     expect(dashboardResource).toBeDefined();
     const dashboardBody = JSON.parse(dashboardResource.dashboard_body);
-    expect(dashboardBody.widgets.length).toBe(3); // 1 for CPU + 2 for NAT Gateways
+    expect(dashboardBody.widgets.length).toBe(4); // 1 for CPU + 3 for NAT Gateways
     expect(dashboardBody.widgets[0].properties.title).toBe(
       'ASG CPU Utilization'
     );

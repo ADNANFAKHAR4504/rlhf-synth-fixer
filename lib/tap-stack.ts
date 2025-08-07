@@ -77,7 +77,8 @@ export class TapStack extends TerraformStack {
     const privateSubnets: Subnet[] = [];
 
     // Fixed: Use Fn.element to correctly access the token list
-    for (let index = 0; index < 2; index++) {
+    // Fixed: Changed loop condition to create 3 availability zones
+    for (let index = 0; index < 3; index++) {
       const zone = Fn.element(availabilityZones.names, index);
       publicSubnets.push(
         new Subnet(this, `public-subnet-${index}`, {
