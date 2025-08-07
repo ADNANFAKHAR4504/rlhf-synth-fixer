@@ -785,7 +785,6 @@ jobs:
           needs.lint.outputs.language == 'hcl'
         )
       }}
-    # if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
     environment: qa
 
     steps:
@@ -806,6 +805,7 @@ jobs:
           pipenv run cfn-flip-to-json > lib/TapStack.json
 
       - name: Run unit tests
+        if: ${{ !(needs.lint.outputs.platform == 'tf' && needs.lint.outputs.language == 'hcl') }}
         run: |
           if [ "${{ needs.lint.outputs.language }}" = "ts" ] && [ "${{ needs.lint.outputs.platform }}" = "cdktf" ]; then
             echo "✅ Terraform TypeScript project detected, running unit tests..."
