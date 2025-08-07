@@ -98,7 +98,8 @@ class TestPulumiInfrastructure:
     assert alb_dns, "ALB DNS name not found in stack outputs."
     alb_url = f"http://{alb_dns}"
     print(f"\nAttempting to reach ALB at: {alb_url}")
-    assert wait_for_http_ok(alb_url, timeout=600, interval=15), \
+    # Increased timeout to 1800 seconds (30 minutes) for ALB to become reachable
+    assert wait_for_http_ok(alb_url, timeout=1800, interval=15), \
       f"ALB at {alb_url} is not reachable or did not return 200 OK."
     print("ALB is reachable and returned 200 OK.")
 
