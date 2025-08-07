@@ -116,7 +116,7 @@ class TapStack(pulumi.ComponentResource):
         from_port=443,
         to_port=443,
         protocol="tcp",
-        prefix_list_id=prefix_list.id,
+        prefix_list_ids=[prefix_list.id],
         security_group_id=sg.id,
         opts=ResourceOptions(parent=sg)
       )
