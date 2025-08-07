@@ -62,7 +62,8 @@ def create_vpc_and_networking() -> Dict[str, Any]:
       availability_zone=az,
       cidr_block=f"10.0.{i+1}.0/24",
       ipv6_cidr_block=vpc.ipv6_cidr_block.apply(
-          lambda cidr: f"{cidr.split('::/')[0]}:{i+1}::/64"
+          # Use string interpolation correctly
+          lambda cidr: f"{cidr.split('::/')[0].rstrip('0')}{i+1:02x}::/64"
       ),
       assign_ipv6_address_on_creation=True,
       map_public_ip_on_launch=True,
@@ -106,7 +107,8 @@ def create_vpc_and_networking() -> Dict[str, Any]:
       availability_zone=az,
       cidr_block=f"10.0.{100+i+1}.0/24",
       ipv6_cidr_block=vpc.ipv6_cidr_block.apply(
-          lambda cidr: f"{cidr.split('::/')[0]}:{100+i+1}::/64"
+          # Use string interpolation correctly
+          lambda cidr: f"{cidr.split('::/')[0].rstrip('0')}{100+i+1:02x}::/64"
       ),
       assign_ipv6_address_on_creation=True,
       tags={**common_tags, "Name": f"{project_name}-private-{i+1}"}
