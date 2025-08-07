@@ -296,7 +296,7 @@ describe('SecureEnvironmentStack', () => {
   describe('EC2 Configuration', () => {
     test('should create EC2 key pair', () => {
       template.hasResourceProperties('AWS::EC2::KeyPair', {
-        KeyName: `org-keypair-${environmentSuffix}`,
+        KeyName: `org-keypair-${environmentSuffix}-TestSecureEnvironmentStack`,
       });
     });
 
