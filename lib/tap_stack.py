@@ -84,26 +84,23 @@ class TapStack(ComponentResource):
                 opts=ResourceOptions(parent=self)
             )
             
-            # Get caller identity for KMS policy
-            caller_identity = aws.get_caller_identity(provider=provider)
-            
             key = aws.kms.Key(
                 f"PROD-kms-{region}-{self.environment_suffix}",
                 description=f"KMS key for {region} region encryption",
                 deletion_window_in_days=7,
                 enable_key_rotation=True,
-                policy=caller_identity.account_id.apply(lambda account_id: json.dumps({
+                policy=json.dumps({
                     "Version": "2012-10-17",
                     "Statement": [
                         {
                             "Sid": "Enable IAM User Permissions",
                             "Effect": "Allow",
-                            "Principal": {"AWS": f"arn:aws:iam::{account_id}:root"},
+                            "Principal": {"AWS": f"arn:aws:iam::{aws.get_caller_identity().account_id}:root"},
                             "Action": "kms:*",
                             "Resource": "*"
                         }
                     ]
-                })),
+                }),
                 tags=self.standard_tags,
                 opts=ResourceOptions(parent=self, provider=provider)
             )
@@ -239,12 +236,8 @@ class TapStack(ComponentResource):
     def _create_cloudtrail(self):
         """Create CloudTrail for comprehensive logging."""
         # S3 bucket for CloudTrail logs
-        # Get caller identity for bucket naming
-        caller_identity = aws.get_caller_identity()
-        
         self.cloudtrail_bucket = aws.s3.Bucket(
-            f"tap-cloudtrail-{self.environment_suffix}",
-            bucket=caller_identity.account_id.apply(lambda account_id: f"tap-cloudtrail-{self.environment_suffix}-{account_id}"),
+            f"prod-cloudtrail-{self.environment_suffix}-{aws.get_caller_identity().account_id}",
             versioning=aws.s3.BucketVersioningArgs(enabled=True),
             server_side_encryption_configuration=aws.s3.BucketServerSideEncryptionConfigurationArgs(
                 rule=aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
@@ -344,8 +337,8 @@ class TapStack(ComponentResource):
                     f"PROD-public-subnet-{region}-{i+1}-{self.environment_suffix}",
                     vpc_id=vpc.id,
                     cidr_block=f"10.0.{i+1}.0/24",
-                    ipv6_cidr_block=vpc.ipv6_cidr_block.apply(
-                        lambda cidr: cidr.replace("::/56", f"::{i+1:x}::/64") if cidr else None
+                    ipv6_cidr_block=Output.all(vpc.ipv6_cidr_block).apply(
+                        lambda cidr: f"{cidr[0][:-2]}{i+1:02x}::/64"
                     ),
                     availability_zone=az,
                     map_public_ip_on_launch=True,
@@ -360,8 +353,8 @@ class TapStack(ComponentResource):
                     f"PROD-private-subnet-{region}-{i+1}-{self.environment_suffix}",
                     vpc_id=vpc.id,
                     cidr_block=f"10.0.{i+10}.0/24",
-                    ipv6_cidr_block=vpc.ipv6_cidr_block.apply(
-                        lambda cidr: cidr.replace("::/56", f"::{i+10:x}::/64") if cidr else None
+                    ipv6_cidr_block=Output.all(vpc.ipv6_cidr_block).apply(
+                        lambda cidr: f"{cidr[0][:-2]}{i+10:02x}::/64"
                     ),
                     availability_zone=az,
                     assign_ipv6_address_on_creation=True,
@@ -421,7 +414,7 @@ class TapStack(ComponentResource):
                 opts=ResourceOptions(parent=self, provider=provider)
             )
 
-            role_policy_attachment = aws.iam.RolePolicyAttachment(
+            aws.iam.RolePolicyAttachment(
                 f"PROD-flowlog-policy-{region}-{self.environment_suffix}",
                 role=flow_log_role.name,
                 policy_arn="arn:aws:iam::aws:policy/service-role/VPCFlowLogsDeliveryRolePolicy",
@@ -445,7 +438,7 @@ class TapStack(ComponentResource):
                 vpc_id=vpc.id,  # Correct parameter name
                 traffic_type="ALL",
                 tags=self.standard_tags,
-                opts=ResourceOptions(parent=self, provider=provider, depends_on=[role_policy_attachment, log_group])
+                opts=ResourceOptions(parent=self, provider=provider)
             )
 
             
@@ -469,12 +462,8 @@ class TapStack(ComponentResource):
                 opts=ResourceOptions(parent=self)
             )
             
-            # Get caller identity for bucket naming
-            caller_identity = aws.get_caller_identity(provider=provider)
-            
             bucket = aws.s3.Bucket(
-                f"tap-storage-{region}-{self.environment_suffix}",
-                bucket=caller_identity.account_id.apply(lambda account_id: f"tap-storage-{region}-{self.environment_suffix}-{account_id}"),
+                f"prod-storage-{region}-{self.environment_suffix}-{aws.get_caller_identity().account_id}",
                 versioning=aws.s3.BucketVersioningArgs(enabled=True),
                 server_side_encryption_configuration=aws.s3.BucketServerSideEncryptionConfigurationArgs(
                     rule=aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
