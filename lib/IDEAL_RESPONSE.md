@@ -290,27 +290,30 @@ Resources:
           import json
 
           def lambda_handler(event, context):
-              return {
-                  'statusCode': 200,
-                  'body': json.dumps('Hello from Lambda!')
-              }
-              return {'statusCode': 200, 'body': 'Success'}
-              secret_name = os.environ['SERVERLESSAPP_SECRET_ARN']
-              # Get secret value
-              session = boto3.session.Session()
-              client = session.client(service_name='secretsmanager')
-              get_secret_value_response = client.get_secret_value(SecretId=secret_name)
-              secret = json.loads(get_secret_value_response['SecretString'])
-              # Process S3 event (get bucket and key)
-              for record in event['Records']:
-                  s3 = boto3.client('s3')
-                  bucket = record['s3']['bucket']['name']
-                  key = record['s3']['object']['key']
-                  # For example: read file
-                  obj = s3.get_object(Bucket=bucket, Key=key)
-                  data = obj['Body'].read()
-                  # ... further processing ...
-              return {'statusCode': 200, 'body': 'Processed.'}
+              try:
+                  secret_name = os.environ['SERVERLESSAPP_SECRET_ARN']
+                  # Get secret value
+                  session = boto3.session.Session()
+                  client = session.client(service_name='secretsmanager')
+                  get_secret_value_response = client.get_secret_value(SecretId=secret_name)
+                  secret = json.loads(get_secret_value_response['SecretString'])
+                  
+                  # Process S3 event (get bucket and key)
+                  for record in event['Records']:
+                      s3 = boto3.client('s3')
+                      bucket = record['s3']['bucket']['name']
+                      key = record['s3']['object']['key']
+                      # For example: read file
+                      obj = s3.get_object(Bucket=bucket, Key=key)
+                      data = obj['Body'].read()
+                      # ... further processing ...
+                  
+                  return {'statusCode': 200, 'body': 'Processed successfully'}
+              except Exception as e:
+                  return {
+                      'statusCode': 500,
+                      'body': json.dumps(f'Error: {str(e)}')
+                  }
       Environment:
         Variables:
           SERVERLESSAPP_SECRET_ARN: !Ref ServerlessAppSecret
