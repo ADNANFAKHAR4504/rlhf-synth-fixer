@@ -1,5 +1,6 @@
 import * as cdk from 'aws-cdk-lib';
 import * as autoscaling from 'aws-cdk-lib/aws-autoscaling';
+import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import { Construct } from 'constructs';
@@ -77,11 +78,11 @@ export class ProjectXInfrastructureStack extends cdk.Stack {
       'Allow HTTPS traffic from internet'
     );
 
-    // Allow SSH access for administration (restrict to specific IP ranges in production)
+    // Allow SSH access for administration (restrict to office network only)
     webServerSecurityGroup.addIngressRule(
-      ec2.Peer.anyIpv4(),
+      ec2.Peer.ipv4('10.0.0.0/8'), // Office network CIDR - replace with actual office IP range
       ec2.Port.tcp(22),
-      'Allow SSH access for administration'
+      'Allow SSH from office network only'
     );
 
     // Tag the security group
@@ -126,6 +127,17 @@ export class ProjectXInfrastructureStack extends cdk.Stack {
         userData: ec2.UserData.forLinux(),
         // Enable detailed monitoring for better scaling decisions
         detailedMonitoring: true,
+        // Enable EBS encryption for data security
+        blockDevices: [
+          {
+            deviceName: '/dev/xvda',
+            volume: ec2.BlockDeviceVolume.ebs(20, {
+              encrypted: true,
+              deleteOnTermination: true,
+              volumeType: ec2.EbsDeviceVolumeType.GP3,
+            }),
+          },
+        ],
       }
     );
 
@@ -138,7 +150,7 @@ export class ProjectXInfrastructureStack extends cdk.Stack {
       'systemctl enable httpd',
       'echo "<h1>ProjectX Web Server - Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</h1>" > /var/www/html/index.html',
       'echo "<p>Availability Zone: $(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)</p>" >> /var/www/html/index.html',
-      'echo "<p>Region: us-east-1</p>" >> /var/www/html/index.html'
+      'echo "<p>Region: us-west-2</p>" >> /var/www/html/index.html'
     );
 
     // 5. Auto Scaling Group Configuration
@@ -169,6 +181,53 @@ export class ProjectXInfrastructureStack extends cdk.Stack {
     // Add scaling policies for dynamic scaling based on CPU utilization
     autoScalingGroup.scaleOnCpuUtilization('ProjectXScaleUp', {
       targetUtilizationPercent: 70,
+    });
+
+    // 6. CloudWatch Alarms for comprehensive monitoring
+    // Auto Scaling Group Alarms
+    new cloudwatch.Alarm(this, 'ProjectX-ASG-CPUUtilizationAlarm', {
+      metric: new cloudwatch.Metric({
+        namespace: 'AWS/AutoScaling',
+        metricName: 'CPUUtilization',
+        dimensionsMap: {
+          AutoScalingGroupName: autoScalingGroup.autoScalingGroupName,
+        },
+        statistic: 'Average',
+        period: cdk.Duration.minutes(5),
+      }),
+      threshold: 80,
+      evaluationPeriods: 2,
+      alarmDescription: 'ProjectX Auto Scaling Group CPU utilization is high',
+    });
+
+    new cloudwatch.Alarm(this, 'ProjectX-ASG-InstanceCountAlarm', {
+      metric: new cloudwatch.Metric({
+        namespace: 'AWS/AutoScaling',
+        metricName: 'GroupDesiredCapacity',
+        dimensionsMap: {
+          AutoScalingGroupName: autoScalingGroup.autoScalingGroupName,
+        },
+        statistic: 'Average',
+        period: cdk.Duration.minutes(5),
+      }),
+      threshold: 4,
+      evaluationPeriods: 2,
+      alarmDescription: 'ProjectX Auto Scaling Group instance count is high',
+    });
+
+    new cloudwatch.Alarm(this, 'ProjectX-ASG-HealthyHostCountAlarm', {
+      metric: new cloudwatch.Metric({
+        namespace: 'AWS/AutoScaling',
+        metricName: 'GroupInServiceInstances',
+        dimensionsMap: {
+          AutoScalingGroupName: autoScalingGroup.autoScalingGroupName,
+        },
+        statistic: 'Average',
+        period: cdk.Duration.minutes(5),
+      }),
+      threshold: 1,
+      evaluationPeriods: 2,
+      alarmDescription: 'ProjectX Auto Scaling Group healthy host count is low',
     });
 
     // Tag the Auto Scaling Group

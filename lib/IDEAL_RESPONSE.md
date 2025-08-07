@@ -50,7 +50,7 @@ export class ProjectXInfrastructureStack extends cdk.Stack {
       enableDnsSupport: true,
     });
 
-    // 2. SECURITY GROUPS - Least privilege principle
+    // 2. SECURITY GROUPS - Least privilege principle with restricted SSH access
     const webServerSecurityGroup = new ec2.SecurityGroup(this, 'ProjectXWebServerSG', {
       vpc,
       securityGroupName: 'projectX-web-server-sg',
@@ -72,11 +72,11 @@ export class ProjectXInfrastructureStack extends cdk.Stack {
       'Allow HTTPS traffic from internet'
     );
 
-    // Allow SSH access for administration (restrict to specific IP ranges in production)
+    // Allow SSH access for administration (restrict to office network only)
     webServerSecurityGroup.addIngressRule(
-      ec2.Peer.anyIpv4(),
+      ec2.Peer.ipv4('10.0.0.0/8'), // Office network CIDR - replace with actual office IP range
       ec2.Port.tcp(22),
-      'Allow SSH access for administration'
+      'Allow SSH from office network only'
     );
 
     // 3. ACCESS MANAGEMENT - IAM Roles with proper trust relationships
@@ -90,21 +90,36 @@ export class ProjectXInfrastructureStack extends cdk.Stack {
       ],
     });
 
-    // Create instance profile for the role
-    const instanceProfile = new iam.CfnInstanceProfile(this, 'ProjectXInstanceProfile', {
+    // Create instance profile for the role (used by launch template)
+    new iam.CfnInstanceProfile(this, 'ProjectXInstanceProfile', {
       instanceProfileName: 'projectX-instance-profile',
       roles: [ec2Role.roleName],
     });
 
-    // 4. COMPUTE LAYER - Launch Template with optimized configuration
+    // 4. COMPUTE LAYER - Launch Template with optimized configuration and EBS encryption
     const launchTemplate = new ec2.LaunchTemplate(this, 'ProjectXLaunchTemplate', {
       launchTemplateName: 'projectX-launch-template',
-      instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MICRO),
+      instanceType: ec2.InstanceType.of(
+        ec2.InstanceClass.T3,
+        ec2.InstanceSize.MICRO
+      ),
       machineImage: ec2.MachineImage.latestAmazonLinux2(),
       securityGroup: webServerSecurityGroup,
       role: ec2Role,
       userData: ec2.UserData.forLinux(),
-      detailedMonitoring: true, // Enable detailed monitoring for better scaling decisions
+      // Enable detailed monitoring for better scaling decisions
+      detailedMonitoring: true,
+      // Enable EBS encryption for data security
+      blockDevices: [
+        {
+          deviceName: '/dev/xvda',
+          volume: ec2.BlockDeviceVolume.ebs(20, {
+            encrypted: true,
+            deleteOnTermination: true,
+            volumeType: ec2.EbsDeviceVolumeType.GP3,
+          }),
+        },
+      ],
     });
 
     // Add user data script to install and configure web server
@@ -139,24 +154,55 @@ export class ProjectXInfrastructureStack extends cdk.Stack {
     });
 
     // 6. SCALING POLICIES - CPU-based auto-scaling
-    const scaleUpPolicy = autoScalingGroup.scaleOnCpuUtilization('ProjectXScaleUp', {
+    autoScalingGroup.scaleOnCpuUtilization('ProjectXScaleUp', {
       targetUtilizationPercent: 70,
     });
 
-    // 7. MONITORING - CloudWatch Alarms for comprehensive monitoring
+    // 7. CLOUDWATCH ALARMS - Comprehensive monitoring
     // Auto Scaling Group Alarms
     new cloudwatch.Alarm(this, 'ProjectX-ASG-CPUUtilizationAlarm', {
-      metric: autoScalingGroup.metricCpuUtilization(),
+      metric: new cloudwatch.Metric({
+        namespace: 'AWS/AutoScaling',
+        metricName: 'CPUUtilization',
+        dimensionsMap: {
+          AutoScalingGroupName: autoScalingGroup.autoScalingGroupName,
+        },
+        statistic: 'Average',
+        period: cdk.Duration.minutes(5),
+      }),
       threshold: 80,
       evaluationPeriods: 2,
       alarmDescription: 'ProjectX Auto Scaling Group CPU utilization is high',
     });
 
     new cloudwatch.Alarm(this, 'ProjectX-ASG-InstanceCountAlarm', {
-      metric: autoScalingGroup.metricGroupDesiredCapacity(),
+      metric: new cloudwatch.Metric({
+        namespace: 'AWS/AutoScaling',
+        metricName: 'GroupDesiredCapacity',
+        dimensionsMap: {
+          AutoScalingGroupName: autoScalingGroup.autoScalingGroupName,
+        },
+        statistic: 'Average',
+        period: cdk.Duration.minutes(5),
+      }),
       threshold: 4,
       evaluationPeriods: 2,
       alarmDescription: 'ProjectX Auto Scaling Group instance count is high',
+    });
+
+    new cloudwatch.Alarm(this, 'ProjectX-ASG-HealthyHostCountAlarm', {
+      metric: new cloudwatch.Metric({
+        namespace: 'AWS/AutoScaling',
+        metricName: 'GroupInServiceInstances',
+        dimensionsMap: {
+          AutoScalingGroupName: autoScalingGroup.autoScalingGroupName,
+        },
+        statistic: 'Average',
+        period: cdk.Duration.minutes(5),
+      }),
+      threshold: 1,
+      evaluationPeriods: 2,
+      alarmDescription: 'ProjectX Auto Scaling Group healthy host count is low',
     });
 
     // 8. TAGGING - Proper resource tagging for cost management and organization
@@ -229,27 +275,38 @@ export class ProjectXInfrastructureStack extends cdk.Stack {
 
 ### ✅ **Security & Access Management**
 - **Security Groups**: Least privilege with specific port rules
+- **SSH Restriction**: Limited to office network (10.0.0.0/8) only
 - **IAM Roles**: Proper trust relationships for EC2 instances
 - **Instance Profiles**: Secure AWS service access
 - **No Public Access**: Controlled access through security groups
 
 ### ✅ **Compute & Auto Scaling**
 - **Launch Template**: Consistent EC2 instance configuration
+- **EBS Encryption**: Encrypted GP3 volumes for data security
 - **Auto Scaling Group**: 2-6 instances with health checks
 - **Scaling Policies**: CPU-based auto-scaling at 70% utilization
 - **Rolling Updates**: Zero-downtime deployments
 
 ### ✅ **Monitoring & Observability**
-- **CloudWatch Alarms**: CPU utilization and instance count monitoring
+- **CloudWatch Alarms**: 3 comprehensive alarms for monitoring
+  - CPU Utilization (80% threshold)
+  - Instance Count (4 instances threshold)
+  - Healthy Host Count (1 instance threshold)
 - **Detailed Monitoring**: Enhanced CloudWatch metrics
 - **Health Checks**: Automatic unhealthy instance replacement
 - **Logging**: User data script for web server logs
+
+### ✅ **Data Security**
+- **EBS Encryption**: All EBS volumes encrypted with GP3 type
+- **Volume Configuration**: 20GB encrypted volumes with delete on termination
+- **Security Groups**: Restricted SSH access to office network only
 
 ### ✅ **Best Practices**
 - **Current APIs**: No deprecated CDK APIs
 - **Proper Tagging**: Cost management and organization
 - **Output Values**: Integration-friendly resource information
 - **Environment Support**: Multi-environment deployment ready
+- **Security First**: SSH restricted, encrypted storage
 
 ## Best Practices Followed
 
@@ -259,9 +316,9 @@ export class ProjectXInfrastructureStack extends cdk.Stack {
 4. **Code Quality**: Clean, well-commented TypeScript code
 5. **Current APIs**: No deprecated CDK APIs used
 6. **Documentation**: Clear comments explaining architectural decisions
-7. **Monitoring**: Comprehensive CloudWatch alarms
-8. **Tagging**: Proper resource tagging for cost management
-9. **Output Values**: Important resource information exposed
+7. **Comprehensive Monitoring**: 3 CloudWatch alarms for different metrics
+8. **Data Encryption**: EBS volumes encrypted with modern GP3 type
+9. **Access Control**: SSH restricted to office network only
 10. **Environment Support**: Configurable for multiple environments
 
 ## Deployment Commands
@@ -293,15 +350,20 @@ After deployment:
 5. **Validate Scaling**: Test CPU-based auto-scaling functionality
 6. **Check Tags**: Verify all resources have proper tags
 7. **Review Outputs**: Confirm all output values are available
+8. **Test SSH Access**: Verify SSH is restricted to office network only
+9. **Check Encryption**: Verify EBS volumes are encrypted
+10. **Monitor CloudWatch**: Check alarms are properly configured
 
 ## Architecture Benefits
 
 - **Scalability**: Auto-scaling based on CPU utilization
 - **Reliability**: Multi-AZ deployment with health checks
-- **Security**: Least privilege access with proper IAM roles
-- **Monitoring**: Comprehensive CloudWatch alarms
+- **Security**: Least privilege access with proper IAM roles and restricted SSH
+- **Monitoring**: Comprehensive CloudWatch alarms for multiple metrics
 - **Maintainability**: Clean, well-documented CDK code
 - **Cost Optimization**: Proper resource sizing and tagging
 - **Future-Proof**: Uses current CDK APIs only
+- **Data Protection**: Encrypted EBS volumes with modern GP3 type
+- **Access Control**: SSH restricted to office network for enhanced security
 
 This implementation provides a production-ready, secure, and scalable AWS infrastructure that meets all specified requirements while following enterprise-grade best practices and using only current CDK APIs.

@@ -2,21 +2,17 @@ import * as cdk from 'aws-cdk-lib';
 import { Template } from 'aws-cdk-lib/assertions';
 import { ProjectXInfrastructureStack } from '../lib/tap-stack';
 
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-
 describe('ProjectXInfrastructureStack', () => {
   let app: cdk.App;
   let stack: ProjectXInfrastructureStack;
   let template: Template;
+  const environmentSuffix = 'test';
 
   beforeEach(() => {
     app = new cdk.App();
     stack = new ProjectXInfrastructureStack(app, 'TestProjectXStack', {
       description: `ProjectX Infrastructure Stack - ${environmentSuffix}`,
-      env: {
-        account: '123456789012',
-        region: 'us-west-2',
-      },
+      env: { account: '123456789012', region: 'us-west-2' },
     });
     template = Template.fromStack(stack);
   });
@@ -35,6 +31,10 @@ describe('ProjectXInfrastructureStack', () => {
         MapPublicIpOnLaunch: true,
       });
     });
+
+    test('should create internet gateway', () => {
+      template.hasResourceProperties('AWS::EC2::InternetGateway', {});
+    });
   });
 
   describe('Security Group Resources', () => {
@@ -42,6 +42,36 @@ describe('ProjectXInfrastructureStack', () => {
       template.hasResourceProperties('AWS::EC2::SecurityGroup', {
         GroupDescription: 'Security group for ProjectX web servers allowing HTTP/HTTPS traffic',
         GroupName: 'projectX-web-server-sg',
+        SecurityGroupIngress: [
+          {
+            CidrIp: '0.0.0.0/0',
+            FromPort: 80,
+            ToPort: 80,
+            IpProtocol: 'tcp',
+            Description: 'Allow HTTP traffic from internet',
+          },
+          {
+            CidrIp: '0.0.0.0/0',
+            FromPort: 443,
+            ToPort: 443,
+            IpProtocol: 'tcp',
+            Description: 'Allow HTTPS traffic from internet',
+          },
+          {
+            CidrIp: '10.0.0.0/8', // Office network only
+            FromPort: 22,
+            ToPort: 22,
+            IpProtocol: 'tcp',
+            Description: 'Allow SSH from office network only',
+          },
+        ],
+        SecurityGroupEgress: [
+          {
+            CidrIp: '0.0.0.0/0',
+            IpProtocol: '-1',
+            Description: 'Allow all outbound traffic by default',
+          },
+        ],
       });
     });
   });
@@ -53,6 +83,31 @@ describe('ProjectXInfrastructureStack', () => {
         MinSize: '2',
         MaxSize: '6',
         DesiredCapacity: '2',
+        HealthCheckType: 'EC2',
+        Tags: [
+          {
+            Key: 'Name',
+            Value: 'projectX-asg',
+            PropagateAtLaunch: true,
+          },
+          {
+            Key: 'Project',
+            Value: 'ProjectX',
+            PropagateAtLaunch: true,
+          },
+        ],
+      });
+    });
+
+    test('should create scaling policy', () => {
+      template.hasResourceProperties('AWS::AutoScaling::ScalingPolicy', {
+        PolicyType: 'TargetTrackingScaling',
+        TargetTrackingConfiguration: {
+          PredefinedMetricSpecification: {
+            PredefinedMetricType: 'ASGAverageCPUUtilization',
+          },
+          TargetValue: 70,
+        },
       });
     });
   });
@@ -71,6 +126,147 @@ describe('ProjectXInfrastructureStack', () => {
               },
             },
           ],
+        },
+        ManagedPolicyArns: [
+          {
+            'Fn::Join': [
+              '',
+              [
+                'arn:',
+                { Ref: 'AWS::Partition' },
+                ':iam::aws:policy/AmazonSSMManagedInstanceCore',
+              ],
+            ],
+          },
+          {
+            'Fn::Join': [
+              '',
+              [
+                'arn:',
+                { Ref: 'AWS::Partition' },
+                ':iam::aws:policy/CloudWatchAgentServerPolicy',
+              ],
+            ],
+          },
+        ],
+      });
+    });
+
+    test('should create instance profile', () => {
+      template.hasResourceProperties('AWS::IAM::InstanceProfile', {
+        InstanceProfileName: 'projectX-instance-profile',
+      });
+    });
+  });
+
+  describe('Launch Template Resources', () => {
+    test('should create launch template with correct configuration', () => {
+      template.hasResourceProperties('AWS::EC2::LaunchTemplate', {
+        LaunchTemplateName: 'projectX-launch-template',
+        LaunchTemplateData: {
+          InstanceType: 't3.micro',
+          Monitoring: {
+            Enabled: true,
+          },
+          BlockDeviceMappings: [
+            {
+              DeviceName: '/dev/xvda',
+              Ebs: {
+                Encrypted: true,
+                DeleteOnTermination: true,
+                VolumeType: 'gp3',
+                VolumeSize: 20,
+              },
+            },
+          ],
+        },
+      });
+    });
+  });
+
+  describe('CloudWatch Alarms', () => {
+    test('should create CPU utilization alarm', () => {
+      template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+        MetricName: 'CPUUtilization',
+        Namespace: 'AWS/AutoScaling',
+        Threshold: 80,
+        EvaluationPeriods: 2,
+        AlarmDescription: 'ProjectX Auto Scaling Group CPU utilization is high',
+      });
+    });
+
+    test('should create instance count alarm', () => {
+      template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+        MetricName: 'GroupDesiredCapacity',
+        Namespace: 'AWS/AutoScaling',
+        Threshold: 4,
+        EvaluationPeriods: 2,
+        AlarmDescription: 'ProjectX Auto Scaling Group instance count is high',
+      });
+    });
+
+    test('should create healthy host count alarm', () => {
+      template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+        MetricName: 'GroupInServiceInstances',
+        Namespace: 'AWS/AutoScaling',
+        Threshold: 1,
+        EvaluationPeriods: 2,
+        AlarmDescription: 'ProjectX Auto Scaling Group healthy host count is low',
+      });
+    });
+  });
+
+  describe('Output Values', () => {
+    test('should export VPC ID', () => {
+      template.hasOutput('VpcId', {
+        Description: 'VPC ID for ProjectX infrastructure',
+        Export: {
+          Name: 'ProjectX-VpcId',
+        },
+      });
+    });
+
+    test('should export VPC CIDR', () => {
+      template.hasOutput('VpcCidr', {
+        Description: 'VPC CIDR block',
+        Export: {
+          Name: 'ProjectX-VpcCidr',
+        },
+      });
+    });
+
+    test('should export public subnet IDs', () => {
+      template.hasOutput('PublicSubnetIds', {
+        Description: 'Public subnet IDs across multiple AZs',
+        Export: {
+          Name: 'ProjectX-PublicSubnetIds',
+        },
+      });
+    });
+
+    test('should export security group ID', () => {
+      template.hasOutput('SecurityGroupId', {
+        Description: 'Security Group ID for web servers',
+        Export: {
+          Name: 'ProjectX-SecurityGroupId',
+        },
+      });
+    });
+
+    test('should export Auto Scaling Group name', () => {
+      template.hasOutput('AutoScalingGroupName', {
+        Description: 'Auto Scaling Group name',
+        Export: {
+          Name: 'ProjectX-AutoScalingGroupName',
+        },
+      });
+    });
+
+    test('should export availability zones', () => {
+      template.hasOutput('AvailabilityZones', {
+        Description: 'Availability Zones used by the infrastructure',
+        Export: {
+          Name: 'ProjectX-AvailabilityZones',
         },
       });
     });
