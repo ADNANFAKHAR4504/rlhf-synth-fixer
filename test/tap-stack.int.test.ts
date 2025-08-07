@@ -231,7 +231,7 @@ describe('TapStack Integration Tests', () => {
 
       const instance = response.Reservations![0].Instances![0];
       expect(instance.IamInstanceProfile).toBeDefined();
-      expect(instance.IamInstanceProfile?.Arn).toContain('ProductionSecureRole');
+      expect(instance.IamInstanceProfile?.Arn).toContain('ProductionInstance');
     });
 
     test('should have resources properly tagged', async () => {
