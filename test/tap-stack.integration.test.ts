@@ -39,11 +39,10 @@ describe('Serverless Infrastructure Integration Tests', () => {
         return;
       }
 
-      const response = await lambda
-        .getFunctionConfiguration({
-          FunctionName: USER_FUNCTION_NAME,
-        })
-        .promise();
+      const command = new GetFunctionConfigurationCommand({
+        FunctionName: USER_FUNCTION_NAME,
+      });
+      const response = await lambda.send(command);
 
       expect(response.FunctionName).toBe(USER_FUNCTION_NAME);
       expect(response.Runtime).toBe('nodejs20.x');
@@ -59,11 +58,10 @@ describe('Serverless Infrastructure Integration Tests', () => {
         return;
       }
 
-      const response = await lambda
-        .getFunctionConfiguration({
-          FunctionName: ORDER_FUNCTION_NAME,
-        })
-        .promise();
+      const command = new GetFunctionConfigurationCommand({
+        FunctionName: ORDER_FUNCTION_NAME,
+      });
+      const response = await lambda.send(command);
 
       expect(response.FunctionName).toBe(ORDER_FUNCTION_NAME);
       expect(response.Runtime).toBe('nodejs20.x');
@@ -79,11 +77,10 @@ describe('Serverless Infrastructure Integration Tests', () => {
         return;
       }
 
-      const response = await lambda
-        .getFunctionConfiguration({
-          FunctionName: SCHEDULED_FUNCTION_NAME,
-        })
-        .promise();
+      const command = new GetFunctionConfigurationCommand({
+        FunctionName: SCHEDULED_FUNCTION_NAME,
+      });
+      const response = await lambda.send(command);
 
       expect(response.FunctionName).toBe(SCHEDULED_FUNCTION_NAME);
       expect(response.Runtime).toBe('nodejs20.x');
@@ -98,11 +95,10 @@ describe('Serverless Infrastructure Integration Tests', () => {
         return;
       }
 
-      const response = await lambda
-        .getFunctionConfiguration({
-          FunctionName: USER_FUNCTION_NAME,
-        })
-        .promise();
+      const command = new GetFunctionConfigurationCommand({
+        FunctionName: USER_FUNCTION_NAME,
+      });
+      const response = await lambda.send(command);
 
       expect(response.Layers).toBeDefined();
       expect(response.Layers?.length).toBeGreaterThan(0);
@@ -137,11 +133,10 @@ describe('Serverless Infrastructure Integration Tests', () => {
       }
       const apiId = apiIdMatch[1];
 
-      const response = await apiGateway
-        .getRestApi({
-          restApiId: apiId,
-        })
-        .promise();
+      const command = new GetRestApiCommand({
+        restApiId: apiId,
+      });
+      const response = await apiGateway.send(command);
 
       expect(response.name).toContain('serverless-api');
     });
@@ -154,11 +149,10 @@ describe('Serverless Infrastructure Integration Tests', () => {
         return;
       }
 
-      const response = await eventBridge
-        .describeEventBus({
-          Name: EVENT_BUS_NAME,
-        })
-        .promise();
+      const command = new DescribeEventBusCommand({
+        Name: EVENT_BUS_NAME,
+      });
+      const response = await eventBridge.send(command);
 
       expect(response.Name).toBe(EVENT_BUS_NAME);
       expect(response.Arn).toContain(EVENT_BUS_NAME);
@@ -170,11 +164,10 @@ describe('Serverless Infrastructure Integration Tests', () => {
         return;
       }
 
-      const response = await eventBridge
-        .listRules({
-          EventBusName: EVENT_BUS_NAME,
-        })
-        .promise();
+      const command = new ListRulesCommand({
+        EventBusName: EVENT_BUS_NAME,
+      });
+      const response = await eventBridge.send(command);
 
       const orderRule = response.Rules?.find((rule) =>
         rule.Name?.includes('order-processing')
@@ -191,11 +184,10 @@ describe('Serverless Infrastructure Integration Tests', () => {
         return;
       }
 
-      const response = await scheduler
-        .getScheduleGroup({
-          Name: SCHEDULE_GROUP_NAME,
-        })
-        .promise();
+      const command = new GetScheduleGroupCommand({
+        Name: SCHEDULE_GROUP_NAME,
+      });
+      const response = await scheduler.send(command);
 
       expect(response.Name).toBe(SCHEDULE_GROUP_NAME);
       expect(response.State).toBe('ACTIVE');
@@ -207,12 +199,11 @@ describe('Serverless Infrastructure Integration Tests', () => {
         return;
       }
 
-      const response = await scheduler
-        .getSchedule({
-          GroupName: SCHEDULE_GROUP_NAME,
-          Name: outputs.DailyScheduleName,
-        })
-        .promise();
+      const command = new GetScheduleCommand({
+        GroupName: SCHEDULE_GROUP_NAME,
+        Name: outputs.DailyScheduleName,
+      });
+      const response = await scheduler.send(command);
 
       expect(response.Name).toBe(outputs.DailyScheduleName);
       expect(response.State).toBe('ENABLED');
@@ -226,12 +217,11 @@ describe('Serverless Infrastructure Integration Tests', () => {
         return;
       }
 
-      const response = await scheduler
-        .getSchedule({
-          GroupName: SCHEDULE_GROUP_NAME,
-          Name: outputs.HourlyScheduleName,
-        })
-        .promise();
+      const command = new GetScheduleCommand({
+        GroupName: SCHEDULE_GROUP_NAME,
+        Name: outputs.HourlyScheduleName,
+      });
+      const response = await scheduler.send(command);
 
       expect(response.Name).toBe(outputs.HourlyScheduleName);
       expect(response.State).toBe('ENABLED');
@@ -245,12 +235,11 @@ describe('Serverless Infrastructure Integration Tests', () => {
         return;
       }
 
-      const response = await scheduler
-        .getSchedule({
-          GroupName: SCHEDULE_GROUP_NAME,
-          Name: outputs.OneTimeScheduleName,
-        })
-        .promise();
+      const command = new GetScheduleCommand({
+        GroupName: SCHEDULE_GROUP_NAME,
+        Name: outputs.OneTimeScheduleName,
+      });
+      const response = await scheduler.send(command);
 
       expect(response.Name).toBe(outputs.OneTimeScheduleName);
       expect(response.State).toBe('ENABLED');
@@ -272,11 +261,10 @@ describe('Serverless Infrastructure Integration Tests', () => {
         throw new Error('Could not extract log group name from ARN');
       }
 
-      const response = await logs
-        .describeLogGroups({
-          logGroupNamePrefix: logGroupName,
-        })
-        .promise();
+      const command = new DescribeLogGroupsCommand({
+        logGroupNamePrefix: logGroupName,
+      });
+      const response = await logs.send(command);
 
       const logGroup = response.logGroups?.find((lg) => lg.logGroupName === logGroupName);
       expect(logGroup).toBeDefined();
@@ -295,11 +283,10 @@ describe('Serverless Infrastructure Integration Tests', () => {
         throw new Error('Could not extract log group name from ARN');
       }
 
-      const response = await logs
-        .describeLogGroups({
-          logGroupNamePrefix: logGroupName,
-        })
-        .promise();
+      const command = new DescribeLogGroupsCommand({
+        logGroupNamePrefix: logGroupName,
+      });
+      const response = await logs.send(command);
 
       const logGroup = response.logGroups?.find((lg) => lg.logGroupName === logGroupName);
       expect(logGroup).toBeDefined();
@@ -309,22 +296,20 @@ describe('Serverless Infrastructure Integration Tests', () => {
 
   describe('CloudWatch Metrics', () => {
     test('Custom metrics namespace exists', async () => {
-      const response = await cloudWatch
-        .listMetrics({
-          Namespace: 'ServerlessApp',
-        })
-        .promise();
+      const command = new ListMetricsCommand({
+        Namespace: 'ServerlessApp',
+      });
+      const response = await cloudWatch.send(command);
 
       // Check if namespace exists (it may not have metrics yet if functions haven't been invoked)
       expect(response).toBeDefined();
     });
 
     test('Lambda function error alarms exist', async () => {
-      const response = await cloudWatch
-        .describeAlarms({
-          AlarmNamePrefix: 'TapStack',
-        })
-        .promise();
+      const command = new DescribeAlarmsCommand({
+        AlarmNamePrefix: 'TapStack',
+      });
+      const response = await cloudWatch.send(command);
 
       // Check for function error alarms
       const userErrorAlarm = response.MetricAlarms?.find((alarm) =>
@@ -356,12 +341,11 @@ describe('Serverless Infrastructure Integration Tests', () => {
         headers: {},
       };
 
-      const response = await lambda
-        .invoke({
-          FunctionName: USER_FUNCTION_NAME,
-          Payload: JSON.stringify(payload),
-        })
-        .promise();
+      const command = new InvokeCommand({
+        FunctionName: USER_FUNCTION_NAME,
+        Payload: JSON.stringify(payload),
+      });
+      const response = await lambda.send(command);
 
       expect(response.StatusCode).toBe(200);
       
@@ -391,12 +375,11 @@ describe('Serverless Infrastructure Integration Tests', () => {
         }),
       };
 
-      const response = await lambda
-        .invoke({
-          FunctionName: ORDER_FUNCTION_NAME,
-          Payload: JSON.stringify(payload),
-        })
-        .promise();
+      const command = new InvokeCommand({
+        FunctionName: ORDER_FUNCTION_NAME,
+        Payload: JSON.stringify(payload),
+      });
+      const response = await lambda.send(command);
 
       expect(response.StatusCode).toBe(200);
     });
@@ -414,12 +397,11 @@ describe('Serverless Infrastructure Integration Tests', () => {
         scheduleArn: 'arn:aws:scheduler:us-east-1:123456789012:schedule/test',
       };
 
-      const response = await lambda
-        .invoke({
-          FunctionName: SCHEDULED_FUNCTION_NAME,
-          Payload: JSON.stringify(payload),
-        })
-        .promise();
+      const command = new InvokeCommand({
+        FunctionName: SCHEDULED_FUNCTION_NAME,
+        Payload: JSON.stringify(payload),
+      });
+      const response = await lambda.send(command);
 
       expect(response.StatusCode).toBe(200);
     });

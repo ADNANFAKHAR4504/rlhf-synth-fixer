@@ -303,7 +303,8 @@ export class ServerlessStack extends cdk.Stack {
               },
               body: JSON.stringify({
                 message: 'Order processed successfully',
-                orderData: orderData,
+                orderId: orderData.orderId,
+                customerId: orderData.customerId,
                 version: process.env.AWS_LAMBDA_FUNCTION_VERSION,
                 traceId: tracer.getRootXrayTraceId()
               })
@@ -704,7 +705,7 @@ export class ServerlessStack extends cdk.Stack {
     );
 
     // Create deployment group for user function canary deployments
-    new codedeploy.LambdaDeploymentGroup(this, 'UserDeploymentGroup', {
+    const userDeploymentGroup = new codedeploy.LambdaDeploymentGroup(this, 'UserDeploymentGroup', {
       application: codeDeployApp,
       alias: userFunctionAlias,
       deploymentConfig: codedeploy.LambdaDeploymentConfig.ALL_AT_ONCE,
@@ -717,7 +718,7 @@ export class ServerlessStack extends cdk.Stack {
     });
 
     // Create deployment group for order function canary deployments
-    new codedeploy.LambdaDeploymentGroup(this, 'OrderDeploymentGroup', {
+    const orderDeploymentGroup = new codedeploy.LambdaDeploymentGroup(this, 'OrderDeploymentGroup', {
       application: codeDeployApp,
       alias: orderFunctionAlias,
       deploymentConfig: codedeploy.LambdaDeploymentConfig.ALL_AT_ONCE,
@@ -730,7 +731,7 @@ export class ServerlessStack extends cdk.Stack {
     });
 
     // Create deployment group for scheduled function canary deployments
-    new codedeploy.LambdaDeploymentGroup(this, 'ScheduledDeploymentGroup', {
+    const scheduledDeploymentGroup = new codedeploy.LambdaDeploymentGroup(this, 'ScheduledDeploymentGroup', {
       application: codeDeployApp,
       alias: scheduledFunctionAlias,
       deploymentConfig: codedeploy.LambdaDeploymentConfig.ALL_AT_ONCE,
@@ -867,6 +868,24 @@ export class ServerlessStack extends cdk.Stack {
       value: oneTimeInitSchedule.name!,
       description: 'One-time Initialization Schedule Name',
       exportName: `onetime-schedule-${props.environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'UserDeploymentGroupName', {
+      value: userDeploymentGroup.deploymentGroupName,
+      description: 'User Lambda Deployment Group Name',
+      exportName: `user-deployment-group-${props.environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'OrderDeploymentGroupName', {
+      value: orderDeploymentGroup.deploymentGroupName,
+      description: 'Order Lambda Deployment Group Name',
+      exportName: `order-deployment-group-${props.environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'ScheduledDeploymentGroupName', {
+      value: scheduledDeploymentGroup.deploymentGroupName,
+      description: 'Scheduled Lambda Deployment Group Name',
+      exportName: `scheduled-deployment-group-${props.environmentSuffix}`,
     });
   }
 }

@@ -66,7 +66,7 @@ describe('Serverless Infrastructure Integration Tests', () => {
       const command = new GetRestApiCommand({ restApiId: apiId });
       const response = await apiGatewayClient.send(command);
       expect(response.name).toContain('serverless-api');
-      expect(response.description).toBe('Serverless API with canary deployments');
+      expect(response.description).toBe('Enhanced Serverless API with Powertools and Scheduler');
     });
 
     test('API Gateway has expected resources', async () => {
