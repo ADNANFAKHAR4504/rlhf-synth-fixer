@@ -803,29 +803,29 @@ echo 'MinProtocol = TLSv1.2' >> /etc/ssl/openssl.cnf
               opts=ResourceOptions(parent=self, provider=provider)
           )
           
-          # Config delivery channel - FIXED: aws.config instead of aws.cfg
-          config_delivery_channel = aws.config.DeliveryChannel(
+          # FIXED: Use aws.cfg with correct class names
+          config_delivery_channel = aws.cfg.DeliveryChannel(
               f"PROD-config-delivery-{region}-{self.environment_suffix}",
               s3_bucket_name=config_bucket.bucket,
               opts=ResourceOptions(parent=self, provider=provider)
           )
           
-          # Config configuration recorder - FIXED: aws.config instead of aws.cfg
-          config_recorder = aws.config.ConfigurationRecorder(
+          # FIXED: Use aws.cfg with correct class names  
+          config_recorder = aws.cfg.ConfigurationRecorder(
               f"PROD-config-recorder-{region}-{self.environment_suffix}",
               role_arn=config_role.arn,
-              recording_group=aws.config.ConfigurationRecorderRecordingGroupArgs(
+              recording_group=aws.cfg.ConfigurationRecorderRecordingGroupArgs(
                   all_supported=True,
                   include_global_resource_types=True if region == self.primary_region else False
               ),
               opts=ResourceOptions(parent=self, provider=provider, depends_on=[config_delivery_channel])
           )
           
-          # Config rules for compliance checks - FIXED: aws.config instead of aws.cfg
-          aws.config.ConfigRule(
+          # FIXED: Use aws.cfg with correct class names
+          aws.cfg.ConfigRule(
               f"PROD-encrypted-volumes-{region}-{self.environment_suffix}",
               name=f"encrypted-volumes-{region}-{self.environment_suffix}",
-              source=aws.config.ConfigRuleSourceArgs(
+              source=aws.cfg.ConfigRuleSourceArgs(
                   owner="AWS",
                   source_identifier="ENCRYPTED_VOLUMES"
               ),
@@ -833,10 +833,10 @@ echo 'MinProtocol = TLSv1.2' >> /etc/ssl/openssl.cnf
               opts=ResourceOptions(parent=self, provider=provider, depends_on=[config_recorder])
           )
           
-          aws.config.ConfigRule(
+          aws.cfg.ConfigRule(
               f"PROD-s3-bucket-ssl-requests-{region}-{self.environment_suffix}",
               name=f"s3-bucket-ssl-requests-{region}-{self.environment_suffix}",
-              source=aws.config.ConfigRuleSourceArgs(
+              source=aws.cfg.ConfigRuleSourceArgs(
                   owner="AWS",
                   source_identifier="S3_BUCKET_SSL_REQUESTS_ONLY"
               ),
