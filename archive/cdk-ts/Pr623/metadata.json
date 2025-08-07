@@ -25,5 +25,11 @@
     "@aws-sdk/client-cloudwatch": "^3.846.0",
     "@aws-sdk/client-cloudtrail": "^3.848.0",
     "markdownlint-cli": "^0.45.0"
-  }
+  },
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Hardik-2117",
+  "dockerS3Location": ""
 }
