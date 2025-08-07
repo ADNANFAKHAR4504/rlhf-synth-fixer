@@ -259,72 +259,71 @@ class TapStack(ComponentResource):
     #  CloudTrail - FIXED: Correct S3 bucket policy format
     # ------------------------------------------------------------------ #
     def _create_cloudtrail(self) -> None:
-        self.cloudtrail_bucket = aws.s3.Bucket(
-            f"prod-cloudtrail-{self.environment_suffix}-{aws.get_caller_identity().account_id}",
-            versioning=aws.s3.BucketVersioningArgs(enabled=True),
-            server_side_encryption_configuration=aws.s3.BucketServerSideEncryptionConfigurationArgs(
-                rule=aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
-                    apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
-                        sse_algorithm="aws:kms", kms_master_key_id=self.kms_key.arn
-                    ),
-                    bucket_key_enabled=True,
-                )
-            ),
-            tags=self.standard_tags,
-            opts=ResourceOptions(parent=self),
-        )
+      """Create CloudTrail for comprehensive logging."""
+      self.cloudtrail_bucket = aws.s3.Bucket(
+          f"prod-cloudtrail-{self.environment_suffix}-{aws.get_caller_identity().account_id}",
+          versioning=aws.s3.BucketVersioningArgs(enabled=True),
+          server_side_encryption_configuration=aws.s3.BucketServerSideEncryptionConfigurationArgs(
+              rule=aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
+                  apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
+                      sse_algorithm="aws:kms", kms_master_key_id=self.kms_key.arn
+                  ),
+                  bucket_key_enabled=True,
+              )
+          ),
+          tags=self.standard_tags,
+          opts=ResourceOptions(parent=self),
+      )
 
-        # FIXED: Corrected CloudTrail S3 bucket policy format
-        cloudtrail_policy = aws.s3.BucketPolicy(
-            f"PROD-cloudtrail-policy-{self.environment_suffix}",
-            bucket=self.cloudtrail_bucket.id,
-            policy=pulumi.Output.all(self.cloudtrail_bucket.arn, aws.get_caller_identity().account_id).apply(
-                lambda args: json.dumps(
-                    {
-                        "Version": "2012-10-17",
-                        "Statement": [
-                            {
-                                "Sid": "AWSCloudTrailAclCheck",
-                                "Effect": "Allow",
-                                "Principal": {"Service": "cloudtrail.amazonaws.com"},
-                                "Action": "s3:GetBucketAcl",
-                                "Resource": args[0],
-                                "Condition": {
-                                    "StringEquals": {
-                                        "AWS:SourceArn": f"arn:aws:cloudtrail:{self.primary_region}:{args[1]}:trail/PROD-cloudtrail-{self.environment_suffix}"
-                                    }
-                                }
-                            },
-                            {
-                                "Sid": "AWSCloudTrailWrite",
-                                "Effect": "Allow",
-                                "Principal": {"Service": "cloudtrail.amazonaws.com"},
-                                "Action": "s3:PutObject",
-                                "Resource": f"{args[0]}/AWSLogs/{args[1]}/*",  # FIXED: Added correct path
-                                "Condition": {
-                                    "StringEquals": {
-                                        "s3:x-amz-acl": "bucket-owner-full-control",
-                                        "AWS:SourceArn": f"arn:aws:cloudtrail:{self.primary_region}:{args[1]}:trail/PROD-cloudtrail-{self.environment_suffix}"
-                                    }
-                                }
-                            },
-                        ],
-                    }
-                )
-            ),
-            opts=ResourceOptions(parent=self),
-        )
+      # FIXED: CloudTrail bucket policy exactly as per AWS documentation
+      cloudtrail_policy = aws.s3.BucketPolicy(
+          f"PROD-cloudtrail-policy-{self.environment_suffix}",
+          bucket=self.cloudtrail_bucket.id,
+          policy=pulumi.Output.all(
+              self.cloudtrail_bucket.bucket,  # Use bucket name, not ARN
+              aws.get_caller_identity().account_id
+          ).apply(
+              lambda args: json.dumps(
+                  {
+                      "Version": "2012-10-17",
+                      "Statement": [
+                          {
+                              "Sid": "AWSCloudTrailAclCheck",
+                              "Effect": "Allow",
+                              "Principal": {"Service": "cloudtrail.amazonaws.com"},
+                              "Action": "s3:GetBucketAcl",
+                              "Resource": f"arn:aws:s3:::{args[0]}"
+                          },
+                          {
+                              "Sid": "AWSCloudTrailWrite",
+                              "Effect": "Allow",
+                              "Principal": {"Service": "cloudtrail.amazonaws.com"},
+                              "Action": "s3:PutObject",
+                              "Resource": f"arn:aws:s3:::{args[0]}/AWSLogs/{args[1]}/*",
+                              "Condition": {
+                                  "StringEquals": {
+                                      "s3:x-amz-acl": "bucket-owner-full-control"
+                                  }
+                              }
+                          }
+                      ]
+                  }
+              )
+          ),
+          opts=ResourceOptions(parent=self),
+      )
 
+      # CloudTrail creation - MUST come after bucket policy
+      aws.cloudtrail.Trail(
+          f"PROD-cloudtrail-{self.environment_suffix}",
+          s3_bucket_name=self.cloudtrail_bucket.bucket,  # Use bucket name
+          is_multi_region_trail=True,
+          enable_log_file_validation=True,
+          kms_key_id=self.kms_key.arn,
+          tags=self.standard_tags,
+          opts=ResourceOptions(parent=self, depends_on=[cloudtrail_policy]),
+      )
 
-        aws.cloudtrail.Trail(
-            f"PROD-cloudtrail-{self.environment_suffix}",
-            s3_bucket_name=self.cloudtrail_bucket.id,
-            is_multi_region_trail=True,
-            enable_log_file_validation=True,
-            kms_key_id=self.kms_key.arn,
-            tags=self.standard_tags,
-            opts=ResourceOptions(parent=self, depends_on=[cloudtrail_policy]),
-        )
 
     # ------------------------------------------------------------------ #
     #  VPC  (IPv4-only) - FIXED VPC Flow Logs Policy
