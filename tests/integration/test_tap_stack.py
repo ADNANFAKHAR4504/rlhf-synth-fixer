@@ -33,7 +33,17 @@ class TestTapStackIntegration(unittest.TestCase):
 
   def setUp(self):
     """Set up test environment"""
-    self.region = "ap-east-1"
+    # Dynamically detect region from outputs (fallback to ENV or default)
+    inferred_region = None
+
+    if "ALBDNSName" in flat_outputs:
+      # Try to extract region from the ALB DNS name
+      parts = flat_outputs["ALBDNSName"].split('.')
+      if len(parts) > 3:
+        inferred_region = parts[-4]  # e.g., us-west-2 from xyz.us-west-2.elb.amazonaws.com
+
+    # If not inferred from DNS, fallback to env or default
+    self.region = inferred_region or os.environ.get("CDK_DEFAULT_REGION", "us-east-1")
     self.outputs = flat_outputs
 
   def test_deployment_outputs_exist(self):
