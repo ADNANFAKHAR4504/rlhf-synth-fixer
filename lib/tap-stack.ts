@@ -314,14 +314,16 @@ export class TapStack extends TerraformStack {
     this.asgName = webAsg.name;
 
     // 9. Monitoring
-    const logGroup = new CloudwatchLogGroup(this, 'log-group', {
+    // No longer assigning to a variable as it's not used later
+    new CloudwatchLogGroup(this, 'log-group', {
       name: `/${id}/web-server`,
       retentionInDays: 7,
       tags: { Name: `${id}-log-group`, ...tags },
     });
 
     // CloudWatch alarm for ASG CPU Utilization
-    const asgCpuAlarm = new CloudwatchMetricAlarm(this, 'asg-cpu-alarm', {
+    // No longer assigning to a variable as it's not used later
+    new CloudwatchMetricAlarm(this, 'asg-cpu-alarm', {
       alarmName: `${id}-asg-cpu-utilization`,
       comparisonOperator: 'GreaterThanOrEqualToThreshold',
       evaluationPeriods: 2,
