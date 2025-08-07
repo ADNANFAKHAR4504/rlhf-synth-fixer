@@ -355,22 +355,26 @@ Resources:
       Runtime: python3.11
       Handler: index.lambda_handler
       Role: !GetAtt CreateItemRole.Arn
-      MemorySize:
-        !If [
-          HasMapping,
-          !FindInMap [
-            EnvironmentConfig,
-            !Ref EnvironmentSuffix,
-            LambdaMemorySize,
-          ],
-          !FindInMap [EnvironmentConfig, 'default', LambdaMemorySize],
-        ]
-      Timeout:
-        !If [
-          HasMapping,
-          !FindInMap [EnvironmentConfig, !Ref EnvironmentSuffix, LambdaTimeout],
-          !FindInMap [EnvironmentConfig, 'default', LambdaTimeout],
-        ]
+      MemorySize: !If
+        - HasMapping
+        - !FindInMap
+          - EnvironmentConfig
+          - !Ref EnvironmentSuffix
+          - LambdaMemorySize
+        - !FindInMap
+          - EnvironmentConfig
+          - default
+          - LambdaMemorySize
+      Timeout: !If
+        - HasMapping
+        - !FindInMap
+          - EnvironmentConfig
+          - !Ref EnvironmentSuffix
+          - LambdaTimeout
+        - !FindInMap
+          - EnvironmentConfig
+          - default
+          - LambdaTimeout
       VpcConfig:
         SecurityGroupIds:
           - !Ref LambdaSecurityGroup
@@ -520,22 +524,26 @@ Resources:
       Runtime: python3.11
       Handler: index.lambda_handler
       Role: !GetAtt GetItemRole.Arn
-      MemorySize:
-        !If [
-          HasMapping,
-          !FindInMap [
-            EnvironmentConfig,
-            !Ref EnvironmentSuffix,
-            LambdaMemorySize,
-          ],
-          !FindInMap [EnvironmentConfig, 'default', LambdaMemorySize],
-        ]
-      Timeout:
-        !If [
-          HasMapping,
-          !FindInMap [EnvironmentConfig, !Ref EnvironmentSuffix, LambdaTimeout],
-          !FindInMap [EnvironmentConfig, 'default', LambdaTimeout],
-        ]
+      MemorySize: !If
+        - HasMapping
+        - !FindInMap
+          - EnvironmentConfig
+          - !Ref EnvironmentSuffix
+          - LambdaMemorySize
+        - !FindInMap
+          - EnvironmentConfig
+          - default
+          - LambdaMemorySize
+      Timeout: !If
+        - HasMapping
+        - !FindInMap
+          - EnvironmentConfig
+          - !Ref EnvironmentSuffix
+          - LambdaTimeout
+        - !FindInMap
+          - EnvironmentConfig
+          - default
+          - LambdaTimeout
       VpcConfig:
         SecurityGroupIds:
           - !Ref LambdaSecurityGroup
@@ -653,22 +661,26 @@ Resources:
       Runtime: python3.11
       Handler: index.lambda_handler
       Role: !GetAtt UpdateItemRole.Arn
-      MemorySize:
-        !If [
-          HasMapping,
-          !FindInMap [
-            EnvironmentConfig,
-            !Ref EnvironmentSuffix,
-            LambdaMemorySize,
-          ],
-          !FindInMap [EnvironmentConfig, 'default', LambdaMemorySize],
-        ]
-      Timeout:
-        !If [
-          HasMapping,
-          !FindInMap [EnvironmentConfig, !Ref EnvironmentSuffix, LambdaTimeout],
-          !FindInMap [EnvironmentConfig, 'default', LambdaTimeout],
-        ]
+      MemorySize: !If
+        - HasMapping
+        - !FindInMap
+          - EnvironmentConfig
+          - !Ref EnvironmentSuffix
+          - LambdaMemorySize
+        - !FindInMap
+          - EnvironmentConfig
+          - default
+          - LambdaMemorySize
+      Timeout: !If
+        - HasMapping
+        - !FindInMap
+          - EnvironmentConfig
+          - !Ref EnvironmentSuffix
+          - LambdaTimeout
+        - !FindInMap
+          - EnvironmentConfig
+          - default
+          - LambdaTimeout
       VpcConfig:
         SecurityGroupIds:
           - !Ref LambdaSecurityGroup
@@ -852,22 +864,26 @@ Resources:
       Runtime: python3.11
       Handler: index.lambda_handler
       Role: !GetAtt DeleteItemRole.Arn
-      MemorySize:
-        !If [
-          HasMapping,
-          !FindInMap [
-            EnvironmentConfig,
-            !Ref EnvironmentSuffix,
-            LambdaMemorySize,
-          ],
-          !FindInMap [EnvironmentConfig, 'default', LambdaMemorySize],
-        ]
-      Timeout:
-        !If [
-          HasMapping,
-          !FindInMap [EnvironmentConfig, !Ref EnvironmentSuffix, LambdaTimeout],
-          !FindInMap [EnvironmentConfig, 'default', LambdaTimeout],
-        ]
+      MemorySize: !If
+        - HasMapping
+        - !FindInMap
+          - EnvironmentConfig
+          - !Ref EnvironmentSuffix
+          - LambdaMemorySize
+        - !FindInMap
+          - EnvironmentConfig
+          - default
+          - LambdaMemorySize
+      Timeout: !If
+        - HasMapping
+        - !FindInMap
+          - EnvironmentConfig
+          - !Ref EnvironmentSuffix
+          - LambdaTimeout
+        - !FindInMap
+          - EnvironmentConfig
+          - default
+          - LambdaTimeout
       VpcConfig:
         SecurityGroupIds:
           - !Ref LambdaSecurityGroup
