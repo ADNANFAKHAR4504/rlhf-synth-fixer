@@ -22,7 +22,7 @@ export class TapStack extends cdk.Stack {
     const environmentSuffix = props.environmentSuffix || 'dev';
     // Create a single domain name for the entire multi-region setup
     const domainName = `${environmentSuffix}.tap-us-east-1.turing229221.com`;
-    const zoneId = 'Z058855538KLEC04AGVPY';
+    const zoneId = 'Z0457876OLTG958Q3IXN';
     const currentRegion = this.region;
     const isPrimary = currentRegion === REGIONS.PRIMARY;
 
