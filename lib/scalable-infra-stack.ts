@@ -1,4 +1,7 @@
+import { AutoscalingGroup } from '@cdktf/provider-aws/lib/autoscaling-group';
+import { AutoscalingPolicy } from '@cdktf/provider-aws/lib/autoscaling-policy';
 import { CloudwatchLogGroup } from '@cdktf/provider-aws/lib/cloudwatch-log-group';
+import { CloudwatchMetricAlarm } from '@cdktf/provider-aws/lib/cloudwatch-metric-alarm';
 import { DataAwsAmi } from '@cdktf/provider-aws/lib/data-aws-ami';
 import { DataAwsAvailabilityZones } from '@cdktf/provider-aws/lib/data-aws-availability-zones';
 import { DbInstance } from '@cdktf/provider-aws/lib/db-instance';
@@ -11,7 +14,10 @@ import { IamPolicy } from '@cdktf/provider-aws/lib/iam-policy';
 import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
 import { IamRolePolicyAttachment } from '@cdktf/provider-aws/lib/iam-role-policy-attachment';
 import { InternetGateway } from '@cdktf/provider-aws/lib/internet-gateway';
+import { LaunchTemplate } from '@cdktf/provider-aws/lib/launch-template';
 import { Lb } from '@cdktf/provider-aws/lib/lb';
+import { LbListener } from '@cdktf/provider-aws/lib/lb-listener';
+import { LbTargetGroup } from '@cdktf/provider-aws/lib/lb-target-group';
 import { NatGateway } from '@cdktf/provider-aws/lib/nat-gateway';
 import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
 import { Route } from '@cdktf/provider-aws/lib/route';
@@ -47,7 +53,7 @@ export class ScalableInfrastructure extends Construct {
       state: 'available',
     });
 
-    new DataAwsAmi(this, 'amazon-linux', {
+    const amazonLinuxAmi = new DataAwsAmi(this, 'amazon-linux', {
       provider: props.provider,
       mostRecent: true,
       owners: ['amazon'],
@@ -230,6 +236,13 @@ export class ScalableInfrastructure extends Construct {
           protocol: 'tcp',
           securityGroups: [albSecurityGroup.id],
           description: 'HTTP from ALB',
+        },
+        {
+          fromPort: 22,
+          toPort: 22,
+          protocol: 'tcp',
+          cidrBlocks: [props.allowedCidr],
+          description: 'SSH access from allowed CIDR',
         },
       ],
       egress: [
@@ -447,15 +460,19 @@ export class ScalableInfrastructure extends Construct {
     });
 
     // Instance profile for EC2 instances
-    new IamInstanceProfile(this, 'ec2-instance-profile', {
-      provider: props.provider,
-      name: `${id}-ec2-instance-profile`,
-      role: ec2Role.name,
-      tags: {
-        Name: `${id}-ec2-instance-profile`,
-        Environment: 'production',
-      },
-    });
+    const ec2InstanceProfile = new IamInstanceProfile(
+      this,
+      'ec2-instance-profile',
+      {
+        provider: props.provider,
+        name: `${id}-ec2-instance-profile`,
+        role: ec2Role.name,
+        tags: {
+          Name: `${id}-ec2-instance-profile`,
+          Environment: 'production',
+        },
+      }
+    );
 
     // S3 Bucket Policy - restrict access to EC2 role only
     new S3BucketPolicy(this, 'bucket-policy', {
@@ -605,6 +622,275 @@ export class ScalableInfrastructure extends Construct {
       },
     });
 
+    // Launch Template for Auto Scaling Group
+    const launchTemplate = new LaunchTemplate(this, 'ec2-launch-template', {
+      provider: props.provider,
+      namePrefix: `${id}-launch-template-`,
+      imageId: amazonLinuxAmi.id,
+      instanceType: 't3.micro',
+      keyName: undefined, // No key pair for security
+      vpcSecurityGroupIds: [ec2SecurityGroup.id],
+      iamInstanceProfile: {
+        name: ec2InstanceProfile.name,
+      },
+      userData: Buffer.from(
+        `#!/bin/bash
+yum update -y
+yum install -y amazon-cloudwatch-agent
+yum install -y httpd
+systemctl start httpd
+systemctl enable httpd
+echo '<h1>Hello from Auto Scaling Group Instance</h1>' > /var/www/html/index.html
+
+# Configure CloudWatch Agent for memory monitoring
+cat <<EOF > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
+{
+  "agent": {
+    "metrics_collection_interval": 60,
+    "run_as_user": "root"
+  },
+  "metrics": {
+    "namespace": "CWAgent",
+    "metrics_collected": {
+      "cpu": {
+        "measurement": [
+          "cpu_usage_idle",
+          "cpu_usage_iowait",
+          "cpu_usage_user",
+          "cpu_usage_system"
+        ],
+        "metrics_collection_interval": 60
+      },
+      "mem": {
+        "measurement": [
+          "mem_used_percent"
+        ],
+        "metrics_collection_interval": 60
+      }
+    }
+  }
+}
+EOF
+
+/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s
+`
+      ).toString('base64'),
+      tagSpecifications: [
+        {
+          resourceType: 'instance',
+          tags: {
+            Name: `${id}-asg-instance`,
+            Environment: 'production',
+          },
+        },
+      ],
+      tags: {
+        Name: `${id}-launch-template`,
+        Environment: 'production',
+      },
+    });
+
+    // Target Group for ALB
+    const targetGroup = new LbTargetGroup(this, 'alb-target-group', {
+      provider: props.provider,
+      name: `${id}-tg`,
+      port: 80,
+      protocol: 'HTTP',
+      vpcId: vpc.id,
+      healthCheck: {
+        enabled: true,
+        healthyThreshold: 2,
+        interval: 30,
+        matcher: '200',
+        path: '/',
+        port: 'traffic-port',
+        protocol: 'HTTP',
+        timeout: 5,
+        unhealthyThreshold: 2,
+      },
+      tags: {
+        Name: `${id}-target-group`,
+        Environment: 'production',
+      },
+    });
+
+    // Auto Scaling Group
+    const autoScalingGroup = new AutoscalingGroup(this, 'asg', {
+      provider: props.provider,
+      name: `${id}-asg`,
+      minSize: 3,
+      maxSize: 9,
+      desiredCapacity: 3,
+      vpcZoneIdentifier: privateSubnets.map(subnet => subnet.id),
+      launchTemplate: {
+        id: launchTemplate.id,
+        version: '$Latest',
+      },
+      targetGroupArns: [targetGroup.arn],
+      healthCheckType: 'ELB',
+      healthCheckGracePeriod: 300,
+      tag: [
+        {
+          key: 'Name',
+          value: `${id}-asg`,
+          propagateAtLaunch: false,
+        },
+        {
+          key: 'Environment',
+          value: 'production',
+          propagateAtLaunch: true,
+        },
+      ],
+    });
+
+    // Auto Scaling Policy - Scale Out (CPU)
+    const scaleOutPolicyCpu = new AutoscalingPolicy(
+      this,
+      'scale-out-policy-cpu',
+      {
+        provider: props.provider,
+        name: `${id}-scale-out-cpu`,
+        scalingAdjustment: 1,
+        adjustmentType: 'ChangeInCapacity',
+        cooldown: 300,
+        autoscalingGroupName: autoScalingGroup.name,
+        policyType: 'SimpleScaling',
+      }
+    );
+
+    // Auto Scaling Policy - Scale In (CPU)
+    const scaleInPolicyCpu = new AutoscalingPolicy(
+      this,
+      'scale-in-policy-cpu',
+      {
+        provider: props.provider,
+        name: `${id}-scale-in-cpu`,
+        scalingAdjustment: -1,
+        adjustmentType: 'ChangeInCapacity',
+        cooldown: 300,
+        autoscalingGroupName: autoScalingGroup.name,
+        policyType: 'SimpleScaling',
+      }
+    );
+
+    // Auto Scaling Policy - Scale Out (Memory)
+    const scaleOutPolicyMemory = new AutoscalingPolicy(
+      this,
+      'scale-out-policy-memory',
+      {
+        provider: props.provider,
+        name: `${id}-scale-out-memory`,
+        scalingAdjustment: 1,
+        adjustmentType: 'ChangeInCapacity',
+        cooldown: 300,
+        autoscalingGroupName: autoScalingGroup.name,
+        policyType: 'SimpleScaling',
+      }
+    );
+
+    // Auto Scaling Policy - Scale In (Memory)
+    const scaleInPolicyMemory = new AutoscalingPolicy(
+      this,
+      'scale-in-policy-memory',
+      {
+        provider: props.provider,
+        name: `${id}-scale-in-memory`,
+        scalingAdjustment: -1,
+        adjustmentType: 'ChangeInCapacity',
+        cooldown: 300,
+        autoscalingGroupName: autoScalingGroup.name,
+        policyType: 'SimpleScaling',
+      }
+    );
+
+    // CloudWatch Alarm - High CPU (Scale Out)
+    new CloudwatchMetricAlarm(this, 'high-cpu-alarm', {
+      provider: props.provider,
+      alarmName: `${id}-high-cpu`,
+      comparisonOperator: 'GreaterThanThreshold',
+      evaluationPeriods: 2,
+      metricName: 'CPUUtilization',
+      namespace: 'AWS/EC2',
+      period: 120,
+      statistic: 'Average',
+      threshold: 70,
+      alarmDescription: 'This metric monitors ec2 cpu utilization',
+      alarmActions: [scaleOutPolicyCpu.arn],
+      dimensions: {
+        AutoScalingGroupName: autoScalingGroup.name,
+      },
+      tags: {
+        Name: `${id}-high-cpu-alarm`,
+        Environment: 'production',
+      },
+    });
+
+    // CloudWatch Alarm - Low CPU (Scale In)
+    new CloudwatchMetricAlarm(this, 'low-cpu-alarm', {
+      provider: props.provider,
+      alarmName: `${id}-low-cpu`,
+      comparisonOperator: 'LessThanThreshold',
+      evaluationPeriods: 2,
+      metricName: 'CPUUtilization',
+      namespace: 'AWS/EC2',
+      period: 120,
+      statistic: 'Average',
+      threshold: 30,
+      alarmDescription: 'This metric monitors ec2 cpu utilization',
+      alarmActions: [scaleInPolicyCpu.arn],
+      dimensions: {
+        AutoScalingGroupName: autoScalingGroup.name,
+      },
+      tags: {
+        Name: `${id}-low-cpu-alarm`,
+        Environment: 'production',
+      },
+    });
+
+    // CloudWatch Alarm - High Memory (Scale Out)
+    new CloudwatchMetricAlarm(this, 'high-memory-alarm', {
+      provider: props.provider,
+      alarmName: `${id}-high-memory`,
+      comparisonOperator: 'GreaterThanThreshold',
+      evaluationPeriods: 2,
+      metricName: 'mem_used_percent',
+      namespace: 'CWAgent',
+      period: 120,
+      statistic: 'Average',
+      threshold: 80,
+      alarmDescription: 'This metric monitors ec2 memory utilization',
+      alarmActions: [scaleOutPolicyMemory.arn],
+      dimensions: {
+        AutoScalingGroupName: autoScalingGroup.name,
+      },
+      tags: {
+        Name: `${id}-high-memory-alarm`,
+        Environment: 'production',
+      },
+    });
+
+    // CloudWatch Alarm - Low Memory (Scale In)
+    new CloudwatchMetricAlarm(this, 'low-memory-alarm', {
+      provider: props.provider,
+      alarmName: `${id}-low-memory`,
+      comparisonOperator: 'LessThanThreshold',
+      evaluationPeriods: 2,
+      metricName: 'mem_used_percent',
+      namespace: 'CWAgent',
+      period: 120,
+      statistic: 'Average',
+      threshold: 40,
+      alarmDescription: 'This metric monitors ec2 memory utilization',
+      alarmActions: [scaleInPolicyMemory.arn],
+      dimensions: {
+        AutoScalingGroupName: autoScalingGroup.name,
+      },
+      tags: {
+        Name: `${id}-low-memory-alarm`,
+        Environment: 'production',
+      },
+    });
+
     // Application Load Balancer
     const alb = new Lb(this, 'alb', {
       provider: props.provider,
@@ -614,6 +900,24 @@ export class ScalableInfrastructure extends Construct {
       securityGroups: [albSecurityGroup.id],
       tags: {
         Name: `${id}-alb`,
+        Environment: 'production',
+      },
+    });
+
+    // ALB Listener
+    new LbListener(this, 'alb-listener', {
+      provider: props.provider,
+      loadBalancerArn: alb.arn,
+      port: 80,
+      protocol: 'HTTP',
+      defaultAction: [
+        {
+          type: 'forward',
+          targetGroupArn: targetGroup.arn,
+        },
+      ],
+      tags: {
+        Name: `${id}-alb-listener`,
         Environment: 'production',
       },
     });
@@ -652,6 +956,21 @@ export class ScalableInfrastructure extends Construct {
       value: rdsInstance.masterUserSecret,
       description: 'RDS MySQL master password',
       sensitive: true,
+    });
+
+    new TerraformOutput(this, 'asg-name', {
+      value: autoScalingGroup.name,
+      description: 'Auto Scaling Group name',
+    });
+
+    new TerraformOutput(this, 'target-group-arn', {
+      value: targetGroup.arn,
+      description: 'Load Balancer Target Group ARN',
+    });
+
+    new TerraformOutput(this, 'launch-template-id', {
+      value: launchTemplate.id,
+      description: 'Launch Template ID',
     });
   }
 }

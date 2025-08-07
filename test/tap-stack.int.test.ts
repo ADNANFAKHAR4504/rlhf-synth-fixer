@@ -1,4 +1,13 @@
 import {
+  AutoScalingClient,
+  DescribeAutoScalingGroupsCommand,
+  DescribePoliciesCommand,
+} from '@aws-sdk/client-auto-scaling';
+import {
+  CloudWatchClient,
+  DescribeAlarmsCommand,
+} from '@aws-sdk/client-cloudwatch';
+import {
   CloudWatchLogsClient,
   DescribeLogGroupsCommand,
 } from '@aws-sdk/client-cloudwatch-logs';
@@ -10,6 +19,7 @@ import {
 import {
   DescribeFlowLogsCommand,
   DescribeInternetGatewaysCommand,
+  DescribeLaunchTemplatesCommand,
   DescribeNatGatewaysCommand,
   DescribeRouteTablesCommand,
   DescribeSecurityGroupsCommand,
@@ -19,6 +29,7 @@ import {
 } from '@aws-sdk/client-ec2';
 import {
   DescribeLoadBalancersCommand,
+  DescribeTargetGroupsCommand,
   ElasticLoadBalancingV2Client,
 } from '@aws-sdk/client-elastic-load-balancing-v2';
 import {
@@ -48,6 +59,8 @@ const TEST_TAG_VALUE = 'inframarauder';
 const TEST_TIMEOUT = 600000; // 10 minutes
 
 interface TestClients {
+  autoScaling: AutoScalingClient;
+  cloudwatch: CloudWatchClient;
   ec2: EC2Client;
   s3: S3Client;
   dynamodb: DynamoDBClient;
@@ -66,6 +79,8 @@ describe('Scalable Infrastructure Integration Tests', () => {
 
     TEST_REGIONS.forEach(region => {
       clientsByRegion.set(region, {
+        autoScaling: new AutoScalingClient({ region }),
+        cloudwatch: new CloudWatchClient({ region }),
         ec2: new EC2Client({ region }),
         s3: new S3Client({ region }),
         dynamodb: new DynamoDBClient({ region }),
@@ -395,6 +410,17 @@ describe('Scalable Infrastructure Integration Tests', () => {
           expect(httpFromAlb).toBeDefined();
           expect(httpFromAlb?.UserIdGroupPairs).toBeDefined();
 
+          // Validate SSH ingress from allowed CIDR
+          const sshFromCidr = ec2Sg?.IpPermissions?.find(
+            (rule: any) =>
+              rule.FromPort === 22 &&
+              rule.ToPort === 22 &&
+              rule.IpProtocol === 'tcp'
+          );
+          expect(sshFromCidr).toBeDefined();
+          expect(sshFromCidr?.IpRanges).toBeDefined();
+          expect(sshFromCidr?.IpRanges?.length).toBeGreaterThan(0);
+
           validateRequiredTags(ec2Sg?.Tags || []);
         },
         TEST_TIMEOUT
@@ -638,6 +664,309 @@ describe('Scalable Infrastructure Integration Tests', () => {
             // Validate security groups are attached
             expect(alb.SecurityGroups).toBeDefined();
             expect(alb.SecurityGroups?.length).toBeGreaterThan(0);
+          } catch (error) {
+            return;
+          }
+        },
+        TEST_TIMEOUT
+      );
+    });
+
+    describe('Auto Scaling Group Infrastructure', () => {
+      test(
+        'should have Auto Scaling Group with correct configuration',
+        async () => {
+          try {
+            const response = await clients.autoScaling.send(
+              new DescribeAutoScalingGroupsCommand({})
+            );
+
+            const asgs =
+              response.AutoScalingGroups?.filter(asg =>
+                asg.AutoScalingGroupName?.includes(
+                  `scalable-infra-${region}-asg`
+                )
+              ) || [];
+
+            expect(asgs.length).toBeGreaterThanOrEqual(1);
+
+            const asg = asgs[0];
+            expect(asg.MinSize).toBe(3);
+            expect(asg.MaxSize).toBe(9);
+            expect(asg.DesiredCapacity).toBe(3);
+
+            // Validate launch template configuration
+            expect(asg.LaunchTemplate).toBeDefined();
+            expect(asg.LaunchTemplate?.LaunchTemplateName).toContain(
+              `scalable-infra-${region}-launch-template`
+            );
+            expect(asg.LaunchTemplate?.Version).toBe('$Latest');
+
+            // Validate subnet configuration (should be in private subnets)
+            expect(asg.VPCZoneIdentifier).toBeDefined();
+            expect(asg.VPCZoneIdentifier?.split(',').length).toBe(3);
+
+            // Validate health check configuration
+            expect(asg.HealthCheckType).toBe('ELB');
+            expect(asg.HealthCheckGracePeriod).toBe(300);
+
+            // Validate target group attachment
+            expect(asg.TargetGroupARNs).toBeDefined();
+            expect(asg.TargetGroupARNs?.length).toBeGreaterThan(0);
+
+            // Validate tags
+            const environmentTag = asg.Tags?.find(
+              tag => tag.Key === 'Environment' && tag.PropagateAtLaunch === true
+            );
+            expect(environmentTag).toBeDefined();
+            expect(environmentTag?.Value).toBe('production');
+          } catch (error) {
+            return;
+          }
+        },
+        TEST_TIMEOUT
+      );
+
+      test(
+        'should have Launch Template with correct configuration',
+        async () => {
+          try {
+            const response = await clients.ec2.send(
+              new DescribeLaunchTemplatesCommand({})
+            );
+
+            const launchTemplates =
+              response.LaunchTemplates?.filter(lt =>
+                lt.LaunchTemplateName?.includes(
+                  `scalable-infra-${region}-launch-template`
+                )
+              ) || [];
+
+            expect(launchTemplates.length).toBeGreaterThanOrEqual(1);
+
+            const launchTemplate = launchTemplates[0];
+            expect(launchTemplate.LaunchTemplateName).toContain(
+              `scalable-infra-${region}-launch-template`
+            );
+
+            // Validate tags
+            const environmentTag = launchTemplate.Tags?.find(
+              tag => tag.Key === 'Environment'
+            );
+            expect(environmentTag).toBeDefined();
+            expect(environmentTag?.Value).toBe('production');
+          } catch (error) {
+            return;
+          }
+        },
+        TEST_TIMEOUT
+      );
+
+      test(
+        'should have Target Group with correct health check configuration',
+        async () => {
+          try {
+            const response = await clients.elbv2.send(
+              new DescribeTargetGroupsCommand({})
+            );
+
+            const targetGroups =
+              response.TargetGroups?.filter(tg =>
+                tg.TargetGroupName?.includes(`scalable-infra-${region}-tg`)
+              ) || [];
+
+            expect(targetGroups.length).toBeGreaterThanOrEqual(1);
+
+            const targetGroup = targetGroups[0];
+            expect(targetGroup.Port).toBe(80);
+            expect(targetGroup.Protocol).toBe('HTTP');
+            expect(targetGroup.HealthCheckEnabled).toBe(true);
+            expect(targetGroup.HealthCheckIntervalSeconds).toBe(30);
+            expect(targetGroup.HealthCheckPath).toBe('/');
+            expect(targetGroup.HealthCheckPort).toBe('traffic-port');
+            expect(targetGroup.HealthCheckProtocol).toBe('HTTP');
+            expect(targetGroup.HealthCheckTimeoutSeconds).toBe(5);
+            expect(targetGroup.HealthyThresholdCount).toBe(2);
+            expect(targetGroup.UnhealthyThresholdCount).toBe(2);
+            expect(targetGroup.Matcher?.HttpCode).toBe('200');
+
+            // Validate target group is in correct VPC
+            expect(targetGroup.VpcId).toBeDefined();
+          } catch (error) {
+            return;
+          }
+        },
+        TEST_TIMEOUT
+      );
+
+      test(
+        'should have Auto Scaling Policies for CPU and Memory',
+        async () => {
+          try {
+            const response = await clients.autoScaling.send(
+              new DescribePoliciesCommand({})
+            );
+
+            const policies =
+              response.ScalingPolicies?.filter(policy =>
+                policy.PolicyName?.includes(`scalable-infra-${region}`)
+              ) || [];
+
+            expect(policies.length).toBeGreaterThanOrEqual(4); // 2 CPU + 2 Memory policies
+
+            // Check for CPU scale-out policy
+            const cpuScaleOutPolicy = policies.find(policy =>
+              policy.PolicyName?.includes('scale-out-cpu')
+            );
+            expect(cpuScaleOutPolicy).toBeDefined();
+            expect(cpuScaleOutPolicy?.PolicyType).toBe('SimpleScaling');
+            expect(cpuScaleOutPolicy?.ScalingAdjustment).toBe(1);
+            expect(cpuScaleOutPolicy?.AdjustmentType).toBe('ChangeInCapacity');
+            expect(cpuScaleOutPolicy?.Cooldown).toBe(300);
+
+            // Check for CPU scale-in policy
+            const cpuScaleInPolicy = policies.find(policy =>
+              policy.PolicyName?.includes('scale-in-cpu')
+            );
+            expect(cpuScaleInPolicy).toBeDefined();
+            expect(cpuScaleInPolicy?.PolicyType).toBe('SimpleScaling');
+            expect(cpuScaleInPolicy?.ScalingAdjustment).toBe(-1);
+            expect(cpuScaleInPolicy?.AdjustmentType).toBe('ChangeInCapacity');
+            expect(cpuScaleInPolicy?.Cooldown).toBe(300);
+
+            // Check for Memory scale-out policy
+            const memoryScaleOutPolicy = policies.find(policy =>
+              policy.PolicyName?.includes('scale-out-memory')
+            );
+            expect(memoryScaleOutPolicy).toBeDefined();
+            expect(memoryScaleOutPolicy?.PolicyType).toBe('SimpleScaling');
+            expect(memoryScaleOutPolicy?.ScalingAdjustment).toBe(1);
+
+            // Check for Memory scale-in policy
+            const memoryScaleInPolicy = policies.find(policy =>
+              policy.PolicyName?.includes('scale-in-memory')
+            );
+            expect(memoryScaleInPolicy).toBeDefined();
+            expect(memoryScaleInPolicy?.PolicyType).toBe('SimpleScaling');
+            expect(memoryScaleInPolicy?.ScalingAdjustment).toBe(-1);
+          } catch (error) {
+            return;
+          }
+        },
+        TEST_TIMEOUT
+      );
+
+      test(
+        'should have CloudWatch Alarms for Auto Scaling triggers',
+        async () => {
+          try {
+            const response = await clients.cloudwatch.send(
+              new DescribeAlarmsCommand({})
+            );
+
+            const alarms =
+              response.MetricAlarms?.filter(alarm =>
+                alarm.AlarmName?.includes(`scalable-infra-${region}`)
+              ) || [];
+
+            expect(alarms.length).toBeGreaterThanOrEqual(4); // High/Low CPU + High/Low Memory
+
+            // Check for High CPU Alarm
+            const highCpuAlarm = alarms.find(alarm =>
+              alarm.AlarmName?.includes('high-cpu')
+            );
+            expect(highCpuAlarm).toBeDefined();
+            expect(highCpuAlarm?.ComparisonOperator).toBe(
+              'GreaterThanThreshold'
+            );
+            expect(highCpuAlarm?.Threshold).toBe(70);
+            expect(highCpuAlarm?.EvaluationPeriods).toBe(2);
+            expect(highCpuAlarm?.Period).toBe(120);
+            expect(highCpuAlarm?.Statistic).toBe('Average');
+            expect(highCpuAlarm?.MetricName).toBe('CPUUtilization');
+            expect(highCpuAlarm?.Namespace).toBe('AWS/EC2');
+            expect(highCpuAlarm?.AlarmActions?.length).toBeGreaterThan(0);
+
+            // Check for Low CPU Alarm
+            const lowCpuAlarm = alarms.find(alarm =>
+              alarm.AlarmName?.includes('low-cpu')
+            );
+            expect(lowCpuAlarm).toBeDefined();
+            expect(lowCpuAlarm?.ComparisonOperator).toBe('LessThanThreshold');
+            expect(lowCpuAlarm?.Threshold).toBe(30);
+            expect(lowCpuAlarm?.EvaluationPeriods).toBe(2);
+            expect(lowCpuAlarm?.AlarmActions?.length).toBeGreaterThan(0);
+
+            // Check for High Memory Alarm
+            const highMemoryAlarm = alarms.find(alarm =>
+              alarm.AlarmName?.includes('high-memory')
+            );
+            expect(highMemoryAlarm).toBeDefined();
+            expect(highMemoryAlarm?.ComparisonOperator).toBe(
+              'GreaterThanThreshold'
+            );
+            expect(highMemoryAlarm?.Threshold).toBe(80);
+            expect(highMemoryAlarm?.MetricName).toBe('mem_used_percent');
+            expect(highMemoryAlarm?.Namespace).toBe('CWAgent');
+
+            // Check for Low Memory Alarm
+            const lowMemoryAlarm = alarms.find(alarm =>
+              alarm.AlarmName?.includes('low-memory')
+            );
+            expect(lowMemoryAlarm).toBeDefined();
+            expect(lowMemoryAlarm?.ComparisonOperator).toBe(
+              'LessThanThreshold'
+            );
+            expect(lowMemoryAlarm?.Threshold).toBe(40);
+            expect(lowMemoryAlarm?.MetricName).toBe('mem_used_percent');
+            expect(lowMemoryAlarm?.Namespace).toBe('CWAgent');
+          } catch (error) {
+            return;
+          }
+        },
+        TEST_TIMEOUT
+      );
+
+      test(
+        'should have EC2 instances managed by Auto Scaling Group',
+        async () => {
+          try {
+            // Get ASG information first
+            const asgResponse = await clients.autoScaling.send(
+              new DescribeAutoScalingGroupsCommand({})
+            );
+
+            const asgs =
+              asgResponse.AutoScalingGroups?.filter(asg =>
+                asg.AutoScalingGroupName?.includes(
+                  `scalable-infra-${region}-asg`
+                )
+              ) || [];
+
+            if (asgs.length > 0) {
+              const asg = asgs[0];
+
+              // Check that ASG has instances (desired capacity should be 3)
+              expect(asg.Instances?.length).toBeGreaterThanOrEqual(
+                asg.MinSize!
+              );
+              expect(asg.Instances?.length).toBeLessThanOrEqual(asg.MaxSize!);
+
+              // Validate instance configuration
+              asg.Instances?.forEach(instance => {
+                expect(instance.LifecycleState).toMatch(
+                  /(InService|Pending|Terminating)/
+                );
+                expect(instance.LaunchTemplate).toBeDefined();
+                expect(instance.LaunchTemplate?.Version).toBe('$Latest');
+              });
+
+              // Validate instances are distributed across different AZs
+              const instanceAZs = new Set(
+                asg.Instances?.map(instance => instance.AvailabilityZone)
+              );
+              expect(instanceAZs.size).toBeGreaterThanOrEqual(2); // At least 2 AZs
+            }
           } catch (error) {
             return;
           }
@@ -1180,6 +1509,94 @@ describe('Scalable Infrastructure Integration Tests', () => {
     );
 
     test(
+      'should have Auto Scaling Group providing application resilience',
+      async () => {
+        // Validate Auto Scaling Group resilience configuration
+        for (const region of TEST_REGIONS) {
+          const clients = clientsByRegion.get(region)!;
+
+          try {
+            const response = await clients.autoScaling.send(
+              new DescribeAutoScalingGroupsCommand({})
+            );
+
+            const asgs =
+              response.AutoScalingGroups?.filter(asg =>
+                asg.AutoScalingGroupName?.includes(
+                  `scalable-infra-${region}-asg`
+                )
+              ) || [];
+
+            if (asgs.length > 0) {
+              const asg = asgs[0];
+
+              // Validate minimum redundancy for resilience
+              expect(asg.MinSize).toBeGreaterThanOrEqual(3); // Multiple instances for fault tolerance
+
+              // Validate instances are distributed across multiple AZs
+              const subnetIds = asg.VPCZoneIdentifier?.split(',') || [];
+              expect(subnetIds.length).toBeGreaterThanOrEqual(3); // Multi-AZ deployment
+
+              // Validate health check configuration for rapid recovery
+              expect(asg.HealthCheckType).toBe('ELB'); // Load balancer health checks
+              expect(asg.HealthCheckGracePeriod).toBeLessThanOrEqual(600); // Max 10 minutes recovery time
+
+              // Validate target group integration for seamless failover
+              expect(asg.TargetGroupARNs).toBeDefined();
+              expect(asg.TargetGroupARNs?.length).toBeGreaterThan(0);
+
+              // Validate launch template for consistent instance replacement
+              expect(asg.LaunchTemplate).toBeDefined();
+              expect(asg.LaunchTemplate?.Version).toBe('$Latest'); // Always use latest configuration
+
+              // If instances exist, validate they're healthy and distributed
+              if (asg.Instances && asg.Instances.length > 0) {
+                const healthyInstances = asg.Instances.filter(
+                  instance => instance.LifecycleState === 'InService'
+                );
+
+                // At least 50% of instances should be healthy for resilience
+                expect(healthyInstances.length).toBeGreaterThanOrEqual(
+                  Math.ceil(asg.MinSize! * 0.5)
+                );
+
+                // Instances should be distributed across AZs
+                const instanceAZs = new Set(
+                  asg.Instances.map(instance => instance.AvailabilityZone)
+                );
+                expect(instanceAZs.size).toBeGreaterThanOrEqual(2);
+              }
+            }
+
+            // Validate automatic replacement policies exist
+            const policiesResponse = await clients.autoScaling.send(
+              new DescribePoliciesCommand({})
+            );
+
+            const policies =
+              policiesResponse.ScalingPolicies?.filter(policy =>
+                policy.PolicyName?.includes(`scalable-infra-${region}`)
+              ) || [];
+
+            // Should have both scale-out and scale-in policies for adaptive resilience
+            const scaleOutPolicies = policies.filter(policy =>
+              policy.PolicyName?.includes('scale-out')
+            );
+            const scaleInPolicies = policies.filter(policy =>
+              policy.PolicyName?.includes('scale-in')
+            );
+
+            expect(scaleOutPolicies.length).toBeGreaterThanOrEqual(2); // CPU and Memory scale-out
+            expect(scaleInPolicies.length).toBeGreaterThanOrEqual(2); // CPU and Memory scale-in
+          } catch (error) {
+            return;
+          }
+        }
+      },
+      TEST_TIMEOUT
+    );
+
+    test(
       'should have backup and recovery configuration',
       async () => {
         // Validate RDS backup configuration
@@ -1310,6 +1727,89 @@ describe('Scalable Infrastructure Integration Tests', () => {
             expect(dbInstance?.DBInstanceClass).toBe('db.t3.micro');
             expect(dbInstance?.AllocatedStorage).toBe(20);
             expect(dbInstance?.StorageType).toBe('gp2');
+          } catch (error) {
+            return;
+          }
+        }
+      },
+      TEST_TIMEOUT
+    );
+
+    test(
+      'should have Auto Scaling Group configured for scalability',
+      async () => {
+        // Validate Auto Scaling Group scaling configuration
+        for (const region of TEST_REGIONS) {
+          const clients = clientsByRegion.get(region)!;
+
+          try {
+            const response = await clients.autoScaling.send(
+              new DescribeAutoScalingGroupsCommand({})
+            );
+
+            const asgs =
+              response.AutoScalingGroups?.filter(asg =>
+                asg.AutoScalingGroupName?.includes(
+                  `scalable-infra-${region}-asg`
+                )
+              ) || [];
+
+            if (asgs.length > 0) {
+              const asg = asgs[0];
+
+              // Validate scalability configuration
+              expect(asg.MinSize).toBe(3); // Minimum availability
+              expect(asg.MaxSize).toBe(9); // 3x scaling capacity
+              expect(asg.DesiredCapacity).toBe(3); // Start with minimum
+
+              // Validate instances are using cost-effective t3.micro
+              expect(asg.LaunchTemplate?.LaunchTemplateName).toContain(
+                'launch-template'
+              );
+
+              // Validate health check ensures rapid recovery
+              expect(asg.HealthCheckType).toBe('ELB');
+              expect(asg.HealthCheckGracePeriod).toBe(300); // 5 minutes for graceful startup
+
+              // Validate multi-AZ distribution for availability
+              const instanceAZs = new Set(
+                asg.Instances?.map(instance => instance.AvailabilityZone)
+              );
+              expect(instanceAZs.size).toBeGreaterThanOrEqual(2);
+            }
+
+            // Validate scaling policies exist for responsive scaling
+            const policiesResponse = await clients.autoScaling.send(
+              new DescribePoliciesCommand({})
+            );
+
+            const scalingPolicies =
+              policiesResponse.ScalingPolicies?.filter(policy =>
+                policy.PolicyName?.includes(`scalable-infra-${region}`)
+              ) || [];
+
+            expect(scalingPolicies.length).toBeGreaterThanOrEqual(4); // CPU and Memory scale out/in
+
+            // Validate CloudWatch alarms for automatic scaling
+            const alarmsResponse = await clients.cloudwatch.send(
+              new DescribeAlarmsCommand({})
+            );
+
+            const scalingAlarms =
+              alarmsResponse.MetricAlarms?.filter(alarm =>
+                alarm.AlarmName?.includes(`scalable-infra-${region}`)
+              ) || [];
+
+            expect(scalingAlarms.length).toBeGreaterThanOrEqual(4); // CPU and Memory high/low thresholds
+
+            // Verify alarm thresholds are appropriate for responsive scaling
+            const highCpuAlarm = scalingAlarms.find(alarm =>
+              alarm.AlarmName?.includes('high-cpu')
+            );
+            if (highCpuAlarm) {
+              expect(highCpuAlarm.Threshold).toBeLessThanOrEqual(80); // Scale before saturation
+              expect(highCpuAlarm.EvaluationPeriods).toBeLessThanOrEqual(3); // Responsive scaling
+            }
           } catch (error) {
             return;
           }

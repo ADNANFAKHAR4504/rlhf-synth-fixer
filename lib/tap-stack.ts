@@ -63,7 +63,7 @@ export class TapStack extends TerraformStack {
       }
       const localIp = getLocalIp();
 
-      const dbUsername = 'ozzyosbourne'; // Fixed username for demonstration
+      const dbUsername = process.env.DATABASE_USERNAME || 'ozzyosbourne'; // Fixed username for demonstration
 
       new ScalableInfrastructure(this, `scalable-infra-${region}`, {
         provider: awsProvider,
