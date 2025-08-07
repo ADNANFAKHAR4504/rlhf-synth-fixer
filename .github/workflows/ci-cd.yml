@@ -54,6 +54,14 @@ jobs:
           PLATFORM=$(jq -r '.platform // "unknown"' metadata.json)
           LANGUAGE=$(jq -r '.language // "unknown"' metadata.json)
           PO_ID=$(jq -r '.po_id // empty' metadata.json)
+          TEAM=$(jq -r '.team // "unknown"' metadata.json)
+          STARTED_AT=$(jq -r '.startedAt // "unknown"' metadata.json)
+
+          # If team or started_at is unknown, fail the job
+          if [ "$TEAM" = "unknown" ] || [ "$STARTED_AT" = "unknown" ]; then
+            echo "❌ Team or started_at is unknown, exiting with failure"
+            exit 1
+          fi
 
           echo "Detected platform: $PLATFORM, language: $LANGUAGE"
 
@@ -74,73 +82,10 @@ jobs:
             exit 1
           fi
 
-  version-check:
-    name: Check Runtime Versions
-    runs-on: ubuntu-24.04
-    needs: detect-metadata
-    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js 22.17.0
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22.17.0'
-          node-version-file: '.nvmrc'
-          cache: 'npm'
-
-      - name: Setup Python 3.12.11
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12.11'
-          check-latest: true
-
-      - name: Install pipenv
-        run: |
-          python -m pip install --upgrade pip
-          pip install pipenv==2025.0.4
-
-      - name: Install Pulumi CLI
-        if: needs.synth.outputs.platform == 'pulumi'
-        uses: pulumi/actions@v5
-        with:
-          pulumi-version: 3.109.0
-
-      - name: Verify Node.js version
-        run: |
-          node --version
-          npm --version
-          if [ "$(node --version)" != "v22.17.0" ]; then
-            echo "❌ Node.js version mismatch! Expected: v22.17.0, Got: $(node --version)"
-            exit 1
-          fi
-          echo "✅ Node.js version is correct: $(node --version)"
-
-      - name: Verify Python version
-        run: |
-          python --version
-          if [ "$(python --version)" != "Python 3.12.11" ]; then
-            echo "❌ Python version mismatch! Expected: Python 3.12.11, Got: $(python --version)"
-            exit 1
-          fi
-          echo "✅ Python version is correct: $(python --version)"
-
-      - name: Verify pipenv version
-        run: |
-          pipenv --version
-          PIPENV_VERSION=$(pipenv --version | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
-          if [ "$PIPENV_VERSION" != "2025.0.4" ]; then
-            echo "❌ Pipenv version mismatch! Expected: 2025.0.4, Got: $PIPENV_VERSION"
-            exit 1
-          fi
-          echo "✅ Pipenv version is correct: $PIPENV_VERSION"
-
   build:
     name: Build
     runs-on: ubuntu-24.04
-    needs: version-check
+    needs: detect-metadata
     if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
     environment: dev
 
@@ -148,48 +93,16 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: Setup Environment
+        uses: ./.github/actions/setup-environment
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
-
-      - name: Setup Python 3.12.11
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12.11'
-          check-latest: true
-
-      - name: Install pipenv
-        run: |
-          python -m pip install --upgrade pip
-          pip install pipenv==2025.0.4
-
-      - name: Install dependencies
-        run: npm ci
+          download-artifacts: 'false'
+          upload-artifacts: 'true'
+          platform: ${{ needs.detect-metadata.outputs.platform }}
 
       - name: Build
         run: npm run build
-      - name: Configure AWS
-        uses: ./.github/actions/configure-aws
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
-
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-artifacts
-          include-hidden-files: true # <-- This one!
-          path: |
-            bin/
-            lib/
-            package*.json
-            tsconfig.json
-            cdk.json
-            metadata.json
-
   synth:
     name: Synth
     runs-on: ubuntu-24.04
@@ -217,6 +130,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup Environment
+        if: ${{ needs.detect-metadata.outputs.platform == 'cdk' || needs.detect-metadata.outputs.platform == 'cdktf' }}
         uses: ./.github/actions/setup-environment
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -231,6 +145,7 @@ jobs:
           aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
 
       - name: Synth
+        if: ${{ needs.detect-metadata.outputs.platform == 'cdk' || needs.detect-metadata.outputs.platform == 'cdktf' }}
         run: |
           echo "Project: platform=${{ needs.detect-metadata.outputs.platform }}, language=${{ needs.detect-metadata.outputs.language }}"
 
@@ -246,10 +161,6 @@ jobs:
             npm run cdktf:synth
           else
             echo "ℹ️ Not a CDK project, skipping CDK synth"
-            echo "This is expected for non-CDK projects like CloudFormation templates"
-            # Create empty cdk.out directory to satisfy artifact upload
-            mkdir -p cdk.out
-            echo "# No CDK artifacts generated for non-CDK projects" > cdk.out/README.md
           fi
         env:
           ENVIRONMENT_SUFFIX: ${{ env.ENVIRONMENT_SUFFIX }}
@@ -257,14 +168,6 @@ jobs:
           TERRAFORM_STATE_BUCKET_REGION: ${{ env.TERRAFORM_STATE_BUCKET_REGION }}
           PULUMI_BACKEND_URL: s3://${{ env.PULUMI_STATE_BUCKET }}
           PULUMI_ORG: ${{ env.PULUMI_ORG }}
-
-      - name: Upload Build Artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: cdk-artifacts
-          path: |
-            cdk.out/
-            cdktf.out/
 
   deploy:
     name: Deploy
