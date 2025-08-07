@@ -266,6 +266,5 @@ class TestTapStackComponents(unittest.TestCase):
     self.assertEqual(1, 1)
     self.assertIsNotNone("test")
 
-
 if __name__ == "__main__":
   unittest.main(verbosity=2)
