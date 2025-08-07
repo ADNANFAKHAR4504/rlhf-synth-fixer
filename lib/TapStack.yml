@@ -5,7 +5,7 @@ Parameters:
   EnvironmentSuffix:
     Type: String
     Default: dev
-    Description: Environment suffix for resource naming and tagging
+    Description: Environment Name for resource naming and tagging
 
 Mappings:
   EnvironmentConfig:
