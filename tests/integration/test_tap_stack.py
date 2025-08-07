@@ -52,17 +52,38 @@ class TestTapStackIntegration(unittest.TestCase):
   def test_alb_exists(self):
     alb_dns = flat_outputs.get("LoadBalancerDNS")
     self.assertIsNotNone(alb_dns, "LoadBalancerDNS output is missing")
-    elbv2 = boto3.client("elbv2")
-    # List all ALBs and check for the DNS name
-    paginator = elbv2.get_paginator('describe_load_balancers')
-    found = False
-    for page in paginator.paginate():
-      for lb in page.get("LoadBalancers", []):
+    
+    # Extract ALB ARN components from the DNS name
+    # DNS format: TapSta-TapAL-sb09SrdGS7qZ-1099203313.us-west-2.elb.amazonaws.com
+    dns_parts = alb_dns.split('.')
+    alb_name = dns_parts[0]  # TapSta-TapAL-sb09SrdGS7qZ-1099203313
+    region = dns_parts[1]    # us-west-2
+    
+    elbv2 = boto3.client("elbv2", region_name=region)
+    
+    try:
+      # Try to get the ALB by name pattern
+      response = elbv2.describe_load_balancers()
+      
+      found_alb = None
+      for lb in response.get("LoadBalancers", []):
+        # Check if DNS name matches exactly
         if lb.get("DNSName") == alb_dns:
-          found = True
-          self.assertEqual(lb.get("State", {}).get("Code"), "active", "ALB is not active")
+          found_alb = lb
           break
-      if found:
-        break
-    self.assertTrue(found, f"ALB with DNS '{alb_dns}' not found in AWS account.")
+        # Fallback: check if ALB name contains our pattern
+        elif alb_name in lb.get("LoadBalancerName", ""):
+          found_alb = lb
+          break
+      
+      self.assertIsNotNone(found_alb, f"ALB with DNS '{alb_dns}' not found in {region}")
+      self.assertEqual(found_alb.get("State", {}).get("Code"), "active", "ALB is not active")
+      
+      # Additional validation using the output data
+      self.assertEqual(found_alb.get("DNSName"), alb_dns, "ALB DNS name doesn't match output")
+      self.assertEqual(found_alb.get("Type"), "application", "ALB is not an Application Load Balancer")
+      self.assertEqual(found_alb.get("Scheme"), "internet-facing", "ALB is not internet-facing")
+      
+    except ClientError as e:
+      self.fail(f"Failed to describe load balancers in {region}: {e}")
 
