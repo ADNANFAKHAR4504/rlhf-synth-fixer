@@ -37,7 +37,7 @@ class TapStackArgs:
     self.region = region or 'us-west-2'
 
 
-class TapStack(pulumi.ComponentResource):
+class TapStack(pulumi.ComponentResource):  # pylint: disable=too-many-instance-attributes
   """
   Represents the main Pulumi component resource for the TAP project.
 
@@ -74,7 +74,9 @@ class TapStack(pulumi.ComponentResource):
       "Project": "TAP",
       "ManagedBy": "Pulumi",
       "Region": self.region,
-      "DeploymentDate": pulumi.Output.from_input(pulumi.get_stack()).apply(lambda _: str(pulumi.get_stack())),
+      "DeploymentDate": pulumi.Output.from_input(pulumi.get_stack()).apply(
+        lambda _: str(pulumi.get_stack())
+      ),
       "CostCenter": "TAP-API",
       **self.tags
     }
@@ -334,7 +336,8 @@ class TapStack(pulumi.ComponentResource):
 
     # Create enhanced CloudWatch alarms for monitoring
     error_threshold = 3 if self.environment_suffix == 'prod' else 5
-    duration_threshold = 45000 if self.environment_suffix == 'prod' else 25000  # 45s for prod, 25s for others
+    # 45s for prod, 25s for others
+    duration_threshold = 45000 if self.environment_suffix == 'prod' else 25000
     
     cloudwatch.MetricAlarm(
       f"lambda-error-alarm-{self.environment_suffix}",
