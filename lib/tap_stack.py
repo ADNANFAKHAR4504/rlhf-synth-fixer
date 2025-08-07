@@ -3,74 +3,90 @@
 tap_stack.py
 ============
 
-Security-first *Infrastructure as Code* stack for the **IaC – AWS Nova Model Breaking**
-project.  The implementation is deliberately opinionated:
+Security-first *Infrastructure as Code* stack for the **IaC – AWS Nova Model
+Breaking** project.
 
-1.  **Multi-region**: resources are provisioned in *us-east-1* (primary),
-    *us-west-2* and *ap-south-1* by means of dedicated Pulumi providers.
-2.  **TLS 1.2+ everywhere**: load balancers, bucket policies and database
-    endpoints all reject insecure cipher suites.
-3.  **Least-privilege IAM**: every service gets its own role and the minimum
-    permissions required to function.
-4.  **Observability & compliance**: CloudTrail, VPC Flow Logs, CloudWatch and
-    AWS Config are enabled by default.
-5.  **IPv6 dual-stack** networking is used for every VPC/subnet.
-6.  **Automated secrets**: database credentials live in AWS Secrets Manager and
-    are automatically rotated.
-7.  **Uniform tagging & naming**: `PROD-{service}-{name}-{region}` plus mandatory
-    cost-allocation tags.
+Key design pillars
+------------------
+1. Multi-region (us-east-1, us-west-2, ap-south-1) with dedicated Pulumi
+   providers.
+2. TLS 1.2+ enforced everywhere.
+3. Strict least-privilege IAM.
+4. Observability (CloudTrail, VPC Flow Logs, CloudWatch) and automated
+   compliance via AWS Config.
+5. IPv6 dual-stack networking.
+6. Automated secrets management (AWS Secrets Manager).
+7. Uniform naming: `PROD-{service}-{identifier}-{region}` plus mandatory
+   tags `Environment`, `Owner`, `CostCenter`, `Project`.
 
-Only three files are required for the whole repository:
-    • lib/tap_stack.py          ← you are here
+Only three repository files are required:
+
+    • lib/tap_stack.py
     • tests/unit/test_tap_stack.py
     • tests/integration/test_tap_stack.py
 """
-
 from __future__ import annotations
 
 import json
-from typing import Dict, List, Optional
+import os
+from dataclasses import dataclass
+from typing import Dict, Optional
 
 import pulumi
 import pulumi_aws as aws
 
+# --------------------------------------------------------------------------- #
+# Public *Args* helper                                                        #
+# --------------------------------------------------------------------------- #
+@dataclass
+class TapStackArgs:
+    """
+    Wrapper for the most common constructor parameters.
 
+    Examples
+    --------
+    >>> TapStack("nova")                                  # all defaults
+    >>> TapStack("nova", TapStackArgs(env="prod"))        # explicit env
+    """
+    env: str = "prod"
+    owner: str = "devops"
+    cost_center: str = "0000"
+    project: str = "nova-model-breaking"
+
+# --------------------------------------------------------------------------- #
+# Main component                                                              #
+# --------------------------------------------------------------------------- #
 class TapStack(pulumi.ComponentResource):
     """
     Root component for the Nova Model Breaking production stack.
-
-    Instantiating `TapStack` inside a Pulumi program will create **all**
-    infrastructure objects across the three mandated AWS regions.
-
-    Parameters
-    ----------
-    name:
-        Logical name of the stack component.
-    env:
-        Resource tag – logical environment.  Defaults to ``"prod"``.
-    owner:
-        Tag identifying the owning team / person.  Defaults to ``"devops"``.
-    cost_center:
-        Tag used for cost allocation.  Defaults to ``"0000"``.
-    project:
-        Tag stating the project name.  Defaults to ``"nova-model-breaking"``.
-    opts:
-        Optional Pulumi resource options.
     """
 
     # --------------------------------------------------------------------- #
-    # PUBLIC API                                                            #
+    # Constructor                                                           #
     # --------------------------------------------------------------------- #
     def __init__(
         self,
         name: str,
-        env: str = "prod",
-        owner: str = "devops",
-        cost_center: str = "0000",
-        project: str = "nova-model-breaking",
+        args: Optional[TapStackArgs] = None,
         opts: Optional[pulumi.ResourceOptions] = None,
     ) -> None:
+        """
+        Parameters
+        ----------
+        name:
+            Logical stack name.
+        args:
+            Optional TapStackArgs wrapper.  If *None*, defaults are used.
+        opts:
+            Standard Pulumi resource options.
+        """
         super().__init__("tap:stack:TapStack", name, None, opts)
+
+        # Accept *args* or fall back to sensible defaults
+        env         = getattr(args, "env", "prod")
+        owner       = getattr(args, "owner", "devops")
+        cost_center = getattr(args, "cost_center", "0000")
+        project     = getattr(args, "project", "nova-model-breaking")
 
         # ------------------------------------------------------------------ #
         # Static, mandatory tags                                             #
@@ -86,684 +102,488 @@ class TapStack(pulumi.ComponentResource):
         # Multi-region providers                                             #
         # ------------------------------------------------------------------ #
         self.providers: Dict[str, aws.Provider] = {
-            region: aws.Provider(f"{name}-{region}", region=region)
-            for region in ("us-east-1", "us-west-2", "ap-south-1")
+            r: aws.Provider(f"{name}-{r}", region=r) for r in
+            ("us-east-1", "us-west-2", "ap-south-1")
         }
 
-        #                                                                   #
-        #               RESOURCE CREATION ORDER MATTERS                     #
-        #                                                                   #
-        networking = self._create_networking()
-        security = self._create_security_resources(networking)
-        compute = self._create_compute_resources(networking, security)
-        storage = self._create_storage_resources(security)
-        self._create_monitoring(networking)
+        # --- Resource graph ------------------------------------------------ #
+        net   = self._create_networking()
+        sec   = self._create_security_resources(net)
+        comp  = self._create_compute_resources(net, sec)
+        store = self._create_storage_resources(sec)
+        self._create_monitoring(net)
+        self._export_outputs(comp, store)
 
-        # Export a handful of useful outputs
-        self._export_outputs(compute, storage)
-
-        # Let Pulumi know the component is ready
         self.register_outputs({})
 
     # --------------------------------------------------------------------- #
-    # INTERNAL HELPERS                                                      #
+    # Helpers                                                                #
     # --------------------------------------------------------------------- #
-    # Tagging ------------------------------------------------------------- #
     def _merge_tags(self, extra: Optional[Dict[str, str]] = None) -> Dict[str, str]:
-        """
-        Merge static stack-level tags with `extra`, giving precedence to *extra*.
-        """
         merged = self._tags.copy()
         if extra:
             merged.update(extra)
         return merged
 
-    # Networking ---------------------------------------------------------- #
+    # --------------------------------------------------------------------- #
+    # Networking                                                             #
+    # --------------------------------------------------------------------- #
     def _create_networking(self) -> Dict[str, Dict[str, pulumi.Resource]]:
         """
-        Build one dual-stack VPC per region with a single public and private
-        subnet (just enough for testing purposes).
-
-        Returns a mapping::
-
-            {
-              "us-east-1": {
-                  "vpc": <Vpc>,
-                  "public_subnet": <Subnet>,
-                  "private_subnet": <Subnet>,
-              },
-              ...
-            }
+        One dual-stack VPC per region with a public & private subnet each.
         """
-        networking: Dict[str, Dict[str, pulumi.Resource]] = {}
+        out: Dict[str, Dict[str, pulumi.Resource]] = {}
 
-        for cidr_idx, region in enumerate(self.providers.keys()):
+        for idx, region in enumerate(self.providers):
             prov = self.providers[region]
 
-            # VPC
             vpc = aws.ec2.Vpc(
                 f"prod-vpc-{region}",
                 provider=prov,
-                cidr_block=f"10.{cidr_idx}.0.0/16",
+                cidr_block=f"10.{idx}.0.0/16",
                 assign_generated_ipv6_cidr_block=True,
                 enable_dns_hostnames=True,
                 enable_dns_support=True,
-                tags=self._merge_tags(
-                    {"Name": f"PROD-vpc-{region}", "Service": "vpc"}
-                ),
+                tags=self._merge_tags({"Name": f"PROD-vpc-{region}", "Service": "vpc"}),
             )
 
-            # IPv6 block for subnet
             ipv6_block = aws.ec2.VpcIpv6CidrBlockAssociation(
-                f"vpc-ipv6-{region}",
-                provider=prov,
-                vpc_id=vpc.id,
+                f"ipv6-{region}", provider=prov, vpc_id=vpc.id
             )
 
-            # Subnets
-            public_subnet = aws.ec2.Subnet(
-                f"public-subnet-{region}",
+            # Subnets ------------------------------------------------------ #
+            pub = aws.ec2.Subnet(
+                f"pub-{region}",
                 provider=prov,
                 vpc_id=vpc.id,
-                cidr_block=f"10.{cidr_idx}.0.0/24",
+                cidr_block=f"10.{idx}.0.0/24",
                 ipv6_cidr_block=ipv6_block.ipv6_cidr_block.apply(
-                    lambda block: block.replace("00::/56", "00:0:100/64")
+                    lambda b: b.replace("00::/56", "00:100/64")
                 ),
                 map_public_ip_on_launch=True,
                 tags=self._merge_tags(
-                    {
-                        "Name": f"PROD-public-{region}",
-                        "Service": "subnet",
-                        "SubnetType": "public",
-                    }
+                    {"Name": f"PROD-public-{region}", "Service": "subnet"}
                 ),
             )
-
-            private_subnet = aws.ec2.Subnet(
-                f"private-subnet-{region}",
+            priv = aws.ec2.Subnet(
+                f"priv-{region}",
                 provider=prov,
                 vpc_id=vpc.id,
-                cidr_block=f"10.{cidr_idx}.1.0/24",
+                cidr_block=f"10.{idx}.1.0/24",
                 ipv6_cidr_block=ipv6_block.ipv6_cidr_block.apply(
-                    lambda block: block.replace("00::/56", "00:0:200/64")
+                    lambda b: b.replace("00::/56", "00:200/64")
                 ),
                 map_public_ip_on_launch=False,
                 tags=self._merge_tags(
-                    {
-                        "Name": f"PROD-private-{region}",
-                        "Service": "subnet",
-                        "SubnetType": "private",
-                    }
+                    {"Name": f"PROD-private-{region}", "Service": "subnet"}
                 ),
             )
 
-            # IGW + route
+            # IGW & route table for public subnet ------------------------- #
             igw = aws.ec2.InternetGateway(
                 f"igw-{region}",
                 provider=prov,
                 vpc_id=vpc.id,
                 tags=self._merge_tags({"Name": f"PROD-igw-{region}", "Service": "igw"}),
             )
-
-            pub_route_table = aws.ec2.RouteTable(
-                f"pub-rt-{region}",
+            rt = aws.ec2.RouteTable(
+                f"rt-pub-{region}",
                 provider=prov,
                 vpc_id=vpc.id,
                 routes=[
-                    aws.ec2.RouteTableRouteArgs(
-                        cidr_block="0.0.0.0/0",
-                        gateway_id=igw.id,
-                    ),
-                    aws.ec2.RouteTableRouteArgs(
-                        ipv6_cidr_block="::/0",
-                        gateway_id=igw.id,
-                    ),
+                    aws.ec2.RouteTableRouteArgs(cidr_block="0.0.0.0/0", gateway_id=igw.id),
+                    aws.ec2.RouteTableRouteArgs(ipv6_cidr_block="::/0",  gateway_id=igw.id),
                 ],
-                tags=self._merge_tags(
-                    {"Name": f"PROD-pub-rt-{region}", "Service": "rt-public"}
-                ),
+                tags=self._merge_tags({"Name": f"PROD-rt-pub-{region}", "Service": "rt"}),
             )
-
             aws.ec2.RouteTableAssociation(
-                f"pub-rta-{region}",
-                provider=prov,
-                subnet_id=public_subnet.id,
-                route_table_id=pub_route_table.id,
+                f"rta-{region}", provider=prov, subnet_id=pub.id, route_table_id=rt.id
             )
 
-            networking[region] = {
-                "vpc": vpc,
-                "public_subnet": public_subnet,
-                "private_subnet": private_subnet,
-            }
+            out[region] = {"vpc": vpc, "public_subnet": pub, "private_subnet": priv}
+        return out
 
-        return networking
-
-    # Security ------------------------------------------------------------ #
+    # --------------------------------------------------------------------- #
+    # Security                                                               #
+    # --------------------------------------------------------------------- #
     def _create_security_resources(
-        self, networking: Dict[str, Dict[str, pulumi.Resource]]
+        self, net: Dict[str, Dict[str, pulumi.Resource]]
     ) -> Dict[str, Dict[str, pulumi.Resource]]:
         """
-        Build IAM roles, KMS keys and security groups common to all other
-        resources.  Returns a dict keyed by region.
+        • One SG per region for application servers.
+        • One customer-managed KMS key per region.
+        • One cross-region EC2 instance role (least-privilege).
         """
-        security: Dict[str, Dict[str, pulumi.Resource]] = {}
+        sec: Dict[str, Dict[str, pulumi.Resource]] = {}
 
-        # Simple *allow all out, none in* SG for app instances
-        for region, net in networking.items():
+        # --- per-region SG & KMS ----------------------------------------- #
+        for region in self.providers:
             prov = self.providers[region]
 
             sg = aws.ec2.SecurityGroup(
-                f"app-sg-{region}",
+                f"sg-app-{region}",
                 provider=prov,
-                vpc_id=net["vpc"].id,
-                description="Application security group – allow 80/443 from ALB",
+                vpc_id=net[region]["vpc"].id,
+                description="Allow 80/443 from anywhere; all egress",
                 ingress=[
                     aws.ec2.SecurityGroupIngressArgs(
-                        description="HTTP from ALB",
-                        from_port=80,
-                        to_port=80,
-                        protocol="tcp",
-                        cidr_blocks=["0.0.0.0/0"],
-                        ipv6_cidr_blocks=["::/0"],
+                        protocol="tcp", from_port=80,  to_port=80,
+                        cidr_blocks=["0.0.0.0/0"], ipv6_cidr_blocks=["::/0"]
                     ),
                     aws.ec2.SecurityGroupIngressArgs(
-                        description="HTTPS from ALB",
-                        from_port=443,
-                        to_port=443,
-                        protocol="tcp",
-                        cidr_blocks=["0.0.0.0/0"],
-                        ipv6_cidr_blocks=["::/0"],
+                        protocol="tcp", from_port=443, to_port=443,
+                        cidr_blocks=["0.0.0.0/0"], ipv6_cidr_blocks=["::/0"]
                     ),
                 ],
                 egress=[
                     aws.ec2.SecurityGroupEgressArgs(
-                        description="All egress",
-                        from_port=0,
-                        to_port=0,
-                        protocol="-1",
-                        cidr_blocks=["0.0.0.0/0"],
-                        ipv6_cidr_blocks=["::/0"],
+                        protocol="-1", from_port=0, to_port=0,
+                        cidr_blocks=["0.0.0.0/0"], ipv6_cidr_blocks=["::/0"]
                     )
                 ],
-                tags=self._merge_tags(
-                    {"Name": f"PROD-app-sg-{region}", "Service": "sg"}
-                ),
+                tags=self._merge_tags({"Name": f"PROD-app-sg-{region}", "Service": "sg"}),
             )
 
-            # Customer-managed KMS key
-            kms_key = aws.kms.Key(
-                f"prod-kms-{region}",
+            kms = aws.kms.Key(
+                f"kms-{region}",
                 provider=prov,
-                description=f"PROD key for {region}",
+                description=f"PROD KMS key ({region})",
                 enable_key_rotation=True,
-                tags=self._merge_tags(
-                    {"Name": f"PROD-kms-{region}", "Service": "kms"}
-                ),
+                tags=self._merge_tags({"Name": f"PROD-kms-{region}", "Service": "kms"}),
             )
 
-            security[region] = {"app_sg": sg, "kms": kms_key}
+            sec[region] = {"app_sg": sg, "kms": kms}
 
-        # IAM – a single cross-region role for EC2 instances
+        # --- global EC2 role & inline policy ----------------------------- #
         self.instance_role = aws.iam.Role(
             "prod-ec2-role",
-            assume_role_policy=json.dumps(
-                {
-                    "Version": "2012-10-17",
-                    "Statement": [
-                        {
-                            "Action": "sts:AssumeRole",
-                            "Principal": {"Service": "ec2.amazonaws.com"},
-                            "Effect": "Allow",
-                        }
-                    ],
-                }
-            ),
+            assume_role_policy=json.dumps({
+                "Version": "2012-10-17",
+                "Statement": [{
+                    "Effect": "Allow",
+                    "Principal": {"Service": "ec2.amazonaws.com"},
+                    "Action": "sts:AssumeRole",
+                }],
+            }),
             tags=self._merge_tags({"Service": "iam", "Name": "PROD-ec2-role"}),
         )
-
         aws.iam.RolePolicy(
-            "prod-ec2-policy",
+            "prod-ec2-logs-s3",
             role=self.instance_role.id,
-            policy=pulumi.Output.from_input(
-                json.dumps(
+            policy=json.dumps({
+                "Version": "2012-10-17",
+                "Statement": [
                     {
-                        "Version": "2012-10-17",
-                        "Statement": [
-                            {
-                                "Action": [
-                                    "logs:CreateLogGroup",
-                                    "logs:CreateLogStream",
-                                    "logs:PutLogEvents",
-                                ],
-                                "Effect": "Allow",
-                                "Resource": "*",
-                            },
-                            {
-                                "Action": ["s3:GetObject", "s3:PutObject"],
-                                "Effect": "Allow",
-                                "Resource": "*",
-                            },
+                        "Effect": "Allow",
+                        "Action": [
+                            "logs:CreateLogGroup", "logs:CreateLogStream",
+                            "logs:PutLogEvents"
                         ],
-                    }
-                )
-            ),
+                        "Resource": "*",
+                    },
+                    {
+                        "Effect": "Allow",
+                        "Action": ["s3:GetObject", "s3:PutObject"],
+                        "Resource": "*",
+                    },
+                ],
+            }),
         )
+        return sec
 
-        return security
-
-    # Compute ------------------------------------------------------------- #
+    # --------------------------------------------------------------------- #
+    # Compute                                                                #
+    # --------------------------------------------------------------------- #
     def _create_compute_resources(
         self,
-        networking: Dict[str, Dict[str, pulumi.Resource]],
-        security: Dict[str, Dict[str, pulumi.Resource]],
-    ) -> Dict[str, pulumi.Resource]:
+        net: Dict[str, Dict[str, pulumi.Resource]],
+        sec: Dict[str, Dict[str, pulumi.Resource]],
+    ) -> Dict[str, pulumi.Output]:
         """
-        Build a tiny demo Auto Scaling Group **only in us-east-1** to act as the
-        primary application layer.  In production this would be rolled out to
-        all regions behind Route 53 health checks.
+        Very small ASG & ALB in the *primary* region (us-east-1) to keep demo
+        affordable; extend as required.
         """
-
-        region = "us-east-1"
-        prov = self.providers[region]
+        primary = "us-east-1"
+        prov    = self.providers[primary]
 
         ami = aws.ec2.get_ami(
-            most_recent=True,
-            owners=["amazon"],
-            filters=[aws.ec2.GetAmiFilterArgs(name="name", values=["amzn2-ami-hvm*"])],
-            provider=prov,
+            provider=prov, most_recent=True, owners=["amazon"],
+            filters=[aws.ec2.GetAmiFilterArgs(name="name", values=["amzn2-ami-hvm*"])]
         )
 
-        # Launch Template
         lt = aws.ec2.LaunchTemplate(
             "app-lt",
             provider=prov,
             image_id=ami.id,
             instance_type="t3.micro",
             iam_instance_profile=aws.iam.InstanceProfile(
-                "app-profile",
-                role=self.instance_role.name,
-                opts=pulumi.ResourceOptions(provider=prov),
+                "app-prof", role=self.instance_role.name,
+                opts=pulumi.ResourceOptions(provider=prov)
             ).name,
-            user_data="""#!/bin/bash
-echo "Hello from $(hostname)" > /var/www/index.html
-""",
             network_interfaces=[
                 aws.ec2.LaunchTemplateNetworkInterfaceArgs(
-                    security_groups=[security[region]["app_sg"].id],
+                    security_groups=[sec[primary]["app_sg"].id],
                     associate_public_ip_address=False,
                 )
             ],
-            tag_specifications=[
-                aws.ec2.LaunchTemplateTagSpecificationArgs(
-                    resource_type="instance",
-                    tags=self._merge_tags(
-                        {"Name": "PROD-ec2-app-us-east-1", "Service": "ec2"}
-                    ),
-                )
-            ],
+            tag_specifications=[aws.ec2.LaunchTemplateTagSpecificationArgs(
+                resource_type="instance",
+                tags=self._merge_tags({"Name": "PROD-ec2-app-us-east-1", "Service": "ec2"}),
+            )],
         )
 
-        # ASG
         asg = aws.autoscaling.Group(
             "app-asg",
             provider=prov,
-            vpc_zone_identifier=[
-                networking[region]["private_subnet"].id,
-            ],
             desired_capacity=2,
-            max_size=3,
             min_size=1,
+            max_size=3,
+            vpc_zone_identifier=[net[primary]["private_subnet"].id],
             launch_template=aws.autoscaling.GroupLaunchTemplateArgs(
-                id=lt.id,
-                version="$Latest",
+                id=lt.id, version="$Latest"
             ),
             tags=[
                 aws.autoscaling.GroupTagArgs(
-                    key=k,
-                    value=v,
-                    propagate_at_launch=True,
-                )
-                for k, v in self._merge_tags({"Service": "ecs"}).items()
+                    key=k, value=v, propagate_at_launch=True
+                ) for k, v in self._merge_tags({"Service": "ec2"}).items()
             ],
         )
 
-        # ALB
         alb = aws.lb.LoadBalancer(
             "app-alb",
             provider=prov,
             load_balancer_type="application",
-            security_groups=[security[region]["app_sg"].id],
-            subnets=[
-                networking[region]["public_subnet"].id,
-            ],
+            subnets=[net[primary]["public_subnet"].id],
+            security_groups=[sec[primary]["app_sg"].id],
             idle_timeout=60,
             enable_deletion_protection=False,
             tags=self._merge_tags({"Name": "PROD-alb-us-east-1", "Service": "alb"}),
         )
-
-        target_group = aws.lb.TargetGroup(
+        tg = aws.lb.TargetGroup(
             "app-tg",
             provider=prov,
             port=80,
             protocol="HTTP",
+            vpc_id=net[primary]["vpc"].id,
             target_type="instance",
-            vpc_id=networking[region]["vpc"].id,
-            health_check=aws.lb.TargetGroupHealthCheckArgs(
-                path="/",
-                matcher="200",
-            ),
+            health_check=aws.lb.TargetGroupHealthCheckArgs(path="/", matcher="200"),
             tags=self._merge_tags({"Service": "alb-tg"}),
         )
-
-        listener = aws.lb.Listener(
-            "alb-listener-https",
+        aws.lb.Listener(
+            "alb-listener",
             provider=prov,
             load_balancer_arn=alb.arn,
             port=443,
             protocol="HTTPS",
-            ssl_policy="ELBSecurityPolicy-TLS-1-2-2017-01",
             certificate_arn=aws.acm.get_certificate(
-                domain="example.com",
-                statuses=["ISSUED"],
-                most_recent=True,
-                provider=prov,
+                provider=prov, domain="example.com", statuses=["ISSUED"], most_recent=True
             ).arn,
-            default_actions=[
-                aws.lb.ListenerDefaultActionArgs(
-                    type="forward",
-                    target_group_arn=target_group.arn,
-                )
-            ],
+            ssl_policy="ELBSecurityPolicy-TLS-1-2-2017-01",
+            default_actions=[aws.lb.ListenerDefaultActionArgs(
+                type="forward", target_group_arn=tg.arn
+            )],
         )
-
-        # Attach ASG to TG
         aws.autoscaling.Attachment(
-            "asg-to-tg",
+            "asg-tg",
+            provider=prov,
             autoscaling_group_name=asg.name,
-            alb_target_group_arn=target_group.arn,
-            opts=pulumi.ResourceOptions(provider=prov),
+            alb_target_group_arn=tg.arn,
         )
 
-        return {
-            "alb_dns": alb.dns_name,
-            "tg": target_group.arn,
-            "asg": asg.name,
-        }
+        return {"alb_dns": alb.dns_name}
 
-    # Storage ------------------------------------------------------------- #
+    # --------------------------------------------------------------------- #
+    # Storage                                                                #
+    # --------------------------------------------------------------------- #
     def _create_storage_resources(
-        self, security: Dict[str, Dict[str, pulumi.Resource]]
-    ) -> Dict[str, pulumi.Resource]:
+        self, sec: Dict[str, Dict[str, pulumi.Resource]]
+    ) -> Dict[str, pulumi.Output]:
         """
-        Build one S3 bucket in us-east-1 and replicate to us-west-2.
-        Also create an RDS PostgreSQL instance with a read-replica.
+        S3 primary bucket → replication into us-west-2; RDS primary + read-replica.
         """
+        primary   = "us-east-1"
+        secondary = "us-west-2"
+        pprov     = self.providers[primary]
+        sprov     = self.providers[secondary]
 
-        primary_region = "us-east-1"
-        secondary_region = "us-west-2"
-
-        primary_prov = self.providers[primary_region]
-        secondary_prov = self.providers[secondary_region]
-
-        # ------------------------------------------------------------------ #
-        # S3 – primary & replica                                             #
-        # ------------------------------------------------------------------ #
+        # --- S3 buckets --------------------------------------------------- #
         primary_bucket = aws.s3.Bucket(
-            "prod-app-bucket-primary",
-            provider=primary_prov,
+            "bucket-primary",
+            provider=pprov,
             versioning=aws.s3.BucketVersioningArgs(enabled=True),
-            server_side_encryption_configuration=aws.s3.BucketServerSideEncryptionConfigurationArgs(
-                rule=aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
-                    apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
-                        sse_algorithm="aws:kms",
-                        kms_master_key_id=security[primary_region]["kms"].id,
+            server_side_encryption_configuration=
+                aws.s3.BucketServerSideEncryptionConfigurationArgs(
+                    rule=aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
+                        apply_server_side_encryption_by_default=
+                            aws.s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
+                                sse_algorithm="aws:kms",
+                                kms_master_key_id=sec[primary]["kms"].id,
+                            )
                     )
-                )
-            ),
+                ),
             tags=self._merge_tags({"Name": "PROD-s3-primary", "Service": "s3"}),
         )
 
         replica_bucket = aws.s3.Bucket(
-            "prod-app-bucket-replica",
-            provider=secondary_prov,
+            "bucket-replica",
+            provider=sprov,
             versioning=aws.s3.BucketVersioningArgs(enabled=True),
-            replication_configuration=aws.s3.BucketReplicationConfigurationArgs(
-                role=aws.iam.get_role(name="prod-ec2-role").arn,
-                rules=[
-                    aws.s3.BucketReplicationConfigurationRuleArgs(
-                        id="replication",
-                        status="Enabled",
-                        destination=aws.s3.BucketReplicationConfigurationRuleDestinationArgs(
-                            bucket=pulumi.Output.concat(
-                                "arn:aws:s3:::", "prod-app-bucket-replica"
-                            ),
-                            storage_class="STANDARD",
-                        ),
+            server_side_encryption_configuration=
+                aws.s3.BucketServerSideEncryptionConfigurationArgs(
+                    rule=aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
+                        apply_server_side_encryption_by_default=
+                            aws.s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
+                                sse_algorithm="aws:kms",
+                                kms_master_key_id=sec[secondary]["kms"].id,
+                            )
                     )
-                ],
-            ),
+                ),
             tags=self._merge_tags({"Name": "PROD-s3-replica", "Service": "s3"}),
         )
 
-        # Enforce TLS-only access
-        policy_doc = primary_bucket.id.apply(
-            lambda _: json.dumps(
-                {
-                    "Version": "2012-10-17",
-                    "Statement": [
-                        {
-                            "Sid": "TLSRequired",
-                            "Effect": "Deny",
-                            "Principal": "*",
-                            "Action": "s3:*",
-                            "Resource": [
-                                primary_bucket.arn,
-                                pulumi.Output.concat(primary_bucket.arn, "/*"),
-                            ],
-                            "Condition": {"Bool": {"aws:SecureTransport": "false"}},
-                        }
-                    ],
-                }
-            )
-        )
-
-        aws.s3.BucketPolicy(
-            "primary-bucket-policy",
-            provider=primary_prov,
+        # Replication rule → after *both* buckets exist -------------------- #
+        aws.s3.BucketReplicationConfig(
+            "replication",
+            provider=pprov,
             bucket=primary_bucket.id,
-            policy=policy_doc,
+            role=aws.iam.get_role(name="prod-ec2-role").arn,
+            rules=[aws.s3.BucketReplicationConfigRuleArgs(
+                destination=aws.s3.BucketReplicationConfigRuleDestinationArgs(
+                    bucket=replica_bucket.arn,
+                    storage_class="STANDARD",
+                ),
+                status="Enabled",
+            )],
         )
 
-        # ------------------------------------------------------------------ #
-        # Secrets Manager                                                    #
-        # ------------------------------------------------------------------ #
-        db_secret = aws.secretsmanager.Secret(
-            "db-credentials",
-            provider=primary_prov,
-            description="RDS credentials – auto-rotated",
-            rotation_lambda_arn="arn:aws:lambda:us-east-1:123456789012:function:SecretsRotation",
+        # TLS-only access policy ------------------------------------------ #
+        pol = primary_bucket.arn.apply(lambda arn: json.dumps({
+            "Version": "2012-10-17",
+            "Statement": [{
+                "Sid": "TLSRequired",
+                "Effect": "Deny",
+                "Principal": "*",
+                "Action": "s3:*",
+                "Resource": [arn, f"{arn}/*"],
+                "Condition": {"Bool": {"aws:SecureTransport": "false"}},
+            }],
+        }))
+        aws.s3.BucketPolicy(
+            "bucket-policy", provider=pprov,
+            bucket=primary_bucket.id, policy=pol
+        )
+
+        # --- Secrets Manager --------------------------------------------- #
+        secret = aws.secretsmanager.Secret(
+            "db-creds", provider=pprov, description="RDS credentials",
             tags=self._merge_tags({"Service": "secretsmanager"}),
         )
-
-        db_secret_version = aws.secretsmanager.SecretVersion(
-            "db-credentials-version",
-            provider=primary_prov,
-            secret_id=db_secret.id,
+        aws.secretsmanager.SecretVersion(
+            "db-creds-v1", provider=pprov, secret_id=secret.id,
             secret_string=json.dumps({"username": "masteruser", "password": "ChangeMe!"}),
         )
 
-        # ------------------------------------------------------------------ #
-        # RDS – primary & replica                                            #
-        # ------------------------------------------------------------------ #
+        # --- RDS primary & replica --------------------------------------- #
         subnet_grp = aws.rds.SubnetGroup(
-            "db-subnet-group",
-            provider=primary_prov,
-            subnet_ids=[
-                pulumi.Output.all(self.providers[primary_region], primary_region)
-                .apply(lambda _: "dummy")  # placeholder to satisfy type checker
-            ],
+            "db-sng", provider=pprov,
+            subnet_ids=[net["private_subnet"].id for net in self._create_networking().values()],
             tags=self._merge_tags({"Service": "rds"}),
         )
-
         primary_db = aws.rds.Instance(
-            "prod-postgres-primary",
-            provider=primary_prov,
-            engine="postgres",
-            engine_version="14.6",
-            instance_class="db.t3.micro",
-            allocated_storage=20,
+            "db-primary", provider=pprov,
+            engine="postgres", engine_version="14.6", instance_class="db.t3.micro",
+            allocated_storage=20, storage_encrypted=True,
             db_subnet_group_name=subnet_grp.name,
-            vpc_security_group_ids=[security[primary_region]["app_sg"].id],
-            publicly_accessible=False,
-            storage_encrypted=True,
-            kms_key_id=security[primary_region]["kms"].id,
+            vpc_security_group_ids=[sec[primary]["app_sg"].id],
+            kms_key_id=sec[primary]["kms"].id,
             username="masteruser",
-            password=db_secret_version.secret_string.apply(
-                lambda s: json.loads(s)["password"]
-            ),
-            multi_az=True,
-            skip_final_snapshot=True,
+            password=secret.name.apply(lambda _: "ChangeMe!"),
+            multi_az=True, skip_final_snapshot=True,
+            publicly_accessible=False,
             tags=self._merge_tags({"Name": "PROD-rds-primary", "Service": "rds"}),
         )
-
         replica_db = aws.rds.Instance(
-            "prod-postgres-replica",
-            provider=secondary_prov,
+            "db-replica", provider=sprov,
             replicate_source_db=primary_db.identifier,
-            instance_class="db.t3.micro",
-            publicly_accessible=False,
-            storage_encrypted=True,
-            kms_key_id=security[secondary_region]["kms"].id,
+            instance_class="db.t3.micro", storage_encrypted=True,
+            publicly_accessible=False, kms_key_id=sec[secondary]["kms"].id,
             skip_final_snapshot=True,
             tags=self._merge_tags({"Name": "PROD-rds-replica", "Service": "rds"}),
         )
 
         return {
             "primary_bucket": primary_bucket.arn,
-            "replica_bucket": replica_bucket.arn,
-            "primary_db": primary_db.endpoint,
-            "replica_db": replica_db.endpoint,
+            "primary_db":     primary_db.endpoint,
         }
 
-    # Monitoring ---------------------------------------------------------- #
-    def _create_monitoring(
-        self, networking: Dict[str, Dict[str, pulumi.Resource]]
-    ) -> None:
-        """
-        CloudTrail, VPC Flow Logs and AWS Config.
-        """
-
+    # --------------------------------------------------------------------- #
+    # Monitoring & Compliance                                               #
+    # --------------------------------------------------------------------- #
+    def _create_monitoring(self, net) -> None:
         region = "us-east-1"
-        prov = self.providers[region]
+        prov   = self.providers[region]
 
-        # CloudWatch log group for centralised logs
-        log_group = aws.cloudwatch.LogGroup(
-            "central-log-group",
-            provider=prov,
-            retention_in_days=30,
-            tags=self._merge_tags({"Service": "cloudwatch"}),
+        lg = aws.cloudwatch.LogGroup(
+            "logs-central", provider=prov, retention_in_days=30,
+            tags=self._merge_tags({"Service": "cloudwatch"})
         )
-
-        # Organisation-wide CloudTrail
         trail_bucket = aws.s3.Bucket(
-            "cloudtrail-bucket",
-            provider=prov,
-            acl="private",
+            "trail-bucket", provider=prov, acl="private",
             versioning=aws.s3.BucketVersioningArgs(enabled=True),
-            tags=self._merge_tags({"Service": "s3", "Name": "PROD-cloudtrail"}),
+            tags=self._merge_tags({"Name": "PROD-cloudtrail", "Service": "s3"}),
         )
-
         aws.cloudtrail.Trail(
-            "org-trail",
-            provider=prov,
-            s3_bucket_name=trail_bucket.id,
-            include_global_service_events=True,
-            is_multi_region_trail=True,
-            event_selector=[
-                aws.cloudtrail.TrailEventSelectorArgs(
-                    read_write_type="All",
-                    include_management_events=True,
-                )
-            ],
-            cloud_watch_logs_group_arn=log_group.arn,
+            "trail", provider=prov, s3_bucket_name=trail_bucket.id,
+            is_multi_region_trail=True, include_global_service_events=True,
             cloud_watch_logs_role_arn=self.instance_role.arn,
+            cloud_watch_logs_group_arn=lg.arn,
+            event_selector=[aws.cloudtrail.TrailEventSelectorArgs(
+                read_write_type="All", include_management_events=True
+            )],
             tags=self._merge_tags({"Service": "cloudtrail"}),
         )
-
-        # VPC Flow Logs – only enable for primary region to limit costs
         aws.ec2.FlowLog(
-            "vpc-flow-logs",
-            provider=prov,
-            vpc_id=networking[region]["vpc"].id,
-            log_destination_type="cloud-watch-logs",
-            log_destination=log_group.arn,
+            "flow-logs", provider=prov, vpc_id=net[region]["vpc"].id,
+            log_destination_type="cloud-watch-logs", log_destination=lg.arn,
             traffic_type="ALL",
             tags=self._merge_tags({"Service": "vpc-flow-logs"}),
         )
 
-        # AWS Config – encrypted with KMS
+        # AWS Config ------------------------------------------------------- #
         cfg_role = aws.iam.Role(
-            "aws-config-role",
-            assume_role_policy=json.dumps(
-                {
-                    "Version": "2012-10-17",
-                    "Statement": [
-                        {
-                            "Effect": "Allow",
-                            "Principal": {"Service": "config.amazonaws.com"},
-                            "Action": "sts:AssumeRole",
-                        }
-                    ],
-                }
-            ),
-            tags=self._merge_tags({"Service": "iam", "Name": "aws-config-role"}),
+            "config-role", provider=prov,
+            assume_role_policy=json.dumps({
+                "Version": "2012-10-17",
+                "Statement": [{
+                    "Effect": "Allow",
+                    "Principal": {"Service": "config.amazonaws.com"},
+                    "Action": "sts:AssumeRole",
+                }],
+            }),
+            tags=self._merge_tags({"Service": "iam"}),
         )
-
         aws.iam.RolePolicyAttachment(
-            "config-managed-policy",
-            role=cfg_role.name,
+            "cfg-role-policy", provider=prov, role=cfg_role.name,
             policy_arn="arn:aws:iam::aws:policy/service-role/AWSConfigRole",
         )
-
         recorder = aws.cfg.Recorder(
-            "config-recorder",
-            provider=prov,
-            role_arn=cfg_role.arn,
+            "cfg-recorder", provider=prov, role_arn=cfg_role.arn,
             recording_group=aws.cfg.RecorderRecordingGroupArgs(
                 all_supported=True, include_global_resource_types=True
             ),
         )
-
         aws.cfg.DeliveryChannel(
-            "config-delivery-channel",
-            provider=prov,
-            s3_bucket_name=trail_bucket.id,
-            s3_key_prefix="config",
-            recording_group=aws.cfg.DeliveryChannelRecordingGroupArgs(
-                all_supported=True, include_global_resource_types=True
-            ),
+            "cfg-channel", provider=prov, s3_bucket_name=trail_bucket.id,
+            s3_key_prefix="config"
         )
-
-        # Ensure recorder starts after delivery channel
         aws.cfg.RecorderStatus(
-            "recorder-status",
-            provider=prov,
-            is_enabled=True,
-            recorder_name=recorder.name,
-            opts=pulumi.ResourceOptions(depends_on=[recorder]),
+            "cfg-start", provider=prov, recorder_name=recorder.name, is_enabled=True
         )
 
-    # Outputs ------------------------------------------------------------- #
-    def _export_outputs(
-        self,
-        compute: Dict[str, pulumi.Output],
-        storage: Dict[str, pulumi.Output],
-    ) -> None:
-        """
-        Expose a handful of outputs so that the integration test-suite and
-        downstream stacks can discover endpoints.
-        """
-        pulumi.export("alb_dns", compute["alb_dns"])
-        pulumi.export("s3_primary_bucket", storage["primary_bucket"])
-        pulumi.export("rds_primary_endpoint", storage["primary_db"])
+    # --------------------------------------------------------------------- #
+    # Outputs                                                                #
+    # --------------------------------------------------------------------- #
+    def _export_outputs(self, comp, store) -> None:
+        pulumi.export("alb_dns",            comp["alb_dns"])
+        pulumi.export("s3_primary_bucket",  store["primary_bucket"])
+        pulumi.export("rds_primary_endpoint", store["primary_db"])
