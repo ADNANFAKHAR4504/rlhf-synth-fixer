@@ -6,9 +6,6 @@ const app = new App();
 
 // Get environment variables from the environment or use defaults
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-const stateBucket = process.env.TERRAFORM_STATE_BUCKET || 'iac-rlhf-tf-states';
-const stateBucketRegion =
-  process.env.TERRAFORM_STATE_BUCKET_REGION || 'us-east-1';
 const awsRegion = process.env.AWS_REGION || 'us-east-1';
 const repositoryName = process.env.REPOSITORY || 'unknown';
 const commitAuthor = process.env.COMMIT_AUTHOR || 'unknown';
