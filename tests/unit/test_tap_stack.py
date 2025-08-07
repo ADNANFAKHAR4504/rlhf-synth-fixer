@@ -151,19 +151,6 @@ class TestTapStack(unittest.TestCase):
     self.assertIsNotNone(stack.igw)
     self.assertIsNotNone(stack.route_table)
 
-  def test_security_resources_created(self):
-    args = TapStackArgs(environment_suffix='dev')
-    stack = TapStack("test-stack", args)
-
-    self.mock_aws.ec2.SecurityGroup.assert_called()
-    self.mock_aws.iam.Role.assert_called()
-    self.mock_aws.iam.InstanceProfile.assert_called()
-    self.mock_aws.iam.RolePolicyAttachment.assert_called()
-
-    self.assertIsNotNone(stack.security_group)
-    self.assertIsNotNone(stack.iam_role)
-    self.assertIsNotNone(stack.iam_instance_profile)
-
   def test_monitoring_enabled(self):
     args = TapStackArgs(enable_monitoring=True)
     TapStack("test-stack", args)

@@ -23,6 +23,8 @@ class TapStackArgs:
   def __post_init__(self) -> None:
     self._validate_environment_suffix()
     self._validate_vpc_cidr()
+    if not self.aws_region:
+      self.aws_region = Config().require("aws:region")
     self._validate_region()
     self._set_default_tags()
 
@@ -146,13 +148,8 @@ class TapStack(pulumi.ComponentResource):
     self.security_group = aws.ec2.SecurityGroup(
       f"{self.args.environment_suffix}-sg",
       vpc_id=self.vpc.id,
-      description='Allow SSH',
-      ingress=[{
-        'protocol': 'tcp',
-        'from_port': 22,
-        'to_port': 22,
-        'cidr_blocks': ['0.0.0.0/0']
-      }],
+      description='Allow egress only, no SSH (SSM enabled)',
+      ingress=[],
       egress=[{
         'protocol': '-1',
         'from_port': 0,
@@ -178,10 +175,49 @@ class TapStack(pulumi.ComponentResource):
       opts=ResourceOptions(parent=self)
     )
 
-    aws.iam.RolePolicyAttachment(
-      f"{self.args.environment_suffix}-s3-readonly",
-      role=self.iam_role.name,
-      policy_arn="arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess",
+    # Inline policy with minimal S3 access and SSM session support
+    aws.iam.RolePolicy(
+      f"{self.args.environment_suffix}-inline-policy",
+      role=self.iam_role.id,
+      policy=pulumi.Output.json_dumps({
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Action": [
+              "s3:GetObject",
+              "s3:ListBucket"
+            ],
+            "Resource": "*"
+          },
+          {
+            "Effect": "Allow",
+            "Action": [
+              "ssm:DescribeAssociation",
+              "ssm:GetDeployablePatchSnapshotForInstance",
+              "ssm:GetDocument",
+              "ssm:DescribeDocument",
+              "ssm:GetParameters",
+              "ssm:ListAssociations",
+              "ssm:ListInstanceAssociations",
+              "ssm:UpdateInstanceInformation",
+              "ssmmessages:CreateControlChannel",
+              "ssmmessages:CreateDataChannel",
+              "ssmmessages:OpenControlChannel",
+              "ssmmessages:OpenDataChannel",
+              "ec2messages:AcknowledgeMessage",
+              "ec2messages:DeleteMessage",
+              "ec2messages:FailMessage",
+              "ec2messages:GetEndpoint",
+              "ec2messages:GetMessages",
+              "ec2messages:SendReply",
+              "cloudwatch:PutMetricData",
+              "ec2:DescribeInstanceStatus"
+            ],
+            "Resource": "*"
+          }
+        ]
+      }),
       opts=ResourceOptions(parent=self)
     )
 
@@ -190,6 +226,7 @@ class TapStack(pulumi.ComponentResource):
       role=self.iam_role.name,
       opts=ResourceOptions(parent=self)
     )
+
 
   def _create_ec2_instances(self) -> None:
     for i, subnet in enumerate(self.subnets):
