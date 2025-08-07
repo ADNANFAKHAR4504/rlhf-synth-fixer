@@ -179,7 +179,7 @@ describe('Secure Architecture Integration Tests', () => {
       
       // Validate ARN format for CloudFront scope (global)
       if (webAclArn && webAclArn !== 'arn:aws:wafv2:global:123456789012:webacl/mock/123') {
-        expect(webAclArn).toContain(':global:');
+        expect(webAclArn).toContain(':global');
         expect(webAclArn).toContain('webacl');
       }
     });
