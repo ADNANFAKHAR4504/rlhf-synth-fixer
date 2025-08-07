@@ -47,6 +47,7 @@ import {
 import {
   CloudFormationClient,
   DescribeStacksCommand,
+  DescribeStackResourcesCommand,
 } from '@aws-sdk/client-cloudformation';
 import {
   IAMClient,
@@ -660,39 +661,66 @@ describe('TapStack Integration Tests', () => {
       const command = new DescribeAlarmsCommand({});
       const response = await cloudWatchClient.send(command);
       
+      // Get stack resources to find the actual alarm names
+      const stackResourcesCommand = new DescribeStackResourcesCommand({
+        StackName: stackName
+      });
+      const stackResourcesResponse = await cloudFormationClient.send(stackResourcesCommand);
+      
+      // Find CloudWatch alarm resources in the stack
+      const alarmResources = stackResourcesResponse.StackResources?.filter((resource: any) => 
+        resource.ResourceType === 'AWS::CloudWatch::Alarm'
+      ) || [];
+
+      // Get the physical resource IDs (actual alarm names)
+      const expectedAlarmNames = alarmResources.map((resource: any) => resource.PhysicalResourceId);
+      
+      // Filter alarms by actual alarm names from stack
       const stackAlarms = response.MetricAlarms!.filter((alarm: any) =>
-        alarm.AlarmName?.includes(stackName.toLowerCase()) ||
-        alarm.Tags?.some((tag: any) => 
-          tag.Key === 'aws:cloudformation:stack-name' && 
-          tag.Value === stackName
-        )
+        expectedAlarmNames.includes(alarm.AlarmName)
       );
 
-      // Should have ASG CPU alarms and RDS CPU alarm
+      console.log(`🔍 Expected alarms: ${expectedAlarmNames.join(', ')}`);
+      console.log(`🔍 Found stack alarms: ${stackAlarms.map((a: any) => a.AlarmName).join(', ')}`);
+
+      // Should have ASG CPU alarms (high/low) and RDS CPU alarm = 3 total
       expect(stackAlarms.length).toBeGreaterThanOrEqual(3);
       
-      // Check for specific alarm types
-      const asgHighCpuAlarm = stackAlarms.find((alarm: any) => 
-        alarm.MetricName === 'CPUUtilization' && 
-        alarm.Namespace === 'AWS/EC2' &&
-        alarm.ComparisonOperator === 'GreaterThanThreshold'
-      );
+      // Check for specific alarm types by logical resource ID mapping
+      const asgHighCpuAlarm = stackAlarms.find((alarm: any) => {
+        const resource = alarmResources.find((r: any) => r.PhysicalResourceId === alarm.AlarmName);
+        return resource?.LogicalResourceId === 'ProdAsgCpuAlarm';
+      });
       expect(asgHighCpuAlarm).toBeDefined();
+      expect(asgHighCpuAlarm?.MetricName).toBe('CPUUtilization');
+      expect(asgHighCpuAlarm?.Namespace).toBe('AWS/EC2');
+      expect(asgHighCpuAlarm?.ComparisonOperator).toBe('GreaterThanThreshold');
+      expect(asgHighCpuAlarm?.Threshold).toBe(70);
       
-      const asgLowCpuAlarm = stackAlarms.find((alarm: any) => 
-        alarm.MetricName === 'CPUUtilization' && 
-        alarm.Namespace === 'AWS/EC2' &&
-        alarm.ComparisonOperator === 'LessThanThreshold'
-      );
+      const asgLowCpuAlarm = stackAlarms.find((alarm: any) => {
+        const resource = alarmResources.find((r: any) => r.PhysicalResourceId === alarm.AlarmName);
+        return resource?.LogicalResourceId === 'ProdAsgLowCpuAlarm';
+      });
       expect(asgLowCpuAlarm).toBeDefined();
+      expect(asgLowCpuAlarm?.MetricName).toBe('CPUUtilization');
+      expect(asgLowCpuAlarm?.Namespace).toBe('AWS/EC2');
+      expect(asgLowCpuAlarm?.ComparisonOperator).toBe('LessThanThreshold');
+      expect(asgLowCpuAlarm?.Threshold).toBe(20);
       
-      const rdsCpuAlarm = stackAlarms.find((alarm: any) => 
-        alarm.MetricName === 'CPUUtilization' && 
-        alarm.Namespace === 'AWS/RDS'
-      );
+      const rdsCpuAlarm = stackAlarms.find((alarm: any) => {
+        const resource = alarmResources.find((r: any) => r.PhysicalResourceId === alarm.AlarmName);
+        return resource?.LogicalResourceId === 'ProdRdsCpuAlarm';
+      });
       expect(rdsCpuAlarm).toBeDefined();
+      expect(rdsCpuAlarm?.MetricName).toBe('CPUUtilization');
+      expect(rdsCpuAlarm?.Namespace).toBe('AWS/RDS');
+      expect(rdsCpuAlarm?.ComparisonOperator).toBe('GreaterThanThreshold');
+      expect(rdsCpuAlarm?.Threshold).toBe(70);
       
       console.log(`✅ Found ${stackAlarms.length} CloudWatch alarms for monitoring`);
+      console.log(`  - ASG High CPU Alarm: ${asgHighCpuAlarm?.AlarmName}`);
+      console.log(`  - ASG Low CPU Alarm: ${asgLowCpuAlarm?.AlarmName}`);
+      console.log(`  - RDS CPU Alarm: ${rdsCpuAlarm?.AlarmName}`);
     });
   });
 });
