@@ -904,6 +904,7 @@
           "Ref": "AppLogsBucket"
         },
         "PolicyDocument": {
+          "Version": "2012-10-17",
           "Statement": [
             {
               "Effect": "Allow",
@@ -924,21 +925,7 @@
               }
             },
             {
-              "Effect": "Allow",
-              "Principal": {
-                "Service": "cloudtrail.amazonaws.com"
-              },
-              "Action": "s3:PutObject",
-              "Resource": {
-                "Fn::Sub": "${AppLogsBucket.Arn}/cloudtrail-logs/*"
-              },
-              "Condition": {
-                "StringEquals": {
-                  "s3:x-amz-acl": "bucket-owner-full-control"
-                }
-              }
-            },
-            {
+              "Sid": "AWSCloudTrailAclCheck",
               "Effect": "Allow",
               "Principal": {
                 "Service": "cloudtrail.amazonaws.com"
@@ -949,6 +936,32 @@
                   "AppLogsBucket",
                   "Arn"
                 ]
+              },
+              "Condition": {
+                "StringEquals": {
+                  "aws:SourceArn": {
+                    "Fn::Sub": "arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${AWS::StackName}-cloudtrail-${EnvironmentSuffix}"
+                  }
+                }
+              }
+            },
+            {
+              "Sid": "AWSCloudTrailWrite",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "cloudtrail.amazonaws.com"
+              },
+              "Action": "s3:PutObject",
+              "Resource": {
+                "Fn::Sub": "${AppLogsBucket.Arn}/cloudtrail-logs/*"
+              },
+              "Condition": {
+                "StringEquals": {
+                  "s3:x-amz-acl": "bucket-owner-full-control",
+                  "aws:SourceArn": {
+                    "Fn::Sub": "arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${AWS::StackName}-cloudtrail-${EnvironmentSuffix}"
+                  }
+                }
               }
             }
           ]
