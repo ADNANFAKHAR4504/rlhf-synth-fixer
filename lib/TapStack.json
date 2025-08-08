@@ -1268,7 +1268,12 @@
         },
         "LaunchTemplateData": {
           "ImageId": {
-            "Fn::Sub": "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}"
+            "Fn::Join": [
+              "",
+              [
+                "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}"
+              ]
+            ]
           },
           "InstanceType": {
             "Ref": "InstanceType"
@@ -1312,9 +1317,7 @@
             }
           ],
           "UserData": {
-            "Fn::Base64": {
-              "Fn::Sub": "#!/bin/bash\nyum update -y\nyum install -y amazon-ssm-agent\nsystemctl enable amazon-ssm-agent\nsystemctl start amazon-ssm-agent\n"
-            }
+            "Fn::Base64": "#!/bin/bash\nyum update -y\nyum install -y amazon-ssm-agent\nsystemctl enable amazon-ssm-agent\nsystemctl start amazon-ssm-agent\n"
           },
           "TagSpecifications": [
             {
@@ -1504,7 +1507,7 @@
     "S3BucketName": {
       "Description": "S3 Bucket Name",
       "Value": {
-        "Ref": "S3Bucket"
+        "Fn::Sub": "${Project}-${Environment}-secure-bucket-${AWS::AccountId}-${AWS::Region}"
       },
       "Export": {
         "Name": {
