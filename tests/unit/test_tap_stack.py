@@ -112,7 +112,7 @@ class TestTapStack(MyMocks):
     provider_calls = self.pulumi_aws_provider_mock.call_args_list
     self.assertIn(call("aws-provider-useast1-prod", region='us-east-1', opts=ANY),
                   provider_calls)
-    self.assertIn(call("aws-provider-uswest1-prod", region='us-west-1', opts=ANY),
+    self.assertIn(call("aws-provider-uswest2-prod", region='us-west-2', opts=ANY),
                   provider_calls)
     self.assertEqual(self.networking_infrastructure_mock.call_count, 2)
     self.assertEqual(self.security_infrastructure_mock.call_count, 2)
@@ -128,7 +128,7 @@ class TestTapStack(MyMocks):
     self.assertEqual(self.pulumi_aws_provider_mock.call_count, 2)
     self.assertIn(call("aws-provider-useast1-prod", region='us-east-1', opts=ANY),
                   self.pulumi_aws_provider_mock.call_args_list)
-    self.assertIn(call("aws-provider-uswest1-prod", region='us-west-1', opts=ANY),
+    self.assertIn(call("aws-provider-uswest2-prod", region='us-west-2', opts=ANY),
                   self.pulumi_aws_provider_mock.call_args_list)
 
   def test_tap_stack_with_empty_regions_list_is_ignored(self):
@@ -140,12 +140,12 @@ class TestTapStack(MyMocks):
     self.assertEqual(self.pulumi_aws_provider_mock.call_count, 2)
     self.assertIn(call("aws-provider-useast1-prod", region='us-east-1', opts=ANY),
                   self.pulumi_aws_provider_mock.call_args_list)
-    self.assertIn(call("aws-provider-uswest1-prod", region='us-west-1', opts=ANY),
+    self.assertIn(call("aws-provider-uswest2-prod", region='us-west-2', opts=ANY),
                   self.pulumi_aws_provider_mock.call_args_list)
 
   def test_sub_component_provider_args(self):
     test_args = TapStackArgs(
-      regions=["us-east-1", "us-west-1"]
+      regions=["us-east-1", "us-west-2"]
     )
     test_stack_name = "test-sub-component-args"
     TapStack(test_stack_name, args=test_args, **self.mock_parent_opts)

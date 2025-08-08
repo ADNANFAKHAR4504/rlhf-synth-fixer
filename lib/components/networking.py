@@ -86,7 +86,7 @@ class NetworkingInfrastructure(pulumi.ComponentResource):
     # Create a NAT Gateway and EIP for private subnet internet access
     self.eip = aws.ec2.Eip(
         f"{name}-nat-eip",
-        vpc=True,
+        domain="vpc",
         tags={**tags, "Name": f"{name}-nat-eip"},
         opts=ResourceOptions(parent=self, depends_on=[self.igw])
     )

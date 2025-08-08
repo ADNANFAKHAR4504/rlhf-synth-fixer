@@ -23,8 +23,16 @@ class ComputeInfrastructure(pulumi.ComponentResource):
                opts: Optional[ResourceOptions] = None):
     super().__init__('tap:components:ComputeInfrastructure', name, None, opts)
 
-    # Use a default instance type and AMI
-    ami_id = "ami-0c55b159cbfafe1f0" # Example AMI for us-east-1
+    # Get the latest Amazon Linux 2 AMI
+    ami = aws.ec2.get_ami(
+        most_recent=True,
+        owners=["amazon"],
+        filters=[
+            {"name": "name", "values": ["amzn2-ami-hvm-*-x86_64-gp2"]},
+            {"name": "state", "values": ["available"]}
+        ]
+    )
+    ami_id = ami.id
     instance_type = "t3.micro"
 
     # Define user data to install a web server on the instances
