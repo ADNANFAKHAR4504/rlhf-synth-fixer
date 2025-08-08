@@ -59,7 +59,7 @@ class TapStack(ComponentResource):
         self._create_lambda_functions()
         self._create_ec2_instances()
         self._create_monitoring()
-        self._create_compliance_checks()
+        # self._create_compliance_checks()
 
         self.register_outputs(
             {
