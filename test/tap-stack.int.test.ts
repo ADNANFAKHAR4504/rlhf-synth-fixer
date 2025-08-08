@@ -4,12 +4,16 @@ import { GetRoleCommand, GetRolePolicyCommand, IAMClient } from '@aws-sdk/client
 import { DescribeKeyCommand, GetKeyPolicyCommand, GetKeyRotationStatusCommand, KMSClient } from '@aws-sdk/client-kms';
 import { GetBucketEncryptionCommand, GetBucketTaggingCommand, GetBucketVersioningCommand, GetPublicAccessBlockCommand, S3Client } from '@aws-sdk/client-s3';
 import * as fs from 'fs';
+import * as path from 'path';
+
+const stackName =  'TapStack'+process.env.ENVIRONMENT_SUFFIX;
 
 // Load stack outputs
 const loadStackOutputs = () => {
-  const outputsData = fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8');
+  const outputsPath = path.join(__dirname, '../cfn-outputs/all-outputs.json');
+  const outputsData = fs.readFileSync(outputsPath, 'utf8');
   const outputs = JSON.parse(outputsData);
-  return outputs.TapStackpr13; // Use the actual stack name from outputs
+  return outputs[stackName]; // Use the actual stack name from outputs
 };
 
 describe('TapStack Infrastructure Integration Tests', () => {
