@@ -119,6 +119,7 @@
             "STAGE": {
               "Ref": "Environment"
             },
+            "AWS_REGION": "us-east-1",
             "LOG_LEVEL": {
               "Ref": "LogLevel"
             },
@@ -343,22 +344,57 @@
           "Fn::Sub": "${Environment}-lambda-error-rate-alarm"
         },
         "AlarmDescription": "Alarm when Lambda error rate exceeds 5% for 5 minutes",
-        "MetricName": "Errors",
-        "Namespace": "AWS/Lambda",
-        "Statistic": "Sum",
-        "Period": 300,
+        "ComparisonOperator": "GreaterThanThreshold",
         "EvaluationPeriods": 1,
         "Threshold": 5.0,
-        "ComparisonOperator": "GreaterThanThreshold",
-        "Dimensions": [
+        "TreatMissingData": "notBreaching",
+        "Metrics": [
           {
-            "Name": "FunctionName",
-            "Value": {
-              "Ref": "DataProcessorFunction"
-            }
+            "Id": "e1",
+            "Expression": "(m1/m2)*100",
+            "Label": "Error Rate (%)"
+          },
+          {
+            "Id": "m1",
+            "MetricStat": {
+              "Metric": {
+                "MetricName": "Errors",
+                "Namespace": "AWS/Lambda",
+                "Dimensions": [
+                  {
+                    "Name": "FunctionName",
+                    "Value": {
+                      "Ref": "DataProcessorFunction"
+                    }
+                  }
+                ]
+              },
+              "Period": 300,
+              "Stat": "Sum"
+            },
+            "ReturnData": false
+          },
+          {
+            "Id": "m2",
+            "MetricStat": {
+              "Metric": {
+                "MetricName": "Invocations",
+                "Namespace": "AWS/Lambda",
+                "Dimensions": [
+                  {
+                    "Name": "FunctionName",
+                    "Value": {
+                      "Ref": "DataProcessorFunction"
+                    }
+                  }
+                ]
+              },
+              "Period": 300,
+              "Stat": "Sum"
+            },
+            "ReturnData": false
           }
-        ],
-        "TreatMissingData": "notBreaching"
+        ]
       }
     }
   },

@@ -10,7 +10,7 @@ The original CloudFormation template provided was generally well-structured and 
 
 ### 1. CloudWatch Alarm Configuration Issue (Critical)
 
-**Issue**: The original template used `ErrorRate` as a metric name in the CloudWatch alarm, which is not a valid CloudWatch metric provided by AWS Lambda. AWS Lambda only provides basic metrics like `Errors`, `Invocations`, `Duration`, etc., but not a pre-calculated error rate.
+**Issue**: The original template used `ErrorRate` as a metric name in the CloudWatch alarm, which is not a valid CloudWatch metric provided by AWS Lambda. AWS Lambda only provides basic metrics like `Errors`, `Invocations`, `Duration`, etc., but not a pre-calculated error rate. Additionally, to properly calculate an error rate percentage (>5%), we need to use a math expression that divides errors by invocations.
 
 **Requirement**:
 
@@ -28,21 +28,52 @@ LambdaErrorAlarm:
     Threshold: 5.0
 ```
 
-**Actual Template Implementation**:
+**Fixed Implementation**:
 
 ```yaml
 LambdaErrorAlarm:
   Type: AWS::CloudWatch::Alarm
   Properties:
-    MetricName: Errors # ✅ Fixed to use valid metric
-    Namespace: AWS/Lambda
-    Statistic: Sum
+    AlarmName: !Sub '${Environment}-lambda-error-rate-alarm'
+    AlarmDescription: 'Alarm when Lambda error rate exceeds 5% for 5 minutes'
+    ComparisonOperator: GreaterThanThreshold
+    EvaluationPeriods: 1
     Threshold: 5.0
+    TreatMissingData: notBreaching
+    Metrics:
+      - Id: e1
+        Expression: '(m1/m2)*100'  # ✅ Calculate error rate percentage
+        Label: 'Error Rate (%)'
+      - Id: m1
+        MetricStat:
+          Metric:
+            MetricName: Errors     # ✅ Valid AWS Lambda metric
+            Namespace: AWS/Lambda
+            Dimensions:
+              - Name: FunctionName
+                Value: !Ref DataProcessorFunction
+          Period: 300
+          Stat: Sum
+        ReturnData: false
+      - Id: m2
+        MetricStat:
+          Metric:
+            MetricName: Invocations  # ✅ Valid AWS Lambda metric  
+            Namespace: AWS/Lambda
+            Dimensions:
+              - Name: FunctionName
+                Value: !Ref DataProcessorFunction
+          Period: 300
+          Stat: Sum
+        ReturnData: false
 ```
 
-**Fix Applied**: Changed the metric from `ErrorRate` to `Errors` and updated the statistic from `Average` to `Sum` to properly monitor Lambda function errors.
+**Fix Applied**: 
+1. Replaced the invalid `ErrorRate` metric with a proper math expression `(m1/m2)*100` that calculates the error rate percentage
+2. Added two metric queries: `m1` for Errors and `m2` for Invocations
+3. Used the proper CloudWatch Metrics configuration with math expressions to calculate the error rate
 
-**Impact**: This fix ensures that the CloudWatch alarm can be successfully created and will properly monitor Lambda function errors using actual AWS metrics.
+**Impact**: This fix ensures that the CloudWatch alarm properly calculates and monitors the Lambda function's error rate as a percentage, triggering when errors exceed 5% of total invocations over a 5-minute period.
 
 ## Quality Assurance Pipeline Results
 
@@ -107,9 +138,10 @@ The original template already implemented most requirements correctly:
 ### 5. Monitoring and Logging
 
 - ✅ Dedicated CloudWatch Log Group with 14-day retention
-- ✅ CloudWatch Alarm for Lambda error rate monitoring
+- ✅ CloudWatch Alarm for Lambda error rate monitoring  
 - ✅ Proper alarm configuration (>5% error rate for 5 minutes)
-- ✅ Math expression for error rate calculation
+- ✅ Math expression `(m1/m2)*100` for error rate percentage calculation
+- ✅ Uses valid AWS Lambda metrics: Errors and Invocations
 
 ### 6. Lambda Function Implementation
 
@@ -132,16 +164,16 @@ The original template already implemented most requirements correctly:
 
 ## Summary
 
-The original model response was of high quality and met 99% of the requirements. Only one minor but critical environment variable was missing, which was easily identified and fixed during the QA pipeline execution. The template demonstrated:
+The original model response was of high quality and met most of the requirements. However, one critical issue was identified and fixed during the QA pipeline execution: the CloudWatch alarm used an invalid metric name (`ErrorRate`) instead of a proper math expression to calculate the error rate percentage. The template demonstrated:
 
 - Strong understanding of AWS CloudFormation best practices
 - Proper implementation of serverless architecture patterns
 - Good security practices with IAM least privilege
-- Comprehensive monitoring and logging setup
+- Comprehensive monitoring and logging setup (after fix)
 - Correct DynamoDB auto-scaling configuration
 - Well-structured Python Lambda function code
 
-The fix was minimal but important for complete compliance with the specified requirements. The final solution represents a production-ready serverless application that follows AWS best practices for security, monitoring, and scalability.
+The fix was important for complete compliance with the specified requirements, ensuring the CloudWatch alarm properly monitors Lambda function error rates using valid AWS metrics and math expressions. The final solution represents a production-ready serverless application that follows AWS best practices for security, monitoring, and scalability.
 
 ## Deployment Status
 

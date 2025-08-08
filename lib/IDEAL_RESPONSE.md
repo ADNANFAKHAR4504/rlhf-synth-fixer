@@ -108,7 +108,7 @@ Resources:
 
           # Initialize DynamoDB client
           dynamodb = boto3.resource('dynamodb', region_name=os.environ.get('AWS_REGION'))
-          table = dynamodb.Table(os.environ.get('DYNAMODB_TABLE'))
+          table = dynamodb.Table(os.environ.get('TABLE_NAME'))
 
           def lambda_handler(event, context):
               try:
@@ -301,23 +301,42 @@ Resources:
         PredefinedMetricSpecification:
           PredefinedMetricType: DynamoDBWriteCapacityUtilization
 
-  # CloudWatch Alarm for Lambda Errors
+  # CloudWatch Alarm for Lambda Error Rate
   LambdaErrorAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName: !Sub '${Environment}-lambda-error-rate-alarm'
       AlarmDescription: 'Alarm when Lambda error rate exceeds 5% for 5 minutes'
-      MetricName: Errors
-      Namespace: AWS/Lambda
-      Statistic: Sum
-      Period: 300
+      ComparisonOperator: GreaterThanThreshold
       EvaluationPeriods: 1
       Threshold: 5.0
-      ComparisonOperator: GreaterThanThreshold
-      Dimensions:
-        - Name: FunctionName
-          Value: !Ref DataProcessorFunction
       TreatMissingData: notBreaching
+      Metrics:
+        - Id: e1
+          Expression: '(m1/m2)*100'
+          Label: 'Error Rate (%)'
+        - Id: m1
+          MetricStat:
+            Metric:
+              MetricName: Errors
+              Namespace: AWS/Lambda
+              Dimensions:
+                - Name: FunctionName
+                  Value: !Ref DataProcessorFunction
+            Period: 300
+            Stat: Sum
+          ReturnData: false
+        - Id: m2
+          MetricStat:
+            Metric:
+              MetricName: Invocations
+              Namespace: AWS/Lambda
+              Dimensions:
+                - Name: FunctionName
+                  Value: !Ref DataProcessorFunction
+            Period: 300
+            Stat: Sum
+          ReturnData: false
 
 Outputs:
   ApiGatewayUrl:
@@ -364,7 +383,7 @@ Outputs:
   - STAGE: References Environment parameter
   - AWS_REGION: Explicitly set to us-east-1
   - LOG_LEVEL: References LogLevel parameter
-  - DYNAMODB_TABLE: References the DynamoDB table
+  - TABLE_NAME: References the DynamoDB table
 - **IAM Role**: Follows least privilege principle with only necessary permissions:
   - CloudWatch Logs: CreateLogStream, PutLogEvents
   - DynamoDB: PutItem access only
