@@ -7,6 +7,8 @@ import pulumi
 import pulumi_aws as aws
 from pulumi import ResourceOptions
 
+import base64
+
 class ComputeInfrastructure(pulumi.ComponentResource):
   """
   Creates an Auto Scaling Group and Launch Template for EC2 instances.
@@ -40,7 +42,7 @@ echo "<h1>Hello from Pulumi!</h1>" > /var/www/html/index.html
         name_prefix=f"{name}-lt-",
         image_id=ami_id,
         instance_type=instance_type,
-        user_data=pulumi.Output.from_input(user_data).apply(lambda data: pulumi.Output.secret(pulumi.Output.from_input(data).apply(lambda d: pulumi.Output.from_input(d).apply(pulumi.Output.encode_base64)))),
+        user_data=base64.b64encode(user_data.encode('utf-8')).decode('utf-8'),
         vpc_security_group_ids=[security_group_id],
         tags={**tags, "Name": f"{name}-launch-template"},
         opts=ResourceOptions(parent=self)
