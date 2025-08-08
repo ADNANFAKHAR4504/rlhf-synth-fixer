@@ -375,12 +375,12 @@ describe('TapStack CloudFormation Template', () => {
       });
     });
 
-    test('bucket names should include EnvironmentSuffix', () => {
+    test('buckets should use auto-generated names (no explicit BucketName)', () => {
       const buckets = ['AppDataBucket', 'AppLogsBucket'];
 
       buckets.forEach(bucket => {
         const bucketName = template.Resources[bucket].Properties.BucketName;
-        expect(bucketName['Fn::Sub']).toContain('${EnvironmentSuffix}');
+        expect(bucketName).toBeUndefined();
       });
     });
 
