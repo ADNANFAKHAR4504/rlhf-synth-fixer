@@ -11,6 +11,7 @@ import {
   DescribeInstancesCommand,
   DescribeInternetGatewaysCommand,
   DescribeLaunchTemplatesCommand,
+  DescribeLaunchTemplateVersionsCommand,
   DescribeSecurityGroupsCommand,
   DescribeSubnetsCommand,
   DescribeVolumesCommand,
@@ -249,7 +250,18 @@ describe('ProjectX Infrastructure Integration Tests', () => {
       const launchTemplate = ltResponse.LaunchTemplates![0];
       
       expect(launchTemplate.LaunchTemplateName).toBe('projectX-launch-template');
-      expect(launchTemplate.LaunchTemplateData?.InstanceType).toBe('t3.micro');
+      
+      // Get launch template data by describing launch template versions
+      const ltVersionCommand = new DescribeLaunchTemplateVersionsCommand({
+        LaunchTemplateId: launchTemplate.LaunchTemplateId,
+        Versions: ['$Latest']
+      });
+      const ltVersionResponse = await ec2Client.send(ltVersionCommand);
+      
+      expect(ltVersionResponse.LaunchTemplateVersions).toHaveLength(1);
+      const launchTemplateData = ltVersionResponse.LaunchTemplateVersions![0].LaunchTemplateData;
+      
+      expect(launchTemplateData?.InstanceType).toBe('t3.micro');
       
       console.log('✅ Launch Template verified:', launchTemplate.LaunchTemplateId);
     });
