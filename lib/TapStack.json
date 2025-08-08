@@ -683,10 +683,22 @@
                   ],
                   "Resource": [
                     {
-                      "Fn::Sub": "${AppDataBucket}/*"
+                      "Fn::GetAtt": [
+                        "AppDataBucket",
+                        "Arn"
+                      ]
                     },
                     {
-                      "Fn::Sub": "${AppLogsBucket}/*"
+                      "Fn::Sub": "${AppDataBucket.Arn}/*"
+                    },
+                    {
+                      "Fn::GetAtt": [
+                        "AppLogsBucket",
+                        "Arn"
+                      ]
+                    },
+                    {
+                      "Fn::Sub": "${AppLogsBucket.Arn}/*"
                     }
                   ]
                 },
@@ -697,10 +709,16 @@
                   ],
                   "Resource": [
                     {
-                      "Ref": "AppDataBucket"
+                      "Fn::GetAtt": [
+                        "AppDataBucket",
+                        "Arn"
+                      ]
                     },
                     {
-                      "Ref": "AppLogsBucket"
+                      "Fn::GetAtt": [
+                        "AppLogsBucket",
+                        "Arn"
+                      ]
                     }
                   ]
                 }
@@ -846,7 +864,7 @@
                 "s3:PutObject"
               ],
               "Resource": {
-                "Fn::Sub": "${AppDataBucket}/*"
+                "Fn::Sub": "${AppDataBucket.Arn}/*"
               }
             },
             {
@@ -855,10 +873,13 @@
               "Action": "s3:*",
               "Resource": [
                 {
-                  "Ref": "AppDataBucket"
+                  "Fn::GetAtt": [
+                    "AppDataBucket",
+                    "Arn"
+                  ]
                 },
                 {
-                  "Fn::Sub": "${AppDataBucket}/*"
+                  "Fn::Sub": "${AppDataBucket.Arn}/*"
                 }
               ],
               "Condition": {
@@ -899,7 +920,7 @@
                 "s3:PutObject"
               ],
               "Resource": {
-                "Fn::Sub": "${AppLogsBucket}/*"
+                "Fn::Sub": "${AppLogsBucket.Arn}/*"
               }
             },
             {
@@ -908,10 +929,13 @@
               "Action": "s3:*",
               "Resource": [
                 {
-                  "Ref": "AppLogsBucket"
+                  "Fn::GetAtt": [
+                    "AppLogsBucket",
+                    "Arn"
+                  ]
                 },
                 {
-                  "Fn::Sub": "${AppLogsBucket}/*"
+                  "Fn::Sub": "${AppLogsBucket.Arn}/*"
                 }
               ],
               "Condition": {
