@@ -459,9 +459,6 @@
         "ApplicationSecurityGroup": {
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
-                "GroupName": {
-                    "Fn::Sub": "${ApplicationName}-${Environment}-SecurityGroup"
-                },
                 "GroupDescription": "Security group allowing only HTTPS inbound traffic",
                 "VpcId": {
                     "Ref": "ApplicationVPC"
@@ -505,9 +502,6 @@
         "EC2InstanceRole": {
             "Type": "AWS::IAM::Role",
             "Properties": {
-                "RoleName": {
-                    "Fn::Sub": "${ApplicationName}-${Environment}-EC2-Role"
-                },
                 "AssumeRolePolicyDocument": {
                     "Version": "2012-10-17",
                     "Statement": [
@@ -543,7 +537,7 @@
             "Type": "AWS::IAM::Policy",
             "Properties": {
                 "PolicyName": {
-                    "Fn::Sub": "${ApplicationName}-${Environment}-EC2-Policy"
+                    "Fn::Sub": "EC2Policy-${AWS::StackName}"
                 },
                 "PolicyDocument": {
                     "Version": "2012-10-17",
@@ -598,9 +592,6 @@
         "EC2InstanceProfile": {
             "Type": "AWS::IAM::InstanceProfile",
             "Properties": {
-                "InstanceProfileName": {
-                    "Fn::Sub": "${ApplicationName}-${Environment}-EC2-Profile"
-                },
                 "Roles": [
                     {
                         "Ref": "EC2InstanceRole"
@@ -694,7 +685,7 @@
             "Type": "AWS::RDS::DBSubnetGroup",
             "Properties": {
                 "DBSubnetGroupName": {
-                    "Fn::Sub": "${ApplicationName}-${Environment}-db-subnet-group"
+                    "Fn::Sub": "financialapp-${Environment}-db-subnet-group"
                 },
                 "DBSubnetGroupDescription": "Subnet group for RDS database",
                 "SubnetIds": [
@@ -724,9 +715,6 @@
         "DatabaseSecurityGroup": {
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
-                "GroupName": {
-                    "Fn::Sub": "${ApplicationName}-${Environment}-Database-SecurityGroup"
-                },
                 "GroupDescription": "Security group for RDS database - allows access from application instances only",
                 "VpcId": {
                     "Ref": "ApplicationVPC"
@@ -792,10 +780,7 @@
                     "Ref": "DBSubnetGroup"
                 },
                 "PubliclyAccessible": false,
-                "MonitoringInterval": 60,
-                "MonitoringRoleArn": {
-                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:role/rds-monitoring-role"
-                },
+                "MonitoringInterval": 0,
                 "EnableCloudwatchLogsExports": [
                     "error",
                     "general",
@@ -848,18 +833,10 @@
                                 "Values": [
                                     {
                                         "Fn::Sub": "${ApplicationDataBucket}/*"
-                                    },
-                                    {
-                                        "Fn::Sub": "${CloudTrailLogsBucket}/*"
                                     }
                                 ]
                             }
                         ]
-                    }
-                ],
-                "InsightSelectors": [
-                    {
-                        "InsightType": "ApiCallRateInsight"
                     }
                 ],
                 "Tags": [

@@ -284,7 +284,7 @@ Resources:
   ApplicationSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub '${ApplicationName}-${Environment}-SecurityGroup'
+      # GroupName removed for auto-generation
       GroupDescription: 'Security group allowing only HTTPS inbound traffic'
       VpcId: !Ref ApplicationVPC
       # Inbound rules - Only HTTPS traffic allowed
@@ -315,7 +315,7 @@ Resources:
   EC2InstanceRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${ApplicationName}-${Environment}-EC2-Role'
+      # RoleName removed for CAPABILITY_IAM compatibility
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -336,7 +336,7 @@ Resources:
   EC2InstancePolicy:
     Type: AWS::IAM::Policy
     Properties:
-      PolicyName: !Sub '${ApplicationName}-${Environment}-EC2-Policy'
+      PolicyName: !Sub 'EC2Policy-${AWS::StackName}'
       PolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -371,7 +371,7 @@ Resources:
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
-      InstanceProfileName: !Sub '${ApplicationName}-${Environment}-EC2-Profile'
+      # InstanceProfileName removed for CAPABILITY_IAM compatibility
       Roles:
         - !Ref EC2InstanceRole
 
@@ -460,7 +460,7 @@ Resources:
   DBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
-      DBSubnetGroupName: !Sub '${ApplicationName}-${Environment}-db-subnet-group'
+      DBSubnetGroupName: !Sub 'financialapp-${Environment}-db-subnet-group'
       DBSubnetGroupDescription: 'Subnet group for RDS database'
       SubnetIds:
         - !Ref PrivateSubnet
@@ -475,7 +475,7 @@ Resources:
   DatabaseSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub '${ApplicationName}-${Environment}-Database-SecurityGroup'
+      # GroupName removed for auto-generation
       GroupDescription: 'Security group for RDS database - allows access from application instances only'
       VpcId: !Ref ApplicationVPC
       SecurityGroupIngress:
@@ -519,8 +519,7 @@ Resources:
       DBSubnetGroupName: !Ref DBSubnetGroup
       PubliclyAccessible: false
       # Monitoring and logging
-      MonitoringInterval: 60
-      MonitoringRoleArn: !Sub 'arn:aws:iam::${AWS::AccountId}:role/rds-monitoring-role'
+      MonitoringInterval: 0 # Disabled to avoid role dependency
       EnableCloudwatchLogsExports:
         - error
         - general
@@ -560,10 +559,7 @@ Resources:
             - Type: 'AWS::S3::Object'
               Values:
                 - !Sub '${ApplicationDataBucket}/*'
-                - !Sub '${CloudTrailLogsBucket}/*'
-      # Enable insight selectors for anomaly detection
-      InsightSelectors:
-        - InsightType: ApiCallRateInsight
+      # Note: InsightSelectors removed for compatibility
       Tags:
         - Key: Name
           Value: !Sub '${ApplicationName}-${Environment}-CloudTrail'
