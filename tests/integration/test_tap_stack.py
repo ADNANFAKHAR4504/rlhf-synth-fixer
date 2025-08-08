@@ -6,7 +6,8 @@ This is a standalone file and does not require a separate conftest.py.
 """
 import pytest
 import boto3
-import pulumi
+import subprocess
+import json
 import os
 
 # Pulumi requires a project and stack name to be set for `pulumi.get_stack()` to work.
@@ -19,21 +20,27 @@ def pulumi_outputs():
   """
   Fixture to get all the outputs from the Pulumi stack.
   
-  This function uses `pulumi stack output` to fetch the values,
-  which requires the Pulumi CLI to be installed and logged in.
+  This function uses the Pulumi CLI via a subprocess to fetch the outputs as JSON.
+  This approach is robust for external scripts like this pytest file.
   The stack must be deployed before running these tests.
   """
-  # Set the PULUMI_STACK environment variable for the Pulumi CLI
-  os.environ['PULUMI_STACK'] = PULUMI_STACK
-
   try:
-    # Use Pulumi's API to get all stack outputs
-    stack_outputs = pulumi.get_stack().outputs
+    # Run the Pulumi CLI command to get the stack outputs in JSON format.
+    # The --json flag is crucial for programmatic access.
+    # We specify the stack to ensure the correct outputs are retrieved.
+    command = ['pulumi', 'stack', 'output', '--json', '--stack', PULUMI_STACK]
+    result = subprocess.run(command, capture_output=True, text=True, check=True)
+    
+    # Parse the JSON output into a Python dictionary
+    stack_outputs = json.loads(result.stdout)
     return stack_outputs
-  except Exception as e:
-    pytest.fail(f"Could not retrieve Pulumi stack outputs: {e}. "
-                "Make sure the stack is deployed and you are logged in.")
-
+  except FileNotFoundError:
+    pytest.fail("Pulumi CLI not found. Please ensure it is installed and in your PATH.")
+  except subprocess.CalledProcessError as e:
+    pytest.fail(f"Pulumi CLI command failed: {e.stderr}. "
+                "Ensure you are logged in and the stack is deployed.")
+  except json.JSONDecodeError:
+    pytest.fail("Failed to parse JSON output from Pulumi CLI. Is the stack output empty?")
 
 # A fixture for the boto3 clients
 @pytest.fixture(scope="session")
@@ -42,7 +49,7 @@ def aws_clients(pulumi_outputs):
   Fixture to provide a dictionary of boto3 clients for each deployed region.
   """
   clients = {}
-  stack_data = pulumi_outputs[PULUMI_STACK]
+  stack_data = pulumi_outputs
   
   # The `all_regions_data` output is a list containing a single dictionary
   regions_data = stack_data['all_regions_data'][0]
@@ -60,7 +67,7 @@ def test_stack_outputs(pulumi_outputs):
   """
   Verify that the high-level stack outputs match the deployed values.
   """
-  stack_data = pulumi_outputs[PULUMI_STACK]
+  stack_data = pulumi_outputs
   
   assert stack_data['environment'] == 'dev'
   assert stack_data['total_regions'] == 2
@@ -81,11 +88,12 @@ def test_primary_region_resources(pulumi_outputs, aws_clients):
   Verify that the primary region's VPC, Security Group, and Auto Scaling Group
   resources exist with the correct IDs from the stack outputs.
   """
-  stack_data = pulumi_outputs[PULUMI_STACK]
+  stack_data = pulumi_outputs
   
   primary_region = stack_data['primary_region']
   primary_vpc_id = stack_data['primary_vpc_id']
   primary_sg_id = stack_data['primary_web_server_sg_id']
+  # The output provides a list of instance ARNs, we need the first one.
   primary_asg_arn = stack_data['primary_instance_ids'][0]
 
   ec2_client = aws_clients[primary_region]['ec2']
@@ -121,7 +129,7 @@ def test_all_regions_resources(pulumi_outputs, aws_clients):
   Iterate through all deployed regions and verify their specific VPC, Security Group,
   and CloudWatch Dashboard resources.
   """
-  stack_data = pulumi_outputs[PULUMI_STACK]
+  stack_data = pulumi_outputs
   
   # Access the nested dictionary correctly
   all_regions_data = stack_data['all_regions_data'][0]
