@@ -17,6 +17,7 @@ Resources:
     Type: AWS::KMS::Key
     Properties:
       Description: 'KMS key for S3 bucket encryption'
+      EnableKeyRotation: true
       KeyPolicy:
         Version: '2012-10-17'
         Statement:
@@ -25,15 +26,6 @@ Resources:
             Principal:
               AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
             Action: 'kms:*'
-            Resource: '*'
-          - Sid: Allow Lambda function to use the key
-            Effect: Allow
-            Principal:
-              AWS: !GetAtt LambdaExecutionRole.Arn
-            Action:
-              - 'kms:Decrypt'
-              - 'kms:GenerateDataKey'
-              - 'kms:DescribeKey'
             Resource: '*'
 
   # KMS key alias for easier reference
@@ -47,7 +39,7 @@ Resources:
   ProcessedDataBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${AWS::StackName}-processed-data-${AWS::AccountId}-${AWS::Region}'
+      BucketName: !Sub '${AWS::StackName}-processed-data-${AWS::AccountId}-${AWS::Region}-${Environment}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -67,12 +59,16 @@ Resources:
             Status: Enabled
             AbortIncompleteMultipartUpload:
               DaysAfterInitiation: 7
+          - Id: DeleteOldVersions
+            Status: Enabled
+            NoncurrentVersionExpiration:
+              NoncurrentDays: 30
 
   # CloudWatch Log Group for Lambda function
   LambdaLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub '/aws/lambda/${LambdaFunction}'
+      LogGroupName: !Sub '/aws/lambda/${AWS::StackName}-processor-function'
       RetentionInDays: 14
 
   # IAM execution role for Lambda with least privilege
@@ -99,11 +95,11 @@ Resources:
                   - 's3:GetObject'
                   - 's3:PutObject'
                   - 's3:DeleteObject'
-                Resource: !Sub '${ProcessedDataBucket}/*'
+                Resource: !Sub 'arn:aws:s3:::${ProcessedDataBucket}/*'
               - Effect: Allow
                 Action:
                   - 's3:ListBucket'
-                Resource: !Ref ProcessedDataBucket
+                Resource: !Sub 'arn:aws:s3:::${ProcessedDataBucket}'
         - PolicyName: KMSAccessPolicy
           PolicyDocument:
             Version: '2012-10-17'
@@ -270,7 +266,7 @@ Resources:
       FunctionName: !Ref LambdaFunction
       Action: lambda:InvokeFunction
       Principal: apigateway.amazonaws.com
-      SourceArn: !Sub '${ApiGateway}/*/ANY/*'
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/${Environment}/ANY/*'
 
   # Lambda permission for API Gateway root resource
   LambdaApiGatewayRootPermission:
@@ -279,7 +275,7 @@ Resources:
       FunctionName: !Ref LambdaFunction
       Action: lambda:InvokeFunction
       Principal: apigateway.amazonaws.com
-      SourceArn: !Sub '${ApiGateway}/*/ANY/'
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/${Environment}/ANY'
 
   # CloudWatch alarm for Lambda errors
   LambdaErrorAlarm:
@@ -312,6 +308,24 @@ Resources:
       EvaluationPeriods: 2
       Threshold: 25000  # 25 seconds (function timeout is 30 seconds)
       ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref LambdaFunction
+      TreatMissingData: notBreaching
+
+  # CloudWatch alarm for Lambda invocations
+  LambdaInvocationAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${AWS::StackName}-lambda-invocations'
+      AlarmDescription: 'Alarm for Lambda function invocations'
+      MetricName: Invocations
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 0
+      ComparisonOperator: LessThanThreshold
       Dimensions:
         - Name: FunctionName
           Value: !Ref LambdaFunction

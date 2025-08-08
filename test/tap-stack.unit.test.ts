@@ -1,210 +1,176 @@
 import fs from 'fs';
-import path from 'path';
 
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
+type CfnTemplate = {
+  AWSTemplateFormatVersion: string;
+  Description?: string;
+  Resources: Record<string, any>;
+  Outputs?: Record<string, any>;
+};
 
-describe('TapStack CloudFormation Template', () => {
-  let template: any;
+describe('TapStack Unit Tests (from JSON)', () => {
+  let template: CfnTemplate;
 
   beforeAll(() => {
-    // If youre testing a yaml template. run `pipenv run cfn-flip-to-json > lib/TapStack.json`
-    // Otherwise, ensure the template is in JSON format.
-    const templatePath = path.join(__dirname, '../lib/TapStack.json');
-    const templateContent = fs.readFileSync(templatePath, 'utf8');
-    template = JSON.parse(templateContent);
+    const raw = fs.readFileSync('lib/TapStack.json', 'utf8');
+    template = JSON.parse(raw);
   });
 
-  describe('Write Integration TESTS', () => {
-    test('Dont forget!', async () => {
-      expect(false).toBe(true);
-    });
+  it('has valid CloudFormation format version', () => {
+    expect(template.AWSTemplateFormatVersion).toBe('2010-09-09');
   });
 
-  describe('Template Structure', () => {
-    test('should have valid CloudFormation format version', () => {
-      expect(template.AWSTemplateFormatVersion).toBe('2010-09-09');
-    });
-
-    test('should have a description', () => {
-      expect(template.Description).toBeDefined();
-      expect(template.Description).toBe(
-        'TAP Stack - Task Assignment Platform CloudFormation Template'
+  describe('KMS Key', () => {
+    it('creates a KMS key with rotation', () => {
+      const key = template.Resources['S3EncryptionKey'];
+      expect(key).toBeDefined();
+      expect(key.Type).toBe('AWS::KMS::Key');
+      expect(key.Properties.Description).toBe(
+        'KMS key for S3 bucket encryption'
       );
+      // EnableKeyRotation may be undefined if not specified; treat missing as failure
+      expect(key.Properties.EnableKeyRotation).toBe(true);
     });
 
-    test('should have metadata section', () => {
-      expect(template.Metadata).toBeDefined();
-      expect(template.Metadata['AWS::CloudFormation::Interface']).toBeDefined();
-    });
-  });
-
-  describe('Parameters', () => {
-    test('should have EnvironmentSuffix parameter', () => {
-      expect(template.Parameters.EnvironmentSuffix).toBeDefined();
-    });
-
-    test('EnvironmentSuffix parameter should have correct properties', () => {
-      const envSuffixParam = template.Parameters.EnvironmentSuffix;
-      expect(envSuffixParam.Type).toBe('String');
-      expect(envSuffixParam.Default).toBe('dev');
-      expect(envSuffixParam.Description).toBe(
-        'Environment suffix for resource naming (e.g., dev, staging, prod)'
-      );
-      expect(envSuffixParam.AllowedPattern).toBe('^[a-zA-Z0-9]+$');
-      expect(envSuffixParam.ConstraintDescription).toBe(
-        'Must contain only alphanumeric characters'
+    it('creates a KMS alias', () => {
+      const alias = template.Resources['S3EncryptionKeyAlias'];
+      expect(alias).toBeDefined();
+      expect(alias.Type).toBe('AWS::KMS::Alias');
+      expect(alias.Properties.AliasName['Fn::Sub']).toContain(
+        '-s3-encryption-key'
       );
     });
   });
 
-  describe('Resources', () => {
-    test('should have TurnAroundPromptTable resource', () => {
-      expect(template.Resources.TurnAroundPromptTable).toBeDefined();
+  describe('S3 Bucket', () => {
+    it('is encrypted with KMS and blocks public access', () => {
+      const bucket = template.Resources['ProcessedDataBucket'];
+      expect(bucket.Type).toBe('AWS::S3::Bucket');
+      const enc =
+        bucket.Properties.BucketEncryption.ServerSideEncryptionConfiguration[0];
+      expect(enc.ServerSideEncryptionByDefault.SSEAlgorithm).toBe('aws:kms');
+      expect(enc.ServerSideEncryptionByDefault.KMSMasterKeyID).toBeDefined();
+      expect(enc.BucketKeyEnabled).toBe(true);
+      const pab = bucket.Properties.PublicAccessBlockConfiguration;
+      expect(pab.BlockPublicAcls).toBe(true);
+      expect(pab.BlockPublicPolicy).toBe(true);
+      expect(pab.IgnorePublicAcls).toBe(true);
+      expect(pab.RestrictPublicBuckets).toBe(true);
     });
 
-    test('TurnAroundPromptTable should be a DynamoDB table', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      expect(table.Type).toBe('AWS::DynamoDB::Table');
+    it('has versioning and lifecycle rules', () => {
+      const bucket = template.Resources['ProcessedDataBucket'];
+      expect(bucket.Properties.VersioningConfiguration.Status).toBe('Enabled');
+      const rules = bucket.Properties.LifecycleConfiguration.Rules;
+      const hasIncomplete = rules.some(
+        (r: any) =>
+          r.Id === 'DeleteIncompleteMultipartUploads' && r.Status === 'Enabled'
+      );
+      const hasOldVersions = rules.some(
+        (r: any) => r.Id === 'DeleteOldVersions' && r.Status === 'Enabled'
+      );
+      expect(hasIncomplete).toBe(true);
+      expect(hasOldVersions).toBe(true);
+    });
+  });
+
+  describe('IAM Role', () => {
+    it('creates execution role with basic policy', () => {
+      const role = template.Resources['LambdaExecutionRole'];
+      expect(role.Type).toBe('AWS::IAM::Role');
+      const assume = role.Properties.AssumeRolePolicyDocument;
+      expect(assume.Statement[0].Principal.Service).toBe(
+        'lambda.amazonaws.com'
+      );
+      const managed = role.Properties.ManagedPolicyArns || [];
+      expect(managed).toContain(
+        'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
+      );
     });
 
-    test('TurnAroundPromptTable should have correct deletion policies', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      expect(table.DeletionPolicy).toBe('Delete');
-      expect(table.UpdateReplacePolicy).toBe('Delete');
+    it('has least-privilege S3 and KMS inline policies', () => {
+      const role = template.Resources['LambdaExecutionRole'];
+      const policies = role.Properties.Policies.map(
+        (p: any) => p.PolicyDocument
+      );
+      const statements = policies.flatMap((pd: any) => pd.Statement);
+      const s3Objects = statements.find(
+        (s: any) => Array.isArray(s.Action) && s.Action.includes('s3:PutObject')
+      );
+      const s3List = statements.find(
+        (s: any) =>
+          Array.isArray(s.Action) && s.Action.includes('s3:ListBucket')
+      );
+      const kmsUse = statements.find(
+        (s: any) => Array.isArray(s.Action) && s.Action.includes('kms:Decrypt')
+      );
+      expect(s3Objects).toBeDefined();
+      expect(s3List).toBeDefined();
+      expect(kmsUse).toBeDefined();
     });
+  });
 
-    test('TurnAroundPromptTable should have correct properties', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const properties = table.Properties;
-
-      expect(properties.TableName).toEqual({
-        'Fn::Sub': 'TurnAroundPromptTable${EnvironmentSuffix}',
-      });
-      expect(properties.BillingMode).toBe('PAY_PER_REQUEST');
-      expect(properties.DeletionProtectionEnabled).toBe(false);
+  describe('Lambda Function', () => {
+    it('configured for API proxy and S3 use', () => {
+      const fn = template.Resources['LambdaFunction'];
+      expect(fn.Type).toBe('AWS::Lambda::Function');
+      expect(fn.Properties.Runtime).toBe('python3.9');
+      expect(fn.Properties.Handler).toBe('index.lambda_handler');
+      expect(fn.Properties.Timeout).toBe(30);
+      expect(fn.Properties.MemorySize).toBe(256);
+      expect(fn.Properties.Environment.Variables.S3_BUCKET_NAME).toBeDefined();
+      expect(fn.Properties.Environment.Variables.KMS_KEY_ID).toBeDefined();
+      expect(fn.Properties.Code.ZipFile).toContain('lambda_handler');
     });
+  });
 
-    test('TurnAroundPromptTable should have correct attribute definitions', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const attributeDefinitions = table.Properties.AttributeDefinitions;
-
-      expect(attributeDefinitions).toHaveLength(1);
-      expect(attributeDefinitions[0].AttributeName).toBe('id');
-      expect(attributeDefinitions[0].AttributeType).toBe('S');
+  describe('API Gateway', () => {
+    it('REST API and proxy methods exist', () => {
+      const api = template.Resources['ApiGateway'];
+      expect(api.Type).toBe('AWS::ApiGateway::RestApi');
+      const proxyMethod = template.Resources['ApiGatewayMethod'];
+      const rootMethod = template.Resources['ApiGatewayRootMethod'];
+      expect(proxyMethod.Properties.HttpMethod).toBe('ANY');
+      expect(proxyMethod.Properties.Integration.Type).toBe('AWS_PROXY');
+      expect(rootMethod.Properties.HttpMethod).toBe('ANY');
+      expect(rootMethod.Properties.Integration.Type).toBe('AWS_PROXY');
     });
+  });
 
-    test('TurnAroundPromptTable should have correct key schema', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const keySchema = table.Properties.KeySchema;
+  describe('Lambda Permissions', () => {
+    it('grants API Gateway invoke permissions with proper SourceArn', () => {
+      const perm1 = template.Resources['LambdaApiGatewayPermission'];
+      const perm2 = template.Resources['LambdaApiGatewayRootPermission'];
+      expect(perm1.Type).toBe('AWS::Lambda::Permission');
+      expect(perm1.Properties.Principal).toBe('apigateway.amazonaws.com');
+      expect(perm1.Properties.SourceArn['Fn::Sub']).toContain(
+        'arn:aws:execute-api'
+      );
+      expect(perm2.Properties.SourceArn['Fn::Sub']).toContain(
+        'arn:aws:execute-api'
+      );
+    });
+  });
 
-      expect(keySchema).toHaveLength(1);
-      expect(keySchema[0].AttributeName).toBe('id');
-      expect(keySchema[0].KeyType).toBe('HASH');
+  describe('CloudWatch Alarms', () => {
+    it('creates error and duration alarms on the Lambda function', () => {
+      const err = template.Resources['LambdaErrorAlarm'];
+      const dur = template.Resources['LambdaDurationAlarm'];
+      expect(err.Properties.MetricName).toBe('Errors');
+      expect(err.Properties.Namespace).toBe('AWS/Lambda');
+      expect(dur.Properties.MetricName).toBe('Duration');
+      expect(dur.Properties.Namespace).toBe('AWS/Lambda');
     });
   });
 
   describe('Outputs', () => {
-    test('should have all required outputs', () => {
-      const expectedOutputs = [
-        'TurnAroundPromptTableName',
-        'TurnAroundPromptTableArn',
-        'StackName',
-        'EnvironmentSuffix',
-      ];
-
-      expectedOutputs.forEach(outputName => {
-        expect(template.Outputs[outputName]).toBeDefined();
-      });
-    });
-
-    test('TurnAroundPromptTableName output should be correct', () => {
-      const output = template.Outputs.TurnAroundPromptTableName;
-      expect(output.Description).toBe('Name of the DynamoDB table');
-      expect(output.Value).toEqual({ Ref: 'TurnAroundPromptTable' });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-TurnAroundPromptTableName',
-      });
-    });
-
-    test('TurnAroundPromptTableArn output should be correct', () => {
-      const output = template.Outputs.TurnAroundPromptTableArn;
-      expect(output.Description).toBe('ARN of the DynamoDB table');
-      expect(output.Value).toEqual({
-        'Fn::GetAtt': ['TurnAroundPromptTable', 'Arn'],
-      });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-TurnAroundPromptTableArn',
-      });
-    });
-
-    test('StackName output should be correct', () => {
-      const output = template.Outputs.StackName;
-      expect(output.Description).toBe('Name of this CloudFormation stack');
-      expect(output.Value).toEqual({ Ref: 'AWS::StackName' });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-StackName',
-      });
-    });
-
-    test('EnvironmentSuffix output should be correct', () => {
-      const output = template.Outputs.EnvironmentSuffix;
-      expect(output.Description).toBe(
-        'Environment suffix used for this deployment'
-      );
-      expect(output.Value).toEqual({ Ref: 'EnvironmentSuffix' });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-EnvironmentSuffix',
-      });
-    });
-  });
-
-  describe('Template Validation', () => {
-    test('should have valid JSON structure', () => {
-      expect(template).toBeDefined();
-      expect(typeof template).toBe('object');
-    });
-
-    test('should not have any undefined or null required sections', () => {
-      expect(template.AWSTemplateFormatVersion).not.toBeNull();
-      expect(template.Description).not.toBeNull();
-      expect(template.Parameters).not.toBeNull();
-      expect(template.Resources).not.toBeNull();
-      expect(template.Outputs).not.toBeNull();
-    });
-
-    test('should have exactly one resource', () => {
-      const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(1);
-    });
-
-    test('should have exactly one parameter', () => {
-      const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(1);
-    });
-
-    test('should have exactly four outputs', () => {
-      const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(4);
-    });
-  });
-
-  describe('Resource Naming Convention', () => {
-    test('table name should follow naming convention with environment suffix', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const tableName = table.Properties.TableName;
-
-      expect(tableName).toEqual({
-        'Fn::Sub': 'TurnAroundPromptTable${EnvironmentSuffix}',
-      });
-    });
-
-    test('export names should follow naming convention', () => {
-      Object.keys(template.Outputs).forEach(outputKey => {
-        const output = template.Outputs[outputKey];
-        expect(output.Export.Name).toEqual({
-          'Fn::Sub': `\${AWS::StackName}-${outputKey}`,
-        });
-      });
+    it('includes required outputs', () => {
+      expect(template.Outputs).toBeDefined();
+      const outputs = template.Outputs!;
+      expect(outputs['ApiGatewayUrl']).toBeDefined();
+      expect(outputs['LambdaFunctionArn']).toBeDefined();
+      expect(outputs['S3BucketName']).toBeDefined();
+      expect(outputs['KMSKeyId']).toBeDefined();
+      expect(outputs['KMSKeyAlias']).toBeDefined();
     });
   });
 });
