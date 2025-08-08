@@ -108,3 +108,4 @@ if __name__ == '__main__':
   # Set Pulumi environment for testing
   pulumi.runtime.set_mocks(Mock(), "test-project", "test-stack")
   unittest.main()
+
