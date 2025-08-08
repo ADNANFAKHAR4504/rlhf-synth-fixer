@@ -410,8 +410,8 @@ Resources:
         - AttributeName: 'id'
           KeyType: 'HASH'
       BillingMode: PAY_PER_REQUEST
-      DeletionProtectionEnabled: false	
-
+      DeletionProtectionEnabled: false
+  
 # Outputs section - returns important values
 Outputs:
   LoadBalancerDNS:
@@ -419,37 +419,33 @@ Outputs:
     Value: !GetAtt WebAppLoadBalancer.DNSName
     Export:
       Name: !Sub '${AWS::StackName}-LoadBalancer-DNS'
-  
+
   LoadBalancerURL:
     Description: 'URL of the Application Load Balancer'
     Value: !Sub 'http://${WebAppLoadBalancer.DNSName}'
     Export:
       Name: !Sub '${AWS::StackName}-LoadBalancer-URL'
-  
+
   VPCId:
     Description: 'VPC ID for the web application'
     Value: !Ref WebAppVPC
     Export:
       Name: !Sub '${AWS::StackName}-VPC-ID'
-	  
   TurnAroundPromptTableName:
     Description: 'Name of the DynamoDB table'
     Value: !Ref TurnAroundPromptTable
     Export:
       Name: !Sub '${AWS::StackName}-TurnAroundPromptTableName'
-
   TurnAroundPromptTableArn:
     Description: 'ARN of the DynamoDB table'
     Value: !GetAtt TurnAroundPromptTable.Arn
     Export:
       Name: !Sub '${AWS::StackName}-TurnAroundPromptTableArn'
-
   StackName:
     Description: 'Name of this CloudFormation stack'
     Value: !Ref AWS::StackName
     Export:
       Name: !Sub '${AWS::StackName}-StackName'
-
   EnvironmentSuffix:
     Description: 'Environment suffix used for this deployment'
     Value: !Ref EnvironmentSuffix
