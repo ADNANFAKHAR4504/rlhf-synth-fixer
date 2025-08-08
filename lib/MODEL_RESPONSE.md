@@ -1,6 +1,6 @@
 from typing import Optional, List, Dict
 import pulumi
-from pulumi import ResourceOptions, Output, Config
+from import ResourceOptions, Output, Config
 import pulumi_aws as aws
 import json
 
@@ -84,14 +84,14 @@ self.tags = args.tags or {}
         return """version: 0.2
 
 phases:
-pre_build:
+pre*build:
 commands: - echo Logging in to Amazon ECR... - echo Build started on `date` - echo Installing dependencies...
 build:
 commands: - echo Build phase started on `date` - echo Building the application... # Add your build commands here - echo Build completed on `date`
 post_build:
 commands: - echo Post-build phase started on `date` - echo Build completed successfully
 artifacts:
-files: - '\*_/_'
+files: - '\**/\_'
 name: BuildArtifacts
 """
 
@@ -407,10 +407,10 @@ name: BuildArtifacts
         deploy_buildspec = f"""version: 0.2
 
 phases:
-pre_build:
+pre*build:
 commands: - echo Deploy started on `date` - echo Syncing to S3 bucket {self.deploy_target_bucket}
 build:
-commands: - aws s3 sync . s3://{self.deploy_target_bucket}/ --delete --exclude "_.git_"
+commands: - aws s3 sync . s3://{self.deploy_target_bucket}/ --delete --exclude "*.git\_"
 post_build:
 commands: - echo Deploy completed on `date`
 """
