@@ -887,7 +887,7 @@
             "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
             "Properties": {
                 "Name": {
-                    "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-alb"
+                    "Fn::Sub": "${LogBucketNamePrefix}-${EnvironmentSuffix}-alb"
                 },
                 "Subnets": [
                     {
@@ -954,7 +954,7 @@
             "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
             "Properties": {
                 "Name": {
-                    "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-tg"
+                    "Fn::Sub": "${LogBucketNamePrefix}-${EnvironmentSuffix}-tg"
                 },
                 "Port": 80,
                 "Protocol": "HTTP",

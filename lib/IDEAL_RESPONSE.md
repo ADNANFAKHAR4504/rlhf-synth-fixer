@@ -483,7 +483,7 @@ Resources:
   ALB:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
-      Name: !Sub "${AWS::StackName}-${EnvironmentSuffix}-alb"
+      Name: !Sub "${LogBucketNamePrefix}-${EnvironmentSuffix}-alb"
       Subnets:
         - !Ref PublicSubnet1
         - !Ref PublicSubnet2
@@ -509,7 +509,7 @@ Resources:
   ALBTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      Name: !Sub "${AWS::StackName}-${EnvironmentSuffix}-tg"
+      Name: !Sub "${LogBucketNamePrefix}-${EnvironmentSuffix}-tg"
       Port: 80
       Protocol: HTTP
       VpcId: !Ref VPC
