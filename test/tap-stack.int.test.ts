@@ -37,7 +37,7 @@ import {
 import axios from 'axios';
 
 const environment = process.env.ENVIRONMENT || 'prod';
-const stackName = process.env.STACK_NAME || `ServerlessStack-${environment}`;
+const stackName = process.env.STACK_NAME || process.env.TAP_STACK_NAME || `ServerlessStack-${environment}`;
 const region = process.env.AWS_REGION || 'us-east-1';
 
 // Initialize AWS clients
@@ -48,6 +48,8 @@ const apiGatewayClient = new ApiGatewayV2Client({ region });
 const iamClient = new IAMClient({ region });
 const cloudWatchLogsClient = new CloudWatchLogsClient({ region });
 
+
+
 describe('Serverless Stack Live AWS Integration Tests', () => {
   let stackOutputs: Record<string, string> = {};
   let stackResources: any[] = [];
@@ -56,10 +58,17 @@ describe('Serverless Stack Live AWS Integration Tests', () => {
   let lambdaFunctionArn: string;
   let lambdaFunctionName: string;
   let s3BucketName: string;
-
+// Helper function to check if stack exists
+const checkStackExists = () => {
+  if (!stackOutputs.ApiEndpoint) {
+    throw new Error(`Stack ${stackName} was not properly initialized. Please check deployment.`);
+  }
+};
   beforeAll(async () => {
     try {
-      // Get stack outputs
+      console.log(`Looking for stack: ${stackName} in region: ${region}`);
+      
+      // Check if stack exists first
       const stackResponse = await cloudFormationClient.send(
         new DescribeStacksCommand({ StackName: stackName })
       );
@@ -69,6 +78,10 @@ describe('Serverless Stack Live AWS Integration Tests', () => {
         throw new Error(`Stack ${stackName} not found`);
       }
 
+      if (!['CREATE_COMPLETE', 'UPDATE_COMPLETE'].includes(stack.StackStatus!)) {
+        throw new Error(`Stack ${stackName} is not in a complete state. Current status: ${stack.StackStatus}`);
+      }
+
       // Parse outputs
       if (stack.Outputs) {
         stack.Outputs.forEach((output) => {
@@ -76,6 +89,14 @@ describe('Serverless Stack Live AWS Integration Tests', () => {
             stackOutputs[output.OutputKey] = output.OutputValue;
           }
         });
+      }
+
+      // Validate required outputs exist
+      const requiredOutputs = ['ApiEndpoint', 'ApiProcessEndpoint', 'LambdaFunctionArn', 'LambdaFunctionName', 'OutputBucketName'];
+      const missingOutputs = requiredOutputs.filter(output => !stackOutputs[output]);
+      
+      if (missingOutputs.length > 0) {
+        throw new Error(`Missing required stack outputs: ${missingOutputs.join(', ')}`);
       }
 
       // Get stack resources
@@ -99,14 +120,39 @@ describe('Serverless Stack Live AWS Integration Tests', () => {
         s3BucketName,
         region
       });
-    } catch (error) {
-      console.error('Setup failed:', error);
+    } catch (error: any) {
+      console.error('Setup failed:', error.message);
+      
+      if (error.name === 'ValidationError' && error.message.includes('does not exist')) {
+        console.error(`
+❌ DEPLOYMENT REQUIRED ❌
+
+The CloudFormation stack "${stackName}" does not exist.
+You need to deploy the stack first before running integration tests.
+
+To deploy the stack, run:
+aws cloudformation deploy \\
+  --template-file lib/ServerlessStack.json \\
+  --stack-name ${stackName} \\
+  --capabilities CAPABILITY_NAMED_IAM \\
+  --parameter-overrides Environment=${environment}
+
+Or set the correct stack name:
+export STACK_NAME=YourActualStackName
+export TAP_STACK_NAME=YourActualStackName
+
+Then run the integration tests again.
+        `);
+      }
+      
       throw error;
     }
   }, 60000);
 
   describe('CloudFormation Stack Validation', () => {
     test('CloudFormation stack should exist and be in a complete state', async () => {
+      checkStackExists();
+      
       const stackResponse = await cloudFormationClient.send(
         new DescribeStacksCommand({ StackName: stackName })
       );
@@ -117,6 +163,8 @@ describe('Serverless Stack Live AWS Integration Tests', () => {
     });
 
     test('All required stack outputs should be present', () => {
+      checkStackExists();
+      
       const requiredOutputs = [
         'ApiEndpoint',
         'ApiProcessEndpoint',
@@ -132,6 +180,8 @@ describe('Serverless Stack Live AWS Integration Tests', () => {
     });
 
     test('Stack resources should be in complete state', () => {
+      checkStackExists();
+      
       const expectedResources = [
         'OutputBucket', 'ProcessorFunction', 'HttpApi', 
         'LambdaExecutionRole', 'LambdaLogGroup', 'ApiGatewayLogGroup'
@@ -147,12 +197,16 @@ describe('Serverless Stack Live AWS Integration Tests', () => {
 
   describe('S3 Bucket - Security and Configuration', () => {
     test('S3 bucket should exist and be accessible', async () => {
+      checkStackExists();
+      
       expect(s3BucketName).toBeDefined();
       expect(s3BucketName).toContain(environment);
       expect(s3BucketName).toContain('s3-app-output');
     });
 
     test('S3 bucket should have versioning enabled', async () => {
+      checkStackExists();
+      
       const versioningResponse = await s3Client.send(
         new GetBucketVersioningCommand({ Bucket: s3BucketName })
       );
@@ -161,6 +215,8 @@ describe('Serverless Stack Live AWS Integration Tests', () => {
     });
 
     test('S3 bucket should have encryption enabled', async () => {
+      checkStackExists();
+      
       const encryptionResponse = await s3Client.send(
         new GetBucketEncryptionCommand({ Bucket: s3BucketName })
       );
@@ -171,6 +227,8 @@ describe('Serverless Stack Live AWS Integration Tests', () => {
     });
 
     test('S3 bucket should block public access', async () => {
+      checkStackExists();
+      
       const publicAccessResponse = await s3Client.send(
         new GetPublicAccessBlockCommand({ Bucket: s3BucketName })
       );
@@ -185,6 +243,8 @@ describe('Serverless Stack Live AWS Integration Tests', () => {
 
   describe('Lambda Function - Configuration and Execution', () => {
     test('Lambda function should be deployed and active', async () => {
+      checkStackExists();
+      
       const functionResponse = await lambdaClient.send(
         new GetFunctionCommand({ FunctionName: lambdaFunctionName })
       );
@@ -199,6 +259,8 @@ describe('Serverless Stack Live AWS Integration Tests', () => {
     });
 
     test('Lambda function should have correct environment variables', async () => {
+      checkStackExists();
+      
       const configResponse = await lambdaClient.send(
         new GetFunctionConfigurationCommand({ FunctionName: lambdaFunctionName })
       );
@@ -211,6 +273,8 @@ describe('Serverless Stack Live AWS Integration Tests', () => {
     });
 
     test('Lambda function should have X-Ray tracing enabled', async () => {
+      checkStackExists();
+      
       const configResponse = await lambdaClient.send(
         new GetFunctionConfigurationCommand({ FunctionName: lambdaFunctionName })
       );
@@ -219,6 +283,8 @@ describe('Serverless Stack Live AWS Integration Tests', () => {
     });
 
     test('Lambda function should execute successfully with test payload', async () => {
+      checkStackExists();
+      
       const testPayload = {
         body: JSON.stringify({
           test: 'data',
@@ -248,6 +314,8 @@ describe('Serverless Stack Live AWS Integration Tests', () => {
     }, 30000);
 
     test('Lambda function should handle encryption correctly when writing to S3', async () => {
+      checkStackExists();
+      
       const testPayload = {
         body: JSON.stringify({
           encryption_test: true,
@@ -284,6 +352,8 @@ describe('Serverless Stack Live AWS Integration Tests', () => {
 
   describe('IAM Roles and Policies - Security Validation', () => {
     test('Lambda execution role should exist with correct trust policy', async () => {
+      checkStackExists();
+      
       const roleName = `${environment}-lambda-execution-role`;
       
       const roleResponse = await iamClient.send(
@@ -299,6 +369,8 @@ describe('Serverless Stack Live AWS Integration Tests', () => {
     });
 
     test('Lambda execution role should have least privilege policy', async () => {
+      checkStackExists();
+      
       const roleName = `${environment}-lambda-execution-role`;
       
       const policiesResponse = await iamClient.send(
@@ -335,6 +407,8 @@ describe('Serverless Stack Live AWS Integration Tests', () => {
 
   describe('API Gateway v2 HTTP API - Configuration and Functionality', () => {
     test('HTTP API should be deployed and accessible', async () => {
+      checkStackExists();
+      
       // Extract API ID from endpoint URL
       const apiId = apiEndpoint.split('//')[1].split('.')[0];
       
@@ -348,6 +422,8 @@ describe('Serverless Stack Live AWS Integration Tests', () => {
     });
 
     test('API Gateway should have correct stage configuration', async () => {
+      checkStackExists();
+      
       const apiId = apiEndpoint.split('//')[1].split('.')[0];
       
       const stageResponse = await apiGatewayClient.send(
@@ -363,6 +439,8 @@ describe('Serverless Stack Live AWS Integration Tests', () => {
     });
 
     test('API Gateway should have POST /process route configured', async () => {
+      checkStackExists();
+      
       const apiId = apiEndpoint.split('//')[1].split('.')[0];
       
       // Get all routes for the API
@@ -375,6 +453,8 @@ describe('Serverless Stack Live AWS Integration Tests', () => {
     });
 
     test('API should respond to HTTP requests', async () => {
+      checkStackExists();
+      
       const testPayload = {
         message: 'integration test',
         timestamp: new Date().toISOString(),
@@ -400,6 +480,8 @@ describe('Serverless Stack Live AWS Integration Tests', () => {
     }, 45000);
 
     test('API should handle CORS preflight requests', async () => {
+      checkStackExists();
+      
       try {
         const response = await axios.options(apiProcessEndpoint, {
           headers: {
@@ -420,6 +502,8 @@ describe('Serverless Stack Live AWS Integration Tests', () => {
     });
 
     test('API should validate request format', async () => {
+      checkStackExists();
+      
       try {
         const response = await axios.post(apiProcessEndpoint, 'invalid json', {
           headers: {
@@ -439,6 +523,8 @@ describe('Serverless Stack Live AWS Integration Tests', () => {
 
   describe('CloudWatch Logging - Monitoring and Observability', () => {
     test('Lambda log group should exist with correct retention', async () => {
+      checkStackExists();
+      
       const logGroupName = `/aws/lambda/${environment}-lambda-processor`;
       
       const logGroupsResponse = await cloudWatchLogsClient.send(
@@ -453,6 +539,8 @@ describe('Serverless Stack Live AWS Integration Tests', () => {
     });
 
     test('API Gateway log group should exist', async () => {
+      checkStackExists();
+      
       const logGroupName = `/aws/apigatewayv2/${environment}-apigw-http`;
       
       const logGroupsResponse = await cloudWatchLogsClient.send(
@@ -466,6 +554,8 @@ describe('Serverless Stack Live AWS Integration Tests', () => {
     });
 
     test('Lambda function should generate logs when invoked', async () => {
+      checkStackExists();
+      
       // First invoke the function to generate logs
       const testPayload = {
         body: JSON.stringify({ test: 'log generation' })
@@ -499,6 +589,8 @@ describe('Serverless Stack Live AWS Integration Tests', () => {
 
   describe('End-to-End Workflow Validation', () => {
     test('Complete request processing workflow should work', async () => {
+      checkStackExists();
+      
       const testData = {
         workflow_test: true,
         user_id: 'test-user-123',
@@ -537,11 +629,13 @@ describe('Serverless Stack Live AWS Integration Tests', () => {
 
       // 3. Verify object structure and content would be correct
       expect(s3ObjectKey).toContain('processed/');
-      expect(s3ObjectKey).toMatch(/^\d{4}\/\d{2}\/\d{2}\//); // Date folder structure
+      expect(s3ObjectKey).toMatch(/processed\/\d{4}\/\d{2}\/\d{2}\//); // Date folder structure
       expect(s3ObjectKey).toContain('.json');
     }, 45000);
 
     test('Error handling should work correctly', async () => {
+      checkStackExists();
+      
       try {
         // Send malformed request
         const response = await axios.post(apiProcessEndpoint, null, {
@@ -557,6 +651,8 @@ describe('Serverless Stack Live AWS Integration Tests', () => {
     });
 
     test('Multiple concurrent requests should be handled', async () => {
+      checkStackExists();
+      
       const promises = [];
       const testData = {
         concurrent_test: true,
@@ -587,6 +683,8 @@ describe('Serverless Stack Live AWS Integration Tests', () => {
 
   describe('Security and Compliance Validation', () => {
     test('S3 bucket policy should enforce encryption', async () => {
+      checkStackExists();
+      
       // Try to upload unencrypted object (should fail based on bucket policy)
       // This test verifies that the bucket policy is working
       try {
@@ -607,6 +705,8 @@ describe('Serverless Stack Live AWS Integration Tests', () => {
     });
 
     test('API should not expose sensitive information in errors', async () => {
+      checkStackExists();
+      
       try {
         await axios.post(apiProcessEndpoint + '/invalid', {}, {
           timeout: 15000
@@ -622,6 +722,8 @@ describe('Serverless Stack Live AWS Integration Tests', () => {
     });
 
     test('Lambda function should not have excessive permissions', async () => {
+      checkStackExists();
+      
       const roleName = `${environment}-lambda-execution-role`;
       
       const policiesResponse = await iamClient.send(
@@ -636,6 +738,8 @@ describe('Serverless Stack Live AWS Integration Tests', () => {
 
   describe('Performance and Scalability', () => {
     test('API response time should be acceptable', async () => {
+      checkStackExists();
+      
       const testData = { performance_test: true };
       const startTime = Date.now();
 
@@ -651,6 +755,8 @@ describe('Serverless Stack Live AWS Integration Tests', () => {
     }, 30000);
 
     test('Lambda cold start should be reasonable', async () => {
+      checkStackExists();
+      
       // Wait a bit to ensure function is cold
       await new Promise(resolve => setTimeout(resolve, 5000));
 
@@ -676,12 +782,16 @@ describe('Serverless Stack Live AWS Integration Tests', () => {
 
   describe('Environment-Specific Configuration', () => {
     test('Resources should use environment-specific naming', () => {
+      checkStackExists();
+      
       expect(lambdaFunctionName).toContain(environment);
       expect(s3BucketName).toContain(environment);
       expect(apiEndpoint).toBeDefined();
     });
 
     test('Environment should be correctly set in Lambda function', async () => {
+      checkStackExists();
+      
       const configResponse = await lambdaClient.send(
         new GetFunctionConfigurationCommand({ FunctionName: lambdaFunctionName })
       );
@@ -691,6 +801,8 @@ describe('Serverless Stack Live AWS Integration Tests', () => {
     });
 
     test('Stack outputs should include environment context', () => {
+      checkStackExists();
+      
       Object.values(stackOutputs).forEach(output => {
         // Most outputs should contain environment-specific information
         if (typeof output === 'string' && output.includes('amazonaws.com')) {
@@ -702,6 +814,8 @@ describe('Serverless Stack Live AWS Integration Tests', () => {
 
   describe('Disaster Recovery and Backup', () => {
     test('S3 bucket should have versioning for data protection', async () => {
+      checkStackExists();
+      
       const versioningResponse = await s3Client.send(
         new GetBucketVersioningCommand({ Bucket: s3BucketName })
       );
@@ -710,6 +824,8 @@ describe('Serverless Stack Live AWS Integration Tests', () => {
     });
 
     test('Lambda function should have alias/version support available', async () => {
+      checkStackExists();
+      
       const functionResponse = await lambdaClient.send(
         new GetFunctionCommand({ FunctionName: lambdaFunctionName })
       );
@@ -722,6 +838,8 @@ describe('Serverless Stack Live AWS Integration Tests', () => {
 
   describe('Cost Optimization Validation', () => {
     test('Lambda should use appropriate memory allocation', async () => {
+      checkStackExists();
+      
       const configResponse = await lambdaClient.send(
         new GetFunctionConfigurationCommand({ FunctionName: lambdaFunctionName })
       );
@@ -731,6 +849,8 @@ describe('Serverless Stack Live AWS Integration Tests', () => {
     });
 
     test('Log retention should be cost-effective', async () => {
+      checkStackExists();
+      
       const logGroupName = `/aws/lambda/${environment}-lambda-processor`;
       
       const logGroupsResponse = await cloudWatchLogsClient.send(
