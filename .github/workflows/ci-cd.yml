@@ -550,7 +550,7 @@ jobs:
       - name: Run integration tests against live environment
         run: |
           if [ "${{ needs.lint.outputs.language }}" = "py" ]; then
-            echo "Python compatible project detected, running integration tests..."
+            echo "✅ CDK project detected, running integration tests..."
             pipenv run test-py-integration
           else
             echo "✅ Running default integration tests..."

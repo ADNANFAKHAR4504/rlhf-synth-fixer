@@ -72,7 +72,6 @@ venv.bak/
 .coverage
 coverage.xml
 cov.json
-coverage
 
 cfn-outputs/*
 
