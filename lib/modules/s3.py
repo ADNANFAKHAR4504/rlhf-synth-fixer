@@ -38,10 +38,10 @@ class S3Manager:
         )
 
         # Enable versioning
-        aws.s3.BucketVersioning(
+        aws.s3.BucketVersioningV2(
             f"{self.project_name}-logging-bucket-versioning",
             bucket=logging_bucket.id,
-            versioning_configuration=aws.s3.BucketVersioningVersioningConfigurationArgs(
+            versioning_configuration=aws.s3.BucketVersioningV2VersioningConfigurationArgs(
                 status="Enabled",
                 mfa_delete="Disabled"  # Set to "Enabled" if MFA delete is required
             )
