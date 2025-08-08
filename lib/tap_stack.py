@@ -18,9 +18,6 @@ project_name = "prod-dual-stack-app"
 domain_name = config.get("domain_name")
 environment = config.get("environment") or "prod"
 aws_region = config.get("aws:region") or "us-east-1"
-# Example of using Pulumi secrets for a hypothetical sensitive value
-# Set this with: pulumi config set --secret api_key "your-secret-value"
-api_key = config.get_secret_string("api_key")
 
 common_tags = {
   "Environment": environment,
