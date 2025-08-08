@@ -1,8 +1,7 @@
 // Configuration - These are coming from cfn-outputs after cdk deploy
 import fs from 'fs';
 
-// Ge:wq!
-t environment suffix from environment variable (set by CI/CD pipeline)
+// Get environment suffix from environment variable (set by CI/CD pipeline)
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
 let outputs: any = {};
