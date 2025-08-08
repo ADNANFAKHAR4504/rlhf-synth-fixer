@@ -86,7 +86,8 @@ class TapStack(pulumi.ComponentResource):
         # Slack configuration with safe defaults
         self.slack_workspace_id = self.config.get("slack.workspaceId") or "T099JAU1EDT"
         self.slack_channel_id = self.config.get("slack.channelId") or "C0995LYSAKH"
-        self.slack_enabled = self.config.get("slack.enabled") or 'false'
+        slack_enabled_str = self.config.get("slack.enabled") or 'false'
+        self.slack_enabled = slack_enabled_str.lower() == 'true'
         
         # Build configuration
         self.buildspec_content = self.config.get("build.buildspec") or self._get_default_buildspec()
