@@ -1,18 +1,19 @@
-# AWS Security Infrastructure Requirements
+I need help setting up a cloud environment on AWS using CDK TypeScript. Here are my requirements:
 
-I need help creating a comprehensive security infrastructure for a new AWS application deployment. The security configuration must follow these requirements:
+Create a VPC with one public subnet and one private subnet. The public subnet should connect to the internet through an internet gateway, and the private subnet should access the internet via a NAT gateway.
 
-1. All IAM roles should have proper trust policies defining allowed principals
-2. Encrypt EBS volumes and RDS instances using AWS KMS keys
-3. S3 buckets need policies that prevent public PUT operations
-4. IAM users require MFA enablement with 90-day access key rotation
-5. Use AWS WAF to protect Load Balancers from web attacks like SQL injection and XSS
-6. EC2 instances should use instance profiles with read-only S3 permissions
-7. CloudTrail logs must be encrypted and stored in secure S3 buckets
-8. SNS topics should only accept messages from authorized AWS services
-9. Security groups must restrict inbound connections, allowing SSH only from specific IP ranges
-10. Enable GuardDuty across all regions for continuous monitoring
+Deploy a t2.micro EC2 instance in the public subnet with SSH access restricted to specific IP ranges (use security group).
 
-The infrastructure should use the new AWS Security Hub for centralized security management and include AWS Shield Advanced for enhanced DDoS protection. Please provide the complete infrastructure code with proper resource naming using 'prod-' and 'dev-' prefixes for different environments.
+Set up an AWS Lambda function using the latest Python runtime that gets triggered when files are uploaded to an S3 bucket.
 
-Target region: us-east-1
+When the Lambda function executes, it should publish a message to an SNS topic.
+
+Create an IAM role with the necessary permissions for the Lambda function to access S3 and SNS.
+
+Tag all resources with Environment: Production.
+
+Use resource naming with the prefix "cf-task-" followed by the resource type.
+
+Also, please consider using the new AWS Network Firewall with active threat defense feature for enhanced VPC security and VPC Block Public Access for additional network controls.
+
+Please provide the complete infrastructure code with one code block per file.
