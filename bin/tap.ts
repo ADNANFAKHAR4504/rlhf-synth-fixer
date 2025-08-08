@@ -18,35 +18,27 @@ Tags.of(app).add('Author', commitAuthor);
 Tags.of(app).add('Project', 'MultiRegionDevEnvironment');
 
 // Deploy infrastructure to both regions
-const usEast1Stack = new TapStack(
-  app,
-  `TapStack${environmentSuffix}-useast1`,
-  {
-    stackName: `TapStack${environmentSuffix}-useast1`,
-    environmentSuffix: environmentSuffix,
+const usEast1Stack = new TapStack(app, `TapStack${environmentSuffix}-useast1`, {
+  stackName: `TapStack${environmentSuffix}-useast1`,
+  environmentSuffix: environmentSuffix,
+  region: 'us-east-1',
+  isPrimaryRegion: true,
+  env: {
+    account: process.env.CDK_DEFAULT_ACCOUNT,
     region: 'us-east-1',
-    isPrimaryRegion: true,
-    env: {
-      account: process.env.CDK_DEFAULT_ACCOUNT,
-      region: 'us-east-1',
-    },
-  }
-);
+  },
+});
 
-const usWest1Stack = new TapStack(
-  app,
-  `TapStack${environmentSuffix}-uswest1`,
-  {
-    stackName: `TapStack${environmentSuffix}-uswest1`,
-    environmentSuffix: environmentSuffix,
+const usWest1Stack = new TapStack(app, `TapStack${environmentSuffix}-uswest1`, {
+  stackName: `TapStack${environmentSuffix}-uswest1`,
+  environmentSuffix: environmentSuffix,
+  region: 'us-west-1',
+  isPrimaryRegion: false,
+  env: {
+    account: process.env.CDK_DEFAULT_ACCOUNT,
     region: 'us-west-1',
-    isPrimaryRegion: false,
-    env: {
-      account: process.env.CDK_DEFAULT_ACCOUNT,
-      region: 'us-west-1',
-    },
-  }
-);
+  },
+});
 
 // Add region-specific tags
 Tags.of(usEast1Stack).add('Region', 'us-east-1');

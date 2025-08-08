@@ -13,7 +13,7 @@ describe('TapStack Unit Tests', () => {
 
   beforeEach(() => {
     app = new cdk.App();
-    
+
     // Create stacks for both regions
     usEast1Stack = new TapStack(app, 'TestTapStackUsEast1', {
       environmentSuffix,
@@ -59,7 +59,7 @@ describe('TapStack Unit Tests', () => {
     test('should create public and private subnets', () => {
       // Check for public subnets
       usEast1Template.resourceCountIs('AWS::EC2::Subnet', 4);
-      
+
       // Verify public subnets have MapPublicIpOnLaunch
       usEast1Template.hasResourceProperties('AWS::EC2::Subnet', {
         MapPublicIpOnLaunch: true,
@@ -161,7 +161,7 @@ describe('TapStack Unit Tests', () => {
     test('should create S3 bucket only in primary region', () => {
       // Primary region should have S3 bucket
       usEast1Template.resourceCountIs('AWS::S3::Bucket', 2); // Main bucket + metadata bucket
-      
+
       // Secondary region should not have S3 bucket
       usWest1Template.resourceCountIs('AWS::S3::Bucket', 0);
     });
@@ -226,15 +226,17 @@ describe('TapStack Unit Tests', () => {
     test('should not have any Retain deletion policies', () => {
       const template = usEast1Template.toJSON();
       const resources = template.Resources || {};
-      
-      Object.entries(resources).forEach(([logicalId, resource]: [string, any]) => {
-        if (resource.DeletionPolicy) {
-          expect(resource.DeletionPolicy).not.toBe('Retain');
+
+      Object.entries(resources).forEach(
+        ([logicalId, resource]: [string, any]) => {
+          if (resource.DeletionPolicy) {
+            expect(resource.DeletionPolicy).not.toBe('Retain');
+          }
+          if (resource.UpdateReplacePolicy) {
+            expect(resource.UpdateReplacePolicy).not.toBe('Retain');
+          }
         }
-        if (resource.UpdateReplacePolicy) {
-          expect(resource.UpdateReplacePolicy).not.toBe('Retain');
-        }
-      });
+      );
     });
   });
 });

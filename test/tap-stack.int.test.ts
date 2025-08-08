@@ -15,10 +15,7 @@ import {
   GetObjectCommand,
   DeleteObjectCommand,
 } from '@aws-sdk/client-s3';
-import {
-  RDSClient,
-  DescribeDBInstancesCommand,
-} from '@aws-sdk/client-rds';
+import { RDSClient, DescribeDBInstancesCommand } from '@aws-sdk/client-rds';
 import { STSClient, GetCallerIdentityCommand } from '@aws-sdk/client-sts';
 
 const outputs = JSON.parse(
@@ -79,12 +76,12 @@ describe('Multi-Region Infrastructure Integration Tests', () => {
       );
 
       expect(response.Subnets).toHaveLength(2);
-      
+
       const publicSubnet = response.Subnets!.find(
-        (s) => s.SubnetId === publicSubnetId
+        s => s.SubnetId === publicSubnetId
       );
       const privateSubnet = response.Subnets!.find(
-        (s) => s.SubnetId === privateSubnetId
+        s => s.SubnetId === privateSubnetId
       );
 
       expect(publicSubnet!.MapPublicIpOnLaunch).toBe(true);
@@ -234,7 +231,7 @@ describe('Multi-Region Infrastructure Integration Tests', () => {
     test('should have proper network connectivity between resources', async () => {
       // Verify all resources are in the same VPC
       const vpcId = outputs.VpcId;
-      
+
       // Check EC2 instance is in the VPC
       const ec2Response = await ec2Client.send(
         new DescribeInstancesCommand({ InstanceIds: [outputs.EC2InstanceId] })
@@ -248,7 +245,7 @@ describe('Multi-Region Infrastructure Integration Tests', () => {
           SubnetIds: [outputs.PublicSubnetId, outputs.PrivateSubnetId],
         })
       );
-      subnetResponse.Subnets!.forEach((subnet) => {
+      subnetResponse.Subnets!.forEach(subnet => {
         expect(subnet.VpcId).toBe(vpcId);
       });
     });
@@ -260,11 +257,11 @@ describe('Multi-Region Infrastructure Integration Tests', () => {
       );
       const instance = ec2Response.Reservations![0].Instances![0];
       const tags = instance.Tags || [];
-      
-      const environmentTag = tags.find((t) => t.Key === 'Environment');
+
+      const environmentTag = tags.find(t => t.Key === 'Environment');
       expect(environmentTag).toBeDefined();
-      
-      const purposeTag = tags.find((t) => t.Key === 'Purpose');
+
+      const purposeTag = tags.find(t => t.Key === 'Purpose');
       expect(purposeTag).toBeDefined();
     });
   });
