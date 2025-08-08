@@ -10,8 +10,10 @@ The stack created by this module uses environment suffixes to distinguish betwee
 different deployment environments (development, staging, production, etc.).
 """
 import os
+
 import pulumi
 from pulumi import Config
+
 from lib.tap_stack import TapStack, TapStackArgs
 
 # Initialize Pulumi configuration
@@ -32,8 +34,8 @@ config_defaults = {
     'env': environment_suffix,
     
     # GitHub configuration with placeholders
-    'github.owner': 'placeholder-owner',
-    'github.repo': 'placeholder-repo', 
+    'github.owner': 'devang-devops',  # Placeholder GitHub owner
+    'github.repo': 'demo-web-app-deployment', 
     'github.branch': 'main',
     'github.connectionArn': None,  # Will create new connection if not provided
     
@@ -44,8 +46,8 @@ config_defaults = {
     'rbac.approverArns': '[]',
     
     # Slack configuration with placeholder values
-    'slack.workspaceId': 'T0000000000',  # Placeholder Slack workspace ID
-    'slack.channelId': 'C0000000000',    # Placeholder Slack channel ID
+    'slack.workspaceId': 'T099JAU1EDT',  # Placeholder Slack workspace ID
+    'slack.channelId': 'C0995LYSAKH',    # Placeholder Slack channel ID
     
     # Build configuration
     'build.buildspec': None,  # Will use default buildspec
