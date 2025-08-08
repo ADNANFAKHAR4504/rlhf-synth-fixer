@@ -25,8 +25,17 @@ Parameters:
     AllowedPattern: '^[a-zA-Z0-9]+$'
     ConstraintDescription: 'Must contain only alphanumeric characters'
 
+Conditions:
+  IsUsWest2: !Equals [ !Ref "AWS::Region", "us-west-2" ]
+
 # Resources section - defines all AWS resources
 Resources:
+  # Region check resource - fails deployment if not in us-west-2
+  RegionCheck:
+    Type: AWS::CloudFormation::WaitConditionHandle
+    Condition: IsUsWest2
+    Metadata:
+      Comment: "This resource exists only to enforce us-west-2 region restriction"
   # VPC and Networking Components
   WebAppVPC:
     Type: 'AWS::EC2::VPC'
@@ -397,20 +406,6 @@ Resources:
           Value: !Ref WebAppAutoScalingGroup
       AlarmActions:
         - !Ref WebAppScaleDownPolicy
-  TurnAroundPromptTable:
-    Type: AWS::DynamoDB::Table
-    DeletionPolicy: Delete
-    UpdateReplacePolicy: Delete
-    Properties:
-      TableName: !Sub 'TurnAroundPromptTable${EnvironmentSuffix}'
-      AttributeDefinitions:
-        - AttributeName: 'id'
-          AttributeType: 'S'
-      KeySchema:
-        - AttributeName: 'id'
-          KeyType: 'HASH'
-      BillingMode: PAY_PER_REQUEST
-      DeletionProtectionEnabled: false
   
 # Outputs section - returns important values
 Outputs:
@@ -431,16 +426,6 @@ Outputs:
     Value: !Ref WebAppVPC
     Export:
       Name: !Sub '${AWS::StackName}-VPCId'
-  TurnAroundPromptTableName:
-    Description: 'Name of the DynamoDB table'
-    Value: !Ref TurnAroundPromptTable
-    Export:
-      Name: !Sub '${AWS::StackName}-TurnAroundPromptTableName'
-  TurnAroundPromptTableArn:
-    Description: 'ARN of the DynamoDB table'
-    Value: !GetAtt TurnAroundPromptTable.Arn
-    Export:
-      Name: !Sub '${AWS::StackName}-TurnAroundPromptTableArn'
   StackName:
     Description: 'Name of this CloudFormation stack'
     Value: !Ref AWS::StackName
