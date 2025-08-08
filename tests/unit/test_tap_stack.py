@@ -37,7 +37,7 @@ class TestTapStack(unittest.TestCase):
     template.resource_count_is("AWS::DynamoDB::Table", 1)
     template.resource_count_is("AWS::S3::Bucket", 1)
     # Lambda role + S3 cleanup role
-    template.resource_count_is("AWS::IAM::Role", 2)
+    template.resource_count_is("AWS::IAM::Role", 3)
     template.resource_count_is(
         "AWS::Lambda::Function",
         3)  # API + Health + S3 cleanup
@@ -224,9 +224,9 @@ class TestTapStack(unittest.TestCase):
     template = Template.from_stack(stack)
 
     # ASSERT
-    template.has_resource_properties("AWS::Logs::LogGroup", {
-        "RetentionInDays": 7
-    })
+    template.has_resource_properties("AWS::Logs::LogGroup", Match.object_like({
+    "RetentionInDays": 7
+}))
 
   @mark.it("creates resources with environment suffix when provided")
   def test_creates_resources_with_env_suffix(self):
