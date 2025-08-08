@@ -139,7 +139,7 @@ Resources:
           STAGE: !Ref Environment
           LOG_LEVEL: !Ref LogLevel
           TABLE_NAME: !Ref DataTable
-          AWS_REGION: !Ref AWS::Region
+          REGION: !Ref AWS::Region
       Timeout: 30
       MemorySize: 128
 
