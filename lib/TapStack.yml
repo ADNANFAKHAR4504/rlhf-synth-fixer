@@ -770,6 +770,8 @@ Outputs:
   LoadBalancerURL:
     Description: Application Load Balancer URL
     Value: !Sub 'http://${ApplicationLoadBalancer.DNSName}'
+    Export:
+      Name: !Sub '${AWS::StackName}-ALB-URL'
   
   DatabaseEndpoint:
     Description: RDS Database endpoint
@@ -803,3 +805,34 @@ Outputs:
       - !Ref KeyPairName
     Export:
       Name: !Sub '${AWS::StackName}-KeyPair-Name'
+  
+  # Additional outputs for integration testing
+  LoadBalancerArn:
+    Description: Application Load Balancer ARN
+    Value: !Ref ApplicationLoadBalancer
+    Export:
+      Name: !Sub '${AWS::StackName}-ALB-ARN'
+  
+  TargetGroupArn:
+    Description: Target Group ARN
+    Value: !Ref TargetGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-TG-ARN'
+  
+  DatabasePort:
+    Description: RDS Database port
+    Value: !GetAtt DatabaseInstance.Endpoint.Port
+    Export:
+      Name: !Sub '${AWS::StackName}-DB-Port'
+  
+  StackName:
+    Description: CloudFormation Stack Name
+    Value: !Ref AWS::StackName
+    Export:
+      Name: !Sub '${AWS::StackName}-Stack-Name'
+  
+  EnvironmentSuffix:
+    Description: Environment suffix used for resource naming
+    Value: !Ref EnvironmentSuffix
+    Export:
+      Name: !Sub '${AWS::StackName}-Environment-Suffix'
