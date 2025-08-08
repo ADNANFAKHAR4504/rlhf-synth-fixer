@@ -24,9 +24,9 @@ class ServerlessStack(Stack):
 
     table = self._create_dynamodb_table()
     self._configure_autoscaling(table)
-    lambda_function = self._create_lambda_function(table)
-    dashboard = self._create_cloudwatch_dashboard(lambda_function, table)
-    self._add_stack_outputs(table, lambda_function, dashboard)
+    lambda_fn = self._create_lambda_function(table)
+    dashboard = self._create_dashboard(lambda_fn, table)
+    self._add_outputs(table, lambda_fn, dashboard)
 
   def _create_dynamodb_table(self) -> ddb.Table:
     return ddb.Table(
@@ -34,42 +34,35 @@ class ServerlessStack(Stack):
       "CostEffectiveTable",
       partition_key=ddb.Attribute(name="ItemId", type=ddb.AttributeType.STRING),
       removal_policy=RemovalPolicy.DESTROY,
-      billing_mode=ddb.BillingMode.PROVISIONED
+      billing_mode=ddb.BillingMode.PROVISIONED,
     )
 
   def _configure_autoscaling(self, table: ddb.Table) -> None:
-    read_scaling = appautoscaling.ScalableTarget(
-      self,
-      "DynamoDBReadScalingTargets",
-      min_capacity=1,
-      max_capacity=1000,
-      resource_id=f"table/{table.table_name}",
-      scalable_dimension="dynamodb:table:ReadCapacityUnits",
-      service_namespace=appautoscaling.ServiceNamespace.DYNAMODB,
-    )
-    read_scaling.scale_to_track_metric(
-      "DynamoDBReadCapacityUtilizations",
-      target_value=70,
-      predefined_metric=appautoscaling.PredefinedMetric.DYNAMODB_READ_CAPACITY_UTILIZATION,
-    )
-
-    write_scaling = appautoscaling.ScalableTarget(
-      self,
-      "DynamoDBWriteScalingTargets",
-      min_capacity=1,
-      max_capacity=1000,
-      resource_id=f"table/{table.table_name}",
-      scalable_dimension="dynamodb:table:WriteCapacityUnits",
-      service_namespace=appautoscaling.ServiceNamespace.DYNAMODB,
-    )
-    write_scaling.scale_to_track_metric(
-      "DynamoDBWriteCapacityUtilizations",
-      target_value=70,
-      predefined_metric=appautoscaling.PredefinedMetric.DYNAMODB_WRITE_CAPACITY_UTILIZATION,
-    )
+    for name, dimension in [
+      ("Read", "ReadCapacityUnits"),
+      ("Write", "WriteCapacityUnits"),
+    ]:
+      target = appautoscaling.ScalableTarget(
+        self,
+        f"DynamoDB{name}ScalingTargetPolicy",
+        min_capacity=1,
+        max_capacity=1000,
+        resource_id=f"table/{table.table_name}",
+        scalable_dimension=f"dynamodb:table:{dimension}",
+        service_namespace=appautoscaling.ServiceNamespace.DYNAMODB,
+      )
+      metric_enum = getattr(
+        appautoscaling.PredefinedMetric,
+        f"DYNAMODB_{name.upper()}_CAPACITY_UTILIZATION"
+      )
+      target.scale_to_track_metric(
+        f"DynamoDB{name}CapacityUtilization",
+        target_value=70,
+        predefined_metric=metric_enum,
+      )
 
   def _create_lambda_function(self, table: ddb.Table) -> _lambda.Function:
-    lambda_role = iam.Role(
+    role = iam.Role(
       self,
       "LambdaExecutionRole",
       assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
@@ -80,7 +73,7 @@ class ServerlessStack(Stack):
       ]
     )
 
-    lambda_function = _lambda.Function(
+    lambda_fn = _lambda.Function(
       self,
       "CostEffectiveLambda",
       runtime=_lambda.Runtime.PYTHON_3_9,
@@ -89,57 +82,56 @@ class ServerlessStack(Stack):
       ),
       handler="index.handler",
       timeout=Duration.seconds(5),
-      role=lambda_role,
-      environment={"TABLE_NAME": table.table_name}
+      role=role,
+      environment={"TABLE_NAME": table.table_name},
     )
 
-    table.grant_read_write_data(lambda_function)
-    return lambda_function
+    table.grant_read_write_data(lambda_fn)
+    return lambda_fn
 
-  def _create_cloudwatch_dashboard(
+  def _create_dashboard(
     self,
-    lambda_function: _lambda.Function,
+    lambda_fn: _lambda.Function,
     table: ddb.Table
   ) -> cw.Dashboard:
     dashboard = cw.Dashboard(
       self,
       "ServerlessDashboard",
-      dashboard_name=f"{self.stack_name}-ServerlessMonitoringDashboard"
+      dashboard_name=f"{self.stack_name}-ServerlessMonitoringDashboard",
     )
 
-    lambda_errors = cw.GraphWidget(
-      title="Lambda Errors",
-      left=[
-        cw.Metric(
-          namespace="AWS/Lambda",
-          metric_name="Errors",
-          dimensions_map={"FunctionName": lambda_function.function_name},
-          statistic="Sum",
-          period=Duration.minutes(1),
-        )
-      ]
+    dashboard.add_widgets(
+      cw.GraphWidget(
+        title="Lambda Errors",
+        left=[
+          cw.Metric(
+            namespace="AWS/Lambda",
+            metric_name="Errors",
+            dimensions_map={"FunctionName": lambda_fn.function_name},
+            statistic="Sum",
+            period=Duration.minutes(1),
+          )
+        ]
+      ),
+      cw.GraphWidget(
+        title="DynamoDB Read Capacity",
+        left=[
+          cw.Metric(
+            namespace="AWS/DynamoDB",
+            metric_name="ConsumedReadCapacityUnits",
+            dimensions_map={"TableName": table.table_name},
+            statistic="Sum",
+            period=Duration.minutes(1),
+          )
+        ]
+      )
     )
-
-    read_capacity = cw.GraphWidget(
-      title="DynamoDB Read Capacity",
-      left=[
-        cw.Metric(
-          namespace="AWS/DynamoDB",
-          metric_name="ConsumedReadCapacityUnits",
-          dimensions_map={"TableName": table.table_name},
-          statistic="Sum",
-          period=Duration.minutes(1),
-        )
-      ]
-    )
-
-    dashboard.add_widgets(lambda_errors, read_capacity)
     return dashboard
 
-  def _add_stack_outputs(
+  def _add_outputs(
     self,
     table: ddb.Table,
-    lambda_function: _lambda.Function,
+    lambda_fn: _lambda.Function,
     dashboard: cw.Dashboard
   ) -> None:
     CfnOutput(
@@ -149,15 +141,13 @@ class ServerlessStack(Stack):
       description="The name of the DynamoDB table",
       export_name="ServerlessStackDynamoDBTableName"
     )
-
     CfnOutput(
       self,
       "LambdaFunctionName",
-      value=lambda_function.function_name,
+      value=lambda_fn.function_name,
       description="The name of the Lambda function",
       export_name="ServerlessStackLambdaFunctionName"
     )
-
     CfnOutput(
       self,
       "CloudWatchDashboardName",
