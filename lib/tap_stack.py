@@ -7,11 +7,11 @@ manages environment-specific configurations.
 
 from typing import Optional
 import json
+import os
 import textwrap
 
 import aws_cdk as cdk
 from aws_cdk import (
-    Stack,
     Duration,
     RemovalPolicy,
     aws_lambda as lambda_,
@@ -77,10 +77,11 @@ class TapStack(cdk.Stack):
           construct_id: str, props: Optional[TapStackProps] = None, **kwargs):
     super().__init__(scope, construct_id, **kwargs)
 
-    # Get environment suffix from props, context, or use 'dev' as default
-    environment_suffix = (
+    # Get environment suffix from props, context, env var, or use 'dev' as default
+    self.environment_suffix = (
         props.environment_suffix if props else None
-    ) or self.node.try_get_context('environmentSuffix') or 'dev'
+    ) or self.node.try_get_context('environmentSuffix') or os.environ.get(
+        'ENVIRONMENT_SUFFIX', 'dev')
 
     # Create KMS key for encryption
     self.kms_key = kms.Key(
@@ -93,7 +94,7 @@ class TapStack(cdk.Stack):
     # Create KMS key alias
     kms.Alias(
         self, "TapKMSKeyAlias",
-        alias_name="alias/tap-application-key",
+        alias_name=f"alias/tap-application-key-{self.environment_suffix}",
         target_key=self.kms_key
     )
 
@@ -101,7 +102,7 @@ class TapStack(cdk.Stack):
     self.secret = secretsmanager.Secret(
         self, "TapSecret",
         description="Application secrets for TAP",
-        secret_name="tap-application-secrets",
+        secret_name=f"tap-application-secrets-{self.environment_suffix}",
         generate_secret_string=secretsmanager.SecretStringGenerator(
             secret_string_template=json.dumps({"username": "admin"}),
             generate_string_key="password",
@@ -115,12 +116,12 @@ class TapStack(cdk.Stack):
     # Create DynamoDB table
     self.dynamodb_table = dynamodb.Table(
         self, "TapTable",
-        table_name="tap-data-table",
+        table_name=f"tap-data-table-{self.environment_suffix}",
         partition_key=dynamodb.Attribute(
             name="id",
             type=dynamodb.AttributeType.STRING
         ),
-        billing_mode=dynamodb.BillingMode.ON_DEMAND,
+        billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
         encryption=dynamodb.TableEncryption.CUSTOMER_MANAGED,
         encryption_key=self.kms_key,
         removal_policy=RemovalPolicy.DESTROY,
@@ -130,7 +131,7 @@ class TapStack(cdk.Stack):
     # Create S3 bucket
     self.s3_bucket = s3.Bucket(
         self, "TapBucket",
-        bucket_name=f"tap-storage-bucket-{self.account}-{self.region}",
+        bucket_name=f"tap-storage-bucket-{self.environment_suffix}-{self.account}-{self.region}",
         encryption=s3.BucketEncryption.KMS,
         encryption_key=self.kms_key,
         block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
@@ -228,7 +229,7 @@ class TapStack(cdk.Stack):
     # Main API Lambda function
     self.api_lambda = lambda_.Function(
         self, "TapApiFunction",
-        function_name="tap-api-function",
+        function_name=f"tap-api-function-{self.environment_suffix}",
         runtime=lambda_.Runtime.PYTHON_3_11,
         handler="index.handler",
         role=self.lambda_role,
@@ -406,7 +407,7 @@ class TapStack(cdk.Stack):
     # Health check Lambda function
     self.health_lambda = lambda_.Function(
         self, "TapHealthFunction",
-        function_name="tap-health-function",
+        function_name=f"tap-health-function-{self.environment_suffix}",
         runtime=lambda_.Runtime.PYTHON_3_11,
         handler="index.handler",
         role=self.lambda_role,
@@ -489,7 +490,7 @@ class TapStack(cdk.Stack):
     # Create HTTP API
     self.http_api = apigwv2.HttpApi(
         self, "TapHttpApi",
-        api_name="tap-http-api",
+        api_name=f"tap-http-api-{self.environment_suffix}",
         description="TAP Application HTTP API",
         cors_preflight=apigwv2.CorsPreflightOptions(
             allow_credentials=False,
