@@ -28,7 +28,7 @@ Your task is to **design and deploy a serverless infrastructure in AWS using Pul
 4. **Monitoring & Error Handling**:
    - All Lambda functions must:
      - Send logs to CloudWatch Logs.
-     - Be configured with Dead Letter Queue (DLQ) using SNS topic (not SQS).
+     - Be configured with Dead Letter Queue (DLQ) using SQS queue (not SNS).
      - Include a basic try/except in handler code.
 
 ---
