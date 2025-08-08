@@ -28,11 +28,12 @@ common_tags = {
 
 def create_vpc_and_networking() -> Dict[str, Any]:
   """
-  Creates a VPC with public subnets.
+  Creates a dual-stack VPC with public subnets.
   """
   vpc = aws.ec2.Vpc(
     f"{project_name}-vpc",
     cidr_block="10.0.0.0/16",
+    assign_generated_ipv6_cidr_block=True,
     enable_dns_hostnames=True,
     enable_dns_support=True,
     tags={**common_tags, "Name": f"{project_name}-vpc"}
@@ -52,6 +53,10 @@ def create_vpc_and_networking() -> Dict[str, Any]:
       vpc_id=vpc.id,
       availability_zone=az,
       cidr_block=f"10.0.{i+1}.0/24",
+      ipv6_cidr_block=vpc.ipv6_cidr_block.apply(
+          lambda cidr: f"{cidr.split('::/')[0].rstrip('0')}{i+1:02x}::/64"
+      ),
+      assign_ipv6_address_on_creation=True,
       map_public_ip_on_launch=True,
       tags={**common_tags, "Name": f"{project_name}-public-{i+1}"}
     )
@@ -60,9 +65,10 @@ def create_vpc_and_networking() -> Dict[str, Any]:
   public_rt = aws.ec2.RouteTable(
     f"{project_name}-public-rt",
     vpc_id=vpc.id,
-    routes=[aws.ec2.RouteTableRouteArgs(
-      cidr_block="0.0.0.0/0", gateway_id=igw.id
-    )],
+    routes=[
+      aws.ec2.RouteTableRouteArgs(cidr_block="0.0.0.0/0", gateway_id=igw.id),
+      aws.ec2.RouteTableRouteArgs(ipv6_cidr_block="::/0", gateway_id=igw.id)
+    ],
     tags={**common_tags, "Name": f"{project_name}-public-rt"}
   )
 
