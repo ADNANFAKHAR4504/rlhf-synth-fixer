@@ -65,7 +65,6 @@ export class TapStack extends cdk.Stack {
 
     // S3 bucket to store pipeline artifacts with cross-region replication capability
     const artifactsBucket = new s3.Bucket(this, 'PipelineArtifactsBucket', {
-      bucketName: `enterprise-cicd-artifacts-${this.account}-${this.region}`,
       versioned: true,
       encryption: s3.BucketEncryption.S3_MANAGED,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,

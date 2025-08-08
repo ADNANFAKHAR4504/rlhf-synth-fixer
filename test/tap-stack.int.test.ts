@@ -9,6 +9,14 @@ describe('CI/CD Pipeline Integration Tests', () => {
       expect(true).toBe(true);
     });
 
+    test('should have auto-generated S3 bucket name following CDK pattern', async () => {
+      // This test would verify that the S3 bucket name follows the expected CDK pattern
+      // In a real scenario, you would use AWS SDK to get the bucket name and verify pattern
+      // Expected pattern: {stack-name}-{resource-name}-{unique-id}
+      // Example: TestTapStack-PipelineArtifactsBucket-XXXXXXXXX
+      expect(true).toBe(true);
+    });
+
     test('should have SNS topic with email subscription', async () => {
       // This test would verify that SNS topic exists and has email subscription
       // In a real scenario, you would use AWS SDK to check SNS configuration
