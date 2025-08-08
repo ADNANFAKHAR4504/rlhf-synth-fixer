@@ -1,10 +1,8 @@
-import json
-from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
-
 import pulumi
 import pulumi_aws as aws
-
+import json
+from typing import Dict, Any, List, Optional
+from dataclasses import dataclass
 
 @dataclass
 class TapStackArgs:

@@ -6,7 +6,9 @@ from unittest.mock import Mock, patch
 sys.path.append(os.path.join(os.path.dirname(__file__), '../..'))
 
 import pulumi
+
 from lib.tap_stack import TapStack, TapStackArgs
+
 
 class TestTapStack(unittest.TestCase):
   """Unit tests for TapStack infrastructure"""
@@ -43,8 +45,7 @@ class TestTapStack(unittest.TestCase):
   @patch('pulumi_aws.Provider')
   def test_regional_infrastructure_creation(self, _):
     """Test that infrastructure is created for each region"""
-    with patch.object(TapStack, '_create_regional_infrastructure') as mock_create, \
-         patch.object(TapStack, '_register_outputs'):
+    with patch.object(TapStack, '_create_regional_infrastructure') as mock_create:
       TapStack("test-stack", self.test_args)
       
       # Verify infrastructure creation called for each region
@@ -73,15 +74,11 @@ class TestTapStack(unittest.TestCase):
     mock_api = Mock()
     mock_api.name = "test-api"
     
-    with patch.object(TapStack, '_create_global_monitoring'), \
-         patch.object(TapStack, '_create_regional_infrastructure'), \
-         patch.object(TapStack, '_register_outputs'):
-      # Reset mock call count before isolated test
-      mock_alarm.reset_mock()
+    with patch.object(TapStack, '_create_global_monitoring'):
       stack = TapStack("test-stack", self.test_args)
       stack._create_regional_monitoring("us-east-1", mock_lambda, mock_api, None)
       
-      # Verify alarms are created - only from the direct call
+      # Verify alarms are created
       self.assertEqual(mock_alarm.call_count, 4)  # 4 alarms per region
   
   def test_naming_convention(self):
