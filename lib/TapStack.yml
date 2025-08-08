@@ -230,14 +230,13 @@ Resources:
       LaunchTemplateData:
         ImageId: !Ref LatestAmiId
         InstanceType: 't2.micro'
-        KeyName: !Ref KeyPairName
         IamInstanceProfile:
           Arn: !GetAtt WebAppInstanceProfile.Arn
         SecurityGroupIds:
           - !Ref WebServerSecurityGroup
         # User data script to install and start Apache web server
         UserData:
-          Fn::Base64: !Sub |
+          Fn::Base64: |
             #!/bin/bash
             yum update -y
             yum install -y httpd
