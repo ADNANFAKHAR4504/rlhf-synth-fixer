@@ -49,6 +49,7 @@ const testSuite = Object.keys(outputs).length > 0 ? describe : describe.skip;
 testSuite('IaC Foundational Security Stack - Integration Tests', () => {
   // Get resource names from stack outputs
   const mfaGroupName = outputs.MfaEnforcedUsersGroupName;
+  const mfaPolicyArn = outputs.MfaPolicyArn;
   const configBucketName = outputs.ConfigBucketNameOutput;
   const sampleBucketName = outputs.SampleS3BucketNameOutput;
   const environmentSuffix = outputs.EnvironmentSuffix;
@@ -60,15 +61,18 @@ testSuite('IaC Foundational Security Stack - Integration Tests', () => {
       const { AttachedPolicies } = await iamClient.send(
         new ListAttachedGroupPoliciesCommand({ GroupName: mfaGroupName })
       );
-      const policyInfo = AttachedPolicies?.find(p =>
-        p.PolicyName?.startsWith('MfaEnforcedPolicy')
+
+      // Find the policy using the ARN from the stack outputs
+      const policyInfo = AttachedPolicies?.find(
+        p => p.PolicyArn === mfaPolicyArn
       );
+
       if (!policyInfo || !policyInfo.PolicyArn) {
         throw new Error(
-          `Could not find MFA policy attached to group ${mfaGroupName}`
+          `Could not find MFA policy with ARN ${mfaPolicyArn} attached to group ${mfaGroupName}`
         );
       }
-
+      // The rest of the function remains the same...
       const { Policy } = await iamClient.send(
         new GetPolicyCommand({ PolicyArn: policyInfo.PolicyArn })
       );

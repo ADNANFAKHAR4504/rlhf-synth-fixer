@@ -170,7 +170,7 @@ describe('IaC - AWS Nova Model Breaking Stack Unit Tests', () => {
       const outputs = template.Outputs;
       const outputKeys = Object.keys(outputs);
 
-      expect(outputKeys.length).toBe(5);
+      expect(outputKeys.length).toBe(6);
       expect(outputs.MfaEnforcedUsersGroupName).toBeDefined();
       expect(outputs.ConfigBucketNameOutput).toBeDefined();
       expect(outputs.SampleS3BucketNameOutput).toBeDefined();

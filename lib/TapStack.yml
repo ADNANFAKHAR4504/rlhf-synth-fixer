@@ -175,6 +175,12 @@ Resources:
         RestrictPublicBuckets: true
 
 Outputs:
+  MfaPolicyArn:
+    Description: 'ARN of the MFA Enforcement Policy'
+    Value: !Ref MfaEnforcedPolicy
+    Export:
+      Name: !Sub '${AWS::StackName}-MfaPolicyArn'
+
   MfaEnforcedUsersGroupName:
     Description: 'Name of the IAM group for MFA-enforced users.'
     Value: !Ref MfaEnforcedUsersGroup
