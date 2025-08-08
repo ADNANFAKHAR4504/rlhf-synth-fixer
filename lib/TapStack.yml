@@ -33,13 +33,12 @@ Resources:
     Type: AWS::KMS::Alias
     Properties:
       AliasName: !Sub 'alias/${AWS::StackName}-s3-encryption-key'
-      TargetKeyId: !Ref S3EncryptionKey
+      TargetKeyId: !GetAtt S3EncryptionKey.KeyId
 
   # S3 bucket for processed data with encryption
   ProcessedDataBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${AWS::StackName}-processed-data-${AWS::AccountId}-${AWS::Region}-${Environment}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
