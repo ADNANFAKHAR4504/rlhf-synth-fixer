@@ -187,7 +187,7 @@
                 "FunctionName": {
                     "Fn::Sub": "${AWS::StackName}-processor-function"
                 },
-                "Runtime": "python3.9",
+                "Runtime": "python3.12",
                 "Handler": "index.lambda_handler",
                 "Role": {
                     "Fn::GetAtt": [

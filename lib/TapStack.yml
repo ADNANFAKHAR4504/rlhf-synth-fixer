@@ -116,7 +116,7 @@ Resources:
     DependsOn: LambdaLogGroup
     Properties:
       FunctionName: !Sub '${AWS::StackName}-processor-function'
-      Runtime: python3.9
+      Runtime: python3.12
       Handler: index.lambda_handler
       Role: !GetAtt LambdaExecutionRole.Arn
       Timeout: 30
@@ -132,7 +132,7 @@ Resources:
           import os
           import uuid
           from datetime import datetime
-          
+
           def lambda_handler(event, context):
               print(f"Received event: {json.dumps(event)}")
               
@@ -305,7 +305,7 @@ Resources:
       Statistic: Average
       Period: 300
       EvaluationPeriods: 2
-      Threshold: 25000  # 25 seconds (function timeout is 30 seconds)
+      Threshold: 25000 # 25 seconds (function timeout is 30 seconds)
       ComparisonOperator: GreaterThanThreshold
       Dimensions:
         - Name: FunctionName
