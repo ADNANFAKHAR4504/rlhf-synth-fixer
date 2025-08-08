@@ -144,18 +144,23 @@ class TestTapStackResourceCreation(unittest.TestCase):
     @patch('lib.tap_stack.aws.s3.BucketPublicAccessBlock')
     @patch('lib.tap_stack.aws.s3.BucketServerSideEncryptionConfigurationV2')
     @patch('lib.tap_stack.aws.s3.BucketVersioningV2')
-    def test_create_artifacts_bucket(self, mock_versioning, mock_encryption, mock_pab, mock_bucket):
+    @patch('lib.tap_stack.ResourceOptions')
+    def test_create_artifacts_bucket(self, mock_resource_options, mock_versioning, mock_encryption, mock_pab, mock_bucket):
         """Test artifacts bucket creation with security configurations."""
         with patch.object(TapStack, '__init__', return_value=None):
             stack = TapStack.__new__(TapStack)
             stack.resource_name_prefix = 'corp-test'
             stack.tags = self.test_tags
             
-            # Mock bucket instance
-            mock_bucket_instance = Mock()
-            mock_bucket_instance.id = 'test-bucket-id'
-            mock_bucket_instance.arn = 'arn:aws:s3:::test-bucket'
+            # Mock bucket instance with proper Pulumi-like attributes
+            mock_bucket_instance = Mock(spec=['id', 'arn', 'bucket'])
+            mock_bucket_instance.id = Mock()
+            mock_bucket_instance.arn = Mock()
+            mock_bucket_instance.bucket = Mock()
             mock_bucket.return_value = mock_bucket_instance
+            
+            # Mock ResourceOptions to avoid issues with depends_on
+            mock_resource_options.return_value = Mock()
             
             stack._create_artifacts_bucket()
             
@@ -171,7 +176,8 @@ class TestTapStackResourceCreation(unittest.TestCase):
     @patch('lib.tap_stack.aws.iam.Role')
     @patch('lib.tap_stack.aws.iam.RolePolicy')
     @patch('lib.tap_stack.aws.iam.RolePolicyAttachment')
-    def test_create_service_roles(self, mock_attachment, mock_policy, mock_role):
+    @patch('lib.tap_stack.ResourceOptions')
+    def test_create_service_roles(self, mock_resource_options, mock_attachment, mock_policy, mock_role):
         """Test IAM service roles creation."""
         with patch.object(TapStack, '__init__', return_value=None):
             stack = TapStack.__new__(TapStack)
@@ -180,9 +186,11 @@ class TestTapStackResourceCreation(unittest.TestCase):
             stack.target_region = 'us-west-2'
             stack.deploy_target_bucket = 'test-deploy-bucket'
             
-            # Mock artifacts bucket
+            # Mock artifacts bucket with Pulumi Output-like behavior
             mock_bucket = Mock()
-            mock_bucket.arn = 'arn:aws:s3:::test-bucket'
+            mock_bucket_arn = Mock()
+            mock_bucket_arn.apply.return_value = Mock()
+            mock_bucket.arn = mock_bucket_arn
             stack.artifacts_bucket = mock_bucket
             
             # Mock role instances
@@ -191,6 +199,9 @@ class TestTapStackResourceCreation(unittest.TestCase):
             mock_role_instance.arn = 'arn:aws:iam::123456789012:role/test-role'
             mock_role_instance.name = 'test-role'
             mock_role.return_value = mock_role_instance
+            
+            # Mock ResourceOptions
+            mock_resource_options.return_value = Mock()
             
             stack._create_service_roles()
             
@@ -223,12 +234,33 @@ class TestTapStackIntegration(unittest.TestCase):
         }.get(key, default)
         mock_config_class.return_value = mock_config
         
-        # Mock AWS resources
-        mock_bucket.return_value = Mock(id='bucket-id', arn='bucket-arn', bucket='bucket-name')
-        mock_role.return_value = Mock(id='role-id', arn='role-arn', name='role-name')
-        mock_codebuild.return_value = Mock(name='build-project')
-        mock_pipeline.return_value = Mock(arn='pipeline-arn')
-        mock_topic.return_value = Mock(arn='topic-arn')
+        # Mock AWS resources with Pulumi Output-like behavior
+        mock_bucket_instance = Mock(spec=['id', 'arn', 'bucket'])
+        mock_bucket_instance.id = Mock()
+        mock_bucket_instance.arn = Mock()
+        mock_bucket_instance.arn.apply = Mock(return_value=Mock())
+        mock_bucket_instance.bucket = Mock()
+        mock_bucket.return_value = mock_bucket_instance
+        
+        mock_role_instance = Mock(spec=['id', 'arn', 'name'])
+        mock_role_instance.id = Mock()
+        mock_role_instance.arn = Mock()
+        mock_role_instance.name = Mock()
+        mock_role.return_value = mock_role_instance
+        
+        mock_codebuild_instance = Mock(spec=['name'])
+        mock_codebuild_instance.name = Mock()
+        mock_codebuild.return_value = mock_codebuild_instance
+        
+        mock_pipeline_instance = Mock(spec=['arn'])
+        mock_pipeline_instance.arn = Mock()
+        mock_pipeline_instance.arn.apply = Mock(return_value=Mock())
+        mock_pipeline.return_value = mock_pipeline_instance
+        
+        mock_topic_instance = Mock(spec=['arn'])
+        mock_topic_instance.arn = Mock()
+        mock_topic_instance.arn.apply = Mock(return_value=Mock())
+        mock_topic.return_value = mock_topic_instance
         
         # Mock all other AWS resources
         with patch('lib.tap_stack.aws.s3.BucketPublicAccessBlock'), \
@@ -244,7 +276,8 @@ class TestTapStackIntegration(unittest.TestCase):
              patch('lib.tap_stack.aws.iam.Policy'), \
              patch('lib.tap_stack.aws.iam.Group'), \
              patch('lib.tap_stack.aws.iam.GroupPolicyAttachment'), \
-             patch('lib.tap_stack.aws.get_caller_identity') as mock_caller_id:
+             patch('lib.tap_stack.aws.get_caller_identity') as mock_caller_id, \
+             patch('lib.tap_stack.ResourceOptions'):
             
             mock_caller_id.return_value = Mock(account_id='123456789012')
             

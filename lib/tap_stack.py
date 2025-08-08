@@ -191,46 +191,45 @@ artifacts:
         )
         
         # CodePipeline Policy - Least privilege access
-        pipeline_policy = {
-            "Version": "2012-10-17",
-            "Statement": [
-                {
-                    "Effect": "Allow",
-                    "Action": [
-                        "s3:GetBucketVersioning",
-                        "s3:GetObject",
-                        "s3:GetObjectVersion",
-                        "s3:PutObject"
-                    ],
-                    "Resource": [
-                        self.artifacts_bucket.arn,
-                        self.artifacts_bucket.arn.apply(lambda arn: f"{arn}/*")
-                    ]
-                },
-                {
-                    "Effect": "Allow",
-                    "Action": [
-                        "codebuild:BatchGetBuilds",
-                        "codebuild:StartBuild"
-                    ],
-                    "Resource": "*"
-                },
-                {
-                    "Effect": "Allow",
-                    "Action": [
-                        "codestar-connections:UseConnection"
-                    ],
-                    "Resource": "*"
-                }
-            ]
-        }
+        def create_pipeline_policy(bucket_arn):
+            return json.dumps({
+                "Version": "2012-10-17",
+                "Statement": [
+                    {
+                        "Effect": "Allow",
+                        "Action": [
+                            "s3:GetBucketVersioning",
+                            "s3:GetObject",
+                            "s3:GetObjectVersion",
+                            "s3:PutObject"
+                        ],
+                        "Resource": [
+                            bucket_arn,
+                            f"{bucket_arn}/*"
+                        ]
+                    },
+                    {
+                        "Effect": "Allow",
+                        "Action": [
+                            "codebuild:BatchGetBuilds",
+                            "codebuild:StartBuild"
+                        ],
+                        "Resource": "*"
+                    },
+                    {
+                        "Effect": "Allow",
+                        "Action": [
+                            "codestar-connections:UseConnection"
+                        ],
+                        "Resource": "*"
+                    }
+                ]
+            })
         
         aws.iam.RolePolicy(
             f"{self.resource_name_prefix}-codepipeline-policy",
             role=self.pipeline_role.id,
-            policy=pulumi.Output.all(self.artifacts_bucket.arn).apply(
-                lambda args: json.dumps(pipeline_policy)
-            ),
+            policy=self.artifacts_bucket.arn.apply(create_pipeline_policy),
             opts=ResourceOptions(parent=self)
         )
         
@@ -254,73 +253,72 @@ artifacts:
         )
         
         # CodeBuild Policy - Least privilege access
-        codebuild_policy = {
-            "Version": "2012-10-17",
-            "Statement": [
-                {
-                    "Effect": "Allow",
-                    "Action": [
-                        "logs:CreateLogGroup",
-                        "logs:CreateLogStream",
-                        "logs:PutLogEvents"
-                    ],
-                    "Resource": f"arn:aws:logs:{self.target_region}:*:log-group:/aws/codebuild/{self.resource_name_prefix}-*"
-                },
-                {
-                    "Effect": "Allow",
-                    "Action": [
-                        "s3:GetObject",
-                        "s3:GetObjectVersion",
-                        "s3:PutObject"
-                    ],
-                    "Resource": [
-                        self.artifacts_bucket.arn.apply(lambda arn: f"{arn}/*")
-                    ]
-                },
-                {
-                    "Effect": "Allow",
-                    "Action": [
-                        "s3:ListBucket"
-                    ],
-                    "Resource": [
-                        self.artifacts_bucket.arn
-                    ]
-                },
-                {
-                    "Effect": "Allow",
-                    "Action": [
-                        "s3:PutObject",
-                        "s3:PutObjectAcl",
-                        "s3:GetObject",
-                        "s3:DeleteObject",
-                        "s3:ListBucket"
-                    ],
-                    "Resource": [
-                        f"arn:aws:s3:::{self.deploy_target_bucket}",
-                        f"arn:aws:s3:::{self.deploy_target_bucket}/*"
-                    ]
-                },
-                {
-                    "Effect": "Allow",
-                    "Action": [
-                        "secretsmanager:GetSecretValue"
-                    ],
-                    "Resource": "*",
-                    "Condition": {
-                        "StringEquals": {
-                            "secretsmanager:ResourceTag/Project": "IaC - AWS Nova Model Breaking"
+        def create_codebuild_policy(bucket_arn):
+            return json.dumps({
+                "Version": "2012-10-17",
+                "Statement": [
+                    {
+                        "Effect": "Allow",
+                        "Action": [
+                            "logs:CreateLogGroup",
+                            "logs:CreateLogStream",
+                            "logs:PutLogEvents"
+                        ],
+                        "Resource": f"arn:aws:logs:{self.target_region}:*:log-group:/aws/codebuild/{self.resource_name_prefix}-*"
+                    },
+                    {
+                        "Effect": "Allow",
+                        "Action": [
+                            "s3:GetObject",
+                            "s3:GetObjectVersion",
+                            "s3:PutObject"
+                        ],
+                        "Resource": [
+                            f"{bucket_arn}/*"
+                        ]
+                    },
+                    {
+                        "Effect": "Allow",
+                        "Action": [
+                            "s3:ListBucket"
+                        ],
+                        "Resource": [
+                            bucket_arn
+                        ]
+                    },
+                    {
+                        "Effect": "Allow",
+                        "Action": [
+                            "s3:PutObject",
+                            "s3:PutObjectAcl",
+                            "s3:GetObject",
+                            "s3:DeleteObject",
+                            "s3:ListBucket"
+                        ],
+                        "Resource": [
+                            f"arn:aws:s3:::{self.deploy_target_bucket}",
+                            f"arn:aws:s3:::{self.deploy_target_bucket}/*"
+                        ]
+                    },
+                    {
+                        "Effect": "Allow",
+                        "Action": [
+                            "secretsmanager:GetSecretValue"
+                        ],
+                        "Resource": "*",
+                        "Condition": {
+                            "StringEquals": {
+                                "secretsmanager:ResourceTag/Project": "IaC - AWS Nova Model Breaking"
+                            }
                         }
                     }
-                }
-            ]
-        }
+                ]
+            })
         
         aws.iam.RolePolicy(
             f"{self.resource_name_prefix}-codebuild-policy",
             role=self.codebuild_role.id,
-            policy=pulumi.Output.all(self.artifacts_bucket.arn).apply(
-                lambda args: json.dumps(codebuild_policy)
-            ),
+            policy=self.artifacts_bucket.arn.apply(create_codebuild_policy),
             opts=ResourceOptions(parent=self)
         )
         
@@ -601,7 +599,7 @@ phases:
             tags={**self.tags, "Purpose": "Pipeline Notifications"},
             opts=ResourceOptions(parent=self)
         )
-        if slack_enabled:
+        if self.slack_enabled:
             
             
             # AWS Chatbot Slack Channel Configuration
@@ -643,30 +641,29 @@ phases:
         )
         
         # SNS Topic Policy to allow CodeStar Notifications to publish
-        topic_policy = {
-            "Version": "2012-10-17",
-            "Statement": [
-                {
-                    "Sid": "AllowCodeStarNotifications",
-                    "Effect": "Allow",
-                    "Principal": {"Service": "codestar-notifications.amazonaws.com"},
-                    "Action": "SNS:Publish",
-                    "Resource": self.notifications_topic.arn,
-                    "Condition": {
-                        "StringEquals": {
-                            "aws:SourceAccount": aws.get_caller_identity().account_id
+        def create_topic_policy(topic_arn):
+            return json.dumps({
+                "Version": "2012-10-17",
+                "Statement": [
+                    {
+                        "Sid": "AllowCodeStarNotifications",
+                        "Effect": "Allow",
+                        "Principal": {"Service": "codestar-notifications.amazonaws.com"},
+                        "Action": "SNS:Publish",
+                        "Resource": topic_arn,
+                        "Condition": {
+                            "StringEquals": {
+                                "aws:SourceAccount": aws.get_caller_identity().account_id
+                            }
                         }
                     }
-                }
-            ]
-        }
+                ]
+            })
         
         aws.sns.TopicPolicy(
             f"{self.resource_name_prefix}-notifications-topic-policy",
             arn=self.notifications_topic.arn,
-            policy=pulumi.Output.all(self.notifications_topic.arn).apply(
-                lambda args: json.dumps(topic_policy)
-            ),
+            policy=self.notifications_topic.arn.apply(create_topic_policy),
             opts=ResourceOptions(parent=self)
         )
 
@@ -676,38 +673,37 @@ phases:
         if not self.rbac_approver_arns:
             # If no approvers specified, create a policy document for reference
             # but don't attach it to avoid empty principal errors
-            rbac_policy_doc = {
-                "Version": "2012-10-17",
-                "Statement": [
-                    {
-                        "Sid": "AllowPipelineExecution",
-                        "Effect": "Allow",
-                        "Action": [
-                            "codepipeline:StartPipelineExecution"
-                        ],
-                        "Resource": self.pipeline.arn,
-                        "Principal": {"AWS": "arn:aws:iam::root"}  # Placeholder
-                    },
-                    {
-                        "Sid": "AllowManualApproval",
-                        "Effect": "Allow",
-                        "Action": [
-                            "codepipeline:PutApprovalResult"
-                        ],
-                        "Resource": self.pipeline.arn.apply(lambda arn: f"{arn}/*/*"),
-                        "Principal": {"AWS": "arn:aws:iam::root"}  # Placeholder
-                    }
-                ]
-            }
+            def create_empty_rbac_policy(pipeline_arn):
+                return json.dumps({
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "AllowPipelineExecution",
+                            "Effect": "Allow",
+                            "Action": [
+                                "codepipeline:StartPipelineExecution"
+                            ],
+                            "Resource": pipeline_arn,
+                            "Principal": {"AWS": "arn:aws:iam::root"}  # Placeholder
+                        },
+                        {
+                            "Sid": "AllowManualApproval",
+                            "Effect": "Allow",
+                            "Action": [
+                                "codepipeline:PutApprovalResult"
+                            ],
+                            "Resource": f"{pipeline_arn}/*/*",
+                            "Principal": {"AWS": "arn:aws:iam::root"}  # Placeholder
+                        }
+                    ]
+                })
             
             # Create the policy for documentation purposes
             self.rbac_policy = aws.iam.Policy(
                 f"{self.resource_name_prefix}-rbac-policy",
                 name=f"{self.resource_name_prefix}-pipeline-rbac",
                 description="RBAC policy for pipeline operations - attach to appropriate principals",
-                policy=pulumi.Output.all(self.pipeline.arn).apply(
-                    lambda args: json.dumps(rbac_policy_doc)
-                ),
+                policy=self.pipeline.arn.apply(create_empty_rbac_policy),
                 tags={**self.tags, "Purpose": "Pipeline RBAC"},
                 opts=ResourceOptions(parent=self)
             )
@@ -715,40 +711,39 @@ phases:
             return
         
         # Create RBAC policy for pipeline operations
-        rbac_policy_doc = {
-            "Version": "2012-10-17",
-            "Statement": [
-                {
-                    "Sid": "AllowPipelineExecution",
-                    "Effect": "Allow",
-                    "Action": [
-                        "codepipeline:StartPipelineExecution",
-                        "codepipeline:GetPipeline",
-                        "codepipeline:GetPipelineExecution",
-                        "codepipeline:GetPipelineState"
-                    ],
-                    "Resource": self.pipeline.arn
-                },
-                {
-                    "Sid": "AllowManualApproval",
-                    "Effect": "Allow",
-                    "Action": [
-                        "codepipeline:PutApprovalResult",
-                        "codepipeline:GetPipelineExecution"
-                    ],
-                    "Resource": self.pipeline.arn.apply(lambda arn: f"{arn}/*/*")
-                }
-            ]
-        }
+        def create_rbac_policy(pipeline_arn):
+            return json.dumps({
+                "Version": "2012-10-17",
+                "Statement": [
+                    {
+                        "Sid": "AllowPipelineExecution",
+                        "Effect": "Allow",
+                        "Action": [
+                            "codepipeline:StartPipelineExecution",
+                            "codepipeline:GetPipeline",
+                            "codepipeline:GetPipelineExecution",
+                            "codepipeline:GetPipelineState"
+                        ],
+                        "Resource": pipeline_arn
+                    },
+                    {
+                        "Sid": "AllowManualApproval",
+                        "Effect": "Allow",
+                        "Action": [
+                            "codepipeline:PutApprovalResult",
+                            "codepipeline:GetPipelineExecution"
+                        ],
+                        "Resource": f"{pipeline_arn}/*/*"
+                    }
+                ]
+            })
         
         # Create the RBAC policy
         self.rbac_policy = aws.iam.Policy(
             f"{self.resource_name_prefix}-rbac-policy",
             name=f"{self.resource_name_prefix}-pipeline-rbac",
             description="RBAC policy for pipeline operations",
-            policy=pulumi.Output.all(self.pipeline.arn).apply(
-                lambda args: json.dumps(rbac_policy_doc)
-            ),
+            policy=self.pipeline.arn.apply(create_rbac_policy),
             tags={**self.tags, "Purpose": "Pipeline RBAC"},
             opts=ResourceOptions(parent=self)
         )
