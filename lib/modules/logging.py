@@ -13,8 +13,6 @@ class LoggingManager:
         self.environment = environment
         self.kms_key = kms_key
         self.logging_key = logging_key
-        self.region = aws.config.region or "us-west-1"
-
     def create_cloudtrail(
             self,
             s3_bucket: aws.s3.Bucket) -> aws.cloudtrail.Trail:
