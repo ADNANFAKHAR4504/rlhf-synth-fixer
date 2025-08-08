@@ -19,16 +19,27 @@ describe('Highly Secure AWS Infrastructure CloudFormation Template', () => {
 
     test('should have a description', () => {
       expect(template.Description).toBeDefined();
-      expect(template.Description).toBe('Highly secure AWS infrastructure with VPC, EC2, KMS encryption, S3, and Secrets Manager');
+      expect(template.Description).toBe(
+        'Highly secure AWS infrastructure with VPC, EC2, KMS encryption, S3, and Secrets Manager'
+      );
     });
   });
 
   describe('Parameters', () => {
     test('should have all required parameters', () => {
       const expectedParams = [
-        'Environment', 'Project', 'Owner', 'VpcCidr',
-        'PublicSubnet1Cidr', 'PublicSubnet2Cidr', 'PrivateSubnet1Cidr', 'PrivateSubnet2Cidr',
-        'InstanceType', 'KeyPairName', 'SSHAllowedCidr', 'EnableNatGateway'
+        'Environment',
+        'Project',
+        'Owner',
+        'VpcCidr',
+        'PublicSubnet1Cidr',
+        'PublicSubnet2Cidr',
+        'PrivateSubnet1Cidr',
+        'PrivateSubnet2Cidr',
+        'InstanceType',
+        'KeyPairName',
+        'SSHAllowedCidr',
+        'EnableNatGateway',
       ];
 
       expectedParams.forEach(param => {
@@ -79,7 +90,7 @@ describe('Highly Secure AWS Infrastructure CloudFormation Template', () => {
     test('should have KMS key alias', () => {
       const keyAlias = template.Resources.KMSKeyAlias;
       expect(keyAlias.Type).toBe('AWS::KMS::Alias');
-      expect(keyAlias.Properties.TargetKeyId).toEqual({ 'Ref': 'KMSKey' });
+      expect(keyAlias.Properties.TargetKeyId).toEqual({ Ref: 'KMSKey' });
     });
 
     test('KMS key should have proper policy', () => {
@@ -97,7 +108,7 @@ describe('Highly Secure AWS Infrastructure CloudFormation Template', () => {
       expect(vpc.Type).toBe('AWS::EC2::VPC');
       expect(vpc.Properties.EnableDnsHostnames).toBe(true);
       expect(vpc.Properties.EnableDnsSupport).toBe(true);
-      expect(vpc.Properties.CidrBlock).toEqual({ 'Ref': 'VpcCidr' });
+      expect(vpc.Properties.CidrBlock).toEqual({ Ref: 'VpcCidr' });
     });
 
     test('should have Internet Gateway', () => {
@@ -113,13 +124,21 @@ describe('Highly Secure AWS Infrastructure CloudFormation Template', () => {
     });
 
     test('private subnets should not auto-assign public IPs', () => {
-      expect(template.Resources.PrivateSubnet1.Properties.MapPublicIpOnLaunch).toBe(false);
-      expect(template.Resources.PrivateSubnet2.Properties.MapPublicIpOnLaunch).toBe(false);
+      expect(
+        template.Resources.PrivateSubnet1.Properties.MapPublicIpOnLaunch
+      ).toBe(false);
+      expect(
+        template.Resources.PrivateSubnet2.Properties.MapPublicIpOnLaunch
+      ).toBe(false);
     });
 
     test('public subnets should auto-assign public IPs', () => {
-      expect(template.Resources.PublicSubnet1.Properties.MapPublicIpOnLaunch).toBe(true);
-      expect(template.Resources.PublicSubnet2.Properties.MapPublicIpOnLaunch).toBe(true);
+      expect(
+        template.Resources.PublicSubnet1.Properties.MapPublicIpOnLaunch
+      ).toBe(true);
+      expect(
+        template.Resources.PublicSubnet2.Properties.MapPublicIpOnLaunch
+      ).toBe(true);
     });
 
     test('should have NAT Gateways with conditions', () => {
@@ -136,13 +155,22 @@ describe('Highly Secure AWS Infrastructure CloudFormation Template', () => {
     test('should have S3 bucket with encryption', () => {
       const s3Bucket = template.Resources.S3Bucket;
       expect(s3Bucket.Type).toBe('AWS::S3::Bucket');
-      expect(s3Bucket.Properties.BucketEncryption.ServerSideEncryptionConfiguration[0].ServerSideEncryptionByDefault.SSEAlgorithm).toBe('aws:kms');
-      expect(s3Bucket.Properties.BucketEncryption.ServerSideEncryptionConfiguration[0].ServerSideEncryptionByDefault.KMSMasterKeyID).toEqual({ 'Ref': 'KMSKey' });
+      expect(
+        s3Bucket.Properties.BucketEncryption
+          .ServerSideEncryptionConfiguration[0].ServerSideEncryptionByDefault
+          .SSEAlgorithm
+      ).toBe('aws:kms');
+      expect(
+        s3Bucket.Properties.BucketEncryption
+          .ServerSideEncryptionConfiguration[0].ServerSideEncryptionByDefault
+          .KMSMasterKeyID
+      ).toEqual({ Ref: 'KMSKey' });
     });
 
     test('should have S3 bucket with public access blocked', () => {
       const s3Bucket = template.Resources.S3Bucket;
-      const publicAccessBlock = s3Bucket.Properties.PublicAccessBlockConfiguration;
+      const publicAccessBlock =
+        s3Bucket.Properties.PublicAccessBlockConfiguration;
       expect(publicAccessBlock.BlockPublicAcls).toBe(true);
       expect(publicAccessBlock.BlockPublicPolicy).toBe(true);
       expect(publicAccessBlock.IgnorePublicAcls).toBe(true);
@@ -152,7 +180,9 @@ describe('Highly Secure AWS Infrastructure CloudFormation Template', () => {
     test('should have S3 bucket policy', () => {
       const bucketPolicy = template.Resources.S3BucketPolicy;
       expect(bucketPolicy.Type).toBe('AWS::S3::BucketPolicy');
-      expect(bucketPolicy.Properties.PolicyDocument.Statement).toBeInstanceOf(Array);
+      expect(bucketPolicy.Properties.PolicyDocument.Statement).toBeInstanceOf(
+        Array
+      );
     });
   });
 
@@ -160,22 +190,27 @@ describe('Highly Secure AWS Infrastructure CloudFormation Template', () => {
     test('should have security group for EC2', () => {
       const sg = template.Resources.EC2SecurityGroup;
       expect(sg.Type).toBe('AWS::EC2::SecurityGroup');
-      expect(sg.Properties.VpcId).toEqual({ 'Ref': 'VPC' });
+      expect(sg.Properties.VpcId).toEqual({ Ref: 'VPC' });
     });
 
     test('should have launch template with encrypted volumes', () => {
       const lt = template.Resources.LaunchTemplate;
       expect(lt.Type).toBe('AWS::EC2::LaunchTemplate');
-      const blockDevice = lt.Properties.LaunchTemplateData.BlockDeviceMappings[0];
+      const blockDevice =
+        lt.Properties.LaunchTemplateData.BlockDeviceMappings[0];
       expect(blockDevice.Ebs.Encrypted).toBe(true);
-      expect(blockDevice.Ebs.KmsKeyId).toEqual({ 'Ref': 'KMSKey' });
+      expect(blockDevice.Ebs.KmsKeyId).toEqual({ Ref: 'KMSKey' });
     });
 
     test('should have auto scaling group in private subnets', () => {
       const asg = template.Resources.AutoScalingGroup;
       expect(asg.Type).toBe('AWS::AutoScaling::AutoScalingGroup');
-      expect(asg.Properties.VPCZoneIdentifier).toContainEqual({ 'Ref': 'PrivateSubnet1' });
-      expect(asg.Properties.VPCZoneIdentifier).toContainEqual({ 'Ref': 'PrivateSubnet2' });
+      expect(asg.Properties.VPCZoneIdentifier).toContainEqual({
+        Ref: 'PrivateSubnet1',
+      });
+      expect(asg.Properties.VPCZoneIdentifier).toContainEqual({
+        Ref: 'PrivateSubnet2',
+      });
     });
   });
 
@@ -183,13 +218,17 @@ describe('Highly Secure AWS Infrastructure CloudFormation Template', () => {
     test('should have EC2 instance role', () => {
       const role = template.Resources.EC2InstanceRole;
       expect(role.Type).toBe('AWS::IAM::Role');
-      expect(role.Properties.ManagedPolicyArns).toContain('arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore');
+      expect(role.Properties.ManagedPolicyArns).toContain(
+        'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore'
+      );
     });
 
     test('should have instance profile', () => {
       const profile = template.Resources.EC2InstanceProfile;
       expect(profile.Type).toBe('AWS::IAM::InstanceProfile');
-      expect(profile.Properties.Roles).toContainEqual({ 'Ref': 'EC2InstanceRole' });
+      expect(profile.Properties.Roles).toContainEqual({
+        Ref: 'EC2InstanceRole',
+      });
     });
 
     test('EC2 role should have scoped policies', () => {
@@ -197,11 +236,13 @@ describe('Highly Secure AWS Infrastructure CloudFormation Template', () => {
       const policies = role.Properties.Policies;
       expect(policies).toBeInstanceOf(Array);
       expect(policies.length).toBeGreaterThan(0);
-      
+
       // Check KMS policy
-      const kmsPolicy = policies.find(p => p.PolicyName === 'KMSAccess');
+      const kmsPolicy = policies.find((p: any) => p.PolicyName === 'KMSAccess');
       expect(kmsPolicy).toBeDefined();
-      expect(kmsPolicy.PolicyDocument.Statement[0].Resource).toEqual({ 'Fn::GetAtt': ['KMSKey', 'Arn'] });
+      expect(kmsPolicy.PolicyDocument.Statement[0].Resource).toEqual({
+        'Fn::GetAtt': ['KMSKey', 'Arn'],
+      });
     });
   });
 
@@ -209,7 +250,7 @@ describe('Highly Secure AWS Infrastructure CloudFormation Template', () => {
     test('should have secrets manager secret', () => {
       const secret = template.Resources.DatabaseSecret;
       expect(secret.Type).toBe('AWS::SecretsManager::Secret');
-      expect(secret.Properties.KmsKeyId).toEqual({ 'Ref': 'KMSKey' });
+      expect(secret.Properties.KmsKeyId).toEqual({ Ref: 'KMSKey' });
     });
 
     test('secret should generate password', () => {
@@ -222,9 +263,17 @@ describe('Highly Secure AWS Infrastructure CloudFormation Template', () => {
   describe('Outputs', () => {
     test('should have all required outputs', () => {
       const expectedOutputs = [
-        'VpcId', 'PublicSubnetIds', 'PrivateSubnetIds', 'KmsKeyId', 'KmsKeyArn',
-        'S3BucketName', 'AutoScalingGroupName', 'EC2InstanceRoleArn', 
-        'SecretsManagerSecretArn', 'LaunchTemplateId', 'SecurityGroupId'
+        'VpcId',
+        'PublicSubnetIds',
+        'PrivateSubnetIds',
+        'KmsKeyId',
+        'KmsKeyArn',
+        'S3BucketName',
+        'AutoScalingGroupName',
+        'EC2InstanceRoleArn',
+        'SecretsManagerSecretArn',
+        'LaunchTemplateId',
+        'SecurityGroupId',
       ];
 
       expectedOutputs.forEach(outputName => {
@@ -234,7 +283,7 @@ describe('Highly Secure AWS Infrastructure CloudFormation Template', () => {
 
     test('VpcId output should reference VPC', () => {
       const output = template.Outputs.VpcId;
-      expect(output.Value).toEqual({ 'Ref': 'VPC' });
+      expect(output.Value).toEqual({ Ref: 'VPC' });
       expect(output.Export).toBeDefined();
     });
 
@@ -257,9 +306,9 @@ describe('Highly Secure AWS Infrastructure CloudFormation Template', () => {
     test('should use resource-specific IAM policies', () => {
       const role = template.Resources.EC2InstanceRole;
       const policies = role.Properties.Policies;
-      
-      policies.forEach(policy => {
-        policy.PolicyDocument.Statement.forEach(statement => {
+
+      policies.forEach((policy: any) => {
+        policy.PolicyDocument.Statement.forEach((statement: any) => {
           if (statement.Resource && statement.Resource !== '*') {
             expect(statement.Resource).not.toBe('*');
           }
@@ -270,8 +319,8 @@ describe('Highly Secure AWS Infrastructure CloudFormation Template', () => {
     test('should have no open SSH to world', () => {
       const sg = template.Resources.EC2SecurityGroup;
       const ingressRules = sg.Properties.SecurityGroupIngress || [];
-      
-      ingressRules.forEach(rule => {
+
+      ingressRules.forEach((rule: any) => {
         if (rule.FromPort === 22 && rule.ToPort === 22) {
           expect(rule.CidrIp).not.toBe('0.0.0.0/0');
         }
@@ -313,15 +362,22 @@ describe('Highly Secure AWS Infrastructure CloudFormation Template', () => {
   describe('Resource Tagging', () => {
     test('should have consistent tagging on resources', () => {
       const resourcesWithTags = [
-        'KMSKey', 'VPC', 'InternetGateway', 'PublicSubnet1', 'PrivateSubnet1',
-        'S3Bucket', 'EC2SecurityGroup', 'EC2InstanceRole', 'DatabaseSecret'
+        'KMSKey',
+        'VPC',
+        'InternetGateway',
+        'PublicSubnet1',
+        'PrivateSubnet1',
+        'S3Bucket',
+        'EC2SecurityGroup',
+        'EC2InstanceRole',
+        'DatabaseSecret',
       ];
 
       resourcesWithTags.forEach(resourceName => {
         const resource = template.Resources[resourceName];
         if (resource && resource.Properties && resource.Properties.Tags) {
           const tags = resource.Properties.Tags;
-          const tagKeys = tags.map(tag => tag.Key);
+          const tagKeys = tags.map((tag: any) => tag.Key);
           expect(tagKeys).toContain('Environment');
           expect(tagKeys).toContain('Project');
           expect(tagKeys).toContain('Owner');
