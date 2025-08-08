@@ -200,25 +200,11 @@ describe('TapStack CloudFormation Template', () => {
     });
 
     test('error alarm should monitor errors metric', () => {
-      const alarmResource: any = Object.values(template.Resources).find(
-        (res: any) =>
-          res.Type === 'AWS::CloudWatch::Alarm' &&
-          res.Properties?.AlarmName?.includes('ErrorRate')
-      );
+      const alarm = template.Resources.LambdaErrorAlarm;
 
-      expect(alarmResource).toBeDefined();
-
-      const errorMetric = alarmResource.Properties.Metrics.find(
-        (m: any) => m.Id === 'e1'
-      ).MetricStat.Metric;
-
-      expect(errorMetric.MetricName).toBe('Errors');
-      expect(errorMetric.Namespace).toBe('AWS/Lambda');
-
-      expect(
-        alarmResource.Properties.Metrics.find((m: any) => m.Id === 'e1')
-          .MetricStat.Stat
-      ).toBe('Sum');
+      expect(alarm.Properties.MetricName).toBe('Errors');
+      expect(alarm.Properties.Namespace).toBe('AWS/Lambda');
+      expect(alarm.Properties.Statistic).toBe('Sum');
     });
   });
 
