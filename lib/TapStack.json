@@ -240,7 +240,10 @@
                     "Ref": "MainLambdaFunction"
                 },
                 "FunctionVersion": {
-                    "Ref": "LambdaVersion"
+                    "Fn::GetAtt": [
+                        "LambdaVersion",
+                        "Version"
+                    ]
                 },
                 "Name": "prod",
                 "ProvisionedConcurrencyConfig": {
