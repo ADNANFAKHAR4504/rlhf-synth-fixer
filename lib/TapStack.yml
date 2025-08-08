@@ -483,7 +483,7 @@ Outputs:
 
   LoadBalancerName:
     Description: Name of the Application Load Balancer
-    Value: !Ref ApplicationLoadBalancer
+    Value: !GetAtt ApplicationLoadBalancer.LoadBalancerName
     Export:
       Name: !Sub ${EnvironmentName}-LoadBalancerName
 
