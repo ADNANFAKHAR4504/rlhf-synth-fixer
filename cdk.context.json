@@ -15,10 +15,5 @@
     "us-west-2b",
     "us-west-2c",
     "us-west-2d"
-  ],
-  "availability-zones:account=718240086340:region=eu-west-1": [
-    "eu-west-1a",
-    "eu-west-1b",
-    "eu-west-1c"
   ]
 }
