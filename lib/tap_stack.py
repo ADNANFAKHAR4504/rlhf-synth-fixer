@@ -30,7 +30,7 @@ class TapStackArgs:
                tags: Optional[dict] = None):
     self.environment_suffix = environment_suffix or 'prod'
     # Defaulting to us-east-1 and us-west-1 for multi-region deployment
-    self.regions = ['us-east-1', 'us-west-1']
+    self.regions = ['us-east-1', 'us-west-2']
     self.tags = tags or {
       'Project': 'Pulumi-Tap-Stack',
       'Environment': self.environment_suffix,
