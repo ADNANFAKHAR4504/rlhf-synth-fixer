@@ -1,6 +1,7 @@
 # Secure AWS Infrastructure with Pulumi (Python)
 
-I'll create a comprehensive, security-first AWS infrastructure using Pulumi with Python that meets all the specified requirements.
+I'll create a comprehensive, security-first AWS infrastructure using Pulumi with Python that meets all the specified
+requirements.
 
 ## Project Structure
 
@@ -830,27 +831,32 @@ pulumi up
 ## Security Features Implemented
 
 ### 🔐 **Encryption at Rest**
+
 - **KMS Key Management**: Dedicated KMS keys for different services with automatic key rotation
 - **S3 Encryption**: All S3 objects encrypted using KMS with bucket-level encryption policies
 - **CloudWatch Logs Encryption**: Log groups encrypted with dedicated KMS keys
 
 ### 🛡️ **IAM Least Privilege**
+
 - **Service-Specific Roles**: Separate IAM roles for each service with minimal required permissions
 - **Resource-Scoped Policies**: Policies limited to specific resources and actions
 - **No Wildcard Permissions**: Explicit resource ARNs and specific actions only
 
 ### 📊 **Centralized Logging**
+
 - **CloudTrail**: Complete API audit trail with log file validation
 - **VPC Flow Logs**: Network traffic monitoring and analysis
 - **CloudWatch Integration**: Centralized log management with retention policies
 - **S3 Log Storage**: Secure, encrypted, and lifecycle-managed log storage
 
 ### 🔒 **Network Security**
+
 - **Private Subnets**: Workloads isolated from direct internet access
 - **Security Groups**: Restrictive rules allowing only necessary traffic
 - **VPC Flow Logs**: Complete network traffic visibility
 
 ### 🚫 **Security Controls**
+
 - **Public Access Blocking**: All S3 buckets block public access
 - **SSL/TLS Enforcement**: Deny all non-encrypted communications
 - **MFA Delete Protection**: Optional MFA delete for critical resources
@@ -872,4 +878,5 @@ The infrastructure includes comprehensive security validations:
 - **KMS Key Efficiency**: Shared keys where appropriate to reduce costs
 - **Resource Tagging**: Comprehensive tagging for cost allocation and management
 
-This implementation provides a production-ready, security-first AWS infrastructure that meets all enterprise-grade requirements while maintaining operational efficiency and cost-effectiveness.
+This implementation provides a production-ready, security-first AWS infrastructure that meets all enterprise-grade
+requirements while maintaining operational efficiency and cost-effectiveness.

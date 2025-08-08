@@ -1,137 +1,117 @@
 """IAM module implementing least privilege access control."""
-import pulumi
-import pulumi_aws as aws
 import json
+
+import pulumi
+import pulumi_aws.iam as iam  # clearer import
 
 
 class IAMManager:
-  """Manages IAM roles and policies with least privilege principle."""
+    """Manages IAM roles and policies with least privilege principle."""
 
-  def __init__(self, project_name: str, environment: str):
-    self.project_name = project_name
-    self.environment = environment
+    def __init__(self, project_name: str, environment: str):
+        self.project_name = project_name
+        self.environment = environment
 
-  def create_cloudtrail_role(
-          self,
-          s3_bucket_arn: pulumi.Output[str]) -> aws.iam.Role:
-    """Create IAM role for CloudTrail with minimal required permissions."""
+    def create_cloudtrail_role(self, s3_bucket_arn: pulumi.Output[str]) -> iam.Role:
+        """Create IAM role for CloudTrail with minimal required permissions."""
 
-    # Trust policy for CloudTrail
-    assume_role_policy = {
-        "Version": "2012-10-17",
-        "Statement": [
-            {
+        assume_role_policy = {
+            "Version": "2012-10-17",
+            "Statement": [{
                 "Effect": "Allow",
-                "Principal": {
-                    "Service": "cloudtrail.amazonaws.com"
-                },
+                "Principal": {"Service": "cloudtrail.amazonaws.com"},
                 "Action": "sts:AssumeRole"
-            }
-        ]
-    }
-
-    cloudtrail_role = aws.iam.Role(
-        f"{self.project_name}-cloudtrail-role",
-        name=f"{self.project_name}-cloudtrail-role",
-        assume_role_policy=json.dumps(assume_role_policy),
-        tags={
-            "Name": f"{self.project_name}-cloudtrail-role",
-            "Environment": self.environment,
-            "Purpose": "cloudtrail-logging",
-            "ManagedBy": "pulumi"
+            }]
         }
-    )
 
-    # Policy for CloudTrail to write to S3
-    cloudtrail_policy = s3_bucket_arn.apply(
-        lambda arn: json.dumps({
+        role = iam.Role(
+            f"{self.project_name}-cloudtrail-role",
+            # Avoid collisions by including environment in name
+            name=f"{self.project_name}-{self.environment}-cloudtrail-role",
+            assume_role_policy=json.dumps(assume_role_policy),
+            tags={
+                "Name": f"{self.project_name}-cloudtrail-role",
+                "Environment": self.environment,
+                "Purpose": "cloudtrail-logging",
+                "ManagedBy": "pulumi"
+            }
+        )
+
+        policy_doc = s3_bucket_arn.apply(lambda arn: json.dumps({
             "Version": "2012-10-17",
             "Statement": [
                 {
                     "Effect": "Allow",
-                    "Action": [
-                        "s3:PutObject",
-                        "s3:GetBucketAcl"
-                    ],
-                    "Resource": [
-                        arn,
-                        f"{arn}/*"
-                    ]
+                    "Action": ["s3:PutObject", "s3:GetBucketAcl"],
+                    "Resource": [f"{arn}/AWSLogs/*"]
                 },
                 {
                     "Effect": "Allow",
-                    "Action": [
-                        "s3:GetBucketLocation"
-                    ],
+                    "Action": ["s3:GetBucketLocation"],
                     "Resource": arn
                 }
             ]
-        })
-    )
+        }))
 
-    aws.iam.RolePolicy(
-        f"{self.project_name}-cloudtrail-policy",
-        name=f"{self.project_name}-cloudtrail-policy",
-        role=cloudtrail_role.id,
-        policy=cloudtrail_policy
-    )
+        iam.RolePolicy(
+            f"{self.project_name}-cloudtrail-policy",
+            name=f"{self.project_name}-{self.environment}-cloudtrail-policy",
+            role=role.id,
+            policy=policy_doc
+        )
 
-    return cloudtrail_role
+        pulumi.export("cloudtrail_role_name", role.name)
+        pulumi.export("cloudtrail_role_arn", role.arn)
 
-  def create_vpc_flow_logs_role(
-          self, log_group_arn: pulumi.Output[str]) -> aws.iam.Role:
-    """Create IAM role for VPC Flow Logs with minimal permissions."""
+        return role
 
-    assume_role_policy = {
-        "Version": "2012-10-17",
-        "Statement": [
-            {
-                "Effect": "Allow",
-                "Principal": {
-                    "Service": "vpc-flow-logs.amazonaws.com"
-                },
-                "Action": "sts:AssumeRole"
-            }
-        ]
-    }
+    def create_vpc_flow_logs_role(self, log_group_arn: pulumi.Output[str]) -> iam.Role:
+        """Create IAM role for VPC Flow Logs with minimal permissions."""
 
-    flow_logs_role = aws.iam.Role(
-        f"{self.project_name}-vpc-flow-logs-role",
-        name=f"{self.project_name}-vpc-flow-logs-role",
-        assume_role_policy=json.dumps(assume_role_policy),
-        tags={
-            "Name": f"{self.project_name}-vpc-flow-logs-role",
-            "Environment": self.environment,
-            "Purpose": "vpc-flow-logs",
-            "ManagedBy": "pulumi"
-        }
-    )
-
-    # Policy for VPC Flow Logs to write to CloudWatch
-    flow_logs_policy = log_group_arn.apply(
-        lambda arn: json.dumps({
+        assume_role_policy = {
             "Version": "2012-10-17",
-            "Statement": [
-                {
-                    "Effect": "Allow",
-                    "Action": [
-                        "logs:CreateLogGroup",
-                        "logs:CreateLogStream",
-                        "logs:PutLogEvents",
-                        "logs:DescribeLogGroups",
-                        "logs:DescribeLogStreams"
-                    ],
-                    "Resource": arn
-                }
-            ]
-        })
-    )
+            "Statement": [{
+                "Effect": "Allow",
+                "Principal": {"Service": "vpc-flow-logs.amazonaws.com"},
+                "Action": "sts:AssumeRole"
+            }]
+        }
 
-    aws.iam.RolePolicy(
-        f"{self.project_name}-vpc-flow-logs-policy",
-        name=f"{self.project_name}-vpc-flow-logs-policy",
-        role=flow_logs_role.id,
-        policy=flow_logs_policy
-    )
+        role = iam.Role(
+            f"{self.project_name}-vpc-flow-logs-role",
+            name=f"{self.project_name}-{self.environment}-vpc-flow-logs-role",
+            assume_role_policy=json.dumps(assume_role_policy),
+            tags={
+                "Name": f"{self.project_name}-vpc-flow-logs-role",
+                "Environment": self.environment,
+                "Purpose": "vpc-flow-logs",
+                "ManagedBy": "pulumi"
+            }
+        )
 
-    return flow_logs_role
+        policy_doc = log_group_arn.apply(lambda arn: json.dumps({
+            "Version": "2012-10-17",
+            "Statement": [{
+                "Effect": "Allow",
+                "Action": [
+                    "logs:CreateLogGroup",
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents",
+                    "logs:DescribeLogGroups",
+                    "logs:DescribeLogStreams"
+                ],
+                "Resource": [arn, f"{arn}:*"]
+            }]
+        }))
+
+        iam.RolePolicy(
+            f"{self.project_name}-vpc-flow-logs-policy",
+            name=f"{self.project_name}-{self.environment}-vpc-flow-logs-policy",
+            role=role.id,
+            policy=policy_doc
+        )
+
+        pulumi.export("vpc_flow_logs_role_name", role.name)
+        pulumi.export("vpc_flow_logs_role_arn", role.arn)
+
+        return role

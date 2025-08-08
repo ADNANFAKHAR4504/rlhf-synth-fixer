@@ -2,13 +2,18 @@
 
 ## Background
 
-You are an expert cloud infrastructure engineer working on a high-security project titled **"IaC - AWS Nova Model Breaking"**. Your mission is to design and implement a secure AWS environment using Pulumi with Python. The focus is on enforcing enterprise-grade security standards in an AWS multi-account architecture.
+You are an expert cloud infrastructure engineer working on a high-security project titled **"IaC - AWS Nova Model
+Breaking"**. Your mission is to design and implement a secure AWS environment using Pulumi with Python. The focus is on
+enforcing enterprise-grade security standards in an AWS multi-account architecture.
 
-All configurations and deployments must adhere to best practices in cloud security and follow the constraints outlined below.
+All configurations and deployments must adhere to best practices in cloud security and follow the constraints outlined
+below.
 
 ## Environment Setup
 
-You are working in the AWS `us-west-1` region. The infrastructure you build must reflect production-grade, security-first principles. This includes correct use of encryption, role-based access control, and secure handling of sensitive information.
+You are working in the AWS `us-west-1` region. The infrastructure you build must reflect production-grade,
+security-first principles. This includes correct use of encryption, role-based access control, and secure handling of
+sensitive information.
 
 ## Requirements
 
@@ -16,14 +21,15 @@ The infrastructure must meet **all** of the following requirements:
 
 1. **Region**: All resources must be deployed in `us-west-1`.
 2. **Encryption**: Use AWS Key Management Service (KMS) to create and manage cryptographic keys for all data at rest.
-3. **IAM Roles**: Implement IAM roles that apply the **least privilege** principle—grant only the minimal permissions necessary for each resource or user.
+3. **IAM Roles**: Implement IAM roles that apply the **least privilege** principle—grant only the minimal permissions
+   necessary for each resource or user.
 4. **Centralized Logging**:
-   - Capture logs from all AWS services (e.g., CloudTrail, VPC Flow Logs, etc.).
-   - Store logs in an S3 bucket.
-   - Ensure the bucket has **encryption enabled by default**.
+    - Capture logs from all AWS services (e.g., CloudTrail, VPC Flow Logs, etc.).
+    - Store logs in an S3 bucket.
+    - Ensure the bucket has **encryption enabled by default**.
 5. **Credential Management**:
-   - Use environment variables to manage sensitive information.
-   - Avoid hardcoding any secrets, API keys, or credentials directly in the source code.
+    - Use environment variables to manage sensitive information.
+    - Avoid hardcoding any secrets, API keys, or credentials directly in the source code.
 
 ## Objective
 
