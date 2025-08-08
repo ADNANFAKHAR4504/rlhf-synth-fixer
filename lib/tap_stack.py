@@ -217,9 +217,6 @@ class TapStack(cdk.Stack):
     # Create API Gateway
     self.create_api_gateway()
 
-    # Create CloudWatch Log Groups with retention
-    self.create_log_groups()
-
     # Create outputs
     self.create_outputs()
 
