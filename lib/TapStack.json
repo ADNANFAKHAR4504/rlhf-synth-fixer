@@ -59,6 +59,12 @@
             "Default": "dev",
             "AllowedPattern": "^[a-z0-9-]+$"
         },
+        "LogBucketNamePrefix": {
+            "Type": "String",
+            "Description": "Prefix for the S3 bucket name (will be converted to lowercase)",
+            "Default": "tapstack",
+            "AllowedPattern": "^[a-z0-9-]+$"
+        },
         "VpcCidr": {
             "Type": "String",
             "Description": "VPC CIDR block — must be 10.0.0.0/16 for this template.",
@@ -678,25 +684,7 @@
             "Type": "AWS::S3::Bucket",
             "Properties": {
                 "BucketName": {
-                    "Fn::Join": [
-                        "-",
-                        [
-                            {
-                                "Ref": "AWS::StackName"
-                            },
-                            {
-                                "Ref": "EnvironmentSuffix"
-                            },
-                            "alb",
-                            "logs",
-                            {
-                                "Ref": "AWS::AccountId"
-                            },
-                            {
-                                "Ref": "AWS::Region"
-                            }
-                        ]
-                    ]
+                    "Fn::Sub": "${LogBucketNamePrefix}-${EnvironmentSuffix}-alb-logs-${AWS::AccountId}-${AWS::Region}"
                 },
                 "VersioningConfiguration": {
                     "Status": "Enabled"
