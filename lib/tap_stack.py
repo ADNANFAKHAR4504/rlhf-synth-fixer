@@ -1,17 +1,29 @@
 import pulumi
 import pulumi_aws as aws
 import json
-from typing import Dict, Any
+from typing import Dict, Any, List, Optional
+from dataclasses import dataclass
+
+@dataclass
+class TapStackArgs:
+    """Arguments for TapStack"""
+    project_name: str = "iac-aws-nova"
+    environment: str = "dev"
+    regions: List[str] = None
+    
+    def __post_init__(self):
+        if self.regions is None:
+            self.regions = ["us-east-1", "us-west-2"]
 
 class TapStack(pulumi.ComponentResource):
     """Multi-region serverless infrastructure stack for AWS Lambda and API Gateway"""
     
-    def __init__(self, name: str, args: Dict[str, Any], opts: pulumi.ResourceOptions = None):
+    def __init__(self, name: str, args: TapStackArgs, opts: pulumi.ResourceOptions = None):
         super().__init__("custom:TapStack", name, None, opts)
         
-        self.project_name = args.get("project_name", "iac-aws-nova")
-        self.environment = args.get("environment", "dev")
-        self.regions = args.get("regions", ["us-east-1", "us-west-2"])
+        self.project_name = args.project_name
+        self.environment = args.environment
+        self.regions = args.regions
         
         # Resource collections
         self.lambda_functions = {}
@@ -413,9 +425,17 @@ def handler(event, context):
         # S3 bucket names
         s3_names = {region: bucket.bucket for region, bucket in self.s3_buckets.items()}
         
+        # Store outputs as instance attributes for export
+        self.api_urls = api_urls
+        self.lambda_arns = lambda_arns
+        self.s3_buckets = s3_names
+        self.vpc_ids = {region: vpc.id for region, vpc in self.vpcs.items()}
+        
+        # Also register them with Pulumi
         self.register_outputs({
             "api_urls": api_urls,
             "lambda_arns": lambda_arns,
             "s3_buckets": s3_names,
-            "vpc_ids": {region: vpc.id for region, vpc in self.vpcs.items()}
+            "vpc_ids": self.vpc_ids
         })
+
