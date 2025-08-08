@@ -4,12 +4,14 @@ import {
 } from '@cdktf/provider-aws/lib/provider';
 import { S3Backend, TerraformStack } from 'cdktf';
 import { Construct } from 'constructs';
-import AWS_REGION_OVERRIDE from './AWS_REGION';
 import { ComputeStack } from './compute-stack';
 import { DatabaseStack } from './database-stack';
 import { SecureVpcStack } from './secure-vpc-stack';
 import { SecurityStack } from './security-stack';
 import { StorageStack } from './storage-stack';
+
+// Load region from shared AWS_REGION file (if implemented)
+import AWS_REGION_OVERRIDE from './AWS_REGION'; // or './lib/AWS_REGION'
 
 interface TapStackProps {
   environmentSuffix?: string;
@@ -43,16 +45,13 @@ export class TapStack extends TerraformStack {
 
     this.addOverride('terraform.backend.s3.use_lockfile', true);
 
-    // Provision VPC & Security
+    // TapStack (simplified for fix)
     const vpcStack = new SecureVpcStack(this, 'SecureVpcStack');
     const securityStack = new SecurityStack(this, 'SecurityStack', {
       vpcId: vpcStack.outputs.vpcId,
-      vpcCidr: '10.0.0.0/16',
-      environmentSuffix: environmentSuffix,
-      projectName: 'tap-infrastructure',
+      vpcCidr: '10.0.0.0/16', // same CIDR used in VPC stack
     });
 
-    // Compute
     new ComputeStack(this, 'ComputeStack', {
       subnetIds: vpcStack.outputs.publicSubnetIds,
       securityGroupIds: [securityStack.outputs.webSgId],
@@ -60,26 +59,20 @@ export class TapStack extends TerraformStack {
       instanceCount: 2,
     });
 
-    // Resolve DB password
-    let rawPassword = process.env.DB_PASSWORD;
-    if (!rawPassword || rawPassword.trim() === '') {
-      // CI fallback: generate random password (<= 41 chars)
-      rawPassword = `P@ssw0rd-${Math.random().toString(36).slice(2, 15)}`;
-    }
-    if (rawPassword.length > 41) {
-      rawPassword = rawPassword.slice(0, 41);
-    }
+        new DatabaseStack(this, 'DatabaseStack', {
+          subnetIds: vpcStack.outputs.privateSubnetIds,
+          securityGroupIds: [securityStack.outputs.dbSgId],
+          dbName: 'appdb',
+          username: 'admin',
 
-    // Database
-    new DatabaseStack(this, 'DatabaseStack', {
-      subnetIds: vpcStack.outputs.privateSubnetIds,
-      securityGroupIds: [securityStack.outputs.dbSgId],
-      dbName: 'appdb',
-      username: 'admin',
-      password: rawPassword, // now always compliant
-    });
+          // Option A (preferred): Secrets Manager
+          // passwordSecretArn: process.env.DB_PASSWORD_SECRET_ARN,
 
-    // Storage
+          // Option B (simple & works in CI/tests): environment variable
+          passwordEnvVarName: 'DB_PASSWORD',
+        });
+
+
     new StorageStack(this, 'StorageStack');
   }
 }

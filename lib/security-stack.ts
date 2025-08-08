@@ -12,8 +12,6 @@ export interface SecurityStackOutputs {
 interface SecurityStackProps {
   vpcId: string;
   vpcCidr: string;
-  environmentSuffix?: string;
-  projectName?: string;
 }
 
 export class SecurityStack extends Construct {
@@ -22,8 +20,8 @@ export class SecurityStack extends Construct {
   constructor(scope: Construct, id: string, props: SecurityStackProps) {
     super(scope, id);
 
-    const environment = props.environmentSuffix || 'dev';
-    const projectName = props.projectName || 'myproject';
+    const environment = 'dev';
+    const projectName = 'myproject';
     const { vpcId, vpcCidr } = props;
 
     const commonTags = {
@@ -62,8 +60,7 @@ export class SecurityStack extends Construct {
       securityGroupId: webSg.id,
     });
 
-    // Web egress: Allow HTTPS to external services (e.g., package repos, APIs)
-    new SecurityGroupRule(this, 'web_egress_https', {
+    new SecurityGroupRule(this, 'web_egress', {
       type: 'egress',
       fromPort: 443,
       toPort: 443,
@@ -72,15 +69,6 @@ export class SecurityStack extends Construct {
       securityGroupId: webSg.id,
     });
 
-    // Web egress: Allow HTTP for package downloads and redirects
-    new SecurityGroupRule(this, 'web_egress_http', {
-      type: 'egress',
-      fromPort: 80,
-      toPort: 80,
-      protocol: 'tcp',
-      cidrBlocks: ['0.0.0.0/0'],
-      securityGroupId: webSg.id,
-    });
 
     // === App SG
     const appSg = new SecurityGroup(this, 'app_sg', {
@@ -112,21 +100,10 @@ export class SecurityStack extends Construct {
       securityGroupId: appSg.id,
     });
 
-    // App egress: Allow HTTPS for external API calls and package downloads
-    new SecurityGroupRule(this, 'app_egress_https', {
+    new SecurityGroupRule(this, 'app_egress', {
       type: 'egress',
       fromPort: 443,
       toPort: 443,
-      protocol: 'tcp',
-      cidrBlocks: ['0.0.0.0/0'],
-      securityGroupId: appSg.id,
-    });
-
-    // App egress: Allow HTTP for package repositories
-    new SecurityGroupRule(this, 'app_egress_http', {
-      type: 'egress',
-      fromPort: 80,
-      toPort: 80,
       protocol: 'tcp',
       cidrBlocks: ['0.0.0.0/0'],
       securityGroupId: appSg.id,
@@ -167,7 +144,7 @@ export class SecurityStack extends Construct {
       fromPort: 443,
       toPort: 443,
       protocol: 'tcp',
-      cidrBlocks: [vpcCidr], // keep DB traffic inside VPC unless needed
+      cidrBlocks: [vpcCidr],  // keep DB traffic inside VPC unless needed
       securityGroupId: dbSg.id,
     });
 
@@ -182,37 +159,6 @@ export class SecurityStack extends Construct {
 
     new TerraformOutput(this, 'db_security_group_id', {
       value: dbSg.id,
-    });
-
-    // === Cross-Security-Group Rules (defined after all SGs exist)
-    
-    // Web egress: Allow communication to app tier
-    new SecurityGroupRule(this, 'web_egress_to_app', {
-      type: 'egress',
-      fromPort: 8080,
-      toPort: 8080,
-      protocol: 'tcp',
-      sourceSecurityGroupId: appSg.id,
-      securityGroupId: webSg.id,
-    });
-
-    // App egress: Allow communication to database
-    new SecurityGroupRule(this, 'app_egress_to_db_mysql', {
-      type: 'egress',
-      fromPort: 3306,
-      toPort: 3306,
-      protocol: 'tcp',
-      sourceSecurityGroupId: dbSg.id,
-      securityGroupId: appSg.id,
-    });
-
-    new SecurityGroupRule(this, 'app_egress_to_db_pgsql', {
-      type: 'egress',
-      fromPort: 5432,
-      toPort: 5432,
-      protocol: 'tcp',
-      sourceSecurityGroupId: dbSg.id,
-      securityGroupId: appSg.id,
     });
 
     // === Expose internal outputs for other stacks

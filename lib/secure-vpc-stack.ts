@@ -78,7 +78,6 @@ export class SecureVpcStack extends Construct {
         vpcId: mainVpc.id,
         cidrBlock: cidr,
         availabilityZone: selectedAzs[i],
-        mapPublicIpOnLaunch: false, // Explicitly set to false for clarity
         tags: {
           ...commonTags,
           Name: `${projectName}-${environment}-private-subnet-${i + 1}`,

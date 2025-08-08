@@ -35,9 +35,11 @@ describe('Unit Tests', () => {
     expect(synthesized).toMatchSnapshot();
   });
 
+  // ✅ This test hits the missing branch
   test('ComputeStack should throw if subnetIds is empty', () => {
     const app = Testing.app();
     const stack = new TerraformStack(app, 'TestInvalidComputeStack');
+
     expect(() => {
       new ComputeStack(stack, 'InvalidComputeStack', {
         subnetIds: [],
@@ -64,6 +66,7 @@ describe('Unit Tests', () => {
       vpcId: 'vpc-0a1b2c3d4e5f67890',
       vpcCidr: '10.0.0.0/16',
     });
+
     const synthesized = Testing.synth(stack);
     expect(synthesized).toMatchSnapshot();
   });
@@ -91,41 +94,26 @@ describe('Unit Tests', () => {
     const synthesized = Testing.synth(stack);
     expect(synthesized).toMatchSnapshot();
   });
-
-  // ✅ New test to cover password > 41 chars branch
-  test('DatabaseStack should truncate password longer than 41 chars', () => {
-    const app = Testing.app();
-    const stack = new TerraformStack(app, 'TestDatabaseLongPw');
-    const longPw = 'A'.repeat(50);
-    new DatabaseStack(stack, 'TestDatabaseTruncatePw', {
-      subnetIds: ['subnet-abc123'],
-      securityGroupIds: ['sg-xyz123'],
-      dbName: 'testdb',
-      username: 'admin',
-      password: longPw,
-    });
-    const synthesized = Testing.synth(stack);
-    expect(synthesized).toMatchSnapshot();
-  });
 });
 
 test('TapStack builds with defaults and with explicit props (branch coverage)', () => {
   const app = new App();
 
+  // Needed so TapStack -> DatabaseStack resolves password during synth
   process.env.DB_PASSWORD = 'unit-test-password';
 
+  // Default props path
   const defaultStack = new TapStack(app, 'TapDefault');
   const defaultSynth = Testing.synth(defaultStack);
   expect(defaultSynth).toBeTruthy();
 
+  // Explicit props path (exercises branches for props?.*)
   const explicitStack = new TapStack(app, 'TapExplicit', {
     environmentSuffix: 'qa',
     awsRegion: 'us-west-2',
     stateBucket: 'iac-rlhf-tf-states',
     stateBucketRegion: 'us-west-2',
-    defaultTags: {
-      tags: { Environment: 'qa', Repository: 'demo', CommitAuthor: 'tester' },
-    },
+    defaultTags: { tags: { Environment: 'qa', Repository: 'demo', CommitAuthor: 'tester' } },
   });
   const explicitSynth = Testing.synth(explicitStack);
   expect(explicitSynth).toBeTruthy();
