@@ -924,6 +924,34 @@
               }
             },
             {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "cloudtrail.amazonaws.com"
+              },
+              "Action": "s3:PutObject",
+              "Resource": {
+                "Fn::Sub": "${AppLogsBucket.Arn}/cloudtrail-logs/*"
+              },
+              "Condition": {
+                "StringEquals": {
+                  "s3:x-amz-acl": "bucket-owner-full-control"
+                }
+              }
+            },
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "cloudtrail.amazonaws.com"
+              },
+              "Action": "s3:GetBucketAcl",
+              "Resource": {
+                "Fn::GetAtt": [
+                  "AppLogsBucket",
+                  "Arn"
+                ]
+              }
+            },
+            {
               "Effect": "Deny",
               "Principal": "*",
               "Action": "s3:*",
@@ -939,13 +967,14 @@
                 }
               ],
               "Condition": {
-                "IpAddressIfExists": {
-                  "aws:SourceIp": {
-                    "Ref": "S3AccessCIDR"
-                  }
-                },
                 "Bool": {
                   "aws:ViaAWSService": "false"
+                },
+                "StringNotEquals": {
+                  "aws:PrincipalServiceName": "cloudtrail.amazonaws.com",
+                  "aws:userid": {
+                    "Fn::Sub": "${EC2Role}:*"
+                  }
                 }
               }
             }
