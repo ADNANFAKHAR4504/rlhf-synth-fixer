@@ -112,7 +112,8 @@ class TestTapStackIntegration:
         
         # Verify encryption is set
         encryption = s3.get_bucket_encryption(Bucket=bucket_name)
-        assert encryption['ServerSideEncryptionConfiguration']['Rules'][0]['ApplyServerSideEncryptionByDefault']['SSEAlgorithm'] == 'AES256'
+        assert (encryption['ServerSideEncryptionConfiguration']['Rules'][0]
+                        ['ApplyServerSideEncryptionByDefault']['SSEAlgorithm'] == 'AES256')
     
     @mock_iam
     def test_iam_least_privilege(self, aws_credentials):

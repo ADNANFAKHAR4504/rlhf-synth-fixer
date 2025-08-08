@@ -91,7 +91,8 @@ class TapStack(ComponentResource):
                                 "Sid": "Enable IAM User Permissions",
                                 "Effect": "Allow",
                                 "Principal": {
-                                    "AWS": f"arn:aws:iam::{aws.get_caller_identity().account_id}:root"
+                                    "AWS": f"arn:aws:iam::"
+                                           f"{aws.get_caller_identity().account_id}:root"
                                 },
                                 "Action": "kms:*",
                                 "Resource": "*",
@@ -112,7 +113,10 @@ class TapStack(ComponentResource):
                                 "Resource": "*",
                                 "Condition": {
                                     "ArnEquals": {
-                                        "kms:EncryptionContext:aws:logs:arn": f"arn:aws:logs:{region}:{aws.get_caller_identity().account_id}:log-group:*"
+                                        "kms:EncryptionContext:aws:logs:arn": (
+                                            f"arn:aws:logs:{region}:"
+                                            f"{aws.get_caller_identity().account_id}:log-group:*"
+                                        )
                                     }
                                 }
                             },
@@ -141,7 +145,9 @@ class TapStack(ComponentResource):
                                 "Resource": "*",
                                 "Condition": {
                                     "StringEquals": {
-                                        "kms:CallerAccount": f"{aws.get_caller_identity().account_id}"
+                                        "kms:CallerAccount": (
+                                            f"{aws.get_caller_identity().account_id}"
+                                        )
                                     }
                                 }
                             }
@@ -280,8 +286,10 @@ class TapStack(ComponentResource):
             versioning=aws.s3.BucketVersioningArgs(enabled=True),
             server_side_encryption_configuration=aws.s3.BucketServerSideEncryptionConfigurationArgs(
                 rule=aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
-                    apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
-                        sse_algorithm="aws:kms", kms_master_key_id=self.kms_key.arn
+                    apply_server_side_encryption_by_default=(
+                        aws.s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
+                            sse_algorithm="aws:kms", kms_master_key_id=self.kms_key.arn
+                        )
                     ),
                     bucket_key_enabled=True,
                 )
@@ -397,7 +405,10 @@ class TapStack(ComponentResource):
             public_rt = aws.ec2.RouteTable(
                 f"PROD-public-rt-{region}-{self.environment_suffix}",
                 vpc_id=vpc.id,
-                tags={**self.standard_tags, "Name": f"PROD-public-rt-{region}-{self.environment_suffix}"},
+                tags={
+                    **self.standard_tags,
+                    "Name": f"PROD-public-rt-{region}-{self.environment_suffix}"
+                },
                 opts=ResourceOptions(parent=self, provider=provider),
             )
 
@@ -492,12 +503,15 @@ class TapStack(ComponentResource):
             )
 
             bucket = aws.s3.Bucket(
-                f"prod-storage-{region}-{self.environment_suffix}-{aws.get_caller_identity().account_id}",
+                (f"prod-storage-{region}-{self.environment_suffix}-"
+                 f"{aws.get_caller_identity().account_id}"),
                 versioning=aws.s3.BucketVersioningArgs(enabled=True),
                 server_side_encryption_configuration=aws.s3.BucketServerSideEncryptionConfigurationArgs(
                     rule=aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
-                        apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
-                            sse_algorithm="aws:kms", kms_master_key_id=self.kms_keys[region].arn
+                        apply_server_side_encryption_by_default=(
+                            aws.s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
+                                sse_algorithm="aws:kms", kms_master_key_id=self.kms_keys[region].arn
+                            )
                         ),
                         bucket_key_enabled=True,
                     )
@@ -728,7 +742,8 @@ echo 'MinProtocol = TLSv1.2' >> /etc/ssl/openssl.cnf
             self.log_groups[region] = lg
 
     def _create_compliance_checks(self) -> None:
-        """Create AWS Config compliance checks with conditional creation to handle existing resources."""
+        """Create AWS Config compliance checks with conditional creation 
+        to handle existing resources."""
         
         provider = aws.Provider(
             f"config-provider-{self.primary_region}", 
@@ -766,19 +781,25 @@ echo 'MinProtocol = TLSv1.2' >> /etc/ssl/openssl.cnf
                 }
 
         config_status = check_config_exists()
-        pulumi.log.info(f"AWS Config Status: Recorders={config_status['recorder_count']}, Channels={config_status['channel_count']}")
+        pulumi.log.info(
+            f"AWS Config Status: Recorders={config_status['recorder_count']}, "
+            f"Channels={config_status['channel_count']}"
+        )
 
         if not config_status["has_recorder"] and not config_status["has_channel"]:
             pulumi.log.info("Creating new AWS Config setup")
             
             config_bucket = aws.s3.Bucket(
-                f"prod-config-{self.primary_region}-{self.environment_suffix}-{aws.get_caller_identity().account_id}",
+                (f"prod-config-{self.primary_region}-{self.environment_suffix}-"
+                 f"{aws.get_caller_identity().account_id}"),
                 versioning=aws.s3.BucketVersioningArgs(enabled=True),
                 server_side_encryption_configuration=aws.s3.BucketServerSideEncryptionConfigurationArgs(
                     rule=aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
-                        apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
-                            sse_algorithm="aws:kms", 
-                            kms_master_key_id=self.kms_keys[self.primary_region].arn
+                        apply_server_side_encryption_by_default=(
+                            aws.s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
+                                sse_algorithm="aws:kms", 
+                                kms_master_key_id=self.kms_keys[self.primary_region].arn
+                            )
                         ),
                         bucket_key_enabled=True,
                     )
@@ -845,8 +866,10 @@ echo 'MinProtocol = TLSv1.2' >> /etc/ssl/openssl.cnf
             )
 
         else:
-            pulumi.log.info("AWS Config already exists - skipping creation of Config recorder and delivery channel")
+            pulumi.log.info("AWS Config already exists - skipping creation of "
+                              "Config recorder and delivery channel")
             if config_status["has_recorder"]:
-                pulumi.log.info(f"Found {config_status['recorder_count']} configuration recorder(s)")
+                pulumi.log.info(f"Found {config_status['recorder_count']} "
+                                  f"configuration recorder(s)")
             if config_status["has_channel"]:
                 pulumi.log.info(f"Found {config_status['channel_count']} delivery channel(s)")
