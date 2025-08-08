@@ -1,5 +1,5 @@
 import * as aws from '@cdktf/provider-aws';
-import { Fn, TerraformOutput, TerraformStack, S3Backend } from 'cdktf';
+import { Fn, S3Backend, TerraformOutput, TerraformStack } from 'cdktf';
 import { Construct } from 'constructs';
 import { CloudwatchConstruct } from './cloudwatch-construct';
 import { Ec2Construct } from './ec2-construct';
@@ -45,8 +45,7 @@ export class TapStack extends TerraformStack {
       key: `${process.env.ENVIRONMENT || props?.environmentSuffix || 'development'}/${name}.tfstate`,
       region: stateBucketRegion,
       encrypt: true,
-      // Optional: add a DynamoDB table for state locking if you have it
-      // dynamodbTable: process.env.TERRAFORM_STATE_LOCK_TABLE,
+      // dynamodbTable: process.env.TERRAFORM_STATE_LOCK_TABLE, // optional
     });
 
     new aws.provider.AwsProvider(this, 'aws', { region });
@@ -88,7 +87,7 @@ export class TapStack extends TerraformStack {
 
     const iam = new IamConstruct(this, `Iam-${uniqueSuffix}`, {
       environment,
-      roleNameSuffix: uniqueSuffix as unknown as string, // CDKTF token is fine
+      roleNameSuffix: uniqueSuffix as unknown as string, // CDKTF tokens are fine
       commonTags,
     });
 
@@ -105,7 +104,7 @@ export class TapStack extends TerraformStack {
       commonTags,
     });
 
-    new S3Construct(this, `S3-${uniqueSuffix}`, {
+    const s3 = new S3Construct(this, `S3-${uniqueSuffix}`, {
       environment,
       // S3 bucket names must be globally unique; include suffix
       bucketName: `${environment}-assets-${uniqueSuffix}`,
@@ -131,7 +130,33 @@ export class TapStack extends TerraformStack {
       commonTags,
     });
 
+    // ── Integration test expects these outputs ──────────────────────────────────
     new TerraformOutput(this, 'vpc_id', { value: vpc.vpcId });
+    new TerraformOutput(this, 'public_subnet_ids', {
+      value: vpc.publicSubnets,
+    });
+    new TerraformOutput(this, 'private_subnet_ids', {
+      value: vpc.privateSubnets,
+    });
+    new TerraformOutput(this, 'database_subnet_ids', {
+      value: vpc.databaseSubnets,
+    });
+    new TerraformOutput(this, 'internet_gateway_id', {
+      value: vpc.internetGatewayId,
+    });
+    new TerraformOutput(this, 'nat_gateway_ids', { value: vpc.natGatewayIds });
+
+    // use strong types (no `any`)
+    new TerraformOutput(this, 'bucket_id', { value: s3.bucketId });
+    new TerraformOutput(this, 'bucket_arn', { value: s3.bucketArn });
+    new TerraformOutput(this, 'bucket_domain_name', {
+      value: s3.bucketDomainName,
+    });
+    new TerraformOutput(this, 'access_logs_bucket_id', {
+      value: s3.accessLogsBucketId,
+    });
+
+    // still useful for other checks
     new TerraformOutput(this, 'instance_id', { value: ec2.instanceId });
   }
 }
