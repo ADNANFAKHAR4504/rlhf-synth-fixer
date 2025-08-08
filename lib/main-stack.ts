@@ -275,6 +275,7 @@ export class MainStack extends cdk.Stack {
         'yum update -y',
         'yum install -y amazon-cloudwatch-agent',
         'yum install -y docker',
+        'yum install -y python3',
         'service docker start',
         'usermod -a -G docker ec2-user',
         // Configure CloudWatch agent
@@ -295,7 +296,12 @@ export class MainStack extends cdk.Stack {
   }
 }
 EOF`,
-        '/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s'
+        '/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s',
+        // Start a simple HTTP server for health checks
+        'cd /tmp',
+        'echo "Hello from EC2 instance $(hostname)" > index.html',
+        'python3 -m http.server 8080 &',
+        'echo "HTTP server started on port 8080"'
       );
     }
 
@@ -341,13 +347,13 @@ EOF`,
       vpc: vpc,
       targetType: elbv2.TargetType.INSTANCE,
       healthCheck: {
-        enabled: false, // Disabled for now since no application is running on instances
-        // path: '/health',
-        // protocol: elbv2.Protocol.HTTP,
-        // healthyThresholdCount: 2,
-        // unhealthyThresholdCount: 3,
-        // interval: cdk.Duration.seconds(30),
-        // timeout: cdk.Duration.seconds(5),
+        enabled: true, // Required for target type 'instance'
+        path: '/', // Use root path
+        protocol: elbv2.Protocol.HTTP,
+        healthyThresholdCount: 2,
+        unhealthyThresholdCount: 5, // Increased to be more lenient
+        interval: cdk.Duration.seconds(60), // Increased interval
+        timeout: cdk.Duration.seconds(10), // Increased timeout
       },
     });
 

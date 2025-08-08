@@ -235,11 +235,11 @@ describe('MainStack Unit Tests', () => {
           Name: `tap-${environmentSuffix}-tg`,
           Port: 8080,
           Protocol: 'HTTP',
-          HealthCheckEnabled: false, // Disabled to avoid health check issues during deployment
-          // HealthCheckPath: '/health', // Removed since health checks are disabled
-          // HealthCheckProtocol: 'HTTP', // Removed since health checks are disabled
-          // HealthyThresholdCount: 2, // Removed since health checks are disabled
-          // UnhealthyThresholdCount: 3, // Removed since health checks are disabled
+          HealthCheckEnabled: true, // Required for target type 'instance'
+          HealthCheckPath: '/', // Use root path
+          HealthCheckProtocol: 'HTTP',
+          HealthyThresholdCount: 2,
+          UnhealthyThresholdCount: 5, // Increased to be more lenient
         }
       );
     });
