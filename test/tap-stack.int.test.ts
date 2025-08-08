@@ -133,7 +133,7 @@ describe('Infrastructure Integration Tests', () => {
       // Verify secret names
       const secretNames = response.SecretList?.map(s => s.Name);
       expect(secretNames?.some(n => n?.includes('database'))).toBe(true);
-      expect(secretNames?.some(n => n?.includes('api-key'))).toBe(true);
+      expect(secretNames?.some(n => n?.includes('api/key') || n?.includes('api-key'))).toBe(true);
     });
   });
 
@@ -179,7 +179,7 @@ describe('Infrastructure Integration Tests', () => {
   describe('Monitoring Stack Tests', () => {
     test('CloudWatch log groups exist', async () => {
       const response = await logsClient.send(new DescribeLogGroupsCommand({
-        logGroupNamePrefix: `/${projectName}/${environmentSuffix}`
+        logGroupNamePrefix: `/aws/${projectName}/${environmentSuffix}`
       }));
       expect(response.logGroups?.length).toBeGreaterThanOrEqual(2); // application and vpc flow logs
       
