@@ -237,6 +237,7 @@ Resources:
               - Effect: Allow
                 Action:
                   - dynamodb:PutItem
+                  - dynamodb:GetItem
                 Resource: !GetAtt ItemsTable.Arn
       Tags:
         - Key: Environment
