@@ -11,6 +11,21 @@ import pytest
 from unittest.mock import patch, MagicMock
 import json
 
+# Simplified approach - just disable depends_on validation by mocking the ResourceOptions constructor
+def mock_resource_options_init(self, parent=None, depends_on=None, **kwargs):
+    # Store the original attributes without validation  
+    self.parent = parent
+    self.depends_on = depends_on or []
+    self.provider = kwargs.get('provider')
+    self.providers = kwargs.get('providers')
+    
+    # Store all kwargs for later retrieval
+    self._kwargs = kwargs
+
+def mock_resource_options_getattr(self, name):
+    # Return the value from kwargs if it exists, otherwise return None
+    return self._kwargs.get(name)
+
 
 class TestTapStackUnit:
     """Unit tests for TapStack components."""
@@ -22,6 +37,8 @@ class TestTapStackUnit:
             mock_config.return_value.get.return_value = 'test'
             yield mock_config
 
+    @patch.object(pulumi.ResourceOptions, '__getattr__', mock_resource_options_getattr)
+    @patch.object(pulumi.ResourceOptions, '__init__', mock_resource_options_init)
     @patch('pulumi_aws.get_caller_identity')
     @patch('pulumi_aws.kms.Key')
     @patch('pulumi_aws.kms.Alias')
@@ -69,7 +86,7 @@ class TestTapStackUnit:
         mock_ami.id = "ami-12345678"
         mocks[3].return_value = mock_ami  # get_ami
 
-        from tap_stack import TapStack, TapStackArgs
+        from lib.tap_stack import TapStack, TapStackArgs
         
         stack = TapStack("test-stack", TapStackArgs("test"))
         
@@ -79,6 +96,7 @@ class TestTapStackUnit:
         assert stack.standard_tags["Project"] == "AWS-Nova-Model-Breaking"
         assert stack.standard_tags["ManagedBy"] == "Pulumi"
 
+    @patch('pulumi.ResourceOptions')
     @patch('pulumi_aws.get_caller_identity')
     @patch('pulumi_aws.kms.Key')
     @patch('pulumi_aws.kms.Alias')
@@ -114,19 +132,19 @@ class TestTapStackUnit:
         # Mock get_caller_identity
         mock_identity = MagicMock()
         mock_identity.account_id = "123456789012"
-        mocks[0].return_value = mock_identity
+        mocks[1].return_value = mock_identity
         
         # Mock get_availability_zones
         mock_azs = MagicMock()
         mock_azs.names = ["us-east-1a", "us-east-1b"]
-        mocks[2].return_value = mock_azs
+        mocks[3].return_value = mock_azs
         
         # Mock get_ami
         mock_ami = MagicMock()
         mock_ami.id = "ami-12345678"
-        mocks[3].return_value = mock_ami
+        mocks[4].return_value = mock_ami
 
-        from tap_stack import TapStack, TapStackArgs
+        from lib.tap_stack import TapStack, TapStackArgs
         
         stack = TapStack("test-stack", TapStackArgs("test"))
         
@@ -184,7 +202,7 @@ class TestTapStackUnit:
 
         mock_kms = mocks[4]  # KMS Key mock
         
-        from tap_stack import TapStack, TapStackArgs
+        from lib.tap_stack import TapStack, TapStackArgs
         
         stack = TapStack("test-stack", TapStackArgs("test"))
         
@@ -244,7 +262,7 @@ class TestTapStackUnit:
 
         mock_rds = mocks[5]  # RDS Instance mock
         
-        from tap_stack import TapStack, TapStackArgs
+        from lib.tap_stack import TapStack, TapStackArgs
         
         stack = TapStack("test-stack", TapStackArgs("test"))
         
@@ -305,7 +323,7 @@ class TestTapStackUnit:
 
         mock_trail = mocks[6]  # CloudTrail mock
         
-        from tap_stack import TapStack, TapStackArgs
+        from lib.tap_stack import TapStack, TapStackArgs
         
         stack = TapStack("test-stack", TapStackArgs("test"))
         
@@ -364,7 +382,7 @@ class TestTapStackUnit:
 
         mock_ec2 = mocks[7]  # EC2 Instance mock
         
-        from tap_stack import TapStack, TapStackArgs
+        from lib.tap_stack import TapStack, TapStackArgs
         
         stack = TapStack("test-stack", TapStackArgs("test"))
         
