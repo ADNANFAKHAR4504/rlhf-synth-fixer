@@ -497,23 +497,6 @@ Resources:
       Certificates:
         - CertificateArn: !If [CreateNewCertificate, !Ref ProdAppSSLCertificate, !Ref SSLCertificateArn]
 
-  # HTTP Listener (Redirects to HTTPS)
-  ProdAppHTTPListener:
-    Type: AWS::ElasticLoadBalancingV2::Listener
-    Properties:
-      DefaultActions:
-        - Type: redirect
-          RedirectConfig:
-            Protocol: HTTPS
-            Port: '443'
-            Host: '#{host}'
-            Path: '/#{path}'
-            Query: '#{query}'
-            StatusCode: HTTP_301
-      LoadBalancerArn: !Ref ProdAppALB
-      Port: 80
-      Protocol: HTTP
-
   # CloudWatch Log Groups
   ProdAppHTTPDAccessLogGroup:
     Type: AWS::Logs::LogGroup
