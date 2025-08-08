@@ -99,7 +99,9 @@ to fix the MODEL_RESPONSE.
   - Dont use custom commands unless you cannot find them in those files.
 - Max 10 deployment attempts
 - No Retain policies allowed. Every resource created should be destroyable.
-- Use real AWS outputs in tests (no mocking)
+- Use real AWS outputs generated on deployment in integration tests (no mocking). These should come from cfn-outputs/flat-outputs.json
+- DO NOT create or update fildes outside of the lib/ and tests/ folder.
+  - Except you need to install new packages.
 - Keep the file structure as simple as possible. But avoid creating files with too many lines.
 Use your best judgement to decide.
 - Never create or updated code outside of the lib, bin, test folders. That should be your working space to do the QA task.
