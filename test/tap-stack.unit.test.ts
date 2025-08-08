@@ -143,7 +143,7 @@ describe('TapStack CloudFormation Template', () => {
         'CreateSSMEndpointCond',
         'CreateCWEndpointCond',
         'UseKeyName',
-        'HasSSLCertificate'
+        'UseHttps'
       ];
 
       expectedConditions.forEach(conditionName => {
