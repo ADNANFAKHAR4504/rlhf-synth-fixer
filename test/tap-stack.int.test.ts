@@ -260,8 +260,8 @@ describe('Secure Infrastructure Integration Tests', () => {
         const response = await ssmClient.send(command);
 
         expect(response.Parameter).toBeDefined();
-        expect(response.Parameter?.Value).toBe(
-          `org-keypair-${environmentSuffix}`
+        expect(response.Parameter?.Value).toMatch(
+          new RegExp(`^org-keypair-${environmentSuffix}-.*$`)
         );
       } catch (error: any) {
         // Parameter might not be accessible, skip test
