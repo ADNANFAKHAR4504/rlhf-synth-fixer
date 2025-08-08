@@ -155,7 +155,7 @@ export class SecurityStack extends cdk.Stack {
             }
             
             if (method === 'POST' && path === '/data') {
-              const body = JSON.parse(event.body);
+              const body = typeof event.body === 'string' ? JSON.parse(event.body) : event.body;
               const item = {
                 id: Date.now().toString(),
                 data: body.data,
@@ -278,12 +278,7 @@ export class SecurityStack extends cdk.Stack {
     });
 
     // Lambda integration
-    const lambdaIntegration = new apigateway.LambdaIntegration(
-      backendFunction,
-      {
-        requestTemplates: { 'application/json': '{ "statusCode": "200" }' },
-      }
-    );
+    const lambdaIntegration = new apigateway.LambdaIntegration(backendFunction);
 
     // API Resources and Methods
     const healthResource = api.root.addResource('health');

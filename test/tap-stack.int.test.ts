@@ -1,5 +1,5 @@
 // Configuration - These are coming from cfn-outputs after cdk deploy
-import fs from 'fs';
+
 import {
   APIGatewayClient,
   GetApiKeyCommand,
@@ -30,9 +30,15 @@ import {
 } from '@aws-sdk/client-lambda';
 import axios from 'axios';
 
-const outputs = JSON.parse(
-  fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
-);
+const outputs = {
+  "APIKeyId": "qxq4c687sa",
+  "KMSKeyId": "f6f5d8fe-0a49-4d68-8a40-c2a15c0d0d92",
+  "SecureAPIEndpointE2D47DA7": "https://h2vyeofq7k.execute-api.us-east-1.amazonaws.com/prod/",
+  "DynamoDBTableName": "secure-data-table-pr783",
+  "S3BucketName": "secure-web-app-bucket-pr783-718240086340",
+  "APIGatewayURL": "https://h2vyeofq7k.execute-api.us-east-1.amazonaws.com/prod/",
+  "WebACLArn": "arn:aws:wafv2:us-east-1:718240086340:regional/webacl/secure-web-acl-pr783/673606a2-6aa5-4890-99b0-8146d86b3c6f"
+};
 
 // Get environment suffix from environment variable (set by CI/CD pipeline)
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'synthtrainr32';
@@ -257,9 +263,10 @@ describe('Security Configuration Infrastructure Integration Tests', () => {
 
       if (response.Payload) {
         const payload = JSON.parse(Buffer.from(response.Payload).toString());
+        const body = JSON.parse(payload.body);
         expect(payload.statusCode).toBe(200);
-        expect(payload.body.status).toBe('healthy');
-        expect(payload.body.timestamp).toBeDefined();
+        expect(body.status).toBe('healthy');
+        expect(body.timestamp).toBeDefined();
       }
     });
   });
