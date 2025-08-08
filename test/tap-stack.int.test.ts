@@ -1,25 +1,25 @@
-import fs from 'fs';
-import { 
-  EC2Client, 
-  DescribeVpcsCommand, 
-  DescribeSubnetsCommand, 
-  DescribeSecurityGroupsCommand,
-  DescribeNatGatewaysCommand 
-} from '@aws-sdk/client-ec2';
-import { 
-  ElasticLoadBalancingV2Client, 
-  DescribeLoadBalancersCommand,
-  DescribeTargetGroupsCommand 
-} from '@aws-sdk/client-elastic-load-balancing-v2';
-import { 
-  RDSClient, 
-  DescribeDBInstancesCommand, 
-  DescribeDBSubnetGroupsCommand 
-} from '@aws-sdk/client-rds';
-import { 
-  AutoScalingClient, 
-  DescribeAutoScalingGroupsCommand 
+import {
+  AutoScalingClient,
+  DescribeAutoScalingGroupsCommand,
 } from '@aws-sdk/client-auto-scaling';
+import {
+  DescribeNatGatewaysCommand,
+  DescribeSecurityGroupsCommand,
+  DescribeSubnetsCommand,
+  DescribeVpcsCommand,
+  EC2Client,
+} from '@aws-sdk/client-ec2';
+import {
+  DescribeLoadBalancersCommand,
+  DescribeTargetGroupsCommand,
+  ElasticLoadBalancingV2Client,
+} from '@aws-sdk/client-elastic-load-balancing-v2';
+import {
+  DescribeDBInstancesCommand,
+  DescribeDBSubnetGroupsCommand,
+  RDSClient,
+} from '@aws-sdk/client-rds';
+import fs from 'fs';
 
 // Get environment suffix from environment variable (set by CI/CD pipeline)
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
@@ -27,10 +27,12 @@ const stackName = `TapStack${environmentSuffix}`;
 
 // Mock outputs for testing when AWS is not available
 const mockOutputs = {
-  VPCId: 'vpc-mock123',
-  LoadBalancerURL: 'http://mock-alb-123.elb.amazonaws.com',
-  DatabaseEndpoint: 'mock-db.cluster-abc123.rds.amazonaws.com',
-  DatabasePort: '5432'
+  DatabasePort: '5432',
+  VPCId: 'vpc-0f874f9c72f27264b',
+  LoadBalancerURL:
+    'http://TapSta-Appli-EK720DBkDlRU-1521561854.us-east-1.elb.amazonaws.com',
+  DatabaseEndpoint:
+    'tapstackpr737-database-1kgdejasrktb.c43eiskmcd0s.us-east-1.rds.amazonaws.com',
 };
 
 let outputs: any;
@@ -41,7 +43,9 @@ describe('Secure Web App Infrastructure Integration Tests', () => {
     try {
       // Try to read actual outputs from deployment
       if (fs.existsSync('cfn-outputs/flat-outputs.json')) {
-        outputs = JSON.parse(fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8'));
+        outputs = JSON.parse(
+          fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
+        );
         hasRealAWS = true;
       } else {
         outputs = mockOutputs;
@@ -62,13 +66,17 @@ describe('Secure Web App Infrastructure Integration Tests', () => {
         return;
       }
 
-      const ec2Client = new EC2Client({ region: process.env.AWS_REGION || 'us-east-1' });
-      
+      const ec2Client = new EC2Client({
+        region: process.env.AWS_REGION || 'us-east-1',
+      });
+
       try {
-        const response = await ec2Client.send(new DescribeVpcsCommand({
-          VpcIds: [outputs.VPCId]
-        }));
-        
+        const response = await ec2Client.send(
+          new DescribeVpcsCommand({
+            VpcIds: [outputs.VPCId],
+          })
+        );
+
         expect(response.Vpcs).toHaveLength(1);
         expect(response.Vpcs![0].CidrBlock).toBe('10.0.0.0/16');
         expect(response.Vpcs![0].State).toBe('available');
@@ -84,34 +92,36 @@ describe('Secure Web App Infrastructure Integration Tests', () => {
         return;
       }
 
-      const ec2Client = new EC2Client({ region: process.env.AWS_REGION || 'us-east-1' });
-      
+      const ec2Client = new EC2Client({
+        region: process.env.AWS_REGION || 'us-east-1',
+      });
+
       try {
-        const response = await ec2Client.send(new DescribeSubnetsCommand({
-          Filters: [
-            { Name: 'vpc-id', Values: [outputs.VPCId] }
-          ]
-        }));
-        
+        const response = await ec2Client.send(
+          new DescribeSubnetsCommand({
+            Filters: [{ Name: 'vpc-id', Values: [outputs.VPCId] }],
+          })
+        );
+
         expect(response.Subnets).toHaveLength(4);
-        
-        const publicSubnets = response.Subnets!.filter(subnet => 
-          subnet.MapPublicIpOnLaunch === true
+
+        const publicSubnets = response.Subnets!.filter(
+          subnet => subnet.MapPublicIpOnLaunch === true
         );
-        const privateSubnets = response.Subnets!.filter(subnet => 
-          subnet.MapPublicIpOnLaunch === false
+        const privateSubnets = response.Subnets!.filter(
+          subnet => subnet.MapPublicIpOnLaunch === false
         );
-        
+
         expect(publicSubnets).toHaveLength(2);
         expect(privateSubnets).toHaveLength(2);
-        
+
         // Check CIDR blocks
         const expectedPublicCidrs = ['10.0.1.0/24', '10.0.2.0/24'];
         const expectedPrivateCidrs = ['10.0.10.0/24', '10.0.11.0/24'];
-        
+
         const actualPublicCidrs = publicSubnets.map(s => s.CidrBlock).sort();
         const actualPrivateCidrs = privateSubnets.map(s => s.CidrBlock).sort();
-        
+
         expect(actualPublicCidrs).toEqual(expectedPublicCidrs.sort());
         expect(actualPrivateCidrs).toEqual(expectedPrivateCidrs.sort());
       } catch (error) {
@@ -126,16 +136,20 @@ describe('Secure Web App Infrastructure Integration Tests', () => {
         return;
       }
 
-      const ec2Client = new EC2Client({ region: process.env.AWS_REGION || 'us-east-1' });
-      
+      const ec2Client = new EC2Client({
+        region: process.env.AWS_REGION || 'us-east-1',
+      });
+
       try {
-        const response = await ec2Client.send(new DescribeNatGatewaysCommand({
-          Filter: [
-            { Name: 'vpc-id', Values: [outputs.VPCId] },
-            { Name: 'state', Values: ['available'] }
-          ]
-        }));
-        
+        const response = await ec2Client.send(
+          new DescribeNatGatewaysCommand({
+            Filter: [
+              { Name: 'vpc-id', Values: [outputs.VPCId] },
+              { Name: 'state', Values: ['available'] },
+            ],
+          })
+        );
+
         expect(response.NatGateways).toHaveLength(2);
       } catch (error) {
         console.warn('NAT Gateway test skipped - AWS not available');
@@ -151,16 +165,21 @@ describe('Secure Web App Infrastructure Integration Tests', () => {
 
       if (!hasRealAWS) return;
 
-      const elbClient = new ElasticLoadBalancingV2Client({ region: process.env.AWS_REGION || 'us-east-1' });
-      
+      const elbClient = new ElasticLoadBalancingV2Client({
+        region: process.env.AWS_REGION || 'us-east-1',
+      });
+
       try {
-        const response = await elbClient.send(new DescribeLoadBalancersCommand());
-        
-        const stackLoadBalancers = response.LoadBalancers?.filter(lb => 
-          lb.LoadBalancerName?.includes(stackName) || 
-          lb.DNSName === outputs.LoadBalancerURL.replace('http://', '')
+        const response = await elbClient.send(
+          new DescribeLoadBalancersCommand()
         );
-        
+
+        const stackLoadBalancers = response.LoadBalancers?.filter(
+          lb =>
+            lb.LoadBalancerName?.includes(stackName) ||
+            lb.DNSName === outputs.LoadBalancerURL.replace('http://', '')
+        );
+
         expect(stackLoadBalancers).toHaveLength(1);
         expect(stackLoadBalancers![0].Scheme).toBe('internet-facing');
         expect(stackLoadBalancers![0].Type).toBe('application');
@@ -176,15 +195,19 @@ describe('Secure Web App Infrastructure Integration Tests', () => {
         return;
       }
 
-      const elbClient = new ElasticLoadBalancingV2Client({ region: process.env.AWS_REGION || 'us-east-1' });
-      
+      const elbClient = new ElasticLoadBalancingV2Client({
+        region: process.env.AWS_REGION || 'us-east-1',
+      });
+
       try {
-        const response = await elbClient.send(new DescribeTargetGroupsCommand());
-        
-        const stackTargetGroups = response.TargetGroups?.filter(tg => 
+        const response = await elbClient.send(
+          new DescribeTargetGroupsCommand()
+        );
+
+        const stackTargetGroups = response.TargetGroups?.filter(tg =>
           tg.TargetGroupName?.includes(stackName.toLowerCase())
         );
-        
+
         expect(stackTargetGroups!.length).toBeGreaterThan(0);
         expect(stackTargetGroups![0].Protocol).toBe('HTTP');
         expect(stackTargetGroups![0].Port).toBe(80);
@@ -198,17 +221,21 @@ describe('Secure Web App Infrastructure Integration Tests', () => {
     test('ASG should have correct configuration', async () => {
       if (!hasRealAWS) return;
 
-      const asgClient = new AutoScalingClient({ region: process.env.AWS_REGION || 'us-east-1' });
-      
+      const asgClient = new AutoScalingClient({
+        region: process.env.AWS_REGION || 'us-east-1',
+      });
+
       try {
-        const response = await asgClient.send(new DescribeAutoScalingGroupsCommand());
-        
-        const stackASGs = response.AutoScalingGroups?.filter(asg => 
+        const response = await asgClient.send(
+          new DescribeAutoScalingGroupsCommand()
+        );
+
+        const stackASGs = response.AutoScalingGroups?.filter(asg =>
           asg.AutoScalingGroupName?.includes(stackName)
         );
-        
+
         expect(stackASGs!.length).toBeGreaterThan(0);
-        
+
         const asg = stackASGs![0];
         expect(asg.MinSize).toBe(2);
         expect(asg.DesiredCapacity).toBe(2);
@@ -227,17 +254,19 @@ describe('Secure Web App Infrastructure Integration Tests', () => {
 
       if (!hasRealAWS) return;
 
-      const rdsClient = new RDSClient({ region: process.env.AWS_REGION || 'us-east-1' });
-      
+      const rdsClient = new RDSClient({
+        region: process.env.AWS_REGION || 'us-east-1',
+      });
+
       try {
         const response = await rdsClient.send(new DescribeDBInstancesCommand());
-        
-        const stackDatabases = response.DBInstances?.filter(db => 
+
+        const stackDatabases = response.DBInstances?.filter(db =>
           db.DBInstanceIdentifier?.includes(stackName.toLowerCase())
         );
-        
+
         expect(stackDatabases!.length).toBeGreaterThan(0);
-        
+
         const db = stackDatabases![0];
         expect(db.Engine).toBe('postgres');
         expect(db.DBInstanceStatus).toBe('available');
@@ -252,15 +281,19 @@ describe('Secure Web App Infrastructure Integration Tests', () => {
     test('Database subnet group should exist with private subnets', async () => {
       if (!hasRealAWS) return;
 
-      const rdsClient = new RDSClient({ region: process.env.AWS_REGION || 'us-east-1' });
-      
+      const rdsClient = new RDSClient({
+        region: process.env.AWS_REGION || 'us-east-1',
+      });
+
       try {
-        const response = await rdsClient.send(new DescribeDBSubnetGroupsCommand());
-        
-        const stackSubnetGroups = response.DBSubnetGroups?.filter(sg => 
+        const response = await rdsClient.send(
+          new DescribeDBSubnetGroupsCommand()
+        );
+
+        const stackSubnetGroups = response.DBSubnetGroups?.filter(sg =>
           sg.DBSubnetGroupName?.includes(stackName.toLowerCase())
         );
-        
+
         expect(stackSubnetGroups!.length).toBeGreaterThan(0);
         expect(stackSubnetGroups![0].Subnets).toHaveLength(2);
       } catch (error) {
@@ -273,35 +306,43 @@ describe('Secure Web App Infrastructure Integration Tests', () => {
     test('should have properly configured security groups', async () => {
       if (!hasRealAWS) return;
 
-      const ec2Client = new EC2Client({ region: process.env.AWS_REGION || 'us-east-1' });
-      
+      const ec2Client = new EC2Client({
+        region: process.env.AWS_REGION || 'us-east-1',
+      });
+
       try {
-        const response = await ec2Client.send(new DescribeSecurityGroupsCommand({
-          Filters: [
-            { Name: 'vpc-id', Values: [outputs.VPCId] }
-          ]
-        }));
-        
+        const response = await ec2Client.send(
+          new DescribeSecurityGroupsCommand({
+            Filters: [{ Name: 'vpc-id', Values: [outputs.VPCId] }],
+          })
+        );
+
         const securityGroups = response.SecurityGroups!;
-        
+
         // Should have at least 3 security groups (ALB, WebServer, Database) + default VPC SG
         expect(securityGroups.length).toBeGreaterThanOrEqual(4);
-        
+
         // Check ALB Security Group
-        const albSG = securityGroups.find(sg => 
-          sg.GroupDescription?.includes('ALB') || sg.GroupDescription?.includes('Load Balancer')
+        const albSG = securityGroups.find(
+          sg =>
+            sg.GroupDescription?.includes('ALB') ||
+            sg.GroupDescription?.includes('Load Balancer')
         );
         expect(albSG).toBeDefined();
-        
+
         // Check Web Server Security Group
-        const webSG = securityGroups.find(sg => 
-          sg.GroupDescription?.includes('web') || sg.GroupDescription?.includes('server')
+        const webSG = securityGroups.find(
+          sg =>
+            sg.GroupDescription?.includes('web') ||
+            sg.GroupDescription?.includes('server')
         );
         expect(webSG).toBeDefined();
-        
+
         // Check Database Security Group
-        const dbSG = securityGroups.find(sg => 
-          sg.GroupDescription?.includes('DB') || sg.GroupDescription?.includes('database')
+        const dbSG = securityGroups.find(
+          sg =>
+            sg.GroupDescription?.includes('DB') ||
+            sg.GroupDescription?.includes('database')
         );
         expect(dbSG).toBeDefined();
       } catch (error) {
@@ -321,12 +362,14 @@ describe('Secure Web App Infrastructure Integration Tests', () => {
         // Simple connectivity test - just check if the URL is reachable
         const url = outputs.LoadBalancerURL;
         expect(url).toMatch(/^http:\/\/.*\.elb\.amazonaws\.com$/);
-        
+
         // In a real test, you might want to make an HTTP request here
         // const response = await fetch(url);
         // expect(response.status).toBeLessThan(500);
       } catch (error) {
-        console.warn('End-to-end connectivity test skipped - AWS not available');
+        console.warn(
+          'End-to-end connectivity test skipped - AWS not available'
+        );
       }
     });
 
@@ -343,19 +386,21 @@ describe('Secure Web App Infrastructure Integration Tests', () => {
     test('Resources should be distributed across multiple AZs', async () => {
       if (!hasRealAWS) return;
 
-      const ec2Client = new EC2Client({ region: process.env.AWS_REGION || 'us-east-1' });
-      
+      const ec2Client = new EC2Client({
+        region: process.env.AWS_REGION || 'us-east-1',
+      });
+
       try {
-        const subnetResponse = await ec2Client.send(new DescribeSubnetsCommand({
-          Filters: [
-            { Name: 'vpc-id', Values: [outputs.VPCId] }
-          ]
-        }));
-        
+        const subnetResponse = await ec2Client.send(
+          new DescribeSubnetsCommand({
+            Filters: [{ Name: 'vpc-id', Values: [outputs.VPCId] }],
+          })
+        );
+
         const availabilityZones = new Set(
           subnetResponse.Subnets!.map(subnet => subnet.AvailabilityZone)
         );
-        
+
         // Should have resources in at least 2 AZs for high availability
         expect(availabilityZones.size).toBeGreaterThanOrEqual(2);
       } catch (error) {
