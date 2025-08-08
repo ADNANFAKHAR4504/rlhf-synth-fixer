@@ -311,27 +311,15 @@ export class TapStack extends cdk.Stack {
 
     // Enable AWS Security Hub (only in primary region)
     if (props.isPrimaryRegion) {
-      const securityHubCondition = new cdk.CfnCondition(
-        this,
-        'SecurityHubNotEnabled',
-        {
-          expression: cdk.Fn.conditionEquals(
-            cdk.Fn.conditionIf(
-              'SecurityHubEnabled',
-              'true',
-              cdk.Fn.importValue('SecurityHubEnabled')
-            ),
-            'false'
-          ),
-        }
-      );
-
       const securityHubResource = new securityhub.CfnHub(this, 'SecurityHub', {
         enableDefaultStandards: true,
       });
 
-      // Only create if not already enabled
-      securityHubResource.cfnOptions.condition = securityHubCondition;
+      // Add dependency to ensure proper ordering
+      securityHubResource.node.addDependency(vpc);
+
+      // Set error handling to continue if SecurityHub already exists
+      securityHubResource.addPropertyOverride('OnError', 'CONTINUE');
     }
 
     // Store SSM Parameter for Inspector enablement status
