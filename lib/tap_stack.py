@@ -50,7 +50,7 @@ class TapStack(pulumi.ComponentResource):
             "artifactsBucket": self.artifacts_bucket.bucket,
             "buildProjectName": self.build_project.name,
             "notificationsTopicArn": self.notifications_topic.arn,
-            "chatbotConfigName": self.chatbot_config.name,
+            "chatbotConfigName": self.chatbot_config.configuration_name,
         })
 
     def _load_config(self) -> None:
