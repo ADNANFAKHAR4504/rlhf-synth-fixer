@@ -31,8 +31,7 @@ common_tags = {
 
 def create_vpc_and_networking() -> Dict[str, Any]:
   """
-  Creates a dual-stack VPC with public/private subnets, a NAT Gateway,
-  and uses a random offset for IPv6 CIDRs to ensure uniqueness.
+  Creates a dual-stack VPC with public and private subnets using deterministic CIDRs.
   """
   vpc = aws.ec2.Vpc(
     f"{project_name}-vpc",
@@ -43,43 +42,56 @@ def create_vpc_and_networking() -> Dict[str, Any]:
     tags={**common_tags, "Name": f"{project_name}-vpc"}
   )
 
-  random_offset = random.RandomInteger(
-      "subnet-offset", min=100, max=200, keepers={"project": project_name}
+  azs = aws.get_availability_zones(state="available").names[:2]
+
+  igw = aws.ec2.InternetGateway(
+    f"{project_name}-igw", vpc_id=vpc.id,
+    tags={**common_tags, "Name": f"{project_name}-igw"}
   )
 
-  azs = aws.get_availability_zones(state="available").names[:2]
-  igw = aws.ec2.InternetGateway(f"{project_name}-igw", vpc_id=vpc.id, tags=common_tags)
-  eigw = aws.ec2.EgressOnlyInternetGateway(f"{project_name}-eigw", vpc_id=vpc.id, tags=common_tags)
+  egress_only_igw = aws.ec2.EgressOnlyInternetGateway(
+    f"{project_name}-eigw",
+    vpc_id=vpc.id,
+    tags={**common_tags, "Name": f"{project_name}-eigw"}
+  )
 
   public_subnets = []
   for i, az in enumerate(azs):
     subnet = aws.ec2.Subnet(
       f"{project_name}-public-subnet-{i+1}",
-      vpc_id=vpc.id, availability_zone=az,
+      vpc_id=vpc.id,
+      availability_zone=az,
       cidr_block=f"10.0.{i+1}.0/24",
-      ipv6_cidr_block=pulumi.Output.all(vpc.ipv6_cidr_block, random_offset.result).apply(
-          lambda args: str(list(ipaddress.IPv6Network(args[0]).subnets(new_prefix=64))[args[1] + i])
+      ipv6_cidr_block=vpc.ipv6_cidr_block.apply(
+          lambda cidr: str(list(ipaddress.IPv6Network(cidr).subnets(new_prefix=64))[i])
       ),
-      assign_ipv6_address_on_creation=True, map_public_ip_on_launch=True,
+      assign_ipv6_address_on_creation=True,
+      map_public_ip_on_launch=True,
       tags={**common_tags, "Name": f"{project_name}-public-{i+1}"}
     )
     public_subnets.append(subnet)
 
   public_rt = aws.ec2.RouteTable(
-    f"{project_name}-public-rt", vpc_id=vpc.id,
+    f"{project_name}-public-rt",
+    vpc_id=vpc.id,
     routes=[
       aws.ec2.RouteTableRouteArgs(cidr_block="0.0.0.0/0", gateway_id=igw.id),
       aws.ec2.RouteTableRouteArgs(ipv6_cidr_block="::/0", gateway_id=igw.id)
     ],
     tags={**common_tags, "Name": f"{project_name}-public-rt"}
   )
+
   for i, subnet in enumerate(public_subnets):
     aws.ec2.RouteTableAssociation(
       f"{project_name}-public-rta-{i+1}",
       subnet_id=subnet.id, route_table_id=public_rt.id
     )
 
-  eip = aws.ec2.Eip(f"{project_name}-nat-eip", tags=common_tags, opts=pulumi.ResourceOptions(depends_on=[igw]))
+  eip = aws.ec2.Eip(
+      f"{project_name}-nat-eip",
+      tags=common_tags,
+      opts=pulumi.ResourceOptions(depends_on=[igw])
+  )
   nat_gw = aws.ec2.NatGateway(
     f"{project_name}-nat-gw",
     subnet_id=public_subnets[0].id,
@@ -91,10 +103,11 @@ def create_vpc_and_networking() -> Dict[str, Any]:
   for i, az in enumerate(azs):
     subnet = aws.ec2.Subnet(
       f"{project_name}-private-subnet-{i+1}",
-      vpc_id=vpc.id, availability_zone=az,
+      vpc_id=vpc.id,
+      availability_zone=az,
       cidr_block=f"10.0.{100+i+1}.0/24",
-      ipv6_cidr_block=pulumi.Output.all(vpc.ipv6_cidr_block, random_offset.result).apply(
-          lambda args: str(list(ipaddress.IPv6Network(args[0]).subnets(new_prefix=64))[args[1] + 100 + i])
+      ipv6_cidr_block=vpc.ipv6_cidr_block.apply(
+          lambda cidr: str(list(ipaddress.IPv6Network(cidr).subnets(new_prefix=64))[100 + i])
       ),
       assign_ipv6_address_on_creation=True,
       tags={**common_tags, "Name": f"{project_name}-private-{i+1}"}
@@ -102,17 +115,26 @@ def create_vpc_and_networking() -> Dict[str, Any]:
     private_subnets.append(subnet)
 
   private_rt = aws.ec2.RouteTable(
-    f"{project_name}-private-rt", vpc_id=vpc.id,
+    f"{project_name}-private-rt",
+    vpc_id=vpc.id,
     routes=[
-      aws.ec2.RouteTableRouteArgs(cidr_block="0.0.0.0/0", nat_gateway_id=nat_gw.id),
-      aws.ec2.RouteTableRouteArgs(ipv6_cidr_block="::/0", egress_only_gateway_id=eigw.id)
+      aws.ec2.RouteTableRouteArgs(
+        cidr_block="0.0.0.0/0",
+        nat_gateway_id=nat_gw.id
+      ),
+      aws.ec2.RouteTableRouteArgs(
+        ipv6_cidr_block="::/0",
+        egress_only_gateway_id=egress_only_igw.id
+      )
     ],
     tags={**common_tags, "Name": f"{project_name}-private-rt"}
   )
+
   for i, subnet in enumerate(private_subnets):
     aws.ec2.RouteTableAssociation(
       f"{project_name}-private-rta-{i+1}",
-      subnet_id=subnet.id, route_table_id=private_rt.id
+      subnet_id=subnet.id,
+      route_table_id=private_rt.id
     )
 
   return {
