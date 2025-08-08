@@ -12,7 +12,7 @@ describe('ProjectXInfrastructureStack', () => {
     stack = new ProjectXInfrastructureStack(app, 'TestProjectXStack', {
       description: `ProjectX Infrastructure Stack - test`,
       environmentSuffix: 'test',
-      env: { account: '123456789012', region: 'us-west-2' },
+      env: { account: '123456789012', region: 'us-east-1' },
     });
     template = Template.fromStack(stack);
   });
@@ -22,7 +22,7 @@ describe('ProjectXInfrastructureStack', () => {
       const testApp = new cdk.App();
       const testStack = new ProjectXInfrastructureStack(testApp, 'TestStack', {
         environmentSuffix: 'prod',
-        env: { account: '123456789012', region: 'us-west-2' },
+        env: { account: '123456789012', region: 'us-east-1' },
       });
       const testTemplate = Template.fromStack(testStack);
       
@@ -39,7 +39,7 @@ describe('ProjectXInfrastructureStack', () => {
       contextApp.node.setContext('environmentSuffix', 'staging');
       
       const contextStack = new ProjectXInfrastructureStack(contextApp, 'ContextStack', {
-        env: { account: '123456789012', region: 'us-west-2' },
+        env: { account: '123456789012', region: 'us-east-1' },
       });
       const contextTemplate = Template.fromStack(contextStack);
       
@@ -55,7 +55,7 @@ describe('ProjectXInfrastructureStack', () => {
       const defaultApp = new cdk.App();
       
       const defaultStack = new ProjectXInfrastructureStack(defaultApp, 'DefaultStack', {
-        env: { account: '123456789012', region: 'us-west-2' },
+        env: { account: '123456789012', region: 'us-east-1' },
       });
       const defaultTemplate = Template.fromStack(defaultStack);
       
@@ -73,7 +73,7 @@ describe('ProjectXInfrastructureStack', () => {
       
       const priorityStack = new ProjectXInfrastructureStack(priorityApp, 'PriorityStack', {
         environmentSuffix: 'prod', // This should take precedence
-        env: { account: '123456789012', region: 'us-west-2' },
+        env: { account: '123456789012', region: 'us-east-1' },
       });
       const priorityTemplate = Template.fromStack(priorityStack);
       

@@ -1,5 +1,5 @@
 **Objective**  
-As an AWS expert you are tasked with designing an AWS cloud infrastructure using AWS CDK in TypeScript, targeting deployment in the us-west-2 region. The infrastructure must satisfy the following requirements and constraints regarding high availability, scalability, and network isolation.
+As an AWS expert you are tasked with designing an AWS cloud infrastructure using AWS CDK in TypeScript, targeting deployment in the us-east-1 region. The infrastructure must satisfy the following requirements and constraints regarding high availability, scalability, and network isolation.
 
 ---
 
@@ -34,7 +34,7 @@ Design and implement an AWS CDK Stack in TypeScript to provision the following r
    - Follow AWS security best practices for group configuration.
 
 5. **Region and Environment**:  
-   - All resources should be deployed in `us-west-2`.
+   - All resources should be deployed in `us-east-1`.
    - Use the naming convention `projectX-<component>` for all resources.
    - Ensure the stack is deployable as a single TypeScript file and adheres to the specified constraints and best practices.
 
