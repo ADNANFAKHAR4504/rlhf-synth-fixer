@@ -799,7 +799,7 @@
       "Type": "AWS::S3::Bucket",
       "Properties": {
         "BucketName": {
-          "Fn::Sub": "webapp-app-data-${AWS::AccountId}-${EnvironmentSuffix}"
+          "Fn::Sub": "webapp-app-data-${AWS::AccountId}-${EnvironmentSuffix}-${AWS::StackName}"
         },
         "BucketEncryption": {
           "ServerSideEncryptionConfiguration": [
@@ -828,7 +828,7 @@
       "Type": "AWS::S3::Bucket",
       "Properties": {
         "BucketName": {
-          "Fn::Sub": "webapp-app-logs-${AWS::AccountId}-${EnvironmentSuffix}"
+          "Fn::Sub": "webapp-app-logs-${AWS::AccountId}-${EnvironmentSuffix}-${AWS::StackName}"
         },
         "BucketEncryption": {
           "ServerSideEncryptionConfiguration": [
