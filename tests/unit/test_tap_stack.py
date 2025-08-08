@@ -10,13 +10,12 @@ ensuring proper configuration, security settings, and compliance with requiremen
 
 """
 
-import pulumi
+import json
+from unittest.mock import MagicMock, patch
 
+import pulumi
 import pytest
 
-from unittest.mock import patch, MagicMock
-
-import json
 
 class TestTapStackUnit:
 
@@ -31,33 +30,19 @@ class TestTapStackUnit:
         args = TapStackArgs(environment_suffix)
 
         with patch('pulumi.ComponentResource.__init__') as mock_super:
-
             mock_super.return_value = None
-
             with patch.object(TapStack, '_create_kms_keys'), \
-
-                patch.object(TapStack, '_create_secrets_manager'), \
-
-                patch.object(TapStack, '_create_iam_roles'), \
-
-                patch.object(TapStack, '_create_cloudtrail'), \
-
-                patch.object(TapStack, '_create_vpc_infrastructure'), \
-
-                patch.object(TapStack, '_create_s3_buckets'), \
-
-                patch.object(TapStack, '_create_rds_instances'), \
-
-                patch.object(TapStack, '_create_lambda_functions'), \
-
-                patch.object(TapStack, '_create_ec2_instances'), \
-
-                patch.object(TapStack, '_create_monitoring'), \
-
-                patch.object(TapStack, 'register_outputs'):
-
+                 patch.object(TapStack, '_create_secrets_manager'), \
+                 patch.object(TapStack, '_create_iam_roles'), \
+                 patch.object(TapStack, '_create_cloudtrail'), \
+                 patch.object(TapStack, '_create_vpc_infrastructure'), \
+                 patch.object(TapStack, '_create_s3_buckets'), \
+                 patch.object(TapStack, '_create_rds_instances'), \
+                 patch.object(TapStack, '_create_lambda_functions'), \
+                 patch.object(TapStack, '_create_ec2_instances'), \
+                 patch.object(TapStack, '_create_monitoring'), \
+                 patch.object(TapStack, 'register_outputs'):
                 stack = TapStack("test-stack", args)
-
                 return stack
 
     def test_tapstack_args_initialization(self):
@@ -376,13 +361,11 @@ class TestTapStackUnit:
 
         """Test imports and module-level code coverage."""
 
-        import lib.tap_stack as tap_stack_module
-
         import json
-
         import os
-
         from typing import Optional
+
+        import lib.tap_stack as tap_stack_module
 
         # Test that all imports work and cover the import statements
 
@@ -470,9 +453,9 @@ class TestTapStackUnit:
 
         """Test ComponentResource and ResourceOptions coverage."""
 
-        from lib.tap_stack import TapStack, TapStackArgs
-
         from pulumi import ComponentResource, ResourceOptions
+
+        from lib.tap_stack import TapStack, TapStackArgs
 
         # Test that we can import and work with basic Pulumi types
 
@@ -709,8 +692,6 @@ class TestTapStackUnit:
         """Test environment-specific configuration validation."""
 
         from lib.tap_stack import TapStackArgs
-
-        
 
         # Test different environments have appropriate settings
 
