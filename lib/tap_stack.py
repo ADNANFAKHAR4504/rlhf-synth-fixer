@@ -68,7 +68,7 @@ class TapStack(TerraformStack):
     construct_id: str,
     environment_suffix: str = "dev",
     aws_region: str = "us-west-2",
-    state_bucket: str = "iac-rlhf-tf-states",
+    state_bucket: str = "iac-rlhf-tf-291231-states",
     state_bucket_region: str = "us-west-2",
     default_tags: Dict[str, Any] = None,
     **kwargs
