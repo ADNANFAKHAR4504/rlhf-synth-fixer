@@ -525,6 +525,30 @@ EnableCloudwatchLogsExports:
 
 **Current Status**: ✅ **CLOUDWATCH LOGS COMPATIBILITY RESOLVED**
 
+### 15. **Partial Stack Deployment Issues (Latest)**
+
+**Issues Identified**: Stack outputs exist but some resources are missing or in failed states:
+
+1. **S3 Buckets**: `NoSuchBucket` errors despite bucket names in outputs
+2. **EC2 Instance**: Instance state is "terminated" instead of "running"
+3. **CloudTrail**: `TrailNotFoundException` despite ARN in outputs
+4. **CloudWatch Alarms**: Recovery alarm not found
+
+**Root Cause**: Stack may have partially deployed then rolled back, or resources were created but later failed/deleted while outputs remained.
+
+**Integration Test Results**: 13/20 passing (65% success rate)
+
+- ✅ **Working**: Stack deployment, outputs, KMS, VPC, subnets, security groups, RDS, monitoring
+- ❌ **Failing**: S3 buckets, EC2 instance, CloudTrail, CloudWatch alarms
+
+**Recommended Actions**:
+
+1. **Check Stack Status**: Verify if stack is in `CREATE_COMPLETE` or `ROLLBACK_COMPLETE` state
+2. **Redeploy Stack**: Clean deployment may resolve resource state issues
+3. **Resource Investigation**: Check AWS console for actual resource states
+
+**Current Status**: ⚠️ **PARTIAL DEPLOYMENT - REQUIRES INVESTIGATION**
+
 ### 12. **Final Validation Results**
 
 **Template Validation**: ✅ **PASSING**

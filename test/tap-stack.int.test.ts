@@ -159,7 +159,7 @@ describe('Financial Services Infrastructure Integration Tests', () => {
       );
 
       simpleAssert(
-        encryptionResponse.ServerSideEncryptionConfiguration,
+        !!encryptionResponse.ServerSideEncryptionConfiguration,
         'Bucket should have encryption configured'
       );
     });
@@ -221,9 +221,9 @@ describe('Financial Services Infrastructure Integration Tests', () => {
       );
 
       const vpc = vpcResponse.Vpcs?.[0];
-      simpleAssert(vpc, 'VPC should exist');
+      simpleAssert(!!vpc, 'VPC should exist');
       simpleEqual(
-        vpc.CidrBlock,
+        vpc?.CidrBlock,
         '10.0.0.0/16',
         'VPC should have correct CIDR block'
       );
@@ -264,12 +264,12 @@ describe('Financial Services Infrastructure Integration Tests', () => {
       );
 
       const sg = sgResponse.SecurityGroups?.[0];
-      simpleAssert(sg, 'Security group should exist');
+      simpleAssert(!!sg, 'Security group should exist');
 
-      const httpsRule = sg.IpPermissions?.find(
+      const httpsRule = sg?.IpPermissions?.find(
         rule => rule.FromPort === 443 && rule.ToPort === 443
       );
-      simpleAssert(httpsRule, 'Should have HTTPS rule');
+      simpleAssert(!!httpsRule, 'Should have HTTPS rule');
     });
   });
 
@@ -283,9 +283,9 @@ describe('Financial Services Infrastructure Integration Tests', () => {
       );
 
       const instance = instanceResponse.Reservations?.[0]?.Instances?.[0];
-      simpleAssert(instance, 'EC2 instance should exist');
+      simpleAssert(!!instance, 'EC2 instance should exist');
       simpleEqual(
-        instance.State?.Name,
+        instance?.State?.Name,
         'running',
         'Instance should be running'
       );
@@ -320,10 +320,10 @@ describe('Financial Services Infrastructure Integration Tests', () => {
       );
 
       const dbInstance = dbResponse.DBInstances?.[0];
-      simpleAssert(dbInstance, 'RDS instance should exist');
-      simpleEqual(dbInstance.Engine, 'mysql', 'Should use MySQL engine');
+      simpleAssert(!!dbInstance, 'RDS instance should exist');
+      simpleEqual(dbInstance?.Engine, 'mysql', 'Should use MySQL engine');
       simpleAssert(
-        dbInstance.EngineVersion?.startsWith('8.4'),
+        !!dbInstance?.EngineVersion?.startsWith('8.4'),
         'Should use MySQL 8.4.x'
       );
     });
@@ -354,9 +354,9 @@ describe('Financial Services Infrastructure Integration Tests', () => {
         sg.DBSubnetGroupName?.includes('financialapp')
       );
 
-      simpleAssert(dbSubnetGroup, 'DB subnet group should exist');
+      simpleAssert(!!dbSubnetGroup, 'DB subnet group should exist');
       simpleAssert(
-        dbSubnetGroup.Subnets && dbSubnetGroup.Subnets.length >= 2,
+        !!(dbSubnetGroup?.Subnets && dbSubnetGroup.Subnets.length >= 2),
         'Should have multiple subnets'
       );
     });
@@ -385,12 +385,12 @@ describe('Financial Services Infrastructure Integration Tests', () => {
         alarm.AlarmName?.includes('EC2-Recovery-Alarm')
       );
 
-      simpleAssert(recoveryAlarm, 'EC2 recovery alarm should exist');
+      simpleAssert(!!recoveryAlarm, 'EC2 recovery alarm should exist');
       // Allow both OK and ALARM states for newly deployed instances
       simpleAssert(
-        recoveryAlarm.StateValue === 'OK' ||
-          recoveryAlarm.StateValue === 'ALARM',
-        `Recovery alarm should be in OK or ALARM state, got: ${recoveryAlarm.StateValue}`
+        recoveryAlarm?.StateValue === 'OK' ||
+          recoveryAlarm?.StateValue === 'ALARM',
+        `Recovery alarm should be in OK or ALARM state, got: ${recoveryAlarm?.StateValue}`
       );
     });
   });
@@ -402,7 +402,7 @@ describe('Financial Services Infrastructure Integration Tests', () => {
       );
 
       const stack = stackResponse.Stacks?.[0];
-      simpleAssert(stack?.Tags, 'Stack should have tags');
+      simpleAssert(!!stack?.Tags, 'Stack should have tags');
 
       // Check for common deployment tags
       const tags = stack?.Tags || [];
@@ -478,16 +478,18 @@ describe('Financial Services Infrastructure Integration Tests', () => {
 
       const dbInstance = dbResponse.DBInstances?.[0];
       simpleAssert(
-        dbInstance?.BackupRetentionPeriod &&
-          dbInstance.BackupRetentionPeriod > 0,
+        !!(
+          dbInstance?.BackupRetentionPeriod &&
+          dbInstance.BackupRetentionPeriod > 0
+        ),
         'Should have backup retention configured'
       );
       simpleAssert(
-        dbInstance?.PreferredBackupWindow,
+        !!dbInstance?.PreferredBackupWindow,
         'Should have backup window configured'
       );
       simpleAssert(
-        dbInstance?.PreferredMaintenanceWindow,
+        !!dbInstance?.PreferredMaintenanceWindow,
         'Should have maintenance window configured'
       );
     });
