@@ -4,14 +4,13 @@ This module contains integration tests for a Pulumi stack using pytest and boto3
 It verifies that the deployed resources match the expected outputs from the stack.
 This is a standalone file and does not require a separate conftest.py.
 """
-import pytest
-import boto3
-import subprocess
 import json
 import os
+import subprocess
+import pytest
+import boto3
 
-# Pulumi requires a project and stack name to be set for `pulumi.get_stack()` to work.
-# We'll use the new stack name provided in the user's output.
+
 PULUMI_PROJECT = "Pulumi-Tap-Stack"
 PULUMI_STACK = "TapStackpr683"
 
@@ -25,9 +24,6 @@ def pulumi_outputs():
   The stack must be deployed before running these tests.
   """
   try:
-    # Run the Pulumi CLI command to get the stack outputs in JSON format.
-    # The --json flag is crucial for programmatic access.
-    # We specify the stack to ensure the correct outputs are retrieved.
     command = ['pulumi', 'stack', 'output', '--json', '--stack', PULUMI_STACK]
     result = subprocess.run(command, capture_output=True, text=True, check=True)
     
