@@ -78,7 +78,7 @@ describe('Security Configuration Infrastructure Integration Tests', () => {
         fail('Should have thrown an error for missing API key');
       } catch (error: any) {
         expect(error.response.status).toBe(403);
-        expect(error.response.data).toContain('Forbidden');
+        expect(error.response.data.message).toContain('Forbidden');
       }
     });
 
@@ -257,10 +257,9 @@ describe('Security Configuration Infrastructure Integration Tests', () => {
 
       if (response.Payload) {
         const payload = JSON.parse(Buffer.from(response.Payload).toString());
-        const body = JSON.parse(payload.body);
         expect(payload.statusCode).toBe(200);
-        expect(body.status).toBe('healthy');
-        expect(body.timestamp).toBeDefined();
+        expect(payload.body.status).toBe('healthy');
+        expect(payload.body.timestamp).toBeDefined();
       }
     });
   });
