@@ -1,892 +1,761 @@
-# tests/unit/test_tap_stack.py
-
 """
+Unit tests for the TAP (Test Automation Platform) infrastructure stack.
 
-Unit tests for the TapStack infrastructure components.
-
-This module contains comprehensive unit tests for all components of the TapStack,
-
-ensuring proper configuration, security settings, and compliance with requirements.
-
+This test suite provides comprehensive coverage for all major components
+including VPC, KMS, IAM, RDS, Lambda, EC2, S3, and monitoring resources.
 """
 
 import json
-from unittest.mock import MagicMock, Mock, patch
+import pytest
+import unittest.mock as mock
+from unittest.mock import MagicMock, patch, PropertyMock
 
 import pulumi
-import pytest
+from pulumi import ResourceOptions
+import pulumi_aws as aws
+
+# Import the classes to test
+from lib.tap_stack import TapStack, TapStackArgs  # Replace with actual module name
 
 
-class TestTapStackUnit:
-
-    """Unit tests for TapStack components."""
-
-    def _create_mocked_tapstack(self, environment_suffix):
-
-        """Helper method to create a mocked TapStack instance."""
-
-        from lib.tap_stack import TapStack, TapStackArgs
-
-        args = TapStackArgs(environment_suffix)
-
-        with patch('pulumi.ComponentResource.__init__') as mock_super:
-            mock_super.return_value = None
-            with patch.object(TapStack, '_create_kms_keys'), \
-                patch.object(TapStack, '_create_secrets_manager'), \
-                patch.object(TapStack, '_create_iam_roles'), \
-                patch.object(TapStack, '_create_cloudtrail'), \
-                patch.object(TapStack, '_create_vpc_infrastructure'), \
-                patch.object(TapStack, '_create_s3_buckets'), \
-                patch.object(TapStack, '_create_rds_instances'), \
-                patch.object(TapStack, '_create_lambda_functions'), \
-                patch.object(TapStack, '_create_ec2_instances'), \
-                patch.object(TapStack, '_create_monitoring'), \
-                patch.object(TapStack, 'register_outputs'):
-                stack = TapStack("test-stack", args)
-                return stack
-
-    def test_tapstack_args_initialization(self):
-
-        """Test that TapStackArgs initializes correctly."""
-
-        from lib.tap_stack import TapStackArgs
-
-        # Test multiple environments to increase coverage
-
-        test_environments = ["dev", "test", "staging", "prod", "qa"]
-
-        for env in test_environments:
-
-            args = TapStackArgs(env)
-
-            assert args.environment_suffix == env
-
-        # Test that the class exists and has the expected attributes
-
+class TestTapStackArgs:
+    """Test cases for TapStackArgs constructor."""
+    
+    def test_tap_stack_args_initialization(self):
+        """Test TapStackArgs properly stores environment suffix."""
         args = TapStackArgs("test-env")
-
-        assert hasattr(args, 'environment_suffix')
-
         assert args.environment_suffix == "test-env"
-
-    def test_multiple_tapstack_args_instances(self):
-
-        """Test creating multiple TapStackArgs instances."""
-
-        from lib.tap_stack import TapStackArgs
-
-        # Test creating multiple instances with different suffixes
-
-        args_list = []
-
-        suffixes = ["env1", "env2", "env3", "test", "prod"]
-
-        for suffix in suffixes:
-
-            args = TapStackArgs(suffix)
-
-            args_list.append(args)
-
-            assert args.environment_suffix == suffix
-
-        # Verify all instances are different
-
-        for i in range(len(args_list)):
-
-            for j in range(i + 1, len(args_list)):
-
-                assert args_list[i].environment_suffix != args_list[j].environment_suffix
-
-    def test_tapstack_args_with_various_environments(self):
-
-        """Test TapStackArgs with multiple environments for better coverage."""
-
-        from lib.tap_stack import TapStackArgs
-
-        environments = ["dev", "test", "staging", "production", "qa", "demo"]
-
-        args_instances = []
-
-        for env in environments:
-
+    
+    def test_tap_stack_args_with_different_environments(self):
+        """Test TapStackArgs with various environment names."""
+        test_cases = ["dev", "staging", "prod", "test-123"]
+        for env in test_cases:
             args = TapStackArgs(env)
-
-            args_instances.append(args)
-
-            # Test individual instance
-
             assert args.environment_suffix == env
 
-            assert hasattr(args, 'environment_suffix')
 
-        # Test that all instances are unique
-
-        assert len(set(args.environment_suffix for args in args_instances)) == len(environments)
-
-    def test_tapstack_class_imports(self):
-
-        """Test that TapStack class can be imported and basic introspection works."""
-
-        from lib.tap_stack import TapStack, TapStackArgs
-
-        # Test class existence
-
-        assert TapStack is not None
-
-        assert TapStackArgs is not None
-
-        # Test class types
-
-        assert isinstance(TapStack, type)
-
-        assert isinstance(TapStackArgs, type)
-
-        # Test that TapStack has expected methods (without calling them)
-
-        expected_methods = ['__init__', '_create_kms_keys', '_create_vpc_infrastructure']
-
-        for method in expected_methods:
-
-            assert hasattr(TapStack, method)
-
-        # Test TapStackArgs can be instantiated multiple times
-
-        args1 = TapStackArgs("env1")
-
-        args2 = TapStackArgs("env2")
-
-        assert args1.environment_suffix != args2.environment_suffix
-
-    def test_basic_component_resource_coverage(self):
-
-        """Test ComponentResource and ResourceOptions coverage."""
-
-        from pulumi import ComponentResource, ResourceOptions
-
-        from lib.tap_stack import TapStack, TapStackArgs
-
-        # Test that we can import and work with basic Pulumi types
-
-        assert ComponentResource is not None
-
-        assert ResourceOptions is not None
-
-        # Test TapStackArgs creation and attributes
-
-        test_args = TapStackArgs("coverage-boost")
-
-        assert isinstance(test_args, object)
-
-        assert hasattr(test_args, '__init__')
-
-        assert test_args.environment_suffix == "coverage-boost"
-
-        # Test TapStack class attributes without instantiation
-
-        assert hasattr(TapStack, '__init__')
-
-        assert TapStack.__name__ == 'TapStack'
-
-        # Test json import (used in the module)
-
-        import json
-
-        test_json = {"test": "data"}
-
-        assert json.dumps(test_json) == '{"test": "data"}'
-
-    def test_module_level_imports_exist(self):
-
-        """Test imports and module-level code coverage."""
-
-        import json
-        import os
-        from typing import Optional
-
-        import lib.tap_stack as tap_stack_module
-
-        # Test that all imports work and cover the import statements
-
-        assert hasattr(tap_stack_module, 'TapStack')
-
-        assert hasattr(tap_stack_module, 'TapStackArgs')
-
-        assert hasattr(tap_stack_module, 'pulumi')
-
-        assert hasattr(tap_stack_module, 'aws')
-
-        # Test module constants and objects exist
-
-        tap_stack_class = tap_stack_module.TapStack
-
-        tap_stack_args_class = tap_stack_module.TapStackArgs
-
-        # Test class definitions exist
-
-        assert tap_stack_class is not None
-
-        assert tap_stack_args_class is not None
-
-        # Test that TapStackArgs constructor works
-
-        args = tap_stack_args_class("coverage-test")
-
-        assert args.environment_suffix == "coverage-test"
-
-    def test_standard_tags_expected_values(self):
-
-        """Test that expected standard tag values are correct."""
-
-        # Test expected tag structure without instantiating the complex TapStack
-
-        expected_tags = {
-
-            "Environment": "test",
-
-            "Owner": "DevOps-Team",
-
-            "CostCenter": "Infrastructure",
-
-            "Project": "AWS-Nova-Model-Breaking",
-
-            "ManagedBy": "Pulumi"
-
-        }
-
-        assert expected_tags["Environment"] == "test"
-
-        assert expected_tags["Owner"] == "DevOps-Team"
-
-        assert expected_tags["CostCenter"] == "Infrastructure"
-
-        assert expected_tags["Project"] == "AWS-Nova-Model-Breaking"
-
-        assert expected_tags["ManagedBy"] == "Pulumi"
-
-        assert len(expected_tags) == 5
-
-    def test_regions_configuration(self):
-
-        """Test that regions are properly configured."""
-
-        expected_regions = ["us-east-1", "us-west-2", "us-east-2"]
-
-        primary_region = "us-east-1"
-
-        # Test the expected configuration
-
-        assert primary_region == "us-east-1"
-
-        assert len(expected_regions) == 3
-
-        assert primary_region in expected_regions
-
-    def test_kms_key_rotation_configuration(self):
-
-        """Test that KMS key rotation is enabled."""
-
-        # Test the expected configuration values
-
-        kms_config = {
-
-            "enable_key_rotation": True,
-
-            "deletion_window": 30
-
-        }
-
-        assert kms_config["enable_key_rotation"] is True
-
-        assert kms_config["deletion_window"] == 30
-
-    def test_rds_encryption_configuration(self):
-
-        """Test that RDS encryption is properly configured."""
-
-        rds_config = {
-
-            "encrypted": True,
-
-            "storage_encrypted": True,
-
-            "deletion_protection": False  # Set to False for QA compliance
-
-        }
-
-        assert rds_config["encrypted"] is True
-
-        assert rds_config["storage_encrypted"] is True
-
-        assert rds_config["deletion_protection"] is False
-
-    def test_cloudtrail_multi_region_configuration(self):
-
-        """Test that CloudTrail multi-region is enabled."""
-
-        cloudtrail_config = {
-
-            "is_multi_region_trail": True,
-
-            "enable_log_file_validation": True
-
-        }
-
-        assert cloudtrail_config["is_multi_region_trail"] is True
-
-        assert cloudtrail_config["enable_log_file_validation"] is True
-
-    def test_ec2_metadata_security_configuration(self):
-
-        """Test that EC2 metadata security is properly configured."""
-
-        ec2_metadata_config = {
-
-            "http_tokens": "required",
-
-            "http_put_response_hop_limit": 1,
-
-            "http_endpoint": "enabled"
-
-        }
-
-        assert ec2_metadata_config["http_tokens"] == "required"
-
-        assert ec2_metadata_config["http_put_response_hop_limit"] == 1
-
-        assert ec2_metadata_config["http_endpoint"] == "enabled"
-
-    def test_security_policy_validation(self):
-
-        """Test security policy validation logic."""
-
-        # Test KMS policy structure
-
-        kms_policy = {
-
-            "Version": "2012-10-17",
-
-            "Statement": [
-
-                {
-
-                    "Effect": "Allow",
-
-                    "Principal": {"AWS": "arn:aws:iam::123456789012:root"},
-
-                    "Action": "kms:*",
-
-                    "Resource": "*"
-
-                }
-
-            ]
-
-        }
-
-        assert kms_policy["Version"] == "2012-10-17"
-
-        assert len(kms_policy["Statement"]) == 1
-
-        assert kms_policy["Statement"][0]["Effect"] == "Allow"
-
-    def test_kms_policy_structure_validation(self):
-
-        """Test KMS policy structure validation."""
-
-        def validate_kms_policy(policy_dict):
-
-            required_keys = ["Version", "Statement"]
-
-            return all(key in policy_dict for key in required_keys)
-
-        valid_policy = {
-
-            "Version": "2012-10-17",
-
-            "Statement": [{"Effect": "Allow"}]
-
-        }
-
-        invalid_policy = {
-
-            "Version": "2012-10-17"  # Missing Statement
-
-        }
-
-        assert validate_kms_policy(valid_policy) is True
-
-        assert validate_kms_policy(invalid_policy) is False
-
-    def test_s3_public_access_block_validation(self):
-
-        """Test S3 bucket security configuration validation."""
-
-        def validate_s3_public_access_block(config):
-
-            required_settings = {
-
-                'block_public_acls': True,
-
-                'block_public_policy': True,
-
-                'ignore_public_acls': True,
-
-                'restrict_public_buckets': True
-
+class TestTapStack:
+    """Comprehensive test cases for TapStack infrastructure."""
+    
+    def setup_method(self):
+        """Set up test fixtures before each test method."""
+        self.mock_account_id = "123456789012"
+        self.environment_suffix = "test"
+        self.args = TapStackArgs(self.environment_suffix)
+        
+        # Mock AWS get_caller_identity
+        self.caller_identity_mock = MagicMock()
+        self.caller_identity_mock.account_id = self.mock_account_id
+    
+    @patch('pulumi_aws.get_caller_identity')
+    @patch('pulumi_aws.Provider')
+    @patch('pulumi_aws.kms.Key')
+    @patch('pulumi_aws.kms.Alias')
+    def test_create_kms_keys(self, mock_alias, mock_key, mock_provider, mock_caller_id):
+        """Test KMS key creation across all regions."""
+        mock_caller_id.return_value = self.caller_identity_mock
+        
+        # Mock KMS key
+        mock_key_instance = MagicMock()
+        mock_key_instance.arn = "arn:aws:kms:us-east-1:123456789012:key/test-key"
+        mock_key_instance.key_id = "test-key-id"
+        mock_key.return_value = mock_key_instance
+        
+        with patch.object(TapStack, '_create_secrets_manager'), \
+             patch.object(TapStack, '_create_iam_roles'), \
+             patch.object(TapStack, '_create_cloudtrail'), \
+             patch.object(TapStack, '_create_vpc_infrastructure'), \
+             patch.object(TapStack, '_create_s3_buckets'), \
+             patch.object(TapStack, '_create_rds_instances'), \
+             patch.object(TapStack, '_create_lambda_functions'), \
+             patch.object(TapStack, '_create_ec2_instances'), \
+             patch.object(TapStack, '_create_monitoring'):
+            
+            stack = TapStack("test-stack", self.args)
+            
+            # Verify KMS keys were created for all regions
+            assert len(stack.kms_keys) == 3
+            assert "us-east-1" in stack.kms_keys
+            assert "us-west-2" in stack.kms_keys
+            assert "us-east-2" in stack.kms_keys
+            
+            # Verify primary KMS key is set
+            assert stack.kms_key == stack.kms_keys["us-east-1"]
+            
+            # Verify KMS key creation was called for each region
+            assert mock_key.call_count == 3
+            assert mock_alias.call_count == 3
+    
+    @patch('pulumi_aws.get_caller_identity')
+    @patch('pulumi_aws.secretsmanager.Secret')
+    @patch('pulumi_aws.secretsmanager.SecretVersion')
+    @patch('pulumi_aws.Provider')
+    def test_create_secrets_manager(self, mock_provider, mock_version, mock_secret, mock_caller_id):
+        """Test Secrets Manager creation and regional replicas."""
+        mock_caller_id.return_value = self.caller_identity_mock
+        
+        # Mock secrets
+        mock_secret_instance = MagicMock()
+        mock_secret_instance.id = "secret-id"
+        mock_secret_instance.arn = "arn:aws:secretsmanager:us-east-1:123456789012:secret:test"
+        mock_secret.return_value = mock_secret_instance
+        
+        with patch.object(TapStack, '_create_kms_keys'), \
+             patch.object(TapStack, '_create_iam_roles'), \
+             patch.object(TapStack, '_create_cloudtrail'), \
+             patch.object(TapStack, '_create_vpc_infrastructure'), \
+             patch.object(TapStack, '_create_s3_buckets'), \
+             patch.object(TapStack, '_create_rds_instances'), \
+             patch.object(TapStack, '_create_lambda_functions'), \
+             patch.object(TapStack, '_create_ec2_instances'), \
+             patch.object(TapStack, '_create_monitoring'):
+            
+            stack = TapStack("test-stack", self.args)
+            stack.kms_key = MagicMock()
+            stack.kms_key.arn = "test-kms-arn"
+            stack.kms_keys = {
+                "us-west-2": MagicMock(),
+                "us-east-2": MagicMock()
             }
-
-            return all(config.get(key) == value for key, value in required_settings.items())
-
-        valid_config = {
-
-            'block_public_acls': True,
-
-            'block_public_policy': True,
-
-            'ignore_public_acls': True,
-
-            'restrict_public_buckets': True
-
-        }
-
-        invalid_config = {
-
-            'block_public_acls': True,
-
-            'block_public_policy': False,  # Should be True
-
-            'ignore_public_acls': True,
-
-            'restrict_public_buckets': True
-
-        }
-
-        assert validate_s3_public_access_block(valid_config) is True
-
-        assert validate_s3_public_access_block(invalid_config) is False
-
-    def test_lambda_configuration_validation(self):
-
-        """Test Lambda function configuration validation."""
-
-        lambda_config = {
-
-            "runtime": "python3.9",
-
-            "timeout": 300,
-
-            "memory_size": 512,
-
-            "environment_variables": {"LOG_LEVEL": "INFO"}
-
-        }
-
-        assert lambda_config["runtime"] == "python3.9"
-
-        assert lambda_config["timeout"] == 300
-
-        assert lambda_config["memory_size"] == 512
-
-        assert "LOG_LEVEL" in lambda_config["environment_variables"]
-
-    def test_vpc_cidr_block_validation(self):
-
-        """Test VPC CIDR block configuration."""
-
-        vpc_config = {
-
-            "cidr_block": "10.0.0.0/16",
-
-            "enable_dns_hostnames": True,
-
-            "enable_dns_support": True
-
-        }
-
-        assert vpc_config["cidr_block"] == "10.0.0.0/16"
-
-        assert vpc_config["enable_dns_hostnames"] is True
-
-        assert vpc_config["enable_dns_support"] is True
-
-    def test_subnet_configuration_validation(self):
-
-        """Test subnet configuration validation."""
-
-        subnet_config = {
-
-            "public_subnets": ["10.0.1.0/24", "10.0.2.0/24"],
-
-            "private_subnets": ["10.0.3.0/24", "10.0.4.0/24"],
-
-            "availability_zones": ["us-east-1a", "us-east-1b"]
-
-        }
-
-        assert len(subnet_config["public_subnets"]) == 2
-
-        assert len(subnet_config["private_subnets"]) == 2
-
-        assert len(subnet_config["availability_zones"]) == 2
-
-    def test_iam_policy_validation(self):
-
-        """Test IAM role policy structure validation."""
-
-        def validate_iam_policy(policy):
-
-            required_keys = ["Version", "Statement"]
-
-            return all(key in policy for key in required_keys)
-
-        valid_policy = {
-
-            "Version": "2012-10-17",
-
-            "Statement": [
-
-                {
-
-                    "Effect": "Allow",
-
-                    "Action": ["s3:GetObject"],
-
-                    "Resource": "*"
-
-                }
-
-            ]
-
-        }
-
-        invalid_policy = {"Version": "2012-10-17"}
-
-        assert validate_iam_policy(valid_policy) is True
-
-        assert validate_iam_policy(invalid_policy) is False
-
-    def test_monitoring_configuration(self):
-
-        """Test monitoring and logging configuration."""
-
-        monitoring_config = {
-
-            "enable_detailed_monitoring": True,
-
-            "cloudwatch_logs_retention": 14,
-
-            "alarm_threshold": 80
-
-        }
-
-        assert monitoring_config["enable_detailed_monitoring"] is True
-
-        assert monitoring_config["cloudwatch_logs_retention"] == 14
-
-        assert monitoring_config["alarm_threshold"] == 80
-
-    def test_backup_configuration(self):
-
-        """Test backup configuration validation."""
-
-        backup_config = {
-
-            "enable_automated_backups": True,
-
-            "backup_retention_period": 7,
-
-            "backup_window": "03:00-04:00",
-
-            "maintenance_window": "sun:04:00-sun:05:00"
-
-        }
-
-        assert backup_config["enable_automated_backups"] is True
-
-        assert backup_config["backup_retention_period"] == 7
-
-        assert backup_config["backup_window"] == "03:00-04:00"
-
-        assert backup_config["maintenance_window"] == "sun:04:00-sun:05:00"
-
-    def test_security_group_rule_validation(self):
-
-        """Test security group rules configuration."""
-
-        def validate_security_group_rule(rule):
-
-            required_keys = ["protocol", "from_port", "to_port", "cidr_blocks"]
-
-            return all(key in rule for key in required_keys)
-
-        valid_rule = {
-
-            "protocol": "tcp",
-
-            "from_port": 443,
-
-            "to_port": 443,
-
-            "cidr_blocks": ["0.0.0.0/0"]
-
-        }
-
-        invalid_rule = {
-
-            "protocol": "tcp",
-
-            "from_port": 443
-
-        }
-
-        assert validate_security_group_rule(valid_rule) is True
-
-        assert validate_security_group_rule(invalid_rule) is False
-
-    def test_environment_specific_configurations(self):
-
-        """Test environment-specific configuration validation."""
-
-        from lib.tap_stack import TapStackArgs
-
-        # Test different environments have appropriate settings
-
-        environments = {
-
-            "dev": {"instance_type": "t3.micro", "multi_az": False},
-
-            "staging": {"instance_type": "t3.small", "multi_az": False},
-
-            "prod": {"instance_type": "t3.medium", "multi_az": True}
-
-        }
-
-        for env_name, config in environments.items():
-
-            args = TapStackArgs(env_name)
-
-            assert args.environment_suffix == env_name
-
-            assert isinstance(config["instance_type"], str)
-
-            assert isinstance(config["multi_az"], bool)
-
-            if env_name == "prod":
-
-                assert config["multi_az"] is True
-
-            else:
-
-                assert config["multi_az"] is False
-
-    def test_additional_tapstack_args_coverage(self):
-
-        """Test additional TapStackArgs scenarios for coverage."""
-
-        from lib.tap_stack import TapStackArgs
-
-        # Test with various environment patterns
-
-        environments = ["development", "testing", "production", "qa", "demo", "sandbox"]
-
-        for env in environments:
-
-            args = TapStackArgs(env)
-
-            assert args.environment_suffix == env
-
-            assert isinstance(args.environment_suffix, str)
-
-            assert len(args.environment_suffix) > 0
-
-    def test_comprehensive_module_import_coverage(self):
-
-        """Test comprehensive module import coverage."""
-
-        # Import the module and test various aspects
-
-        import lib.tap_stack
-
-        # Test that we can access the classes
-
-        assert hasattr(lib.tap_stack, 'TapStack')
-
-        assert hasattr(lib.tap_stack, 'TapStackArgs')
-
-        # Test pulumi imports work
-
-        import pulumi
-        import pulumi_aws
-
-        assert pulumi is not None
-
-        assert pulumi_aws is not None
-
-        # Test json import
-
-        import json
-
-        test_data = {"test": "data", "environment": "dev"}
-
-        json_string = json.dumps(test_data)
-
-        assert "dev" in json_string
-
-    def test_additional_validation_functions(self):
-
-        """Test additional validation functions for coverage."""
-
-        # Test network configuration validation
-
-        def validate_network_config(config):
-
-            required_keys = ["cidr_block", "subnets", "availability_zones"]
-
-            return all(key in config for key in required_keys)
-
-        network_config = {
-
-            "cidr_block": "10.0.0.0/16",
-
-            "subnets": ["10.0.1.0/24", "10.0.2.0/24"],
-
-            "availability_zones": ["us-east-1a", "us-east-1b"]
-
-        }
-
-        assert validate_network_config(network_config) is True
-
-        # Test incomplete config
-
-        incomplete_config = {
-
-            "cidr_block": "10.0.0.0/16",
-
-            "subnets": ["10.0.1.0/24"]
-
-        }
-
-        assert validate_network_config(incomplete_config) is False
-
-    def test_extended_tapstack_args_initialization(self):
-
-        """Test extended TapStackArgs initialization patterns."""
-
-        from lib.tap_stack import TapStackArgs
-
-        # Test with different naming conventions
-
-        environments = [
-
-            "dev-environment",
-
-            "test_environment", 
-
-            "staging.env",
-
-            "prod123",
-
-            "qa-final"
-
-        ]
-
-        created_args = []
-
-        for env in environments:
-
-            args = TapStackArgs(env)
-
-            created_args.append(args)
-
-            assert args.environment_suffix == env
-
-        # Verify all are unique
-
-        suffixes = [arg.environment_suffix for arg in created_args]
-
-        assert len(set(suffixes)) == len(suffixes)
-
-    def test_tapstack_class_attributes_without_instantiation(self):
-
-        """Test TapStack class attributes without full instantiation."""
-
-        from lib.tap_stack import TapStack
-
-        # Test that the class has expected attributes/methods
-
-        expected_methods = [
-            '_create_kms_keys',
-            '_create_secrets_manager',
-            '_create_iam_roles',
-            '_create_cloudtrail',
-            '_create_vpc_infrastructure',
-            '_create_s3_buckets',
-            '_create_rds_instances',
-            '_create_lambda_functions',
-            '_create_ec2_instances',
-            '_create_monitoring'
-        ]
-
-        for method in expected_methods:
-            assert hasattr(TapStack, method)
-            assert callable(getattr(TapStack, method))
-
-    def test_module_constants_and_imports(self):
-
-        """Test module constants and imports coverage."""
-
-        import lib.tap_stack as tap_stack_module
-
-        # Test import statements work
-        import json
-        import os
-        from typing import Optional
-        import pulumi
-        import pulumi_aws as aws
-        from pulumi import ComponentResource, ResourceOptions
-
-        # Test that imports are accessible 
-        assert json is not None
-        assert os is not None
-        assert Optional is not None
-        assert pulumi is not None
-        assert aws is not None
-        assert ComponentResource is not None
-        assert ResourceOptions is not None
-
-        # Test the module has the expected classes
-        assert hasattr(tap_stack_module, 'TapStack')
-        assert hasattr(tap_stack_module, 'TapStackArgs')
-
-    def test_tapstack_expected_constants(self):
-
-        """Test expected constants that would be used by TapStack."""
-
-        from lib.tap_stack import TapStackArgs
-
-        # Test that we can create args and they would have expected properties
-        args = TapStackArgs("unittest")
+            
+            stack._create_secrets_manager()
+            
+            # Verify primary secret was created
+            assert hasattr(stack, 'secrets_manager')
+            
+            # Verify secret creation calls
+            assert mock_secret.call_count >= 1
+            assert mock_version.call_count >= 1
+    
+    @patch('pulumi_aws.get_caller_identity')
+    @patch('pulumi_aws.iam.Role')
+    @patch('pulumi_aws.iam.RolePolicyAttachment')
+    @patch('pulumi_aws.iam.InstanceProfile')
+    def test_create_iam_roles(self, mock_profile, mock_attachment, mock_role, mock_caller_id):
+        """Test IAM roles and policies creation."""
+        mock_caller_id.return_value = self.caller_identity_mock
         
-        # Test regions constant that would be used
-        expected_regions = ["us-east-1", "us-west-2", "us-east-2"]
-        primary_region = "us-east-1"
+        # Mock IAM role
+        mock_role_instance = MagicMock()
+        mock_role_instance.name = "test-role"
+        mock_role_instance.arn = "arn:aws:iam::123456789012:role/test-role"
+        mock_role.return_value = mock_role_instance
         
-        assert len(expected_regions) == 3
-        assert primary_region in expected_regions
+        with patch.object(TapStack, '_create_kms_keys'), \
+             patch.object(TapStack, '_create_secrets_manager'), \
+             patch.object(TapStack, '_create_cloudtrail'), \
+             patch.object(TapStack, '_create_vpc_infrastructure'), \
+             patch.object(TapStack, '_create_s3_buckets'), \
+             patch.object(TapStack, '_create_rds_instances'), \
+             patch.object(TapStack, '_create_lambda_functions'), \
+             patch.object(TapStack, '_create_ec2_instances'), \
+             patch.object(TapStack, '_create_monitoring'):
+            
+            stack = TapStack("test-stack", self.args)
+            
+            # Verify roles were created
+            assert hasattr(stack, 'ec2_role')
+            assert hasattr(stack, 'lambda_role')
+            assert hasattr(stack, 'ec2_instance_profile')
+            
+            # Verify role creation calls
+            assert mock_role.call_count == 2  # EC2 and Lambda roles
+            assert mock_attachment.call_count == 2  # Policy attachments
+            assert mock_profile.call_count == 1  # Instance profile
+    
+    @patch('pulumi_aws.get_caller_identity')
+    @patch('pulumi_aws.s3.Bucket')
+    @patch('pulumi_aws.s3.BucketPolicy')
+    @patch('pulumi_aws.cloudtrail.Trail')
+    def test_create_cloudtrail(self, mock_trail, mock_policy, mock_bucket, mock_caller_id):
+        """Test CloudTrail creation with S3 bucket."""
+        mock_caller_id.return_value = self.caller_identity_mock
         
-        # Test standard tags structure
-        expected_tags_structure = {
-            "Environment": args.environment_suffix,
-            "Owner": "DevOps-Team", 
-            "CostCenter": "Infrastructure",
-            "Project": "AWS-Nova-Model-Breaking",
-            "ManagedBy": "Pulumi"
-        }
+        # Mock S3 bucket
+        mock_bucket_instance = MagicMock()
+        mock_bucket_instance.id = "bucket-id"
+        mock_bucket_instance.bucket = "cloudtrail-bucket"
+        mock_bucket.return_value = mock_bucket_instance
         
-        assert expected_tags_structure["Environment"] == "unittest"
-        assert expected_tags_structure["Owner"] == "DevOps-Team"
+        with patch.object(TapStack, '_create_kms_keys'), \
+             patch.object(TapStack, '_create_secrets_manager'), \
+             patch.object(TapStack, '_create_iam_roles'), \
+             patch.object(TapStack, '_create_vpc_infrastructure'), \
+             patch.object(TapStack, '_create_s3_buckets'), \
+             patch.object(TapStack, '_create_rds_instances'), \
+             patch.object(TapStack, '_create_lambda_functions'), \
+             patch.object(TapStack, '_create_ec2_instances'), \
+             patch.object(TapStack, '_create_monitoring'):
+            
+            stack = TapStack("test-stack", self.args)
+            stack.kms_key = MagicMock()
+            stack.kms_key.arn = "test-kms-arn"
+            
+            stack._create_cloudtrail()
+            
+            # Verify CloudTrail components were created
+            assert hasattr(stack, 'cloudtrail_bucket')
+            assert mock_bucket.call_count == 1
+            assert mock_policy.call_count == 1
+            assert mock_trail.call_count == 1
+    
+    @patch('pulumi_aws.get_caller_identity')
+    @patch('pulumi_aws.Provider')
+    @patch('pulumi_aws.ec2.Vpc')
+    @patch('pulumi_aws.ec2.InternetGateway')
+    @patch('pulumi_aws.ec2.Subnet')
+    @patch('pulumi_aws.ec2.RouteTable')
+    @patch('pulumi_aws.ec2.Route')
+    @patch('pulumi_aws.ec2.RouteTableAssociation')
+    @patch('pulumi_aws.ec2.FlowLog')
+    @patch('pulumi_aws.get_availability_zones')
+    def test_create_vpc_infrastructure(self, mock_azs, mock_flowlog, mock_rta, 
+                                     mock_route, mock_rt, mock_subnet, mock_igw, 
+                                     mock_vpc, mock_provider, mock_caller_id):
+        """Test VPC infrastructure creation across regions."""
+        mock_caller_id.return_value = self.caller_identity_mock
+        
+        # Mock availability zones
+        mock_azs.return_value = MagicMock(names=["us-east-1a", "us-east-1b"])
+        
+        # Mock VPC
+        mock_vpc_instance = MagicMock()
+        mock_vpc_instance.id = "vpc-12345"
+        mock_vpc.return_value = mock_vpc_instance
+        
+        # Mock subnets
+        mock_subnet_instance = MagicMock()
+        mock_subnet_instance.id = "subnet-12345"
+        mock_subnet.return_value = mock_subnet_instance
+        
+        with patch.object(TapStack, '_create_kms_keys'), \
+             patch.object(TapStack, '_create_secrets_manager'), \
+             patch.object(TapStack, '_create_iam_roles'), \
+             patch.object(TapStack, '_create_cloudtrail'), \
+             patch.object(TapStack, '_create_s3_buckets'), \
+             patch.object(TapStack, '_create_rds_instances'), \
+             patch.object(TapStack, '_create_lambda_functions'), \
+             patch.object(TapStack, '_create_ec2_instances'), \
+             patch.object(TapStack, '_create_monitoring'), \
+             patch('pulumi_aws.iam.Role'), \
+             patch('pulumi_aws.iam.RolePolicy'), \
+             patch('pulumi_aws.cloudwatch.LogGroup'):
+            
+            stack = TapStack("test-stack", self.args)
+            stack.kms_keys = {
+                "us-east-1": MagicMock(),
+                "us-west-2": MagicMock(),
+                "us-east-2": MagicMock()
+            }
+            
+            stack._create_vpc_infrastructure()
+            
+            # Verify VPC infrastructure
+            assert hasattr(stack, 'vpcs')
+            assert hasattr(stack, 'subnets')
+            assert hasattr(stack, 'primary_vpc')
+            assert len(stack.vpcs) == 3
+            assert len(stack.subnets) == 3
+            
+            # Verify VPC creation for each region
+            assert mock_vpc.call_count == 3
+    
+    @patch('pulumi_aws.get_caller_identity')
+    @patch('pulumi_aws.Provider')
+    @patch('pulumi_aws.s3.Bucket')
+    @patch('pulumi_aws.s3.BucketPublicAccessBlock')
+    def test_create_s3_buckets(self, mock_pab, mock_bucket, mock_provider, mock_caller_id):
+        """Test S3 buckets creation across regions."""
+        mock_caller_id.return_value = self.caller_identity_mock
+        
+        # Mock S3 bucket
+        mock_bucket_instance = MagicMock()
+        mock_bucket_instance.id = "bucket-id"
+        mock_bucket.return_value = mock_bucket_instance
+        
+        with patch.object(TapStack, '_create_kms_keys'), \
+             patch.object(TapStack, '_create_secrets_manager'), \
+             patch.object(TapStack, '_create_iam_roles'), \
+             patch.object(TapStack, '_create_cloudtrail'), \
+             patch.object(TapStack, '_create_vpc_infrastructure'), \
+             patch.object(TapStack, '_create_rds_instances'), \
+             patch.object(TapStack, '_create_lambda_functions'), \
+             patch.object(TapStack, '_create_ec2_instances'), \
+             patch.object(TapStack, '_create_monitoring'):
+            
+            stack = TapStack("test-stack", self.args)
+            stack.kms_keys = {
+                "us-east-1": MagicMock(),
+                "us-west-2": MagicMock(),
+                "us-east-2": MagicMock()
+            }
+            
+            stack._create_s3_buckets()
+            
+            # Verify S3 buckets
+            assert hasattr(stack, 's3_buckets')
+            assert len(stack.s3_buckets) == 3
+            
+            # Verify bucket creation for each region
+            assert mock_bucket.call_count == 3
+            assert mock_pab.call_count == 3
+    
+    @patch('pulumi_aws.get_caller_identity')
+    @patch('pulumi_aws.Provider')
+    @patch('pulumi_aws.rds.SubnetGroup')
+    @patch('pulumi_aws.ec2.SecurityGroup')
+    @patch('pulumi_aws.rds.Instance')
+    def test_create_rds_instances(self, mock_rds, mock_sg, mock_subnet_group, 
+                                mock_provider, mock_caller_id):
+        """Test RDS instances creation across regions."""
+        mock_caller_id.return_value = self.caller_identity_mock
+        
+        # Mock RDS instance
+        mock_rds_instance = MagicMock()
+        mock_rds_instance.id = "rds-instance-id"
+        mock_rds.return_value = mock_rds_instance
+        
+        with patch.object(TapStack, '_create_kms_keys'), \
+             patch.object(TapStack, '_create_secrets_manager'), \
+             patch.object(TapStack, '_create_iam_roles'), \
+             patch.object(TapStack, '_create_cloudtrail'), \
+             patch.object(TapStack, '_create_vpc_infrastructure'), \
+             patch.object(TapStack, '_create_s3_buckets'), \
+             patch.object(TapStack, '_create_lambda_functions'), \
+             patch.object(TapStack, '_create_ec2_instances'), \
+             patch.object(TapStack, '_create_monitoring'):
+            
+            stack = TapStack("test-stack", self.args)
+            stack.kms_keys = {
+                "us-east-1": MagicMock(),
+                "us-west-2": MagicMock(),
+                "us-east-2": MagicMock()
+            }
+            stack.vpcs = {
+                "us-east-1": MagicMock(),
+                "us-west-2": MagicMock(),
+                "us-east-2": MagicMock()
+            }
+            stack.subnets = {
+                "us-east-1": {"private": [MagicMock(), MagicMock()]},
+                "us-west-2": {"private": [MagicMock(), MagicMock()]},
+                "us-east-2": {"private": [MagicMock(), MagicMock()]}
+            }
+            
+            stack._create_rds_instances()
+            
+            # Verify RDS instances
+            assert hasattr(stack, 'rds_instances')
+            assert len(stack.rds_instances) == 3
+            
+            # Verify RDS creation for each region
+            assert mock_rds.call_count == 3
+            assert mock_sg.call_count == 3
+            assert mock_subnet_group.call_count == 3
+    
+    @patch('pulumi_aws.get_caller_identity')
+    @patch('pulumi_aws.Provider')
+    @patch('pulumi_aws.lambda_.Function')
+    def test_create_lambda_functions(self, mock_lambda, mock_provider, mock_caller_id):
+        """Test Lambda functions creation across regions."""
+        mock_caller_id.return_value = self.caller_identity_mock
+        
+        # Mock Lambda function
+        mock_lambda_instance = MagicMock()
+        mock_lambda_instance.id = "lambda-function-id"
+        mock_lambda.return_value = mock_lambda_instance
+        
+        with patch.object(TapStack, '_create_kms_keys'), \
+             patch.object(TapStack, '_create_secrets_manager'), \
+             patch.object(TapStack, '_create_iam_roles'), \
+             patch.object(TapStack, '_create_cloudtrail'), \
+             patch.object(TapStack, '_create_vpc_infrastructure'), \
+             patch.object(TapStack, '_create_s3_buckets'), \
+             patch.object(TapStack, '_create_rds_instances'), \
+             patch.object(TapStack, '_create_ec2_instances'), \
+             patch.object(TapStack, '_create_monitoring'):
+            
+            stack = TapStack("test-stack", self.args)
+            stack.lambda_role = MagicMock()
+            stack.lambda_role.arn = "lambda-role-arn"
+            stack.kms_keys = {
+                "us-east-1": MagicMock(),
+                "us-west-2": MagicMock(),
+                "us-east-2": MagicMock()
+            }
+            
+            stack._create_lambda_functions()
+            
+            # Verify Lambda functions
+            assert hasattr(stack, 'lambda_functions')
+            assert len(stack.lambda_functions) == 3
+            
+            # Verify Lambda creation for each region
+            assert mock_lambda.call_count == 3
+    
+    @patch('pulumi_aws.get_caller_identity')
+    @patch('pulumi_aws.Provider')
+    @patch('pulumi_aws.ec2.SecurityGroup')
+    @patch('pulumi_aws.ec2.Instance')
+    @patch('pulumi_aws.ec2.get_ami')
+    def test_create_ec2_instances(self, mock_ami, mock_instance, mock_sg, 
+                                mock_provider, mock_caller_id):
+        """Test EC2 instances creation across regions."""
+        mock_caller_id.return_value = self.caller_identity_mock
+        
+        # Mock AMI
+        mock_ami.return_value = MagicMock(id="ami-12345")
+        
+        # Mock EC2 instance
+        mock_instance_obj = MagicMock()
+        mock_instance_obj.id = "i-12345"
+        mock_instance.return_value = mock_instance_obj
+        
+        with patch.object(TapStack, '_create_kms_keys'), \
+             patch.object(TapStack, '_create_secrets_manager'), \
+             patch.object(TapStack, '_create_iam_roles'), \
+             patch.object(TapStack, '_create_cloudtrail'), \
+             patch.object(TapStack, '_create_vpc_infrastructure'), \
+             patch.object(TapStack, '_create_s3_buckets'), \
+             patch.object(TapStack, '_create_rds_instances'), \
+             patch.object(TapStack, '_create_lambda_functions'), \
+             patch.object(TapStack, '_create_monitoring'):
+            
+            stack = TapStack("test-stack", self.args)
+            stack.ec2_instance_profile = MagicMock()
+            stack.ec2_instance_profile.name = "profile-name"
+            stack.kms_keys = {
+                "us-east-1": MagicMock(),
+                "us-west-2": MagicMock(),
+                "us-east-2": MagicMock()
+            }
+            stack.vpcs = {
+                "us-east-1": MagicMock(),
+                "us-west-2": MagicMock(),
+                "us-east-2": MagicMock()
+            }
+            stack.subnets = {
+                "us-east-1": {"public": [MagicMock()]},
+                "us-west-2": {"public": [MagicMock()]},
+                "us-east-2": {"public": [MagicMock()]}
+            }
+            
+            stack._create_ec2_instances()
+            
+            # Verify EC2 instances
+            assert hasattr(stack, 'ec2_instances')
+            assert len(stack.ec2_instances) == 3
+            
+            # Verify EC2 creation for each region
+            assert mock_instance.call_count == 3
+            assert mock_sg.call_count == 3
+    
+    @patch('pulumi_aws.get_caller_identity')
+    @patch('pulumi_aws.Provider')
+    @patch('pulumi_aws.cloudwatch.LogGroup')
+    @patch('pulumi_aws.cloudwatch.MetricAlarm')
+    def test_create_monitoring(self, mock_alarm, mock_log_group, mock_provider, mock_caller_id):
+        """Test monitoring resources creation."""
+        mock_caller_id.return_value = self.caller_identity_mock
+        
+        # Mock log group
+        mock_log_group_instance = MagicMock()
+        mock_log_group_instance.id = "log-group-id"
+        mock_log_group.return_value = mock_log_group_instance
+        
+        with patch.object(TapStack, '_create_kms_keys'), \
+             patch.object(TapStack, '_create_secrets_manager'), \
+             patch.object(TapStack, '_create_iam_roles'), \
+             patch.object(TapStack, '_create_cloudtrail'), \
+             patch.object(TapStack, '_create_vpc_infrastructure'), \
+             patch.object(TapStack, '_create_s3_buckets'), \
+             patch.object(TapStack, '_create_rds_instances'), \
+             patch.object(TapStack, '_create_lambda_functions'), \
+             patch.object(TapStack, '_create_ec2_instances'):
+            
+            stack = TapStack("test-stack", self.args)
+            stack.kms_keys = {
+                "us-east-1": MagicMock(),
+                "us-west-2": MagicMock(),
+                "us-east-2": MagicMock()
+            }
+            stack.ec2_instances = {
+                "us-east-1": MagicMock(),
+                "us-west-2": MagicMock(),
+                "us-east-2": MagicMock()
+            }
+            
+            stack._create_monitoring()
+            
+            # Verify monitoring resources
+            assert hasattr(stack, 'log_groups')
+            assert len(stack.log_groups) == 3
+            
+            # Verify monitoring creation for each region
+            assert mock_log_group.call_count == 3
+            assert mock_alarm.call_count == 3
+    
+    def test_standard_tags_format(self):
+        """Test that standard tags are properly formatted."""
+        with patch.object(TapStack, '_create_kms_keys'), \
+             patch.object(TapStack, '_create_secrets_manager'), \
+             patch.object(TapStack, '_create_iam_roles'), \
+             patch.object(TapStack, '_create_cloudtrail'), \
+             patch.object(TapStack, '_create_vpc_infrastructure'), \
+             patch.object(TapStack, '_create_s3_buckets'), \
+             patch.object(TapStack, '_create_rds_instances'), \
+             patch.object(TapStack, '_create_lambda_functions'), \
+             patch.object(TapStack, '_create_ec2_instances'), \
+             patch.object(TapStack, '_create_monitoring'):
+            
+            stack = TapStack("test-stack", self.args)
+            
+            # Verify standard tags
+            expected_tags = {
+                "Environment": self.environment_suffix,
+                "Owner": "DevOps-Team",
+                "CostCenter": "Infrastructure",
+                "Project": "AWS-Nova-Model-Breaking",
+                "ManagedBy": "Pulumi",
+            }
+            
+            assert stack.standard_tags == expected_tags
+    
+    def test_regions_configuration(self):
+        """Test that regions are properly configured."""
+        with patch.object(TapStack, '_create_kms_keys'), \
+             patch.object(TapStack, '_create_secrets_manager'), \
+             patch.object(TapStack, '_create_iam_roles'), \
+             patch.object(TapStack, '_create_cloudtrail'), \
+             patch.object(TapStack, '_create_vpc_infrastructure'), \
+             patch.object(TapStack, '_create_s3_buckets'), \
+             patch.object(TapStack, '_create_rds_instances'), \
+             patch.object(TapStack, '_create_lambda_functions'), \
+             patch.object(TapStack, '_create_ec2_instances'), \
+             patch.object(TapStack, '_create_monitoring'):
+            
+            stack = TapStack("test-stack", self.args)
+            
+            # Verify regions
+            expected_regions = ["us-east-1", "us-west-2", "us-east-2"]
+            assert stack.regions == expected_regions
+            assert stack.primary_region == "us-east-1"
+    
+    @patch('pulumi_aws.get_caller_identity')
+    def test_environment_suffix_propagation(self, mock_caller_id):
+        """Test that environment suffix is properly used throughout."""
+        mock_caller_id.return_value = self.caller_identity_mock
+        
+        with patch.object(TapStack, '_create_kms_keys'), \
+             patch.object(TapStack, '_create_secrets_manager'), \
+             patch.object(TapStack, '_create_iam_roles'), \
+             patch.object(TapStack, '_create_cloudtrail'), \
+             patch.object(TapStack, '_create_vpc_infrastructure'), \
+             patch.object(TapStack, '_create_s3_buckets'), \
+             patch.object(TapStack, '_create_rds_instances'), \
+             patch.object(TapStack, '_create_lambda_functions'), \
+             patch.object(TapStack, '_create_ec2_instances'), \
+             patch.object(TapStack, '_create_monitoring'):
+            
+            stack = TapStack("test-stack", self.args)
+            
+            assert stack.environment_suffix == self.environment_suffix
+    
+    @patch('pulumi_aws.get_caller_identity')
+    def test_stack_initialization_with_resource_options(self, mock_caller_id):
+        """Test stack initialization with custom resource options."""
+        mock_caller_id.return_value = self.caller_identity_mock
+        
+        custom_opts = ResourceOptions(protect=True)
+        
+        with patch.object(TapStack, '_create_kms_keys'), \
+             patch.object(TapStack, '_create_secrets_manager'), \
+             patch.object(TapStack, '_create_iam_roles'), \
+             patch.object(TapStack, '_create_cloudtrail'), \
+             patch.object(TapStack, '_create_vpc_infrastructure'), \
+             patch.object(TapStack, '_create_s3_buckets'), \
+             patch.object(TapStack, '_create_rds_instances'), \
+             patch.object(TapStack, '_create_lambda_functions'), \
+             patch.object(TapStack, '_create_ec2_instances'), \
+             patch.object(TapStack, '_create_monitoring'):
+            
+            stack = TapStack("test-stack", self.args, opts=custom_opts)
+            
+            assert stack.environment_suffix == self.environment_suffix
+
+
+class TestTapStackCompliance:
+    """Test cases for compliance and configuration checks."""
+    
+    def setup_method(self):
+        """Set up test fixtures for compliance tests."""
+        self.environment_suffix = "test"
+        self.args = TapStackArgs(self.environment_suffix)
+        self.mock_account_id = "123456789012"
+        
+        self.caller_identity_mock = MagicMock()
+        self.caller_identity_mock.account_id = self.mock_account_id
+    
+    @patch('pulumi_aws.get_caller_identity')
+    @patch('pulumi_aws.cfg.get_configuration_recorders')
+    @patch('pulumi_aws.cfg.get_delivery_channels')
+    @patch('pulumi_aws.Provider')
+    def test_create_compliance_checks_no_existing_config(self, mock_provider, 
+                                                       mock_channels, mock_recorders, 
+                                                       mock_caller_id):
+        """Test compliance checks creation when no AWS Config exists."""
+        mock_caller_id.return_value = self.caller_identity_mock
+        
+        # Mock no existing configuration
+        mock_recorders.return_value = MagicMock(configuration_recorders=[])
+        mock_channels.return_value = MagicMock(delivery_channels=[])
+        
+        with patch.object(TapStack, '_create_kms_keys'), \
+             patch.object(TapStack, '_create_secrets_manager'), \
+             patch.object(TapStack, '_create_iam_roles'), \
+             patch.object(TapStack, '_create_cloudtrail'), \
+             patch.object(TapStack, '_create_vpc_infrastructure'), \
+             patch.object(TapStack, '_create_s3_buckets'), \
+             patch.object(TapStack, '_create_rds_instances'), \
+             patch.object(TapStack, '_create_lambda_functions'), \
+             patch.object(TapStack, '_create_ec2_instances'), \
+             patch.object(TapStack, '_create_monitoring'), \
+             patch('pulumi_aws.s3.Bucket'), \
+             patch('pulumi_aws.iam.Role'), \
+             patch('pulumi_aws.iam.RolePolicyAttachment'), \
+             patch('pulumi_aws.cfg.Recorder'), \
+             patch('pulumi_aws.cfg.DeliveryChannel'), \
+             patch('pulumi_aws.cfg.Rule') as mock_rule:
+            
+            stack = TapStack("test-stack", self.args)
+            stack.kms_keys = {"us-east-1": MagicMock()}
+            
+            stack._create_compliance_checks()
+            
+            # Verify Config rules were created
+            assert mock_rule.call_count == 2  # Two compliance rules
+    
+    @patch('pulumi_aws.get_caller_identity')
+    @patch('pulumi_aws.cfg.get_configuration_recorders')
+    @patch('pulumi_aws.cfg.get_delivery_channels')
+    @patch('pulumi_aws.Provider')
+    def test_create_compliance_checks_existing_config(self, mock_provider, 
+                                                    mock_channels, mock_recorders, 
+                                                    mock_caller_id):
+        """Test compliance checks when AWS Config already exists."""
+        mock_caller_id.return_value = self.caller_identity_mock
+        
+        # Mock existing configuration
+        mock_recorders.return_value = MagicMock(
+            configuration_recorders=[MagicMock(name="existing-recorder")]
+        )
+        mock_channels.return_value = MagicMock(
+            delivery_channels=[MagicMock(name="existing-channel")]
+        )
+        
+        with patch.object(TapStack, '_create_kms_keys'), \
+             patch.object(TapStack, '_create_secrets_manager'), \
+             patch.object(TapStack, '_create_iam_roles'), \
+             patch.object(TapStack, '_create_cloudtrail'), \
+             patch.object(TapStack, '_create_vpc_infrastructure'), \
+             patch.object(TapStack, '_create_s3_buckets'), \
+             patch.object(TapStack, '_create_rds_instances'), \
+             patch.object(TapStack, '_create_lambda_functions'), \
+             patch.object(TapStack, '_create_ec2_instances'), \
+             patch.object(TapStack, '_create_monitoring'), \
+             patch('pulumi.log.info') as mock_log:
+            
+            stack = TapStack("test-stack", self.args)
+            stack.kms_keys = {"us-east-1": MagicMock()}
+            
+            stack._create_compliance_checks()
+            
+            # Verify logging messages for existing config
+            mock_log.assert_called()
+
+
+class TestTapStackIntegration:
+    """Integration tests for TapStack components."""
+    
+    def setup_method(self):
+        """Set up integration test fixtures."""
+        self.environment_suffix = "integration-test"
+        self.args = TapStackArgs(self.environment_suffix)
+        self.mock_account_id = "123456789012"
+        
+        self.caller_identity_mock = MagicMock()
+        self.caller_identity_mock.account_id = self.mock_account_id
+    
+    @patch('pulumi_aws.get_caller_identity')
+    def test_full_stack_output_registration(self, mock_caller_id):
+        """Test that stack outputs are properly registered."""
+        mock_caller_id.return_value = self.caller_identity_mock
+        
+        with patch.object(TapStack, '_create_kms_keys'), \
+             patch.object(TapStack, '_create_secrets_manager'), \
+             patch.object(TapStack, '_create_iam_roles'), \
+             patch.object(TapStack, '_create_cloudtrail'), \
+             patch.object(TapStack, '_create_vpc_infrastructure'), \
+             patch.object(TapStack, '_create_s3_buckets'), \
+             patch.object(TapStack, '_create_rds_instances'), \
+             patch.object(TapStack, '_create_lambda_functions'), \
+             patch.object(TapStack, '_create_ec2_instances'), \
+             patch.object(TapStack, '_create_monitoring'), \
+             patch.object(TapStack, 'register_outputs') as mock_register:
+            
+            # Mock required attributes
+            mock_vpc = MagicMock()
+            mock_vpc.id = "vpc-12345"
+            
+            mock_kms = MagicMock()
+            mock_kms.arn = "arn:aws:kms:us-east-1:123456789012:key/test"
+            
+            mock_secrets = MagicMock()
+            mock_secrets.arn = "arn:aws:secretsmanager:us-east-1:123456789012:secret:test"
+            
+            stack = TapStack("test-stack", self.args)
+            stack.primary_vpc = mock_vpc
+            stack.kms_key = mock_kms
+            stack.secrets_manager = mock_secrets
+            
+            # Verify outputs were registered
+            mock_register.assert_called_once()
+            call_args = mock_register.call_args[0][0]
+            
+            assert "regions" in call_args
+            assert "primary_vpc_id" in call_args
+            assert "kms_key_arn" in call_args
+            assert "secrets_manager_arn" in call_args
+
+
+# Pytest configuration and fixtures
+@pytest.fixture
+def mock_pulumi_context():
+    """Fixture to mock Pulumi context for testing."""
+    with patch('pulumi.get_stack'), \
+         patch('pulumi.get_project'):
+        yield
+
+
+def test_module_imports():
+    """Test that all required modules can be imported."""
+    import json
+    import os
+    from typing import Optional
+    
+    import pulumi
+    import pulumi_aws as aws
+    from pulumi import ComponentResource, ResourceOptions
+    
+    # Verify imports are successful
+    assert json is not None
+    assert os is not None
+    assert Optional is not None
+    assert pulumi is not None
+    assert aws is not None
+    assert ComponentResource is not None
+    assert ResourceOptions is not None
 
 
 if __name__ == "__main__":
-
-    pytest.main([__file__])
+    pytest.main([__file__, "-v", "--cov=your_module", "--cov-report=html"])
