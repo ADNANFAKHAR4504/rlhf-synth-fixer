@@ -182,7 +182,9 @@ export class TapStack extends cdk.Stack {
     });
 
     const cloudtrailBucket = new s3.Bucket(this, 'CloudTrailBucket', {
-      bucketName: `tap${environmentSuffix}-${props.isPrimaryRegion ? 'primary' : 'secondary'}-trail-logs-${region}`.toLowerCase(),
+      bucketName: `tap${environmentSuffix}-${
+        props.isPrimaryRegion ? 'primary' : 'secondary'
+      }-trail-logs-${region}`.toLowerCase(),
       encryption: s3.BucketEncryption.KMS,
       encryptionKey: kmsKey,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
