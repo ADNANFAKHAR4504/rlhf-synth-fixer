@@ -51,4 +51,4 @@ tmp/
 temp/
 
 .github/
-claude*
+.claude/
