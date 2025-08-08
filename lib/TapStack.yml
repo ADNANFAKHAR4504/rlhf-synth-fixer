@@ -139,6 +139,7 @@ Resources:
           STAGE: !Ref Environment
           LOG_LEVEL: !Ref LogLevel
           TABLE_NAME: !Ref DataTable
+          AWS_REGION: !Ref AWS::Region
       Timeout: 30
       MemorySize: 128
 
@@ -281,19 +282,39 @@ Resources:
   LambdaErrorAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub '${Environment}-lambda-error-rate-alarm'
-      AlarmDescription: 'Alarm when Lambda error rate exceeds 5% for 5 minutes'
-      MetricName: Errors
-      Namespace: AWS/Lambda
-      Statistic: Sum
-      Period: 300
-      EvaluationPeriods: 1
-      Threshold: 5.0
+      AlarmName: LambdaErrorRateGreaterThan5Percent
+      AlarmDescription: Alarm when Lambda error rate is greater than 5%
       ComparisonOperator: GreaterThanThreshold
-      Dimensions:
-        - Name: FunctionName
-          Value: !Ref DataProcessorFunction
-      TreatMissingData: notBreaching
+      EvaluationPeriods: 1
+      Threshold: 5
+      TreatMissingData: missing
+      Metrics:
+        - Id: e1
+          Label: ErrorCount
+          MetricStat:
+            Metric:
+              Namespace: AWS/Lambda
+              MetricName: Errors
+              Dimensions:
+                - Name: FunctionName
+                  Value: my-lambda
+            Period: 300
+            Stat: Sum
+        - Id: i1
+          Label: InvocationCount
+          MetricStat:
+            Metric:
+              Namespace: AWS/Lambda
+              MetricName: Invocations
+              Dimensions:
+                - Name: FunctionName
+                  Value: my-lambda
+            Period: 300
+            Stat: Sum
+        - Id: m1
+          Label: ErrorRate
+          Expression: '(e1 / i1) * 100'
+          ReturnData: true
 
 Outputs:
   ApiEndpoint:
