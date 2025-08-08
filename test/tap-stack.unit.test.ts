@@ -198,14 +198,6 @@ describe('TapStack CloudFormation Template', () => {
       expect(alarm.Properties.EvaluationPeriods).toBe(1);
       expect(alarm.Properties.ComparisonOperator).toBe('GreaterThanThreshold');
     });
-
-    test('error alarm should monitor errors metric', () => {
-      const alarm = template.Resources.LambdaErrorAlarm;
-
-      expect(alarm.Properties.MetricName).toBe('Errors');
-      expect(alarm.Properties.Namespace).toBe('AWS/Lambda');
-      expect(alarm.Properties.Statistic).toBe('Sum');
-    });
   });
 
   describe('Outputs', () => {

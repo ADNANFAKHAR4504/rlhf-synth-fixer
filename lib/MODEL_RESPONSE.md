@@ -286,23 +286,42 @@ Resources:
       RestApiId: !Ref DataAPI
       StageName: !Ref Environment
 
-  # CloudWatch Alarm for Lambda Errors
+  # CloudWatch Alarm for Lambda Error Rate
   LambdaErrorAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName: !Sub '${Environment}-lambda-error-rate-alarm'
       AlarmDescription: 'Alarm when Lambda error rate exceeds 5% for 5 minutes'
-      MetricName: ErrorRate
-      Namespace: AWS/Lambda
-      Statistic: Average
-      Period: 300
+      ComparisonOperator: GreaterThanThreshold
       EvaluationPeriods: 1
       Threshold: 5.0
-      ComparisonOperator: GreaterThanThreshold
-      Dimensions:
-        - Name: FunctionName
-          Value: !Ref DataProcessorFunction
       TreatMissingData: notBreaching
+      Metrics:
+        - Id: e1
+          Expression: '(m1/m2)*100'
+          Label: 'Error Rate (%)'
+        - Id: m1
+          MetricStat:
+            Metric:
+              MetricName: Errors
+              Namespace: AWS/Lambda
+              Dimensions:
+                - Name: FunctionName
+                  Value: !Ref DataProcessorFunction
+            Period: 300
+            Stat: Sum
+          ReturnData: false
+        - Id: m2
+          MetricStat:
+            Metric:
+              MetricName: Invocations
+              Namespace: AWS/Lambda
+              Dimensions:
+                - Name: FunctionName
+                  Value: !Ref DataProcessorFunction
+            Period: 300
+            Stat: Sum
+          ReturnData: false
 
 Outputs:
   ApiEndpoint:
