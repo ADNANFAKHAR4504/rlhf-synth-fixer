@@ -1,0 +1,80 @@
+Task: Fix Pulumi Python issues in CodePipeline/Slack integration
+
+Repo / File(s):
+
+lib/tap_stack.py (primary)
+
+tap.py (entrypoint references)
+
+Current Failing Error (highest priority):
+
+pgsql
+Copy
+TypeError: Object of type Output is not JSON serializable
+at lib/tap_stack.py:232 -> json.dumps(pipeline_policy)
+Root Cause: We’re passing dicts that contain pulumi.Output[...] (e.g., self.artifacts_bucket.arn) directly to json.dumps. Pulumi outputs must be resolved via .apply(...) (or Output.all(...)) before serialization.
+
+Required Fix (do this):
+
+Replace any json.dumps(<dict_with_outputs>) with:
+
+policy_json = Output.all(<needed outputs>).apply(lambda vals: json.dumps({...}))
+
+or single-output: some_output.apply(lambda v: json.dumps({... using v ...}))
+
+Pass the resulting Output[str] directly into policy= for aws.iam.RolePolicy.
+
+Concrete examples to implement:
+
+CodePipeline role policy
+
+Build pipeline_policy_json = self.artifacts_bucket.arn.apply(lambda bucket_arn: json.dumps({... bucket_arn, f"{bucket_arn}/*" ...}))
+
+Use policy=pipeline_policy_json in aws.iam.RolePolicy.
+
+CodeBuild role policy
+
+Same pattern: codebuild_policy_json = self.artifacts_bucket.arn.apply(lambda bucket_arn: json.dumps({...}))
+
+Use policy=codebuild_policy_json.
+
+Other recent fixes to keep/verify:
+
+S3 SSE V2 class names: use
+
+BucketServerSideEncryptionConfigurationV2Args
+
+...V2RuleArgs
+
+...V2RuleApplyServerSideEncryptionByDefaultArgs
+not the non-existent mega-name.
+
+CodePipeline artifact store (AWS provider v6):
+
+Use artifact_stores=[aws.codepipeline.PipelineArtifactStoreArgs(...)] (plural), not artifact_store.
+
+Slack Chatbot:
+
+Skip via config flag (slack.enabled=false) or ensure real IDs (T…/C…) and don’t reference .name on SlackChannelConfiguration — use .configuration_name, .slack_channel_name, .chat_configuration_arn.
+
+Acceptance Criteria:
+
+pulumi preview & pulumi up succeed for env suffix like pr741.
+
+No Output is not JSON serializable errors.
+
+CodePipeline created with S3 artifact store and SSE enabled.
+
+If slack.enabled=false, no Chatbot resources created and no attribute errors in outputs.
+
+Linting passes and code is readable (keep comments short).
+
+Nice-to-have:
+
+Introduce a small helper function:
+
+python
+Copy
+def to_policy_json(o: pulumi.Input[Any], fn: Callable[[Any], Dict]) -> pulumi.Output[str]:
+    return pulumi.Output.from_input(o).apply(lambda v: json.dumps(fn(v)))
+…to DRY up future policies.
