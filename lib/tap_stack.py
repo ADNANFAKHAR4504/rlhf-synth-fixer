@@ -680,6 +680,7 @@ class TapStack(TerraformStack):
         {
           "sid": "DenyAllExceptUnlessSignedInWithMFA",
           "effect": "Deny",
+          "actions": ["*"],
           "not_actions": [
             "iam:CreateVirtualMFADevice",
             "iam:EnableMFADevice",
