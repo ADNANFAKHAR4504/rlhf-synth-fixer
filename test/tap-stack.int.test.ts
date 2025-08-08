@@ -344,8 +344,11 @@ describe('TapStack Infrastructure Integration Tests', () => {
     });
 
     it('should have consistent AWS account and region across all resources', () => {
-      const accountId = '805947636957';
-      const region = 'us-east-1';
+
+
+      const kmsArnParts = stackOutputs.kmsKeyArn.split(':');
+      const region = kmsArnParts[3];
+      const accountId = kmsArnParts[4];
       
       // Check S3 bucket ARN
       expect(stackOutputs.bucketArn).toContain(`arn:aws:s3:::${stackOutputs.bucketName}`);
