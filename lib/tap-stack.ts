@@ -33,7 +33,7 @@ export class TapStack extends cdk.Stack {
     // VPC with secure configuration
     const vpc = new ec2.Vpc(this, 'SecureVpc', {
       maxAzs: 2,
-      natGateways: 2,
+      natGateways: 1, // Reduced to 1 NAT Gateway to stay within EIP limits
       subnetConfiguration: [
         {
           cidrMask: 24,
@@ -198,7 +198,7 @@ export class TapStack extends cdk.Stack {
     // Store CloudTrail configuration for organization-level trail
     // Note: CloudTrail is typically configured at the organization level
     new ssm.StringParameter(this, 'CloudTrailConfig', {
-      parameterName: `/tap${environmentSuffix}/${props.isPrimaryRegion ? 'primary' : 'secondary'}/cloudtrail-config`,
+      parameterName: `/tap/${environmentSuffix}/cloudtrail-config`,
       stringValue: JSON.stringify({
         bucket: cloudtrailBucket.bucketName,
         encryptionKey: kmsKey.keyArn,
@@ -311,16 +311,30 @@ export class TapStack extends cdk.Stack {
 
     // Enable AWS Security Hub (only in primary region)
     if (props.isPrimaryRegion) {
-      new securityhub.CfnHub(this, 'SecurityHub', {
+      const securityHubCondition = new cdk.CfnCondition(this, 'SecurityHubNotEnabled', {
+        expression: cdk.Fn.conditionEquals(
+          cdk.Fn.conditionIf(
+            'SecurityHubEnabled',
+            'true',
+            cdk.Fn.importValue('SecurityHubEnabled')
+          ),
+          'false'
+        ),
+      });
+
+      const securityHubResource = new securityhub.CfnHub(this, 'SecurityHub', {
         enableDefaultStandards: true,
       });
+      
+      // Only create if not already enabled
+      securityHubResource.cfnOptions.condition = securityHubCondition;
     }
 
     // Store SSM Parameter for Inspector enablement status
     // Note: Inspector v2 enablement is typically done at the org level
     if (props.isPrimaryRegion) {
       new ssm.StringParameter(this, 'InspectorStatus', {
-        parameterName: `/tap${environmentSuffix}/${props.isPrimaryRegion ? 'primary' : 'secondary'}/inspector-status`,
+        parameterName: `/tap/${environmentSuffix}/inspector-status`,
         stringValue:
           'Inspector should be enabled at organization level for EC2 and ECR scanning',
         description: 'Status of Amazon Inspector v2 enablement',

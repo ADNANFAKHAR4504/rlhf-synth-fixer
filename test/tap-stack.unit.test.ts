@@ -44,7 +44,7 @@ describe('TapStack Unit Tests', () => {
       
       template.resourceCountIs('AWS::EC2::VPC', 1);
       template.resourceCountIs('AWS::EC2::Subnet', 6);
-      template.resourceCountIs('AWS::EC2::NatGateway', 2);
+      template.resourceCountIs('AWS::EC2::NatGateway', 1); // Reduced to 1 NAT Gateway to stay within EIP limits
       template.resourceCountIs('AWS::EC2::InternetGateway', 1);
     });
   });
