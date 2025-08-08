@@ -156,7 +156,7 @@ jobs:
           ENVIRONMENT_SUFFIX: ${{ env.ENVIRONMENT_SUFFIX }}
           TERRAFORM_STATE_BUCKET: ${{ env.TERRAFORM_STATE_BUCKET }}
           TERRAFORM_STATE_BUCKET_REGION: ${{ env.TERRAFORM_STATE_BUCKET_REGION }}
-          PULUMI_BACKEND_URL: s3://${{ env.PULUMI_STATE_BUCKET }}
+          5: s3://${{ env.PULUMI_STATE_BUCKET }}
           PULUMI_ORG: ${{ env.PULUMI_ORG }}
 
   deploy:
