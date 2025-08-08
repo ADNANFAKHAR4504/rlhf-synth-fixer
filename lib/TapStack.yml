@@ -493,13 +493,13 @@ Resources:
               - 's3:GetObject'
               - 's3:PutObject'
               - 's3:DeleteObject'
-            Resource: !Sub '${S3Bucket.Arn}/*' # Corrected S3 ARN format
+            Resource: !Sub '${S3Bucket}/*'
           - Sid: AllowEC2RoleListBucket
             Effect: Allow
             Principal:
               AWS: !GetAtt EC2InstanceRole.Arn
             Action: 's3:ListBucket'
-            Resource: !GetAtt S3Bucket.Arn # Corrected S3 ARN format
+            Resource: !Ref S3Bucket
 
   # Secrets Manager
   DatabaseSecret:
@@ -557,10 +557,10 @@ Resources:
                   - s3:GetObject
                   - s3:PutObject
                   - s3:DeleteObject
-                Resource: !Sub '${S3Bucket.Arn}/*' # Corrected ARN
+                Resource: !Sub '${S3Bucket}/*'
               - Effect: Allow
                 Action: s3:ListBucket
-                Resource: !GetAtt S3Bucket.Arn # Corrected ARN
+                Resource: !Ref S3Bucket
         - PolicyName: SecretsManagerAccess
           PolicyDocument:
             Version: '2012-10-17'
@@ -591,73 +591,74 @@ Resources:
   # If you modify the policy here, it will overwrite the initial policy defined in KMSKey.
   # The permissions granted to EC2InstanceRole are already included in EC2InstanceRole's inline policies.
   # This section is redundant if the KMSKey's initial policy is comprehensive.
-  KMSKeyPolicyUpdate:
-    Type: AWS::KMS::Key
-    Properties:
-      Description: 'KMS Key for encrypting resources in secure infrastructure'
-      EnableKeyRotation: true
-      KeyId: !Ref KMSKey
-      KeyPolicy:
-        Version: '2012-10-17'
-        Statement:
-          - Sid: Enable IAM User Permissions
-            Effect: Allow
-            Principal:
-              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
-            Action: 'kms:*'
-            Resource: '*'
-          - Sid: Allow CloudFormation Service
-            Effect: Allow
-            Principal:
-              Service: cloudformation.amazonaws.com
-            Action:
-              - kms:Decrypt
-              - kms:DescribeKey
-            Resource: '*'
-          - Sid: Allow EC2 Service
-            Effect: Allow
-            Principal:
-              Service: ec2.amazonaws.com
-            Action:
-              - kms:Decrypt
-              - kms:DescribeKey
-              - kms:Encrypt
-              - kms:GenerateDataKey
-              - kms:ReEncrypt*
-            Resource: '*'
-          - Sid: Allow S3 Service
-            Effect: Allow
-            Principal:
-              Service: s3.amazonaws.com
-            Action:
-              - kms:Decrypt
-              - kms:DescribeKey
-              - kms:Encrypt
-              - kms:GenerateDataKey
-              - kms:ReEncrypt*
-            Resource: '*'
-          - Sid: Allow Secrets Manager Service
-            Effect: Allow
-            Principal:
-              Service: secretsmanager.amazonaws.com
-            Action:
-              - kms:Decrypt
-              - kms:DescribeKey
-              - kms:Encrypt
-              - kms:GenerateDataKey
-              - kms:ReEncrypt*
-            Resource: '*'
-          - Sid: Allow EC2 Instance Role
-            Effect: Allow
-            Principal:
-              AWS: !GetAtt EC2InstanceRole.Arn
-            Action:
-              - kms:Decrypt
-              - kms:DescribeKey
-              - kms:Encrypt
-              - kms:GenerateDataKey
-              - kms:ReEncrypt*
-            Resource: '*'
+  # Removed as it's a redundant definition and can cause issues if not managed carefully.
+  # KMSKeyPolicyUpdate:
+  #   Type: AWS::KMS::Key
+  #   Properties:
+  #     Description: 'KMS Key for encrypting resources in secure infrastructure'
+  #     EnableKeyRotation: true
+  #     KeyId: !Ref KMSKey
+  #     KeyPolicy:
+  #       Version: '2012-10-17'
+  #       Statement:
+  #         - Sid: Enable IAM User Permissions
+  #           Effect: Allow
+  #           Principal:
+  #             AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+  #           Action: 'kms:*'
+  #           Resource: '*'
+  #         - Sid: Allow CloudFormation Service
+  #           Effect: Allow
+  #           Principal:
+  #             Service: cloudformation.amazonaws.com
+  #           Action:
+  #             - kms:Decrypt
+  #             - kms:DescribeKey
+  #           Resource: '*'
+  #         - Sid: Allow EC2 Service
+  #           Effect: Allow
+  #           Principal:
+  #             Service: ec2.amazonaws.com
+  #           Action:
+  #             - kms:Decrypt
+  #             - kms:DescribeKey
+  #             - kms:Encrypt
+  #             - kms:GenerateDataKey
+  #             - kms:ReEncrypt*
+  #           Resource: '*'
+  #         - Sid: Allow S3 Service
+  #           Effect: Allow
+  #           Principal:
+  #             Service: s3.amazonaws.com
+  #           Action:
+  #             - kms:Decrypt
+  #             - kms:DescribeKey
+  #             - kms:Encrypt
+  #             - kms:GenerateDataKey
+  #             - kms:ReEncrypt*
+  #           Resource: '*'
+  #         - Sid: Allow Secrets Manager Service
+  #           Effect: Allow
+  #           Principal:
+  #             Service: secretsmanager.amazonaws.com
+  #           Action:
+  #             - kms:Decrypt
+  #             - kms:DescribeKey
+  #             - kms:Encrypt
+  #             - kms:GenerateDataKey
+  #             - kms:ReEncrypt*
+  #           Resource: '*'
+  #         - Sid: Allow EC2 Instance Role
+  #           Effect: Allow
+  #           Principal:
+  #             AWS: !GetAtt EC2InstanceRole.Arn
+  #           Action:
+  #             - kms:Decrypt
+  #             - kms:DescribeKey
+  #             - kms:Encrypt
+  #             - kms:GenerateDataKey
+  #             - kms:ReEncrypt*
+  #           Resource: '*'
 
   # Launch Template
   LaunchTemplate:
@@ -778,7 +779,7 @@ Outputs:
 
   S3BucketName:
     Description: 'S3 Bucket Name'
-    Value: !Sub '${Project}-${Environment}-secure-bucket-${AWS::AccountId}-${AWS::Region}'
+    Value: !Ref S3Bucket
     Export:
       Name: !Sub '${AWS::StackName}-S3BucketName'
 
