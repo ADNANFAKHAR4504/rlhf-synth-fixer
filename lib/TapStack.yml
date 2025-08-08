@@ -510,3 +510,57 @@ Outputs:
     Value: !If [CreateNewKeyPair, !Ref NewKeyPair, "No new key pair created"]
     Export:
       Name: !Sub ${EnvironmentName}-NewKeyPairName
+
+  PublicSubnetAZ1Id:
+    Description: Public Subnet AZ1 ID
+    Value: !Ref PublicSubnet1
+    Export:
+      Name: !Sub ${EnvironmentName}-PublicSubnetAZ1Id
+
+  PublicSubnetAZ2Id:
+    Description: Public Subnet AZ2 ID
+    Value: !Ref PublicSubnet2
+    Export:
+      Name: !Sub ${EnvironmentName}-PublicSubnetAZ2Id
+
+  TargetGroupArn:
+    Description: Application Load Balancer Target Group ARN
+    Value: !Ref ALBTargetGroup
+    Export:
+      Name: !Sub ${EnvironmentName}-TargetGroupArn
+
+  ALBSecurityGroupId:
+    Description: Application Load Balancer Security Group ID
+    Value: !Ref ALBSecurityGroup
+    Export:
+      Name: !Sub ${EnvironmentName}-ALBSecurityGroupId
+
+  WebServerSecurityGroupId:
+    Description: Web Server Security Group ID
+    Value: !Ref WebServerSecurityGroup
+    Export:
+      Name: !Sub ${EnvironmentName}-WebServerSecurityGroupId
+
+  EC2RoleArn:
+    Description: EC2 Instance Role ARN
+    Value: !GetAtt EC2Role.Arn
+    Export:
+      Name: !Sub ${EnvironmentName}-EC2RoleArn
+
+  NotificationTopicArn:
+    Description: SNS Notification Topic ARN
+    Value: !Ref NotificationTopic
+    Export:
+      Name: !Sub ${EnvironmentName}-NotificationTopicArn
+
+  HighCPUAlarmName:
+    Description: High CPU CloudWatch Alarm Name
+    Value: !Ref HighCPUAlarm
+    Export:
+      Name: !Sub ${EnvironmentName}-HighCPUAlarmName
+
+  LowCPUAlarmName:
+    Description: Low CPU CloudWatch Alarm Name
+    Value: !Ref LowCPUAlarm
+    Export:
+      Name: !Sub ${EnvironmentName}-LowCPUAlarmName
