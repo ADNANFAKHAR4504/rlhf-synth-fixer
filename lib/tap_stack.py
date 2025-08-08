@@ -8,7 +8,7 @@ from dataclasses import dataclass
 class TapStackArgs:
     """Arguments for TapStack"""
     project_name: str = "iac-aws-nova"
-    environment_suffix: str = "dev"  # Changed from 'environment' to 'environment_suffix'
+    environment_suffix: str = "dev"
     regions: List[str] = None
     
     def __post_init__(self):
@@ -22,7 +22,7 @@ class TapStack(pulumi.ComponentResource):
         super().__init__("custom:TapStack", name, None, opts)
         
         self.project_name = args.project_name
-        self.environment = args.environment_suffix  # Use environment_suffix from args
+        self.environment = args.environment_suffix
         self.regions = args.regions
         
         # Resource collections
@@ -31,6 +31,10 @@ class TapStack(pulumi.ComponentResource):
         self.s3_buckets = {}
         self.cloudwatch_alarms = {}
         self.vpcs = {}
+        self.providers = {}  # Store providers to avoid duplicates
+        
+        # Create providers for each region first
+        self._create_regional_providers()
         
         # Create infrastructure in each region
         for region in self.regions:
@@ -42,12 +46,24 @@ class TapStack(pulumi.ComponentResource):
         # Export key outputs
         self._register_outputs()
 
+    def _create_regional_providers(self):
+        """Create AWS providers for each region"""
+        for region in self.regions:
+            # Create unique provider name for each region
+            provider_name = f"{self.project_name}-provider-{region}-{self.environment}"
+            self.providers[region] = aws.Provider(
+                provider_name,
+                region=region,
+                opts=pulumi.ResourceOptions(parent=self)
+            )
+
     def _create_regional_infrastructure(self, region: str):
         """Create infrastructure resources for a specific region"""
-        region_opts = pulumi.ResourceOptions(provider=aws.Provider(
-            f"provider-{region}",
-            region=region
-        ))
+        # Use the pre-created provider for this region
+        region_opts = pulumi.ResourceOptions(
+            provider=self.providers[region],
+            parent=self
+        )
         
         # VPC for the region
         vpc = aws.ec2.Vpc(
@@ -226,8 +242,8 @@ class TapStack(pulumi.ComponentResource):
             stage_description=f"Deployment for {self.environment} environment",
             opts=pulumi.ResourceOptions(
                 depends_on=[api_method, integration],
-                parent=region_opts.provider if region_opts else None,
-                replace_on_changes=["stage_name"]
+                provider=self.providers[region],
+                parent=self
             )
         )
         
@@ -242,7 +258,7 @@ class TapStack(pulumi.ComponentResource):
     def _create_regional_monitoring(self, region: str, lambda_function, api_gateway, region_opts):
         """Create CloudWatch monitoring and alarms for a region"""
         
-        # Lambda error rate alarm - FIXED: Removed alarm_name parameter
+        # Lambda error rate alarm
         lambda_error_alarm = aws.cloudwatch.MetricAlarm(
             f"{self.project_name}-lambda-errors-{region}-{self.environment}",
             comparison_operator="GreaterThanThreshold",
@@ -259,7 +275,7 @@ class TapStack(pulumi.ComponentResource):
             opts=region_opts
         )
         
-        # Lambda duration alarm - FIXED: Removed alarm_name parameter
+        # Lambda duration alarm
         lambda_duration_alarm = aws.cloudwatch.MetricAlarm(
             f"{self.project_name}-lambda-duration-{region}-{self.environment}",
             comparison_operator="GreaterThanThreshold",
@@ -276,7 +292,7 @@ class TapStack(pulumi.ComponentResource):
             opts=region_opts
         )
         
-        # API Gateway 4XX error alarm - FIXED: Removed alarm_name parameter
+        # API Gateway 4XX error alarm
         api_4xx_alarm = aws.cloudwatch.MetricAlarm(
             f"{self.project_name}-api-4xx-{region}-{self.environment}",
             comparison_operator="GreaterThanThreshold",
@@ -293,7 +309,7 @@ class TapStack(pulumi.ComponentResource):
             opts=region_opts
         )
         
-        # API Gateway 5XX error alarm - FIXED: Removed alarm_name parameter
+        # API Gateway 5XX error alarm
         api_5xx_alarm = aws.cloudwatch.MetricAlarm(
             f"{self.project_name}-api-5xx-{region}-{self.environment}",
             comparison_operator="GreaterThanThreshold",
@@ -320,10 +336,10 @@ class TapStack(pulumi.ComponentResource):
     def _create_global_monitoring(self):
         """Create global CloudWatch dashboard"""
         primary_region = self.regions[0]
-        primary_opts = pulumi.ResourceOptions(provider=aws.Provider(
-            f"provider-{primary_region}",
-            region=primary_region
-        ))
+        primary_opts = pulumi.ResourceOptions(
+            provider=self.providers[primary_region],
+            parent=self
+        )
         
         dashboard_body = {
             "widgets": []
