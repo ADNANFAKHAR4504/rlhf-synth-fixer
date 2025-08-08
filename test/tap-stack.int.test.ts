@@ -325,24 +325,24 @@ describe('Secure Web App Infrastructure Integration Tests', () => {
         // Check ALB Security Group
         const albSG = securityGroups.find(
           sg =>
-            sg.GroupDescription?.includes('ALB') ||
-            sg.GroupDescription?.includes('Load Balancer')
+            sg.Description?.includes('ALB') ||
+            sg.Description?.includes('Load Balancer')
         );
         expect(albSG).toBeDefined();
 
         // Check Web Server Security Group
         const webSG = securityGroups.find(
           sg =>
-            sg.GroupDescription?.includes('web') ||
-            sg.GroupDescription?.includes('server')
+            sg.Description?.includes('web') ||
+            sg.Description?.includes('server')
         );
         expect(webSG).toBeDefined();
 
         // Check Database Security Group
         const dbSG = securityGroups.find(
           sg =>
-            sg.GroupDescription?.includes('DB') ||
-            sg.GroupDescription?.includes('database')
+            sg.Description?.includes('DB') ||
+            sg.Description?.includes('database')
         );
         expect(dbSG).toBeDefined();
       } catch (error) {
