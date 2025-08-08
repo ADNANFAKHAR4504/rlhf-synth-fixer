@@ -37,69 +37,78 @@
     },
     "ExistingPublicSubnet1Id": {
       "Type": "String",
-      "Default": "10.0.1.0/24",
+      "Default": "subnet-0123456789abcdef0",
       "Description": "Existing Public Subnet 1 ID (leave empty to create new)"
     },
     "ExistingPublicSubnet2Id": {
       "Type": "String",
-      "Default": "10.0.2.0/24",
+      "Default": "subnet-0123456789abcdef1",
       "Description": "Existing Public Subnet 2 ID (leave empty to create new)"
     },
     "ExistingPrivateSubnet1Id": {
       "Type": "String",
-      "Default": "10.0.10.0/24",
+      "Default": "subnet-0123456789abcdef2",
       "Description": "Existing Private Subnet 1 ID (leave empty to create new)"
     },
     "ExistingPrivateSubnet2Id": {
       "Type": "String",
-      "Default": "10.0.11.0/24",
+      "Default": "subnet-0123456789abcdef3",
       "Description": "Existing Private Subnet 2 ID (leave empty to create new)"
     },
     "ExistingInternetGatewayId": {
       "Type": "String",
       "Default": "igw-0ab6cd53c8ed36df2",
       "Description": "Existing Internet Gateway ID (leave empty to create new)"
+    },
+    "UseExistingVPCInfrastructure": {
+      "Type": "String",
+      "Default": "true",
+      "AllowedValues": [
+        "true",
+        "false"
+      ],
+      "Description": "Set to 'false' to create new VPC infrastructure, 'true' to use existing"
     }
   },
   "Conditions": {
     "CreatePublicSubnet1": {
       "Fn::Equals": [
         {
-          "Ref": "ExistingPublicSubnet1Id"
+          "Ref": "UseExistingVPCInfrastructure"
         },
-        ""
+        "false"
       ]
     },
     "CreatePublicSubnet2": {
       "Fn::Equals": [
         {
-          "Ref": "ExistingPublicSubnet2Id"
+          "Ref": "UseExistingVPCInfrastructure"
         },
-        ""
+        "false"
       ]
     },
     "CreatePrivateSubnet1": {
       "Fn::Equals": [
         {
-          "Ref": "ExistingPrivateSubnet1Id"
+          "Ref": "UseExistingVPCInfrastructure"
         },
-        ""
+        "false"
       ]
     },
     "CreatePrivateSubnet2": {
       "Fn::Equals": [
         {
-          "Ref": "ExistingPrivateSubnet2Id"
+          "Ref": "UseExistingVPCInfrastructure"
         },
-        ""
+        "false"
       ]
     },
     "CreateInternetGateway": {
       "Fn::Equals": [
         {
-          "Ref": "ExistingInternetGatewayId"
+          "Ref": "UseExistingVPCInfrastructure"
         },
-        ""
+        "false"
       ]
     }
   },
@@ -343,15 +352,6 @@
             "Value": "Production"
           }
         ]
-      },
-      "DependsOn": {
-        "Fn::If": [
-          "CreateInternetGateway",
-          "AttachGateway",
-          {
-            "Ref": "AWS::NoValue"
-          }
-        ]
       }
     },
     "NATGateway": {
@@ -446,15 +446,6 @@
             }
           ]
         }
-      },
-      "DependsOn": {
-        "Fn::If": [
-          "CreateInternetGateway",
-          "AttachGateway",
-          {
-            "Ref": "AWS::NoValue"
-          }
-        ]
       }
     },
     "PrivateRoute": {

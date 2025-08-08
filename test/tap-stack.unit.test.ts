@@ -49,6 +49,7 @@ describe('TapStack CloudFormation Template', () => {
       'ExistingPrivateSubnet1Id',
       'ExistingPrivateSubnet2Id',
       'ExistingInternetGatewayId',
+      'UseExistingVPCInfrastructure',
     ];
 
     test('should have all required parameters', () => {
@@ -743,26 +744,16 @@ describe('TapStack CloudFormation Template', () => {
   });
 
   describe('Resource Dependencies', () => {
-    test('NATGateway EIP should depend on Internet Gateway attachment', () => {
+    test('NATGateway EIP should not have conditional dependencies', () => {
       const eip = template.Resources.NATGatewayEIP;
-      expect(eip.DependsOn).toEqual({
-        'Fn::If': [
-          'CreateInternetGateway',
-          'AttachGateway',
-          { Ref: 'AWS::NoValue' },
-        ],
-      });
+      // DependsOn was removed to fix CloudFormation validation errors
+      expect(eip.DependsOn).toBeUndefined();
     });
 
-    test('Public route should depend on Internet Gateway attachment', () => {
+    test('Public route should not have conditional dependencies', () => {
       const route = template.Resources.PublicRoute;
-      expect(route.DependsOn).toEqual({
-        'Fn::If': [
-          'CreateInternetGateway',
-          'AttachGateway',
-          { Ref: 'AWS::NoValue' },
-        ],
-      });
+      // DependsOn was removed to fix CloudFormation validation errors
+      expect(route.DependsOn).toBeUndefined();
     });
 
     test('Auto Scaling Group should reference target group', () => {
