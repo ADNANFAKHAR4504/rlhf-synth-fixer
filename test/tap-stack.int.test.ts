@@ -36,8 +36,8 @@ import {
 } from '@aws-sdk/client-apigatewayv2';
 import axios from 'axios';
 
-const environment = process.env.ENVIRONMENT || 'prod';
-const stackName = process.env.STACK_NAME || process.env.TAP_STACK_NAME || `ServerlessStack-${environment}`;
+const environment = process.env.ENVIRONMENT_SUFFIX || 'prod';
+const stackName = "TapStackpr767"
 const region = process.env.AWS_REGION || 'us-east-1';
 
 // Initialize AWS clients
