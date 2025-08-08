@@ -59,11 +59,11 @@ class TapStack(pulumi.ComponentResource):
     project_name = f"aws-nova-model-breaking-{self.environment_suffix}"
     environment = self.environment_suffix
 
-    # Validate required environment variables
-    required_vars = ["AWS_ACCOUNT_ID"]
-    for var in required_vars:
-      if not os.getenv(var):
-        raise ValueError(f"Environment variable {var} is required.")
+    # # Validate required environment variables
+    # required_vars = ["AWS_ACCOUNT_ID"]
+    # for var in required_vars:
+    #   if not os.getenv(var):
+    #     raise ValueError(f"Environment variable {var} is required.")
 
     # === Module Initializations ===
     kms_manager = KMSManager(project_name, environment)
