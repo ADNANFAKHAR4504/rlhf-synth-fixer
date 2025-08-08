@@ -1,6 +1,6 @@
 ```yaml
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'Merged CloudFormation template for the Serverless Healthcare Application backend. Deploys DynamoDB, SQS, SNS, and Lambda functions with least-privilege IAM roles for different environments.'
+Description: 'Merged CloudFormation template for the Serverless Healthcare Application backend. Deploys DynamoDB, SQS, SNS, and Lambda functions with least-privilege IAM roles. Resources are named automatically by CloudFormation.'
 
 Metadata:
   AWS::CloudFormation::Interface:
@@ -15,47 +15,24 @@ Parameters:
   ProjectName:
     Type: String
     Default: 'ServerlessHealthcareApp'
-    Description: 'The project name used to prefix all resource names.'
+    Description: 'The project name used for resource tagging and logical organization.'
     AllowedPattern: '^[a-zA-Z0-9]+$'
     ConstraintDescription: 'Must contain only alphanumeric characters.'
   EnvironmentSuffix:
     Type: String
     Default: 'dev'
-    Description: 'Environment suffix for resource naming (e.g., dev, staging, prod)'
+    Description: 'Environment suffix for resource tagging (e.g., dev, staging, prod).'
     AllowedPattern: '^[a-zA-Z0-9]+$'
     ConstraintDescription: 'Must contain only alphanumeric characters.'
 
 Resources:
   # ----------------------------------------------------------------
-  # CloudWatch Log Groups (to break circular dependencies)
-  # ----------------------------------------------------------------
-
-  ProcessPatientDataLogGroup:
-    Type: AWS::Logs::LogGroup
-    Properties:
-      LogGroupName: !Sub '/aws/lambda/${ProjectName}-ProcessPatientDataFunction-${EnvironmentSuffix}'
-      RetentionInDays: 14
-
-  AnalyticsProcessingLogGroup:
-    Type: AWS::Logs::LogGroup
-    Properties:
-      LogGroupName: !Sub '/aws/lambda/${ProjectName}-AnalyticsProcessingFunction-${EnvironmentSuffix}'
-      RetentionInDays: 14
-
-  SendNotificationLogGroup:
-    Type: AWS::Logs::LogGroup
-    Properties:
-      LogGroupName: !Sub '/aws/lambda/${ProjectName}-SendNotificationFunction-${EnvironmentSuffix}'
-      RetentionInDays: 14
-
-  # ----------------------------------------------------------------
-  # IAM Roles (Least Privilege)
+  # IAM Roles (Least Privilege, No Custom Names)
   # ----------------------------------------------------------------
 
   ProcessPatientDataRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${ProjectName}-ProcessPatientDataRole-${EnvironmentSuffix}'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -68,11 +45,12 @@ Resources:
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
-              - Effect: Allow
+              - Effect: Allow # Allows the function to create and write to its own log group
                 Action:
+                  - logs:CreateLogGroup
                   - logs:CreateLogStream
                   - logs:PutLogEvents
-                Resource: !GetAtt ProcessPatientDataLogGroup.Arn
+                Resource: !Sub 'arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:*'
               - Effect: Allow
                 Action: 'dynamodb:PutItem'
                 Resource: !GetAtt PatientDataTable.Arn
@@ -83,7 +61,6 @@ Resources:
   AnalyticsProcessingRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${ProjectName}-AnalyticsProcessingRole-${EnvironmentSuffix}'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -96,11 +73,12 @@ Resources:
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
-              - Effect: Allow
+              - Effect: Allow # Allows the function to create and write to its own log group
                 Action:
+                  - logs:CreateLogGroup
                   - logs:CreateLogStream
                   - logs:PutLogEvents
-                Resource: !GetAtt AnalyticsProcessingLogGroup.Arn
+                Resource: !Sub 'arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:*'
               - Effect: Allow
                 Action:
                   - sqs:ReceiveMessage
@@ -111,7 +89,6 @@ Resources:
   SendNotificationRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${ProjectName}-SendNotificationRole-${EnvironmentSuffix}'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -124,23 +101,23 @@ Resources:
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
-              - Effect: Allow
+              - Effect: Allow # Allows the function to create and write to its own log group
                 Action:
+                  - logs:CreateLogGroup
                   - logs:CreateLogStream
                   - logs:PutLogEvents
-                Resource: !GetAtt SendNotificationLogGroup.Arn
+                Resource: !Sub 'arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:*'
               - Effect: Allow
                 Action: 'sns:Publish'
                 Resource: !Ref PatientUpdatesTopic
 
   # ----------------------------------------------------------------
-  # DynamoDB Table
+  # Core Infrastructure (DynamoDB, SQS, SNS)
   # ----------------------------------------------------------------
 
   PatientDataTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: !Sub '${ProjectName}-PatientDataTable-${EnvironmentSuffix}'
       AttributeDefinitions:
         - AttributeName: 'PatientID'
           AttributeType: 'S'
@@ -153,41 +130,26 @@ Resources:
       SSESpecification:
         SSEEnabled: true
 
-  # ----------------------------------------------------------------
-  # SQS Queue
-  # ----------------------------------------------------------------
-
   AnalyticsTaskQueue:
     Type: AWS::SQS::Queue
     Properties:
-      QueueName: !Sub '${ProjectName}-AnalyticsTaskQueue-${EnvironmentSuffix}'
       RedrivePolicy:
         deadLetterTargetArn: !GetAtt AnalyticsTaskDeadLetterQueue.Arn
         maxReceiveCount: 5
 
   AnalyticsTaskDeadLetterQueue:
     Type: AWS::SQS::Queue
-    Properties:
-      QueueName: !Sub '${ProjectName}-AnalyticsTaskQueue-DLQ-${EnvironmentSuffix}'
-
-  # ----------------------------------------------------------------
-  # SNS Topic
-  # ----------------------------------------------------------------
 
   PatientUpdatesTopic:
     Type: AWS::SNS::Topic
-    Properties:
-      TopicName: !Sub '${ProjectName}-PatientUpdatesTopic-${EnvironmentSuffix}'
 
   # ----------------------------------------------------------------
-  # Lambda Functions
+  # Lambda Functions (No Custom Names)
   # ----------------------------------------------------------------
 
   ProcessPatientDataFunction:
     Type: AWS::Lambda::Function
-    DependsOn: ProcessPatientDataLogGroup
     Properties:
-      FunctionName: !Sub '${ProjectName}-ProcessPatientDataFunction-${EnvironmentSuffix}'
       Handler: 'index.handler'
       Runtime: 'nodejs20.x'
       Role: !GetAtt ProcessPatientDataRole.Arn
@@ -200,14 +162,11 @@ Resources:
           const { DynamoDBClient, PutItemCommand } = require("@aws-sdk/client-dynamodb");
           const { SQSClient, SendMessageCommand } = require("@aws-sdk/client-sqs");
           const crypto = require("crypto");
-
           const ddbClient = new DynamoDBClient({ region: process.env.AWS_REGION });
           const sqsClient = new SQSClient({ region: process.env.AWS_REGION });
-
           exports.handler = async (event) => {
             console.log("Received event:", JSON.stringify(event, null, 2));
             const patientId = event.patientId || crypto.randomUUID();
-
             const ddbParams = {
               TableName: process.env.PATIENT_TABLE_NAME,
               Item: {
@@ -216,37 +175,25 @@ Resources:
                 'Timestamp': { S: new Date().toISOString() }
               }
             };
-
             const sqsParams = {
               QueueUrl: process.env.ANALYTICS_QUEUE_URL,
               MessageBody: JSON.stringify({ patientId: patientId, message: "New patient data for analytics." })
             };
-
             try {
               await ddbClient.send(new PutItemCommand(ddbParams));
               console.log(`Successfully added patient ${patientId} to the table.`);
-
               await sqsClient.send(new SendMessageCommand(sqsParams));
               console.log(`Successfully sent message for patient ${patientId} to the analytics queue.`);
-
-              return {
-                statusCode: 200,
-                body: JSON.stringify({ message: "Patient data processed successfully.", patientId: patientId }),
-              };
+              return { statusCode: 200, body: JSON.stringify({ message: "Patient data processed successfully.", patientId: patientId }) };
             } catch (err) {
               console.error(err);
-              return {
-                statusCode: 500,
-                body: JSON.stringify({ message: "Error processing patient data." }),
-              };
+              return { statusCode: 500, body: JSON.stringify({ message: "Error processing patient data." }) };
             }
           };
 
   AnalyticsProcessingFunction:
     Type: AWS::Lambda::Function
-    DependsOn: AnalyticsProcessingLogGroup
     Properties:
-      FunctionName: !Sub '${ProjectName}-AnalyticsProcessingFunction-${EnvironmentSuffix}'
       Handler: 'index.handler'
       Runtime: 'nodejs20.x'
       Role: !GetAtt AnalyticsProcessingRole.Arn
@@ -258,17 +205,12 @@ Resources:
               const messageBody = JSON.parse(record.body);
               console.log(`Processing analytics for patient: ${messageBody.patientId}`);
             }
-            return {
-              statusCode: 200,
-              body: JSON.stringify({ message: "Analytics batch processed successfully." }),
-            };
+            return { statusCode: 200, body: JSON.stringify({ message: "Analytics batch processed successfully." }) };
           };
 
   SendNotificationFunction:
     Type: AWS::Lambda::Function
-    DependsOn: SendNotificationLogGroup
     Properties:
-      FunctionName: !Sub '${ProjectName}-SendNotificationFunction-${EnvironmentSuffix}'
       Handler: 'index.handler'
       Runtime: 'nodejs20.x'
       Role: !GetAtt SendNotificationRole.Arn
@@ -281,10 +223,7 @@ Resources:
               console.log(`Sending notification for subject: ${snsMessage.Subject}`);
               console.log(`Message: ${snsMessage.Message}`);
             }
-            return {
-              statusCode: 200,
-              body: JSON.stringify({ message: "Notification sent successfully." }),
-            };
+            return { statusCode: 200, body: JSON.stringify({ message: "Notification sent successfully." }) };
           };
 
   # ----------------------------------------------------------------
@@ -319,39 +258,67 @@ Resources:
 # ----------------------------------------------------------------
 
 Outputs:
+  # General Info
   StackName:
     Description: 'Name of this CloudFormation stack'
     Value: !Ref AWS::StackName
-    Export:
-      Name: !Sub '${AWS::StackName}-StackName'
-
+  ProjectName:
+    Description: 'Project name used for this deployment'
+    Value: !Ref ProjectName
   EnvironmentSuffix:
     Description: 'Environment suffix used for this deployment'
     Value: !Ref EnvironmentSuffix
-    Export:
-      Name: !Sub '${AWS::StackName}-EnvironmentSuffix'
 
+  # DynamoDB Outputs
   PatientDataTableName:
-    Description: 'The name of the DynamoDB table for patient data.'
+    Description: 'The auto-generated name of the DynamoDB table for patient data.'
     Value: !Ref PatientDataTable
     Export:
-      Name: !Sub '${ProjectName}-${EnvironmentSuffix}-PatientDataTableName'
+      Name: !Sub '${AWS::StackName}-PatientDataTableName'
 
+  # SQS Outputs
   AnalyticsTaskQueueURL:
     Description: 'The URL of the SQS queue for analytics tasks.'
     Value: !Ref AnalyticsTaskQueue
     Export:
-      Name: !Sub '${ProjectName}-${EnvironmentSuffix}-AnalyticsTaskQueueURL'
-
+      Name: !Sub '${AWS::StackName}-AnalyticsTaskQueueURL'
   AnalyticsTaskQueueARN:
     Description: 'The ARN of the SQS queue for analytics tasks.'
     Value: !GetAtt AnalyticsTaskQueue.Arn
     Export:
-      Name: !Sub '${ProjectName}-${EnvironmentSuffix}-AnalyticsTaskQueueARN'
+      Name: !Sub '${AWS::StackName}-AnalyticsTaskQueueARN'
+  AnalyticsTaskDeadLetterQueueArn:
+    Description: 'The ARN of the SQS dead-letter queue.'
+    Value: !GetAtt AnalyticsTaskDeadLetterQueue.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-AnalyticsTaskDeadLetterQueueArn'
 
+  # SNS Outputs
   PatientUpdatesTopicArn:
     Description: 'The ARN of the SNS topic for patient updates.'
     Value: !Ref PatientUpdatesTopic
     Export:
-      Name: !Sub '${ProjectName}-${EnvironmentSuffix}-PatientUpdatesTopicArn'
+      Name: !Sub '${AWS::StackName}-PatientUpdatesTopicArn'
+
+  # Lambda Outputs
+  ProcessPatientDataFunctionName:
+    Description: 'Name of the ProcessPatientData Lambda function'
+    Value: !Ref ProcessPatientDataFunction
+  AnalyticsProcessingFunctionName:
+    Description: 'Name of the AnalyticsProcessing Lambda function'
+    Value: !Ref AnalyticsProcessingFunction
+  SendNotificationFunctionName:
+    Description: 'Name of the SendNotification Lambda function'
+    Value: !Ref SendNotificationFunction
+
+  # IAM Role Outputs
+  ProcessPatientDataRoleName:
+    Description: 'Name of the ProcessPatientData IAM Role'
+    Value: !Ref ProcessPatientDataRole
+  AnalyticsProcessingRoleName:
+    Description: 'Name of the AnalyticsProcessing IAM Role'
+    Value: !Ref AnalyticsProcessingRole
+  SendNotificationRoleName:
+    Description: 'Name of the SendNotification IAM Role'
+    Value: !Ref SendNotificationRole
 ```
