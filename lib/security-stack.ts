@@ -4,8 +4,8 @@ import * as kms from 'aws-cdk-lib/aws-kms';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as sns from 'aws-cdk-lib/aws-sns';
 import * as cloudtrail from 'aws-cdk-lib/aws-cloudtrail';
-// import * as guardduty from 'aws-cdk-lib/aws-guardduty';
-// import * as securityhub from 'aws-cdk-lib/aws-securityhub';
+import * as guardduty from 'aws-cdk-lib/aws-guardduty';
+import * as securityhub from 'aws-cdk-lib/aws-securityhub';
 import * as wafv2 from 'aws-cdk-lib/aws-wafv2';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import { Construct } from 'constructs';
@@ -30,6 +30,7 @@ export class SecurityStack extends cdk.NestedStack {
       alias: `${props.environmentSuffix}-security-key`,
       description: `KMS key for ${props.environmentSuffix} environment encryption`,
       enableKeyRotation: true,
+      pendingWindow: cdk.Duration.days(7),
       policy: new iam.PolicyDocument({
         statements: [
           new iam.PolicyStatement({
@@ -145,20 +146,16 @@ export class SecurityStack extends cdk.NestedStack {
       })
     );
 
-    // GuardDuty detector - only create if not exists
-    // Note: In production, you'd check if detector exists first
-    // For demo purposes, we'll comment this out as it already exists
-    // new guardduty.CfnDetector(this, `${props.environmentSuffix}-guardduty`, {
-    //   enable: true,
-    //   findingPublishingFrequency: 'FIFTEEN_MINUTES',
-    // });
+    // GuardDuty detector
+    new guardduty.CfnDetector(this, `${props.environmentSuffix}-guardduty`, {
+      enable: true,
+      findingPublishingFrequency: 'FIFTEEN_MINUTES',
+    });
 
-    // Security Hub - only create if not exists
-    // Note: In production, you'd check if hub exists first
-    // For demo purposes, we'll comment this out as it already exists
-    // new securityhub.CfnHub(this, `${props.environmentSuffix}-security-hub`, {
-    //   enableDefaultStandards: true,
-    // });
+    // Security Hub
+    new securityhub.CfnHub(this, `${props.environmentSuffix}-security-hub`, {
+      enableDefaultStandards: true,
+    });
 
     // Output to indicate GuardDuty and Security Hub should be enabled
     new cdk.CfnOutput(this, 'GuardDutyStatus', {

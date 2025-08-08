@@ -109,17 +109,18 @@ describe('SecurityStack', () => {
     });
 
     test('EC2 role has read-only S3 permissions', () => {
-      template.hasResourceProperties('AWS::IAM::Role', {
-        ManagedPolicyArns: Match.arrayWith([
-          Match.objectLike({
-            'Fn::Join': Match.arrayWith([
-              Match.anyValue(),
-              Match.arrayWith([
-                Match.stringLikeRegexp('.*AmazonS3ReadOnlyAccess'),
-              ]),
-            ]),
-          }),
-        ]),
+      const roles = template.findResources('AWS::IAM::Role');
+      const ec2Roles = Object.values(roles).filter(role => 
+        role.Properties?.RoleName?.includes(`${environmentSuffix}-ec2-role`)
+      );
+      
+      expect(ec2Roles.length).toBeGreaterThan(0);
+      ec2Roles.forEach(role => {
+        const managedPolicies = role.Properties?.ManagedPolicyArns || [];
+        const hasS3ReadOnly = managedPolicies.some((policy: any) => 
+          JSON.stringify(policy).includes('AmazonS3ReadOnlyAccess')
+        );
+        expect(hasS3ReadOnly).toBe(true);
       });
     });
 

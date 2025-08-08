@@ -44,9 +44,13 @@ describe('MonitoringStack', () => {
     });
 
     test('security alarm sends notifications to SNS topic', () => {
-      template.hasResourceProperties('AWS::CloudWatch::Alarm', {
-        AlarmActions: Match.arrayWith([Match.anyValue()]),
-      });
+      const alarms = template.findResources('AWS::CloudWatch::Alarm');
+      const hasAlarmActions = Object.values(alarms).some(alarm => 
+        alarm.Properties?.AlarmActions && 
+        Array.isArray(alarm.Properties.AlarmActions) &&
+        alarm.Properties.AlarmActions.length > 0
+      );
+      expect(hasAlarmActions).toBe(true);
     });
   });
 

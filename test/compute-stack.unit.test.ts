@@ -49,10 +49,14 @@ describe('ComputeStack', () => {
 
   describe('EC2 Configuration', () => {
     test('creates instance profile with correct role', () => {
-      template.hasResourceProperties('AWS::IAM::InstanceProfile', {
-        InstanceProfileName: Match.stringLikeRegexp(`${environmentSuffix}-instance-profile`),
-        Roles: Match.arrayWith([Match.anyValue()]),
-      });
+      const profiles = template.findResources('AWS::IAM::InstanceProfile');
+      const hasInstanceProfile = Object.values(profiles).some(profile => 
+        profile.Properties?.InstanceProfileName?.includes(`${environmentSuffix}-instance-profile`) &&
+        profile.Properties?.Roles && 
+        Array.isArray(profile.Properties.Roles) &&
+        profile.Properties.Roles.length > 0
+      );
+      expect(hasInstanceProfile).toBe(true);
     });
 
     test('creates launch template with encrypted EBS volumes', () => {
@@ -158,9 +162,13 @@ describe('ComputeStack', () => {
     });
 
     test('ALB uses provided security group', () => {
-      template.hasResourceProperties('AWS::ElasticLoadBalancingV2::LoadBalancer', {
-        SecurityGroups: Match.arrayWith([Match.anyValue()]),
-      });
+      const albs = template.findResources('AWS::ElasticLoadBalancingV2::LoadBalancer');
+      const hasSecurityGroups = Object.values(albs).some(alb => 
+        alb.Properties?.SecurityGroups && 
+        Array.isArray(alb.Properties.SecurityGroups) &&
+        alb.Properties.SecurityGroups.length > 0
+      );
+      expect(hasSecurityGroups).toBe(true);
     });
   });
 

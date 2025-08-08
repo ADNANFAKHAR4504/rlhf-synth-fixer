@@ -1,9 +1,9 @@
 {
   "platform": "cdk",
   "language": "ts",
-  "complexity": "hard",
+  "complexity": "medium",
   "turn_type": "single",
-  "po_id": "trainr14",
+  "po_id": "trainr22",
   "team": "synth",
-  "startedAt": "2025-08-07T18:04:56-05:00"
+  "startedAt": "2025-08-07T23:13:11-05:00"
 }
