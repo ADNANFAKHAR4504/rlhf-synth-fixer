@@ -1,5 +1,5 @@
 import * as cdk from 'aws-cdk-lib';
-import { Template, Match } from 'aws-cdk-lib/assertions';
+import { Match, Template } from 'aws-cdk-lib/assertions';
 import { TapStack } from '../lib/tap-stack';
 
 const environmentSuffix = 'test';
@@ -415,28 +415,28 @@ describe('TapStack', () => {
 
     test('creates VPC endpoint for Secrets Manager', () => {
       template.hasResourceProperties('AWS::EC2::VPCEndpoint', {
-        ServiceName: 'com.amazonaws.us-east-1.secretsmanager',
+        ServiceName: { 'Fn::Join': ['', ['com.amazonaws.', { Ref: 'AWS::Region' }, '.secretsmanager']] },
         VpcEndpointType: 'Interface',
       });
     });
 
     test('creates VPC endpoint for EventBridge', () => {
       template.hasResourceProperties('AWS::EC2::VPCEndpoint', {
-        ServiceName: 'com.amazonaws.us-east-1.events',
+        ServiceName: { 'Fn::Join': ['', ['com.amazonaws.', { Ref: 'AWS::Region' }, '.events']] },
         VpcEndpointType: 'Interface',
       });
     });
 
     test('creates VPC endpoint for Step Functions', () => {
       template.hasResourceProperties('AWS::EC2::VPCEndpoint', {
-        ServiceName: 'com.amazonaws.us-east-1.states',
+        ServiceName: { 'Fn::Join': ['', ['com.amazonaws.', { Ref: 'AWS::Region' }, '.states']] },
         VpcEndpointType: 'Interface',
       });
     });
 
     test('creates VPC endpoint for SNS', () => {
       template.hasResourceProperties('AWS::EC2::VPCEndpoint', {
-        ServiceName: 'com.amazonaws.us-east-1.sns',
+        ServiceName: { 'Fn::Join': ['', ['com.amazonaws.', { Ref: 'AWS::Region' }, '.sns']] },
         VpcEndpointType: 'Interface',
       });
     });
