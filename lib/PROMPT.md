@@ -22,7 +22,7 @@ Your Pulumi code should be modular, promoting reuse and consistency across envir
 
 Create a reusable TypeScript class or a function that defines a "Secure S3 Bucket". This component must enforce the following security configurations by default:
 
-1.  **Encryption:** Server-Side Encryption must be enabled using the KMS key.
+1.  **Encryption:** Server-Side Encryption must be enabled using a customer-managed KMS key.
 2.  **Versioning:** Versioning must be enabled to protect against accidental data deletion or modification.
 3.  **Public Access:** All public access must be explicitly blocked.
 4.  **Tagging:** The component must automatically apply the mandatory `Department` and `Project` tags.
@@ -59,7 +59,7 @@ To satisfy the requirement for logging on CloudWatch resources, create the follo
 
 Ensure your generated code explicitly implements every one of these constraints:
 
-* **S3 Encryption:** All S3 buckets use the `AES256` algorithm for encryption at rest.
+* **S3 Encryption:** All S3 buckets use customer-managed KMS keys for encryption at rest.
 * **S3 Versioning:** Versioning is enabled on all S3 buckets.
 * **IAM Role Metadata:** All IAM roles have a defined `path` and a descriptive `purpose` in the description field.
 * **CloudWatch Logging:** An EventBridge rule captures alarm state changes and logs them to a CloudWatch Log Group.
