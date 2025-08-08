@@ -430,7 +430,7 @@ Outputs:
     Description: 'VPC ID for the web application'
     Value: !Ref WebAppVPC
     Export:
-      Name: !Sub '${AWS::StackName}-VPC-ID'
+      Name: !Sub '${AWS::StackName}-VPCId'
   TurnAroundPromptTableName:
     Description: 'Name of the DynamoDB table'
     Value: !Ref TurnAroundPromptTable
