@@ -10,25 +10,19 @@ import {
   ElasticLoadBalancingV2Client,
   DescribeLoadBalancersCommand,
   DescribeListenersCommand,
-  DescribeTargetGroupsCommand,
   DescribeTargetHealthCommand,
 } from '@aws-sdk/client-elastic-load-balancing-v2';
 import {
   AutoScalingClient,
   DescribeAutoScalingGroupsCommand,
 } from '@aws-sdk/client-auto-scaling';
-import {
-  Route53Client,
-  ListResourceRecordSetsCommand,
-  ListHostedZonesByNameCommand,
-} from '@aws-sdk/client-route-53';
+import { Route53Client } from '@aws-sdk/client-route-53';
 import { SNSClient, ListTopicsCommand } from '@aws-sdk/client-sns';
 import {
   BackupClient,
   DescribeBackupVaultCommand,
 } from '@aws-sdk/client-backup';
 import * as fs from 'fs';
-import * as path from 'path';
 
 // --- Test Configuration ---
 
@@ -40,7 +34,6 @@ const REGION = process.env.AWS_REGION || 'us-west-2';
 const ec2Client = new EC2Client({ region: REGION });
 const elbv2Client = new ElasticLoadBalancingV2Client({ region: REGION });
 const asgClient = new AutoScalingClient({ region: REGION });
-const route53Client = new Route53Client({ region: REGION });
 const snsClient = new SNSClient({ region: REGION });
 const backupClient = new BackupClient({ region: REGION });
 
@@ -61,10 +54,8 @@ try {
 const testSuite = Object.keys(outputs).length > 0 ? describe : describe.skip;
 
 testSuite('High-Availability Stack Integration Tests', () => {
-  const applicationUrl = outputs.ApplicationURL;
-  const loadBalancerDns = outputs.LoadBalancerDNSName;
+  const loadBalancerDns = outputs.LoadBalancerDNSName; // Dynamically find resource IDs using tags and outputs
 
-  // Dynamically find resource IDs using tags and outputs
   let vpcId: string;
   let albArn: string;
   let asgName: string;
@@ -80,14 +71,14 @@ testSuite('High-Availability Stack Integration Tests', () => {
     if (!alb || !alb.LoadBalancerArn)
       throw new Error('Could not find deployed Application Load Balancer');
     albArn = alb.LoadBalancerArn;
-    vpcId = alb.VpcId!;
+    vpcId = alb.VpcId!; // Find the ASG name using tags
 
-    // Find the ASG name using tags
     const asgResponse = await asgClient.send(
       new DescribeAutoScalingGroupsCommand({})
     );
+
     const asg = asgResponse.AutoScalingGroups?.find(g =>
-      g.AutoScalingGroupName.startsWith(STACK_NAME)
+      g.AutoScalingGroupName?.startsWith(STACK_NAME)
     );
     if (!asg || !asg.AutoScalingGroupName)
       throw new Error('Could not find deployed Auto Scaling Group');
@@ -119,9 +110,8 @@ testSuite('High-Availability Stack Integration Tests', () => {
       );
 
       expect(publicSubnets).toHaveLength(3);
-      expect(privateSubnets).toHaveLength(3);
+      expect(privateSubnets).toHaveLength(3); // Verify they are in different AZs
 
-      // Verify they are in different AZs
       const publicAzs = new Set(publicSubnets.map(s => s.AvailabilityZone));
       const privateAzs = new Set(privateSubnets.map(s => s.AvailabilityZone));
       expect(publicAzs.size).toBe(3);
