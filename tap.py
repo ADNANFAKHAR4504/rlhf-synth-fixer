@@ -8,7 +8,7 @@ from lib.tap_stack import TapStack
 
 # Get environment variables from the environment or use defaults
 environment_suffix = os.getenv("ENVIRONMENT_SUFFIX", "dev")
-state_bucket_env = os.getenv("TERRAFORM_STATE_BUCKET", "iac-rlhf-tf-291231-states")
+state_bucket_env = os.getenv("TERRAFORM_STATE_BUCKET")
 state_bucket_region = os.getenv("TERRAFORM_STATE_BUCKET_REGION", "us-west-2")
 aws_region = os.getenv("AWS_REGION", "us-west-2")
 repository_name = os.getenv("REPOSITORY", "unknown")
@@ -18,7 +18,7 @@ commit_author = os.getenv("COMMIT_AUTHOR", "unknown")
 if state_bucket_env == "iac-rlhf-tf-states" and state_bucket_region == "us-east-1":
     # CI/CD is trying to use the us-east-1 bucket, but we need to exclude us-east-1
     # Use a different bucket name that exists in the target region
-    state_bucket = f"iac-rlhf-tf-states-{aws_region.replace('-', '')}"
+    state_bucket = f"iac-rlhf-tf-291231-states"
     print(f"Warning: Original bucket 'iac-rlhf-tf-states' is in us-east-1 (excluded region)")
     print(f"Using region-specific bucket: {state_bucket}")
 else:
