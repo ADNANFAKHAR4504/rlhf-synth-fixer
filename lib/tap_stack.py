@@ -499,10 +499,16 @@ phases:
             f"{self.resource_name_prefix}-pipeline",
             name=pipeline_name,
             role_arn=self.pipeline_role.arn,
-            artifact_store=aws.codepipeline.PipelineArtifactStoreArgs(
-                location=self.artifacts_bucket.bucket,
-                type="S3"
-            ),
+            artifact_stores=[
+                aws.codepipeline.PipelineArtifactStoreArgs(
+                    location=self.artifacts_bucket.bucket,
+                    type="S3",
+                    encryption_key=aws.codepipeline.PipelineArtifactStoreEncryptionKeyArgs(
+                        id=self.artifacts_bucket_kms_key.arn,
+                        type="KMS"
+                    )
+                )
+            ],
             stages=[
                 # Source Stage - GitHub via CodeStar Connections
                 aws.codepipeline.PipelineStageArgs(
