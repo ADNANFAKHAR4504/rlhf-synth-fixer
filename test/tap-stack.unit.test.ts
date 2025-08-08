@@ -29,6 +29,7 @@ describe('IaC - Serverless Healthcare App Stack Unit Tests', () => {
       }),
     ]);
 
+    // CORRECTED: Pointing to the correct file path assuming tests are in `test/` and lib is in `lib/`
     const templatePath = path.join(__dirname, '../lib/TapStack.yml');
     const templateContent = fs.readFileSync(templatePath, 'utf8');
     template = yaml.load(templateContent, { schema: cfnSchema });
@@ -46,40 +47,22 @@ describe('IaC - Serverless Healthcare App Stack Unit Tests', () => {
       expect(parameters.ProjectName.AllowedPattern).toBe('^[a-zA-Z0-9]+$');
     });
 
-    test('should define EnvironmentSuffix parameter correctly', () => {
-      expect(parameters.EnvironmentSuffix).toBeDefined();
-      expect(parameters.EnvironmentSuffix.Type).toBe('String');
-      expect(parameters.EnvironmentSuffix.Default).toBe('dev');
-    });
-
-    test('should have exactly two parameters defined', () => {
-      expect(Object.keys(parameters).length).toBe(2);
+    // CORRECTED: The EnvironmentSuffix parameter was removed as per requirements.
+    test('should have exactly one parameter defined', () => {
+      expect(Object.keys(parameters).length).toBe(1);
     });
   });
 
-  // 2. Test Suite for Best Practices
+  // 2. Test Suite for Best Practices & Naming
   describe('✅ Best Practices & Naming', () => {
-    test('should not contain hardcoded custom names for deployable resources', () => {
-      const resourceTypesWithNames = [
-        'AWS::Lambda::Function',
-        'AWS::IAM::Role',
-        'AWS::DynamoDB::Table',
-        'AWS::SQS::Queue',
-        'AWS::SNS::Topic',
-      ];
-
-      for (const key in resources) {
-        if (resourceTypesWithNames.includes(resources[key].Type)) {
-          const props = resources[key].Properties;
-          if (props) {
-            expect(props.RoleName).toBeUndefined();
-            expect(props.FunctionName).toBeUndefined();
-            expect(props.TableName).toBeUndefined();
-            expect(props.QueueName).toBeUndefined();
-            expect(props.TopicName).toBeUndefined();
-          }
-        }
-      }
+    // CORRECTED: The test now validates that resources ARE named according to the requirements.
+    test('should contain required custom names for deployable resources', () => {
+      expect(resources.PatientDataTable.Properties.TableName).toBeDefined();
+      expect(resources.AnalyticsTaskQueue.Properties.QueueName).toBeDefined();
+      expect(resources.PatientUpdatesTopic.Properties.TopicName).toBeDefined();
+      expect(
+        resources.ProcessPatientDataFunction.Properties.FunctionName
+      ).toBeDefined();
     });
 
     test('should have a valid AWSTemplateFormatVersion', () => {
@@ -89,6 +72,7 @@ describe('IaC - Serverless Healthcare App Stack Unit Tests', () => {
 
   // 3. Test Suite for IAM Roles and Least Privilege
   describe('✅ IAM Roles & Least Privilege', () => {
+    // CORRECTED: Validates the more secure logging permissions (no CreateLogGroup).
     test('ProcessPatientDataRole should have correct permissions', () => {
       const role = resources.ProcessPatientDataRole;
       const policy = role.Properties.Policies[0].PolicyDocument;
@@ -96,8 +80,9 @@ describe('IaC - Serverless Healthcare App Stack Unit Tests', () => {
 
       expect(actions).toContain('dynamodb:PutItem');
       expect(actions).toContain('sqs:SendMessage');
-      expect(actions).toContain('logs:CreateLogGroup');
-      expect(actions).toHaveLength(5); // 3 for logs, 1 for DDB, 1 for SQS
+      expect(actions).toContain('logs:PutLogEvents');
+      expect(actions).not.toContain('logs:CreateLogGroup'); // Important security check
+      expect(actions).toHaveLength(4); // 2 for logs, 1 for DDB, 1 for SQS
     });
 
     test('ProcessPatientDataRole should NOT have unintended permissions', () => {
@@ -110,6 +95,7 @@ describe('IaC - Serverless Healthcare App Stack Unit Tests', () => {
       expect(actions).not.toContain('sqs:ReceiveMessage');
     });
 
+    // CORRECTED: Validates the more secure logging permissions.
     test('AnalyticsProcessingRole should have correct permissions', () => {
       const role = resources.AnalyticsProcessingRole;
       const policy = role.Properties.Policies[0].PolicyDocument;
@@ -118,16 +104,17 @@ describe('IaC - Serverless Healthcare App Stack Unit Tests', () => {
       expect(actions).toContain('sqs:ReceiveMessage');
       expect(actions).toContain('sqs:DeleteMessage');
       expect(actions).toContain('sqs:GetQueueAttributes');
-      expect(actions).toHaveLength(6); // 3 for SQS, 3 for logs
+      expect(actions).toHaveLength(5); // 3 for SQS, 2 for logs
     });
 
+    // CORRECTED: Validates the more secure logging permissions.
     test('SendNotificationRole should have correct permissions', () => {
       const role = resources.SendNotificationRole;
       const policy = role.Properties.Policies[0].PolicyDocument;
       const actions = policy.Statement.map((p: any) => p.Action).flat();
 
       expect(actions).toContain('sns:Publish');
-      expect(actions).toHaveLength(4); // 1 for SNS, 3 for logs
+      expect(actions).toHaveLength(3); // 1 for SNS, 2 for logs
     });
 
     test('All IAM roles should have the correct AssumeRolePolicy for Lambda', () => {
@@ -229,9 +216,10 @@ describe('IaC - Serverless Healthcare App Stack Unit Tests', () => {
 
   // 6. Test Suite for Outputs
   describe('✅ Outputs', () => {
-    test('should define all 14 required outputs', () => {
+    // CORRECTED: The number of outputs is now 13 since EnvironmentSuffix was removed.
+    test('should define all 13 required outputs', () => {
       const outputKeys = Object.keys(outputs);
-      expect(outputKeys.length).toBe(14);
+      expect(outputKeys.length).toBe(13);
     });
 
     test('should correctly export key resource identifiers', () => {
