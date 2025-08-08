@@ -11,30 +11,26 @@ import {
   DescribeLoadBalancersCommand,
   DescribeTargetGroupsCommand,
 } from '@aws-sdk/client-elastic-load-balancing-v2';
-import {
-  RDSClient,
-  DescribeDBInstancesCommand,
-} from '@aws-sdk/client-rds';
+import { RDSClient, DescribeDBInstancesCommand } from '@aws-sdk/client-rds';
 import {
   S3Client,
   GetBucketEncryptionCommand,
   GetBucketVersioningCommand,
 } from '@aws-sdk/client-s3';
-import {
-  KMSClient,
-  DescribeKeyCommand,
-} from '@aws-sdk/client-kms';
+import { KMSClient, DescribeKeyCommand } from '@aws-sdk/client-kms';
 import {
   SecretsManagerClient,
   DescribeSecretCommand,
 } from '@aws-sdk/client-secrets-manager';
-import {
-  WAFV2Client,
-  GetWebACLCommand,
-} from '@aws-sdk/client-wafv2';
+import { WAFV2Client, GetWebACLCommand } from '@aws-sdk/client-wafv2';
 
 // Read outputs from deployment
-const outputsPath = path.join(__dirname, '..', 'cfn-outputs', 'flat-outputs.json');
+const outputsPath = path.join(
+  __dirname,
+  '..',
+  'cfn-outputs',
+  'flat-outputs.json'
+);
 let outputs: any = {};
 
 if (fs.existsSync(outputsPath)) {
@@ -93,7 +89,9 @@ describe('MainStack Integration Tests', () => {
       expect(response.Subnets!.length).toBeGreaterThanOrEqual(4);
 
       // Check for multi-AZ deployment
-      const azs = new Set(response.Subnets!.map((subnet) => subnet.AvailabilityZone));
+      const azs = new Set(
+        response.Subnets!.map(subnet => subnet.AvailabilityZone)
+      );
       expect(azs.size).toBeGreaterThanOrEqual(2);
     });
 
@@ -118,17 +116,19 @@ describe('MainStack Integration Tests', () => {
       const securityGroups = response.SecurityGroups!;
 
       // Check for ALB security group with restricted access
-      const albSg = securityGroups.find((sg) =>
+      const albSg = securityGroups.find(sg =>
         sg.GroupName?.includes('AlbSecurityGroup')
       );
       if (albSg) {
         const httpIngress = albSg.IpPermissions?.find(
-          (rule) => rule.FromPort === 80
+          rule => rule.FromPort === 80
         );
         expect(httpIngress).toBeDefined();
-        expect(httpIngress?.IpRanges?.some((range) => 
-          range.CidrIp?.includes('203.0.113.0')
-        )).toBeTruthy();
+        expect(
+          httpIngress?.IpRanges?.some(range =>
+            range.CidrIp?.includes('203.0.113.0')
+          )
+        ).toBeTruthy();
       }
     });
   });
@@ -145,7 +145,7 @@ describe('MainStack Integration Tests', () => {
       );
 
       const alb = response.LoadBalancers?.find(
-        (lb) => lb.DNSName === outputs.LoadBalancerDNS
+        lb => lb.DNSName === outputs.LoadBalancerDNS
       );
 
       expect(alb).toBeDefined();
@@ -160,7 +160,7 @@ describe('MainStack Integration Tests', () => {
       );
 
       const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-      const targetGroups = response.TargetGroups?.filter((tg) =>
+      const targetGroups = response.TargetGroups?.filter(tg =>
         tg.TargetGroupName?.includes(environmentSuffix)
       );
 
@@ -191,7 +191,7 @@ describe('MainStack Integration Tests', () => {
 
       expect(response.DBInstances).toHaveLength(1);
       const db = response.DBInstances![0];
-      
+
       expect(db.DBInstanceStatus).toBe('available');
       expect(db.MultiAZ).toBe(true);
       expect(db.StorageEncrypted).toBe(true);
@@ -215,7 +215,9 @@ describe('MainStack Integration Tests', () => {
           })
         );
 
-        expect(encryptionResponse.ServerSideEncryptionConfiguration).toBeDefined();
+        expect(
+          encryptionResponse.ServerSideEncryptionConfiguration
+        ).toBeDefined();
         expect(
           encryptionResponse.ServerSideEncryptionConfiguration?.Rules
         ).toHaveLength(1);
@@ -264,7 +266,7 @@ describe('MainStack Integration Tests', () => {
 
       // Parse the WebACL ARN format (name|id|scope)
       const [name, id, scope] = outputs.WebAclArn.split('|');
-      
+
       try {
         const response = await wafClient.send(
           new GetWebACLCommand({
@@ -276,23 +278,23 @@ describe('MainStack Integration Tests', () => {
 
         expect(response.WebACL).toBeDefined();
         expect(response.WebACL?.DefaultAction?.Allow).toBeDefined();
-        
+
         // Check for managed rule groups
         const rules = response.WebACL?.Rules || [];
         expect(rules.length).toBeGreaterThan(0);
-        
-        const hasCommonRuleSet = rules.some((rule) =>
-          rule.Name === 'AWSManagedRulesCommonRuleSet'
+
+        const hasCommonRuleSet = rules.some(
+          rule => rule.Name === 'AWSManagedRulesCommonRuleSet'
         );
         expect(hasCommonRuleSet).toBeTruthy();
-        
-        const hasSQLiRuleSet = rules.some((rule) =>
-          rule.Name === 'AWSManagedRulesSQLiRuleSet'
+
+        const hasSQLiRuleSet = rules.some(
+          rule => rule.Name === 'AWSManagedRulesSQLiRuleSet'
         );
         expect(hasSQLiRuleSet).toBeTruthy();
-        
-        const hasRateLimitRule = rules.some((rule) =>
-          rule.Name === 'RateLimitRule'
+
+        const hasRateLimitRule = rules.some(
+          rule => rule.Name === 'RateLimitRule'
         );
         expect(hasRateLimitRule).toBeTruthy();
       } catch (error: any) {
@@ -325,7 +327,7 @@ describe('MainStack Integration Tests', () => {
       );
 
       const azs = new Set(
-        subnetResponse.Subnets?.map((subnet) => subnet.AvailabilityZone)
+        subnetResponse.Subnets?.map(subnet => subnet.AvailabilityZone)
       );
       expect(azs.size).toBeGreaterThanOrEqual(2);
 
@@ -337,7 +339,7 @@ describe('MainStack Integration Tests', () => {
             DBInstanceIdentifier: `tap-${environmentSuffix}-db`,
           })
         );
-        
+
         if (dbResponse.DBInstances && dbResponse.DBInstances.length > 0) {
           expect(dbResponse.DBInstances[0].MultiAZ).toBe(true);
         }
@@ -355,7 +357,7 @@ describe('MainStack Integration Tests', () => {
             DBInstanceIdentifier: `tap-${environmentSuffix}-db`,
           })
         );
-        
+
         if (dbResponse.DBInstances && dbResponse.DBInstances.length > 0) {
           expect(dbResponse.DBInstances[0].StorageEncrypted).toBe(true);
         }
