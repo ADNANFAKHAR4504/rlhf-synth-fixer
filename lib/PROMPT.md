@@ -9,7 +9,9 @@ Output Format: Pulumi + Python
 
 **Here is the task:**
 
-Develop a Python Pulumi program that sets up an AWS infrastructure environment designed for a secure, scalable, and dual-stack (IPv4/IPv6) web application. The solution must meet the following requirements:
+Develop a Python Pulumi program that sets up an AWS infrastructure environment designed for a secure, scalable, and dual-stack (IPv4/IPv6) web application. The primary goal is to make the application accessible via the automatically generated DNS name of the Application Load Balancer. This task does not require you to buy a domain name. 
+
+**The solution must meet the following requirements:**
 
 1) Networking (VPC & Subnets): Define a VPC with both an IPv4 and an Amazon-provided IPv6 CIDR block. The VPC must contain at least two public, dual-stack subnets across different Availability Zones, with an Internet Gateway and appropriate route tables for full internet connectivity.
 
@@ -17,7 +19,7 @@ Develop a Python Pulumi program that sets up an AWS infrastructure environment d
 
 3) Deploy an Application Load Balancer (ALB) configured for dualstack IP address type. It should have an HTTP listener that forwards traffic to a target group containing the EC2 instance.
 
-4) DNS & Routing (Route 53 - Optional): If a domain name is provided via Pulumi config, the program should automatically look up the corresponding Route 53 hosted zone and create A (IPv4) and AAAA (IPv6) alias records pointing to the ALB. If no domain name is provided, this step should be skipped without error.
+4) DNS & Routing (Route 53 - Optional Bonus): As an optional enhancement, if a domain name (for a pre-existing hosted zone) is provided via Pulumi config, the program should create A (IPv4) and AAAA (IPv6) alias records pointing to the ALB. If no domain is provided, this step must be skipped without error.
 
 5) Security (IAM & Security Groups): Enforce least privilege with a dedicated IAM role for the EC2 instance. The ALB's security group must allow inbound port 80 traffic from the internet (0.0.0.0/0 and ::/0), while the EC2 security group must only allow port 80 traffic from the ALB's security group.
 
