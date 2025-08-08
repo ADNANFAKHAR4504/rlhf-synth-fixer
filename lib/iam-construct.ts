@@ -4,6 +4,7 @@ import { Construct } from 'constructs';
 export interface IamConstructProps {
   environment: string;
   commonTags: { [key: string]: string };
+  roleNameSuffix?: string; // already here
 }
 
 export class IamConstruct extends Construct {
@@ -15,8 +16,11 @@ export class IamConstruct extends Construct {
   constructor(scope: Construct, id: string, config: IamConstructProps) {
     super(scope, id);
 
+    // ✅ CHANGED: use suffix if provided, otherwise empty string
+    const suffix = config.roleNameSuffix ? `-${config.roleNameSuffix}` : '';
+
     const ec2Role = new aws.iamRole.IamRole(this, 'Ec2Role', {
-      name: `${config.environment}-ec2-role`,
+      name: `${config.environment}-ec2-role${suffix}`, // ✅ CHANGED
       assumeRolePolicy: JSON.stringify({
         Version: '2012-10-17',
         Statement: [
@@ -34,14 +38,14 @@ export class IamConstruct extends Construct {
       this,
       'Ec2Profile',
       {
-        name: `${config.environment}-ec2-profile`,
+        name: `${config.environment}-ec2-profile${suffix}`, // ✅ CHANGED
         role: ec2Role.name,
         tags: config.commonTags,
       }
     );
 
     new aws.iamRolePolicy.IamRolePolicy(this, 'Ec2Policy', {
-      name: `${config.environment}-ec2-policy`,
+      name: `${config.environment}-ec2-policy${suffix}`, // ✅ CHANGED
       role: ec2Role.id,
       policy: JSON.stringify({
         Version: '2012-10-17',
@@ -70,7 +74,7 @@ export class IamConstruct extends Construct {
     });
 
     const s3ServiceRole = new aws.iamRole.IamRole(this, 'S3ServiceRole', {
-      name: `${config.environment}-s3-service-role`,
+      name: `${config.environment}-s3-service-role${suffix}`, // ✅ CHANGED
       assumeRolePolicy: JSON.stringify({
         Version: '2012-10-17',
         Statement: [
@@ -85,7 +89,7 @@ export class IamConstruct extends Construct {
     });
 
     const cloudwatchRole = new aws.iamRole.IamRole(this, 'CloudWatchRole', {
-      name: `${config.environment}-cloudwatch-role`,
+      name: `${config.environment}-cloudwatch-role${suffix}`, // ✅ CHANGED
       assumeRolePolicy: JSON.stringify({
         Version: '2012-10-17',
         Statement: [

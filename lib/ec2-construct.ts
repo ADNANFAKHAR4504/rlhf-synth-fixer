@@ -11,6 +11,8 @@ export interface Ec2ConstructProps {
   iamInstanceProfile: string;
   allowedCidrBlocks: string[];
   commonTags: { [key: string]: string };
+  logGroupName?: string;
+  resourceSuffix?: string; // ✅ NEW: to ensure SG & EC2 uniqueness
 }
 
 export class Ec2Construct extends Construct {
@@ -21,6 +23,8 @@ export class Ec2Construct extends Construct {
 
   constructor(scope: Construct, id: string, config: Ec2ConstructProps) {
     super(scope, id);
+
+    const suffix = config.resourceSuffix ? `-${config.resourceSuffix}` : '';
 
     const ami = new aws.dataAwsAmi.DataAwsAmi(this, 'AmazonLinuxAmi', {
       mostRecent: true,
@@ -66,7 +70,7 @@ export class Ec2Construct extends Construct {
       ],
       tags: {
         ...config.commonTags,
-        Name: `${config.environment}-ec2-sg`,
+        Name: `${config.environment}-ec2-sg${suffix}`, // ✅ CHANGED
       },
     });
 
@@ -93,13 +97,13 @@ export class Ec2Construct extends Construct {
       },
       tags: {
         ...config.commonTags,
-        Name: `${config.environment}-web-server`,
+        Name: `${config.environment}-web-server${suffix}`, // ✅ CHANGED
         Type: 'WebServer',
       },
     });
 
     new aws.cloudwatchLogGroup.CloudwatchLogGroup(this, 'Ec2LogGroup', {
-      name: `/aws/ec2/${config.environment}`,
+      name: config.logGroupName || `/aws/ec2/${config.environment}${suffix}`, // ✅ CHANGED
       retentionInDays: config.environment === 'production' ? 365 : 30,
       tags: config.commonTags,
     });

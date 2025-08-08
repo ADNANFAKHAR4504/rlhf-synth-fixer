@@ -5,6 +5,7 @@ export interface CloudwatchConstructProps {
   environment: string;
   instanceId: string;
   commonTags: { [key: string]: string };
+  logGroupName?: string; // <-- added so TapStack can inject unique name
 }
 
 export class CloudwatchConstruct extends Construct {
@@ -15,12 +16,14 @@ export class CloudwatchConstruct extends Construct {
     super(scope, id);
 
     const topic = new aws.snsTopic.SnsTopic(this, 'AlertsTopic', {
-      name: `${config.environment}-infrastructure-alerts`,
+      // CHANGED: add suffix-safe name to avoid collisions
+      name: `${config.environment}-infrastructure-alerts-${id}`,
       tags: config.commonTags,
     });
 
     new aws.cloudwatchDashboard.CloudwatchDashboard(this, 'Dashboard', {
-      dashboardName: `${config.environment}-infrastructure-dashboard`,
+      // CHANGED: add suffix to dashboard name
+      dashboardName: `${config.environment}-infrastructure-dashboard-${id}`,
       dashboardBody: JSON.stringify({
         widgets: [
           {
@@ -47,7 +50,7 @@ export class CloudwatchConstruct extends Construct {
     });
 
     new aws.cloudwatchMetricAlarm.CloudwatchMetricAlarm(this, 'HighCpuAlarm', {
-      alarmName: `${config.environment}-high-cpu-utilization`,
+      alarmName: `${config.environment}-high-cpu-utilization-${id}`, // CHANGED
       comparisonOperator: 'GreaterThanThreshold',
       evaluationPeriods: 2,
       metricName: 'CPUUtilization',
@@ -67,7 +70,7 @@ export class CloudwatchConstruct extends Construct {
       this,
       'InstanceHealthAlarm',
       {
-        alarmName: `${config.environment}-instance-health-check`,
+        alarmName: `${config.environment}-instance-health-check-${id}`, // CHANGED
         comparisonOperator: 'GreaterThanThreshold',
         evaluationPeriods: 2,
         metricName: 'StatusCheckFailed',
@@ -85,12 +88,15 @@ export class CloudwatchConstruct extends Construct {
     );
 
     new aws.cloudwatchLogGroup.CloudwatchLogGroup(this, 'AppLogGroup', {
-      name: `/aws/application/${config.environment}`,
+      // CHANGED: use unique log group name from props or fallback to env + id
+      name:
+        config.logGroupName || `/aws/application/${config.environment}-${id}`,
       retentionInDays: config.environment === 'production' ? 365 : 30,
       tags: config.commonTags,
     });
 
-    this.dashboardUrl = `https://console.aws.amazon.com/cloudwatch/home?region=us-west-2#dashboards:name=${config.environment}-infrastructure-dashboard`;
+    // CHANGED: dashboard URL also needs the unique name
+    this.dashboardUrl = `https://console.aws.amazon.com/cloudwatch/home?region=us-west-2#dashboards:name=${config.environment}-infrastructure-dashboard-${id}`;
     this.snsTopicArn = topic.arn;
   }
 }

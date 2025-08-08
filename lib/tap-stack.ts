@@ -1,5 +1,5 @@
 import * as aws from '@cdktf/provider-aws';
-import { TerraformOutput, TerraformStack } from 'cdktf';
+import { Fn, TerraformOutput, TerraformStack } from 'cdktf';
 import { Construct } from 'constructs';
 import { CloudwatchConstruct } from './cloudwatch-construct';
 import { Ec2Construct } from './ec2-construct';
@@ -9,14 +9,18 @@ import { VpcConstruct } from './vpc-construct';
 
 export interface TapStackProps {
   environmentSuffix?: string;
+  awsRegion?: string;
+  // added so bin/tap.ts can pass these without TS errors
   stateBucket?: string;
   stateBucketRegion?: string;
-  awsRegion?: string;
   defaultTags?: {
     tags: {
       Environment?: string;
       Owner?: string;
       Service?: string;
+      // bin passes Repository & CommitAuthor; allow passthrough
+      Repository?: string;
+      CommitAuthor?: string;
     };
   };
 }
@@ -24,30 +28,30 @@ export interface TapStackProps {
 export class TapStack extends TerraformStack {
   constructor(scope: Construct, name: string, props?: TapStackProps) {
     super(scope, name);
-    new aws.provider.AwsProvider(this, 'aws', {
-      region: process.env.AWS_REGION || 'us-west-2',
-    });
+
+    const region = process.env.AWS_REGION || props?.awsRegion || 'us-west-2';
+    new aws.provider.AwsProvider(this, 'aws', { region });
 
     const environment =
       process.env.ENVIRONMENT || props?.environmentSuffix || 'development';
-    const region = process.env.AWS_REGION || props?.awsRegion || 'us-west-2';
+
+    // unique suffix for resources to avoid collisions across PRs/environments
+    const uniqueSuffix = Fn.substr(Fn.sha1(name), 0, 6);
 
     const commonTags = {
       Environment: environment,
       Owner: 'team-infra',
       Service: 'core',
-      CostCenter: '1234',
       ManagedBy: 'Terraform',
       ...props?.defaultTags?.tags,
     };
 
     const azs = [`${region}a`, `${region}b`, `${region}c`];
-    const vpcCidr = '10.0.0.0/16';
 
-    const vpc = new VpcConstruct(this, 'Vpc', {
+    const vpc = new VpcConstruct(this, `Vpc-${uniqueSuffix}`, {
       environment,
       region,
-      vpcCidr,
+      vpcCidr: '10.0.0.0/16',
       azs,
       publicSubnetCidrs: ['10.0.1.0/24', '10.0.2.0/24', '10.0.3.0/24'],
       privateSubnetCidrs: ['10.0.11.0/24', '10.0.12.0/24', '10.0.13.0/24'],
@@ -55,12 +59,13 @@ export class TapStack extends TerraformStack {
       commonTags,
     });
 
-    const iam = new IamConstruct(this, 'Iam', {
+    const iam = new IamConstruct(this, `Iam-${uniqueSuffix}`, {
       environment,
+      roleNameSuffix: uniqueSuffix,
       commonTags,
     });
 
-    const ec2 = new Ec2Construct(this, 'Ec2', {
+    const ec2 = new Ec2Construct(this, `Ec2-${uniqueSuffix}`, {
       environment,
       vpcId: vpc.vpcId,
       subnetId: vpc.publicSubnets[0],
@@ -68,12 +73,15 @@ export class TapStack extends TerraformStack {
       keyName: process.env.EC2_KEY_NAME || '',
       iamInstanceProfile: iam.ec2ProfileName,
       allowedCidrBlocks: ['0.0.0.0/0'],
+      logGroupName: `/aws/ec2/${environment}-${uniqueSuffix}`,
+      resourceSuffix: uniqueSuffix,
       commonTags,
     });
 
-    new S3Construct(this, 'S3', {
+    new S3Construct(this, `S3-${uniqueSuffix}`, {
       environment,
-      bucketName: `${environment}-assets-bucket`,
+      // globally unique bucket name
+      bucketName: `${environment}-assets-${uniqueSuffix}`,
       enableVersioning: true,
       lifecycleRules:
         environment === 'production'
@@ -89,13 +97,13 @@ export class TapStack extends TerraformStack {
       commonTags,
     });
 
-    new CloudwatchConstruct(this, 'Cloudwatch', {
+    new CloudwatchConstruct(this, `Cloudwatch-${uniqueSuffix}`, {
       environment,
       instanceId: ec2.instanceId,
+      logGroupName: `/aws/application/${environment}-${uniqueSuffix}`,
       commonTags,
     });
 
-    // Optionally output important values
     new TerraformOutput(this, 'vpc_id', { value: vpc.vpcId });
     new TerraformOutput(this, 'instance_id', { value: ec2.instanceId });
   }
