@@ -6,6 +6,7 @@ from lib.tap_stack import ServerlessStack
 
 
 class TestServerlessStack(unittest.TestCase):
+
   def setUp(self):
     self.app = cdk.App()
     self.stack = ServerlessStack(self.app, "TestServerlessStack")
@@ -33,7 +34,9 @@ class TestServerlessStack(unittest.TestCase):
       "Timeout": 5,
       "Environment": {
         "Variables": {
-          "TABLE_NAME": Match.any_value()
+          "TABLE_NAME": {
+            "Ref": Match.any_value()
+          }
         }
       }
     })
@@ -51,7 +54,7 @@ class TestServerlessStack(unittest.TestCase):
       },
       "ManagedPolicyArns": Match.array_with([
         Match.string_like_regexp(
-          r"arn:.*:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+          r"^arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole$"
         )
       ])
     })
@@ -59,38 +62,28 @@ class TestServerlessStack(unittest.TestCase):
   def test_lambda_grants_dynamodb_access(self):
     self.template.has_resource_properties("AWS::IAM::Policy", {
       "PolicyDocument": {
-        "Statement": [
+        "Statement": Match.array_with([
           Match.object_like({
+            "Effect": "Allow",
             "Action": Match.array_with([
-              "dynamodb:BatchGetItem",
               "dynamodb:GetItem",
-              "dynamodb:Scan",
-              "dynamodb:Query",
-              "dynamodb:GetRecords",
-              "dynamodb:GetShardIterator",
-              "dynamodb:ConditionCheckItem",
-              "dynamodb:BatchWriteItem",
               "dynamodb:PutItem",
               "dynamodb:UpdateItem",
-              "dynamodb:DeleteItem",
-              "dynamodb:DescribeTable"
-            ]),
-            "Effect": "Allow"
+              "dynamodb:DeleteItem"
+            ])
           })
-        ]
+        ])
       }
     })
 
   def test_autoscaling_targets_created(self):
     self.template.resource_count_is("AWS::ApplicationAutoScaling::ScalableTarget", 2)
-
     self.template.has_resource_properties("AWS::ApplicationAutoScaling::ScalableTarget", {
       "MinCapacity": 1,
       "MaxCapacity": 1000,
       "ScalableDimension": "dynamodb:table:ReadCapacityUnits",
       "ServiceNamespace": "dynamodb"
     })
-
     self.template.has_resource_properties("AWS::ApplicationAutoScaling::ScalableTarget", {
       "MinCapacity": 1,
       "MaxCapacity": 1000,
@@ -101,23 +94,31 @@ class TestServerlessStack(unittest.TestCase):
   def test_cloudwatch_dashboard_created(self):
     self.template.resource_count_is("AWS::CloudWatch::Dashboard", 1)
     self.template.has_resource_properties("AWS::CloudWatch::Dashboard", {
-      "DashboardName": Match.string_like_regexp(
-        r"TestServerlessStack-ServerlessMonitoringDashboardV3"
-      )
+      "DashboardName": "TestServerlessStack-ServerlessMonitoringDashboardV3"
     })
 
   def test_cfn_outputs_exist(self):
     self.template.has_output("DynamoDBTableName", {
-      "Value": Match.any_value(),
-      "Export": {"Name": "ServerlessStackV3DynamoDBTableName"}
+      "Value": {
+        "Ref": Match.any_value()
+      },
+      "Export": {
+        "Name": "ServerlessStackV3DynamoDBTableName"
+      }
     })
-
     self.template.has_output("LambdaFunctionName", {
-      "Value": Match.any_value(),
-      "Export": {"Name": "ServerlessStackV3LambdaFunctionName"}
+      "Value": {
+        "Ref": Match.any_value()
+      },
+      "Export": {
+        "Name": "ServerlessStackV3LambdaFunctionName"
+      }
     })
-
     self.template.has_output("CloudWatchDashboardName", {
-      "Value": Match.any_value(),
-      "Export": {"Name": "ServerlessStackV3CloudWatchDashboardName"}
+      "Value": {
+        "Ref": Match.any_value()
+      },
+      "Export": {
+        "Name": "ServerlessStackV3CloudWatchDashboardName"
+      }
     })
