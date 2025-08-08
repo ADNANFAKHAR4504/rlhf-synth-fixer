@@ -164,4 +164,5 @@ class NetworkingInfrastructure(pulumi.ComponentResource):
 
     # Export key outputs to be used by other components
     self.vpc_id = self.vpc.id
-    self.private_subnet_ids = [self.private_subnet_1.id, self.private_subnet_2.id]
+    # FIX: Convert list of Outputs to a proper Pulumi Output
+    self.private_subnet_ids = pulumi.Output.all(self.private_subnet_1.id, self.private_subnet_2.id)

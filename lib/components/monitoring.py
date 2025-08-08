@@ -15,16 +15,17 @@ class MonitoringInfrastructure(pulumi.ComponentResource):
                name: str,
                instance_ids: pulumi.Output,
                environment: str,
+               region: str,
                tags: Optional[dict] = None,
                opts: Optional[ResourceOptions] = None):
     super().__init__('tap:components:MonitoringInfrastructure', name, None, opts)
 
     # A simple CloudWatch Dashboard for the EC2 instances
-    self.dashboard_name = f"{name}-dashboard"
+    dashboard_name_str = f"{name}-dashboard"
 
     self.dashboard = aws.cloudwatch.Dashboard(
         f"{name}-dashboard",
-        dashboard_name=self.dashboard_name,
+        dashboard_name=dashboard_name_str,
         dashboard_body=instance_ids.apply(lambda ids:
             f"""
             {{
@@ -37,11 +38,11 @@ class MonitoringInfrastructure(pulumi.ComponentResource):
                         "height": 6,
                         "properties": {{
                             "metrics": [
-                                [ "AWS/EC2", "CPUUtilization", "InstanceId", "{ids[0]}" ]
+                                [ "AWS/EC2", "CPUUtilization", "InstanceId", "{ids[0] if ids else 'no-instance'}" ]
                             ],
                             "period": 300,
                             "stat": "Average",
-                            "region": "{opts.provider.region}",
+                            "region": "{region}",
                             "title": "EC2 CPU Utilization"
                         }}
                     }}
@@ -49,25 +50,24 @@ class MonitoringInfrastructure(pulumi.ComponentResource):
             }}
             """ if ids else
             """
-            {
+            {{
                 "widgets": [
-                    {
+                    {{
                         "type": "text",
                         "x": 0,
                         "y": 0,
                         "width": 12,
                         "height": 2,
-                        "properties": {
+                        "properties": {{
                             "markdown": "### No instances found to monitor."
-                        }
-                    }
+                        }}
+                    }}
                 ]
-            }
+            }}
             """
         ),
         opts=ResourceOptions(parent=self)
     )
     
-    # Export key outputs
+    # Export key outputs - FIX: Use the dashboard's actual output, not the string
     self.dashboard_name = self.dashboard.dashboard_name
-
