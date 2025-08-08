@@ -2,6 +2,7 @@
 import os
 
 import pulumi
+import pulumi_aws
 import pulumi_aws.kms as kms
 
 
@@ -11,7 +12,7 @@ class KMSManager:
     def __init__(self, project_name: str, environment: str):
         self.project_name = project_name
         self.environment = environment
-        self.account_id = os.getenv("AWS_ACCOUNT_ID")
+        self.account_id = pulumi_aws.get_caller_identity().account_id
 
     def create_master_key(self) -> kms.Key:
         """Create master KMS key for primary encryption."""

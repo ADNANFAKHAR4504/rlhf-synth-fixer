@@ -18,7 +18,7 @@ class S3Manager:
         self.project_name = project_name
         self.environment = environment
         self.kms_key = kms_key
-        self.account_id = os.getenv('AWS_ACCOUNT_ID')
+        self.account_id = aws.get_caller_identity().account_id
 
     def create_logging_bucket(self) -> aws.s3.BucketV2:
         """Create secure S3 bucket for centralized logging."""

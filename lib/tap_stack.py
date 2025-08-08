@@ -7,6 +7,8 @@ secure AWS infrastructure under the TAP project with enterprise-grade standards.
 It integrates KMS, IAM, S3, Logging, and VPC components using modular design
 from MODEL_RESPONSE.md and adheres strictly to constraints in PROMPT.md.
 """
+import os
+
 import pulumi
 from lib.modules.iam import IAMManager
 from lib.modules.kms import KMSManager
@@ -51,12 +53,12 @@ class TapStack(pulumi.ComponentResource):
             opts: ResourceOptions = None):
         super().__init__('tap:stack:TapStack', name, None, opts)
 
-        self.environment_suffix = args.environment_suffix
+        self.environment_suffix = os.getenv("ENVIRONMENT_SUFFIX")
         self.tags = args.tags
 
         # Project configuration
         project_name = f"aws-nova-model-breaking-{self.environment_suffix}"
-        environment = self.environment_suffix
+        environment = os.getenv("ENVIRONMENT_SUFFIX")
 
         # # Validate required environment variables
         # required_vars = ["AWS_ACCOUNT_ID"]
