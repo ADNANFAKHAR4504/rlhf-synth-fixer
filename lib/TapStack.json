@@ -59,6 +59,12 @@
             "Default": "dev",
             "AllowedPattern": "^[a-z0-9-]+$"
         },
+        "StackVersion": {
+            "Type": "String",
+            "Description": "Stack version suffix to ensure unique stack names (e.g., v1, v2)",
+            "Default": "v1",
+            "AllowedPattern": "^[a-z0-9-]+$"
+        },
         "LogBucketNamePrefix": {
             "Type": "String",
             "Description": "Prefix for the S3 bucket name (will be converted to lowercase)",
@@ -684,7 +690,7 @@
             "Type": "AWS::S3::Bucket",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "${LogBucketNamePrefix}-${EnvironmentSuffix}-logs-${AWS::AccountId}-${AWS::Region}"
+                    "Fn::Sub": "${LogBucketNamePrefix}-${EnvironmentSuffix}-${StackVersion}-logs-${AWS::AccountId}-${AWS::Region}"
                 },
                 "VersioningConfiguration": {
                     "Status": "Enabled"
@@ -887,7 +893,7 @@
             "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
             "Properties": {
                 "Name": {
-                    "Fn::Sub": "${LogBucketNamePrefix}-${EnvironmentSuffix}-alb"
+                    "Fn::Sub": "${LogBucketNamePrefix}-${EnvironmentSuffix}-${StackVersion}-alb"
                 },
                 "Subnets": [
                     {
@@ -954,7 +960,7 @@
             "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
             "Properties": {
                 "Name": {
-                    "Fn::Sub": "${LogBucketNamePrefix}-${EnvironmentSuffix}-tg"
+                    "Fn::Sub": "${LogBucketNamePrefix}-${EnvironmentSuffix}-${StackVersion}-tg"
                 },
                 "Port": 80,
                 "Protocol": "HTTP",

@@ -58,6 +58,7 @@ describe('TapStack CloudFormation Template', () => {
   describe('Parameters', () => {
     const requiredParameters = [
       'EnvironmentSuffix',
+      'StackVersion',
       'LogBucketNamePrefix',
       'VpcCidr',
       'PublicSubnet1Cidr',
@@ -91,6 +92,15 @@ describe('TapStack CloudFormation Template', () => {
       expect(param.Type).toBe('String');
       expect(param.Default).toBe('dev');
       expect(param.Description).toContain('Environment suffix');
+      expect(param.AllowedPattern).toBe('^[a-z0-9-]+$');
+    });
+
+    test('StackVersion parameter should have correct properties', () => {
+      if (skipIfNoTemplate()) return;
+      const param = template.Parameters.StackVersion;
+      expect(param.Type).toBe('String');
+      expect(param.Default).toBe('v1');
+      expect(param.Description).toContain('Stack version suffix');
       expect(param.AllowedPattern).toBe('^[a-z0-9-]+$');
     });
 
@@ -495,7 +505,7 @@ describe('TapStack CloudFormation Template', () => {
     test('should have all required parameters', () => {
       if (skipIfNoTemplate()) return;
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(19); // Exact count of required parameters including EnvironmentSuffix and LogBucketNamePrefix
+      expect(parameterCount).toBe(20); // Exact count of required parameters including EnvironmentSuffix, StackVersion, and LogBucketNamePrefix
     });
 
     test('should have all required outputs', () => {
