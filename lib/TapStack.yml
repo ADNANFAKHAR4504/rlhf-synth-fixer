@@ -368,7 +368,7 @@ Resources:
     Condition: CreateLogBucketCond
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub "${LogBucketNamePrefix}-${EnvironmentSuffix}-alb-logs-${AWS::AccountId}-${AWS::Region}"
+      BucketName: !Sub "${LogBucketNamePrefix}-${EnvironmentSuffix}-logs-${AWS::AccountId}-${AWS::Region}"
       VersioningConfiguration:
         Status: Enabled
       PublicAccessBlockConfiguration:
@@ -378,7 +378,7 @@ Resources:
         IgnorePublicAcls: true
       Tags:
         - Key: Name
-          Value: !Sub "${AWS::StackName}-${EnvironmentSuffix}-alb-logs"
+          Value: !Sub "${AWS::StackName}-${EnvironmentSuffix}-logs"
 
   LogBucketPolicy:
     Condition: CreateLogBucketCond

@@ -684,7 +684,7 @@
             "Type": "AWS::S3::Bucket",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "${LogBucketNamePrefix}-${EnvironmentSuffix}-alb-logs-${AWS::AccountId}-${AWS::Region}"
+                    "Fn::Sub": "${LogBucketNamePrefix}-${EnvironmentSuffix}-logs-${AWS::AccountId}-${AWS::Region}"
                 },
                 "VersioningConfiguration": {
                     "Status": "Enabled"
@@ -699,7 +699,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-alb-logs"
+                            "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-logs"
                         }
                     }
                 ]

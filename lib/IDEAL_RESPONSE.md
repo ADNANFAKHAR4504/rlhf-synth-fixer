@@ -3,7 +3,7 @@
 This CloudFormation template creates a scalable, secure, and highly available web service infrastructure on AWS that fully meets all specified requirements. The solution implements comprehensive best practices for production deployments including proper resource isolation, security hardening, and full parameterization for deployment flexibility.
 
 ```yaml
-AWSTemplateFormatVersion: "2010-09-09"
+AAWSTemplateFormatVersion: "2010-09-09"
 Description: >
   TapStack - VPC-based, multi-AZ secure web service.
   Creates VPC (10.0.0.0/16), 2 public & 2 private subnets across 2 AZs,
@@ -373,7 +373,7 @@ Resources:
     Condition: CreateLogBucketCond
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub "${LogBucketNamePrefix}-${EnvironmentSuffix}-alb-logs-${AWS::AccountId}-${AWS::Region}"
+      BucketName: !Sub "${LogBucketNamePrefix}-${EnvironmentSuffix}-logs-${AWS::AccountId}-${AWS::Region}"
       VersioningConfiguration:
         Status: Enabled
       PublicAccessBlockConfiguration:
@@ -383,7 +383,7 @@ Resources:
         IgnorePublicAcls: true
       Tags:
         - Key: Name
-          Value: !Sub "${AWS::StackName}-${EnvironmentSuffix}-alb-logs"
+          Value: !Sub "${AWS::StackName}-${EnvironmentSuffix}-logs"
 
   LogBucketPolicy:
     Condition: CreateLogBucketCond
