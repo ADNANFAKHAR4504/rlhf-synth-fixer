@@ -3,7 +3,7 @@
 This is the ideal implementation of a production-ready, scalable web application infrastructure using Pulumi with Python. The solution demonstrates AWS best practices, proper architecture, comprehensive testing, and maintainable code structure.
 
 ## Project Architecture Overview
-
+##additional comment
 The implementation creates a highly available, scalable web application infrastructure including:
 - **Auto Scaling Group** with EC2 instances running Amazon Linux 2
 - **Application Load Balancer** for traffic distribution
