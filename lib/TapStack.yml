@@ -28,6 +28,9 @@ Mappings:
     us-east-1:
       # Amazon Linux 2023 AMI ID - Updated regularly
       AMI: 'ami-0c02fb55956c7d316'
+    us-west-2:
+      # Amazon Linux 2023 AMI ID for us-west-2
+      AMI: 'ami-0aff18ec83b712f05'
 
 Resources:
   # ========================================
@@ -85,7 +88,7 @@ Resources:
   ApplicationDataBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 'financialapp-${Environment}-app-data-${AWS::AccountId}'
+      # BucketName removed - CloudFormation will auto-generate unique name
       # Enable versioning for data integrity and protection against accidental deletions
       VersioningConfiguration:
         Status: Enabled
@@ -125,7 +128,7 @@ Resources:
   CloudTrailLogsBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 'financialapp-${Environment}-cloudtrail-logs-${AWS::AccountId}'
+      # BucketName removed - CloudFormation will auto-generate unique name
       # Enable versioning for audit trail integrity
       VersioningConfiguration:
         Status: Enabled
@@ -499,7 +502,7 @@ Resources:
       DBInstanceIdentifier: !Sub '${ApplicationName}-${Environment}-database'
       DBInstanceClass: 'db.t3.micro'
       Engine: mysql
-      EngineVersion: '8.0.35'
+      EngineVersion: '8.4.5'
       AllocatedStorage: 20
       StorageType: gp2
       StorageEncrypted: true
@@ -523,7 +526,6 @@ Resources:
       EnableCloudwatchLogsExports:
         - error
         - general
-        - slow-query
       # Performance and availability
       MultiAZ: false # Set to true for production high availability
       AutoMinorVersionUpgrade: true
@@ -551,14 +553,10 @@ Resources:
       IsMultiRegionTrail: true
       IncludeGlobalServiceEvents: true
       IsLogging: true
-      # Enable data events for S3 buckets
+      # Enable management events only (data events removed to avoid bucket reference issues)
       EventSelectors:
         - ReadWriteType: All
           IncludeManagementEvents: true
-          DataResources:
-            - Type: 'AWS::S3::Object'
-              Values:
-                - !Sub '${ApplicationDataBucket}/*'
       # Note: InsightSelectors removed for compatibility
       Tags:
         - Key: Name

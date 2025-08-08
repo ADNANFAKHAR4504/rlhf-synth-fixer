@@ -364,8 +364,8 @@ describe('Financial Services CloudFormation Template', () => {
       simpleEqual(db.Properties.Engine, 'mysql', 'Should use MySQL engine');
       simpleEqual(
         db.Properties.EngineVersion,
-        '8.0.35',
-        'Should use MySQL 8.0.35'
+        '8.4.5',
+        'Should use MySQL 8.4.5'
       );
     });
 

@@ -34,6 +34,9 @@
         "RegionMap": {
             "us-east-1": {
                 "AMI": "ami-0c02fb55956c7d316"
+            },
+            "us-west-2": {
+                "AMI": "ami-0aff18ec83b712f05"
             }
         }
     },
@@ -116,9 +119,6 @@
         "ApplicationDataBucket": {
             "Type": "AWS::S3::Bucket",
             "Properties": {
-                "BucketName": {
-                    "Fn::Sub": "financialapp-${Environment}-app-data-${AWS::AccountId}"
-                },
                 "VersioningConfiguration": {
                     "Status": "Enabled"
                 },
@@ -182,9 +182,6 @@
         "CloudTrailLogsBucket": {
             "Type": "AWS::S3::Bucket",
             "Properties": {
-                "BucketName": {
-                    "Fn::Sub": "financialapp-${Environment}-cloudtrail-logs-${AWS::AccountId}"
-                },
                 "VersioningConfiguration": {
                     "Status": "Enabled"
                 },
@@ -756,7 +753,7 @@
                 },
                 "DBInstanceClass": "db.t3.micro",
                 "Engine": "mysql",
-                "EngineVersion": "8.0.35",
+                "EngineVersion": "8.4.5",
                 "AllocatedStorage": 20,
                 "StorageType": "gp2",
                 "StorageEncrypted": true,
@@ -783,8 +780,7 @@
                 "MonitoringInterval": 0,
                 "EnableCloudwatchLogsExports": [
                     "error",
-                    "general",
-                    "slow-query"
+                    "general"
                 ],
                 "MultiAZ": false,
                 "AutoMinorVersionUpgrade": true,
@@ -826,17 +822,7 @@
                 "EventSelectors": [
                     {
                         "ReadWriteType": "All",
-                        "IncludeManagementEvents": true,
-                        "DataResources": [
-                            {
-                                "Type": "AWS::S3::Object",
-                                "Values": [
-                                    {
-                                        "Fn::Sub": "${ApplicationDataBucket}/*"
-                                    }
-                                ]
-                            }
-                        ]
+                        "IncludeManagementEvents": true
                     }
                 ],
                 "Tags": [
