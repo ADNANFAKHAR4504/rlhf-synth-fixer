@@ -37,30 +37,54 @@ describe('TapStack Live Infrastructure Integration Tests', () => {
       region: process.env.AWS_REGION || 'us-east-1'
     };
 
-    // Load outputs from tapstack.json as fallback
+    // Load outputs from cfn-outputs/flat-outputs.json first
     try {
-      const outputsPath = path.join(__dirname, '../tapstack.json');
+      const outputsPath = path.join(__dirname, '../cfn-outputs/flat-outputs.json');
       const outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf8'));
       
       // Map outputs to test configuration if environment variables are not set
       if (!testConfig.vpcId && outputs.VpcId) {
         testConfig.vpcId = outputs.VpcId;
-        console.log('Loaded VpcId from tapstack.json');
+        console.log('Loaded VpcId from cfn-outputs/flat-outputs.json');
       }
       if (!testConfig.albDnsName && outputs.ALBDNSName) {
         testConfig.albDnsName = outputs.ALBDNSName;
-        console.log('Loaded ALBDNSName from tapstack.json');
+        console.log('Loaded ALBDNSName from cfn-outputs/flat-outputs.json');
       }
       if (!testConfig.asgName && outputs.ASGName) {
         testConfig.asgName = outputs.ASGName;
-        console.log('Loaded ASGName from tapstack.json');
+        console.log('Loaded ASGName from cfn-outputs/flat-outputs.json');
       }
       if (!testConfig.logBucketName && outputs.LogBucketOutput) {
         testConfig.logBucketName = outputs.LogBucketOutput;
-        console.log('Loaded LogBucketOutput from tapstack.json');
+        console.log('Loaded LogBucketOutput from cfn-outputs/flat-outputs.json');
       }
     } catch (error) {
-      console.warn('No tapstack.json found, using environment variables for testing');
+      // Try loading from tapstack.json as fallback
+      try {
+        const outputsPath = path.join(__dirname, '../tapstack.json');
+        const outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf8'));
+        
+        // Map outputs to test configuration if environment variables are not set
+        if (!testConfig.vpcId && outputs.VpcId) {
+          testConfig.vpcId = outputs.VpcId;
+          console.log('Loaded VpcId from tapstack.json');
+        }
+        if (!testConfig.albDnsName && outputs.ALBDNSName) {
+          testConfig.albDnsName = outputs.ALBDNSName;
+          console.log('Loaded ALBDNSName from tapstack.json');
+        }
+        if (!testConfig.asgName && outputs.ASGName) {
+          testConfig.asgName = outputs.ASGName;
+          console.log('Loaded ASGName from tapstack.json');
+        }
+        if (!testConfig.logBucketName && outputs.LogBucketOutput) {
+          testConfig.logBucketName = outputs.LogBucketOutput;
+          console.log('Loaded LogBucketOutput from tapstack.json');
+        }
+      } catch (err) {
+        console.warn('No outputs found, using environment variables for testing');
+      }
     }
   });
 
