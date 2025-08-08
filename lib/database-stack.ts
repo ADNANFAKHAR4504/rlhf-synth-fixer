@@ -1,6 +1,6 @@
 import * as cdk from 'aws-cdk-lib';
-import * as rds from 'aws-cdk-lib/aws-rds';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
+import * as rds from 'aws-cdk-lib/aws-rds';
 import { Construct } from 'constructs';
 
 interface DatabaseStackProps extends cdk.StackProps {
@@ -41,7 +41,7 @@ export class DatabaseStack extends cdk.NestedStack {
         instanceProps: {
           instanceType: ec2.InstanceType.of(
             ec2.InstanceClass.T3,
-            ec2.InstanceSize.MICRO
+            ec2.InstanceSize.MEDIUM
           ),
           vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_ISOLATED },
           vpc: props.vpc,
