@@ -19,18 +19,20 @@ class ComputeInfrastructure(pulumi.ComponentResource):
                private_subnet_ids: pulumi.Output,
                security_group_id: pulumi.Output,
                environment: str,
+               region: str,
                tags: Optional[dict] = None,
                opts: Optional[ResourceOptions] = None):
     super().__init__('tap:components:ComputeInfrastructure', name, None, opts)
 
-    # Get the latest Amazon Linux 2 AMI
+    # Get the latest Amazon Linux 2 AMI for the specific region
     ami = aws.ec2.get_ami(
         most_recent=True,
         owners=["amazon"],
         filters=[
             {"name": "name", "values": ["amzn2-ami-hvm-*-x86_64-gp2"]},
             {"name": "state", "values": ["available"]}
-        ]
+        ],
+        opts=ResourceOptions(provider=opts.provider if opts and opts.provider else None)
     )
     ami_id = ami.id
     instance_type = "t3.micro"

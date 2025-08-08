@@ -102,6 +102,7 @@ class TapStack(pulumi.ComponentResource):
       self.regional_compute[region] = ComputeInfrastructure(
         name=f"compute-{region_suffix}-{self.environment_suffix}",
         vpc_id=self.regional_networks[region].vpc_id,
+        region=region,
         private_subnet_ids=self.regional_networks[region].private_subnet_ids,
         security_group_id=self.regional_security[region].web_server_sg_id, # Assumed output
         environment=self.environment_suffix,
