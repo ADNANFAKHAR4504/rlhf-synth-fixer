@@ -96,7 +96,8 @@ Parameters:
     Description: CIDR allowed to access the ALB (set to admin IP range for production)
   ACMCertificateArn:
     Type: String
-    Description: ARN of an existing ACM certificate for HTTPS (must be provided)
+    Default: ""
+    Description: ARN of an existing ACM certificate for HTTPS (optional - leave empty for HTTP only)
   LogBucketName:
     Type: String
     Default: ""
@@ -125,6 +126,7 @@ Conditions:
   CreateSSMEndpointCond: !Equals [!Ref CreateSSMEndpoint, "true"]
   CreateCWEndpointCond: !Equals [!Ref CreateCWEndpoint, "true"]
   UseKeyName: !Not [!Equals [!Ref KeyName, ""]]
+  UseHttps: !Not [!Equals [!Ref ACMCertificateArn, ""]]
 
 Resources:
   ## Networking
@@ -507,6 +509,7 @@ Resources:
 
   ALBListenerHTTPS:
     Type: AWS::ElasticLoadBalancingV2::Listener
+    Condition: UseHttps
     Properties:
       Certificates:
         - CertificateArn: !Ref ACMCertificateArn

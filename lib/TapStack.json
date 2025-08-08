@@ -115,7 +115,8 @@
         },
         "ACMCertificateArn": {
             "Type": "String",
-            "Description": "ARN of an existing ACM certificate for HTTPS (must be provided)"
+            "Default": "",
+            "Description": "ARN of an existing ACM certificate for HTTPS (optional - leave empty for HTTP only)"
         },
         "LogBucketName": {
             "Type": "String",
@@ -193,6 +194,18 @@
                     "Fn::Equals": [
                         {
                             "Ref": "KeyName"
+                        },
+                        ""
+                    ]
+                }
+            ]
+        },
+        "UseHttps": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "ACMCertificateArn"
                         },
                         ""
                     ]
@@ -943,6 +956,7 @@
         },
         "ALBListenerHTTPS": {
             "Type": "AWS::ElasticLoadBalancingV2::Listener",
+            "Condition": "UseHttps",
             "Properties": {
                 "Certificates": [
                     {
