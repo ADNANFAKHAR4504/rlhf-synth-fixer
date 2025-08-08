@@ -95,7 +95,6 @@ class TestTapStack(unittest.TestCase):
 
     # ASSERT
     template.resource_count_is("AWS::Config::ConfigRule", 1)
-    template.resource_count_is("AWS::Config::ConfigurationRecorder", 1)
     template.resource_count_is("AWS::Config::DeliveryChannel", 1)
 
   @mark.it("creates an RDS instance with encryption and in private subnets")

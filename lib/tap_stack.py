@@ -288,15 +288,6 @@ class TapStack(Stack):
       )
     )
 
-    # 8. AWS Config Recorder and Delivery Channel
-    config_recorder = config.CfnConfigurationRecorder(
-      self, "ConfigRecorder",
-      role_arn=config_role.role_arn,
-      recording_group=config.CfnConfigurationRecorder.RecordingGroupProperty(
-        all_supported=True,
-        include_global_resource_types=True
-      )
-    )
     delivery_channel = config.CfnDeliveryChannel(
       self, "ConfigDeliveryChannel",
       s3_bucket_name=config_bucket.bucket_name
@@ -308,8 +299,7 @@ class TapStack(Stack):
       identifier=config.ManagedRuleIdentifiers.S3_BUCKET_PUBLIC_READ_PROHIBITED
     )
 
-    # Ensure the rule is created after the recorder and delivery channel
-    config_rule.node.add_dependency(config_recorder)
+    # Ensure the rule is created after the delivery channel (remove recorder dependency)
     config_rule.node.add_dependency(delivery_channel)
 
     # 10. Security Group with restricted SSH
