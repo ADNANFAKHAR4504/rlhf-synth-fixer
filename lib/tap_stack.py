@@ -288,19 +288,11 @@ class TapStack(Stack):
       )
     )
 
-    delivery_channel = config.CfnDeliveryChannel(
-      self, "ConfigDeliveryChannel",
-      s3_bucket_name=config_bucket.bucket_name
-    )
-
     # 9. AWS Config Managed Rules (example: S3 public access prohibited)
     config_rule = config.ManagedRule(
       self, "S3BucketPublicAccessProhibited",
       identifier=config.ManagedRuleIdentifiers.S3_BUCKET_PUBLIC_READ_PROHIBITED
     )
-
-    # Ensure the rule is created after the delivery channel (remove recorder dependency)
-    config_rule.node.add_dependency(delivery_channel)
 
     # 10. Security Group with restricted SSH
     secure_sg = ec2.SecurityGroup(
