@@ -46,7 +46,7 @@ function simpleEqual(actual: any, expected: any, message: string) {
   }
 }
 
-const region = process.env.AWS_REGION || 'us-west-2';
+const region = process.env.AWS_REGION || 'us-east-2';
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 const stackName = `TapStack${environmentSuffix}`;
 
