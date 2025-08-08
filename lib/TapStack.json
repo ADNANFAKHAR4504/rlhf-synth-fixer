@@ -936,13 +936,6 @@
                   "AppLogsBucket",
                   "Arn"
                 ]
-              },
-              "Condition": {
-                "StringEquals": {
-                  "aws:SourceArn": {
-                    "Fn::Sub": "arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${AWS::StackName}-cloudtrail-${EnvironmentSuffix}"
-                  }
-                }
               }
             },
             {
@@ -957,10 +950,7 @@
               },
               "Condition": {
                 "StringEquals": {
-                  "s3:x-amz-acl": "bucket-owner-full-control",
-                  "aws:SourceArn": {
-                    "Fn::Sub": "arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${AWS::StackName}-cloudtrail-${EnvironmentSuffix}"
-                  }
+                  "s3:x-amz-acl": "bucket-owner-full-control"
                 }
               }
             }
@@ -1512,6 +1502,9 @@
     },
     "CloudTrail": {
       "Type": "AWS::CloudTrail::Trail",
+      "DependsOn": [
+        "AppLogsBucketPolicy"
+      ],
       "Properties": {
         "TrailName": {
           "Fn::Sub": "${AWS::StackName}-cloudtrail-${EnvironmentSuffix}"
