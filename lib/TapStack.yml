@@ -293,7 +293,6 @@ Resources:
   ALBTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      Name: WebApp-TG
       VpcId: !Ref VPC
       Protocol: HTTP
       Port: 80
@@ -324,7 +323,6 @@ Resources:
     Properties:
       Description: 'Credentials for the WebApp RDS Database'
       GenerateSecretString:
-        # FIX: Ensure DBMasterUsername parameter is used here
         SecretStringTemplate: !Sub '{"username": "${DBMasterUsername}"}'
         GenerateStringKey: 'password'
         PasswordLength: 16
@@ -356,7 +354,6 @@ Resources:
       EngineVersion: '16.3'
       DBInstanceClass: db.t3.micro
       AllocatedStorage: '20'
-      # FIX: Ensure DBMasterUsername parameter is used here
       MasterUsername: !Ref DBMasterUsername
       MasterUserPassword:
         !Join [
@@ -424,6 +421,7 @@ Resources:
   LambdaDynamoDBPolicy:
     Type: AWS::IAM::Policy
     Properties:
+      PolicyName: !Sub '${AWS::StackName}-DynamoDBReadPolicy'
       PolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -431,7 +429,6 @@ Resources:
             Action:
               - dynamodb:GetItem
               - dynamodb:Scan
-            # FIX: Ensure DynamoDBTableArnParameter is used here
             Resource: !Ref DynamoDBTableArnParameter
       Roles:
         - !Ref LambdaExecutionRole
@@ -443,7 +440,6 @@ Resources:
       Role: !GetAtt LambdaExecutionRole.Arn
       PackageType: Image
       Code:
-        # FIX: Ensure ECRImageUriParameter is used here
         ImageUri: !Ref ECRImageUriParameter
       VpcConfig:
         SecurityGroupIds:
