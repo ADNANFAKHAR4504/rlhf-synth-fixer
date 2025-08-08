@@ -3,431 +3,207 @@ import {
   DescribeStackResourcesCommand,
   DescribeStacksCommand,
 } from '@aws-sdk/client-cloudformation';
-import {
-  CloudTrailClient,
-  DescribeTrailsCommand,
-  GetTrailStatusCommand,
-} from '@aws-sdk/client-cloudtrail';
-import {
-  CloudWatchClient,
-  DescribeAlarmsCommand,
-} from '@aws-sdk/client-cloudwatch';
-import {
-  DescribeInstancesCommand,
-  DescribeSecurityGroupsCommand,
-  DescribeSubnetsCommand,
-  DescribeVpcsCommand,
-  EC2Client,
-} from '@aws-sdk/client-ec2';
-import {
-  DescribeKeyCommand,
-  GetKeyRotationStatusCommand,
-  KMSClient,
-} from '@aws-sdk/client-kms';
-import {
-  DescribeDBInstancesCommand,
-  DescribeDBSubnetGroupsCommand,
-  RDSClient,
-} from '@aws-sdk/client-rds';
-import {
-  GetBucketEncryptionCommand,
-  GetBucketVersioningCommand,
-  GetPublicAccessBlockCommand,
-  S3Client,
-} from '@aws-sdk/client-s3';
+import { DescribeTableCommand, DynamoDBClient } from '@aws-sdk/client-dynamodb';
 
 const region = process.env.AWS_REGION || 'us-east-1';
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 const stackName = `TapStack${environmentSuffix}`;
 
 const cfnClient = new CloudFormationClient({ region });
-const ec2Client = new EC2Client({ region });
-const rdsClient = new RDSClient({ region });
-const s3Client = new S3Client({ region });
-const kmsClient = new KMSClient({ region });
-const cloudTrailClient = new CloudTrailClient({ region });
-const cloudWatchClient = new CloudWatchClient({ region });
+const dynamoClient = new DynamoDBClient({ region });
 
-describe('Financial Services Infrastructure Integration Tests', () => {
-  let stackOutputs: Record<string, string> = {};
+describe('TAP Stack Infrastructure Integration Tests', () => {
+  let stackOutputs: any = {};
   let stackResources: any[] = [];
 
   beforeAll(async () => {
     try {
-      // Get stack outputs
-      const stackCommand = new DescribeStacksCommand({
-        StackName: stackName,
-      });
-      const stackResponse = await cfnClient.send(stackCommand);
-      const stack = stackResponse.Stacks?.[0];
+      // Get stack information
+      const stackResponse = await cfnClient.send(
+        new DescribeStacksCommand({ StackName: stackName })
+      );
 
-      if (stack?.Outputs) {
-        stackOutputs = stack.Outputs.reduce(
-          (acc, output) => {
+      if (stackResponse.Stacks && stackResponse.Stacks[0]) {
+        stackOutputs =
+          stackResponse.Stacks[0].Outputs?.reduce((acc, output) => {
             if (output.OutputKey && output.OutputValue) {
               acc[output.OutputKey] = output.OutputValue;
             }
             return acc;
-          },
-          {} as Record<string, string>
-        );
+          }, {} as any) || {};
       }
 
       // Get stack resources
-      const resourcesCommand = new DescribeStackResourcesCommand({
-        StackName: stackName,
-      });
-      const resourcesResponse = await cfnClient.send(resourcesCommand);
+      const resourcesResponse = await cfnClient.send(
+        new DescribeStackResourcesCommand({ StackName: stackName })
+      );
       stackResources = resourcesResponse.StackResources || [];
     } catch (error) {
       console.error('Failed to get stack information:', error);
-      throw new Error(`Stack ${stackName} not found or not accessible`);
+      throw new Error(
+        `Stack ${stackName} not found or not accessible. Please deploy the stack first using: npm run cfn:deploy-yaml`
+      );
     }
   }, 30000);
 
   describe('Stack Deployment', () => {
-    test('should have deployed stack successfully', async () => {
-      expect(stackOutputs).toBeDefined();
-      expect(Object.keys(stackOutputs).length).toBeGreaterThan(0);
+    test('should have deployed stack successfully', () => {
+      expect(stackResources.length).toBeGreaterThan(0);
     });
 
-    test('should have all expected outputs', async () => {
+    test('should have all expected outputs', () => {
       const expectedOutputs = [
-        'KMSKeyArn',
-        'ApplicationDataBucketName',
-        'CloudTrailLogsBucketName',
-        'SecurityGroupId',
-        'VPCId',
-        'EC2InstanceId',
-        'DatabaseEndpoint',
-        'CloudTrailArn',
+        'TurnAroundPromptTableName',
+        'TurnAroundPromptTableArn',
+        'StackName',
+        'EnvironmentSuffix',
       ];
 
-      expectedOutputs.forEach(outputName => {
-        expect(stackOutputs[outputName]).toBeDefined();
+      expectedOutputs.forEach(outputKey => {
+        expect(stackOutputs[outputKey]).toBeDefined();
+      });
+    });
+
+    test('should have correct environment suffix in outputs', () => {
+      expect(stackOutputs.EnvironmentSuffix).toBe(environmentSuffix);
+      expect(stackOutputs.StackName).toBe(stackName);
+    });
+  });
+
+  describe('DynamoDB Table', () => {
+    test('should have TurnAroundPromptTable deployed', () => {
+      const tableResource = stackResources.find(
+        resource => resource.ResourceType === 'AWS::DynamoDB::Table'
+      );
+      expect(tableResource).toBeDefined();
+      expect(tableResource?.LogicalResourceId).toBe('TurnAroundPromptTable');
+    });
+
+    test('should have correct table name with environment suffix', async () => {
+      const expectedTableName = `TurnAroundPromptTable${environmentSuffix}`;
+      expect(stackOutputs.TurnAroundPromptTableName).toBe(expectedTableName);
+
+      // Verify table exists in DynamoDB
+      const tableResponse = await dynamoClient.send(
+        new DescribeTableCommand({ TableName: expectedTableName })
+      );
+
+      expect(tableResponse.Table).toBeDefined();
+      expect(tableResponse.Table?.TableName).toBe(expectedTableName);
+    });
+
+    test('should have correct table configuration', async () => {
+      const tableName = stackOutputs.TurnAroundPromptTableName;
+      const tableResponse = await dynamoClient.send(
+        new DescribeTableCommand({ TableName: tableName })
+      );
+
+      const table = tableResponse.Table;
+      expect(table).toBeDefined();
+
+      // Check billing mode
+      expect(table?.BillingModeSummary?.BillingMode).toBe('PAY_PER_REQUEST');
+
+      // Check key schema
+      expect(table?.KeySchema).toHaveLength(1);
+      expect(table?.KeySchema?.[0].AttributeName).toBe('id');
+      expect(table?.KeySchema?.[0].KeyType).toBe('HASH');
+
+      // Check attribute definitions
+      expect(table?.AttributeDefinitions).toHaveLength(1);
+      expect(table?.AttributeDefinitions?.[0].AttributeName).toBe('id');
+      expect(table?.AttributeDefinitions?.[0].AttributeType).toBe('S');
+    });
+
+    test('should have deletion protection disabled', async () => {
+      const tableName = stackOutputs.TurnAroundPromptTableName;
+      const tableResponse = await dynamoClient.send(
+        new DescribeTableCommand({ TableName: tableName })
+      );
+
+      expect(tableResponse.Table?.DeletionProtectionEnabled).toBe(false);
+    });
+
+    test('should have correct table status', async () => {
+      const tableName = stackOutputs.TurnAroundPromptTableName;
+      const tableResponse = await dynamoClient.send(
+        new DescribeTableCommand({ TableName: tableName })
+      );
+
+      expect(tableResponse.Table?.TableStatus).toBe('ACTIVE');
+    });
+  });
+
+  describe('Stack Outputs Validation', () => {
+    test('should have valid table ARN output', () => {
+      const tableArn = stackOutputs.TurnAroundPromptTableArn;
+      expect(tableArn).toBeDefined();
+      expect(tableArn).toMatch(/^arn:aws:dynamodb:/);
+      expect(tableArn).toContain(`TurnAroundPromptTable${environmentSuffix}`);
+    });
+
+    test('should have exports for all outputs', async () => {
+      const stackResponse = await cfnClient.send(
+        new DescribeStacksCommand({ StackName: stackName })
+      );
+
+      const outputs = stackResponse.Stacks?.[0].Outputs || [];
+
+      outputs.forEach(output => {
+        expect(output.ExportName).toBeDefined();
+        expect(output.ExportName).toContain(stackName);
       });
     });
   });
 
-  describe('KMS Encryption', () => {
-    test('should have KMS key with rotation enabled', async () => {
-      const keyArn = stackOutputs.KMSKeyArn;
-      expect(keyArn).toBeDefined();
-
-      const keyId = keyArn.split('/')[1];
-
-      const describeCommand = new DescribeKeyCommand({ KeyId: keyId });
-      const keyResponse = await kmsClient.send(describeCommand);
-      expect(keyResponse.KeyMetadata?.KeyState).toBe('Enabled');
-
-      const rotationCommand = new GetKeyRotationStatusCommand({ KeyId: keyId });
-      const rotationResponse = await kmsClient.send(rotationCommand);
-      expect(rotationResponse.KeyRotationEnabled).toBe(true);
-    }, 10000);
-  });
-
-  describe('S3 Security Configuration', () => {
-    test('should have application data bucket with encryption', async () => {
-      const bucketName = stackOutputs.ApplicationDataBucketName;
-      expect(bucketName).toBeDefined();
-
-      const encryptionCommand = new GetBucketEncryptionCommand({
-        Bucket: bucketName,
-      });
-      const encryptionResponse = await s3Client.send(encryptionCommand);
-      expect(
-        encryptionResponse.ServerSideEncryptionConfiguration
-      ).toBeDefined();
-    }, 10000);
-
-    test('should have buckets with versioning enabled', async () => {
-      const bucketName = stackOutputs.ApplicationDataBucketName;
-
-      const versioningCommand = new GetBucketVersioningCommand({
-        Bucket: bucketName,
-      });
-      const versioningResponse = await s3Client.send(versioningCommand);
-      expect(versioningResponse.Status).toBe('Enabled');
-    }, 10000);
-
-    test('should have buckets with public access blocked', async () => {
-      const bucketName = stackOutputs.ApplicationDataBucketName;
-
-      const publicAccessCommand = new GetPublicAccessBlockCommand({
-        Bucket: bucketName,
-      });
-      const publicAccessResponse = await s3Client.send(publicAccessCommand);
-      expect(
-        publicAccessResponse.PublicAccessBlockConfiguration?.BlockPublicAcls
-      ).toBe(true);
-      expect(
-        publicAccessResponse.PublicAccessBlockConfiguration?.BlockPublicPolicy
-      ).toBe(true);
-    }, 10000);
-  });
-
-  describe('VPC and Network Security', () => {
-    test('should have VPC with proper configuration', async () => {
-      const vpcId = stackOutputs.VPCId;
-      expect(vpcId).toBeDefined();
-
-      const vpcCommand = new DescribeVpcsCommand({
-        VpcIds: [vpcId],
-      });
-      const vpcResponse = await ec2Client.send(vpcCommand);
-      const vpc = vpcResponse.Vpcs?.[0];
-
-      expect(vpc).toBeDefined();
-      expect(vpc?.CidrBlock).toBe('10.0.0.0/16');
-      expect(vpc?.State).toBe('available');
-    }, 10000);
-
-    test('should have subnets in different availability zones', async () => {
-      const vpcId = stackOutputs.VPCId;
-
-      const subnetsCommand = new DescribeSubnetsCommand({
-        Filters: [
-          {
-            Name: 'vpc-id',
-            Values: [vpcId],
-          },
-        ],
-      });
-      const subnetsResponse = await ec2Client.send(subnetsCommand);
-      const subnets = subnetsResponse.Subnets || [];
-
-      expect(subnets.length).toBeGreaterThanOrEqual(3); // 1 public + 2 private
-
-      const availabilityZones = new Set(
-        subnets.map(subnet => subnet.AvailabilityZone)
-      );
-      expect(availabilityZones.size).toBeGreaterThanOrEqual(2); // Multi-AZ
-    }, 10000);
-
-    test('should have security group with HTTPS only access', async () => {
-      const sgId = stackOutputs.SecurityGroupId;
-      expect(sgId).toBeDefined();
-
-      const sgCommand = new DescribeSecurityGroupsCommand({
-        GroupIds: [sgId],
-      });
-      const sgResponse = await ec2Client.send(sgCommand);
-      const sg = sgResponse.SecurityGroups?.[0];
-
-      expect(sg).toBeDefined();
-      expect(sg?.IpPermissions).toHaveLength(1);
-      expect(sg?.IpPermissions?.[0].FromPort).toBe(443);
-      expect(sg?.IpPermissions?.[0].ToPort).toBe(443);
-    }, 10000);
-  });
-
-  describe('EC2 Instance', () => {
-    test('should have EC2 instance running with updated AMI', async () => {
-      const instanceId = stackOutputs.EC2InstanceId;
-      expect(instanceId).toBeDefined();
-
-      const instanceCommand = new DescribeInstancesCommand({
-        InstanceIds: [instanceId],
-      });
-      const instanceResponse = await ec2Client.send(instanceCommand);
-      const instance = instanceResponse.Reservations?.[0]?.Instances?.[0];
-
-      expect(instance).toBeDefined();
-      expect(instance?.State?.Name).toBe('running');
-      expect(instance?.ImageId).toBe('ami-0dd6a5d3354342a7a'); // Updated AMI
-    }, 15000);
-
-    test('should have CloudWatch monitoring enabled', async () => {
-      const instanceId = stackOutputs.EC2InstanceId;
-
-      const instanceCommand = new DescribeInstancesCommand({
-        InstanceIds: [instanceId],
-      });
-      const instanceResponse = await ec2Client.send(instanceCommand);
-      const instance = instanceResponse.Reservations?.[0]?.Instances?.[0];
-
-      expect(instance?.Monitoring?.State).toBe('enabled');
-    }, 10000);
-  });
-
-  describe('RDS Database', () => {
-    test('should have RDS instance with latest MySQL version', async () => {
-      const dbEndpoint = stackOutputs.DatabaseEndpoint;
-      expect(dbEndpoint).toBeDefined();
-
-      // Extract DB identifier from endpoint
-      const dbIdentifier = dbEndpoint.split('.')[0];
-
-      const dbCommand = new DescribeDBInstancesCommand({
-        DBInstanceIdentifier: dbIdentifier,
-      });
-      const dbResponse = await rdsClient.send(dbCommand);
-      const dbInstance = dbResponse.DBInstances?.[0];
-
-      expect(dbInstance).toBeDefined();
-      expect(dbInstance?.Engine).toBe('mysql');
-      expect(dbInstance?.EngineVersion).toBe('8.4.6');
-      expect(dbInstance?.DBInstanceStatus).toBe('available');
-    }, 20000);
-
-    test('should have encrypted storage and Multi-AZ enabled', async () => {
-      const dbEndpoint = stackOutputs.DatabaseEndpoint;
-      const dbIdentifier = dbEndpoint.split('.')[0];
-
-      const dbCommand = new DescribeDBInstancesCommand({
-        DBInstanceIdentifier: dbIdentifier,
-      });
-      const dbResponse = await rdsClient.send(dbCommand);
-      const dbInstance = dbResponse.DBInstances?.[0];
-
-      expect(dbInstance?.StorageEncrypted).toBe(true);
-      expect(dbInstance?.MultiAZ).toBe(true);
-      expect(dbInstance?.PubliclyAccessible).toBe(false);
-    }, 15000);
-
-    test('should have DB subnet group with private subnets', async () => {
-      const dbEndpoint = stackOutputs.DatabaseEndpoint;
-      const dbIdentifier = dbEndpoint.split('.')[0];
-
-      const dbCommand = new DescribeDBInstancesCommand({
-        DBInstanceIdentifier: dbIdentifier,
-      });
-      const dbResponse = await rdsClient.send(dbCommand);
-      const dbInstance = dbResponse.DBInstances?.[0];
-      const subnetGroupName = dbInstance?.DBSubnetGroup?.DBSubnetGroupName;
-
-      expect(subnetGroupName).toBeDefined();
-
-      const subnetGroupCommand = new DescribeDBSubnetGroupsCommand({
-        DBSubnetGroupName: subnetGroupName,
-      });
-      const subnetGroupResponse = await rdsClient.send(subnetGroupCommand);
-      const subnetGroup = subnetGroupResponse.DBSubnetGroups?.[0];
-
-      expect(subnetGroup?.Subnets).toHaveLength(2); // Two private subnets
-    }, 15000);
-  });
-
-  describe('CloudTrail Audit Logging', () => {
-    test('should have CloudTrail enabled and logging', async () => {
-      const trailArn = stackOutputs.CloudTrailArn;
-      expect(trailArn).toBeDefined();
-
-      const trailName = trailArn.split('/')[1];
-
-      const trailCommand = new DescribeTrailsCommand({
-        trailNameList: [trailName],
-      });
-      const trailResponse = await cloudTrailClient.send(trailCommand);
-      const trail = trailResponse.trailList?.[0];
-
-      expect(trail).toBeDefined();
-      expect(trail?.IsMultiRegionTrail).toBe(true);
-      expect(trail?.IncludeGlobalServiceEvents).toBe(true);
-
-      const statusCommand = new GetTrailStatusCommand({
-        Name: trailName,
-      });
-      const statusResponse = await cloudTrailClient.send(statusCommand);
-      expect(statusResponse.IsLogging).toBe(true);
-    }, 15000);
-  });
-
-  describe('CloudWatch Monitoring', () => {
-    test('should have EC2 recovery alarm configured', async () => {
-      const instanceId = stackOutputs.EC2InstanceId;
-
-      const alarmsCommand = new DescribeAlarmsCommand({
-        AlarmNames: [`FinancialApp-Prod-EC2-Recovery-Alarm`],
-      });
-      const alarmsResponse = await cloudWatchClient.send(alarmsCommand);
-      const alarm = alarmsResponse.MetricAlarms?.[0];
-
-      expect(alarm).toBeDefined();
-      expect(alarm?.MetricName).toBe('StatusCheckFailed_System');
-      expect(alarm?.Namespace).toBe('AWS/EC2');
-      expect(alarm?.StateValue).toBeDefined();
-    }, 10000);
-  });
-
-  describe('Resource Tagging Compliance', () => {
-    test('should have proper tags on all resources', async () => {
-      const taggedResources = stackResources.filter(resource =>
-        [
-          'AWS::EC2::VPC',
-          'AWS::EC2::Instance',
-          'AWS::RDS::DBInstance',
-          'AWS::S3::Bucket',
-        ].includes(resource.ResourceType || '')
+  describe('Resource Tagging', () => {
+    test('should have stack-level tags applied', async () => {
+      const stackResponse = await cfnClient.send(
+        new DescribeStacksCommand({ StackName: stackName })
       );
 
-      expect(taggedResources.length).toBeGreaterThan(0);
+      const stack = stackResponse.Stacks?.[0];
+      expect(stack?.Tags).toBeDefined();
 
-      // All resources should be successfully created
-      taggedResources.forEach(resource => {
-        expect(resource.ResourceStatus).toBe('CREATE_COMPLETE');
-      });
+      // Check for common deployment tags
+      const tags = stack?.Tags || [];
+      const tagKeys = tags.map(tag => tag.Key);
+
+      // These tags are typically added during deployment
+      expect(
+        tagKeys.some(key => key === 'Repository' || key === 'CommitAuthor')
+      ).toBeTruthy();
     });
   });
 
-  describe('Security Compliance', () => {
-    test('should have no publicly accessible database', async () => {
-      const dbEndpoint = stackOutputs.DatabaseEndpoint;
-      const dbIdentifier = dbEndpoint.split('.')[0];
+  describe('Template Validation', () => {
+    test('should have correct resource count', () => {
+      // Should only have 1 resource (DynamoDB table)
+      const dynamoResources = stackResources.filter(
+        resource => resource.ResourceType === 'AWS::DynamoDB::Table'
+      );
+      expect(dynamoResources).toHaveLength(1);
+    });
 
-      const dbCommand = new DescribeDBInstancesCommand({
-        DBInstanceIdentifier: dbIdentifier,
-      });
-      const dbResponse = await rdsClient.send(dbCommand);
-      const dbInstance = dbResponse.DBInstances?.[0];
+    test('should have no IAM resources', () => {
+      const iamResources = stackResources.filter(resource =>
+        resource.ResourceType?.startsWith('AWS::IAM::')
+      );
+      expect(iamResources).toHaveLength(0);
+    });
 
-      expect(dbInstance?.PubliclyAccessible).toBe(false);
-    }, 10000);
+    test('should have no VPC resources', () => {
+      const vpcResources = stackResources.filter(resource =>
+        resource.ResourceType?.startsWith('AWS::EC2::')
+      );
+      expect(vpcResources).toHaveLength(0);
+    });
 
-    test('should have S3 buckets with no public access', async () => {
-      const bucketName = stackOutputs.ApplicationDataBucketName;
-
-      const publicAccessCommand = new GetPublicAccessBlockCommand({
-        Bucket: bucketName,
-      });
-      const publicAccessResponse = await s3Client.send(publicAccessCommand);
-      const config = publicAccessResponse.PublicAccessBlockConfiguration;
-
-      expect(config?.BlockPublicAcls).toBe(true);
-      expect(config?.BlockPublicPolicy).toBe(true);
-      expect(config?.IgnorePublicAcls).toBe(true);
-      expect(config?.RestrictPublicBuckets).toBe(true);
-    }, 10000);
-  });
-
-  describe('High Availability Validation', () => {
-    test('should have Multi-AZ database deployment', async () => {
-      const dbEndpoint = stackOutputs.DatabaseEndpoint;
-      const dbIdentifier = dbEndpoint.split('.')[0];
-
-      const dbCommand = new DescribeDBInstancesCommand({
-        DBInstanceIdentifier: dbIdentifier,
-      });
-      const dbResponse = await rdsClient.send(dbCommand);
-      const dbInstance = dbResponse.DBInstances?.[0];
-
-      expect(dbInstance?.MultiAZ).toBe(true);
-      expect(dbInstance?.AvailabilityZone).toBeDefined();
-    }, 15000);
-
-    test('should have backup and maintenance windows configured', async () => {
-      const dbEndpoint = stackOutputs.DatabaseEndpoint;
-      const dbIdentifier = dbEndpoint.split('.')[0];
-
-      const dbCommand = new DescribeDBInstancesCommand({
-        DBInstanceIdentifier: dbIdentifier,
-      });
-      const dbResponse = await rdsClient.send(dbCommand);
-      const dbInstance = dbResponse.DBInstances?.[0];
-
-      expect(dbInstance?.BackupRetentionPeriod).toBe(30);
-      expect(dbInstance?.PreferredBackupWindow).toBeDefined();
-      expect(dbInstance?.PreferredMaintenanceWindow).toBeDefined();
-    }, 15000);
+    test('should have no S3 resources', () => {
+      const s3Resources = stackResources.filter(resource =>
+        resource.ResourceType?.startsWith('AWS::S3::')
+      );
+      expect(s3Resources).toHaveLength(0);
+    });
   });
 });
