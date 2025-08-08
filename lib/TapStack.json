@@ -56,6 +56,18 @@
                     ]
                 }
             ]
+        },
+        "BucketExists": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "S3BucketName"
+                        },
+                        ""
+                    ]
+                }
+            ]
         }
     },
     "Resources": {
@@ -336,7 +348,12 @@
                             "Principal": {
                                 "Service": "lambda.amazonaws.com"
                             },
-                            "Action": "sts:AssumeRole"
+                            "Action": "sts:AssumeRole",
+                            "Condition": {
+                                "StringEquals": {
+                                    "aws:RequestedRegion": "us-east-1"
+                                }
+                            }
                         }
                     ]
                 },
@@ -490,6 +507,7 @@
         },
         "S3BucketPolicy": {
             "Type": "AWS::S3::BucketPolicy",
+            "Condition": "BucketExists",
             "Properties": {
                 "Bucket": {
                     "Ref": "S3BucketName"
@@ -503,22 +521,25 @@
                             "Principal": {
                                 "Service": "logs.amazonaws.com"
                             },
-                            "Action": [
-                                "s3:PutObject",
-                                "s3:GetBucketAcl"
-                            ],
-                            "Resource": [
-                                {
-                                    "Fn::Sub": "arn:aws:s3:::${S3BucketName}"
-                                },
-                                {
-                                    "Fn::Sub": "arn:aws:s3:::${S3BucketName}/lambda-logs/*"
-                                }
-                            ],
+                            "Action": "s3:PutObject",
+                            "Resource": {
+                                "Fn::Sub": "arn:aws:s3:::${S3BucketName}/lambda-logs/*"
+                            },
                             "Condition": {
                                 "StringEquals": {
                                     "s3:x-amz-acl": "bucket-owner-full-control"
                                 }
+                            }
+                        },
+                        {
+                            "Sid": "AllowCloudWatchLogsGetBucketAcl",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "logs.amazonaws.com"
+                            },
+                            "Action": "s3:GetBucketAcl",
+                            "Resource": {
+                                "Fn::Sub": "arn:aws:s3:::${S3BucketName}"
                             }
                         },
                         {
@@ -534,7 +555,6 @@
                             },
                             "Action": [
                                 "s3:PutObject",
-                                "s3:GetBucketAcl",
                                 "s3:GetBucketLocation",
                                 "s3:ListBucket"
                             ],

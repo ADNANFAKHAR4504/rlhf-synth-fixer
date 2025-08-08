@@ -331,6 +331,9 @@ Resources:
             Principal:
               Service: lambda.amazonaws.com
             Action: sts:AssumeRole
+            Condition:
+              StringEquals:
+                'aws:RequestedRegion': 'us-east-1'
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
       Policies:
@@ -428,6 +431,9 @@ Resources:
               Service: logs.amazonaws.com
             Action: s3:PutObject
             Resource: !Sub 'arn:aws:s3:::${S3BucketName}/lambda-logs/*'
+            Condition:
+              StringEquals:
+                "s3:x-amz-acl": "bucket-owner-full-control"
           - Sid: 'AllowCloudWatchLogsGetBucketAcl'
             Effect: Allow
             Principal:
