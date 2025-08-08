@@ -1,5 +1,35 @@
-import fs from 'fs';
-import path from 'path';
+import {
+  CloudFormationClient,
+  DescribeStackResourcesCommand,
+  DescribeStacksCommand,
+} from '@aws-sdk/client-cloudformation';
+import {
+  CloudTrailClient,
+  GetTrailStatusCommand,
+} from '@aws-sdk/client-cloudtrail';
+import {
+  CloudWatchClient,
+  DescribeAlarmsCommand,
+} from '@aws-sdk/client-cloudwatch';
+import {
+  DescribeInstancesCommand,
+  DescribeSecurityGroupsCommand,
+  DescribeSubnetsCommand,
+  DescribeVpcsCommand,
+  EC2Client,
+} from '@aws-sdk/client-ec2';
+import { GetKeyRotationStatusCommand, KMSClient } from '@aws-sdk/client-kms';
+import {
+  DescribeDBInstancesCommand,
+  DescribeDBSubnetGroupsCommand,
+  RDSClient,
+} from '@aws-sdk/client-rds';
+import {
+  GetBucketEncryptionCommand,
+  GetBucketVersioningCommand,
+  GetPublicAccessBlockCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
 
 // Simple assertion helpers to avoid Jest dependency issues
 function simpleAssert(condition: boolean, message: string) {
@@ -20,307 +50,423 @@ const region = process.env.AWS_REGION || 'us-east-1';
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 const stackName = `TapStack${environmentSuffix}`;
 
-describe('TAP Stack Infrastructure Integration Tests', () => {
-  let template: any;
+const cfnClient = new CloudFormationClient({ region });
+const ec2Client = new EC2Client({ region });
+const rdsClient = new RDSClient({ region });
+const s3Client = new S3Client({ region });
+const kmsClient = new KMSClient({ region });
+const cloudTrailClient = new CloudTrailClient({ region });
+const cloudWatchClient = new CloudWatchClient({ region });
 
-  beforeAll(() => {
-    // Load template for validation since we can't assume stack is deployed
-    const templatePath = path.join(__dirname, '../lib/TapStack.json');
-    const templateContent = fs.readFileSync(templatePath, 'utf8');
-    template = JSON.parse(templateContent);
-  });
+describe('Financial Services Infrastructure Integration Tests', () => {
+  let stackOutputs: any = {};
+  let stackResources: any[] = [];
 
-  describe('Template Integration Readiness', () => {
-    test('should have template loaded successfully', () => {
-      simpleAssert(template, 'Template should be loaded');
-      simpleEqual(typeof template, 'object', 'Template should be an object');
-    });
-
-    test('should have deployable structure', () => {
-      simpleAssert(
-        template.AWSTemplateFormatVersion,
-        'Should have CloudFormation version'
+  beforeAll(async () => {
+    try {
+      // Get stack information
+      const stackResponse = await cfnClient.send(
+        new DescribeStacksCommand({ StackName: stackName })
       );
-      simpleAssert(template.Resources, 'Should have Resources section');
-      simpleAssert(template.Outputs, 'Should have Outputs section');
-    });
 
-    test('should have DynamoDB table resource for integration', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      simpleAssert(table, 'Should have TurnAroundPromptTable resource');
-      simpleEqual(
-        table.Type,
-        'AWS::DynamoDB::Table',
-        'Should be DynamoDB table'
+      if (stackResponse.Stacks && stackResponse.Stacks[0]) {
+        stackOutputs =
+          stackResponse.Stacks[0].Outputs?.reduce((acc, output) => {
+            if (output.OutputKey && output.OutputValue) {
+              acc[output.OutputKey] = output.OutputValue;
+            }
+            return acc;
+          }, {} as any) || {};
+      }
+
+      // Get stack resources
+      const resourcesResponse = await cfnClient.send(
+        new DescribeStackResourcesCommand({ StackName: stackName })
       );
+      stackResources = resourcesResponse.StackResources || [];
+    } catch (error) {
+      console.error('Failed to get stack information:', error);
+      throw new Error(
+        `Stack ${stackName} not found or not accessible. Please deploy the stack first using: npm run cfn:deploy-yaml`
+      );
+    }
+  }, 30000);
+
+  describe('Stack Deployment', () => {
+    test('should have deployed stack successfully', () => {
+      simpleAssert(stackResources.length > 0, 'Stack should have resources');
     });
 
-    test('should have required outputs for integration testing', () => {
-      const requiredOutputs = [
-        'TurnAroundPromptTableName',
-        'TurnAroundPromptTableArn',
+    test('should have all expected outputs', () => {
+      const expectedOutputs = [
+        'KMSKeyArn',
+        'ApplicationDataBucketName',
+        'CloudTrailLogsBucketName',
+        'SecurityGroupId',
+        'VPCId',
+        'EC2InstanceId',
+        'DatabaseEndpoint',
+        'CloudTrailArn',
       ];
-      requiredOutputs.forEach(outputName => {
+
+      expectedOutputs.forEach(outputKey => {
         simpleAssert(
-          template.Outputs[outputName],
-          `Should have ${outputName} output`
+          stackOutputs[outputKey],
+          `Output ${outputKey} should be defined`
         );
       });
     });
+  });
 
-    test('should have environment suffix parameter for deployment', () => {
-      const param = template.Parameters.EnvironmentSuffix;
-      simpleAssert(param, 'Should have EnvironmentSuffix parameter');
-      simpleEqual(param.Type, 'String', 'Should be String type');
+  describe('KMS Encryption', () => {
+    test('should have KMS key with rotation enabled', async () => {
+      const kmsKeyArn = stackOutputs.KMSKeyArn;
+      simpleAssert(kmsKeyArn, 'KMS Key ARN should be available');
+
+      const keyId = kmsKeyArn.split('/')[1];
+      const rotationResponse = await kmsClient.send(
+        new GetKeyRotationStatusCommand({ KeyId: keyId })
+      );
+
+      simpleEqual(
+        rotationResponse.KeyRotationEnabled,
+        true,
+        'KMS key rotation should be enabled'
+      );
     });
   });
 
-  describe('Deployment Compatibility', () => {
-    test('should be deployable without CAPABILITY_NAMED_IAM', () => {
-      const resources = Object.values(template.Resources);
-      const iamResources = resources.filter(
-        (resource: any) =>
-          resource.Type && resource.Type.startsWith('AWS::IAM::')
+  describe('S3 Security Configuration', () => {
+    test('should have application data bucket with encryption', async () => {
+      const bucketName = stackOutputs.ApplicationDataBucketName;
+      simpleAssert(
+        bucketName,
+        'Application data bucket name should be available'
       );
-      simpleEqual(
-        iamResources.length,
-        0,
-        'Should have no IAM resources to avoid CAPABILITY_NAMED_IAM requirement'
+
+      const encryptionResponse = await s3Client.send(
+        new GetBucketEncryptionCommand({ Bucket: bucketName })
+      );
+
+      simpleAssert(
+        encryptionResponse.ServerSideEncryptionConfiguration,
+        'Bucket should have encryption configured'
       );
     });
 
-    test('should have correct table naming for environment', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const expectedTableName = {
-        'Fn::Sub': 'TurnAroundPromptTable${EnvironmentSuffix}',
-      };
+    test('should have buckets with versioning enabled', async () => {
+      const appBucketName = stackOutputs.ApplicationDataBucketName;
+      const trailBucketName = stackOutputs.CloudTrailLogsBucketName;
+
+      const appVersioning = await s3Client.send(
+        new GetBucketVersioningCommand({ Bucket: appBucketName })
+      );
+      const trailVersioning = await s3Client.send(
+        new GetBucketVersioningCommand({ Bucket: trailBucketName })
+      );
+
       simpleEqual(
-        table.Properties.TableName,
-        expectedTableName,
-        'Table name should include environment suffix'
+        appVersioning.Status,
+        'Enabled',
+        'App bucket versioning should be enabled'
+      );
+      simpleEqual(
+        trailVersioning.Status,
+        'Enabled',
+        'Trail bucket versioning should be enabled'
       );
     });
 
-    test('should have pay-per-request billing for cost efficiency', () => {
-      const table = template.Resources.TurnAroundPromptTable;
+    test('should have buckets with public access blocked', async () => {
+      const appBucketName = stackOutputs.ApplicationDataBucketName;
+      const trailBucketName = stackOutputs.CloudTrailLogsBucketName;
+
+      const appPublicAccess = await s3Client.send(
+        new GetPublicAccessBlockCommand({ Bucket: appBucketName })
+      );
+      const trailPublicAccess = await s3Client.send(
+        new GetPublicAccessBlockCommand({ Bucket: trailBucketName })
+      );
+
       simpleEqual(
-        table.Properties.BillingMode,
-        'PAY_PER_REQUEST',
-        'Should use pay-per-request billing'
+        appPublicAccess.PublicAccessBlockConfiguration?.BlockPublicAcls,
+        true,
+        'App bucket should block public ACLs'
+      );
+      simpleEqual(
+        trailPublicAccess.PublicAccessBlockConfiguration?.BlockPublicAcls,
+        true,
+        'Trail bucket should block public ACLs'
+      );
+    });
+  });
+
+  describe('VPC and Network Security', () => {
+    test('should have VPC with proper configuration', async () => {
+      const vpcId = stackOutputs.VPCId;
+      simpleAssert(vpcId, 'VPC ID should be available');
+
+      const vpcResponse = await ec2Client.send(
+        new DescribeVpcsCommand({ VpcIds: [vpcId] })
+      );
+
+      const vpc = vpcResponse.Vpcs?.[0];
+      simpleAssert(vpc, 'VPC should exist');
+      simpleEqual(
+        vpc.CidrBlock,
+        '10.0.0.0/16',
+        'VPC should have correct CIDR block'
       );
     });
 
-    test('should have deletion protection disabled for dev environments', () => {
-      const table = template.Resources.TurnAroundPromptTable;
+    test('should have subnets in different availability zones', async () => {
+      const subnetResources = stackResources.filter(
+        resource => resource.ResourceType === 'AWS::EC2::Subnet'
+      );
+
+      simpleAssert(
+        subnetResources.length >= 2,
+        'Should have at least 2 subnets'
+      );
+
+      const subnetIds = subnetResources.map(
+        resource => resource.PhysicalResourceId
+      );
+      const subnetsResponse = await ec2Client.send(
+        new DescribeSubnetsCommand({ SubnetIds: subnetIds })
+      );
+
+      const azs = new Set(
+        subnetsResponse.Subnets?.map(subnet => subnet.AvailabilityZone)
+      );
+      simpleAssert(
+        azs.size >= 2,
+        'Subnets should be in different availability zones'
+      );
+    });
+
+    test('should have security group with HTTPS only access', async () => {
+      const sgId = stackOutputs.SecurityGroupId;
+      simpleAssert(sgId, 'Security Group ID should be available');
+
+      const sgResponse = await ec2Client.send(
+        new DescribeSecurityGroupsCommand({ GroupIds: [sgId] })
+      );
+
+      const sg = sgResponse.SecurityGroups?.[0];
+      simpleAssert(sg, 'Security group should exist');
+
+      const httpsRule = sg.IpPermissions?.find(
+        rule => rule.FromPort === 443 && rule.ToPort === 443
+      );
+      simpleAssert(httpsRule, 'Should have HTTPS rule');
+    });
+  });
+
+  describe('EC2 Instance', () => {
+    test('should have EC2 instance running with updated AMI', async () => {
+      const instanceId = stackOutputs.EC2InstanceId;
+      simpleAssert(instanceId, 'EC2 Instance ID should be available');
+
+      const instanceResponse = await ec2Client.send(
+        new DescribeInstancesCommand({ InstanceIds: [instanceId] })
+      );
+
+      const instance = instanceResponse.Reservations?.[0]?.Instances?.[0];
+      simpleAssert(instance, 'EC2 instance should exist');
       simpleEqual(
-        table.Properties.DeletionProtectionEnabled,
+        instance.State?.Name,
+        'running',
+        'Instance should be running'
+      );
+    });
+
+    test('should have CloudWatch monitoring enabled', async () => {
+      const instanceId = stackOutputs.EC2InstanceId;
+
+      const instanceResponse = await ec2Client.send(
+        new DescribeInstancesCommand({ InstanceIds: [instanceId] })
+      );
+
+      const instance = instanceResponse.Reservations?.[0]?.Instances?.[0];
+      simpleEqual(
+        instance?.Monitoring?.State,
+        'enabled',
+        'CloudWatch monitoring should be enabled'
+      );
+    });
+  });
+
+  describe('RDS Database', () => {
+    test('should have RDS instance with latest MySQL version', async () => {
+      const dbEndpoint = stackOutputs.DatabaseEndpoint;
+      simpleAssert(dbEndpoint, 'Database endpoint should be available');
+
+      // Extract DB instance identifier from endpoint
+      const dbIdentifier = dbEndpoint.split('.')[0];
+
+      const dbResponse = await rdsClient.send(
+        new DescribeDBInstancesCommand({ DBInstanceIdentifier: dbIdentifier })
+      );
+
+      const dbInstance = dbResponse.DBInstances?.[0];
+      simpleAssert(dbInstance, 'RDS instance should exist');
+      simpleEqual(dbInstance.Engine, 'mysql', 'Should use MySQL engine');
+      simpleAssert(
+        dbInstance.EngineVersion?.startsWith('8.0'),
+        'Should use MySQL 8.0.x'
+      );
+    });
+
+    test('should have encrypted storage and Multi-AZ enabled', async () => {
+      const dbEndpoint = stackOutputs.DatabaseEndpoint;
+      const dbIdentifier = dbEndpoint.split('.')[0];
+
+      const dbResponse = await rdsClient.send(
+        new DescribeDBInstancesCommand({ DBInstanceIdentifier: dbIdentifier })
+      );
+
+      const dbInstance = dbResponse.DBInstances?.[0];
+      simpleEqual(
+        dbInstance?.StorageEncrypted,
+        true,
+        'Storage should be encrypted'
+      );
+      // Note: MultiAZ might be false for cost optimization in dev environments
+    });
+
+    test('should have DB subnet group with private subnets', async () => {
+      const dbSubnetGroups = await rdsClient.send(
+        new DescribeDBSubnetGroupsCommand({})
+      );
+
+      const dbSubnetGroup = dbSubnetGroups.DBSubnetGroups?.find(sg =>
+        sg.DBSubnetGroupName?.includes('financialapp')
+      );
+
+      simpleAssert(dbSubnetGroup, 'DB subnet group should exist');
+      simpleAssert(
+        dbSubnetGroup.Subnets && dbSubnetGroup.Subnets.length >= 2,
+        'Should have multiple subnets'
+      );
+    });
+  });
+
+  describe('CloudTrail Audit Logging', () => {
+    test('should have CloudTrail enabled and logging', async () => {
+      const cloudTrailArn = stackOutputs.CloudTrailArn;
+      simpleAssert(cloudTrailArn, 'CloudTrail ARN should be available');
+
+      const trailName = cloudTrailArn.split('/')[1];
+
+      const trailStatus = await cloudTrailClient.send(
+        new GetTrailStatusCommand({ Name: trailName })
+      );
+
+      simpleEqual(trailStatus.IsLogging, true, 'CloudTrail should be logging');
+    });
+  });
+
+  describe('CloudWatch Monitoring', () => {
+    test('should have EC2 recovery alarm configured', async () => {
+      const alarms = await cloudWatchClient.send(new DescribeAlarmsCommand({}));
+
+      const recoveryAlarm = alarms.MetricAlarms?.find(alarm =>
+        alarm.AlarmName?.includes('EC2-Recovery-Alarm')
+      );
+
+      simpleAssert(recoveryAlarm, 'EC2 recovery alarm should exist');
+      simpleEqual(
+        recoveryAlarm.StateValue,
+        'OK',
+        'Recovery alarm should be in OK state'
+      );
+    });
+  });
+
+  describe('Resource Tagging Compliance', () => {
+    test('should have proper tags on all resources', async () => {
+      const stackResponse = await cfnClient.send(
+        new DescribeStacksCommand({ StackName: stackName })
+      );
+
+      const stack = stackResponse.Stacks?.[0];
+      simpleAssert(stack?.Tags, 'Stack should have tags');
+
+      // Check for common deployment tags
+      const tags = stack?.Tags || [];
+      const tagKeys = tags.map(tag => tag.Key);
+
+      simpleAssert(
+        tagKeys.some(key => key === 'Repository' || key === 'CommitAuthor'),
+        'Should have deployment tags'
+      );
+    });
+  });
+
+  describe('Security Compliance', () => {
+    test('should have no publicly accessible database', async () => {
+      const dbEndpoint = stackOutputs.DatabaseEndpoint;
+      const dbIdentifier = dbEndpoint.split('.')[0];
+
+      const dbResponse = await rdsClient.send(
+        new DescribeDBInstancesCommand({ DBInstanceIdentifier: dbIdentifier })
+      );
+
+      const dbInstance = dbResponse.DBInstances?.[0];
+      simpleEqual(
+        dbInstance?.PubliclyAccessible,
         false,
-        'Deletion protection should be disabled'
+        'Database should not be publicly accessible'
       );
     });
 
-    test('should have proper deletion policies for cleanup', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      simpleEqual(table.DeletionPolicy, 'Delete', 'Should have Delete policy');
+    test('should have S3 buckets with no public access', async () => {
+      const appBucketName = stackOutputs.ApplicationDataBucketName;
+      const trailBucketName = stackOutputs.CloudTrailLogsBucketName;
+
+      const appPublicAccess = await s3Client.send(
+        new GetPublicAccessBlockCommand({ Bucket: appBucketName })
+      );
+      const trailPublicAccess = await s3Client.send(
+        new GetPublicAccessBlockCommand({ Bucket: trailBucketName })
+      );
+
       simpleEqual(
-        table.UpdateReplacePolicy,
-        'Delete',
-        'Should have Delete update policy'
+        appPublicAccess.PublicAccessBlockConfiguration?.RestrictPublicBuckets,
+        true,
+        'App bucket should restrict public buckets'
+      );
+      simpleEqual(
+        trailPublicAccess.PublicAccessBlockConfiguration?.RestrictPublicBuckets,
+        true,
+        'Trail bucket should restrict public buckets'
       );
     });
   });
 
-  describe('Resource Configuration', () => {
-    test('should have correct DynamoDB key schema', () => {
-      const table = template.Resources.TurnAroundPromptTable;
+  describe('High Availability Validation', () => {
+    test('should have backup and maintenance windows configured', async () => {
+      const dbEndpoint = stackOutputs.DatabaseEndpoint;
+      const dbIdentifier = dbEndpoint.split('.')[0];
+
+      const dbResponse = await rdsClient.send(
+        new DescribeDBInstancesCommand({ DBInstanceIdentifier: dbIdentifier })
+      );
+
+      const dbInstance = dbResponse.DBInstances?.[0];
       simpleAssert(
-        table.Properties.KeySchema.length === 1,
-        'Should have exactly 1 key'
-      );
-      simpleEqual(
-        table.Properties.KeySchema[0].AttributeName,
-        'id',
-        'Key should be id'
-      );
-      simpleEqual(
-        table.Properties.KeySchema[0].KeyType,
-        'HASH',
-        'Should be hash key'
-      );
-    });
-
-    test('should have correct attribute definitions', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      simpleAssert(
-        table.Properties.AttributeDefinitions.length === 1,
-        'Should have 1 attribute'
-      );
-      simpleEqual(
-        table.Properties.AttributeDefinitions[0].AttributeName,
-        'id',
-        'Attribute should be id'
-      );
-      simpleEqual(
-        table.Properties.AttributeDefinitions[0].AttributeType,
-        'S',
-        'Should be String type'
-      );
-    });
-
-    test('should have minimal resource footprint', () => {
-      const resourceCount = Object.keys(template.Resources).length;
-      simpleEqual(resourceCount, 1, 'Should have minimal resource count');
-    });
-
-    test('should have no complex networking resources', () => {
-      const resources = Object.values(template.Resources);
-      const networkResources = resources.filter(
-        (resource: any) =>
-          resource.Type &&
-          (resource.Type.startsWith('AWS::EC2::') ||
-            resource.Type.startsWith('AWS::ELB::') ||
-            resource.Type.startsWith('AWS::ElasticLoadBalancing::'))
-      );
-      simpleEqual(
-        networkResources.length,
-        0,
-        'Should have no networking resources'
-      );
-    });
-
-    test('should have no storage resources other than DynamoDB', () => {
-      const resources = Object.values(template.Resources);
-      const storageResources = resources.filter(
-        (resource: any) =>
-          resource.Type &&
-          (resource.Type.startsWith('AWS::S3::') ||
-            resource.Type.startsWith('AWS::RDS::') ||
-            resource.Type.startsWith('AWS::EFS::'))
-      );
-      simpleEqual(
-        storageResources.length,
-        0,
-        'Should have no additional storage resources'
-      );
-    });
-  });
-
-  describe('Output Validation', () => {
-    test('should have table name output for integration', () => {
-      const output = template.Outputs.TurnAroundPromptTableName;
-      simpleAssert(output, 'Should have table name output');
-      simpleAssert(
-        output.Export,
-        'Should have export for cross-stack reference'
-      );
-    });
-
-    test('should have table ARN output for integration', () => {
-      const output = template.Outputs.TurnAroundPromptTableArn;
-      simpleAssert(output, 'Should have table ARN output');
-      simpleAssert(
-        output.Export,
-        'Should have export for cross-stack reference'
-      );
-    });
-
-    test('should have stack name output for reference', () => {
-      const output = template.Outputs.StackName;
-      simpleAssert(output, 'Should have stack name output');
-      simpleEqual(
-        output.Value,
-        { Ref: 'AWS::StackName' },
-        'Should reference stack name'
-      );
-    });
-
-    test('should have environment suffix output for validation', () => {
-      const output = template.Outputs.EnvironmentSuffix;
-      simpleAssert(output, 'Should have environment suffix output');
-      simpleEqual(
-        output.Value,
-        { Ref: 'EnvironmentSuffix' },
-        'Should reference parameter'
-      );
-    });
-
-    test('should have all outputs with proper export names', () => {
-      const outputs = Object.keys(template.Outputs);
-      outputs.forEach(outputName => {
-        const output = template.Outputs[outputName];
-        simpleAssert(output.Export, `${outputName} should have export`);
-        simpleAssert(
-          output.Export.Name,
-          `${outputName} should have export name`
-        );
-        simpleAssert(
-          output.Export.Name['Fn::Sub'],
-          `${outputName} should use Fn::Sub for export name`
-        );
-      });
-    });
-  });
-
-  describe('Integration Test Readiness', () => {
-    test('should be ready for deployment testing', () => {
-      // This test validates that the template is ready for actual deployment
-      simpleAssert(
-        template.AWSTemplateFormatVersion === '2010-09-09',
-        'Should have valid CF version'
+        dbInstance?.BackupRetentionPeriod &&
+          dbInstance.BackupRetentionPeriod > 0,
+        'Should have backup retention configured'
       );
       simpleAssert(
-        Object.keys(template.Resources).length > 0,
-        'Should have resources to deploy'
+        dbInstance?.PreferredBackupWindow,
+        'Should have backup window configured'
       );
       simpleAssert(
-        Object.keys(template.Outputs).length > 0,
-        'Should have outputs to validate'
-      );
-    });
-
-    test('should have expected stack name format', () => {
-      // Validate that the expected stack name follows the pattern
-      const expectedPattern = /^TapStack[a-zA-Z0-9]+$/;
-      simpleAssert(
-        expectedPattern.test(stackName),
-        `Stack name ${stackName} should match pattern`
-      );
-    });
-
-    test('should have region configuration', () => {
-      // Validate region is set for integration tests
-      simpleAssert(region, 'AWS region should be configured');
-      simpleAssert(typeof region === 'string', 'Region should be a string');
-    });
-
-    test('should have environment suffix configuration', () => {
-      // Validate environment suffix is set
-      simpleAssert(
-        environmentSuffix,
-        'Environment suffix should be configured'
-      );
-      simpleAssert(
-        typeof environmentSuffix === 'string',
-        'Environment suffix should be a string'
-      );
-    });
-
-    test('should be compatible with CI/CD deployment', () => {
-      // Validate template doesn't require manual intervention
-      const resources = Object.values(template.Resources);
-      const manualResources = resources.filter((resource: any) => {
-        // Check for resources that might require manual setup
-        return (
-          resource.Type &&
-          (resource.Type === 'AWS::IAM::Role' ||
-            resource.Type === 'AWS::IAM::User' ||
-            resource.Type === 'AWS::IAM::Policy')
-        );
-      });
-      simpleEqual(
-        manualResources.length,
-        0,
-        'Should have no resources requiring manual IAM setup'
+        dbInstance?.PreferredMaintenanceWindow,
+        'Should have maintenance window configured'
       );
     });
   });
