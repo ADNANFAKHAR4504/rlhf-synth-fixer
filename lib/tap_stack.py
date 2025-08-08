@@ -137,21 +137,25 @@ artifacts:
             restrict_public_buckets=True,
             opts=ResourceOptions(parent=self, depends_on=[self.artifacts_bucket])
         )
-        
+      
         # Enable server-side encryption (using V2 for latest provider)
         aws.s3.BucketServerSideEncryptionConfigurationV2(
             f"{self.resource_name_prefix}-artifacts-bucket-encryption",
             bucket=self.artifacts_bucket.id,
-            server_side_encryption_configuration=aws.s3.BucketServerSideEncryptionConfigurationV2ServerSideEncryptionConfigurationArgs(
-                rules=[aws.s3.BucketServerSideEncryptionConfigurationV2ServerSideEncryptionConfigurationRuleArgs(
-                    apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationV2ServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
-                        sse_algorithm="AES256"
-                    )
-                )]
-            ),
-            opts=ResourceOptions(parent=self, depends_on=[self.artifacts_bucket])
+            rules=[
+                aws.s3.BucketServerSideEncryptionConfigurationV2RuleArgs(
+                    apply_server_side_encryption_by_default=
+                        aws.s3.BucketServerSideEncryptionConfigurationV2RuleApplyServerSideEncryptionByDefaultArgs(
+                            sse_algorithm="AES256"   # or "aws:kms"
+                            # kms_master_key_id=kms_key.arn,  # uncomment if using KMS
+                        )
+                )
+            ],
+            opts=ResourceOptions(parent=self, depends_on=[self.artifacts_bucket]),
         )
-        
+
+
+
         # Enable versioning for artifact integrity  
         aws.s3.BucketVersioningV2(
             f"{self.resource_name_prefix}-artifacts-bucket-versioning",
@@ -753,6 +757,8 @@ phases:
             policy_arn=self.rbac_policy.arn,
             opts=ResourceOptions(parent=self)
         )
+
+
         
         # Note: In a real-world scenario, you would need to add the specified
         # IAM users/roles to this group or directly attach the policy to them.
