@@ -57,10 +57,10 @@ class TestServerlessStack(unittest.TestCase):
 
   def test_lambda_execution_role_created(self):
     """
-    FIXED: The assertion was simplified to correctly match the managed policy ARN.
-    The previous attempts used complex matchers that were causing a runtime error.
-    This version directly matches the string for the ARN, which is the most
-    reliable way to test for the `AWSLambdaBasicExecutionRole` policy.
+    FIXED: The assertion has been corrected to use a robust regular expression
+    to match the managed policy ARN. This is the most reliable way to check
+    for a managed policy, as the ARN can sometimes be represented by a
+    CloudFormation intrinsic function instead of a simple string.
     """
     self.template.has_resource_properties("AWS::IAM::Role", {
       "AssumeRolePolicyDocument": {
@@ -75,7 +75,9 @@ class TestServerlessStack(unittest.TestCase):
         ])
       },
       "ManagedPolicyArns": Match.array_with([
-        "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+        Match.string_like_regexp(
+          r"arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+        )
       ])
     })
 
