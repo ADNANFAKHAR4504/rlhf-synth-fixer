@@ -30,6 +30,8 @@ Important: Use the commands in `package.json` and `pipfile` to run these tasks p
 - Ensure that all resources that will be created are destroyable (no Retain policies or protected
  from deletion). Make changes in the IaC code if needed to guarantee this.
 - Ensure that all resources names have the ENVIRONMENT_SUFFIX to avoid conflicts with other deployments.
+- You can never change the ci-cd .yml files that are deploying this project. Your mission is to create code
+that can be deployed with the current configuration of the ci-cd pipelines.
 - Deploy to AWS (max 10 attempts)
   - e.g. If there are refereces to SSM parameters, include those params as part of the deployed resources.
   - If ENVIRONMENT_SUFFIX env variable is not present, set it as `synth{TaskId}`:
@@ -40,13 +42,16 @@ Important: Use the commands in `package.json` and `pipfile` to run these tasks p
     same envs.
   - Check `lib/AWS_REGION` to check if there is a specific region to deploy on. if not, deploy to   us-east-1
   - If deployment fails, fix the code until it deploys succesfully.
+  - If you are not able to deploy, report this error and finish your execution with an error message.
 - Important: Verify that the deployed resources are consistent with the `lib/PROMPT.md` requirements. If
 they are not, fix the code to match the requirements (Except for the guardrails stablished in your agent description)
 - Important: Every deployment should be self-sufficient. There should not be references to resources
     that should be already created. Make sure that every deploy execution can run in isolation.
-- Save flattened outputs to `cfn-outputs/flat-outputs.json`. Very Important!: Check the
+- Every Stack should output the values that will be required for integration tests. Make sure that those outputs are being
+exported by the main or parent stack, so they are easy to retrieve by querying only one stack.
+- After the deployment succeeds, Save flattened outputs to `cfn-outputs/flat-outputs.json`. Very Important!: Check the
 `Get Deployment Outputs` job in `.github/workflows/ci-cd.yml` for reference on how to accomplish this per platform and region.
-The result should be similar to this (an object based on plain key, value):
+The result should be similar to this (an object based on plain key, value).
 
 ```json
 {
@@ -65,7 +70,7 @@ The result should be similar to this (an object based on plain key, value):
     - You can create new files, but use the existing ones.
   - Don't test hardcoded environmentSuffix
   - Convert YAML to JSON before testing if platform is cfn and language is yml
-  - Run until 100% coverage
+  - Run until 90% Coverage is reached. You cannot bypass this. Is mandatory to pass unit test coverage.
 - **Integration Tests**: End-to-end testing with real AWS outputs
   - Use the commands in `package.json` and `pipfile` to run the integration tests
   - Use the files and folder structure existent inside test or tests folder.
