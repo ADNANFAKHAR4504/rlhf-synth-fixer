@@ -1,910 +1,916 @@
-# Production-Grade Serverless Infrastructure with Pulumi
+# Complete Multi-Region Serverless CI/CD Pipeline Implementation
 
-I'll design a comprehensive serverless infrastructure solution that meets all your requirements. This solution includes a Lambda function connected to RDS through API Gateway, with proper security, testing, and documentation.
+I'll provide a comprehensive implementation of the multi-region serverless infrastructure with Pulumi, following AWS best practices and the specified requirements.
 
-## Project Structure
+## 1. Project Structure and Configuration
 
-```
-serverless-infrastructure/
-├── Pulumi.yaml
-├── Pulumi.dev.yaml
-├── requirements.txt
-├── __main__.py
-├── infrastructure/
-│   ├── __init__.py
-│   ├── vpc.py
-│   ├── rds.py
-│   ├── lambda_function.py
-│   ├── api_gateway.py
-│   └── iam.py
-├── lambda_src/
-│   ├── handler.py
-│   └── requirements.txt
-├── tests/
-│   ├── __init__.py
-│   ├── test_infrastructure.py
-│   └── test_api.py
-├── scripts/
-│   ├── deploy.sh
-│   └── test.sh
-└── README.md
+### Pulumi Project Configuration
+
+**Pulumi.yaml**
+```yaml
+name: iac-aws-nova-model-breaking
+runtime: python
+description: Multi-region serverless CI/CD pipeline with rolling updates
+template:
+  config:
+    aws:region:
+      description: Primary AWS region
+      default: us-east-1
 ```
 
-## Core Infrastructure Code
+**Pulumi.dev.yaml**
+```yaml
+config:
+  aws:region: us-east-1
+  iac-aws-nova-model-breaking:environment: dev
+  iac-aws-nova-model-breaking:secondary-region: us-west-2
+  iac-aws-nova-model-breaking:enable-monitoring: true
+```
 
-### 1. Main Pulumi Program (`__main__.py`)
+**requirements.txt**
+```txt
+pulumi>=3.0.0,<4.0.0
+pulumi-aws>=6.0.0,<7.0.0
+pulumi-awsx>=2.0.0,<3.0.0
+pytest>=7.0.0
+boto3>=1.26.0
+moto>=4.0.0
+```
+
+## 2. Main Infrastructure Code
+
+### lib/tap_stack.py
 
 ```python
-"""
-Main Pulumi program for serverless infrastructure deployment.
-This orchestrates the creation of all AWS resources with proper dependencies.
-"""
-
-import pulumi
-from infrastructure.vpc import create_vpc_infrastructure
-from infrastructure.iam import create_lambda_role
-from infrastructure.rds import create_rds_instance
-from infrastructure.lambda_function import create_lambda_function
-from infrastructure.api_gateway import create_api_gateway
-
-# Get configuration values
-config = pulumi.Config()
-environment = config.get("environment") or "dev"
-db_password = config.require_secret("db_password")
-db_username = config.get("db_username") or "admin"
-
-# Create VPC infrastructure first (foundational layer)
-vpc_resources = create_vpc_infrastructure(environment)
-
-# Create IAM role for Lambda execution
-lambda_role = create_lambda_role(environment)
-
-# Create RDS instance in private subnets
-rds_instance = create_rds_instance(
-    environment=environment,
-    vpc_id=vpc_resources["vpc_id"],
-    private_subnet_ids=vpc_resources["private_subnet_ids"],
-    db_security_group_id=vpc_resources["db_security_group_id"],
-    username=db_username,
-    password=db_password
-)
-
-# Create Lambda function with VPC configuration
-lambda_function = create_lambda_function(
-    environment=environment,
-    role_arn=lambda_role.arn,
-    vpc_id=vpc_resources["vpc_id"],
-    private_subnet_ids=vpc_resources["private_subnet_ids"],
-    lambda_security_group_id=vpc_resources["lambda_security_group_id"],
-    rds_endpoint=rds_instance.endpoint,
-    db_name=rds_instance.db_name,
-    db_username=db_username,
-    db_password=db_password
-)
-
-# Create API Gateway to trigger Lambda
-api_gateway = create_api_gateway(
-    environment=environment,
-    lambda_function_arn=lambda_function.arn,
-    lambda_function_name=lambda_function.name
-)
-
-# Export important values for reference
-pulumi.export("api_gateway_url", api_gateway["api_url"])
-pulumi.export("rds_endpoint", rds_instance.endpoint)
-pulumi.export("lambda_function_name", lambda_function.name)
-pulumi.export("vpc_id", vpc_resources["vpc_id"])
-```
-
-### 2. VPC Infrastructure (`infrastructure/vpc.py`)
-
-```python
-"""
-VPC infrastructure module for secure networking.
-Creates VPC, subnets, security groups, and NAT gateway for Lambda-RDS connectivity.
-"""
-
-import pulumi
-import pulumi_aws as aws
-
-def create_vpc_infrastructure(environment: str) -> dict:
-    """
-    Creates VPC infrastructure with public/private subnets and security groups.
-    
-    Args:
-        environment: Environment name (dev, staging, prod)
-        
-    Returns:
-        Dictionary containing VPC resource references
-    """
-    
-    # Create VPC with DNS support for RDS connectivity
-    vpc = aws.ec2.Vpc(
-        f"vpc-{environment}",
-        cidr_block="10.0.0.0/16",
-        enable_dns_hostnames=True,
-        enable_dns_support=True,
-        tags={
-            "Name": f"vpc-{environment}",
-            "Environment": environment
-        }
-    )
-    
-    # Create Internet Gateway for public subnet connectivity
-    igw = aws.ec2.InternetGateway(
-        f"igw-{environment}",
-        vpc_id=vpc.id,
-        tags={
-            "Name": f"igw-{environment}",
-            "Environment": environment
-        }
-    )
-    
-    # Get availability zones for multi-AZ deployment
-    azs = aws.get_availability_zones(state="available")
-    
-    # Create public subnets (for NAT Gateway)
-    public_subnets = []
-    for i, az in enumerate(azs.names[:2]):  # Use first 2 AZs
-        subnet = aws.ec2.Subnet(
-            f"public-subnet-{environment}-{i+1}",
-            vpc_id=vpc.id,
-            cidr_block=f"10.0.{i+1}.0/24",
-            availability_zone=az,
-            map_public_ip_on_launch=True,
-            tags={
-                "Name": f"public-subnet-{environment}-{i+1}",
-                "Environment": environment,
-                "Type": "Public"
-            }
-        )
-        public_subnets.append(subnet)
-    
-    # Create private subnets (for Lambda and RDS)
-    private_subnets = []
-    for i, az in enumerate(azs.names[:2]):
-        subnet = aws.ec2.Subnet(
-            f"private-subnet-{environment}-{i+1}",
-            vpc_id=vpc.id,
-            cidr_block=f"10.0.{i+10}.0/24",
-            availability_zone=az,
-            tags={
-                "Name": f"private-subnet-{environment}-{i+1}",
-                "Environment": environment,
-                "Type": "Private"
-            }
-        )
-        private_subnets.append(subnet)
-    
-    # Create Elastic IP for NAT Gateway
-    nat_eip = aws.ec2.Eip(
-        f"nat-eip-{environment}",
-        domain="vpc",
-        tags={
-            "Name": f"nat-eip-{environment}",
-            "Environment": environment
-        }
-    )
-    
-    # Create NAT Gateway in first public subnet
-    nat_gateway = aws.ec2.NatGateway(
-        f"nat-gateway-{environment}",
-        allocation_id=nat_eip.id,
-        subnet_id=public_subnets[0].id,
-        tags={
-            "Name": f"nat-gateway-{environment}",
-            "Environment": environment
-        }
-    )
-    
-    # Create route table for public subnets
-    public_rt = aws.ec2.RouteTable(
-        f"public-rt-{environment}",
-        vpc_id=vpc.id,
-        routes=[
-            aws.ec2.RouteTableRouteArgs(
-                cidr_block="0.0.0.0/0",
-                gateway_id=igw.id
-            )
-        ],
-        tags={
-            "Name": f"public-rt-{environment}",
-            "Environment": environment
-        }
-    )
-    
-    # Create route table for private subnets
-    private_rt = aws.ec2.RouteTable(
-        f"private-rt-{environment}",
-        vpc_id=vpc.id,
-        routes=[
-            aws.ec2.RouteTableRouteArgs(
-                cidr_block="0.0.0.0/0",
-                nat_gateway_id=nat_gateway.id
-            )
-        ],
-        tags={
-            "Name": f"private-rt-{environment}",
-            "Environment": environment
-        }
-    )
-    
-    # Associate public subnets with public route table
-    for i, subnet in enumerate(public_subnets):
-        aws.ec2.RouteTableAssociation(
-            f"public-rta-{environment}-{i+1}",
-            subnet_id=subnet.id,
-            route_table_id=public_rt.id
-        )
-    
-    # Associate private subnets with private route table
-    for i, subnet in enumerate(private_subnets):
-        aws.ec2.RouteTableAssociation(
-            f"private-rta-{environment}-{i+1}",
-            subnet_id=subnet.id,
-            route_table_id=private_rt.id
-        )
-    
-    # Security group for Lambda function
-    lambda_sg = aws.ec2.SecurityGroup(
-        f"lambda-sg-{environment}",
-        name=f"lambda-sg-{environment}",
-        description="Security group for Lambda function",
-        vpc_id=vpc.id,
-        egress=[
-            aws.ec2.SecurityGroupEgressArgs(
-                protocol="-1",
-                from_port=0,
-                to_port=0,
-                cidr_blocks=["0.0.0.0/0"]
-            )
-        ],
-        tags={
-            "Name": f"lambda-sg-{environment}",
-            "Environment": environment
-        }
-    )
-    
-    # Security group for RDS instance
-    db_sg = aws.ec2.SecurityGroup(
-        f"db-sg-{environment}",
-        name=f"db-sg-{environment}",
-        description="Security group for RDS database",
-        vpc_id=vpc.id,
-        ingress=[
-            aws.ec2.SecurityGroupIngressArgs(
-                protocol="tcp",
-                from_port=5432,  # PostgreSQL port
-                to_port=5432,
-                security_groups=[lambda_sg.id]
-            )
-        ],
-        tags={
-            "Name": f"db-sg-{environment}",
-            "Environment": environment
-        }
-    )
-    
-    return {
-        "vpc_id": vpc.id,
-        "public_subnet_ids": [subnet.id for subnet in public_subnets],
-        "private_subnet_ids": [subnet.id for subnet in private_subnets],
-        "lambda_security_group_id": lambda_sg.id,
-        "db_security_group_id": db_sg.id,
-        "nat_gateway_id": nat_gateway.id
-    }
-```
-
-### 3. IAM Role (`infrastructure/iam.py`)
-
-```python
-"""
-IAM module for Lambda execution role with least privilege permissions.
-Creates role with necessary permissions for VPC, RDS, and CloudWatch access.
-"""
-
 import json
+from typing import Dict, List, Optional
+import pulumi
 import pulumi_aws as aws
+import pulumi_awsx as awsx
+from pulumi import ComponentResource, ResourceOptions, Output
 
-def create_lambda_role(environment: str) -> aws.iam.Role:
-    """
-    Creates IAM role for Lambda with least privilege permissions.
-    
-    Args:
-        environment: Environment name (dev, staging, prod)
+
+class TapStackArgs:
+    def __init__(
+        self,
+        environment: str,
+        primary_region: str,
+        secondary_region: str,
+        enable_monitoring: bool = True,
+        lambda_timeout: int = 30,
+        api_stage_name: str = "v1"
+    ):
+        self.environment = environment
+        self.primary_region = primary_region
+        self.secondary_region = secondary_region
+        self.enable_monitoring = enable_monitoring
+        self.lambda_timeout = lambda_timeout
+        self.api_stage_name = api_stage_name
+
+
+class VPCComponent(ComponentResource):
+    def __init__(self, name: str, args: TapStackArgs, opts: Optional[ResourceOptions] = None):
+        super().__init__("custom:networking:VPC", name, {}, opts)
         
-    Returns:
-        IAM Role for Lambda execution
-    """
-    
-    # Trust policy for Lambda service
-    assume_role_policy = json.dumps({
-        "Version": "2012-10-17",
-        "Statement": [
-            {
-                "Action": "sts:AssumeRole",
-                "Effect": "Allow",
-                "Principal": {
-                    "Service": "lambda.amazonaws.com"
-                }
-            }
-        ]
-    })
-    
-    # Create Lambda execution role
-    lambda_role = aws.iam.Role(
-        f"lambda-role-{environment}",
-        name=f"lambda-role-{environment}",
-        assume_role_policy=assume_role_policy,
-        tags={
-            "Name": f"lambda-role-{environment}",
-            "Environment": environment
-        }
-    )
-    
-    # Attach basic Lambda execution policy
-    aws.iam.RolePolicyAttachment(
-        f"lambda-basic-execution-{environment}",
-        role=lambda_role.name,
-        policy_arn="arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
-    )
-    
-    # Attach VPC access policy for Lambda
-    aws.iam.RolePolicyAttachment(
-        f"lambda-vpc-access-{environment}",
-        role=lambda_role.name,
-        policy_arn="arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
-    )
-    
-    # Custom policy for RDS access (read-only for security)
-    rds_policy = aws.iam.Policy(
-        f"lambda-rds-policy-{environment}",
-        name=f"lambda-rds-policy-{environment}",
-        description="Policy for Lambda to access RDS",
-        policy=json.dumps({
-            "Version": "2012-10-17",
-            "Statement": [
-                {
-                    "Effect": "Allow",
-                    "Action": [
-                        "rds:DescribeDBInstances",
-                        "rds:DescribeDBClusters"
-                    ],
-                    "Resource": "*"
+        # Create VPC
+        self.vpc = aws.ec2.Vpc(
+            f"{name}-vpc",
+            cidr_block="10.0.0.0/16",
+            enable_dns_hostnames=True,
+            enable_dns_support=True,
+            tags={
+                "Name": f"nova-vpc-{args.environment}",
+                "Environment": args.environment,
+                "Project": "nova-model-breaking"
+            },
+            opts=ResourceOptions(parent=self)
+        )
+        
+        # Create Internet Gateway
+        self.igw = aws.ec2.InternetGateway(
+            f"{name}-igw",
+            vpc_id=self.vpc.id,
+            tags={
+                "Name": f"nova-igw-{args.environment}",
+                "Environment": args.environment
+            },
+            opts=ResourceOptions(parent=self)
+        )
+        
+        # Create public subnets
+        self.public_subnets = []
+        availability_zones = aws.get_availability_zones(state="available")
+        
+        for i, az in enumerate(availability_zones.names[:2]):
+            subnet = aws.ec2.Subnet(
+                f"{name}-public-subnet-{i+1}",
+                vpc_id=self.vpc.id,
+                cidr_block=f"10.0.{i+1}.0/24",
+                availability_zone=az,
+                map_public_ip_on_launch=True,
+                tags={
+                    "Name": f"nova-public-subnet-{i+1}-{args.environment}",
+                    "Environment": args.environment,
+                    "Type": "public"
                 },
-                {
-                    "Effect": "Allow",
-                    "Action": [
-                        "logs:CreateLogGroup",
-                        "logs:CreateLogStream",
-                        "logs:PutLogEvents"
-                    ],
-                    "Resource": f"arn:aws:logs:*:*:log-group:/aws/lambda/*"
-                }
-            ]
-        })
-    )
-    
-    # Attach custom RDS policy
-    aws.iam.RolePolicyAttachment(
-        f"lambda-rds-policy-attachment-{environment}",
-        role=lambda_role.name,
-        policy_arn=rds_policy.arn
-    )
-    
-    return lambda_role
-```
-
-### 4. RDS Instance (`infrastructure/rds.py`)
-
-```python
-"""
-RDS module for PostgreSQL database instance.
-Creates RDS with encryption, backup, and proper subnet group configuration.
-"""
-
-import pulumi
-import pulumi_aws as aws
-
-def create_rds_instance(
-    environment: str,
-    vpc_id: pulumi.Output[str],
-    private_subnet_ids: list,
-    db_security_group_id: pulumi.Output[str],
-    username: str,
-    password: pulumi.Output[str]
-) -> aws.rds.Instance:
-    """
-    Creates RDS PostgreSQL instance with security best practices.
-    
-    Args:
-        environment: Environment name
-        vpc_id: VPC ID where RDS will be created
-        private_subnet_ids: List of private subnet IDs
-        db_security_group_id: Security group ID for database
-        username: Database username
-        password: Database password (secret)
-        
-    Returns:
-        RDS Instance
-    """
-    
-    # Create DB subnet group for multi-AZ deployment
-    db_subnet_group = aws.rds.SubnetGroup(
-        f"db-subnet-group-{environment}",
-        name=f"db-subnet-group-{environment}",
-        subnet_ids=private_subnet_ids,
-        tags={
-            "Name": f"db-subnet-group-{environment}",
-            "Environment": environment
-        }
-    )
-    
-    # Create RDS parameter group for PostgreSQL optimization
-    db_parameter_group = aws.rds.ParameterGroup(
-        f"db-params-{environment}",
-        name=f"db-params-{environment}",
-        family="postgres14",
-        description=f"Parameter group for {environment} PostgreSQL",
-        parameters=[
-            aws.rds.ParameterGroupParameterArgs(
-                name="shared_preload_libraries",
-                value="pg_stat_statements"
-            ),
-            aws.rds.ParameterGroupParameterArgs(
-                name="log_statement",
-                value="all"
+                opts=ResourceOptions(parent=self)
             )
-        ],
-        tags={
-            "Name": f"db-params-{environment}",
-            "Environment": environment
-        }
-    )
-    
-    # Determine instance class based on environment
-    instance_class_map = {
-        "dev": "db.t3.micro",
-        "staging": "db.t3.small", 
-        "prod": "db.t3.medium"
-    }
-    instance_class = instance_class_map.get(environment, "db.t3.micro")
-    
-    # Create RDS instance with encryption and backup
-    rds_instance = aws.rds.Instance(
-        f"postgres-{environment}",
-        identifier=f"postgres-{environment}",
-        engine="postgres",
-        engine_version="14.9",
-        instance_class=instance_class,
-        allocated_storage=20,
-        max_allocated_storage=100,  # Enable storage autoscaling
-        storage_type="gp2",
-        storage_encrypted=True,  # Encrypt storage at rest
+            self.public_subnets.append(subnet)
         
-        # Database configuration
-        db_name="appdb",
-        username=username,
-        password=password,
-        port=5432,
+        # Create private subnets
+        self.private_subnets = []
+        for i, az in enumerate(availability_zones.names[:2]):
+            subnet = aws.ec2.Subnet(
+                f"{name}-private-subnet-{i+1}",
+                vpc_id=self.vpc.id,
+                cidr_block=f"10.0.{i+10}.0/24",
+                availability_zone=az,
+                tags={
+                    "Name": f"nova-private-subnet-{i+1}-{args.environment}",
+                    "Environment": args.environment,
+                    "Type": "private"
+                },
+                opts=ResourceOptions(parent=self)
+            )
+            self.private_subnets.append(subnet)
         
-        # Network and security
-        vpc_security_group_ids=[db_security_group_id],
-        db_subnet_group_name=db_subnet_group.name,
-        parameter_group_name=db_parameter_group.name,
-        publicly_accessible=False,  # Keep in private subnet
+        # Create route table for public subnets
+        self.public_route_table = aws.ec2.RouteTable(
+            f"{name}-public-rt",
+            vpc_id=self.vpc.id,
+            routes=[
+                aws.ec2.RouteTableRouteArgs(
+                    cidr_block="0.0.0.0/0",
+                    gateway_id=self.igw.id
+                )
+            ],
+            tags={
+                "Name": f"nova-public-rt-{args.environment}",
+                "Environment": args.environment
+            },
+            opts=ResourceOptions(parent=self)
+        )
         
-        # Backup and maintenance
-        backup_retention_period=7,
-        backup_window="03:00-04:00",  # UTC
-        maintenance_window="sun:04:00-sun:05:00",  # UTC
-        auto_minor_version_upgrade=True,
+        # Associate public subnets with route table
+        for i, subnet in enumerate(self.public_subnets):
+            aws.ec2.RouteTableAssociation(
+                f"{name}-public-rta-{i+1}",
+                subnet_id=subnet.id,
+                route_table_id=self.public_route_table.id,
+                opts=ResourceOptions(parent=self)
+            )
         
-        # Monitoring and performance
-        monitoring_interval=60,
-        performance_insights_enabled=True,
-        performance_insights_retention_period=7,
+        # Create security group for Lambda functions
+        self.lambda_security_group = aws.ec2.SecurityGroup(
+            f"{name}-lambda-sg",
+            description="Security group for Lambda functions",
+            vpc_id=self.vpc.id,
+            egress=[
+                aws.ec2.SecurityGroupEgressArgs(
+                    protocol="-1",
+                    from_port=0,
+                    to_port=0,
+                    cidr_blocks=["0.0.0.0/0"]
+                )
+            ],
+            tags={
+                "Name": f"nova-lambda-sg-{args.environment}",
+                "Environment": args.environment
+            },
+            opts=ResourceOptions(parent=self)
+        )
         
-        # Deletion protection for production
-        deletion_protection=environment == "prod",
-        skip_final_snapshot=environment != "prod",
-        final_snapshot_identifier=f"postgres-{environment}-final-snapshot" if environment == "prod" else None,
-        
-        tags={
-            "Name": f"postgres-{environment}",
-            "Environment": environment,
-            "Engine": "PostgreSQL"
-        }
-    )
-    
-    return rds_instance
-```
+        # VPC Endpoints for AWS services
+        self.s3_endpoint = aws.ec2.VpcEndpoint(
+            f"{name}-s3-endpoint",
+            vpc_id=self.vpc.id,
+            service_name=f"com.amazonaws.{args.primary_region}.s3",
+            vpc_endpoint_type="Gateway",
+            route_table_ids=[self.public_route_table.id],
+            tags={
+                "Name": f"nova-s3-endpoint-{args.environment}",
+                "Environment": args.environment
+            },
+            opts=ResourceOptions(parent=self)
+        )
 
-### 5. Lambda Function (`infrastructure/lambda_function.py`)
 
-```python
-"""
-Lambda function module with VPC configuration and environment variables.
-Creates Lambda deployment package and configures networking.
-"""
-
-import base64
+class LambdaComponent(ComponentResource):
+    def __init__(self, name: str, args: TapStackArgs, vpc: VPCComponent, opts: Optional[ResourceOptions] = None):
+        super().__init__("custom:compute:Lambda", name, {}, opts)
+        
+        # Create IAM role for Lambda
+        self.lambda_role = aws.iam.Role(
+            f"{name}-lambda-role",
+            assume_role_policy=json.dumps({
+                "Version": "2012-10-17",
+                "Statement": [
+                    {
+                        "Action": "sts:AssumeRole",
+                        "Effect": "Allow",
+                        "Principal": {
+                            "Service": "lambda.amazonaws.com"
+                        }
+                    }
+                ]
+            }),
+            tags={
+                "Name": f"nova-lambda-role-{args.environment}",
+                "Environment": args.environment
+            },
+            opts=ResourceOptions(parent=self)
+        )
+        
+        # Attach necessary policies
+        aws.iam.RolePolicyAttachment(
+            f"{name}-lambda-vpc-policy",
+            role=self.lambda_role.name,
+            policy_arn="arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole",
+            opts=ResourceOptions(parent=self)
+        )
+        
+        aws.iam.RolePolicyAttachment(
+            f"{name}-lambda-basic-policy",
+            role=self.lambda_role.name,
+            policy_arn="arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
+            opts=ResourceOptions(parent=self)
+        )
+        
+        # Custom policy for S3 and CloudWatch
+        lambda_policy = aws.iam.Policy(
+            f"{name}-lambda-custom-policy",
+            policy=json.dumps({
+                "Version": "2012-10-17",
+                "Statement": [
+                    {
+                        "Effect": "Allow",
+                        "Action": [
+                            "s3:GetObject",
+                            "s3:PutObject",
+                            "s3:DeleteObject"
+                        ],
+                        "Resource": "*"
+                    },
+                    {
+                        "Effect": "Allow",
+                        "Action": [
+                            "cloudwatch:PutMetricData",
+                            "logs:CreateLogGroup",
+                            "logs:CreateLogStream",
+                            "logs:PutLogEvents"
+                        ],
+                        "Resource": "*"
+                    }
+                ]
+            }),
+            opts=ResourceOptions(parent=self)
+        )
+        
+        aws.iam.RolePolicyAttachment(
+            f"{name}-lambda-custom-policy-attachment",
+            role=self.lambda_role.name,
+            policy_arn=lambda_policy.arn,
+            opts=ResourceOptions(parent=self)
+        )
+        
+        # Lambda function code
+        lambda_code = """
 import json
-import pulumi
-import pulumi_aws as aws
-
-def create_lambda_function(
-    environment: str,
-    role_arn: pulumi.Output[str],
-    vpc_id: pulumi.Output[str],
-    private_subnet_ids: list,
-    lambda_security_group_id: pulumi.Output[str],
-    rds_endpoint: pulumi.Output[str],
-    db_name: pulumi.Output[str],
-    db_username: str,
-    db_password: pulumi.Output[str]
-) -> aws.lambda_.Function:
-    """
-    Creates Lambda function with VPC configuration and RDS connectivity.
-    
-    Args:
-        environment: Environment name
-        role_arn: IAM role ARN for Lambda execution
-        vpc_id: VPC ID for Lambda deployment
-        private_subnet_ids: Private subnet IDs for Lambda
-        lambda_security_group_id: Security group for Lambda
-        rds_endpoint: RDS instance endpoint
-        db_name: Database name
-        db_username: Database username
-        db_password: Database password (secret)
-        
-    Returns:
-        Lambda Function
-    """
-    
-    # Create Lambda deployment package
-    lambda_code = """
-import json
-import logging
-import os
-import psycopg2
-from psycopg2.extras import RealDictCursor
 import boto3
+import logging
+from datetime import datetime
 
-# Configure structured logging
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 def lambda_handler(event, context):
-    \"\"\"
-    Lambda handler for API Gateway requests.
-    Connects to RDS and executes database operations.
-    \"\"\"
-    
-    # Log incoming request for debugging
-    logger.info(f"Received event: {json.dumps(event)}")
-    
     try:
-        # Extract HTTP method and path
-        http_method = event.get('httpMethod', 'GET')
-        path = event.get('path', '/')
+        logger.info(f"Received event: {json.dumps(event)}")
         
-        # Database connection parameters from environment
-        db_config = {
-            'host': os.environ['DB_HOST'],
-            'database': os.environ['DB_NAME'],
-            'user': os.environ['DB_USER'],
-            'password': os.environ['DB_PASSWORD'],
-            'port': int(os.environ.get('DB_PORT', 5432)),
-            'connect_timeout': 10,
-            'sslmode': 'require'  # Enforce SSL connection
+        # Process the request
+        response_body = {
+            "message": "Hello from Nova Model Breaking API",
+            "timestamp": datetime.utcnow().isoformat(),
+            "region": context.invoked_function_arn.split(":")[3],
+            "version": context.function_version,
+            "request_id": context.aws_request_id
         }
         
-        # Handle different API endpoints
-        if path == '/health' and http_method == 'GET':
-            return handle_health_check(db_config)
-        elif path == '/users' and http_method == 'GET':
-            return handle_get_users(db_config)
-        elif path == '/users' and http_method == 'POST':
-            body = json.loads(event.get('body', '{}'))
-            return handle_create_user(db_config, body)
-        else:
-            return create_response(404, {'error': 'Endpoint not found'})
-            
+        # Custom CloudWatch metric
+        cloudwatch = boto3.client('cloudwatch')
+        cloudwatch.put_metric_data(
+            Namespace='NovaModelBreaking',
+            MetricData=[
+                {
+                    'MetricName': 'RequestCount',
+                    'Value': 1,
+                    'Unit': 'Count',
+                    'Dimensions': [
+                        {
+                            'Name': 'Environment',
+                            'Value': event.get('environment', 'unknown')
+                        }
+                    ]
+                }
+            ]
+        )
+        
+        return {
+            "statusCode": 200,
+            "headers": {
+                "Content-Type": "application/json",
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+                "Access-Control-Allow-Headers": "Content-Type"
+            },
+            "body": json.dumps(response_body)
+        }
+        
     except Exception as e:
-        logger.error(f"Unhandled error: {str(e)}", exc_info=True)
-        return create_response(500, {'error': 'Internal server error'})
-
-def handle_health_check(db_config):
-    \"\"\"Health check endpoint to verify database connectivity.\"\"\"
-    try:
-        with psycopg2.connect(**db_config) as conn:
-            with conn.cursor() as cursor:
-                cursor.execute("SELECT version();")
-                version = cursor.fetchone()[0]
-                
-        logger.info("Database health check successful")
-        return create_response(200, {
-            'status': 'healthy',
-            'database': 'connected',
-            'version': version
-        })
-        
-    except psycopg2.Error as e:
-        logger.error(f"Database connection error: {str(e)}")
-        return create_response(503, {
-            'status': 'unhealthy',
-            'database': 'disconnected',
-            'error': str(e)
-        })
-
-def handle_get_users(db_config):
-    \"\"\"Get all users from database.\"\"\"
-    try:
-        with psycopg2.connect(**db_config) as conn:
-            with conn.cursor(cursor_factory=RealDictCursor) as cursor:
-                # Create users table if it doesn't exist
-                cursor.execute(\"\"\"
-                    CREATE TABLE IF NOT EXISTS users (
-                        id SERIAL PRIMARY KEY,
-                        name VARCHAR(100) NOT NULL,
-                        email VARCHAR(100) UNIQUE NOT NULL,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                    );
-                \"\"\")
-                
-                # Fetch all users
-                cursor.execute("SELECT id, name, email, created_at FROM users ORDER BY id;")
-                users = cursor.fetchall()
-                
-        logger.info(f"Retrieved {len(users)} users")
-        return create_response(200, {'users': [dict(user) for user in users]})
-        
-    except psycopg2.Error as e:
-        logger.error(f"Database query error: {str(e)}")
-        return create_response(500, {'error': 'Database query failed'})
-
-def handle_create_user(db_config, user_data):
-    \"\"\"Create a new user in database.\"\"\"
-    try:
-        # Validate input
-        if not user_data.get('name') or not user_data.get('email'):
-            return create_response(400, {'error': 'Name and email are required'})
-            
-        with psycopg2.connect(**db_config) as conn:
-            with conn.cursor(cursor_factory=RealDictCursor) as cursor:
-                # Create users table if it doesn't exist
-                cursor.execute(\"\"\"
-                    CREATE TABLE IF NOT EXISTS users (
-                        id SERIAL PRIMARY KEY,
-                        name VARCHAR(100) NOT NULL,
-                        email VARCHAR(100) UNIQUE NOT NULL,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                    );
-                \"\"\")
-                
-                # Insert new user
-                cursor.execute(
-                    "INSERT INTO users (name, email) VALUES (%s, %s) RETURNING id, name, email, created_at;",
-                    (user_data['name'], user_data['email'])
-                )
-                new_user = cursor.fetchone()
-                conn.commit()
-                
-        logger.info(f"Created user: {new_user['email']}")
-        return create_response(201, {'user': dict(new_user)})
-        
-    except psycopg2.IntegrityError as e:
-        logger.error(f"User creation failed - integrity error: {str(e)}")
-        return create_response(409, {'error': 'Email already exists'})
-    except psycopg2.Error as e:
-        logger.error(f"Database error during user creation: {str(e)}")
-        return create_response(500, {'error': 'Failed to create user'})
-
-def create_response(status_code, body):
-    \"\"\"Create standardized API Gateway response.\"\"\"
-    return {
-        'statusCode': status_code,
-        'headers': {
-            'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': '*',
-            'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-            'Access-Control-Allow-Headers': 'Content-Type'
-        },
-        'body': json.dumps(body, default=str)  # Handle datetime serialization
-    }
+        logger.error(f"Error processing request: {str(e)}")
+        return {
+            "statusCode": 500,
+            "headers": {
+                "Content-Type": "application/json",
+                "Access-Control-Allow-Origin": "*"
+            },
+            "body": json.dumps({
+                "error": "Internal server error",
+                "message": str(e)
+            })
+        }
 """
+        
+        # Create Lambda function
+        self.function = aws.lambda_.Function(
+            f"{name}-function",
+            runtime="python3.9",
+            code=pulumi.AssetArchive({
+                "lambda_function.py": pulumi.StringAsset(lambda_code)
+            }),
+            handler="lambda_function.lambda_handler",
+            role=self.lambda_role.arn,
+            timeout=args.lambda_timeout,
+            memory_size=256,
+            vpc_config=aws.lambda_.FunctionVpcConfigArgs(
+                subnet_ids=[subnet.id for subnet in vpc.private_subnets],
+                security_group_ids=[vpc.lambda_security_group.id]
+            ),
+            environment=aws.lambda_.FunctionEnvironmentArgs(
+                variables={
+                    "ENVIRONMENT": args.environment,
+                    "REGION": args.primary_region
+                }
+            ),
+            tags={
+                "Name": f"nova-function-{args.environment}",
+                "Environment": args.environment,
+                "Project": "nova-model-breaking"
+            },
+            opts=ResourceOptions(parent=self)
+        )
+        
+        # Create Lambda alias for blue-green deployments
+        self.alias = aws.lambda_.Alias(
+            f"{name}-alias",
+            function_name=self.function.name,
+            function_version="$LATEST",
+            description=f"Alias for {args.environment} environment",
+            opts=ResourceOptions(parent=self)
+        )
+
+
+class APIGatewayComponent(ComponentResource):
+    def __init__(self, name: str, args: TapStackArgs, lambda_func: LambdaComponent, opts: Optional[ResourceOptions] = None):
+        super().__init__("custom:api:Gateway", name, {}, opts)
+        
+        # Create API Gateway
+        self.api = aws.apigateway.RestApi(
+            f"{name}-api",
+            description=f"Nova Model Breaking API - {args.environment}",
+            endpoint_configuration=aws.apigateway.RestApiEndpointConfigurationArgs(
+                types="REGIONAL"
+            ),
+            tags={
+                "Name": f"nova-api-{args.environment}",
+                "Environment": args.environment,
+                "Project": "nova-model-breaking"
+            },
+            opts=ResourceOptions(parent=self)
+        )
+        
+        # Create API Gateway resource
+        self.resource = aws.apigateway.Resource(
+            f"{name}-api-resource",
+            rest_api=self.api.id,
+            parent_id=self.api.root_resource_id,
+            path_part="nova",
+            opts=ResourceOptions(parent=self)
+        )
+        
+        # Create method
+        self.method = aws.apigateway.Method(
+            f"{name}-api-method",
+            rest_api=self.api.id,
+            resource_id=self.resource.id,
+            http_method="GET",
+            authorization="NONE",
+            opts=ResourceOptions(parent=self)
+        )
+        
+        # Create integration
+        self.integration = aws.apigateway.Integration(
+            f"{name}-api-integration",
+            rest_api=self.api.id,
+            resource_id=self.resource.id,
+            http_method=self.method.http_method,
+            integration_http_method="POST",
+            type="AWS_PROXY",
+            uri=lambda_func.alias.invoke_arn,
+            opts=ResourceOptions(parent=self)
+        )
+        
+        # Lambda permission for API Gateway
+        self.lambda_permission = aws.lambda_.Permission(
+            f"{name}-lambda-permission",
+            statement_id="AllowExecutionFromAPIGateway",
+            action="lambda:InvokeFunction",
+            function=lambda_func.alias.function_name,
+            qualifier=lambda_func.alias.name,
+            principal="apigateway.amazonaws.com",
+            source_arn=pulumi.Output.concat(self.api.execution_arn, "/*/*"),
+            opts=ResourceOptions(parent=self)
+        )
+        
+        # Create deployment
+        self.deployment = aws.apigateway.Deployment(
+            f"{name}-api-deployment",
+            rest_api=self.api.id,
+            stage_name=args.api_stage_name,
+            stage_description=f"Deployment for {args.environment}",
+            opts=ResourceOptions(
+                parent=self,
+                depends_on=[self.method, self.integration]
+            )
+        )
+        
+        # Create stage with monitoring
+        self.stage = aws.apigateway.Stage(
+            f"{name}-api-stage",
+            deployment=self.deployment.id,
+            rest_api=self.api.id,
+            stage_name=args.api_stage_name,
+            xray_tracing_enabled=True,
+            tags={
+                "Name": f"nova-api-stage-{args.environment}",
+                "Environment": args.environment
+            },
+            opts=ResourceOptions(parent=self)
+        )
+
+
+class S3Component(ComponentResource):
+    def __init__(self, name: str, args: TapStackArgs, opts: Optional[ResourceOptions] = None):
+        super().__init__("custom:storage:S3", name, {}, opts)
+        
+        # Primary region bucket
+        self.primary_bucket = aws.s3.Bucket(
+            f"{name}-primary-bucket",
+            bucket=f"nova-model-breaking-{args.environment}-{args.primary_region}",
+            tags={
+                "Name": f"nova-primary-bucket-{args.environment}",
+                "Environment": args.environment,
+                "Region": args.primary_region
+            },
+            opts=ResourceOptions(parent=self)
+        )
+        
+        # Configure bucket versioning
+        aws.s3.BucketVersioning(
+            f"{name}-primary-bucket-versioning",
+            bucket=self.primary_bucket.id,
+            versioning_configuration=aws.s3.BucketVersioningVersioningConfigurationArgs(
+                status="Enabled"
+            ),
+            opts=ResourceOptions(parent=self)
+        )
+        
+        # Configure bucket encryption
+        aws.s3.BucketServerSideEncryptionConfiguration(
+            f"{name}-primary-bucket-encryption",
+            bucket=self.primary_bucket.id,
+            rules=[
+                aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
+                    apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
+                        sse_algorithm="AES256"
+                    )
+                )
+            ],
+            opts=ResourceOptions(parent=self)
+        )
+        
+        # Block public access
+        aws.s3.BucketPublicAccessBlock(
+            f"{name}-primary-bucket-pab",
+            bucket=self.primary_bucket.id,
+            block_public_acls=True,
+            block_public_policy=True,
+            ignore_public_acls=True,
+            restrict_public_buckets=True,
+            opts=ResourceOptions(parent=self)
+        )
+
+
+class MonitoringComponent(ComponentResource):
+    def __init__(self, name: str, args: TapStackArgs, lambda_func: LambdaComponent, api: APIGatewayComponent, opts: Optional[ResourceOptions] = None):
+        super().__init__("custom:monitoring:CloudWatch", name, {}, opts)
+        
+        # SNS topic for alerts
+        self.alert_topic = aws.sns.Topic(
+            f"{name}-alerts",
+            name=f"nova-alerts-{args.environment}",
+            tags={
+                "Name": f"nova-alerts-{args.environment}",
+                "Environment": args.environment
+            },
+            opts=ResourceOptions(parent=self)
+        )
+        
+        # Lambda error alarm
+        self.lambda_error_alarm = aws.cloudwatch.MetricAlarm(
+            f"{name}-lambda-error-alarm",
+            comparison_operator="GreaterThanThreshold",
+            evaluation_periods=2,
+            metric_name="Errors",
+            namespace="AWS/Lambda",
+            period=300,
+            statistic="Sum",
+            threshold=1,
+            alarm_description=f"Lambda function errors in {args.environment}",
+            alarm_name=f"nova-lambda-errors-{args.environment}",
+            dimensions={
+                "FunctionName": lambda_func.function.name
+            },
+            alarm_actions=[self.alert_topic.arn],
+            tags={
+                "Environment": args.environment
+            },
+            opts=ResourceOptions(parent=self)
+        )
+        
+        # Lambda duration alarm
+        self.lambda_duration_alarm = aws.cloudwatch.MetricAlarm(
+            f"{name}-lambda-duration-alarm",
+            comparison_operator="GreaterThanThreshold",
+            evaluation_periods=3,
+            metric_name="Duration",
+            namespace="AWS/Lambda",
+            period=300,
+            statistic="Average",
+            threshold=10000,  # 10 seconds
+            alarm_description=f"Lambda function duration in {args.environment}",
+            alarm_name=f"nova-lambda-duration-{args.environment}",
+            dimensions={
+                "FunctionName": lambda_func.function.name
+            },
+            alarm_actions=[self.alert_topic.arn],
+            tags={
+                "Environment": args.environment
+            },
+            opts=ResourceOptions(parent=self)
+        )
+        
+        # API Gateway 4XX errors alarm
+        self.api_4xx_alarm = aws.cloudwatch.MetricAlarm(
+            f"{name}-api-4xx-alarm",
+            comparison_operator="GreaterThanThreshold",
+            evaluation_periods=2,
+            metric_name="4XXError",
+            namespace="AWS/ApiGateway",
+            period=300,
+            statistic="Sum",
+            threshold=10,
+            alarm_description=f"API Gateway 4XX errors in {args.environment}",
+            alarm_name=f"nova-api-4xx-{args.environment}",
+            dimensions={
+                "ApiName": api.api.name,
+                "Stage": args.api_stage_name
+            },
+            alarm_actions=[self.alert_topic.arn],
+            tags={
+                "Environment": args.environment
+            },
+            opts=ResourceOptions(parent=self)
+        )
+        
+        # API Gateway 5XX errors alarm
+        self.api_5xx_alarm = aws.cloudwatch.MetricAlarm(
+            f"{name}-api-5xx-alarm",
+            comparison_operator="GreaterThanThreshold",
+            evaluation_periods=1,
+            metric_name="5XXError",
+            namespace="AWS/ApiGateway",
+            period=300,
+            statistic="Sum",
+            threshold=1,
+            alarm_description=f"API Gateway 5XX errors in {args.environment}",
+            alarm_name=f"nova-api-5xx-{args.environment}",
+            dimensions={
+                "ApiName": api.api.name,
+                "Stage": args.api_stage_name
+            },
+            alarm_actions=[self.alert_topic.arn],
+            tags={
+                "Environment": args.environment
+            },
+            opts=ResourceOptions(parent=self)
+        )
+        
+        # Custom dashboard
+        self.dashboard = aws.cloudwatch.Dashboard(
+            f"{name}-dashboard",
+            dashboard_name=f"Nova-Model-Breaking-{args.environment}",
+            dashboard_body=pulumi.Output.all(
+                lambda_func.function.name,
+                api.api.name
+            ).apply(lambda args: json.dumps({
+                "widgets": [
+                    {
+                        "type": "metric",
+                        "x": 0,
+                        "y": 0,
+                        "width": 12,
+                        "height": 6,
+                        "properties": {
+                            "metrics": [
+                                ["AWS/Lambda", "Duration", "FunctionName", args[0]],
+                                [".", "Errors", ".", "."],
+                                [".", "Invocations", ".", "."]
+                            ],
+                            "period": 300,
+                            "stat": "Average",
+                            "region": "us-east-1",
+                            "title": "Lambda Metrics"
+                        }
+                    },
+                    {
+                        "type": "metric",
+                        "x": 0,
+                        "y": 6,
+                        "width": 12,
+                        "height": 6,
+                        "properties": {
+                            "metrics": [
+                                ["AWS/ApiGateway", "Count", "ApiName", args[1]],
+                                [".", "Latency", ".", "."],
+                                [".", "4XXError", ".", "."],
+                                [".", "5XXError", ".", "."]
+                            ],
+                            "period": 300,
+                            "stat": "Sum",
+                            "region": "us-east-1",
+                            "title": "API Gateway Metrics"
+                        }
+                    }
+                ]
+            })),
+            opts=ResourceOptions(parent=self)
+        )
+
+
+class TapStack(ComponentResource):
+    def __init__(self, name: str, args: TapStackArgs, opts: Optional[ResourceOptions] = None):
+        super().__init__("custom:stack:TapStack", name, {}, opts)
+        
+        # Create VPC
+        self.vpc = VPCComponent(f"{name}-vpc", args, ResourceOptions(parent=self))
+        
+        # Create Lambda function
+        self.lambda_component = LambdaComponent(
+            f"{name}-lambda", 
+            args, 
+            self.vpc, 
+            ResourceOptions(parent=self)
+        )
+        
+        # Create API Gateway
+        self.api = APIGatewayComponent(
+            f"{name}-api", 
+            args, 
+            self.lambda_component, 
+            ResourceOptions(parent=self)
+        )
+        
+        # Create S3 buckets
+        self.s3 = S3Component(f"{name}-s3", args, ResourceOptions(parent=self))
+        
+        # Create monitoring (if enabled)
+        if args.enable_monitoring:
+            self.monitoring = MonitoringComponent(
+                f"{name}-monitoring", 
+                args, 
+                self.lambda_component, 
+                self.api, 
+                ResourceOptions(parent=self)
+            )
+        
+        # Outputs
+        self.api_url = pulumi.Output.concat(
+            "https://",
+            self.api.api.id,
+            ".execute-api.",
+            args.primary_region,
+            ".amazonaws.com/",
+            args.api_stage_name,
+            "/nova"
+        )
+        
+        self.lambda_function_name = self.lambda_component.function.name
+        self.s3_bucket_name = self.s3.primary_bucket.bucket
+
+
+# Main stack instantiation
+def create_stack():
+    config = pulumi.Config()
+    environment = config.require("environment")
+    secondary_region = config.require("secondary-region")
+    enable_monitoring = config.get_bool("enable-monitoring", True)
     
-    # Create Lambda function with VPC configuration
-    lambda_function = aws.lambda_.Function(
-        f"api-lambda-{environment}",
-        name=f"api-lambda-{environment}",
-        runtime="python3.9",
-        code=pulumi.AssetArchive({
-            "lambda_function.py": pulumi.StringAsset(lambda_code)
-        }),
-        handler="lambda_function.lambda_handler",
-        role=role_arn,
-        timeout=30,
-        memory_size=256,
-        
-        # VPC Configuration for RDS access
-        vpc_config=aws.lambda_.FunctionVpcConfigArgs(
-            subnet_ids=private_subnet_ids,
-            security_group_ids=[lambda_security_group_id]
-        ),
-        
-        # Environment variables for database connection
-        environment=aws.lambda_.FunctionEnvironmentArgs(
-            variables={
-                "DB_HOST": rds_endpoint,
-                "DB_NAME": db_name,
-                "DB_USER": db_username,
-                "DB_PASSWORD": db_password,
-                "DB_PORT": "5432",
-                "ENVIRONMENT": environment
-            }
-        ),
-        
-        # Enable detailed monitoring
-        tracing_config=aws.lambda_.FunctionTracingConfigArgs(
-            mode="Active"
-        ),
-        
-        tags={
-            "Name": f"api-lambda-{environment}",
-            "Environment": environment
-        }
+    current_region = aws.get_region()
+    
+    args = TapStackArgs(
+        environment=environment,
+        primary_region=current_region.name,
+        secondary_region=secondary_region,
+        enable_monitoring=enable_monitoring
     )
     
-    # Create CloudWatch Log Group with retention
-    aws.cloudwatch.LogGroup(
-        f"lambda-logs-{environment}",
-        name=lambda_function.name.apply(lambda name: f"/aws/lambda/{name}"),
-        retention_in_days=14,
-        tags={
-            "Environment": environment
-        }
-    )
+    stack = TapStack("nova-model-breaking", args)
     
-    return lambda_function
+    # Export outputs
+    pulumi.export("api_url", stack.api_url)
+    pulumi.export("lambda_function_name", stack.lambda_function_name)
+    pulumi.export("s3_bucket_name", stack.s3_bucket_name)
+    pulumi.export("vpc_id", stack.vpc.vpc.id)
+    
+    if enable_monitoring:
+        pulumi.export("dashboard_url", pulumi.Output.concat(
+            "https://console.aws.amazon.com/cloudwatch/home?region=",
+            current_region.name,
+            "#dashboards:name=",
+            stack.monitoring.dashboard.dashboard_name
+        ))
+        pulumi.export("alert_topic_arn", stack.monitoring.alert_topic.arn)
+    
+    return stack
+
+
+if __name__ == "__main__":
+    create_stack()
 ```
 
-### 6. API Gateway (`infrastructure/api_gateway.py`)
+## 3. CI/CD Pipeline Configuration
 
-```python
-"""
-API Gateway module for Lambda function integration.
-Creates REST API with proper CORS, throttling, and logging configuration.
-"""
+### .github/workflows/deploy.yml
 
-import json
-import pulumi
-import pulumi_aws as aws
+```yaml
+name: Deploy Nova Model Breaking Infrastructure
 
-def create_api_gateway(
-    environment: str,
-    lambda_function_arn: pulumi.Output[str],
-    lambda_function_name: pulumi.Output[str]
-) -> dict:
-    """
-    Creates API Gateway REST API with Lambda integration.
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+env:
+  PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+  AWS_REGION: us-east-1
+
+jobs:
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+
+      - name: Run unit tests
+        run: |
+          python -m pytest tests/unit/ -v --cov=lib --cov-report=xml
+
+      - name: Run linting
+        run: |
+          flake8 lib/ tests/
+          black --check lib/ tests/
+
+      - name: Upload coverage reports
+        uses: codecov/codecov-action@v3
+        with:
+          file: ./coverage.xml
+
+  deploy-dev:
+    name: Deploy to Development
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.ref == 'refs/heads/develop'
+    environment: development
     
-    Args:
-        environment: Environment name
-        lambda_function_arn: Lambda function ARN
-        lambda_function_name: Lambda function name
-        
-    Returns:
-        Dictionary with API Gateway resources
-    """
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Pulumi
+        uses: pulumi/actions@v4
+        with:
+          command: up
+          stack-name: dev
+          work-dir: .
+        env:
+          PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
+
+      - name: Run integration tests
+        run: |
+          python -m pytest tests/integration/ -v
+        env:
+          ENVIRONMENT: dev
+          AWS_REGION: ${{ env.AWS_REGION }}
+
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.ref == 'refs/heads/main'
+    environment: staging
     
-    # Create REST API
-    api = aws.apigateway.RestApi(
-        f"api-{environment}",
-        name=f"serverless-api-{environment}",
-        description=f"Serverless API for {environment} environment",
-        endpoint_configuration=aws.apigateway.RestApiEndpointConfigurationArgs(
-            types="REGIONAL"
-        ),
-        tags={
-            "Name": f"api-{environment}",
-            "Environment": environment
-        }
-    )
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Pulumi
+        uses: pulumi/actions@v4
+        with:
+          command: up
+          stack-name: staging
+          work-dir: .
+        env:
+          PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
+
+      - name: Run smoke tests
+        run: |
+          python -m pytest tests/integration/test_smoke.py -v
+        env:
+          ENVIRONMENT: staging
+          AWS_REGION: ${{ env.AWS_REGION }}
+
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: deploy-staging
+    if: github.ref == 'refs/heads/main'
+    environment: production
     
-    # Create API Gateway resources and methods
+    strategy:
+      matrix:
+        region: [us-east-1, us-west-2]
     
-    # Health check resource
-    health_resource = aws.apigateway.Resource(
-        f"health-resource-{environment}",
-        rest_api=api.id,
-        parent_id=api.root_resource_id,
-        path_part="health"
-    )
-    
-    # Users resource
-    users_resource = aws.apigateway.Resource(
-        f"users-resource-{environment}",
-        rest_api=api.id,
-        parent_id=api.root_resource_id,
-        path_part="users"
-    )
-    
-    # Create methods for health endpoint
-    health_method = aws.apigateway.Method(
-        f"health-method-{environment}",
-        rest_api=api.id,
-        resource_id=health_resource.id,
-        http_method="GET",
-        authorization="NONE"
-    )
-    
-    # Create methods for users endpoint
-    users_get_method = aws.apigateway.Method(
-        f"users-get-method-{environment}",
-        rest_api=api.id,
-        resource_id=users_resource.id,
-        http_method="GET",
-        authorization="NONE"
-    )
-    
-    users_post_method = aws.apigateway.Method(
-        f"users-post-method-{environment}",
-        rest_api=api.id,
-        resource_id=users_resource.id,
-        http_method="POST",
-        authorization="NONE"
-    )
-    
-    # CORS OPTIONS methods
-    health_options_method = aws.apigateway.Method(
-        f"health-options-method-{environment}",
-        rest_api=api.id,
-        resource_id=health_resource.id,
-        http_method="OPTIONS",
-        authorization="NONE"
-    )
-    
-    users_options_method = aws.apigateway.Method(
-        f"users-options-method-{environment}",
-        rest_api=api.id,
-        resource_id=users_resource.id,
-        http_method="OPTIONS",
-        authorization="NONE"
-    )
-    
-    # Lambda integrations
-    health_integration = aws.apigateway.Integration(
-        f"health-integration-{environment}",
-        rest_api=api.id,
-        resource_id=health_resource.id,
-        http_method=health_method.http_method,
-        integration_http_method="POST",
-        type="AWS_PROXY",
-        uri=lambda_function_arn.apply(
-            lambda arn: f"arn:aws:apigateway:{aws.get_region().name}:lambda:path/2015-03-31/functions/{arn}/invocations"
-        )
-    )
-    
-    users_get_integration = aws.apigateway.Integration(
-        f"users-get-integration-{environment}",
-        rest_api=api.id,
-        resource_id=users_resource.id,
-        http_method=users_get_method.http_method,
-        integration_http_method="POST",
-        type="AWS_PROXY",
-        uri=lambda_function_arn.apply(
-            lambda arn: f"arn:aws:apigateway:{aws.get_region().name}:lambda:path/2015-03-31/functions/{arn}/invocations"
-        )
-    )
-    
-    users_post_integration = aws.apigateway.Integration(
-        f"users-post-integration-{environment}",
-        rest_api=api.id,
-        resource_id=users_resource.id,
-        http_method=users_post_method.http_method,
-        integration_http_method="POST",
-        type="AWS_PROXY",
-        uri=lambda_function_arn.apply(
-            lambda arn: f"arn:aws:apigateway:{aws.get_region().name}:lambda:path
+    steps:

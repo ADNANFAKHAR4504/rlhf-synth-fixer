@@ -1,58 +1,117 @@
-## **System Instruction**
+I'll help you create a well-structured prompt that aligns with Claude Sonnet's best practices for building AWS infrastructure with Pulumi and Python. Here's a comprehensive prompt template:
 
-You are a senior AWS Cloud Engineer and Pulumi expert with advanced Python development skills. Your goal is to design and deliver **a production-grade, serverless infrastructure** using Pulumi and Python. You must adhere to AWS security, IAM, and operational excellence best practices.
+## Complete Multi-Region Serverless CI/CD Pipeline with Pulumi
 
----
+**Context:** You are an expert DevOps engineer tasked with designing and implementing a production-ready, multi-region serverless application infrastructure on AWS using Pulumi (Python).
 
-## **User Requirements**
+### Infrastructure Requirements
 
-1. **Infrastructure as Code (IaC)**  
-   - All resources must be defined in **Pulumi using Python**.  
-   - The Pulumi project must be **modular, reusable, and well-structured**.  
+**Core Architecture:**
+- Multi-region deployment across `us-east-1` and `us-west-2`
+- Serverless backend using AWS Lambda functions and API Gateway
+- S3 buckets for storage and deployment artifacts
+- VPC configuration spanning both regions
+- Infrastructure naming convention: `project-component-environment`
 
-2. **Serverless Application Design**  
-   - Provision an **AWS Lambda function** capable of connecting securely to an **AWS RDS instance**.  
-   - Trigger the Lambda function from an **API Gateway** endpoint.  
-   - Ensure secure VPC networking between the Lambda and RDS instance (private subnets, security group rules).  
+**Project Structure:**
+```
+project-root/
+├── lib/
+│   └── tap_stack.py
+├── tests/
+│   ├── unit/
+│   │   └── test_tap_stack.py
+│   └── integration/
+│       └── test_tap_stack.py
+```
 
-3. **IAM & Security**  
-   - Create a dedicated **IAM role for Lambda execution** with **least privilege permissions**.  
-   - The role must allow:  
-     - Access to RDS (read-only or required privileges).  
-     - Access to logs for observability.  
-   - Apply **secure networking** and **encryption (TLS/SSL)** where applicable.  
+### Deliverable Requirements
 
-4. **Error Handling & Logging**  
-   - Implement **comprehensive error handling** inside the Lambda function.  
-   - Use structured logging and integrate with **CloudWatch Logs**.  
+**1. Infrastructure Code (`lib/tap_stack.py`):**
+- Define reusable Pulumi components for Lambda functions, API Gateway, and S3
+- Implement cross-region resource deployment with proper dependency management
+- Include VPC setup with appropriate subnets and security groups
+- Ensure consistent resource tagging and naming conventions
+- Add environment-specific configurations (dev, staging, prod)
 
-5. **Testing & Validation**  
-   - Implement **automated tests** to confirm:  
-     - API Gateway endpoint responds successfully.  
-     - Lambda retrieves data from RDS correctly.  
-     - Failure scenarios are handled gracefully.  
+**2. CI/CD Pipeline Configuration:**
+- Support for rolling updates with zero-downtime deployment strategy
+- Multi-stage pipeline: build → test → deploy-staging → deploy-production
+- Cross-region deployment orchestration
+- Rollback mechanisms for failed deployments
+- Integration with Pulumi state management
 
-6. **Documentation**  
-   - Provide detailed **deployment documentation**, covering:  
-     - Pulumi project structure.  
-     - Environment variables and configuration management.  
-     - Step-by-step commands (`pulumi up`, `pulumi destroy`, etc.).  
+**3. Monitoring and Alerting Integration:**
+- AWS CloudWatch metrics and alarms for Lambda performance
+- API Gateway monitoring with custom metrics
+- Cross-region health checks and failover alerts
+- Deployment success/failure notifications
+- Cost monitoring and budget alerts
 
----
+**4. Testing Framework:**
+- Unit tests (`tests/unit/test_tap_stack.py`) for infrastructure components
+- Integration tests (`tests/integration/test_tap_stack.py`) for cross-region functionality
+- Validation of rolling update mechanisms
+- Monitoring system integration tests
 
-## **Output Requirements**
+### Technical Specifications
 
-- Deliver **Pulumi Python code** with inline comments describing resource connections.  
-- Show how the Lambda function, API Gateway, and RDS instance are linked securely.  
-- Include **test code** for API Gateway and Lambda functionality.  
-- Include **clear deployment documentation** suitable for DevOps teams managing multi-environment setups.  
+**Rolling Update Strategy:**
+- Implement blue-green or canary deployment patterns
+- Use AWS Lambda aliases and weighted routing
+- API Gateway stage-based deployments
+- Automated rollback on failure detection
 
----
+**Resource Connectivity:**
+- Lambda functions connected to API Gateway with proper IAM roles
+- Cross-region S3 bucket replication
+- VPC endpoints for secure service communication
+- Route 53 health checks for multi-region failover
 
-## **Additional Notes**
+**Security Requirements:**
+- Least privilege IAM policies
+- Encryption at rest and in transit
+- VPC security groups and NACLs
+- Secrets management using AWS Secrets Manager
 
-- Use Pulumi configuration or environment variables for sensitive data like database credentials.  
-- Implement proper state management with Pulumi (e.g., Pulumi Service backend or S3 backend).  
-- Ensure the infrastructure can be deployed repeatedly in different AWS accounts/environments without modification.  
+### Expected Output Format
 
----
+Provide complete, production-ready code including:
+
+1. **Main Infrastructure Code**: Fully implemented `lib/tap_stack.py` with modular design
+2. **CI/CD Pipeline**: Complete workflow configuration (GitHub Actions, GitLab CI, or Jenkins)
+3. **Test Suite**: Comprehensive unit and integration tests
+4. **Documentation**: Deployment instructions, monitoring setup, and troubleshooting guide
+5. **Configuration Files**: Pulumi project files, requirements, and environment configs
+
+### Success Criteria
+
+Your solution must demonstrate:
+- Successful deployment to both regions simultaneously
+- Zero-downtime rolling updates with automatic rollback
+- Functional monitoring and alerting system
+- Passing unit and integration test suites
+-  Proper error handling and logging throughout the pipeline
+-  Cost optimization and resource efficiency
+
+**Constraints:**
+- Use only AWS native services (no third-party tools except Pulumi)
+- Follow AWS Well-Architected Framework principles
+- Ensure all code is production-ready with proper error handling
+- Include comprehensive logging and observability
+
+**Project Name:** IaC - AWS Nova Model Breaking
+
+Please provide the complete implementation with detailed explanations for each component and how they interconnect to form a cohesive, scalable infrastructure solution.
+
+***
+
+This prompt template follows Claude's best practices by:
+- **Clear Structure**: Organized sections with specific requirements
+- **Concrete Examples**: File structure and naming conventions
+- **Specific Constraints**: Technical limitations and success criteria  
+- **Action-Oriented**: Clear deliverables and expected outcomes
+- **Context-Rich**: Complete background information for informed decisions
+- **Measurable Results**: Testable success criteria and validation requirements
+
+You can customize this template by adjusting the specific AWS services, regions, or testing requirements based on your project needs.
