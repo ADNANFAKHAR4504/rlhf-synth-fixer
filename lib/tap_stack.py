@@ -503,10 +503,7 @@ phases:
                 aws.codepipeline.PipelineArtifactStoreArgs(
                     location=self.artifacts_bucket.bucket,
                     type="S3",
-                    encryption_key=aws.codepipeline.PipelineArtifactStoreEncryptionKeyArgs(
-                        id=self.artifacts_bucket_kms_key.arn,
-                        type="KMS"
-                    )
+                    
                 )
             ],
             stages=[
