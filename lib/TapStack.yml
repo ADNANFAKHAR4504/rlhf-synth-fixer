@@ -424,7 +424,7 @@ Outputs:
     Description: 'URL of the Application Load Balancer'
     Value: !Sub 'http://${WebAppLoadBalancer.DNSName}'
     Export:
-      Name: !Sub '${AWS::StackName}-LoadBalancer-URL'
+      Name: !Sub '${AWS::StackName}-LoadBalancerURL'
 
   VPCId:
     Description: 'VPC ID for the web application'
