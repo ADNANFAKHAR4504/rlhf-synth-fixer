@@ -1,107 +1,115 @@
-"""CI/CD-proof integration tests for TapStack with live resource validation."""
+"""CI/CD-proof integration tests for TapStack with region-aware live resource validation."""
 
 import os
 import unittest
 
 import boto3
+from botocore.exceptions import ClientError
 
 from lib.tap_stack import TapStackArgs
 
 
 class TestTapStackIntegration(unittest.TestCase):
-    """Live resource integration tests with CI fallback."""
+    """Live resource integration tests with automatic region handling."""
     
     @classmethod
     def setUpClass(cls):
-        """Initialize AWS clients and test configuration."""
+        """Initialize AWS clients with proper region configuration."""
         cls.ci_mode = os.getenv("CI", "").lower() == "true"
         cls.environment_suffix = os.getenv("ENVIRONMENT_SUFFIX", "dev")
         cls.team = "nova"
         
-        # Only initialize AWS clients if not in CI mode
+        # Determine the correct region based on environment
+        cls.region = "us-east-1" if cls.ci_mode else os.getenv("AWS_REGION", "us-west-2")
+        
+        # Initialize AWS clients with explicit region configuration
         if not cls.ci_mode:
-            cls.dynamodb = boto3.client('dynamodb')
-            cls.lambda_client = boto3.client('lambda')
-            cls.sqs = boto3.client('sqs')
-            cls.cloudwatch = boto3.client('cloudwatch')
-            cls.region = os.getenv('AWS_REGION', 'us-east-1')
+            cls.session = boto3.Session(region_name=cls.region)
+            cls.dynamodb = cls.session.client('dynamodb')
+            cls.lambda_client = cls.session.client('lambda')
+            cls.sqs = cls.session.client('sqs')
+            cls.cloudwatch = cls.session.client('cloudwatch')
+
+            # Verify region configuration
+            print(f"\nTesting in AWS Region: {cls.region}")
+
+    def _verify_resource(self, service, resource_name, verification_func=None):
+        """Helper method to verify resource existence with region awareness."""
+        try:
+            client = getattr(self, service)
+            if service == 'dynamodb':
+                response = client.describe_table(TableName=resource_name)
+            elif service == 'lambda_client':
+                response = client.get_function(FunctionName=resource_name)
+            elif service == 'sqs':
+                response = client.list_queues(QueueNamePrefix=resource_name)
+            
+            if verification_func:
+                verification_func(response)
+            
+            print(f"✅ Found {resource_name} in {self.region}")
+            return True
+        except ClientError as e:
+            if e.response['Error']['Code'] == 'ResourceNotFoundException':
+                print(f"❌ Resource {resource_name} not found in {self.region}")
+                return False
+            raise
 
     def test_01_live_dynamodb_configuration(self):
-        """Validate DynamoDB table has streaming enabled."""
+        """Validate DynamoDB table configuration."""
         if self.ci_mode:
             self.skipTest("Skipping live resource test in CI mode")
             
-        args = TapStackArgs(
-            environment_suffix=self.environment_suffix,
-            team=self.team
-        )
-        table_name = f"{args.environment_suffix}-nova-data-{args.team}"
+        table_name = f"{self.environment_suffix}-nova-data-{self.team}"
         
-        try:
-            response = self.dynamodb.describe_table(TableName=table_name)
+        def verify_dynamodb(response):
             self.assertTrue(response['Table']['StreamSpecification']['StreamEnabled'])
             self.assertEqual(
                 response['Table']['StreamSpecification']['StreamViewType'],
                 "NEW_AND_OLD_IMAGES"
             )
-        except Exception as e:
-            self.fail(f"DynamoDB validation failed: {str(e)}")
+        
+        if not self._verify_resource('dynamodb', table_name, verify_dynamodb):
+            self.fail(f"DynamoDB table {table_name} not found in {self.region}")
 
     def test_02_lambda_function_configs(self):
-        """Verify Lambda functions exist with correct configurations."""
+        """Verify Lambda functions configuration."""
         if self.ci_mode:
             self.skipTest("Skipping live resource test in CI mode")
             
-        args = TapStackArgs(
-            environment_suffix=self.environment_suffix,
-            team=self.team
-        )
-        
         functions = [
-            f"{args.environment_suffix}-processor-{args.team}",
-            f"{args.environment_suffix}-analyzer-{args.team}"
+            f"{self.environment_suffix}-processor-{self.team}",
+            f"{self.environment_suffix}-analyzer-{self.team}"
         ]
         
         for func_name in functions:
-            try:
-                response = self.lambda_client.get_function(FunctionName=func_name)
+            def verify_lambda(response):
                 self.assertEqual(response['Configuration']['Runtime'], "python3.9")
                 self.assertEqual(response['Configuration']['MemorySize'], 256)
-                
-                # Verify DLQ config
                 if 'DeadLetterConfig' in response['Configuration']:
-                    self.assertIn(
-                        'sqs',
-                        response['Configuration']['DeadLetterConfig']['TargetArn']
-                    )
-            except Exception as e:
-                self.fail(f"Lambda validation failed for {func_name}: {str(e)}")
+                    self.assertIn('sqs', response['Configuration']['DeadLetterConfig']['TargetArn'])
+            
+            if not self._verify_resource('lambda_client', func_name, verify_lambda):
+                self.fail(f"Lambda function {func_name} not found in {self.region}")
 
     def test_03_dlq_validation(self):
-        """Validate DLQ exists with correct settings."""
+        """Validate DLQ configuration."""
         if self.ci_mode:
             self.skipTest("Skipping live resource test in CI mode")
             
-        args = TapStackArgs(
-            environment_suffix=self.environment_suffix,
-            team=self.team
-        )
-        queue_name = f"{args.environment_suffix}-nova-dlq-{args.team}"
+        queue_name = f"{self.environment_suffix}-nova-dlq-{self.team}"
         
-        try:
-            # Find queue URL by listing all queues
-            queues = self.sqs.list_queues(QueueNamePrefix=queue_name)
-            self.assertIn('QueueUrls', queues)
-            
-            # Get queue attributes
-            queue_url = queues['QueueUrls'][0]
+        def verify_dlq(response):
+            self.assertIn('QueueUrls', response)
+            queue_url = response['QueueUrls'][0]
             attrs = self.sqs.get_queue_attributes(
                 QueueUrl=queue_url,
                 AttributeNames=['MessageRetentionPeriod']
             )
             self.assertEqual(attrs['Attributes']['MessageRetentionPeriod'], "1209600")
-        except Exception as e:
-            self.fail(f"DLQ validation failed: {str(e)}")
+        
+        if not self._verify_resource('sqs', queue_name, verify_dlq):
+            self.fail(f"DLQ {queue_name} not found in {self.region}")
 
     def test_04_ci_safe_fallback_tests(self):
         """Tests that always run (CI and local)."""
@@ -114,7 +122,8 @@ class TestTapStackIntegration(unittest.TestCase):
         resources = [
             f"{args.environment_suffix}-nova-data-{args.team}",
             f"{args.environment_suffix}-processor-{args.team}",
-            f"{args.environment_suffix}-analyzer-{args.team}"
+            f"{args.environment_suffix}-analyzer-{args.team}",
+            f"{args.environment_suffix}-nova-dlq-{args.team}"
         ]
         
         for resource in resources:
