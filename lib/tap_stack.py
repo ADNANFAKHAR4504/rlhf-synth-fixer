@@ -240,6 +240,7 @@ class TapStack(cdk.Stack):
             "S3_BUCKET": self.s3_bucket.bucket_name,
             "KMS_KEY_ID": self.kms_key.key_id
         },
+        log_retention=logs.RetentionDays.ONE_WEEK,
         code=lambda_.InlineCode(textwrap.dedent("""\
             import json
             import boto3
@@ -416,6 +417,7 @@ class TapStack(cdk.Stack):
             "DYNAMODB_TABLE": self.dynamodb_table.table_name,
             "S3_BUCKET": self.s3_bucket.bucket_name
         },
+        log_retention=logs.RetentionDays.ONE_WEEK,
         code=lambda_.InlineCode(textwrap.dedent("""\
             import json
             import boto3
@@ -529,25 +531,6 @@ class TapStack(cdk.Stack):
         path="/health",
         methods=[apigwv2.HttpMethod.GET],
         integration=health_integration
-    )
-
-  def create_log_groups(self):
-    """Create CloudWatch Log Groups with retention policy"""
-
-    # API Lambda log group
-    logs.LogGroup(
-        self, "TapApiLogGroup",
-        log_group_name=f"/aws/lambda/{self.api_lambda.function_name}",
-        retention=logs.RetentionDays.ONE_WEEK,
-        removal_policy=RemovalPolicy.DESTROY
-    )
-
-    # Health Lambda log group
-    logs.LogGroup(
-        self, "TapHealthLogGroup",
-        log_group_name=f"/aws/lambda/{self.health_lambda.function_name}",
-        retention=logs.RetentionDays.ONE_WEEK,
-        removal_policy=RemovalPolicy.DESTROY
     )
 
   def create_outputs(self):
