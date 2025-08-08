@@ -425,9 +425,9 @@ export class TapStack extends cdk.Stack {
           actions: [
             new codepipeline_actions.GitHubSourceAction({
               actionName: 'GitHub_Source',
-              owner: 'Prakhar12s',
-              repo: 'enterprise-web-app',
-              branch: 'main',
+              owner: 'TuringGpt',
+              repo: 'iac-test-automations',
+              branch: 'IAC-291873',
               oauthToken: cdk.SecretValue.secretsManager(
                 'arn:aws:secretsmanager:us-west-2:718240086340:secret:github-token-IAC-291873-NqyjXr'
               ),
