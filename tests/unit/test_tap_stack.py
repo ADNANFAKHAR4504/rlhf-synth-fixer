@@ -33,7 +33,6 @@ class TestServerlessStack(unittest.TestCase):
         "ReadCapacityUnits": 1,
         "WriteCapacityUnits": 1
       }),
-      "TableName": Match.any_value()
     })
 
   def test_lambda_function_created(self):
@@ -85,10 +84,13 @@ class TestServerlessStack(unittest.TestCase):
                         "dynamodb:Scan",
                         "dynamodb:Query",
                         "dynamodb:GetRecords",
+                        "dynamodb:GetShardIterator",
+                        "dynamodb:ConditionCheckItem",
                         "dynamodb:BatchWriteItem",
                         "dynamodb:PutItem",
                         "dynamodb:UpdateItem",
-                        "dynamodb:DeleteItem"
+                        "dynamodb:DeleteItem",
+                        "dynamodb:DescribeTable"
                     ]),
                     "Effect": "Allow",
                 })
