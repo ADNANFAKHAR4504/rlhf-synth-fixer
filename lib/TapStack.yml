@@ -20,8 +20,14 @@ Parameters:
     Default: INFO
     Description: 'Log level for Lambda function'
 
+  DeploymentRegion: # New parameter for the deployment region
+    Type: String
+    Default: us-east-1
+    Description: 'The AWS region where resources will be deployed'
+    AllowedPattern: '^[a-z]{2}-[a-z]+-[1-9]{1}$'
+    ConstraintDescription: 'Must be a valid AWS region (e.g., us-east-1)'
+
 Resources:
-  # IAM Role for Lambda function
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
@@ -53,16 +59,15 @@ Resources:
                   - logs:CreateLogGroup
                   - logs:CreateLogStream
                   - logs:PutLogEvents
-                Resource: !Sub 'arn:aws:logs:us-east-1:${AWS::AccountId}:log-group:/aws/lambda/${Environment}-data-processor:*'
+                # Use DeploymentRegion for the log group ARN
+                Resource: !Sub 'arn:aws:logs:${DeploymentRegion}:${AWS::AccountId}:log-group:/aws/lambda/${Environment}-data-processor:*'
 
-  # CloudWatch Log Group
   LambdaLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub '/aws/lambda/${Environment}-data-processor'
       RetentionInDays: 14
 
-  # Lambda function
   DataProcessorFunction:
     Type: AWS::Lambda::Function
     Properties:
@@ -79,13 +84,12 @@ Resources:
           from datetime import datetime
           import uuid
 
-          # Configure logging
           log_level = os.environ.get('LOG_LEVEL', 'INFO')
           logger = logging.getLogger()
           logger.setLevel(getattr(logging, log_level))
 
-          # Initialize DynamoDB client
-          dynamodb = boto3.resource('dynamodb')
+          # Ensure boto3 client uses the correct region from environment variable
+          dynamodb = boto3.resource('dynamodb', region_name=os.environ.get('REGION'))
           table_name = os.environ.get('TABLE_NAME')
           table = dynamodb.Table(table_name)
 
@@ -93,13 +97,11 @@ Resources:
               try:
                   logger.info(f"Processing event: {json.dumps(event)}")
                   
-                  # Extract data from event
                   if 'body' in event:
                       body = json.loads(event['body']) if isinstance(event['body'], str) else event['body']
                   else:
                       body = event
                   
-                  # Create item for DynamoDB
                   item = {
                       'id': str(uuid.uuid4()),
                       'timestamp': datetime.utcnow().isoformat(),
@@ -107,8 +109,7 @@ Resources:
                       'environment': os.environ.get('STAGE', 'dev')
                   }
                   
-                  # Put item in DynamoDB
-                  response = table.put_item(Item=item)
+                  table.put_item(Item=item)
                   
                   logger.info(f"Successfully stored item with id: {item['id']}")
                   
@@ -139,20 +140,19 @@ Resources:
           STAGE: !Ref Environment
           LOG_LEVEL: !Ref LogLevel
           TABLE_NAME: !Ref DataTable
-          REGION: !Ref AWS::Region
+          REGION: !Ref DeploymentRegion # Use the new DeploymentRegion parameter
       Timeout: 30
       MemorySize: 128
 
-  # Lambda Permission for API Gateway
   LambdaApiGatewayPermission:
     Type: AWS::Lambda::Permission
     Properties:
       FunctionName: !Ref DataProcessorFunction
       Action: lambda:InvokeFunction
       Principal: apigateway.amazonaws.com
-      SourceArn: !Sub 'arn:aws:execute-api:us-east-1:${AWS::AccountId}:${DataApi}/*/*'
+      # Use DeploymentRegion in SourceArn
+      SourceArn: !Sub 'arn:aws:execute-api:${DeploymentRegion}:${AWS::AccountId}:${DataApi}/*/*'
 
-  # API Gateway REST API
   DataApi:
     Type: AWS::ApiGateway::RestApi
     Properties:
@@ -162,7 +162,6 @@ Resources:
         Types:
           - REGIONAL
 
-  # API Gateway Resource
   DataResource:
     Type: AWS::ApiGateway::Resource
     Properties:
@@ -170,7 +169,6 @@ Resources:
       ParentId: !GetAtt DataApi.RootResourceId
       PathPart: data
 
-  # API Gateway Method
   DataMethod:
     Type: AWS::ApiGateway::Method
     Properties:
@@ -181,7 +179,8 @@ Resources:
       Integration:
         Type: AWS_PROXY
         IntegrationHttpMethod: POST
-        Uri: !Sub 'arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/${DataProcessorFunction.Arn}/invocations'
+        # Use DeploymentRegion in Lambda integration URI
+        Uri: !Sub 'arn:aws:apigateway:${DeploymentRegion}:lambda:path/2015-03-31/functions/${DataProcessorFunction.Arn}/invocations'
       MethodResponses:
         - StatusCode: 200
           ResponseModels:
@@ -190,7 +189,6 @@ Resources:
           ResponseModels:
             application/json: Empty
 
-  # API Gateway Deployment
   ApiDeployment:
     Type: AWS::ApiGateway::Deployment
     DependsOn: DataMethod
@@ -198,7 +196,6 @@ Resources:
       RestApiId: !Ref DataApi
       StageName: !Ref Environment
 
-  # DynamoDB Table
   DataTable:
     Type: AWS::DynamoDB::Table
     Properties:
@@ -214,7 +211,6 @@ Resources:
         ReadCapacityUnits: 5
         WriteCapacityUnits: 5
 
-  # Application Auto Scaling Role for DynamoDB
   ApplicationAutoScalingDynamoDBRole:
     Type: AWS::IAM::Role
     Properties:
@@ -228,7 +224,6 @@ Resources:
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess
 
-  # DynamoDB Auto Scaling Target for Read Capacity
   ReadCapacityScalableTarget:
     Type: AWS::ApplicationAutoScaling::ScalableTarget
     Properties:
@@ -239,7 +234,6 @@ Resources:
       ScalableDimension: dynamodb:table:ReadCapacityUnits
       ServiceNamespace: dynamodb
 
-  # DynamoDB Auto Scaling Target for Write Capacity
   WriteCapacityScalableTarget:
     Type: AWS::ApplicationAutoScaling::ScalableTarget
     Properties:
@@ -250,7 +244,6 @@ Resources:
       ScalableDimension: dynamodb:table:WriteCapacityUnits
       ServiceNamespace: dynamodb
 
-  # Read Capacity Scaling Policy
   ReadScalingPolicy:
     Type: AWS::ApplicationAutoScaling::ScalingPolicy
     Properties:
@@ -264,7 +257,6 @@ Resources:
         PredefinedMetricSpecification:
           PredefinedMetricType: DynamoDBReadCapacityUtilization
 
-  # Write Capacity Scaling Policy
   WriteScalingPolicy:
     Type: AWS::ApplicationAutoScaling::ScalingPolicy
     Properties:
@@ -278,7 +270,6 @@ Resources:
         PredefinedMetricSpecification:
           PredefinedMetricType: DynamoDBWriteCapacityUtilization
 
-  # CloudWatch Alarm for Lambda Errors
   LambdaErrorAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
@@ -299,7 +290,8 @@ Resources:
 Outputs:
   ApiEndpoint:
     Description: 'API Gateway endpoint URL'
-    Value: !Sub 'https://${DataApi}.execute-api.us-east-1.amazonaws.com/${Environment}/data'
+    # Use DeploymentRegion in the output URL
+    Value: !Sub 'https://${DataApi}.execute-api.${DeploymentRegion}.amazonaws.com/${Environment}/data'
     Export:
       Name: !Sub '${AWS::StackName}-ApiEndpoint'
 

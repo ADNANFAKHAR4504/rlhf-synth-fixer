@@ -227,7 +227,7 @@ describe('TapStack CloudFormation Template', () => {
       expect(output.Description).toBe('API Gateway endpoint URL');
       expect(output.Value).toEqual({
         'Fn::Sub':
-          'https://${DataApi}.execute-api.us-east-1.amazonaws.com/${Environment}/data',
+          'https://${DataApi}.execute-api.${DeploymentRegion}.amazonaws.com/${Environment}/data',
       });
     });
 
@@ -308,7 +308,7 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have correct number of parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(2); // Environment and LogLevel
+      expect(parameterCount).toBe(3); // Environment and LogLevel
     });
 
     test('should have correct number of outputs', () => {
@@ -326,14 +326,10 @@ describe('TapStack CloudFormation Template', () => {
   });
 
   describe('Region Constraint', () => {
-    test('template should explicitly reference us-east-1 region', () => {
+    test('template should default reference us-east-1 region', () => {
       // Check API Gateway URL in outputs
-      const apiOutput = template.Outputs.ApiEndpoint;
-      expect(apiOutput.Value['Fn::Sub']).toContain('us-east-1');
-
-      // Check Lambda permission source ARN
-      const permission = template.Resources.LambdaApiGatewayPermission;
-      expect(permission.Properties.SourceArn['Fn::Sub']).toContain('us-east-1');
+      const output = template.Parameters.DeploymentRegion.Default;
+      expect(output).toBe('us-east-1');
     });
   });
 });
