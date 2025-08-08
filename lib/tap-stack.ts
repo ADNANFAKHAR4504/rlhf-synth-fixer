@@ -123,10 +123,14 @@ export class ProjectXInfrastructureStack extends cdk.Stack {
     });
 
     // Create instance profile for the role (used by launch template)
-    new iam.CfnInstanceProfile(this, 'ProjectXInstanceProfile', {
-      instanceProfileName: 'projectX-instance-profile',
-      roles: [ec2Role.roleName],
-    });
+    const instanceProfile = new iam.CfnInstanceProfile(
+      this,
+      'ProjectXInstanceProfile',
+      {
+        instanceProfileName: 'projectX-instance-profile',
+        roles: [ec2Role.roleName],
+      }
+    );
 
     // 4. Launch Template Configuration
     // Create launch template for consistent EC2 instance configuration
@@ -203,50 +207,63 @@ export class ProjectXInfrastructureStack extends cdk.Stack {
 
     // 6. CloudWatch Alarms for comprehensive monitoring
     // Auto Scaling Group Alarms
-    new cloudwatch.Alarm(this, 'ProjectX-ASG-CPUUtilizationAlarm', {
-      metric: new cloudwatch.Metric({
-        namespace: 'AWS/AutoScaling',
-        metricName: 'CPUUtilization',
-        dimensionsMap: {
-          AutoScalingGroupName: autoScalingGroup.autoScalingGroupName,
-        },
-        statistic: 'Average',
-        period: cdk.Duration.minutes(5),
-      }),
-      threshold: 80,
-      evaluationPeriods: 2,
-      alarmDescription: 'ProjectX Auto Scaling Group CPU utilization is high',
-    });
+    const cpuUtilizationAlarm = new cloudwatch.Alarm(
+      this,
+      'TapStack-ASG-CPUUtilizationAlarm',
+      {
+        metric: new cloudwatch.Metric({
+          namespace: 'AWS/AutoScaling',
+          metricName: 'CPUUtilization',
+          dimensionsMap: {
+            AutoScalingGroupName: autoScalingGroup.autoScalingGroupName,
+          },
+          statistic: 'Average',
+          period: cdk.Duration.minutes(5),
+        }),
+        threshold: 80,
+        evaluationPeriods: 2,
+        alarmDescription: 'ProjectX Auto Scaling Group CPU utilization is high',
+      }
+    );
 
-    new cloudwatch.Alarm(this, 'ProjectX-ASG-InstanceCountAlarm', {
-      metric: new cloudwatch.Metric({
-        namespace: 'AWS/AutoScaling',
-        metricName: 'GroupDesiredCapacity',
-        dimensionsMap: {
-          AutoScalingGroupName: autoScalingGroup.autoScalingGroupName,
-        },
-        statistic: 'Average',
-        period: cdk.Duration.minutes(5),
-      }),
-      threshold: 4,
-      evaluationPeriods: 2,
-      alarmDescription: 'ProjectX Auto Scaling Group instance count is high',
-    });
+    const instanceCountAlarm = new cloudwatch.Alarm(
+      this,
+      'TapStack-ASG-InstanceCountAlarm',
+      {
+        metric: new cloudwatch.Metric({
+          namespace: 'AWS/AutoScaling',
+          metricName: 'GroupDesiredCapacity',
+          dimensionsMap: {
+            AutoScalingGroupName: autoScalingGroup.autoScalingGroupName,
+          },
+          statistic: 'Average',
+          period: cdk.Duration.minutes(5),
+        }),
+        threshold: 4,
+        evaluationPeriods: 2,
+        alarmDescription: 'ProjectX Auto Scaling Group instance count is high',
+      }
+    );
 
-    new cloudwatch.Alarm(this, 'ProjectX-ASG-HealthyHostCountAlarm', {
-      metric: new cloudwatch.Metric({
-        namespace: 'AWS/AutoScaling',
-        metricName: 'GroupInServiceInstances',
-        dimensionsMap: {
-          AutoScalingGroupName: autoScalingGroup.autoScalingGroupName,
-        },
-        statistic: 'Average',
-        period: cdk.Duration.minutes(5),
-      }),
-      threshold: 1,
-      evaluationPeriods: 2,
-      alarmDescription: 'ProjectX Auto Scaling Group healthy host count is low',
-    });
+    const healthyHostCountAlarm = new cloudwatch.Alarm(
+      this,
+      'TapStack-ASG-HealthyHostCountAlarm',
+      {
+        metric: new cloudwatch.Metric({
+          namespace: 'AWS/AutoScaling',
+          metricName: 'GroupInServiceInstances',
+          dimensionsMap: {
+            AutoScalingGroupName: autoScalingGroup.autoScalingGroupName,
+          },
+          statistic: 'Average',
+          period: cdk.Duration.minutes(5),
+        }),
+        threshold: 1,
+        evaluationPeriods: 2,
+        alarmDescription:
+          'ProjectX Auto Scaling Group healthy host count is low',
+      }
+    );
 
     // Tag the Auto Scaling Group
     cdk.Tags.of(autoScalingGroup).add('Name', 'projectX-asg');
@@ -258,37 +275,170 @@ export class ProjectXInfrastructureStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'VpcId', {
       value: vpc.vpcId,
       description: 'VPC ID for ProjectX infrastructure',
-      exportName: `ProjectX-VpcId-${environmentSuffix}`,
+      exportName: `TapStack-VpcId-${environmentSuffix}`,
     });
 
     new cdk.CfnOutput(this, 'VpcCidr', {
       value: vpc.vpcCidrBlock,
       description: 'VPC CIDR block',
-      exportName: `ProjectX-VpcCidr-${environmentSuffix}`,
+      exportName: `TapStack-VpcCidr-${environmentSuffix}`,
     });
 
     new cdk.CfnOutput(this, 'PublicSubnetIds', {
       value: vpc.publicSubnets.map(subnet => subnet.subnetId).join(','),
       description: 'Public subnet IDs across multiple AZs',
-      exportName: `ProjectX-PublicSubnetIds-${environmentSuffix}`,
+      exportName: `TapStack-PublicSubnetIds-${environmentSuffix}`,
     });
 
     new cdk.CfnOutput(this, 'SecurityGroupId', {
       value: webServerSecurityGroup.securityGroupId,
       description: 'Security Group ID for web servers',
-      exportName: `ProjectX-SecurityGroupId-${environmentSuffix}`,
+      exportName: `TapStack-SecurityGroupId-${environmentSuffix}`,
     });
 
     new cdk.CfnOutput(this, 'AutoScalingGroupName', {
       value: autoScalingGroup.autoScalingGroupName,
       description: 'Auto Scaling Group name',
-      exportName: `ProjectX-AutoScalingGroupName-${environmentSuffix}`,
+      exportName: `TapStack-AutoScalingGroupName-${environmentSuffix}`,
     });
 
     new cdk.CfnOutput(this, 'AvailabilityZones', {
       value: vpc.availabilityZones.join(','),
       description: 'Availability Zones used by the infrastructure',
-      exportName: `ProjectX-AvailabilityZones-${environmentSuffix}`,
+      exportName: `TapStack-AvailabilityZones-${environmentSuffix}`,
+    });
+
+    // IAM Role outputs
+    new cdk.CfnOutput(this, 'EC2RoleArn', {
+      value: ec2Role.roleArn,
+      description: 'ARN of the IAM role for EC2 instances',
+      exportName: `TapStack-EC2RoleArn-${environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'EC2RoleName', {
+      value: ec2Role.roleName,
+      description: 'Name of the IAM role for EC2 instances',
+      exportName: `TapStack-EC2RoleName-${environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'InstanceProfileArn', {
+      value: instanceProfile.attrArn,
+      description: 'ARN of the instance profile for EC2 instances',
+      exportName: `TapStack-InstanceProfileArn-${environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'InstanceProfileName', {
+      value: instanceProfile.instanceProfileName!,
+      description: 'Name of the instance profile for EC2 instances',
+      exportName: `TapStack-InstanceProfileName-${environmentSuffix}`,
+    });
+
+    // Launch Template outputs
+    new cdk.CfnOutput(this, 'LaunchTemplateId', {
+      value: launchTemplate.launchTemplateId!,
+      description: 'ID of the launch template',
+      exportName: `TapStack-LaunchTemplateId-${environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'LaunchTemplateName', {
+      value: launchTemplate.launchTemplateName!,
+      description: 'Name of the launch template',
+      exportName: `TapStack-LaunchTemplateName-${environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'LaunchTemplateLatestVersion', {
+      value: launchTemplate.latestVersionNumber,
+      description: 'Latest version number of the launch template',
+      exportName: `TapStack-LaunchTemplateLatestVersion-${environmentSuffix}`,
+    });
+
+    // Internet Gateway output
+    new cdk.CfnOutput(this, 'InternetGatewayId', {
+      value: vpc.internetGatewayId!,
+      description: 'Internet Gateway ID',
+      exportName: `TapStack-InternetGatewayId-${environmentSuffix}`,
+    });
+
+    // Route Table outputs
+    new cdk.CfnOutput(this, 'PublicRouteTableIds', {
+      value: vpc.publicSubnets
+        .map(subnet => subnet.routeTable.routeTableId)
+        .join(','),
+      description: 'Route Table IDs for public subnets',
+      exportName: `TapStack-PublicRouteTableIds-${environmentSuffix}`,
+    });
+
+    // Auto Scaling Group capacity outputs (using the configured values)
+    new cdk.CfnOutput(this, 'ASGMinCapacity', {
+      value: '2',
+      description: 'Auto Scaling Group minimum capacity',
+      exportName: `TapStack-ASGMinCapacity-${environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'ASGMaxCapacity', {
+      value: '6',
+      description: 'Auto Scaling Group maximum capacity',
+      exportName: `TapStack-ASGMaxCapacity-${environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'ASGDesiredCapacity', {
+      value: '2',
+      description: 'Auto Scaling Group desired capacity',
+      exportName: `TapStack-ASGDesiredCapacity-${environmentSuffix}`,
+    });
+
+    // Instance Type output
+    new cdk.CfnOutput(this, 'InstanceType', {
+      value: ec2.InstanceType.of(
+        ec2.InstanceClass.T3,
+        ec2.InstanceSize.MICRO
+      ).toString(),
+      description: 'EC2 instance type used in the launch template',
+      exportName: `TapStack-InstanceType-${environmentSuffix}`,
+    });
+
+    // AMI ID output
+    new cdk.CfnOutput(this, 'AMIId', {
+      value: ec2.MachineImage.latestAmazonLinux2().getImage(this).imageId,
+      description: 'AMI ID used for EC2 instances',
+      exportName: `TapStack-AMIId-${environmentSuffix}`,
+    });
+
+    // CloudWatch Alarm outputs
+    new cdk.CfnOutput(this, 'CPUUtilizationAlarmArn', {
+      value: cpuUtilizationAlarm.alarmArn,
+      description: 'ARN of the CPU utilization CloudWatch alarm',
+      exportName: `TapStack-CPUUtilizationAlarmArn-${environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'CPUUtilizationAlarmName', {
+      value: cpuUtilizationAlarm.alarmName,
+      description: 'Name of the CPU utilization CloudWatch alarm',
+      exportName: `TapStack-CPUUtilizationAlarmName-${environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'InstanceCountAlarmArn', {
+      value: instanceCountAlarm.alarmArn,
+      description: 'ARN of the instance count CloudWatch alarm',
+      exportName: `TapStack-InstanceCountAlarmArn-${environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'InstanceCountAlarmName', {
+      value: instanceCountAlarm.alarmName,
+      description: 'Name of the instance count CloudWatch alarm',
+      exportName: `TapStack-InstanceCountAlarmName-${environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'HealthyHostCountAlarmArn', {
+      value: healthyHostCountAlarm.alarmArn,
+      description: 'ARN of the healthy host count CloudWatch alarm',
+      exportName: `TapStack-HealthyHostCountAlarmArn-${environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'HealthyHostCountAlarmName', {
+      value: healthyHostCountAlarm.alarmName,
+      description: 'Name of the healthy host count CloudWatch alarm',
+      exportName: `TapStack-HealthyHostCountAlarmName-${environmentSuffix}`,
     });
   }
 }
