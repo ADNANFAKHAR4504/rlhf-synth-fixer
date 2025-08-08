@@ -30,6 +30,13 @@ function hasType(types: string[], needle: string): boolean {
 }
 
 describe("TapStack (unit)", () => {
+  afterEach(() => {
+    // clean env between tests so branches execute as intended
+    delete process.env.AWS_REGION;
+    delete process.env.ENVIRONMENT;
+    delete process.env.ENVIRONMENT_SUFFIX;
+  });
+
   it("synthesizes and contains core resources (dev path)", () => {
     process.env.AWS_REGION = "us-west-2";
     process.env.ENVIRONMENT = "dev";
@@ -40,9 +47,6 @@ describe("TapStack (unit)", () => {
     const parsed = parseSynth(stack);
     const res = resourceMap(parsed);
     const types = flattenTypes(res);
-
-    // quick debug print if needed
-    // console.log("Resource types (dev):", Array.from(new Set(types)).sort());
 
     expect(types.length).toBeGreaterThan(0);
 
@@ -76,8 +80,6 @@ describe("TapStack (unit)", () => {
     const res = resourceMap(parsed);
     const types = flattenTypes(res);
 
-    // console.log("Resource types (prod):", Array.from(new Set(types)).sort());
-
     expect(types.length).toBeGreaterThan(0);
 
     // same minimal checks as dev
@@ -97,5 +99,52 @@ describe("TapStack (unit)", () => {
     expect(hasType(types, "aws_cloudwatch_metric_alarm")).toBeTruthy();
     expect(hasType(types, "aws_cloudwatch_log_group")).toBeTruthy();
     expect(hasType(types, "aws_sns_topic")).toBeTruthy();
+  });
+
+  it("synthesizes with defaults when no env vars are set (default branch path)", () => {
+    // intentionally leave AWS_REGION / ENVIRONMENT / ENVIRONMENT_SUFFIX undefined
+    const app = new App();
+    const stack = new TapStack(app, "TestStackDefault");
+    const parsed = parseSynth(stack);
+    const res = resourceMap(parsed);
+    const types = flattenTypes(res);
+
+    expect(types.length).toBeGreaterThan(0);
+
+    // minimal checks to assert resources exist on the default path
+    expect(hasType(types, "aws_vpc")).toBeTruthy();
+    expect(types.filter((t) => t.includes("aws_subnet")).length).toBeGreaterThanOrEqual(3);
+
+    // a couple of core services to keep it stable
+    expect(hasType(types, "aws_iam_role")).toBeTruthy();
+    expect(hasType(types, "aws_s3_bucket")).toBeTruthy();
+    expect(hasType(types, "aws_cloudwatch_log_group")).toBeTruthy();
+  });
+
+  it("synthesizes for a non-standard env (staging) to hit else branches", () => {
+    process.env.AWS_REGION = "us-east-1";
+    process.env.ENVIRONMENT = "staging"; // exercise non-dev/non-production branch
+    process.env.ENVIRONMENT_SUFFIX = "stagetest";
+
+    const app = new App();
+    const stack = new TapStack(app, "TestStackStaging");
+    const parsed = parseSynth(stack);
+    const res = resourceMap(parsed);
+    const types = flattenTypes(res);
+
+    expect(types.length).toBeGreaterThan(0);
+
+    // same minimal existence checks
+    expect(hasType(types, "aws_vpc")).toBeTruthy();
+    expect(types.filter((t) => t.includes("aws_subnet")).length).toBeGreaterThanOrEqual(3);
+
+    expect(hasType(types, "aws_iam_role")).toBeTruthy();
+    expect(hasType(types, "aws_iam_instance_profile")).toBeTruthy();
+
+    expect(hasType(types, "aws_instance")).toBeTruthy();
+    expect(hasType(types, "aws_security_group")).toBeTruthy();
+
+    expect(hasType(types, "aws_s3_bucket")).toBeTruthy();
+    expect(hasType(types, "aws_cloudwatch_dashboard")).toBeTruthy();
   });
 });
