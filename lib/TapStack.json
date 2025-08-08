@@ -23,6 +23,20 @@
             "Type": "String",
             "Default": "serverless-app",
             "Description": "Application name for resource naming"
+        },
+        "LambdaProvisionedConcurrency": {
+            "Type": "Number",
+            "Default": 1000,
+            "Description": "Provisioned concurrency for Lambda functions to avoid cold starts",
+            "MinValue": 100,
+            "MaxValue": 10000
+        },
+        "LambdaReservedConcurrency": {
+            "Type": "Number",
+            "Default": 5000,
+            "Description": "Reserved concurrency limit for Lambda functions",
+            "MinValue": 100,
+            "MaxValue": 10000
         }
     },
     "Resources": {
@@ -145,6 +159,12 @@
                     "BlockPublicPolicy": true,
                     "IgnorePublicAcls": true,
                     "RestrictPublicBuckets": true
+                },
+                "LoggingConfiguration": {
+                    "DestinationBucketName": {
+                        "Ref": "S3AccessLogsBucket"
+                    },
+                    "LogFilePrefix": "access-logs/"
                 }
             }
         },
@@ -186,7 +206,7 @@
                 "FunctionName": {
                     "Fn::Sub": "${ApplicationName}-${Environment}-main-function"
                 },
-                "Runtime": "python3.9",
+                "Runtime": "python3.11",
                 "Handler": "index.lambda_handler",
                 "Role": {
                     "Fn::GetAtt": [
@@ -334,7 +354,9 @@
                         "DataTraceEnabled": true,
                         "MetricsEnabled": true,
                         "CachingEnabled": true,
-                        "CacheTtlInSeconds": 300
+                        "CacheTtlInSeconds": 300,
+                        "ThrottlingRateLimit": 10000,
+                        "ThrottlingBurstLimit": 20000
                     }
                 ]
             }

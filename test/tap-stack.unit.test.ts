@@ -256,12 +256,93 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have the correct number of parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(3); // EnvironmentSuffix, ApplicationName, Environment
+      expect(parameterCount).toBe(5); // EnvironmentSuffix, ApplicationName, Environment, LambdaProvisionedConcurrency, LambdaReservedConcurrency
     });
 
     test('should have the correct number of outputs', () => {
       const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBeGreaterThan(0);
+      expect(outputCount).toBe(8); // ApiGatewayUrl, LambdaFunctionArn, S3BucketName, LambdaFunctionName, CloudWatchLogGroups, SecurityFeatures, StackName, EnvironmentSuffix
+    });
+
+    test('should have CloudWatch alarms for monitoring', () => {
+      expect(template.Resources.LambdaErrorRateAlarm).toBeDefined();
+      expect(template.Resources.LambdaDurationAlarm).toBeDefined();
+      expect(template.Resources.LambdaThrottleAlarm).toBeDefined();
+    });
+
+    test('Lambda error rate alarm should be properly configured', () => {
+      const alarm = template.Resources.LambdaErrorRateAlarm;
+      expect(alarm.Type).toBe('AWS::CloudWatch::Alarm');
+      expect(alarm.Properties.AlarmName['Fn::Sub']).toBeDefined();
+      expect(alarm.Properties.MetricName).toBe('Errors');
+      expect(alarm.Properties.Namespace).toBe('AWS/Lambda');
+      expect(alarm.Properties.Statistic).toBe('Sum');
+      expect(alarm.Properties.Period).toBe(300);
+      expect(alarm.Properties.EvaluationPeriods).toBe(2);
+      expect(alarm.Properties.Threshold).toBe(10);
+      expect(alarm.Properties.ComparisonOperator).toBe('GreaterThanThreshold');
+    });
+
+    test('Lambda duration alarm should be properly configured', () => {
+      const alarm = template.Resources.LambdaDurationAlarm;
+      expect(alarm.Type).toBe('AWS::CloudWatch::Alarm');
+      expect(alarm.Properties.MetricName).toBe('Duration');
+      expect(alarm.Properties.Statistic).toBe('Average');
+      expect(alarm.Properties.Threshold).toBe(10000);
+      expect(alarm.Properties.ComparisonOperator).toBe('GreaterThanThreshold');
+    });
+
+    test('Lambda throttle alarm should be properly configured', () => {
+      const alarm = template.Resources.LambdaThrottleAlarm;
+      expect(alarm.Type).toBe('AWS::CloudWatch::Alarm');
+      expect(alarm.Properties.MetricName).toBe('Throttles');
+      expect(alarm.Properties.Statistic).toBe('Sum');
+      expect(alarm.Properties.Threshold).toBe(1);
+      expect(alarm.Properties.ComparisonOperator).toBe('GreaterThanOrEqualToThreshold');
+    });
+
+    test('Lambda execution role should have proper policies', () => {
+      const role = template.Resources.LambdaExecutionRole;
+      expect(role.Properties.Policies).toBeDefined();
+      expect(role.Properties.Policies).toHaveLength(2); // S3AccessPolicy and CloudWatchLogsPolicy
+    });
+
+    test('Lambda execution role should have S3 access policy', () => {
+      const role = template.Resources.LambdaExecutionRole;
+      const s3Policy = role.Properties.Policies.find((p: any) => p.PolicyName === 'S3AccessPolicy');
+      expect(s3Policy).toBeDefined();
+      expect(s3Policy.PolicyDocument.Statement).toHaveLength(2);
+      
+      // Check S3 object permissions
+      const objectStatement = s3Policy.PolicyDocument.Statement.find((s: any) => s.Action.includes('s3:GetObject'));
+      expect(objectStatement.Effect).toBe('Allow');
+      expect(objectStatement.Action).toContain('s3:GetObject');
+      expect(objectStatement.Action).toContain('s3:PutObject');
+      expect(objectStatement.Action).toContain('s3:DeleteObject');
+      
+      // Check S3 bucket permissions
+      const bucketStatement = s3Policy.PolicyDocument.Statement.find((s: any) => s.Action.includes('s3:ListBucket'));
+      expect(bucketStatement.Effect).toBe('Allow');
+      expect(bucketStatement.Action).toContain('s3:ListBucket');
+    });
+
+    test('Lambda execution role should have CloudWatch logs policy', () => {
+      const role = template.Resources.LambdaExecutionRole;
+      const logsPolicy = role.Properties.Policies.find((p: any) => p.PolicyName === 'CloudWatchLogsPolicy');
+      expect(logsPolicy).toBeDefined();
+      expect(logsPolicy.PolicyDocument.Statement).toHaveLength(1);
+      
+      const statement = logsPolicy.PolicyDocument.Statement[0];
+      expect(statement.Effect).toBe('Allow');
+      expect(statement.Action).toContain('logs:CreateLogGroup');
+      expect(statement.Action).toContain('logs:CreateLogStream');
+      expect(statement.Action).toContain('logs:PutLogEvents');
+      expect(statement.Resource).toBe('*');
+    });
+
+    test('API Gateway CloudWatch role should have proper permissions', () => {
+      const role = template.Resources.ApiGatewayCloudWatchRole;
+      expect(role.Properties.ManagedPolicyArns).toContain('arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs');
     });
   });
 
