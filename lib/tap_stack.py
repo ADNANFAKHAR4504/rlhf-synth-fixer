@@ -143,14 +143,14 @@ class TapStack(pulumi.ComponentResource):
         pulumi.export("primary_web_server_sg_id", self.regional_security[primary_region].web_server_sg_id)
         pulumi.export("primary_dashboard_name", self.regional_monitoring[primary_region].dashboard_name)
 
-    # All regions data for reference
-    all_regions_data_outputs = {}
-    for region in self.regions:
-      all_regions_data_outputs[region] = pulumi.Output.all(
-        vpc_id=pulumi.Output.from_input(self.regional_networks[region].vpc_id),
-        instance_ids=pulumi.Output.from_input(self.regional_compute[region].instance_ids),
-        security_group_id=pulumi.Output.from_input(self.regional_security[region].web_server_sg_id),
-        dashboard_name=pulumi.Output.from_input(self.regional_monitoring[region].dashboard_name),
-      )
-    
-    pulumi.export("all_regions_data", pulumi.Output.all(all_regions_data_outputs))
+    # All regions data for reference - TEMPORARILY COMMENTED OUT FOR DEBUGGING
+    # all_regions_data_outputs = {}
+    # for region in self.regions:
+    #   all_regions_data_outputs[region] = pulumi.Output.all(
+    #     vpc_id=pulumi.Output.from_input(self.regional_networks[region].vpc_id),
+    #     instance_ids=pulumi.Output.from_input(self.regional_compute[region].instance_ids),
+    #     security_group_id=pulumi.Output.from_input(self.regional_security[region].web_server_sg_id),
+    #     dashboard_name=pulumi.Output.from_input(self.regional_monitoring[region].dashboard_name),
+    #   )
+    # 
+    # pulumi.export("all_regions_data", pulumi.Output.all(all_regions_data_outputs))
