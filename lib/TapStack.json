@@ -283,7 +283,7 @@
         "VpcId": {
           "Ref": "ExistingVPCId"
         },
-        "CidrBlock": "10.0.5.0/24",
+        "CidrBlock": "10.0.7.0/24",
         "AvailabilityZone": {
           "Fn::Select": [
             0,
@@ -312,7 +312,7 @@
         "VpcId": {
           "Ref": "ExistingVPCId"
         },
-        "CidrBlock": "10.0.6.0/24",
+        "CidrBlock": "10.0.8.0/24",
         "AvailabilityZone": {
           "Fn::Select": [
             1,
